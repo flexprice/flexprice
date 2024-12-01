@@ -123,6 +123,37 @@ definitions:
     - email
     - password
     type: object
+  dto.SyncStripeUsageRequest:
+    properties:
+      end_time:
+        example: "2024-12-09T00:00:00Z"
+        type: string
+      external_customer_id:
+        example: user_5
+        type: string
+      meter_id:
+        example: d62e8435-ecf2-43cc-9f9f-5589a736ccf7
+        type: string
+      start_time:
+        example: "2024-11-09T00:00:00Z"
+        type: string
+      stripe_subscription_item_id:
+        example: sub_item_123
+        type: string
+    required:
+    - end_time
+    - external_customer_id
+    - meter_id
+    - start_time
+    - stripe_subscription_item_id
+    type: object
+  dto.SyncStripeUsageResponse:
+    properties:
+      run_id:
+        type: string
+      workflow_id:
+        type: string
+    type: object
   dto.UserResponse:
     properties:
       email:
@@ -544,6 +575,42 @@ paths:
       security:
       - BearerAuth: []
       summary: 'Disable meter [TODO: Deprecate]'
+      tags:
+      - meters
+  /meters/sync/stripe:
+    post:
+      consumes:
+      - application/json
+      description: Synchronizes usage data with Stripe for billing
+      parameters:
+      - description: Sync request parameters
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.SyncStripeUsageRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/dto.SyncStripeUsageResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Sync usage data to Stripe
       tags:
       - meters
   /users/me:

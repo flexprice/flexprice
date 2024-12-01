@@ -23,6 +23,8 @@ type Configuration struct {
 	ClickHouse ClickHouseConfig `validate:"required"`
 	Logging    LoggingConfig    `validate:"required"`
 	Postgres   PostgresConfig   `validate:"required"`
+	Temporal   TemporalConfig
+	Stripe     StripeConfig
 }
 
 type DeploymentConfig struct {
@@ -73,6 +75,14 @@ type PostgresConfig struct {
 	Password string `mapstructure:"password" validate:"required"`
 	DBName   string `mapstructure:"dbname" validate:"required"`
 	SSLMode  string `mapstructure:"sslmode" validate:"required"`
+}
+
+type TemporalConfig struct {
+	HostPort string `mapstructure:"host_port"`
+}
+
+type StripeConfig struct {
+	SecretKey string `mapstructure:"secret_key"`
 }
 
 func NewConfig() (*Configuration, error) {

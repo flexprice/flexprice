@@ -36,6 +36,13 @@ postgres:
   dbname: flexprice
   sslmode: disable
 
+
+temporal:
+  host_port: "localhost:7233"
+
+stripe:
+  secret_key: "sk_test_123"
+
+
 logging:
   level: "debug"
-

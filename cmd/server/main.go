@@ -17,6 +17,8 @@ import (
 	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/integrations"
 	"github.com/flexprice/flexprice/internal/kafka"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
@@ -24,6 +26,7 @@ import (
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
+	"go.temporal.io/sdk/client"
 )
 
 // @title FlexPrice API
@@ -71,6 +74,12 @@ func main() {
 			service.NewUserService,
 			service.NewAuthService,
 
+			// Temporal Client
+			NewTemporalClient,
+
+			// Stripe Integration
+			NewStripeIntegration, // Ensure this now includes the Stripe secret key
+
 			// Handlers
 			provideHandlers,
 
@@ -91,10 +100,11 @@ func provideHandlers(
 	eventService service.EventService,
 	authService service.AuthService,
 	userService service.UserService,
+	temporalClient client.Client,
 ) api.Handlers {
 	return api.Handlers{
 		Events: v1.NewEventsHandler(eventService, logger),
-		Meter:  v1.NewMeterHandler(meterService, logger),
+		Meter:  v1.NewMeterHandler(meterService, temporalClient, logger),
 		Auth:   v1.NewAuthHandler(cfg, authService, logger),
 		User:   v1.NewUserHandler(userService, logger),
 	}
@@ -192,10 +202,6 @@ func startAWSLambdaConsumer(eventRepo events.Repository, log *logger.Logger) {
 				log.Debugf("Processing record: topic=%s, partition=%d, offset=%d",
 					r.Topic, r.Partition, r.Offset)
 
-				// TODO decide the repository to use based on the event topic and properties
-				// For now we will use the event repository from the events topic
-
-				// Decode base64 payload first
 				decodedPayload, err := base64.StdEncoding.DecodeString(string(r.Value))
 				if err != nil {
 					log.Errorf("Failed to decode base64 payload: %v", err)
@@ -205,12 +211,11 @@ func startAWSLambdaConsumer(eventRepo events.Repository, log *logger.Logger) {
 				var event events.Event
 				if err := json.Unmarshal(decodedPayload, &event); err != nil {
 					log.Errorf("Failed to unmarshal event: %v, payload: %s", err, decodedPayload)
-					continue // Skip invalid messages
+					continue
 				}
 
 				if err := eventRepo.InsertEvent(ctx, &event); err != nil {
 					log.Errorf("Failed to insert event: %v, event: %+v", err, event)
-					// TODO: Handle error and decide if we should retry or send to DLQ
 					continue
 				}
 
@@ -234,7 +239,7 @@ func consumeMessages(consumer kafka.MessageConsumer, eventRepo events.Repository
 		var event events.Event
 		if err := json.Unmarshal(msg.Payload, &event); err != nil {
 			log.Errorf("Failed to unmarshal event: %v, payload: %s", err, string(msg.Payload))
-			msg.Ack() // Acknowledge invalid messages
+			msg.Ack()
 			continue
 		}
 
@@ -242,9 +247,22 @@ func consumeMessages(consumer kafka.MessageConsumer, eventRepo events.Repository
 
 		if err := eventRepo.InsertEvent(context.Background(), &event); err != nil {
 			log.Errorf("Failed to insert event: %v, event: %+v", err, event)
-			// TODO: Handle error and decide if we should retry or send to DLQ
 		}
 		msg.Ack()
 		log.Debugf("Successfully processed event: %+v", event)
 	}
+}
+
+func NewTemporalClient(cfg *config.Configuration) (client.Client, error) {
+	return client.NewClient(client.Options{
+		HostPort: cfg.Temporal.HostPort,
+	})
+}
+
+func NewStripeIntegration(
+	eventService service.EventService,
+	meterRepo meter.Repository,
+	cfg *config.Configuration, // Add configuration to access the Stripe secret key
+) *integrations.StripeIntegration {
+	return integrations.NewStripeIntegration(eventService, meterRepo, cfg.Stripe.SecretKey)
 }
