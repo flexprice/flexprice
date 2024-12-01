@@ -13,8 +13,9 @@ const (
 	CtxEnvironmentID ContextKey = "ctx_environment_id"
 
 	// Default values
-	DefaultTenantID = "00000000-0000-0000-0000-000000000000"
-	DefaultUserID   = "00000000-0000-0000-0000-000000000000"
+	DefaultTenantID      = "00000000-0000-0000-0000-000000000000"
+	DefaultUserID        = "00000000-0000-0000-0000-000000000000"
+	DefaultEnvironmentID = "00000000-0000-0000-0000-000000000000"
 )
 
 func GetUserID(ctx context.Context) string {

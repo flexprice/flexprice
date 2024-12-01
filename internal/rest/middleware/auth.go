@@ -64,16 +64,9 @@ func AuthenticateMiddleware(cfg *config.Configuration, logger *logger.Logger) gi
 		ctx = context.WithValue(ctx, types.CtxUserID, claims.UserID)
 		ctx = context.WithValue(ctx, types.CtxTenantID, claims.TenantID)
 		ctx = context.WithValue(ctx, types.CtxJWT, tokenString)
-
-		// Set additional headers for downstream handlers
-		environmentID := c.GetHeader(types.HeaderEnvironment)
-		if environmentID != "" {
-			ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
-		}
 		c.Request = c.Request.WithContext(ctx)
 
-		logger.Debugf("authenticated request: user_id=%s, tenant_id=%s env_id=%s",
-			claims.UserID, claims.TenantID, environmentID)
+		logger.Debugf("authenticated request: user_id=%s, tenant_id=%s", claims.UserID, claims.TenantID)
 		c.Next()
 	}
 }

@@ -28,16 +28,17 @@ func (r *meterRepository) CreateMeter(ctx context.Context, meter *meter.Meter) e
 
 	query := `
 	INSERT INTO meters (
-		id, tenant_id, event_name, aggregation, 
+		id, tenant_id, environment_id, event_name, aggregation, 
 		created_at, updated_at, created_by, updated_by, status
 	) VALUES (
-		$1, $2, $3, $4, $5, $6, $7, $8, $9
+		$1, $2, $3, $4, $5, $6, $7, $8, $9, $10
 	)
 	`
 
 	_, err = r.db.ExecContext(ctx, query,
 		meter.ID,
 		meter.TenantID,
+		meter.EnvironmentID,
 		meter.EventName,
 		aggregationJSON,
 		meter.CreatedAt,
@@ -54,6 +55,7 @@ func (r *meterRepository) CreateMeter(ctx context.Context, meter *meter.Meter) e
 	return nil
 }
 
+// TODO: Add environment_id to the query
 func (r *meterRepository) GetMeter(ctx context.Context, id string) (*meter.Meter, error) {
 
 	meter := &meter.Meter{}
@@ -90,6 +92,7 @@ func (r *meterRepository) GetMeter(ctx context.Context, id string) (*meter.Meter
 	return meter, nil
 }
 
+// TODO: Add environment_id to the query
 func (r *meterRepository) GetAllMeters(ctx context.Context) ([]*meter.Meter, error) {
 	query := `
 	SELECT 
@@ -136,6 +139,7 @@ func (r *meterRepository) GetAllMeters(ctx context.Context) ([]*meter.Meter, err
 	return meters, nil
 }
 
+// TODO: Add environment_id to the query
 func (r *meterRepository) DisableMeter(ctx context.Context, id string) error {
 	query := `
 		UPDATE meters 

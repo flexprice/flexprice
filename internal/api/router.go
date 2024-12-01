@@ -68,7 +68,8 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			events.GET("/usage/meter", handlers.Events.GetUsageByMeter)
 		}
 
-		meters := v1Private.Group("/meters")
+		// Meters routes
+		meters := v1Private.Group("/meters", middleware.EnvironmentMiddleware())
 		{
 			meters.POST("", handlers.Meter.CreateMeter)
 			meters.GET("", handlers.Meter.GetAllMeters)

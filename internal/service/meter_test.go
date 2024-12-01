@@ -81,7 +81,7 @@ func (s *MeterServiceSuite) TestCreateMeter() {
 
 func (s *MeterServiceSuite) TestGetMeter() {
 	// Create test meter
-	testMeter := meter.NewMeter("", "tenant-1", "test-user")
+	testMeter := meter.NewMeter("", "tenant-1", types.DefaultEnvironmentID, "test-user")
 	testMeter.EventName = "api_request" // Replaced Filters with EventName
 	testMeter.Aggregation = meter.Aggregation{
 		Type:  types.AggregationSum,
@@ -130,8 +130,8 @@ func (s *MeterServiceSuite) TestGetMeter() {
 func (s *MeterServiceSuite) TestGetAllMeters() {
 	// Create test meters
 	meters := []*meter.Meter{
-		meter.NewMeter("", "tenant-1", "test-user-1"),
-		meter.NewMeter("", "tenant-1", "test-user-2"),
+		meter.NewMeter("", "tenant-1", types.DefaultEnvironmentID, "test-user-1"),
+		meter.NewMeter("", "tenant-1", types.DefaultEnvironmentID, "test-user-2"),
 	}
 
 	// Set required fields
@@ -158,7 +158,7 @@ func (s *MeterServiceSuite) TestGetAllMeters() {
 
 func (s *MeterServiceSuite) TestDisableMeter() {
 	// Create test meter
-	testMeter := meter.NewMeter("", "tenant-1", "test-user")
+	testMeter := meter.NewMeter("", "tenant-1", types.DefaultEnvironmentID, "test-user")
 	testMeter.EventName = "api_request" // Replaced Filters with EventName
 	testMeter.BaseModel = types.BaseModel{
 		Status: types.StatusActive,

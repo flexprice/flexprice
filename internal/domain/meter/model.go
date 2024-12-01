@@ -9,9 +9,10 @@ import (
 )
 
 type Meter struct {
-	ID          string      `db:"id" json:"id"`
-	EventName   string      `db:"event_name" json:"event_name"`
-	Aggregation Aggregation `db:"aggregation" json:"aggregation"`
+	ID            string      `db:"id" json:"id"`
+	EventName     string      `db:"event_name" json:"event_name"`
+	Aggregation   Aggregation `db:"aggregation" json:"aggregation"`
+	EnvironmentID string      `db:"environment_id" json:"environment_id"`
 	types.BaseModel
 }
 
@@ -38,14 +39,15 @@ func (m *Meter) Validate() error {
 }
 
 // Constructor for creating new meters with defaults
-func NewMeter(id string, tenantID, createdBy string) *Meter {
+func NewMeter(id string, tenantID, environmentID, createdBy string) *Meter {
 	now := time.Now().UTC()
 	if id == "" {
 		id = uuid.New().String()
 	}
 
 	return &Meter{
-		ID: id,
+		ID:            id,
+		EnvironmentID: environmentID,
 		BaseModel: types.BaseModel{
 			TenantID:  tenantID,
 			CreatedAt: now,
