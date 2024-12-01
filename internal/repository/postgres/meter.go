@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	sq "github.com/Masterminds/squirrel"
+	"github.com/flexprice/flexprice/internal/database/builder"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
@@ -26,50 +28,51 @@ func (r *meterRepository) CreateMeter(ctx context.Context, meter *meter.Meter) e
 		return fmt.Errorf("marshal aggregation: %w", err)
 	}
 
-	query := `
-	INSERT INTO meters (
-		id, tenant_id, environment_id, event_name, aggregation, 
-		created_at, updated_at, created_by, updated_by, status
-	) VALUES (
-		$1, $2, $3, $4, $5, $6, $7, $8, $9, $10
-	)
-	`
-
-	_, err = r.db.ExecContext(ctx, query,
-		meter.ID,
-		meter.TenantID,
-		meter.EnvironmentID,
-		meter.EventName,
-		aggregationJSON,
-		meter.CreatedAt,
-		meter.UpdatedAt,
-		meter.CreatedBy,
-		meter.UpdatedBy,
-		meter.Status,
-	)
+	query, args, err := builder.New().
+		Insert("meters").
+		Columns("id", "event_name", "aggregation", "created_at", "updated_at", "created_by", "updated_by", "status").
+		Values(
+			meter.ID,
+			meter.EventName,
+			aggregationJSON,
+			meter.CreatedAt,
+			meter.UpdatedAt,
+			meter.CreatedBy,
+			meter.UpdatedBy,
+			meter.Status,
+		).
+		WithContext(ctx).
+		ToSql()
 
 	if err != nil {
-		return fmt.Errorf("insert meter: %w ", err)
+		return fmt.Errorf("build query: %w", err)
+	}
+
+	_, err = r.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("insert meter: %w", err)
 	}
 
 	return nil
 }
 
-// TODO: Add environment_id to the query
 func (r *meterRepository) GetMeter(ctx context.Context, id string) (*meter.Meter, error) {
+	query, args, err := builder.New().
+		Select("id", "tenant_id", "event_name", "aggregation",
+			"created_at", "updated_at", "created_by", "updated_by", "status").
+		From("meters").
+		Where(sq.Eq{"id": id}).
+		WithContext(ctx).
+		ToSql()
+
+	if err != nil {
+		return nil, fmt.Errorf("build query: %w", err)
+	}
 
 	meter := &meter.Meter{}
 	var aggregationJSON []byte
 
-	query := `
-	SELECT 
-		id, tenant_id, event_name, aggregation, 
-		created_at, updated_at, created_by, updated_by, status
-	FROM meters
-	WHERE id = $1 AND tenant_id = $2
-	`
-
-	err := r.db.QueryRowContext(ctx, query, id, types.GetTenantID(ctx)).Scan(
+	err = r.db.QueryRowContext(ctx, query, args...).Scan(
 		&meter.ID,
 		&meter.TenantID,
 		&meter.EventName,
@@ -92,18 +95,21 @@ func (r *meterRepository) GetMeter(ctx context.Context, id string) (*meter.Meter
 	return meter, nil
 }
 
-// TODO: Add environment_id to the query
 func (r *meterRepository) GetAllMeters(ctx context.Context) ([]*meter.Meter, error) {
-	query := `
-	SELECT 
-		id, tenant_id, event_name, aggregation, 
-		created_at, updated_at, created_by, updated_by, status
-	FROM meters
-	WHERE status = 'active' AND tenant_id = $1
-	ORDER BY created_at DESC
-	`
+	query, args, err := builder.New().
+		Select("id", "tenant_id", "event_name", "aggregation",
+			"created_at", "updated_at", "created_by", "updated_by", "status").
+		From("meters").
+		Where(sq.Eq{"status": types.StatusActive}).
+		WithContext(ctx).
+		OrderBy("created_at DESC").
+		ToSql()
 
-	rows, err := r.db.QueryContext(ctx, query, types.GetTenantID(ctx))
+	if err != nil {
+		return nil, fmt.Errorf("build query: %w", err)
+	}
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query meters: %w", err)
 	}
@@ -139,7 +145,6 @@ func (r *meterRepository) GetAllMeters(ctx context.Context) ([]*meter.Meter, err
 	return meters, nil
 }
 
-// TODO: Add environment_id to the query
 func (r *meterRepository) DisableMeter(ctx context.Context, id string) error {
 	query := `
 		UPDATE meters 
