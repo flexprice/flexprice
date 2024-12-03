@@ -25,6 +25,19 @@ type MeterResponse struct {
 	Status      string            `json:"status" example:"ACTIVE"`
 }
 
+type SyncStripeUsageRequest struct {
+	MeterID                  string    `json:"meter_id" binding:"required" example:"d62e8435-ecf2-43cc-9f9f-5589a736ccf7"`
+	ExternalCustomerID       string    `json:"external_customer_id" binding:"required" example:"user_5"`
+	StartTime                time.Time `json:"start_time" binding:"required" example:"2024-11-09T00:00:00Z"`
+	EndTime                  time.Time `json:"end_time" binding:"required" example:"2024-12-09T00:00:00Z"`
+	StripeSubscriptionItemID string    `json:"stripe_subscription_item_id" binding:"required" example:"sub_item_123"`
+}
+
+type SyncStripeUsageResponse struct {
+	WorkflowID string `json:"workflow_id"`
+	RunID      string `json:"run_id"`
+}
+
 // Convert domain Meter to MeterResponse
 func ToMeterResponse(m *meter.Meter) *MeterResponse {
 	return &MeterResponse{

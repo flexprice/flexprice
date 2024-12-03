@@ -75,6 +75,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			meters.GET("/:id", handlers.Meter.GetMeter)
 			meters.POST("/:id/disable", handlers.Meter.DisableMeter)
 			meters.DELETE("/:id", handlers.Meter.DeleteMeter)
+			meters.POST("/sync/stripe", handlers.Meter.SyncUsageToStripe)
 		}
 	}
 	return router
