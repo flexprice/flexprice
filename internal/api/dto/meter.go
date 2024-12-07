@@ -1,6 +1,7 @@
 package dto
 
 import (
+	"context"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/meter"
@@ -39,8 +40,8 @@ func ToMeterResponse(m *meter.Meter) *MeterResponse {
 }
 
 // Convert CreateMeterRequest to domain Meter
-func (r *CreateMeterRequest) ToMeter(tenantID, createdBy string) *meter.Meter {
-	m := meter.NewMeter("", tenantID, createdBy)
+func (r *CreateMeterRequest) ToMeter(ctx context.Context) *meter.Meter {
+	m := meter.NewMeter("", types.GetTenantID(ctx), types.GetEnvironmentID(ctx), types.GetUserID(ctx))
 	m.EventName = r.EventName
 	m.Aggregation = r.Aggregation
 	m.Status = types.StatusActive

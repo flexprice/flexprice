@@ -6,7 +6,6 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/meter"
-	"github.com/flexprice/flexprice/internal/types"
 )
 
 type MeterService interface {
@@ -30,7 +29,7 @@ func (s *meterService) CreateMeter(ctx context.Context, req *dto.CreateMeterRequ
 		return nil, fmt.Errorf("meter cannot be nil")
 	}
 
-	meter := req.ToMeter(types.GetTenantID(ctx), types.GetUserID(ctx))
+	meter := req.ToMeter(ctx)
 
 	if err := meter.Validate(); err != nil {
 		return nil, fmt.Errorf("validate meter: %w", err)
