@@ -59,6 +59,15 @@ type Subscription struct {
 	// TrialEnd is the end date of the trial period
 	TrialEnd *time.Time `db:"trial_end" json:"trial_end"`
 
+	// BillingCadence is the cadence of the billing cycle.
+	BillingCadence types.BillingCadence `db:"billing_cadence" json:"billing_cadence"`
+
+	// BillingPeriod is the period of the billing cycle.
+	BillingPeriod types.BillingPeriod `db:"billing_period" json:"billing_period"`
+
+	// BillingPeriodUnit is the unit of the billing period.
+	BillingPeriodUnit int `db:"billing_period_unit" json:"billing_period_unit"`
+
 	// InvoiceCadence is the cadence of the invoice. This overrides the plan's invoice cadence.
 	InvoiceCadence types.InvoiceCadence `db:"invoice_cadence" json:"invoice_cadence"`
 

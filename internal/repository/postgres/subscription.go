@@ -27,7 +27,7 @@ func (r *subscriptionRepository) Create(ctx context.Context, subscription *subsc
 			lookup_key, 
 			customer_id, 
 			plan_id, 
-			status, 
+			subscription_status,
 			currency,
 			billing_anchor, 
 			start_date, 
@@ -40,7 +40,11 @@ func (r *subscriptionRepository) Create(ctx context.Context, subscription *subsc
 			trial_start, 
 			trial_end, 
 			invoice_cadence,
+			billing_cadence,
+			billing_period,
+			billing_period_unit,
 			tenant_id, 
+			status, 
 			created_at, 
 			updated_at, 
 			created_by, 
@@ -50,7 +54,7 @@ func (r *subscriptionRepository) Create(ctx context.Context, subscription *subsc
 			:lookup_key, 
 			:customer_id, 
 			:plan_id, 
-			:status, 
+			:subscription_status,
 			:currency,
 			:billing_anchor, 
 			:start_date, 
@@ -63,7 +67,11 @@ func (r *subscriptionRepository) Create(ctx context.Context, subscription *subsc
 			:trial_start, 
 			:trial_end, 
 			:invoice_cadence,
+			:billing_cadence,
+			:billing_period,
+			:billing_period_unit,
 			:tenant_id, 
+			:status, 
 			:created_at, 
 			:updated_at, 
 			:created_by, 
@@ -113,6 +121,28 @@ func (r *subscriptionRepository) Get(ctx context.Context, id string) (*subscript
 func (r *subscriptionRepository) Update(ctx context.Context, subscription *subscription.Subscription) error {
 	// TODO: Implement this after chalking out proper use cases here
 
+	subscription.UpdatedAt = time.Now().UTC()
+	subscription.UpdatedBy = types.GetUserID(ctx)
+
+	query := `
+		UPDATE subscriptions 
+		SET 
+			subscription_status = :subscription_status,
+			cancelled_at = :cancelled_at,
+			cancel_at = :cancel_at,
+			cancel_at_period_end = :cancel_at_period_end,
+			status = :status, 
+			updated_at = :updated_at, 
+			updated_by = :updated_by
+		WHERE 
+			id = :id AND 
+			tenant_id = :tenant_id
+	`
+
+	_, err := r.db.NamedExecContext(ctx, query, subscription)
+	if err != nil {
+		return fmt.Errorf("failed to update subscription: %w", err)
+	}
 	return nil
 }
 
@@ -158,6 +188,9 @@ func (r *subscriptionRepository) List(ctx context.Context, filter *types.Subscri
 	}
 	if filter.PlanID != "" {
 		query += " AND plan_id = :plan_id"
+	}
+	if filter.SubscriptionStatus != "" {
+		query += " AND subscription_status = :subscription_status"
 	}
 
 	// Add ordering and pagination

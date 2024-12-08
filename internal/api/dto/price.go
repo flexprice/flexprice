@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/types"
@@ -13,7 +12,7 @@ import (
 )
 
 type CreatePriceRequest struct {
-	Amount             int                   `json:"amount" validate:"required"`
+	Amount             uint64                `json:"amount" validate:"required"`
 	Currency           string                `json:"currency" validate:"required,len=3"`
 	PlanID             string                `json:"plan_id,omitempty"`
 	Type               types.PriceType       `json:"type" validate:"required"`
@@ -22,7 +21,7 @@ type CreatePriceRequest struct {
 	BillingModel       types.BillingModel    `json:"billing_model" validate:"required"`
 	BillingCadence     types.BillingCadence  `json:"billing_cadence" validate:"required"`
 	MeterID            string                `json:"meter_id,omitempty"`
-	FilterValues       map[string]string     `json:"filter_values,omitempty"`
+	FilterValues       map[string][]string   `json:"filter_values,omitempty"`
 	LookupKey          string                `json:"lookup_key,omitempty"`
 	Description        string                `json:"description,omitempty"`
 	Metadata           map[string]string     `json:"metadata,omitempty"`
@@ -124,14 +123,7 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) *price.Price {
 		TierMode:           tierMode,
 		Tiers:              tiers,
 		Transform:          transform,
-		BaseModel: types.BaseModel{
-			TenantID:  types.GetTenantID(ctx),
-			Status:    types.StatusPublished,
-			CreatedAt: time.Now().UTC(),
-			UpdatedAt: time.Now().UTC(),
-			CreatedBy: types.GetUserID(ctx),
-			UpdatedBy: types.GetUserID(ctx),
-		},
+		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
 	price.DisplayAmount = price.GetDisplayAmount()
 	return price

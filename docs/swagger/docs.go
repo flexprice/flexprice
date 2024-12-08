@@ -1432,8 +1432,8 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Filter by status",
-                        "name": "status",
+                        "description": "Filter by subscription status",
+                        "name": "subscription_status",
                         "in": "query"
                     },
                     {
@@ -1806,6 +1806,9 @@ const docTemplate = `{
                 "description": {
                     "type": "string"
                 },
+                "invoice_cadence": {
+                    "$ref": "#/definitions/types.InvoiceCadence"
+                },
                 "lookup_key": {
                     "type": "string"
                 },
@@ -1817,6 +1820,9 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/dto.CreatePlanPriceRequest"
                     }
+                },
+                "trial_period": {
+                    "type": "integer"
                 }
             }
         },
@@ -1900,6 +1906,15 @@ const docTemplate = `{
                 "plan_id"
             ],
             "properties": {
+                "billing_cadence": {
+                    "$ref": "#/definitions/types.BillingCadence"
+                },
+                "billing_period": {
+                    "$ref": "#/definitions/types.BillingPeriod"
+                },
+                "billing_period_unit": {
+                    "type": "integer"
+                },
                 "currency": {
                     "type": "string"
                 },
@@ -2399,6 +2414,26 @@ const docTemplate = `{
                     "description": "BillingAnchor is the reference point that aligns future billing cycle dates.\nIt sets the day of week for week intervals, the day of month for month and year intervals,\nand the month of year for year intervals. The timestamp is in UTC format.",
                     "type": "string"
                 },
+                "billing_cadence": {
+                    "description": "BillingCadence is the cadence of the billing cycle.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.BillingCadence"
+                        }
+                    ]
+                },
+                "billing_period": {
+                    "description": "BillingPeriod is the period of the billing cycle.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.BillingPeriod"
+                        }
+                    ]
+                },
+                "billing_period_unit": {
+                    "description": "BillingPeriodUnit is the unit of the billing period.",
+                    "type": "integer"
+                },
                 "cancel_at": {
                     "description": "CancelAt is the date the subscription will be canceled",
                     "type": "string"
@@ -2593,6 +2628,9 @@ const docTemplate = `{
                 "description": {
                     "type": "string"
                 },
+                "invoice_cadence": {
+                    "$ref": "#/definitions/types.InvoiceCadence"
+                },
                 "lookup_key": {
                     "type": "string"
                 },
@@ -2604,6 +2642,9 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/dto.UpdatePlanPriceRequest"
                     }
+                },
+                "trial_period": {
+                    "type": "integer"
                 }
             }
         },

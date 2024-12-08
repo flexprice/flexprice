@@ -3,6 +3,8 @@ CREATE TABLE IF NOT EXISTS plans (
     lookup_key VARCHAR(255) NOT NULL,
     name VARCHAR(255) NOT NULL,
     description TEXT,
+    invoice_cadence VARCHAR(20) NOT NULL,
+    trial_period INT NOT NULL,
     tenant_id VARCHAR(255) NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'published',
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,

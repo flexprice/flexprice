@@ -95,6 +95,8 @@ definitions:
     properties:
       description:
         type: string
+      invoice_cadence:
+        $ref: '#/definitions/types.InvoiceCadence'
       lookup_key:
         type: string
       name:
@@ -103,6 +105,8 @@ definitions:
         items:
           $ref: '#/definitions/dto.CreatePlanPriceRequest'
         type: array
+      trial_period:
+        type: integer
     required:
     - name
     type: object
@@ -158,6 +162,12 @@ definitions:
     type: object
   dto.CreateSubscriptionRequest:
     properties:
+      billing_cadence:
+        $ref: '#/definitions/types.BillingCadence'
+      billing_period:
+        $ref: '#/definitions/types.BillingPeriod'
+      billing_period_unit:
+        type: integer
       currency:
         type: string
       customer_id:
@@ -500,6 +510,17 @@ definitions:
           It sets the day of week for week intervals, the day of month for month and year intervals,
           and the month of year for year intervals. The timestamp is in UTC format.
         type: string
+      billing_cadence:
+        allOf:
+        - $ref: '#/definitions/types.BillingCadence'
+        description: BillingCadence is the cadence of the billing cycle.
+      billing_period:
+        allOf:
+        - $ref: '#/definitions/types.BillingPeriod'
+        description: BillingPeriod is the period of the billing cycle.
+      billing_period_unit:
+        description: BillingPeriodUnit is the unit of the billing period.
+        type: integer
       cancel_at:
         description: CancelAt is the date the subscription will be canceled
         type: string
@@ -639,6 +660,8 @@ definitions:
     properties:
       description:
         type: string
+      invoice_cadence:
+        $ref: '#/definitions/types.InvoiceCadence'
       lookup_key:
         type: string
       name:
@@ -647,6 +670,8 @@ definitions:
         items:
           $ref: '#/definitions/dto.UpdatePlanPriceRequest'
         type: array
+      trial_period:
+        type: integer
     required:
     - name
     type: object
@@ -1766,9 +1791,9 @@ paths:
         in: query
         name: customer_id
         type: string
-      - description: Filter by status
+      - description: Filter by subscription status
         in: query
-        name: status
+        name: subscription_status
         type: string
       - description: Filter by plan ID
         in: query

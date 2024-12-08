@@ -2,7 +2,6 @@ package dto
 
 import (
 	"context"
-	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/types"
@@ -11,10 +10,12 @@ import (
 )
 
 type CreatePlanRequest struct {
-	Name        string                   `json:"name" validate:"required"`
-	LookupKey   string                   `json:"lookup_key"`
-	Description string                   `json:"description"`
-	Prices      []CreatePlanPriceRequest `json:"prices"`
+	Name           string                   `json:"name" validate:"required"`
+	LookupKey      string                   `json:"lookup_key"`
+	Description    string                   `json:"description"`
+	InvoiceCadence types.InvoiceCadence     `json:"invoice_cadence"`
+	TrialPeriod    int                      `json:"trial_period"`
+	Prices         []CreatePlanPriceRequest `json:"prices"`
 }
 
 type CreatePlanPriceRequest struct {
@@ -38,18 +39,13 @@ func (r *CreatePlanRequest) Validate() error {
 
 func (r *CreatePlanRequest) ToPlan(ctx context.Context) *plan.Plan {
 	plan := &plan.Plan{
-		ID:          uuid.New().String(),
-		LookupKey:   r.LookupKey,
-		Name:        r.Name,
-		Description: r.Description,
-		BaseModel: types.BaseModel{
-			TenantID:  types.GetTenantID(ctx),
-			Status:    types.StatusPublished,
-			CreatedAt: time.Now().UTC(),
-			UpdatedAt: time.Now().UTC(),
-			CreatedBy: types.GetUserID(ctx),
-			UpdatedBy: types.GetUserID(ctx),
-		},
+		ID:             uuid.New().String(),
+		LookupKey:      r.LookupKey,
+		Name:           r.Name,
+		Description:    r.Description,
+		InvoiceCadence: r.InvoiceCadence,
+		TrialPeriod:    r.TrialPeriod,
+		BaseModel:      types.GetDefaultBaseModel(ctx),
 	}
 	return plan
 }
@@ -64,10 +60,12 @@ type PlanResponse struct {
 }
 
 type UpdatePlanRequest struct {
-	Name        string                   `json:"name" validate:"required"`
-	LookupKey   string                   `json:"lookup_key"`
-	Description string                   `json:"description"`
-	Prices      []UpdatePlanPriceRequest `json:"prices"`
+	Name           string                   `json:"name" validate:"required"`
+	LookupKey      string                   `json:"lookup_key"`
+	Description    string                   `json:"description"`
+	InvoiceCadence types.InvoiceCadence     `json:"invoice_cadence"`
+	TrialPeriod    int                      `json:"trial_period"`
+	Prices         []UpdatePlanPriceRequest `json:"prices"`
 }
 
 type UpdatePlanPriceRequest struct {

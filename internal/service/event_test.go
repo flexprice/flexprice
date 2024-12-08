@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/suite"
@@ -23,6 +24,7 @@ type EventServiceSuite struct {
 	store      *testutil.InMemoryEventStore
 	broker     *testutil.InMemoryMessageBroker
 	msgChannel chan *message.Message
+	logger     *logger.Logger
 }
 
 func TestEventService(t *testing.T) {
@@ -33,7 +35,8 @@ func (s *EventServiceSuite) SetupTest() {
 	s.ctx = testutil.SetupContext()
 	s.store = testutil.NewInMemoryEventStore()
 	s.broker = testutil.NewInMemoryMessageBroker()
-	s.service = NewEventService(s.broker, s.store, nil).(*eventService)
+	s.logger = logger.GetLogger()
+	s.service = NewEventService(s.broker, s.store, nil, s.logger).(*eventService)
 
 	// Setup message consumer
 	s.msgChannel = s.broker.Subscribe()
@@ -280,7 +283,7 @@ func (s *EventServiceSuite) TestGetUsageByMeter() {
 	s.NoError(err)
 
 	// Setup the event service with the mocked meter repository
-	s.service = NewEventService(s.broker, s.store, mockedMeterRepo).(*eventService)
+	s.service = NewEventService(s.broker, s.store, mockedMeterRepo, s.logger).(*eventService)
 
 	// Setup test events
 	testingEvents := []*dto.IngestEventRequest{

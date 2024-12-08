@@ -112,9 +112,14 @@ func (a *SumAggregator) GetQuery(ctx context.Context, params *events.UsageParams
 		windowGroupBy = ", window_size"
 	}
 
-	customerFilter := ""
+	externalCustomerFilter := ""
 	if params.ExternalCustomerID != "" {
-		customerFilter = fmt.Sprintf("AND external_customer_id = '%s'", params.ExternalCustomerID)
+		externalCustomerFilter = fmt.Sprintf("AND external_customer_id = '%s'", params.ExternalCustomerID)
+	}
+
+	customerFilter := ""
+	if params.CustomerID != "" {
+		customerFilter = fmt.Sprintf("AND customer_id = '%s'", params.CustomerID)
 	}
 
 	filterConditions := buildFilterConditions(params.Filters)
@@ -129,7 +134,8 @@ func (a *SumAggregator) GetQuery(ctx context.Context, params *events.UsageParams
             FROM events
             PREWHERE event_name = '%s' 
                 AND tenant_id = '%s'
-                %s
+				%s
+				%s
                 %s
                 %s
             GROUP BY %s %s
@@ -141,6 +147,7 @@ func (a *SumAggregator) GetQuery(ctx context.Context, params *events.UsageParams
 		params.PropertyName,
 		params.EventName,
 		types.GetTenantID(ctx),
+		externalCustomerFilter,
 		customerFilter,
 		filterConditions,
 		timeConditions,
@@ -166,9 +173,14 @@ func (a *CountAggregator) GetQuery(ctx context.Context, params *events.UsagePara
 		groupByClause = "GROUP BY window_size ORDER BY window_size"
 	}
 
-	customerFilter := ""
+	externalCustomerFilter := ""
 	if params.ExternalCustomerID != "" {
-		customerFilter = fmt.Sprintf("AND external_customer_id = '%s'", params.ExternalCustomerID)
+		externalCustomerFilter = fmt.Sprintf("AND external_customer_id = '%s'", params.ExternalCustomerID)
+	}
+
+	customerFilter := ""
+	if params.CustomerID != "" {
+		customerFilter = fmt.Sprintf("AND customer_id = '%s'", params.CustomerID)
 	}
 
 	filterConditions := buildFilterConditions(params.Filters)
@@ -180,7 +192,8 @@ func (a *CountAggregator) GetQuery(ctx context.Context, params *events.UsagePara
         FROM events
         PREWHERE event_name = '%s'
             AND tenant_id = '%s'
-            %s
+			%s
+			%s
             %s
             %s
         %s
@@ -189,6 +202,7 @@ func (a *CountAggregator) GetQuery(ctx context.Context, params *events.UsagePara
 		getDeduplicationKey(),
 		params.EventName,
 		types.GetTenantID(ctx),
+		externalCustomerFilter,
 		customerFilter,
 		filterConditions,
 		timeConditions,
@@ -216,9 +230,14 @@ func (a *AvgAggregator) GetQuery(ctx context.Context, params *events.UsageParams
 		windowGroupBy = ", window_size"
 	}
 
-	customerFilter := ""
+	externalCustomerFilter := ""
 	if params.ExternalCustomerID != "" {
-		customerFilter = fmt.Sprintf("AND external_customer_id = '%s'", params.ExternalCustomerID)
+		externalCustomerFilter = fmt.Sprintf("AND external_customer_id = '%s'", params.ExternalCustomerID)
+	}
+
+	customerFilter := ""
+	if params.CustomerID != "" {
+		customerFilter = fmt.Sprintf("AND customer_id = '%s'", params.CustomerID)
 	}
 
 	filterConditions := buildFilterConditions(params.Filters)
@@ -233,8 +252,9 @@ func (a *AvgAggregator) GetQuery(ctx context.Context, params *events.UsageParams
             FROM events
             PREWHERE event_name = '%s' 
                 AND tenant_id = '%s'
-                %s
-                %s
+				%s
+				%s
+				%s
                 %s
             GROUP BY %s %s
         )
@@ -245,6 +265,7 @@ func (a *AvgAggregator) GetQuery(ctx context.Context, params *events.UsageParams
 		params.PropertyName,
 		params.EventName,
 		types.GetTenantID(ctx),
+		externalCustomerFilter,
 		customerFilter,
 		filterConditions,
 		timeConditions,

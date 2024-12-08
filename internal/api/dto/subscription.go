@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/go-playground/validator/v10"
@@ -11,15 +12,18 @@ import (
 )
 
 type CreateSubscriptionRequest struct {
-	CustomerID     string               `json:"customer_id" validate:"required"`
-	PlanID         string               `json:"plan_id" validate:"required"`
-	Currency       string               `json:"currency" validate:"required,len=3"`
-	LookupKey      string               `json:"lookup_key"`
-	StartDate      time.Time            `json:"start_date,omitempty"`
-	EndDate        *time.Time           `json:"end_date,omitempty"`
-	TrialStart     *time.Time           `json:"trial_start,omitempty"`
-	TrialEnd       *time.Time           `json:"trial_end,omitempty"`
-	InvoiceCadence types.InvoiceCadence `json:"invoice_cadence,omitempty"`
+	CustomerID        string               `json:"customer_id" validate:"required"`
+	PlanID            string               `json:"plan_id" validate:"required"`
+	Currency          string               `json:"currency" validate:"required,len=3"`
+	LookupKey         string               `json:"lookup_key"`
+	StartDate         time.Time            `json:"start_date,omitempty"`
+	EndDate           *time.Time           `json:"end_date,omitempty"`
+	TrialStart        *time.Time           `json:"trial_start,omitempty"`
+	TrialEnd          *time.Time           `json:"trial_end,omitempty"`
+	InvoiceCadence    types.InvoiceCadence `json:"invoice_cadence,omitempty"`
+	BillingCadence    types.BillingCadence `json:"billing_cadence,omitempty"`
+	BillingPeriod     types.BillingPeriod  `json:"billing_period,omitempty"`
+	BillingPeriodUnit int                  `json:"billing_period_unit,omitempty"`
 }
 
 type UpdateSubscriptionRequest struct {
@@ -62,14 +66,35 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		TrialStart:         r.TrialStart,
 		TrialEnd:           r.TrialEnd,
 		InvoiceCadence:     r.InvoiceCadence,
+		BillingCadence:     r.BillingCadence,
+		BillingPeriod:      r.BillingPeriod,
+		BillingPeriodUnit:  r.BillingPeriodUnit,
 		BillingAnchor:      r.StartDate,
-		BaseModel: types.BaseModel{
-			TenantID:  types.GetTenantID(ctx),
-			CreatedAt: now,
-			UpdatedAt: now,
-			CreatedBy: types.GetUserID(ctx),
-			UpdatedBy: types.GetUserID(ctx),
-			Status:    types.StatusPublished,
-		},
+		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
+}
+
+type GetUsageBySubscriptionRequest struct {
+	SubscriptionID string    `json:"subscription_id" binding:"required" example:"123"`
+	StartTime      time.Time `json:"start_time" example:"2024-03-13T00:00:00Z"`
+	EndTime        time.Time `json:"end_time" example:"2024-03-20T00:00:00Z"`
+}
+
+type GetUsageBySubscriptionResponse struct {
+	Amount        float64                              `json:"amount"`
+	Currency      string                               `json:"currency"`
+	DisplayAmount string                               `json:"display_amount"`
+	StartTime     time.Time                            `json:"start_time"`
+	EndTime       time.Time                            `json:"end_time"`
+	Charges       []*SubscriptionUsageByMetersResponse `json:"charges"`
+}
+
+type SubscriptionUsageByMetersResponse struct {
+	Amount        float64            `json:"amount"`
+	Currency      string             `json:"currency"`
+	DisplayAmount string             `json:"display_amount"`
+	Quantity      float64            `json:"quantity"`
+	FilterValues  price.JSONBFilters `json:"filter_values"`
+	Meter         *MeterResponse     `json:"meter"`
+	Price         *PriceResponse     `json:"price"`
 }

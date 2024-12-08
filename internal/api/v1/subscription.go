@@ -73,7 +73,7 @@ func (h *SubscriptionHandler) GetSubscription(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param customer_id query string false "Filter by customer ID"
-// @Param status query string false "Filter by status"
+// @Param subscription_status query string false "Filter by subscription status"
 // @Param plan_id query string false "Filter by plan ID"
 // @Param offset query int false "Offset for pagination"
 // @Param limit query int false "Limit for pagination"
@@ -121,4 +121,30 @@ func (h *SubscriptionHandler) CancelSubscription(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Subscription cancelled successfully"})
+}
+
+// @Summary Get usage by subscription
+// @Description Get usage by subscription
+// @Tags subscriptions
+// @Produce json
+// @Security BearerAuth
+// @Param request body dto.GetUsageBySubscriptionRequest true "Request"
+// @Success 200 {object} dto.GetUsageBySubscriptionResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /subscriptions/usage [get]
+func (h *SubscriptionHandler) GetUsageBySubscription(c *gin.Context) {
+	var req dto.GetUsageBySubscriptionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	resp, err := h.service.GetUsageBySubscription(c.Request.Context(), &req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
 }

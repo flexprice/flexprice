@@ -18,9 +18,10 @@ const (
 
 type SubscriptionFilter struct {
 	Filter
-	CustomerID string             `form:"customer_id"`
-	Status     SubscriptionStatus `form:"status"`
-	PlanID     string             `form:"plan_id"`
+	CustomerID         string             `form:"customer_id"`
+	SubscriptionStatus SubscriptionStatus `form:"subscription_status"`
+	Status             Status             `form:"status"`
+	PlanID             string             `form:"plan_id"`
 }
 
 func (f *SubscriptionFilter) ToMap() map[string]interface{} {
@@ -31,6 +32,10 @@ func (f *SubscriptionFilter) ToMap() map[string]interface{} {
 
 	if f.CustomerID != "" {
 		params["customer_id"] = f.CustomerID
+	}
+
+	if f.SubscriptionStatus != "" {
+		params["subscription_status"] = f.SubscriptionStatus
 	}
 
 	if f.Status != "" {

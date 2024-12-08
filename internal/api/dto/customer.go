@@ -2,7 +2,6 @@ package dto
 
 import (
 	"context"
-	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/types"
@@ -43,13 +42,7 @@ func (r *CreateCustomerRequest) ToCustomer(ctx context.Context) *customer.Custom
 		ExternalID: r.ExternalID,
 		Name:       r.Name,
 		Email:      r.Email,
-		BaseModel: types.BaseModel{
-			TenantID:  types.GetTenantID(ctx),
-			CreatedAt: time.Now(),
-			CreatedBy: types.GetUserID(ctx),
-			UpdatedAt: time.Now(),
-			UpdatedBy: types.GetUserID(ctx),
-		},
+		BaseModel:  types.GetDefaultBaseModel(ctx),
 	}
 }
 

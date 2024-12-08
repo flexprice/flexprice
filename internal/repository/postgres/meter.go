@@ -68,13 +68,13 @@ func (r *meterRepository) GetMeter(ctx context.Context, id string) (*meter.Meter
 		id, tenant_id, name, event_name, filters, aggregation, reset_usage,
 		created_at, updated_at, created_by, updated_by, status
 	FROM meters 
-	WHERE id = $1 AND status = $2
+	WHERE id = $1 AND tenant_id = $2
 	`
 
 	var m meter.Meter
 	var filtersJSON, aggregationJSON []byte
 
-	err := r.db.QueryRowContext(ctx, query, id, types.StatusPublished, types.GetTenantID(ctx)).Scan(
+	err := r.db.QueryRowContext(ctx, query, id, types.GetTenantID(ctx)).Scan(
 		&m.ID,
 		&m.TenantID,
 		&m.Name,

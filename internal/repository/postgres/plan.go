@@ -28,6 +28,8 @@ func (r *planRepository) Create(ctx context.Context, plan *plan.Plan) error {
 			lookup_key, 
 			name, 
 			description, 
+			invoice_cadence, 
+			trial_period, 
 			status, 
 			created_at, 
 			updated_at, 
@@ -40,6 +42,8 @@ func (r *planRepository) Create(ctx context.Context, plan *plan.Plan) error {
 			:lookup_key, 
 			:name, 
 			:description, 
+			:invoice_cadence, 
+			:trial_period, 
 			:status, 
 			:created_at, 
 			:updated_at, 
@@ -132,6 +136,8 @@ func (r *planRepository) Update(ctx context.Context, plan *plan.Plan) error {
 		SET lookup_key = :lookup_key, 
 		name = :name, 
 		description = :description, 
+		invoice_cadence = :invoice_cadence, 
+		trial_period = :trial_period, 
 		updated_at = :updated_at, 
 		updated_by = :updated_by 
 		WHERE id = :id 

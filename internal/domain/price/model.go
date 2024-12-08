@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"math"
 
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -12,7 +13,7 @@ import (
 type JSONBTiers []PriceTier
 type JSONBTransform PriceTransform
 type JSONBMetadata map[string]string
-type JSONBFilters map[string]string
+type JSONBFilters map[string][]string
 
 // Price model with JSONB tags
 type Price struct {
@@ -20,7 +21,7 @@ type Price struct {
 	ID string `db:"id" json:"id"`
 
 	// Amount in cents ex 1200 for $12
-	Amount int `db:"amount" json:"amount"`
+	Amount uint64 `db:"amount" json:"amount"`
 
 	// DisplayAmount is the amount in the currency ex $12.00
 	DisplayAmount string `db:"display_amount" json:"display_amount"`
@@ -81,6 +82,24 @@ func (p *Price) GetDisplayAmount() string {
 	return fmt.Sprintf("%s%.2f", p.GetCurrencySymbol(), float64(p.Amount)/100.0)
 }
 
+func GetDisplayAmount(amount uint64, currency string) string {
+	price := &Price{
+		Amount:   amount,
+		Currency: currency,
+	}
+	return price.GetDisplayAmount()
+}
+
+func GetAmountInDollars(amount uint64) float64 {
+	return float64(amount) / 100.0
+}
+
+func GetAmountInCents(amount float64) uint64 {
+	// round to 2 decimal places
+	amountFloat := math.Round(amount*100) / 100
+	return uint64(amountFloat)
+}
+
 type PriceTransform struct {
 	DivideBy int    `json:"divide_by,omitempty"` // Divide quantity by this number
 	Round    string `json:"round,omitempty"`     // up, down, or nearest
@@ -111,6 +130,25 @@ func (j JSONBTiers) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return json.Marshal(j)
+}
+
+// func (j JSONBTiers) GetTierUpTo(i int) int {
+// 	if i >= len(j) {
+// 		return math.MaxInt
+// 	}
+
+// 	tier := j[i]
+// 	if tier.UpTo != nil {
+// 		return *tier.UpTo
+// 	}
+// 	return math.MaxInt
+// }
+
+func (t PriceTier) GetTierUpTo() int {
+	if t.UpTo != nil {
+		return *t.UpTo
+	}
+	return math.MaxInt
 }
 
 // Scanner/Valuer implementations for JSONBTransform
