@@ -21,6 +21,7 @@ type UsageParams struct {
 	WindowSize         types.WindowSize      `json:"window_size"`
 	StartTime          time.Time             `json:"start_time" validate:"required"`
 	EndTime            time.Time             `json:"end_time" validate:"required"`
+	Filters            map[string][]string   `json:"filters"`
 }
 
 type GetEventsParams struct {

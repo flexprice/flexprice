@@ -66,13 +66,11 @@ func (s *eventService) CreateEvent(ctx context.Context, createEventRequest *dto.
 		return fmt.Errorf("failed to publish event: %w", err)
 	}
 
-	// Return the event ID to the client
 	createEventRequest.EventID = event.ID
 	return nil
 }
 
 func (s *eventService) GetUsage(ctx context.Context, getUsageRequest *dto.GetUsageRequest) (*events.AggregationResult, error) {
-	// Default to COUNT if property name is not specified or aggregation type is not specified
 	if getUsageRequest.AggregationType == "" || getUsageRequest.PropertyName == "" {
 		getUsageRequest.AggregationType = string(types.AggregationCount)
 	}
@@ -87,6 +85,7 @@ func (s *eventService) GetUsage(ctx context.Context, getUsageRequest *dto.GetUsa
 			WindowSize:         getUsageRequest.WindowSize,
 			StartTime:          getUsageRequest.StartTime,
 			EndTime:            getUsageRequest.EndTime,
+			Filters:            getUsageRequest.Filters,
 		},
 	)
 	if err != nil {
@@ -102,29 +101,93 @@ func (s *eventService) GetUsageByMeter(ctx context.Context, getUsageByMeterReque
 		return nil, errors.NewAttributeNotFoundError("meter")
 	}
 
-	if meter.EventName == "" {
-		return nil, errors.NewAttributeNotFoundError("event_name")
+	switch meter.ResetUsage {
+	case types.ResetUsageBillingPeriod:
+		return s.getUsageForBillingPeriod(ctx, meter, getUsageByMeterRequest)
+	case types.ResetUsageNever:
+		return s.getUsageForNeverReset(ctx, meter, getUsageByMeterRequest)
+	default:
+		return nil, errors.NewInvalidInputError("invalid reset_usage type")
+	}
+}
+
+func (s *eventService) getUsageForBillingPeriod(ctx context.Context, meter *meter.Meter, req *dto.GetUsageByMeterRequest) (*events.AggregationResult, error) {
+	return s.calculateUsage(ctx, meter, req.ExternalCustomerID, req.StartTime, req.EndTime)
+}
+
+func (s *eventService) getUsageForNeverReset(ctx context.Context, meter *meter.Meter, req *dto.GetUsageByMeterRequest) (*events.AggregationResult, error) {
+	if req.StartTime.IsZero() && req.EndTime.IsZero() {
+		return s.calculateUsage(ctx, meter, req.ExternalCustomerID, req.StartTime, req.EndTime)
 	}
 
-	if meter.Aggregation.Field == "" {
-		return nil, errors.NewAttributeNotFoundError("aggregation_field")
+	if !req.StartTime.IsZero() && req.EndTime.IsZero() {
+		beforeUsage, err := s.calculateUsage(ctx, meter, req.ExternalCustomerID, time.Time{}, req.StartTime)
+		if err != nil {
+			return nil, fmt.Errorf("calculate before usage: %w", err)
+		}
+
+		afterUsage, err := s.calculateUsage(ctx, meter, req.ExternalCustomerID, req.StartTime, time.Time{})
+		if err != nil {
+			return nil, fmt.Errorf("calculate after usage: %w", err)
+		}
+
+		return s.combineResults(beforeUsage, afterUsage, meter), nil
 	}
 
-	usageRequest := &dto.GetUsageRequest{
-		ExternalCustomerID: getUsageByMeterRequest.ExternalCustomerID,
+	if !req.StartTime.IsZero() && !req.EndTime.IsZero() {
+		return s.calculateUsage(ctx, meter, req.ExternalCustomerID, req.StartTime, req.EndTime)
+	}
+
+	return nil, errors.NewInvalidInputError("invalid date range")
+}
+
+func (s *eventService) calculateUsage(ctx context.Context, meter *meter.Meter, externalCustomerID string, startTime, endTime time.Time) (*events.AggregationResult, error) {
+	filterMap := make(map[string][]string)
+	for _, filter := range meter.Filters {
+		filterMap[filter.Key] = filter.Values
+	}
+
+	return s.GetUsage(ctx, &dto.GetUsageRequest{
+		ExternalCustomerID: externalCustomerID,
 		EventName:          meter.EventName,
 		PropertyName:       meter.Aggregation.Field,
 		AggregationType:    string(meter.Aggregation.Type),
-		WindowSize:         getUsageByMeterRequest.WindowSize,
-		StartTime:          getUsageByMeterRequest.StartTime,
-		EndTime:            getUsageByMeterRequest.EndTime,
+		StartTime:          startTime,
+		EndTime:            endTime,
+		Filters:            filterMap,
+	})
+}
+
+func (s *eventService) combineResults(beforeUsage, afterUsage *events.AggregationResult, meter *meter.Meter) *events.AggregationResult {
+	var totalValue float64
+
+	if beforeUsage != nil && beforeUsage.Value != nil {
+		switch v := beforeUsage.Value.(type) {
+		case float64:
+			totalValue += v
+		case int64:
+			totalValue += float64(v)
+		}
 	}
-	return s.GetUsage(ctx, usageRequest)
+
+	if afterUsage != nil && afterUsage.Value != nil {
+		switch v := afterUsage.Value.(type) {
+		case float64:
+			totalValue += v
+		case int64:
+			totalValue += float64(v)
+		}
+	}
+
+	return &events.AggregationResult{
+		Value:     totalValue,
+		EventName: meter.EventName,
+		Type:      meter.Aggregation.Type,
+	}
 }
 
 func (s *eventService) GetEvents(ctx context.Context, req *dto.GetEventsRequest) (*dto.GetEventsResponse, error) {
-	// Max page size is 50
-	if req.PageSize <= 0 || req.PageSize >= 50 {
+	if req.PageSize <= 0 || req.PageSize > 50 {
 		req.PageSize = 50
 	}
 
@@ -156,17 +219,11 @@ func (s *eventService) GetEvents(ctx context.Context, req *dto.GetEventsRequest)
 		eventsList = eventsList[:req.PageSize]
 	}
 
-	// Deduping the events list by ID
-	// TODO: This is a temporary solution to dedupe the events list.
-	// We need to find a better way to handle this.
-	eventsList = dedupeEvents(eventsList)
-
 	response := &dto.GetEventsResponse{
 		Events:  make([]dto.Event, len(eventsList)),
 		HasMore: hasMore,
 	}
 
-	// Set first and next cursors
 	if len(eventsList) > 0 {
 		firstEvent := eventsList[0]
 		lastEvent := eventsList[len(eventsList)-1]
@@ -177,7 +234,6 @@ func (s *eventService) GetEvents(ctx context.Context, req *dto.GetEventsRequest)
 		}
 	}
 
-	// Convert events to DTO
 	for i, event := range eventsList {
 		response.Events[i] = dto.Event{
 			ID:                 event.ID,
@@ -198,13 +254,11 @@ func parseEventIteratorToStruct(key string) (*events.EventIterator, error) {
 		return nil, nil
 	}
 
-	// sample cursor unix_timestamp_nanoseconds::event_id
 	parts := strings.Split(key, "::")
 	if len(parts) != 2 {
 		return nil, fmt.Errorf("invalid cursor key format")
 	}
 
-	// parse unix timestamp nanoseconds
 	timestampNanoseconds, err := strconv.ParseInt(parts[0], 10, 64)
 	if err != nil {
 		return nil, fmt.Errorf("invalid timestamp while parsing cursor: %w", err)
@@ -212,29 +266,12 @@ func parseEventIteratorToStruct(key string) (*events.EventIterator, error) {
 
 	timestamp := time.Unix(0, timestampNanoseconds)
 
-	cursor := &events.EventIterator{
+	return &events.EventIterator{
 		Timestamp: timestamp,
 		ID:        parts[1],
-	}
-
-	return cursor, nil
+	}, nil
 }
 
 func createEventIteratorKey(timestamp time.Time, id string) string {
-	// sample cursor unix_timestamp_nanoseconds::event_id
 	return fmt.Sprintf("%d::%s", timestamp.UnixNano(), id)
-}
-
-func dedupeEvents(eventsList []*events.Event) []*events.Event {
-	seen := make(map[string]bool)
-	result := make([]*events.Event, 0, len(eventsList))
-
-	// Preserve order by taking first occurrence of each ID
-	for _, event := range eventsList {
-		if !seen[event.ID] {
-			seen[event.ID] = true
-			result = append(result, event)
-		}
-	}
-	return result
 }

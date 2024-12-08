@@ -18,13 +18,14 @@ type IngestEventRequest struct {
 }
 
 type GetUsageRequest struct {
-	ExternalCustomerID string           `form:"external_customer_id" example:"customer456"`
-	EventName          string           `form:"event_name" binding:"required" example:"api_request"`
-	PropertyName       string           `form:"property_name" example:"request_size"` // will be empty/ignored in case of COUNT
-	AggregationType    string           `form:"aggregation_type" binding:"required" example:"COUNT"`
-	StartTime          time.Time        `form:"start_time" example:"2024-03-13T00:00:00Z"`
-	EndTime            time.Time        `form:"end_time" example:"2024-03-20T00:00:00Z"`
-	WindowSize         types.WindowSize `form:"window_size" example:"HOUR"`
+	ExternalCustomerID string              `form:"external_customer_id" example:"customer456"`
+	EventName          string              `form:"event_name" binding:"required" example:"api_request"`
+	PropertyName       string              `form:"property_name" example:"request_size"` // will be empty/ignored in case of COUNT
+	AggregationType    string              `form:"aggregation_type" binding:"required" example:"COUNT"`
+	StartTime          time.Time           `form:"start_time" example:"2024-03-13T00:00:00Z"`
+	EndTime            time.Time           `form:"end_time" example:"2024-03-20T00:00:00Z"`
+	WindowSize         types.WindowSize    `form:"window_size" example:"HOUR"`
+	Filters            map[string][]string `form:"filters,omitempty"`
 }
 
 type GetUsageByMeterRequest struct {

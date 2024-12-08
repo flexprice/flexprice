@@ -114,7 +114,7 @@ func (s *EventServiceSuite) TestCreateEvent() {
 }
 
 func (s *EventServiceSuite) TestGetUsage() {
-	// Setup test data
+	// Setup test data with properties for filtering
 	testingEvents := []*dto.IngestEventRequest{
 		{
 			EventID:            "evt-1",
@@ -123,6 +123,8 @@ func (s *EventServiceSuite) TestGetUsage() {
 			Timestamp:          time.Now().Add(-1 * time.Hour),
 			Properties: map[string]interface{}{
 				"duration_ms": float64(100),
+				"status":      "success",
+				"region":      "us-east-1",
 			},
 		},
 		{
@@ -132,6 +134,19 @@ func (s *EventServiceSuite) TestGetUsage() {
 			Timestamp:          time.Now().Add(-30 * time.Minute),
 			Properties: map[string]interface{}{
 				"duration_ms": float64(150),
+				"status":      "error",
+				"region":      "us-east-1",
+			},
+		},
+		{
+			EventID:            "evt-3",
+			ExternalCustomerID: "cust-1",
+			EventName:          "api_request",
+			Timestamp:          time.Now().Add(-15 * time.Minute),
+			Properties: map[string]interface{}{
+				"duration_ms": float64(200),
+				"status":      "success",
+				"region":      "us-west-2",
 			},
 		},
 	}
@@ -167,11 +182,11 @@ func (s *EventServiceSuite) TestGetUsage() {
 				StartTime:          time.Now().Add(-2 * time.Hour),
 				EndTime:            time.Now(),
 			},
-			expectedValue: 2,
+			expectedValue: float64(3),
 			expectedError: false,
 		},
 		{
-			name: "sum_duration_with_window_size",
+			name: "sum_duration_with_status_filter",
 			request: &dto.GetUsageRequest{
 				ExternalCustomerID: "cust-1",
 				EventName:          "api_request",
@@ -179,9 +194,43 @@ func (s *EventServiceSuite) TestGetUsage() {
 				AggregationType:    string(types.AggregationSum),
 				StartTime:          time.Now().Add(-2 * time.Hour),
 				EndTime:            time.Now(),
-				WindowSize:         "HOUR",
+				Filters: map[string][]string{
+					"status": {"success"},
+				},
 			},
-			expectedValue: 250,
+			expectedValue: 300, // 100 + 200 (only success events)
+			expectedError: false,
+		},
+		{
+			name: "sum_duration_with_multiple_status_values",
+			request: &dto.GetUsageRequest{
+				ExternalCustomerID: "cust-1",
+				EventName:          "api_request",
+				PropertyName:       "duration_ms",
+				AggregationType:    string(types.AggregationSum),
+				StartTime:          time.Now().Add(-2 * time.Hour),
+				EndTime:            time.Now(),
+				Filters: map[string][]string{
+					"status": {"success", "error"},
+					"region": {"us-east-1"},
+				},
+			},
+			expectedValue: 250, // 100 + 150 (us-east-1 events only)
+			expectedError: false,
+		},
+		{
+			name: "count_with_region_filter",
+			request: &dto.GetUsageRequest{
+				ExternalCustomerID: "cust-1",
+				EventName:          "api_request",
+				AggregationType:    string(types.AggregationCount),
+				StartTime:          time.Now().Add(-2 * time.Hour),
+				EndTime:            time.Now(),
+				Filters: map[string][]string{
+					"region": {"us-west-2"},
+				},
+			},
+			expectedValue: 1, // Only one event in us-west-2
 			expectedError: false,
 		},
 	}
@@ -191,29 +240,41 @@ func (s *EventServiceSuite) TestGetUsage() {
 			result, err := s.service.GetUsage(s.ctx, tc.request)
 			if tc.expectedError {
 				s.Error(err)
-				return
+			} else {
+				s.NoError(err)
+				s.Equal(tc.expectedValue, result.Value)
 			}
-			s.NoError(err)
-			s.Equal(tc.expectedValue, result.Value)
 		})
 	}
 }
 
 func (s *EventServiceSuite) TestGetUsageByMeter() {
-	// Setup test data for meter
+	// Setup test meter with required fields
 	testMeter := &meter.Meter{
 		ID:        "meter-1",
+		Name:      "Test Meter", // Add a name
 		EventName: "api_request",
 		Aggregation: meter.Aggregation{
 			Type:  types.AggregationSum,
 			Field: "duration_ms",
 		},
+		Filters: []meter.Filter{
+			{
+				Key:    "status",
+				Values: []string{"success", "error"},
+			},
+			{
+				Key:    "region",
+				Values: []string{"us-east-1"},
+			},
+		},
+		ResetUsage: types.ResetUsageBillingPeriod, // Ensure ResetUsage is valid
 		BaseModel: types.BaseModel{
-			TenantID: "tenant-1",
+			TenantID: types.GetTenantID(s.ctx),
 		},
 	}
 
-	// Add the test meter to a mocked meter repository
+	// Add the test meter to the mocked meter repository
 	mockedMeterRepo := testutil.NewInMemoryMeterStore()
 	err := mockedMeterRepo.CreateMeter(s.ctx, testMeter)
 	s.NoError(err)
@@ -230,10 +291,35 @@ func (s *EventServiceSuite) TestGetUsageByMeter() {
 			Timestamp:          time.Now().Add(-1 * time.Hour),
 			Properties: map[string]interface{}{
 				"duration_ms": float64(100),
+				"status":      "success",
+				"region":      "us-east-1",
+			},
+		},
+		{
+			EventID:            "evt-2",
+			ExternalCustomerID: "cust-1",
+			EventName:          "api_request",
+			Timestamp:          time.Now().Add(-1 * time.Hour),
+			Properties: map[string]interface{}{
+				"duration_ms": float64(200),
+				"status":      "error",
+				"region":      "us-east-1",
+			},
+		},
+		{
+			EventID:            "evt-3",
+			ExternalCustomerID: "cust-1",
+			EventName:          "api_request",
+			Timestamp:          time.Now().Add(-1 * time.Hour),
+			Properties: map[string]interface{}{
+				"duration_ms": float64(300),
+				"status":      "success",
+				"region":      "us-west-2", // Should be filtered out
 			},
 		},
 	}
 
+	// Insert test events
 	for _, evt := range testingEvents {
 		event := events.NewEvent(
 			evt.EventName,
@@ -249,37 +335,20 @@ func (s *EventServiceSuite) TestGetUsageByMeter() {
 		s.NoError(err)
 	}
 
-	// Test cases for GetUsageByMeter
-	testCases := []struct {
-		name          string
-		request       *dto.GetUsageByMeterRequest
-		expectedValue float64
-		expectedError bool
-	}{
-		{
-			name: "sum_duration_with_window_size",
-			request: &dto.GetUsageByMeterRequest{
-				MeterID:            "meter-1",
-				ExternalCustomerID: "cust-1",
-				StartTime:          time.Now().Add(-2 * time.Hour),
-				EndTime:            time.Now(),
-			},
-			expectedValue: 100, // Matches partition window "DAY"
-			expectedError: false,
-		},
-	}
+	// Test usage calculation with filters
+	result, err := s.service.GetUsageByMeter(s.ctx, &dto.GetUsageByMeterRequest{
+		MeterID:            testMeter.ID,
+		ExternalCustomerID: "cust-1",
+		StartTime:          time.Now().Add(-2 * time.Hour),
+		EndTime:            time.Now(),
+		WindowSize:         types.WindowSizeHour,
+	})
 
-	for _, tc := range testCases {
-		s.Run(tc.name, func() {
-			result, err := s.service.GetUsageByMeter(s.ctx, tc.request)
-			if tc.expectedError {
-				s.Error(err)
-				return
-			}
-			s.NoError(err)
-			s.Equal(tc.expectedValue, result.Value)
-		})
-	}
+	s.NoError(err)
+	s.NotNil(result)
+	s.Equal(float64(300), result.Value) // Only sum of us-east-1 events (100 + 200)
+	s.Equal("api_request", result.EventName)
+	s.Equal(types.AggregationSum, result.Type)
 }
 
 func (s *EventServiceSuite) TestGetEvents() {

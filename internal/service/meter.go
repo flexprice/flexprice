@@ -25,9 +25,12 @@ func NewMeterService(meterRepo meter.Repository) MeterService {
 }
 
 func (s *meterService) CreateMeter(ctx context.Context, req *dto.CreateMeterRequest) (*meter.Meter, error) {
-	// If meter is nil, return error
 	if req == nil {
 		return nil, fmt.Errorf("meter cannot be nil")
+	}
+
+	if req.EventName == "" {
+		return nil, fmt.Errorf("event_name is required")
 	}
 
 	meter := req.ToMeter(types.GetTenantID(ctx), types.GetUserID(ctx))

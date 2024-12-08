@@ -36,34 +36,71 @@ func (s *InMemoryEventStore) GetUsage(ctx context.Context, params *events.UsageP
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	var result float64
+	var filteredEvents []*events.Event
+
+	// Filter events based on basic criteria
 	for _, event := range s.events {
-		if event.EventName != params.EventName ||
-			event.ExternalCustomerID != params.ExternalCustomerID ||
-			event.Timestamp.Before(params.StartTime) ||
-			event.Timestamp.After(params.EndTime) {
+		if event.EventName != params.EventName {
 			continue
 		}
 
-		switch params.AggregationType {
-		case types.AggregationCount:
-			result++
-		case types.AggregationSum:
-			if params.PropertyName != "" {
-				if val, ok := event.Properties[params.PropertyName]; ok {
-					if numVal, ok := val.(float64); ok {
-						result += numVal
+		if params.ExternalCustomerID != "" && event.ExternalCustomerID != params.ExternalCustomerID {
+			continue
+		}
+
+		if event.Timestamp.Before(params.StartTime) || event.Timestamp.After(params.EndTime) {
+			continue
+		}
+
+		// Apply property filters
+		matchesFilters := true
+		for key, expectedValues := range params.Filters {
+			if propertyValue, exists := event.Properties[key]; exists {
+				valueStr := fmt.Sprintf("%v", propertyValue)
+				valueMatches := false
+				for _, expectedValue := range expectedValues {
+					if valueStr == expectedValue {
+						valueMatches = true
+						break
 					}
 				}
+				if !valueMatches {
+					matchesFilters = false
+					break
+				}
+			} else {
+				matchesFilters = false
+				break
 			}
+		}
+
+		if matchesFilters {
+			filteredEvents = append(filteredEvents, event)
 		}
 	}
 
-	return &events.AggregationResult{
-		Value:     result,
+	// Calculate aggregation
+	result := &events.AggregationResult{
 		EventName: params.EventName,
 		Type:      params.AggregationType,
-	}, nil
+	}
+
+	switch params.AggregationType {
+	case types.AggregationCount:
+		result.Value = float64(len(filteredEvents))
+	case types.AggregationSum:
+		var sum float64
+		for _, event := range filteredEvents {
+			if val, ok := event.Properties[params.PropertyName]; ok {
+				if floatVal, ok := val.(float64); ok {
+					sum += floatVal
+				}
+			}
+		}
+		result.Value = sum
+	}
+
+	return result, nil
 }
 
 func (s *InMemoryEventStore) GetEvents(ctx context.Context, params *events.GetEventsParams) ([]*events.Event, error) {

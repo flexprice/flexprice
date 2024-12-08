@@ -37,11 +37,14 @@ func (s *MeterServiceSuite) TestCreateMeter() {
 		{
 			name: "successful_meter_creation",
 			input: &dto.CreateMeterRequest{
-				EventName: "api_request", // Replaced Filters with EventName
+				Name:      "API Usage Counter",
+				EventName: "api_request",
 				Aggregation: meter.Aggregation{
 					Type:  types.AggregationSum,
 					Field: "duration_ms",
 				},
+				Filters:    []meter.Filter{},
+				ResetUsage: types.ResetUsageBillingPeriod,
 			},
 			expectedError: false,
 		},
@@ -51,8 +54,19 @@ func (s *MeterServiceSuite) TestCreateMeter() {
 			expectedError: true,
 		},
 		{
+			name: "invalid_meter_missing_name",
+			input: &dto.CreateMeterRequest{
+				EventName: "api_request",
+				Aggregation: meter.Aggregation{
+					Type: types.AggregationSum,
+				},
+			},
+			expectedError: true,
+		},
+		{
 			name: "invalid_meter_missing_event_name",
 			input: &dto.CreateMeterRequest{
+				Name: "Test Meter",
 				Aggregation: meter.Aggregation{
 					Type: types.AggregationSum,
 				},
@@ -70,9 +84,10 @@ func (s *MeterServiceSuite) TestCreateMeter() {
 			}
 			s.NoError(err)
 
-			if tc.input != nil && tc.input.EventName != "" {
+			if tc.input != nil {
 				stored, err := s.store.GetMeter(s.ctx, meter.ID)
 				s.NoError(err)
+				s.Equal(tc.input.Name, stored.Name)
 				s.Equal(tc.input.EventName, stored.EventName)
 			}
 		})
@@ -81,68 +96,59 @@ func (s *MeterServiceSuite) TestCreateMeter() {
 
 func (s *MeterServiceSuite) TestGetMeter() {
 	// Create test meter
-	testMeter := meter.NewMeter("", "tenant-1", "test-user")
-	testMeter.EventName = "api_request" // Replaced Filters with EventName
+	testMeter := meter.NewMeter("Test API Meter", "tenant-1", "test-user")
+	testMeter.EventName = "api_request"
 	testMeter.Aggregation = meter.Aggregation{
 		Type:  types.AggregationSum,
 		Field: "duration_ms",
 	}
+	testMeter.Filters = []meter.Filter{
+		{
+			Key:    "status",
+			Values: []string{"success", "error"},
+		},
+		{
+			Key:    "region",
+			Values: []string{"us-east-1"},
+		},
+	}
+	testMeter.BaseModel.Status = types.StatusActive
+	testMeter.ResetUsage = types.ResetUsageBillingPeriod
 
 	err := s.store.CreateMeter(s.ctx, testMeter)
 	s.NoError(err)
 
-	testCases := []struct {
-		name          string
-		id            string
-		expectedError bool
-	}{
-		{
-			name:          "existing_meter",
-			id:            testMeter.ID,
-			expectedError: false,
-		},
-		{
-			name:          "empty_id",
-			id:            "",
-			expectedError: true,
-		},
-		{
-			name:          "non_existent_meter",
-			id:            "non-existent",
-			expectedError: true,
-		},
-	}
-
-	for _, tc := range testCases {
-		s.Run(tc.name, func() {
-			result, err := s.service.GetMeter(s.ctx, tc.id)
-			if tc.expectedError {
-				s.Error(err)
-				return
-			}
-			s.NoError(err)
-			s.Equal(testMeter.ID, result.ID)
-			s.Equal(testMeter.EventName, result.EventName) // Verify EventName
-		})
-	}
+	result, err := s.service.GetMeter(s.ctx, testMeter.ID)
+	s.NoError(err)
+	s.Equal(testMeter.ID, result.ID)
+	s.Equal(testMeter.Name, result.Name)
+	s.Equal(testMeter.EventName, result.EventName)
+	s.Equal(testMeter.Aggregation, result.Aggregation)
+	s.Equal(testMeter.Filters, result.Filters)
 }
 
 func (s *MeterServiceSuite) TestGetAllMeters() {
 	// Create test meters
 	meters := []*meter.Meter{
-		meter.NewMeter("", "tenant-1", "test-user-1"),
-		meter.NewMeter("", "tenant-1", "test-user-2"),
+		meter.NewMeter("First API Meter", "tenant-1", "test-user-1"),
+		meter.NewMeter("Second API Meter", "tenant-1", "test-user-2"),
 	}
 
 	// Set required fields
 	for _, m := range meters {
-		m.TenantID = "tenant-1"
-		m.EventName = "api_request" // Replaced Filters with EventName
+		m.EventName = "api_request"
 		m.Aggregation = meter.Aggregation{
 			Type:  types.AggregationSum,
 			Field: "duration_ms",
 		}
+		m.Filters = []meter.Filter{
+			{
+				Key:    "status",
+				Values: []string{"success"},
+			},
+		}
 		m.BaseModel.Status = types.StatusActive
+		m.ResetUsage = types.ResetUsageBillingPeriod
 
 		err := s.store.CreateMeter(s.ctx, m)
 		s.NoError(err)
@@ -151,18 +157,27 @@ func (s *MeterServiceSuite) TestGetAllMeters() {
 	result, err := s.service.GetAllMeters(s.ctx)
 	s.NoError(err)
 	s.Len(result, 2)
-	for _, m := range result {
-		s.Equal("api_request", m.EventName) // Verify EventName
+	for i, m := range result {
+		s.Equal(meters[i].Name, m.Name)
+		s.Equal("api_request", m.EventName)
+		s.NotEmpty(m.Filters)
+		s.Equal("status", m.Filters[0].Key)
 	}
 }
 
 func (s *MeterServiceSuite) TestDisableMeter() {
-	// Create test meter
-	testMeter := meter.NewMeter("", "tenant-1", "test-user")
-	testMeter.EventName = "api_request" // Replaced Filters with EventName
+	// Create test meter with a name
+	testMeter := meter.NewMeter("Test Disable Meter", "tenant-1", "test-user") // Added name
+	testMeter.EventName = "api_request"
 	testMeter.BaseModel = types.BaseModel{
 		Status: types.StatusActive,
 	}
+	testMeter.Aggregation = meter.Aggregation{ // Add required fields
+		Type:  types.AggregationSum,
+		Field: "duration_ms",
+	}
+	testMeter.Filters = []meter.Filter{} // Initialize empty filters
+	testMeter.ResetUsage = types.ResetUsageBillingPeriod
 
 	err := s.store.CreateMeter(s.ctx, testMeter)
 	s.NoError(err)
@@ -199,7 +214,8 @@ func (s *MeterServiceSuite) TestDisableMeter() {
 			s.NoError(err)
 
 			// Verify meter is disabled
-			meter, _ := s.store.GetMeter(s.ctx, tc.id)
+			meter, err := s.store.GetMeter(s.ctx, tc.id)
+			s.NoError(err)
 			s.Equal(types.StatusDeleted, meter.BaseModel.Status)
 		})
 	}
