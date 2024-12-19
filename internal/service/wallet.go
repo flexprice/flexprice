@@ -260,6 +260,7 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 			SubscriptionID: sub.Subscription.ID,
 			StartTime:      sub.Subscription.CurrentPeriodStart,
 			EndTime:        time.Now().UTC(),
+			LifetimeUsage:  true,
 		})
 		if err != nil {
 			s.logger.Errorw("failed to get subscription usage",
