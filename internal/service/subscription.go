@@ -214,6 +214,11 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 		usageEndTime = subscription.CurrentPeriodEnd
 	}
 
+	if req.LifetimeUsage {
+		usageStartTime = time.Time{}
+		usageEndTime = time.Now().UTC()
+	}
+
 	// Maintain meter order as they first appear in pricesResponse
 	meterOrder := []string{}
 	seenMeters := make(map[string]bool)
