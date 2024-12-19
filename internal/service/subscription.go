@@ -97,7 +97,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		subscription.BillingPeriodCount = 1
 	}
 
-	nextBillingDate, err := types.NextBillingDate(subscription.StartDate, subscription.BillingPeriodCount, subscription.BillingPeriod)
+	nextBillingDate, err := types.NextBillingDate(subscription.StartDate, subscription.BillingAnchor, subscription.BillingPeriodCount, subscription.BillingPeriod)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate next billing date: %w", err)
 	}
