@@ -85,18 +85,30 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 
 	subscription := req.ToSubscription(ctx)
 	now := time.Now().UTC()
+
+	// Set start date and ensure it's in UTC
 	if subscription.StartDate.IsZero() {
 		subscription.StartDate = now
+	} else {
+		subscription.StartDate = subscription.StartDate.UTC()
 	}
 
+	// Set billing anchor and ensure it's in UTC
 	if subscription.BillingAnchor.IsZero() {
 		subscription.BillingAnchor = subscription.StartDate
+	} else {
+		subscription.BillingAnchor = subscription.BillingAnchor.UTC()
+		// Validate that billing anchor is not before start date
+		if subscription.BillingAnchor.Before(subscription.StartDate) {
+			return nil, fmt.Errorf("billing anchor cannot be before start date")
+		}
 	}
 
 	if subscription.BillingPeriodCount == 0 {
 		subscription.BillingPeriodCount = 1
 	}
 
+	// Calculate the first billing period end date
 	nextBillingDate, err := types.NextBillingDate(subscription.StartDate, subscription.BillingAnchor, subscription.BillingPeriodCount, subscription.BillingPeriod)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate next billing date: %w", err)
@@ -104,8 +116,15 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 
 	subscription.CurrentPeriodStart = subscription.StartDate
 	subscription.CurrentPeriodEnd = nextBillingDate
-	subscription.InvoiceCadence = plan.InvoiceCadence
-	subscription.Currency = prices[0].Currency
+	subscription.SubscriptionStatus = types.SubscriptionStatusActive
+
+	s.logger.Infow("creating subscription",
+		"customer_id", subscription.CustomerID,
+		"plan_id", subscription.PlanID,
+		"start_date", subscription.StartDate,
+		"billing_anchor", subscription.BillingAnchor,
+		"current_period_start", subscription.CurrentPeriodStart,
+		"current_period_end", subscription.CurrentPeriodEnd)
 
 	if err := s.subscriptionRepo.Create(ctx, subscription); err != nil {
 		return nil, fmt.Errorf("failed to create subscription: %w", err)
