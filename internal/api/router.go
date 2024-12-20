@@ -2,6 +2,7 @@ package api
 
 import (
 	"github.com/flexprice/flexprice/docs/swagger"
+	"github.com/flexprice/flexprice/internal/api/cron"
 	v1 "github.com/flexprice/flexprice/internal/api/v1"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -22,6 +23,7 @@ type Handlers struct {
 	Plan         *v1.PlanHandler
 	Subscription *v1.SubscriptionHandler
 	Wallet       *v1.WalletHandler
+	Cron         *cron.SubscriptionHandler
 }
 
 func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logger) *gin.Engine {
@@ -133,6 +135,15 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			wallet.POST("/:id/terminate", handlers.Wallet.TerminateWallet)
 			wallet.GET("/:id/balance/real-time", handlers.Wallet.GetWalletBalance)
 		}
+	}
+
+	// Cron routes
+	// TODO: move crons out of API based architecture
+	cron := v1Private.Group("/cron")
+	// Subscription related cron jobs
+	subscriptionGroup := cron.Group("/subscriptions")
+	{
+		subscriptionGroup.POST("/update-periods", handlers.Cron.UpdateBillingPeriods)
 	}
 	return router
 }

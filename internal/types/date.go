@@ -5,68 +5,82 @@ import (
 	"time"
 )
 
-// NextBillingDate calculates the next billing date based on the given start time,
-// billing period, and billing period unit (the frequency multiplier).
-// For example:
-// - If billing period is MONTHLY and unit is 2, we add two months.
-// - If billing period is ANNUAL and unit is 1, we add one year.
-// - If billing period is WEEKLY and unit is 3, we add 21 days (3 weeks).
-// - If billing period is DAILY and unit is 10, we add 10 days.
-// This function leverages time.AddDate, which properly handles leap years, month-boundary issues, etc.
-func NextBillingDate(start time.Time, unit int, period BillingPeriod) (time.Time, error) {
+// NextBillingDate calculates the next billing date based on the current period start,
+// billing anchor, billing period, and billing period unit.
+// The billing anchor determines the reference point for billing cycles:
+// - For MONTHLY periods, it sets the day of the month
+// - For ANNUAL periods, it sets the month and day of the year
+// - For WEEKLY/DAILY periods, it's used only for validation
+func NextBillingDate(currentPeriodStart, billingAnchor time.Time, unit int, period BillingPeriod) (time.Time, error) {
 	if unit <= 0 {
-		return start, fmt.Errorf("billing period unit must be a positive integer, got %d", unit)
+		return currentPeriodStart, fmt.Errorf("billing period unit must be a positive integer, got %d", unit)
 	}
 
+	// For daily and weekly periods, we can use simple addition
 	switch period {
 	case BILLING_PERIOD_DAILY:
-		// Add unit days
-		return AddClampedDate(start, 0, 0, unit), nil
+		return currentPeriodStart.AddDate(0, 0, unit), nil
 	case BILLING_PERIOD_WEEKLY:
-		// 1 week = 7 days
-		return AddClampedDate(start, 0, 0, 7*unit), nil
-	case BILLING_PERIOD_MONTHLY:
-		// Add 'unit' months
-		return AddClampedDate(start, 0, unit, 0), nil
-	case BILLING_PERIOD_ANNUAL:
-		// Add 'unit' years
-		return AddClampedDate(start, unit, 0, 0), nil
-	default:
-		return start, fmt.Errorf("invalid billing period type: %s", period)
+		return currentPeriodStart.AddDate(0, 0, 7*unit), nil
 	}
+
+	// For monthly and annual periods, calculate the target year and month
+	var years, months int
+	switch period {
+	case BILLING_PERIOD_MONTHLY:
+		months = unit
+	case BILLING_PERIOD_ANNUAL:
+		years = unit
+	default:
+		return currentPeriodStart, fmt.Errorf("invalid billing period type: %s", period)
+	}
+
+	// Get the current year and month
+	y, m, _ := currentPeriodStart.Date()
+	h, min, sec := currentPeriodStart.Clock()
+
+	// Calculate the target year and month
+	targetY := y + years
+	targetM := time.Month(int(m) + months)
+
+	// Adjust for month overflow/underflow
+	for targetM > 12 {
+		targetM -= 12
+		targetY++
+	}
+	for targetM < 1 {
+		targetM += 12
+		targetY--
+	}
+
+	// For annual billing, preserve the billing anchor month
+	if period == BILLING_PERIOD_ANNUAL {
+		targetM = billingAnchor.Month()
+	}
+
+	// Get the target day from the billing anchor
+	targetD := billingAnchor.Day()
+
+	// Find the last day of the target month
+	lastDayOfMonth := time.Date(targetY, targetM+1, 0, 0, 0, 0, 0, currentPeriodStart.Location()).Day()
+
+	// Special handling for month-end dates and February
+	if targetD > lastDayOfMonth {
+		targetD = lastDayOfMonth
+	}
+
+	// Special case for February 29th in leap years
+	if period == BILLING_PERIOD_ANNUAL && 
+		billingAnchor.Month() == time.February && 
+		billingAnchor.Day() == 29 && 
+		!isLeapYear(targetY) {
+		targetD = 28
+	}
+
+	return time.Date(targetY, targetM, targetD, h, min, sec, 0, currentPeriodStart.Location()), nil
 }
 
-func AddClampedDate(t time.Time, years, months, days int) time.Time {
-	y, m, d := t.Date()
-	h, min, sec := t.Clock()
-
-	// Calculate the proposed year and month
-	newY := y + years
-	newM := time.Month(int(m) + months)
-
-	// If we move beyond December, it adjusts correctly,
-	// for example adding 2 months to November will land on January next year.
-	for newM > 12 {
-		newM -= 12
-		newY++
-	}
-	for newM < 1 {
-		newM += 12
-		newY--
-	}
-
-	// Find the last valid day of the new month
-	firstOfNextMonth := time.Date(newY, newM+1, 1, 0, 0, 0, 0, t.Location())
-	lastDay := firstOfNextMonth.Add(-24 * time.Hour).Day()
-
-	newD := d + days
-	if newD > lastDay {
-		// Clamp to last valid day
-		newD = lastDay
-	} else if newD < 1 {
-		// If we go backwards beyond the start of the month,
-		// we might need similar logic. For simplicity, assume positive increments.
-	}
-
-	return time.Date(newY, newM, newD, h, min, sec, t.Nanosecond(), t.Location())
+// isLeapYear returns true if the given year is a leap year
+func isLeapYear(year int) bool {
+	return year%4 == 0 && (year%100 != 0 || year%400 == 0)
 }

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/ent/schema"
+	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/wallet"
 	"github.com/flexprice/flexprice/ent/wallettransaction"
 	"github.com/shopspring/decimal"
@@ -15,6 +16,85 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
+	subscriptionMixin := schema.Subscription{}.Mixin()
+	subscriptionMixinFields0 := subscriptionMixin[0].Fields()
+	_ = subscriptionMixinFields0
+	subscriptionFields := schema.Subscription{}.Fields()
+	_ = subscriptionFields
+	// subscriptionDescTenantID is the schema descriptor for tenant_id field.
+	subscriptionDescTenantID := subscriptionMixinFields0[0].Descriptor()
+	// subscription.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	subscription.TenantIDValidator = subscriptionDescTenantID.Validators[0].(func(string) error)
+	// subscriptionDescStatus is the schema descriptor for status field.
+	subscriptionDescStatus := subscriptionMixinFields0[1].Descriptor()
+	// subscription.DefaultStatus holds the default value on creation for the status field.
+	subscription.DefaultStatus = subscriptionDescStatus.Default.(string)
+	// subscriptionDescCreatedAt is the schema descriptor for created_at field.
+	subscriptionDescCreatedAt := subscriptionMixinFields0[2].Descriptor()
+	// subscription.DefaultCreatedAt holds the default value on creation for the created_at field.
+	subscription.DefaultCreatedAt = subscriptionDescCreatedAt.Default.(func() time.Time)
+	// subscriptionDescUpdatedAt is the schema descriptor for updated_at field.
+	subscriptionDescUpdatedAt := subscriptionMixinFields0[3].Descriptor()
+	// subscription.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	subscription.DefaultUpdatedAt = subscriptionDescUpdatedAt.Default.(func() time.Time)
+	// subscription.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	subscription.UpdateDefaultUpdatedAt = subscriptionDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// subscriptionDescCustomerID is the schema descriptor for customer_id field.
+	subscriptionDescCustomerID := subscriptionFields[2].Descriptor()
+	// subscription.CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
+	subscription.CustomerIDValidator = subscriptionDescCustomerID.Validators[0].(func(string) error)
+	// subscriptionDescPlanID is the schema descriptor for plan_id field.
+	subscriptionDescPlanID := subscriptionFields[3].Descriptor()
+	// subscription.PlanIDValidator is a validator for the "plan_id" field. It is called by the builders before save.
+	subscription.PlanIDValidator = subscriptionDescPlanID.Validators[0].(func(string) error)
+	// subscriptionDescSubscriptionStatus is the schema descriptor for subscription_status field.
+	subscriptionDescSubscriptionStatus := subscriptionFields[4].Descriptor()
+	// subscription.DefaultSubscriptionStatus holds the default value on creation for the subscription_status field.
+	subscription.DefaultSubscriptionStatus = subscriptionDescSubscriptionStatus.Default.(string)
+	// subscriptionDescCurrency is the schema descriptor for currency field.
+	subscriptionDescCurrency := subscriptionFields[5].Descriptor()
+	// subscription.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
+	subscription.CurrencyValidator = subscriptionDescCurrency.Validators[0].(func(string) error)
+	// subscriptionDescBillingAnchor is the schema descriptor for billing_anchor field.
+	subscriptionDescBillingAnchor := subscriptionFields[6].Descriptor()
+	// subscription.DefaultBillingAnchor holds the default value on creation for the billing_anchor field.
+	subscription.DefaultBillingAnchor = subscriptionDescBillingAnchor.Default.(func() time.Time)
+	// subscriptionDescStartDate is the schema descriptor for start_date field.
+	subscriptionDescStartDate := subscriptionFields[7].Descriptor()
+	// subscription.DefaultStartDate holds the default value on creation for the start_date field.
+	subscription.DefaultStartDate = subscriptionDescStartDate.Default.(func() time.Time)
+	// subscriptionDescCurrentPeriodStart is the schema descriptor for current_period_start field.
+	subscriptionDescCurrentPeriodStart := subscriptionFields[9].Descriptor()
+	// subscription.DefaultCurrentPeriodStart holds the default value on creation for the current_period_start field.
+	subscription.DefaultCurrentPeriodStart = subscriptionDescCurrentPeriodStart.Default.(func() time.Time)
+	// subscriptionDescCurrentPeriodEnd is the schema descriptor for current_period_end field.
+	subscriptionDescCurrentPeriodEnd := subscriptionFields[10].Descriptor()
+	// subscription.DefaultCurrentPeriodEnd holds the default value on creation for the current_period_end field.
+	subscription.DefaultCurrentPeriodEnd = subscriptionDescCurrentPeriodEnd.Default.(func() time.Time)
+	// subscriptionDescCancelAtPeriodEnd is the schema descriptor for cancel_at_period_end field.
+	subscriptionDescCancelAtPeriodEnd := subscriptionFields[13].Descriptor()
+	// subscription.DefaultCancelAtPeriodEnd holds the default value on creation for the cancel_at_period_end field.
+	subscription.DefaultCancelAtPeriodEnd = subscriptionDescCancelAtPeriodEnd.Default.(bool)
+	// subscriptionDescInvoiceCadence is the schema descriptor for invoice_cadence field.
+	subscriptionDescInvoiceCadence := subscriptionFields[16].Descriptor()
+	// subscription.InvoiceCadenceValidator is a validator for the "invoice_cadence" field. It is called by the builders before save.
+	subscription.InvoiceCadenceValidator = subscriptionDescInvoiceCadence.Validators[0].(func(string) error)
+	// subscriptionDescBillingCadence is the schema descriptor for billing_cadence field.
+	subscriptionDescBillingCadence := subscriptionFields[17].Descriptor()
+	// subscription.BillingCadenceValidator is a validator for the "billing_cadence" field. It is called by the builders before save.
+	subscription.BillingCadenceValidator = subscriptionDescBillingCadence.Validators[0].(func(string) error)
+	// subscriptionDescBillingPeriod is the schema descriptor for billing_period field.
+	subscriptionDescBillingPeriod := subscriptionFields[18].Descriptor()
+	// subscription.BillingPeriodValidator is a validator for the "billing_period" field. It is called by the builders before save.
+	subscription.BillingPeriodValidator = subscriptionDescBillingPeriod.Validators[0].(func(string) error)
+	// subscriptionDescBillingPeriodCount is the schema descriptor for billing_period_count field.
+	subscriptionDescBillingPeriodCount := subscriptionFields[19].Descriptor()
+	// subscription.DefaultBillingPeriodCount holds the default value on creation for the billing_period_count field.
+	subscription.DefaultBillingPeriodCount = subscriptionDescBillingPeriodCount.Default.(int)
+	// subscriptionDescVersion is the schema descriptor for version field.
+	subscriptionDescVersion := subscriptionFields[20].Descriptor()
+	// subscription.DefaultVersion holds the default value on creation for the version field.
+	subscription.DefaultVersion = subscriptionDescVersion.Default.(int)
 	walletFields := schema.Wallet{}.Fields()
 	_ = walletFields
 	// walletDescTenantID is the schema descriptor for tenant_id field.
