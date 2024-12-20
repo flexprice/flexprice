@@ -25,6 +25,7 @@ type SubscriptionService interface {
 	CancelSubscription(ctx context.Context, id string, cancelAtPeriodEnd bool) error
 	ListSubscriptions(ctx context.Context, filter *types.SubscriptionFilter) (*dto.ListSubscriptionsResponse, error)
 	GetUsageBySubscription(ctx context.Context, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error)
+	UpdateBillingPeriods(ctx context.Context) error
 }
 
 type subscriptionService struct {
@@ -85,18 +86,30 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 
 	subscription := req.ToSubscription(ctx)
 	now := time.Now().UTC()
+
+	// Set start date and ensure it's in UTC
 	if subscription.StartDate.IsZero() {
 		subscription.StartDate = now
+	} else {
+		subscription.StartDate = subscription.StartDate.UTC()
 	}
 
+	// Set billing anchor and ensure it's in UTC
 	if subscription.BillingAnchor.IsZero() {
 		subscription.BillingAnchor = subscription.StartDate
+	} else {
+		subscription.BillingAnchor = subscription.BillingAnchor.UTC()
+		// Validate that billing anchor is not before start date
+		if subscription.BillingAnchor.Before(subscription.StartDate) {
+			return nil, fmt.Errorf("billing anchor cannot be before start date")
+		}
 	}
 
 	if subscription.BillingPeriodCount == 0 {
 		subscription.BillingPeriodCount = 1
 	}
 
+	// Calculate the first billing period end date
 	nextBillingDate, err := types.NextBillingDate(subscription.StartDate, subscription.BillingAnchor, subscription.BillingPeriodCount, subscription.BillingPeriod)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate next billing date: %w", err)
@@ -104,8 +117,15 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 
 	subscription.CurrentPeriodStart = subscription.StartDate
 	subscription.CurrentPeriodEnd = nextBillingDate
-	subscription.InvoiceCadence = plan.InvoiceCadence
-	subscription.Currency = prices[0].Currency
+	subscription.SubscriptionStatus = types.SubscriptionStatusActive
+
+	s.logger.Infow("creating subscription",
+		"customer_id", subscription.CustomerID,
+		"plan_id", subscription.PlanID,
+		"start_date", subscription.StartDate,
+		"billing_anchor", subscription.BillingAnchor,
+		"current_period_start", subscription.CurrentPeriodStart,
+		"current_period_end", subscription.CurrentPeriodEnd)
 
 	if err := s.subscriptionRepo.Create(ctx, subscription); err != nil {
 		return nil, fmt.Errorf("failed to create subscription: %w", err)
@@ -357,6 +377,142 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 
 	return response, nil
 }
+
+// UpdateBillingPeriods updates the current billing periods for all active subscriptions
+// This should be run every 15 minutes to ensure billing periods are up to date
+func (s *subscriptionService) UpdateBillingPeriods(ctx context.Context) error {
+	const batchSize = 100
+	now := time.Now().UTC()
+
+	s.logger.Infow("starting billing period updates",
+		"current_time", now)
+
+	offset := 0
+	for {
+		filter := &types.SubscriptionFilter{
+			Filter: types.Filter{
+				Limit:  batchSize,
+				Offset: offset,
+			},
+			SubscriptionStatus:     types.SubscriptionStatusActive,
+			Status:                 types.StatusPublished,
+			CurrentPeriodEndBefore: &now,
+		}
+
+		subs, err := s.subscriptionRepo.List(ctx, filter)
+		if err != nil {
+			return fmt.Errorf("failed to list subscriptions: %w", err)
+		}
+
+		s.logger.Infow("processing subscription batch",
+			"batch_size", len(subs),
+			"offset", offset)
+
+		if len(subs) == 0 {
+			break // No more subscriptions to process
+		}
+
+		// Process each subscription in the batch
+		for _, sub := range subs {
+			if err := s.processSubscriptionPeriod(ctx, sub, now); err != nil {
+				s.logger.Errorw("failed to process subscription period",
+					"subscription_id", sub.ID,
+					"error", err)
+				// Continue processing other subscriptions
+				continue
+			}
+		}
+
+		offset += len(subs)
+		if len(subs) < batchSize {
+			break // No more subscriptions to fetch
+		}
+	}
+
+	return nil
+}
+
+// processSubscriptionPeriod handles the period transitions for a single subscription
+func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub *subscription.Subscription, now time.Time) error {
+	originalStart := sub.CurrentPeriodStart
+	originalEnd := sub.CurrentPeriodEnd
+
+	currentStart := sub.CurrentPeriodStart
+	currentEnd := sub.CurrentPeriodEnd
+	var transitions []struct {
+		start time.Time
+		end   time.Time
+	}
+
+	// Calculate all transitions up to the next hour boundary
+	// This ensures we have a stable window for processing regardless of when the cron runs
+	for currentEnd.Before(now) {
+		nextStart := currentEnd
+		nextEnd, err := types.NextBillingDate(nextStart, sub.BillingAnchor, sub.BillingPeriodCount, sub.BillingPeriod)
+		if err != nil {
+			s.logger.Errorw("failed to calculate next billing date",
+				"subscription_id", sub.ID,
+				"current_start", currentStart,
+				"current_end", currentEnd,
+				"process_up_to", now,
+				"error", err)
+			return err
+		}
+
+		transitions = append(transitions, struct {
+			start time.Time
+			end   time.Time
+		}{
+			start: nextStart,
+			end:   nextEnd,
+		})
+
+		currentStart = nextStart
+		currentEnd = nextEnd
+	}
+
+	if len(transitions) == 0 {
+		s.logger.Debugw("no transitions needed for subscription",
+			"subscription_id", sub.ID,
+			"current_period_start", sub.CurrentPeriodStart,
+			"current_period_end", sub.CurrentPeriodEnd,
+			"process_up_to", now)
+		return nil
+	}
+
+	// Update to the latest period
+	lastTransition := transitions[len(transitions)-1]
+	sub.CurrentPeriodStart = lastTransition.start
+	sub.CurrentPeriodEnd = lastTransition.end
+
+	// Handle subscription cancellation at period end
+	if sub.CancelAtPeriodEnd && sub.CancelAt != nil {
+		for _, t := range transitions {
+			if !sub.CancelAt.After(t.end) {
+				sub.SubscriptionStatus = types.SubscriptionStatusCancelled
+				sub.CancelledAt = sub.CancelAt
+				break
+			}
+		}
+	}
+
+	if err := s.subscriptionRepo.Update(ctx, sub); err != nil {
+		return fmt.Errorf("failed to update subscription: %w", err)
+	}
+
+	s.logger.Infow("updated subscription billing period",
+		"subscription_id", sub.ID,
+		"previous_period_start", originalStart,
+		"previous_period_end", originalEnd,
+		"new_period_start", sub.CurrentPeriodStart,
+		"new_period_end", sub.CurrentPeriodEnd,
+		"process_up_to", now,
+		"transitions_count", len(transitions))
+
+	return nil
+}
+
+/// Helpers
 
 func createChargeResponse(priceObj *price.Price, quantity decimal.Decimal, cost decimal.Decimal, meterDisplayName string) *dto.SubscriptionUsageByMetersResponse {
 	finalAmount := price.FormatAmountToFloat64WithPrecision(cost, priceObj.Currency)

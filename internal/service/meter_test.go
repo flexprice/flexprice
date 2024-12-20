@@ -149,6 +149,7 @@ func (s *MeterServiceSuite) TestGetAllMeters() {
 		}
 		m.BaseModel.Status = types.StatusPublished
 		m.ResetUsage = types.ResetUsageBillingPeriod
+		m.BaseModel = types.GetDefaultBaseModel(s.ctx)
 
 		err := s.store.CreateMeter(s.ctx, m)
 		s.NoError(err)

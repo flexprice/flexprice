@@ -71,5 +71,7 @@ type Subscription struct {
 	// InvoiceCadence is the cadence of the invoice. This overrides the plan's invoice cadence.
 	InvoiceCadence types.InvoiceCadence `db:"invoice_cadence" json:"invoice_cadence"`
 
+	Version int `db:"version" json:"version"`
+
 	types.BaseModel
 }

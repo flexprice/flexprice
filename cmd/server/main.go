@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api"
+	"github.com/flexprice/flexprice/internal/api/cron"
 	v1 "github.com/flexprice/flexprice/internal/api/v1"
 	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/config"
@@ -120,6 +121,7 @@ func provideHandlers(
 		Plan:         v1.NewPlanHandler(planService, logger),
 		Subscription: v1.NewSubscriptionHandler(subscriptionService, logger),
 		Wallet:       v1.NewWalletHandler(walletService, logger),
+		Cron:         cron.NewSubscriptionHandler(subscriptionService, logger),
 	}
 }
 
