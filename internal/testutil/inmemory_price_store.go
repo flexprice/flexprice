@@ -10,19 +10,19 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
-// InMemoryPriceStore implements price.Repository
-type InMemoryPriceStore struct {
+// InMemoryPriceRepository implements price.Repository
+type InMemoryPriceRepository struct {
 	mu     sync.RWMutex
 	prices map[string]*price.Price
 }
 
-func NewInMemoryPriceStore() *InMemoryPriceStore {
-	return &InMemoryPriceStore{
+func NewInMemoryPriceStore() *InMemoryPriceRepository {
+	return &InMemoryPriceRepository{
 		prices: make(map[string]*price.Price),
 	}
 }
 
-func (s *InMemoryPriceStore) Create(ctx context.Context, p *price.Price) error {
+func (s *InMemoryPriceRepository) Create(ctx context.Context, p *price.Price) error {
 	if p == nil {
 		return fmt.Errorf("price cannot be nil")
 	}
@@ -42,7 +42,7 @@ func (s *InMemoryPriceStore) Create(ctx context.Context, p *price.Price) error {
 	return nil
 }
 
-func (s *InMemoryPriceStore) Get(ctx context.Context, id string) (*price.Price, error) {
+func (s *InMemoryPriceRepository) Get(ctx context.Context, id string) (*price.Price, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -52,7 +52,7 @@ func (s *InMemoryPriceStore) Get(ctx context.Context, id string) (*price.Price, 
 	return nil, fmt.Errorf("price not found")
 }
 
-func (s *InMemoryPriceStore) GetByPlanID(ctx context.Context, planID string) ([]*price.Price, error) {
+func (s *InMemoryPriceRepository) GetByPlanID(ctx context.Context, planID string) ([]*price.Price, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -72,7 +72,7 @@ func (s *InMemoryPriceStore) GetByPlanID(ctx context.Context, planID string) ([]
 	return result, nil
 }
 
-func (s *InMemoryPriceStore) List(ctx context.Context, filter types.Filter) ([]*price.Price, error) {
+func (s *InMemoryPriceRepository) List(ctx context.Context, filter types.Filter) ([]*price.Price, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -100,7 +100,7 @@ func (s *InMemoryPriceStore) List(ctx context.Context, filter types.Filter) ([]*
 	return result[start:end], nil
 }
 
-func (s *InMemoryPriceStore) Update(ctx context.Context, p *price.Price) error {
+func (s *InMemoryPriceRepository) Update(ctx context.Context, p *price.Price) error {
 	if p == nil {
 		return fmt.Errorf("price cannot be nil")
 	}
@@ -116,7 +116,7 @@ func (s *InMemoryPriceStore) Update(ctx context.Context, p *price.Price) error {
 	return nil
 }
 
-func (s *InMemoryPriceStore) Delete(ctx context.Context, id string) error {
+func (s *InMemoryPriceRepository) Delete(ctx context.Context, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

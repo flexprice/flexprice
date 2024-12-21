@@ -22,6 +22,7 @@ type Handlers struct {
 	Plan         *v1.PlanHandler
 	Subscription *v1.SubscriptionHandler
 	Wallet       *v1.WalletHandler
+	Tenant       *v1.TenantHandler
 }
 
 func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logger) *gin.Engine {
@@ -132,6 +133,12 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			wallet.POST("/:id/top-up", handlers.Wallet.TopUpWallet)
 			wallet.POST("/:id/terminate", handlers.Wallet.TerminateWallet)
 			wallet.GET("/:id/balance/real-time", handlers.Wallet.GetWalletBalance)
+		}
+		// Tenant routes
+		tenant := v1Private.Group("/tenants")
+		{
+			tenant.POST("", handlers.Tenant.CreateTenant)     // Create a new tenant
+			tenant.GET("/:id", handlers.Tenant.GetTenantByID) // Get tenant by ID
 		}
 	}
 	return router
