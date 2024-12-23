@@ -16,8 +16,8 @@ type AuthRequest struct {
 }
 
 type AuthResponse struct {
-	ProviderToken string
-	AuthToken     string
+	ProviderToken string `json:"provider_token"` // Token from provider, e.g., Supabase
+	AuthToken     string `json:"auth_token"`     // Internal token (if applicable)
 }
 
 type Provider interface {

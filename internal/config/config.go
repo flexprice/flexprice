@@ -40,7 +40,9 @@ type AuthConfig struct {
 }
 
 type SupabaseConfig struct {
-	BaseURL string `mapstructure:"base_url"`
+	BaseURL string `mapstructure:"url" validate:"required"`
+	AnonKey string `mapstructure:"anon_key" validate:"required"`
+	Secret  string `mapstructure:"secret" validate:"required"`
 }
 
 type KafkaConfig struct {

@@ -52,14 +52,14 @@ func (s *authService) SignUp(ctx context.Context, req *dto.SignUpRequest) (*dto.
 		return nil, fmt.Errorf("unable to sign up: %w", err)
 	}
 
-	auth := auth.NewAuth(user.ID, types.AuthProviderFlexprice, authResponse.ProviderToken)
+	auth := auth.NewAuth(user.ID, types.AuthProviderSupabase, authResponse.ProviderToken)
 	err = s.authRepo.CreateAuth(ctx, auth)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create auth: %w", err)
 	}
 
 	response := &dto.AuthResponse{
-		Token: authResponse.AuthToken,
+		Token: authResponse.ProviderToken,
 	}
 
 	return response, nil
@@ -88,7 +88,7 @@ func (s *authService) Login(ctx context.Context, req *dto.LoginRequest) (*dto.Au
 	}
 
 	response := &dto.AuthResponse{
-		Token: authResponse.AuthToken,
+		Token: authResponse.ProviderToken,
 	}
 
 	return response, nil

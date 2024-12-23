@@ -5,10 +5,12 @@ server:
   address: ":8080"
 
 auth:
-  provider: "flexprice" # "flexprice" or "supabase"
+  provider: "supabase" # "flexprice" or "supabase"
   secret: "031f6bbed1156eca651d48652c17a5bce727514cc804f185aca207153b2915abb79c0f1b53945915866dc3b63f37ea73aa86fc062f13e6008249e30819f87483"
   supabase:
-    base_url: "http://localhost:54321"
+    url: "https://vnswkuldxqmqhyiewgsq.supabase.co"
+    anon_key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZuc3drdWxkeHFtcWh5aWV3Z3NxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTQzOTgyNjgsImV4cCI6MjAyOTk3NDI2OH0.bfyVXH--fR50KeYnzImhFrPJ8VHpw5VDu6uRXohL4as"
+    secret: "nIp+WyQlckXXnSvvknaQn7poy/27pLAENjoOPU1wblz2Khh1xqVT5ixmgsAsGKqNN8I3SiVmsyz0JR8XLbOjBw=="
 
 kafka:
   brokers:
