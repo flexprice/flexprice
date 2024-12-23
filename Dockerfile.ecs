@@ -1,0 +1,47 @@
+# Define platform
+ARG TARGETPLATFORM=linux/arm64
+
+# Build stage
+FROM --platform=${TARGETPLATFORM} golang:1.23.3-alpine3.20 AS builder
+WORKDIR /app
+
+# Copy go mod and sum files
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build the Go binary
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
+    go build -ldflags="-w -s" \
+    -trimpath \
+    -a \
+    -installsuffix cgo \
+    -o server cmd/server/main.go
+
+# Runtime stage
+FROM --platform=${TARGETPLATFORM} public.ecr.aws/amazonlinux/amazonlinux:2023
+
+# Install necessary dependencies
+RUN dnf update -y && dnf install -y \
+    ca-certificates && \
+    dnf clean all
+
+# Set working directory
+WORKDIR /app
+
+# Copy the binary from the builder stage
+COPY --from=builder /app/server /app/server
+
+# Copy configuration files if needed
+COPY internal/config ./config
+
+# Set execute permissions for the binary
+RUN chmod +x /app/server
+
+# Expose application port
+EXPOSE 8080
+
+# Command to run the application
+CMD ["/app/server"]
