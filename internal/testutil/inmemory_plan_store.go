@@ -10,19 +10,19 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
-// InMemoryPlanStore implements plan.Repository
-type InMemoryPlanStore struct {
+// InMemoryPlanRepository implements plan.Repository
+type InMemoryPlanRepository struct {
 	mu    sync.RWMutex
 	plans map[string]*plan.Plan
 }
 
-func NewInMemoryPlanStore() *InMemoryPlanStore {
-	return &InMemoryPlanStore{
+func NewInMemoryPlanStore() *InMemoryPlanRepository {
+	return &InMemoryPlanRepository{
 		plans: make(map[string]*plan.Plan),
 	}
 }
 
-func (s *InMemoryPlanStore) Create(ctx context.Context, p *plan.Plan) error {
+func (s *InMemoryPlanRepository) Create(ctx context.Context, p *plan.Plan) error {
 	if p == nil {
 		return fmt.Errorf("plan cannot be nil")
 	}
@@ -38,7 +38,7 @@ func (s *InMemoryPlanStore) Create(ctx context.Context, p *plan.Plan) error {
 	return nil
 }
 
-func (s *InMemoryPlanStore) Get(ctx context.Context, id string) (*plan.Plan, error) {
+func (s *InMemoryPlanRepository) Get(ctx context.Context, id string) (*plan.Plan, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -48,7 +48,7 @@ func (s *InMemoryPlanStore) Get(ctx context.Context, id string) (*plan.Plan, err
 	return nil, fmt.Errorf("plan not found")
 }
 
-func (s *InMemoryPlanStore) List(ctx context.Context, filter types.Filter) ([]*plan.Plan, error) {
+func (s *InMemoryPlanRepository) List(ctx context.Context, filter types.Filter) ([]*plan.Plan, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -76,7 +76,7 @@ func (s *InMemoryPlanStore) List(ctx context.Context, filter types.Filter) ([]*p
 	return result[start:end], nil
 }
 
-func (s *InMemoryPlanStore) Update(ctx context.Context, p *plan.Plan) error {
+func (s *InMemoryPlanRepository) Update(ctx context.Context, p *plan.Plan) error {
 	if p == nil {
 		return fmt.Errorf("plan cannot be nil")
 	}
@@ -92,7 +92,7 @@ func (s *InMemoryPlanStore) Update(ctx context.Context, p *plan.Plan) error {
 	return nil
 }
 
-func (s *InMemoryPlanStore) Delete(ctx context.Context, id string) error {
+func (s *InMemoryPlanRepository) Delete(ctx context.Context, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

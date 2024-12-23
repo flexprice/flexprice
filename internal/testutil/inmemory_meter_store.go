@@ -9,18 +9,18 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
-type InMemoryMeterStore struct {
+type InMemoryMeterRepository struct {
 	mu     sync.RWMutex
 	meters map[string]*meter.Meter
 }
 
-func NewInMemoryMeterStore() *InMemoryMeterStore {
-	return &InMemoryMeterStore{
+func NewInMemoryMeterStore() *InMemoryMeterRepository {
+	return &InMemoryMeterRepository{
 		meters: make(map[string]*meter.Meter),
 	}
 }
 
-func (s *InMemoryMeterStore) CreateMeter(ctx context.Context, m *meter.Meter) error {
+func (s *InMemoryMeterRepository) CreateMeter(ctx context.Context, m *meter.Meter) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -40,7 +40,7 @@ func (s *InMemoryMeterStore) CreateMeter(ctx context.Context, m *meter.Meter) er
 	return nil
 }
 
-func (s *InMemoryMeterStore) GetMeter(ctx context.Context, id string) (*meter.Meter, error) {
+func (s *InMemoryMeterRepository) GetMeter(ctx context.Context, id string) (*meter.Meter, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -51,7 +51,7 @@ func (s *InMemoryMeterStore) GetMeter(ctx context.Context, id string) (*meter.Me
 	return m, nil
 }
 
-func (s *InMemoryMeterStore) GetAllMeters(ctx context.Context) ([]*meter.Meter, error) {
+func (s *InMemoryMeterRepository) GetAllMeters(ctx context.Context) ([]*meter.Meter, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -62,7 +62,7 @@ func (s *InMemoryMeterStore) GetAllMeters(ctx context.Context) ([]*meter.Meter, 
 	return meters, nil
 }
 
-func (s *InMemoryMeterStore) DisableMeter(ctx context.Context, id string) error {
+func (s *InMemoryMeterRepository) DisableMeter(ctx context.Context, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
