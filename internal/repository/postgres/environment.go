@@ -22,7 +22,7 @@ func NewEnvironmentRepository(db *postgres.DB, logger *logger.Logger) environmen
 func (r *environmentRepository) Create(ctx context.Context, env *environment.Environment) error {
 	query := `
 		INSERT INTO environments (
-			id, tenant_id, name, type, slug, status created_at, updated_at, created_by, updated_by
+			id, tenant_id, name, type, slug, status, created_at, updated_at, created_by, updated_by
 		) VALUES (
 			:id, :tenant_id, :name, :type, :slug, :status, :created_at, :updated_at, :created_by, :updated_by
 		)`

@@ -78,8 +78,8 @@ func (h *EnvironmentHandler) GetEnvironment(c *gin.Context) {
 // @Security BearerAuth
 // @Param filter query types.Filter false "Filter"
 // @Success 200 {object} dto.ListEnvironmentsResponse
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
 // @Router /environments [get]
 func (h *EnvironmentHandler) GetEnvironments(c *gin.Context) {
 	var filter types.Filter
@@ -106,9 +106,9 @@ func (h *EnvironmentHandler) GetEnvironments(c *gin.Context) {
 // @Param id path string true "Environment ID"
 // @Param environment body dto.UpdateEnvironmentRequest true "Environment"
 // @Success 200 {object} dto.EnvironmentResponse
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 404 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
 // @Router /environments/{id} [put]
 func (h *EnvironmentHandler) UpdateEnvironment(c *gin.Context) {
 	id := c.Param("id")

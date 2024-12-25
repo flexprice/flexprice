@@ -3,31 +3,33 @@ package auth
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/auth"
+	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/golang-jwt/jwt"
 	"github.com/nedpals/supabase-go"
 )
 
 type supabaseAuth struct {
-	AuthConfig     config.AuthConfig
-	SupabaseClient *supabase.Client
+	AuthConfig config.AuthConfig
+	client     *supabase.Client
 }
 
 func NewSupabaseAuth(cfg *config.Configuration) Provider {
-	// Validate the configuration
-	if cfg.Auth.Supabase.BaseURL == "" || cfg.Auth.Supabase.AnonKey == "" {
-		panic("Supabase BaseURL and AnonKey are required")
+	supabaseUrl := cfg.Auth.Supabase.BaseURL
+	adminApiKey := cfg.Auth.Supabase.ServiceKey
+
+	client := supabase.CreateClient(supabaseUrl, adminApiKey)
+	if client == nil {
+		log.Fatalf("failed to create Supabase client")
 	}
 
-	// Initialize Supabase client
-	client := supabase.CreateClient(cfg.Auth.Supabase.BaseURL, cfg.Auth.Supabase.AnonKey)
-
 	return &supabaseAuth{
-		AuthConfig:     cfg.Auth,
-		SupabaseClient: client,
+		AuthConfig: cfg.Auth,
+		client:     client,
 	}
 }
 
@@ -36,38 +38,29 @@ func (s *supabaseAuth) GetProvider() types.AuthProvider {
 }
 
 func (s *supabaseAuth) SignUp(ctx context.Context, req AuthRequest) (*AuthResponse, error) {
-	// Use Supabase's SignUp method
-	session, err := s.SupabaseClient.Auth.SignUp(ctx, supabase.UserCredentials{
+	_, err := s.client.Auth.SignUp(ctx, supabase.UserCredentials{
 		Email:    req.Email,
 		Password: req.Password,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("supabase signup failed: %w", err)
+		return nil, fmt.Errorf("failed to sign up: %w", err)
 	}
 
-	// Return the provider token
-	return &AuthResponse{
-		ProviderToken: session.Email,
-	}, nil
+	return s.Login(ctx, req, nil)
 }
 
 func (s *supabaseAuth) Login(ctx context.Context, req AuthRequest, userAuthInfo *auth.Auth) (*AuthResponse, error) {
-	// Use Supabase's SignIn method
-	session, err := s.SupabaseClient.Auth.SignIn(ctx, supabase.UserCredentials{
+	user, err := s.client.Auth.SignIn(ctx, supabase.UserCredentials{
 		Email:    req.Email,
 		Password: req.Password,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("supabase login failed: %w", err)
+		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
-
-	// Validate the session and extract the access token
-	if session == nil || session.AccessToken == "" {
-		return nil, fmt.Errorf("invalid response from Supabase: missing session or access token")
-	}
-
 	return &AuthResponse{
-		ProviderToken: session.AccessToken,
+		ProviderToken: user.AccessToken,
+		AuthToken:     user.AccessToken,
+		ID:            user.User.ID,
 	}, nil
 }
 
@@ -93,8 +86,16 @@ func (s *supabaseAuth) ValidateToken(ctx context.Context, token string) (*auth.C
 		return nil, fmt.Errorf("token missing user ID")
 	}
 
-	tenantID, tenantOk := claims["tenant_id"].(string)
-	if !tenantOk {
+	// Get tenant_id from app_metadata
+	var tenantID string
+	if appMetadata, ok := claims["app_metadata"].(map[string]interface{}); ok {
+		if tid, ok := appMetadata["tenant_id"].(string); ok {
+			tenantID = tid
+		}
+	}
+
+	// If no tenant_id found in app_metadata, use default
+	if tenantID == "" {
 		tenantID = types.DefaultTenantID
 	}
 
@@ -102,4 +103,27 @@ func (s *supabaseAuth) ValidateToken(ctx context.Context, token string) (*auth.C
 		UserID:   userID,
 		TenantID: tenantID,
 	}, nil
+}
+
+func (s *supabaseAuth) AssignUserToTenant(ctx context.Context, userID string, tenantID string) error {
+	// Use Supabase Admin API to update user's app_metadata
+	params := supabase.AdminUserParams{
+		AppMetadata: map[string]interface{}{
+			"tenant_id": tenantID,
+		},
+	}
+
+	resp, err := s.client.Admin.UpdateUser(context.Background(), userID, params)
+	if err != nil {
+		return fmt.Errorf("failed to assign tenant to user: %w", err)
+	}
+
+	log, _ := logger.NewLogger(config.GetDefaultConfig())
+	log.Debugw("assigned tenant to user",
+		"user_id", userID,
+		"tenant_id", tenantID,
+		"response", resp,
+	)
+
+	return nil
 }

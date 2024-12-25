@@ -19,12 +19,12 @@ import (
 
 const (
 	NUM_EVENTS       = 500000
-	BATCH_SIZE       = 1000  // Reduced batch size
-	REQUESTS_PER_SEC = 100   // Rate limit: requests per second
-	MAX_RETRIES      = 1   // Maximum number of retries for failed requests
-	INITIAL_BACKOFF  = 100 // Initial backoff in milliseconds
-	// API_ENDPOINT     = "https://api-dev.cloud.flexprice.io/v1/events"
-	API_ENDPOINT    = "http://localhost:8080/v1/events/ingest"
+	BATCH_SIZE       = 500 // Reduced batch size
+	REQUESTS_PER_SEC = 50  // Rate limit: requests per second
+	MAX_RETRIES      = 1    // Maximum number of retries for failed requests
+	INITIAL_BACKOFF  = 100  // Initial backoff in milliseconds
+	API_ENDPOINT     = "https://api.cloud.flexprice.io/v1/events"
+	// API_ENDPOINT    = "http://localhost:8080/v1/events/ingest"
 	TIMEOUT_SECONDS = 5
 )
 
@@ -96,7 +96,19 @@ func ingestEvent(event dto.IngestEventRequest, limiter *rate.Limiter, wg *sync.W
 			Timeout: time.Second * TIMEOUT_SECONDS,
 		}
 
-		resp, err := client.Post(API_ENDPOINT, "application/json", bytes.NewBuffer(jsonData))
+		req, err := http.NewRequest("POST", API_ENDPOINT, bytes.NewBuffer(jsonData))
+
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		req.Header.Add("Content-Type", "application/json")
+		req.Header.Add("Accept", "application/json")
+		req.Header.Add("x-api-key", "a1bb7da0c3bf6f34b18b73d421e39d805283725bb7d994e18d1e88ce12f2ba61")
+
+		
+		// resp, err := client.Post(API_ENDPOINT, "application/json", bytes.NewBuffer(jsonData))
+		resp, err := client.Do(req)
 		if err != nil {
 			if retryCount == MAX_RETRIES {
 				errors <- fmt.Errorf("request error after %d retries: %v", MAX_RETRIES, err)

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api"
+	"github.com/flexprice/flexprice/internal/api/cron"
 	v1 "github.com/flexprice/flexprice/internal/api/v1"
 	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/config"
@@ -14,6 +15,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/repository"
+	"github.com/flexprice/flexprice/internal/sentry"
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"go.uber.org/fx"
@@ -46,6 +48,7 @@ func main() {
 	opts = append(opts,
 		// Ent client module
 		postgres.Module(),
+		sentry.Module(),
 
 		fx.Provide(
 			// Config
@@ -72,6 +75,7 @@ func main() {
 			repository.NewPlanRepository,
 			repository.NewSubscriptionRepository,
 			repository.NewWalletRepository,
+			repository.NewTenantRepository,
 
 			// Services
 			service.NewMeterService,
@@ -83,6 +87,7 @@ func main() {
 			service.NewPlanService,
 			service.NewSubscriptionService,
 			service.NewWalletService,
+			service.NewTenantService,
 
 			// Handlers
 			provideHandlers,
@@ -109,6 +114,7 @@ func provideHandlers(
 	planService service.PlanService,
 	subscriptionService service.SubscriptionService,
 	walletService service.WalletService,
+	tenantService service.TenantService,
 ) api.Handlers {
 	return api.Handlers{
 		Events:       v1.NewEventsHandler(eventService, logger),
@@ -120,6 +126,8 @@ func provideHandlers(
 		Plan:         v1.NewPlanHandler(planService, logger),
 		Subscription: v1.NewSubscriptionHandler(subscriptionService, logger),
 		Wallet:       v1.NewWalletHandler(walletService, logger),
+		Tenant:       v1.NewTenantHandler(tenantService, logger),
+		Cron:         cron.NewSubscriptionHandler(subscriptionService, logger),
 	}
 }
 
@@ -268,6 +276,9 @@ func consumeMessages(consumer kafka.MessageConsumer, eventRepo events.Repository
 			// TODO: Handle error and decide if we should retry or send to DLQ
 		}
 		msg.Ack()
-		log.Debugf("Successfully processed event: %+v", event)
+		log.Debugf(
+			"Successfully processed event with lag : %v ms : %+v",
+			time.Since(event.Timestamp).Milliseconds(), event,
+		)
 	}
 }

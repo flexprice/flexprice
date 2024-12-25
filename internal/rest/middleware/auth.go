@@ -12,23 +12,69 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// validateAPIKey validates the API key and returns tenant ID and user ID if valid
+func validateAPIKey(cfg *config.Configuration, apiKey string) (tenantID, userID string, valid bool) {
+	if apiKey == "" {
+		return "", "", false
+	}
+	return auth.ValidateAPIKey(cfg, apiKey)
+}
+
+// setContextValues sets the tenant ID and user ID in the context
+func setContextValues(c *gin.Context, tenantID, userID string) {
+	ctx := c.Request.Context()
+	ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
+	ctx = context.WithValue(ctx, types.CtxUserID, userID)
+
+	// Set additional headers for downstream handlers
+	environmentID := c.GetHeader(types.HeaderEnvironment)
+	if environmentID != "" {
+		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
+	}
+	c.Request = c.Request.WithContext(ctx)
+}
+
 // GuestAuthenticateMiddleware is a middleware that allows requests without authentication
 // For now it sets a default tenant ID and user ID in the request context
-// TODO: Implement guest user id logic if needed
 func GuestAuthenticateMiddleware(c *gin.Context) {
-	ctx := c.Request.Context()
-	ctx = context.WithValue(ctx, types.CtxTenantID, types.DefaultTenantID)
-	ctx = context.WithValue(ctx, types.CtxUserID, types.DefaultUserID)
-	c.Request = c.Request.WithContext(ctx)
+	setContextValues(c, types.DefaultTenantID, types.DefaultUserID)
 	c.Next()
 }
 
-// AuthenticateMiddleware is a middleware that authenticates requests based on the JWT token
-// It expects the JWT token to be in the Authorization header as a Bearer token
-// It sets the user ID and JWT token in the request context so it can be used by downstream handlers
-// It also sets the environment ID and other headers in the request context if present
-func AuthenticateMiddleware(cfg *config.Configuration, logger *logger.Logger) gin.HandlerFunc {
+// APIKeyAuthMiddleware is a middleware that only allows requests with valid API keys
+func APIKeyAuthMiddleware(cfg *config.Configuration, logger *logger.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		apiKey := c.GetHeader(cfg.Auth.APIKey.Header)
+		tenantID, userID, valid := validateAPIKey(cfg, apiKey)
+		if !valid {
+			logger.Debugw("invalid api key")
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid API key"})
+			c.Abort()
+			return
+		}
+
+		setContextValues(c, tenantID, userID)
+		c.Next()
+	}
+}
+
+// AuthenticateMiddleware is a middleware that authenticates requests based on either:
+// 1. JWT token in the Authorization header as a Bearer token
+// 2. API key in the x-api-key header (or configured header name)
+func AuthenticateMiddleware(cfg *config.Configuration, logger *logger.Logger) gin.HandlerFunc {
+	authProvider := auth.NewProvider(cfg)
+
+	return func(c *gin.Context) {
+		// First check for API key
+		apiKey := c.GetHeader(cfg.Auth.APIKey.Header)
+		tenantID, userID, valid := validateAPIKey(cfg, apiKey)
+		if valid {
+			setContextValues(c, tenantID, userID)
+			c.Next()
+			return
+		}
+
+		// If no API key, check for JWT token
 		authHeader := c.GetHeader(types.HeaderAuthorization)
 		if authHeader == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
@@ -44,12 +90,10 @@ func AuthenticateMiddleware(cfg *config.Configuration, logger *logger.Logger) gi
 		}
 
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-
-		provider := auth.NewProvider(cfg)
-
-		claims, err := provider.ValidateToken(c.Request.Context(), tokenString)
+		claims, err := authProvider.ValidateToken(c.Request.Context(), tokenString)
 		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token: " + err.Error()})
+			logger.Errorw("failed to validate token", "error", err)
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 			c.Abort()
 			return
 		}
@@ -60,20 +104,7 @@ func AuthenticateMiddleware(cfg *config.Configuration, logger *logger.Logger) gi
 			return
 		}
 
-		ctx := c.Request.Context()
-		ctx = context.WithValue(ctx, types.CtxUserID, claims.UserID)
-		ctx = context.WithValue(ctx, types.CtxTenantID, claims.TenantID)
-		ctx = context.WithValue(ctx, types.CtxJWT, tokenString)
-
-		// Set additional headers for downstream handlers
-		environmentID := c.GetHeader(types.HeaderEnvironment)
-		if environmentID != "" {
-			ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
-		}
-		c.Request = c.Request.WithContext(ctx)
-
-		logger.Debugf("authenticated request: user_id=%s, tenant_id=%s env_id=%s",
-			claims.UserID, claims.TenantID, environmentID)
+		setContextValues(c, claims.TenantID, claims.UserID)
 		c.Next()
 	}
 }

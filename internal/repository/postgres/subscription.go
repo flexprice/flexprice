@@ -127,6 +127,9 @@ func (r *subscriptionRepository) Update(ctx context.Context, subscription *subsc
 	query := `
 		UPDATE subscriptions 
 		SET 
+			lookup_key = :lookup_key,
+			current_period_start = :current_period_start,
+			current_period_end = :current_period_end,
 			subscription_status = :subscription_status,
 			cancelled_at = :cancelled_at,
 			cancel_at = :cancel_at,

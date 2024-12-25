@@ -112,3 +112,7 @@ func (f *flexpriceAuth) generateToken(userID, tenantID string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(f.AuthConfig.Secret))
 }
+
+func (f *flexpriceAuth) AssignUserToTenant(ctx context.Context, userID string, tenantID string) error {
+	return fmt.Errorf("not implemented")
+}

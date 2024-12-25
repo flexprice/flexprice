@@ -1,5 +1,8 @@
 package main
 
 func main() {
-	SeedEventsClickhouse()
+	// SeedEventsClickhouse()
+	// GenerateNewAPIKey()
+	// AssignTenantToUser()
+	// OnboardNewTenant()
 }
