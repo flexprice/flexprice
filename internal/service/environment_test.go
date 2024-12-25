@@ -43,9 +43,9 @@ func (s *EnvironmentServiceSuite) TestCreateEnvironment() {
 func (s *EnvironmentServiceSuite) TestGetEnvironmentByID() {
 	env := &environment.Environment{
 		ID:   "env-1",
-		Name: "Staging",
-		Type: types.EnvironmentType("staging"),
-		Slug: "staging-environment",
+		Name: "Testing",
+		Type: types.EnvironmentTesting,
+		Slug: "testing-environment",
 	}
 
 	_ = s.environmentRepo.Create(s.ctx, env)
@@ -63,8 +63,8 @@ func (s *EnvironmentServiceSuite) TestGetEnvironmentByID() {
 }
 
 func (s *EnvironmentServiceSuite) TestListEnvironments() {
-	_ = s.environmentRepo.Create(s.ctx, &environment.Environment{ID: "env-1", Name: "Production", Type: environment.EnvironmentType("production"), Slug: "prod-environment"})
-	_ = s.environmentRepo.Create(s.ctx, &environment.Environment{ID: "env-2", Name: "Staging", Type: environment.EnvironmentType("staging"), Slug: "staging-environment"})
+	_ = s.environmentRepo.Create(s.ctx, &environment.Environment{ID: "env-1", Name: "Production", Type: types.EnvironmentProduction, Slug: "prod-environment"})
+	_ = s.environmentRepo.Create(s.ctx, &environment.Environment{ID: "env-2", Name: "Testing", Type: types.EnvironmentTesting, Slug: "testing-environment"})
 
 	resp, err := s.environmentService.GetEnvironments(s.ctx, types.Filter{Offset: 0, Limit: 10})
 	s.NoError(err)
@@ -79,7 +79,7 @@ func (s *EnvironmentServiceSuite) TestUpdateEnvironment() {
 	env := &environment.Environment{
 		ID:   "env-1",
 		Name: "Development",
-		Type: environment.EnvironmentType("development"),
+		Type: types.EnvironmentDevelopment,
 		Slug: "dev-environment",
 	}
 	_ = s.environmentRepo.Create(s.ctx, env)

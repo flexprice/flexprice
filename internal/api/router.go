@@ -2,6 +2,7 @@ package api
 
 import (
 	"github.com/flexprice/flexprice/docs/swagger"
+	"github.com/flexprice/flexprice/internal/api/cron"
 	v1 "github.com/flexprice/flexprice/internal/api/v1"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -23,6 +24,7 @@ type Handlers struct {
 	Subscription *v1.SubscriptionHandler
 	Wallet       *v1.WalletHandler
 	Tenant       *v1.TenantHandler
+	Cron         *cron.SubscriptionHandler
 }
 
 func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logger) *gin.Engine {
@@ -32,6 +34,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 	router.Use(
 		middleware.RequestIDMiddleware,
 		middleware.CORSMiddleware,
+		middleware.SentryMiddleware(cfg), // Add Sentry middleware
 	)
 
 	// Add middleware to set swagger host dynamically
@@ -135,11 +138,27 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			wallet.GET("/:id/balance/real-time", handlers.Wallet.GetWalletBalance)
 		}
 		// Tenant routes
-		tenant := v1Private.Group("/tenants")
+		tenantRoutes := v1Private.Group("/tenants")
 		{
-			tenant.POST("", handlers.Tenant.CreateTenant)     // Create a new tenant
-			tenant.GET("/:id", handlers.Tenant.GetTenantByID) // Get tenant by ID
+			tenantRoutes.POST("", handlers.Tenant.CreateTenant)
+			tenantRoutes.GET("/:id", handlers.Tenant.GetTenantByID)
 		}
+
+		// Admin routes (API Key only)
+		adminRoutes := v1Private.Group("/admin")
+		adminRoutes.Use(middleware.APIKeyAuthMiddleware(cfg, logger))
+		{
+			// All admin routes to go here
+		}
+	}
+
+	// Cron routes
+	// TODO: move crons out of API based architecture
+	cron := v1Private.Group("/cron")
+	// Subscription related cron jobs
+	subscriptionGroup := cron.Group("/subscriptions")
+	{
+		subscriptionGroup.POST("/update-periods", handlers.Cron.UpdateBillingPeriods)
 	}
 	return router
 }

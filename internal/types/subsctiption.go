@@ -1,5 +1,7 @@
 package types
 
+import "time"
+
 // SubscriptionStatus is the status of a subscription
 // For now taking inspiration from Stripe's subscription statuses
 // https://stripe.com/docs/api/subscriptions/object#subscription_object-status
@@ -18,12 +20,15 @@ const (
 
 type SubscriptionFilter struct {
 	Filter
-	CustomerID         string             `form:"customer_id"`
-	SubscriptionStatus SubscriptionStatus `form:"subscription_status"`
-	Status             Status             `form:"status"`
-	PlanID             string             `form:"plan_id"`
+	CustomerID             string             `form:"customer_id"`
+	SubscriptionStatus     SubscriptionStatus `form:"subscription_status"`
+	Status                 Status             `form:"status"`
+	PlanID                 string             `form:"plan_id"`
+	CurrentPeriodEndBefore *time.Time         `form:"current_period_end_before"`
 }
 
+// ToMap only parsing selected fields which can be supported by ClickHouse
+// as built in our query_builder.go
 func (f *SubscriptionFilter) ToMap() map[string]interface{} {
 	params := map[string]interface{}{
 		"offset": f.Offset,

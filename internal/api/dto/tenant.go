@@ -20,6 +20,11 @@ type TenantResponse struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
+type AssignTenantRequest struct {
+	UserID   string `json:"user_id" validate:"required,uuid"`
+	TenantID string `json:"tenant_id" validate:"required,uuid"`
+}
+
 func (r *CreateTenantRequest) Validate() error {
 	return validator.New().Struct(r)
 }
@@ -31,6 +36,14 @@ func (r *CreateTenantRequest) ToTenant(ctx context.Context) *tenant.Tenant {
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
+}
+
+func (r *AssignTenantRequest) Validate(ctx context.Context) error {
+	err := validator.New().Struct(r)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func NewTenantResponse(t *tenant.Tenant) *TenantResponse {

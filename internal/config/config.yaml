@@ -9,6 +9,15 @@ auth:
   secret: "031f6bbed1156eca651d48652c17a5bce727514cc804f185aca207153b2915abb79c0f1b53945915866dc3b63f37ea73aa86fc062f13e6008249e30819f87483"
   supabase:
     base_url: "http://localhost:54321"
+    service_key: "<supabase service key>"
+  api_key:
+    header: "x-api-key"
+    keys:
+      "a1bb7da0c3bf6f34b18b73d421e39d805283725bb7d994e18d1e88ce12f2ba61":
+        tenant_id: "00000000-0000-0000-0000-000000000000"
+        user_id: "00000000-0000-0000-0000-000000000000"
+        name: "Dev API Keys"
+        is_active: true
 
 kafka:
   brokers:
@@ -35,7 +44,16 @@ postgres:
   password: postgres
   dbname: flexprice
   sslmode: disable
+  max_open_conns: 10
+  max_idle_conns: 5
+  conn_max_lifetime_minutes: 60
+  auto_migrate: false
+
+sentry:
+  enabled: false  # Set to true in production
+  dsn: ""  # Add your Sentry DSN here
+  environment: "development"  # Change to "production" in prod
+  sample_rate: 1.0  # Adjust sampling rate as needed (0.0 to 1.0)
 
 logging:
   level: "debug"
-

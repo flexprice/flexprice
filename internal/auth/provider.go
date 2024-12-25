@@ -18,6 +18,7 @@ type AuthRequest struct {
 type AuthResponse struct {
 	ProviderToken string
 	AuthToken     string
+	ID            string
 }
 
 type Provider interface {
@@ -27,6 +28,7 @@ type Provider interface {
 	SignUp(ctx context.Context, req AuthRequest) (*AuthResponse, error)
 	Login(ctx context.Context, req AuthRequest, userAuthInfo *auth.Auth) (*AuthResponse, error)
 	ValidateToken(ctx context.Context, token string) (*auth.Claims, error)
+	AssignUserToTenant(ctx context.Context, userID string, tenantID string) error
 }
 
 func NewProvider(cfg *config.Configuration) Provider {

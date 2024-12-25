@@ -16,6 +16,19 @@ definitions:
     required:
     - external_id
     type: object
+  dto.CreateEnvironmentRequest:
+    properties:
+      name:
+        type: string
+      slug:
+        type: string
+      type:
+        type: string
+    required:
+    - name
+    - slug
+    - type
+    type: object
   dto.CreateMeterRequest:
     properties:
       aggregation:
@@ -203,6 +216,13 @@ definitions:
     - customer_id
     - plan_id
     type: object
+  dto.CreateTenantRequest:
+    properties:
+      name:
+        type: string
+    required:
+    - name
+    type: object
   dto.CreateWalletRequest:
     properties:
       currency:
@@ -240,6 +260,21 @@ definitions:
       updated_at:
         type: string
       updated_by:
+        type: string
+    type: object
+  dto.EnvironmentResponse:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      slug:
+        type: string
+      type:
+        type: string
+      updated_at:
         type: string
     type: object
   dto.Event:
@@ -308,6 +343,9 @@ definitions:
       end_time:
         example: "2024-03-20T00:00:00Z"
         type: string
+      lifetime_usage:
+        example: false
+        type: boolean
       start_time:
         example: "2024-03-13T00:00:00Z"
         type: string
@@ -421,6 +459,19 @@ definitions:
       customers:
         items:
           $ref: '#/definitions/dto.CustomerResponse'
+        type: array
+      limit:
+        type: integer
+      offset:
+        type: integer
+      total:
+        type: integer
+    type: object
+  dto.ListEnvironmentsResponse:
+    properties:
+      environments:
+        items:
+          $ref: '#/definitions/dto.EnvironmentResponse'
         type: array
       limit:
         type: integer
@@ -732,6 +783,8 @@ definitions:
         type: string
       updated_by:
         type: string
+      version:
+        type: integer
     type: object
   dto.SubscriptionUsageByMetersResponse:
     properties:
@@ -749,6 +802,17 @@ definitions:
         $ref: '#/definitions/price.Price'
       quantity:
         type: number
+    type: object
+  dto.TenantResponse:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      updated_at:
+        type: string
     type: object
   dto.TopUpWalletRequest:
     properties:
@@ -768,6 +832,15 @@ definitions:
       external_id:
         type: string
       name:
+        type: string
+    type: object
+  dto.UpdateEnvironmentRequest:
+    properties:
+      name:
+        type: string
+      slug:
+        type: string
+      type:
         type: string
     type: object
   dto.UpdatePlanPriceRequest:
@@ -1575,6 +1648,161 @@ paths:
       summary: Get wallets by customer ID
       tags:
       - Wallet
+  /environments:
+    get:
+      consumes:
+      - application/json
+      description: Get environments
+      parameters:
+      - in: query
+        name: limit
+        type: integer
+      - in: query
+        name: offset
+        type: integer
+      - in: query
+        name: order
+        type: string
+      - in: query
+        name: sort
+        type: string
+      - enum:
+        - published
+        - deleted
+        - archived
+        in: query
+        name: status
+        type: string
+        x-enum-varnames:
+        - StatusPublished
+        - StatusDeleted
+        - StatusArchived
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ListEnvironmentsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get environments
+      tags:
+      - environments
+    post:
+      consumes:
+      - application/json
+      description: Create an environment
+      parameters:
+      - description: Environment
+        in: body
+        name: environment
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateEnvironmentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.EnvironmentResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create an environment
+      tags:
+      - environments
+  /environments/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Get an environment
+      parameters:
+      - description: Environment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.EnvironmentResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get an environment
+      tags:
+      - environments
+    put:
+      consumes:
+      - application/json
+      description: Update an environment
+      parameters:
+      - description: Environment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Environment
+        in: body
+        name: environment
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateEnvironmentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.EnvironmentResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update an environment
+      tags:
+      - environments
   /events:
     get:
       description: Retrieve raw events with pagination and filtering
@@ -2389,6 +2617,69 @@ paths:
       summary: Get usage by subscription
       tags:
       - subscriptions
+  /tenants:
+    post:
+      consumes:
+      - application/json
+      description: Create a new tenant
+      parameters:
+      - description: Create tenant request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateTenantRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.TenantResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a new tenant
+      tags:
+      - Tenant
+  /tenants/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Get tenant by ID
+      parameters:
+      - description: Tenant ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.TenantResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get tenant by ID
+      tags:
+      - Tenant
   /users/me:
     get:
       consumes:
