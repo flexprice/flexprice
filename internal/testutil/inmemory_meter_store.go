@@ -74,3 +74,64 @@ func (s *InMemoryMeterRepository) DisableMeter(ctx context.Context, id string) e
 	m.Status = types.StatusDeleted
 	return nil
 }
+
+func (s *InMemoryMeterRepository) UpdateMeter(ctx context.Context, id string, filters []meter.Filter) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if id == "" {
+		return fmt.Errorf("id is required")
+	}
+
+	// Find the meter by ID
+	m, exists := s.meters[id]
+	if !exists {
+		return fmt.Errorf("meter not found")
+	}
+
+	if m.Filters == nil {
+		m.Filters = []meter.Filter{}
+	}
+
+	// Merge new filters into the existing filters
+	existingFilters := map[string][]string{}
+	for _, f := range m.Filters {
+		existingFilters[f.Key] = f.Values
+	}
+
+	for _, newFilter := range filters {
+		if _, exists := existingFilters[newFilter.Key]; !exists {
+			// If the key doesn't exist, add the entire filter
+			existingFilters[newFilter.Key] = newFilter.Values
+		} else {
+			// Append new values for an existing key, avoiding duplicates
+			for _, newValue := range newFilter.Values {
+				if !contains(existingFilters[newFilter.Key], newValue) {
+					existingFilters[newFilter.Key] = append(existingFilters[newFilter.Key], newValue)
+				}
+			}
+		}
+	}
+
+	// Update the meter's filters
+	updatedFilters := []meter.Filter{}
+	for key, values := range existingFilters {
+		updatedFilters = append(updatedFilters, meter.Filter{
+			Key:    key,
+			Values: values,
+		})
+	}
+
+	m.Filters = updatedFilters
+	return nil
+}
+
+// Helper function to check if a slice contains a specific value
+func contains(slice []string, value string) bool {
+	for _, v := range slice {
+		if v == value {
+			return true
+		}
+	}
+	return false
+}

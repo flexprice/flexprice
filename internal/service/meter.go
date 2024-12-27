@@ -14,6 +14,7 @@ type MeterService interface {
 	GetMeter(ctx context.Context, id string) (*meter.Meter, error)
 	GetAllMeters(ctx context.Context) ([]*meter.Meter, error)
 	DisableMeter(ctx context.Context, id string) error
+	UpdateMeter(ctx context.Context, id string, filters []meter.Filter) (*meter.Meter, error)
 }
 
 type meterService struct {
@@ -62,4 +63,28 @@ func (s *meterService) DisableMeter(ctx context.Context, id string) error {
 		return fmt.Errorf("id is required")
 	}
 	return s.meterRepo.DisableMeter(ctx, id)
+}
+
+func (s *meterService) UpdateMeter(ctx context.Context, id string, filters []meter.Filter) (*meter.Meter, error) {
+	if id == "" {
+		return nil, fmt.Errorf("id is required")
+	}
+
+	if len(filters) == 0 {
+		return nil, fmt.Errorf("filters cannot be empty")
+	}
+
+	// Call the repository to update filters
+	err := s.meterRepo.UpdateMeter(ctx, id, filters)
+	if err != nil {
+		return nil, fmt.Errorf("update meter: %w", err)
+	}
+
+	// Fetch the updated meter
+	updatedMeter, err := s.meterRepo.GetMeter(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("get meter: %w", err)
+	}
+
+	return updatedMeter, nil
 }

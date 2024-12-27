@@ -42,14 +42,8 @@ type AuthConfig struct {
 }
 
 type SupabaseConfig struct {
-<<<<<<< HEAD
-	BaseURL string `mapstructure:"url" validate:"required"`
-	AnonKey string `mapstructure:"anon_key" validate:"required"`
-	Secret  string `mapstructure:"secret" validate:"required"`
-=======
 	BaseURL    string `mapstructure:"base_url"`
 	ServiceKey string `mapstructure:"service_key"`
->>>>>>> develop
 }
 
 type KafkaConfig struct {

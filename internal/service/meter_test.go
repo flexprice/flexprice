@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"sort"
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -157,6 +158,11 @@ func (s *MeterServiceSuite) TestGetAllMeters() {
 
 	result, err := s.service.GetAllMeters(s.ctx)
 	s.NoError(err)
+
+	// Sort both expected and actual results by Name for comparison
+	sortMetersByName(meters)
+	sortMetersByName(result)
+
 	s.Len(result, 2)
 	for i, m := range result {
 		s.Equal(meters[i].Name, m.Name)
@@ -164,6 +170,13 @@ func (s *MeterServiceSuite) TestGetAllMeters() {
 		s.NotEmpty(m.Filters)
 		s.Equal("status", m.Filters[0].Key)
 	}
+}
+
+// Helper function to sort meters by Name
+func sortMetersByName(meters []*meter.Meter) {
+	sort.Slice(meters, func(i, j int) bool {
+		return meters[i].Name < meters[j].Name
+	})
 }
 
 func (s *MeterServiceSuite) TestDisableMeter() {
@@ -220,4 +233,93 @@ func (s *MeterServiceSuite) TestDisableMeter() {
 			s.Equal(types.StatusDeleted, meter.BaseModel.Status)
 		})
 	}
+}
+
+func (s *MeterServiceSuite) TestUpdateMeter() {
+	testMeter := &meter.Meter{
+		ID:      "test-meter-id",
+		Name:    "Test Meter",
+		Filters: []meter.Filter{{Key: "status", Values: []string{"active"}}},
+	}
+	err := s.store.CreateMeter(s.ctx, testMeter)
+	s.NoError(err)
+
+	testCases := []struct {
+		name            string
+		id              string
+		filters         []meter.Filter
+		expectedError   bool
+		expectedFilters []meter.Filter
+	}{
+		{
+			name:          "add_new_filter",
+			id:            "test-meter-id",
+			filters:       []meter.Filter{{Key: "region", Values: []string{"us-east-1"}}},
+			expectedError: false,
+			expectedFilters: []meter.Filter{
+				{Key: "status", Values: []string{"active"}},
+				{Key: "region", Values: []string{"us-east-1"}},
+			},
+		},
+		{
+			name:          "add_existing_filter_value",
+			id:            "test-meter-id",
+			filters:       []meter.Filter{{Key: "status", Values: []string{"inactive"}}},
+			expectedError: false,
+			expectedFilters: []meter.Filter{
+				{Key: "status", Values: []string{"active", "inactive"}},
+				{Key: "region", Values: []string{"us-east-1"}},
+			},
+		},
+		{
+			name:          "add_duplicate_filter_value",
+			id:            "test-meter-id",
+			filters:       []meter.Filter{{Key: "status", Values: []string{"active"}}},
+			expectedError: false,
+			expectedFilters: []meter.Filter{
+				{Key: "status", Values: []string{"active", "inactive"}}, // Ensure no duplicates
+				{Key: "region", Values: []string{"us-east-1"}},
+			},
+		},
+		{
+			name:          "empty_id",
+			id:            "",
+			filters:       []meter.Filter{{Key: "status", Values: []string{"inactive"}}},
+			expectedError: true,
+		},
+		{
+			name:          "non_existent_meter",
+			id:            "non-existent-id",
+			filters:       []meter.Filter{{Key: "status", Values: []string{"inactive"}}},
+			expectedError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			meter, err := s.service.UpdateMeter(s.ctx, tc.id, tc.filters)
+			if tc.expectedError {
+				s.Error(err)
+				return
+			}
+			s.NoError(err)
+			s.NotNil(meter)
+
+			updatedMeter, err := s.store.GetMeter(s.ctx, tc.id)
+			s.NoError(err)
+
+			// Sort filters before comparison
+			sortFilters(tc.expectedFilters)
+			sortFilters(updatedMeter.Filters)
+
+			s.Equal(tc.expectedFilters, updatedMeter.Filters)
+		})
+	}
+}
+
+// Helper function to sort Filters by Key
+func sortFilters(filters []meter.Filter) {
+	sort.Slice(filters, func(i, j int) bool {
+		return filters[i].Key < filters[j].Key
+	})
 }

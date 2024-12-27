@@ -17,6 +17,11 @@ type CreateMeterRequest struct {
 	ResetUsage  types.ResetUsage  `json:"reset_usage" example:"BILLING_PERIOD"`
 }
 
+// UpdateMeterRequest represents the request payload for updating a meter
+type UpdateMeterRequest struct {
+	Filters []meter.Filter `json:"filters"`
+}
+
 // MeterResponse represents the meter response structure
 type MeterResponse struct {
 	ID          string            `json:"id" example:"550e8400-e29b-41d4-a716-446655440000"`

@@ -132,3 +132,45 @@ func (h *MeterHandler) DeleteMeter(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Meter deleted successfully"})
 }
+
+// @Summary Update meter
+// @Description Update an existing meter
+// @Tags meters
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Meter ID"
+// @Param meter body dto.UpdateMeterRequest true "Meter configuration"
+// @Success 200 {object} dto.MeterResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /meters/{id} [put]
+func (h *MeterHandler) UpdateMeter(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Meter ID is required"})
+		return
+	}
+
+	ctx := c.Request.Context()
+	var req dto.UpdateMeterRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request payload"})
+		return
+	}
+
+	if len(req.Filters) == 0 {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Filters cannot be empty"})
+		return
+	}
+
+	meter, err := h.service.UpdateMeter(ctx, id, req.Filters)
+	if err != nil {
+		h.log.Error("Failed to update meter", "error", err)
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to update meter"})
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.ToMeterResponse(meter))
+}

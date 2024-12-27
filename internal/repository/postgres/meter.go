@@ -193,3 +193,83 @@ func (r *meterRepository) DisableMeter(ctx context.Context, id string) error {
 
 	return nil
 }
+
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *meterRepository) UpdateMeter(ctx context.Context, id string, filters []meter.Filter) error {
+	query := `
+        SELECT filters
+        FROM meters
+        WHERE id = $1 AND tenant_id = $2 AND status = 'published'
+    `
+
+	var existingFiltersJSON []byte
+	err := r.db.QueryRowContext(ctx, query, id, types.GetTenantID(ctx)).Scan(&existingFiltersJSON)
+	if err != nil {
+		return fmt.Errorf("fetch existing filters: %w", err)
+	}
+
+	var existingFilters []meter.Filter
+	if len(existingFiltersJSON) > 0 {
+		if err := json.Unmarshal(existingFiltersJSON, &existingFilters); err != nil {
+			return fmt.Errorf("unmarshal existing filters: %w", err)
+		}
+	}
+
+	// Merge new filters into existing filters
+	filterMap := map[string][]string{}
+	for _, f := range existingFilters {
+		filterMap[f.Key] = f.Values
+	}
+
+	for _, newFilter := range filters {
+		if _, exists := filterMap[newFilter.Key]; !exists {
+			filterMap[newFilter.Key] = []string{}
+		}
+		for _, value := range newFilter.Values {
+			if !contains(filterMap[newFilter.Key], value) {
+				filterMap[newFilter.Key] = append(filterMap[newFilter.Key], value)
+			}
+		}
+	}
+
+	// Convert merged filterMap back to []Filter
+	updatedFilters := []meter.Filter{}
+	for key, values := range filterMap {
+		updatedFilters = append(updatedFilters, meter.Filter{
+			Key:    key,
+			Values: values,
+		})
+	}
+
+	updatedFiltersJSON, err := json.Marshal(updatedFilters)
+	if err != nil {
+		return fmt.Errorf("marshal updated filters: %w", err)
+	}
+
+	updateQuery := `
+        UPDATE meters 
+        SET 
+            filters = $1, 
+            updated_at = NOW(), 
+            updated_by = $2
+        WHERE 
+            id = $3 AND 
+            tenant_id = $4 AND 
+            status = 'published'
+    `
+
+	_, err = r.db.ExecContext(ctx, updateQuery, updatedFiltersJSON, types.GetUserID(ctx), id, types.GetTenantID(ctx))
+	if err != nil {
+		return fmt.Errorf("update filters: %w", err)
+	}
+
+	return nil
+}
