@@ -24,6 +24,8 @@ type Configuration struct {
 	Logging    LoggingConfig    `validate:"required"`
 	Postgres   PostgresConfig   `validate:"required"`
 	Sentry     SentryConfig     `validate:"required"`
+	Event      EventConfig      `validate:"required"`
+	DynamoDB   DynamoDBConfig   `validate:"required"`
 }
 
 type DeploymentConfig struct {

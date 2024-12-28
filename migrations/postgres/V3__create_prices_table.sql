@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS prices (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     -- Amount stored in main currency units (e.g., dollars, not cents)
     -- For USD: 12.50 means $12.50, not cents
-    amount DECIMAL(20,9) NOT NULL,
+    amount DECIMAL(25,15) NOT NULL,
     currency VARCHAR(3) NOT NULL,
     display_amount VARCHAR(255) NOT NULL,
     plan_id VARCHAR(255) NOT NULL,

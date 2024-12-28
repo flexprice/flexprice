@@ -334,3 +334,9 @@ func (s *InMemoryEventStore) HasEvent(id string) bool {
 	_, exists := s.events[id]
 	return exists
 }
+
+func (s *InMemoryEventStore) Clear() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.events = make(map[string]*events.Event)
+}

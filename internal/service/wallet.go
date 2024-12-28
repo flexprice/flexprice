@@ -13,9 +13,9 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
-	"github.com/flexprice/flexprice/internal/kafka"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
+	"github.com/flexprice/flexprice/internal/publisher"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
@@ -50,10 +50,10 @@ type walletService struct {
 	subscriptionRepo subscription.Repository
 	planRepo         plan.Repository
 	priceRepo        price.Repository
-	producer         kafka.MessageProducer
 	eventRepo        events.Repository
 	meterRepo        meter.Repository
 	customerRepo     customer.Repository
+	publisher        publisher.EventPublisher
 	client           *postgres.Client
 }
 
@@ -64,11 +64,11 @@ func NewWalletService(
 	subscriptionRepo subscription.Repository,
 	planRepo plan.Repository,
 	priceRepo price.Repository,
-	producer kafka.MessageProducer,
 	eventRepo events.Repository,
 	meterRepo meter.Repository,
 	customerRepo customer.Repository,
 	client *postgres.Client,
+	publisher publisher.EventPublisher,
 ) WalletService {
 	return &walletService{
 		walletRepo:       walletRepo,
@@ -76,11 +76,11 @@ func NewWalletService(
 		subscriptionRepo: subscriptionRepo,
 		planRepo:         planRepo,
 		priceRepo:        priceRepo,
-		producer:         producer,
 		eventRepo:        eventRepo,
 		meterRepo:        meterRepo,
 		customerRepo:     customerRepo,
 		client:           client,
+		publisher:        publisher,
 	}
 }
 
@@ -236,10 +236,10 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 		s.subscriptionRepo,
 		s.planRepo,
 		s.priceRepo,
-		s.producer,
 		s.eventRepo,
 		s.meterRepo,
 		s.customerRepo,
+		s.publisher,
 		s.logger,
 	)
 

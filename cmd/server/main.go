@@ -11,9 +11,11 @@ import (
 	v1 "github.com/flexprice/flexprice/internal/api/v1"
 	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/dynamodb"
 	"github.com/flexprice/flexprice/internal/kafka"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
+	"github.com/flexprice/flexprice/internal/publisher"
 	"github.com/flexprice/flexprice/internal/repository"
 	"github.com/flexprice/flexprice/internal/sentry"
 	"github.com/flexprice/flexprice/internal/service"
@@ -61,9 +63,15 @@ func main() {
 			postgres.NewDB,
 			clickhouse.NewClickHouseStore,
 
+			// Optional DBs
+			dynamodb.NewClient,
+
 			// Producers and Consumers
 			kafka.NewProducer,
 			kafka.NewConsumer,
+
+			// Event Publisher
+			publisher.NewEventPublisher,
 
 			// Repositories
 			repository.NewEventRepository,

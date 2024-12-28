@@ -37,6 +37,7 @@ func TestSubscriptionService_GetUsageBySubscription(t *testing.T) {
 	meterStore := testutil.NewInMemoryMeterStore()
 	customerStore := testutil.NewInMemoryCustomerStore()
 	log := logger.GetLogger()
+	publisher := testutil.NewInMemoryEventPublisher(eventStore).(*testutil.InMemoryPublisherService)
 
 	// Create test customer
 	testCustomer := &customer.Customer{
@@ -205,15 +206,14 @@ func TestSubscriptionService_GetUsageBySubscription(t *testing.T) {
 		require.NoError(t, eventStore.InsertEvent(ctx, event))
 	}
 
-	producer := testutil.NewInMemoryMessageBroker()
 	svc := NewSubscriptionService(
 		subscriptionStore,
 		planStore,
 		priceStore,
-		producer,
 		eventStore,
 		meterStore,
 		customerStore,
+		publisher,
 		log,
 	)
 
