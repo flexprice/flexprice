@@ -65,7 +65,18 @@ func (s *meterService) DisableMeter(ctx context.Context, id string) error {
 	return s.meterRepo.DisableMeter(ctx, id)
 }
 
+// contains checks if a slice contains a specific value
+func contains(slice []string, value string) bool {
+	for _, v := range slice {
+		if v == value {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *meterService) UpdateMeter(ctx context.Context, id string, filters []meter.Filter) (*meter.Meter, error) {
+	// Validate input
 	if id == "" {
 		return nil, fmt.Errorf("id is required")
 	}
@@ -74,17 +85,54 @@ func (s *meterService) UpdateMeter(ctx context.Context, id string, filters []met
 		return nil, fmt.Errorf("filters cannot be empty")
 	}
 
-	// Call the repository to update filters
-	err := s.meterRepo.UpdateMeter(ctx, id, filters)
+	// Fetch the existing meter
+	existingMeter, err := s.meterRepo.GetMeter(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("update meter: %w", err)
+		return nil, fmt.Errorf("fetch meter: %w", err)
 	}
 
-	// Fetch the updated meter
-	updatedMeter, err := s.meterRepo.GetMeter(ctx, id)
-	if err != nil {
-		return nil, fmt.Errorf("get meter: %w", err)
+	// Merge filters
+	mergedFilters := mergeFilters(existingMeter.Filters, filters)
+
+	// Update only the filters field in the database
+	if err := s.meterRepo.UpdateMeter(ctx, id, mergedFilters); err != nil {
+		return nil, fmt.Errorf("update filters: %w", err)
 	}
 
-	return updatedMeter, nil
+	// Return the updated meter object
+	existingMeter.Filters = mergedFilters
+	return existingMeter, nil
+}
+
+// mergeFilters combines existing filters with new filters, ensuring no duplicates
+func mergeFilters(existingFilters, newFilters []meter.Filter) []meter.Filter {
+	filterMap := make(map[string][]string)
+
+	// Add existing filters to the map
+	for _, f := range existingFilters {
+		filterMap[f.Key] = f.Values
+	}
+
+	// Merge new filters into the map
+	for _, newFilter := range newFilters {
+		if _, exists := filterMap[newFilter.Key]; !exists {
+			filterMap[newFilter.Key] = []string{}
+		}
+		for _, value := range newFilter.Values {
+			if !contains(filterMap[newFilter.Key], value) {
+				filterMap[newFilter.Key] = append(filterMap[newFilter.Key], value)
+			}
+		}
+	}
+
+	// Convert the map back to a slice of filters
+	mergedFilters := make([]meter.Filter, 0, len(filterMap))
+	for key, values := range filterMap {
+		mergedFilters = append(mergedFilters, meter.Filter{
+			Key:    key,
+			Values: values,
+		})
+	}
+
+	return mergedFilters
 }
