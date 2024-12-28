@@ -13,8 +13,8 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
-	"github.com/flexprice/flexprice/internal/kafka"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/publisher"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
@@ -32,10 +32,10 @@ type subscriptionService struct {
 	subscriptionRepo subscription.Repository
 	planRepo         plan.Repository
 	priceRepo        price.Repository
-	producer         kafka.MessageProducer
 	eventRepo        events.Repository
 	meterRepo        meter.Repository
 	customerRepo     customer.Repository
+	publisher        publisher.EventPublisher
 	logger           *logger.Logger
 }
 
@@ -43,19 +43,19 @@ func NewSubscriptionService(
 	subscriptionRepo subscription.Repository,
 	planRepo plan.Repository,
 	priceRepo price.Repository,
-	producer kafka.MessageProducer,
 	eventRepo events.Repository,
 	meterRepo meter.Repository,
 	customerRepo customer.Repository,
+	publisher publisher.EventPublisher,
 	logger *logger.Logger,
 ) SubscriptionService {
 	return &subscriptionService{
 		subscriptionRepo: subscriptionRepo,
 		planRepo:         planRepo,
 		priceRepo:        priceRepo,
-		producer:         producer,
 		eventRepo:        eventRepo,
 		meterRepo:        meterRepo,
+		publisher:        publisher,
 		customerRepo:     customerRepo,
 		logger:           logger,
 	}
@@ -204,7 +204,7 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error) {
 	response := &dto.GetUsageBySubscriptionResponse{}
 
-	eventService := NewEventService(s.producer, s.eventRepo, s.meterRepo, s.logger)
+	eventService := NewEventService(s.eventRepo, s.meterRepo, s.publisher, s.logger)
 	priceService := NewPriceService(s.priceRepo, s.logger)
 
 	subscriptionResponse, err := s.GetSubscription(ctx, req.SubscriptionID)

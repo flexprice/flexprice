@@ -2,12 +2,9 @@ package service
 
 import (
 	"context"
-	"encoding/json"
-	"sync"
 	"testing"
 	"time"
 
-	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
@@ -20,12 +17,11 @@ import (
 
 type EventServiceSuite struct {
 	suite.Suite
-	ctx        context.Context
-	service    *eventService
-	store      *testutil.InMemoryEventStore
-	broker     *testutil.InMemoryMessageBroker
-	msgChannel chan *message.Message
-	logger     *logger.Logger
+	ctx       context.Context
+	service   EventService
+	eventRepo *testutil.InMemoryEventStore
+	publisher *testutil.InMemoryPublisherService
+	logger    *logger.Logger
 }
 
 func TestEventService(t *testing.T) {
@@ -34,28 +30,21 @@ func TestEventService(t *testing.T) {
 
 func (s *EventServiceSuite) SetupTest() {
 	s.ctx = testutil.SetupContext()
-	s.store = testutil.NewInMemoryEventStore()
-	s.broker = testutil.NewInMemoryMessageBroker()
+	s.eventRepo = testutil.NewInMemoryEventStore()
+	s.publisher = testutil.NewInMemoryEventPublisher(s.eventRepo).(*testutil.InMemoryPublisherService)
 	s.logger = logger.GetLogger()
-	s.service = NewEventService(s.broker, s.store, nil, s.logger).(*eventService)
 
-	// Setup message consumer
-	s.msgChannel = s.broker.Subscribe()
-
-	// Start consuming messages
-	go func() {
-		for msg := range s.msgChannel {
-			var event events.Event
-			if err := json.Unmarshal(msg.Payload, &event); err != nil {
-				continue
-			}
-			_ = s.store.InsertEvent(s.ctx, &event)
-		}
-	}()
+	s.service = NewEventService(
+		s.eventRepo,
+		nil, // meter repo not needed for these tests
+		s.publisher,
+		s.logger,
+	)
 }
 
 func (s *EventServiceSuite) TearDownTest() {
-	s.broker.Close()
+	s.publisher.Clear()
+	s.eventRepo.Clear()
 }
 
 func (s *EventServiceSuite) TestCreateEvent() {
@@ -63,7 +52,7 @@ func (s *EventServiceSuite) TestCreateEvent() {
 		name          string
 		input         *dto.IngestEventRequest
 		expectedError bool
-		verify        func(wg *sync.WaitGroup)
+		verify        func(input *dto.IngestEventRequest)
 	}{
 		{
 			name: "successful_event_creation",
@@ -77,14 +66,31 @@ func (s *EventServiceSuite) TestCreateEvent() {
 				},
 			},
 			expectedError: false,
-			verify: func(wg *sync.WaitGroup) {
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
-					time.Sleep(100 * time.Millisecond)
-					s.True(s.broker.HasMessage("events", "test-1"))
-					s.True(s.store.HasEvent("test-1"))
-				}()
+			verify: func(input *dto.IngestEventRequest) {
+				// First verify event was published (this should happen immediately)
+				s.True(s.publisher.HasEvent("test-1"), "Event should be published")
+
+				// Give some time for the consumer to process the event
+				time.Sleep(100 * time.Millisecond)
+
+				// Then verify it was stored by the consumer
+				s.True(s.eventRepo.HasEvent("test-1"), "Event should be stored by consumer")
+
+				// Verify event details through GetEvents
+				params := &events.GetEventsParams{
+					ExternalCustomerID: input.ExternalCustomerID,
+					EventName:          input.EventName,
+					StartTime:          input.Timestamp.Add(-time.Hour), // Buffer to ensure we catch the event
+					EndTime:            input.Timestamp.Add(time.Hour),
+					PageSize:           10,
+				}
+				storedEvents, err := s.eventRepo.GetEvents(s.ctx, params)
+				s.NoError(err)
+				s.Len(storedEvents, 1)
+
+				event := storedEvents[0]
+				s.Equal(input.EventName, event.EventName)
+				s.Equal(input.ExternalCustomerID, event.ExternalCustomerID)
 			},
 		},
 		{
@@ -93,26 +99,25 @@ func (s *EventServiceSuite) TestCreateEvent() {
 				EventID: "test-2",
 			},
 			expectedError: true,
-			verify: func(wg *sync.WaitGroup) {
-				s.False(s.store.HasEvent("test-2"))
-				s.False(s.broker.HasMessage("events", "test-2"))
+			verify: func(input *dto.IngestEventRequest) {
+				s.False(s.publisher.HasEvent("test-2"), "Event should not be published")
+				time.Sleep(100 * time.Millisecond) // Wait for potential consumer processing
+				s.False(s.eventRepo.HasEvent("test-2"), "Event should not be stored")
 			},
 		},
 	}
 
 	for _, tc := range testCases {
 		s.Run(tc.name, func() {
-			var wg sync.WaitGroup
-
 			err := s.service.CreateEvent(s.ctx, tc.input)
+
 			if tc.expectedError {
 				s.Error(err)
 			} else {
 				s.NoError(err)
 			}
 
-			tc.verify(&wg)
-			wg.Wait()
+			tc.verify(tc.input)
 		})
 	}
 }
@@ -167,7 +172,7 @@ func (s *EventServiceSuite) TestGetUsage() {
 			evt.CustomerID,
 			evt.Source,
 		)
-		err := s.store.InsertEvent(s.ctx, event)
+		err := s.eventRepo.InsertEvent(s.ctx, event)
 		s.NoError(err)
 	}
 
@@ -284,7 +289,12 @@ func (s *EventServiceSuite) TestGetUsageByMeter() {
 	s.NoError(err)
 
 	// Setup the event service with the mocked meter repository
-	s.service = NewEventService(s.broker, s.store, mockedMeterRepo, s.logger).(*eventService)
+	s.service = NewEventService(
+		s.eventRepo,
+		mockedMeterRepo,
+		s.publisher,
+		s.logger,
+	)
 
 	// Setup test events
 	testingEvents := []*dto.IngestEventRequest{
@@ -335,7 +345,7 @@ func (s *EventServiceSuite) TestGetUsageByMeter() {
 			evt.CustomerID,
 			evt.Source,
 		)
-		err := s.store.InsertEvent(s.ctx, event)
+		err := s.eventRepo.InsertEvent(s.ctx, event)
 		s.NoError(err)
 	}
 
@@ -412,7 +422,7 @@ func (s *EventServiceSuite) TestGetEvents() {
 			evt.CustomerID,
 			evt.Source,
 		)
-		err := s.store.InsertEvent(s.ctx, event)
+		err := s.eventRepo.InsertEvent(s.ctx, event)
 		s.NoError(err)
 	}
 

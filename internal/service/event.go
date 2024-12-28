@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
@@ -13,8 +12,8 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/errors"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
-	"github.com/flexprice/flexprice/internal/kafka"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/publisher"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/go-playground/validator/v10"
 	"github.com/shopspring/decimal"
@@ -29,30 +28,28 @@ type EventService interface {
 }
 
 type eventService struct {
-	producer  kafka.MessageProducer
 	eventRepo events.Repository
 	meterRepo meter.Repository
-	validator *validator.Validate
+	publisher publisher.EventPublisher
 	logger    *logger.Logger
 }
 
 func NewEventService(
-	producer kafka.MessageProducer,
 	eventRepo events.Repository,
 	meterRepo meter.Repository,
+	publisher publisher.EventPublisher,
 	logger *logger.Logger,
 ) EventService {
 	return &eventService{
-		producer:  producer,
 		eventRepo: eventRepo,
 		meterRepo: meterRepo,
-		validator: validator.New(),
+		publisher: publisher,
 		logger:    logger,
 	}
 }
 
 func (s *eventService) CreateEvent(ctx context.Context, createEventRequest *dto.IngestEventRequest) error {
-	if err := s.validator.Struct(createEventRequest); err != nil {
+	if err := validator.New().Struct(createEventRequest); err != nil {
 		return fmt.Errorf("validation failed: %w", err)
 	}
 
@@ -68,13 +65,12 @@ func (s *eventService) CreateEvent(ctx context.Context, createEventRequest *dto.
 		createEventRequest.Source,
 	)
 
-	payload, err := json.Marshal(event)
-	if err != nil {
-		return fmt.Errorf("failed to marshal event: %w", err)
-	}
-
-	if err := s.producer.PublishWithID("events", payload, event.ID); err != nil {
-		return fmt.Errorf("failed to publish event: %w", err)
+	if err := s.publisher.Publish(ctx, event); err != nil {
+		// Log the error but don't fail the request
+		s.logger.With(
+			"event_id", event.ID,
+			"error", err,
+		).Error("failed to publish event")
 	}
 
 	createEventRequest.EventID = event.ID

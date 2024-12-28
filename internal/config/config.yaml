@@ -55,5 +55,13 @@ sentry:
   environment: "development"  # Change to "production" in prod
   sample_rate: 1.0  # Adjust sampling rate as needed (0.0 to 1.0)
 
+event:
+  publish_destination: "kafka"
+
+dynamodb:
+  in_use: false
+  region: "us-east-1"
+  event_table_name: "events"
+
 logging:
   level: "debug"

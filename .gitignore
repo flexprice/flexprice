@@ -40,3 +40,6 @@ research/*
 # windsurf rules
 .windsurfrules
 .cursorrules
+
+# local adhoc scripts not production ready
+scripts/hacks/*

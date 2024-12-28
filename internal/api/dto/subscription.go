@@ -2,6 +2,7 @@ package dto
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -58,7 +59,7 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		ID:                 uuid.New().String(),
 		CustomerID:         r.CustomerID,
 		PlanID:             r.PlanID,
-		Currency:           r.Currency,
+		Currency:           strings.ToLower(r.Currency),
 		LookupKey:          r.LookupKey,
 		SubscriptionStatus: types.SubscriptionStatusActive,
 		StartDate:          r.StartDate,
