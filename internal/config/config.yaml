@@ -5,7 +5,7 @@ server:
   address: ":8080"
 
 auth:
-  provider: "supabase" # "flexprice" or "supabase"
+  provider: "flexprice" # "flexprice" or "supabase"
   secret: "031f6bbed1156eca651d48652c17a5bce727514cc804f185aca207153b2915abb79c0f1b53945915866dc3b63f37ea73aa86fc062f13e6008249e30819f87483"
   supabase:
     base_url: "http://localhost:54321"
