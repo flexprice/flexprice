@@ -3,26 +3,62 @@ name: Run Tests
 on:
   pull_request:
     branches: [ main, develop ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
   push:
     branches: [ main, develop ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
 
 jobs:
   test:
-    name: Run Tests and Lint
+    name: Run Tests
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
 
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
           go-version: '1.23.0'
           cache: true
+          cache-dependency-path: go.sum
+
+      # Optimize caching of dependencies
+      - name: Go Cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
 
       - name: Install dependencies
-        run: go mod download
-
-      - name: Run Tests
         run: |
-          go test -v -race ./...
+          go mod download
+          # Pre-compile test dependencies
+          go test -i ./...
+
+      # Run tests in parallel with optimized flags
+      - name: Run Tests
+        env:
+          GOFLAGS: "-count=1"
+          GOMAXPROCS: 4
+        run: |
+          go test -v -race -parallel 4 -timeout 5m ./... -json > test-results.json
+
+      # Cleanup unnecessary files before caching
+      - name: Cleanup
+        run: |
+          rm -rf $(go env GOCACHE)/*test*
+          rm -rf $(go env GOCACHE)/*race*
+          find . -type f -name '*.test' -delete
