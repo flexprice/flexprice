@@ -8,21 +8,21 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/user"
 )
 
-// InMemoryUserRepository is an in-memory implementation of the User repository
-type InMemoryUserRepository struct {
+// InMemoryUserStore is an in-memory implementation of the User repository
+type InMemoryUserStore struct {
 	mu    sync.Mutex
 	users map[string]*user.User
 }
 
-// NewInMemoryUserRepository creates a new instance of InMemoryUserRepository
-func NewInMemoryUserRepository() *InMemoryUserRepository {
-	return &InMemoryUserRepository{
+// NewInMemoryUserStore creates a new instance of InMemoryUserStore
+func NewInMemoryUserStore() *InMemoryUserStore {
+	return &InMemoryUserStore{
 		users: make(map[string]*user.User),
 	}
 }
 
 // Create creates a new user in the in-memory store
-func (r *InMemoryUserRepository) Create(ctx context.Context, user *user.User) error {
+func (r *InMemoryUserStore) Create(ctx context.Context, user *user.User) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -35,7 +35,7 @@ func (r *InMemoryUserRepository) Create(ctx context.Context, user *user.User) er
 }
 
 // GetByEmail retrieves a user by email from the in-memory store
-func (r *InMemoryUserRepository) GetByEmail(ctx context.Context, email string) (*user.User, error) {
+func (r *InMemoryUserStore) GetByEmail(ctx context.Context, email string) (*user.User, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -48,7 +48,7 @@ func (r *InMemoryUserRepository) GetByEmail(ctx context.Context, email string) (
 }
 
 // GetByID retrieves a user by ID from the in-memory store
-func (r *InMemoryUserRepository) GetByID(ctx context.Context, userID string) (*user.User, error) {
+func (r *InMemoryUserStore) GetByID(ctx context.Context, userID string) (*user.User, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -58,4 +58,11 @@ func (r *InMemoryUserRepository) GetByID(ctx context.Context, userID string) (*u
 		}
 	}
 	return nil, errors.New("user not found")
+}
+
+func (s *InMemoryUserStore) Clear() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.users = make(map[string]*user.User)
 }

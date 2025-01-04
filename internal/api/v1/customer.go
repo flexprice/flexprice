@@ -21,10 +21,10 @@ func NewCustomerHandler(service service.CustomerService, log *logger.Logger) *Cu
 
 // @Summary Create a customer
 // @Description Create a customer
-// @Tags customers
+// @Tags Customers
 // @Accept json
 // @Produce json
-// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Param customer body dto.CreateCustomerRequest true "Customer"
 // @Success 201 {object} dto.CustomerResponse
 // @Failure 400 {object} ErrorResponse
@@ -48,10 +48,10 @@ func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 
 // @Summary Get a customer
 // @Description Get a customer
-// @Tags customers
+// @Tags Customers
 // @Accept json
 // @Produce json
-// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Param id path string true "Customer ID"
 // @Success 200 {object} dto.CustomerResponse
 // @Failure 400 {object} ErrorResponse
@@ -71,10 +71,10 @@ func (h *CustomerHandler) GetCustomer(c *gin.Context) {
 
 // @Summary Get customers
 // @Description Get customers
-// @Tags customers
+// @Tags Customers
 // @Accept json
 // @Produce json
-// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Param filter query types.Filter false "Filter"
 // @Success 200 {object} dto.ListCustomersResponse
 // @Failure 400 {object} ErrorResponse
@@ -98,10 +98,10 @@ func (h *CustomerHandler) GetCustomers(c *gin.Context) {
 
 // @Summary Update a customer
 // @Description Update a customer
-// @Tags customers
+// @Tags Customers
 // @Accept json
 // @Produce json
-// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Param id path string true "Customer ID"
 // @Param customer body dto.UpdateCustomerRequest true "Customer"
 // @Success 200 {object} dto.CustomerResponse
@@ -128,10 +128,10 @@ func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
 
 // @Summary Delete a customer
 // @Description Delete a customer
-// @Tags customers
+// @Tags Customers
 // @Accept json
 // @Produce json
-// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Param id path string true "Customer ID"
 // @Success 204
 // @Failure 400 {object} ErrorResponse

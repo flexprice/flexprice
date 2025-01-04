@@ -17,7 +17,7 @@ type AuthServiceSuite struct {
 	suite.Suite
 	ctx         context.Context
 	authService *authService
-	userRepo    *testutil.InMemoryUserRepository
+	userRepo    *testutil.InMemoryUserStore
 	authRepo    *testutil.InMemoryAuthRepository
 }
 
@@ -27,7 +27,7 @@ func TestAuthService(t *testing.T) {
 
 func (s *AuthServiceSuite) SetupTest() {
 	s.ctx = testutil.SetupContext()
-	s.userRepo = testutil.NewInMemoryUserRepository()
+	s.userRepo = testutil.NewInMemoryUserStore()
 	s.authRepo = testutil.NewInMemoryAuthRepository()
 
 	// Create a real provider (e.g., flexpriceAuth) with test config

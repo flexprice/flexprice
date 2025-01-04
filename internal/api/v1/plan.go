@@ -21,10 +21,10 @@ func NewPlanHandler(service service.PlanService, log *logger.Logger) *PlanHandle
 
 // @Summary Create a new plan
 // @Description Create a new plan with the specified configuration
-// @Tags plans
+// @Tags Plans
 // @Accept json
 // @Produce json
-// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Param plan body dto.CreatePlanRequest true "Plan configuration"
 // @Success 201 {object} dto.PlanResponse
 // @Failure 400 {object} ErrorResponse
@@ -48,10 +48,10 @@ func (h *PlanHandler) CreatePlan(c *gin.Context) {
 
 // @Summary Get a plan by ID
 // @Description Get a plan by ID
-// @Tags plans
+// @Tags Plans
 // @Accept json
 // @Produce json
-// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Param id path string true "Plan ID"
 // @Success 200 {object} dto.PlanResponse
 // @Failure 400 {object} ErrorResponse
@@ -71,10 +71,10 @@ func (h *PlanHandler) GetPlan(c *gin.Context) {
 
 // @Summary Get plans
 // @Description Get plans with the specified filter
-// @Tags plans
+// @Tags Plans
 // @Accept json
 // @Produce json
-// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Param filter query types.Filter true "Filter"
 // @Success 200 {object} dto.ListPlansResponse
 // @Failure 400 {object} ErrorResponse
@@ -98,10 +98,10 @@ func (h *PlanHandler) GetPlans(c *gin.Context) {
 
 // @Summary Update a plan by ID
 // @Description Update a plan by ID
-// @Tags plans
+// @Tags Plans
 // @Accept json
 // @Produce json
-// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Param id path string true "Plan ID"
 // @Param plan body dto.UpdatePlanRequest true "Plan configuration"
 // @Success 200 {object} dto.PlanResponse
@@ -128,10 +128,10 @@ func (h *PlanHandler) UpdatePlan(c *gin.Context) {
 
 // @Summary Delete a plan by ID
 // @Description Delete a plan by ID
-// @Tags plans
+// @Tags Plans
 // @Accept json
 // @Produce json
-// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Param id path string true "Plan ID"
 // @Success 200 {object} gin.H
 // @Failure 400 {object} ErrorResponse

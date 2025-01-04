@@ -19,12 +19,12 @@ type Service struct {
 func Module() fx.Option {
 	return fx.Options(
 		fx.Provide(NewSentryService),
-		fx.Invoke(registerHooks),
+		fx.Invoke(RegisterHooks),
 	)
 }
 
 // registerHooks registers lifecycle hooks for Sentry
-func registerHooks(lc fx.Lifecycle, svc *Service) {
+func RegisterHooks(lc fx.Lifecycle, svc *Service) {
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			if !svc.cfg.Sentry.Enabled {

@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -54,7 +55,8 @@ type walletService struct {
 	meterRepo        meter.Repository
 	customerRepo     customer.Repository
 	publisher        publisher.EventPublisher
-	client           *postgres.Client
+	invoiceRepo      invoice.Repository
+	db               postgres.IClient
 }
 
 // NewWalletService creates a new instance of WalletService
@@ -67,7 +69,8 @@ func NewWalletService(
 	eventRepo events.Repository,
 	meterRepo meter.Repository,
 	customerRepo customer.Repository,
-	client *postgres.Client,
+	invoiceRepo invoice.Repository,
+	db postgres.IClient,
 	publisher publisher.EventPublisher,
 ) WalletService {
 	return &walletService{
@@ -79,7 +82,8 @@ func NewWalletService(
 		eventRepo:        eventRepo,
 		meterRepo:        meterRepo,
 		customerRepo:     customerRepo,
-		client:           client,
+		invoiceRepo:      invoiceRepo,
+		db:               db,
 		publisher:        publisher,
 	}
 }
@@ -239,7 +243,9 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 		s.eventRepo,
 		s.meterRepo,
 		s.customerRepo,
+		s.invoiceRepo,
 		s.publisher,
+		s.db,
 		s.logger,
 	)
 
@@ -302,7 +308,7 @@ func (s *walletService) TerminateWallet(ctx context.Context, walletID string) er
 	}
 
 	// Use client's WithTx for atomic operations
-	return s.client.WithTx(ctx, func(ctx context.Context) error {
+	return s.db.WithTx(ctx, func(ctx context.Context) error {
 		// Debit remaining balance if any
 		if w.Balance.GreaterThan(decimal.Zero) {
 			debitReq := &wallet.WalletOperation{

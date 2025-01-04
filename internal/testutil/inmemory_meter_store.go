@@ -9,18 +9,18 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
-type InMemoryMeterRepository struct {
+type InMemoryMeterStore struct {
 	mu     sync.RWMutex
 	meters map[string]*meter.Meter
 }
 
-func NewInMemoryMeterStore() *InMemoryMeterRepository {
-	return &InMemoryMeterRepository{
+func NewInMemoryMeterStore() *InMemoryMeterStore {
+	return &InMemoryMeterStore{
 		meters: make(map[string]*meter.Meter),
 	}
 }
 
-func (s *InMemoryMeterRepository) CreateMeter(ctx context.Context, m *meter.Meter) error {
+func (s *InMemoryMeterStore) CreateMeter(ctx context.Context, m *meter.Meter) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -40,7 +40,7 @@ func (s *InMemoryMeterRepository) CreateMeter(ctx context.Context, m *meter.Mete
 	return nil
 }
 
-func (s *InMemoryMeterRepository) GetMeter(ctx context.Context, id string) (*meter.Meter, error) {
+func (s *InMemoryMeterStore) GetMeter(ctx context.Context, id string) (*meter.Meter, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -51,7 +51,7 @@ func (s *InMemoryMeterRepository) GetMeter(ctx context.Context, id string) (*met
 	return m, nil
 }
 
-func (s *InMemoryMeterRepository) GetAllMeters(ctx context.Context) ([]*meter.Meter, error) {
+func (s *InMemoryMeterStore) GetAllMeters(ctx context.Context) ([]*meter.Meter, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -62,7 +62,7 @@ func (s *InMemoryMeterRepository) GetAllMeters(ctx context.Context) ([]*meter.Me
 	return meters, nil
 }
 
-func (s *InMemoryMeterRepository) DisableMeter(ctx context.Context, id string) error {
+func (s *InMemoryMeterStore) DisableMeter(ctx context.Context, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -73,4 +73,72 @@ func (s *InMemoryMeterRepository) DisableMeter(ctx context.Context, id string) e
 
 	m.Status = types.StatusDeleted
 	return nil
+}
+
+func (s *InMemoryMeterStore) UpdateMeter(ctx context.Context, id string, filters []meter.Filter) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if id == "" {
+		return fmt.Errorf("id is required")
+	}
+
+	// Find the meter by ID
+	m, exists := s.meters[id]
+	if !exists {
+		return fmt.Errorf("meter not found")
+	}
+
+	if m.Filters == nil {
+		m.Filters = []meter.Filter{}
+	}
+
+	// Merge new filters into the existing filters
+	existingFilters := map[string][]string{}
+	for _, f := range m.Filters {
+		existingFilters[f.Key] = f.Values
+	}
+
+	for _, newFilter := range filters {
+		if _, exists := existingFilters[newFilter.Key]; !exists {
+			// If the key doesn't exist, add the entire filter
+			existingFilters[newFilter.Key] = newFilter.Values
+		} else {
+			// Append new values for an existing key, avoiding duplicates
+			for _, newValue := range newFilter.Values {
+				if !contains(existingFilters[newFilter.Key], newValue) {
+					existingFilters[newFilter.Key] = append(existingFilters[newFilter.Key], newValue)
+				}
+			}
+		}
+	}
+
+	// Update the meter's filters
+	updatedFilters := []meter.Filter{}
+	for key, values := range existingFilters {
+		updatedFilters = append(updatedFilters, meter.Filter{
+			Key:    key,
+			Values: values,
+		})
+	}
+
+	m.Filters = updatedFilters
+	return nil
+}
+
+func (s *InMemoryMeterStore) Clear() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.meters = make(map[string]*meter.Meter)
+}
+
+// Helper function to check if a slice contains a specific value
+func contains(slice []string, value string) bool {
+	for _, v := range slice {
+		if v == value {
+			return true
+		}
+	}
+	return false
 }

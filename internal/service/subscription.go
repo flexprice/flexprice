@@ -9,11 +9,13 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/publisher"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
@@ -35,8 +37,10 @@ type subscriptionService struct {
 	eventRepo        events.Repository
 	meterRepo        meter.Repository
 	customerRepo     customer.Repository
+	invoiceRepo      invoice.Repository
 	publisher        publisher.EventPublisher
 	logger           *logger.Logger
+	db               postgres.IClient
 }
 
 func NewSubscriptionService(
@@ -46,7 +50,9 @@ func NewSubscriptionService(
 	eventRepo events.Repository,
 	meterRepo meter.Repository,
 	customerRepo customer.Repository,
+	invoiceRepo invoice.Repository,
 	publisher publisher.EventPublisher,
+	db postgres.IClient,
 	logger *logger.Logger,
 ) SubscriptionService {
 	return &subscriptionService{
@@ -55,8 +61,10 @@ func NewSubscriptionService(
 		priceRepo:        priceRepo,
 		eventRepo:        eventRepo,
 		meterRepo:        meterRepo,
-		publisher:        publisher,
 		customerRepo:     customerRepo,
+		invoiceRepo:      invoiceRepo,
+		publisher:        publisher,
+		db:               db,
 		logger:           logger,
 	}
 }
@@ -64,6 +72,16 @@ func NewSubscriptionService(
 func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.CreateSubscriptionRequest) (*dto.SubscriptionResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid request: %w", err)
+	}
+
+	// Check if customer exists
+	customer, err := s.customerRepo.Get(ctx, req.CustomerID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get customer: %w", err)
+	}
+
+	if customer.Status != types.StatusPublished {
+		return nil, fmt.Errorf("customer is not active")
 	}
 
 	plan, err := s.planRepo.Get(ctx, req.PlanID)
@@ -153,6 +171,10 @@ func (s *subscriptionService) CancelSubscription(ctx context.Context, id string,
 	subscription, err := s.subscriptionRepo.Get(ctx, id)
 	if err != nil {
 		return fmt.Errorf("failed to get subscription: %w", err)
+	}
+
+	if subscription.SubscriptionStatus == types.SubscriptionStatusCancelled {
+		return fmt.Errorf("subscription is already cancelled")
 	}
 
 	now := time.Now().UTC()
@@ -432,8 +454,16 @@ func (s *subscriptionService) UpdateBillingPeriods(ctx context.Context) error {
 	return nil
 }
 
+/// Helpers
+
 // processSubscriptionPeriod handles the period transitions for a single subscription
 func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub *subscription.Subscription, now time.Time) error {
+	invoiceService := NewInvoiceService(
+		s.invoiceRepo,
+		s.logger,
+		s.db,
+	)
+
 	originalStart := sub.CurrentPeriodStart
 	originalEnd := sub.CurrentPeriodEnd
 
@@ -480,39 +510,71 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 		return nil
 	}
 
-	// Update to the latest period
-	lastTransition := transitions[len(transitions)-1]
-	sub.CurrentPeriodStart = lastTransition.start
-	sub.CurrentPeriodEnd = lastTransition.end
+	// Use db's WithTx for atomic operations
+	err := s.db.WithTx(ctx, func(ctx context.Context) error {
+		// Get usage for current period
+		usage, err := s.GetUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
+			SubscriptionID: sub.ID,
+			StartTime:      originalStart,
+			EndTime:        originalEnd,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to get subscription usage: %w", err)
+		}
 
-	// Handle subscription cancellation at period end
-	if sub.CancelAtPeriodEnd && sub.CancelAt != nil {
-		for _, t := range transitions {
-			if !sub.CancelAt.After(t.end) {
-				sub.SubscriptionStatus = types.SubscriptionStatusCancelled
-				sub.CancelledAt = sub.CancelAt
-				break
+		// Create invoice for current period
+		inv, err := invoiceService.CreateSubscriptionInvoice(ctx, sub, originalStart, originalEnd, usage)
+		if err != nil {
+			return fmt.Errorf("failed to create subscription invoice: %w", err)
+		}
+
+		// Finalize the invoice
+		if err := invoiceService.FinalizeInvoice(ctx, inv.ID); err != nil {
+			return fmt.Errorf("failed to finalize subscription invoice: %w", err)
+		}
+
+		// Update to the latest period
+		lastTransition := transitions[len(transitions)-1]
+		sub.CurrentPeriodStart = lastTransition.start
+		sub.CurrentPeriodEnd = lastTransition.end
+
+		// Handle subscription cancellation at period end
+		if sub.CancelAtPeriodEnd && sub.CancelAt != nil {
+			for _, t := range transitions {
+				if !sub.CancelAt.After(t.end) {
+					sub.SubscriptionStatus = types.SubscriptionStatusCancelled
+					sub.CancelledAt = sub.CancelAt
+					break
+				}
 			}
 		}
-	}
 
-	if err := s.subscriptionRepo.Update(ctx, sub); err != nil {
-		return fmt.Errorf("failed to update subscription: %w", err)
-	}
+		if err := s.subscriptionRepo.Update(ctx, sub); err != nil {
+			return fmt.Errorf("failed to update subscription: %w", err)
+		}
 
-	s.logger.Infow("updated subscription billing period",
-		"subscription_id", sub.ID,
-		"previous_period_start", originalStart,
-		"previous_period_end", originalEnd,
-		"new_period_start", sub.CurrentPeriodStart,
-		"new_period_end", sub.CurrentPeriodEnd,
-		"process_up_to", now,
-		"transitions_count", len(transitions))
+		s.logger.Infow("updated subscription billing period",
+			"subscription_id", sub.ID,
+			"previous_period_start", originalStart,
+			"previous_period_end", originalEnd,
+			"new_period_start", sub.CurrentPeriodStart,
+			"new_period_end", sub.CurrentPeriodEnd,
+			"process_up_to", now,
+			"transitions_count", len(transitions),
+			"invoice_id", inv.ID)
+
+		return nil
+	})
+
+	if err != nil {
+		s.logger.Errorw("failed to process subscription period",
+			"subscription_id", sub.ID,
+			"error", err)
+		return err
+	}
 
 	return nil
 }
-
-/// Helpers
 
 func createChargeResponse(priceObj *price.Price, quantity decimal.Decimal, cost decimal.Decimal, meterDisplayName string) *dto.SubscriptionUsageByMetersResponse {
 	finalAmount := price.FormatAmountToFloat64WithPrecision(cost, priceObj.Currency)

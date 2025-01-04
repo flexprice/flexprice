@@ -20,6 +20,16 @@ swagger: install-swag
 		--parseVendor \
 		--outputTypes go,json,yaml
 
+.PHONY: swagger-3-0
+swagger-3-0: install-swag
+	@echo "Converting Swagger 2.0 to OpenAPI 3.0..."
+	@curl -X 'POST' \
+		'https://converter.swagger.io/api/convert' \
+		-H 'accept: application/json' \
+		-H 'Content-Type: application/json' \
+		-d @docs/swagger/swagger.json > docs/swagger/swagger-3-0.json
+	@echo "Conversion complete. Output saved to docs/swagger/swagger-3-0.json"
+
 .PHONY: up
 up:
 	docker compose up --build

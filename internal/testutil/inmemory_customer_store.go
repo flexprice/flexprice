@@ -104,3 +104,10 @@ func (s *InMemoryCustomerStore) Delete(ctx context.Context, id string) error {
 	delete(s.customers, id)
 	return nil
 }
+
+func (s *InMemoryCustomerStore) Clear() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.customers = make(map[string]*customer.Customer)
+}

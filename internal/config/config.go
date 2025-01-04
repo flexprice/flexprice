@@ -78,10 +78,10 @@ type PostgresConfig struct {
 	Password               string `mapstructure:"password" validate:"required"`
 	DBName                 string `mapstructure:"dbname" validate:"required"`
 	SSLMode                string `mapstructure:"sslmode" validate:"required"`
-	MaxOpenConns           int    `mapstructure:"max_open_conns, default=10"`
-	MaxIdleConns           int    `mapstructure:"max_idle_conns default=5"`
-	ConnMaxLifetimeMinutes int    `mapstructure:"conn_max_lifetime_minutes default=60"`
-	AutoMigrate            bool   `mapstructure:"auto_migrate default=false"`
+	MaxOpenConns           int    `mapstructure:"max_open_conns" default:"10"`
+	MaxIdleConns           int    `mapstructure:"max_idle_conns" default:"5"`
+	ConnMaxLifetimeMinutes int    `mapstructure:"conn_max_lifetime_minutes" default:"60"`
+	AutoMigrate            bool   `mapstructure:"auto_migrate" default:"false"`
 }
 
 type APIKeyConfig struct {

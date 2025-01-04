@@ -6,6 +6,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -27,7 +28,7 @@ type RepositoryParams struct {
 
 	Logger       *logger.Logger
 	DB           *postgres.DB
-	EntClient    *postgres.Client
+	EntClient    postgres.IClient
 	ClickHouseDB *clickhouse.ClickHouseStore
 }
 
@@ -83,4 +84,8 @@ func NewTenantRepository(p RepositoryParams) tenant.Repository {
 
 func NewEnvironmentRepository(p RepositoryParams) environment.Repository {
 	return postgresRepo.NewEnvironmentRepository(p.DB, p.Logger)
+}
+
+func NewInvoiceRepository(p RepositoryParams) invoice.Repository {
+	return entRepo.NewInvoiceRepository(p.EntClient, p.Logger)
 }

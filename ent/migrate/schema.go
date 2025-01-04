@@ -8,6 +8,136 @@ import (
 )
 
 var (
+	// InvoicesColumns holds the columns for the "invoices" table.
+	InvoicesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true},
+		{Name: "tenant_id", Type: field.TypeString},
+		{Name: "status", Type: field.TypeString, Default: "published"},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "customer_id", Type: field.TypeString},
+		{Name: "subscription_id", Type: field.TypeString, Nullable: true},
+		{Name: "invoice_type", Type: field.TypeString},
+		{Name: "invoice_status", Type: field.TypeString, Default: "DRAFT"},
+		{Name: "payment_status", Type: field.TypeString, Default: "PENDING"},
+		{Name: "currency", Type: field.TypeString},
+		{Name: "amount_due", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "amount_paid", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "amount_remaining", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "description", Type: field.TypeString, Nullable: true},
+		{Name: "due_date", Type: field.TypeTime, Nullable: true},
+		{Name: "paid_at", Type: field.TypeTime, Nullable: true},
+		{Name: "voided_at", Type: field.TypeTime, Nullable: true},
+		{Name: "finalized_at", Type: field.TypeTime, Nullable: true},
+		{Name: "period_start", Type: field.TypeTime, Nullable: true},
+		{Name: "period_end", Type: field.TypeTime, Nullable: true},
+		{Name: "invoice_pdf_url", Type: field.TypeString, Nullable: true},
+		{Name: "billing_reason", Type: field.TypeString, Nullable: true},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "version", Type: field.TypeInt, Default: 1},
+	}
+	// InvoicesTable holds the schema information for the "invoices" table.
+	InvoicesTable = &schema.Table{
+		Name:       "invoices",
+		Columns:    InvoicesColumns,
+		PrimaryKey: []*schema.Column{InvoicesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "invoice_tenant_id_customer_id_invoice_status_payment_status_status",
+				Unique:  false,
+				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[10], InvoicesColumns[11], InvoicesColumns[2]},
+			},
+			{
+				Name:    "invoice_tenant_id_subscription_id_invoice_status_payment_status_status",
+				Unique:  false,
+				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[8], InvoicesColumns[10], InvoicesColumns[11], InvoicesColumns[2]},
+			},
+			{
+				Name:    "invoice_tenant_id_invoice_type_invoice_status_payment_status_status",
+				Unique:  false,
+				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[9], InvoicesColumns[10], InvoicesColumns[11], InvoicesColumns[2]},
+			},
+			{
+				Name:    "invoice_tenant_id_due_date_invoice_status_payment_status_status",
+				Unique:  false,
+				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[17], InvoicesColumns[10], InvoicesColumns[11], InvoicesColumns[2]},
+			},
+			{
+				Name:    "invoice_period_start_period_end",
+				Unique:  false,
+				Columns: []*schema.Column{InvoicesColumns[21], InvoicesColumns[22]},
+			},
+		},
+	}
+	// InvoiceLineItemsColumns holds the columns for the "invoice_line_items" table.
+	InvoiceLineItemsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true},
+		{Name: "tenant_id", Type: field.TypeString},
+		{Name: "status", Type: field.TypeString, Default: "published"},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "customer_id", Type: field.TypeString},
+		{Name: "subscription_id", Type: field.TypeString, Nullable: true},
+		{Name: "price_id", Type: field.TypeString},
+		{Name: "meter_id", Type: field.TypeString, Nullable: true},
+		{Name: "amount", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "quantity", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "currency", Type: field.TypeString},
+		{Name: "period_start", Type: field.TypeTime, Nullable: true},
+		{Name: "period_end", Type: field.TypeTime, Nullable: true},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "invoice_id", Type: field.TypeString},
+	}
+	// InvoiceLineItemsTable holds the schema information for the "invoice_line_items" table.
+	InvoiceLineItemsTable = &schema.Table{
+		Name:       "invoice_line_items",
+		Columns:    InvoiceLineItemsColumns,
+		PrimaryKey: []*schema.Column{InvoiceLineItemsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "invoice_line_items_invoices_line_items",
+				Columns:    []*schema.Column{InvoiceLineItemsColumns[17]},
+				RefColumns: []*schema.Column{InvoicesColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "invoicelineitem_tenant_id_invoice_id_status",
+				Unique:  false,
+				Columns: []*schema.Column{InvoiceLineItemsColumns[1], InvoiceLineItemsColumns[17], InvoiceLineItemsColumns[2]},
+			},
+			{
+				Name:    "invoicelineitem_tenant_id_customer_id_status",
+				Unique:  false,
+				Columns: []*schema.Column{InvoiceLineItemsColumns[1], InvoiceLineItemsColumns[7], InvoiceLineItemsColumns[2]},
+			},
+			{
+				Name:    "invoicelineitem_tenant_id_subscription_id_status",
+				Unique:  false,
+				Columns: []*schema.Column{InvoiceLineItemsColumns[1], InvoiceLineItemsColumns[8], InvoiceLineItemsColumns[2]},
+			},
+			{
+				Name:    "invoicelineitem_tenant_id_price_id_status",
+				Unique:  false,
+				Columns: []*schema.Column{InvoiceLineItemsColumns[1], InvoiceLineItemsColumns[9], InvoiceLineItemsColumns[2]},
+			},
+			{
+				Name:    "invoicelineitem_tenant_id_meter_id_status",
+				Unique:  false,
+				Columns: []*schema.Column{InvoiceLineItemsColumns[1], InvoiceLineItemsColumns[10], InvoiceLineItemsColumns[2]},
+			},
+			{
+				Name:    "invoicelineitem_period_start_period_end",
+				Unique:  false,
+				Columns: []*schema.Column{InvoiceLineItemsColumns[14], InvoiceLineItemsColumns[15]},
+			},
+		},
+	}
 	// SubscriptionsColumns holds the columns for the "subscriptions" table.
 	SubscriptionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true},
@@ -63,11 +193,6 @@ var (
 				Name:    "subscription_tenant_id_current_period_end_subscription_status_status",
 				Unique:  false,
 				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[16], SubscriptionsColumns[10], SubscriptionsColumns[2]},
-			},
-			{
-				Name:    "subscription_tenant_id_lookup_key",
-				Unique:  true,
-				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7]},
 			},
 		},
 	}
@@ -150,6 +275,8 @@ var (
 	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
+		InvoicesTable,
+		InvoiceLineItemsTable,
 		SubscriptionsTable,
 		WalletsTable,
 		WalletTransactionsTable,
@@ -157,4 +284,5 @@ var (
 )
 
 func init() {
+	InvoiceLineItemsTable.ForeignKeys[0].RefTable = InvoicesTable
 }

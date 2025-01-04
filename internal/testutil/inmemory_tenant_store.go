@@ -9,18 +9,18 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 )
 
-type InMemoryTenantRepository struct {
+type InMemoryTenantStore struct {
 	mu      sync.RWMutex
 	tenants map[string]*tenant.Tenant
 }
 
-func NewInMemoryTenantStore() *InMemoryTenantRepository {
-	return &InMemoryTenantRepository{
+func NewInMemoryTenantStore() *InMemoryTenantStore {
+	return &InMemoryTenantStore{
 		tenants: make(map[string]*tenant.Tenant),
 	}
 }
 
-func (s *InMemoryTenantRepository) Create(ctx context.Context, t *tenant.Tenant) error {
+func (s *InMemoryTenantStore) Create(ctx context.Context, t *tenant.Tenant) error {
 	if t == nil {
 		return fmt.Errorf("tenant cannot be nil")
 	}
@@ -38,7 +38,7 @@ func (s *InMemoryTenantRepository) Create(ctx context.Context, t *tenant.Tenant)
 	return nil
 }
 
-func (s *InMemoryTenantRepository) GetByID(ctx context.Context, id string) (*tenant.Tenant, error) {
+func (s *InMemoryTenantStore) GetByID(ctx context.Context, id string) (*tenant.Tenant, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -46,4 +46,11 @@ func (s *InMemoryTenantRepository) GetByID(ctx context.Context, id string) (*ten
 		return t, nil
 	}
 	return nil, fmt.Errorf("tenant not found")
+}
+
+func (s *InMemoryTenantStore) Clear() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.tenants = make(map[string]*tenant.Tenant)
 }

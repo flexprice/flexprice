@@ -53,27 +53,29 @@ func (qb *QueryBuilder) WithBaseFilters(ctx context.Context, params *events.Usag
 	if params.Filters != nil {
 		for property, values := range params.Filters {
 			if len(values) > 0 {
-				quotedValues := make([]string, len(values))
-				for i, v := range values {
-					quotedValues[i] = fmt.Sprintf("'%s'", v)
+				var condition string
+				if len(values) == 1 {
+					condition = fmt.Sprintf("JSONExtractString(properties, '%s') = '%s'", property, values[0])
+				} else {
+					quotedValues := make([]string, len(values))
+					for i, v := range values {
+						quotedValues[i] = fmt.Sprintf("'%s'", v)
+					}
+					condition = fmt.Sprintf(
+						"JSONExtractString(properties, '%s') IN (%s)",
+						property,
+						strings.Join(quotedValues, ","),
+					)
 				}
-				conditions = append(conditions, fmt.Sprintf(
-					"JSONExtractString(properties, '%s') IN (%s)",
-					property,
-					strings.Join(quotedValues, ","),
-				))
+				conditions = append(conditions, condition)
 			}
 		}
 	}
 
 	qb.params = params
-	qb.baseQuery = fmt.Sprintf(`
-		base_events AS (
+	qb.baseQuery = fmt.Sprintf(`base_events AS (
 			SELECT * FROM (
-				SELECT DISTINCT ON (%s) *
-				FROM events
-				WHERE %s
-				ORDER BY %s, timestamp DESC
+				SELECT DISTINCT ON (%s) * FROM events WHERE %s ORDER BY %s, timestamp DESC
 			)
 		)`,
 		qb.getDeduplicationKey(),
@@ -96,15 +98,21 @@ func (qb *QueryBuilder) WithFilterGroups(ctx context.Context, groups []events.Fi
 			if len(values) == 0 {
 				continue
 			}
-			quotedValues := make([]string, len(values))
-			for i, v := range values {
-				quotedValues[i] = fmt.Sprintf("'%s'", v)
+			var condition string
+			if len(values) == 1 {
+				condition = fmt.Sprintf("JSONExtractString(properties, '%s') = '%s'", property, values[0])
+			} else {
+				quotedValues := make([]string, len(values))
+				for i, v := range values {
+					quotedValues[i] = fmt.Sprintf("'%s'", v)
+				}
+				condition = fmt.Sprintf(
+					"JSONExtractString(properties, '%s') IN (%s)",
+					property,
+					strings.Join(quotedValues, ","),
+				)
 			}
-			conditions = append(conditions, fmt.Sprintf(
-				"JSONExtractString(properties, '%s') IN (%s)",
-				property,
-				strings.Join(quotedValues, ","),
-			))
+			conditions = append(conditions, condition)
 		}
 
 		// Only add the filter group if it has conditions

@@ -85,4 +85,4 @@ Whether you're a newbie coder or a wizard 🧙‍♀️, your perspective is gol
 
 ## ✨ Resources!
 
-📖 [API Docs](https://documenter.getpostman.com/view/35977379/2sAY4xBNAS)
+📖 [API Docs](https://docs.flexprice.io/)

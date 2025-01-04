@@ -25,6 +25,7 @@ type Handlers struct {
 	Wallet       *v1.WalletHandler
 	Tenant       *v1.TenantHandler
 	Cron         *cron.SubscriptionHandler
+	Invoice      *v1.InvoiceHandler
 }
 
 func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logger) *gin.Engine {
@@ -87,6 +88,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			meters.GET("/:id", handlers.Meter.GetMeter)
 			meters.POST("/:id/disable", handlers.Meter.DisableMeter)
 			meters.DELETE("/:id", handlers.Meter.DeleteMeter)
+			meters.PUT("/:id", handlers.Meter.UpdateMeter)
 		}
 
 		price := v1Private.Group("/prices")
@@ -142,6 +144,16 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		{
 			tenantRoutes.POST("", handlers.Tenant.CreateTenant)
 			tenantRoutes.GET("/:id", handlers.Tenant.GetTenantByID)
+		}
+
+		invoices := v1Private.Group("/invoices")
+		{
+			invoices.POST("", handlers.Invoice.CreateInvoice)
+			invoices.GET("", handlers.Invoice.ListInvoices)
+			invoices.GET("/:id", handlers.Invoice.GetInvoice)
+			invoices.POST("/:id/finalize", handlers.Invoice.FinalizeInvoice)
+			invoices.POST("/:id/void", handlers.Invoice.VoidInvoice)
+			invoices.PUT("/:id/payment", handlers.Invoice.UpdatePaymentStatus)
 		}
 
 		// Admin routes (API Key only)

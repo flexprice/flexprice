@@ -1,0 +1,53 @@
+version: 1.3
+about:
+  - "Our golang stack"
+  - go version "1.23.0"
+  - go.mod
+  - gin for rest apis
+  - github.com/jmoiron/sqlx and github.com/lib/pq for database access
+  - github.com/ClickHouse/clickhouse-go/v2 for clickhouse access
+  - github.com/ThreeDotsLabs/watermill for kafka message processing
+  - github.com/ThreeDotsLabs/watermill-kafka/v2 for kafka message processing
+  - github.com/ThreeDotsLabs/watermill-kafka/v2/pkg/kafka for kafka client
+  - github.com/Shopify/sarama for kafka client configurations
+  - "we are using golang with well defined interfaces and dependency injection using fx"
+  - "Our file structure"
+  - cmd/server/main.go : entry point for the server
+  - "This is responsible for starting the server and initializing all dependencies"
+  - internal/api/v1: all rest api handlers defined here"
+  - "This is responsible for validating input request DTOS and calling service layer"
+  - internal/api/dto : all data transfer objects defined here"
+  - "This is responsible for defining request and response DTOS with required validations and types"
+  - internal/api/router.go : all rest api router defined here"
+  - "This is responsible for defining all api routes and their handlers"
+  - internal/config : all configuration defined here"
+  - "This is responsible for loading configuration from environment variables and files"
+  - internal/clickhouse : clickhouse client wrapper"
+  - internal/logger : logging wrapper on top of zaps.SugaredLogger"
+  - internal/kafka : kafka client wrapper with producer and consumer"
+  - internal/postgres : postgres client wrapper with sqlx
+  - internal/domain : all DB schema and repository interfaces defined here"
+  - ent/schema : all ent schemas defined here"
+  - "This is mapped with the domain model as well by implementing a func FromEnt(ent *ent.Schema) DomainModel function"
+  - "internal/repository"
+  - internal/repository/ent : all ent repository implementations defined here
+  - This is responsible for interacting with postgres database using ent
+  - internal/repository/postgres (deprecated) : all old postgres repository implementations defined here
+  - This was responsible for interacting with postgres database using raw queries
+  - TODO we need to migrate old entities from this repo to ent based schema and repo
+  - internal/repository/clickhouse : all clickhouse repository implementations defined here
+  - This is responsible for interacting with clickhouse database using raw queries with some parsing logic
+  - internal/repository/factory.go : all repository factory defined here to choose if using postgres or clickhouse
+  - This is responsible for choosing the correct repository based on the configuration
+  - internal/service : all service logic defined here ex events service, meter service
+  - This is responsible for calling the repository layer and performing business logic
+  - This layer can call other service layers if needed
+  - migrations : all migrations defined here
+  - migrations/postgres : all postgres migrations defined here
+  - This is responsible for creating and running postgres migrations
+  - Whenever creating a new domain model, add a new migration
+  - migrations/clickhouse : all clickhouse migrations defined here
+  - This is responsible for creating and running clickhouse migrations.
+  - You can refer events table migration here
+ignore:
+  - "ent/"  # ignore everything in the `ent/` directory as most code is auto generated

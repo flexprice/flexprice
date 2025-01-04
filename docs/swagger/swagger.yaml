@@ -29,6 +29,67 @@ definitions:
     - slug
     - type
     type: object
+  dto.CreateInvoiceLineItemRequest:
+    properties:
+      amount:
+        type: number
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      meter_id:
+        type: string
+      period_end:
+        type: string
+      period_start:
+        type: string
+      price_id:
+        type: string
+      quantity:
+        type: number
+    required:
+    - amount
+    - price_id
+    - quantity
+    type: object
+  dto.CreateInvoiceRequest:
+    properties:
+      amount_due:
+        type: number
+      amount_paid:
+        type: number
+      billing_reason:
+        $ref: '#/definitions/types.InvoiceBillingReason'
+      currency:
+        type: string
+      customer_id:
+        type: string
+      description:
+        type: string
+      due_date:
+        type: string
+      invoice_status:
+        $ref: '#/definitions/types.InvoiceStatus'
+      invoice_type:
+        $ref: '#/definitions/types.InvoiceType'
+      line_items:
+        items:
+          $ref: '#/definitions/dto.CreateInvoiceLineItemRequest'
+        type: array
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      payment_status:
+        $ref: '#/definitions/types.InvoicePaymentStatus'
+      period_end:
+        type: string
+      period_start:
+        type: string
+      subscription_id:
+        type: string
+    required:
+    - amount_due
+    - currency
+    - customer_id
+    - invoice_type
+    type: object
   dto.CreateMeterRequest:
     properties:
       aggregation:
@@ -193,6 +254,7 @@ definitions:
       billing_period:
         $ref: '#/definitions/types.BillingPeriod'
       billing_period_count:
+        minimum: 1
         type: integer
       currency:
         type: string
@@ -213,8 +275,14 @@ definitions:
       trial_start:
         type: string
     required:
+    - billing_cadence
+    - billing_period
+    - billing_period_count
+    - currency
     - customer_id
+    - invoice_cadence
     - plan_id
+    - start_date
     type: object
   dto.CreateTenantRequest:
     properties:
@@ -454,6 +522,106 @@ definitions:
     - event_name
     - external_customer_id
     type: object
+  dto.InvoiceLineItemResponse:
+    properties:
+      amount:
+        type: number
+      created_at:
+        type: string
+      created_by:
+        type: string
+      currency:
+        type: string
+      customer_id:
+        type: string
+      id:
+        type: string
+      invoice_id:
+        type: string
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      meter_id:
+        type: string
+      period_end:
+        type: string
+      period_start:
+        type: string
+      price_id:
+        type: string
+      quantity:
+        type: number
+      status:
+        type: string
+      subscription_id:
+        type: string
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+    type: object
+  dto.InvoiceResponse:
+    properties:
+      amount_due:
+        type: number
+      amount_paid:
+        type: number
+      amount_remaining:
+        type: number
+      billing_reason:
+        type: string
+      created_at:
+        type: string
+      created_by:
+        type: string
+      currency:
+        type: string
+      customer_id:
+        type: string
+      description:
+        type: string
+      due_date:
+        type: string
+      finalized_at:
+        type: string
+      id:
+        type: string
+      invoice_pdf_url:
+        type: string
+      invoice_status:
+        $ref: '#/definitions/types.InvoiceStatus'
+      invoice_type:
+        $ref: '#/definitions/types.InvoiceType'
+      line_items:
+        items:
+          $ref: '#/definitions/dto.InvoiceLineItemResponse'
+        type: array
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      paid_at:
+        type: string
+      payment_status:
+        $ref: '#/definitions/types.InvoicePaymentStatus'
+      period_end:
+        type: string
+      period_start:
+        type: string
+      status:
+        type: string
+      subscription_id:
+        type: string
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+      version:
+        type: integer
+      voided_at:
+        type: string
+    type: object
   dto.ListCustomersResponse:
     properties:
       customers:
@@ -477,6 +645,15 @@ definitions:
         type: integer
       offset:
         type: integer
+      total:
+        type: integer
+    type: object
+  dto.ListInvoicesResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/dto.InvoiceResponse'
+        type: array
       total:
         type: integer
     type: object
@@ -842,6 +1019,22 @@ definitions:
         type: string
       type:
         type: string
+    type: object
+  dto.UpdateInvoicePaymentStatusRequest:
+    properties:
+      amount:
+        type: number
+      payment_status:
+        $ref: '#/definitions/types.InvoicePaymentStatus'
+    required:
+    - payment_status
+    type: object
+  dto.UpdateMeterRequest:
+    properties:
+      filters:
+        items:
+          $ref: '#/definitions/meter.Filter'
+        type: array
     type: object
   dto.UpdatePlanPriceRequest:
     properties:
@@ -1285,6 +1478,18 @@ definitions:
       status:
         $ref: '#/definitions/types.Status'
     type: object
+  types.InvoiceBillingReason:
+    enum:
+    - SUBSCRIPTION_CREATE
+    - SUBSCRIPTION_CYCLE
+    - SUBSCRIPTION_UPDATE
+    - MANUAL
+    type: string
+    x-enum-varnames:
+    - InvoiceBillingReasonSubscriptionCreate
+    - InvoiceBillingReasonSubscriptionCycle
+    - InvoiceBillingReasonSubscriptionUpdate
+    - InvoiceBillingReasonManual
   types.InvoiceCadence:
     enum:
     - ARREAR
@@ -1293,6 +1498,36 @@ definitions:
     x-enum-varnames:
     - InvoiceCadenceArrear
     - InvoiceCadenceAdvance
+  types.InvoicePaymentStatus:
+    enum:
+    - PENDING
+    - SUCCEEDED
+    - FAILED
+    type: string
+    x-enum-varnames:
+    - InvoicePaymentStatusPending
+    - InvoicePaymentStatusSucceeded
+    - InvoicePaymentStatusFailed
+  types.InvoiceStatus:
+    enum:
+    - DRAFT
+    - FINALIZED
+    - VOIDED
+    type: string
+    x-enum-varnames:
+    - InvoiceStatusDraft
+    - InvoiceStatusFinalized
+    - InvoiceStatusVoided
+  types.InvoiceType:
+    enum:
+    - SUBSCRIPTION
+    - ONE_OFF
+    - CREDIT
+    type: string
+    x-enum-varnames:
+    - InvoiceTypeSubscription
+    - InvoiceTypeOneOff
+    - InvoiceTypeCredit
   types.Metadata:
     additionalProperties:
       type: string
@@ -1413,7 +1648,7 @@ paths:
             $ref: '#/definitions/v1.ErrorResponse'
       summary: Login
       tags:
-      - auth
+      - Auth
   /auth/signup:
     post:
       consumes:
@@ -1439,7 +1674,7 @@ paths:
             $ref: '#/definitions/v1.ErrorResponse'
       summary: Sign up
       tags:
-      - auth
+      - Auth
   /customers:
     get:
       consumes:
@@ -1485,10 +1720,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Get customers
       tags:
-      - customers
+      - Customers
     post:
       consumes:
       - application/json
@@ -1516,10 +1751,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Create a customer
       tags:
-      - customers
+      - Customers
   /customers/{id}:
     delete:
       consumes:
@@ -1545,10 +1780,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Delete a customer
       tags:
-      - customers
+      - Customers
     get:
       consumes:
       - application/json
@@ -1575,10 +1810,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Get a customer
       tags:
-      - customers
+      - Customers
     put:
       consumes:
       - application/json
@@ -1611,10 +1846,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Update a customer
       tags:
-      - customers
+      - Customers
   /customers/{id}/wallets:
     get:
       consumes:
@@ -1644,10 +1879,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Get wallets by customer ID
       tags:
-      - Wallet
+      - Wallets
   /environments:
     get:
       consumes:
@@ -1693,10 +1928,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Get environments
       tags:
-      - environments
+      - Environments
     post:
       consumes:
       - application/json
@@ -1724,10 +1959,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Create an environment
       tags:
-      - environments
+      - Environments
   /environments/{id}:
     get:
       consumes:
@@ -1759,10 +1994,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Get an environment
       tags:
-      - environments
+      - Environments
     put:
       consumes:
       - application/json
@@ -1799,10 +2034,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Update an environment
       tags:
-      - environments
+      - Environments
   /events:
     get:
       description: Retrieve raw events with pagination and filtering
@@ -1851,10 +2086,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Get raw events
       tags:
-      - events
+      - Events
     post:
       consumes:
       - application/json
@@ -1884,10 +2119,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Ingest event
       tags:
-      - events
+      - Events
   /events/usage:
     post:
       description: Retrieve aggregated usage statistics for events
@@ -1914,10 +2149,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Get usage statistics
       tags:
-      - events
+      - Events
   /events/usage/meter:
     post:
       description: Retrieve aggregated usage statistics using meter configuration
@@ -1948,10 +2183,226 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Get usage by meter
       tags:
-      - events
+      - Events
+  /invoices:
+    get:
+      consumes:
+      - application/json
+      description: List invoices with optional filtering
+      parameters:
+      - description: Customer ID
+        in: query
+        name: customer_id
+        type: string
+      - description: Subscription ID
+        in: query
+        name: subscription_id
+        type: string
+      - description: Wallet ID
+        in: query
+        name: wallet_id
+        type: string
+      - collectionFormat: csv
+        description: Invoice statuses
+        in: query
+        items:
+          type: string
+        name: status
+        type: array
+      - description: Start time (RFC3339)
+        in: query
+        name: start_time
+        type: string
+      - description: End time (RFC3339)
+        in: query
+        name: end_time
+        type: string
+      - description: Limit
+        in: query
+        name: limit
+        type: integer
+      - description: Offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ListInvoicesResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      summary: List invoices
+      tags:
+      - Invoices
+    post:
+      consumes:
+      - application/json
+      description: Create a new invoice with the provided details
+      parameters:
+      - description: Invoice details
+        in: body
+        name: invoice
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateInvoiceRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.InvoiceResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      summary: Create a new invoice
+      tags:
+      - Invoices
+  /invoices/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Get detailed information about an invoice
+      parameters:
+      - description: Invoice ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.InvoiceResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      summary: Get an invoice by ID
+      tags:
+      - Invoices
+  /invoices/{id}/finalize:
+    post:
+      consumes:
+      - application/json
+      description: Finalize a draft invoice
+      parameters:
+      - description: Invoice ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/gin.H'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      summary: Finalize an invoice
+      tags:
+      - Invoices
+  /invoices/{id}/payment:
+    put:
+      consumes:
+      - application/json
+      description: Update the payment status of an invoice
+      parameters:
+      - description: Invoice ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Payment Status Update Request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateInvoicePaymentStatusRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.InvoiceResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update invoice payment status
+      tags:
+      - Invoices
+  /invoices/{id}/void:
+    post:
+      consumes:
+      - application/json
+      description: Void an invoice that hasn't been paid
+      parameters:
+      - description: Invoice ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/gin.H'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      summary: Void an invoice
+      tags:
+      - Invoices
   /meters:
     get:
       description: Get all meters
@@ -1969,10 +2420,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: List meters
       tags:
-      - meters
+      - Meters
     post:
       consumes:
       - application/json
@@ -2000,10 +2451,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Create meter
       tags:
-      - meters
+      - Meters
   /meters/{id}:
     delete:
       description: Delete an existing meter
@@ -2031,10 +2482,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Delete meter
       tags:
-      - meters
+      - Meters
     get:
       description: Get a specific meter by ID
       parameters:
@@ -2059,10 +2510,50 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Get meter
       tags:
-      - meters
+      - Meters
+    put:
+      consumes:
+      - application/json
+      description: Update an existing meter
+      parameters:
+      - description: Meter ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Meter configuration
+        in: body
+        name: meter
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateMeterRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.MeterResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update meter
+      tags:
+      - Meters
   /meters/{id}/disable:
     post:
       description: Disable an existing meter
@@ -2090,10 +2581,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: 'Disable meter [TODO: Deprecate]'
       tags:
-      - meters
+      - Meters
   /plans:
     get:
       consumes:
@@ -2139,10 +2630,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Get plans
       tags:
-      - plans
+      - Plans
     post:
       consumes:
       - application/json
@@ -2170,10 +2661,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Create a new plan
       tags:
-      - plans
+      - Plans
   /plans/{id}:
     delete:
       consumes:
@@ -2201,10 +2692,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Delete a plan by ID
       tags:
-      - plans
+      - Plans
     get:
       consumes:
       - application/json
@@ -2231,10 +2722,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Get a plan by ID
       tags:
-      - plans
+      - Plans
     put:
       consumes:
       - application/json
@@ -2267,10 +2758,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Update a plan by ID
       tags:
-      - plans
+      - Plans
   /prices:
     get:
       consumes:
@@ -2316,10 +2807,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Get prices
       tags:
-      - prices
+      - Prices
     post:
       consumes:
       - application/json
@@ -2347,10 +2838,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Create a new price
       tags:
-      - prices
+      - Prices
   /prices/{id}:
     delete:
       consumes:
@@ -2378,10 +2869,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Delete a price
       tags:
-      - prices
+      - Prices
     get:
       consumes:
       - application/json
@@ -2408,10 +2899,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Get a price by ID
       tags:
-      - prices
+      - Prices
     put:
       consumes:
       - application/json
@@ -2444,10 +2935,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Update a price
       tags:
-      - prices
+      - Prices
   /subscriptions:
     get:
       description: Get subscriptions with optional filtering
@@ -2488,10 +2979,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: List subscriptions
       tags:
-      - subscriptions
+      - Subscriptions
     post:
       consumes:
       - application/json
@@ -2519,10 +3010,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Create subscription
       tags:
-      - subscriptions
+      - Subscriptions
   /subscriptions/{id}:
     get:
       description: Get a subscription by ID
@@ -2548,10 +3039,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Get subscription
       tags:
-      - subscriptions
+      - Subscriptions
   /subscriptions/{id}/cancel:
     post:
       consumes:
@@ -2583,10 +3074,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Cancel subscription
       tags:
-      - subscriptions
+      - Subscriptions
   /subscriptions/usage:
     post:
       description: Get usage by subscription
@@ -2613,10 +3104,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Get usage by subscription
       tags:
-      - subscriptions
+      - Subscriptions
   /tenants:
     post:
       consumes:
@@ -2645,10 +3136,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Create a new tenant
       tags:
-      - Tenant
+      - Tenants
   /tenants/{id}:
     get:
       consumes:
@@ -2676,10 +3167,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Get tenant by ID
       tags:
-      - Tenant
+      - Tenants
   /users/me:
     get:
       consumes:
@@ -2697,10 +3188,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Get user info
       tags:
-      - users
+      - Users
   /wallets:
     post:
       consumes:
@@ -2729,10 +3220,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Create a new wallet
       tags:
-      - Wallet
+      - Wallets
   /wallets/{id}:
     get:
       consumes:
@@ -2764,10 +3255,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Get wallet by ID
       tags:
-      - Wallet
+      - Wallets
   /wallets/{id}/balance/real-time:
     get:
       consumes:
@@ -2799,10 +3290,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Get wallet balance
       tags:
-      - Wallet
+      - Wallets
   /wallets/{id}/terminate:
     post:
       consumes:
@@ -2835,7 +3326,7 @@ paths:
             $ref: '#/definitions/v1.ErrorResponse'
       summary: Terminate a wallet
       tags:
-      - wallets
+      - Wallets
   /wallets/{id}/top-up:
     post:
       consumes:
@@ -2873,10 +3364,10 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Top up wallet
       tags:
-      - Wallet
+      - Wallets
   /wallets/{id}/transactions:
     get:
       consumes:
@@ -2931,17 +3422,17 @@ paths:
           schema:
             $ref: '#/definitions/v1.ErrorResponse'
       security:
-      - BearerAuth: []
+      - ApiKeyAuth: []
       summary: Get wallet transactions
       tags:
-      - Wallet
+      - Wallets
 schemes:
 - http
 - https
 securityDefinitions:
-  BearerAuth:
-    description: Enter your bearer token in the format **Bearer &lt;token&gt;**
+  ApiKeyAuth:
+    description: Enter your API key in the format *x-api-key &lt;api-key&gt;**
     in: header
-    name: Authorization
+    name: x-api-key
     type: apiKey
 swagger: "2.0"

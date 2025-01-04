@@ -25,7 +25,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "auth"
+                    "Auth"
                 ],
                 "summary": "Login",
                 "parameters": [
@@ -65,7 +65,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "auth"
+                    "Auth"
                 ],
                 "summary": "Sign up",
                 "parameters": [
@@ -99,7 +99,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Get customers",
@@ -110,7 +110,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "customers"
+                    "Customers"
                 ],
                 "summary": "Get customers",
                 "parameters": [
@@ -174,7 +174,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Create a customer",
@@ -185,7 +185,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "customers"
+                    "Customers"
                 ],
                 "summary": "Create a customer",
                 "parameters": [
@@ -225,7 +225,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Get a customer",
@@ -236,7 +236,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "customers"
+                    "Customers"
                 ],
                 "summary": "Get a customer",
                 "parameters": [
@@ -272,7 +272,7 @@ const docTemplate = `{
             "put": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Update a customer",
@@ -283,7 +283,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "customers"
+                    "Customers"
                 ],
                 "summary": "Update a customer",
                 "parameters": [
@@ -328,7 +328,7 @@ const docTemplate = `{
             "delete": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Delete a customer",
@@ -339,7 +339,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "customers"
+                    "Customers"
                 ],
                 "summary": "Delete a customer",
                 "parameters": [
@@ -374,7 +374,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Get all wallets for a customer",
@@ -385,7 +385,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Wallet"
+                    "Wallets"
                 ],
                 "summary": "Get wallets by customer ID",
                 "parameters": [
@@ -426,7 +426,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Get environments",
@@ -437,7 +437,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "environments"
+                    "Environments"
                 ],
                 "summary": "Get environments",
                 "parameters": [
@@ -501,7 +501,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Create an environment",
@@ -512,7 +512,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "environments"
+                    "Environments"
                 ],
                 "summary": "Create an environment",
                 "parameters": [
@@ -552,7 +552,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Get an environment",
@@ -563,7 +563,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "environments"
+                    "Environments"
                 ],
                 "summary": "Get an environment",
                 "parameters": [
@@ -605,7 +605,7 @@ const docTemplate = `{
             "put": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Update an environment",
@@ -616,7 +616,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "environments"
+                    "Environments"
                 ],
                 "summary": "Update an environment",
                 "parameters": [
@@ -669,7 +669,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Retrieve raw events with pagination and filtering",
@@ -677,7 +677,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "events"
+                    "Events"
                 ],
                 "summary": "Get raw events",
                 "parameters": [
@@ -748,7 +748,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Ingest a new event into the system",
@@ -759,7 +759,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "events"
+                    "Events"
                 ],
                 "summary": "Ingest event",
                 "parameters": [
@@ -802,7 +802,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Retrieve aggregated usage statistics for events",
@@ -810,7 +810,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "events"
+                    "Events"
                 ],
                 "summary": "Get usage statistics",
                 "parameters": [
@@ -850,7 +850,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Retrieve aggregated usage statistics using meter configuration",
@@ -858,7 +858,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "events"
+                    "Events"
                 ],
                 "summary": "Get usage by meter",
                 "parameters": [
@@ -900,11 +900,340 @@ const docTemplate = `{
                 }
             }
         },
+        "/invoices": {
+            "get": {
+                "description": "List invoices with optional filtering",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Invoices"
+                ],
+                "summary": "List invoices",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Customer ID",
+                        "name": "customer_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Subscription ID",
+                        "name": "subscription_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Wallet ID",
+                        "name": "wallet_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "Invoice statuses",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start time (RFC3339)",
+                        "name": "start_time",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End time (RFC3339)",
+                        "name": "end_time",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Limit",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ListInvoicesResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/v1.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/v1.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Create a new invoice with the provided details",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Invoices"
+                ],
+                "summary": "Create a new invoice",
+                "parameters": [
+                    {
+                        "description": "Invoice details",
+                        "name": "invoice",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CreateInvoiceRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/dto.InvoiceResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/v1.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/v1.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/invoices/{id}": {
+            "get": {
+                "description": "Get detailed information about an invoice",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Invoices"
+                ],
+                "summary": "Get an invoice by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Invoice ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.InvoiceResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/v1.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/v1.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/invoices/{id}/finalize": {
+            "post": {
+                "description": "Finalize a draft invoice",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Invoices"
+                ],
+                "summary": "Finalize an invoice",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Invoice ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/gin.H"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/v1.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/v1.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/invoices/{id}/payment": {
+            "put": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update the payment status of an invoice",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Invoices"
+                ],
+                "summary": "Update invoice payment status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Invoice ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Payment Status Update Request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.UpdateInvoicePaymentStatusRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.InvoiceResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/v1.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/v1.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/v1.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/invoices/{id}/void": {
+            "post": {
+                "description": "Void an invoice that hasn't been paid",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Invoices"
+                ],
+                "summary": "Void an invoice",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Invoice ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/gin.H"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/v1.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/v1.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/meters": {
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Get all meters",
@@ -912,7 +1241,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "meters"
+                    "Meters"
                 ],
                 "summary": "List meters",
                 "responses": {
@@ -936,7 +1265,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Create a new meter with the specified configuration",
@@ -947,7 +1276,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "meters"
+                    "Meters"
                 ],
                 "summary": "Create meter",
                 "parameters": [
@@ -987,7 +1316,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Get a specific meter by ID",
@@ -995,7 +1324,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "meters"
+                    "Meters"
                 ],
                 "summary": "Get meter",
                 "parameters": [
@@ -1028,10 +1357,72 @@ const docTemplate = `{
                     }
                 }
             },
+            "put": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update an existing meter",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Meters"
+                ],
+                "summary": "Update meter",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Meter ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Meter configuration",
+                        "name": "meter",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.UpdateMeterRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.MeterResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/v1.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/v1.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/v1.ErrorResponse"
+                        }
+                    }
+                }
+            },
             "delete": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Delete an existing meter",
@@ -1039,7 +1430,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "meters"
+                    "Meters"
                 ],
                 "summary": "Delete meter",
                 "parameters": [
@@ -1080,7 +1471,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Disable an existing meter",
@@ -1088,7 +1479,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "meters"
+                    "Meters"
                 ],
                 "summary": "Disable meter [TODO: Deprecate]",
                 "parameters": [
@@ -1129,7 +1520,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Get plans with the specified filter",
@@ -1140,7 +1531,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "plans"
+                    "Plans"
                 ],
                 "summary": "Get plans",
                 "parameters": [
@@ -1204,7 +1595,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Create a new plan with the specified configuration",
@@ -1215,7 +1606,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "plans"
+                    "Plans"
                 ],
                 "summary": "Create a new plan",
                 "parameters": [
@@ -1255,7 +1646,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Get a plan by ID",
@@ -1266,7 +1657,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "plans"
+                    "Plans"
                 ],
                 "summary": "Get a plan by ID",
                 "parameters": [
@@ -1302,7 +1693,7 @@ const docTemplate = `{
             "put": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Update a plan by ID",
@@ -1313,7 +1704,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "plans"
+                    "Plans"
                 ],
                 "summary": "Update a plan by ID",
                 "parameters": [
@@ -1358,7 +1749,7 @@ const docTemplate = `{
             "delete": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Delete a plan by ID",
@@ -1369,7 +1760,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "plans"
+                    "Plans"
                 ],
                 "summary": "Delete a plan by ID",
                 "parameters": [
@@ -1407,7 +1798,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Get prices with the specified filter",
@@ -1418,7 +1809,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "prices"
+                    "Prices"
                 ],
                 "summary": "Get prices",
                 "parameters": [
@@ -1482,7 +1873,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Create a new price with the specified configuration",
@@ -1493,7 +1884,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "prices"
+                    "Prices"
                 ],
                 "summary": "Create a new price",
                 "parameters": [
@@ -1533,7 +1924,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Get a price by ID",
@@ -1544,7 +1935,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "prices"
+                    "Prices"
                 ],
                 "summary": "Get a price by ID",
                 "parameters": [
@@ -1580,7 +1971,7 @@ const docTemplate = `{
             "put": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Update a price with the specified configuration",
@@ -1591,7 +1982,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "prices"
+                    "Prices"
                 ],
                 "summary": "Update a price",
                 "parameters": [
@@ -1636,7 +2027,7 @@ const docTemplate = `{
             "delete": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Delete a price",
@@ -1647,7 +2038,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "prices"
+                    "Prices"
                 ],
                 "summary": "Delete a price",
                 "parameters": [
@@ -1685,7 +2076,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Get subscriptions with optional filtering",
@@ -1693,7 +2084,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "subscriptions"
+                    "Subscriptions"
                 ],
                 "summary": "List subscriptions",
                 "parameters": [
@@ -1752,7 +2143,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Create a new subscription",
@@ -1763,7 +2154,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "subscriptions"
+                    "Subscriptions"
                 ],
                 "summary": "Create subscription",
                 "parameters": [
@@ -1803,7 +2194,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Get usage by subscription",
@@ -1811,7 +2202,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "subscriptions"
+                    "Subscriptions"
                 ],
                 "summary": "Get usage by subscription",
                 "parameters": [
@@ -1851,7 +2242,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Get a subscription by ID",
@@ -1859,7 +2250,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "subscriptions"
+                    "Subscriptions"
                 ],
                 "summary": "Get subscription",
                 "parameters": [
@@ -1897,7 +2288,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Cancel a subscription",
@@ -1908,7 +2299,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "subscriptions"
+                    "Subscriptions"
                 ],
                 "summary": "Cancel subscription",
                 "parameters": [
@@ -1952,7 +2343,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Create a new tenant",
@@ -1963,7 +2354,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Tenant"
+                    "Tenants"
                 ],
                 "summary": "Create a new tenant",
                 "parameters": [
@@ -2003,7 +2394,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Get tenant by ID",
@@ -2014,7 +2405,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Tenant"
+                    "Tenants"
                 ],
                 "summary": "Get tenant by ID",
                 "parameters": [
@@ -2052,7 +2443,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Get the current user's information",
@@ -2063,7 +2454,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "users"
+                    "Users"
                 ],
                 "summary": "Get user info",
                 "responses": {
@@ -2086,7 +2477,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Create a new wallet for a customer",
@@ -2097,7 +2488,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Wallet"
+                    "Wallets"
                 ],
                 "summary": "Create a new wallet",
                 "parameters": [
@@ -2137,7 +2528,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Get a wallet by its ID",
@@ -2148,7 +2539,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Wallet"
+                    "Wallets"
                 ],
                 "summary": "Get wallet by ID",
                 "parameters": [
@@ -2192,7 +2583,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Get real-time balance of a wallet",
@@ -2203,7 +2594,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Wallet"
+                    "Wallets"
                 ],
                 "summary": "Get wallet balance",
                 "parameters": [
@@ -2253,7 +2644,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "wallets"
+                    "Wallets"
                 ],
                 "summary": "Terminate a wallet",
                 "parameters": [
@@ -2297,7 +2688,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Add credits to a wallet",
@@ -2308,7 +2699,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Wallet"
+                    "Wallets"
                 ],
                 "summary": "Top up wallet",
                 "parameters": [
@@ -2361,7 +2752,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Get transactions for a wallet with pagination",
@@ -2372,7 +2763,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Wallet"
+                    "Wallets"
                 ],
                 "summary": "Get wallet transactions",
                 "parameters": [
@@ -2486,6 +2877,96 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.CreateInvoiceLineItemRequest": {
+            "type": "object",
+            "required": [
+                "amount",
+                "price_id",
+                "quantity"
+            ],
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
+                "meter_id": {
+                    "type": "string"
+                },
+                "period_end": {
+                    "type": "string"
+                },
+                "period_start": {
+                    "type": "string"
+                },
+                "price_id": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "number"
+                }
+            }
+        },
+        "dto.CreateInvoiceRequest": {
+            "type": "object",
+            "required": [
+                "amount_due",
+                "currency",
+                "customer_id",
+                "invoice_type"
+            ],
+            "properties": {
+                "amount_due": {
+                    "type": "number"
+                },
+                "amount_paid": {
+                    "type": "number"
+                },
+                "billing_reason": {
+                    "$ref": "#/definitions/types.InvoiceBillingReason"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "due_date": {
+                    "type": "string"
+                },
+                "invoice_status": {
+                    "$ref": "#/definitions/types.InvoiceStatus"
+                },
+                "invoice_type": {
+                    "$ref": "#/definitions/types.InvoiceType"
+                },
+                "line_items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.CreateInvoiceLineItemRequest"
+                    }
+                },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
+                "payment_status": {
+                    "$ref": "#/definitions/types.InvoicePaymentStatus"
+                },
+                "period_end": {
+                    "type": "string"
+                },
+                "period_start": {
+                    "type": "string"
+                },
+                "subscription_id": {
                     "type": "string"
                 }
             }
@@ -2724,8 +3205,14 @@ const docTemplate = `{
         "dto.CreateSubscriptionRequest": {
             "type": "object",
             "required": [
+                "billing_cadence",
+                "billing_period",
+                "billing_period_count",
+                "currency",
                 "customer_id",
-                "plan_id"
+                "invoice_cadence",
+                "plan_id",
+                "start_date"
             ],
             "properties": {
                 "billing_cadence": {
@@ -2735,7 +3222,8 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.BillingPeriod"
                 },
                 "billing_period_count": {
-                    "type": "integer"
+                    "type": "integer",
+                    "minimum": 1
                 },
                 "currency": {
                     "type": "string"
@@ -3117,6 +3605,157 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.InvoiceLineItemResponse": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "invoice_id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
+                "meter_id": {
+                    "type": "string"
+                },
+                "period_end": {
+                    "type": "string"
+                },
+                "period_start": {
+                    "type": "string"
+                },
+                "price_id": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "number"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "subscription_id": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.InvoiceResponse": {
+            "type": "object",
+            "properties": {
+                "amount_due": {
+                    "type": "number"
+                },
+                "amount_paid": {
+                    "type": "number"
+                },
+                "amount_remaining": {
+                    "type": "number"
+                },
+                "billing_reason": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "due_date": {
+                    "type": "string"
+                },
+                "finalized_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "invoice_pdf_url": {
+                    "type": "string"
+                },
+                "invoice_status": {
+                    "$ref": "#/definitions/types.InvoiceStatus"
+                },
+                "invoice_type": {
+                    "$ref": "#/definitions/types.InvoiceType"
+                },
+                "line_items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.InvoiceLineItemResponse"
+                    }
+                },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
+                "paid_at": {
+                    "type": "string"
+                },
+                "payment_status": {
+                    "$ref": "#/definitions/types.InvoicePaymentStatus"
+                },
+                "period_end": {
+                    "type": "string"
+                },
+                "period_start": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "subscription_id": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "integer"
+                },
+                "voided_at": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.ListCustomersResponse": {
             "type": "object",
             "properties": {
@@ -3151,6 +3790,20 @@ const docTemplate = `{
                 },
                 "offset": {
                     "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.ListInvoicesResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.InvoiceResponse"
+                    }
                 },
                 "total": {
                     "type": "integer"
@@ -3681,6 +4334,31 @@ const docTemplate = `{
                 },
                 "type": {
                     "type": "string"
+                }
+            }
+        },
+        "dto.UpdateInvoicePaymentStatusRequest": {
+            "type": "object",
+            "required": [
+                "payment_status"
+            ],
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "payment_status": {
+                    "$ref": "#/definitions/types.InvoicePaymentStatus"
+                }
+            }
+        },
+        "dto.UpdateMeterRequest": {
+            "type": "object",
+            "properties": {
+                "filters": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/meter.Filter"
+                    }
                 }
             }
         },
@@ -4317,6 +4995,21 @@ const docTemplate = `{
                 }
             }
         },
+        "types.InvoiceBillingReason": {
+            "type": "string",
+            "enum": [
+                "SUBSCRIPTION_CREATE",
+                "SUBSCRIPTION_CYCLE",
+                "SUBSCRIPTION_UPDATE",
+                "MANUAL"
+            ],
+            "x-enum-varnames": [
+                "InvoiceBillingReasonSubscriptionCreate",
+                "InvoiceBillingReasonSubscriptionCycle",
+                "InvoiceBillingReasonSubscriptionUpdate",
+                "InvoiceBillingReasonManual"
+            ]
+        },
         "types.InvoiceCadence": {
             "type": "string",
             "enum": [
@@ -4326,6 +5019,45 @@ const docTemplate = `{
             "x-enum-varnames": [
                 "InvoiceCadenceArrear",
                 "InvoiceCadenceAdvance"
+            ]
+        },
+        "types.InvoicePaymentStatus": {
+            "type": "string",
+            "enum": [
+                "PENDING",
+                "SUCCEEDED",
+                "FAILED"
+            ],
+            "x-enum-varnames": [
+                "InvoicePaymentStatusPending",
+                "InvoicePaymentStatusSucceeded",
+                "InvoicePaymentStatusFailed"
+            ]
+        },
+        "types.InvoiceStatus": {
+            "type": "string",
+            "enum": [
+                "DRAFT",
+                "FINALIZED",
+                "VOIDED"
+            ],
+            "x-enum-varnames": [
+                "InvoiceStatusDraft",
+                "InvoiceStatusFinalized",
+                "InvoiceStatusVoided"
+            ]
+        },
+        "types.InvoiceType": {
+            "type": "string",
+            "enum": [
+                "SUBSCRIPTION",
+                "ONE_OFF",
+                "CREDIT"
+            ],
+            "x-enum-varnames": [
+                "InvoiceTypeSubscription",
+                "InvoiceTypeOneOff",
+                "InvoiceTypeCredit"
             ]
         },
         "types.Metadata": {
@@ -4446,10 +5178,10 @@ const docTemplate = `{
         }
     },
     "securityDefinitions": {
-        "BearerAuth": {
-            "description": "Enter your bearer token in the format **Bearer \u0026lt;token\u0026gt;**",
+        "ApiKeyAuth": {
+            "description": "Enter your API key in the format *x-api-key \u0026lt;api-key\u0026gt;**",
             "type": "apiKey",
-            "name": "Authorization",
+            "name": "x-api-key",
             "in": "header"
         }
     }

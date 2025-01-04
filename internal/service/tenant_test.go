@@ -14,7 +14,7 @@ type TenantServiceSuite struct {
 	suite.Suite
 	ctx           context.Context
 	tenantService *tenantService // Pointer to the concrete implementation
-	tenantRepo    *testutil.InMemoryTenantRepository
+	tenantRepo    *testutil.InMemoryTenantStore
 }
 
 func TestTenantService(t *testing.T) {

@@ -69,8 +69,7 @@ func (s *supabaseAuth) ValidateToken(ctx context.Context, token string) (*auth.C
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
-		secret := s.AuthConfig.Secret
-		return []byte(secret), nil
+		return []byte(s.AuthConfig.Secret), nil
 	})
 
 	if err != nil {
@@ -100,7 +99,10 @@ func (s *supabaseAuth) ValidateToken(ctx context.Context, token string) (*auth.C
 		tenantID = types.DefaultTenantID
 	}
 
-	return &auth.Claims{UserID: userID, TenantID: tenantID}, nil
+	return &auth.Claims{
+		UserID:   userID,
+		TenantID: tenantID,
+	}, nil
 }
 
 func (s *supabaseAuth) AssignUserToTenant(ctx context.Context, userID string, tenantID string) error {

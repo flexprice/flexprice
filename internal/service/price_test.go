@@ -19,7 +19,7 @@ type PriceServiceSuite struct {
 	suite.Suite
 	ctx          context.Context
 	priceService *priceService
-	priceRepo    *testutil.InMemoryPriceRepository
+	priceRepo    *testutil.InMemoryPriceStore
 }
 
 func TestPriceService(t *testing.T) {

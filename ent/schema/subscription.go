@@ -99,8 +99,5 @@ func (Subscription) Indexes() []ent.Index {
 		index.Fields("tenant_id", "subscription_status", "status"),
 		// For billing period updates
 		index.Fields("tenant_id", "current_period_end", "subscription_status", "status"),
-		// For unique lookup keys within a tenant
-		index.Fields("tenant_id", "lookup_key").
-			Unique(),
 	}
 }

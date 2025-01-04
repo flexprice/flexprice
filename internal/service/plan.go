@@ -76,19 +76,37 @@ func (s *planService) GetPlan(ctx context.Context, id string) (*dto.PlanResponse
 }
 
 func (s *planService) GetPlans(ctx context.Context, filter types.Filter) (*dto.ListPlansResponse, error) {
-	plans, err := s.planRepo.List(ctx, filter)
+	expand := filter.GetExpand()
+
+	var plans []*plan.Plan
+	var err error
+
+	plans, err = s.planRepo.List(ctx, filter)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get plans: %w", err)
+		return nil, fmt.Errorf("failed to list plans: %w", err)
 	}
 
 	response := &dto.ListPlansResponse{
-		Plans: make([]plan.Plan, len(plans)),
+		Plans: make([]*dto.PlanResponse, len(plans)),
 	}
 
 	for i, plan := range plans {
-		response.Plans[i] = *plan
+		response.Plans[i] = &dto.PlanResponse{Plan: plan}
 	}
 
+	// If prices weren't eagerly loaded and are requested, fetch them
+	if expand.Has(types.ExpandPrices) {
+		for i, plan := range plans {
+			prices, err := s.priceRepo.GetByPlanID(ctx, plan.ID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get prices for plan %s: %w", plan.ID, err)
+			}
+			response.Plans[i].Prices = make([]dto.PriceResponse, len(prices))
+			for j, price := range prices {
+				response.Plans[i].Prices[j] = dto.PriceResponse{Price: price}
+			}
+		}
+	}
 	response.Total = len(plans)
 	response.Offset = filter.Offset
 	response.Limit = filter.Limit

@@ -15,11 +15,11 @@ import (
 )
 
 type subscriptionRepository struct {
-	client *postgres.Client
+	client postgres.IClient
 	logger *logger.Logger
 }
 
-func NewSubscriptionRepository(client *postgres.Client, logger *logger.Logger) domainSub.Repository {
+func NewSubscriptionRepository(client postgres.IClient, logger *logger.Logger) domainSub.Repository {
 	return &subscriptionRepository{
 		client: client,
 		logger: logger,
@@ -89,12 +89,17 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 	client := r.client.Querier(ctx)
 	now := time.Now().UTC()
 
-	_, err := client.Subscription.UpdateOneID(sub.ID).
+	// Use predicate-based update for optimistic locking
+	query := client.Subscription.Update().
 		Where(
+			subscription.ID(sub.ID),
 			subscription.TenantID(types.GetTenantID(ctx)),
 			subscription.Status(string(types.StatusPublished)),
-			subscription.Version(sub.Version), // Add optimistic locking
-		).
+			subscription.Version(sub.Version), // Version check for optimistic locking
+		)
+
+	// Set all fields
+	query.
 		SetLookupKey(sub.LookupKey).
 		SetSubscriptionStatus(string(sub.SubscriptionStatus)).
 		SetCurrentPeriodStart(sub.CurrentPeriodStart).
@@ -104,17 +109,29 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 		SetCancelAtPeriodEnd(sub.CancelAtPeriodEnd).
 		SetUpdatedAt(now).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		SetVersion(sub.Version + 1). // Increment version for optimistic locking
-		Save(ctx)
+		AddVersion(1) // Increment version atomically
 
+	// Execute update
+	n, err := query.Save(ctx)
 	if err != nil {
-		if ent.IsNotFound(err) {
+		return errors.WithOp(err, "repository.subscription.Update")
+	}
+	if n == 0 {
+		// No rows were updated - either record doesn't exist or version mismatch
+		exists, err := client.Subscription.Query().
+			Where(
+				subscription.ID(sub.ID),
+				subscription.TenantID(types.GetTenantID(ctx)),
+			).
+			Exist(ctx)
+		if err != nil {
+			return errors.WithOp(err, "repository.subscription.Update.CheckExists")
+		}
+		if !exists {
 			return domainSub.NewNotFoundError(sub.ID)
 		}
-		if ent.IsConstraintError(err) {
-			return domainSub.NewVersionConflictError(sub.ID, sub.Version, sub.Version+1)
-		}
-		return errors.WithOp(err, "repository.subscription.Update")
+		// Record exists but version mismatch
+		return domainSub.NewVersionConflictError(sub.ID, sub.Version, sub.Version+1)
 	}
 
 	return nil

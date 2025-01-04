@@ -16,6 +16,18 @@ import (
 	"go.uber.org/fx"
 )
 
+// IClient defines the interface for postgres client operations
+type IClient interface {
+	// WithTx wraps the given function in a transaction
+	WithTx(ctx context.Context, fn func(context.Context) error) error
+
+	// TxFromContext returns the transaction from context if it exists
+	TxFromContext(ctx context.Context) *ent.Tx
+
+	// Querier returns the current transaction client if in a transaction, or the regular client
+	Querier(ctx context.Context) *ent.Client
+}
+
 // Client wraps ent.Client to provide transaction management
 type Client struct {
 	entClient *ent.Client
@@ -59,8 +71,14 @@ func NewEntClient(config *config.Configuration, logger *logger.Logger) (*ent.Cli
 
 	client := ent.NewClient(opts...)
 
+	logger.Debugw("connected to postgres",
+		"host", config.Postgres.Host,
+		"port", config.Postgres.Port,
+		"auto_migrate", config.Postgres.AutoMigrate,
+	)
 	// Run the auto migration tool if enabled
 	if config.Postgres.AutoMigrate {
+		logger.Debugw("running auto migration")
 		if err := client.Schema.Create(context.Background()); err != nil {
 			return nil, fmt.Errorf("failed creating schema resources: %w", err)
 		}
@@ -70,7 +88,7 @@ func NewEntClient(config *config.Configuration, logger *logger.Logger) (*ent.Cli
 }
 
 // NewClient creates a new ent client wrapper with transaction management
-func NewClient(client *ent.Client, logger *logger.Logger) *Client {
+func NewClient(client *ent.Client, logger *logger.Logger) IClient {
 	return &Client{
 		entClient: client,
 		logger:    logger,

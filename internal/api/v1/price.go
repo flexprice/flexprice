@@ -21,10 +21,10 @@ func NewPriceHandler(service service.PriceService, log *logger.Logger) *PriceHan
 
 // @Summary Create a new price
 // @Description Create a new price with the specified configuration
-// @Tags prices
+// @Tags Prices
 // @Accept json
 // @Produce json
-// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Param price body dto.CreatePriceRequest true "Price configuration"
 // @Success 201 {object} dto.PriceResponse
 // @Failure 400 {object} ErrorResponse
@@ -48,10 +48,10 @@ func (h *PriceHandler) CreatePrice(c *gin.Context) {
 
 // @Summary Get a price by ID
 // @Description Get a price by ID
-// @Tags prices
+// @Tags Prices
 // @Accept json
 // @Produce json
-// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Param id path string true "Price ID"
 // @Success 200 {object} dto.PriceResponse
 // @Failure 400 {object} ErrorResponse
@@ -75,10 +75,10 @@ func (h *PriceHandler) GetPrice(c *gin.Context) {
 
 // @Summary Get prices
 // @Description Get prices with the specified filter
-// @Tags prices
+// @Tags Prices
 // @Accept json
 // @Produce json
-// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Param filter query types.Filter true "Filter"
 // @Success 200 {object} dto.ListPricesResponse
 // @Failure 400 {object} ErrorResponse
@@ -102,10 +102,10 @@ func (h *PriceHandler) GetPrices(c *gin.Context) {
 
 // @Summary Update a price
 // @Description Update a price with the specified configuration
-// @Tags prices
+// @Tags Prices
 // @Accept json
 // @Produce json
-// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Param id path string true "Price ID"
 // @Param price body dto.UpdatePriceRequest true "Price configuration"
 // @Success 200 {object} dto.PriceResponse
@@ -136,10 +136,10 @@ func (h *PriceHandler) UpdatePrice(c *gin.Context) {
 
 // @Summary Delete a price
 // @Description Delete a price
-// @Tags prices
+// @Tags Prices
 // @Accept json
 // @Produce json
-// @Security BearerAuth
+// @Security ApiKeyAuth
 // @Param id path string true "Price ID"
 // @Success 200 {object} gin.H
 // @Failure 400 {object} ErrorResponse

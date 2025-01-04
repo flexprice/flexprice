@@ -10,18 +10,18 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
-type InMemoryEnvironmentRepository struct {
+type InMemoryEnvironmentStore struct {
 	mu           sync.RWMutex
 	environments map[string]*environment.Environment
 }
 
-func NewInMemoryEnvironmentStore() *InMemoryEnvironmentRepository {
-	return &InMemoryEnvironmentRepository{
+func NewInMemoryEnvironmentStore() *InMemoryEnvironmentStore {
+	return &InMemoryEnvironmentStore{
 		environments: make(map[string]*environment.Environment),
 	}
 }
 
-func (s *InMemoryEnvironmentRepository) Create(ctx context.Context, env *environment.Environment) error {
+func (s *InMemoryEnvironmentStore) Create(ctx context.Context, env *environment.Environment) error {
 	if env == nil {
 		return fmt.Errorf("environment cannot be nil")
 	}
@@ -39,7 +39,7 @@ func (s *InMemoryEnvironmentRepository) Create(ctx context.Context, env *environ
 	return nil
 }
 
-func (s *InMemoryEnvironmentRepository) Get(ctx context.Context, id string) (*environment.Environment, error) {
+func (s *InMemoryEnvironmentStore) Get(ctx context.Context, id string) (*environment.Environment, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -49,7 +49,7 @@ func (s *InMemoryEnvironmentRepository) Get(ctx context.Context, id string) (*en
 	return nil, fmt.Errorf("environment not found")
 }
 
-func (s *InMemoryEnvironmentRepository) List(ctx context.Context, filter types.Filter) ([]*environment.Environment, error) {
+func (s *InMemoryEnvironmentStore) List(ctx context.Context, filter types.Filter) ([]*environment.Environment, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -72,7 +72,7 @@ func (s *InMemoryEnvironmentRepository) List(ctx context.Context, filter types.F
 	return environments, nil
 }
 
-func (s *InMemoryEnvironmentRepository) Update(ctx context.Context, env *environment.Environment) error {
+func (s *InMemoryEnvironmentStore) Update(ctx context.Context, env *environment.Environment) error {
 	if env == nil {
 		return fmt.Errorf("environment cannot be nil")
 	}
@@ -91,4 +91,11 @@ func (s *InMemoryEnvironmentRepository) Update(ctx context.Context, env *environ
 	existing.UpdatedAt = time.Now()
 	existing.UpdatedBy = env.UpdatedBy
 	return nil
+}
+
+func (s *InMemoryEnvironmentStore) Clear() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.environments = make(map[string]*environment.Environment)
 }

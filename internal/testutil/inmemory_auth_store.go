@@ -64,3 +64,11 @@ func (r *InMemoryAuthRepository) DeleteAuth(ctx context.Context, userID string) 
 	delete(r.auths, userID)
 	return nil
 }
+
+// Clear clears all auth records from the in-memory store
+func (r *InMemoryAuthRepository) Clear() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.auths = make(map[string]*auth.Auth)
+}

@@ -68,6 +68,14 @@ func (s *InMemorySubscriptionStore) List(ctx context.Context, filter *types.Subs
 			continue
 		}
 
+		if filter.SubscriptionStatus != "" && sub.SubscriptionStatus != filter.SubscriptionStatus {
+			continue
+		}
+
+		if filter.Status != "" && sub.Status != filter.Status {
+			continue
+		}
+
 		result = append(result, sub)
 	}
 
@@ -120,4 +128,11 @@ func (s *InMemorySubscriptionStore) Delete(ctx context.Context, id string) error
 
 	delete(s.subscriptions, id)
 	return nil
+}
+
+func (s *InMemorySubscriptionStore) Clear() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.subscriptions = make(map[string]*subscription.Subscription)
 }

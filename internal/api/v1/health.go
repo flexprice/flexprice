@@ -14,7 +14,7 @@ func NewHealthHandler() *HealthHandler {
 
 // @Summary Health check
 // @Description Health check
-// @Tags health
+// @Tags Health
 // @Accept json
 // @Produce json
 // @Success 200 {object} map[string]string

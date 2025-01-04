@@ -76,8 +76,8 @@ type UpdatePlanPriceRequest struct {
 }
 
 type ListPlansResponse struct {
-	Plans  []plan.Plan `json:"plans"`
-	Total  int         `json:"total"`
-	Offset int         `json:"offset"`
-	Limit  int         `json:"limit"`
+	Plans  []*PlanResponse `json:"plans"`
+	Total  int             `json:"total"`
+	Offset int             `json:"offset"`
+	Limit  int             `json:"limit"`
 }

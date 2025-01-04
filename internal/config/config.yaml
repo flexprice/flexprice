@@ -13,7 +13,7 @@ auth:
   api_key:
     header: "x-api-key"
     keys:
-      "a1bb7da0c3bf6f34b18b73d421e39d805283725bb7d994e18d1e88ce12f2ba61":
+      "c3b3fa371183f0df159d659da0b42c5270c8d53c22e180df2286e059c75802ab":
         tenant_id: "00000000-0000-0000-0000-000000000000"
         user_id: "00000000-0000-0000-0000-000000000000"
         name: "Dev API Keys"

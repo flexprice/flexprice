@@ -2,6 +2,7 @@ package dto
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -15,16 +16,16 @@ import (
 type CreateSubscriptionRequest struct {
 	CustomerID         string               `json:"customer_id" validate:"required"`
 	PlanID             string               `json:"plan_id" validate:"required"`
-	Currency           string               `json:"currency"`
+	Currency           string               `json:"currency" validate:"required,len=3"`
 	LookupKey          string               `json:"lookup_key"`
-	StartDate          time.Time            `json:"start_date,omitempty"`
+	StartDate          time.Time            `json:"start_date" validate:"required"`
 	EndDate            *time.Time           `json:"end_date,omitempty"`
 	TrialStart         *time.Time           `json:"trial_start,omitempty"`
 	TrialEnd           *time.Time           `json:"trial_end,omitempty"`
-	InvoiceCadence     types.InvoiceCadence `json:"invoice_cadence,omitempty"`
-	BillingCadence     types.BillingCadence `json:"billing_cadence,omitempty"`
-	BillingPeriod      types.BillingPeriod  `json:"billing_period,omitempty"`
-	BillingPeriodCount int                  `json:"billing_period_count,omitempty"`
+	InvoiceCadence     types.InvoiceCadence `json:"invoice_cadence" validate:"required"`
+	BillingCadence     types.BillingCadence `json:"billing_cadence" validate:"required"`
+	BillingPeriod      types.BillingPeriod  `json:"billing_period" validate:"required"`
+	BillingPeriodCount int                  `json:"billing_period_count" validate:"required,min=1"`
 }
 
 type UpdateSubscriptionRequest struct {
@@ -46,7 +47,28 @@ type ListSubscriptionsResponse struct {
 }
 
 func (r *CreateSubscriptionRequest) Validate() error {
-	return validator.New().Struct(r)
+	err := validator.New().Struct(r)
+	if err != nil {
+		return err
+	}
+
+	if r.StartDate.After(time.Now().UTC()) {
+		return fmt.Errorf("start_date: can not be in the future - %s", r.StartDate)
+	}
+
+	if r.EndDate != nil && r.EndDate.Before(r.StartDate) {
+		return fmt.Errorf("end_date: can not be before start_date - %s", r.EndDate)
+	}
+
+	if r.TrialStart != nil && r.TrialStart.After(r.StartDate) {
+		return fmt.Errorf("trial_start: can not be after start_date - %s", r.TrialStart)
+	}
+
+	if r.TrialEnd != nil && r.TrialEnd.Before(r.StartDate) {
+		return fmt.Errorf("trial_end: can not be before start_date - %s", r.TrialEnd)
+	}
+
+	return nil
 }
 
 func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscription.Subscription {

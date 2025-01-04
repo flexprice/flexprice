@@ -17,11 +17,11 @@ import (
 )
 
 type walletRepository struct {
-	client *postgres.Client
+	client postgres.IClient
 	logger *logger.Logger
 }
 
-func NewWalletRepository(client *postgres.Client, logger *logger.Logger) walletdomain.Repository {
+func NewWalletRepository(client postgres.IClient, logger *logger.Logger) walletdomain.Repository {
 	return &walletRepository{
 		client: client,
 		logger: logger,

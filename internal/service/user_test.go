@@ -14,7 +14,7 @@ type UserServiceSuite struct {
 	suite.Suite
 	ctx         context.Context
 	userService *userService
-	userRepo    *testutil.InMemoryUserRepository
+	userRepo    *testutil.InMemoryUserStore
 }
 
 func TestUserService(t *testing.T) {
@@ -24,7 +24,7 @@ func TestUserService(t *testing.T) {
 func (s *UserServiceSuite) SetupTest() {
 	// Initialize context and repository
 	s.ctx = testutil.SetupContext()
-	s.userRepo = testutil.NewInMemoryUserRepository()
+	s.userRepo = testutil.NewInMemoryUserStore()
 
 	// Create the userService with the repository
 	s.userService = &userService{
@@ -63,7 +63,7 @@ func (s *UserServiceSuite) TestGetUserInfo() {
 	for _, tc := range testCases {
 		s.Run(tc.name, func() {
 			// Reset repository and service for each test
-			s.userRepo = testutil.NewInMemoryUserRepository()
+			s.userRepo = testutil.NewInMemoryUserStore()
 			s.userService = &userService{userRepo: s.userRepo}
 
 			// Create a context with the test's user ID

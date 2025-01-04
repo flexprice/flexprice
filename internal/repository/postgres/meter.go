@@ -186,9 +186,42 @@ func (r *meterRepository) DisableMeter(ctx context.Context, id string) error {
 			status = 'published'
 	`
 
-	_, err := r.db.ExecContext(ctx, query, types.GetUserID(ctx), id, types.GetTenantID(ctx))
+	result, err := r.db.ExecContext(ctx, query, types.GetUserID(ctx), id, types.GetTenantID(ctx))
 	if err != nil {
 		return fmt.Errorf("disable meter: %w", err)
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("meter not found or already disabled")
+	}
+	return nil
+}
+
+func (r *meterRepository) UpdateMeter(ctx context.Context, id string, filters []meter.Filter) error {
+	updatedFiltersJSON, err := json.Marshal(filters)
+	if err != nil {
+		return fmt.Errorf("marshal updated filters: %w", err)
+	}
+
+	updateQuery := `
+        UPDATE meters 
+        SET 
+            filters = $1, 
+            updated_at = NOW(), 
+            updated_by = $2
+        WHERE 
+            id = $3 AND 
+            tenant_id = $4 AND 
+            status = 'published'
+    `
+
+	_, err = r.db.ExecContext(ctx, updateQuery, updatedFiltersJSON, types.GetUserID(ctx), id, types.GetTenantID(ctx))
+	if err != nil {
+		return fmt.Errorf("update filters: %w", err)
 	}
 
 	return nil

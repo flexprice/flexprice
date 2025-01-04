@@ -15,7 +15,7 @@ type EnvironmentServiceSuite struct {
 	suite.Suite
 	ctx                context.Context
 	environmentService *environmentService
-	environmentRepo    *testutil.InMemoryEnvironmentRepository
+	environmentRepo    *testutil.InMemoryEnvironmentStore
 }
 
 func TestEnvironmentService(t *testing.T) {

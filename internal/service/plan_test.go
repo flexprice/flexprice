@@ -18,7 +18,7 @@ type PlanServiceSuite struct {
 	suite.Suite
 	ctx         context.Context
 	planService *planService
-	planRepo    *testutil.InMemoryPlanRepository
+	planRepo    *testutil.InMemoryPlanStore
 }
 
 func TestPlanService(t *testing.T) {

@@ -150,18 +150,15 @@ func (s *onboardingScript) assignTenantToUser(ctx context.Context, userID, tenan
 func OnboardNewTenant() error {
 	email := os.Getenv("USER_EMAIL")
 	tenantName := os.Getenv("TENANT_NAME")
-	if email == "" || tenantName == "" {
+	password := os.Getenv("USER_PASSWORD")
+
+	if email == "" || tenantName == "" || password == "" {
 		log, _ := logger.NewLogger(config.GetDefaultConfig())
-		log.Fatal("Please set EMAIL and TENANT environment variables")
+		log.Fatalf("Usage: go run scripts/local/main.go -user-email=<email> -tenant-name=<tenant_name> -user-password=<password>")
 		return nil
 	}
 
 	log, _ := logger.NewLogger(config.GetDefaultConfig())
-
-	if email == "" || tenantName == "" {
-		log.Fatalf("Usage: go run scripts/local/main.go -email=<email> -tenant=<tenant_name>")
-	}
-
 	// Initialize script
 	script, err := newOnboardingScript()
 	if err != nil {
