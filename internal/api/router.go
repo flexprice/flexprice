@@ -26,6 +26,7 @@ type Handlers struct {
 	Tenant       *v1.TenantHandler
 	Cron         *cron.SubscriptionHandler
 	Invoice      *v1.InvoiceHandler
+	Environment  *v1.EnvironmentHandler
 }
 
 func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logger) *gin.Engine {
@@ -154,6 +155,14 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			invoices.POST("/:id/finalize", handlers.Invoice.FinalizeInvoice)
 			invoices.POST("/:id/void", handlers.Invoice.VoidInvoice)
 			invoices.PUT("/:id/payment", handlers.Invoice.UpdatePaymentStatus)
+		}
+
+		environment := v1Private.Group("/environments")
+		{
+			environment.POST("", handlers.Environment.CreateEnvironment)
+			environment.GET("", handlers.Environment.GetEnvironments)
+			environment.GET("/:id", handlers.Environment.GetEnvironment)
+			environment.PUT("/:id", handlers.Environment.UpdateEnvironment)
 		}
 
 		// Admin routes (API Key only)

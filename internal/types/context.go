@@ -29,7 +29,7 @@ func GetTenantID(ctx context.Context) string {
 	if tenantID, ok := ctx.Value(CtxTenantID).(string); ok {
 		return tenantID
 	}
-	return ""
+	return DefaultTenantID
 }
 
 func GetRequestID(ctx context.Context) string {

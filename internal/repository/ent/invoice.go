@@ -434,147 +434,72 @@ func (r *invoiceRepository) ExistsForPeriod(ctx context.Context, subscriptionID 
 	return exists, nil
 }
 
-// func (r *invoiceRepository) GetNextInvoiceNumber(ctx context.Context) (string, error) {
-// 	yearMonth := time.Now().Format("200601") // YYYYMM
-// 	tenantID := types.GetTenantID(ctx)
-
-// 	// Use raw SQL for atomic increment since ent doesn't support RETURNING with OnConflict
-// 	query := `
-// 		INSERT INTO invoice_sequences (tenant_id, year_month, last_value, created_at, updated_at)
-// 		VALUES ($1, $2, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-// 		ON CONFLICT (tenant_id, year_month) DO UPDATE
-// 		SET last_value = invoice_sequences.last_value + 1,
-// 			updated_at = CURRENT_TIMESTAMP
-// 		RETURNING last_value`
-
-// 	var lastValue int64
-// 	rows, err := r.client.Querier(ctx).QueryContext(ctx, query, tenantID, yearMonth)
-// 	if err != nil {
-// 		return "", fmt.Errorf("failed to execute sequence query: %w", err)
-// 	}
-// 	defer rows.Close()
-
-// 	if !rows.Next() {
-// 		return "", fmt.Errorf("no sequence value returned")
-// 	}
-
-// 	if err := rows.Scan(&lastValue); err != nil {
-// 		return "", fmt.Errorf("failed to scan sequence value: %w", err)
-// 	}
-
-// 	r.log.Infow("generated invoice number",
-// 		"tenant_id", tenantID,
-// 		"year_month", yearMonth,
-// 		"sequence", lastValue)
-
-// 	return fmt.Sprintf("INV-%s-%05d", yearMonth, lastValue), nil
-// }
-
-// func (r *invoiceRepository) GetNextBillingSequence(ctx context.Context, subscriptionID string) (int, error) {
-// 	tenantID := types.GetTenantID(ctx)
-// 	// Use raw SQL for atomic increment since ent doesn't support RETURNING with OnConflict
-// 	query := `
-// 		INSERT INTO billing_sequences (tenant_id, subscription_id, last_sequence, created_at, updated_at)
-// 		VALUES ($1, $2, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-// 		ON CONFLICT (tenant_id, subscription_id) DO UPDATE
-// 		SET last_sequence = billing_sequences.last_sequence + 1,
-// 			updated_at = CURRENT_TIMESTAMP
-// 		RETURNING last_sequence`
-
-// 	var lastSequence int
-// 	rows, err := r.client.Querier(ctx).QueryContext(ctx, query, tenantID, subscriptionID)
-// 	if err != nil {
-// 		return 0, fmt.Errorf("failed to execute sequence query: %w", err)
-// 	}
-// 	defer rows.Close()
-
-// 	if !rows.Next() {
-// 		return 0, fmt.Errorf("no sequence value returned")
-// 	}
-
-// 	if err := rows.Scan(&lastSequence); err != nil {
-// 		return 0, fmt.Errorf("failed to scan sequence value: %w", err)
-// 	}
-
-// 	r.log.Infow("generated billing sequence",
-// 		"tenant_id", tenantID,
-// 		"subscription_id", subscriptionID,
-// 		"sequence", lastSequence)
-
-// 	return lastSequence, nil
-// }
-
 func (r *invoiceRepository) GetNextInvoiceNumber(ctx context.Context) (string, error) {
 	yearMonth := time.Now().Format("200601") // YYYYMM
 	tenantID := types.GetTenantID(ctx)
 
 	// Use raw SQL for atomic increment since ent doesn't support RETURNING with OnConflict
-	// query := `
-	// 	INSERT INTO invoice_sequences (tenant_id, year_month, last_value, created_at, updated_at)
-	// 	VALUES ($1, $2, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-	// 	ON CONFLICT (tenant_id, year_month) DO UPDATE
-	// 	SET last_value = invoice_sequences.last_value + 1,
-	// 		updated_at = CURRENT_TIMESTAMP
-	// 	RETURNING last_value`
+	query := `
+		INSERT INTO invoice_sequences (tenant_id, year_month, last_value, created_at, updated_at)
+		VALUES ($1, $2, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		ON CONFLICT (tenant_id, year_month) DO UPDATE
+		SET last_value = invoice_sequences.last_value + 1,
+			updated_at = CURRENT_TIMESTAMP
+		RETURNING last_value`
 
 	var lastValue int64
-	// Commenting out the problematic line
-	// rows, err := r.client.Querier(ctx).QueryContext(ctx, query, tenantID, yearMonth)
-	// if err != nil {
-	// 	return "", fmt.Errorf("failed to execute sequence query: %w", err)
-	// }
-	// defer rows.Close()
+	rows, err := r.client.Querier(ctx).QueryContext(ctx, query, tenantID, yearMonth)
+	if err != nil {
+		return "", fmt.Errorf("failed to execute sequence query: %w", err)
+	}
+	defer rows.Close()
 
-	// if !rows.Next() {
-	// 	return "", fmt.Errorf("no sequence value returned")
-	// }
+	if !rows.Next() {
+		return "", fmt.Errorf("no sequence value returned")
+	}
 
-	// if err := rows.Scan(&lastValue); err != nil {
-	// 	return "", fmt.Errorf("failed to scan sequence value: %w", err)
-	// }
+	if err := rows.Scan(&lastValue); err != nil {
+		return "", fmt.Errorf("failed to scan sequence value: %w", err)
+	}
 
-	// Temporarily returning a mock value for testing purposes
-	r.log.Infow("generated invoice number (mocked)", "tenant_id", tenantID, "year_month", yearMonth)
-
-	// Mock sequence number for now
-	lastValue = 1
+	r.log.Infow("generated invoice number",
+		"tenant_id", tenantID,
+		"year_month", yearMonth,
+		"sequence", lastValue)
 
 	return fmt.Sprintf("INV-%s-%05d", yearMonth, lastValue), nil
 }
 
 func (r *invoiceRepository) GetNextBillingSequence(ctx context.Context, subscriptionID string) (int, error) {
 	tenantID := types.GetTenantID(ctx)
-
 	// Use raw SQL for atomic increment since ent doesn't support RETURNING with OnConflict
-	// query := `
-	// 	INSERT INTO billing_sequences (tenant_id, subscription_id, last_sequence, created_at, updated_at)
-	// 	VALUES ($1, $2, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-	// 	ON CONFLICT (tenant_id, subscription_id) DO UPDATE
-	// 	SET last_sequence = billing_sequences.last_sequence + 1,
-	// 		updated_at = CURRENT_TIMESTAMP
-	// 	RETURNING last_sequence`
+	query := `
+		INSERT INTO billing_sequences (tenant_id, subscription_id, last_sequence, created_at, updated_at)
+		VALUES ($1, $2, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		ON CONFLICT (tenant_id, subscription_id) DO UPDATE
+		SET last_sequence = billing_sequences.last_sequence + 1,
+			updated_at = CURRENT_TIMESTAMP
+		RETURNING last_sequence`
 
 	var lastSequence int
-	// Commenting out the problematic line
-	// rows, err := r.client.Querier(ctx).QueryContext(ctx, query, tenantID, subscriptionID)
-	// if err != nil {
-	// 	return 0, fmt.Errorf("failed to execute sequence query: %w", err)
-	// }
-	// defer rows.Close()
+	rows, err := r.client.Querier(ctx).QueryContext(ctx, query, tenantID, subscriptionID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to execute sequence query: %w", err)
+	}
+	defer rows.Close()
 
-	// if !rows.Next() {
-	// 	return 0, fmt.Errorf("no sequence value returned")
-	// }
+	if !rows.Next() {
+		return 0, fmt.Errorf("no sequence value returned")
+	}
 
-	// if err := rows.Scan(&lastSequence); err != nil {
-	// 	return 0, fmt.Errorf("failed to scan sequence value: %w", err)
-	// }
+	if err := rows.Scan(&lastSequence); err != nil {
+		return 0, fmt.Errorf("failed to scan sequence value: %w", err)
+	}
 
-	// Temporarily returning a mock value for testing purposes
-	r.log.Infow("generated billing sequence (mocked)", "tenant_id", tenantID, "subscription_id", subscriptionID)
-
-	// Mock sequence number for now
-	lastSequence = 1
+	r.log.Infow("generated billing sequence",
+		"tenant_id", tenantID,
+		"subscription_id", subscriptionID,
+		"sequence", lastSequence)
 
 	return lastSequence, nil
 }

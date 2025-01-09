@@ -2,6 +2,7 @@ package ent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/flexprice/flexprice/ent/environment"
@@ -23,6 +24,10 @@ func NewEnvironmentRepository(client postgres.IClient, log *logger.Logger) domai
 }
 
 func (r *environmentRepository) Create(ctx context.Context, env *domainEnv.Environment) error {
+	// Validate the environment
+	if err := env.Validate(); err != nil {
+		return err
+	}
 	client := r.client.Querier(ctx)
 	environment, err := client.Environment.Create().
 		SetID(env.ID).
@@ -67,8 +72,13 @@ func (r *environmentRepository) Get(ctx context.Context, id string) (*domainEnv.
 }
 
 func (r *environmentRepository) Update(ctx context.Context, env *domainEnv.Environment) error {
+	// Validate the environment before updating
+	if err := env.Validate(); err != nil {
+		r.log.Error("invalid environment data", "error", err)
+		return fmt.Errorf("validation failed: %w", err)
+	}
 	client := r.client.Querier(ctx)
-	_, err := client.Environment.Update().
+	updated, err := client.Environment.Update().
 		Where(
 			environment.ID(env.ID),
 			environment.TenantID(env.TenantID),
@@ -86,6 +96,28 @@ func (r *environmentRepository) Update(ctx context.Context, env *domainEnv.Envir
 		return fmt.Errorf("updating environment: %w", err)
 	}
 
+	if updated == 0 {
+		// This means no row matched the ID & TenantID
+		errMsg := "no matching environment found to update"
+		r.log.Warn(errMsg, "env_id", env.ID, "tenant_id", env.TenantID)
+		return errors.New(errMsg)
+	}
+
+	// Query the updated entity
+	updatedEnv, err := client.Environment.Query().
+		Where(
+			environment.ID(env.ID),
+			environment.TenantID(env.TenantID),
+		).
+		Only(ctx)
+
+	if err != nil {
+		r.log.Error("failed to retrieve updated environment", "error", err)
+		return fmt.Errorf("retrieving updated environment: %w", err)
+	}
+
+	// Refresh the caller's env with the updated DB values
+	*env = *domainEnv.FromEnt(updatedEnv)
 	return nil
 }
 

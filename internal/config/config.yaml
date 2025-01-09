@@ -47,7 +47,7 @@ postgres:
   max_open_conns: 10
   max_idle_conns: 5
   conn_max_lifetime_minutes: 60
-  auto_migrate: false
+  auto_migrate: true
 
 sentry:
   enabled: false  # Set to true in production
