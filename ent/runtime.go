@@ -7,6 +7,7 @@ import (
 
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/customer"
+	"github.com/flexprice/flexprice/ent/environment"
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/ent/invoicesequence"
@@ -83,6 +84,41 @@ func init() {
 	customerDescEmail := customerFields[3].Descriptor()
 	// customer.EmailValidator is a validator for the "email" field. It is called by the builders before save.
 	customer.EmailValidator = customerDescEmail.Validators[0].(func(string) error)
+	environmentMixin := schema.Environment{}.Mixin()
+	environmentMixinFields0 := environmentMixin[0].Fields()
+	_ = environmentMixinFields0
+	environmentFields := schema.Environment{}.Fields()
+	_ = environmentFields
+	// environmentDescTenantID is the schema descriptor for tenant_id field.
+	environmentDescTenantID := environmentMixinFields0[0].Descriptor()
+	// environment.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	environment.TenantIDValidator = environmentDescTenantID.Validators[0].(func(string) error)
+	// environmentDescStatus is the schema descriptor for status field.
+	environmentDescStatus := environmentMixinFields0[1].Descriptor()
+	// environment.DefaultStatus holds the default value on creation for the status field.
+	environment.DefaultStatus = environmentDescStatus.Default.(string)
+	// environmentDescCreatedAt is the schema descriptor for created_at field.
+	environmentDescCreatedAt := environmentMixinFields0[2].Descriptor()
+	// environment.DefaultCreatedAt holds the default value on creation for the created_at field.
+	environment.DefaultCreatedAt = environmentDescCreatedAt.Default.(func() time.Time)
+	// environmentDescUpdatedAt is the schema descriptor for updated_at field.
+	environmentDescUpdatedAt := environmentMixinFields0[3].Descriptor()
+	// environment.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	environment.DefaultUpdatedAt = environmentDescUpdatedAt.Default.(func() time.Time)
+	// environment.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	environment.UpdateDefaultUpdatedAt = environmentDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// environmentDescName is the schema descriptor for name field.
+	environmentDescName := environmentFields[1].Descriptor()
+	// environment.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	environment.NameValidator = environmentDescName.Validators[0].(func(string) error)
+	// environmentDescType is the schema descriptor for type field.
+	environmentDescType := environmentFields[2].Descriptor()
+	// environment.TypeValidator is a validator for the "type" field. It is called by the builders before save.
+	environment.TypeValidator = environmentDescType.Validators[0].(func(string) error)
+	// environmentDescSlug is the schema descriptor for slug field.
+	environmentDescSlug := environmentFields[3].Descriptor()
+	// environment.SlugValidator is a validator for the "slug" field. It is called by the builders before save.
+	environment.SlugValidator = environmentDescSlug.Validators[0].(func(string) error)
 	invoiceMixin := schema.Invoice{}.Mixin()
 	invoiceMixinFields0 := invoiceMixin[0].Fields()
 	_ = invoiceMixinFields0
