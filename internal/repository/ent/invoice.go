@@ -382,6 +382,45 @@ func (r *invoiceRepository) Count(ctx context.Context, filter *types.InvoiceFilt
 
 // helper functions
 
+func (r *invoiceRepository) GetByIdempotencyKey(ctx context.Context, key string) (*domainInvoice.Invoice, error) {
+	inv, err := r.client.Querier(ctx).Invoice.Query().
+		Where(
+			invoice.IdempotencyKeyEQ(key),
+			invoice.TenantID(types.GetTenantID(ctx)),
+			invoice.StatusEQ(string(types.StatusPublished)),
+			invoice.InvoiceStatusNEQ(string(types.InvoiceStatusVoided)),
+		).
+		First(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, domainInvoice.ErrInvoiceNotFound
+		}
+		return nil, fmt.Errorf("failed to get invoice by idempotency key: %w", err)
+	}
+
+	return domainInvoice.FromEnt(inv), nil
+}
+
+func (r *invoiceRepository) ExistsForPeriod(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time) (bool, error) {
+	exists, err := r.client.Querier(ctx).Invoice.Query().
+		Where(
+			invoice.And(
+				invoice.TenantID(types.GetTenantID(ctx)),
+				invoice.SubscriptionIDEQ(subscriptionID),
+				invoice.PeriodStartEQ(periodStart),
+				invoice.PeriodEndEQ(periodEnd),
+				invoice.StatusEQ(string(types.StatusPublished)),
+				invoice.InvoiceStatusNEQ(string(types.InvoiceStatusVoided)),
+			),
+		).
+		Exist(ctx)
+	if err != nil {
+		return false, fmt.Errorf("failed to check invoice existence: %w", err)
+	}
+
+	return exists, nil
+}
+
 // Add a helper function to parse the InvoiceFilter struct to relevant ent base *ent.InvoiceQuery
 func ToEntQuery(ctx context.Context, f *types.InvoiceFilter, query *ent.InvoiceQuery) *ent.InvoiceQuery {
 	if f == nil {
