@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -78,24 +79,69 @@ func (r *priceRepository) Get(ctx context.Context, id string) (*price.Price, err
 	return &p, nil
 }
 
-func (r *priceRepository) GetByPlanID(ctx context.Context, planID string) ([]*price.Price, error) {
+func (r *priceRepository) List(ctx context.Context, filter types.PriceFilter) ([]*price.Price, error) {
 	var prices []*price.Price
+
+	// Build base query
 	query := `
 		SELECT * FROM prices
-		WHERE plan_id = :plan_id
-		AND tenant_id = :tenant_id
-		AND status = :status`
+		WHERE tenant_id = :tenant_id`
 
-	rows, err := r.db.NamedQueryContext(ctx, query, map[string]interface{}{
-		"plan_id":   planID,
+	// Build params map
+	params := map[string]interface{}{
 		"tenant_id": types.GetTenantID(ctx),
-		"status":    types.StatusPublished,
-	})
+	}
+
+	// Add status filter if present
+	if filter.Status != nil {
+		query += " AND status = :status"
+		params["status"] = *filter.Status
+	}
+
+	// Add plan IDs filter if present
+	if len(filter.PlanIDs) > 0 {
+		query += " AND plan_id = ANY(string_to_array(:plan_ids, ','))"
+		params["plan_ids"] = strings.Join(filter.PlanIDs, ",")
+	}
+
+	// Add ordering
+	if filter.Sort != nil {
+		query += fmt.Sprintf(" ORDER BY %s", filter.GetSort())
+		if filter.Order != nil {
+			query += fmt.Sprintf(" %s", filter.GetOrder())
+		}
+	} else {
+		query += " ORDER BY created_at DESC"
+	}
+
+	// Add pagination if limits are set
+	if filter.Limit != nil {
+		query += " LIMIT :limit"
+		params["limit"] = filter.GetLimit()
+	}
+
+	if filter.Offset != nil {
+		query += " OFFSET :offset"
+		params["offset"] = filter.GetOffset()
+	}
+
+	r.logger.Debugw("listing prices",
+		"plan_ids", filter.PlanIDs,
+		"tenant_id", types.GetTenantID(ctx),
+		"limit", filter.GetLimit(),
+		"offset", filter.GetOffset(),
+		"status", filter.GetStatus(),
+		"query", query,
+		"params", params)
+
+	// Execute query
+	rows, err := r.db.NamedQueryContext(ctx, query, params)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get prices: %w", err)
+		return nil, fmt.Errorf("failed to list prices: %w", err)
 	}
 	defer rows.Close()
 
+	// Scan rows
 	for rows.Next() {
 		var p price.Price
 		if err := rows.StructScan(&p); err != nil {
@@ -104,41 +150,8 @@ func (r *priceRepository) GetByPlanID(ctx context.Context, planID string) ([]*pr
 		prices = append(prices, &p)
 	}
 
-	return prices, nil
-}
-
-func (r *priceRepository) List(ctx context.Context, filter types.Filter) ([]*price.Price, error) {
-	var prices []*price.Price
-	query := `
-		SELECT * FROM prices 
-		WHERE tenant_id = :tenant_id 
-		AND status = :status
-		ORDER BY created_at DESC 
-		LIMIT :limit OFFSET :offset`
-
-	// First, prepare the named query
-	rows, err := r.db.NamedQueryContext(ctx, query, map[string]interface{}{
-		"tenant_id": types.GetTenantID(ctx),
-		"status":    types.StatusPublished,
-		"limit":     filter.Limit,
-		"offset":    filter.Offset,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute query: %w", err)
-	}
-	defer rows.Close()
-
-	// Iterate through the rows and scan into price objects
-	for rows.Next() {
-		var p price.Price
-		if err := rows.StructScan(&p); err != nil {
-			return nil, fmt.Errorf("failed to scan price: %w", err)
-		}
-		prices = append(prices, &p)
-	}
-
-	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating rows: %w", err)
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating price rows: %w", err)
 	}
 
 	return prices, nil

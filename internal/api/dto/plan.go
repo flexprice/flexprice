@@ -6,7 +6,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/go-playground/validator/v10"
-	"github.com/google/uuid"
 )
 
 type CreatePlanRequest struct {
@@ -39,7 +38,7 @@ func (r *CreatePlanRequest) Validate() error {
 
 func (r *CreatePlanRequest) ToPlan(ctx context.Context) *plan.Plan {
 	plan := &plan.Plan{
-		ID:             uuid.New().String(),
+		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PLAN),
 		LookupKey:      r.LookupKey,
 		Name:           r.Name,
 		Description:    r.Description,

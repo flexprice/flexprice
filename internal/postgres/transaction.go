@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/google/uuid"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -56,7 +56,7 @@ func (db *DB) BeginTx(ctx context.Context) (context.Context, *Tx, error) {
 
 	tx := &Tx{
 		Tx: sqlxTx,
-		ID: uuid.New().String(),
+		ID: types.GenerateUUID(),
 	}
 
 	db.logger.Debug("starting new transaction",

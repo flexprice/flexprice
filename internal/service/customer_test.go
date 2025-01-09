@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -195,16 +196,18 @@ func (s *CustomerServiceSuite) TestUpdateCustomer() {
 			name: "valid_update",
 			id:   "cust-1",
 			req: dto.UpdateCustomerRequest{
-				Name:  "New Name",
-				Email: "new@example.com",
+				Name:  lo.ToPtr("New Name"),
+				Email: lo.ToPtr("new@example.com"),
 			},
 			expectedError: false,
 			expectedName:  "New Name",
 		},
 		{
-			name:          "customer_not_found",
-			id:            "nonexistent-id",
-			req:           dto.UpdateCustomerRequest{Name: "Should Not Work"},
+			name: "customer_not_found",
+			id:   "nonexistent-id",
+			req: dto.UpdateCustomerRequest{
+				Name: lo.ToPtr("Should Not Work"),
+			},
 			expectedError: true,
 		},
 	}

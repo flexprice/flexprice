@@ -33,15 +33,15 @@ kafka:
 clickhouse:
   address: 127.0.0.1:9000
   tls: false
-  username: default
-  password: default
+  username: flexprice
+  password: flexprice123
   database: flexprice
 
 postgres:
   host: 127.0.0.1
   port: 5432
-  user: postgres
-  password: postgres
+  user: flexprice
+  password: flexprice123
   dbname: flexprice
   sslmode: disable
   max_open_conns: 10

@@ -10,7 +10,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/go-playground/validator/v10"
-	"github.com/google/uuid"
 )
 
 type CreateSubscriptionRequest struct {
@@ -78,7 +77,7 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 	}
 
 	return &subscription.Subscription{
-		ID:                 uuid.New().String(),
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
 		CustomerID:         r.CustomerID,
 		PlanID:             r.PlanID,
 		Currency:           strings.ToLower(r.Currency),
@@ -121,4 +120,19 @@ type SubscriptionUsageByMetersResponse struct {
 	FilterValues     price.JSONBFilters `json:"filter_values"`
 	MeterDisplayName string             `json:"meter_display_name"`
 	Price            *price.Price       `json:"price"`
+}
+
+type SubscriptionUpdatePeriodResponse struct {
+	TotalSuccess int                                     `json:"total_success"`
+	TotalFailed  int                                     `json:"total_failed"`
+	Items        []*SubscriptionUpdatePeriodResponseItem `json:"items"`
+	StartAt      time.Time                               `json:"start_at"`
+}
+
+type SubscriptionUpdatePeriodResponseItem struct {
+	SubscriptionID string    `json:"subscription_id"`
+	PeriodStart    time.Time `json:"period_start"`
+	PeriodEnd      time.Time `json:"period_end"`
+	Success        bool      `json:"success"`
+	Error          string    `json:"error"`
 }

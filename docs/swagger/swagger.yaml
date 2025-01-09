@@ -35,13 +35,21 @@ definitions:
         type: number
       metadata:
         $ref: '#/definitions/types.Metadata'
+      meter_display_name:
+        type: string
       meter_id:
         type: string
       period_end:
         type: string
       period_start:
         type: string
+      plan_display_name:
+        type: string
+      plan_id:
+        type: string
       price_id:
+        type: string
+      price_type:
         type: string
       quantity:
         type: number
@@ -65,6 +73,8 @@ definitions:
       description:
         type: string
       due_date:
+        type: string
+      idempotency_key:
         type: string
       invoice_status:
         $ref: '#/definitions/types.InvoiceStatus'
@@ -157,7 +167,6 @@ definitions:
       type:
         $ref: '#/definitions/types.PriceType'
     required:
-    - amount
     - billing_cadence
     - billing_model
     - billing_period
@@ -228,7 +237,6 @@ definitions:
       type:
         $ref: '#/definitions/types.PriceType'
     required:
-    - amount
     - billing_cadence
     - billing_model
     - billing_period
@@ -540,13 +548,21 @@ definitions:
         type: string
       metadata:
         $ref: '#/definitions/types.Metadata'
+      meter_display_name:
+        type: string
       meter_id:
         type: string
       period_end:
         type: string
       period_start:
         type: string
+      plan_display_name:
+        type: string
+      plan_id:
+        type: string
       price_id:
+        type: string
+      price_type:
         type: string
       quantity:
         type: number
@@ -571,6 +587,8 @@ definitions:
         type: number
       billing_reason:
         type: string
+      billing_sequence:
+        type: integer
       created_at:
         type: string
       created_by:
@@ -586,6 +604,10 @@ definitions:
       finalized_at:
         type: string
       id:
+        type: string
+      idempotency_key:
+        type: string
+      invoice_number:
         type: string
       invoice_pdf_url:
         type: string
@@ -665,7 +687,7 @@ definitions:
         type: integer
       plans:
         items:
-          $ref: '#/definitions/plan.Plan'
+          $ref: '#/definitions/dto.PlanResponse'
         type: array
       total:
         type: integer
@@ -826,6 +848,8 @@ definitions:
         allOf:
         - $ref: '#/definitions/price.JSONBMetadata'
         description: Metadata is a jsonb field for additional information
+      meter:
+        $ref: '#/definitions/dto.MeterResponse'
       meter_id:
         description: MeterID is the id of the meter for usage based pricing
         type: string
@@ -1084,7 +1108,6 @@ definitions:
       type:
         $ref: '#/definitions/types.PriceType'
     required:
-    - amount
     - billing_cadence
     - billing_model
     - billing_period
@@ -1257,33 +1280,6 @@ definitions:
         items:
           type: string
         type: array
-    type: object
-  plan.Plan:
-    properties:
-      created_at:
-        type: string
-      created_by:
-        type: string
-      description:
-        type: string
-      id:
-        type: string
-      invoice_cadence:
-        $ref: '#/definitions/types.InvoiceCadence'
-      lookup_key:
-        type: string
-      name:
-        type: string
-      status:
-        $ref: '#/definitions/types.Status'
-      tenant_id:
-        type: string
-      trial_period:
-        type: integer
-      updated_at:
-        type: string
-      updated_by:
-        type: string
     type: object
   price.JSONBFilters:
     additionalProperties:
@@ -1467,6 +1463,8 @@ definitions:
     - BILLING_TIER_SLAB
   types.Filter:
     properties:
+      expand:
+        type: string
       limit:
         type: integer
       offset:
@@ -1682,6 +1680,9 @@ paths:
       description: Get customers
       parameters:
       - in: query
+        name: expand
+        type: string
+      - in: query
         name: limit
         type: integer
       - in: query
@@ -1889,6 +1890,9 @@ paths:
       - application/json
       description: Get environments
       parameters:
+      - in: query
+        name: expand
+        type: string
       - in: query
         name: limit
         type: integer
@@ -2592,6 +2596,9 @@ paths:
       description: Get plans with the specified filter
       parameters:
       - in: query
+        name: expand
+        type: string
+      - in: query
         name: limit
         type: integer
       - in: query
@@ -2769,6 +2776,9 @@ paths:
       description: Get prices with the specified filter
       parameters:
       - in: query
+        name: expand
+        type: string
+      - in: query
         name: limit
         type: integer
       - in: query
@@ -2777,6 +2787,12 @@ paths:
       - in: query
         name: order
         type: string
+      - collectionFormat: csv
+        in: query
+        items:
+          type: string
+        name: plan_ids
+        type: array
       - in: query
         name: sort
         type: string

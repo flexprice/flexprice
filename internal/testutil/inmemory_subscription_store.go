@@ -102,6 +102,51 @@ func (s *InMemorySubscriptionStore) List(ctx context.Context, filter *types.Subs
 	return result, nil
 }
 
+func (s *InMemorySubscriptionStore) ListAll(ctx context.Context, filter *types.SubscriptionFilter) ([]*subscription.Subscription, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var result []*subscription.Subscription
+	for _, sub := range s.subscriptions {
+		if filter == nil {
+			result = append(result, sub)
+			continue
+		}
+
+		if filter.SubscriptionStatus != "" && sub.SubscriptionStatus != filter.SubscriptionStatus {
+			continue
+		}
+
+		if filter.Status != "" && sub.Status != filter.Status {
+			continue
+		}
+
+		result = append(result, sub)
+	}
+
+	// Sort by created date desc (default)
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].CreatedAt.After(result[j].CreatedAt)
+	})
+
+	// Apply pagination if filter has limit/offset
+	if filter != nil {
+		start := filter.Offset
+		if start >= len(result) {
+			return []*subscription.Subscription{}, nil
+		}
+
+		end := start + filter.Limit
+		if end > len(result) {
+			end = len(result)
+		}
+
+		result = result[start:end]
+	}
+
+	return result, nil
+}
+
 func (s *InMemorySubscriptionStore) Update(ctx context.Context, sub *subscription.Subscription) error {
 	if sub == nil {
 		return fmt.Errorf("subscription cannot be nil")

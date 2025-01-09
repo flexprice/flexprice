@@ -52,15 +52,22 @@ func (s *InMemoryPriceStore) Get(ctx context.Context, id string) (*price.Price, 
 	return nil, fmt.Errorf("price not found")
 }
 
-func (s *InMemoryPriceStore) GetByPlanID(ctx context.Context, planID string) ([]*price.Price, error) {
+func (s *InMemoryPriceStore) List(ctx context.Context, filter types.PriceFilter) ([]*price.Price, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	tenantID, _ := ctx.Value(types.CtxTenantID).(string)
+	tenantID := ctx.Value(types.CtxTenantID)
 	var result []*price.Price
 	for _, p := range s.prices {
-		if p.PlanID == planID && p.TenantID == tenantID {
+		if len(filter.PlanIDs) == 0 {
 			result = append(result, p)
+			continue
+		}
+
+		for _, planID := range filter.PlanIDs {
+			if p.PlanID == planID && p.TenantID == tenantID {
+				result = append(result, p)
+			}
 		}
 	}
 
@@ -69,30 +76,13 @@ func (s *InMemoryPriceStore) GetByPlanID(ctx context.Context, planID string) ([]
 		return result[i].CreatedAt.After(result[j].CreatedAt)
 	})
 
-	return result, nil
-}
-
-func (s *InMemoryPriceStore) List(ctx context.Context, filter types.Filter) ([]*price.Price, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	var result []*price.Price
-	for _, p := range s.prices {
-		result = append(result, p)
-	}
-
-	// Sort by created date desc
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].CreatedAt.After(result[j].CreatedAt)
-	})
-
 	// Apply pagination
-	start := filter.Offset
+	start := filter.GetOffset()
 	if start >= len(result) {
 		return []*price.Price{}, nil
 	}
 
-	end := start + filter.Limit
+	end := start + filter.GetLimit()
 	if end > len(result) {
 		end = len(result)
 	}

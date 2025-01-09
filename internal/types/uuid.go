@@ -3,12 +3,12 @@ package types
 import (
 	"fmt"
 
-	"github.com/segmentio/ksuid"
+	"github.com/oklog/ulid/v2"
 )
 
 // GenerateUUID returns a k-sortable unique identifier
 func GenerateUUID() string {
-	return ksuid.New().String()
+	return ulid.Make().String()
 }
 
 // GenerateUUIDWithPrefix returns a k-sortable unique identifier
@@ -17,7 +17,7 @@ func GenerateUUIDWithPrefix(prefix string) string {
 	if prefix == "" {
 		return GenerateUUID()
 	}
-	return fmt.Sprintf("%s_%s", prefix, ksuid.New().String())
+	return fmt.Sprintf("%s_%s", prefix, GenerateUUID())
 }
 
 const (
@@ -32,7 +32,7 @@ const (
 	UUID_PREFIX_SUBSCRIPTION      = "subs"
 	UUID_PREFIX_CUSTOMER          = "cust"
 	UUID_PREFIX_WALLET            = "wallet"
-	UUID_PREFIX_ENV               = "env"
+	UUID_PREFIX_ENVIRONMENT       = "env"
 	UUID_PREFIX_USER              = "user"
 	UUID_PREFIX_TENANT            = "tenant"
 )

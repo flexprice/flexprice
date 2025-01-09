@@ -37,7 +37,7 @@ func NewEventRepository(p RepositoryParams) events.Repository {
 }
 
 func NewMeterRepository(p RepositoryParams) meter.Repository {
-	return postgresRepo.NewMeterRepository(p.DB, p.Logger)
+	return entRepo.NewMeterRepository(p.EntClient, p.Logger)
 }
 
 func NewUserRepository(p RepositoryParams) user.Repository {
@@ -49,24 +49,19 @@ func NewAuthRepository(p RepositoryParams) auth.Repository {
 }
 
 func NewPriceRepository(p RepositoryParams) price.Repository {
-	return postgresRepo.NewPriceRepository(p.DB, p.Logger)
+	return entRepo.NewPriceRepository(p.EntClient, p.Logger)
 }
 
 func NewCustomerRepository(p RepositoryParams) customer.Repository {
-	return postgresRepo.NewCustomerRepository(p.DB, p.Logger)
+	return entRepo.NewCustomerRepository(p.EntClient, p.Logger)
 }
 
 func NewPlanRepository(p RepositoryParams) plan.Repository {
-	return postgresRepo.NewPlanRepository(p.DB, p.Logger)
+	return entRepo.NewPlanRepository(p.EntClient, p.Logger)
 }
 
 func NewSubscriptionRepository(p RepositoryParams) subscription.Repository {
-	// Use Ent implementation if client is available
-	if p.EntClient != nil {
-		return entRepo.NewSubscriptionRepository(p.EntClient, p.Logger)
-	}
-	// Fallback to PostgreSQL implementation
-	return postgresRepo.NewSubscriptionRepository(p.DB, p.Logger)
+	return entRepo.NewSubscriptionRepository(p.EntClient, p.Logger)
 }
 
 func NewWalletRepository(p RepositoryParams) wallet.Repository {

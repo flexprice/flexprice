@@ -263,6 +263,38 @@ func (s *InMemoryInvoiceStore) Count(ctx context.Context, filter *types.InvoiceF
 	return count, nil
 }
 
+func (s *InMemoryInvoiceStore) GetByIdempotencyKey(ctx context.Context, key string) (*invoice.Invoice, error) {
+	s.RLock()
+	defer s.RUnlock()
+
+	for _, inv := range s.invoices {
+		if *inv.IdempotencyKey == key {
+			return copyInvoice(inv), nil
+		}
+	}
+	return nil, invoice.ErrInvoiceNotFound
+}
+
+func (s *InMemoryInvoiceStore) ExistsForPeriod(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time) (bool, error) {
+	s.RLock()
+	defer s.RUnlock()
+
+	for _, inv := range s.invoices {
+		if inv.SubscriptionID != nil && *inv.SubscriptionID == subscriptionID && inv.PeriodStart.Before(periodEnd) && inv.PeriodEnd.After(periodStart) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (s *InMemoryInvoiceStore) GetNextInvoiceNumber(ctx context.Context) (string, error) {
+	return "INV-YYYYMM-XXXXX", nil
+}
+
+func (s *InMemoryInvoiceStore) GetNextBillingSequence(ctx context.Context, subscriptionID string) (int, error) {
+	return 1, nil
+}
+
 func (s *InMemoryInvoiceStore) matchesFilter(ctx context.Context, inv *invoice.Invoice, filter *types.InvoiceFilter) bool {
 	if inv.Status == types.StatusDeleted {
 		return false

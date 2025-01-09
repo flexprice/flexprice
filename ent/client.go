@@ -15,11 +15,19 @@ import (
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"github.com/flexprice/flexprice/ent/billingsequence"
+	"github.com/flexprice/flexprice/ent/customer"
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
+	"github.com/flexprice/flexprice/ent/invoicesequence"
+	"github.com/flexprice/flexprice/ent/meter"
+	"github.com/flexprice/flexprice/ent/plan"
+	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/wallet"
 	"github.com/flexprice/flexprice/ent/wallettransaction"
+
+	stdsql "database/sql"
 )
 
 // Client is the client that holds all ent builders.
@@ -27,10 +35,22 @@ type Client struct {
 	config
 	// Schema is the client for creating, migrating and dropping schema.
 	Schema *migrate.Schema
+	// BillingSequence is the client for interacting with the BillingSequence builders.
+	BillingSequence *BillingSequenceClient
+	// Customer is the client for interacting with the Customer builders.
+	Customer *CustomerClient
 	// Invoice is the client for interacting with the Invoice builders.
 	Invoice *InvoiceClient
 	// InvoiceLineItem is the client for interacting with the InvoiceLineItem builders.
 	InvoiceLineItem *InvoiceLineItemClient
+	// InvoiceSequence is the client for interacting with the InvoiceSequence builders.
+	InvoiceSequence *InvoiceSequenceClient
+	// Meter is the client for interacting with the Meter builders.
+	Meter *MeterClient
+	// Plan is the client for interacting with the Plan builders.
+	Plan *PlanClient
+	// Price is the client for interacting with the Price builders.
+	Price *PriceClient
 	// Subscription is the client for interacting with the Subscription builders.
 	Subscription *SubscriptionClient
 	// Wallet is the client for interacting with the Wallet builders.
@@ -48,8 +68,14 @@ func NewClient(opts ...Option) *Client {
 
 func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
+	c.BillingSequence = NewBillingSequenceClient(c.config)
+	c.Customer = NewCustomerClient(c.config)
 	c.Invoice = NewInvoiceClient(c.config)
 	c.InvoiceLineItem = NewInvoiceLineItemClient(c.config)
+	c.InvoiceSequence = NewInvoiceSequenceClient(c.config)
+	c.Meter = NewMeterClient(c.config)
+	c.Plan = NewPlanClient(c.config)
+	c.Price = NewPriceClient(c.config)
 	c.Subscription = NewSubscriptionClient(c.config)
 	c.Wallet = NewWalletClient(c.config)
 	c.WalletTransaction = NewWalletTransactionClient(c.config)
@@ -145,8 +171,14 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	return &Tx{
 		ctx:               ctx,
 		config:            cfg,
+		BillingSequence:   NewBillingSequenceClient(cfg),
+		Customer:          NewCustomerClient(cfg),
 		Invoice:           NewInvoiceClient(cfg),
 		InvoiceLineItem:   NewInvoiceLineItemClient(cfg),
+		InvoiceSequence:   NewInvoiceSequenceClient(cfg),
+		Meter:             NewMeterClient(cfg),
+		Plan:              NewPlanClient(cfg),
+		Price:             NewPriceClient(cfg),
 		Subscription:      NewSubscriptionClient(cfg),
 		Wallet:            NewWalletClient(cfg),
 		WalletTransaction: NewWalletTransactionClient(cfg),
@@ -169,8 +201,14 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	return &Tx{
 		ctx:               ctx,
 		config:            cfg,
+		BillingSequence:   NewBillingSequenceClient(cfg),
+		Customer:          NewCustomerClient(cfg),
 		Invoice:           NewInvoiceClient(cfg),
 		InvoiceLineItem:   NewInvoiceLineItemClient(cfg),
+		InvoiceSequence:   NewInvoiceSequenceClient(cfg),
+		Meter:             NewMeterClient(cfg),
+		Plan:              NewPlanClient(cfg),
+		Price:             NewPriceClient(cfg),
 		Subscription:      NewSubscriptionClient(cfg),
 		Wallet:            NewWalletClient(cfg),
 		WalletTransaction: NewWalletTransactionClient(cfg),
@@ -180,7 +218,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 // Debug returns a new debug-client. It's used to get verbose logging on specific operations.
 //
 //	client.Debug().
-//		Invoice.
+//		BillingSequence.
 //		Query().
 //		Count(ctx)
 func (c *Client) Debug() *Client {
@@ -202,30 +240,44 @@ func (c *Client) Close() error {
 // Use adds the mutation hooks to all the entity clients.
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
-	c.Invoice.Use(hooks...)
-	c.InvoiceLineItem.Use(hooks...)
-	c.Subscription.Use(hooks...)
-	c.Wallet.Use(hooks...)
-	c.WalletTransaction.Use(hooks...)
+	for _, n := range []interface{ Use(...Hook) }{
+		c.BillingSequence, c.Customer, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence,
+		c.Meter, c.Plan, c.Price, c.Subscription, c.Wallet, c.WalletTransaction,
+	} {
+		n.Use(hooks...)
+	}
 }
 
 // Intercept adds the query interceptors to all the entity clients.
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
-	c.Invoice.Intercept(interceptors...)
-	c.InvoiceLineItem.Intercept(interceptors...)
-	c.Subscription.Intercept(interceptors...)
-	c.Wallet.Intercept(interceptors...)
-	c.WalletTransaction.Intercept(interceptors...)
+	for _, n := range []interface{ Intercept(...Interceptor) }{
+		c.BillingSequence, c.Customer, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence,
+		c.Meter, c.Plan, c.Price, c.Subscription, c.Wallet, c.WalletTransaction,
+	} {
+		n.Intercept(interceptors...)
+	}
 }
 
 // Mutate implements the ent.Mutator interface.
 func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 	switch m := m.(type) {
+	case *BillingSequenceMutation:
+		return c.BillingSequence.mutate(ctx, m)
+	case *CustomerMutation:
+		return c.Customer.mutate(ctx, m)
 	case *InvoiceMutation:
 		return c.Invoice.mutate(ctx, m)
 	case *InvoiceLineItemMutation:
 		return c.InvoiceLineItem.mutate(ctx, m)
+	case *InvoiceSequenceMutation:
+		return c.InvoiceSequence.mutate(ctx, m)
+	case *MeterMutation:
+		return c.Meter.mutate(ctx, m)
+	case *PlanMutation:
+		return c.Plan.mutate(ctx, m)
+	case *PriceMutation:
+		return c.Price.mutate(ctx, m)
 	case *SubscriptionMutation:
 		return c.Subscription.mutate(ctx, m)
 	case *WalletMutation:
@@ -234,6 +286,272 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.WalletTransaction.mutate(ctx, m)
 	default:
 		return nil, fmt.Errorf("ent: unknown mutation type %T", m)
+	}
+}
+
+// BillingSequenceClient is a client for the BillingSequence schema.
+type BillingSequenceClient struct {
+	config
+}
+
+// NewBillingSequenceClient returns a client for the BillingSequence from the given config.
+func NewBillingSequenceClient(c config) *BillingSequenceClient {
+	return &BillingSequenceClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `billingsequence.Hooks(f(g(h())))`.
+func (c *BillingSequenceClient) Use(hooks ...Hook) {
+	c.hooks.BillingSequence = append(c.hooks.BillingSequence, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `billingsequence.Intercept(f(g(h())))`.
+func (c *BillingSequenceClient) Intercept(interceptors ...Interceptor) {
+	c.inters.BillingSequence = append(c.inters.BillingSequence, interceptors...)
+}
+
+// Create returns a builder for creating a BillingSequence entity.
+func (c *BillingSequenceClient) Create() *BillingSequenceCreate {
+	mutation := newBillingSequenceMutation(c.config, OpCreate)
+	return &BillingSequenceCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of BillingSequence entities.
+func (c *BillingSequenceClient) CreateBulk(builders ...*BillingSequenceCreate) *BillingSequenceCreateBulk {
+	return &BillingSequenceCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *BillingSequenceClient) MapCreateBulk(slice any, setFunc func(*BillingSequenceCreate, int)) *BillingSequenceCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &BillingSequenceCreateBulk{err: fmt.Errorf("calling to BillingSequenceClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*BillingSequenceCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &BillingSequenceCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for BillingSequence.
+func (c *BillingSequenceClient) Update() *BillingSequenceUpdate {
+	mutation := newBillingSequenceMutation(c.config, OpUpdate)
+	return &BillingSequenceUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *BillingSequenceClient) UpdateOne(bs *BillingSequence) *BillingSequenceUpdateOne {
+	mutation := newBillingSequenceMutation(c.config, OpUpdateOne, withBillingSequence(bs))
+	return &BillingSequenceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *BillingSequenceClient) UpdateOneID(id int) *BillingSequenceUpdateOne {
+	mutation := newBillingSequenceMutation(c.config, OpUpdateOne, withBillingSequenceID(id))
+	return &BillingSequenceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for BillingSequence.
+func (c *BillingSequenceClient) Delete() *BillingSequenceDelete {
+	mutation := newBillingSequenceMutation(c.config, OpDelete)
+	return &BillingSequenceDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *BillingSequenceClient) DeleteOne(bs *BillingSequence) *BillingSequenceDeleteOne {
+	return c.DeleteOneID(bs.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *BillingSequenceClient) DeleteOneID(id int) *BillingSequenceDeleteOne {
+	builder := c.Delete().Where(billingsequence.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &BillingSequenceDeleteOne{builder}
+}
+
+// Query returns a query builder for BillingSequence.
+func (c *BillingSequenceClient) Query() *BillingSequenceQuery {
+	return &BillingSequenceQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeBillingSequence},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a BillingSequence entity by its id.
+func (c *BillingSequenceClient) Get(ctx context.Context, id int) (*BillingSequence, error) {
+	return c.Query().Where(billingsequence.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *BillingSequenceClient) GetX(ctx context.Context, id int) *BillingSequence {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *BillingSequenceClient) Hooks() []Hook {
+	return c.hooks.BillingSequence
+}
+
+// Interceptors returns the client interceptors.
+func (c *BillingSequenceClient) Interceptors() []Interceptor {
+	return c.inters.BillingSequence
+}
+
+func (c *BillingSequenceClient) mutate(ctx context.Context, m *BillingSequenceMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&BillingSequenceCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&BillingSequenceUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&BillingSequenceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&BillingSequenceDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown BillingSequence mutation op: %q", m.Op())
+	}
+}
+
+// CustomerClient is a client for the Customer schema.
+type CustomerClient struct {
+	config
+}
+
+// NewCustomerClient returns a client for the Customer from the given config.
+func NewCustomerClient(c config) *CustomerClient {
+	return &CustomerClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `customer.Hooks(f(g(h())))`.
+func (c *CustomerClient) Use(hooks ...Hook) {
+	c.hooks.Customer = append(c.hooks.Customer, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `customer.Intercept(f(g(h())))`.
+func (c *CustomerClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Customer = append(c.inters.Customer, interceptors...)
+}
+
+// Create returns a builder for creating a Customer entity.
+func (c *CustomerClient) Create() *CustomerCreate {
+	mutation := newCustomerMutation(c.config, OpCreate)
+	return &CustomerCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Customer entities.
+func (c *CustomerClient) CreateBulk(builders ...*CustomerCreate) *CustomerCreateBulk {
+	return &CustomerCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *CustomerClient) MapCreateBulk(slice any, setFunc func(*CustomerCreate, int)) *CustomerCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &CustomerCreateBulk{err: fmt.Errorf("calling to CustomerClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*CustomerCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &CustomerCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Customer.
+func (c *CustomerClient) Update() *CustomerUpdate {
+	mutation := newCustomerMutation(c.config, OpUpdate)
+	return &CustomerUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *CustomerClient) UpdateOne(cu *Customer) *CustomerUpdateOne {
+	mutation := newCustomerMutation(c.config, OpUpdateOne, withCustomer(cu))
+	return &CustomerUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *CustomerClient) UpdateOneID(id string) *CustomerUpdateOne {
+	mutation := newCustomerMutation(c.config, OpUpdateOne, withCustomerID(id))
+	return &CustomerUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Customer.
+func (c *CustomerClient) Delete() *CustomerDelete {
+	mutation := newCustomerMutation(c.config, OpDelete)
+	return &CustomerDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *CustomerClient) DeleteOne(cu *Customer) *CustomerDeleteOne {
+	return c.DeleteOneID(cu.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *CustomerClient) DeleteOneID(id string) *CustomerDeleteOne {
+	builder := c.Delete().Where(customer.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &CustomerDeleteOne{builder}
+}
+
+// Query returns a query builder for Customer.
+func (c *CustomerClient) Query() *CustomerQuery {
+	return &CustomerQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeCustomer},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Customer entity by its id.
+func (c *CustomerClient) Get(ctx context.Context, id string) (*Customer, error) {
+	return c.Query().Where(customer.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *CustomerClient) GetX(ctx context.Context, id string) *Customer {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *CustomerClient) Hooks() []Hook {
+	return c.hooks.Customer
+}
+
+// Interceptors returns the client interceptors.
+func (c *CustomerClient) Interceptors() []Interceptor {
+	return c.inters.Customer
+}
+
+func (c *CustomerClient) mutate(ctx context.Context, m *CustomerMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&CustomerCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&CustomerUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&CustomerUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&CustomerDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Customer mutation op: %q", m.Op())
 	}
 }
 
@@ -532,6 +850,538 @@ func (c *InvoiceLineItemClient) mutate(ctx context.Context, m *InvoiceLineItemMu
 		return (&InvoiceLineItemDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown InvoiceLineItem mutation op: %q", m.Op())
+	}
+}
+
+// InvoiceSequenceClient is a client for the InvoiceSequence schema.
+type InvoiceSequenceClient struct {
+	config
+}
+
+// NewInvoiceSequenceClient returns a client for the InvoiceSequence from the given config.
+func NewInvoiceSequenceClient(c config) *InvoiceSequenceClient {
+	return &InvoiceSequenceClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `invoicesequence.Hooks(f(g(h())))`.
+func (c *InvoiceSequenceClient) Use(hooks ...Hook) {
+	c.hooks.InvoiceSequence = append(c.hooks.InvoiceSequence, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `invoicesequence.Intercept(f(g(h())))`.
+func (c *InvoiceSequenceClient) Intercept(interceptors ...Interceptor) {
+	c.inters.InvoiceSequence = append(c.inters.InvoiceSequence, interceptors...)
+}
+
+// Create returns a builder for creating a InvoiceSequence entity.
+func (c *InvoiceSequenceClient) Create() *InvoiceSequenceCreate {
+	mutation := newInvoiceSequenceMutation(c.config, OpCreate)
+	return &InvoiceSequenceCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of InvoiceSequence entities.
+func (c *InvoiceSequenceClient) CreateBulk(builders ...*InvoiceSequenceCreate) *InvoiceSequenceCreateBulk {
+	return &InvoiceSequenceCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *InvoiceSequenceClient) MapCreateBulk(slice any, setFunc func(*InvoiceSequenceCreate, int)) *InvoiceSequenceCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &InvoiceSequenceCreateBulk{err: fmt.Errorf("calling to InvoiceSequenceClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*InvoiceSequenceCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &InvoiceSequenceCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for InvoiceSequence.
+func (c *InvoiceSequenceClient) Update() *InvoiceSequenceUpdate {
+	mutation := newInvoiceSequenceMutation(c.config, OpUpdate)
+	return &InvoiceSequenceUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *InvoiceSequenceClient) UpdateOne(is *InvoiceSequence) *InvoiceSequenceUpdateOne {
+	mutation := newInvoiceSequenceMutation(c.config, OpUpdateOne, withInvoiceSequence(is))
+	return &InvoiceSequenceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *InvoiceSequenceClient) UpdateOneID(id int) *InvoiceSequenceUpdateOne {
+	mutation := newInvoiceSequenceMutation(c.config, OpUpdateOne, withInvoiceSequenceID(id))
+	return &InvoiceSequenceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for InvoiceSequence.
+func (c *InvoiceSequenceClient) Delete() *InvoiceSequenceDelete {
+	mutation := newInvoiceSequenceMutation(c.config, OpDelete)
+	return &InvoiceSequenceDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *InvoiceSequenceClient) DeleteOne(is *InvoiceSequence) *InvoiceSequenceDeleteOne {
+	return c.DeleteOneID(is.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *InvoiceSequenceClient) DeleteOneID(id int) *InvoiceSequenceDeleteOne {
+	builder := c.Delete().Where(invoicesequence.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &InvoiceSequenceDeleteOne{builder}
+}
+
+// Query returns a query builder for InvoiceSequence.
+func (c *InvoiceSequenceClient) Query() *InvoiceSequenceQuery {
+	return &InvoiceSequenceQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeInvoiceSequence},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a InvoiceSequence entity by its id.
+func (c *InvoiceSequenceClient) Get(ctx context.Context, id int) (*InvoiceSequence, error) {
+	return c.Query().Where(invoicesequence.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *InvoiceSequenceClient) GetX(ctx context.Context, id int) *InvoiceSequence {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *InvoiceSequenceClient) Hooks() []Hook {
+	return c.hooks.InvoiceSequence
+}
+
+// Interceptors returns the client interceptors.
+func (c *InvoiceSequenceClient) Interceptors() []Interceptor {
+	return c.inters.InvoiceSequence
+}
+
+func (c *InvoiceSequenceClient) mutate(ctx context.Context, m *InvoiceSequenceMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&InvoiceSequenceCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&InvoiceSequenceUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&InvoiceSequenceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&InvoiceSequenceDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown InvoiceSequence mutation op: %q", m.Op())
+	}
+}
+
+// MeterClient is a client for the Meter schema.
+type MeterClient struct {
+	config
+}
+
+// NewMeterClient returns a client for the Meter from the given config.
+func NewMeterClient(c config) *MeterClient {
+	return &MeterClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `meter.Hooks(f(g(h())))`.
+func (c *MeterClient) Use(hooks ...Hook) {
+	c.hooks.Meter = append(c.hooks.Meter, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `meter.Intercept(f(g(h())))`.
+func (c *MeterClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Meter = append(c.inters.Meter, interceptors...)
+}
+
+// Create returns a builder for creating a Meter entity.
+func (c *MeterClient) Create() *MeterCreate {
+	mutation := newMeterMutation(c.config, OpCreate)
+	return &MeterCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Meter entities.
+func (c *MeterClient) CreateBulk(builders ...*MeterCreate) *MeterCreateBulk {
+	return &MeterCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *MeterClient) MapCreateBulk(slice any, setFunc func(*MeterCreate, int)) *MeterCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &MeterCreateBulk{err: fmt.Errorf("calling to MeterClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*MeterCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &MeterCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Meter.
+func (c *MeterClient) Update() *MeterUpdate {
+	mutation := newMeterMutation(c.config, OpUpdate)
+	return &MeterUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *MeterClient) UpdateOne(m *Meter) *MeterUpdateOne {
+	mutation := newMeterMutation(c.config, OpUpdateOne, withMeter(m))
+	return &MeterUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *MeterClient) UpdateOneID(id string) *MeterUpdateOne {
+	mutation := newMeterMutation(c.config, OpUpdateOne, withMeterID(id))
+	return &MeterUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Meter.
+func (c *MeterClient) Delete() *MeterDelete {
+	mutation := newMeterMutation(c.config, OpDelete)
+	return &MeterDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *MeterClient) DeleteOne(m *Meter) *MeterDeleteOne {
+	return c.DeleteOneID(m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *MeterClient) DeleteOneID(id string) *MeterDeleteOne {
+	builder := c.Delete().Where(meter.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &MeterDeleteOne{builder}
+}
+
+// Query returns a query builder for Meter.
+func (c *MeterClient) Query() *MeterQuery {
+	return &MeterQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeMeter},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Meter entity by its id.
+func (c *MeterClient) Get(ctx context.Context, id string) (*Meter, error) {
+	return c.Query().Where(meter.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *MeterClient) GetX(ctx context.Context, id string) *Meter {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *MeterClient) Hooks() []Hook {
+	return c.hooks.Meter
+}
+
+// Interceptors returns the client interceptors.
+func (c *MeterClient) Interceptors() []Interceptor {
+	return c.inters.Meter
+}
+
+func (c *MeterClient) mutate(ctx context.Context, m *MeterMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&MeterCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&MeterUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&MeterUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&MeterDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Meter mutation op: %q", m.Op())
+	}
+}
+
+// PlanClient is a client for the Plan schema.
+type PlanClient struct {
+	config
+}
+
+// NewPlanClient returns a client for the Plan from the given config.
+func NewPlanClient(c config) *PlanClient {
+	return &PlanClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `plan.Hooks(f(g(h())))`.
+func (c *PlanClient) Use(hooks ...Hook) {
+	c.hooks.Plan = append(c.hooks.Plan, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `plan.Intercept(f(g(h())))`.
+func (c *PlanClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Plan = append(c.inters.Plan, interceptors...)
+}
+
+// Create returns a builder for creating a Plan entity.
+func (c *PlanClient) Create() *PlanCreate {
+	mutation := newPlanMutation(c.config, OpCreate)
+	return &PlanCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Plan entities.
+func (c *PlanClient) CreateBulk(builders ...*PlanCreate) *PlanCreateBulk {
+	return &PlanCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *PlanClient) MapCreateBulk(slice any, setFunc func(*PlanCreate, int)) *PlanCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &PlanCreateBulk{err: fmt.Errorf("calling to PlanClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*PlanCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &PlanCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Plan.
+func (c *PlanClient) Update() *PlanUpdate {
+	mutation := newPlanMutation(c.config, OpUpdate)
+	return &PlanUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *PlanClient) UpdateOne(pl *Plan) *PlanUpdateOne {
+	mutation := newPlanMutation(c.config, OpUpdateOne, withPlan(pl))
+	return &PlanUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *PlanClient) UpdateOneID(id string) *PlanUpdateOne {
+	mutation := newPlanMutation(c.config, OpUpdateOne, withPlanID(id))
+	return &PlanUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Plan.
+func (c *PlanClient) Delete() *PlanDelete {
+	mutation := newPlanMutation(c.config, OpDelete)
+	return &PlanDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *PlanClient) DeleteOne(pl *Plan) *PlanDeleteOne {
+	return c.DeleteOneID(pl.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *PlanClient) DeleteOneID(id string) *PlanDeleteOne {
+	builder := c.Delete().Where(plan.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &PlanDeleteOne{builder}
+}
+
+// Query returns a query builder for Plan.
+func (c *PlanClient) Query() *PlanQuery {
+	return &PlanQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypePlan},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Plan entity by its id.
+func (c *PlanClient) Get(ctx context.Context, id string) (*Plan, error) {
+	return c.Query().Where(plan.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *PlanClient) GetX(ctx context.Context, id string) *Plan {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *PlanClient) Hooks() []Hook {
+	return c.hooks.Plan
+}
+
+// Interceptors returns the client interceptors.
+func (c *PlanClient) Interceptors() []Interceptor {
+	return c.inters.Plan
+}
+
+func (c *PlanClient) mutate(ctx context.Context, m *PlanMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&PlanCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&PlanUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&PlanUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&PlanDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Plan mutation op: %q", m.Op())
+	}
+}
+
+// PriceClient is a client for the Price schema.
+type PriceClient struct {
+	config
+}
+
+// NewPriceClient returns a client for the Price from the given config.
+func NewPriceClient(c config) *PriceClient {
+	return &PriceClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `price.Hooks(f(g(h())))`.
+func (c *PriceClient) Use(hooks ...Hook) {
+	c.hooks.Price = append(c.hooks.Price, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `price.Intercept(f(g(h())))`.
+func (c *PriceClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Price = append(c.inters.Price, interceptors...)
+}
+
+// Create returns a builder for creating a Price entity.
+func (c *PriceClient) Create() *PriceCreate {
+	mutation := newPriceMutation(c.config, OpCreate)
+	return &PriceCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Price entities.
+func (c *PriceClient) CreateBulk(builders ...*PriceCreate) *PriceCreateBulk {
+	return &PriceCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *PriceClient) MapCreateBulk(slice any, setFunc func(*PriceCreate, int)) *PriceCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &PriceCreateBulk{err: fmt.Errorf("calling to PriceClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*PriceCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &PriceCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Price.
+func (c *PriceClient) Update() *PriceUpdate {
+	mutation := newPriceMutation(c.config, OpUpdate)
+	return &PriceUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *PriceClient) UpdateOne(pr *Price) *PriceUpdateOne {
+	mutation := newPriceMutation(c.config, OpUpdateOne, withPrice(pr))
+	return &PriceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *PriceClient) UpdateOneID(id string) *PriceUpdateOne {
+	mutation := newPriceMutation(c.config, OpUpdateOne, withPriceID(id))
+	return &PriceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Price.
+func (c *PriceClient) Delete() *PriceDelete {
+	mutation := newPriceMutation(c.config, OpDelete)
+	return &PriceDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *PriceClient) DeleteOne(pr *Price) *PriceDeleteOne {
+	return c.DeleteOneID(pr.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *PriceClient) DeleteOneID(id string) *PriceDeleteOne {
+	builder := c.Delete().Where(price.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &PriceDeleteOne{builder}
+}
+
+// Query returns a query builder for Price.
+func (c *PriceClient) Query() *PriceQuery {
+	return &PriceQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypePrice},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Price entity by its id.
+func (c *PriceClient) Get(ctx context.Context, id string) (*Price, error) {
+	return c.Query().Where(price.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *PriceClient) GetX(ctx context.Context, id string) *Price {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *PriceClient) Hooks() []Hook {
+	return c.hooks.Price
+}
+
+// Interceptors returns the client interceptors.
+func (c *PriceClient) Interceptors() []Interceptor {
+	return c.inters.Price
+}
+
+func (c *PriceClient) mutate(ctx context.Context, m *PriceMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&PriceCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&PriceUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&PriceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&PriceDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Price mutation op: %q", m.Op())
 	}
 }
 
@@ -937,10 +1787,35 @@ func (c *WalletTransactionClient) mutate(ctx context.Context, m *WalletTransacti
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		Invoice, InvoiceLineItem, Subscription, Wallet, WalletTransaction []ent.Hook
+		BillingSequence, Customer, Invoice, InvoiceLineItem, InvoiceSequence, Meter,
+		Plan, Price, Subscription, Wallet, WalletTransaction []ent.Hook
 	}
 	inters struct {
-		Invoice, InvoiceLineItem, Subscription, Wallet,
-		WalletTransaction []ent.Interceptor
+		BillingSequence, Customer, Invoice, InvoiceLineItem, InvoiceSequence, Meter,
+		Plan, Price, Subscription, Wallet, WalletTransaction []ent.Interceptor
 	}
 )
+
+// ExecContext allows calling the underlying ExecContext method of the driver if it is supported by it.
+// See, database/sql#DB.ExecContext for more information.
+func (c *config) ExecContext(ctx context.Context, query string, args ...any) (stdsql.Result, error) {
+	ex, ok := c.driver.(interface {
+		ExecContext(context.Context, string, ...any) (stdsql.Result, error)
+	})
+	if !ok {
+		return nil, fmt.Errorf("Driver.ExecContext is not supported")
+	}
+	return ex.ExecContext(ctx, query, args...)
+}
+
+// QueryContext allows calling the underlying QueryContext method of the driver if it is supported by it.
+// See, database/sql#DB.QueryContext for more information.
+func (c *config) QueryContext(ctx context.Context, query string, args ...any) (*stdsql.Rows, error) {
+	q, ok := c.driver.(interface {
+		QueryContext(context.Context, string, ...any) (*stdsql.Rows, error)
+	})
+	if !ok {
+		return nil, fmt.Errorf("Driver.QueryContext is not supported")
+	}
+	return q.QueryContext(ctx, query, args...)
+}

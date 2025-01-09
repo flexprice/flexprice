@@ -4,11 +4,11 @@ services:
     ports:
       - 127.0.0.1:5432:5432
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: flexprice
+      POSTGRES_PASSWORD: flexprice123
       POSTGRES_DB: flexprice
     healthcheck:
-      test: pg_isready -U postgres -d flexprice
+      test: pg_isready -U flexprice -d flexprice
       interval: 5s
       timeout: 3s
       retries: 100
@@ -32,18 +32,8 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
-      JMX_PORT: 9997
-      KAFKA_JMX_OPTS: "-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Djava.rmi.server.hostname=kafka -Dcom.sun.management.jmxremote.rmi.port=9997"
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "JMX_PORT=9998",
-          "kafka-topics",
-          "--bootstrap-server",
-          "kafka:9092",
-          "--list",
-        ]
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server kafka:9092 --list"]
       interval: 5s
       timeout: 3s
       retries: 30
@@ -55,8 +45,8 @@ services:
       - "127.0.0.1:9000:9000"
       - "127.0.0.1:9009:9009"
     environment:
-      CLICKHOUSE_USER: default
-      CLICKHOUSE_PASSWORD: default
+      CLICKHOUSE_USER: flexprice
+      CLICKHOUSE_PASSWORD: flexprice123
       CLICKHOUSE_DB: flexprice
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
     ulimits:
@@ -80,7 +70,6 @@ services:
     environment:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
-      KAFKA_CLUSTERS_0_METRICS_PORT: 9997
       DYNAMIC_CONFIG_ENABLED: "true"
     healthcheck:
       test: ["CMD", "wget", "--spider", "http://kafka-ui:8080/"]

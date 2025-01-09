@@ -10,18 +10,22 @@ import (
 
 // InvoiceLineItem represents a single line item in an invoice
 type InvoiceLineItem struct {
-	ID             string          `json:"id"`
-	InvoiceID      string          `json:"invoice_id"`
-	CustomerID     string          `json:"customer_id"`
-	SubscriptionID *string         `json:"subscription_id,omitempty"`
-	PriceID        string          `json:"price_id"`
-	MeterID        *string         `json:"meter_id,omitempty"`
-	Amount         decimal.Decimal `json:"amount"`
-	Quantity       decimal.Decimal `json:"quantity"`
-	Currency       string          `json:"currency"`
-	PeriodStart    *time.Time      `json:"period_start,omitempty"`
-	PeriodEnd      *time.Time      `json:"period_end,omitempty"`
-	Metadata       types.Metadata  `json:"metadata,omitempty"`
+	ID               string          `json:"id"`
+	InvoiceID        string          `json:"invoice_id"`
+	CustomerID       string          `json:"customer_id"`
+	SubscriptionID   *string         `json:"subscription_id,omitempty"`
+	PlanID           *string         `json:"plan_id,omitempty"`
+	PlanDisplayName  *string         `json:"plan_display_name,omitempty"`
+	PriceID          string          `json:"price_id"`
+	PriceType        *string         `json:"price_type,omitempty"`
+	MeterID          *string         `json:"meter_id,omitempty"`
+	MeterDisplayName *string         `json:"meter_display_name,omitempty"`
+	Amount           decimal.Decimal `json:"amount"`
+	Quantity         decimal.Decimal `json:"quantity"`
+	Currency         string          `json:"currency"`
+	PeriodStart      *time.Time      `json:"period_start,omitempty"`
+	PeriodEnd        *time.Time      `json:"period_end,omitempty"`
+	Metadata         types.Metadata  `json:"metadata,omitempty"`
 	types.BaseModel
 }
 
@@ -32,18 +36,22 @@ func (i *InvoiceLineItem) FromEnt(e *ent.InvoiceLineItem) *InvoiceLineItem {
 	}
 
 	return &InvoiceLineItem{
-		ID:             e.ID,
-		InvoiceID:      e.InvoiceID,
-		CustomerID:     e.CustomerID,
-		SubscriptionID: e.SubscriptionID,
-		PriceID:        e.PriceID,
-		MeterID:        e.MeterID,
-		Amount:         e.Amount,
-		Quantity:       e.Quantity,
-		Currency:       e.Currency,
-		PeriodStart:    e.PeriodStart,
-		PeriodEnd:      e.PeriodEnd,
-		Metadata:       e.Metadata,
+		ID:               e.ID,
+		InvoiceID:        e.InvoiceID,
+		CustomerID:       e.CustomerID,
+		SubscriptionID:   e.SubscriptionID,
+		PlanID:           e.PlanID,
+		PlanDisplayName:  e.PlanDisplayName,
+		PriceID:          e.PriceID,
+		PriceType:        e.PriceType,
+		MeterID:          e.MeterID,
+		MeterDisplayName: e.MeterDisplayName,
+		Amount:           e.Amount,
+		Quantity:         e.Quantity,
+		Currency:         e.Currency,
+		PeriodStart:      e.PeriodStart,
+		PeriodEnd:        e.PeriodEnd,
+		Metadata:         e.Metadata,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

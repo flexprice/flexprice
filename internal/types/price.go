@@ -1,5 +1,11 @@
 package types
 
+import (
+	"fmt"
+
+	"github.com/samber/lo"
+)
+
 // BillingModel is the billing model for the price ex FLAT_FEE, PACKAGE, TIERED
 type BillingModel string
 
@@ -57,3 +63,65 @@ const (
 	// DEFAULT_FLOATING_PRECISION is the default floating point precision
 	DEFAULT_FLOATING_PRECISION = 2
 )
+
+func (b BillingCadence) Validate() error {
+	allowed := []BillingCadence{
+		BILLING_CADENCE_RECURRING,
+		BILLING_CADENCE_ONETIME,
+	}
+	if !lo.Contains(allowed, b) {
+		return fmt.Errorf("invalid billing cadence: %s", b)
+	}
+	return nil
+}
+
+func (b BillingPeriod) Validate() error {
+	if b == "" {
+		return nil
+	}
+
+	allowed := []BillingPeriod{
+		BILLING_PERIOD_MONTHLY,
+		BILLING_PERIOD_ANNUAL,
+		BILLING_PERIOD_WEEKLY,
+		BILLING_PERIOD_DAILY,
+	}
+	if !lo.Contains(allowed, b) {
+		return fmt.Errorf("invalid billing period: %s", b)
+	}
+	return nil
+}
+
+func (b BillingModel) Validate() error {
+	allowed := []BillingModel{
+		BILLING_MODEL_FLAT_FEE,
+		BILLING_MODEL_PACKAGE,
+		BILLING_MODEL_TIERED,
+	}
+	if !lo.Contains(allowed, b) {
+		return fmt.Errorf("invalid billing model: %s", b)
+	}
+	return nil
+}
+
+func (b BillingTier) Validate() error {
+	allowed := []BillingTier{
+		BILLING_TIER_VOLUME,
+		BILLING_TIER_SLAB,
+	}
+	if !lo.Contains(allowed, b) {
+		return fmt.Errorf("invalid billing tier: %s", b)
+	}
+	return nil
+}
+
+func (p PriceType) Validate() error {
+	allowed := []PriceType{
+		PRICE_TYPE_USAGE,
+		PRICE_TYPE_FIXED,
+	}
+	if !lo.Contains(allowed, p) {
+		return fmt.Errorf("invalid price type: %s", p)
+	}
+	return nil
+}

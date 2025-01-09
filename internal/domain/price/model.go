@@ -6,7 +6,10 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/flexprice/flexprice/ent"
+	"github.com/flexprice/flexprice/ent/schema"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -258,4 +261,87 @@ func (j JSONBFilters) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return json.Marshal(j)
+}
+
+// FromEnt converts an Ent Price to a domain Price
+func FromEnt(e *ent.Price) *Price {
+	if e == nil {
+		return nil
+	}
+
+	// Convert tiers from rent model to price tiers
+	var tiers JSONBTiers
+	if len(e.Tiers) > 0 {
+		tiers = make(JSONBTiers, len(e.Tiers))
+		for i, tier := range e.Tiers {
+			tiers[i] = PriceTier{
+				UpTo:       tier.UpTo,
+				UnitAmount: tier.UnitAmount,
+			}
+			if tier.FlatAmount != nil {
+				flatAmount := tier.FlatAmount
+				tiers[i].FlatAmount = flatAmount
+			}
+		}
+	}
+
+	return &Price{
+		ID:                 e.ID,
+		Amount:             decimal.NewFromFloat(e.Amount),
+		Currency:           e.Currency,
+		DisplayAmount:      e.DisplayAmount,
+		PlanID:             e.PlanID,
+		Type:               types.PriceType(e.Type),
+		BillingPeriod:      types.BillingPeriod(e.BillingPeriod),
+		BillingPeriodCount: e.BillingPeriodCount,
+		BillingModel:       types.BillingModel(e.BillingModel),
+		BillingCadence:     types.BillingCadence(e.BillingCadence),
+		TierMode:           types.BillingTier(lo.FromPtr(e.TierMode)),
+		Tiers:              tiers,
+		MeterID:            lo.FromPtr(e.MeterID),
+		LookupKey:          e.LookupKey,
+		Description:        e.Description,
+		FilterValues:       JSONBFilters(e.FilterValues),
+		TransformQuantity:  JSONBTransformQuantity(e.TransformQuantity),
+		Metadata:           JSONBMetadata(e.Metadata),
+		BaseModel: types.BaseModel{
+			TenantID:  e.TenantID,
+			Status:    types.Status(e.Status),
+			CreatedAt: e.CreatedAt,
+			UpdatedAt: e.UpdatedAt,
+			CreatedBy: e.CreatedBy,
+			UpdatedBy: e.UpdatedBy,
+		},
+	}
+}
+
+// FromEntList converts a list of Ent Prices to domain Prices
+func FromEntList(list []*ent.Price) []*Price {
+	if list == nil {
+		return nil
+	}
+	prices := make([]*Price, len(list))
+	for i, item := range list {
+		prices[i] = FromEnt(item)
+	}
+	return prices
+}
+
+// ToEntTiers converts domain PriceTiers to Ent PriceTiers
+func (p *Price) ToEntTiers() []schema.PriceTier {
+	if len(p.Tiers) == 0 {
+		return nil
+	}
+	tiers := make([]schema.PriceTier, len(p.Tiers))
+	for i, tier := range p.Tiers {
+		tiers[i] = schema.PriceTier{
+			UpTo:       tier.UpTo,
+			UnitAmount: tier.UnitAmount,
+		}
+		if tier.FlatAmount != nil {
+			flatAmount := tier.FlatAmount
+			tiers[i].FlatAmount = flatAmount
+		}
+	}
+	return tiers
 }

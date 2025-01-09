@@ -58,7 +58,7 @@ const (
 )
 
 const (
-	InvoiceDefaultDueDays = 30
+	InvoiceDefaultDueDays = 1
 )
 
 // InvoiceFilter represents the filter options for listing invoices

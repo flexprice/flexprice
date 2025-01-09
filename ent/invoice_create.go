@@ -346,6 +346,48 @@ func (ic *InvoiceCreate) SetNillableVersion(i *int) *InvoiceCreate {
 	return ic
 }
 
+// SetInvoiceNumber sets the "invoice_number" field.
+func (ic *InvoiceCreate) SetInvoiceNumber(s string) *InvoiceCreate {
+	ic.mutation.SetInvoiceNumber(s)
+	return ic
+}
+
+// SetNillableInvoiceNumber sets the "invoice_number" field if the given value is not nil.
+func (ic *InvoiceCreate) SetNillableInvoiceNumber(s *string) *InvoiceCreate {
+	if s != nil {
+		ic.SetInvoiceNumber(*s)
+	}
+	return ic
+}
+
+// SetBillingSequence sets the "billing_sequence" field.
+func (ic *InvoiceCreate) SetBillingSequence(i int) *InvoiceCreate {
+	ic.mutation.SetBillingSequence(i)
+	return ic
+}
+
+// SetNillableBillingSequence sets the "billing_sequence" field if the given value is not nil.
+func (ic *InvoiceCreate) SetNillableBillingSequence(i *int) *InvoiceCreate {
+	if i != nil {
+		ic.SetBillingSequence(*i)
+	}
+	return ic
+}
+
+// SetIdempotencyKey sets the "idempotency_key" field.
+func (ic *InvoiceCreate) SetIdempotencyKey(s string) *InvoiceCreate {
+	ic.mutation.SetIdempotencyKey(s)
+	return ic
+}
+
+// SetNillableIdempotencyKey sets the "idempotency_key" field if the given value is not nil.
+func (ic *InvoiceCreate) SetNillableIdempotencyKey(s *string) *InvoiceCreate {
+	if s != nil {
+		ic.SetIdempotencyKey(*s)
+	}
+	return ic
+}
+
 // SetID sets the "id" field.
 func (ic *InvoiceCreate) SetID(s string) *InvoiceCreate {
 	ic.mutation.SetID(s)
@@ -639,6 +681,18 @@ func (ic *InvoiceCreate) createSpec() (*Invoice, *sqlgraph.CreateSpec) {
 	if value, ok := ic.mutation.Version(); ok {
 		_spec.SetField(invoice.FieldVersion, field.TypeInt, value)
 		_node.Version = value
+	}
+	if value, ok := ic.mutation.InvoiceNumber(); ok {
+		_spec.SetField(invoice.FieldInvoiceNumber, field.TypeString, value)
+		_node.InvoiceNumber = &value
+	}
+	if value, ok := ic.mutation.BillingSequence(); ok {
+		_spec.SetField(invoice.FieldBillingSequence, field.TypeInt, value)
+		_node.BillingSequence = &value
+	}
+	if value, ok := ic.mutation.IdempotencyKey(); ok {
+		_spec.SetField(invoice.FieldIdempotencyKey, field.TypeString, value)
+		_node.IdempotencyKey = &value
 	}
 	if nodes := ic.mutation.LineItemsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

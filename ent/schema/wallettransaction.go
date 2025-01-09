@@ -1,11 +1,10 @@
 package schema
 
 import (
-	"time"
-
 	"entgo.io/ent"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
+	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
@@ -15,16 +14,26 @@ type WalletTransaction struct {
 	ent.Schema
 }
 
+// Mixin of the WalletTransaction.
+func (WalletTransaction) Mixin() []ent.Mixin {
+	return []ent.Mixin{
+		baseMixin.BaseMixin{},
+	}
+}
+
 // Fields of the WalletTransaction.
 func (WalletTransaction) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
 			Unique().
 			Immutable(),
-		field.String("tenant_id").
-			NotEmpty().
-			Immutable(),
 		field.String("wallet_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
 			NotEmpty().
 			Immutable(),
 		field.String("type").
@@ -45,6 +54,9 @@ func (WalletTransaction) Fields() []ent.Field {
 			}).
 			Default(decimal.Zero),
 		field.String("reference_type").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
 			Optional(),
 		field.String("reference_id").
 			Optional(),
@@ -56,20 +68,10 @@ func (WalletTransaction) Fields() []ent.Field {
 				"postgres": "jsonb",
 			}),
 		field.String("transaction_status").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
 			Default(string(types.TransactionStatusPending)),
-		field.String("status").
-			Default("published"),
-		field.Time("created_at").
-			Immutable().
-			Default(time.Now),
-		field.String("created_by").
-			Optional().
-			Immutable(),
-		field.Time("updated_at").
-			Default(time.Now).
-			UpdateDefault(time.Now),
-		field.String("updated_by").
-			Optional(),
 	}
 }
 

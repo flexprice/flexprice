@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/tenant"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/go-playground/validator/v10"
-	"github.com/google/uuid"
 )
 
 type CreateTenantRequest struct {
@@ -31,7 +31,7 @@ func (r *CreateTenantRequest) Validate() error {
 
 func (r *CreateTenantRequest) ToTenant(ctx context.Context) *tenant.Tenant {
 	return &tenant.Tenant{
-		ID:        uuid.New().String(),
+		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TENANT),
 		Name:      r.Name,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -22,11 +23,12 @@ type PlanService interface {
 type planService struct {
 	planRepo  plan.Repository
 	priceRepo price.Repository
+	meterRepo meter.Repository
 	logger    *logger.Logger
 }
 
-func NewPlanService(planRepo plan.Repository, priceRepo price.Repository, logger *logger.Logger) PlanService {
-	return &planService{planRepo: planRepo, priceRepo: priceRepo, logger: logger}
+func NewPlanService(planRepo plan.Repository, priceRepo price.Repository, meterRepo meter.Repository, logger *logger.Logger) PlanService {
+	return &planService{planRepo: planRepo, priceRepo: priceRepo, meterRepo: meterRepo, logger: logger}
 }
 
 func (s *planService) CreatePlan(ctx context.Context, req dto.CreatePlanRequest) (*dto.CreatePlanResponse, error) {
@@ -59,16 +61,17 @@ func (s *planService) GetPlan(ctx context.Context, id string) (*dto.PlanResponse
 	if err != nil {
 		return nil, fmt.Errorf("failed to get plan: %w", err)
 	}
-
-	prices, err := s.priceRepo.GetByPlanID(ctx, plan.ID)
+	priceService := NewPriceService(s.priceRepo, s.meterRepo, s.logger)
+	pricesResponse, err := priceService.GetPricesByPlanID(ctx, plan.ID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get prices: %w", err)
+		s.logger.Errorw("failed to fetch prices for plan", "plan_id", plan.ID, "error", err)
+		return nil, err
 	}
 
 	response := &dto.PlanResponse{Plan: plan}
-	for _, price := range prices {
-		if price.PlanID == plan.ID {
-			response.Prices = append(response.Prices, dto.PriceResponse{Price: price})
+	for _, p := range pricesResponse.Prices {
+		if p.Price.PlanID == plan.ID {
+			response.Prices = append(response.Prices, dto.PriceResponse{Price: p.Price})
 		}
 	}
 
@@ -76,40 +79,68 @@ func (s *planService) GetPlan(ctx context.Context, id string) (*dto.PlanResponse
 }
 
 func (s *planService) GetPlans(ctx context.Context, filter types.Filter) (*dto.ListPlansResponse, error) {
-	expand := filter.GetExpand()
+	priceService := NewPriceService(s.priceRepo, s.meterRepo, s.logger)
 
-	var plans []*plan.Plan
-	var err error
-
-	plans, err = s.planRepo.List(ctx, filter)
+	// Fetch plans
+	s.logger.Debugw("fetching plans", "filter", filter)
+	plans, err := s.planRepo.List(ctx, filter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list plans: %w", err)
 	}
 
+	// Prepare response
 	response := &dto.ListPlansResponse{
-		Plans: make([]*dto.PlanResponse, len(plans)),
+		Plans:  make([]*dto.PlanResponse, len(plans)),
+		Total:  len(plans),
+		Offset: filter.Offset,
+		Limit:  filter.Limit,
 	}
 
+	// Create basic plan responses
 	for i, plan := range plans {
 		response.Plans[i] = &dto.PlanResponse{Plan: plan}
 	}
 
-	// If prices weren't eagerly loaded and are requested, fetch them
-	if expand.Has(types.ExpandPrices) {
+	// If prices expansion is requested, fetch all prices in one query
+	if filter.GetExpand().Has(types.ExpandPrices) && len(plans) > 0 {
+		// Extract plan IDs
+		planIDs := make([]string, len(plans))
 		for i, plan := range plans {
-			prices, err := s.priceRepo.GetByPlanID(ctx, plan.ID)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get prices for plan %s: %w", plan.ID, err)
-			}
-			response.Plans[i].Prices = make([]dto.PriceResponse, len(prices))
-			for j, price := range prices {
-				response.Plans[i].Prices[j] = dto.PriceResponse{Price: price}
+			planIDs[i] = plan.ID
+		}
+
+		// Create price filter with same status as plan filter and propagate meter expansion
+		priceFilter := types.NewUnlimitedPriceFilter().
+			WithPlanIDs(planIDs).
+			WithStatus(types.StatusPublished)
+
+		// If meters should be expanded, propagate the expansion to prices
+		if filter.GetExpand().Has(types.ExpandMeters) {
+			priceFilter = priceFilter.WithExpand(string(types.ExpandMeters))
+		}
+
+		// Fetch all prices in one query
+		s.logger.Debugw("fetching prices for plans",
+			"plan_ids", planIDs,
+			"expand", priceFilter.GetExpand())
+		pricesResponse, err := priceService.GetPrices(ctx, priceFilter)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch prices: %w", err)
+		}
+
+		// Create a map for quick price lookup by plan ID
+		pricesByPlanID := make(map[string][]dto.PriceResponse)
+		for _, p := range pricesResponse.Prices {
+			pricesByPlanID[p.Price.PlanID] = append(pricesByPlanID[p.Price.PlanID], p)
+		}
+
+		// Assign prices to respective plans
+		for i, planResp := range response.Plans {
+			if prices, ok := pricesByPlanID[planResp.ID]; ok {
+				response.Plans[i].Prices = prices
 			}
 		}
 	}
-	response.Total = len(plans)
-	response.Offset = filter.Offset
-	response.Limit = filter.Limit
 
 	return response, nil
 }

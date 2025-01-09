@@ -17,9 +17,15 @@ type BaseMixin struct {
 func (BaseMixin) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("tenant_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
 			NotEmpty().
 			Immutable(),
 		field.String("status").
+			SchemaType(map[string]string{
+				"postgres": "varchar(20)",
+			}).
 			Default("published"),
 		field.Time("created_at").
 			Immutable().

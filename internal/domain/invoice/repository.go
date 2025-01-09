@@ -2,6 +2,7 @@ package invoice
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -22,4 +23,17 @@ type Repository interface {
 
 	// Bulk operations with edges
 	CreateWithLineItems(ctx context.Context, inv *Invoice) error
+
+	// Idempotency operations
+	GetByIdempotencyKey(ctx context.Context, key string) (*Invoice, error)
+
+	// Period validation
+	ExistsForPeriod(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time) (bool, error)
+
+	// GetNextInvoiceNumber generates and returns the next invoice number for a tenant
+	// Format: INV-YYYYMM-XXXXX
+	GetNextInvoiceNumber(ctx context.Context) (string, error)
+
+	// GetNextBillingSequence returns the next billing sequence number for a subscription
+	GetNextBillingSequence(ctx context.Context, subscriptionID string) (int, error)
 }

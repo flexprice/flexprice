@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -28,10 +29,12 @@ func TestPlanService(t *testing.T) {
 func (s *PlanServiceSuite) SetupTest() {
 	s.ctx = testutil.SetupContext()
 	s.planRepo = testutil.NewInMemoryPlanStore()
-
+	priceRepo := testutil.NewInMemoryPriceStore()
+	logger := logger.GetLogger()
 	s.planService = &planService{
 		planRepo:  s.planRepo,
-		priceRepo: testutil.NewInMemoryPriceStore(),
+		priceRepo: priceRepo,
+		logger:    logger,
 	}
 }
 

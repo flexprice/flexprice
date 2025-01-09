@@ -27,6 +27,76 @@ func (wc *WalletCreate) SetTenantID(s string) *WalletCreate {
 	return wc
 }
 
+// SetStatus sets the "status" field.
+func (wc *WalletCreate) SetStatus(s string) *WalletCreate {
+	wc.mutation.SetStatus(s)
+	return wc
+}
+
+// SetNillableStatus sets the "status" field if the given value is not nil.
+func (wc *WalletCreate) SetNillableStatus(s *string) *WalletCreate {
+	if s != nil {
+		wc.SetStatus(*s)
+	}
+	return wc
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (wc *WalletCreate) SetCreatedAt(t time.Time) *WalletCreate {
+	wc.mutation.SetCreatedAt(t)
+	return wc
+}
+
+// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
+func (wc *WalletCreate) SetNillableCreatedAt(t *time.Time) *WalletCreate {
+	if t != nil {
+		wc.SetCreatedAt(*t)
+	}
+	return wc
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (wc *WalletCreate) SetUpdatedAt(t time.Time) *WalletCreate {
+	wc.mutation.SetUpdatedAt(t)
+	return wc
+}
+
+// SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
+func (wc *WalletCreate) SetNillableUpdatedAt(t *time.Time) *WalletCreate {
+	if t != nil {
+		wc.SetUpdatedAt(*t)
+	}
+	return wc
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (wc *WalletCreate) SetCreatedBy(s string) *WalletCreate {
+	wc.mutation.SetCreatedBy(s)
+	return wc
+}
+
+// SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
+func (wc *WalletCreate) SetNillableCreatedBy(s *string) *WalletCreate {
+	if s != nil {
+		wc.SetCreatedBy(*s)
+	}
+	return wc
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (wc *WalletCreate) SetUpdatedBy(s string) *WalletCreate {
+	wc.mutation.SetUpdatedBy(s)
+	return wc
+}
+
+// SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
+func (wc *WalletCreate) SetNillableUpdatedBy(s *string) *WalletCreate {
+	if s != nil {
+		wc.SetUpdatedBy(*s)
+	}
+	return wc
+}
+
 // SetCustomerID sets the "customer_id" field.
 func (wc *WalletCreate) SetCustomerID(s string) *WalletCreate {
 	wc.mutation.SetCustomerID(s)
@@ -87,76 +157,6 @@ func (wc *WalletCreate) SetNillableWalletStatus(s *string) *WalletCreate {
 	return wc
 }
 
-// SetStatus sets the "status" field.
-func (wc *WalletCreate) SetStatus(s string) *WalletCreate {
-	wc.mutation.SetStatus(s)
-	return wc
-}
-
-// SetNillableStatus sets the "status" field if the given value is not nil.
-func (wc *WalletCreate) SetNillableStatus(s *string) *WalletCreate {
-	if s != nil {
-		wc.SetStatus(*s)
-	}
-	return wc
-}
-
-// SetCreatedAt sets the "created_at" field.
-func (wc *WalletCreate) SetCreatedAt(t time.Time) *WalletCreate {
-	wc.mutation.SetCreatedAt(t)
-	return wc
-}
-
-// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (wc *WalletCreate) SetNillableCreatedAt(t *time.Time) *WalletCreate {
-	if t != nil {
-		wc.SetCreatedAt(*t)
-	}
-	return wc
-}
-
-// SetCreatedBy sets the "created_by" field.
-func (wc *WalletCreate) SetCreatedBy(s string) *WalletCreate {
-	wc.mutation.SetCreatedBy(s)
-	return wc
-}
-
-// SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
-func (wc *WalletCreate) SetNillableCreatedBy(s *string) *WalletCreate {
-	if s != nil {
-		wc.SetCreatedBy(*s)
-	}
-	return wc
-}
-
-// SetUpdatedAt sets the "updated_at" field.
-func (wc *WalletCreate) SetUpdatedAt(t time.Time) *WalletCreate {
-	wc.mutation.SetUpdatedAt(t)
-	return wc
-}
-
-// SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (wc *WalletCreate) SetNillableUpdatedAt(t *time.Time) *WalletCreate {
-	if t != nil {
-		wc.SetUpdatedAt(*t)
-	}
-	return wc
-}
-
-// SetUpdatedBy sets the "updated_by" field.
-func (wc *WalletCreate) SetUpdatedBy(s string) *WalletCreate {
-	wc.mutation.SetUpdatedBy(s)
-	return wc
-}
-
-// SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (wc *WalletCreate) SetNillableUpdatedBy(s *string) *WalletCreate {
-	if s != nil {
-		wc.SetUpdatedBy(*s)
-	}
-	return wc
-}
-
 // SetID sets the "id" field.
 func (wc *WalletCreate) SetID(s string) *WalletCreate {
 	wc.mutation.SetID(s)
@@ -198,14 +198,6 @@ func (wc *WalletCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (wc *WalletCreate) defaults() {
-	if _, ok := wc.mutation.Balance(); !ok {
-		v := wallet.DefaultBalance
-		wc.mutation.SetBalance(v)
-	}
-	if _, ok := wc.mutation.WalletStatus(); !ok {
-		v := wallet.DefaultWalletStatus
-		wc.mutation.SetWalletStatus(v)
-	}
 	if _, ok := wc.mutation.Status(); !ok {
 		v := wallet.DefaultStatus
 		wc.mutation.SetStatus(v)
@@ -218,6 +210,14 @@ func (wc *WalletCreate) defaults() {
 		v := wallet.DefaultUpdatedAt()
 		wc.mutation.SetUpdatedAt(v)
 	}
+	if _, ok := wc.mutation.Balance(); !ok {
+		v := wallet.DefaultBalance
+		wc.mutation.SetBalance(v)
+	}
+	if _, ok := wc.mutation.WalletStatus(); !ok {
+		v := wallet.DefaultWalletStatus
+		wc.mutation.SetWalletStatus(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -229,6 +229,15 @@ func (wc *WalletCreate) check() error {
 		if err := wallet.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "Wallet.tenant_id": %w`, err)}
 		}
+	}
+	if _, ok := wc.mutation.Status(); !ok {
+		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "Wallet.status"`)}
+	}
+	if _, ok := wc.mutation.CreatedAt(); !ok {
+		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "Wallet.created_at"`)}
+	}
+	if _, ok := wc.mutation.UpdatedAt(); !ok {
+		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "Wallet.updated_at"`)}
 	}
 	if _, ok := wc.mutation.CustomerID(); !ok {
 		return &ValidationError{Name: "customer_id", err: errors.New(`ent: missing required field "Wallet.customer_id"`)}
@@ -251,15 +260,6 @@ func (wc *WalletCreate) check() error {
 	}
 	if _, ok := wc.mutation.WalletStatus(); !ok {
 		return &ValidationError{Name: "wallet_status", err: errors.New(`ent: missing required field "Wallet.wallet_status"`)}
-	}
-	if _, ok := wc.mutation.Status(); !ok {
-		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "Wallet.status"`)}
-	}
-	if _, ok := wc.mutation.CreatedAt(); !ok {
-		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "Wallet.created_at"`)}
-	}
-	if _, ok := wc.mutation.UpdatedAt(); !ok {
-		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "Wallet.updated_at"`)}
 	}
 	return nil
 }
@@ -300,6 +300,26 @@ func (wc *WalletCreate) createSpec() (*Wallet, *sqlgraph.CreateSpec) {
 		_spec.SetField(wallet.FieldTenantID, field.TypeString, value)
 		_node.TenantID = value
 	}
+	if value, ok := wc.mutation.Status(); ok {
+		_spec.SetField(wallet.FieldStatus, field.TypeString, value)
+		_node.Status = value
+	}
+	if value, ok := wc.mutation.CreatedAt(); ok {
+		_spec.SetField(wallet.FieldCreatedAt, field.TypeTime, value)
+		_node.CreatedAt = value
+	}
+	if value, ok := wc.mutation.UpdatedAt(); ok {
+		_spec.SetField(wallet.FieldUpdatedAt, field.TypeTime, value)
+		_node.UpdatedAt = value
+	}
+	if value, ok := wc.mutation.CreatedBy(); ok {
+		_spec.SetField(wallet.FieldCreatedBy, field.TypeString, value)
+		_node.CreatedBy = value
+	}
+	if value, ok := wc.mutation.UpdatedBy(); ok {
+		_spec.SetField(wallet.FieldUpdatedBy, field.TypeString, value)
+		_node.UpdatedBy = value
+	}
 	if value, ok := wc.mutation.CustomerID(); ok {
 		_spec.SetField(wallet.FieldCustomerID, field.TypeString, value)
 		_node.CustomerID = value
@@ -323,26 +343,6 @@ func (wc *WalletCreate) createSpec() (*Wallet, *sqlgraph.CreateSpec) {
 	if value, ok := wc.mutation.WalletStatus(); ok {
 		_spec.SetField(wallet.FieldWalletStatus, field.TypeString, value)
 		_node.WalletStatus = value
-	}
-	if value, ok := wc.mutation.Status(); ok {
-		_spec.SetField(wallet.FieldStatus, field.TypeString, value)
-		_node.Status = value
-	}
-	if value, ok := wc.mutation.CreatedAt(); ok {
-		_spec.SetField(wallet.FieldCreatedAt, field.TypeTime, value)
-		_node.CreatedAt = value
-	}
-	if value, ok := wc.mutation.CreatedBy(); ok {
-		_spec.SetField(wallet.FieldCreatedBy, field.TypeString, value)
-		_node.CreatedBy = value
-	}
-	if value, ok := wc.mutation.UpdatedAt(); ok {
-		_spec.SetField(wallet.FieldUpdatedAt, field.TypeTime, value)
-		_node.UpdatedAt = value
-	}
-	if value, ok := wc.mutation.UpdatedBy(); ok {
-		_spec.SetField(wallet.FieldUpdatedBy, field.TypeString, value)
-		_node.UpdatedBy = value
 	}
 	return _node, _spec
 }

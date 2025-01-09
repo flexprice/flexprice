@@ -21,7 +21,6 @@ import (
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/publisher"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -83,7 +82,7 @@ func (s *BaseServiceTestSuite) setupContext() {
 	s.ctx = context.Background()
 	s.ctx = context.WithValue(s.ctx, types.CtxTenantID, "tenant_test")
 	s.ctx = context.WithValue(s.ctx, types.CtxUserID, "user_test")
-	s.ctx = context.WithValue(s.ctx, types.CtxRequestID, uuid.New().String())
+	s.ctx = context.WithValue(s.ctx, types.CtxRequestID, types.GenerateUUID())
 }
 
 func (s *BaseServiceTestSuite) setupStores() {
@@ -154,5 +153,5 @@ func (s *BaseServiceTestSuite) GetNow() time.Time {
 
 // GetUUID returns a new UUID string
 func (s *BaseServiceTestSuite) GetUUID() string {
-	return uuid.New().String()
+	return types.GenerateUUID()
 }

@@ -15,7 +15,6 @@ import (
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/repository"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/google/uuid"
 )
 
 type onboardingScript struct {
@@ -67,7 +66,7 @@ func newOnboardingScript() (*onboardingScript, error) {
 
 func (s *onboardingScript) createTenant(ctx context.Context, name string) (*tenant.Tenant, error) {
 	t := &tenant.Tenant{
-		ID:        uuid.New().String(),
+		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TENANT),
 		Name:      name,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
@@ -117,7 +116,7 @@ func (s *onboardingScript) createUser(ctx context.Context, email, tenantID strin
 
 func (s *onboardingScript) createEnvironment(ctx context.Context, name string, envType types.EnvironmentType, tenantID string) (*environment.Environment, error) {
 	e := &environment.Environment{
-		ID:   uuid.New().String(),
+		ID:   types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENVIRONMENT),
 		Name: name,
 		Type: envType,
 		Slug: fmt.Sprintf("%s-%s", name, envType),

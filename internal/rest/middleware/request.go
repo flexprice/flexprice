@@ -5,7 +5,6 @@ import (
 
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 )
 
 func RequestIDMiddleware(c *gin.Context) {
@@ -15,7 +14,7 @@ func RequestIDMiddleware(c *gin.Context) {
 	// Add request ID
 	requestID := c.GetHeader("X-Request-ID")
 	if requestID == "" {
-		requestID = uuid.New().String()
+		requestID = types.GenerateUUID()
 	}
 
 	// Create new context with values

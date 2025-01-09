@@ -67,6 +67,12 @@ const (
 	FieldMetadata = "metadata"
 	// FieldVersion holds the string denoting the version field in the database.
 	FieldVersion = "version"
+	// FieldInvoiceNumber holds the string denoting the invoice_number field in the database.
+	FieldInvoiceNumber = "invoice_number"
+	// FieldBillingSequence holds the string denoting the billing_sequence field in the database.
+	FieldBillingSequence = "billing_sequence"
+	// FieldIdempotencyKey holds the string denoting the idempotency_key field in the database.
+	FieldIdempotencyKey = "idempotency_key"
 	// EdgeLineItems holds the string denoting the line_items edge name in mutations.
 	EdgeLineItems = "line_items"
 	// Table holds the table name of the invoice in the database.
@@ -109,6 +115,9 @@ var Columns = []string{
 	FieldBillingReason,
 	FieldMetadata,
 	FieldVersion,
+	FieldInvoiceNumber,
+	FieldBillingSequence,
+	FieldIdempotencyKey,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -283,6 +292,21 @@ func ByBillingReason(opts ...sql.OrderTermOption) OrderOption {
 // ByVersion orders the results by the version field.
 func ByVersion(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldVersion, opts...).ToFunc()
+}
+
+// ByInvoiceNumber orders the results by the invoice_number field.
+func ByInvoiceNumber(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldInvoiceNumber, opts...).ToFunc()
+}
+
+// ByBillingSequence orders the results by the billing_sequence field.
+func ByBillingSequence(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBillingSequence, opts...).ToFunc()
+}
+
+// ByIdempotencyKey orders the results by the idempotency_key field.
+func ByIdempotencyKey(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIdempotencyKey, opts...).ToFunc()
 }
 
 // ByLineItemsCount orders the results by line_items count.

@@ -333,6 +333,73 @@ func (iu *InvoiceUpdate) AddVersion(i int) *InvoiceUpdate {
 	return iu
 }
 
+// SetInvoiceNumber sets the "invoice_number" field.
+func (iu *InvoiceUpdate) SetInvoiceNumber(s string) *InvoiceUpdate {
+	iu.mutation.SetInvoiceNumber(s)
+	return iu
+}
+
+// SetNillableInvoiceNumber sets the "invoice_number" field if the given value is not nil.
+func (iu *InvoiceUpdate) SetNillableInvoiceNumber(s *string) *InvoiceUpdate {
+	if s != nil {
+		iu.SetInvoiceNumber(*s)
+	}
+	return iu
+}
+
+// ClearInvoiceNumber clears the value of the "invoice_number" field.
+func (iu *InvoiceUpdate) ClearInvoiceNumber() *InvoiceUpdate {
+	iu.mutation.ClearInvoiceNumber()
+	return iu
+}
+
+// SetBillingSequence sets the "billing_sequence" field.
+func (iu *InvoiceUpdate) SetBillingSequence(i int) *InvoiceUpdate {
+	iu.mutation.ResetBillingSequence()
+	iu.mutation.SetBillingSequence(i)
+	return iu
+}
+
+// SetNillableBillingSequence sets the "billing_sequence" field if the given value is not nil.
+func (iu *InvoiceUpdate) SetNillableBillingSequence(i *int) *InvoiceUpdate {
+	if i != nil {
+		iu.SetBillingSequence(*i)
+	}
+	return iu
+}
+
+// AddBillingSequence adds i to the "billing_sequence" field.
+func (iu *InvoiceUpdate) AddBillingSequence(i int) *InvoiceUpdate {
+	iu.mutation.AddBillingSequence(i)
+	return iu
+}
+
+// ClearBillingSequence clears the value of the "billing_sequence" field.
+func (iu *InvoiceUpdate) ClearBillingSequence() *InvoiceUpdate {
+	iu.mutation.ClearBillingSequence()
+	return iu
+}
+
+// SetIdempotencyKey sets the "idempotency_key" field.
+func (iu *InvoiceUpdate) SetIdempotencyKey(s string) *InvoiceUpdate {
+	iu.mutation.SetIdempotencyKey(s)
+	return iu
+}
+
+// SetNillableIdempotencyKey sets the "idempotency_key" field if the given value is not nil.
+func (iu *InvoiceUpdate) SetNillableIdempotencyKey(s *string) *InvoiceUpdate {
+	if s != nil {
+		iu.SetIdempotencyKey(*s)
+	}
+	return iu
+}
+
+// ClearIdempotencyKey clears the value of the "idempotency_key" field.
+func (iu *InvoiceUpdate) ClearIdempotencyKey() *InvoiceUpdate {
+	iu.mutation.ClearIdempotencyKey()
+	return iu
+}
+
 // AddLineItemIDs adds the "line_items" edge to the InvoiceLineItem entity by IDs.
 func (iu *InvoiceUpdate) AddLineItemIDs(ids ...string) *InvoiceUpdate {
 	iu.mutation.AddLineItemIDs(ids...)
@@ -514,6 +581,27 @@ func (iu *InvoiceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := iu.mutation.AddedVersion(); ok {
 		_spec.AddField(invoice.FieldVersion, field.TypeInt, value)
+	}
+	if value, ok := iu.mutation.InvoiceNumber(); ok {
+		_spec.SetField(invoice.FieldInvoiceNumber, field.TypeString, value)
+	}
+	if iu.mutation.InvoiceNumberCleared() {
+		_spec.ClearField(invoice.FieldInvoiceNumber, field.TypeString)
+	}
+	if value, ok := iu.mutation.BillingSequence(); ok {
+		_spec.SetField(invoice.FieldBillingSequence, field.TypeInt, value)
+	}
+	if value, ok := iu.mutation.AddedBillingSequence(); ok {
+		_spec.AddField(invoice.FieldBillingSequence, field.TypeInt, value)
+	}
+	if iu.mutation.BillingSequenceCleared() {
+		_spec.ClearField(invoice.FieldBillingSequence, field.TypeInt)
+	}
+	if value, ok := iu.mutation.IdempotencyKey(); ok {
+		_spec.SetField(invoice.FieldIdempotencyKey, field.TypeString, value)
+	}
+	if iu.mutation.IdempotencyKeyCleared() {
+		_spec.ClearField(invoice.FieldIdempotencyKey, field.TypeString)
 	}
 	if iu.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -883,6 +971,73 @@ func (iuo *InvoiceUpdateOne) AddVersion(i int) *InvoiceUpdateOne {
 	return iuo
 }
 
+// SetInvoiceNumber sets the "invoice_number" field.
+func (iuo *InvoiceUpdateOne) SetInvoiceNumber(s string) *InvoiceUpdateOne {
+	iuo.mutation.SetInvoiceNumber(s)
+	return iuo
+}
+
+// SetNillableInvoiceNumber sets the "invoice_number" field if the given value is not nil.
+func (iuo *InvoiceUpdateOne) SetNillableInvoiceNumber(s *string) *InvoiceUpdateOne {
+	if s != nil {
+		iuo.SetInvoiceNumber(*s)
+	}
+	return iuo
+}
+
+// ClearInvoiceNumber clears the value of the "invoice_number" field.
+func (iuo *InvoiceUpdateOne) ClearInvoiceNumber() *InvoiceUpdateOne {
+	iuo.mutation.ClearInvoiceNumber()
+	return iuo
+}
+
+// SetBillingSequence sets the "billing_sequence" field.
+func (iuo *InvoiceUpdateOne) SetBillingSequence(i int) *InvoiceUpdateOne {
+	iuo.mutation.ResetBillingSequence()
+	iuo.mutation.SetBillingSequence(i)
+	return iuo
+}
+
+// SetNillableBillingSequence sets the "billing_sequence" field if the given value is not nil.
+func (iuo *InvoiceUpdateOne) SetNillableBillingSequence(i *int) *InvoiceUpdateOne {
+	if i != nil {
+		iuo.SetBillingSequence(*i)
+	}
+	return iuo
+}
+
+// AddBillingSequence adds i to the "billing_sequence" field.
+func (iuo *InvoiceUpdateOne) AddBillingSequence(i int) *InvoiceUpdateOne {
+	iuo.mutation.AddBillingSequence(i)
+	return iuo
+}
+
+// ClearBillingSequence clears the value of the "billing_sequence" field.
+func (iuo *InvoiceUpdateOne) ClearBillingSequence() *InvoiceUpdateOne {
+	iuo.mutation.ClearBillingSequence()
+	return iuo
+}
+
+// SetIdempotencyKey sets the "idempotency_key" field.
+func (iuo *InvoiceUpdateOne) SetIdempotencyKey(s string) *InvoiceUpdateOne {
+	iuo.mutation.SetIdempotencyKey(s)
+	return iuo
+}
+
+// SetNillableIdempotencyKey sets the "idempotency_key" field if the given value is not nil.
+func (iuo *InvoiceUpdateOne) SetNillableIdempotencyKey(s *string) *InvoiceUpdateOne {
+	if s != nil {
+		iuo.SetIdempotencyKey(*s)
+	}
+	return iuo
+}
+
+// ClearIdempotencyKey clears the value of the "idempotency_key" field.
+func (iuo *InvoiceUpdateOne) ClearIdempotencyKey() *InvoiceUpdateOne {
+	iuo.mutation.ClearIdempotencyKey()
+	return iuo
+}
+
 // AddLineItemIDs adds the "line_items" edge to the InvoiceLineItem entity by IDs.
 func (iuo *InvoiceUpdateOne) AddLineItemIDs(ids ...string) *InvoiceUpdateOne {
 	iuo.mutation.AddLineItemIDs(ids...)
@@ -1094,6 +1249,27 @@ func (iuo *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err e
 	}
 	if value, ok := iuo.mutation.AddedVersion(); ok {
 		_spec.AddField(invoice.FieldVersion, field.TypeInt, value)
+	}
+	if value, ok := iuo.mutation.InvoiceNumber(); ok {
+		_spec.SetField(invoice.FieldInvoiceNumber, field.TypeString, value)
+	}
+	if iuo.mutation.InvoiceNumberCleared() {
+		_spec.ClearField(invoice.FieldInvoiceNumber, field.TypeString)
+	}
+	if value, ok := iuo.mutation.BillingSequence(); ok {
+		_spec.SetField(invoice.FieldBillingSequence, field.TypeInt, value)
+	}
+	if value, ok := iuo.mutation.AddedBillingSequence(); ok {
+		_spec.AddField(invoice.FieldBillingSequence, field.TypeInt, value)
+	}
+	if iuo.mutation.BillingSequenceCleared() {
+		_spec.ClearField(invoice.FieldBillingSequence, field.TypeInt)
+	}
+	if value, ok := iuo.mutation.IdempotencyKey(); ok {
+		_spec.SetField(invoice.FieldIdempotencyKey, field.TypeString, value)
+	}
+	if iuo.mutation.IdempotencyKeyCleared() {
+		_spec.ClearField(invoice.FieldIdempotencyKey, field.TypeString)
 	}
 	if iuo.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{

@@ -2,6 +2,7 @@ package schema
 
 import (
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
@@ -26,22 +27,43 @@ func (Invoice) Mixin() []ent.Mixin {
 func (Invoice) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
 			Unique().
 			Immutable(),
 		field.String("customer_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
 			NotEmpty().
 			Immutable(),
 		field.String("subscription_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
 			Optional().
 			Nillable(),
 		field.String("invoice_type").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
 			NotEmpty().
 			Immutable(),
 		field.String("invoice_status").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
 			Default(string(types.InvoiceStatusDraft)),
 		field.String("payment_status").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
 			Default(string(types.InvoicePaymentStatusPending)),
 		field.String("currency").
+			SchemaType(map[string]string{
+				"postgres": "varchar(10)",
+			}).
 			NotEmpty().
 			Immutable(),
 		field.Other("amount_due", decimal.Decimal{}).
@@ -93,6 +115,27 @@ func (Invoice) Fields() []ent.Field {
 			}),
 		field.Int("version").
 			Default(1),
+		field.String("invoice_number").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable().
+			Comment("Generated invoice number unique per tenant"),
+		field.Int("billing_sequence").
+			SchemaType(map[string]string{
+				"postgres": "integer",
+			}).
+			Optional().
+			Nillable().
+			Comment("Sequence number for subscription billing periods"),
+		field.String("idempotency_key").
+			SchemaType(map[string]string{
+				"postgres": "varchar(100)",
+			}).
+			Optional().
+			Nillable().
+			Comment("Key for ensuring idempotent invoice creation"),
 	}
 }
 
@@ -106,12 +149,23 @@ func (Invoice) Edges() []ent.Edge {
 // Indexes of the Invoice.
 func (Invoice) Indexes() []ent.Index {
 	return []ent.Index{
-		// Common query patterns
-		index.Fields("tenant_id", "customer_id", "invoice_status", "payment_status", "status"),
-		index.Fields("tenant_id", "subscription_id", "invoice_status", "payment_status", "status"),
-		index.Fields("tenant_id", "invoice_type", "invoice_status", "payment_status", "status"),
-		index.Fields("tenant_id", "due_date", "invoice_status", "payment_status", "status"),
-		// Period based queries
-		index.Fields("period_start", "period_end"),
+		index.Fields("tenant_id", "customer_id", "invoice_status", "payment_status", "status").
+			StorageKey("idx_tenant_customer_status"),
+		index.Fields("tenant_id", "subscription_id", "invoice_status", "payment_status", "status").
+			StorageKey("idx_tenant_subscription_status"),
+		index.Fields("tenant_id", "invoice_type", "invoice_status", "payment_status", "status").
+			StorageKey("idx_tenant_type_status"),
+		index.Fields("tenant_id", "due_date", "invoice_status", "payment_status", "status").
+			StorageKey("idx_tenant_due_date_status"),
+		index.Fields("tenant_id", "invoice_number").
+			Unique().
+			StorageKey("idx_tenant_invoice_number_unique"),
+		index.Fields("idempotency_key").
+			Unique().
+			StorageKey("idx_idempotency_key_unique").
+			Annotations(entsql.IndexWhere("idempotency_key IS NOT NULL")),
+		index.Fields("subscription_id", "period_start", "period_end").
+			StorageKey("idx_subscription_period_unique").
+			Annotations(entsql.IndexWhere("invoice_status != 'VOIDED' AND subscription_id IS NOT NULL")),
 	}
 }

@@ -26,19 +26,34 @@ func (Subscription) Mixin() []ent.Mixin {
 func (Subscription) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
 			Unique().
 			Immutable(),
 		field.String("lookup_key").
 			Optional(),
 		field.String("customer_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
 			NotEmpty().
 			Immutable(),
 		field.String("plan_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
 			NotEmpty().
 			Immutable(),
 		field.String("subscription_status").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
 			Default(string(types.SubscriptionStatusActive)),
 		field.String("currency").
+			SchemaType(map[string]string{
+				"postgres": "varchar(10)",
+			}).
 			NotEmpty().
 			Immutable(),
 		field.Time("billing_anchor").

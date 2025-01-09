@@ -7,7 +7,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/go-playground/validator/v10"
-	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 )
 
@@ -20,7 +19,7 @@ type CreateWalletRequest struct {
 
 func (r *CreateWalletRequest) ToWallet(ctx context.Context) *wallet.Wallet {
 	return &wallet.Wallet{
-		ID:           uuid.New().String(),
+		ID:           types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET),
 		CustomerID:   r.CustomerID,
 		Currency:     r.Currency,
 		Metadata:     r.Metadata,

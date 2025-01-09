@@ -191,6 +191,21 @@ func Version(v int) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldVersion, v))
 }
 
+// InvoiceNumber applies equality check predicate on the "invoice_number" field. It's identical to InvoiceNumberEQ.
+func InvoiceNumber(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldInvoiceNumber, v))
+}
+
+// BillingSequence applies equality check predicate on the "billing_sequence" field. It's identical to BillingSequenceEQ.
+func BillingSequence(v int) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldBillingSequence, v))
+}
+
+// IdempotencyKey applies equality check predicate on the "idempotency_key" field. It's identical to IdempotencyKeyEQ.
+func IdempotencyKey(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldIdempotencyKey, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldTenantID, v))
@@ -1644,6 +1659,206 @@ func VersionLT(v int) predicate.Invoice {
 // VersionLTE applies the LTE predicate on the "version" field.
 func VersionLTE(v int) predicate.Invoice {
 	return predicate.Invoice(sql.FieldLTE(FieldVersion, v))
+}
+
+// InvoiceNumberEQ applies the EQ predicate on the "invoice_number" field.
+func InvoiceNumberEQ(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldInvoiceNumber, v))
+}
+
+// InvoiceNumberNEQ applies the NEQ predicate on the "invoice_number" field.
+func InvoiceNumberNEQ(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNEQ(FieldInvoiceNumber, v))
+}
+
+// InvoiceNumberIn applies the In predicate on the "invoice_number" field.
+func InvoiceNumberIn(vs ...string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldIn(FieldInvoiceNumber, vs...))
+}
+
+// InvoiceNumberNotIn applies the NotIn predicate on the "invoice_number" field.
+func InvoiceNumberNotIn(vs ...string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotIn(FieldInvoiceNumber, vs...))
+}
+
+// InvoiceNumberGT applies the GT predicate on the "invoice_number" field.
+func InvoiceNumberGT(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGT(FieldInvoiceNumber, v))
+}
+
+// InvoiceNumberGTE applies the GTE predicate on the "invoice_number" field.
+func InvoiceNumberGTE(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGTE(FieldInvoiceNumber, v))
+}
+
+// InvoiceNumberLT applies the LT predicate on the "invoice_number" field.
+func InvoiceNumberLT(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLT(FieldInvoiceNumber, v))
+}
+
+// InvoiceNumberLTE applies the LTE predicate on the "invoice_number" field.
+func InvoiceNumberLTE(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLTE(FieldInvoiceNumber, v))
+}
+
+// InvoiceNumberContains applies the Contains predicate on the "invoice_number" field.
+func InvoiceNumberContains(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldContains(FieldInvoiceNumber, v))
+}
+
+// InvoiceNumberHasPrefix applies the HasPrefix predicate on the "invoice_number" field.
+func InvoiceNumberHasPrefix(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldHasPrefix(FieldInvoiceNumber, v))
+}
+
+// InvoiceNumberHasSuffix applies the HasSuffix predicate on the "invoice_number" field.
+func InvoiceNumberHasSuffix(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldHasSuffix(FieldInvoiceNumber, v))
+}
+
+// InvoiceNumberIsNil applies the IsNil predicate on the "invoice_number" field.
+func InvoiceNumberIsNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldIsNull(FieldInvoiceNumber))
+}
+
+// InvoiceNumberNotNil applies the NotNil predicate on the "invoice_number" field.
+func InvoiceNumberNotNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotNull(FieldInvoiceNumber))
+}
+
+// InvoiceNumberEqualFold applies the EqualFold predicate on the "invoice_number" field.
+func InvoiceNumberEqualFold(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEqualFold(FieldInvoiceNumber, v))
+}
+
+// InvoiceNumberContainsFold applies the ContainsFold predicate on the "invoice_number" field.
+func InvoiceNumberContainsFold(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldContainsFold(FieldInvoiceNumber, v))
+}
+
+// BillingSequenceEQ applies the EQ predicate on the "billing_sequence" field.
+func BillingSequenceEQ(v int) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldBillingSequence, v))
+}
+
+// BillingSequenceNEQ applies the NEQ predicate on the "billing_sequence" field.
+func BillingSequenceNEQ(v int) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNEQ(FieldBillingSequence, v))
+}
+
+// BillingSequenceIn applies the In predicate on the "billing_sequence" field.
+func BillingSequenceIn(vs ...int) predicate.Invoice {
+	return predicate.Invoice(sql.FieldIn(FieldBillingSequence, vs...))
+}
+
+// BillingSequenceNotIn applies the NotIn predicate on the "billing_sequence" field.
+func BillingSequenceNotIn(vs ...int) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotIn(FieldBillingSequence, vs...))
+}
+
+// BillingSequenceGT applies the GT predicate on the "billing_sequence" field.
+func BillingSequenceGT(v int) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGT(FieldBillingSequence, v))
+}
+
+// BillingSequenceGTE applies the GTE predicate on the "billing_sequence" field.
+func BillingSequenceGTE(v int) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGTE(FieldBillingSequence, v))
+}
+
+// BillingSequenceLT applies the LT predicate on the "billing_sequence" field.
+func BillingSequenceLT(v int) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLT(FieldBillingSequence, v))
+}
+
+// BillingSequenceLTE applies the LTE predicate on the "billing_sequence" field.
+func BillingSequenceLTE(v int) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLTE(FieldBillingSequence, v))
+}
+
+// BillingSequenceIsNil applies the IsNil predicate on the "billing_sequence" field.
+func BillingSequenceIsNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldIsNull(FieldBillingSequence))
+}
+
+// BillingSequenceNotNil applies the NotNil predicate on the "billing_sequence" field.
+func BillingSequenceNotNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotNull(FieldBillingSequence))
+}
+
+// IdempotencyKeyEQ applies the EQ predicate on the "idempotency_key" field.
+func IdempotencyKeyEQ(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyNEQ applies the NEQ predicate on the "idempotency_key" field.
+func IdempotencyKeyNEQ(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNEQ(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyIn applies the In predicate on the "idempotency_key" field.
+func IdempotencyKeyIn(vs ...string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldIn(FieldIdempotencyKey, vs...))
+}
+
+// IdempotencyKeyNotIn applies the NotIn predicate on the "idempotency_key" field.
+func IdempotencyKeyNotIn(vs ...string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotIn(FieldIdempotencyKey, vs...))
+}
+
+// IdempotencyKeyGT applies the GT predicate on the "idempotency_key" field.
+func IdempotencyKeyGT(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGT(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyGTE applies the GTE predicate on the "idempotency_key" field.
+func IdempotencyKeyGTE(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGTE(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyLT applies the LT predicate on the "idempotency_key" field.
+func IdempotencyKeyLT(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLT(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyLTE applies the LTE predicate on the "idempotency_key" field.
+func IdempotencyKeyLTE(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLTE(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyContains applies the Contains predicate on the "idempotency_key" field.
+func IdempotencyKeyContains(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldContains(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyHasPrefix applies the HasPrefix predicate on the "idempotency_key" field.
+func IdempotencyKeyHasPrefix(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldHasPrefix(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyHasSuffix applies the HasSuffix predicate on the "idempotency_key" field.
+func IdempotencyKeyHasSuffix(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldHasSuffix(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyIsNil applies the IsNil predicate on the "idempotency_key" field.
+func IdempotencyKeyIsNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldIsNull(FieldIdempotencyKey))
+}
+
+// IdempotencyKeyNotNil applies the NotNil predicate on the "idempotency_key" field.
+func IdempotencyKeyNotNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotNull(FieldIdempotencyKey))
+}
+
+// IdempotencyKeyEqualFold applies the EqualFold predicate on the "idempotency_key" field.
+func IdempotencyKeyEqualFold(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEqualFold(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyContainsFold applies the ContainsFold predicate on the "idempotency_key" field.
+func IdempotencyKeyContainsFold(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldContainsFold(FieldIdempotencyKey, v))
 }
 
 // HasLineItems applies the HasEdge predicate on the "line_items" edge.

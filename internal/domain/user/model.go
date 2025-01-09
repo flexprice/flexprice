@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/google/uuid"
 )
 
 type User struct {
@@ -15,7 +14,7 @@ type User struct {
 
 func NewUser(email, tenantID string) *User {
 	return &User{
-		ID:    uuid.New().String(),
+		ID:    types.GenerateUUIDWithPrefix(types.UUID_PREFIX_USER),
 		Email: email,
 		BaseModel: types.BaseModel{
 			TenantID:  tenantID,

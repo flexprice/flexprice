@@ -27,7 +27,7 @@ func NewSubscriptionHandler(
 
 func (h *SubscriptionHandler) UpdateBillingPeriods(c *gin.Context) {
 	ctx := c.Request.Context()
-	err := h.subscriptionService.UpdateBillingPeriods(ctx)
+	response, err := h.subscriptionService.UpdateBillingPeriods(ctx)
 	if err != nil {
 		h.logger.Errorw("failed to update billing periods",
 			"error", err)
@@ -36,7 +36,5 @@ func (h *SubscriptionHandler) UpdateBillingPeriods(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "billing periods updated",
-	})
+	c.JSON(http.StatusOK, response)
 }

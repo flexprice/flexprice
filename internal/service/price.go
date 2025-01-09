@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
@@ -15,19 +16,21 @@ import (
 type PriceService interface {
 	CreatePrice(ctx context.Context, req dto.CreatePriceRequest) (*dto.PriceResponse, error)
 	GetPrice(ctx context.Context, id string) (*dto.PriceResponse, error)
-	GetPrices(ctx context.Context, filter types.Filter) (*dto.ListPricesResponse, error)
+	GetPricesByPlanID(ctx context.Context, planID string) (*dto.ListPricesResponse, error)
+	GetPrices(ctx context.Context, filter types.PriceFilter) (*dto.ListPricesResponse, error)
 	UpdatePrice(ctx context.Context, id string, req dto.UpdatePriceRequest) (*dto.PriceResponse, error)
 	DeletePrice(ctx context.Context, id string) error
 	CalculateCost(ctx context.Context, price *price.Price, quantity decimal.Decimal) decimal.Decimal
 }
 
 type priceService struct {
-	repo   price.Repository
-	logger *logger.Logger
+	repo      price.Repository
+	meterRepo meter.Repository
+	logger    *logger.Logger
 }
 
-func NewPriceService(repo price.Repository, logger *logger.Logger) PriceService {
-	return &priceService{repo: repo, logger: logger}
+func NewPriceService(repo price.Repository, meterRepo meter.Repository, logger *logger.Logger) PriceService {
+	return &priceService{repo: repo, logger: logger, meterRepo: meterRepo}
 }
 
 func (s *priceService) CreatePrice(ctx context.Context, req dto.CreatePriceRequest) (*dto.PriceResponse, error) {
@@ -61,7 +64,23 @@ func (s *priceService) GetPrice(ctx context.Context, id string) (*dto.PriceRespo
 	return &dto.PriceResponse{Price: price}, nil
 }
 
-func (s *priceService) GetPrices(ctx context.Context, filter types.Filter) (*dto.ListPricesResponse, error) {
+func (s *priceService) GetPricesByPlanID(ctx context.Context, planID string) (*dto.ListPricesResponse, error) {
+	// Use unlimited filter to fetch all prices
+	priceFilter := types.NewUnlimitedPriceFilter().
+		WithPlanIDs([]string{planID}).
+		WithStatus(types.StatusPublished).
+		WithExpand(string(types.ExpandMeters))
+
+	return s.GetPrices(ctx, priceFilter)
+}
+
+func (s *priceService) GetPrices(ctx context.Context, filter types.PriceFilter) (*dto.ListPricesResponse, error) {
+	// Validate expand fields
+	if err := filter.GetExpand().Validate(types.PriceExpandConfig); err != nil {
+		return nil, fmt.Errorf("invalid expand fields: %w", err)
+	}
+
+	// Fetch prices
 	prices, err := s.repo.List(ctx, filter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list prices: %w", err)
@@ -71,13 +90,39 @@ func (s *priceService) GetPrices(ctx context.Context, filter types.Filter) (*dto
 		Prices: make([]dto.PriceResponse, len(prices)),
 	}
 
+	// If meters are requested to be expanded, fetch all meters in one query
+	var metersByID map[string]*meter.Meter
+	if filter.GetExpand().Has(types.ExpandMeters) && len(prices) > 0 {
+		// Fetch all meters in one query
+		meters, err := s.meterRepo.GetAllMeters(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch meters: %w", err)
+		}
+
+		// Create a map for quick meter lookup
+		metersByID = make(map[string]*meter.Meter, len(meters))
+		for _, m := range meters {
+			metersByID[m.ID] = m
+		}
+
+		s.logger.Debugw("fetched meters for prices", "count", len(meters))
+	}
+
+	// Build response with expanded fields
 	for i, p := range prices {
 		response.Prices[i] = dto.PriceResponse{Price: p}
+
+		// Add meter if requested and available
+		if filter.GetExpand().Has(types.ExpandMeters) && p.MeterID != "" {
+			if m, ok := metersByID[p.MeterID]; ok {
+				response.Prices[i].Meter = dto.ToMeterResponse(m)
+			}
+		}
 	}
 
 	response.Total = len(prices)
-	response.Offset = filter.Offset
-	response.Limit = filter.Limit
+	response.Offset = filter.GetOffset()
+	response.Limit = filter.GetLimit()
 
 	return response, nil
 }

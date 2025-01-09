@@ -80,6 +80,8 @@ Whether you're a newbie coder or a wizard 🧙‍♀️, your perspective is gol
 
 📜 [Contribution Guidelines](CONTRIBUTING.md)
 
+🏗️ [Local Development Setup](SETUP.md)
+
 ❤️ [Code of Conduct](CODE_OF_CONDUCT.md)
 
 

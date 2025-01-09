@@ -27,7 +27,7 @@ type SubscriptionService interface {
 	CancelSubscription(ctx context.Context, id string, cancelAtPeriodEnd bool) error
 	ListSubscriptions(ctx context.Context, filter *types.SubscriptionFilter) (*dto.ListSubscriptionsResponse, error)
 	GetUsageBySubscription(ctx context.Context, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error)
-	UpdateBillingPeriods(ctx context.Context) error
+	UpdateBillingPeriods(ctx context.Context) (*dto.SubscriptionUpdatePeriodResponse, error)
 }
 
 type subscriptionService struct {
@@ -93,13 +93,19 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		return nil, fmt.Errorf("plan is not active")
 	}
 
-	prices, err := s.priceRepo.GetByPlanID(ctx, req.PlanID)
+	priceService := NewPriceService(s.priceRepo, s.meterRepo, s.logger)
+	pricesResponse, err := priceService.GetPricesByPlanID(ctx, plan.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get prices: %w", err)
 	}
 
-	if len(prices) == 0 {
+	if len(pricesResponse.Prices) == 0 {
 		return nil, fmt.Errorf("no prices found for plan")
+	}
+
+	prices := make([]price.Price, len(pricesResponse.Prices))
+	for i, p := range pricesResponse.Prices {
+		prices[i] = *p.Price
 	}
 
 	subscription := req.ToSubscription(ctx)
@@ -158,7 +164,7 @@ func (s *subscriptionService) GetSubscription(ctx context.Context, id string) (*
 		return nil, fmt.Errorf("failed to get subscription: %w", err)
 	}
 
-	planService := NewPlanService(s.planRepo, s.priceRepo, s.logger)
+	planService := NewPlanService(s.planRepo, s.priceRepo, s.meterRepo, s.logger)
 	plan, err := planService.GetPlan(ctx, subscription.PlanID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get plan: %w", err)
@@ -227,7 +233,7 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 	response := &dto.GetUsageBySubscriptionResponse{}
 
 	eventService := NewEventService(s.eventRepo, s.meterRepo, s.publisher, s.logger)
-	priceService := NewPriceService(s.priceRepo, s.logger)
+	priceService := NewPriceService(s.priceRepo, s.meterRepo, s.logger)
 
 	subscriptionResponse, err := s.GetSubscription(ctx, req.SubscriptionID)
 	if err != nil {
@@ -402,12 +408,19 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 
 // UpdateBillingPeriods updates the current billing periods for all active subscriptions
 // This should be run every 15 minutes to ensure billing periods are up to date
-func (s *subscriptionService) UpdateBillingPeriods(ctx context.Context) error {
+func (s *subscriptionService) UpdateBillingPeriods(ctx context.Context) (*dto.SubscriptionUpdatePeriodResponse, error) {
 	const batchSize = 100
 	now := time.Now().UTC()
 
 	s.logger.Infow("starting billing period updates",
 		"current_time", now)
+
+	response := &dto.SubscriptionUpdatePeriodResponse{
+		Items:        make([]*dto.SubscriptionUpdatePeriodResponseItem, 0),
+		TotalFailed:  0,
+		TotalSuccess: 0,
+		StartAt:      now,
+	}
 
 	offset := 0
 	for {
@@ -421,9 +434,9 @@ func (s *subscriptionService) UpdateBillingPeriods(ctx context.Context) error {
 			CurrentPeriodEndBefore: &now,
 		}
 
-		subs, err := s.subscriptionRepo.List(ctx, filter)
+		subs, err := s.subscriptionRepo.ListAll(ctx, filter)
 		if err != nil {
-			return fmt.Errorf("failed to list subscriptions: %w", err)
+			return response, fmt.Errorf("failed to list subscriptions: %w", err)
 		}
 
 		s.logger.Infow("processing subscription batch",
@@ -436,13 +449,25 @@ func (s *subscriptionService) UpdateBillingPeriods(ctx context.Context) error {
 
 		// Process each subscription in the batch
 		for _, sub := range subs {
-			if err := s.processSubscriptionPeriod(ctx, sub, now); err != nil {
+			item := &dto.SubscriptionUpdatePeriodResponseItem{
+				SubscriptionID: sub.ID,
+				PeriodStart:    sub.CurrentPeriodStart,
+				PeriodEnd:      sub.CurrentPeriodEnd,
+			}
+			err = s.processSubscriptionPeriod(ctx, sub, now)
+			if err != nil {
 				s.logger.Errorw("failed to process subscription period",
 					"subscription_id", sub.ID,
 					"error", err)
-				// Continue processing other subscriptions
-				continue
+
+				response.TotalFailed++
+				item.Error = err.Error()
+			} else {
+				item.Success = true
+				response.TotalSuccess++
 			}
+
+			response.Items = append(response.Items, item)
 		}
 
 		offset += len(subs)
@@ -451,45 +476,51 @@ func (s *subscriptionService) UpdateBillingPeriods(ctx context.Context) error {
 		}
 	}
 
-	return nil
+	return response, nil
 }
 
 /// Helpers
 
-// processSubscriptionPeriod handles the period transitions for a single subscription
 func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub *subscription.Subscription, now time.Time) error {
+	// Initialize services
 	invoiceService := NewInvoiceService(
 		s.invoiceRepo,
+		s.priceRepo,
+		s.meterRepo,
+		s.planRepo,
 		s.logger,
 		s.db,
 	)
 
-	originalStart := sub.CurrentPeriodStart
-	originalEnd := sub.CurrentPeriodEnd
-
 	currentStart := sub.CurrentPeriodStart
 	currentEnd := sub.CurrentPeriodEnd
-	var transitions []struct {
+
+	// Start with current period
+	var periods []struct {
 		start time.Time
 		end   time.Time
 	}
+	periods = append(periods, struct {
+		start time.Time
+		end   time.Time
+	}{
+		start: currentStart,
+		end:   currentEnd,
+	})
 
-	// Calculate all transitions up to the next hour boundary
-	// This ensures we have a stable window for processing regardless of when the cron runs
 	for currentEnd.Before(now) {
 		nextStart := currentEnd
 		nextEnd, err := types.NextBillingDate(nextStart, sub.BillingAnchor, sub.BillingPeriodCount, sub.BillingPeriod)
 		if err != nil {
 			s.logger.Errorw("failed to calculate next billing date",
 				"subscription_id", sub.ID,
-				"current_start", currentStart,
 				"current_end", currentEnd,
 				"process_up_to", now,
 				"error", err)
 			return err
 		}
 
-		transitions = append(transitions, struct {
+		periods = append(periods, struct {
 			start time.Time
 			end   time.Time
 		}{
@@ -497,11 +528,10 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 			end:   nextEnd,
 		})
 
-		currentStart = nextStart
 		currentEnd = nextEnd
 	}
 
-	if len(transitions) == 0 {
+	if len(periods) == 1 {
 		s.logger.Debugw("no transitions needed for subscription",
 			"subscription_id", sub.ID,
 			"current_period_start", sub.CurrentPeriodStart,
@@ -512,56 +542,68 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 
 	// Use db's WithTx for atomic operations
 	err := s.db.WithTx(ctx, func(ctx context.Context) error {
-		// Get usage for current period
-		usage, err := s.GetUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
-			SubscriptionID: sub.ID,
-			StartTime:      originalStart,
-			EndTime:        originalEnd,
-		})
-		if err != nil {
-			return fmt.Errorf("failed to get subscription usage: %w", err)
-		}
+		// Process all periods except the last one (which becomes the new current period)
+		for i := 0; i < len(periods)-1; i++ {
+			period := periods[i]
 
-		// Create invoice for current period
-		inv, err := invoiceService.CreateSubscriptionInvoice(ctx, sub, originalStart, originalEnd, usage)
-		if err != nil {
-			return fmt.Errorf("failed to create subscription invoice: %w", err)
-		}
-
-		// Finalize the invoice
-		if err := invoiceService.FinalizeInvoice(ctx, inv.ID); err != nil {
-			return fmt.Errorf("failed to finalize subscription invoice: %w", err)
-		}
-
-		// Update to the latest period
-		lastTransition := transitions[len(transitions)-1]
-		sub.CurrentPeriodStart = lastTransition.start
-		sub.CurrentPeriodEnd = lastTransition.end
-
-		// Handle subscription cancellation at period end
-		if sub.CancelAtPeriodEnd && sub.CancelAt != nil {
-			for _, t := range transitions {
-				if !sub.CancelAt.After(t.end) {
-					sub.SubscriptionStatus = types.SubscriptionStatusCancelled
-					sub.CancelledAt = sub.CancelAt
-					break
-				}
+			// Get usage for this period
+			usage, err := s.GetUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
+				SubscriptionID: sub.ID,
+				StartTime:      period.start,
+				EndTime:        period.end,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to get subscription usage for period: %w", err)
 			}
+
+			// Create and finalize invoice for this period
+			inv, err := invoiceService.CreateSubscriptionInvoice(ctx, sub, period.start, period.end, usage)
+			if err != nil {
+				return fmt.Errorf("failed to create subscription invoice for period: %w", err)
+			}
+
+			if err := invoiceService.FinalizeInvoice(ctx, inv.ID); err != nil {
+				return fmt.Errorf("failed to finalize subscription invoice for period: %w", err)
+			}
+
+			s.logger.Infow("created invoice for period",
+				"subscription_id", sub.ID,
+				"invoice_id", inv.ID,
+				"period_start", period.start,
+				"period_end", period.end,
+				"period_index", i)
+
+			// Check for cancellation at this period end
+			if sub.CancelAtPeriodEnd && sub.CancelAt != nil && !sub.CancelAt.After(period.end) {
+				sub.SubscriptionStatus = types.SubscriptionStatusCancelled
+				sub.CancelledAt = sub.CancelAt
+				break
+			}
+		}
+
+		// Update to the new current period (last period)
+		newPeriod := periods[len(periods)-1]
+		sub.CurrentPeriodStart = newPeriod.start
+		sub.CurrentPeriodEnd = newPeriod.end
+
+		// Final cancellation check
+		if sub.CancelAtPeriodEnd && sub.CancelAt != nil && !sub.CancelAt.After(newPeriod.end) {
+			sub.SubscriptionStatus = types.SubscriptionStatusCancelled
+			sub.CancelledAt = sub.CancelAt
 		}
 
 		if err := s.subscriptionRepo.Update(ctx, sub); err != nil {
 			return fmt.Errorf("failed to update subscription: %w", err)
 		}
 
-		s.logger.Infow("updated subscription billing period",
+		s.logger.Infow("completed subscription period processing",
 			"subscription_id", sub.ID,
-			"previous_period_start", originalStart,
-			"previous_period_end", originalEnd,
+			"original_period_start", periods[0].start,
+			"original_period_end", periods[0].end,
 			"new_period_start", sub.CurrentPeriodStart,
 			"new_period_end", sub.CurrentPeriodEnd,
 			"process_up_to", now,
-			"transitions_count", len(transitions),
-			"invoice_id", inv.ID)
+			"periods_processed", len(periods)-1)
 
 		return nil
 	})

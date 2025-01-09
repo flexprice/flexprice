@@ -55,6 +55,9 @@ func (s *InvoiceServiceSuite) TearDownTest() {
 func (s *InvoiceServiceSuite) setupService() {
 	s.service = NewInvoiceService(
 		s.GetStores().InvoiceRepo,
+		s.GetStores().PriceRepo,
+		s.GetStores().MeterRepo,
+		s.GetStores().PlanRepo,
 		s.GetLogger(),
 		s.GetDB(),
 	)

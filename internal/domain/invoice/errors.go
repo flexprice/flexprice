@@ -29,6 +29,9 @@ var (
 
 	// ErrInvoiceNotFinalized indicates that the invoice is not in finalized status
 	ErrInvoiceNotFinalized = errors.New("invoice not finalized")
+
+	// ErrInvoiceAlreadyExists indicates that the invoice already exists
+	ErrInvoiceAlreadyExists = errors.New("invoice already exists")
 )
 
 // ValidationError represents an error that occurs during invoice validation
@@ -67,8 +70,8 @@ func IsInvoiceLineItemNotFoundError(err error) bool {
 
 // VersionConflictError represents an error that occurs during optimistic locking
 type VersionConflictError struct {
-	ID            string
-	CurrentVersion int
+	ID              string
+	CurrentVersion  int
 	ExpectedVersion int
 }
 
@@ -79,8 +82,8 @@ func (e *VersionConflictError) Error() string {
 // NewVersionConflictError creates a new version conflict error
 func NewVersionConflictError(id string, currentVersion, expectedVersion int) error {
 	return &VersionConflictError{
-		ID:            id,
-		CurrentVersion: currentVersion,
+		ID:              id,
+		CurrentVersion:  currentVersion,
 		ExpectedVersion: expectedVersion,
 	}
 }
@@ -89,4 +92,32 @@ func NewVersionConflictError(id string, currentVersion, expectedVersion int) err
 func IsVersionConflictError(err error) bool {
 	_, ok := err.(*VersionConflictError)
 	return ok
+}
+
+func IsInvalidInvoiceAmountError(err error) bool {
+	return errors.Is(err, ErrInvalidInvoiceAmount)
+}
+
+func IsInvalidInvoiceStatusError(err error) bool {
+	return errors.Is(err, ErrInvalidInvoiceStatus)
+}
+
+func IsInvalidPaymentStatusError(err error) bool {
+	return errors.Is(err, ErrInvalidPaymentStatus)
+}
+
+func IsInvoiceAlreadyPaidError(err error) bool {
+	return errors.Is(err, ErrInvoiceAlreadyPaid)
+}
+
+func IsInvoiceAlreadyVoidedError(err error) bool {
+	return errors.Is(err, ErrInvoiceAlreadyVoided)
+}
+
+func IsInvoiceNotFinalizedError(err error) bool {
+	return errors.Is(err, ErrInvoiceNotFinalized)
+}
+
+func IsInvoiceAlreadyExistsError(err error) bool {
+	return errors.Is(err, ErrInvoiceAlreadyExists)
 }

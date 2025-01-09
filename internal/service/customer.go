@@ -80,9 +80,15 @@ func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto
 		return nil, fmt.Errorf("failed to get customer: %w", err)
 	}
 
-	customer.Name = req.Name
-	customer.ExternalID = req.ExternalID
-	customer.Email = req.Email
+	if req.Name != nil {
+		customer.Name = *req.Name
+	}
+	if req.ExternalID != nil {
+		customer.ExternalID = *req.ExternalID
+	}
+	if req.Email != nil {
+		customer.Email = *req.Email
+	}
 	customer.UpdatedAt = time.Now().UTC()
 	customer.UpdatedBy = types.GetUserID(ctx)
 

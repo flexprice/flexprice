@@ -13,7 +13,6 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/ent/predicate"
-	"github.com/shopspring/decimal"
 )
 
 // InvoiceLineItemUpdate is the builder for updating InvoiceLineItem entities.
@@ -66,74 +65,6 @@ func (iliu *InvoiceLineItemUpdate) SetNillableUpdatedBy(s *string) *InvoiceLineI
 // ClearUpdatedBy clears the value of the "updated_by" field.
 func (iliu *InvoiceLineItemUpdate) ClearUpdatedBy() *InvoiceLineItemUpdate {
 	iliu.mutation.ClearUpdatedBy()
-	return iliu
-}
-
-// SetSubscriptionID sets the "subscription_id" field.
-func (iliu *InvoiceLineItemUpdate) SetSubscriptionID(s string) *InvoiceLineItemUpdate {
-	iliu.mutation.SetSubscriptionID(s)
-	return iliu
-}
-
-// SetNillableSubscriptionID sets the "subscription_id" field if the given value is not nil.
-func (iliu *InvoiceLineItemUpdate) SetNillableSubscriptionID(s *string) *InvoiceLineItemUpdate {
-	if s != nil {
-		iliu.SetSubscriptionID(*s)
-	}
-	return iliu
-}
-
-// ClearSubscriptionID clears the value of the "subscription_id" field.
-func (iliu *InvoiceLineItemUpdate) ClearSubscriptionID() *InvoiceLineItemUpdate {
-	iliu.mutation.ClearSubscriptionID()
-	return iliu
-}
-
-// SetMeterID sets the "meter_id" field.
-func (iliu *InvoiceLineItemUpdate) SetMeterID(s string) *InvoiceLineItemUpdate {
-	iliu.mutation.SetMeterID(s)
-	return iliu
-}
-
-// SetNillableMeterID sets the "meter_id" field if the given value is not nil.
-func (iliu *InvoiceLineItemUpdate) SetNillableMeterID(s *string) *InvoiceLineItemUpdate {
-	if s != nil {
-		iliu.SetMeterID(*s)
-	}
-	return iliu
-}
-
-// ClearMeterID clears the value of the "meter_id" field.
-func (iliu *InvoiceLineItemUpdate) ClearMeterID() *InvoiceLineItemUpdate {
-	iliu.mutation.ClearMeterID()
-	return iliu
-}
-
-// SetAmount sets the "amount" field.
-func (iliu *InvoiceLineItemUpdate) SetAmount(d decimal.Decimal) *InvoiceLineItemUpdate {
-	iliu.mutation.SetAmount(d)
-	return iliu
-}
-
-// SetNillableAmount sets the "amount" field if the given value is not nil.
-func (iliu *InvoiceLineItemUpdate) SetNillableAmount(d *decimal.Decimal) *InvoiceLineItemUpdate {
-	if d != nil {
-		iliu.SetAmount(*d)
-	}
-	return iliu
-}
-
-// SetQuantity sets the "quantity" field.
-func (iliu *InvoiceLineItemUpdate) SetQuantity(d decimal.Decimal) *InvoiceLineItemUpdate {
-	iliu.mutation.SetQuantity(d)
-	return iliu
-}
-
-// SetNillableQuantity sets the "quantity" field if the given value is not nil.
-func (iliu *InvoiceLineItemUpdate) SetNillableQuantity(d *decimal.Decimal) *InvoiceLineItemUpdate {
-	if d != nil {
-		iliu.SetQuantity(*d)
-	}
 	return iliu
 }
 
@@ -265,23 +196,23 @@ func (iliu *InvoiceLineItemUpdate) sqlSave(ctx context.Context) (n int, err erro
 	if iliu.mutation.UpdatedByCleared() {
 		_spec.ClearField(invoicelineitem.FieldUpdatedBy, field.TypeString)
 	}
-	if value, ok := iliu.mutation.SubscriptionID(); ok {
-		_spec.SetField(invoicelineitem.FieldSubscriptionID, field.TypeString, value)
-	}
 	if iliu.mutation.SubscriptionIDCleared() {
 		_spec.ClearField(invoicelineitem.FieldSubscriptionID, field.TypeString)
 	}
-	if value, ok := iliu.mutation.MeterID(); ok {
-		_spec.SetField(invoicelineitem.FieldMeterID, field.TypeString, value)
+	if iliu.mutation.PlanIDCleared() {
+		_spec.ClearField(invoicelineitem.FieldPlanID, field.TypeString)
+	}
+	if iliu.mutation.PlanDisplayNameCleared() {
+		_spec.ClearField(invoicelineitem.FieldPlanDisplayName, field.TypeString)
+	}
+	if iliu.mutation.PriceTypeCleared() {
+		_spec.ClearField(invoicelineitem.FieldPriceType, field.TypeString)
 	}
 	if iliu.mutation.MeterIDCleared() {
 		_spec.ClearField(invoicelineitem.FieldMeterID, field.TypeString)
 	}
-	if value, ok := iliu.mutation.Amount(); ok {
-		_spec.SetField(invoicelineitem.FieldAmount, field.TypeOther, value)
-	}
-	if value, ok := iliu.mutation.Quantity(); ok {
-		_spec.SetField(invoicelineitem.FieldQuantity, field.TypeOther, value)
+	if iliu.mutation.MeterDisplayNameCleared() {
+		_spec.ClearField(invoicelineitem.FieldMeterDisplayName, field.TypeString)
 	}
 	if value, ok := iliu.mutation.PeriodStart(); ok {
 		_spec.SetField(invoicelineitem.FieldPeriodStart, field.TypeTime, value)
@@ -358,74 +289,6 @@ func (iliuo *InvoiceLineItemUpdateOne) SetNillableUpdatedBy(s *string) *InvoiceL
 // ClearUpdatedBy clears the value of the "updated_by" field.
 func (iliuo *InvoiceLineItemUpdateOne) ClearUpdatedBy() *InvoiceLineItemUpdateOne {
 	iliuo.mutation.ClearUpdatedBy()
-	return iliuo
-}
-
-// SetSubscriptionID sets the "subscription_id" field.
-func (iliuo *InvoiceLineItemUpdateOne) SetSubscriptionID(s string) *InvoiceLineItemUpdateOne {
-	iliuo.mutation.SetSubscriptionID(s)
-	return iliuo
-}
-
-// SetNillableSubscriptionID sets the "subscription_id" field if the given value is not nil.
-func (iliuo *InvoiceLineItemUpdateOne) SetNillableSubscriptionID(s *string) *InvoiceLineItemUpdateOne {
-	if s != nil {
-		iliuo.SetSubscriptionID(*s)
-	}
-	return iliuo
-}
-
-// ClearSubscriptionID clears the value of the "subscription_id" field.
-func (iliuo *InvoiceLineItemUpdateOne) ClearSubscriptionID() *InvoiceLineItemUpdateOne {
-	iliuo.mutation.ClearSubscriptionID()
-	return iliuo
-}
-
-// SetMeterID sets the "meter_id" field.
-func (iliuo *InvoiceLineItemUpdateOne) SetMeterID(s string) *InvoiceLineItemUpdateOne {
-	iliuo.mutation.SetMeterID(s)
-	return iliuo
-}
-
-// SetNillableMeterID sets the "meter_id" field if the given value is not nil.
-func (iliuo *InvoiceLineItemUpdateOne) SetNillableMeterID(s *string) *InvoiceLineItemUpdateOne {
-	if s != nil {
-		iliuo.SetMeterID(*s)
-	}
-	return iliuo
-}
-
-// ClearMeterID clears the value of the "meter_id" field.
-func (iliuo *InvoiceLineItemUpdateOne) ClearMeterID() *InvoiceLineItemUpdateOne {
-	iliuo.mutation.ClearMeterID()
-	return iliuo
-}
-
-// SetAmount sets the "amount" field.
-func (iliuo *InvoiceLineItemUpdateOne) SetAmount(d decimal.Decimal) *InvoiceLineItemUpdateOne {
-	iliuo.mutation.SetAmount(d)
-	return iliuo
-}
-
-// SetNillableAmount sets the "amount" field if the given value is not nil.
-func (iliuo *InvoiceLineItemUpdateOne) SetNillableAmount(d *decimal.Decimal) *InvoiceLineItemUpdateOne {
-	if d != nil {
-		iliuo.SetAmount(*d)
-	}
-	return iliuo
-}
-
-// SetQuantity sets the "quantity" field.
-func (iliuo *InvoiceLineItemUpdateOne) SetQuantity(d decimal.Decimal) *InvoiceLineItemUpdateOne {
-	iliuo.mutation.SetQuantity(d)
-	return iliuo
-}
-
-// SetNillableQuantity sets the "quantity" field if the given value is not nil.
-func (iliuo *InvoiceLineItemUpdateOne) SetNillableQuantity(d *decimal.Decimal) *InvoiceLineItemUpdateOne {
-	if d != nil {
-		iliuo.SetQuantity(*d)
-	}
 	return iliuo
 }
 
@@ -587,23 +450,23 @@ func (iliuo *InvoiceLineItemUpdateOne) sqlSave(ctx context.Context) (_node *Invo
 	if iliuo.mutation.UpdatedByCleared() {
 		_spec.ClearField(invoicelineitem.FieldUpdatedBy, field.TypeString)
 	}
-	if value, ok := iliuo.mutation.SubscriptionID(); ok {
-		_spec.SetField(invoicelineitem.FieldSubscriptionID, field.TypeString, value)
-	}
 	if iliuo.mutation.SubscriptionIDCleared() {
 		_spec.ClearField(invoicelineitem.FieldSubscriptionID, field.TypeString)
 	}
-	if value, ok := iliuo.mutation.MeterID(); ok {
-		_spec.SetField(invoicelineitem.FieldMeterID, field.TypeString, value)
+	if iliuo.mutation.PlanIDCleared() {
+		_spec.ClearField(invoicelineitem.FieldPlanID, field.TypeString)
+	}
+	if iliuo.mutation.PlanDisplayNameCleared() {
+		_spec.ClearField(invoicelineitem.FieldPlanDisplayName, field.TypeString)
+	}
+	if iliuo.mutation.PriceTypeCleared() {
+		_spec.ClearField(invoicelineitem.FieldPriceType, field.TypeString)
 	}
 	if iliuo.mutation.MeterIDCleared() {
 		_spec.ClearField(invoicelineitem.FieldMeterID, field.TypeString)
 	}
-	if value, ok := iliuo.mutation.Amount(); ok {
-		_spec.SetField(invoicelineitem.FieldAmount, field.TypeOther, value)
-	}
-	if value, ok := iliuo.mutation.Quantity(); ok {
-		_spec.SetField(invoicelineitem.FieldQuantity, field.TypeOther, value)
+	if iliuo.mutation.MeterDisplayNameCleared() {
+		_spec.ClearField(invoicelineitem.FieldMeterDisplayName, field.TypeString)
 	}
 	if value, ok := iliuo.mutation.PeriodStart(); ok {
 		_spec.SetField(invoicelineitem.FieldPeriodStart, field.TypeTime, value)

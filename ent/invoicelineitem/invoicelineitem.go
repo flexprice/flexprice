@@ -33,10 +33,18 @@ const (
 	FieldCustomerID = "customer_id"
 	// FieldSubscriptionID holds the string denoting the subscription_id field in the database.
 	FieldSubscriptionID = "subscription_id"
+	// FieldPlanID holds the string denoting the plan_id field in the database.
+	FieldPlanID = "plan_id"
+	// FieldPlanDisplayName holds the string denoting the plan_display_name field in the database.
+	FieldPlanDisplayName = "plan_display_name"
 	// FieldPriceID holds the string denoting the price_id field in the database.
 	FieldPriceID = "price_id"
+	// FieldPriceType holds the string denoting the price_type field in the database.
+	FieldPriceType = "price_type"
 	// FieldMeterID holds the string denoting the meter_id field in the database.
 	FieldMeterID = "meter_id"
+	// FieldMeterDisplayName holds the string denoting the meter_display_name field in the database.
+	FieldMeterDisplayName = "meter_display_name"
 	// FieldAmount holds the string denoting the amount field in the database.
 	FieldAmount = "amount"
 	// FieldQuantity holds the string denoting the quantity field in the database.
@@ -74,8 +82,12 @@ var Columns = []string{
 	FieldInvoiceID,
 	FieldCustomerID,
 	FieldSubscriptionID,
+	FieldPlanID,
+	FieldPlanDisplayName,
 	FieldPriceID,
+	FieldPriceType,
 	FieldMeterID,
+	FieldMeterDisplayName,
 	FieldAmount,
 	FieldQuantity,
 	FieldCurrency,
@@ -172,14 +184,34 @@ func BySubscriptionID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSubscriptionID, opts...).ToFunc()
 }
 
+// ByPlanID orders the results by the plan_id field.
+func ByPlanID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPlanID, opts...).ToFunc()
+}
+
+// ByPlanDisplayName orders the results by the plan_display_name field.
+func ByPlanDisplayName(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPlanDisplayName, opts...).ToFunc()
+}
+
 // ByPriceID orders the results by the price_id field.
 func ByPriceID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPriceID, opts...).ToFunc()
 }
 
+// ByPriceType orders the results by the price_type field.
+func ByPriceType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPriceType, opts...).ToFunc()
+}
+
 // ByMeterID orders the results by the meter_id field.
 func ByMeterID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldMeterID, opts...).ToFunc()
+}
+
+// ByMeterDisplayName orders the results by the meter_display_name field.
+func ByMeterDisplayName(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldMeterDisplayName, opts...).ToFunc()
 }
 
 // ByAmount orders the results by the amount field.

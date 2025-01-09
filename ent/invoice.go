@@ -71,6 +71,12 @@ type Invoice struct {
 	Metadata map[string]string `json:"metadata,omitempty"`
 	// Version holds the value of the "version" field.
 	Version int `json:"version,omitempty"`
+	// Generated invoice number unique per tenant
+	InvoiceNumber *string `json:"invoice_number,omitempty"`
+	// Sequence number for subscription billing periods
+	BillingSequence *int `json:"billing_sequence,omitempty"`
+	// Key for ensuring idempotent invoice creation
+	IdempotencyKey *string `json:"idempotency_key,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the InvoiceQuery when eager-loading is set.
 	Edges        InvoiceEdges `json:"edges"`
@@ -104,9 +110,9 @@ func (*Invoice) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case invoice.FieldAmountDue, invoice.FieldAmountPaid, invoice.FieldAmountRemaining:
 			values[i] = new(decimal.Decimal)
-		case invoice.FieldVersion:
+		case invoice.FieldVersion, invoice.FieldBillingSequence:
 			values[i] = new(sql.NullInt64)
-		case invoice.FieldID, invoice.FieldTenantID, invoice.FieldStatus, invoice.FieldCreatedBy, invoice.FieldUpdatedBy, invoice.FieldCustomerID, invoice.FieldSubscriptionID, invoice.FieldInvoiceType, invoice.FieldInvoiceStatus, invoice.FieldPaymentStatus, invoice.FieldCurrency, invoice.FieldDescription, invoice.FieldInvoicePdfURL, invoice.FieldBillingReason:
+		case invoice.FieldID, invoice.FieldTenantID, invoice.FieldStatus, invoice.FieldCreatedBy, invoice.FieldUpdatedBy, invoice.FieldCustomerID, invoice.FieldSubscriptionID, invoice.FieldInvoiceType, invoice.FieldInvoiceStatus, invoice.FieldPaymentStatus, invoice.FieldCurrency, invoice.FieldDescription, invoice.FieldInvoicePdfURL, invoice.FieldBillingReason, invoice.FieldInvoiceNumber, invoice.FieldIdempotencyKey:
 			values[i] = new(sql.NullString)
 		case invoice.FieldCreatedAt, invoice.FieldUpdatedAt, invoice.FieldDueDate, invoice.FieldPaidAt, invoice.FieldVoidedAt, invoice.FieldFinalizedAt, invoice.FieldPeriodStart, invoice.FieldPeriodEnd:
 			values[i] = new(sql.NullTime)
@@ -297,6 +303,27 @@ func (i *Invoice) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				i.Version = int(value.Int64)
 			}
+		case invoice.FieldInvoiceNumber:
+			if value, ok := values[j].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field invoice_number", values[j])
+			} else if value.Valid {
+				i.InvoiceNumber = new(string)
+				*i.InvoiceNumber = value.String
+			}
+		case invoice.FieldBillingSequence:
+			if value, ok := values[j].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field billing_sequence", values[j])
+			} else if value.Valid {
+				i.BillingSequence = new(int)
+				*i.BillingSequence = int(value.Int64)
+			}
+		case invoice.FieldIdempotencyKey:
+			if value, ok := values[j].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field idempotency_key", values[j])
+			} else if value.Valid {
+				i.IdempotencyKey = new(string)
+				*i.IdempotencyKey = value.String
+			}
 		default:
 			i.selectValues.Set(columns[j], values[j])
 		}
@@ -431,6 +458,21 @@ func (i *Invoice) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("version=")
 	builder.WriteString(fmt.Sprintf("%v", i.Version))
+	builder.WriteString(", ")
+	if v := i.InvoiceNumber; v != nil {
+		builder.WriteString("invoice_number=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := i.BillingSequence; v != nil {
+		builder.WriteString("billing_sequence=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := i.IdempotencyKey; v != nil {
+		builder.WriteString("idempotency_key=")
+		builder.WriteString(*v)
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }

@@ -7,7 +7,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/go-playground/validator/v10"
-	"github.com/google/uuid"
 )
 
 type CreateEnvironmentRequest struct {
@@ -44,7 +43,7 @@ func (r *CreateEnvironmentRequest) Validate() error {
 
 func (r *CreateEnvironmentRequest) ToEnvironment(ctx context.Context) *environment.Environment {
 	return &environment.Environment{
-		ID:        uuid.New().String(),
+		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENVIRONMENT),
 		Name:      r.Name,
 		Type:      types.EnvironmentType(r.Type),
 		Slug:      r.Slug,

@@ -29,6 +29,46 @@ func (wtu *WalletTransactionUpdate) Where(ps ...predicate.WalletTransaction) *Wa
 	return wtu
 }
 
+// SetStatus sets the "status" field.
+func (wtu *WalletTransactionUpdate) SetStatus(s string) *WalletTransactionUpdate {
+	wtu.mutation.SetStatus(s)
+	return wtu
+}
+
+// SetNillableStatus sets the "status" field if the given value is not nil.
+func (wtu *WalletTransactionUpdate) SetNillableStatus(s *string) *WalletTransactionUpdate {
+	if s != nil {
+		wtu.SetStatus(*s)
+	}
+	return wtu
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (wtu *WalletTransactionUpdate) SetUpdatedAt(t time.Time) *WalletTransactionUpdate {
+	wtu.mutation.SetUpdatedAt(t)
+	return wtu
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (wtu *WalletTransactionUpdate) SetUpdatedBy(s string) *WalletTransactionUpdate {
+	wtu.mutation.SetUpdatedBy(s)
+	return wtu
+}
+
+// SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
+func (wtu *WalletTransactionUpdate) SetNillableUpdatedBy(s *string) *WalletTransactionUpdate {
+	if s != nil {
+		wtu.SetUpdatedBy(*s)
+	}
+	return wtu
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (wtu *WalletTransactionUpdate) ClearUpdatedBy() *WalletTransactionUpdate {
+	wtu.mutation.ClearUpdatedBy()
+	return wtu
+}
+
 // SetType sets the "type" field.
 func (wtu *WalletTransactionUpdate) SetType(s string) *WalletTransactionUpdate {
 	wtu.mutation.SetType(s)
@@ -171,46 +211,6 @@ func (wtu *WalletTransactionUpdate) SetNillableTransactionStatus(s *string) *Wal
 	return wtu
 }
 
-// SetStatus sets the "status" field.
-func (wtu *WalletTransactionUpdate) SetStatus(s string) *WalletTransactionUpdate {
-	wtu.mutation.SetStatus(s)
-	return wtu
-}
-
-// SetNillableStatus sets the "status" field if the given value is not nil.
-func (wtu *WalletTransactionUpdate) SetNillableStatus(s *string) *WalletTransactionUpdate {
-	if s != nil {
-		wtu.SetStatus(*s)
-	}
-	return wtu
-}
-
-// SetUpdatedAt sets the "updated_at" field.
-func (wtu *WalletTransactionUpdate) SetUpdatedAt(t time.Time) *WalletTransactionUpdate {
-	wtu.mutation.SetUpdatedAt(t)
-	return wtu
-}
-
-// SetUpdatedBy sets the "updated_by" field.
-func (wtu *WalletTransactionUpdate) SetUpdatedBy(s string) *WalletTransactionUpdate {
-	wtu.mutation.SetUpdatedBy(s)
-	return wtu
-}
-
-// SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (wtu *WalletTransactionUpdate) SetNillableUpdatedBy(s *string) *WalletTransactionUpdate {
-	if s != nil {
-		wtu.SetUpdatedBy(*s)
-	}
-	return wtu
-}
-
-// ClearUpdatedBy clears the value of the "updated_by" field.
-func (wtu *WalletTransactionUpdate) ClearUpdatedBy() *WalletTransactionUpdate {
-	wtu.mutation.ClearUpdatedBy()
-	return wtu
-}
-
 // Mutation returns the WalletTransactionMutation object of the builder.
 func (wtu *WalletTransactionUpdate) Mutation() *WalletTransactionMutation {
 	return wtu.mutation
@@ -274,6 +274,21 @@ func (wtu *WalletTransactionUpdate) sqlSave(ctx context.Context) (n int, err err
 			}
 		}
 	}
+	if value, ok := wtu.mutation.Status(); ok {
+		_spec.SetField(wallettransaction.FieldStatus, field.TypeString, value)
+	}
+	if value, ok := wtu.mutation.UpdatedAt(); ok {
+		_spec.SetField(wallettransaction.FieldUpdatedAt, field.TypeTime, value)
+	}
+	if wtu.mutation.CreatedByCleared() {
+		_spec.ClearField(wallettransaction.FieldCreatedBy, field.TypeString)
+	}
+	if value, ok := wtu.mutation.UpdatedBy(); ok {
+		_spec.SetField(wallettransaction.FieldUpdatedBy, field.TypeString, value)
+	}
+	if wtu.mutation.UpdatedByCleared() {
+		_spec.ClearField(wallettransaction.FieldUpdatedBy, field.TypeString)
+	}
 	if value, ok := wtu.mutation.GetType(); ok {
 		_spec.SetField(wallettransaction.FieldType, field.TypeString, value)
 	}
@@ -313,21 +328,6 @@ func (wtu *WalletTransactionUpdate) sqlSave(ctx context.Context) (n int, err err
 	if value, ok := wtu.mutation.TransactionStatus(); ok {
 		_spec.SetField(wallettransaction.FieldTransactionStatus, field.TypeString, value)
 	}
-	if value, ok := wtu.mutation.Status(); ok {
-		_spec.SetField(wallettransaction.FieldStatus, field.TypeString, value)
-	}
-	if wtu.mutation.CreatedByCleared() {
-		_spec.ClearField(wallettransaction.FieldCreatedBy, field.TypeString)
-	}
-	if value, ok := wtu.mutation.UpdatedAt(); ok {
-		_spec.SetField(wallettransaction.FieldUpdatedAt, field.TypeTime, value)
-	}
-	if value, ok := wtu.mutation.UpdatedBy(); ok {
-		_spec.SetField(wallettransaction.FieldUpdatedBy, field.TypeString, value)
-	}
-	if wtu.mutation.UpdatedByCleared() {
-		_spec.ClearField(wallettransaction.FieldUpdatedBy, field.TypeString)
-	}
 	if n, err = sqlgraph.UpdateNodes(ctx, wtu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{wallettransaction.Label}
@@ -346,6 +346,46 @@ type WalletTransactionUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *WalletTransactionMutation
+}
+
+// SetStatus sets the "status" field.
+func (wtuo *WalletTransactionUpdateOne) SetStatus(s string) *WalletTransactionUpdateOne {
+	wtuo.mutation.SetStatus(s)
+	return wtuo
+}
+
+// SetNillableStatus sets the "status" field if the given value is not nil.
+func (wtuo *WalletTransactionUpdateOne) SetNillableStatus(s *string) *WalletTransactionUpdateOne {
+	if s != nil {
+		wtuo.SetStatus(*s)
+	}
+	return wtuo
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (wtuo *WalletTransactionUpdateOne) SetUpdatedAt(t time.Time) *WalletTransactionUpdateOne {
+	wtuo.mutation.SetUpdatedAt(t)
+	return wtuo
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (wtuo *WalletTransactionUpdateOne) SetUpdatedBy(s string) *WalletTransactionUpdateOne {
+	wtuo.mutation.SetUpdatedBy(s)
+	return wtuo
+}
+
+// SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
+func (wtuo *WalletTransactionUpdateOne) SetNillableUpdatedBy(s *string) *WalletTransactionUpdateOne {
+	if s != nil {
+		wtuo.SetUpdatedBy(*s)
+	}
+	return wtuo
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (wtuo *WalletTransactionUpdateOne) ClearUpdatedBy() *WalletTransactionUpdateOne {
+	wtuo.mutation.ClearUpdatedBy()
+	return wtuo
 }
 
 // SetType sets the "type" field.
@@ -490,46 +530,6 @@ func (wtuo *WalletTransactionUpdateOne) SetNillableTransactionStatus(s *string) 
 	return wtuo
 }
 
-// SetStatus sets the "status" field.
-func (wtuo *WalletTransactionUpdateOne) SetStatus(s string) *WalletTransactionUpdateOne {
-	wtuo.mutation.SetStatus(s)
-	return wtuo
-}
-
-// SetNillableStatus sets the "status" field if the given value is not nil.
-func (wtuo *WalletTransactionUpdateOne) SetNillableStatus(s *string) *WalletTransactionUpdateOne {
-	if s != nil {
-		wtuo.SetStatus(*s)
-	}
-	return wtuo
-}
-
-// SetUpdatedAt sets the "updated_at" field.
-func (wtuo *WalletTransactionUpdateOne) SetUpdatedAt(t time.Time) *WalletTransactionUpdateOne {
-	wtuo.mutation.SetUpdatedAt(t)
-	return wtuo
-}
-
-// SetUpdatedBy sets the "updated_by" field.
-func (wtuo *WalletTransactionUpdateOne) SetUpdatedBy(s string) *WalletTransactionUpdateOne {
-	wtuo.mutation.SetUpdatedBy(s)
-	return wtuo
-}
-
-// SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (wtuo *WalletTransactionUpdateOne) SetNillableUpdatedBy(s *string) *WalletTransactionUpdateOne {
-	if s != nil {
-		wtuo.SetUpdatedBy(*s)
-	}
-	return wtuo
-}
-
-// ClearUpdatedBy clears the value of the "updated_by" field.
-func (wtuo *WalletTransactionUpdateOne) ClearUpdatedBy() *WalletTransactionUpdateOne {
-	wtuo.mutation.ClearUpdatedBy()
-	return wtuo
-}
-
 // Mutation returns the WalletTransactionMutation object of the builder.
 func (wtuo *WalletTransactionUpdateOne) Mutation() *WalletTransactionMutation {
 	return wtuo.mutation
@@ -623,6 +623,21 @@ func (wtuo *WalletTransactionUpdateOne) sqlSave(ctx context.Context) (_node *Wal
 			}
 		}
 	}
+	if value, ok := wtuo.mutation.Status(); ok {
+		_spec.SetField(wallettransaction.FieldStatus, field.TypeString, value)
+	}
+	if value, ok := wtuo.mutation.UpdatedAt(); ok {
+		_spec.SetField(wallettransaction.FieldUpdatedAt, field.TypeTime, value)
+	}
+	if wtuo.mutation.CreatedByCleared() {
+		_spec.ClearField(wallettransaction.FieldCreatedBy, field.TypeString)
+	}
+	if value, ok := wtuo.mutation.UpdatedBy(); ok {
+		_spec.SetField(wallettransaction.FieldUpdatedBy, field.TypeString, value)
+	}
+	if wtuo.mutation.UpdatedByCleared() {
+		_spec.ClearField(wallettransaction.FieldUpdatedBy, field.TypeString)
+	}
 	if value, ok := wtuo.mutation.GetType(); ok {
 		_spec.SetField(wallettransaction.FieldType, field.TypeString, value)
 	}
@@ -661,21 +676,6 @@ func (wtuo *WalletTransactionUpdateOne) sqlSave(ctx context.Context) (_node *Wal
 	}
 	if value, ok := wtuo.mutation.TransactionStatus(); ok {
 		_spec.SetField(wallettransaction.FieldTransactionStatus, field.TypeString, value)
-	}
-	if value, ok := wtuo.mutation.Status(); ok {
-		_spec.SetField(wallettransaction.FieldStatus, field.TypeString, value)
-	}
-	if wtuo.mutation.CreatedByCleared() {
-		_spec.ClearField(wallettransaction.FieldCreatedBy, field.TypeString)
-	}
-	if value, ok := wtuo.mutation.UpdatedAt(); ok {
-		_spec.SetField(wallettransaction.FieldUpdatedAt, field.TypeTime, value)
-	}
-	if value, ok := wtuo.mutation.UpdatedBy(); ok {
-		_spec.SetField(wallettransaction.FieldUpdatedBy, field.TypeString, value)
-	}
-	if wtuo.mutation.UpdatedByCleared() {
-		_spec.ClearField(wallettransaction.FieldUpdatedBy, field.TypeString)
 	}
 	_node = &WalletTransaction{config: wtuo.config}
 	_spec.Assign = _node.assignValues

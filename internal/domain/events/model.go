@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/go-playground/validator/v10"
-	"github.com/google/uuid"
 )
 
 // Event represents the base event structure
@@ -48,7 +48,7 @@ func NewEvent(
 	eventID, customerID, source string,
 ) *Event {
 	if eventID == "" {
-		eventID = uuid.New().String()
+		eventID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_EVENT)
 	}
 
 	now := time.Now().UTC()

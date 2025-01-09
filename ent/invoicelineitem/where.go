@@ -111,14 +111,34 @@ func SubscriptionID(v string) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldEQ(FieldSubscriptionID, v))
 }
 
+// PlanID applies equality check predicate on the "plan_id" field. It's identical to PlanIDEQ.
+func PlanID(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEQ(FieldPlanID, v))
+}
+
+// PlanDisplayName applies equality check predicate on the "plan_display_name" field. It's identical to PlanDisplayNameEQ.
+func PlanDisplayName(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEQ(FieldPlanDisplayName, v))
+}
+
 // PriceID applies equality check predicate on the "price_id" field. It's identical to PriceIDEQ.
 func PriceID(v string) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldEQ(FieldPriceID, v))
 }
 
+// PriceType applies equality check predicate on the "price_type" field. It's identical to PriceTypeEQ.
+func PriceType(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEQ(FieldPriceType, v))
+}
+
 // MeterID applies equality check predicate on the "meter_id" field. It's identical to MeterIDEQ.
 func MeterID(v string) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldEQ(FieldMeterID, v))
+}
+
+// MeterDisplayName applies equality check predicate on the "meter_display_name" field. It's identical to MeterDisplayNameEQ.
+func MeterDisplayName(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEQ(FieldMeterDisplayName, v))
 }
 
 // Amount applies equality check predicate on the "amount" field. It's identical to AmountEQ.
@@ -711,6 +731,156 @@ func SubscriptionIDContainsFold(v string) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldContainsFold(FieldSubscriptionID, v))
 }
 
+// PlanIDEQ applies the EQ predicate on the "plan_id" field.
+func PlanIDEQ(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEQ(FieldPlanID, v))
+}
+
+// PlanIDNEQ applies the NEQ predicate on the "plan_id" field.
+func PlanIDNEQ(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNEQ(FieldPlanID, v))
+}
+
+// PlanIDIn applies the In predicate on the "plan_id" field.
+func PlanIDIn(vs ...string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldIn(FieldPlanID, vs...))
+}
+
+// PlanIDNotIn applies the NotIn predicate on the "plan_id" field.
+func PlanIDNotIn(vs ...string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNotIn(FieldPlanID, vs...))
+}
+
+// PlanIDGT applies the GT predicate on the "plan_id" field.
+func PlanIDGT(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldGT(FieldPlanID, v))
+}
+
+// PlanIDGTE applies the GTE predicate on the "plan_id" field.
+func PlanIDGTE(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldGTE(FieldPlanID, v))
+}
+
+// PlanIDLT applies the LT predicate on the "plan_id" field.
+func PlanIDLT(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldLT(FieldPlanID, v))
+}
+
+// PlanIDLTE applies the LTE predicate on the "plan_id" field.
+func PlanIDLTE(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldLTE(FieldPlanID, v))
+}
+
+// PlanIDContains applies the Contains predicate on the "plan_id" field.
+func PlanIDContains(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldContains(FieldPlanID, v))
+}
+
+// PlanIDHasPrefix applies the HasPrefix predicate on the "plan_id" field.
+func PlanIDHasPrefix(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldHasPrefix(FieldPlanID, v))
+}
+
+// PlanIDHasSuffix applies the HasSuffix predicate on the "plan_id" field.
+func PlanIDHasSuffix(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldHasSuffix(FieldPlanID, v))
+}
+
+// PlanIDIsNil applies the IsNil predicate on the "plan_id" field.
+func PlanIDIsNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldIsNull(FieldPlanID))
+}
+
+// PlanIDNotNil applies the NotNil predicate on the "plan_id" field.
+func PlanIDNotNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNotNull(FieldPlanID))
+}
+
+// PlanIDEqualFold applies the EqualFold predicate on the "plan_id" field.
+func PlanIDEqualFold(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEqualFold(FieldPlanID, v))
+}
+
+// PlanIDContainsFold applies the ContainsFold predicate on the "plan_id" field.
+func PlanIDContainsFold(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldContainsFold(FieldPlanID, v))
+}
+
+// PlanDisplayNameEQ applies the EQ predicate on the "plan_display_name" field.
+func PlanDisplayNameEQ(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEQ(FieldPlanDisplayName, v))
+}
+
+// PlanDisplayNameNEQ applies the NEQ predicate on the "plan_display_name" field.
+func PlanDisplayNameNEQ(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNEQ(FieldPlanDisplayName, v))
+}
+
+// PlanDisplayNameIn applies the In predicate on the "plan_display_name" field.
+func PlanDisplayNameIn(vs ...string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldIn(FieldPlanDisplayName, vs...))
+}
+
+// PlanDisplayNameNotIn applies the NotIn predicate on the "plan_display_name" field.
+func PlanDisplayNameNotIn(vs ...string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNotIn(FieldPlanDisplayName, vs...))
+}
+
+// PlanDisplayNameGT applies the GT predicate on the "plan_display_name" field.
+func PlanDisplayNameGT(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldGT(FieldPlanDisplayName, v))
+}
+
+// PlanDisplayNameGTE applies the GTE predicate on the "plan_display_name" field.
+func PlanDisplayNameGTE(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldGTE(FieldPlanDisplayName, v))
+}
+
+// PlanDisplayNameLT applies the LT predicate on the "plan_display_name" field.
+func PlanDisplayNameLT(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldLT(FieldPlanDisplayName, v))
+}
+
+// PlanDisplayNameLTE applies the LTE predicate on the "plan_display_name" field.
+func PlanDisplayNameLTE(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldLTE(FieldPlanDisplayName, v))
+}
+
+// PlanDisplayNameContains applies the Contains predicate on the "plan_display_name" field.
+func PlanDisplayNameContains(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldContains(FieldPlanDisplayName, v))
+}
+
+// PlanDisplayNameHasPrefix applies the HasPrefix predicate on the "plan_display_name" field.
+func PlanDisplayNameHasPrefix(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldHasPrefix(FieldPlanDisplayName, v))
+}
+
+// PlanDisplayNameHasSuffix applies the HasSuffix predicate on the "plan_display_name" field.
+func PlanDisplayNameHasSuffix(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldHasSuffix(FieldPlanDisplayName, v))
+}
+
+// PlanDisplayNameIsNil applies the IsNil predicate on the "plan_display_name" field.
+func PlanDisplayNameIsNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldIsNull(FieldPlanDisplayName))
+}
+
+// PlanDisplayNameNotNil applies the NotNil predicate on the "plan_display_name" field.
+func PlanDisplayNameNotNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNotNull(FieldPlanDisplayName))
+}
+
+// PlanDisplayNameEqualFold applies the EqualFold predicate on the "plan_display_name" field.
+func PlanDisplayNameEqualFold(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEqualFold(FieldPlanDisplayName, v))
+}
+
+// PlanDisplayNameContainsFold applies the ContainsFold predicate on the "plan_display_name" field.
+func PlanDisplayNameContainsFold(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldContainsFold(FieldPlanDisplayName, v))
+}
+
 // PriceIDEQ applies the EQ predicate on the "price_id" field.
 func PriceIDEQ(v string) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldEQ(FieldPriceID, v))
@@ -774,6 +944,81 @@ func PriceIDEqualFold(v string) predicate.InvoiceLineItem {
 // PriceIDContainsFold applies the ContainsFold predicate on the "price_id" field.
 func PriceIDContainsFold(v string) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldContainsFold(FieldPriceID, v))
+}
+
+// PriceTypeEQ applies the EQ predicate on the "price_type" field.
+func PriceTypeEQ(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEQ(FieldPriceType, v))
+}
+
+// PriceTypeNEQ applies the NEQ predicate on the "price_type" field.
+func PriceTypeNEQ(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNEQ(FieldPriceType, v))
+}
+
+// PriceTypeIn applies the In predicate on the "price_type" field.
+func PriceTypeIn(vs ...string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldIn(FieldPriceType, vs...))
+}
+
+// PriceTypeNotIn applies the NotIn predicate on the "price_type" field.
+func PriceTypeNotIn(vs ...string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNotIn(FieldPriceType, vs...))
+}
+
+// PriceTypeGT applies the GT predicate on the "price_type" field.
+func PriceTypeGT(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldGT(FieldPriceType, v))
+}
+
+// PriceTypeGTE applies the GTE predicate on the "price_type" field.
+func PriceTypeGTE(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldGTE(FieldPriceType, v))
+}
+
+// PriceTypeLT applies the LT predicate on the "price_type" field.
+func PriceTypeLT(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldLT(FieldPriceType, v))
+}
+
+// PriceTypeLTE applies the LTE predicate on the "price_type" field.
+func PriceTypeLTE(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldLTE(FieldPriceType, v))
+}
+
+// PriceTypeContains applies the Contains predicate on the "price_type" field.
+func PriceTypeContains(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldContains(FieldPriceType, v))
+}
+
+// PriceTypeHasPrefix applies the HasPrefix predicate on the "price_type" field.
+func PriceTypeHasPrefix(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldHasPrefix(FieldPriceType, v))
+}
+
+// PriceTypeHasSuffix applies the HasSuffix predicate on the "price_type" field.
+func PriceTypeHasSuffix(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldHasSuffix(FieldPriceType, v))
+}
+
+// PriceTypeIsNil applies the IsNil predicate on the "price_type" field.
+func PriceTypeIsNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldIsNull(FieldPriceType))
+}
+
+// PriceTypeNotNil applies the NotNil predicate on the "price_type" field.
+func PriceTypeNotNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNotNull(FieldPriceType))
+}
+
+// PriceTypeEqualFold applies the EqualFold predicate on the "price_type" field.
+func PriceTypeEqualFold(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEqualFold(FieldPriceType, v))
+}
+
+// PriceTypeContainsFold applies the ContainsFold predicate on the "price_type" field.
+func PriceTypeContainsFold(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldContainsFold(FieldPriceType, v))
 }
 
 // MeterIDEQ applies the EQ predicate on the "meter_id" field.
@@ -849,6 +1094,81 @@ func MeterIDEqualFold(v string) predicate.InvoiceLineItem {
 // MeterIDContainsFold applies the ContainsFold predicate on the "meter_id" field.
 func MeterIDContainsFold(v string) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldContainsFold(FieldMeterID, v))
+}
+
+// MeterDisplayNameEQ applies the EQ predicate on the "meter_display_name" field.
+func MeterDisplayNameEQ(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEQ(FieldMeterDisplayName, v))
+}
+
+// MeterDisplayNameNEQ applies the NEQ predicate on the "meter_display_name" field.
+func MeterDisplayNameNEQ(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNEQ(FieldMeterDisplayName, v))
+}
+
+// MeterDisplayNameIn applies the In predicate on the "meter_display_name" field.
+func MeterDisplayNameIn(vs ...string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldIn(FieldMeterDisplayName, vs...))
+}
+
+// MeterDisplayNameNotIn applies the NotIn predicate on the "meter_display_name" field.
+func MeterDisplayNameNotIn(vs ...string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNotIn(FieldMeterDisplayName, vs...))
+}
+
+// MeterDisplayNameGT applies the GT predicate on the "meter_display_name" field.
+func MeterDisplayNameGT(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldGT(FieldMeterDisplayName, v))
+}
+
+// MeterDisplayNameGTE applies the GTE predicate on the "meter_display_name" field.
+func MeterDisplayNameGTE(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldGTE(FieldMeterDisplayName, v))
+}
+
+// MeterDisplayNameLT applies the LT predicate on the "meter_display_name" field.
+func MeterDisplayNameLT(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldLT(FieldMeterDisplayName, v))
+}
+
+// MeterDisplayNameLTE applies the LTE predicate on the "meter_display_name" field.
+func MeterDisplayNameLTE(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldLTE(FieldMeterDisplayName, v))
+}
+
+// MeterDisplayNameContains applies the Contains predicate on the "meter_display_name" field.
+func MeterDisplayNameContains(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldContains(FieldMeterDisplayName, v))
+}
+
+// MeterDisplayNameHasPrefix applies the HasPrefix predicate on the "meter_display_name" field.
+func MeterDisplayNameHasPrefix(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldHasPrefix(FieldMeterDisplayName, v))
+}
+
+// MeterDisplayNameHasSuffix applies the HasSuffix predicate on the "meter_display_name" field.
+func MeterDisplayNameHasSuffix(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldHasSuffix(FieldMeterDisplayName, v))
+}
+
+// MeterDisplayNameIsNil applies the IsNil predicate on the "meter_display_name" field.
+func MeterDisplayNameIsNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldIsNull(FieldMeterDisplayName))
+}
+
+// MeterDisplayNameNotNil applies the NotNil predicate on the "meter_display_name" field.
+func MeterDisplayNameNotNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNotNull(FieldMeterDisplayName))
+}
+
+// MeterDisplayNameEqualFold applies the EqualFold predicate on the "meter_display_name" field.
+func MeterDisplayNameEqualFold(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEqualFold(FieldMeterDisplayName, v))
+}
+
+// MeterDisplayNameContainsFold applies the ContainsFold predicate on the "meter_display_name" field.
+func MeterDisplayNameContainsFold(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldContainsFold(FieldMeterDisplayName, v))
 }
 
 // AmountEQ applies the EQ predicate on the "amount" field.

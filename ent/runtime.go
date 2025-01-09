@@ -5,8 +5,14 @@ package ent
 import (
 	"time"
 
+	"github.com/flexprice/flexprice/ent/billingsequence"
+	"github.com/flexprice/flexprice/ent/customer"
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
+	"github.com/flexprice/flexprice/ent/invoicesequence"
+	"github.com/flexprice/flexprice/ent/meter"
+	"github.com/flexprice/flexprice/ent/plan"
+	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/schema"
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/wallet"
@@ -18,6 +24,65 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
+	billingsequenceFields := schema.BillingSequence{}.Fields()
+	_ = billingsequenceFields
+	// billingsequenceDescTenantID is the schema descriptor for tenant_id field.
+	billingsequenceDescTenantID := billingsequenceFields[0].Descriptor()
+	// billingsequence.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	billingsequence.TenantIDValidator = billingsequenceDescTenantID.Validators[0].(func(string) error)
+	// billingsequenceDescSubscriptionID is the schema descriptor for subscription_id field.
+	billingsequenceDescSubscriptionID := billingsequenceFields[1].Descriptor()
+	// billingsequence.SubscriptionIDValidator is a validator for the "subscription_id" field. It is called by the builders before save.
+	billingsequence.SubscriptionIDValidator = billingsequenceDescSubscriptionID.Validators[0].(func(string) error)
+	// billingsequenceDescLastSequence is the schema descriptor for last_sequence field.
+	billingsequenceDescLastSequence := billingsequenceFields[2].Descriptor()
+	// billingsequence.DefaultLastSequence holds the default value on creation for the last_sequence field.
+	billingsequence.DefaultLastSequence = billingsequenceDescLastSequence.Default.(int)
+	// billingsequenceDescCreatedAt is the schema descriptor for created_at field.
+	billingsequenceDescCreatedAt := billingsequenceFields[3].Descriptor()
+	// billingsequence.DefaultCreatedAt holds the default value on creation for the created_at field.
+	billingsequence.DefaultCreatedAt = billingsequenceDescCreatedAt.Default.(func() time.Time)
+	// billingsequenceDescUpdatedAt is the schema descriptor for updated_at field.
+	billingsequenceDescUpdatedAt := billingsequenceFields[4].Descriptor()
+	// billingsequence.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	billingsequence.DefaultUpdatedAt = billingsequenceDescUpdatedAt.Default.(func() time.Time)
+	// billingsequence.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	billingsequence.UpdateDefaultUpdatedAt = billingsequenceDescUpdatedAt.UpdateDefault.(func() time.Time)
+	customerMixin := schema.Customer{}.Mixin()
+	customerMixinFields0 := customerMixin[0].Fields()
+	_ = customerMixinFields0
+	customerFields := schema.Customer{}.Fields()
+	_ = customerFields
+	// customerDescTenantID is the schema descriptor for tenant_id field.
+	customerDescTenantID := customerMixinFields0[0].Descriptor()
+	// customer.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	customer.TenantIDValidator = customerDescTenantID.Validators[0].(func(string) error)
+	// customerDescStatus is the schema descriptor for status field.
+	customerDescStatus := customerMixinFields0[1].Descriptor()
+	// customer.DefaultStatus holds the default value on creation for the status field.
+	customer.DefaultStatus = customerDescStatus.Default.(string)
+	// customerDescCreatedAt is the schema descriptor for created_at field.
+	customerDescCreatedAt := customerMixinFields0[2].Descriptor()
+	// customer.DefaultCreatedAt holds the default value on creation for the created_at field.
+	customer.DefaultCreatedAt = customerDescCreatedAt.Default.(func() time.Time)
+	// customerDescUpdatedAt is the schema descriptor for updated_at field.
+	customerDescUpdatedAt := customerMixinFields0[3].Descriptor()
+	// customer.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	customer.DefaultUpdatedAt = customerDescUpdatedAt.Default.(func() time.Time)
+	// customer.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	customer.UpdateDefaultUpdatedAt = customerDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// customerDescExternalID is the schema descriptor for external_id field.
+	customerDescExternalID := customerFields[1].Descriptor()
+	// customer.ExternalIDValidator is a validator for the "external_id" field. It is called by the builders before save.
+	customer.ExternalIDValidator = customerDescExternalID.Validators[0].(func(string) error)
+	// customerDescName is the schema descriptor for name field.
+	customerDescName := customerFields[2].Descriptor()
+	// customer.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	customer.NameValidator = customerDescName.Validators[0].(func(string) error)
+	// customerDescEmail is the schema descriptor for email field.
+	customerDescEmail := customerFields[3].Descriptor()
+	// customer.EmailValidator is a validator for the "email" field. It is called by the builders before save.
+	customer.EmailValidator = customerDescEmail.Validators[0].(func(string) error)
 	invoiceMixin := schema.Invoice{}.Mixin()
 	invoiceMixinFields0 := invoiceMixin[0].Fields()
 	_ = invoiceMixinFields0
@@ -109,21 +174,186 @@ func init() {
 	// invoicelineitem.CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
 	invoicelineitem.CustomerIDValidator = invoicelineitemDescCustomerID.Validators[0].(func(string) error)
 	// invoicelineitemDescPriceID is the schema descriptor for price_id field.
-	invoicelineitemDescPriceID := invoicelineitemFields[4].Descriptor()
+	invoicelineitemDescPriceID := invoicelineitemFields[6].Descriptor()
 	// invoicelineitem.PriceIDValidator is a validator for the "price_id" field. It is called by the builders before save.
 	invoicelineitem.PriceIDValidator = invoicelineitemDescPriceID.Validators[0].(func(string) error)
 	// invoicelineitemDescAmount is the schema descriptor for amount field.
-	invoicelineitemDescAmount := invoicelineitemFields[6].Descriptor()
+	invoicelineitemDescAmount := invoicelineitemFields[10].Descriptor()
 	// invoicelineitem.DefaultAmount holds the default value on creation for the amount field.
 	invoicelineitem.DefaultAmount = invoicelineitemDescAmount.Default.(decimal.Decimal)
 	// invoicelineitemDescQuantity is the schema descriptor for quantity field.
-	invoicelineitemDescQuantity := invoicelineitemFields[7].Descriptor()
+	invoicelineitemDescQuantity := invoicelineitemFields[11].Descriptor()
 	// invoicelineitem.DefaultQuantity holds the default value on creation for the quantity field.
 	invoicelineitem.DefaultQuantity = invoicelineitemDescQuantity.Default.(decimal.Decimal)
 	// invoicelineitemDescCurrency is the schema descriptor for currency field.
-	invoicelineitemDescCurrency := invoicelineitemFields[8].Descriptor()
+	invoicelineitemDescCurrency := invoicelineitemFields[12].Descriptor()
 	// invoicelineitem.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
 	invoicelineitem.CurrencyValidator = invoicelineitemDescCurrency.Validators[0].(func(string) error)
+	invoicesequenceFields := schema.InvoiceSequence{}.Fields()
+	_ = invoicesequenceFields
+	// invoicesequenceDescTenantID is the schema descriptor for tenant_id field.
+	invoicesequenceDescTenantID := invoicesequenceFields[0].Descriptor()
+	// invoicesequence.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	invoicesequence.TenantIDValidator = invoicesequenceDescTenantID.Validators[0].(func(string) error)
+	// invoicesequenceDescYearMonth is the schema descriptor for year_month field.
+	invoicesequenceDescYearMonth := invoicesequenceFields[1].Descriptor()
+	// invoicesequence.YearMonthValidator is a validator for the "year_month" field. It is called by the builders before save.
+	invoicesequence.YearMonthValidator = invoicesequenceDescYearMonth.Validators[0].(func(string) error)
+	// invoicesequenceDescLastValue is the schema descriptor for last_value field.
+	invoicesequenceDescLastValue := invoicesequenceFields[2].Descriptor()
+	// invoicesequence.DefaultLastValue holds the default value on creation for the last_value field.
+	invoicesequence.DefaultLastValue = invoicesequenceDescLastValue.Default.(int64)
+	// invoicesequenceDescCreatedAt is the schema descriptor for created_at field.
+	invoicesequenceDescCreatedAt := invoicesequenceFields[3].Descriptor()
+	// invoicesequence.DefaultCreatedAt holds the default value on creation for the created_at field.
+	invoicesequence.DefaultCreatedAt = invoicesequenceDescCreatedAt.Default.(func() time.Time)
+	// invoicesequenceDescUpdatedAt is the schema descriptor for updated_at field.
+	invoicesequenceDescUpdatedAt := invoicesequenceFields[4].Descriptor()
+	// invoicesequence.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	invoicesequence.DefaultUpdatedAt = invoicesequenceDescUpdatedAt.Default.(func() time.Time)
+	// invoicesequence.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	invoicesequence.UpdateDefaultUpdatedAt = invoicesequenceDescUpdatedAt.UpdateDefault.(func() time.Time)
+	meterMixin := schema.Meter{}.Mixin()
+	meterMixinFields0 := meterMixin[0].Fields()
+	_ = meterMixinFields0
+	meterFields := schema.Meter{}.Fields()
+	_ = meterFields
+	// meterDescTenantID is the schema descriptor for tenant_id field.
+	meterDescTenantID := meterMixinFields0[0].Descriptor()
+	// meter.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	meter.TenantIDValidator = meterDescTenantID.Validators[0].(func(string) error)
+	// meterDescStatus is the schema descriptor for status field.
+	meterDescStatus := meterMixinFields0[1].Descriptor()
+	// meter.DefaultStatus holds the default value on creation for the status field.
+	meter.DefaultStatus = meterDescStatus.Default.(string)
+	// meterDescCreatedAt is the schema descriptor for created_at field.
+	meterDescCreatedAt := meterMixinFields0[2].Descriptor()
+	// meter.DefaultCreatedAt holds the default value on creation for the created_at field.
+	meter.DefaultCreatedAt = meterDescCreatedAt.Default.(func() time.Time)
+	// meterDescUpdatedAt is the schema descriptor for updated_at field.
+	meterDescUpdatedAt := meterMixinFields0[3].Descriptor()
+	// meter.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	meter.DefaultUpdatedAt = meterDescUpdatedAt.Default.(func() time.Time)
+	// meter.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	meter.UpdateDefaultUpdatedAt = meterDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// meterDescEventName is the schema descriptor for event_name field.
+	meterDescEventName := meterFields[1].Descriptor()
+	// meter.EventNameValidator is a validator for the "event_name" field. It is called by the builders before save.
+	meter.EventNameValidator = meterDescEventName.Validators[0].(func(string) error)
+	// meterDescName is the schema descriptor for name field.
+	meterDescName := meterFields[2].Descriptor()
+	// meter.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	meter.NameValidator = meterDescName.Validators[0].(func(string) error)
+	// meterDescAggregation is the schema descriptor for aggregation field.
+	meterDescAggregation := meterFields[3].Descriptor()
+	// meter.DefaultAggregation holds the default value on creation for the aggregation field.
+	meter.DefaultAggregation = meterDescAggregation.Default.(schema.MeterAggregation)
+	// meterDescFilters is the schema descriptor for filters field.
+	meterDescFilters := meterFields[4].Descriptor()
+	// meter.DefaultFilters holds the default value on creation for the filters field.
+	meter.DefaultFilters = meterDescFilters.Default.([]schema.MeterFilter)
+	// meterDescResetUsage is the schema descriptor for reset_usage field.
+	meterDescResetUsage := meterFields[5].Descriptor()
+	// meter.DefaultResetUsage holds the default value on creation for the reset_usage field.
+	meter.DefaultResetUsage = meterDescResetUsage.Default.(string)
+	planMixin := schema.Plan{}.Mixin()
+	planMixinFields0 := planMixin[0].Fields()
+	_ = planMixinFields0
+	planFields := schema.Plan{}.Fields()
+	_ = planFields
+	// planDescTenantID is the schema descriptor for tenant_id field.
+	planDescTenantID := planMixinFields0[0].Descriptor()
+	// plan.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	plan.TenantIDValidator = planDescTenantID.Validators[0].(func(string) error)
+	// planDescStatus is the schema descriptor for status field.
+	planDescStatus := planMixinFields0[1].Descriptor()
+	// plan.DefaultStatus holds the default value on creation for the status field.
+	plan.DefaultStatus = planDescStatus.Default.(string)
+	// planDescCreatedAt is the schema descriptor for created_at field.
+	planDescCreatedAt := planMixinFields0[2].Descriptor()
+	// plan.DefaultCreatedAt holds the default value on creation for the created_at field.
+	plan.DefaultCreatedAt = planDescCreatedAt.Default.(func() time.Time)
+	// planDescUpdatedAt is the schema descriptor for updated_at field.
+	planDescUpdatedAt := planMixinFields0[3].Descriptor()
+	// plan.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	plan.DefaultUpdatedAt = planDescUpdatedAt.Default.(func() time.Time)
+	// plan.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	plan.UpdateDefaultUpdatedAt = planDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// planDescLookupKey is the schema descriptor for lookup_key field.
+	planDescLookupKey := planFields[1].Descriptor()
+	// plan.LookupKeyValidator is a validator for the "lookup_key" field. It is called by the builders before save.
+	plan.LookupKeyValidator = planDescLookupKey.Validators[0].(func(string) error)
+	// planDescName is the schema descriptor for name field.
+	planDescName := planFields[2].Descriptor()
+	// plan.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	plan.NameValidator = planDescName.Validators[0].(func(string) error)
+	// planDescInvoiceCadence is the schema descriptor for invoice_cadence field.
+	planDescInvoiceCadence := planFields[4].Descriptor()
+	// plan.InvoiceCadenceValidator is a validator for the "invoice_cadence" field. It is called by the builders before save.
+	plan.InvoiceCadenceValidator = planDescInvoiceCadence.Validators[0].(func(string) error)
+	// planDescTrialPeriod is the schema descriptor for trial_period field.
+	planDescTrialPeriod := planFields[5].Descriptor()
+	// plan.DefaultTrialPeriod holds the default value on creation for the trial_period field.
+	plan.DefaultTrialPeriod = planDescTrialPeriod.Default.(int)
+	priceMixin := schema.Price{}.Mixin()
+	priceMixinFields0 := priceMixin[0].Fields()
+	_ = priceMixinFields0
+	priceFields := schema.Price{}.Fields()
+	_ = priceFields
+	// priceDescTenantID is the schema descriptor for tenant_id field.
+	priceDescTenantID := priceMixinFields0[0].Descriptor()
+	// price.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	price.TenantIDValidator = priceDescTenantID.Validators[0].(func(string) error)
+	// priceDescStatus is the schema descriptor for status field.
+	priceDescStatus := priceMixinFields0[1].Descriptor()
+	// price.DefaultStatus holds the default value on creation for the status field.
+	price.DefaultStatus = priceDescStatus.Default.(string)
+	// priceDescCreatedAt is the schema descriptor for created_at field.
+	priceDescCreatedAt := priceMixinFields0[2].Descriptor()
+	// price.DefaultCreatedAt holds the default value on creation for the created_at field.
+	price.DefaultCreatedAt = priceDescCreatedAt.Default.(func() time.Time)
+	// priceDescUpdatedAt is the schema descriptor for updated_at field.
+	priceDescUpdatedAt := priceMixinFields0[3].Descriptor()
+	// price.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	price.DefaultUpdatedAt = priceDescUpdatedAt.Default.(func() time.Time)
+	// price.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	price.UpdateDefaultUpdatedAt = priceDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// priceDescCurrency is the schema descriptor for currency field.
+	priceDescCurrency := priceFields[2].Descriptor()
+	// price.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
+	price.CurrencyValidator = priceDescCurrency.Validators[0].(func(string) error)
+	// priceDescDisplayAmount is the schema descriptor for display_amount field.
+	priceDescDisplayAmount := priceFields[3].Descriptor()
+	// price.DisplayAmountValidator is a validator for the "display_amount" field. It is called by the builders before save.
+	price.DisplayAmountValidator = priceDescDisplayAmount.Validators[0].(func(string) error)
+	// priceDescPlanID is the schema descriptor for plan_id field.
+	priceDescPlanID := priceFields[4].Descriptor()
+	// price.PlanIDValidator is a validator for the "plan_id" field. It is called by the builders before save.
+	price.PlanIDValidator = priceDescPlanID.Validators[0].(func(string) error)
+	// priceDescType is the schema descriptor for type field.
+	priceDescType := priceFields[5].Descriptor()
+	// price.TypeValidator is a validator for the "type" field. It is called by the builders before save.
+	price.TypeValidator = priceDescType.Validators[0].(func(string) error)
+	// priceDescBillingPeriod is the schema descriptor for billing_period field.
+	priceDescBillingPeriod := priceFields[6].Descriptor()
+	// price.BillingPeriodValidator is a validator for the "billing_period" field. It is called by the builders before save.
+	price.BillingPeriodValidator = priceDescBillingPeriod.Validators[0].(func(string) error)
+	// priceDescBillingPeriodCount is the schema descriptor for billing_period_count field.
+	priceDescBillingPeriodCount := priceFields[7].Descriptor()
+	// price.BillingPeriodCountValidator is a validator for the "billing_period_count" field. It is called by the builders before save.
+	price.BillingPeriodCountValidator = priceDescBillingPeriodCount.Validators[0].(func(int) error)
+	// priceDescBillingModel is the schema descriptor for billing_model field.
+	priceDescBillingModel := priceFields[8].Descriptor()
+	// price.BillingModelValidator is a validator for the "billing_model" field. It is called by the builders before save.
+	price.BillingModelValidator = priceDescBillingModel.Validators[0].(func(string) error)
+	// priceDescBillingCadence is the schema descriptor for billing_cadence field.
+	priceDescBillingCadence := priceFields[9].Descriptor()
+	// price.BillingCadenceValidator is a validator for the "billing_cadence" field. It is called by the builders before save.
+	price.BillingCadenceValidator = priceDescBillingCadence.Validators[0].(func(string) error)
+	// priceDescLookupKey is the schema descriptor for lookup_key field.
+	priceDescLookupKey := priceFields[15].Descriptor()
+	// price.LookupKeyValidator is a validator for the "lookup_key" field. It is called by the builders before save.
+	price.LookupKeyValidator = priceDescLookupKey.Validators[0].(func(string) error)
 	subscriptionMixin := schema.Subscription{}.Mixin()
 	subscriptionMixinFields0 := subscriptionMixin[0].Fields()
 	_ = subscriptionMixinFields0
@@ -203,82 +433,88 @@ func init() {
 	subscriptionDescVersion := subscriptionFields[20].Descriptor()
 	// subscription.DefaultVersion holds the default value on creation for the version field.
 	subscription.DefaultVersion = subscriptionDescVersion.Default.(int)
+	walletMixin := schema.Wallet{}.Mixin()
+	walletMixinFields0 := walletMixin[0].Fields()
+	_ = walletMixinFields0
 	walletFields := schema.Wallet{}.Fields()
 	_ = walletFields
 	// walletDescTenantID is the schema descriptor for tenant_id field.
-	walletDescTenantID := walletFields[1].Descriptor()
+	walletDescTenantID := walletMixinFields0[0].Descriptor()
 	// wallet.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
 	wallet.TenantIDValidator = walletDescTenantID.Validators[0].(func(string) error)
-	// walletDescCustomerID is the schema descriptor for customer_id field.
-	walletDescCustomerID := walletFields[2].Descriptor()
-	// wallet.CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
-	wallet.CustomerIDValidator = walletDescCustomerID.Validators[0].(func(string) error)
-	// walletDescCurrency is the schema descriptor for currency field.
-	walletDescCurrency := walletFields[3].Descriptor()
-	// wallet.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
-	wallet.CurrencyValidator = walletDescCurrency.Validators[0].(func(string) error)
-	// walletDescBalance is the schema descriptor for balance field.
-	walletDescBalance := walletFields[6].Descriptor()
-	// wallet.DefaultBalance holds the default value on creation for the balance field.
-	wallet.DefaultBalance = walletDescBalance.Default.(decimal.Decimal)
-	// walletDescWalletStatus is the schema descriptor for wallet_status field.
-	walletDescWalletStatus := walletFields[7].Descriptor()
-	// wallet.DefaultWalletStatus holds the default value on creation for the wallet_status field.
-	wallet.DefaultWalletStatus = walletDescWalletStatus.Default.(string)
 	// walletDescStatus is the schema descriptor for status field.
-	walletDescStatus := walletFields[8].Descriptor()
+	walletDescStatus := walletMixinFields0[1].Descriptor()
 	// wallet.DefaultStatus holds the default value on creation for the status field.
 	wallet.DefaultStatus = walletDescStatus.Default.(string)
 	// walletDescCreatedAt is the schema descriptor for created_at field.
-	walletDescCreatedAt := walletFields[9].Descriptor()
+	walletDescCreatedAt := walletMixinFields0[2].Descriptor()
 	// wallet.DefaultCreatedAt holds the default value on creation for the created_at field.
 	wallet.DefaultCreatedAt = walletDescCreatedAt.Default.(func() time.Time)
 	// walletDescUpdatedAt is the schema descriptor for updated_at field.
-	walletDescUpdatedAt := walletFields[11].Descriptor()
+	walletDescUpdatedAt := walletMixinFields0[3].Descriptor()
 	// wallet.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	wallet.DefaultUpdatedAt = walletDescUpdatedAt.Default.(func() time.Time)
 	// wallet.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	wallet.UpdateDefaultUpdatedAt = walletDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// walletDescCustomerID is the schema descriptor for customer_id field.
+	walletDescCustomerID := walletFields[1].Descriptor()
+	// wallet.CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
+	wallet.CustomerIDValidator = walletDescCustomerID.Validators[0].(func(string) error)
+	// walletDescCurrency is the schema descriptor for currency field.
+	walletDescCurrency := walletFields[2].Descriptor()
+	// wallet.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
+	wallet.CurrencyValidator = walletDescCurrency.Validators[0].(func(string) error)
+	// walletDescBalance is the schema descriptor for balance field.
+	walletDescBalance := walletFields[5].Descriptor()
+	// wallet.DefaultBalance holds the default value on creation for the balance field.
+	wallet.DefaultBalance = walletDescBalance.Default.(decimal.Decimal)
+	// walletDescWalletStatus is the schema descriptor for wallet_status field.
+	walletDescWalletStatus := walletFields[6].Descriptor()
+	// wallet.DefaultWalletStatus holds the default value on creation for the wallet_status field.
+	wallet.DefaultWalletStatus = walletDescWalletStatus.Default.(string)
+	wallettransactionMixin := schema.WalletTransaction{}.Mixin()
+	wallettransactionMixinFields0 := wallettransactionMixin[0].Fields()
+	_ = wallettransactionMixinFields0
 	wallettransactionFields := schema.WalletTransaction{}.Fields()
 	_ = wallettransactionFields
 	// wallettransactionDescTenantID is the schema descriptor for tenant_id field.
-	wallettransactionDescTenantID := wallettransactionFields[1].Descriptor()
+	wallettransactionDescTenantID := wallettransactionMixinFields0[0].Descriptor()
 	// wallettransaction.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
 	wallettransaction.TenantIDValidator = wallettransactionDescTenantID.Validators[0].(func(string) error)
+	// wallettransactionDescStatus is the schema descriptor for status field.
+	wallettransactionDescStatus := wallettransactionMixinFields0[1].Descriptor()
+	// wallettransaction.DefaultStatus holds the default value on creation for the status field.
+	wallettransaction.DefaultStatus = wallettransactionDescStatus.Default.(string)
+	// wallettransactionDescCreatedAt is the schema descriptor for created_at field.
+	wallettransactionDescCreatedAt := wallettransactionMixinFields0[2].Descriptor()
+	// wallettransaction.DefaultCreatedAt holds the default value on creation for the created_at field.
+	wallettransaction.DefaultCreatedAt = wallettransactionDescCreatedAt.Default.(func() time.Time)
+	// wallettransactionDescUpdatedAt is the schema descriptor for updated_at field.
+	wallettransactionDescUpdatedAt := wallettransactionMixinFields0[3].Descriptor()
+	// wallettransaction.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	wallettransaction.DefaultUpdatedAt = wallettransactionDescUpdatedAt.Default.(func() time.Time)
+	// wallettransaction.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	wallettransaction.UpdateDefaultUpdatedAt = wallettransactionDescUpdatedAt.UpdateDefault.(func() time.Time)
 	// wallettransactionDescWalletID is the schema descriptor for wallet_id field.
-	wallettransactionDescWalletID := wallettransactionFields[2].Descriptor()
+	wallettransactionDescWalletID := wallettransactionFields[1].Descriptor()
 	// wallettransaction.WalletIDValidator is a validator for the "wallet_id" field. It is called by the builders before save.
 	wallettransaction.WalletIDValidator = wallettransactionDescWalletID.Validators[0].(func(string) error)
 	// wallettransactionDescType is the schema descriptor for type field.
-	wallettransactionDescType := wallettransactionFields[3].Descriptor()
+	wallettransactionDescType := wallettransactionFields[2].Descriptor()
 	// wallettransaction.DefaultType holds the default value on creation for the type field.
 	wallettransaction.DefaultType = wallettransactionDescType.Default.(string)
 	// wallettransaction.TypeValidator is a validator for the "type" field. It is called by the builders before save.
 	wallettransaction.TypeValidator = wallettransactionDescType.Validators[0].(func(string) error)
 	// wallettransactionDescBalanceBefore is the schema descriptor for balance_before field.
-	wallettransactionDescBalanceBefore := wallettransactionFields[5].Descriptor()
+	wallettransactionDescBalanceBefore := wallettransactionFields[4].Descriptor()
 	// wallettransaction.DefaultBalanceBefore holds the default value on creation for the balance_before field.
 	wallettransaction.DefaultBalanceBefore = wallettransactionDescBalanceBefore.Default.(decimal.Decimal)
 	// wallettransactionDescBalanceAfter is the schema descriptor for balance_after field.
-	wallettransactionDescBalanceAfter := wallettransactionFields[6].Descriptor()
+	wallettransactionDescBalanceAfter := wallettransactionFields[5].Descriptor()
 	// wallettransaction.DefaultBalanceAfter holds the default value on creation for the balance_after field.
 	wallettransaction.DefaultBalanceAfter = wallettransactionDescBalanceAfter.Default.(decimal.Decimal)
 	// wallettransactionDescTransactionStatus is the schema descriptor for transaction_status field.
-	wallettransactionDescTransactionStatus := wallettransactionFields[11].Descriptor()
+	wallettransactionDescTransactionStatus := wallettransactionFields[10].Descriptor()
 	// wallettransaction.DefaultTransactionStatus holds the default value on creation for the transaction_status field.
 	wallettransaction.DefaultTransactionStatus = wallettransactionDescTransactionStatus.Default.(string)
-	// wallettransactionDescStatus is the schema descriptor for status field.
-	wallettransactionDescStatus := wallettransactionFields[12].Descriptor()
-	// wallettransaction.DefaultStatus holds the default value on creation for the status field.
-	wallettransaction.DefaultStatus = wallettransactionDescStatus.Default.(string)
-	// wallettransactionDescCreatedAt is the schema descriptor for created_at field.
-	wallettransactionDescCreatedAt := wallettransactionFields[13].Descriptor()
-	// wallettransaction.DefaultCreatedAt holds the default value on creation for the created_at field.
-	wallettransaction.DefaultCreatedAt = wallettransactionDescCreatedAt.Default.(func() time.Time)
-	// wallettransactionDescUpdatedAt is the schema descriptor for updated_at field.
-	wallettransactionDescUpdatedAt := wallettransactionFields[15].Descriptor()
-	// wallettransaction.DefaultUpdatedAt holds the default value on creation for the updated_at field.
-	wallettransaction.DefaultUpdatedAt = wallettransactionDescUpdatedAt.Default.(func() time.Time)
-	// wallettransaction.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
-	wallettransaction.UpdateDefaultUpdatedAt = wallettransactionDescUpdatedAt.UpdateDefault.(func() time.Time)
 }

@@ -102,7 +102,10 @@ func (s *PriceServiceSuite) TestGetPrices() {
 	_ = s.priceRepo.Create(s.ctx, &price.Price{ID: "price-2", Amount: decimal.NewFromInt(200), Currency: "USD", PlanID: "plan-1"})
 
 	// Retrieve all prices within limit
-	resp, err := s.priceService.GetPrices(s.ctx, types.Filter{Offset: 0, Limit: 10})
+	priceFilter := types.NewPriceFilter()
+	priceFilter.QueryFilter.Offset = lo.ToPtr(0)
+	priceFilter.QueryFilter.Limit = lo.ToPtr(10)
+	resp, err := s.priceService.GetPrices(s.ctx, priceFilter)
 	s.NoError(err)
 	s.NotNil(resp)
 	s.Equal(2, resp.Total) // Ensure all prices are retrieved
@@ -117,7 +120,9 @@ func (s *PriceServiceSuite) TestGetPrices() {
 	s.Equal("price-2", resp.Prices[1].ID)
 
 	// Retrieve with offset exceeding available records
-	resp, err = s.priceService.GetPrices(s.ctx, types.Filter{Offset: 10, Limit: 10})
+	priceFilter.QueryFilter.Offset = lo.ToPtr(10)
+	priceFilter.QueryFilter.Limit = lo.ToPtr(10)
+	resp, err = s.priceService.GetPrices(s.ctx, priceFilter)
 	s.NoError(err)
 	s.NotNil(resp)
 	s.Equal(0, resp.Total) // Ensure no prices are retrieved

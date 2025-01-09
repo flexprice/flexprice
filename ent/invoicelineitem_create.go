@@ -124,9 +124,51 @@ func (ilic *InvoiceLineItemCreate) SetNillableSubscriptionID(s *string) *Invoice
 	return ilic
 }
 
+// SetPlanID sets the "plan_id" field.
+func (ilic *InvoiceLineItemCreate) SetPlanID(s string) *InvoiceLineItemCreate {
+	ilic.mutation.SetPlanID(s)
+	return ilic
+}
+
+// SetNillablePlanID sets the "plan_id" field if the given value is not nil.
+func (ilic *InvoiceLineItemCreate) SetNillablePlanID(s *string) *InvoiceLineItemCreate {
+	if s != nil {
+		ilic.SetPlanID(*s)
+	}
+	return ilic
+}
+
+// SetPlanDisplayName sets the "plan_display_name" field.
+func (ilic *InvoiceLineItemCreate) SetPlanDisplayName(s string) *InvoiceLineItemCreate {
+	ilic.mutation.SetPlanDisplayName(s)
+	return ilic
+}
+
+// SetNillablePlanDisplayName sets the "plan_display_name" field if the given value is not nil.
+func (ilic *InvoiceLineItemCreate) SetNillablePlanDisplayName(s *string) *InvoiceLineItemCreate {
+	if s != nil {
+		ilic.SetPlanDisplayName(*s)
+	}
+	return ilic
+}
+
 // SetPriceID sets the "price_id" field.
 func (ilic *InvoiceLineItemCreate) SetPriceID(s string) *InvoiceLineItemCreate {
 	ilic.mutation.SetPriceID(s)
+	return ilic
+}
+
+// SetPriceType sets the "price_type" field.
+func (ilic *InvoiceLineItemCreate) SetPriceType(s string) *InvoiceLineItemCreate {
+	ilic.mutation.SetPriceType(s)
+	return ilic
+}
+
+// SetNillablePriceType sets the "price_type" field if the given value is not nil.
+func (ilic *InvoiceLineItemCreate) SetNillablePriceType(s *string) *InvoiceLineItemCreate {
+	if s != nil {
+		ilic.SetPriceType(*s)
+	}
 	return ilic
 }
 
@@ -140,6 +182,20 @@ func (ilic *InvoiceLineItemCreate) SetMeterID(s string) *InvoiceLineItemCreate {
 func (ilic *InvoiceLineItemCreate) SetNillableMeterID(s *string) *InvoiceLineItemCreate {
 	if s != nil {
 		ilic.SetMeterID(*s)
+	}
+	return ilic
+}
+
+// SetMeterDisplayName sets the "meter_display_name" field.
+func (ilic *InvoiceLineItemCreate) SetMeterDisplayName(s string) *InvoiceLineItemCreate {
+	ilic.mutation.SetMeterDisplayName(s)
+	return ilic
+}
+
+// SetNillableMeterDisplayName sets the "meter_display_name" field if the given value is not nil.
+func (ilic *InvoiceLineItemCreate) SetNillableMeterDisplayName(s *string) *InvoiceLineItemCreate {
+	if s != nil {
+		ilic.SetMeterDisplayName(*s)
 	}
 	return ilic
 }
@@ -407,13 +463,29 @@ func (ilic *InvoiceLineItemCreate) createSpec() (*InvoiceLineItem, *sqlgraph.Cre
 		_spec.SetField(invoicelineitem.FieldSubscriptionID, field.TypeString, value)
 		_node.SubscriptionID = &value
 	}
+	if value, ok := ilic.mutation.PlanID(); ok {
+		_spec.SetField(invoicelineitem.FieldPlanID, field.TypeString, value)
+		_node.PlanID = &value
+	}
+	if value, ok := ilic.mutation.PlanDisplayName(); ok {
+		_spec.SetField(invoicelineitem.FieldPlanDisplayName, field.TypeString, value)
+		_node.PlanDisplayName = &value
+	}
 	if value, ok := ilic.mutation.PriceID(); ok {
 		_spec.SetField(invoicelineitem.FieldPriceID, field.TypeString, value)
 		_node.PriceID = value
 	}
+	if value, ok := ilic.mutation.PriceType(); ok {
+		_spec.SetField(invoicelineitem.FieldPriceType, field.TypeString, value)
+		_node.PriceType = &value
+	}
 	if value, ok := ilic.mutation.MeterID(); ok {
 		_spec.SetField(invoicelineitem.FieldMeterID, field.TypeString, value)
 		_node.MeterID = &value
+	}
+	if value, ok := ilic.mutation.MeterDisplayName(); ok {
+		_spec.SetField(invoicelineitem.FieldMeterDisplayName, field.TypeString, value)
+		_node.MeterDisplayName = &value
 	}
 	if value, ok := ilic.mutation.Amount(); ok {
 		_spec.SetField(invoicelineitem.FieldAmount, field.TypeOther, value)

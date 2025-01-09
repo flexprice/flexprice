@@ -21,6 +21,16 @@ type WalletTransaction struct {
 	ID string `json:"id,omitempty"`
 	// TenantID holds the value of the "tenant_id" field.
 	TenantID string `json:"tenant_id,omitempty"`
+	// Status holds the value of the "status" field.
+	Status string `json:"status,omitempty"`
+	// CreatedAt holds the value of the "created_at" field.
+	CreatedAt time.Time `json:"created_at,omitempty"`
+	// UpdatedAt holds the value of the "updated_at" field.
+	UpdatedAt time.Time `json:"updated_at,omitempty"`
+	// CreatedBy holds the value of the "created_by" field.
+	CreatedBy string `json:"created_by,omitempty"`
+	// UpdatedBy holds the value of the "updated_by" field.
+	UpdatedBy string `json:"updated_by,omitempty"`
 	// WalletID holds the value of the "wallet_id" field.
 	WalletID string `json:"wallet_id,omitempty"`
 	// Type holds the value of the "type" field.
@@ -41,17 +51,7 @@ type WalletTransaction struct {
 	Metadata map[string]string `json:"metadata,omitempty"`
 	// TransactionStatus holds the value of the "transaction_status" field.
 	TransactionStatus string `json:"transaction_status,omitempty"`
-	// Status holds the value of the "status" field.
-	Status string `json:"status,omitempty"`
-	// CreatedAt holds the value of the "created_at" field.
-	CreatedAt time.Time `json:"created_at,omitempty"`
-	// CreatedBy holds the value of the "created_by" field.
-	CreatedBy string `json:"created_by,omitempty"`
-	// UpdatedAt holds the value of the "updated_at" field.
-	UpdatedAt time.Time `json:"updated_at,omitempty"`
-	// UpdatedBy holds the value of the "updated_by" field.
-	UpdatedBy    string `json:"updated_by,omitempty"`
-	selectValues sql.SelectValues
+	selectValues      sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -63,7 +63,7 @@ func (*WalletTransaction) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case wallettransaction.FieldAmount, wallettransaction.FieldBalanceBefore, wallettransaction.FieldBalanceAfter:
 			values[i] = new(decimal.Decimal)
-		case wallettransaction.FieldID, wallettransaction.FieldTenantID, wallettransaction.FieldWalletID, wallettransaction.FieldType, wallettransaction.FieldReferenceType, wallettransaction.FieldReferenceID, wallettransaction.FieldDescription, wallettransaction.FieldTransactionStatus, wallettransaction.FieldStatus, wallettransaction.FieldCreatedBy, wallettransaction.FieldUpdatedBy:
+		case wallettransaction.FieldID, wallettransaction.FieldTenantID, wallettransaction.FieldStatus, wallettransaction.FieldCreatedBy, wallettransaction.FieldUpdatedBy, wallettransaction.FieldWalletID, wallettransaction.FieldType, wallettransaction.FieldReferenceType, wallettransaction.FieldReferenceID, wallettransaction.FieldDescription, wallettransaction.FieldTransactionStatus:
 			values[i] = new(sql.NullString)
 		case wallettransaction.FieldCreatedAt, wallettransaction.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -93,6 +93,36 @@ func (wt *WalletTransaction) assignValues(columns []string, values []any) error 
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
 				wt.TenantID = value.String
+			}
+		case wallettransaction.FieldStatus:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field status", values[i])
+			} else if value.Valid {
+				wt.Status = value.String
+			}
+		case wallettransaction.FieldCreatedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field created_at", values[i])
+			} else if value.Valid {
+				wt.CreatedAt = value.Time
+			}
+		case wallettransaction.FieldUpdatedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
+			} else if value.Valid {
+				wt.UpdatedAt = value.Time
+			}
+		case wallettransaction.FieldCreatedBy:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field created_by", values[i])
+			} else if value.Valid {
+				wt.CreatedBy = value.String
+			}
+		case wallettransaction.FieldUpdatedBy:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
+			} else if value.Valid {
+				wt.UpdatedBy = value.String
 			}
 		case wallettransaction.FieldWalletID:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -156,36 +186,6 @@ func (wt *WalletTransaction) assignValues(columns []string, values []any) error 
 			} else if value.Valid {
 				wt.TransactionStatus = value.String
 			}
-		case wallettransaction.FieldStatus:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field status", values[i])
-			} else if value.Valid {
-				wt.Status = value.String
-			}
-		case wallettransaction.FieldCreatedAt:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field created_at", values[i])
-			} else if value.Valid {
-				wt.CreatedAt = value.Time
-			}
-		case wallettransaction.FieldCreatedBy:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field created_by", values[i])
-			} else if value.Valid {
-				wt.CreatedBy = value.String
-			}
-		case wallettransaction.FieldUpdatedAt:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
-			} else if value.Valid {
-				wt.UpdatedAt = value.Time
-			}
-		case wallettransaction.FieldUpdatedBy:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
-			} else if value.Valid {
-				wt.UpdatedBy = value.String
-			}
 		default:
 			wt.selectValues.Set(columns[i], values[i])
 		}
@@ -225,6 +225,21 @@ func (wt *WalletTransaction) String() string {
 	builder.WriteString("tenant_id=")
 	builder.WriteString(wt.TenantID)
 	builder.WriteString(", ")
+	builder.WriteString("status=")
+	builder.WriteString(wt.Status)
+	builder.WriteString(", ")
+	builder.WriteString("created_at=")
+	builder.WriteString(wt.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(", ")
+	builder.WriteString("updated_at=")
+	builder.WriteString(wt.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(", ")
+	builder.WriteString("created_by=")
+	builder.WriteString(wt.CreatedBy)
+	builder.WriteString(", ")
+	builder.WriteString("updated_by=")
+	builder.WriteString(wt.UpdatedBy)
+	builder.WriteString(", ")
 	builder.WriteString("wallet_id=")
 	builder.WriteString(wt.WalletID)
 	builder.WriteString(", ")
@@ -254,21 +269,6 @@ func (wt *WalletTransaction) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("transaction_status=")
 	builder.WriteString(wt.TransactionStatus)
-	builder.WriteString(", ")
-	builder.WriteString("status=")
-	builder.WriteString(wt.Status)
-	builder.WriteString(", ")
-	builder.WriteString("created_at=")
-	builder.WriteString(wt.CreatedAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	builder.WriteString("created_by=")
-	builder.WriteString(wt.CreatedBy)
-	builder.WriteString(", ")
-	builder.WriteString("updated_at=")
-	builder.WriteString(wt.UpdatedAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	builder.WriteString("updated_by=")
-	builder.WriteString(wt.UpdatedBy)
 	builder.WriteByte(')')
 	return builder.String()
 }

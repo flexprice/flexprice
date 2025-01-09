@@ -79,13 +79,13 @@ func (h *PriceHandler) GetPrice(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Param filter query types.Filter true "Filter"
+// @Param filter query types.PriceFilter true "Filter"
 // @Success 200 {object} dto.ListPricesResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Router /prices [get]
 func (h *PriceHandler) GetPrices(c *gin.Context) {
-	var filter types.Filter
+	var filter types.PriceFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

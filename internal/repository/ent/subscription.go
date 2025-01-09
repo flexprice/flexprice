@@ -206,6 +206,44 @@ func (r *subscriptionRepository) List(ctx context.Context, filter *types.Subscri
 	return result, nil
 }
 
+func (r *subscriptionRepository) ListAll(ctx context.Context, filter *types.SubscriptionFilter) ([]*domainSub.Subscription, error) {
+	client := r.client.Querier(ctx)
+	query := client.Subscription.Query().
+		Where(
+			subscription.Status(string(types.StatusPublished)),
+		)
+
+	if filter.SubscriptionStatus != "" {
+		query = query.Where(subscription.SubscriptionStatus(string(filter.SubscriptionStatus)))
+	}
+
+	if filter.CurrentPeriodEndBefore != nil {
+		query = query.Where(subscription.CurrentPeriodEndLTE(*filter.CurrentPeriodEndBefore))
+	}
+
+	// Apply pagination
+	if filter.Offset > 0 {
+		query = query.Offset(filter.Offset)
+	}
+	if filter.Limit > 0 {
+		query = query.Limit(filter.Limit)
+	}
+
+	// Execute query
+	subs, err := query.All(ctx)
+	if err != nil {
+		return nil, errors.WithOp(err, "repository.subscription.List")
+	}
+
+	// Convert to domain subscriptions
+	result := make([]*domainSub.Subscription, len(subs))
+	for i, sub := range subs {
+		result[i] = toDomainSubscription(sub)
+	}
+
+	return result, nil
+}
+
 func toDomainSubscription(sub *ent.Subscription) *domainSub.Subscription {
 	return &domainSub.Subscription{
 		ID:                 sub.ID,

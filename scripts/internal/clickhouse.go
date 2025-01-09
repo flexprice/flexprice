@@ -14,7 +14,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/google/uuid"
+	"github.com/flexprice/flexprice/internal/types"
 	"golang.org/x/time/rate"
 )
 
@@ -120,7 +120,7 @@ func generateEvent(index int) dto.IngestEventRequest {
 	timestamp := time.Now().Add(-time.Duration(randInt64(0, 72)) * time.Hour)
 
 	return dto.IngestEventRequest{
-		EventID:            uuid.New().String(),
+		EventID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_EVENT),
 		ExternalCustomerID: customerIDs[(index+rand.Intn(10))%len(customerIDs)],
 		EventName:          meter.Code,
 		Timestamp:          timestamp,

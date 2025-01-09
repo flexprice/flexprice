@@ -2,12 +2,17 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/domain/plan"
+	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
@@ -29,10 +34,17 @@ type invoiceService struct {
 	db          postgres.IClient
 	logger      *logger.Logger
 	invoiceRepo invoice.Repository
+	priceRepo   price.Repository
+	meterRepo   meter.Repository
+	planRepo    plan.Repository
+	idempGen    *idempotency.Generator
 }
 
 func NewInvoiceService(
 	invoiceRepo invoice.Repository,
+	priceRepo price.Repository,
+	meterRepo meter.Repository,
+	planRepo plan.Repository,
 	logger *logger.Logger,
 	db postgres.IClient,
 ) InvoiceService {
@@ -40,6 +52,10 @@ func NewInvoiceService(
 		db:          db,
 		logger:      logger,
 		invoiceRepo: invoiceRepo,
+		priceRepo:   priceRepo,
+		meterRepo:   meterRepo,
+		planRepo:    planRepo,
+		idempGen:    idempotency.NewGenerator(),
 	}
 }
 
@@ -49,12 +65,76 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 	}
 
 	var resp *dto.InvoiceResponse
+
+	// Start transaction
 	err := s.db.WithTx(ctx, func(tx context.Context) error {
+		// 1. Generate idempotency key if not provided
+		var idempKey string
+		if req.IdempotencyKey == nil {
+			params := map[string]interface{}{
+				"tenant_id":    types.GetTenantID(ctx),
+				"customer_id":  req.CustomerID,
+				"period_start": req.PeriodStart,
+				"period_end":   req.PeriodEnd,
+			}
+			scope := idempotency.ScopeOneOffInvoice
+			if req.SubscriptionID != nil {
+				scope = idempotency.ScopeSubscriptionInvoice
+				params["subscription_id"] = req.SubscriptionID
+			}
+			idempKey = s.idempGen.GenerateKey(scope, params)
+		} else {
+			idempKey = *req.IdempotencyKey
+		}
+
+		// 2. Check for existing invoice with same idempotency key
+		existing, err := s.invoiceRepo.GetByIdempotencyKey(tx, idempKey)
+		if err != nil && !errors.Is(err, invoice.ErrInvoiceNotFound) {
+			return fmt.Errorf("failed to check idempotency: %w", err)
+		}
+		if existing != nil {
+			s.logger.Infow("returning existing invoice for idempotency key",
+				"idempotency_key", idempKey,
+				"invoice_id", existing.ID)
+			return nil
+		}
+
+		// 3. For subscription invoices, validate period uniqueness and get billing sequence
+		var billingSeq *int
+		if req.SubscriptionID != nil {
+			// Check period uniqueness
+			exists, err := s.invoiceRepo.ExistsForPeriod(ctx, *req.SubscriptionID, *req.PeriodStart, *req.PeriodEnd)
+			if err != nil {
+				return fmt.Errorf("failed to check period uniqueness: %w", err)
+			}
+			if exists {
+				return invoice.ErrInvoiceAlreadyExists
+			}
+
+			// Get billing sequence
+			seq, err := s.invoiceRepo.GetNextBillingSequence(ctx, *req.SubscriptionID)
+			if err != nil {
+				return fmt.Errorf("failed to get billing sequence: %w", err)
+			}
+			billingSeq = &seq
+		}
+
+		// 4. Generate invoice number
+		invoiceNumber, err := s.invoiceRepo.GetNextInvoiceNumber(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to generate invoice number: %w", err)
+		}
+
+		// 5. Create invoice
 		// Convert request to domain model
 		inv, err := req.ToInvoice(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to convert request to invoice: %w", err)
 		}
+
+		inv.InvoiceNumber = &invoiceNumber
+		inv.IdempotencyKey = &idempKey
+		inv.BillingSequence = billingSeq
 
 		// Setting default values
 		if req.InvoiceType == types.InvoiceTypeOneOff {
@@ -98,6 +178,10 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 	})
 
 	if err != nil {
+		s.logger.Errorw("failed to create invoice",
+			"error", err,
+			"customer_id", req.CustomerID,
+			"subscription_id", req.SubscriptionID)
 		return nil, err
 	}
 
@@ -250,8 +334,53 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, sub *sub
 		return nil, fmt.Errorf("usage is required")
 	}
 
+	// Get all prices for the subscription's plan
+	priceService := NewPriceService(s.priceRepo, s.meterRepo, s.logger)
+	pricesResponse, err := priceService.GetPricesByPlanID(ctx, sub.PlanID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get prices: %w", err)
+	}
+
+	// Fetch Plan info as well
+	plan, err := s.planRepo.Get(ctx, sub.PlanID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get plan: %w", err)
+	}
+
+	// Filter prices valid for this subscription
+	validPrices := filterValidPricesForSubscription(pricesResponse.Prices, sub)
+
 	// Calculate total amount from usage
-	amountDue := decimal.NewFromFloat(usage.Amount)
+	usageAmount := decimal.NewFromFloat(usage.Amount)
+
+	// Calculate fixed charges
+	var fixedCost decimal.Decimal
+	var fixedCostLineItems []dto.CreateInvoiceLineItemRequest
+
+	for _, price := range validPrices {
+		if price.Price.Type == types.PRICE_TYPE_FIXED {
+			quantity := decimal.NewFromInt(1)
+			amount := priceService.CalculateCost(ctx, price.Price, quantity)
+			fixedCost = fixedCost.Add(amount)
+
+			fixedCostLineItems = append(fixedCostLineItems, dto.CreateInvoiceLineItemRequest{
+				PlanID:          &price.Price.PlanID,
+				PlanDisplayName: lo.ToPtr(plan.Name),
+				PriceID:         price.Price.ID,
+				PriceType:       lo.ToPtr(string(price.Price.Type)),
+				Amount:          amount,
+				Quantity:        quantity,
+				PeriodStart:     &periodStart,
+				PeriodEnd:       &periodEnd,
+				Metadata: types.Metadata{
+					"description": fmt.Sprintf("%s (Fixed Charge)", price.Price.LookupKey),
+				},
+			})
+		}
+	}
+
+	// Total amount is sum of usage and fixed charges
+	amountDue := usageAmount.Add(fixedCost)
 	invoiceDueDate := periodEnd.Add(24 * time.Hour * types.InvoiceDefaultDueDays)
 
 	// Create invoice using CreateInvoice
@@ -271,21 +400,36 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, sub *sub
 		Metadata:       types.Metadata{},
 	}
 
-	// Create line items from usage charges
+	// Add fixed charge line items
+	req.LineItems = append(req.LineItems, fixedCostLineItems...)
+
+	// Add usage charge line items
 	for _, item := range usage.Charges {
 		lineItemAmount := decimal.NewFromFloat(item.Amount)
 		req.LineItems = append(req.LineItems, dto.CreateInvoiceLineItemRequest{
-			PriceID:     item.Price.ID,
-			MeterID:     &item.Price.MeterID,
-			Amount:      lineItemAmount,
-			Quantity:    decimal.NewFromFloat(item.Quantity),
-			PeriodStart: &periodStart,
-			PeriodEnd:   &periodEnd,
+			PlanID:           &item.Price.PlanID,
+			PlanDisplayName:  lo.ToPtr(plan.Name),
+			PriceType:        lo.ToPtr(string(item.Price.Type)),
+			PriceID:          item.Price.ID,
+			MeterID:          &item.Price.MeterID,
+			MeterDisplayName: lo.ToPtr(item.MeterDisplayName),
+			Amount:           lineItemAmount,
+			Quantity:         decimal.NewFromFloat(item.Quantity),
+			PeriodStart:      &periodStart,
+			PeriodEnd:        &periodEnd,
 			Metadata: types.Metadata{
-				"meter_display_name": item.MeterDisplayName,
+				"description": fmt.Sprintf("%s (Usage Charge)", item.Price.LookupKey),
 			},
 		})
 	}
+
+	s.logger.Infow("creating invoice with fixed and usage charges",
+		"subscription_id", sub.ID,
+		"usage_amount", usageAmount,
+		"fixed_amount", fixedCost,
+		"total_amount", amountDue,
+		"fixed_line_items", len(fixedCostLineItems),
+		"usage_line_items", len(usage.Charges))
 
 	return s.CreateInvoice(ctx, req)
 }
