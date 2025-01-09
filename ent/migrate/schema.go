@@ -65,6 +65,25 @@ var (
 			},
 		},
 	}
+	// EnvironmentsColumns holds the columns for the "environments" table.
+	EnvironmentsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "name", Type: field.TypeString},
+		{Name: "type", Type: field.TypeString},
+		{Name: "slug", Type: field.TypeString},
+	}
+	// EnvironmentsTable holds the schema information for the "environments" table.
+	EnvironmentsTable = &schema.Table{
+		Name:       "environments",
+		Columns:    EnvironmentsColumns,
+		PrimaryKey: []*schema.Column{EnvironmentsColumns[0]},
+	}
 	// InvoicesColumns holds the columns for the "invoices" table.
 	InvoicesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -496,6 +515,7 @@ var (
 	Tables = []*schema.Table{
 		BillingSequencesTable,
 		CustomersTable,
+		EnvironmentsTable,
 		InvoicesTable,
 		InvoiceLineItemsTable,
 		InvoiceSequencesTable,

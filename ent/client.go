@@ -17,6 +17,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/customer"
+	"github.com/flexprice/flexprice/ent/environment"
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/ent/invoicesequence"
@@ -26,8 +27,6 @@ import (
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/wallet"
 	"github.com/flexprice/flexprice/ent/wallettransaction"
-
-	stdsql "database/sql"
 )
 
 // Client is the client that holds all ent builders.
@@ -39,6 +38,8 @@ type Client struct {
 	BillingSequence *BillingSequenceClient
 	// Customer is the client for interacting with the Customer builders.
 	Customer *CustomerClient
+	// Environment is the client for interacting with the Environment builders.
+	Environment *EnvironmentClient
 	// Invoice is the client for interacting with the Invoice builders.
 	Invoice *InvoiceClient
 	// InvoiceLineItem is the client for interacting with the InvoiceLineItem builders.
@@ -70,6 +71,7 @@ func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
 	c.BillingSequence = NewBillingSequenceClient(c.config)
 	c.Customer = NewCustomerClient(c.config)
+	c.Environment = NewEnvironmentClient(c.config)
 	c.Invoice = NewInvoiceClient(c.config)
 	c.InvoiceLineItem = NewInvoiceLineItemClient(c.config)
 	c.InvoiceSequence = NewInvoiceSequenceClient(c.config)
@@ -173,6 +175,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		config:            cfg,
 		BillingSequence:   NewBillingSequenceClient(cfg),
 		Customer:          NewCustomerClient(cfg),
+		Environment:       NewEnvironmentClient(cfg),
 		Invoice:           NewInvoiceClient(cfg),
 		InvoiceLineItem:   NewInvoiceLineItemClient(cfg),
 		InvoiceSequence:   NewInvoiceSequenceClient(cfg),
@@ -203,6 +206,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		config:            cfg,
 		BillingSequence:   NewBillingSequenceClient(cfg),
 		Customer:          NewCustomerClient(cfg),
+		Environment:       NewEnvironmentClient(cfg),
 		Invoice:           NewInvoiceClient(cfg),
 		InvoiceLineItem:   NewInvoiceLineItemClient(cfg),
 		InvoiceSequence:   NewInvoiceSequenceClient(cfg),
@@ -241,8 +245,9 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.BillingSequence, c.Customer, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence,
-		c.Meter, c.Plan, c.Price, c.Subscription, c.Wallet, c.WalletTransaction,
+		c.BillingSequence, c.Customer, c.Environment, c.Invoice, c.InvoiceLineItem,
+		c.InvoiceSequence, c.Meter, c.Plan, c.Price, c.Subscription, c.Wallet,
+		c.WalletTransaction,
 	} {
 		n.Use(hooks...)
 	}
@@ -252,8 +257,9 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.BillingSequence, c.Customer, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence,
-		c.Meter, c.Plan, c.Price, c.Subscription, c.Wallet, c.WalletTransaction,
+		c.BillingSequence, c.Customer, c.Environment, c.Invoice, c.InvoiceLineItem,
+		c.InvoiceSequence, c.Meter, c.Plan, c.Price, c.Subscription, c.Wallet,
+		c.WalletTransaction,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -266,6 +272,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.BillingSequence.mutate(ctx, m)
 	case *CustomerMutation:
 		return c.Customer.mutate(ctx, m)
+	case *EnvironmentMutation:
+		return c.Environment.mutate(ctx, m)
 	case *InvoiceMutation:
 		return c.Invoice.mutate(ctx, m)
 	case *InvoiceLineItemMutation:
@@ -552,6 +560,139 @@ func (c *CustomerClient) mutate(ctx context.Context, m *CustomerMutation) (Value
 		return (&CustomerDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Customer mutation op: %q", m.Op())
+	}
+}
+
+// EnvironmentClient is a client for the Environment schema.
+type EnvironmentClient struct {
+	config
+}
+
+// NewEnvironmentClient returns a client for the Environment from the given config.
+func NewEnvironmentClient(c config) *EnvironmentClient {
+	return &EnvironmentClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `environment.Hooks(f(g(h())))`.
+func (c *EnvironmentClient) Use(hooks ...Hook) {
+	c.hooks.Environment = append(c.hooks.Environment, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `environment.Intercept(f(g(h())))`.
+func (c *EnvironmentClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Environment = append(c.inters.Environment, interceptors...)
+}
+
+// Create returns a builder for creating a Environment entity.
+func (c *EnvironmentClient) Create() *EnvironmentCreate {
+	mutation := newEnvironmentMutation(c.config, OpCreate)
+	return &EnvironmentCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Environment entities.
+func (c *EnvironmentClient) CreateBulk(builders ...*EnvironmentCreate) *EnvironmentCreateBulk {
+	return &EnvironmentCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *EnvironmentClient) MapCreateBulk(slice any, setFunc func(*EnvironmentCreate, int)) *EnvironmentCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &EnvironmentCreateBulk{err: fmt.Errorf("calling to EnvironmentClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*EnvironmentCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &EnvironmentCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Environment.
+func (c *EnvironmentClient) Update() *EnvironmentUpdate {
+	mutation := newEnvironmentMutation(c.config, OpUpdate)
+	return &EnvironmentUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *EnvironmentClient) UpdateOne(e *Environment) *EnvironmentUpdateOne {
+	mutation := newEnvironmentMutation(c.config, OpUpdateOne, withEnvironment(e))
+	return &EnvironmentUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *EnvironmentClient) UpdateOneID(id string) *EnvironmentUpdateOne {
+	mutation := newEnvironmentMutation(c.config, OpUpdateOne, withEnvironmentID(id))
+	return &EnvironmentUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Environment.
+func (c *EnvironmentClient) Delete() *EnvironmentDelete {
+	mutation := newEnvironmentMutation(c.config, OpDelete)
+	return &EnvironmentDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *EnvironmentClient) DeleteOne(e *Environment) *EnvironmentDeleteOne {
+	return c.DeleteOneID(e.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *EnvironmentClient) DeleteOneID(id string) *EnvironmentDeleteOne {
+	builder := c.Delete().Where(environment.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &EnvironmentDeleteOne{builder}
+}
+
+// Query returns a query builder for Environment.
+func (c *EnvironmentClient) Query() *EnvironmentQuery {
+	return &EnvironmentQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeEnvironment},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Environment entity by its id.
+func (c *EnvironmentClient) Get(ctx context.Context, id string) (*Environment, error) {
+	return c.Query().Where(environment.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *EnvironmentClient) GetX(ctx context.Context, id string) *Environment {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *EnvironmentClient) Hooks() []Hook {
+	return c.hooks.Environment
+}
+
+// Interceptors returns the client interceptors.
+func (c *EnvironmentClient) Interceptors() []Interceptor {
+	return c.inters.Environment
+}
+
+func (c *EnvironmentClient) mutate(ctx context.Context, m *EnvironmentMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&EnvironmentCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&EnvironmentUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&EnvironmentUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&EnvironmentDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Environment mutation op: %q", m.Op())
 	}
 }
 
@@ -1787,35 +1928,13 @@ func (c *WalletTransactionClient) mutate(ctx context.Context, m *WalletTransacti
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		BillingSequence, Customer, Invoice, InvoiceLineItem, InvoiceSequence, Meter,
-		Plan, Price, Subscription, Wallet, WalletTransaction []ent.Hook
+		BillingSequence, Customer, Environment, Invoice, InvoiceLineItem,
+		InvoiceSequence, Meter, Plan, Price, Subscription, Wallet,
+		WalletTransaction []ent.Hook
 	}
 	inters struct {
-		BillingSequence, Customer, Invoice, InvoiceLineItem, InvoiceSequence, Meter,
-		Plan, Price, Subscription, Wallet, WalletTransaction []ent.Interceptor
+		BillingSequence, Customer, Environment, Invoice, InvoiceLineItem,
+		InvoiceSequence, Meter, Plan, Price, Subscription, Wallet,
+		WalletTransaction []ent.Interceptor
 	}
 )
-
-// ExecContext allows calling the underlying ExecContext method of the driver if it is supported by it.
-// See, database/sql#DB.ExecContext for more information.
-func (c *config) ExecContext(ctx context.Context, query string, args ...any) (stdsql.Result, error) {
-	ex, ok := c.driver.(interface {
-		ExecContext(context.Context, string, ...any) (stdsql.Result, error)
-	})
-	if !ok {
-		return nil, fmt.Errorf("Driver.ExecContext is not supported")
-	}
-	return ex.ExecContext(ctx, query, args...)
-}
-
-// QueryContext allows calling the underlying QueryContext method of the driver if it is supported by it.
-// See, database/sql#DB.QueryContext for more information.
-func (c *config) QueryContext(ctx context.Context, query string, args ...any) (*stdsql.Rows, error) {
-	q, ok := c.driver.(interface {
-		QueryContext(context.Context, string, ...any) (*stdsql.Rows, error)
-	})
-	if !ok {
-		return nil, fmt.Errorf("Driver.QueryContext is not supported")
-	}
-	return q.QueryContext(ctx, query, args...)
-}

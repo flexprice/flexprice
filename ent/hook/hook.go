@@ -33,6 +33,18 @@ func (f CustomerFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, er
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CustomerMutation", m)
 }
 
+// The EnvironmentFunc type is an adapter to allow the use of ordinary
+// function as Environment mutator.
+type EnvironmentFunc func(context.Context, *ent.EnvironmentMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f EnvironmentFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.EnvironmentMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.EnvironmentMutation", m)
+}
+
 // The InvoiceFunc type is an adapter to allow the use of ordinary
 // function as Invoice mutator.
 type InvoiceFunc func(context.Context, *ent.InvoiceMutation) (ent.Value, error)

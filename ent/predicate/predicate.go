@@ -12,6 +12,9 @@ type BillingSequence func(*sql.Selector)
 // Customer is the predicate function for customer builders.
 type Customer func(*sql.Selector)
 
+// Environment is the predicate function for environment builders.
+type Environment func(*sql.Selector)
+
 // Invoice is the predicate function for invoice builders.
 type Invoice func(*sql.Selector)
 
