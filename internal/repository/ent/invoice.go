@@ -12,7 +12,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 type invoiceRepository struct {
@@ -42,9 +41,6 @@ func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoi
 		SetAmountDue(inv.AmountDue).
 		SetAmountPaid(inv.AmountPaid).
 		SetAmountRemaining(inv.AmountRemaining).
-		SetIdempotencyKey(lo.FromPtr(inv.IdempotencyKey)).
-		SetInvoiceNumber(lo.FromPtr(inv.InvoiceNumber)).
-		SetBillingSequence(lo.FromPtr(inv.BillingSequence)).
 		SetDescription(inv.Description).
 		SetNillableDueDate(inv.DueDate).
 		SetNillablePaidAt(inv.PaidAt).
@@ -92,9 +88,6 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 			SetAmountDue(inv.AmountDue).
 			SetAmountPaid(inv.AmountPaid).
 			SetAmountRemaining(inv.AmountRemaining).
-			SetIdempotencyKey(lo.FromPtr(inv.IdempotencyKey)).
-			SetInvoiceNumber(lo.FromPtr(inv.InvoiceNumber)).
-			SetBillingSequence(lo.FromPtr(inv.BillingSequence)).
 			SetDescription(inv.Description).
 			SetNillableDueDate(inv.DueDate).
 			SetNillablePaidAt(inv.PaidAt).
@@ -127,12 +120,8 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 					SetInvoiceID(invoice.ID).
 					SetCustomerID(item.CustomerID).
 					SetNillableSubscriptionID(item.SubscriptionID).
-					SetNillablePlanID(item.PlanID).
-					SetNillablePlanDisplayName(item.PlanDisplayName).
-					SetNillablePriceType(item.PriceType).
 					SetPriceID(item.PriceID).
 					SetNillableMeterID(item.MeterID).
-					SetNillableMeterDisplayName(item.MeterDisplayName).
 					SetAmount(item.Amount).
 					SetQuantity(item.Quantity).
 					SetCurrency(item.Currency).
@@ -178,12 +167,8 @@ func (r *invoiceRepository) AddLineItems(ctx context.Context, invoiceID string, 
 				SetInvoiceID(invoiceID).
 				SetCustomerID(item.CustomerID).
 				SetNillableSubscriptionID(item.SubscriptionID).
-				SetNillablePlanID(item.PlanID).
-				SetNillablePlanDisplayName(item.PlanDisplayName).
-				SetNillablePriceType(item.PriceType).
 				SetPriceID(item.PriceID).
 				SetNillableMeterID(item.MeterID).
-				SetNillableMeterDisplayName(item.MeterDisplayName).
 				SetAmount(item.Amount).
 				SetQuantity(item.Quantity).
 				SetCurrency(item.Currency).
@@ -393,115 +378,6 @@ func (r *invoiceRepository) Count(ctx context.Context, filter *types.InvoiceFilt
 		return 0, fmt.Errorf("failed to count invoices: %w", err)
 	}
 	return count, nil
-}
-
-func (r *invoiceRepository) GetByIdempotencyKey(ctx context.Context, key string) (*domainInvoice.Invoice, error) {
-	inv, err := r.client.Querier(ctx).Invoice.Query().
-		Where(
-			invoice.IdempotencyKeyEQ(key),
-			invoice.TenantID(types.GetTenantID(ctx)),
-			invoice.StatusEQ(string(types.StatusPublished)),
-			invoice.InvoiceStatusNEQ(string(types.InvoiceStatusVoided)),
-		).
-		First(ctx)
-	if err != nil {
-		if ent.IsNotFound(err) {
-			return nil, domainInvoice.ErrInvoiceNotFound
-		}
-		return nil, fmt.Errorf("failed to get invoice by idempotency key: %w", err)
-	}
-
-	return domainInvoice.FromEnt(inv), nil
-}
-
-func (r *invoiceRepository) ExistsForPeriod(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time) (bool, error) {
-	exists, err := r.client.Querier(ctx).Invoice.Query().
-		Where(
-			invoice.And(
-				invoice.TenantID(types.GetTenantID(ctx)),
-				invoice.SubscriptionIDEQ(subscriptionID),
-				invoice.PeriodStartEQ(periodStart),
-				invoice.PeriodEndEQ(periodEnd),
-				invoice.StatusEQ(string(types.StatusPublished)),
-				invoice.InvoiceStatusNEQ(string(types.InvoiceStatusVoided)),
-			),
-		).
-		Exist(ctx)
-	if err != nil {
-		return false, fmt.Errorf("failed to check invoice existence: %w", err)
-	}
-
-	return exists, nil
-}
-
-func (r *invoiceRepository) GetNextInvoiceNumber(ctx context.Context) (string, error) {
-	yearMonth := time.Now().Format("200601") // YYYYMM
-	tenantID := types.GetTenantID(ctx)
-
-	// Use raw SQL for atomic increment since ent doesn't support RETURNING with OnConflict
-	query := `
-		INSERT INTO invoice_sequences (tenant_id, year_month, last_value, created_at, updated_at)
-		VALUES ($1, $2, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-		ON CONFLICT (tenant_id, year_month) DO UPDATE
-		SET last_value = invoice_sequences.last_value + 1,
-			updated_at = CURRENT_TIMESTAMP
-		RETURNING last_value`
-
-	var lastValue int64
-	rows, err := r.client.Querier(ctx).QueryContext(ctx, query, tenantID, yearMonth)
-	if err != nil {
-		return "", fmt.Errorf("failed to execute sequence query: %w", err)
-	}
-	defer rows.Close()
-
-	if !rows.Next() {
-		return "", fmt.Errorf("no sequence value returned")
-	}
-
-	if err := rows.Scan(&lastValue); err != nil {
-		return "", fmt.Errorf("failed to scan sequence value: %w", err)
-	}
-
-	r.log.Infow("generated invoice number",
-		"tenant_id", tenantID,
-		"year_month", yearMonth,
-		"sequence", lastValue)
-
-	return fmt.Sprintf("INV-%s-%05d", yearMonth, lastValue), nil
-}
-
-func (r *invoiceRepository) GetNextBillingSequence(ctx context.Context, subscriptionID string) (int, error) {
-	tenantID := types.GetTenantID(ctx)
-	// Use raw SQL for atomic increment since ent doesn't support RETURNING with OnConflict
-	query := `
-		INSERT INTO billing_sequences (tenant_id, subscription_id, last_sequence, created_at, updated_at)
-		VALUES ($1, $2, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-		ON CONFLICT (tenant_id, subscription_id) DO UPDATE
-		SET last_sequence = billing_sequences.last_sequence + 1,
-			updated_at = CURRENT_TIMESTAMP
-		RETURNING last_sequence`
-
-	var lastSequence int
-	rows, err := r.client.Querier(ctx).QueryContext(ctx, query, tenantID, subscriptionID)
-	if err != nil {
-		return 0, fmt.Errorf("failed to execute sequence query: %w", err)
-	}
-	defer rows.Close()
-
-	if !rows.Next() {
-		return 0, fmt.Errorf("no sequence value returned")
-	}
-
-	if err := rows.Scan(&lastSequence); err != nil {
-		return 0, fmt.Errorf("failed to scan sequence value: %w", err)
-	}
-
-	r.log.Infow("generated billing sequence",
-		"tenant_id", tenantID,
-		"subscription_id", subscriptionID,
-		"sequence", lastSequence)
-
-	return lastSequence, nil
 }
 
 // helper functions
