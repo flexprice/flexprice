@@ -100,6 +100,7 @@ func main() {
 			service.NewWalletService,
 			service.NewTenantService,
 			service.NewInvoiceService,
+			service.NewEnvironmentService,
 
 			// Handlers
 			provideHandlers,
@@ -128,6 +129,7 @@ func provideHandlers(
 	walletService service.WalletService,
 	tenantService service.TenantService,
 	invoiceService service.InvoiceService,
+	envService service.EnvironmentService,
 
 ) api.Handlers {
 	return api.Handlers{
@@ -143,6 +145,7 @@ func provideHandlers(
 		Tenant:       v1.NewTenantHandler(tenantService, logger),
 		Cron:         cron.NewSubscriptionHandler(subscriptionService, logger),
 		Invoice:      v1.NewInvoiceHandler(invoiceService, logger),
+		Environment:  v1.NewEnvironmentHandler(envService, logger),
 	}
 }
 
