@@ -78,6 +78,10 @@ func NewTenantRepository(p RepositoryParams) tenant.Repository {
 }
 
 func NewEnvironmentRepository(p RepositoryParams) environment.Repository {
+	// Use Ent implementation if client is available
+	if p.EntClient != nil {
+		return entRepo.NewEnvironmentRepository(p.EntClient, p.Logger)
+	}
 	return postgresRepo.NewEnvironmentRepository(p.DB, p.Logger)
 }
 
