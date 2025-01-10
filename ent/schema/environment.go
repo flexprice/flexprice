@@ -16,15 +16,29 @@ func (Environment) Mixin() []ent.Mixin {
 	}
 }
 
+// Fields of the Environment.
 func (Environment) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Unique().
 			Immutable(),
 		field.String("name").
+			SchemaType(map[string]string{
+				"postgres": "varchar(255)",
+			}).
 			NotEmpty(),
 		field.String("type").
+			SchemaType(map[string]string{
+				"postgres": "varchar(255)",
+			}).
 			NotEmpty(),
 		field.String("slug").
+			SchemaType(map[string]string{
+				"postgres": "varchar(255)",
+			}).
 			NotEmpty(),
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"github.com/flexprice/flexprice/ent/auth"
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/customer"
 	"github.com/flexprice/flexprice/ent/environment"
@@ -22,6 +23,8 @@ import (
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/subscription"
+	"github.com/flexprice/flexprice/ent/tenant"
+	"github.com/flexprice/flexprice/ent/user"
 	"github.com/flexprice/flexprice/ent/wallet"
 	"github.com/flexprice/flexprice/ent/wallettransaction"
 )
@@ -84,6 +87,7 @@ var (
 func checkColumn(table, column string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
+			auth.Table:              auth.ValidColumn,
 			billingsequence.Table:   billingsequence.ValidColumn,
 			customer.Table:          customer.ValidColumn,
 			environment.Table:       environment.ValidColumn,
@@ -94,6 +98,8 @@ func checkColumn(table, column string) error {
 			plan.Table:              plan.ValidColumn,
 			price.Table:             price.ValidColumn,
 			subscription.Table:      subscription.ValidColumn,
+			tenant.Table:            tenant.ValidColumn,
+			user.Table:              user.ValidColumn,
 			wallet.Table:            wallet.ValidColumn,
 			wallettransaction.Table: wallettransaction.ValidColumn,
 		})

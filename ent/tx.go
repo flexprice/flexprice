@@ -14,6 +14,8 @@ import (
 // Tx is a transactional client that is created by calling Client.Tx().
 type Tx struct {
 	config
+	// Auth is the client for interacting with the Auth builders.
+	Auth *AuthClient
 	// BillingSequence is the client for interacting with the BillingSequence builders.
 	BillingSequence *BillingSequenceClient
 	// Customer is the client for interacting with the Customer builders.
@@ -34,6 +36,10 @@ type Tx struct {
 	Price *PriceClient
 	// Subscription is the client for interacting with the Subscription builders.
 	Subscription *SubscriptionClient
+	// Tenant is the client for interacting with the Tenant builders.
+	Tenant *TenantClient
+	// User is the client for interacting with the User builders.
+	User *UserClient
 	// Wallet is the client for interacting with the Wallet builders.
 	Wallet *WalletClient
 	// WalletTransaction is the client for interacting with the WalletTransaction builders.
@@ -169,6 +175,7 @@ func (tx *Tx) Client() *Client {
 }
 
 func (tx *Tx) init() {
+	tx.Auth = NewAuthClient(tx.config)
 	tx.BillingSequence = NewBillingSequenceClient(tx.config)
 	tx.Customer = NewCustomerClient(tx.config)
 	tx.Environment = NewEnvironmentClient(tx.config)
@@ -179,6 +186,8 @@ func (tx *Tx) init() {
 	tx.Plan = NewPlanClient(tx.config)
 	tx.Price = NewPriceClient(tx.config)
 	tx.Subscription = NewSubscriptionClient(tx.config)
+	tx.Tenant = NewTenantClient(tx.config)
+	tx.User = NewUserClient(tx.config)
 	tx.Wallet = NewWalletClient(tx.config)
 	tx.WalletTransaction = NewWalletTransactionClient(tx.config)
 }
@@ -190,7 +199,7 @@ func (tx *Tx) init() {
 // of them in order to commit or rollback the transaction.
 //
 // If a closed transaction is embedded in one of the generated entities, and the entity
-// applies a query, for example: BillingSequence.QueryXXX(), the query will be executed
+// applies a query, for example: Auth.QueryXXX(), the query will be executed
 // through the driver which created this transaction.
 //
 // Note that txDriver is not goroutine safe.
