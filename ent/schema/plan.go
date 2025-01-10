@@ -33,7 +33,7 @@ func (Plan) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(255)",
 			}).
-			NotEmpty(),
+			Optional(),
 		field.String("name").
 			SchemaType(map[string]string{
 				"postgres": "varchar(255)",
@@ -61,7 +61,7 @@ func (Plan) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("tenant_id", "lookup_key").
 			Unique().
-			Annotations(entsql.IndexWhere("status != 'deleted'")),
+			Annotations(entsql.IndexWhere("status != 'deleted'" + " AND lookup_key IS NOT NULL AND lookup_key != ''")),
 		index.Fields("tenant_id"),
 	}
 }

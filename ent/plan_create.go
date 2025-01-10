@@ -102,6 +102,14 @@ func (pc *PlanCreate) SetLookupKey(s string) *PlanCreate {
 	return pc
 }
 
+// SetNillableLookupKey sets the "lookup_key" field if the given value is not nil.
+func (pc *PlanCreate) SetNillableLookupKey(s *string) *PlanCreate {
+	if s != nil {
+		pc.SetLookupKey(*s)
+	}
+	return pc
+}
+
 // SetName sets the "name" field.
 func (pc *PlanCreate) SetName(s string) *PlanCreate {
 	pc.mutation.SetName(s)
@@ -219,14 +227,6 @@ func (pc *PlanCreate) check() error {
 	}
 	if _, ok := pc.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "Plan.updated_at"`)}
-	}
-	if _, ok := pc.mutation.LookupKey(); !ok {
-		return &ValidationError{Name: "lookup_key", err: errors.New(`ent: missing required field "Plan.lookup_key"`)}
-	}
-	if v, ok := pc.mutation.LookupKey(); ok {
-		if err := plan.LookupKeyValidator(v); err != nil {
-			return &ValidationError{Name: "lookup_key", err: fmt.Errorf(`ent: validator failed for field "Plan.lookup_key": %w`, err)}
-		}
 	}
 	if _, ok := pc.mutation.Name(); !ok {
 		return &ValidationError{Name: "name", err: errors.New(`ent: missing required field "Plan.name"`)}

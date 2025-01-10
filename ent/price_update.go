@@ -314,6 +314,12 @@ func (pu *PriceUpdate) SetNillableLookupKey(s *string) *PriceUpdate {
 	return pu
 }
 
+// ClearLookupKey clears the value of the "lookup_key" field.
+func (pu *PriceUpdate) ClearLookupKey() *PriceUpdate {
+	pu.mutation.ClearLookupKey()
+	return pu
+}
+
 // SetDescription sets the "description" field.
 func (pu *PriceUpdate) SetDescription(s string) *PriceUpdate {
 	pu.mutation.SetDescription(s)
@@ -429,11 +435,6 @@ func (pu *PriceUpdate) check() error {
 			return &ValidationError{Name: "billing_cadence", err: fmt.Errorf(`ent: validator failed for field "Price.billing_cadence": %w`, err)}
 		}
 	}
-	if v, ok := pu.mutation.LookupKey(); ok {
-		if err := price.LookupKeyValidator(v); err != nil {
-			return &ValidationError{Name: "lookup_key", err: fmt.Errorf(`ent: validator failed for field "Price.lookup_key": %w`, err)}
-		}
-	}
 	return nil
 }
 
@@ -534,6 +535,9 @@ func (pu *PriceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := pu.mutation.LookupKey(); ok {
 		_spec.SetField(price.FieldLookupKey, field.TypeString, value)
+	}
+	if pu.mutation.LookupKeyCleared() {
+		_spec.ClearField(price.FieldLookupKey, field.TypeString)
 	}
 	if value, ok := pu.mutation.Description(); ok {
 		_spec.SetField(price.FieldDescription, field.TypeString, value)
@@ -851,6 +855,12 @@ func (puo *PriceUpdateOne) SetNillableLookupKey(s *string) *PriceUpdateOne {
 	return puo
 }
 
+// ClearLookupKey clears the value of the "lookup_key" field.
+func (puo *PriceUpdateOne) ClearLookupKey() *PriceUpdateOne {
+	puo.mutation.ClearLookupKey()
+	return puo
+}
+
 // SetDescription sets the "description" field.
 func (puo *PriceUpdateOne) SetDescription(s string) *PriceUpdateOne {
 	puo.mutation.SetDescription(s)
@@ -979,11 +989,6 @@ func (puo *PriceUpdateOne) check() error {
 			return &ValidationError{Name: "billing_cadence", err: fmt.Errorf(`ent: validator failed for field "Price.billing_cadence": %w`, err)}
 		}
 	}
-	if v, ok := puo.mutation.LookupKey(); ok {
-		if err := price.LookupKeyValidator(v); err != nil {
-			return &ValidationError{Name: "lookup_key", err: fmt.Errorf(`ent: validator failed for field "Price.lookup_key": %w`, err)}
-		}
-	}
 	return nil
 }
 
@@ -1101,6 +1106,9 @@ func (puo *PriceUpdateOne) sqlSave(ctx context.Context) (_node *Price, err error
 	}
 	if value, ok := puo.mutation.LookupKey(); ok {
 		_spec.SetField(price.FieldLookupKey, field.TypeString, value)
+	}
+	if puo.mutation.LookupKeyCleared() {
+		_spec.ClearField(price.FieldLookupKey, field.TypeString)
 	}
 	if value, ok := puo.mutation.Description(); ok {
 		_spec.SetField(price.FieldDescription, field.TypeString, value)

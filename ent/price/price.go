@@ -128,8 +128,6 @@ var (
 	BillingModelValidator func(string) error
 	// BillingCadenceValidator is a validator for the "billing_cadence" field. It is called by the builders before save.
 	BillingCadenceValidator func(string) error
-	// LookupKeyValidator is a validator for the "lookup_key" field. It is called by the builders before save.
-	LookupKeyValidator func(string) error
 )
 
 // OrderOption defines the ordering options for the Price queries.

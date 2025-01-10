@@ -55,7 +55,7 @@ var (
 				Unique:  true,
 				Columns: []*schema.Column{CustomersColumns[1], CustomersColumns[7]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "status != 'deleted'",
+					Where: "status != 'deleted' AND external_id != ''",
 				},
 			},
 			{
@@ -296,7 +296,7 @@ var (
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "created_by", Type: field.TypeString, Nullable: true},
 		{Name: "updated_by", Type: field.TypeString, Nullable: true},
-		{Name: "lookup_key", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "lookup_key", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "name", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "description", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "invoice_cadence", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
@@ -313,7 +313,7 @@ var (
 				Unique:  true,
 				Columns: []*schema.Column{PlansColumns[1], PlansColumns[7]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "status != 'deleted'",
+					Where: "status != 'deleted' AND lookup_key IS NOT NULL AND lookup_key != ''",
 				},
 			},
 			{
@@ -346,7 +346,7 @@ var (
 		{Name: "tier_mode", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "tiers", Type: field.TypeJSON, Nullable: true},
 		{Name: "transform_quantity", Type: field.TypeJSON, Nullable: true},
-		{Name: "lookup_key", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "lookup_key", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "description", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
 	}
@@ -361,7 +361,7 @@ var (
 				Unique:  true,
 				Columns: []*schema.Column{PricesColumns[1], PricesColumns[21]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "status != 'deleted' AND lookup_key != ''",
+					Where: "status != 'deleted' AND lookup_key IS NOT NULL AND lookup_key != ''",
 				},
 			},
 			{

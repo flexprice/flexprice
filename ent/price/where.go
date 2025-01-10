@@ -1289,6 +1289,16 @@ func LookupKeyHasSuffix(v string) predicate.Price {
 	return predicate.Price(sql.FieldHasSuffix(FieldLookupKey, v))
 }
 
+// LookupKeyIsNil applies the IsNil predicate on the "lookup_key" field.
+func LookupKeyIsNil() predicate.Price {
+	return predicate.Price(sql.FieldIsNull(FieldLookupKey))
+}
+
+// LookupKeyNotNil applies the NotNil predicate on the "lookup_key" field.
+func LookupKeyNotNil() predicate.Price {
+	return predicate.Price(sql.FieldNotNull(FieldLookupKey))
+}
+
 // LookupKeyEqualFold applies the EqualFold predicate on the "lookup_key" field.
 func LookupKeyEqualFold(v string) predicate.Price {
 	return predicate.Price(sql.FieldEqualFold(FieldLookupKey, v))

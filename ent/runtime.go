@@ -315,10 +315,6 @@ func init() {
 	plan.DefaultUpdatedAt = planDescUpdatedAt.Default.(func() time.Time)
 	// plan.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	plan.UpdateDefaultUpdatedAt = planDescUpdatedAt.UpdateDefault.(func() time.Time)
-	// planDescLookupKey is the schema descriptor for lookup_key field.
-	planDescLookupKey := planFields[1].Descriptor()
-	// plan.LookupKeyValidator is a validator for the "lookup_key" field. It is called by the builders before save.
-	plan.LookupKeyValidator = planDescLookupKey.Validators[0].(func(string) error)
 	// planDescName is the schema descriptor for name field.
 	planDescName := planFields[2].Descriptor()
 	// plan.NameValidator is a validator for the "name" field. It is called by the builders before save.
@@ -386,10 +382,6 @@ func init() {
 	priceDescBillingCadence := priceFields[9].Descriptor()
 	// price.BillingCadenceValidator is a validator for the "billing_cadence" field. It is called by the builders before save.
 	price.BillingCadenceValidator = priceDescBillingCadence.Validators[0].(func(string) error)
-	// priceDescLookupKey is the schema descriptor for lookup_key field.
-	priceDescLookupKey := priceFields[15].Descriptor()
-	// price.LookupKeyValidator is a validator for the "lookup_key" field. It is called by the builders before save.
-	price.LookupKeyValidator = priceDescLookupKey.Validators[0].(func(string) error)
 	subscriptionMixin := schema.Subscription{}.Mixin()
 	subscriptionMixinFields0 := subscriptionMixin[0].Fields()
 	_ = subscriptionMixinFields0
