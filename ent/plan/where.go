@@ -534,6 +534,16 @@ func LookupKeyHasSuffix(v string) predicate.Plan {
 	return predicate.Plan(sql.FieldHasSuffix(FieldLookupKey, v))
 }
 
+// LookupKeyIsNil applies the IsNil predicate on the "lookup_key" field.
+func LookupKeyIsNil() predicate.Plan {
+	return predicate.Plan(sql.FieldIsNull(FieldLookupKey))
+}
+
+// LookupKeyNotNil applies the NotNil predicate on the "lookup_key" field.
+func LookupKeyNotNil() predicate.Plan {
+	return predicate.Plan(sql.FieldNotNull(FieldLookupKey))
+}
+
 // LookupKeyEqualFold applies the EqualFold predicate on the "lookup_key" field.
 func LookupKeyEqualFold(v string) predicate.Plan {
 	return predicate.Plan(sql.FieldEqualFold(FieldLookupKey, v))

@@ -8139,9 +8139,22 @@ func (m *PlanMutation) OldLookupKey(ctx context.Context) (v string, err error) {
 	return oldValue.LookupKey, nil
 }
 
+// ClearLookupKey clears the value of the "lookup_key" field.
+func (m *PlanMutation) ClearLookupKey() {
+	m.lookup_key = nil
+	m.clearedFields[plan.FieldLookupKey] = struct{}{}
+}
+
+// LookupKeyCleared returns if the "lookup_key" field was cleared in this mutation.
+func (m *PlanMutation) LookupKeyCleared() bool {
+	_, ok := m.clearedFields[plan.FieldLookupKey]
+	return ok
+}
+
 // ResetLookupKey resets all changes to the "lookup_key" field.
 func (m *PlanMutation) ResetLookupKey() {
 	m.lookup_key = nil
+	delete(m.clearedFields, plan.FieldLookupKey)
 }
 
 // SetName sets the "name" field.
@@ -8587,6 +8600,9 @@ func (m *PlanMutation) ClearedFields() []string {
 	if m.FieldCleared(plan.FieldUpdatedBy) {
 		fields = append(fields, plan.FieldUpdatedBy)
 	}
+	if m.FieldCleared(plan.FieldLookupKey) {
+		fields = append(fields, plan.FieldLookupKey)
+	}
 	if m.FieldCleared(plan.FieldDescription) {
 		fields = append(fields, plan.FieldDescription)
 	}
@@ -8609,6 +8625,9 @@ func (m *PlanMutation) ClearField(name string) error {
 		return nil
 	case plan.FieldUpdatedBy:
 		m.ClearUpdatedBy()
+		return nil
+	case plan.FieldLookupKey:
+		m.ClearLookupKey()
 		return nil
 	case plan.FieldDescription:
 		m.ClearDescription()
@@ -9746,9 +9765,22 @@ func (m *PriceMutation) OldLookupKey(ctx context.Context) (v string, err error) 
 	return oldValue.LookupKey, nil
 }
 
+// ClearLookupKey clears the value of the "lookup_key" field.
+func (m *PriceMutation) ClearLookupKey() {
+	m.lookup_key = nil
+	m.clearedFields[price.FieldLookupKey] = struct{}{}
+}
+
+// LookupKeyCleared returns if the "lookup_key" field was cleared in this mutation.
+func (m *PriceMutation) LookupKeyCleared() bool {
+	_, ok := m.clearedFields[price.FieldLookupKey]
+	return ok
+}
+
 // ResetLookupKey resets all changes to the "lookup_key" field.
 func (m *PriceMutation) ResetLookupKey() {
 	m.lookup_key = nil
+	delete(m.clearedFields, price.FieldLookupKey)
 }
 
 // SetDescription sets the "description" field.
@@ -10310,6 +10342,9 @@ func (m *PriceMutation) ClearedFields() []string {
 	if m.FieldCleared(price.FieldTransformQuantity) {
 		fields = append(fields, price.FieldTransformQuantity)
 	}
+	if m.FieldCleared(price.FieldLookupKey) {
+		fields = append(fields, price.FieldLookupKey)
+	}
 	if m.FieldCleared(price.FieldDescription) {
 		fields = append(fields, price.FieldDescription)
 	}
@@ -10350,6 +10385,9 @@ func (m *PriceMutation) ClearField(name string) error {
 		return nil
 	case price.FieldTransformQuantity:
 		m.ClearTransformQuantity()
+		return nil
+	case price.FieldLookupKey:
+		m.ClearLookupKey()
 		return nil
 	case price.FieldDescription:
 		m.ClearDescription()

@@ -211,6 +211,14 @@ func (pc *PriceCreate) SetLookupKey(s string) *PriceCreate {
 	return pc
 }
 
+// SetNillableLookupKey sets the "lookup_key" field if the given value is not nil.
+func (pc *PriceCreate) SetNillableLookupKey(s *string) *PriceCreate {
+	if s != nil {
+		pc.SetLookupKey(*s)
+	}
+	return pc
+}
+
 // SetDescription sets the "description" field.
 func (pc *PriceCreate) SetDescription(s string) *PriceCreate {
 	pc.mutation.SetDescription(s)
@@ -370,14 +378,6 @@ func (pc *PriceCreate) check() error {
 	if v, ok := pc.mutation.BillingCadence(); ok {
 		if err := price.BillingCadenceValidator(v); err != nil {
 			return &ValidationError{Name: "billing_cadence", err: fmt.Errorf(`ent: validator failed for field "Price.billing_cadence": %w`, err)}
-		}
-	}
-	if _, ok := pc.mutation.LookupKey(); !ok {
-		return &ValidationError{Name: "lookup_key", err: errors.New(`ent: missing required field "Price.lookup_key"`)}
-	}
-	if v, ok := pc.mutation.LookupKey(); ok {
-		if err := price.LookupKeyValidator(v); err != nil {
-			return &ValidationError{Name: "lookup_key", err: fmt.Errorf(`ent: validator failed for field "Price.lookup_key": %w`, err)}
 		}
 	}
 	return nil

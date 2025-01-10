@@ -82,6 +82,12 @@ func (pu *PlanUpdate) SetNillableLookupKey(s *string) *PlanUpdate {
 	return pu
 }
 
+// ClearLookupKey clears the value of the "lookup_key" field.
+func (pu *PlanUpdate) ClearLookupKey() *PlanUpdate {
+	pu.mutation.ClearLookupKey()
+	return pu
+}
+
 // SetName sets the "name" field.
 func (pu *PlanUpdate) SetName(s string) *PlanUpdate {
 	pu.mutation.SetName(s)
@@ -194,11 +200,6 @@ func (pu *PlanUpdate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (pu *PlanUpdate) check() error {
-	if v, ok := pu.mutation.LookupKey(); ok {
-		if err := plan.LookupKeyValidator(v); err != nil {
-			return &ValidationError{Name: "lookup_key", err: fmt.Errorf(`ent: validator failed for field "Plan.lookup_key": %w`, err)}
-		}
-	}
 	if v, ok := pu.mutation.Name(); ok {
 		if err := plan.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Plan.name": %w`, err)}
@@ -241,6 +242,9 @@ func (pu *PlanUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := pu.mutation.LookupKey(); ok {
 		_spec.SetField(plan.FieldLookupKey, field.TypeString, value)
+	}
+	if pu.mutation.LookupKeyCleared() {
+		_spec.ClearField(plan.FieldLookupKey, field.TypeString)
 	}
 	if value, ok := pu.mutation.Name(); ok {
 		_spec.SetField(plan.FieldName, field.TypeString, value)
@@ -331,6 +335,12 @@ func (puo *PlanUpdateOne) SetNillableLookupKey(s *string) *PlanUpdateOne {
 	if s != nil {
 		puo.SetLookupKey(*s)
 	}
+	return puo
+}
+
+// ClearLookupKey clears the value of the "lookup_key" field.
+func (puo *PlanUpdateOne) ClearLookupKey() *PlanUpdateOne {
+	puo.mutation.ClearLookupKey()
 	return puo
 }
 
@@ -459,11 +469,6 @@ func (puo *PlanUpdateOne) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (puo *PlanUpdateOne) check() error {
-	if v, ok := puo.mutation.LookupKey(); ok {
-		if err := plan.LookupKeyValidator(v); err != nil {
-			return &ValidationError{Name: "lookup_key", err: fmt.Errorf(`ent: validator failed for field "Plan.lookup_key": %w`, err)}
-		}
-	}
 	if v, ok := puo.mutation.Name(); ok {
 		if err := plan.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Plan.name": %w`, err)}
@@ -523,6 +528,9 @@ func (puo *PlanUpdateOne) sqlSave(ctx context.Context) (_node *Plan, err error) 
 	}
 	if value, ok := puo.mutation.LookupKey(); ok {
 		_spec.SetField(plan.FieldLookupKey, field.TypeString, value)
+	}
+	if puo.mutation.LookupKeyCleared() {
+		_spec.ClearField(plan.FieldLookupKey, field.TypeString)
 	}
 	if value, ok := puo.mutation.Name(); ok {
 		_spec.SetField(plan.FieldName, field.TypeString, value)

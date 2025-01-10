@@ -93,7 +93,7 @@ func (Price) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(255)",
 			}).
-			NotEmpty(),
+			Optional(),
 		field.Text("description").
 			Optional(),
 		field.JSON("metadata", map[string]string{}).
@@ -111,7 +111,7 @@ func (Price) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("tenant_id", "lookup_key").
 			Unique().
-			Annotations(entsql.IndexWhere("status != 'deleted' AND lookup_key != ''")),
+			Annotations(entsql.IndexWhere("status != 'deleted' AND lookup_key IS NOT NULL AND lookup_key != ''")),
 		index.Fields("tenant_id", "plan_id"),
 		index.Fields("tenant_id"),
 	}

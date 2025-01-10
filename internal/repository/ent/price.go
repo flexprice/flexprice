@@ -30,7 +30,7 @@ func NewPriceRepository(client postgres.IClient, log *logger.Logger) domainPrice
 func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) error {
 	client := r.client.Querier(ctx)
 
-	r.log.Debug("creating price",
+	r.log.Debugw("creating price",
 		"price_id", p.ID,
 		"tenant_id", p.TenantID,
 		"plan_id", p.PlanID,
