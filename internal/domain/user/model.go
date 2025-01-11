@@ -1,8 +1,7 @@
 package user
 
 import (
-	"time"
-
+	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -12,16 +11,17 @@ type User struct {
 	types.BaseModel
 }
 
-func NewUser(email, tenantID string) *User {
-	return &User{
-		ID:    types.GenerateUUIDWithPrefix(types.UUID_PREFIX_USER),
-		Email: email,
-		BaseModel: types.BaseModel{
-			TenantID:  tenantID,
-			CreatedBy: types.DefaultUserID,
-			UpdatedBy: types.DefaultUserID,
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
-		},
+func fromEnt(e *ent.User) *User {
+	if e == nil {
+		return nil
 	}
+
+	return &User{
+		ID:    e.ID,
+		Email: e.Email,
+	}
+}
+
+func (u *User) Validate() error {
+	return nil
 }

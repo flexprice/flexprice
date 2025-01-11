@@ -3,6 +3,7 @@ package auth
 import (
 	"time"
 
+	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -20,13 +21,17 @@ type Claims struct {
 	TenantID string
 }
 
-func NewAuth(userID string, provider types.AuthProvider, token string) *Auth {
+func FromEnt(e *ent.Auth) *Auth {
+	if e == nil {
+		return nil
+	}
+
 	return &Auth{
-		UserID:    userID,
-		Provider:  provider,
-		Token:     token,
-		Status:    types.StatusPublished,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		UserID:    e.UserID,
+		Provider:  types.AuthProvider(e.Provider),
+		Token:     e.Token,
+		Status:    types.Status(e.Status),
+		CreatedAt: e.CreatedAt,
+		UpdatedAt: e.UpdatedAt,
 	}
 }
