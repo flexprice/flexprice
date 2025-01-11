@@ -41,10 +41,20 @@ func NewMeterRepository(p RepositoryParams) meter.Repository {
 }
 
 func NewUserRepository(p RepositoryParams) user.Repository {
+	// Use Ent implementation if client is available
+	if p.EntClient != nil {
+		return entRepo.NewUserRepository(p.EntClient, p.Logger)
+	}
+	// Fallback to PostgreSQL implementation
 	return postgresRepo.NewUserRepository(p.DB, p.Logger)
 }
 
 func NewAuthRepository(p RepositoryParams) auth.Repository {
+	// Use Ent implementation if client is available
+	if p.EntClient != nil {
+		return entRepo.NewAuthRepository(p.EntClient, p.Logger)
+	}
+	// Fallback to PostgreSQL implementation
 	return postgresRepo.NewAuthRepository(p.DB, p.Logger)
 }
 
@@ -74,6 +84,10 @@ func NewWalletRepository(p RepositoryParams) wallet.Repository {
 }
 
 func NewTenantRepository(p RepositoryParams) tenant.Repository {
+	// Use Ent implementation if client is available
+	if p.EntClient != nil {
+		return entRepo.NewTenantRepository(p.EntClient, p.Logger)
+	}
 	return postgresRepo.NewTenantRepository(p.DB, p.Logger)
 }
 

@@ -20,7 +20,8 @@ type environmentRepository struct {
 func NewEnvironmentRepository(client postgres.IClient, log *logger.Logger) domainEnv.Repository {
 	return &environmentRepository{
 		client: client,
-		log:    log}
+		log:    log,
+	}
 }
 
 func (r *environmentRepository) Create(ctx context.Context, env *domainEnv.Environment) error {

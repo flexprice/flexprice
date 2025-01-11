@@ -11,7 +11,7 @@ type User struct {
 	types.BaseModel
 }
 
-func fromEnt(e *ent.User) *User {
+func FromEnt(e *ent.User) *User {
 	if e == nil {
 		return nil
 	}
