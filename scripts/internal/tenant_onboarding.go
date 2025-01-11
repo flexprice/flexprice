@@ -82,19 +82,25 @@ func (s *onboardingScript) createTenant(ctx context.Context, name string) (*tena
 
 func (s *onboardingScript) createUser(ctx context.Context, email, tenantID string) (*user.User, error) {
 	password := os.Getenv("USER_PASSWORD")
-	u := user.NewUser(email, tenantID)
 
 	// Check if user already exists in MongoDB
-	existingUser, err := s.userRepo.GetByEmail(ctx, u.Email)
+	existingUser, err := s.userRepo.GetByEmail(ctx, email)
 	if err == nil && existingUser != nil {
 		s.log.Infow("user already exists", "id", existingUser.ID, "email", existingUser.Email, "tenant_id", existingUser.TenantID)
 		return existingUser, nil
 	}
 
+	newUser := &user.User{
+		Email: email,
+		BaseModel: types.BaseModel{
+			TenantID: tenantID,
+		},
+	}
+
 	// Register the user with Supabase only if UserID is empty
 	// Skip the confirmation email step and directly set the user as confirmed
 	authResponse, err := s.authProvider.SignUp(ctx, auth.AuthRequest{
-		Email:    u.Email,
+		Email:    newUser.Email,
 		Password: password,
 	})
 	if err != nil {
@@ -104,14 +110,14 @@ func (s *onboardingScript) createUser(ctx context.Context, email, tenantID strin
 
 	s.log.Infof("Supabase registration response : %+v", authResponse)
 
-	u.ID = authResponse.ID // Set the UserID from the Supabase response
+	newUser.ID = authResponse.ID // Update the UserID from the Supabase response
 
-	if err := s.userRepo.Create(ctx, u); err != nil {
+	if err := s.userRepo.Create(ctx, newUser); err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
-	s.log.Infow("created user", "id", u.ID, "email", u.Email, "tenant_id", u.TenantID)
-	return u, nil
+	s.log.Infow("created user", "id", newUser.ID, "email", newUser.Email, "tenant_id", newUser.TenantID)
+	return newUser, nil
 }
 
 func (s *onboardingScript) createEnvironment(ctx context.Context, name string, envType types.EnvironmentType, tenantID string) (*environment.Environment, error) {

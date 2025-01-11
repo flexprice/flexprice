@@ -36,7 +36,14 @@ func NewAuthService(cfg *config.Configuration, userRepo user.Repository, authRep
 func (s *authService) SignUp(ctx context.Context, req *dto.SignUpRequest) (*dto.AuthResponse, error) {
 	tenantID := types.DefaultTenantID
 
-	user := user.NewUser(req.Email, tenantID)
+	// Instead of user.NewUser(req.Email, tenantID):
+	user := &user.User{
+		Email: req.Email,
+		BaseModel: types.BaseModel{
+			TenantID: tenantID,
+		},
+	}
+
 	err := s.userRepo.Create(ctx, user)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create user: %w", err)
@@ -52,8 +59,13 @@ func (s *authService) SignUp(ctx context.Context, req *dto.SignUpRequest) (*dto.
 		return nil, fmt.Errorf("unable to sign up: %w", err)
 	}
 
-	auth := auth.NewAuth(user.ID, types.AuthProviderFlexprice, authResponse.ProviderToken)
-	err = s.authRepo.CreateAuth(ctx, auth)
+	//auth := auth.NewAuth(user.ID, types.AuthProviderFlexprice, authResponse.ProviderToken)
+	authObj := &auth.Auth{
+		UserID:   user.ID,
+		Provider: types.AuthProviderFlexprice,
+	}
+
+	err = s.authRepo.CreateAuth(ctx, authObj)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create auth: %w", err)
 	}
