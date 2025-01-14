@@ -415,6 +415,25 @@ var (
 			},
 		},
 	}
+	// SystemEventsColumns holds the columns for the "system_events" table.
+	SystemEventsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID, Unique: true},
+		{Name: "tenant_id", Type: field.TypeString},
+		{Name: "type", Type: field.TypeString},
+		{Name: "payload", Type: field.TypeJSON, Nullable: true},
+		{Name: "status", Type: field.TypeString},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString},
+		{Name: "updated_by", Type: field.TypeString},
+		{Name: "workflow_id", Type: field.TypeString, Nullable: true},
+	}
+	// SystemEventsTable holds the schema information for the "system_events" table.
+	SystemEventsTable = &schema.Table{
+		Name:       "system_events",
+		Columns:    SystemEventsColumns,
+		PrimaryKey: []*schema.Column{SystemEventsColumns[0]},
+	}
 	// WalletsColumns holds the columns for the "wallets" table.
 	WalletsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -503,6 +522,7 @@ var (
 		PlansTable,
 		PricesTable,
 		SubscriptionsTable,
+		SystemEventsTable,
 		WalletsTable,
 		WalletTransactionsTable,
 	}

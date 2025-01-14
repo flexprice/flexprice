@@ -33,6 +33,9 @@ type Price func(*sql.Selector)
 // Subscription is the predicate function for subscription builders.
 type Subscription func(*sql.Selector)
 
+// SystemEvent is the predicate function for systemevent builders.
+type SystemEvent func(*sql.Selector)
+
 // Wallet is the predicate function for wallet builders.
 type Wallet func(*sql.Selector)
 

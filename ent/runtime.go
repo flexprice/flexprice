@@ -15,8 +15,10 @@ import (
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/schema"
 	"github.com/flexprice/flexprice/ent/subscription"
+	"github.com/flexprice/flexprice/ent/systemevent"
 	"github.com/flexprice/flexprice/ent/wallet"
 	"github.com/flexprice/flexprice/ent/wallettransaction"
+	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 )
 
@@ -425,6 +427,32 @@ func init() {
 	subscriptionDescVersion := subscriptionFields[20].Descriptor()
 	// subscription.DefaultVersion holds the default value on creation for the version field.
 	subscription.DefaultVersion = subscriptionDescVersion.Default.(int)
+	systemeventFields := schema.SystemEvent{}.Fields()
+	_ = systemeventFields
+	// systemeventDescTenantID is the schema descriptor for tenant_id field.
+	systemeventDescTenantID := systemeventFields[1].Descriptor()
+	// systemevent.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	systemevent.TenantIDValidator = systemeventDescTenantID.Validators[0].(func(string) error)
+	// systemeventDescType is the schema descriptor for type field.
+	systemeventDescType := systemeventFields[2].Descriptor()
+	// systemevent.TypeValidator is a validator for the "type" field. It is called by the builders before save.
+	systemevent.TypeValidator = systemeventDescType.Validators[0].(func(string) error)
+	// systemeventDescStatus is the schema descriptor for status field.
+	systemeventDescStatus := systemeventFields[4].Descriptor()
+	// systemevent.StatusValidator is a validator for the "status" field. It is called by the builders before save.
+	systemevent.StatusValidator = systemeventDescStatus.Validators[0].(func(string) error)
+	// systemeventDescCreatedBy is the schema descriptor for created_by field.
+	systemeventDescCreatedBy := systemeventFields[7].Descriptor()
+	// systemevent.CreatedByValidator is a validator for the "created_by" field. It is called by the builders before save.
+	systemevent.CreatedByValidator = systemeventDescCreatedBy.Validators[0].(func(string) error)
+	// systemeventDescUpdatedBy is the schema descriptor for updated_by field.
+	systemeventDescUpdatedBy := systemeventFields[8].Descriptor()
+	// systemevent.UpdatedByValidator is a validator for the "updated_by" field. It is called by the builders before save.
+	systemevent.UpdatedByValidator = systemeventDescUpdatedBy.Validators[0].(func(string) error)
+	// systemeventDescID is the schema descriptor for id field.
+	systemeventDescID := systemeventFields[0].Descriptor()
+	// systemevent.DefaultID holds the default value on creation for the id field.
+	systemevent.DefaultID = systemeventDescID.Default.(func() uuid.UUID)
 	walletMixin := schema.Wallet{}.Mixin()
 	walletMixinFields0 := walletMixin[0].Fields()
 	_ = walletMixinFields0

@@ -26,6 +26,25 @@ type Configuration struct {
 	Sentry     SentryConfig     `validate:"required"`
 	Event      EventConfig      `validate:"required"`
 	DynamoDB   DynamoDBConfig   `validate:"required"`
+	Temporal   struct {
+		Address    string `mapstructure:"address"`
+		Namespace  string `mapstructure:"namespace"`
+		TaskQueue  string `mapstructure:"task_queue"`
+		ClientName string `mapstructure:"client_name"`
+		Retry      struct {
+			InitialInterval    int     `mapstructure:"initial_interval_seconds"`
+			MaxInterval        int     `mapstructure:"max_interval_seconds"`
+			MaxAttempts        int     `mapstructure:"max_attempts"`
+			BackoffCoefficient float64 `mapstructure:"backoff_coefficient"`
+		} `mapstructure:"retry"`
+		Connection struct {
+			DialTimeout             int     `mapstructure:"dial_timeout_seconds"`
+			RetryMaxAttempts        int     `mapstructure:"retry_max_attempts"`
+			RetryInitialInterval    int     `mapstructure:"retry_initial_interval_seconds"`
+			RetryMaxInterval        int     `mapstructure:"retry_max_interval_seconds"`
+			RetryBackoffCoefficient float64 `mapstructure:"retry_backoff_coefficient"`
+		} `mapstructure:"connection"`
+	} `mapstructure:"temporal"`
 }
 
 type DeploymentConfig struct {
@@ -102,6 +121,11 @@ type SentryConfig struct {
 	Environment string  `mapstructure:"environment"`
 	SampleRate  float64 `mapstructure:"sample_rate" default:"1.0"`
 }
+
+// Add the new mode constant
+const (
+	ModeTemporalWorker types.RunMode = "temporal_worker"
+)
 
 func NewConfig() (*Configuration, error) {
 	v := viper.New()

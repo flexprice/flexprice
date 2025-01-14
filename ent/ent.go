@@ -21,6 +21,7 @@ import (
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/subscription"
+	"github.com/flexprice/flexprice/ent/systemevent"
 	"github.com/flexprice/flexprice/ent/wallet"
 	"github.com/flexprice/flexprice/ent/wallettransaction"
 )
@@ -92,6 +93,7 @@ func checkColumn(table, column string) error {
 			plan.Table:              plan.ValidColumn,
 			price.Table:             price.ValidColumn,
 			subscription.Table:      subscription.ValidColumn,
+			systemevent.Table:       systemevent.ValidColumn,
 			wallet.Table:            wallet.ValidColumn,
 			wallettransaction.Table: wallettransaction.ValidColumn,
 		})
