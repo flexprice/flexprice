@@ -20,7 +20,6 @@ func UpdateBillingPeriodsWorkflow(ctx workflow.Context, payload *BillingPeriodUp
 	logger.Info("Starting billing period update workflow",
 		"tenant_id", payload.TenantID)
 
-	// Configure activity options
 	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: time.Minute * 10,
 		RetryPolicy: &temporal.RetryPolicy{

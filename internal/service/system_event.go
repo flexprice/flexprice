@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/system"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	workflowTypes "github.com/flexprice/flexprice/internal/types/workflow"
 	"github.com/google/uuid"
 	"go.temporal.io/sdk/client"
 )
@@ -16,6 +17,7 @@ type SystemEventService interface {
 	CreateSystemEvent(ctx context.Context, eventType system.SystemEventType, payload interface{}) error
 	GetSystemEvents(ctx context.Context, workflowID string) ([]*system.Event, error)
 	UpdateSystemEventStatus(ctx context.Context, eventID uuid.UUID, status string) error
+	HandleSystemEvent(ctx context.Context, event *system.Event) error
 }
 
 type systemEventService struct {
@@ -148,4 +150,38 @@ func (s *systemEventService) UpdateSystemEventStatus(ctx context.Context, eventI
 	}
 
 	return nil
+}
+
+func (s *systemEventService) HandleSystemEvent(ctx context.Context, event *system.Event) error {
+	if event.Type == system.SystemEventTypeUpdateBillingPeriods {
+		// Prepare workflow payload
+		payload := &workflowTypes.BillingPeriodUpdatePayload{
+			EventID:  event.ID.String(),
+			TenantID: event.TenantID,
+			Metadata: event.Metadata,
+		}
+
+		// Start temporal workflow
+		workflowOptions := client.StartWorkflowOptions{
+			ID:           fmt.Sprintf("billing-period-update-%s", event.ID),
+			TaskQueue:    "billing-period-queue",
+			CronSchedule: "0 0 * * *", // Run daily at midnight
+		}
+
+		_, err := s.temporalClient.ExecuteWorkflow(ctx, workflowOptions, "UpdateBillingPeriodsWorkflow", payload)
+		if err != nil {
+			// Update event status to failed if workflow start fails
+			if updateErr := s.systemEventRepo.UpdateEventStatus(ctx, event.ID, system.EventStatusFailed); updateErr != nil {
+				s.logger.Error("failed to update event status",
+					"event_id", event.ID,
+					"error", updateErr,
+				)
+			}
+			return fmt.Errorf("failed to start billing period update workflow: %w", err)
+		}
+
+		return nil
+	}
+
+	return fmt.Errorf("unknown system event type: %s", event.Type)
 }
