@@ -18,6 +18,9 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
+	"net/http"
+	"bytes"
+	"encoding/json"
 )
 
 type InvoiceService interface {
@@ -185,6 +188,9 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 		return nil, err
 	}
 
+	// Trigger webhook for invoice creation
+	go s.triggerWebhook("invoice.created", resp)
+
 	return resp, nil
 }
 
@@ -236,7 +242,8 @@ func (s *invoiceService) FinalizeInvoice(ctx context.Context, id string) error {
 		return fmt.Errorf("failed to update invoice: %w", err)
 	}
 
-	// TODO: add publisher event for invoice finalized
+	// Trigger webhook for invoice finalization
+	go s.triggerWebhook("invoice.finalized", inv)
 
 	return nil
 }
@@ -263,7 +270,8 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string) error {
 		return fmt.Errorf("failed to update invoice: %w", err)
 	}
 
-	// TODO: add publisher event for invoice voided
+	// Trigger webhook for invoice voiding
+	go s.triggerWebhook("invoice.voided", inv)
 
 	return nil
 }
@@ -320,6 +328,9 @@ func (s *invoiceService) UpdatePaymentStatus(ctx context.Context, id string, sta
 	if err := s.invoiceRepo.Update(ctx, inv); err != nil {
 		return fmt.Errorf("failed to update invoice: %w", err)
 	}
+
+	// Trigger webhook for invoice payment status update
+	go s.triggerWebhook("invoice.payment_updated", inv)
 
 	return nil
 }
@@ -459,4 +470,41 @@ func (s *invoiceService) validatePaymentStatusTransition(from, to types.InvoiceP
 	}
 
 	return fmt.Errorf("invalid payment status transition from %s to %s", from, to)
+}
+
+func (s *invoiceService) triggerWebhook(event string, payload interface{}) {
+	webhookURL := s.config.WebhookURL
+	webhookSecret := s.config.WebhookSecret
+
+	if webhookURL == "" {
+		s.logger.Error("webhook URL is not configured")
+		return
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		s.logger.Errorw("failed to marshal webhook payload", "error", err)
+		return
+	}
+
+	req, err := http.NewRequest("POST", webhookURL, bytes.NewBuffer(payloadBytes))
+	if err != nil {
+		s.logger.Errorw("failed to create webhook request", "error", err)
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", webhookSecret))
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		s.logger.Errorw("failed to send webhook request", "error", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		s.logger.Errorw("webhook request failed", "status", resp.Status)
+	}
 }

@@ -49,6 +49,9 @@ func (h *InvoiceHandler) CreateInvoice(c *gin.Context) {
 		return
 	}
 
+	// Trigger webhook for invoice creation
+	go h.triggerWebhook("invoice.created", invoice)
+
 	c.JSON(http.StatusCreated, invoice)
 }
 
@@ -151,6 +154,9 @@ func (h *InvoiceHandler) FinalizeInvoice(c *gin.Context) {
 		return
 	}
 
+	// Trigger webhook for invoice finalization
+	go h.triggerWebhook("invoice.finalized", id)
+
 	c.JSON(http.StatusOK, gin.H{"message": "invoice finalized successfully"})
 }
 
@@ -177,6 +183,9 @@ func (h *InvoiceHandler) VoidInvoice(c *gin.Context) {
 		NewErrorResponse(c, http.StatusInternalServerError, "failed to void invoice", err)
 		return
 	}
+
+	// Trigger webhook for invoice voiding
+	go h.triggerWebhook("invoice.voided", id)
 
 	c.JSON(http.StatusOK, gin.H{"message": "invoice voided successfully"})
 }
@@ -233,5 +242,13 @@ func (h *InvoiceHandler) UpdatePaymentStatus(c *gin.Context) {
 		return
 	}
 
+	// Trigger webhook for invoice payment status update
+	go h.triggerWebhook("invoice.payment_updated", resp)
+
 	c.JSON(http.StatusOK, resp)
+}
+
+// triggerWebhook triggers a webhook for the given event and payload
+func (h *InvoiceHandler) triggerWebhook(event string, payload interface{}) {
+	// Implement webhook trigger logic here
 }

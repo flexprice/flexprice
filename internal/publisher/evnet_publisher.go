@@ -3,6 +3,7 @@ package publisher
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"sync"
 
 	"github.com/flexprice/flexprice/internal/config"
@@ -99,4 +100,34 @@ func (s *eventPublisher) Publish(ctx context.Context, event *events.Event) error
 	default:
 		return fmt.Errorf("unknown publish destination: %s", s.config.PublishDestination)
 	}
+}
+
+func (s *eventPublisher) publishWebhookEvent(ctx context.Context, event *events.Event) error {
+	webhookURL := s.config.WebhookURL
+	webhookSecret := s.config.WebhookSecret
+
+	if webhookURL == "" {
+		return fmt.Errorf("webhook URL is not configured")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", webhookURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create webhook request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", webhookSecret))
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send webhook request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("webhook request failed with status: %s", resp.Status)
+	}
+
+	return nil
 }
