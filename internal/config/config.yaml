@@ -65,3 +65,20 @@ dynamodb:
 
 logging:
   level: "debug"
+
+temporal:
+  address: "localhost:7233"
+  namespace: "default"
+  task_queue: "default"
+  client_name: "flexprice-client"
+  retry:
+    initial_interval_seconds: 1
+    max_interval_seconds: 10
+    max_attempts: 3
+    backoff_coefficient: 2.0
+  connection:
+    dial_timeout_seconds: 5
+    retry_max_attempts: 5
+    retry_initial_interval_seconds: 1
+    retry_max_interval_seconds: 10
+    retry_backoff_coefficient: 1.5

@@ -13,19 +13,20 @@ import (
 )
 
 type Handlers struct {
-	Events       *v1.EventsHandler
-	Meter        *v1.MeterHandler
-	Auth         *v1.AuthHandler
-	User         *v1.UserHandler
-	Health       *v1.HealthHandler
-	Price        *v1.PriceHandler
-	Customer     *v1.CustomerHandler
-	Plan         *v1.PlanHandler
-	Subscription *v1.SubscriptionHandler
-	Wallet       *v1.WalletHandler
-	Tenant       *v1.TenantHandler
-	Cron         *cron.SubscriptionHandler
-	Invoice      *v1.InvoiceHandler
+	Events          *v1.EventsHandler
+	Meter           *v1.MeterHandler
+	Auth            *v1.AuthHandler
+	User            *v1.UserHandler
+	Health          *v1.HealthHandler
+	Price           *v1.PriceHandler
+	Customer        *v1.CustomerHandler
+	Plan            *v1.PlanHandler
+	Subscription    *v1.SubscriptionHandler
+	Wallet          *v1.WalletHandler
+	Tenant          *v1.TenantHandler
+	Cron            *cron.SubscriptionHandler
+	Invoice         *v1.InvoiceHandler
+	TemporalBilling *v1.TemporalBillingHandler
 }
 
 func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logger) *gin.Engine {
@@ -161,6 +162,15 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		adminRoutes.Use(middleware.APIKeyAuthMiddleware(cfg, logger))
 		{
 			// All admin routes to go here
+		}
+
+		// Temporal billing routes
+		temporal := v1Private.Group("/temporal")
+		{
+			billing := temporal.Group("/billing")
+			{
+				billing.POST("/start", handlers.TemporalBilling.StartTemporalBilling)
+			}
 		}
 	}
 

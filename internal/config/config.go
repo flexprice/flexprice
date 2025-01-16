@@ -13,6 +13,7 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/joho/godotenv"
 	"github.com/spf13/viper"
+	"go.temporal.io/sdk/client"
 )
 
 type Configuration struct {
@@ -26,6 +27,7 @@ type Configuration struct {
 	Sentry     SentryConfig     `validate:"required"`
 	Event      EventConfig      `validate:"required"`
 	DynamoDB   DynamoDBConfig   `validate:"required"`
+	Temporal   TemporalConfig   `validate:"required"`
 }
 
 type DeploymentConfig struct {
@@ -101,6 +103,16 @@ type SentryConfig struct {
 	DSN         string  `mapstructure:"dsn"`
 	Environment string  `mapstructure:"environment"`
 	SampleRate  float64 `mapstructure:"sample_rate" default:"1.0"`
+}
+
+type TemporalConfig struct {
+	HostPort           string  `yaml:"host_port"`
+	Namespace          string  `yaml:"namespace"`
+	TaskQueue          string  `yaml:"task_queue"`
+	ClientName         string  `yaml:"client_name"`
+	MaxIntervalSeconds int     `yaml:"max_interval_seconds"`
+	MaxAttempts        int32   `yaml:"max_attempts"`
+	BackoffCoefficient float64 `yaml:"backoff_coefficient"`
 }
 
 func NewConfig() (*Configuration, error) {
@@ -190,4 +202,14 @@ func (c PostgresConfig) GetDSN() string {
 		c.Port,
 		c.SSLMode,
 	)
+}
+
+func (c *TemporalConfig) GetClientOptions() client.Options {
+	return client.Options{
+		HostPort:  c.HostPort,
+		Namespace: c.Namespace,
+		ConnectionOptions: client.ConnectionOptions{
+			MaxPayloadSize: 2 * 1024 * 1024, // 2MB
+		},
+	}
 }

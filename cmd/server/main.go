@@ -27,6 +27,7 @@ import (
 	ginadapter "github.com/awslabs/aws-lambda-go-api-proxy/gin"
 	_ "github.com/flexprice/flexprice/docs/swagger"
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/temporal"
 	"github.com/gin-gonic/gin"
 )
 
@@ -106,8 +107,14 @@ func main() {
 
 			// Router
 			provideRouter,
+
+			// Temporal
+			temporal.NewTemporalClient,
+			service.NewTemporalService,
 		),
-		fx.Invoke(sentry.RegisterHooks, startServer),
+		fx.Invoke(
+			startTemporalWorker,
+		),
 	)
 
 	app := fx.New(opts...)
@@ -128,20 +135,22 @@ func provideHandlers(
 	walletService service.WalletService,
 	tenantService service.TenantService,
 	invoiceService service.InvoiceService,
+	temporalService service.TemporalService,
 ) api.Handlers {
 	return api.Handlers{
-		Events:       v1.NewEventsHandler(eventService, logger),
-		Meter:        v1.NewMeterHandler(meterService, logger),
-		Auth:         v1.NewAuthHandler(cfg, authService, logger),
-		User:         v1.NewUserHandler(userService, logger),
-		Price:        v1.NewPriceHandler(priceService, logger),
-		Customer:     v1.NewCustomerHandler(customerService, logger),
-		Plan:         v1.NewPlanHandler(planService, logger),
-		Subscription: v1.NewSubscriptionHandler(subscriptionService, logger),
-		Wallet:       v1.NewWalletHandler(walletService, logger),
-		Tenant:       v1.NewTenantHandler(tenantService, logger),
-		Cron:         cron.NewSubscriptionHandler(subscriptionService, logger),
-		Invoice:      v1.NewInvoiceHandler(invoiceService, logger),
+		Events:          v1.NewEventsHandler(eventService, logger),
+		Meter:           v1.NewMeterHandler(meterService, logger),
+		Auth:            v1.NewAuthHandler(cfg, authService, logger),
+		User:            v1.NewUserHandler(userService, logger),
+		Price:           v1.NewPriceHandler(priceService, logger),
+		Customer:        v1.NewCustomerHandler(customerService, logger),
+		Plan:            v1.NewPlanHandler(planService, logger),
+		Subscription:    v1.NewSubscriptionHandler(subscriptionService, logger),
+		Wallet:          v1.NewWalletHandler(walletService, logger),
+		Tenant:          v1.NewTenantHandler(tenantService, logger),
+		Cron:            cron.NewSubscriptionHandler(subscriptionService, logger),
+		Invoice:         v1.NewInvoiceHandler(invoiceService, logger),
+		TemporalBilling: v1.NewTemporalBillingHandler(temporalService, logger),
 	}
 }
 
@@ -155,6 +164,7 @@ func startServer(
 	r *gin.Engine,
 	consumer kafka.MessageConsumer,
 	eventRepo events.Repository,
+	temporalClient *temporal.TemporalClient,
 	log *logger.Logger,
 ) {
 	mode := cfg.Deployment.Mode
@@ -166,17 +176,26 @@ func startServer(
 		}
 		startAPIServer(lc, r, cfg, log)
 		startConsumer(lc, consumer, eventRepo, cfg, log)
+		startTemporalWorker(lc, temporalClient, cfg, log)
+
+	case types.ModeTemporalWorker:
+		startTemporalWorker(lc, temporalClient, cfg, log)
+
 	case types.ModeAPI:
 		startAPIServer(lc, r, cfg, log)
+
 	case types.ModeConsumer:
 		if consumer == nil {
 			log.Fatal("Kafka consumer required for consumer mode")
 		}
 		startConsumer(lc, consumer, eventRepo, cfg, log)
+
 	case types.ModeAWSLambdaAPI:
 		startAWSLambdaAPI(r)
+
 	case types.ModeAWSLambdaConsumer:
 		startAWSLambdaConsumer(eventRepo, log)
+
 	default:
 		log.Fatalf("Unknown deployment mode: %s", mode)
 	}
@@ -295,4 +314,25 @@ func consumeMessages(consumer kafka.MessageConsumer, eventRepo events.Repository
 			time.Since(event.Timestamp).Milliseconds(), event,
 		)
 	}
+}
+
+func startTemporalWorker(
+	lc fx.Lifecycle,
+	temporalClient *temporal.TemporalClient,
+	cfg *config.Configuration,
+	log *logger.Logger,
+) {
+	worker := temporal.NewWorker(temporalClient, cfg.Temporal)
+
+	lc.Append(fx.Hook{
+		OnStart: func(ctx context.Context) error {
+			log.Info("Starting temporal worker...")
+			return worker.Start()
+		},
+		OnStop: func(ctx context.Context) error {
+			log.Info("Shutting down temporal worker...")
+			worker.Stop()
+			return nil
+		},
+	})
 }
