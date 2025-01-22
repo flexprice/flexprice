@@ -106,42 +106,40 @@ type SentryConfig struct {
 }
 
 type TemporalConfig struct {
-	HostPort           string  `yaml:"host_port"`
-	Namespace          string  `yaml:"namespace"`
-	TaskQueue          string  `yaml:"task_queue"`
-	ClientName         string  `yaml:"client_name"`
-	MaxIntervalSeconds int     `yaml:"max_interval_seconds"`
-	MaxAttempts        int32   `yaml:"max_attempts"`
-	BackoffCoefficient float64 `yaml:"backoff_coefficient"`
+	Address    string `mapstructure:"address" validate:"required"`
+	Namespace  string `mapstructure:"namespace" validate:"required"`
+	TaskQueue  string `mapstructure:"task_queue" validate:"required"`
+	ClientName string `mapstructure:"client_name" validate:"required"`
+	Retry      struct {
+		InitialIntervalSeconds int     `mapstructure:"initial_interval_seconds"`
+		MaxIntervalSeconds     int     `mapstructure:"max_interval_seconds"`
+		MaxAttempts            int     `mapstructure:"max_attempts"`
+		BackoffCoefficient     float64 `mapstructure:"backoff_coefficient"`
+	} `mapstructure:"retry"`
+	Connection struct {
+		RetryMaxAttempts            int     `mapstructure:"retry_max_attempts"`
+		RetryInitialIntervalSeconds int     `mapstructure:"retry_initial_interval_seconds"`
+		RetryMaxIntervalSeconds     int     `mapstructure:"retry_max_interval_seconds"`
+		RetryBackoffCoefficient     float64 `mapstructure:"retry_backoff_coefficient"`
+	} `mapstructure:"connection"`
 }
 
 func NewConfig() (*Configuration, error) {
 	v := viper.New()
 
-	// Step 1: Load `.env` if it exists
 	_ = godotenv.Load()
 
-	// Step 2: Initialize Viper
 	v.SetConfigName("config")
 	v.SetConfigType("yaml")
 	v.AddConfigPath("./internal/config")
 	v.AddConfigPath("./config")
 
-	// Step 3: Set up environment variables support
 	v.SetEnvPrefix("FLEXPRICE")
 	v.AutomaticEnv()
-
-	// Step 4: Environment variable key mapping (e.g., FLEXPRICE_KAFKA_CONSUMER_GROUP)
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
-	// Step 5: Read the YAML file
-	if err := v.ReadInConfig(); err != nil {
-		fmt.Printf("Error reading config file: %v\n", err)
-		if !errors.As(err, &viper.ConfigFileNotFoundError{}) {
-			return nil, err
-		}
-	} else {
-		fmt.Printf("Using config file: %s\n", v.ConfigFileUsed())
+	if err := v.ReadInConfig(); err != nil && !errors.As(err, &viper.ConfigFileNotFoundError{}) {
+		return nil, err
 	}
 
 	var cfg Configuration
@@ -150,7 +148,6 @@ func NewConfig() (*Configuration, error) {
 	}
 
 	apiKeysStr := v.GetString("auth.api_key.keys")
-	// Parse API keys JSON if present
 	if apiKeysStr != "" {
 		var apiKeys map[string]APIKeyDetails
 		if err := json.Unmarshal([]byte(apiKeysStr), &apiKeys); err != nil {
@@ -167,8 +164,6 @@ func (c Configuration) Validate() error {
 	return validate.Struct(c)
 }
 
-// GetDefaultConfig returns a default configuration for local development
-// This is useful for running scripts or other non-web applications
 func GetDefaultConfig() *Configuration {
 	return &Configuration{
 		Deployment: DeploymentConfig{Mode: types.ModeLocal},
@@ -206,7 +201,7 @@ func (c PostgresConfig) GetDSN() string {
 
 func (c *TemporalConfig) GetClientOptions() client.Options {
 	return client.Options{
-		HostPort:  c.HostPort,
+		HostPort:  c.Address,
 		Namespace: c.Namespace,
 		ConnectionOptions: client.ConnectionOptions{
 			MaxPayloadSize: 2 * 1024 * 1024, // 2MB

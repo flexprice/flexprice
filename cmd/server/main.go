@@ -109,6 +109,7 @@ func main() {
 			provideRouter,
 
 			// Temporal
+			provideTemporalConfig,
 			temporal.NewTemporalClient,
 			service.NewTemporalService,
 		),
@@ -335,4 +336,8 @@ func startTemporalWorker(
 			return nil
 		},
 	})
+}
+
+func provideTemporalConfig(cfg *config.Configuration) *config.TemporalConfig {
+	return &cfg.Temporal
 }

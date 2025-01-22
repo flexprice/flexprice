@@ -14,7 +14,11 @@ type temporalService struct {
 	logger         *logger.Logger
 }
 
-func NewTemporalService(tc *temporal.TemporalClient, log *logger.Logger) domain.TemporalService {
+type TemporalService interface {
+	StartBillingWorkflow(ctx context.Context, customerID, subscriptionID string, periodStart, periodEnd time.Time) (*domain.BillingWorkflowResult, error)
+}
+
+func NewTemporalService(tc *temporal.TemporalClient, log *logger.Logger) TemporalService {
 	return &temporalService{
 		temporalClient: tc,
 		logger:         log,
