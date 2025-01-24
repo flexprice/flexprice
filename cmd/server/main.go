@@ -19,7 +19,10 @@ import (
 	"github.com/flexprice/flexprice/internal/repository"
 	"github.com/flexprice/flexprice/internal/sentry"
 	"github.com/flexprice/flexprice/internal/service"
-	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/temporal"
+	"github.com/flexprice/flexprice/internal/workflow"
+	"go.temporal.io/sdk/client"
+	"go.temporal.io/sdk/worker"
 	"go.uber.org/fx"
 
 	lambdaEvents "github.com/aws/aws-lambda-go/events"
@@ -27,6 +30,7 @@ import (
 	ginadapter "github.com/awslabs/aws-lambda-go-api-proxy/gin"
 	_ "github.com/flexprice/flexprice/docs/swagger"
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 )
 
@@ -74,6 +78,9 @@ func main() {
 			// Event Publisher
 			publisher.NewEventPublisher,
 
+			// Temporal Client
+			temporal.NewClient,
+
 			// Repositories
 			repository.NewEventRepository,
 			repository.NewMeterRepository,
@@ -107,11 +114,45 @@ func main() {
 			// Router
 			provideRouter,
 		),
-		fx.Invoke(sentry.RegisterHooks, startServer),
+		fx.Invoke(
+			sentry.RegisterHooks,
+			startServer,
+			registerTemporalWorker,
+		),
 	)
 
 	app := fx.New(opts...)
 	app.Run()
+}
+
+func registerTemporalWorker(
+	lc fx.Lifecycle,
+	temporalClient client.Client,
+	subscriptionService service.SubscriptionService,
+	logger *logger.Logger,
+) {
+	lc.Append(fx.Hook{
+		OnStart: func(ctx context.Context) error {
+			// Create worker
+			w := worker.New(temporalClient, "billing-period-queue", worker.Options{})
+
+			// Register workflow and activity
+			w.RegisterWorkflow(workflow.UpdateBillingPeriodsWorkflow)
+			w.RegisterActivity(workflow.UpdateBillingPeriodsActivity)
+
+			// Start worker in a goroutine
+			go func() {
+				if err := w.Run(worker.InterruptCh()); err != nil {
+					logger.Fatal("Unable to start worker", "error", err)
+				}
+			}()
+			return nil
+		},
+		OnStop: func(ctx context.Context) error {
+			logger.Info("Shutting down Temporal worker...")
+			return nil
+		},
+	})
 }
 
 func provideHandlers(
@@ -155,6 +196,8 @@ func startServer(
 	r *gin.Engine,
 	consumer kafka.MessageConsumer,
 	eventRepo events.Repository,
+	temporalClient client.Client,
+	subscriptionService service.SubscriptionService,
 	log *logger.Logger,
 ) {
 	mode := cfg.Deployment.Mode
@@ -166,6 +209,7 @@ func startServer(
 		}
 		startAPIServer(lc, r, cfg, log)
 		startConsumer(lc, consumer, eventRepo, cfg, log)
+		startTemporalWorker(lc, temporalClient, subscriptionService, log)
 	case types.ModeAPI:
 		startAPIServer(lc, r, cfg, log)
 	case types.ModeConsumer:
@@ -173,6 +217,8 @@ func startServer(
 			log.Fatal("Kafka consumer required for consumer mode")
 		}
 		startConsumer(lc, consumer, eventRepo, cfg, log)
+	case types.ModeTemporalWorker:
+		startTemporalWorker(lc, temporalClient, subscriptionService, log)
 	case types.ModeAWSLambdaAPI:
 		startAWSLambdaAPI(r)
 	case types.ModeAWSLambdaConsumer:
@@ -237,10 +283,6 @@ func startAWSLambdaConsumer(eventRepo events.Repository, log *logger.Logger) {
 				log.Debugf("Processing record: topic=%s, partition=%d, offset=%d",
 					r.Topic, r.Partition, r.Offset)
 
-				// TODO decide the repository to use based on the event topic and properties
-				// For now we will use the event repository from the events topic
-
-				// Decode base64 payload first
 				decodedPayload, err := base64.StdEncoding.DecodeString(string(r.Value))
 				if err != nil {
 					log.Errorf("Failed to decode base64 payload: %v", err)
@@ -250,12 +292,11 @@ func startAWSLambdaConsumer(eventRepo events.Repository, log *logger.Logger) {
 				var event events.Event
 				if err := json.Unmarshal(decodedPayload, &event); err != nil {
 					log.Errorf("Failed to unmarshal event: %v, payload: %s", err, decodedPayload)
-					continue // Skip invalid messages
+					continue
 				}
 
 				if err := eventRepo.InsertEvent(ctx, &event); err != nil {
 					log.Errorf("Failed to insert event: %v, event: %+v", err, event)
-					// TODO: Handle error and decide if we should retry or send to DLQ
 					continue
 				}
 
@@ -279,7 +320,7 @@ func consumeMessages(consumer kafka.MessageConsumer, eventRepo events.Repository
 		var event events.Event
 		if err := json.Unmarshal(msg.Payload, &event); err != nil {
 			log.Errorf("Failed to unmarshal event: %v, payload: %s", err, string(msg.Payload))
-			msg.Ack() // Acknowledge invalid messages
+			msg.Ack()
 			continue
 		}
 
@@ -287,7 +328,6 @@ func consumeMessages(consumer kafka.MessageConsumer, eventRepo events.Repository
 
 		if err := eventRepo.InsertEvent(context.Background(), &event); err != nil {
 			log.Errorf("Failed to insert event: %v, event: %+v", err, event)
-			// TODO: Handle error and decide if we should retry or send to DLQ
 		}
 		msg.Ack()
 		log.Debugf(
@@ -295,4 +335,34 @@ func consumeMessages(consumer kafka.MessageConsumer, eventRepo events.Repository
 			time.Since(event.Timestamp).Milliseconds(), event,
 		)
 	}
+}
+
+func startTemporalWorker(
+	lc fx.Lifecycle,
+	temporalClient client.Client,
+	subscriptionService service.SubscriptionService,
+	log *logger.Logger,
+) {
+	lc.Append(fx.Hook{
+		OnStart: func(ctx context.Context) error {
+			w := worker.New(temporalClient, "billing-period-queue", worker.Options{})
+
+			// Register workflow
+			w.RegisterWorkflow(workflow.UpdateBillingPeriodsWorkflow)
+
+			// Register activity - note that we're just passing the function
+			w.RegisterActivity(workflow.UpdateBillingPeriodsActivity)
+
+			go func() {
+				if err := w.Run(worker.InterruptCh()); err != nil {
+					log.Fatal("Unable to start worker", "error", err)
+				}
+			}()
+			return nil
+		},
+		OnStop: func(ctx context.Context) error {
+			log.Info("Shutting down Temporal worker...")
+			return nil
+		},
+	})
 }

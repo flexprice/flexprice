@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	"github.com/flexprice/flexprice/internal/domain/system"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
@@ -78,4 +79,8 @@ func NewEnvironmentRepository(p RepositoryParams) environment.Repository {
 
 func NewInvoiceRepository(p RepositoryParams) invoice.Repository {
 	return entRepo.NewInvoiceRepository(p.EntClient, p.Logger)
+}
+
+func NewSystemRepository(p RepositoryParams) system.Repository {
+	return entRepo.NewSystemEventRepository(p.EntClient, p.Logger)
 }

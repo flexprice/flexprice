@@ -10,6 +10,7 @@ import (
 	"reflect"
 
 	"github.com/flexprice/flexprice/ent/migrate"
+	"github.com/google/uuid"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect"
@@ -24,6 +25,7 @@ import (
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/subscription"
+	"github.com/flexprice/flexprice/ent/systemevent"
 	"github.com/flexprice/flexprice/ent/wallet"
 	"github.com/flexprice/flexprice/ent/wallettransaction"
 
@@ -53,6 +55,8 @@ type Client struct {
 	Price *PriceClient
 	// Subscription is the client for interacting with the Subscription builders.
 	Subscription *SubscriptionClient
+	// SystemEvent is the client for interacting with the SystemEvent builders.
+	SystemEvent *SystemEventClient
 	// Wallet is the client for interacting with the Wallet builders.
 	Wallet *WalletClient
 	// WalletTransaction is the client for interacting with the WalletTransaction builders.
@@ -77,6 +81,7 @@ func (c *Client) init() {
 	c.Plan = NewPlanClient(c.config)
 	c.Price = NewPriceClient(c.config)
 	c.Subscription = NewSubscriptionClient(c.config)
+	c.SystemEvent = NewSystemEventClient(c.config)
 	c.Wallet = NewWalletClient(c.config)
 	c.WalletTransaction = NewWalletTransactionClient(c.config)
 }
@@ -180,6 +185,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Plan:              NewPlanClient(cfg),
 		Price:             NewPriceClient(cfg),
 		Subscription:      NewSubscriptionClient(cfg),
+		SystemEvent:       NewSystemEventClient(cfg),
 		Wallet:            NewWalletClient(cfg),
 		WalletTransaction: NewWalletTransactionClient(cfg),
 	}, nil
@@ -210,6 +216,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Plan:              NewPlanClient(cfg),
 		Price:             NewPriceClient(cfg),
 		Subscription:      NewSubscriptionClient(cfg),
+		SystemEvent:       NewSystemEventClient(cfg),
 		Wallet:            NewWalletClient(cfg),
 		WalletTransaction: NewWalletTransactionClient(cfg),
 	}, nil
@@ -242,7 +249,8 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.BillingSequence, c.Customer, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence,
-		c.Meter, c.Plan, c.Price, c.Subscription, c.Wallet, c.WalletTransaction,
+		c.Meter, c.Plan, c.Price, c.Subscription, c.SystemEvent, c.Wallet,
+		c.WalletTransaction,
 	} {
 		n.Use(hooks...)
 	}
@@ -253,7 +261,8 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.BillingSequence, c.Customer, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence,
-		c.Meter, c.Plan, c.Price, c.Subscription, c.Wallet, c.WalletTransaction,
+		c.Meter, c.Plan, c.Price, c.Subscription, c.SystemEvent, c.Wallet,
+		c.WalletTransaction,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -280,6 +289,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Price.mutate(ctx, m)
 	case *SubscriptionMutation:
 		return c.Subscription.mutate(ctx, m)
+	case *SystemEventMutation:
+		return c.SystemEvent.mutate(ctx, m)
 	case *WalletMutation:
 		return c.Wallet.mutate(ctx, m)
 	case *WalletTransactionMutation:
@@ -1518,6 +1529,139 @@ func (c *SubscriptionClient) mutate(ctx context.Context, m *SubscriptionMutation
 	}
 }
 
+// SystemEventClient is a client for the SystemEvent schema.
+type SystemEventClient struct {
+	config
+}
+
+// NewSystemEventClient returns a client for the SystemEvent from the given config.
+func NewSystemEventClient(c config) *SystemEventClient {
+	return &SystemEventClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `systemevent.Hooks(f(g(h())))`.
+func (c *SystemEventClient) Use(hooks ...Hook) {
+	c.hooks.SystemEvent = append(c.hooks.SystemEvent, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `systemevent.Intercept(f(g(h())))`.
+func (c *SystemEventClient) Intercept(interceptors ...Interceptor) {
+	c.inters.SystemEvent = append(c.inters.SystemEvent, interceptors...)
+}
+
+// Create returns a builder for creating a SystemEvent entity.
+func (c *SystemEventClient) Create() *SystemEventCreate {
+	mutation := newSystemEventMutation(c.config, OpCreate)
+	return &SystemEventCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of SystemEvent entities.
+func (c *SystemEventClient) CreateBulk(builders ...*SystemEventCreate) *SystemEventCreateBulk {
+	return &SystemEventCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *SystemEventClient) MapCreateBulk(slice any, setFunc func(*SystemEventCreate, int)) *SystemEventCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &SystemEventCreateBulk{err: fmt.Errorf("calling to SystemEventClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*SystemEventCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &SystemEventCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for SystemEvent.
+func (c *SystemEventClient) Update() *SystemEventUpdate {
+	mutation := newSystemEventMutation(c.config, OpUpdate)
+	return &SystemEventUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *SystemEventClient) UpdateOne(se *SystemEvent) *SystemEventUpdateOne {
+	mutation := newSystemEventMutation(c.config, OpUpdateOne, withSystemEvent(se))
+	return &SystemEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *SystemEventClient) UpdateOneID(id uuid.UUID) *SystemEventUpdateOne {
+	mutation := newSystemEventMutation(c.config, OpUpdateOne, withSystemEventID(id))
+	return &SystemEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for SystemEvent.
+func (c *SystemEventClient) Delete() *SystemEventDelete {
+	mutation := newSystemEventMutation(c.config, OpDelete)
+	return &SystemEventDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *SystemEventClient) DeleteOne(se *SystemEvent) *SystemEventDeleteOne {
+	return c.DeleteOneID(se.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *SystemEventClient) DeleteOneID(id uuid.UUID) *SystemEventDeleteOne {
+	builder := c.Delete().Where(systemevent.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &SystemEventDeleteOne{builder}
+}
+
+// Query returns a query builder for SystemEvent.
+func (c *SystemEventClient) Query() *SystemEventQuery {
+	return &SystemEventQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeSystemEvent},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a SystemEvent entity by its id.
+func (c *SystemEventClient) Get(ctx context.Context, id uuid.UUID) (*SystemEvent, error) {
+	return c.Query().Where(systemevent.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *SystemEventClient) GetX(ctx context.Context, id uuid.UUID) *SystemEvent {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *SystemEventClient) Hooks() []Hook {
+	return c.hooks.SystemEvent
+}
+
+// Interceptors returns the client interceptors.
+func (c *SystemEventClient) Interceptors() []Interceptor {
+	return c.inters.SystemEvent
+}
+
+func (c *SystemEventClient) mutate(ctx context.Context, m *SystemEventMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&SystemEventCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&SystemEventUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&SystemEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&SystemEventDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown SystemEvent mutation op: %q", m.Op())
+	}
+}
+
 // WalletClient is a client for the Wallet schema.
 type WalletClient struct {
 	config
@@ -1788,11 +1932,12 @@ func (c *WalletTransactionClient) mutate(ctx context.Context, m *WalletTransacti
 type (
 	hooks struct {
 		BillingSequence, Customer, Invoice, InvoiceLineItem, InvoiceSequence, Meter,
-		Plan, Price, Subscription, Wallet, WalletTransaction []ent.Hook
+		Plan, Price, Subscription, SystemEvent, Wallet, WalletTransaction []ent.Hook
 	}
 	inters struct {
 		BillingSequence, Customer, Invoice, InvoiceLineItem, InvoiceSequence, Meter,
-		Plan, Price, Subscription, Wallet, WalletTransaction []ent.Interceptor
+		Plan, Price, Subscription, SystemEvent, Wallet,
+		WalletTransaction []ent.Interceptor
 	}
 )
 
