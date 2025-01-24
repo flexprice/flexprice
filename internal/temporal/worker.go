@@ -17,7 +17,8 @@ func NewWorker(
 ) *Worker {
 	w := worker.New(c.Client, cfg.TaskQueue, worker.Options{})
 
-	w.RegisterWorkflow(workflows.BillingWorkflow)
+	w.RegisterWorkflow(workflows.CronBillingWorkflow)
+	w.RegisterWorkflow(workflows.CalculateChargesWorkflow)
 	w.RegisterActivity(&activities.BillingActivities{})
 
 	return &Worker{worker: w}

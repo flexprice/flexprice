@@ -1,4 +1,4 @@
-package domain
+package temporal
 
 import (
 	"context"
@@ -19,7 +19,7 @@ type BillingWorkflowInput struct {
 	PeriodEnd      time.Time
 }
 
-// Simple interfaces without DTOs
+// Interfaces for dependent services
 type InvoiceService interface {
 	GenerateInvoice(ctx context.Context, req *dto.GenerateInvoiceRequest) (*dto.InvoiceResponse, error)
 }
@@ -32,12 +32,9 @@ type PriceService interface {
 	CalculatePrice(ctx context.Context, req *dto.CalculatePriceRequest) (*dto.PriceResponse, error)
 }
 
+// WorkerDependencies holds dependencies required by Temporal workers
 type WorkerDependencies struct {
 	InvoiceService InvoiceService
 	PlanService    PlanService
 	PriceService   PriceService
-}
-
-type TemporalService interface {
-	StartBillingWorkflow(ctx context.Context, customerID, subscriptionID string, periodStart, periodEnd time.Time) (*BillingWorkflowResult, error)
 }
