@@ -61,8 +61,6 @@ services:
 
   kafka-ui:
     image: ghcr.io/kafbat/kafka-ui:main
-    profiles:
-      - dev
     depends_on:
       - kafka
     ports:
