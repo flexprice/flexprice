@@ -7,39 +7,54 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/temporal"
+	"github.com/flexprice/flexprice/internal/temporal/activities"
 	"github.com/flexprice/flexprice/internal/temporal/workflows"
 	"go.temporal.io/sdk/client"
+	"go.temporal.io/sdk/worker"
 )
 
 type TemporalService struct {
 	client client.Client
+	worker worker.Worker
 }
 
-func NewTemporalService(hostPort string) (*TemporalService, error) {
+func NewTemporalService(address string) (*TemporalService, error) {
 	c, err := client.NewClient(client.Options{
-		HostPort: hostPort,
+		HostPort: address,
 	})
 	if err != nil {
-		log.Printf("Failed to create Temporal client: %v", err)
-		return nil, err
+		return nil, fmt.Errorf("failed to create temporal client: %w", err)
 	}
 
-	return &TemporalService{
+	// Create worker
+	w := worker.New(c, "billing-task-queue", worker.Options{})
+
+	// Register workflows and activities
+	w.RegisterWorkflow(workflows.CronBillingWorkflow)
+	w.RegisterWorkflow(workflows.CalculateChargesWorkflow)
+	w.RegisterActivity(&activities.BillingActivities{})
+
+	ts := &TemporalService{
 		client: c,
-	}, nil
-}
-
-func (s *TemporalService) Close() {
-	if s.client != nil {
-		s.client.Close()
+		worker: w,
 	}
+
+	// Start the worker
+	if err := w.Start(); err != nil {
+		c.Close()
+		return nil, fmt.Errorf("failed to start worker: %w", err)
+	}
+
+	log.Printf("Temporal worker started successfully on queue: billing-task-queue")
+	return ts, nil
 }
 
 func (s *TemporalService) StartBillingWorkflow(ctx context.Context, customerID, subscriptionID string, periodStart, periodEnd time.Time) (*temporal.BillingWorkflowResult, error) {
+	workflowID := fmt.Sprintf("billing-%s-%s-%d", customerID, subscriptionID, time.Now().UnixNano())
 	workflowOptions := client.StartWorkflowOptions{
-		ID:           fmt.Sprintf("billing-%s-%s-%d", customerID, subscriptionID, time.Now().Unix()),
-		TaskQueue:    "default",
-		CronSchedule: "*/5 * * * *", // Run every 5 minutes
+		ID:           workflowID,
+		TaskQueue:    "billing-task-queue",
+		CronSchedule: "*/5 * * * *",
 	}
 
 	input := workflows.BillingWorkflowInput{
@@ -49,21 +64,24 @@ func (s *TemporalService) StartBillingWorkflow(ctx context.Context, customerID, 
 		PeriodEnd:      periodEnd,
 	}
 
-	we, err := s.client.ExecuteWorkflow(ctx, workflowOptions, workflows.CronBillingWorkflow, input)
+	// Execute the workflow but don't store the workflow execution handle since we don't use it
+	_, err := s.client.ExecuteWorkflow(ctx, workflowOptions, workflows.CronBillingWorkflow, input)
 	if err != nil {
-		log.Printf("Failed to start workflow: %v", err)
 		return nil, fmt.Errorf("failed to start workflow: %w", err)
 	}
 
-	var result workflows.BillingWorkflowResult
-	if err := we.Get(ctx, &result); err != nil {
-		log.Printf("Failed to get workflow result: %v", err)
-		return nil, fmt.Errorf("failed to get workflow result: %w", err)
-	}
-
-	// Convert the result to the domain type
+	// For cron workflows, we don't want to wait for the result
 	return &temporal.BillingWorkflowResult{
-		InvoiceID: result.InvoiceID,
-		Status:    result.Status,
+		InvoiceID: workflowID,
+		Status:    "scheduled",
 	}, nil
+}
+
+func (s *TemporalService) Close() {
+	if s.worker != nil {
+		s.worker.Stop()
+	}
+	if s.client != nil {
+		s.client.Close()
+	}
 }

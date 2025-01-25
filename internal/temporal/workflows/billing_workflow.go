@@ -12,10 +12,12 @@ import (
 func CronBillingWorkflow(ctx workflow.Context, input BillingWorkflowInput) (*BillingWorkflowResult, error) {
 	logger := workflow.GetLogger(ctx)
 	logger.Info("Starting cron billing workflow",
+		"customerID", input.CustomerID,
+		"subscriptionID", input.SubscriptionID,
 		"executionTime", workflow.Now(ctx))
 
 	// Set workflow timeout and retry policy
-	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+	activityOptions := workflow.ActivityOptions{
 		StartToCloseTimeout: time.Minute * 3,
 		RetryPolicy: &temporal.RetryPolicy{
 			InitialInterval:    time.Second,
@@ -23,23 +25,37 @@ func CronBillingWorkflow(ctx workflow.Context, input BillingWorkflowInput) (*Bil
 			MaximumInterval:    time.Minute,
 			MaximumAttempts:    3,
 		},
-	})
+	}
+	ctx = workflow.WithActivityOptions(ctx, activityOptions)
 
-	// Execute a child workflow
+	// Create unique workflow ID
+	info := workflow.GetInfo(ctx)
+	childWorkflowID := fmt.Sprintf("calculation-%s-%d", info.WorkflowExecution.RunID, workflow.Now(ctx).Unix())
+
+	// Set child workflow options with proper syntax
+	childWorkflowOptions := workflow.ChildWorkflowOptions{
+		WorkflowID:         childWorkflowID,
+		WorkflowRunTimeout: time.Minute * 5,
+		TaskQueue:          "billing-task-queue",
+	}
+	childCtx := workflow.WithChildOptions(ctx, childWorkflowOptions)
+
+	// Execute child workflow
 	var calculationResult CalculationResult
-	childCtx := workflow.WithChildOptions(ctx, workflow.ChildWorkflowOptions{
-		WorkflowID: fmt.Sprintf("calculation-5min-%d", workflow.Now(ctx).Unix()),
-	})
+	childWorkflowFuture := workflow.ExecuteChildWorkflow(childCtx, CalculateChargesWorkflow, input)
 
-	err := workflow.ExecuteChildWorkflow(childCtx, CalculateChargesWorkflow, input).Get(ctx, &calculationResult)
-	if err != nil {
+	// Wait for child workflow to complete
+	if err := childWorkflowFuture.Get(ctx, &calculationResult); err != nil {
 		logger.Error("Failed to execute calculation workflow", "error", err)
-		return nil, err
+		return &BillingWorkflowResult{
+			InvoiceID: "",
+			Status:    "failed",
+		}, err
 	}
 
-	logger.Info("5-minute billing calculation completed",
-		"totalAmount", calculationResult.TotalAmount,
-		"itemCount", len(calculationResult.Items))
+	logger.Info("Billing calculation completed",
+		"invoiceID", calculationResult.InvoiceID,
+		"totalAmount", calculationResult.TotalAmount)
 
 	return &BillingWorkflowResult{
 		InvoiceID: calculationResult.InvoiceID,

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api"
@@ -327,7 +328,27 @@ func startTemporalWorker(
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			log.Info("Starting temporal worker...")
-			return worker.Start()
+			if err := worker.Start(); err != nil {
+				return fmt.Errorf("failed to start worker: %w", err)
+			}
+
+			// Start the initial workflow after worker is ready
+			temporalService, err := service.NewTemporalService(cfg.Temporal.Address)
+			if err != nil {
+				return fmt.Errorf("failed to create temporal service: %w", err)
+			}
+
+			_, err = temporalService.StartBillingWorkflow(
+				ctx,
+				"sample-customer",
+				"sample-subscription",
+				time.Now().Add(-24*time.Hour),
+				time.Now(),
+			)
+			if err != nil {
+				return fmt.Errorf("failed to start initial workflow: %w", err)
+			}
+			return nil
 		},
 		OnStop: func(ctx context.Context) error {
 			log.Info("Shutting down temporal worker...")
@@ -340,3 +361,16 @@ func startTemporalWorker(
 func provideTemporalConfig(cfg *config.Configuration) *config.TemporalConfig {
 	return &cfg.Temporal
 }
+
+func provideTemporalService(cfg *config.Configuration) (*service.TemporalService, error) {
+	return service.NewTemporalService(cfg.Temporal.Address)
+}
+
+var Module = fx.Options(
+	fx.Provide(
+		provideTemporalService,
+	),
+	fx.Invoke(
+		startTemporalWorker,
+	),
+)
