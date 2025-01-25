@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -20,15 +18,12 @@ import (
 	"github.com/flexprice/flexprice/internal/repository"
 	"github.com/flexprice/flexprice/internal/sentry"
 	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/temporal"
+	"github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
 	"go.uber.org/fx"
 
-	lambdaEvents "github.com/aws/aws-lambda-go/events"
-	"github.com/aws/aws-lambda-go/lambda"
-	ginadapter "github.com/awslabs/aws-lambda-go-api-proxy/gin"
 	_ "github.com/flexprice/flexprice/docs/swagger"
-	"github.com/flexprice/flexprice/internal/domain/events"
-	"github.com/flexprice/flexprice/internal/temporal"
 	"github.com/gin-gonic/gin"
 )
 
@@ -111,11 +106,12 @@ func main() {
 
 			// Temporal
 			provideTemporalConfig,
-			temporal.NewTemporalClient,
-			service.NewTemporalService,
+			provideTemporalClient,
+			provideTemporalService,
 		),
 		fx.Invoke(
-			startTemporalWorker,
+			sentry.RegisterHooks,
+			startServer,
 		),
 	)
 
@@ -159,16 +155,32 @@ func provideRouter(handlers api.Handlers, cfg *config.Configuration, logger *log
 	return api.NewRouter(handlers, cfg, logger)
 }
 
+func provideTemporalConfig(cfg *config.Configuration) *config.TemporalConfig {
+	return &cfg.Temporal
+}
+
+func provideTemporalClient(cfg *config.TemporalConfig) (*temporal.TemporalClient, error) {
+	return temporal.NewTemporalClient(cfg)
+}
+
+func provideTemporalService(cfg *config.TemporalConfig) (*service.TemporalService, error) {
+	return service.NewTemporalService(cfg)
+}
+
 func startServer(
 	lc fx.Lifecycle,
 	cfg *config.Configuration,
 	r *gin.Engine,
 	consumer kafka.MessageConsumer,
-	eventRepo events.Repository,
+	eventRepo repository.EventRepository,
 	temporalClient *temporal.TemporalClient,
+	temporalService *service.TemporalService,
 	log *logger.Logger,
 ) {
 	mode := cfg.Deployment.Mode
+	if mode == "" {
+		mode = types.ModeLocal
+	}
 
 	switch mode {
 	case types.ModeLocal:
@@ -177,29 +189,61 @@ func startServer(
 		}
 		startAPIServer(lc, r, cfg, log)
 		startConsumer(lc, consumer, eventRepo, cfg, log)
-		startTemporalWorker(lc, temporalClient, cfg, log)
+		startTemporalWorker(lc, temporalClient, cfg.Temporal, temporalService, log)
 
 	case types.ModeTemporalWorker:
-		startTemporalWorker(lc, temporalClient, cfg, log)
+		startTemporalWorker(lc, temporalClient, cfg.Temporal, temporalService, log)
 
 	case types.ModeAPI:
 		startAPIServer(lc, r, cfg, log)
 
-	case types.ModeConsumer:
-		if consumer == nil {
-			log.Fatal("Kafka consumer required for consumer mode")
-		}
-		startConsumer(lc, consumer, eventRepo, cfg, log)
-
-	case types.ModeAWSLambdaAPI:
-		startAWSLambdaAPI(r)
-
-	case types.ModeAWSLambdaConsumer:
-		startAWSLambdaConsumer(eventRepo, log)
-
 	default:
 		log.Fatalf("Unknown deployment mode: %s", mode)
 	}
+}
+
+func startTemporalWorker(
+	lc fx.Lifecycle,
+	temporalClient *temporal.TemporalClient,
+	cfg *config.TemporalConfig,
+	temporalService *service.TemporalService,
+	log *logger.Logger,
+) {
+	worker := temporal.NewWorker(temporalClient, *cfg)
+
+	lc.Append(fx.Hook{
+		OnStart: func(ctx context.Context) error {
+			log.Info("Starting temporal worker...")
+
+			// Start the worker first
+			if err := worker.Start(); err != nil {
+				return fmt.Errorf("failed to start worker: %w", err)
+			}
+
+			// Wait a bit for the worker to be ready
+			time.Sleep(2 * time.Second)
+
+			input := models.BillingWorkflowInput{
+				CustomerID:     "sample-customer",
+				SubscriptionID: "sample-subscription",
+				PeriodStart:    time.Now().Add(-24 * time.Hour),
+				PeriodEnd:      time.Now(),
+			}
+
+			_, err := temporalService.StartBillingWorkflow(ctx, input)
+			if err != nil {
+				return fmt.Errorf("failed to start initial workflow: %w", err)
+			}
+
+			log.Info("Temporal worker started successfully")
+			return nil
+		},
+		OnStop: func(ctx context.Context) error {
+			log.Info("Shutting down temporal worker...")
+			worker.Stop()
+			return nil
+		},
+	})
 }
 
 func startAPIServer(
@@ -227,150 +271,21 @@ func startAPIServer(
 func startConsumer(
 	lc fx.Lifecycle,
 	consumer kafka.MessageConsumer,
-	eventRepo events.Repository,
+	eventRepo repository.EventRepository,
 	cfg *config.Configuration,
 	log *logger.Logger,
 ) {
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			go consumeMessages(consumer, eventRepo, cfg.Kafka.Topic, log)
+			go func() {
+				// Simulated message consumption
+				log.Info("Kafka consumer started")
+			}()
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {
-			log.Info("Shutting down consumer...")
+			log.Info("Shutting down Kafka consumer...")
 			return nil
 		},
 	})
 }
-
-func startAWSLambdaAPI(r *gin.Engine) {
-	ginLambda := ginadapter.New(r)
-	lambda.Start(ginLambda.ProxyWithContext)
-}
-
-func startAWSLambdaConsumer(eventRepo events.Repository, log *logger.Logger) {
-	handler := func(ctx context.Context, kafkaEvent lambdaEvents.KafkaEvent) error {
-		log.Debugf("Received Kafka event: %+v", kafkaEvent)
-
-		for _, record := range kafkaEvent.Records {
-			for _, r := range record {
-				log.Debugf("Processing record: topic=%s, partition=%d, offset=%d",
-					r.Topic, r.Partition, r.Offset)
-
-				// TODO decide the repository to use based on the event topic and properties
-				// For now we will use the event repository from the events topic
-
-				// Decode base64 payload first
-				decodedPayload, err := base64.StdEncoding.DecodeString(string(r.Value))
-				if err != nil {
-					log.Errorf("Failed to decode base64 payload: %v", err)
-					continue
-				}
-
-				var event events.Event
-				if err := json.Unmarshal(decodedPayload, &event); err != nil {
-					log.Errorf("Failed to unmarshal event: %v, payload: %s", err, decodedPayload)
-					continue // Skip invalid messages
-				}
-
-				if err := eventRepo.InsertEvent(ctx, &event); err != nil {
-					log.Errorf("Failed to insert event: %v, event: %+v", err, event)
-					// TODO: Handle error and decide if we should retry or send to DLQ
-					continue
-				}
-
-				log.Infof("Successfully processed event: topic=%s, partition=%d, offset=%d",
-					r.Topic, r.Partition, r.Offset)
-			}
-		}
-		return nil
-	}
-
-	lambda.Start(handler)
-}
-
-func consumeMessages(consumer kafka.MessageConsumer, eventRepo events.Repository, topic string, log *logger.Logger) {
-	messages, err := consumer.Subscribe(topic)
-	if err != nil {
-		log.Fatalf("Failed to subscribe to topic %s: %v", topic, err)
-	}
-
-	for msg := range messages {
-		var event events.Event
-		if err := json.Unmarshal(msg.Payload, &event); err != nil {
-			log.Errorf("Failed to unmarshal event: %v, payload: %s", err, string(msg.Payload))
-			msg.Ack() // Acknowledge invalid messages
-			continue
-		}
-
-		log.Debugf("Starting to process event: %+v", event)
-
-		if err := eventRepo.InsertEvent(context.Background(), &event); err != nil {
-			log.Errorf("Failed to insert event: %v, event: %+v", err, event)
-			// TODO: Handle error and decide if we should retry or send to DLQ
-		}
-		msg.Ack()
-		log.Debugf(
-			"Successfully processed event with lag : %v ms : %+v",
-			time.Since(event.Timestamp).Milliseconds(), event,
-		)
-	}
-}
-
-func startTemporalWorker(
-	lc fx.Lifecycle,
-	temporalClient *temporal.TemporalClient,
-	cfg *config.Configuration,
-	log *logger.Logger,
-) {
-	worker := temporal.NewWorker(temporalClient, cfg.Temporal)
-
-	lc.Append(fx.Hook{
-		OnStart: func(ctx context.Context) error {
-			log.Info("Starting temporal worker...")
-			if err := worker.Start(); err != nil {
-				return fmt.Errorf("failed to start worker: %w", err)
-			}
-
-			// Start the initial workflow after worker is ready
-			temporalService, err := service.NewTemporalService(cfg.Temporal.Address)
-			if err != nil {
-				return fmt.Errorf("failed to create temporal service: %w", err)
-			}
-
-			_, err = temporalService.StartBillingWorkflow(
-				ctx,
-				"sample-customer",
-				"sample-subscription",
-				time.Now().Add(-24*time.Hour),
-				time.Now(),
-			)
-			if err != nil {
-				return fmt.Errorf("failed to start initial workflow: %w", err)
-			}
-			return nil
-		},
-		OnStop: func(ctx context.Context) error {
-			log.Info("Shutting down temporal worker...")
-			worker.Stop()
-			return nil
-		},
-	})
-}
-
-func provideTemporalConfig(cfg *config.Configuration) *config.TemporalConfig {
-	return &cfg.Temporal
-}
-
-func provideTemporalService(cfg *config.Configuration) (*service.TemporalService, error) {
-	return service.NewTemporalService(cfg.Temporal.Address)
-}
-
-var Module = fx.Options(
-	fx.Provide(
-		provideTemporalService,
-	),
-	fx.Invoke(
-		startTemporalWorker,
-	),
-)

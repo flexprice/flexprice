@@ -4,19 +4,16 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/temporal/models"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
 
-// CronBillingWorkflow runs on a schedule and calculates billing
-func CronBillingWorkflow(ctx workflow.Context, input BillingWorkflowInput) (*BillingWorkflowResult, error) {
+// CronBillingWorkflow represents a recurring billing workflow.
+func CronBillingWorkflow(ctx workflow.Context, input models.BillingWorkflowInput) (*models.BillingWorkflowResult, error) {
 	logger := workflow.GetLogger(ctx)
-	logger.Info("Starting cron billing workflow",
-		"customerID", input.CustomerID,
-		"subscriptionID", input.SubscriptionID,
-		"executionTime", workflow.Now(ctx))
+	logger.Info("Starting cron billing workflow", "customerID", input.CustomerID, "subscriptionID", input.SubscriptionID)
 
-	// Set workflow timeout and retry policy
 	activityOptions := workflow.ActivityOptions{
 		StartToCloseTimeout: time.Minute * 3,
 		RetryPolicy: &temporal.RetryPolicy{
@@ -28,11 +25,7 @@ func CronBillingWorkflow(ctx workflow.Context, input BillingWorkflowInput) (*Bil
 	}
 	ctx = workflow.WithActivityOptions(ctx, activityOptions)
 
-	// Create unique workflow ID
-	info := workflow.GetInfo(ctx)
-	childWorkflowID := fmt.Sprintf("calculation-%s-%d", info.WorkflowExecution.RunID, workflow.Now(ctx).Unix())
-
-	// Set child workflow options with proper syntax
+	childWorkflowID := fmt.Sprintf("calculation-%s-%d", workflow.GetInfo(ctx).WorkflowExecution.RunID, workflow.Now(ctx).Unix())
 	childWorkflowOptions := workflow.ChildWorkflowOptions{
 		WorkflowID:         childWorkflowID,
 		WorkflowRunTimeout: time.Minute * 5,
@@ -40,25 +33,15 @@ func CronBillingWorkflow(ctx workflow.Context, input BillingWorkflowInput) (*Bil
 	}
 	childCtx := workflow.WithChildOptions(ctx, childWorkflowOptions)
 
-	// Execute child workflow
-	var calculationResult CalculationResult
-	childWorkflowFuture := workflow.ExecuteChildWorkflow(childCtx, CalculateChargesWorkflow, input)
-
-	// Wait for child workflow to complete
-	if err := childWorkflowFuture.Get(ctx, &calculationResult); err != nil {
-		logger.Error("Failed to execute calculation workflow", "error", err)
-		return &BillingWorkflowResult{
-			InvoiceID: "",
-			Status:    "failed",
-		}, err
+	var result models.BillingWorkflowResult
+	future := workflow.ExecuteChildWorkflow(childCtx, CalculateChargesWorkflow, input)
+	if err := future.Get(ctx, &result); err != nil {
+		logger.Error("Child workflow failed", "error", err)
+		return nil, err
 	}
 
-	logger.Info("Billing calculation completed",
-		"invoiceID", calculationResult.InvoiceID,
-		"totalAmount", calculationResult.TotalAmount)
-
-	return &BillingWorkflowResult{
-		InvoiceID: calculationResult.InvoiceID,
+	return &models.BillingWorkflowResult{
+		InvoiceID: result.InvoiceID,
 		Status:    "completed",
 	}, nil
 }

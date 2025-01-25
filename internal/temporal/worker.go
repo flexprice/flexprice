@@ -2,32 +2,32 @@ package temporal
 
 import (
 	"github.com/flexprice/flexprice/internal/config"
-	"github.com/flexprice/flexprice/internal/temporal/activities"
-	"github.com/flexprice/flexprice/internal/temporal/workflows"
 	"go.temporal.io/sdk/worker"
 )
 
+// Worker manages the Temporal worker instance.
 type Worker struct {
 	worker worker.Worker
 }
 
-func NewWorker(
-	c *TemporalClient,
-	cfg config.TemporalConfig,
-) *Worker {
-	w := worker.New(c.Client, cfg.TaskQueue, worker.Options{})
+// NewWorker creates a new Temporal worker and registers workflows and activities.
+func NewWorker(client *TemporalClient, cfg config.TemporalConfig) *Worker {
+	w := worker.New(client.Client, cfg.TaskQueue, worker.Options{})
 
-	w.RegisterWorkflow(workflows.CronBillingWorkflow)
-	w.RegisterWorkflow(workflows.CalculateChargesWorkflow)
-	w.RegisterActivity(&activities.BillingActivities{})
+	// Use the existing registration function
+	RegisterWorkflowsAndActivities(w)
 
 	return &Worker{worker: w}
 }
 
+// Start starts the Temporal worker.
 func (w *Worker) Start() error {
 	return w.worker.Start()
 }
 
+// Stop stops the Temporal worker.
 func (w *Worker) Stop() {
-	w.worker.Stop()
+	if w.worker != nil {
+		w.worker.Stop()
+	}
 }
