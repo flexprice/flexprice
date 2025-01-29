@@ -24,6 +24,7 @@ import (
 	"go.uber.org/fx"
 
 	_ "github.com/flexprice/flexprice/docs/swagger"
+	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/gin-gonic/gin"
 )
 
@@ -172,7 +173,7 @@ func startServer(
 	cfg *config.Configuration,
 	r *gin.Engine,
 	consumer kafka.MessageConsumer,
-	eventRepo repository.EventRepository,
+	eventRepo events.Repository,
 	temporalClient *temporal.TemporalClient,
 	temporalService *service.TemporalService,
 	log *logger.Logger,
@@ -189,10 +190,10 @@ func startServer(
 		}
 		startAPIServer(lc, r, cfg, log)
 		startConsumer(lc, consumer, eventRepo, cfg, log)
-		startTemporalWorker(lc, temporalClient, cfg.Temporal, temporalService, log)
+		startTemporalWorker(lc, temporalClient, &cfg.Temporal, temporalService, log)
 
 	case types.ModeTemporalWorker:
-		startTemporalWorker(lc, temporalClient, cfg.Temporal, temporalService, log)
+		startTemporalWorker(lc, temporalClient, &cfg.Temporal, temporalService, log)
 
 	case types.ModeAPI:
 		startAPIServer(lc, r, cfg, log)
@@ -271,7 +272,7 @@ func startAPIServer(
 func startConsumer(
 	lc fx.Lifecycle,
 	consumer kafka.MessageConsumer,
-	eventRepo repository.EventRepository,
+	eventRepo events.Repository,
 	cfg *config.Configuration,
 	log *logger.Logger,
 ) {
