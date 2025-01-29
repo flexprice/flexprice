@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api"
@@ -19,7 +18,6 @@ import (
 	"github.com/flexprice/flexprice/internal/sentry"
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/temporal"
-	"github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
 	"go.uber.org/fx"
 
@@ -107,11 +105,10 @@ func main() {
 
 			// Temporal
 			provideTemporalConfig,
-			provideTemporalClient,
+			temporal.NewTemporalClient,
 			provideTemporalService,
 		),
 		fx.Invoke(
-			sentry.RegisterHooks,
 			startServer,
 		),
 	)
@@ -160,12 +157,8 @@ func provideTemporalConfig(cfg *config.Configuration) *config.TemporalConfig {
 	return &cfg.Temporal
 }
 
-func provideTemporalClient(cfg *config.TemporalConfig) (*temporal.TemporalClient, error) {
-	return temporal.NewTemporalClient(cfg)
-}
-
-func provideTemporalService(cfg *config.TemporalConfig) (*service.TemporalService, error) {
-	return service.NewTemporalService(cfg)
+func provideTemporalService(cfg *config.TemporalConfig, log *logger.Logger) (*service.TemporalService, error) {
+	return service.NewTemporalService(cfg, log)
 }
 
 func startServer(
@@ -185,18 +178,20 @@ func startServer(
 
 	switch mode {
 	case types.ModeLocal:
-		if consumer == nil {
-			log.Fatal("Kafka consumer required for local mode")
-		}
 		startAPIServer(lc, r, cfg, log)
-		startConsumer(lc, consumer, eventRepo, cfg, log)
+		if consumer != nil {
+			startConsumer(lc, consumer, eventRepo, cfg, log)
+		}
 		startTemporalWorker(lc, temporalClient, &cfg.Temporal, temporalService, log)
+		return
 
 	case types.ModeTemporalWorker:
 		startTemporalWorker(lc, temporalClient, &cfg.Temporal, temporalService, log)
+		return
 
 	case types.ModeAPI:
 		startAPIServer(lc, r, cfg, log)
+		return
 
 	default:
 		log.Fatalf("Unknown deployment mode: %s", mode)
@@ -215,33 +210,27 @@ func startTemporalWorker(
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			log.Info("Starting temporal worker...")
-
-			// Start the worker first
 			if err := worker.Start(); err != nil {
-				return fmt.Errorf("failed to start worker: %w", err)
+				log.Error("Failed to start worker", "error", err)
+				return err
 			}
-
-			// Wait a bit for the worker to be ready
-			time.Sleep(2 * time.Second)
-
-			input := models.BillingWorkflowInput{
-				CustomerID:     "sample-customer",
-				SubscriptionID: "sample-subscription",
-				PeriodStart:    time.Now().Add(-24 * time.Hour),
-				PeriodEnd:      time.Now(),
-			}
-
-			_, err := temporalService.StartBillingWorkflow(ctx, input)
-			if err != nil {
-				return fmt.Errorf("failed to start initial workflow: %w", err)
-			}
-
 			log.Info("Temporal worker started successfully")
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {
 			log.Info("Shutting down temporal worker...")
-			worker.Stop()
+			done := make(chan struct{})
+			go func() {
+				worker.Stop()
+				close(done)
+			}()
+
+			select {
+			case <-done:
+				log.Info("Temporal worker stopped successfully")
+			case <-ctx.Done():
+				log.Error("Timeout while stopping temporal worker")
+			}
 			return nil
 		},
 	})

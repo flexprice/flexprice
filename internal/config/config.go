@@ -106,22 +106,9 @@ type SentryConfig struct {
 }
 
 type TemporalConfig struct {
-	Address    string `mapstructure:"address" validate:"required"`
-	Namespace  string `mapstructure:"namespace" validate:"required"`
-	TaskQueue  string `mapstructure:"task_queue" validate:"required"`
-	ClientName string `mapstructure:"client_name" validate:"required"`
-	Retry      struct {
-		InitialIntervalSeconds int     `mapstructure:"initial_interval_seconds"`
-		MaxIntervalSeconds     int     `mapstructure:"max_interval_seconds"`
-		MaxAttempts            int     `mapstructure:"max_attempts"`
-		BackoffCoefficient     float64 `mapstructure:"backoff_coefficient"`
-	} `mapstructure:"retry"`
-	Connection struct {
-		RetryMaxAttempts            int     `mapstructure:"retry_max_attempts"`
-		RetryInitialIntervalSeconds int     `mapstructure:"retry_initial_interval_seconds"`
-		RetryMaxIntervalSeconds     int     `mapstructure:"retry_max_interval_seconds"`
-		RetryBackoffCoefficient     float64 `mapstructure:"retry_backoff_coefficient"`
-	} `mapstructure:"connection"`
+	Address   string `mapstructure:"address" validate:"required"`
+	TaskQueue string `mapstructure:"task_queue" validate:"required"`
+	Namespace string `mapstructure:"namespace" validate:"required"`
 }
 
 func NewConfig() (*Configuration, error) {
@@ -202,7 +189,7 @@ func (c PostgresConfig) GetDSN() string {
 func (c *TemporalConfig) GetClientOptions() client.Options {
 	return client.Options{
 		HostPort:  c.Address,
-		Namespace: c.Namespace,
+		Namespace: c.TaskQueue,
 		ConnectionOptions: client.ConnectionOptions{
 			MaxPayloadSize: 2 * 1024 * 1024, // 2MB
 		},

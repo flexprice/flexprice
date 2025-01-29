@@ -3,20 +3,25 @@ package service
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/flexprice/flexprice/internal/config"
-	"github.com/flexprice/flexprice/internal/temporal/models"
+	"github.com/flexprice/flexprice/internal/domain/temporal"
+	"github.com/flexprice/flexprice/internal/logger"
 	"go.temporal.io/sdk/client"
 )
 
-// TemporalService handles Temporal workflows and worker management.
+// TemporalService implements temporal.Service interface
 type TemporalService struct {
 	client client.Client
+	log    *logger.Logger
+	cfg    *config.TemporalConfig
 }
 
+// Ensure TemporalService implements the interface
+var _ temporal.Service = (*TemporalService)(nil)
+
 // NewTemporalService initializes a Temporal service with the specified configuration.
-func NewTemporalService(cfg *config.TemporalConfig) (*TemporalService, error) {
+func NewTemporalService(cfg *config.TemporalConfig, log *logger.Logger) (*TemporalService, error) {
 	c, err := client.NewClient(client.Options{
 		HostPort: cfg.Address,
 	})
@@ -25,24 +30,32 @@ func NewTemporalService(cfg *config.TemporalConfig) (*TemporalService, error) {
 	}
 	return &TemporalService{
 		client: c,
+		log:    log,
+		cfg:    cfg,
 	}, nil
 }
 
 // StartBillingWorkflow starts a billing workflow.
-func (s *TemporalService) StartBillingWorkflow(ctx context.Context, input models.BillingWorkflowInput) (*models.BillingWorkflowResult, error) {
-	workflowID := fmt.Sprintf("billing-%s-%s-%d", input.CustomerID, input.SubscriptionID, time.Now().UnixNano())
+func (s *TemporalService) StartBillingWorkflow(ctx context.Context, input temporal.BillingWorkflowInput) (*temporal.BillingWorkflowResult, error) {
+	s.log.Info("Starting billing workflow",
+		"customerID", input.CustomerID,
+		"subscriptionID", input.SubscriptionID,
+	)
+
+	workflowID := fmt.Sprintf("billing-%s-%s", input.CustomerID, input.SubscriptionID)
 	workflowOptions := client.StartWorkflowOptions{
-		ID:           workflowID,
-		TaskQueue:    "billing-task-queue",
-		CronSchedule: "*/5 * * * *", // Example: Runs every 5 minutes.
+		ID:        workflowID,
+		TaskQueue: s.cfg.TaskQueue,
 	}
 
 	_, err := s.client.ExecuteWorkflow(ctx, workflowOptions, "CronBillingWorkflow", input)
 	if err != nil {
-		return nil, fmt.Errorf("failed to start workflow: %w", err)
+		s.log.Error("Failed to start workflow", "error", err)
+		return nil, err
 	}
 
-	return &models.BillingWorkflowResult{
+	s.log.Info("Successfully started billing workflow", "workflowID", workflowID)
+	return &temporal.BillingWorkflowResult{
 		InvoiceID: workflowID,
 		Status:    "scheduled",
 	}, nil
