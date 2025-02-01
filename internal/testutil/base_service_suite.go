@@ -21,6 +21,7 @@ import (
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/publisher"
 	"github.com/flexprice/flexprice/internal/types"
+	webhookPublisher "github.com/flexprice/flexprice/internal/webhook/publisher"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -43,12 +44,14 @@ type Stores struct {
 // BaseServiceTestSuite provides common functionality for all service test suites
 type BaseServiceTestSuite struct {
 	suite.Suite
-	ctx       context.Context
-	stores    Stores
-	publisher publisher.EventPublisher
-	db        postgres.IClient
-	logger    *logger.Logger
-	now       time.Time
+	ctx              context.Context
+	stores           Stores
+	publisher        publisher.EventPublisher
+	webhookPublisher webhookPublisher.WebhookPublisher
+	db               postgres.IClient
+	logger           *logger.Logger
+	config           *config.Configuration
+	now              time.Time
 }
 
 // SetupSuite is called once before running the tests in the suite
@@ -60,6 +63,7 @@ func (s *BaseServiceTestSuite) SetupSuite() {
 		},
 	}
 	var err error
+	s.config = cfg
 	s.logger, err = logger.NewLogger(cfg)
 	if err != nil {
 		s.T().Fatalf("failed to create logger: %v", err)
@@ -80,8 +84,8 @@ func (s *BaseServiceTestSuite) TearDownTest() {
 
 func (s *BaseServiceTestSuite) setupContext() {
 	s.ctx = context.Background()
-	s.ctx = context.WithValue(s.ctx, types.CtxTenantID, "tenant_test")
-	s.ctx = context.WithValue(s.ctx, types.CtxUserID, "user_test")
+	s.ctx = context.WithValue(s.ctx, types.CtxTenantID, types.DefaultTenantID)
+	s.ctx = context.WithValue(s.ctx, types.CtxUserID, types.DefaultUserID)
 	s.ctx = context.WithValue(s.ctx, types.CtxRequestID, types.GenerateUUID())
 }
 
@@ -104,6 +108,12 @@ func (s *BaseServiceTestSuite) setupStores() {
 	s.db = NewMockPostgresClient(s.logger)
 	eventStore := s.stores.EventRepo.(*InMemoryEventStore)
 	s.publisher = NewInMemoryEventPublisher(eventStore)
+	pubsub := NewInMemoryPubSub()
+	webhookPublisher, err := webhookPublisher.NewPublisher(pubsub, s.config, s.logger)
+	if err != nil {
+		s.T().Fatalf("failed to create webhook publisher: %v", err)
+	}
+	s.webhookPublisher = webhookPublisher
 }
 
 func (s *BaseServiceTestSuite) clearStores() {
@@ -121,9 +131,18 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.EnvironmentRepo.(*InMemoryEnvironmentStore).Clear()
 }
 
+func (s *BaseServiceTestSuite) ClearStores() {
+	s.clearStores()
+}
+
 // GetContext returns the test context
 func (s *BaseServiceTestSuite) GetContext() context.Context {
 	return s.ctx
+}
+
+// GetConfig returns the test configuration
+func (s *BaseServiceTestSuite) GetConfig() *config.Configuration {
+	return s.config
 }
 
 // GetStores returns all test repositories
@@ -134,6 +153,11 @@ func (s *BaseServiceTestSuite) GetStores() Stores {
 // GetPublisher returns the test event publisher
 func (s *BaseServiceTestSuite) GetPublisher() publisher.EventPublisher {
 	return s.publisher
+}
+
+// GetWebhookPublisher returns the test webhook publisher
+func (s *BaseServiceTestSuite) GetWebhookPublisher() webhookPublisher.WebhookPublisher {
+	return s.webhookPublisher
 }
 
 // GetDB returns the test database client

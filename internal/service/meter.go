@@ -12,7 +12,8 @@ import (
 type MeterService interface {
 	CreateMeter(ctx context.Context, req *dto.CreateMeterRequest) (*meter.Meter, error)
 	GetMeter(ctx context.Context, id string) (*meter.Meter, error)
-	GetAllMeters(ctx context.Context) ([]*meter.Meter, error)
+	GetMeters(ctx context.Context, filter *types.MeterFilter) (*dto.ListMetersResponse, error)
+	GetAllMeters(ctx context.Context) (*dto.ListMetersResponse, error)
 	DisableMeter(ctx context.Context, id string) error
 	UpdateMeter(ctx context.Context, id string, filters []meter.Filter) (*meter.Meter, error)
 }
@@ -54,8 +55,58 @@ func (s *meterService) GetMeter(ctx context.Context, id string) (*meter.Meter, e
 	return s.meterRepo.GetMeter(ctx, id)
 }
 
-func (s *meterService) GetAllMeters(ctx context.Context) ([]*meter.Meter, error) {
-	return s.meterRepo.GetAllMeters(ctx)
+func (s *meterService) GetMeters(ctx context.Context, filter *types.MeterFilter) (*dto.ListMetersResponse, error) {
+	if filter == nil {
+		filter = types.NewMeterFilter()
+	}
+
+	if err := filter.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid filter: %w", err)
+	}
+
+	meters, err := s.meterRepo.List(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list meters: %w", err)
+	}
+
+	count, err := s.meterRepo.Count(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count meters: %w", err)
+	}
+
+	response := &dto.ListMetersResponse{
+		Items:      make([]*dto.MeterResponse, len(meters)),
+		Pagination: types.NewPaginationResponse(count, filter.GetLimit(), filter.GetOffset()),
+	}
+
+	for i, meter := range meters {
+		response.Items[i] = dto.ToMeterResponse(meter)
+	}
+
+	return response, nil
+}
+
+func (s *meterService) GetAllMeters(ctx context.Context) (*dto.ListMetersResponse, error) {
+	filter := types.NewNoLimitMeterFilter()
+	meters, err := s.meterRepo.ListAll(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list meters: %w", err)
+	}
+
+	count, err := s.meterRepo.Count(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count meters: %w", err)
+	}
+
+	response := &dto.ListMetersResponse{
+		Items:      make([]*dto.MeterResponse, len(meters)),
+		Pagination: types.NewPaginationResponse(count, filter.GetLimit(), filter.GetOffset()),
+	}
+
+	for i, meter := range meters {
+		response.Items[i] = dto.ToMeterResponse(meter)
+	}
+	return response, nil
 }
 
 func (s *meterService) DisableMeter(ctx context.Context, id string) error {

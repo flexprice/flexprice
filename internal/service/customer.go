@@ -13,7 +13,7 @@ import (
 type CustomerService interface {
 	CreateCustomer(ctx context.Context, req dto.CreateCustomerRequest) (*dto.CustomerResponse, error)
 	GetCustomer(ctx context.Context, id string) (*dto.CustomerResponse, error)
-	GetCustomers(ctx context.Context, filter types.Filter) (*dto.ListCustomersResponse, error)
+	GetCustomers(ctx context.Context, filter *types.CustomerFilter) (*dto.ListCustomersResponse, error)
 	UpdateCustomer(ctx context.Context, id string, req dto.UpdateCustomerRequest) (*dto.CustomerResponse, error)
 	DeleteCustomer(ctx context.Context, id string) error
 }
@@ -49,25 +49,36 @@ func (s *customerService) GetCustomer(ctx context.Context, id string) (*dto.Cust
 	return &dto.CustomerResponse{Customer: customer}, nil
 }
 
-func (s *customerService) GetCustomers(ctx context.Context, filter types.Filter) (*dto.ListCustomersResponse, error) {
+func (s *customerService) GetCustomers(ctx context.Context, filter *types.CustomerFilter) (*dto.ListCustomersResponse, error) {
+	if filter == nil {
+		filter = &types.CustomerFilter{
+			QueryFilter: types.NewDefaultQueryFilter(),
+		}
+	}
+
+	if err := filter.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid filter: %w", err)
+	}
+
 	customers, err := s.repo.List(ctx, filter)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get customers: %w", err)
+		return nil, fmt.Errorf("failed to list customers: %w", err)
 	}
 
-	response := &dto.ListCustomersResponse{
-		Customers: make([]dto.CustomerResponse, len(customers)),
+	total, err := s.repo.Count(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count customers: %w", err)
 	}
 
-	for i, c := range customers {
-		response.Customers[i] = dto.CustomerResponse{Customer: c}
+	var response []*dto.CustomerResponse
+	for _, c := range customers {
+		response = append(response, &dto.CustomerResponse{Customer: c})
 	}
 
-	response.Total = len(customers)
-	response.Offset = filter.Offset
-	response.Limit = filter.Limit
-
-	return response, nil
+	return &dto.ListCustomersResponse{
+		Items:      response,
+		Pagination: types.NewPaginationResponse(total, filter.GetLimit(), filter.GetOffset()),
+	}, nil
 }
 
 func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto.UpdateCustomerRequest) (*dto.CustomerResponse, error) {
@@ -80,15 +91,16 @@ func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto
 		return nil, fmt.Errorf("failed to get customer: %w", err)
 	}
 
-	if req.Name != nil {
-		customer.Name = *req.Name
-	}
 	if req.ExternalID != nil {
 		customer.ExternalID = *req.ExternalID
+	}
+	if req.Name != nil {
+		customer.Name = *req.Name
 	}
 	if req.Email != nil {
 		customer.Email = *req.Email
 	}
+
 	customer.UpdatedAt = time.Now().UTC()
 	customer.UpdatedBy = types.GetUserID(ctx)
 
@@ -103,5 +115,6 @@ func (s *customerService) DeleteCustomer(ctx context.Context, id string) error {
 	if err := s.repo.Delete(ctx, id); err != nil {
 		return fmt.Errorf("failed to delete customer: %w", err)
 	}
+
 	return nil
 }

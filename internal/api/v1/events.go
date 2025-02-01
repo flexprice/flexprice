@@ -156,6 +156,7 @@ func (h *EventsHandler) GetEvents(c *gin.Context) {
 	endTimeStr := c.Query("end_time")
 	iterFirstKey := c.Query("iter_first_key")
 	iterLastKey := c.Query("iter_last_key")
+	eventID := c.Query("event_id")
 
 	pageSize := 50
 	if size := c.Query("page_size"); size != "" {
@@ -175,6 +176,7 @@ func (h *EventsHandler) GetEvents(c *gin.Context) {
 	events, err := h.eventService.GetEvents(ctx, &dto.GetEventsRequest{
 		ExternalCustomerID: externalCustomerID,
 		EventName:          eventName,
+		EventID:            eventID,
 		StartTime:          startTime,
 		EndTime:            endTime,
 		PageSize:           pageSize,

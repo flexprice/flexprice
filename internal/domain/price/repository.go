@@ -9,7 +9,9 @@ import (
 type Repository interface {
 	Create(ctx context.Context, price *Price) error
 	Get(ctx context.Context, id string) (*Price, error)
-	List(ctx context.Context, filter types.PriceFilter) ([]*Price, error)
+	List(ctx context.Context, filter *types.PriceFilter) ([]*Price, error)
+	Count(ctx context.Context, filter *types.PriceFilter) (int, error)
+	ListAll(ctx context.Context, filter *types.PriceFilter) ([]*Price, error)
 	Update(ctx context.Context, price *Price) error
 	Delete(ctx context.Context, id string) error
 }

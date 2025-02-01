@@ -74,8 +74,6 @@ var (
 	ExternalIDValidator func(string) error
 	// NameValidator is a validator for the "name" field. It is called by the builders before save.
 	NameValidator func(string) error
-	// EmailValidator is a validator for the "email" field. It is called by the builders before save.
-	EmailValidator func(string) error
 )
 
 // OrderOption defines the ordering options for the Customer queries.

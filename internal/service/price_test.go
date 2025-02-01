@@ -98,8 +98,20 @@ func (s *PriceServiceSuite) TestGetPrice() {
 
 func (s *PriceServiceSuite) TestGetPrices() {
 	// Prepopulate the repository with prices associated with a plan_id
-	_ = s.priceRepo.Create(s.ctx, &price.Price{ID: "price-1", Amount: decimal.NewFromInt(100), Currency: "USD", PlanID: "plan-1"})
-	_ = s.priceRepo.Create(s.ctx, &price.Price{ID: "price-2", Amount: decimal.NewFromInt(200), Currency: "USD", PlanID: "plan-1"})
+	_ = s.priceRepo.Create(s.ctx, &price.Price{
+		ID:        "price-1",
+		Amount:    decimal.NewFromInt(100),
+		Currency:  "USD",
+		PlanID:    "plan-1",
+		BaseModel: types.GetDefaultBaseModel(s.ctx),
+	})
+	_ = s.priceRepo.Create(s.ctx, &price.Price{
+		ID:        "price-2",
+		Amount:    decimal.NewFromInt(200),
+		Currency:  "USD",
+		PlanID:    "plan-1",
+		BaseModel: types.GetDefaultBaseModel(s.ctx),
+	})
 
 	// Retrieve all prices within limit
 	priceFilter := types.NewPriceFilter()
@@ -108,16 +120,16 @@ func (s *PriceServiceSuite) TestGetPrices() {
 	resp, err := s.priceService.GetPrices(s.ctx, priceFilter)
 	s.NoError(err)
 	s.NotNil(resp)
-	s.Equal(2, resp.Total) // Ensure all prices are retrieved
-	s.Len(resp.Prices, 2)
+	s.Equal(2, resp.Pagination.Total) // Ensure all prices are retrieved
+	s.Len(resp.Items, 2)
 
 	// Sort the response prices by ID
-	sort.Slice(resp.Prices, func(i, j int) bool {
-		return resp.Prices[i].ID < resp.Prices[j].ID
+	sort.Slice(resp.Items, func(i, j int) bool {
+		return resp.Items[i].ID < resp.Items[j].ID
 	})
 
-	s.Equal("price-1", resp.Prices[0].ID)
-	s.Equal("price-2", resp.Prices[1].ID)
+	s.Equal("price-1", resp.Items[0].ID)
+	s.Equal("price-2", resp.Items[1].ID)
 
 	// Retrieve with offset exceeding available records
 	priceFilter.QueryFilter.Offset = lo.ToPtr(10)
@@ -125,8 +137,8 @@ func (s *PriceServiceSuite) TestGetPrices() {
 	resp, err = s.priceService.GetPrices(s.ctx, priceFilter)
 	s.NoError(err)
 	s.NotNil(resp)
-	s.Equal(0, resp.Total) // Ensure no prices are retrieved
-	s.Len(resp.Prices, 0)
+	s.Equal(2, resp.Pagination.Total)
+	s.Len(resp.Items, 0) // Ensure no prices are retrieved
 }
 
 func (s *PriceServiceSuite) TestUpdatePrice() {

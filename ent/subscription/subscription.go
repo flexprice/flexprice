@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
 const (
@@ -65,8 +66,19 @@ const (
 	FieldBillingPeriodCount = "billing_period_count"
 	// FieldVersion holds the string denoting the version field in the database.
 	FieldVersion = "version"
+	// FieldMetadata holds the string denoting the metadata field in the database.
+	FieldMetadata = "metadata"
+	// EdgeLineItems holds the string denoting the line_items edge name in mutations.
+	EdgeLineItems = "line_items"
 	// Table holds the table name of the subscription in the database.
 	Table = "subscriptions"
+	// LineItemsTable is the table that holds the line_items relation/edge.
+	LineItemsTable = "subscription_line_items"
+	// LineItemsInverseTable is the table name for the SubscriptionLineItem entity.
+	// It exists in this package in order to avoid circular dependency with the "subscriptionlineitem" package.
+	LineItemsInverseTable = "subscription_line_items"
+	// LineItemsColumn is the table column denoting the line_items relation/edge.
+	LineItemsColumn = "subscription_id"
 )
 
 // Columns holds all SQL columns for subscription fields.
@@ -98,6 +110,7 @@ var Columns = []string{
 	FieldBillingPeriod,
 	FieldBillingPeriodCount,
 	FieldVersion,
+	FieldMetadata,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -287,4 +300,25 @@ func ByBillingPeriodCount(opts ...sql.OrderTermOption) OrderOption {
 // ByVersion orders the results by the version field.
 func ByVersion(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldVersion, opts...).ToFunc()
+}
+
+// ByLineItemsCount orders the results by line_items count.
+func ByLineItemsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newLineItemsStep(), opts...)
+	}
+}
+
+// ByLineItems orders the results by line_items terms.
+func ByLineItems(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newLineItemsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+func newLineItemsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(LineItemsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, LineItemsTable, LineItemsColumn),
+	)
 }

@@ -1,113 +1,130 @@
-// In-memory customer repository for testing
 package testutil
 
 import (
 	"context"
-	"fmt"
-	"sort"
-	"sync"
+	"strings"
 
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // InMemoryCustomerStore implements customer.Repository
 type InMemoryCustomerStore struct {
-	mu        sync.RWMutex
-	customers map[string]*customer.Customer
+	*InMemoryStore[*customer.Customer]
 }
 
+// NewInMemoryCustomerStore creates a new in-memory customer store
 func NewInMemoryCustomerStore() *InMemoryCustomerStore {
 	return &InMemoryCustomerStore{
-		customers: make(map[string]*customer.Customer),
+		InMemoryStore: NewInMemoryStore[*customer.Customer](),
 	}
+}
+
+// Helper to copy customer
+func copyCustomer(c *customer.Customer) *customer.Customer {
+	if c == nil {
+		return nil
+	}
+
+	// Deep copy of customer
+	c = &customer.Customer{
+		ID:         c.ID,
+		ExternalID: c.ExternalID,
+		Name:       c.Name,
+		Email:      c.Email,
+		BaseModel: types.BaseModel{
+			TenantID:  c.TenantID,
+			Status:    c.Status,
+			CreatedAt: c.CreatedAt,
+			UpdatedAt: c.UpdatedAt,
+			CreatedBy: c.CreatedBy,
+			UpdatedBy: c.UpdatedBy,
+		},
+	}
+
+	return c
 }
 
 func (s *InMemoryCustomerStore) Create(ctx context.Context, c *customer.Customer) error {
-	if c == nil {
-		return fmt.Errorf("customer cannot be nil")
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if _, exists := s.customers[c.ID]; exists {
-		return fmt.Errorf("customer already exists")
-	}
-
-	s.customers[c.ID] = c
-	return nil
+	return s.InMemoryStore.Create(ctx, c.ID, copyCustomer(c))
 }
 
 func (s *InMemoryCustomerStore) Get(ctx context.Context, id string) (*customer.Customer, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if c, exists := s.customers[id]; exists {
-		return c, nil
+	c, err := s.InMemoryStore.Get(ctx, id)
+	if err != nil {
+		return nil, err
 	}
-	return nil, fmt.Errorf("customer not found")
+	return copyCustomer(c), nil
 }
 
-func (s *InMemoryCustomerStore) List(ctx context.Context, filter types.Filter) ([]*customer.Customer, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	var result []*customer.Customer
-	for _, c := range s.customers {
-		result = append(result, c)
+func (s *InMemoryCustomerStore) List(ctx context.Context, filter *types.CustomerFilter) ([]*customer.Customer, error) {
+	items, err := s.InMemoryStore.List(ctx, filter, customerFilterFn, customerSortFn)
+	if err != nil {
+		return nil, err
 	}
 
-	// Sort by created date desc (default)
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].CreatedAt.After(result[j].CreatedAt)
-	})
+	return lo.Map(items, func(c *customer.Customer, _ int) *customer.Customer {
+		return copyCustomer(c)
+	}), nil
+}
 
-	// Apply pagination
-	start := filter.Offset
-	if start >= len(result) {
-		return []*customer.Customer{}, nil
-	}
+func (s *InMemoryCustomerStore) Count(ctx context.Context, filter *types.CustomerFilter) (int, error) {
+	return s.InMemoryStore.Count(ctx, filter, customerFilterFn)
+}
 
-	end := start + filter.Limit
-	if end > len(result) {
-		end = len(result)
-	}
-
-	return result[start:end], nil
+func (s *InMemoryCustomerStore) ListAll(ctx context.Context, filter *types.CustomerFilter) ([]*customer.Customer, error) {
+	f := *filter
+	f.QueryFilter = types.NewNoLimitQueryFilter()
+	return s.List(ctx, &f)
 }
 
 func (s *InMemoryCustomerStore) Update(ctx context.Context, c *customer.Customer) error {
-	if c == nil {
-		return fmt.Errorf("customer cannot be nil")
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if _, exists := s.customers[c.ID]; !exists {
-		return fmt.Errorf("customer not found")
-	}
-
-	s.customers[c.ID] = c
-	return nil
+	return s.InMemoryStore.Update(ctx, c.ID, copyCustomer(c))
 }
 
 func (s *InMemoryCustomerStore) Delete(ctx context.Context, id string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if _, exists := s.customers[id]; !exists {
-		return fmt.Errorf("customer not found")
-	}
-
-	delete(s.customers, id)
-	return nil
+	return s.InMemoryStore.Delete(ctx, id)
 }
 
-func (s *InMemoryCustomerStore) Clear() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+// customerFilterFn implements filtering logic for customers
+func customerFilterFn(ctx context.Context, c *customer.Customer, filter interface{}) bool {
+	f, ok := filter.(*types.CustomerFilter)
+	if !ok {
+		return false
+	}
 
-	s.customers = make(map[string]*customer.Customer)
+	// Apply tenant filter
+	tenantID := types.GetTenantID(ctx)
+	if tenantID != "" && c.TenantID != tenantID {
+		return false
+	}
+
+	// Apply external ID filter
+	if f.ExternalID != "" && c.ExternalID != f.ExternalID {
+		return false
+	}
+
+	// Apply email filter
+	if f.Email != "" && !strings.EqualFold(c.Email, f.Email) {
+		return false
+	}
+
+	// Apply time range filter if present
+	if f.TimeRangeFilter != nil {
+		if f.StartTime != nil && c.CreatedAt.Before(*f.StartTime) {
+			return false
+		}
+		if f.EndTime != nil && c.CreatedAt.After(*f.EndTime) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// customerSortFn implements sorting logic for customers
+func customerSortFn(i, j *customer.Customer) bool {
+	// Default sort by created_at desc
+	return i.CreatedAt.After(j.CreatedAt)
 }

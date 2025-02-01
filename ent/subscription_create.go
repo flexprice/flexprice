@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/subscription"
+	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 )
 
 // SubscriptionCreate is the builder for creating a Subscription entity.
@@ -328,10 +329,31 @@ func (sc *SubscriptionCreate) SetNillableVersion(i *int) *SubscriptionCreate {
 	return sc
 }
 
+// SetMetadata sets the "metadata" field.
+func (sc *SubscriptionCreate) SetMetadata(m map[string]string) *SubscriptionCreate {
+	sc.mutation.SetMetadata(m)
+	return sc
+}
+
 // SetID sets the "id" field.
 func (sc *SubscriptionCreate) SetID(s string) *SubscriptionCreate {
 	sc.mutation.SetID(s)
 	return sc
+}
+
+// AddLineItemIDs adds the "line_items" edge to the SubscriptionLineItem entity by IDs.
+func (sc *SubscriptionCreate) AddLineItemIDs(ids ...string) *SubscriptionCreate {
+	sc.mutation.AddLineItemIDs(ids...)
+	return sc
+}
+
+// AddLineItems adds the "line_items" edges to the SubscriptionLineItem entity.
+func (sc *SubscriptionCreate) AddLineItems(s ...*SubscriptionLineItem) *SubscriptionCreate {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return sc.AddLineItemIDs(ids...)
 }
 
 // Mutation returns the SubscriptionMutation object of the builder.
@@ -644,6 +666,26 @@ func (sc *SubscriptionCreate) createSpec() (*Subscription, *sqlgraph.CreateSpec)
 	if value, ok := sc.mutation.Version(); ok {
 		_spec.SetField(subscription.FieldVersion, field.TypeInt, value)
 		_node.Version = value
+	}
+	if value, ok := sc.mutation.Metadata(); ok {
+		_spec.SetField(subscription.FieldMetadata, field.TypeJSON, value)
+		_node.Metadata = value
+	}
+	if nodes := sc.mutation.LineItemsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.LineItemsTable,
+			Columns: []string{subscription.LineItemsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionlineitem.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
 }

@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/subscription"
+	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 )
 
 // SubscriptionUpdate is the builder for updating Subscription entities.
@@ -265,9 +266,57 @@ func (su *SubscriptionUpdate) AddVersion(i int) *SubscriptionUpdate {
 	return su
 }
 
+// SetMetadata sets the "metadata" field.
+func (su *SubscriptionUpdate) SetMetadata(m map[string]string) *SubscriptionUpdate {
+	su.mutation.SetMetadata(m)
+	return su
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (su *SubscriptionUpdate) ClearMetadata() *SubscriptionUpdate {
+	su.mutation.ClearMetadata()
+	return su
+}
+
+// AddLineItemIDs adds the "line_items" edge to the SubscriptionLineItem entity by IDs.
+func (su *SubscriptionUpdate) AddLineItemIDs(ids ...string) *SubscriptionUpdate {
+	su.mutation.AddLineItemIDs(ids...)
+	return su
+}
+
+// AddLineItems adds the "line_items" edges to the SubscriptionLineItem entity.
+func (su *SubscriptionUpdate) AddLineItems(s ...*SubscriptionLineItem) *SubscriptionUpdate {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return su.AddLineItemIDs(ids...)
+}
+
 // Mutation returns the SubscriptionMutation object of the builder.
 func (su *SubscriptionUpdate) Mutation() *SubscriptionMutation {
 	return su.mutation
+}
+
+// ClearLineItems clears all "line_items" edges to the SubscriptionLineItem entity.
+func (su *SubscriptionUpdate) ClearLineItems() *SubscriptionUpdate {
+	su.mutation.ClearLineItems()
+	return su
+}
+
+// RemoveLineItemIDs removes the "line_items" edge to SubscriptionLineItem entities by IDs.
+func (su *SubscriptionUpdate) RemoveLineItemIDs(ids ...string) *SubscriptionUpdate {
+	su.mutation.RemoveLineItemIDs(ids...)
+	return su
+}
+
+// RemoveLineItems removes "line_items" edges to SubscriptionLineItem entities.
+func (su *SubscriptionUpdate) RemoveLineItems(s ...*SubscriptionLineItem) *SubscriptionUpdate {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return su.RemoveLineItemIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -383,6 +432,57 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := su.mutation.AddedVersion(); ok {
 		_spec.AddField(subscription.FieldVersion, field.TypeInt, value)
+	}
+	if value, ok := su.mutation.Metadata(); ok {
+		_spec.SetField(subscription.FieldMetadata, field.TypeJSON, value)
+	}
+	if su.mutation.MetadataCleared() {
+		_spec.ClearField(subscription.FieldMetadata, field.TypeJSON)
+	}
+	if su.mutation.LineItemsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.LineItemsTable,
+			Columns: []string{subscription.LineItemsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionlineitem.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := su.mutation.RemovedLineItemsIDs(); len(nodes) > 0 && !su.mutation.LineItemsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.LineItemsTable,
+			Columns: []string{subscription.LineItemsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionlineitem.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := su.mutation.LineItemsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.LineItemsTable,
+			Columns: []string{subscription.LineItemsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionlineitem.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, su.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -641,9 +741,57 @@ func (suo *SubscriptionUpdateOne) AddVersion(i int) *SubscriptionUpdateOne {
 	return suo
 }
 
+// SetMetadata sets the "metadata" field.
+func (suo *SubscriptionUpdateOne) SetMetadata(m map[string]string) *SubscriptionUpdateOne {
+	suo.mutation.SetMetadata(m)
+	return suo
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (suo *SubscriptionUpdateOne) ClearMetadata() *SubscriptionUpdateOne {
+	suo.mutation.ClearMetadata()
+	return suo
+}
+
+// AddLineItemIDs adds the "line_items" edge to the SubscriptionLineItem entity by IDs.
+func (suo *SubscriptionUpdateOne) AddLineItemIDs(ids ...string) *SubscriptionUpdateOne {
+	suo.mutation.AddLineItemIDs(ids...)
+	return suo
+}
+
+// AddLineItems adds the "line_items" edges to the SubscriptionLineItem entity.
+func (suo *SubscriptionUpdateOne) AddLineItems(s ...*SubscriptionLineItem) *SubscriptionUpdateOne {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return suo.AddLineItemIDs(ids...)
+}
+
 // Mutation returns the SubscriptionMutation object of the builder.
 func (suo *SubscriptionUpdateOne) Mutation() *SubscriptionMutation {
 	return suo.mutation
+}
+
+// ClearLineItems clears all "line_items" edges to the SubscriptionLineItem entity.
+func (suo *SubscriptionUpdateOne) ClearLineItems() *SubscriptionUpdateOne {
+	suo.mutation.ClearLineItems()
+	return suo
+}
+
+// RemoveLineItemIDs removes the "line_items" edge to SubscriptionLineItem entities by IDs.
+func (suo *SubscriptionUpdateOne) RemoveLineItemIDs(ids ...string) *SubscriptionUpdateOne {
+	suo.mutation.RemoveLineItemIDs(ids...)
+	return suo
+}
+
+// RemoveLineItems removes "line_items" edges to SubscriptionLineItem entities.
+func (suo *SubscriptionUpdateOne) RemoveLineItems(s ...*SubscriptionLineItem) *SubscriptionUpdateOne {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return suo.RemoveLineItemIDs(ids...)
 }
 
 // Where appends a list predicates to the SubscriptionUpdate builder.
@@ -789,6 +937,57 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 	}
 	if value, ok := suo.mutation.AddedVersion(); ok {
 		_spec.AddField(subscription.FieldVersion, field.TypeInt, value)
+	}
+	if value, ok := suo.mutation.Metadata(); ok {
+		_spec.SetField(subscription.FieldMetadata, field.TypeJSON, value)
+	}
+	if suo.mutation.MetadataCleared() {
+		_spec.ClearField(subscription.FieldMetadata, field.TypeJSON)
+	}
+	if suo.mutation.LineItemsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.LineItemsTable,
+			Columns: []string{subscription.LineItemsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionlineitem.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := suo.mutation.RemovedLineItemsIDs(); len(nodes) > 0 && !suo.mutation.LineItemsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.LineItemsTable,
+			Columns: []string{subscription.LineItemsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionlineitem.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := suo.mutation.LineItemsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.LineItemsTable,
+			Columns: []string{subscription.LineItemsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionlineitem.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_node = &Subscription{config: suo.config}
 	_spec.Assign = _node.assignValues

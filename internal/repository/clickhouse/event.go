@@ -222,6 +222,10 @@ func (r *EventRepository) GetEvents(ctx context.Context, params *events.GetEvent
 	args = append(args, types.GetTenantID(ctx))
 
 	// Apply filters
+	if params.EventID != "" {
+		baseQuery += " AND id = ?"
+		args = append(args, params.EventID)
+	}
 	if params.ExternalCustomerID != "" {
 		baseQuery += " AND external_customer_id = ?"
 		args = append(args, params.ExternalCustomerID)

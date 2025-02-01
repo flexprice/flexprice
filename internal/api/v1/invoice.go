@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
+	"github.com/samber/lo"
 )
 
 type InvoiceHandler struct {
@@ -86,14 +87,7 @@ func (h *InvoiceHandler) GetInvoice(c *gin.Context) {
 // @Tags Invoices
 // @Accept json
 // @Produce json
-// @Param customer_id query string false "Customer ID"
-// @Param subscription_id query string false "Subscription ID"
-// @Param wallet_id query string false "Wallet ID"
-// @Param status query []string false "Invoice statuses"
-// @Param start_time query string false "Start time (RFC3339)"
-// @Param end_time query string false "End time (RFC3339)"
-// @Param limit query int false "Limit"
-// @Param offset query int false "Offset"
+// @Param filter query types.InvoiceFilter false "Filter"
 // @Success 200 {object} dto.ListInvoicesResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
@@ -106,21 +100,21 @@ func (h *InvoiceHandler) ListInvoices(c *gin.Context) {
 		return
 	}
 
-	// Set default values if not provided
-	if filter.Limit == 0 {
-		filter.Limit = types.FILTER_DEFAULT_LIMIT
+	if filter.GetLimit() == 0 {
+		filter.Limit = lo.ToPtr(types.GetDefaultFilter().Limit)
 	}
-	if filter.Sort == "" {
-		filter.Sort = types.FILTER_DEFAULT_SORT
-	}
-	if filter.Order == "" {
-		filter.Order = types.FILTER_DEFAULT_ORDER
+
+	// Validate filter
+	if err := filter.Validate(); err != nil {
+		h.logger.Error("Invalid filter parameters", "error", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
 	resp, err := h.invoiceService.ListInvoices(c.Request.Context(), &filter)
 	if err != nil {
 		h.logger.Error("Failed to list invoices", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list invoices"})
 		return
 	}
 
@@ -230,6 +224,60 @@ func (h *InvoiceHandler) UpdatePaymentStatus(c *gin.Context) {
 			"error", err,
 		)
 		NewErrorResponse(c, http.StatusInternalServerError, "failed to get updated invoice", err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+// GetPreviewInvoice godoc
+// @Summary Get a preview invoice
+// @Description Get a preview invoice
+// @Tags Invoices
+// @Accept json
+// @Produce json
+// @Param request body dto.GetPreviewInvoiceRequest true "Preview Invoice Request"
+// @Success 200 {object} dto.InvoiceResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /invoices/preview [post]
+func (h *InvoiceHandler) GetPreviewInvoice(c *gin.Context) {
+	var req dto.GetPreviewInvoiceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Error("Failed to bind request body", "error", err)
+		NewErrorResponse(c, http.StatusBadRequest, "failed to bind request body", err)
+		return
+	}
+
+	resp, err := h.invoiceService.GetPreviewInvoice(c.Request.Context(), req)
+	if err != nil {
+		h.logger.Error("Failed to get preview invoice", "error", err)
+		NewErrorResponse(c, http.StatusInternalServerError, "failed to get preview invoice", err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+// GetCustomerInvoiceSummary godoc
+// @Summary Get a customer invoice summary
+// @Description Get a customer invoice summary
+// @Tags Invoices
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Customer ID"
+// @Success 200 {object} dto.CustomerMultiCurrencyInvoiceSummary
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /customers/{id}/invoices/summary [get]
+func (h *InvoiceHandler) GetCustomerInvoiceSummary(c *gin.Context) {
+	id := c.Param("id")
+
+	resp, err := h.invoiceService.GetCustomerMultiCurrencyInvoiceSummary(c.Request.Context(), id)
+	if err != nil {
+		h.logger.Errorw("failed to get customer invoice summary", "error", err, "customer_id", id)
+		NewErrorResponse(c, http.StatusInternalServerError, "failed to get customer invoice summary", err)
 		return
 	}
 

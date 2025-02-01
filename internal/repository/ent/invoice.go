@@ -16,14 +16,16 @@ import (
 )
 
 type invoiceRepository struct {
-	client postgres.IClient
-	log    *logger.Logger
+	client    postgres.IClient
+	logger    *logger.Logger
+	queryOpts InvoiceQueryOptions
 }
 
-func NewInvoiceRepository(client postgres.IClient, log *logger.Logger) domainInvoice.Repository {
+func NewInvoiceRepository(client postgres.IClient, logger *logger.Logger) domainInvoice.Repository {
 	return &invoiceRepository{
-		client: client,
-		log:    log,
+		client:    client,
+		logger:    logger,
+		queryOpts: InvoiceQueryOptions{},
 	}
 }
 
@@ -64,7 +66,7 @@ func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoi
 		Save(ctx)
 
 	if err != nil {
-		r.log.Error("failed to create invoice", "error", err)
+		r.logger.Error("failed to create invoice", "error", err)
 		return fmt.Errorf("creating invoice: %w", err)
 	}
 
@@ -74,7 +76,7 @@ func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoi
 
 // CreateWithLineItems creates an invoice with its line items in a single transaction
 func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domainInvoice.Invoice) error {
-	r.log.Debugw("creating invoice with line items",
+	r.logger.Debugw("creating invoice with line items",
 		"id", inv.ID,
 		"line_items_count", len(inv.LineItems))
 
@@ -113,7 +115,7 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 			SetNillablePeriodEnd(inv.PeriodEnd).
 			Save(ctx)
 		if err != nil {
-			r.log.Error("failed to create invoice", "error", err)
+			r.logger.Error("failed to create invoice", "error", err)
 			return fmt.Errorf("creating invoice: %w", err)
 		}
 
@@ -133,6 +135,7 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 					SetPriceID(item.PriceID).
 					SetNillableMeterID(item.MeterID).
 					SetNillableMeterDisplayName(item.MeterDisplayName).
+					SetNillableDisplayName(item.DisplayName).
 					SetAmount(item.Amount).
 					SetQuantity(item.Quantity).
 					SetCurrency(item.Currency).
@@ -147,7 +150,7 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 			}
 
 			if err := r.client.Querier(ctx).InvoiceLineItem.CreateBulk(builders...).Exec(ctx); err != nil {
-				r.log.Error("failed to create line items", "error", err)
+				r.logger.Error("failed to create line items", "error", err)
 				return fmt.Errorf("creating line items: %w", err)
 			}
 		}
@@ -158,7 +161,7 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 
 // AddLineItems adds line items to an existing invoice
 func (r *invoiceRepository) AddLineItems(ctx context.Context, invoiceID string, items []*domainInvoice.InvoiceLineItem) error {
-	r.log.Debugw("adding line items", "invoice_id", invoiceID, "count", len(items))
+	r.logger.Debugw("adding line items", "invoice_id", invoiceID, "count", len(items))
 
 	return r.client.WithTx(ctx, func(ctx context.Context) error {
 		// Verify invoice exists
@@ -184,6 +187,7 @@ func (r *invoiceRepository) AddLineItems(ctx context.Context, invoiceID string, 
 				SetPriceID(item.PriceID).
 				SetNillableMeterID(item.MeterID).
 				SetNillableMeterDisplayName(item.MeterDisplayName).
+				SetNillableDisplayName(item.DisplayName).
 				SetAmount(item.Amount).
 				SetQuantity(item.Quantity).
 				SetCurrency(item.Currency).
@@ -198,7 +202,7 @@ func (r *invoiceRepository) AddLineItems(ctx context.Context, invoiceID string, 
 		}
 
 		if err := r.client.Querier(ctx).InvoiceLineItem.CreateBulk(builders...).Exec(ctx); err != nil {
-			r.log.Error("failed to add line items", "error", err)
+			r.logger.Error("failed to add line items", "error", err)
 			return fmt.Errorf("adding line items: %w", err)
 		}
 
@@ -208,7 +212,7 @@ func (r *invoiceRepository) AddLineItems(ctx context.Context, invoiceID string, 
 
 // RemoveLineItems removes line items from an invoice
 func (r *invoiceRepository) RemoveLineItems(ctx context.Context, invoiceID string, itemIDs []string) error {
-	r.log.Debugw("removing line items", "invoice_id", invoiceID, "count", len(itemIDs))
+	r.logger.Debugw("removing line items", "invoice_id", invoiceID, "count", len(itemIDs))
 
 	return r.client.WithTx(ctx, func(ctx context.Context) error {
 		// Verify invoice exists
@@ -238,7 +242,7 @@ func (r *invoiceRepository) RemoveLineItems(ctx context.Context, invoiceID strin
 }
 
 func (r *invoiceRepository) Get(ctx context.Context, id string) (*domainInvoice.Invoice, error) {
-	r.log.Debugw("getting invoice", "id", id)
+	r.logger.Debugw("getting invoice", "id", id)
 
 	invoice, err := r.client.Querier(ctx).Invoice.Query().
 		Where(invoice.ID(id)).
@@ -281,8 +285,8 @@ func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoi
 		SetNillableInvoicePdfURL(inv.InvoicePDFURL).
 		SetBillingReason(string(inv.BillingReason)).
 		SetMetadata(inv.Metadata).
-		SetUpdatedAt(inv.UpdatedAt).
-		SetUpdatedBy(inv.UpdatedBy).
+		SetUpdatedAt(time.Now()).
+		SetUpdatedBy(types.GetUserID(ctx)).
 		AddVersion(1) // Increment version atomically
 
 	// Execute update
@@ -312,7 +316,7 @@ func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoi
 }
 
 func (r *invoiceRepository) Delete(ctx context.Context, id string) error {
-	r.log.Info("deleting invoice", "id", id)
+	r.logger.Info("deleting invoice", "id", id)
 
 	return r.client.WithTx(ctx, func(ctx context.Context) error {
 		// Delete line items first
@@ -348,23 +352,17 @@ func (r *invoiceRepository) Delete(ctx context.Context, id string) error {
 	})
 }
 
+// List returns a paginated list of invoices based on the filter
 func (r *invoiceRepository) List(ctx context.Context, filter *types.InvoiceFilter) ([]*domainInvoice.Invoice, error) {
 	client := r.client.Querier(ctx)
 	query := client.Invoice.Query().
 		WithLineItems()
 
-	query = ToEntQuery(ctx, filter, query)
+	// Apply entity-specific filters
+	query = r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
 
-	// Apply order by
-	query = query.Order(ent.Desc(invoice.FieldCreatedAt))
-
-	// Apply pagination
-	if filter != nil && filter.Limit > 0 {
-		query = query.Limit(filter.Limit)
-		if filter.Offset > 0 {
-			query = query.Offset(filter.Offset)
-		}
-	}
+	// Apply common query options
+	query = ApplyQueryOptions(ctx, query, filter, r.queryOpts)
 
 	invoices, err := query.All(ctx)
 	if err != nil {
@@ -380,13 +378,13 @@ func (r *invoiceRepository) List(ctx context.Context, filter *types.InvoiceFilte
 	return result, nil
 }
 
+// Count returns the total number of invoices based on the filter
 func (r *invoiceRepository) Count(ctx context.Context, filter *types.InvoiceFilter) (int, error) {
 	client := r.client.Querier(ctx)
 	query := client.Invoice.Query()
 
-	if filter != nil {
-		query = ToEntQuery(ctx, filter, query)
-	}
+	query = ApplyBaseFilters(ctx, query, filter, r.queryOpts)
+	query = r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
 
 	count, err := query.Count(ctx)
 	if err != nil {
@@ -462,7 +460,7 @@ func (r *invoiceRepository) GetNextInvoiceNumber(ctx context.Context) (string, e
 		return "", fmt.Errorf("failed to scan sequence value: %w", err)
 	}
 
-	r.log.Infow("generated invoice number",
+	r.logger.Infow("generated invoice number",
 		"tenant_id", tenantID,
 		"year_month", yearMonth,
 		"sequence", lastValue)
@@ -496,7 +494,7 @@ func (r *invoiceRepository) GetNextBillingSequence(ctx context.Context, subscrip
 		return 0, fmt.Errorf("failed to scan sequence value: %w", err)
 	}
 
-	r.log.Infow("generated billing sequence",
+	r.logger.Infow("generated billing sequence",
 		"tenant_id", tenantID,
 		"subscription_id", subscriptionID,
 		"sequence", lastSequence)
@@ -504,18 +502,59 @@ func (r *invoiceRepository) GetNextBillingSequence(ctx context.Context, subscrip
 	return lastSequence, nil
 }
 
-// helper functions
-
 // Add a helper function to parse the InvoiceFilter struct to relevant ent base *ent.InvoiceQuery
-func ToEntQuery(ctx context.Context, f *types.InvoiceFilter, query *ent.InvoiceQuery) *ent.InvoiceQuery {
+// InvoiceQuery type alias for better readability
+type InvoiceQuery = *ent.InvoiceQuery
+
+// InvoiceQueryOptions implements BaseQueryOptions for invoice queries
+type InvoiceQueryOptions struct{}
+
+func (o InvoiceQueryOptions) ApplyTenantFilter(ctx context.Context, query InvoiceQuery) InvoiceQuery {
+	return query.Where(invoice.TenantID(types.GetTenantID(ctx)))
+}
+
+func (o InvoiceQueryOptions) ApplyStatusFilter(query InvoiceQuery, status string) InvoiceQuery {
+	if status == "" {
+		return query.Where(invoice.StatusNotIn(string(types.StatusDeleted)))
+	}
+	return query.Where(invoice.Status(status))
+}
+
+func (o InvoiceQueryOptions) ApplySortFilter(query InvoiceQuery, field string, order string) InvoiceQuery {
+	orderFunc := ent.Desc
+	if order == "asc" {
+		orderFunc = ent.Asc
+	}
+	return query.Order(orderFunc(o.GetFieldName(field)))
+}
+
+func (o InvoiceQueryOptions) ApplyPaginationFilter(query InvoiceQuery, limit int, offset int) InvoiceQuery {
+	query = query.Limit(limit)
+	if offset > 0 {
+		query = query.Offset(offset)
+	}
+	return query
+}
+
+func (o InvoiceQueryOptions) GetFieldName(field string) string {
+	switch field {
+	case "created_at":
+		return invoice.FieldCreatedAt
+	case "updated_at":
+		return invoice.FieldUpdatedAt
+	case "invoice_number":
+		return invoice.FieldInvoiceNumber
+	default:
+		return field
+	}
+}
+
+func (o InvoiceQueryOptions) applyEntityQueryOptions(ctx context.Context, f *types.InvoiceFilter, query *ent.InvoiceQuery) *ent.InvoiceQuery {
 	if f == nil {
 		return query
 	}
 
-	query.Where(
-		invoice.TenantID(types.GetTenantID(ctx)),
-		invoice.Status(string(types.StatusPublished)),
-	)
+	// Apply entity-specific filters
 	if f.CustomerID != "" {
 		query = query.Where(invoice.CustomerID(f.CustomerID))
 	}
@@ -539,11 +578,16 @@ func ToEntQuery(ctx context.Context, f *types.InvoiceFilter, query *ent.InvoiceQ
 		}
 		query = query.Where(invoice.PaymentStatusIn(paymentStatuses...))
 	}
-	if f.StartTime != nil {
-		query = query.Where(invoice.CreatedAtGTE(*f.StartTime))
+
+	// Apply time range filters
+	if f.TimeRangeFilter != nil {
+		if f.TimeRangeFilter.StartTime != nil {
+			query = query.Where(invoice.PeriodStartGTE(*f.TimeRangeFilter.StartTime))
+		}
+		if f.TimeRangeFilter.EndTime != nil {
+			query = query.Where(invoice.PeriodEndLTE(*f.TimeRangeFilter.EndTime))
+		}
 	}
-	if f.EndTime != nil {
-		query = query.Where(invoice.CreatedAtLTE(*f.EndTime))
-	}
+
 	return query
 }

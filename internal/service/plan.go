@@ -15,7 +15,7 @@ import (
 type PlanService interface {
 	CreatePlan(ctx context.Context, req dto.CreatePlanRequest) (*dto.CreatePlanResponse, error)
 	GetPlan(ctx context.Context, id string) (*dto.PlanResponse, error)
-	GetPlans(ctx context.Context, filter types.Filter) (*dto.ListPlansResponse, error)
+	GetPlans(ctx context.Context, filter *types.PlanFilter) (*dto.ListPlansResponse, error)
 	UpdatePlan(ctx context.Context, id string, req dto.UpdatePlanRequest) (*dto.PlanResponse, error)
 	DeletePlan(ctx context.Context, id string) error
 }
@@ -69,36 +69,44 @@ func (s *planService) GetPlan(ctx context.Context, id string) (*dto.PlanResponse
 	}
 
 	response := &dto.PlanResponse{Plan: plan}
-	for _, p := range pricesResponse.Prices {
+	for _, p := range pricesResponse.Items {
 		if p.Price.PlanID == plan.ID {
-			response.Prices = append(response.Prices, dto.PriceResponse{Price: p.Price})
+			response.Prices = append(response.Prices, p)
 		}
 	}
 
 	return response, nil
 }
 
-func (s *planService) GetPlans(ctx context.Context, filter types.Filter) (*dto.ListPlansResponse, error) {
+func (s *planService) GetPlans(ctx context.Context, filter *types.PlanFilter) (*dto.ListPlansResponse, error) {
+	s.logger.Debugw("getting plans", "filter", filter)
 	priceService := NewPriceService(s.priceRepo, s.meterRepo, s.logger)
+	if filter == nil {
+		filter = types.NewPlanFilter()
+	}
+
+	if err := filter.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid filter: %w", err)
+	}
 
 	// Fetch plans
-	s.logger.Debugw("fetching plans", "filter", filter)
 	plans, err := s.planRepo.List(ctx, filter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list plans: %w", err)
 	}
 
-	// Prepare response
-	response := &dto.ListPlansResponse{
-		Plans:  make([]*dto.PlanResponse, len(plans)),
-		Total:  len(plans),
-		Offset: filter.Offset,
-		Limit:  filter.Limit,
+	count, err := s.planRepo.Count(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count plans: %w", err)
 	}
 
-	// Create basic plan responses
-	for i, plan := range plans {
-		response.Plans[i] = &dto.PlanResponse{Plan: plan}
+	response := &dto.ListPlansResponse{
+		Items: make([]*dto.PlanResponse, len(plans)),
+		Pagination: types.NewPaginationResponse(
+			count,
+			filter.GetLimit(),
+			filter.GetOffset(),
+		),
 	}
 
 	// If prices expansion is requested, fetch all prices in one query
@@ -110,7 +118,7 @@ func (s *planService) GetPlans(ctx context.Context, filter types.Filter) (*dto.L
 		}
 
 		// Create price filter with same status as plan filter and propagate meter expansion
-		priceFilter := types.NewUnlimitedPriceFilter().
+		priceFilter := types.NewNoLimitPriceFilter().
 			WithPlanIDs(planIDs).
 			WithStatus(types.StatusPublished)
 
@@ -120,25 +128,28 @@ func (s *planService) GetPlans(ctx context.Context, filter types.Filter) (*dto.L
 		}
 
 		// Fetch all prices in one query
-		s.logger.Debugw("fetching prices for plans",
-			"plan_ids", planIDs,
-			"expand", priceFilter.GetExpand())
 		pricesResponse, err := priceService.GetPrices(ctx, priceFilter)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch prices: %w", err)
 		}
 
 		// Create a map for quick price lookup by plan ID
-		pricesByPlanID := make(map[string][]dto.PriceResponse)
-		for _, p := range pricesResponse.Prices {
+		pricesByPlanID := make(map[string][]*dto.PriceResponse)
+		for _, p := range pricesResponse.Items {
 			pricesByPlanID[p.Price.PlanID] = append(pricesByPlanID[p.Price.PlanID], p)
 		}
 
-		// Assign prices to respective plans
-		for i, planResp := range response.Plans {
-			if prices, ok := pricesByPlanID[planResp.ID]; ok {
-				response.Plans[i].Prices = prices
+		// Build response with expanded fields
+		for i, plan := range plans {
+			response.Items[i] = &dto.PlanResponse{Plan: plan}
+			if prices, ok := pricesByPlanID[plan.ID]; ok {
+				response.Items[i].Prices = prices
 			}
+		}
+	} else {
+		// Build response without expanded fields
+		for i, plan := range plans {
+			response.Items[i] = &dto.PlanResponse{Plan: plan}
 		}
 	}
 
@@ -217,11 +228,11 @@ func (s *planService) UpdatePlan(ctx context.Context, id string, req dto.UpdateP
 
 	response := &dto.PlanResponse{
 		Plan:   plan,
-		Prices: make([]dto.PriceResponse, 0, len(finalPrices)),
+		Prices: make([]*dto.PriceResponse, 0, len(finalPrices)),
 	}
 
 	for _, price := range finalPrices {
-		response.Prices = append(response.Prices, dto.PriceResponse{Price: price})
+		response.Prices = append(response.Prices, &dto.PriceResponse{Price: price})
 	}
 
 	return response, nil

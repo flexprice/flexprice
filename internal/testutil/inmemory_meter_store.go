@@ -2,91 +2,90 @@ package testutil
 
 import (
 	"context"
-	"fmt"
-	"sync"
 
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
+// InMemoryMeterStore implements meter.Repository
 type InMemoryMeterStore struct {
-	mu     sync.RWMutex
-	meters map[string]*meter.Meter
+	*InMemoryStore[*meter.Meter]
 }
 
+// NewInMemoryMeterStore creates a new in-memory meter store
 func NewInMemoryMeterStore() *InMemoryMeterStore {
 	return &InMemoryMeterStore{
-		meters: make(map[string]*meter.Meter),
+		InMemoryStore: NewInMemoryStore[*meter.Meter](),
 	}
+}
+
+// Helper to copy meter
+func copyMeter(m *meter.Meter) *meter.Meter {
+	if m == nil {
+		return nil
+	}
+
+	// Deep copy of meter
+	meter := &meter.Meter{
+		ID:        m.ID,
+		Name:      m.Name,
+		EventName: m.EventName,
+		BaseModel: types.BaseModel{
+			TenantID:  m.TenantID,
+			Status:    m.Status,
+			CreatedAt: m.CreatedAt,
+			UpdatedAt: m.UpdatedAt,
+			CreatedBy: m.CreatedBy,
+			UpdatedBy: m.UpdatedBy,
+		},
+		Aggregation: m.Aggregation,
+		Filters:     make([]meter.Filter, len(m.Filters)),
+		ResetUsage:  m.ResetUsage,
+	}
+
+	// Deep copy filters
+	copy(meter.Filters, m.Filters)
+
+	return meter
 }
 
 func (s *InMemoryMeterStore) CreateMeter(ctx context.Context, m *meter.Meter) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if m.ID == "" {
-		return fmt.Errorf("meter ID cannot be empty")
-	}
-
-	if m.Name == "" {
-		return fmt.Errorf("meter name cannot be empty")
-	}
-
-	if m.ResetUsage == "" {
-		m.ResetUsage = types.ResetUsageBillingPeriod
-	}
-
-	s.meters[m.ID] = m
-	return nil
+	return s.InMemoryStore.Create(ctx, m.ID, copyMeter(m))
 }
 
 func (s *InMemoryMeterStore) GetMeter(ctx context.Context, id string) (*meter.Meter, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	m, exists := s.meters[id]
-	if !exists {
-		return nil, fmt.Errorf("meter not found")
-	}
-	return m, nil
+	return s.InMemoryStore.Get(ctx, id)
 }
 
-func (s *InMemoryMeterStore) GetAllMeters(ctx context.Context) ([]*meter.Meter, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+func (s *InMemoryMeterStore) List(ctx context.Context, filter *types.MeterFilter) ([]*meter.Meter, error) {
+	return s.InMemoryStore.List(ctx, filter, meterFilterFn, meterSortFn)
+}
 
-	meters := make([]*meter.Meter, 0, len(s.meters))
-	for _, m := range s.meters {
-		meters = append(meters, m)
-	}
-	return meters, nil
+func (s *InMemoryMeterStore) ListAll(ctx context.Context, filter *types.MeterFilter) ([]*meter.Meter, error) {
+	f := *filter
+	f.QueryFilter = types.NewNoLimitQueryFilter()
+	return s.List(ctx, &f)
+}
+
+func (s *InMemoryMeterStore) Count(ctx context.Context, filter *types.MeterFilter) (int, error) {
+	return s.InMemoryStore.Count(ctx, filter, meterFilterFn)
 }
 
 func (s *InMemoryMeterStore) DisableMeter(ctx context.Context, id string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	m, exists := s.meters[id]
-	if !exists {
-		return fmt.Errorf("meter not found")
+	m, err := s.GetMeter(ctx, id)
+	if err != nil {
+		return err
 	}
 
 	m.Status = types.StatusDeleted
-	return nil
+	return s.InMemoryStore.Update(ctx, m.ID, m)
 }
 
 func (s *InMemoryMeterStore) UpdateMeter(ctx context.Context, id string, filters []meter.Filter) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if id == "" {
-		return fmt.Errorf("id is required")
-	}
-
-	// Find the meter by ID
-	m, exists := s.meters[id]
-	if !exists {
-		return fmt.Errorf("meter not found")
+	m, err := s.GetMeter(ctx, id)
+	if err != nil {
+		return err
 	}
 
 	if m.Filters == nil {
@@ -106,7 +105,7 @@ func (s *InMemoryMeterStore) UpdateMeter(ctx context.Context, id string, filters
 		} else {
 			// Append new values for an existing key, avoiding duplicates
 			for _, newValue := range newFilter.Values {
-				if !contains(existingFilters[newFilter.Key], newValue) {
+				if !lo.Contains(existingFilters[newFilter.Key], newValue) {
 					existingFilters[newFilter.Key] = append(existingFilters[newFilter.Key], newValue)
 				}
 			}
@@ -123,22 +122,47 @@ func (s *InMemoryMeterStore) UpdateMeter(ctx context.Context, id string, filters
 	}
 
 	m.Filters = updatedFilters
-	return nil
+	return s.InMemoryStore.Update(ctx, m.ID, m)
 }
 
-func (s *InMemoryMeterStore) Clear() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+// meterFilterFn implements filtering logic for meters
+func meterFilterFn(ctx context.Context, m *meter.Meter, filter interface{}) bool {
+	f, ok := filter.(*types.MeterFilter)
+	if !ok {
+		return false
+	}
 
-	s.meters = make(map[string]*meter.Meter)
-}
+	// Apply tenant filter
+	tenantID := types.GetTenantID(ctx)
+	if tenantID != "" && m.TenantID != tenantID {
+		return false
+	}
 
-// Helper function to check if a slice contains a specific value
-func contains(slice []string, value string) bool {
-	for _, v := range slice {
-		if v == value {
-			return true
+	// Apply status filter
+	if f.Status != nil && m.Status != *f.Status {
+		return false
+	}
+
+	// Apply event name filter
+	if f.EventName != "" && m.EventName != f.EventName {
+		return false
+	}
+
+	// Apply time range filter
+	if f.TimeRangeFilter != nil {
+		if f.StartTime != nil && m.CreatedAt.Before(*f.StartTime) {
+			return false
+		}
+		if f.EndTime != nil && m.CreatedAt.After(*f.EndTime) {
+			return false
 		}
 	}
-	return false
+
+	return true
+}
+
+// meterSortFn implements sorting logic for meters
+func meterSortFn(i, j *meter.Meter) bool {
+	// Default sort by created_at desc
+	return i.CreatedAt.After(j.CreatedAt)
 }

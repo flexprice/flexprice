@@ -65,12 +65,7 @@ func NewSubscriptionRepository(p RepositoryParams) subscription.Repository {
 }
 
 func NewWalletRepository(p RepositoryParams) wallet.Repository {
-	// Use Ent implementation if client is available
-	if p.EntClient != nil {
-		return entRepo.NewWalletRepository(p.EntClient, p.Logger)
-	}
-	// Fallback to PostgreSQL implementation
-	return postgresRepo.NewWalletRepository(p.DB, p.Logger)
+	return entRepo.NewWalletRepository(p.EntClient, p.Logger)
 }
 
 func NewTenantRepository(p RepositoryParams) tenant.Repository {

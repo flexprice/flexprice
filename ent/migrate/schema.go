@@ -42,7 +42,7 @@ var (
 		{Name: "updated_by", Type: field.TypeString, Nullable: true},
 		{Name: "external_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "name", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
-		{Name: "email", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "email", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 	}
 	// CustomersTable holds the schema information for the "customers" table.
 	CustomersTable = &schema.Table{
@@ -164,6 +164,7 @@ var (
 		{Name: "price_type", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "meter_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "meter_display_name", Type: field.TypeString, Nullable: true},
+		{Name: "display_name", Type: field.TypeString, Nullable: true},
 		{Name: "amount", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 		{Name: "quantity", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 		{Name: "currency", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(10)"}},
@@ -180,7 +181,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "invoice_line_items_invoices_line_items",
-				Columns:    []*schema.Column{InvoiceLineItemsColumns[21]},
+				Columns:    []*schema.Column{InvoiceLineItemsColumns[22]},
 				RefColumns: []*schema.Column{InvoicesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -189,7 +190,7 @@ var (
 			{
 				Name:    "invoicelineitem_tenant_id_invoice_id_status",
 				Unique:  false,
-				Columns: []*schema.Column{InvoiceLineItemsColumns[1], InvoiceLineItemsColumns[21], InvoiceLineItemsColumns[2]},
+				Columns: []*schema.Column{InvoiceLineItemsColumns[1], InvoiceLineItemsColumns[22], InvoiceLineItemsColumns[2]},
 			},
 			{
 				Name:    "invoicelineitem_tenant_id_customer_id_status",
@@ -214,7 +215,7 @@ var (
 			{
 				Name:    "invoicelineitem_period_start_period_end",
 				Unique:  false,
-				Columns: []*schema.Column{InvoiceLineItemsColumns[18], InvoiceLineItemsColumns[19]},
+				Columns: []*schema.Column{InvoiceLineItemsColumns[19], InvoiceLineItemsColumns[20]},
 			},
 		},
 	}
@@ -386,6 +387,7 @@ var (
 		{Name: "billing_period", Type: field.TypeString},
 		{Name: "billing_period_count", Type: field.TypeInt, Default: 1},
 		{Name: "version", Type: field.TypeInt, Default: 1},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 	}
 	// SubscriptionsTable holds the schema information for the "subscriptions" table.
 	SubscriptionsTable = &schema.Table{
@@ -415,6 +417,77 @@ var (
 			},
 		},
 	}
+	// SubscriptionLineItemsColumns holds the columns for the "subscription_line_items" table.
+	SubscriptionLineItemsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "customer_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "plan_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "plan_display_name", Type: field.TypeString, Nullable: true},
+		{Name: "price_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "price_type", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "meter_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "meter_display_name", Type: field.TypeString, Nullable: true},
+		{Name: "display_name", Type: field.TypeString, Nullable: true},
+		{Name: "quantity", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "currency", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(10)"}},
+		{Name: "billing_period", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "start_date", Type: field.TypeTime, Nullable: true},
+		{Name: "end_date", Type: field.TypeTime, Nullable: true},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "subscription_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+	}
+	// SubscriptionLineItemsTable holds the schema information for the "subscription_line_items" table.
+	SubscriptionLineItemsTable = &schema.Table{
+		Name:       "subscription_line_items",
+		Columns:    SubscriptionLineItemsColumns,
+		PrimaryKey: []*schema.Column{SubscriptionLineItemsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "subscription_line_items_subscriptions_line_items",
+				Columns:    []*schema.Column{SubscriptionLineItemsColumns[21]},
+				RefColumns: []*schema.Column{SubscriptionsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "subscriptionlineitem_tenant_id_subscription_id_status",
+				Unique:  false,
+				Columns: []*schema.Column{SubscriptionLineItemsColumns[1], SubscriptionLineItemsColumns[21], SubscriptionLineItemsColumns[2]},
+			},
+			{
+				Name:    "subscriptionlineitem_tenant_id_customer_id_status",
+				Unique:  false,
+				Columns: []*schema.Column{SubscriptionLineItemsColumns[1], SubscriptionLineItemsColumns[7], SubscriptionLineItemsColumns[2]},
+			},
+			{
+				Name:    "subscriptionlineitem_tenant_id_plan_id_status",
+				Unique:  false,
+				Columns: []*schema.Column{SubscriptionLineItemsColumns[1], SubscriptionLineItemsColumns[8], SubscriptionLineItemsColumns[2]},
+			},
+			{
+				Name:    "subscriptionlineitem_tenant_id_price_id_status",
+				Unique:  false,
+				Columns: []*schema.Column{SubscriptionLineItemsColumns[1], SubscriptionLineItemsColumns[10], SubscriptionLineItemsColumns[2]},
+			},
+			{
+				Name:    "subscriptionlineitem_tenant_id_meter_id_status",
+				Unique:  false,
+				Columns: []*schema.Column{SubscriptionLineItemsColumns[1], SubscriptionLineItemsColumns[12], SubscriptionLineItemsColumns[2]},
+			},
+			{
+				Name:    "subscriptionlineitem_start_date_end_date",
+				Unique:  false,
+				Columns: []*schema.Column{SubscriptionLineItemsColumns[18], SubscriptionLineItemsColumns[19]},
+			},
+		},
+	}
 	// WalletsColumns holds the columns for the "wallets" table.
 	WalletsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -424,6 +497,7 @@ var (
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "created_by", Type: field.TypeString, Nullable: true},
 		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "name", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "customer_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "currency", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(10)"}},
 		{Name: "description", Type: field.TypeString, Nullable: true},
@@ -440,12 +514,12 @@ var (
 			{
 				Name:    "wallet_tenant_id_customer_id_status",
 				Unique:  false,
-				Columns: []*schema.Column{WalletsColumns[1], WalletsColumns[7], WalletsColumns[2]},
+				Columns: []*schema.Column{WalletsColumns[1], WalletsColumns[8], WalletsColumns[2]},
 			},
 			{
 				Name:    "wallet_tenant_id_status_wallet_status",
 				Unique:  false,
-				Columns: []*schema.Column{WalletsColumns[1], WalletsColumns[2], WalletsColumns[12]},
+				Columns: []*schema.Column{WalletsColumns[1], WalletsColumns[2], WalletsColumns[13]},
 			},
 		},
 	}
@@ -503,6 +577,7 @@ var (
 		PlansTable,
 		PricesTable,
 		SubscriptionsTable,
+		SubscriptionLineItemsTable,
 		WalletsTable,
 		WalletTransactionsTable,
 	}
@@ -510,4 +585,5 @@ var (
 
 func init() {
 	InvoiceLineItemsTable.ForeignKeys[0].RefTable = InvoicesTable
+	SubscriptionLineItemsTable.ForeignKeys[0].RefTable = SubscriptionsTable
 }

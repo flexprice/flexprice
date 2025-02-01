@@ -66,10 +66,29 @@ dynamodb:
 logging:
   level: "debug"
 
+webhook:
+  enabled: true
+  topic: "webhook_events"
+  pubsub: "memory"
+  max_retries: 3
+  initial_interval: 1s
+  max_interval: 10s
+  multiplier: 2.0
+  max_elapsed_time: 2m
+  tenants:
+    "00000000-0000-0000-0000-000000000000":
+      enabled: true
+      endpoint: "http://localhost:8080/health"
+      headers:
+        "X-Api-Key": "api-key-provided-by-tenant"
+      excluded_events:
+        - "tenant.created"
+        - "tenant.updated"
+
 temporal:
   address: "localhost:7233"
   namespace: "default"
-  task_queue: "default"
+  task_queue: "billing-task-queue"
   client_name: "flexprice-client"
   retry:
     initial_interval_seconds: 1

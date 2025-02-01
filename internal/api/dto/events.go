@@ -44,6 +44,7 @@ type GetUsageByMeterRequest struct {
 type GetEventsRequest struct {
 	ExternalCustomerID string    `json:"external_customer_id"`
 	EventName          string    `json:"event_name" binding:"required"`
+	EventID            string    `json:"event_id"`
 	StartTime          time.Time `json:"start_time" example:"2024-11-09T00:00:00Z"`
 	EndTime            time.Time `json:"end_time" example:"2024-12-09T00:00:00Z"`
 	IterFirstKey       string    `json:"iter_first_key"`
@@ -131,7 +132,16 @@ func (r *GetUsageRequest) ToUsageParams() *events.UsageParams {
 }
 
 func (r *GetUsageByMeterRequest) Validate() error {
-	return validator.New().Struct(r)
+	err := validator.New().Struct(r)
+	if err != nil {
+		return err
+	}
+
+	if err := r.WindowSize.Validate(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (r *GetEventsRequest) Validate() error {

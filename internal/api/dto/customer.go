@@ -11,25 +11,21 @@ import (
 type CreateCustomerRequest struct {
 	ExternalID string `json:"external_id" validate:"required"`
 	Name       string `json:"name"`
-	Email      string `json:"email"`
+	Email      string `json:"email" validate:"omitempty,email"`
 }
 
 type UpdateCustomerRequest struct {
 	ExternalID *string `json:"external_id"`
 	Name       *string `json:"name"`
-	Email      *string `json:"email"`
+	Email      *string `json:"email" validate:"omitempty,email"`
 }
 
 type CustomerResponse struct {
 	*customer.Customer
 }
 
-type ListCustomersResponse struct {
-	Customers []CustomerResponse `json:"customers"`
-	Total     int                `json:"total"`
-	Offset    int                `json:"offset"`
-	Limit     int                `json:"limit"`
-}
+// ListCustomersResponse represents the response for listing customers
+type ListCustomersResponse = types.ListResponse[*CustomerResponse]
 
 func (r *CreateCustomerRequest) Validate() error {
 	return validator.New().Struct(r)

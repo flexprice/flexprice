@@ -3,6 +3,7 @@
 package ent
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -68,8 +69,31 @@ type Subscription struct {
 	// BillingPeriodCount holds the value of the "billing_period_count" field.
 	BillingPeriodCount int `json:"billing_period_count,omitempty"`
 	// Version holds the value of the "version" field.
-	Version      int `json:"version,omitempty"`
+	Version int `json:"version,omitempty"`
+	// Metadata holds the value of the "metadata" field.
+	Metadata map[string]string `json:"metadata,omitempty"`
+	// Edges holds the relations/edges for other nodes in the graph.
+	// The values are being populated by the SubscriptionQuery when eager-loading is set.
+	Edges        SubscriptionEdges `json:"edges"`
 	selectValues sql.SelectValues
+}
+
+// SubscriptionEdges holds the relations/edges for other nodes in the graph.
+type SubscriptionEdges struct {
+	// LineItems holds the value of the line_items edge.
+	LineItems []*SubscriptionLineItem `json:"line_items,omitempty"`
+	// loadedTypes holds the information for reporting if a
+	// type was loaded (or requested) in eager-loading or not.
+	loadedTypes [1]bool
+}
+
+// LineItemsOrErr returns the LineItems value or an error if the edge
+// was not loaded in eager-loading.
+func (e SubscriptionEdges) LineItemsOrErr() ([]*SubscriptionLineItem, error) {
+	if e.loadedTypes[0] {
+		return e.LineItems, nil
+	}
+	return nil, &NotLoadedError{edge: "line_items"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -77,6 +101,8 @@ func (*Subscription) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case subscription.FieldMetadata:
+			values[i] = new([]byte)
 		case subscription.FieldCancelAtPeriodEnd:
 			values[i] = new(sql.NullBool)
 		case subscription.FieldBillingPeriodCount, subscription.FieldVersion:
@@ -267,6 +293,14 @@ func (s *Subscription) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				s.Version = int(value.Int64)
 			}
+		case subscription.FieldMetadata:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field metadata", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &s.Metadata); err != nil {
+					return fmt.Errorf("unmarshal field metadata: %w", err)
+				}
+			}
 		default:
 			s.selectValues.Set(columns[i], values[i])
 		}
@@ -278,6 +312,11 @@ func (s *Subscription) assignValues(columns []string, values []any) error {
 // This includes values selected through modifiers, order, etc.
 func (s *Subscription) Value(name string) (ent.Value, error) {
 	return s.selectValues.Get(name)
+}
+
+// QueryLineItems queries the "line_items" edge of the Subscription entity.
+func (s *Subscription) QueryLineItems() *SubscriptionLineItemQuery {
+	return NewSubscriptionClient(s.config).QueryLineItems(s)
 }
 
 // Update returns a builder for updating this Subscription.
@@ -390,6 +429,9 @@ func (s *Subscription) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("version=")
 	builder.WriteString(fmt.Sprintf("%v", s.Version))
+	builder.WriteString(", ")
+	builder.WriteString("metadata=")
+	builder.WriteString(fmt.Sprintf("%v", s.Metadata))
 	builder.WriteByte(')')
 	return builder.String()
 }

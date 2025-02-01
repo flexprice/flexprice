@@ -67,3 +67,6 @@ func (r *CreateMeterRequest) ToMeter(tenantID, createdBy string) *meter.Meter {
 func (r *CreateMeterRequest) Validate() error {
 	return validator.New().Struct(r)
 }
+
+// ListMetersResponse represents a paginated list of meters
+type ListMetersResponse = types.ListResponse[*MeterResponse]

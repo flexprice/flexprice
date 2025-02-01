@@ -15,14 +15,16 @@ import (
 )
 
 type subscriptionRepository struct {
-	client postgres.IClient
-	logger *logger.Logger
+	client    postgres.IClient
+	logger    *logger.Logger
+	queryOpts SubscriptionQueryOptions
 }
 
 func NewSubscriptionRepository(client postgres.IClient, logger *logger.Logger) domainSub.Repository {
 	return &subscriptionRepository{
-		client: client,
-		logger: logger,
+		client:    client,
+		logger:    logger,
+		queryOpts: SubscriptionQueryOptions{},
 	}
 }
 
@@ -144,7 +146,7 @@ func (r *subscriptionRepository) Delete(ctx context.Context, id string) error {
 			subscription.TenantID(types.GetTenantID(ctx)),
 			subscription.Status(string(types.StatusPublished)),
 		).
-		SetStatus(string(types.StatusDeleted)).
+		SetStatus(string(types.StatusArchived)).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Exec(ctx)
@@ -159,45 +161,36 @@ func (r *subscriptionRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
+// List retrieves a list of subscriptions based on the provided filter
 func (r *subscriptionRepository) List(ctx context.Context, filter *types.SubscriptionFilter) ([]*domainSub.Subscription, error) {
+	r.logger.Debugw("listing subscriptions", "filter", filter)
+
+	if filter == nil {
+		filter = &types.SubscriptionFilter{
+			QueryFilter: types.NewDefaultQueryFilter(),
+		}
+	}
+
+	if err := filter.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid filter: %w", err)
+	}
+
 	client := r.client.Querier(ctx)
-	query := client.Subscription.Query().
-		Where(
-			subscription.TenantID(types.GetTenantID(ctx)),
-			subscription.Status(string(types.StatusPublished)),
-		)
+	query := client.Subscription.Query()
 
-	if filter.CustomerID != "" {
-		query = query.Where(subscription.CustomerID(filter.CustomerID))
-	}
+	// Apply entity-specific filters
+	query = r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
 
-	if filter.SubscriptionStatus != "" {
-		query = query.Where(subscription.SubscriptionStatus(string(filter.SubscriptionStatus)))
-	}
+	// Apply common query options
+	query = ApplyQueryOptions(ctx, query, filter, r.queryOpts)
 
-	if filter.PlanID != "" {
-		query = query.Where(subscription.PlanID(filter.PlanID))
-	}
-
-	if filter.CurrentPeriodEndBefore != nil {
-		query = query.Where(subscription.CurrentPeriodEndLTE(*filter.CurrentPeriodEndBefore))
-	}
-
-	// Apply pagination
-	if filter.Offset > 0 {
-		query = query.Offset(filter.Offset)
-	}
-	if filter.Limit > 0 {
-		query = query.Limit(filter.Limit)
-	}
-
-	// Execute query
 	subs, err := query.All(ctx)
 	if err != nil {
-		return nil, errors.WithOp(err, "repository.subscription.List")
+		r.logger.Errorw("failed to list subscriptions", "error", err)
+		return nil, fmt.Errorf("listing subscriptions: %w", err)
 	}
 
-	// Convert to domain subscriptions
+	// Convert to domain model
 	result := make([]*domainSub.Subscription, len(subs))
 	for i, sub := range subs {
 		result[i] = toDomainSubscription(sub)
@@ -206,42 +199,210 @@ func (r *subscriptionRepository) List(ctx context.Context, filter *types.Subscri
 	return result, nil
 }
 
+// ListAll retrieves all subscriptions without pagination
 func (r *subscriptionRepository) ListAll(ctx context.Context, filter *types.SubscriptionFilter) ([]*domainSub.Subscription, error) {
+	if filter == nil {
+		filter = &types.SubscriptionFilter{
+			QueryFilter: types.NewNoLimitQueryFilter(),
+		}
+	} else {
+		// Override pagination settings for ListAll
+		filter.QueryFilter = types.NewNoLimitQueryFilter()
+	}
+
+	return r.List(ctx, filter)
+}
+
+// ListAllTenant retrieves all subscriptions across all tenants
+// NOTE: This is a potentially expensive operation and to be used only for CRONs
+func (r *subscriptionRepository) ListAllTenant(ctx context.Context, filter *types.SubscriptionFilter) ([]*domainSub.Subscription, error) {
+	r.logger.Debugw("listing subscriptions for all tenants", "filter", filter)
+
+	if filter == nil {
+		filter = &types.SubscriptionFilter{
+			QueryFilter: types.NewDefaultQueryFilter(),
+		}
+	}
+
+	if err := filter.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid filter: %w", err)
+	}
+
 	client := r.client.Querier(ctx)
-	query := client.Subscription.Query().
-		Where(
-			subscription.Status(string(types.StatusPublished)),
-		)
+	query := client.Subscription.Query()
 
-	if filter.SubscriptionStatus != "" {
-		query = query.Where(subscription.SubscriptionStatus(string(filter.SubscriptionStatus)))
-	}
+	// Apply entity-specific filters
+	query = r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
 
-	if filter.CurrentPeriodEndBefore != nil {
-		query = query.Where(subscription.CurrentPeriodEndLTE(*filter.CurrentPeriodEndBefore))
-	}
+	// Apply all query options except tenant filter
+	query = ApplySorting(query, filter, r.queryOpts)
+	query = ApplyPagination(query, filter, r.queryOpts)
+	query = r.queryOpts.ApplyStatusFilter(query, filter.GetStatus())
 
-	// Apply pagination
-	if filter.Offset > 0 {
-		query = query.Offset(filter.Offset)
-	}
-	if filter.Limit > 0 {
-		query = query.Limit(filter.Limit)
-	}
-
-	// Execute query
 	subs, err := query.All(ctx)
 	if err != nil {
-		return nil, errors.WithOp(err, "repository.subscription.List")
+		r.logger.Errorw("failed to list subscriptions", "error", err)
+		return nil, fmt.Errorf("listing subscriptions: %w", err)
 	}
 
-	// Convert to domain subscriptions
+	// Convert to domain model
 	result := make([]*domainSub.Subscription, len(subs))
 	for i, sub := range subs {
 		result[i] = toDomainSubscription(sub)
 	}
 
 	return result, nil
+}
+
+// Count returns the total number of subscriptions based on the provided filter
+func (r *subscriptionRepository) Count(ctx context.Context, filter *types.SubscriptionFilter) (int, error) {
+	client := r.client.Querier(ctx)
+	query := client.Subscription.Query()
+
+	// Apply entity-specific filters
+	query = r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
+
+	count, err := query.Count(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count subscriptions: %w", err)
+	}
+	return count, nil
+}
+
+// Query option methods
+// SubscriptionQuery type alias for better readability
+type SubscriptionQuery = *ent.SubscriptionQuery
+
+// SubscriptionQueryOptions implements BaseQueryOptions for subscription queries
+type SubscriptionQueryOptions struct{}
+
+func (o SubscriptionQueryOptions) ApplyTenantFilter(ctx context.Context, query SubscriptionQuery) SubscriptionQuery {
+	return query.Where(subscription.TenantID(types.GetTenantID(ctx)))
+}
+
+func (o SubscriptionQueryOptions) ApplyStatusFilter(query SubscriptionQuery, status string) SubscriptionQuery {
+	if status == "" {
+		return query.Where(subscription.StatusNotIn(string(types.StatusDeleted)))
+	}
+	return query.Where(subscription.Status(status))
+}
+
+func (o SubscriptionQueryOptions) ApplySortFilter(query SubscriptionQuery, field string, order string) SubscriptionQuery {
+	orderFunc := ent.Desc
+	if order == "asc" {
+		orderFunc = ent.Asc
+	}
+	return query.Order(orderFunc(o.GetFieldName(field)))
+}
+
+func (o SubscriptionQueryOptions) ApplyPaginationFilter(query SubscriptionQuery, limit int, offset int) SubscriptionQuery {
+	query = query.Limit(limit)
+	if offset > 0 {
+		query = query.Offset(offset)
+	}
+	return query
+}
+
+func (o SubscriptionQueryOptions) GetFieldName(field string) string {
+	switch field {
+	case "created_at":
+		return subscription.FieldCreatedAt
+	case "updated_at":
+		return subscription.FieldUpdatedAt
+	case "start_date":
+		return subscription.FieldStartDate
+	case "end_date":
+		return subscription.FieldEndDate
+	case "current_period_start":
+		return subscription.FieldCurrentPeriodStart
+	case "current_period_end":
+		return subscription.FieldCurrentPeriodEnd
+	default:
+		return field
+	}
+}
+
+// applyEntityQueryOptions applies subscription-specific filters to the query
+func (o *SubscriptionQueryOptions) applyEntityQueryOptions(ctx context.Context, f *types.SubscriptionFilter, query SubscriptionQuery) SubscriptionQuery {
+	if f == nil {
+		return query
+	}
+
+	// Apply customer filter
+	if f.CustomerID != "" {
+		query = query.Where(subscription.CustomerID(f.CustomerID))
+	}
+
+	// Apply plan filter
+	if f.PlanID != "" {
+		query = query.Where(subscription.PlanID(f.PlanID))
+	}
+
+	// Apply subscription status filter
+	if len(f.SubscriptionStatus) > 0 {
+		statuses := make([]string, len(f.SubscriptionStatus))
+		for i, status := range f.SubscriptionStatus {
+			statuses[i] = string(status)
+		}
+		query = query.Where(subscription.SubscriptionStatusIn(statuses...))
+	}
+
+	// Apply invoice cadence filter
+	if len(f.InvoiceCadence) > 0 {
+		cadences := make([]string, len(f.InvoiceCadence))
+		for i, cadence := range f.InvoiceCadence {
+			cadences[i] = string(cadence)
+		}
+		query = query.Where(subscription.InvoiceCadenceIn(cadences...))
+	}
+
+	// Apply billing cadence filter
+	if len(f.BillingCadence) > 0 {
+		cadences := make([]string, len(f.BillingCadence))
+		for i, cadence := range f.BillingCadence {
+			cadences[i] = string(cadence)
+		}
+		query = query.Where(subscription.BillingCadenceIn(cadences...))
+	}
+
+	// Apply billing period filter
+	if len(f.BillingPeriod) > 0 {
+		periods := make([]string, len(f.BillingPeriod))
+		for i, period := range f.BillingPeriod {
+			periods[i] = string(period)
+		}
+		query = query.Where(subscription.BillingPeriodIn(periods...))
+	}
+
+	// Apply canceled filter
+	if !f.IncludeCanceled {
+		query = query.Where(subscription.CancelledAtIsNil())
+	}
+
+	// Apply active at filter
+	if f.ActiveAt != nil {
+		query = query.Where(
+			subscription.And(
+				subscription.StartDateLTE(*f.ActiveAt),
+				subscription.Or(
+					subscription.EndDateGT(*f.ActiveAt),
+					subscription.EndDateIsNil(),
+				),
+			),
+		)
+	}
+
+	// Apply time range filters
+	if f.TimeRangeFilter != nil {
+		if f.TimeRangeFilter.StartTime != nil {
+			query = query.Where(subscription.CurrentPeriodStartGTE(*f.TimeRangeFilter.StartTime))
+		}
+		if f.TimeRangeFilter.EndTime != nil {
+			query = query.Where(subscription.CurrentPeriodEndLTE(*f.TimeRangeFilter.EndTime))
+		}
+	}
+
+	return query
 }
 
 func toDomainSubscription(sub *ent.Subscription) *domainSub.Subscription {

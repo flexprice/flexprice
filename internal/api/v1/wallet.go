@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
+	"github.com/samber/lo"
 )
 
 type WalletHandler struct {
@@ -114,12 +115,8 @@ func (h *WalletHandler) GetWalletByID(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Param id path string true "Wallet ID"
-// @Param limit query int false "Limit" default(50)
-// @Param offset query int false "Offset" default(0)
-// @Param sort query string false "Sort field" default(created_at)
-// @Param order query string false "Sort order" Enums(asc, desc) default(desc)
-// @Success 200 {object} dto.WalletTransactionsResponse
+// @Param filter query types.WalletTransactionFilter false "Filter"
+// @Success 200 {object} dto.ListWalletTransactionsResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
@@ -131,13 +128,17 @@ func (h *WalletHandler) GetWalletTransactions(c *gin.Context) {
 		return
 	}
 
-	var filter types.Filter
+	var filter types.WalletTransactionFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
 		NewErrorResponse(c, http.StatusBadRequest, "invalid filter parameters", err)
 		return
 	}
 
-	transactions, err := h.walletService.GetWalletTransactions(c.Request.Context(), walletID, filter)
+	if filter.GetLimit() == 0 {
+		filter.Limit = lo.ToPtr(types.GetDefaultFilter().Limit)
+	}
+
+	transactions, err := h.walletService.GetWalletTransactions(c.Request.Context(), walletID, &filter)
 	if err != nil {
 		NewErrorResponse(c, http.StatusInternalServerError, "failed to get transactions", err)
 		return

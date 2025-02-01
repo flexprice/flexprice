@@ -43,7 +43,7 @@ func (Customer) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(255)",
 			}).
-			NotEmpty(),
+			Optional(),
 	}
 }
 

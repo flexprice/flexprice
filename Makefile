@@ -69,8 +69,17 @@ test-coverage:
 # Database related targets
 .PHONY: init-db migrate-postgres migrate-clickhouse seed-db
 
+.PHONY: install-ent
+install-ent:
+	@which ent > /dev/null || (go install entgo.io/ent/cmd/ent@latest)
+
+.PHONY: generate-ent
+generate-ent: install-ent
+	@echo "Generating ent code..."
+	@go run -mod=mod entgo.io/ent/cmd/ent generate --feature sql/execquery ./ent/schema
+
 # Initialize databases and required topics
-init-db: up migrate-postgres migrate-clickhouse seed-db
+init-db: up migrate-postgres migrate-clickhouse generate-ent seed-db
 	@echo "Database initialization complete"
 
 # Run postgres migrations

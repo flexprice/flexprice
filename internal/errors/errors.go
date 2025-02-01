@@ -7,38 +7,48 @@ import (
 
 // Common error types that can be used across the application
 var (
-	ErrNotFound          = errors.New("resource not found")
-	ErrAlreadyExists     = errors.New("resource already exists")
-	ErrVersionConflict   = errors.New("version conflict")
-	ErrValidation        = errors.New("validation error")
-	ErrInvalidOperation  = errors.New("invalid operation")
-	ErrPermissionDenied  = errors.New("permission denied")
-	ErrDependencyMissing = errors.New("dependency missing")
+	ErrNotFound         = New(ErrCodeNotFound, "resource not found")
+	ErrAlreadyExists    = New(ErrCodeAlreadyExists, "resource already exists")
+	ErrVersionConflict  = New(ErrCodeVersionConflict, "version conflict")
+	ErrValidation       = New(ErrCodeValidation, "validation error")
+	ErrInvalidOperation = New(ErrCodeInvalidOperation, "invalid operation")
+	ErrPermissionDenied = New(ErrCodePermissionDenied, "permission denied")
+	ErrHTTPClient       = New(ErrCodeHTTPClient, "http client error")
 )
 
-// Error represents a domain error
-type Error struct {
+const (
+	ErrCodeHTTPClient       = "http_client_error"
+	ErrCodeNotFound         = "not_found"
+	ErrCodeAlreadyExists    = "already_exists"
+	ErrCodeVersionConflict  = "version_conflict"
+	ErrCodeValidation       = "validation_error"
+	ErrCodeInvalidOperation = "invalid_operation"
+	ErrCodePermissionDenied = "permission_denied"
+)
+
+// InternalError represents a domain error
+type InternalError struct {
 	Code    string // Machine-readable error code
 	Message string // Human-readable error message
 	Op      string // Logical operation name
 	Err     error  // Underlying error
 }
 
-func (e *Error) Error() string {
+func (e *InternalError) Error() string {
 	return fmt.Sprintf("%s: %s", e.Code, e.Message)
 }
 
-func (e *Error) Unwrap() error {
+func (e *InternalError) Unwrap() error {
 	return e.Err
 }
 
 // Is implements error matching for wrapped errors
-func (e *Error) Is(target error) bool {
+func (e *InternalError) Is(target error) bool {
 	if target == nil {
 		return false
 	}
 
-	t, ok := target.(*Error)
+	t, ok := target.(*InternalError)
 	if !ok {
 		return errors.Is(e.Err, target)
 	}
@@ -46,20 +56,20 @@ func (e *Error) Is(target error) bool {
 	return e.Code == t.Code
 }
 
-// New creates a new Error
-func New(code string, message string) *Error {
-	return &Error{
+// New creates a new InternalError
+func New(code string, message string) *InternalError {
+	return &InternalError{
 		Code:    code,
 		Message: message,
 	}
 }
 
 // Wrap wraps an existing error with additional context
-func Wrap(err error, code string, message string) *Error {
+func Wrap(err error, code string, message string) *InternalError {
 	if err == nil {
 		return nil
 	}
-	return &Error{
+	return &InternalError{
 		Code:    code,
 		Message: message,
 		Err:     err,
@@ -67,14 +77,14 @@ func Wrap(err error, code string, message string) *Error {
 }
 
 // WithOp adds operation information to an error
-func WithOp(err error, op string) *Error {
+func WithOp(err error, op string) *InternalError {
 	if err == nil {
 		return nil
 	}
 
-	e, ok := err.(*Error)
+	e, ok := err.(*InternalError)
 	if !ok {
-		return &Error{
+		return &InternalError{
 			Message: err.Error(),
 			Op:      op,
 			Err:     err,
@@ -115,7 +125,7 @@ func IsPermissionDenied(err error) bool {
 	return errors.Is(err, ErrPermissionDenied)
 }
 
-// IsDependencyMissing checks if an error is a dependency missing error
-func IsDependencyMissing(err error) bool {
-	return errors.Is(err, ErrDependencyMissing)
+// IsHTTPClient checks if an error is an http client error
+func IsHTTPClient(err error) bool {
+	return errors.Is(err, ErrHTTPClient)
 }

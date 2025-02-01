@@ -130,6 +130,7 @@ type CreateInvoiceLineItemRequest struct {
 	PriceType        *string         `json:"price_type,omitempty"`
 	MeterID          *string         `json:"meter_id,omitempty"`
 	MeterDisplayName *string         `json:"meter_display_name,omitempty"`
+	DisplayName      *string         `json:"display_name,omitempty"`
 	Amount           decimal.Decimal `json:"amount" validate:"required"`
 	Quantity         decimal.Decimal `json:"quantity" validate:"required"`
 	PeriodStart      *time.Time      `json:"period_start,omitempty"`
@@ -172,6 +173,7 @@ func (r *CreateInvoiceLineItemRequest) ToInvoiceLineItem(ctx context.Context, in
 		PriceType:        r.PriceType,
 		MeterID:          r.MeterID,
 		MeterDisplayName: r.MeterDisplayName,
+		DisplayName:      r.DisplayName,
 		Amount:           r.Amount,
 		Quantity:         r.Quantity,
 		Currency:         inv.Currency,
@@ -194,6 +196,7 @@ type InvoiceLineItemResponse struct {
 	PriceType        *string         `json:"price_type,omitempty"`
 	MeterID          *string         `json:"meter_id,omitempty"`
 	MeterDisplayName *string         `json:"meter_display_name,omitempty"`
+	DisplayName      *string         `json:"display_name,omitempty"`
 	Amount           decimal.Decimal `json:"amount"`
 	Quantity         decimal.Decimal `json:"quantity"`
 	Currency         string          `json:"currency"`
@@ -224,6 +227,7 @@ func NewInvoiceLineItemResponse(item *invoice.InvoiceLineItem) *InvoiceLineItemR
 		PriceType:        item.PriceType,
 		MeterID:          item.MeterID,
 		MeterDisplayName: item.MeterDisplayName,
+		DisplayName:      item.DisplayName,
 		Amount:           item.Amount,
 		Quantity:         item.Quantity,
 		Currency:         item.Currency,
@@ -297,6 +301,9 @@ type InvoiceResponse struct {
 	UpdatedAt       time.Time                  `json:"updated_at"`
 	CreatedBy       string                     `json:"created_by,omitempty"`
 	UpdatedBy       string                     `json:"updated_by,omitempty"`
+
+	// Edges
+	Subscription *SubscriptionResponse `json:"subscription,omitempty"`
 }
 
 // NewInvoiceResponse creates a new invoice response from domain invoice
@@ -348,8 +355,37 @@ func NewInvoiceResponse(inv *invoice.Invoice) *InvoiceResponse {
 	return resp
 }
 
+func (r *InvoiceResponse) WithSubscription(sub *SubscriptionResponse) *InvoiceResponse {
+	r.Subscription = sub
+	return r
+}
+
 // ListInvoicesResponse represents the response for listing invoices
-type ListInvoicesResponse struct {
-	Items []*InvoiceResponse `json:"items"`
-	Total int                `json:"total"`
+type ListInvoicesResponse = types.ListResponse[*InvoiceResponse]
+
+type GetPreviewInvoiceRequest struct {
+	SubscriptionID string     `json:"subscription_id" binding:"required"`
+	PeriodStart    *time.Time `json:"period_start,omitempty"`
+	PeriodEnd      *time.Time `json:"period_end,omitempty"`
+}
+
+// CustomerInvoiceSummary represents a summary of customer's invoice status
+type CustomerInvoiceSummary struct {
+	CustomerID          string          `json:"customer_id"`
+	Currency            string          `json:"currency"`
+	TotalRevenueAmount  decimal.Decimal `json:"total_revenue_amount"`
+	TotalUnpaidAmount   decimal.Decimal `json:"total_unpaid_amount"`
+	TotalOverdueAmount  decimal.Decimal `json:"total_overdue_amount"`
+	TotalInvoiceCount   int             `json:"total_invoice_count"`
+	UnpaidInvoiceCount  int             `json:"unpaid_invoice_count"`
+	OverdueInvoiceCount int             `json:"overdue_invoice_count"`
+	UnpaidUsageCharges  decimal.Decimal `json:"unpaid_usage_charges"`
+	UnpaidFixedCharges  decimal.Decimal `json:"unpaid_fixed_charges"`
+}
+
+// CustomerMultiCurrencyInvoiceSummary represents invoice summaries across all currencies
+type CustomerMultiCurrencyInvoiceSummary struct {
+	CustomerID      string                    `json:"customer_id"`
+	DefaultCurrency string                    `json:"default_currency"`
+	Summaries       []*CustomerInvoiceSummary `json:"summaries"`
 }

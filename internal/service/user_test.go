@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -15,6 +16,7 @@ type UserServiceSuite struct {
 	ctx         context.Context
 	userService *userService
 	userRepo    *testutil.InMemoryUserStore
+	tenantRepo  *testutil.InMemoryTenantStore
 }
 
 func TestUserService(t *testing.T) {
@@ -25,11 +27,17 @@ func (s *UserServiceSuite) SetupTest() {
 	// Initialize context and repository
 	s.ctx = testutil.SetupContext()
 	s.userRepo = testutil.NewInMemoryUserStore()
-
+	s.tenantRepo = testutil.NewInMemoryTenantStore()
 	// Create the userService with the repository
 	s.userService = &userService{
-		userRepo: s.userRepo,
+		userRepo:   s.userRepo,
+		tenantRepo: s.tenantRepo,
 	}
+
+	s.tenantRepo.Create(s.ctx, &tenant.Tenant{
+		ID:   types.DefaultTenantID,
+		Name: "Test Tenant",
+	})
 }
 
 func (s *UserServiceSuite) TestGetUserInfo() {
@@ -44,8 +52,9 @@ func (s *UserServiceSuite) TestGetUserInfo() {
 			name: "user_found",
 			setup: func(ctx context.Context) {
 				_ = s.userRepo.Create(ctx, &user.User{
-					ID:    "user-1",
-					Email: "test@example.com",
+					ID:        "user-1",
+					Email:     "test@example.com",
+					BaseModel: types.GetDefaultBaseModel(ctx),
 				})
 			},
 			contextUserID: "user-1",
@@ -62,9 +71,12 @@ func (s *UserServiceSuite) TestGetUserInfo() {
 
 	for _, tc := range testCases {
 		s.Run(tc.name, func() {
-			// Reset repository and service for each test
+			// Reset repositories and service for each test
 			s.userRepo = testutil.NewInMemoryUserStore()
-			s.userService = &userService{userRepo: s.userRepo}
+			s.userService = &userService{
+				userRepo:   s.userRepo,
+				tenantRepo: s.tenantRepo,
+			}
 
 			// Create a context with the test's user ID
 			ctx := testutil.SetupContext()

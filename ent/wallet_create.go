@@ -97,6 +97,20 @@ func (wc *WalletCreate) SetNillableUpdatedBy(s *string) *WalletCreate {
 	return wc
 }
 
+// SetName sets the "name" field.
+func (wc *WalletCreate) SetName(s string) *WalletCreate {
+	wc.mutation.SetName(s)
+	return wc
+}
+
+// SetNillableName sets the "name" field if the given value is not nil.
+func (wc *WalletCreate) SetNillableName(s *string) *WalletCreate {
+	if s != nil {
+		wc.SetName(*s)
+	}
+	return wc
+}
+
 // SetCustomerID sets the "customer_id" field.
 func (wc *WalletCreate) SetCustomerID(s string) *WalletCreate {
 	wc.mutation.SetCustomerID(s)
@@ -319,6 +333,10 @@ func (wc *WalletCreate) createSpec() (*Wallet, *sqlgraph.CreateSpec) {
 	if value, ok := wc.mutation.UpdatedBy(); ok {
 		_spec.SetField(wallet.FieldUpdatedBy, field.TypeString, value)
 		_node.UpdatedBy = value
+	}
+	if value, ok := wc.mutation.Name(); ok {
+		_spec.SetField(wallet.FieldName, field.TypeString, value)
+		_node.Name = value
 	}
 	if value, ok := wc.mutation.CustomerID(); ok {
 		_spec.SetField(wallet.FieldCustomerID, field.TypeString, value)

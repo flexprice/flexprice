@@ -16,14 +16,16 @@ import (
 )
 
 type priceRepository struct {
-	client postgres.IClient
-	log    *logger.Logger
+	client    postgres.IClient
+	log       *logger.Logger
+	queryOpts PriceQueryOptions
 }
 
 func NewPriceRepository(client postgres.IClient, log *logger.Logger) domainPrice.Repository {
 	return &priceRepository{
-		client: client,
-		log:    log,
+		client:    client,
+		log:       log,
+		queryOpts: PriceQueryOptions{},
 	}
 }
 
@@ -75,7 +77,7 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 func (r *priceRepository) Get(ctx context.Context, id string) (*domainPrice.Price, error) {
 	client := r.client.Querier(ctx)
 
-	r.log.Debug("getting price",
+	r.log.Debugw("getting price",
 		"price_id", id,
 		"tenant_id", types.GetTenantID(ctx),
 	)
@@ -97,29 +99,23 @@ func (r *priceRepository) Get(ctx context.Context, id string) (*domainPrice.Pric
 	return domainPrice.FromEnt(p), nil
 }
 
-func (r *priceRepository) List(ctx context.Context, filter types.PriceFilter) ([]*domainPrice.Price, error) {
-	client := r.client.Querier(ctx)
-
-	r.log.Debug("listing prices",
-		"tenant_id", types.GetTenantID(ctx),
-		"plan_ids", filter.PlanIDs,
-		"limit", filter.Limit,
-		"offset", filter.Offset,
-	)
-
-	query := client.Price.Query().
-		Where(price.TenantID(types.GetTenantID(ctx)))
-
-	if len(filter.PlanIDs) > 0 {
-		query = query.Where(price.PlanIDIn(filter.PlanIDs...))
+func (r *priceRepository) List(ctx context.Context, filter *types.PriceFilter) ([]*domainPrice.Price, error) {
+	if filter == nil {
+		filter = &types.PriceFilter{
+			QueryFilter: types.NewDefaultQueryFilter(),
+		}
 	}
 
-	prices, err := query.
-		Order(ent.Desc(price.FieldCreatedAt)).
-		Limit(lo.FromPtr(filter.Limit)).
-		Offset(lo.FromPtr(filter.Offset)).
-		All(ctx)
+	client := r.client.Querier(ctx)
+	query := client.Price.Query()
 
+	// Apply entity-specific filters
+	query = r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
+
+	// Apply common query options
+	query = ApplyQueryOptions(ctx, query, filter, r.queryOpts)
+
+	prices, err := query.All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list prices: %w", err)
 	}
@@ -127,10 +123,41 @@ func (r *priceRepository) List(ctx context.Context, filter types.PriceFilter) ([
 	return domainPrice.FromEntList(prices), nil
 }
 
+func (r *priceRepository) Count(ctx context.Context, filter *types.PriceFilter) (int, error) {
+	client := r.client.Querier(ctx)
+	query := client.Price.Query()
+
+	query = ApplyBaseFilters(ctx, query, filter, r.queryOpts)
+	query = r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
+
+	count, err := query.Count(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count prices: %w", err)
+	}
+
+	return count, nil
+}
+
+func (r *priceRepository) ListAll(ctx context.Context, filter *types.PriceFilter) ([]*domainPrice.Price, error) {
+	if filter == nil {
+		filter = types.NewNoLimitPriceFilter()
+	}
+
+	if filter.QueryFilter == nil {
+		filter.QueryFilter = types.NewNoLimitQueryFilter()
+	}
+
+	if err := filter.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid filter: %w", err)
+	}
+
+	return r.List(ctx, filter)
+}
+
 func (r *priceRepository) Update(ctx context.Context, p *domainPrice.Price) error {
 	client := r.client.Querier(ctx)
 
-	r.log.Debug("updating price",
+	r.log.Debugw("updating price",
 		"price_id", p.ID,
 		"tenant_id", p.TenantID,
 	)
@@ -172,7 +199,7 @@ func (r *priceRepository) Update(ctx context.Context, p *domainPrice.Price) erro
 func (r *priceRepository) Delete(ctx context.Context, id string) error {
 	client := r.client.Querier(ctx)
 
-	r.log.Debug("deleting price",
+	r.log.Debugw("deleting price",
 		"price_id", id,
 		"tenant_id", types.GetTenantID(ctx),
 	)
@@ -182,7 +209,7 @@ func (r *priceRepository) Delete(ctx context.Context, id string) error {
 			price.ID(id),
 			price.TenantID(types.GetTenantID(ctx)),
 		).
-		SetStatus(string(types.StatusDeleted)).
+		SetStatus(string(types.StatusArchived)).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
@@ -195,4 +222,78 @@ func (r *priceRepository) Delete(ctx context.Context, id string) error {
 	}
 
 	return nil
+}
+
+// PriceQuery type alias for better readability
+type PriceQuery = *ent.PriceQuery
+
+// PriceQueryOptions implements BaseQueryOptions for price queries
+type PriceQueryOptions struct{}
+
+func (o PriceQueryOptions) ApplyTenantFilter(ctx context.Context, query PriceQuery) PriceQuery {
+	return query.Where(price.TenantID(types.GetTenantID(ctx)))
+}
+
+func (o PriceQueryOptions) ApplyStatusFilter(query PriceQuery, status string) PriceQuery {
+	if status == "" {
+		return query.Where(price.StatusNotIn(string(types.StatusDeleted)))
+	}
+	return query.Where(price.Status(status))
+}
+
+func (o PriceQueryOptions) ApplySortFilter(query PriceQuery, field string, order string) PriceQuery {
+	orderFunc := ent.Desc
+	if order == "asc" {
+		orderFunc = ent.Asc
+	}
+	return query.Order(orderFunc(o.GetFieldName(field)))
+}
+
+func (o PriceQueryOptions) ApplyPaginationFilter(query PriceQuery, limit int, offset int) PriceQuery {
+	query = query.Limit(limit)
+	if offset > 0 {
+		query = query.Offset(offset)
+	}
+	return query
+}
+
+func (o PriceQueryOptions) GetFieldName(field string) string {
+	switch field {
+	case "created_at":
+		return price.FieldCreatedAt
+	case "updated_at":
+		return price.FieldUpdatedAt
+	case "lookup_key":
+		return price.FieldLookupKey
+	case "amount":
+		return price.FieldAmount
+	default:
+		return field
+	}
+}
+
+func (o PriceQueryOptions) applyEntityQueryOptions(ctx context.Context, f *types.PriceFilter, query PriceQuery) PriceQuery {
+	if f == nil {
+		return query
+	}
+
+	// Apply tenant filter first
+	query = o.ApplyTenantFilter(ctx, query)
+
+	// Apply plan IDs filter if specified
+	if len(f.PlanIDs) > 0 {
+		query = query.Where(price.PlanIDIn(f.PlanIDs...))
+	}
+
+	// Apply time range filters if specified
+	if f.TimeRangeFilter != nil {
+		if f.StartTime != nil {
+			query = query.Where(price.CreatedAtGTE(*f.StartTime))
+		}
+		if f.EndTime != nil {
+			query = query.Where(price.CreatedAtLTE(*f.EndTime))
+		}
+	}
+
+	return query
 }

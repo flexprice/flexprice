@@ -14,14 +14,16 @@ import (
 )
 
 type meterRepository struct {
-	client postgres.IClient
-	log    *logger.Logger
+	client    postgres.IClient
+	logger    *logger.Logger
+	queryOpts MeterQueryOptions
 }
 
-func NewMeterRepository(client postgres.IClient, log *logger.Logger) domainMeter.Repository {
+func NewMeterRepository(client postgres.IClient, logger *logger.Logger) domainMeter.Repository {
 	return &meterRepository{
-		client: client,
-		log:    log,
+		client:    client,
+		logger:    logger,
+		queryOpts: MeterQueryOptions{},
 	}
 }
 
@@ -71,19 +73,54 @@ func (r *meterRepository) GetMeter(ctx context.Context, id string) (*domainMeter
 	return domainMeter.FromEnt(m), nil
 }
 
-func (r *meterRepository) GetAllMeters(ctx context.Context) ([]*domainMeter.Meter, error) {
+func (r *meterRepository) List(ctx context.Context, filter *types.MeterFilter) ([]*domainMeter.Meter, error) {
 	client := r.client.Querier(ctx)
+	query := client.Meter.Query()
 
-	meters, err := client.Meter.Query().
-		Where(meter.TenantID(types.GetTenantID(ctx))).
-		Order(ent.Desc(meter.FieldCreatedAt)).
-		All(ctx)
+	// Apply base filters
+	query = ApplyQueryOptions(ctx, query, filter, r.queryOpts)
 
+	// Apply entity-specific filters
+	query = r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
+
+	// Execute query
+	meters, err := query.All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list meters: %w", err)
 	}
 
-	return domainMeter.FromEntList(meters), nil
+	// Convert to domain models
+	result := make([]*domainMeter.Meter, len(meters))
+	for i, m := range meters {
+		result[i] = domainMeter.FromEnt(m)
+	}
+
+	return result, nil
+}
+
+func (r *meterRepository) ListAll(ctx context.Context, filter *types.MeterFilter) ([]*domainMeter.Meter, error) {
+	if filter == nil {
+		filter = types.NewNoLimitMeterFilter()
+	}
+
+	if filter.QueryFilter == nil {
+		filter.QueryFilter = types.NewNoLimitQueryFilter()
+	}
+
+	return r.List(ctx, filter)
+}
+
+func (r *meterRepository) Count(ctx context.Context, filter *types.MeterFilter) (int, error) {
+	client := r.client.Querier(ctx)
+	query := client.Meter.Query()
+
+	// Apply base filters
+	query = ApplyBaseFilters(ctx, query, filter, r.queryOpts)
+
+	// Apply entity-specific filters
+	query = r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
+
+	return query.Count(ctx)
 }
 
 func (r *meterRepository) DisableMeter(ctx context.Context, id string) error {
@@ -112,7 +149,7 @@ func (r *meterRepository) DisableMeter(ctx context.Context, id string) error {
 func (r *meterRepository) UpdateMeter(ctx context.Context, id string, filters []domainMeter.Filter) error {
 	client := r.client.Querier(ctx)
 
-	r.log.Debug("updating meter",
+	r.logger.Debugw("updating meter",
 		"meter_id", id,
 		"tenant_id", types.GetTenantID(ctx),
 	)
@@ -136,4 +173,70 @@ func (r *meterRepository) UpdateMeter(ctx context.Context, id string, filters []
 	}
 
 	return nil
+}
+
+// Query option methods
+type MeterQuery = *ent.MeterQuery
+
+// MeterQueryOptions implements BaseQueryOptions for meter queries
+type MeterQueryOptions struct{}
+
+func (o MeterQueryOptions) ApplyTenantFilter(ctx context.Context, query MeterQuery) MeterQuery {
+	return query.Where(meter.TenantID(types.GetTenantID(ctx)))
+}
+
+func (o MeterQueryOptions) ApplyStatusFilter(query MeterQuery, status string) MeterQuery {
+	if status == "" {
+		return query.Where(meter.StatusNotIn(string(types.StatusDeleted)))
+	}
+	return query.Where(meter.Status(status))
+}
+
+func (o MeterQueryOptions) ApplySortFilter(query MeterQuery, field string, order string) MeterQuery {
+	orderFunc := ent.Desc
+	if order == types.OrderAsc {
+		orderFunc = ent.Asc
+	}
+	return query.Order(orderFunc(o.GetFieldName(field)))
+}
+
+func (o MeterQueryOptions) ApplyPaginationFilter(query MeterQuery, limit int, offset int) MeterQuery {
+	query = query.Limit(limit)
+	if offset > 0 {
+		query = query.Offset(offset)
+	}
+	return query
+}
+
+func (o MeterQueryOptions) GetFieldName(field string) string {
+	switch field {
+	case "created_at":
+		return meter.FieldCreatedAt
+	case "updated_at":
+		return meter.FieldUpdatedAt
+	default:
+		return field
+	}
+}
+
+func (o MeterQueryOptions) applyEntityQueryOptions(ctx context.Context, f *types.MeterFilter, query MeterQuery) MeterQuery {
+	if f == nil {
+		return query
+	}
+
+	if f.EventName != "" {
+		query = query.Where(meter.EventName(string(f.EventName)))
+	}
+
+	// Apply time range filters if specified
+	if f.TimeRangeFilter != nil {
+		if f.StartTime != nil {
+			query = query.Where(meter.CreatedAtGTE(*f.StartTime))
+		}
+		if f.EndTime != nil {
+			query = query.Where(meter.CreatedAtLTE(*f.EndTime))
+		}
+	}
+
+	return query
 }

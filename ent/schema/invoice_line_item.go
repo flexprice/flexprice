@@ -84,6 +84,10 @@ func (InvoiceLineItem) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Immutable(),
+		field.String("display_name").
+			Optional().
+			Nillable().
+			Immutable(),
 		field.Other("amount", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(20,8)",

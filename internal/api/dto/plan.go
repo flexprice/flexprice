@@ -55,7 +55,7 @@ type CreatePlanResponse struct {
 
 type PlanResponse struct {
 	*plan.Plan
-	Prices []PriceResponse `json:"prices"`
+	Prices []*PriceResponse `json:"prices"`
 }
 
 type UpdatePlanRequest struct {
@@ -74,9 +74,5 @@ type UpdatePlanPriceRequest struct {
 	*CreatePriceRequest
 }
 
-type ListPlansResponse struct {
-	Plans  []*PlanResponse `json:"plans"`
-	Total  int             `json:"total"`
-	Offset int             `json:"offset"`
-	Limit  int             `json:"limit"`
-}
+// ListPlansResponse represents the response for listing plans
+type ListPlansResponse = types.ListResponse[*PlanResponse]

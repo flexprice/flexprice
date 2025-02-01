@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"entgo.io/ent"
+	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
@@ -97,12 +98,19 @@ func (Subscription) Fields() []ent.Field {
 			Immutable(),
 		field.Int("version").
 			Default(1),
+		field.JSON("metadata", map[string]string{}).
+			Optional().
+			SchemaType(map[string]string{
+				"postgres": "jsonb",
+			}),
 	}
 }
 
 // Edges of the Subscription.
 func (Subscription) Edges() []ent.Edge {
-	return nil
+	return []ent.Edge{
+		edge.To("line_items", SubscriptionLineItem.Type),
+	}
 }
 
 // Indexes of the Subscription.

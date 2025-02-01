@@ -21,6 +21,7 @@ import (
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/subscription"
+	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/ent/wallet"
 	"github.com/flexprice/flexprice/ent/wallettransaction"
 )
@@ -83,17 +84,18 @@ var (
 func checkColumn(table, column string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
-			billingsequence.Table:   billingsequence.ValidColumn,
-			customer.Table:          customer.ValidColumn,
-			invoice.Table:           invoice.ValidColumn,
-			invoicelineitem.Table:   invoicelineitem.ValidColumn,
-			invoicesequence.Table:   invoicesequence.ValidColumn,
-			meter.Table:             meter.ValidColumn,
-			plan.Table:              plan.ValidColumn,
-			price.Table:             price.ValidColumn,
-			subscription.Table:      subscription.ValidColumn,
-			wallet.Table:            wallet.ValidColumn,
-			wallettransaction.Table: wallettransaction.ValidColumn,
+			billingsequence.Table:      billingsequence.ValidColumn,
+			customer.Table:             customer.ValidColumn,
+			invoice.Table:              invoice.ValidColumn,
+			invoicelineitem.Table:      invoicelineitem.ValidColumn,
+			invoicesequence.Table:      invoicesequence.ValidColumn,
+			meter.Table:                meter.ValidColumn,
+			plan.Table:                 plan.ValidColumn,
+			price.Table:                price.ValidColumn,
+			subscription.Table:         subscription.ValidColumn,
+			subscriptionlineitem.Table: subscriptionlineitem.ValidColumn,
+			wallet.Table:               wallet.ValidColumn,
+			wallettransaction.Table:    wallettransaction.ValidColumn,
 		})
 	})
 	return columnCheck(table, column)

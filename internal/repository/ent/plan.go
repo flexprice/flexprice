@@ -14,21 +14,23 @@ import (
 )
 
 type planRepository struct {
-	client postgres.IClient
-	log    *logger.Logger
+	client    postgres.IClient
+	log       *logger.Logger
+	queryOpts PlanQueryOptions
 }
 
 func NewPlanRepository(client postgres.IClient, log *logger.Logger) domainPlan.Repository {
 	return &planRepository{
-		client: client,
-		log:    log,
+		client:    client,
+		log:       log,
+		queryOpts: PlanQueryOptions{},
 	}
 }
 
 func (r *planRepository) Create(ctx context.Context, p *domainPlan.Plan) error {
 	client := r.client.Querier(ctx)
 
-	r.log.Debug("creating plan",
+	r.log.Debugw("creating plan",
 		"plan_id", p.ID,
 		"tenant_id", p.TenantID,
 		"lookup_key", p.LookupKey,
@@ -60,7 +62,7 @@ func (r *planRepository) Create(ctx context.Context, p *domainPlan.Plan) error {
 func (r *planRepository) Get(ctx context.Context, id string) (*domainPlan.Plan, error) {
 	client := r.client.Querier(ctx)
 
-	r.log.Debug("getting plan",
+	r.log.Debugw("getting plan",
 		"plan_id", id,
 		"tenant_id", types.GetTenantID(ctx),
 	)
@@ -82,22 +84,19 @@ func (r *planRepository) Get(ctx context.Context, id string) (*domainPlan.Plan, 
 	return domainPlan.FromEnt(p), nil
 }
 
-func (r *planRepository) List(ctx context.Context, filter types.Filter) ([]*domainPlan.Plan, error) {
+func (r *planRepository) List(ctx context.Context, filter *types.PlanFilter) ([]*domainPlan.Plan, error) {
 	client := r.client.Querier(ctx)
-
-	r.log.Debug("listing plans",
+	r.log.Debugw("listing plans",
 		"tenant_id", types.GetTenantID(ctx),
-		"limit", filter.Limit,
-		"offset", filter.Offset,
+		"limit", filter.GetLimit(),
+		"offset", filter.GetOffset(),
 	)
 
-	plans, err := client.Plan.Query().
-		Where(plan.TenantID(types.GetTenantID(ctx))).
-		Order(ent.Desc(plan.FieldCreatedAt)).
-		Limit(filter.Limit).
-		Offset(filter.Offset).
-		All(ctx)
+	query := client.Plan.Query()
+	query = ApplyQueryOptions(ctx, query, filter, r.queryOpts)
+	query = r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
 
+	plans, err := query.All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list plans: %w", err)
 	}
@@ -105,10 +104,41 @@ func (r *planRepository) List(ctx context.Context, filter types.Filter) ([]*doma
 	return domainPlan.FromEntList(plans), nil
 }
 
+func (r *planRepository) ListAll(ctx context.Context, filter *types.PlanFilter) ([]*domainPlan.Plan, error) {
+	if filter == nil {
+		filter = types.NewNoLimitPlanFilter()
+	}
+
+	if filter.QueryFilter == nil {
+		filter.QueryFilter = types.NewNoLimitQueryFilter()
+	}
+
+	return r.List(ctx, filter)
+}
+
+func (r *planRepository) Count(ctx context.Context, filter *types.PlanFilter) (int, error) {
+	client := r.client.Querier(ctx)
+
+	r.log.Debugw("counting plans",
+		"tenant_id", types.GetTenantID(ctx),
+	)
+
+	query := client.Plan.Query()
+	query = ApplyBaseFilters(ctx, query, filter, r.queryOpts)
+	query = r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
+
+	count, err := query.Count(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count plans: %w", err)
+	}
+
+	return count, nil
+}
+
 func (r *planRepository) Update(ctx context.Context, p *domainPlan.Plan) error {
 	client := r.client.Querier(ctx)
 
-	r.log.Debug("updating plan",
+	r.log.Debugw("updating plan",
 		"plan_id", p.ID,
 		"tenant_id", p.TenantID,
 	)
@@ -140,7 +170,7 @@ func (r *planRepository) Update(ctx context.Context, p *domainPlan.Plan) error {
 func (r *planRepository) Delete(ctx context.Context, id string) error {
 	client := r.client.Querier(ctx)
 
-	r.log.Debug("deleting plan",
+	r.log.Debugw("deleting plan",
 		"plan_id", id,
 		"tenant_id", types.GetTenantID(ctx),
 	)
@@ -150,7 +180,7 @@ func (r *planRepository) Delete(ctx context.Context, id string) error {
 			plan.ID(id),
 			plan.TenantID(types.GetTenantID(ctx)),
 		).
-		SetStatus(string(types.StatusDeleted)).
+		SetStatus(string(types.StatusArchived)).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
@@ -163,4 +193,60 @@ func (r *planRepository) Delete(ctx context.Context, id string) error {
 	}
 
 	return nil
+}
+
+// PlanQuery type alias for better readability
+type PlanQuery = *ent.PlanQuery
+
+// PlanQueryOptions implements BaseQueryOptions for plan queries
+type PlanQueryOptions struct{}
+
+func (o PlanQueryOptions) ApplyTenantFilter(ctx context.Context, query PlanQuery) PlanQuery {
+	return query.Where(plan.TenantID(types.GetTenantID(ctx)))
+}
+
+func (o PlanQueryOptions) ApplyStatusFilter(query PlanQuery, status string) PlanQuery {
+	if status == "" {
+		return query.Where(plan.StatusNotIn(string(types.StatusDeleted)))
+	}
+	return query.Where(plan.Status(status))
+}
+
+func (o PlanQueryOptions) ApplySortFilter(query PlanQuery, field string, order string) PlanQuery {
+	field = o.GetFieldName(field)
+	if order == types.OrderDesc {
+		return query.Order(ent.Desc(field))
+	}
+	return query.Order(ent.Asc(field))
+}
+
+func (o PlanQueryOptions) ApplyPaginationFilter(query PlanQuery, limit int, offset int) PlanQuery {
+	return query.Offset(offset).Limit(limit)
+}
+
+func (o PlanQueryOptions) GetFieldName(field string) string {
+	switch field {
+	case "created_at":
+		return plan.FieldCreatedAt
+	case "updated_at":
+		return plan.FieldUpdatedAt
+	case "lookup_key":
+		return plan.FieldLookupKey
+	case "name":
+		return plan.FieldName
+	default:
+		return field
+	}
+}
+
+func (o PlanQueryOptions) applyEntityQueryOptions(ctx context.Context, filter *types.PlanFilter, query PlanQuery) PlanQuery {
+	if filter == nil {
+		return query
+	}
+
+	if len(filter.PlanIDs) > 0 {
+		query = query.Where(plan.IDIn(filter.PlanIDs...))
+	}
+
+	return query
 }

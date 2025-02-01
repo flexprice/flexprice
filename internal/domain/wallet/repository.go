@@ -29,7 +29,9 @@ type Repository interface {
 
 	// Transaction operations
 	GetTransactionByID(ctx context.Context, id string) (*Transaction, error)
-	GetTransactionsByWalletID(ctx context.Context, walletID string, limit, offset int) ([]*Transaction, error)
+	ListWalletTransactions(ctx context.Context, f *types.WalletTransactionFilter) ([]*Transaction, error)
+	ListAllWalletTransactions(ctx context.Context, f *types.WalletTransactionFilter) ([]*Transaction, error)
+	CountWalletTransactions(ctx context.Context, f *types.WalletTransactionFilter) (int, error)
 	UpdateTransactionStatus(ctx context.Context, id string, status types.TransactionStatus) error
 }
 

@@ -114,6 +114,14 @@ func (cc *CustomerCreate) SetEmail(s string) *CustomerCreate {
 	return cc
 }
 
+// SetNillableEmail sets the "email" field if the given value is not nil.
+func (cc *CustomerCreate) SetNillableEmail(s *string) *CustomerCreate {
+	if s != nil {
+		cc.SetEmail(*s)
+	}
+	return cc
+}
+
 // SetID sets the "id" field.
 func (cc *CustomerCreate) SetID(s string) *CustomerCreate {
 	cc.mutation.SetID(s)
@@ -202,14 +210,6 @@ func (cc *CustomerCreate) check() error {
 	if v, ok := cc.mutation.Name(); ok {
 		if err := customer.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Customer.name": %w`, err)}
-		}
-	}
-	if _, ok := cc.mutation.Email(); !ok {
-		return &ValidationError{Name: "email", err: errors.New(`ent: missing required field "Customer.email"`)}
-	}
-	if v, ok := cc.mutation.Email(); ok {
-		if err := customer.EmailValidator(v); err != nil {
-			return &ValidationError{Name: "email", err: fmt.Errorf(`ent: validator failed for field "Customer.email": %w`, err)}
 		}
 	}
 	return nil

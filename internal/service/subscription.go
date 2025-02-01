@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -18,6 +19,8 @@ import (
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/publisher"
 	"github.com/flexprice/flexprice/internal/types"
+	webhookPublisher "github.com/flexprice/flexprice/internal/webhook/publisher"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -38,9 +41,11 @@ type subscriptionService struct {
 	meterRepo        meter.Repository
 	customerRepo     customer.Repository
 	invoiceRepo      invoice.Repository
-	publisher        publisher.EventPublisher
+	eventPublisher   publisher.EventPublisher
+	webhookPublisher webhookPublisher.WebhookPublisher
 	logger           *logger.Logger
 	db               postgres.IClient
+	config           *config.Configuration
 }
 
 func NewSubscriptionService(
@@ -51,9 +56,11 @@ func NewSubscriptionService(
 	meterRepo meter.Repository,
 	customerRepo customer.Repository,
 	invoiceRepo invoice.Repository,
-	publisher publisher.EventPublisher,
+	eventPublisher publisher.EventPublisher,
+	webhookPublisher webhookPublisher.WebhookPublisher,
 	db postgres.IClient,
 	logger *logger.Logger,
+	config *config.Configuration,
 ) SubscriptionService {
 	return &subscriptionService{
 		subscriptionRepo: subscriptionRepo,
@@ -63,9 +70,11 @@ func NewSubscriptionService(
 		meterRepo:        meterRepo,
 		customerRepo:     customerRepo,
 		invoiceRepo:      invoiceRepo,
-		publisher:        publisher,
+		eventPublisher:   eventPublisher,
+		webhookPublisher: webhookPublisher,
 		db:               db,
 		logger:           logger,
+		config:           config,
 	}
 }
 
@@ -99,12 +108,12 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		return nil, fmt.Errorf("failed to get prices: %w", err)
 	}
 
-	if len(pricesResponse.Prices) == 0 {
+	if len(pricesResponse.Items) == 0 {
 		return nil, fmt.Errorf("no prices found for plan")
 	}
 
-	prices := make([]price.Price, len(pricesResponse.Prices))
-	for i, p := range pricesResponse.Prices {
+	prices := make([]price.Price, len(pricesResponse.Items))
+	for i, p := range pricesResponse.Items {
 		prices[i] = *p.Price
 	}
 
@@ -164,13 +173,21 @@ func (s *subscriptionService) GetSubscription(ctx context.Context, id string) (*
 		return nil, fmt.Errorf("failed to get subscription: %w", err)
 	}
 
+	// expand plan
 	planService := NewPlanService(s.planRepo, s.priceRepo, s.meterRepo, s.logger)
 	plan, err := planService.GetPlan(ctx, subscription.PlanID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get plan: %w", err)
 	}
 
-	return &dto.SubscriptionResponse{Subscription: subscription, Plan: plan}, nil
+	// expand customer
+	customerService := NewCustomerService(s.customerRepo)
+	customer, err := customerService.GetCustomer(ctx, subscription.CustomerID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get customer: %w", err)
+	}
+
+	return &dto.SubscriptionResponse{Subscription: subscription, Plan: plan, Customer: customer}, nil
 }
 
 func (s *subscriptionService) CancelSubscription(ctx context.Context, id string, cancelAtPeriodEnd bool) error {
@@ -196,33 +213,48 @@ func (s *subscriptionService) CancelSubscription(ctx context.Context, id string,
 }
 
 func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *types.SubscriptionFilter) (*dto.ListSubscriptionsResponse, error) {
-	if filter.Limit == 0 {
-		filter.Limit = 10
-	}
+	planService := NewPlanService(s.planRepo, s.priceRepo, s.meterRepo, s.logger)
 
 	subscriptions, err := s.subscriptionRepo.List(ctx, filter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list subscriptions: %w", err)
 	}
 
+	count, err := s.subscriptionRepo.Count(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count subscriptions: %w", err)
+	}
+
 	response := &dto.ListSubscriptionsResponse{
-		Subscriptions: make([]*dto.SubscriptionResponse, len(subscriptions)),
-		Total:         len(subscriptions),
-		Offset:        filter.Offset,
-		Limit:         filter.Limit,
+		Items: make([]*dto.SubscriptionResponse, len(subscriptions)),
+		Pagination: types.NewPaginationResponse(
+			count,
+			filter.GetLimit(),
+			filter.GetOffset(),
+		),
+	}
+
+	planIDMap := make(map[string]*dto.PlanResponse, 0)
+	for _, sub := range subscriptions {
+		planIDMap[sub.PlanID] = nil
+	}
+
+	// Get plans
+	planFilter := types.NewNoLimitPlanFilter()
+	planFilter.PlanIDs = lo.Keys(planIDMap)
+	planResponse, err := planService.GetPlans(ctx, planFilter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get plans: %w", err)
+	}
+
+	for _, plan := range planResponse.Items {
+		planIDMap[plan.Plan.ID] = plan
 	}
 
 	for i, sub := range subscriptions {
-		plan, err := s.planRepo.Get(ctx, sub.PlanID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get plan: %w", err)
-		}
-
-		response.Subscriptions[i] = &dto.SubscriptionResponse{
+		response.Items[i] = &dto.SubscriptionResponse{
 			Subscription: sub,
-			Plan: &dto.PlanResponse{
-				Plan: plan,
-			},
+			Plan:         planIDMap[sub.PlanID],
 		}
 	}
 
@@ -232,7 +264,7 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error) {
 	response := &dto.GetUsageBySubscriptionResponse{}
 
-	eventService := NewEventService(s.eventRepo, s.meterRepo, s.publisher, s.logger)
+	eventService := NewEventService(s.eventRepo, s.meterRepo, s.eventPublisher, s.logger)
 	priceService := NewPriceService(s.priceRepo, s.meterRepo, s.logger)
 
 	subscriptionResponse, err := s.GetSubscription(ctx, req.SubscriptionID)
@@ -270,7 +302,7 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 	// Maintain meter order as they first appear in pricesResponse
 	meterOrder := []string{}
 	seenMeters := make(map[string]bool)
-	meterPrices := make(map[string][]dto.PriceResponse)
+	meterPrices := make(map[string][]*dto.PriceResponse)
 
 	// Build meterPrices in the order of appearance in pricesResponse
 	for _, priceResponse := range pricesResponse {
@@ -425,16 +457,18 @@ func (s *subscriptionService) UpdateBillingPeriods(ctx context.Context) (*dto.Su
 	offset := 0
 	for {
 		filter := &types.SubscriptionFilter{
-			Filter: types.Filter{
-				Limit:  batchSize,
-				Offset: offset,
+			QueryFilter: &types.QueryFilter{
+				Limit:  lo.ToPtr(batchSize),
+				Offset: lo.ToPtr(offset),
+				Status: lo.ToPtr(types.StatusPublished),
 			},
-			SubscriptionStatus:     types.SubscriptionStatusActive,
-			Status:                 types.StatusPublished,
-			CurrentPeriodEndBefore: &now,
+			SubscriptionStatus: []types.SubscriptionStatus{types.SubscriptionStatusActive},
+			TimeRangeFilter: &types.TimeRangeFilter{
+				EndTime: &now,
+			},
 		}
 
-		subs, err := s.subscriptionRepo.ListAll(ctx, filter)
+		subs, err := s.subscriptionRepo.ListAllTenant(ctx, filter)
 		if err != nil {
 			return response, fmt.Errorf("failed to list subscriptions: %w", err)
 		}
@@ -449,6 +483,8 @@ func (s *subscriptionService) UpdateBillingPeriods(ctx context.Context) (*dto.Su
 
 		// Process each subscription in the batch
 		for _, sub := range subs {
+			// update context to include the tenant id
+			ctx = context.WithValue(ctx, types.CtxTenantID, sub.TenantID)
 			item := &dto.SubscriptionUpdatePeriodResponseItem{
 				SubscriptionID: sub.ID,
 				PeriodStart:    sub.CurrentPeriodStart,
@@ -484,12 +520,18 @@ func (s *subscriptionService) UpdateBillingPeriods(ctx context.Context) (*dto.Su
 func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub *subscription.Subscription, now time.Time) error {
 	// Initialize services
 	invoiceService := NewInvoiceService(
-		s.invoiceRepo,
-		s.priceRepo,
-		s.meterRepo,
+		s.subscriptionRepo,
 		s.planRepo,
-		s.logger,
+		s.priceRepo,
+		s.eventRepo,
+		s.meterRepo,
+		s.customerRepo,
+		s.invoiceRepo,
+		s.eventPublisher,
+		s.webhookPublisher,
 		s.db,
+		s.logger,
+		s.config,
 	)
 
 	currentStart := sub.CurrentPeriodStart
@@ -546,18 +588,8 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 		for i := 0; i < len(periods)-1; i++ {
 			period := periods[i]
 
-			// Get usage for this period
-			usage, err := s.GetUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
-				SubscriptionID: sub.ID,
-				StartTime:      period.start,
-				EndTime:        period.end,
-			})
-			if err != nil {
-				return fmt.Errorf("failed to get subscription usage for period: %w", err)
-			}
-
 			// Create and finalize invoice for this period
-			inv, err := invoiceService.CreateSubscriptionInvoice(ctx, sub, period.start, period.end, usage)
+			inv, err := invoiceService.CreateSubscriptionInvoice(ctx, sub, period.start, period.end)
 			if err != nil {
 				return fmt.Errorf("failed to create subscription invoice for period: %w", err)
 			}
@@ -653,8 +685,8 @@ func getMeterDisplayName(ctx context.Context, meterRepo meter.Repository, meterI
 	return displayName
 }
 
-func filterValidPricesForSubscription(prices []dto.PriceResponse, subscriptionObj *subscription.Subscription) []dto.PriceResponse {
-	var validPrices []dto.PriceResponse
+func filterValidPricesForSubscription(prices []*dto.PriceResponse, subscriptionObj *subscription.Subscription) []*dto.PriceResponse {
+	var validPrices []*dto.PriceResponse
 	for _, p := range prices {
 		if p.Price.Currency == subscriptionObj.Currency &&
 			p.Price.BillingPeriod == subscriptionObj.BillingPeriod &&

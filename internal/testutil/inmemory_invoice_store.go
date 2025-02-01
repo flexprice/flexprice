@@ -3,24 +3,22 @@ package testutil
 import (
 	"context"
 	"fmt"
-	"sort"
-	"sync"
 	"time"
 
-	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
-// InMemoryInvoiceStore implements invoice.Repository for testing
+// InMemoryInvoiceStore implements invoice.Repository
 type InMemoryInvoiceStore struct {
-	sync.RWMutex
-	invoices map[string]*invoice.Invoice
+	*InMemoryStore[*invoice.Invoice]
 }
 
-func NewInMemoryInvoiceStore() invoice.Repository {
+// NewInMemoryInvoiceStore creates a new in-memory invoice store
+func NewInMemoryInvoiceStore() *InMemoryInvoiceStore {
 	return &InMemoryInvoiceStore{
-		invoices: make(map[string]*invoice.Invoice),
+		InMemoryStore: NewInMemoryStore[*invoice.Invoice](),
 	}
 }
 
@@ -30,14 +28,41 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 		return nil
 	}
 
-	// Convert to ent model and back to get a deep copy
-	entInv := &ent.Invoice{
+	// Deep copy line items
+	lineItems := make([]*invoice.InvoiceLineItem, 0, len(inv.LineItems))
+	for _, item := range inv.LineItems {
+		if item == nil {
+			continue
+		}
+		lineItems = append(lineItems, &invoice.InvoiceLineItem{
+			ID:               item.ID,
+			InvoiceID:        item.InvoiceID,
+			CustomerID:       item.CustomerID,
+			SubscriptionID:   item.SubscriptionID,
+			PlanID:           item.PlanID,
+			PlanDisplayName:  item.PlanDisplayName,
+			PriceID:          item.PriceID,
+			PriceType:        item.PriceType,
+			MeterID:          item.MeterID,
+			MeterDisplayName: item.MeterDisplayName,
+			DisplayName:      item.DisplayName,
+			Amount:           item.Amount,
+			Quantity:         item.Quantity,
+			Currency:         item.Currency,
+			PeriodStart:      item.PeriodStart,
+			PeriodEnd:        item.PeriodEnd,
+			Metadata:         item.Metadata,
+			BaseModel:        item.BaseModel,
+		})
+	}
+
+	return &invoice.Invoice{
 		ID:              inv.ID,
 		CustomerID:      inv.CustomerID,
 		SubscriptionID:  inv.SubscriptionID,
-		InvoiceType:     string(inv.InvoiceType),
-		InvoiceStatus:   string(inv.InvoiceStatus),
-		PaymentStatus:   string(inv.PaymentStatus),
+		InvoiceType:     inv.InvoiceType,
+		InvoiceStatus:   inv.InvoiceStatus,
+		PaymentStatus:   inv.PaymentStatus,
 		Currency:        inv.Currency,
 		AmountDue:       inv.AmountDue,
 		AmountPaid:      inv.AmountPaid,
@@ -49,316 +74,220 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 		FinalizedAt:     inv.FinalizedAt,
 		PeriodStart:     inv.PeriodStart,
 		PeriodEnd:       inv.PeriodEnd,
-		InvoicePdfURL:   inv.InvoicePDFURL,
-		BillingReason:   inv.BillingReason,
+		InvoicePDFURL:   inv.InvoicePDFURL,
+		LineItems:       lineItems,
 		Metadata:        inv.Metadata,
-		Version:         inv.Version,
-		Status:          string(inv.Status),
-		TenantID:        inv.TenantID,
-		CreatedAt:       inv.CreatedAt,
-		CreatedBy:       inv.CreatedBy,
-		UpdatedAt:       inv.UpdatedAt,
-		UpdatedBy:       inv.UpdatedBy,
+		BaseModel:       inv.BaseModel,
 	}
-
-	// Copy line items
-	if len(inv.LineItems) > 0 {
-		entInv.Edges.LineItems = make([]*ent.InvoiceLineItem, len(inv.LineItems))
-		for i, item := range inv.LineItems {
-			entInv.Edges.LineItems[i] = &ent.InvoiceLineItem{
-				ID:             item.ID,
-				InvoiceID:      item.InvoiceID,
-				CustomerID:     item.CustomerID,
-				SubscriptionID: item.SubscriptionID,
-				PriceID:        item.PriceID,
-				MeterID:        item.MeterID,
-				Amount:         item.Amount,
-				Quantity:       item.Quantity,
-				Currency:       item.Currency,
-				PeriodStart:    item.PeriodStart,
-				PeriodEnd:      item.PeriodEnd,
-				Status:         string(item.Status),
-				TenantID:       item.TenantID,
-				CreatedAt:      item.CreatedAt,
-				CreatedBy:      item.CreatedBy,
-				UpdatedAt:      item.UpdatedAt,
-				UpdatedBy:      item.UpdatedBy,
-			}
-		}
-	}
-
-	return invoice.FromEnt(entInv)
 }
 
 func (s *InMemoryInvoiceStore) Create(ctx context.Context, inv *invoice.Invoice) error {
-	s.Lock()
-	defer s.Unlock()
-
-	if inv.ID == "" {
-		return fmt.Errorf("invoice ID cannot be empty")
+	if inv == nil {
+		return fmt.Errorf("invoice cannot be nil")
 	}
-
-	if _, exists := s.invoices[inv.ID]; exists {
-		return fmt.Errorf("invoice already exists")
-	}
-
-	s.invoices[inv.ID] = copyInvoice(inv)
-	return nil
+	return s.InMemoryStore.Create(ctx, inv.ID, copyInvoice(inv))
 }
 
 func (s *InMemoryInvoiceStore) CreateWithLineItems(ctx context.Context, inv *invoice.Invoice) error {
-	return s.Create(ctx, inv)
+	return s.Create(ctx, inv) // In memory store doesn't need special transaction handling
 }
 
 func (s *InMemoryInvoiceStore) AddLineItems(ctx context.Context, invoiceID string, items []*invoice.InvoiceLineItem) error {
-	s.Lock()
-	defer s.Unlock()
-
-	inv, exists := s.invoices[invoiceID]
-	if !exists {
-		return fmt.Errorf("invoice not found")
+	inv, err := s.Get(ctx, invoiceID)
+	if err != nil {
+		return err
 	}
-
 	// Copy and add each line item
 	for _, item := range items {
 		itemCopy := copyInvoice(&invoice.Invoice{LineItems: []*invoice.InvoiceLineItem{item}}).LineItems[0]
 		itemCopy.InvoiceID = invoiceID
 		inv.LineItems = append(inv.LineItems, itemCopy)
 	}
-	return nil
+	return s.Update(ctx, inv)
 }
 
 func (s *InMemoryInvoiceStore) RemoveLineItems(ctx context.Context, invoiceID string, itemIDs []string) error {
-	s.Lock()
-	defer s.Unlock()
-
-	inv, exists := s.invoices[invoiceID]
-	if !exists {
-		return fmt.Errorf("invoice not found")
+	inv, err := s.Get(ctx, invoiceID)
+	if err != nil {
+		return err
 	}
 
-	// Convert to map for O(1) lookup
-	toRemove := make(map[string]bool)
-	for _, id := range itemIDs {
-		toRemove[id] = true
-	}
+	inv.LineItems = lo.Filter(inv.LineItems, func(item *invoice.InvoiceLineItem, _ int) bool {
+		return !lo.Contains(itemIDs, item.ID)
+	})
 
-	// Filter out removed items
-	remaining := make([]*invoice.InvoiceLineItem, 0)
-	for _, item := range inv.LineItems {
-		if !toRemove[item.ID] {
-			remaining = append(remaining, item)
-		} else {
-			// Soft delete
-			item.Status = types.StatusDeleted
-			item.UpdatedAt = time.Now()
-			item.UpdatedBy = types.GetUserID(ctx)
-			remaining = append(remaining, item)
-		}
-	}
-	inv.LineItems = remaining
-	return nil
+	return s.Update(ctx, inv)
 }
 
 func (s *InMemoryInvoiceStore) Get(ctx context.Context, id string) (*invoice.Invoice, error) {
-	s.RLock()
-	defer s.RUnlock()
-
-	inv, exists := s.invoices[id]
-	if !exists {
+	inv, err := s.InMemoryStore.Get(ctx, id)
+	if err != nil {
 		return nil, invoice.ErrInvoiceNotFound
 	}
-
-	if inv.Status == types.StatusDeleted {
-		return nil, invoice.ErrInvoiceNotFound
-	}
-
 	return copyInvoice(inv), nil
 }
 
 func (s *InMemoryInvoiceStore) Update(ctx context.Context, inv *invoice.Invoice) error {
-	s.Lock()
-	defer s.Unlock()
-
-	existing, exists := s.invoices[inv.ID]
-	if !exists {
-		return invoice.ErrInvoiceNotFound
+	if inv == nil {
+		return fmt.Errorf("invoice cannot be nil")
 	}
-
-	if existing.Version != inv.Version {
-		return invoice.NewVersionConflictError(inv.ID, inv.Version, existing.Version)
-	}
-
-	inv.Version++
-	s.invoices[inv.ID] = copyInvoice(inv)
-	return nil
+	return s.InMemoryStore.Update(ctx, inv.ID, copyInvoice(inv))
 }
 
 func (s *InMemoryInvoiceStore) Delete(ctx context.Context, id string) error {
-	s.Lock()
-	defer s.Unlock()
-
-	inv, exists := s.invoices[id]
-	if !exists {
-		return invoice.ErrInvoiceNotFound
-	}
-
-	// Soft delete
-	inv.Status = types.StatusDeleted
-	inv.UpdatedAt = time.Now()
-	inv.UpdatedBy = types.GetUserID(ctx)
-
-	// Soft delete line items
-	for _, item := range inv.LineItems {
-		item.Status = types.StatusDeleted
-		item.UpdatedAt = time.Now()
-		item.UpdatedBy = types.GetUserID(ctx)
-	}
-
-	return nil
+	return s.InMemoryStore.Delete(ctx, id)
 }
 
 func (s *InMemoryInvoiceStore) List(ctx context.Context, filter *types.InvoiceFilter) ([]*invoice.Invoice, error) {
-	s.RLock()
-	defer s.RUnlock()
-
-	result := make([]*invoice.Invoice, 0)
-	for _, inv := range s.invoices {
-		if s.matchesFilter(ctx, inv, filter) {
-			result = append(result, copyInvoice(inv))
-		}
-	}
-
-	// Sort by created_at desc
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].CreatedAt.After(result[j].CreatedAt)
-	})
-
-	// Apply pagination
-	if filter != nil && filter.Limit > 0 {
-		start := filter.Offset
-		if start > len(result) {
-			start = len(result)
-		}
-		end := start + filter.Limit
-		if end > len(result) {
-			end = len(result)
-		}
-		result = result[start:end]
-	}
-
-	return result, nil
+	return s.InMemoryStore.List(ctx, filter, invoiceFilterFn, invoiceSortFn)
 }
 
 func (s *InMemoryInvoiceStore) Count(ctx context.Context, filter *types.InvoiceFilter) (int, error) {
-	s.RLock()
-	defer s.RUnlock()
-
-	count := 0
-	for _, inv := range s.invoices {
-		if s.matchesFilter(ctx, inv, filter) {
-			count++
-		}
-	}
-	return count, nil
+	return s.InMemoryStore.Count(ctx, filter, invoiceFilterFn)
 }
 
 func (s *InMemoryInvoiceStore) GetByIdempotencyKey(ctx context.Context, key string) (*invoice.Invoice, error) {
-	s.RLock()
-	defer s.RUnlock()
+	filter := types.NewNoLimitInvoiceFilter()
+	invoices, err := s.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
 
-	for _, inv := range s.invoices {
-		if *inv.IdempotencyKey == key {
+	for _, inv := range invoices {
+		if inv.IdempotencyKey != nil && *inv.IdempotencyKey == key {
 			return copyInvoice(inv), nil
 		}
 	}
+
 	return nil, invoice.ErrInvoiceNotFound
 }
 
 func (s *InMemoryInvoiceStore) ExistsForPeriod(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time) (bool, error) {
-	s.RLock()
-	defer s.RUnlock()
+	filter := types.NewNoLimitInvoiceFilter()
+	filter.SubscriptionID = subscriptionID
+	invoices, err := s.List(ctx, filter)
+	if err != nil {
+		return false, err
+	}
 
-	for _, inv := range s.invoices {
-		if inv.SubscriptionID != nil && *inv.SubscriptionID == subscriptionID && inv.PeriodStart.Before(periodEnd) && inv.PeriodEnd.After(periodStart) {
-			return true, nil
+	for _, inv := range invoices {
+		if inv.PeriodStart != nil && inv.PeriodEnd != nil {
+			if (periodStart.Equal(*inv.PeriodStart) || periodStart.After(*inv.PeriodStart)) &&
+				(periodEnd.Equal(*inv.PeriodEnd) || periodEnd.Before(*inv.PeriodEnd)) {
+				return true, nil
+			}
 		}
 	}
+
 	return false, nil
 }
 
 func (s *InMemoryInvoiceStore) GetNextInvoiceNumber(ctx context.Context) (string, error) {
-	return "INV-YYYYMM-XXXXX", nil
+	filter := types.NewNoLimitInvoiceFilter()
+	invoices, err := s.List(ctx, filter)
+	if err != nil {
+		return "", err
+	}
+
+	maxNum := 0
+	for _, inv := range invoices {
+		if inv.InvoiceNumber != nil {
+			var num int
+			_, err := fmt.Sscanf(*inv.InvoiceNumber, "INV-%d", &num)
+			if err == nil && num > maxNum {
+				maxNum = num
+			}
+		}
+	}
+
+	return fmt.Sprintf("INV-%08d", maxNum+1), nil
 }
 
 func (s *InMemoryInvoiceStore) GetNextBillingSequence(ctx context.Context, subscriptionID string) (int, error) {
-	return 1, nil
+	filter := types.NewNoLimitInvoiceFilter()
+	filter.SubscriptionID = subscriptionID
+	invoices, err := s.List(ctx, filter)
+	if err != nil {
+		return 0, err
+	}
+
+	maxSeq := 0
+	for _, inv := range invoices {
+		if inv.BillingSequence != nil && *inv.BillingSequence > maxSeq {
+			maxSeq = *inv.BillingSequence
+		}
+	}
+
+	return maxSeq + 1, nil
 }
 
-func (s *InMemoryInvoiceStore) matchesFilter(ctx context.Context, inv *invoice.Invoice, filter *types.InvoiceFilter) bool {
-	if inv.Status == types.StatusDeleted {
+// invoiceFilterFn implements filtering logic for invoices
+func invoiceFilterFn(ctx context.Context, inv *invoice.Invoice, filter interface{}) bool {
+	if inv == nil {
 		return false
 	}
 
-	if inv.TenantID != types.GetTenantID(ctx) {
-		return false
+	f, ok := filter.(*types.InvoiceFilter)
+	if !ok {
+		return true // No filter applied
 	}
 
-	if filter == nil {
-		return true
-	}
-
-	if filter.CustomerID != "" && inv.CustomerID != filter.CustomerID {
-		return false
-	}
-
-	if filter.SubscriptionID != "" && inv.SubscriptionID != nil && *inv.SubscriptionID != filter.SubscriptionID {
-		return false
-	}
-
-	if filter.InvoiceType != "" && inv.InvoiceType != filter.InvoiceType {
-		return false
-	}
-
-	if len(filter.InvoiceStatus) > 0 {
-		found := false
-		for _, status := range filter.InvoiceStatus {
-			if inv.InvoiceStatus == status {
-				found = true
-				break
-			}
-		}
-		if !found {
+	// Check tenant ID
+	if tenantID, ok := ctx.Value(types.CtxTenantID).(string); ok {
+		if inv.TenantID != tenantID {
 			return false
 		}
 	}
 
-	if len(filter.PaymentStatus) > 0 {
-		found := false
-		for _, status := range filter.PaymentStatus {
-			if inv.PaymentStatus == status {
-				found = true
-				break
-			}
-		}
-		if !found {
+	// Filter by customer ID
+	if f.CustomerID != "" && inv.CustomerID != f.CustomerID {
+		return false
+	}
+
+	// Filter by subscription ID
+	if f.SubscriptionID != "" {
+		if inv.SubscriptionID == nil || *inv.SubscriptionID != f.SubscriptionID {
 			return false
 		}
 	}
 
-	if filter.StartTime != nil && inv.CreatedAt.Before(*filter.StartTime) {
+	// Filter by invoice type
+	if f.InvoiceType != "" && inv.InvoiceType != f.InvoiceType {
 		return false
 	}
 
-	if filter.EndTime != nil && inv.CreatedAt.After(*filter.EndTime) {
+	// Filter by invoice status
+	if len(f.InvoiceStatus) > 0 && !lo.Contains(f.InvoiceStatus, inv.InvoiceStatus) {
 		return false
+	}
+
+	// Filter by payment status
+	if len(f.PaymentStatus) > 0 && !lo.Contains(f.PaymentStatus, inv.PaymentStatus) {
+		return false
+	}
+
+	// Filter by status
+	if f.Status != nil && inv.Status != *f.Status {
+		return false
+	}
+
+	// Filter by time range
+	if f.TimeRangeFilter != nil {
+		if f.StartTime != nil && inv.CreatedAt.Before(*f.StartTime) {
+			return false
+		}
+		if f.EndTime != nil && inv.CreatedAt.After(*f.EndTime) {
+			return false
+		}
 	}
 
 	return true
 }
 
-func (s *InMemoryInvoiceStore) Clear() {
-	s.Lock()
-	defer s.Unlock()
-	s.invoices = make(map[string]*invoice.Invoice)
+// invoiceSortFn implements sorting logic for invoices
+func invoiceSortFn(i, j *invoice.Invoice) bool {
+	if i == nil || j == nil {
+		return false
+	}
+	return i.CreatedAt.After(j.CreatedAt)
 }

@@ -225,6 +225,7 @@ func (s *eventService) GetEvents(ctx context.Context, req *dto.GetEventsRequest)
 	eventsList, err := s.eventRepo.GetEvents(ctx, &events.GetEventsParams{
 		ExternalCustomerID: req.ExternalCustomerID,
 		EventName:          req.EventName,
+		EventID:            req.EventID,
 		StartTime:          req.StartTime,
 		EndTime:            req.EndTime,
 		IterFirst:          iterFirst,

@@ -236,9 +236,5 @@ type PriceResponse struct {
 	Meter *MeterResponse `json:"meter,omitempty"`
 }
 
-type ListPricesResponse struct {
-	Prices []PriceResponse `json:"prices"`
-	Total  int             `json:"total"`
-	Offset int             `json:"offset"`
-	Limit  int             `json:"limit"`
-}
+// ListPricesResponse represents the response for listing prices
+type ListPricesResponse = types.ListResponse[*PriceResponse]

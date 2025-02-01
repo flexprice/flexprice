@@ -45,6 +45,8 @@ const (
 	FieldMeterID = "meter_id"
 	// FieldMeterDisplayName holds the string denoting the meter_display_name field in the database.
 	FieldMeterDisplayName = "meter_display_name"
+	// FieldDisplayName holds the string denoting the display_name field in the database.
+	FieldDisplayName = "display_name"
 	// FieldAmount holds the string denoting the amount field in the database.
 	FieldAmount = "amount"
 	// FieldQuantity holds the string denoting the quantity field in the database.
@@ -88,6 +90,7 @@ var Columns = []string{
 	FieldPriceType,
 	FieldMeterID,
 	FieldMeterDisplayName,
+	FieldDisplayName,
 	FieldAmount,
 	FieldQuantity,
 	FieldCurrency,
@@ -212,6 +215,11 @@ func ByMeterID(opts ...sql.OrderTermOption) OrderOption {
 // ByMeterDisplayName orders the results by the meter_display_name field.
 func ByMeterDisplayName(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldMeterDisplayName, opts...).ToFunc()
+}
+
+// ByDisplayName orders the results by the display_name field.
+func ByDisplayName(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDisplayName, opts...).ToFunc()
 }
 
 // ByAmount orders the results by the amount field.

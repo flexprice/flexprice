@@ -6,7 +6,9 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
+	"github.com/samber/lo"
 )
 
 type MeterHandler struct {
@@ -52,22 +54,29 @@ func (h *MeterHandler) CreateMeter(c *gin.Context) {
 // @Tags Meters
 // @Produce json
 // @Security ApiKeyAuth
+// @Param filter query types.MeterFilter false "Filter"
 // @Success 200 {array} dto.MeterResponse
 // @Failure 500 {object} ErrorResponse
 // @Router /meters [get]
 func (h *MeterHandler) GetAllMeters(c *gin.Context) {
 	ctx := c.Request.Context()
-	meters, err := h.service.GetAllMeters(ctx)
+	var filter types.MeterFilter
+	if err := c.ShouldBindQuery(&filter); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid filter parameters"})
+		return
+	}
+
+	if filter.GetLimit() == 0 {
+		filter.Limit = lo.ToPtr(types.GetDefaultFilter().Limit)
+	}
+
+	response, err := h.service.GetMeters(ctx, &filter)
 	if err != nil {
 		h.log.Error("Failed to get meters", "error", err)
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to get meters"})
 		return
 	}
 
-	response := make([]*dto.MeterResponse, len(meters))
-	for i, m := range meters {
-		response[i] = dto.ToMeterResponse(m)
-	}
 	c.JSON(http.StatusOK, response)
 }
 

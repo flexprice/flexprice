@@ -17,8 +17,9 @@ import (
 )
 
 type walletRepository struct {
-	client postgres.IClient
-	logger *logger.Logger
+	client    postgres.IClient
+	logger    *logger.Logger
+	queryOpts WalletTransactionQueryOptions
 }
 
 func NewWalletRepository(client postgres.IClient, logger *logger.Logger) walletdomain.Repository {
@@ -34,6 +35,7 @@ func (r *walletRepository) CreateWallet(ctx context.Context, w *walletdomain.Wal
 		SetID(w.ID).
 		SetTenantID(w.TenantID).
 		SetCustomerID(w.CustomerID).
+		SetName(w.Name).
 		SetCurrency(w.Currency).
 		SetDescription(w.Description).
 		SetMetadata(w.Metadata).
@@ -242,29 +244,70 @@ func (r *walletRepository) GetTransactionByID(ctx context.Context, id string) (*
 	return toDomainTransaction(t), nil
 }
 
-// GetTransactionsByWalletID retrieves transactions for a wallet with pagination
-func (r *walletRepository) GetTransactionsByWalletID(ctx context.Context, walletID string, limit, offset int) ([]*walletdomain.Transaction, error) {
+func (r *walletRepository) ListWalletTransactions(ctx context.Context, f *types.WalletTransactionFilter) ([]*walletdomain.Transaction, error) {
 	client := r.client.Querier(ctx)
-	transactions, err := client.WalletTransaction.Query().
-		Where(
-			wallettransaction.WalletID(walletID),
-			wallettransaction.TenantID(types.GetTenantID(ctx)),
-			wallettransaction.StatusEQ(string(types.StatusPublished)),
-		).
-		Order(ent.Desc(wallettransaction.FieldCreatedAt)).
-		Limit(limit).
-		Offset(offset).
-		All(ctx)
+	query := client.WalletTransaction.Query()
+	query = ApplyQueryOptions(ctx, query, f, r.queryOpts)
+	if f != nil {
+		query = r.queryOpts.applyEntityQueryOptions(ctx, f, query)
+	}
 
+	result, err := query.All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query transactions: %w", err)
 	}
 
-	result := make([]*walletdomain.Transaction, len(transactions))
-	for i, t := range transactions {
-		result[i] = toDomainTransaction(t)
+	transactions := make([]*walletdomain.Transaction, len(result))
+	for i, t := range result {
+		transactions[i] = toDomainTransaction(t)
 	}
-	return result, nil
+
+	return transactions, nil
+}
+
+func (r *walletRepository) ListAllWalletTransactions(ctx context.Context, f *types.WalletTransactionFilter) ([]*walletdomain.Transaction, error) {
+	if f == nil {
+		f = types.NewNoLimitWalletTransactionFilter()
+	}
+
+	client := r.client.Querier(ctx)
+	query := client.WalletTransaction.Query()
+	query = ApplyBaseFilters(ctx, query, f, r.queryOpts)
+	if f != nil {
+		query = r.queryOpts.applyEntityQueryOptions(ctx, f, query)
+	}
+
+	result, err := query.All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query transactions: %w", err)
+	}
+
+	transactions := make([]*walletdomain.Transaction, len(result))
+	for i, t := range result {
+		transactions[i] = toDomainTransaction(t)
+	}
+
+	return transactions, nil
+}
+
+func (r *walletRepository) CountWalletTransactions(ctx context.Context, f *types.WalletTransactionFilter) (int, error) {
+	if f == nil {
+		f = types.NewNoLimitWalletTransactionFilter()
+	}
+
+	client := r.client.Querier(ctx)
+	query := client.WalletTransaction.Query()
+	query = ApplyBaseFilters(ctx, query, f, r.queryOpts)
+	if f != nil {
+		query = r.queryOpts.applyEntityQueryOptions(ctx, f, query)
+	}
+
+	count, err := query.Count(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count transactions: %w", err)
+	}
+
+	return count, nil
 }
 
 // UpdateTransactionStatus updates the status of a transaction
@@ -296,6 +339,7 @@ func (r *walletRepository) UpdateTransactionStatus(ctx context.Context, id strin
 func toDomainWallet(w *ent.Wallet) *walletdomain.Wallet {
 	return &walletdomain.Wallet{
 		ID:           w.ID,
+		Name:         w.Name,
 		CustomerID:   w.CustomerID,
 		Currency:     w.Currency,
 		Description:  w.Description,
@@ -336,4 +380,87 @@ func toDomainTransaction(t *ent.WalletTransaction) *walletdomain.Transaction {
 			UpdatedBy: t.UpdatedBy,
 		},
 	}
+}
+
+// WalletTransactionQuery type alias for better readability
+type WalletTransactionQuery = *ent.WalletTransactionQuery
+
+// WalletTransactionQueryOptions implements BaseQueryOptions for wallet queries
+type WalletTransactionQueryOptions struct{}
+
+func (o WalletTransactionQueryOptions) ApplyTenantFilter(ctx context.Context, query WalletTransactionQuery) WalletTransactionQuery {
+	return query.Where(wallettransaction.TenantID(types.GetTenantID(ctx)))
+}
+
+func (o WalletTransactionQueryOptions) ApplyStatusFilter(query WalletTransactionQuery, status string) WalletTransactionQuery {
+	if status == "" {
+		return query.Where(wallettransaction.StatusNotIn(string(types.StatusDeleted)))
+	}
+	return query.Where(wallettransaction.Status(status))
+}
+
+func (o WalletTransactionQueryOptions) ApplySortFilter(query WalletTransactionQuery, field string, order string) WalletTransactionQuery {
+	orderFunc := ent.Desc
+	if order == "asc" {
+		orderFunc = ent.Asc
+	}
+	return query.Order(orderFunc(o.GetFieldName(field)))
+}
+
+func (o WalletTransactionQueryOptions) ApplyPaginationFilter(query WalletTransactionQuery, limit int, offset int) WalletTransactionQuery {
+	query = query.Limit(limit)
+	if offset > 0 {
+		query = query.Offset(offset)
+	}
+	return query
+}
+
+func (o WalletTransactionQueryOptions) GetFieldName(field string) string {
+	switch field {
+	case "created_at":
+		return wallettransaction.FieldCreatedAt
+	case "updated_at":
+		return wallettransaction.FieldUpdatedAt
+	case "amount":
+		return wallettransaction.FieldAmount
+	default:
+		return field
+	}
+}
+
+func (o WalletTransactionQueryOptions) applyEntityQueryOptions(ctx context.Context, f *types.WalletTransactionFilter, query WalletTransactionQuery) WalletTransactionQuery {
+	if f == nil {
+		return query
+	}
+
+	if f.WalletID != nil {
+		query = query.Where(wallettransaction.WalletID(*f.WalletID))
+	}
+
+	if f.Type != nil {
+		query = query.Where(wallettransaction.Type(string(*f.Type)))
+	}
+
+	if f.TransactionStatus != nil {
+		query = query.Where(wallettransaction.TransactionStatus(string(*f.TransactionStatus)))
+	}
+
+	if f.ReferenceType != nil && f.ReferenceID != nil {
+		query = query.Where(
+			wallettransaction.ReferenceType(*f.ReferenceType),
+			wallettransaction.ReferenceID(*f.ReferenceID),
+		)
+	}
+
+	// Apply time range filters if specified
+	if f.TimeRangeFilter != nil {
+		if f.StartTime != nil {
+			query = query.Where(wallettransaction.CreatedAtGTE(*f.StartTime))
+		}
+		if f.EndTime != nil {
+			query = query.Where(wallettransaction.CreatedAtLTE(*f.EndTime))
+		}
+	}
+
+	return query
 }

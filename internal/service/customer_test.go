@@ -143,19 +143,29 @@ func (s *CustomerServiceSuite) TestGetCustomers() {
 
 	testCases := []struct {
 		name          string
-		filter        types.Filter
+		filter        *types.CustomerFilter
 		expectedError bool
 		expectedCount int
 	}{
 		{
-			name:          "all_customers",
-			filter:        types.Filter{Offset: 0, Limit: 10},
+			name: "all_customers",
+			filter: &types.CustomerFilter{
+				QueryFilter: &types.QueryFilter{
+					Limit:  lo.ToPtr(int(10)),
+					Offset: lo.ToPtr(int(0)),
+				},
+			},
 			expectedError: false,
 			expectedCount: 2,
 		},
 		{
-			name:          "no_customers",
-			filter:        types.Filter{Offset: 10, Limit: 10},
+			name: "no_customers",
+			filter: &types.CustomerFilter{
+				QueryFilter: &types.QueryFilter{
+					Limit:  lo.ToPtr(int(10)),
+					Offset: lo.ToPtr(int(10)),
+				},
+			},
 			expectedError: false,
 			expectedCount: 0,
 		},
@@ -171,7 +181,7 @@ func (s *CustomerServiceSuite) TestGetCustomers() {
 			} else {
 				s.NoError(err)
 				s.NotNil(resp)
-				s.Equal(tc.expectedCount, resp.Total)
+				s.Equal(tc.expectedCount, len(resp.Items))
 			}
 		})
 	}

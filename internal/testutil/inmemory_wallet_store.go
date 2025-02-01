@@ -3,80 +3,163 @@ package testutil
 import (
 	"context"
 	"fmt"
-	"sync"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
 type InMemoryWalletStore struct {
-	mu           sync.RWMutex
-	wallets      map[string]*wallet.Wallet
-	transactions map[string]*wallet.Transaction
+	wallets      *InMemoryStore[*wallet.Wallet]
+	transactions *InMemoryStore[*wallet.Transaction]
 }
 
 func NewInMemoryWalletStore() *InMemoryWalletStore {
 	return &InMemoryWalletStore{
-		wallets:      make(map[string]*wallet.Wallet),
-		transactions: make(map[string]*wallet.Transaction),
+		wallets:      NewInMemoryStore[*wallet.Wallet](),
+		transactions: NewInMemoryStore[*wallet.Transaction](),
 	}
 }
 
-func (r *InMemoryWalletStore) CreateWallet(ctx context.Context, w *wallet.Wallet) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	if _, exists := r.wallets[w.ID]; exists {
-		return fmt.Errorf("wallet already exists")
+// walletFilterFn implements filtering logic for wallets
+func walletFilterFn(ctx context.Context, w *wallet.Wallet, filter interface{}) bool {
+	if w == nil {
+		return false
 	}
 
-	r.wallets[w.ID] = w
-	return nil
-}
-
-func (r *InMemoryWalletStore) GetWalletByID(ctx context.Context, id string) (*wallet.Wallet, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	if w, exists := r.wallets[id]; exists {
-		return w, nil
-	}
-	return nil, fmt.Errorf("wallet not found")
-}
-
-func (r *InMemoryWalletStore) GetWalletsByCustomerID(ctx context.Context, customerID string) ([]*wallet.Wallet, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	var result []*wallet.Wallet
-	for _, w := range r.wallets {
-		if w.CustomerID == customerID {
-			result = append(result, w)
+	// Check tenant ID
+	if tenantID, ok := ctx.Value(types.CtxTenantID).(string); ok {
+		if w.TenantID != tenantID {
+			return false
 		}
 	}
-	return result, nil
+
+	// Check wallet status
+	if w.Status != types.StatusPublished {
+		return false
+	}
+
+	// Check wallet status is active
+	if w.WalletStatus != types.WalletStatusActive {
+		return false
+	}
+
+	return true
 }
 
-func (r *InMemoryWalletStore) UpdateWalletStatus(ctx context.Context, id string, status types.WalletStatus) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+// transactionFilterFn implements filtering logic for transactions
+func transactionFilterFn(ctx context.Context, t *wallet.Transaction, filter interface{}) bool {
+	if t == nil {
+		return false
+	}
 
-	w, exists := r.wallets[id]
-	if !exists {
-		return fmt.Errorf("wallet not found")
+	f, ok := filter.(*types.WalletTransactionFilter)
+	if !ok {
+		return true // No filter applied
+	}
+
+	// Check tenant ID
+	if tenantID, ok := ctx.Value(types.CtxTenantID).(string); ok {
+		if t.TenantID != tenantID {
+			return false
+		}
+	}
+
+	// Filter by status
+	if f.Status != nil && t.Status != *f.Status {
+		return false
+	}
+
+	// Filter by wallet ID
+	if f.WalletID != nil && t.WalletID != *f.WalletID {
+		return false
+	}
+
+	// Filter by transaction type
+	if f.Type != nil && t.Type != *f.Type {
+		return false
+	}
+
+	// Filter by transaction status
+	if f.TransactionStatus != nil && t.TxStatus != *f.TransactionStatus {
+		return false
+	}
+
+	// Filter by reference type and ID
+	if f.ReferenceType != nil && f.ReferenceID != nil {
+		if t.ReferenceType != *f.ReferenceType || t.ReferenceID != *f.ReferenceID {
+			return false
+		}
+	}
+
+	// Filter by time range
+	if f.TimeRangeFilter != nil {
+		if f.StartTime != nil && t.CreatedAt.Before(*f.StartTime) {
+			return false
+		}
+		if f.EndTime != nil && t.CreatedAt.After(*f.EndTime) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// transactionSortFn implements sorting logic for transactions
+func transactionSortFn(i, j *wallet.Transaction) bool {
+	if i == nil || j == nil {
+		return false
+	}
+	return i.CreatedAt.After(j.CreatedAt)
+}
+
+func (s *InMemoryWalletStore) CreateWallet(ctx context.Context, w *wallet.Wallet) error {
+	if w == nil {
+		return fmt.Errorf("wallet cannot be nil")
+	}
+
+	// Set default status if not set
+	if w.Status == "" {
+		w.Status = types.StatusPublished
+	}
+	if w.WalletStatus == "" {
+		w.WalletStatus = types.WalletStatusActive
+	}
+
+	return s.wallets.Create(ctx, w.ID, w)
+}
+
+func (s *InMemoryWalletStore) GetWalletByID(ctx context.Context, id string) (*wallet.Wallet, error) {
+	return s.wallets.Get(ctx, id)
+}
+
+func (s *InMemoryWalletStore) GetWalletsByCustomerID(ctx context.Context, customerID string) ([]*wallet.Wallet, error) {
+	// Create a filter function that checks customer ID
+	filterFn := func(ctx context.Context, w *wallet.Wallet, filter interface{}) bool {
+		if !walletFilterFn(ctx, w, filter) {
+			return false
+		}
+		return w.CustomerID == customerID
+	}
+
+	// List all wallets with the customer ID filter
+	return s.wallets.List(ctx, nil, filterFn, nil)
+}
+
+func (s *InMemoryWalletStore) UpdateWalletStatus(ctx context.Context, id string, status types.WalletStatus) error {
+	w, err := s.GetWalletByID(ctx, id)
+	if err != nil {
+		return err
 	}
 
 	w.WalletStatus = status
-	return nil
+	return s.wallets.Update(ctx, id, w)
 }
 
-func (r *InMemoryWalletStore) DebitWallet(ctx context.Context, op *wallet.WalletOperation) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	w, exists := r.wallets[op.WalletID]
-	if !exists {
-		return fmt.Errorf("wallet not found")
+func (s *InMemoryWalletStore) DebitWallet(ctx context.Context, op *wallet.WalletOperation) error {
+	w, err := s.GetWalletByID(ctx, op.WalletID)
+	if err != nil {
+		return err
 	}
 
 	if w.Balance.LessThan(op.Amount) {
@@ -85,7 +168,7 @@ func (r *InMemoryWalletStore) DebitWallet(ctx context.Context, op *wallet.Wallet
 
 	// Create a transaction
 	txn := &wallet.Transaction{
-		ID:            fmt.Sprintf("txn-%s", op.WalletID),
+		ID:            fmt.Sprintf("txn-%s-%d", op.WalletID, time.Now().UnixNano()),
 		WalletID:      op.WalletID,
 		Type:          op.Type,
 		Amount:        op.Amount,
@@ -94,25 +177,26 @@ func (r *InMemoryWalletStore) DebitWallet(ctx context.Context, op *wallet.Wallet
 		TxStatus:      types.TransactionStatusCompleted,
 		Description:   op.Description,
 		Metadata:      op.Metadata,
+		BaseModel:     types.GetDefaultBaseModel(ctx),
 	}
-	r.transactions[txn.ID] = txn
+
+	if err := s.transactions.Create(ctx, txn.ID, txn); err != nil {
+		return fmt.Errorf("failed to create transaction: %w", err)
+	}
 
 	w.Balance = w.Balance.Sub(op.Amount)
-	return nil
+	return s.wallets.Update(ctx, w.ID, w)
 }
 
-func (r *InMemoryWalletStore) CreditWallet(ctx context.Context, op *wallet.WalletOperation) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	w, exists := r.wallets[op.WalletID]
-	if !exists {
-		return fmt.Errorf("wallet not found")
+func (s *InMemoryWalletStore) CreditWallet(ctx context.Context, op *wallet.WalletOperation) error {
+	w, err := s.GetWalletByID(ctx, op.WalletID)
+	if err != nil {
+		return err
 	}
 
 	// Create a transaction
 	txn := &wallet.Transaction{
-		ID:            fmt.Sprintf("txn-%s", op.WalletID),
+		ID:            fmt.Sprintf("txn-%s-%d", op.WalletID, time.Now().UnixNano()),
 		WalletID:      op.WalletID,
 		Type:          op.Type,
 		Amount:        op.Amount,
@@ -121,64 +205,47 @@ func (r *InMemoryWalletStore) CreditWallet(ctx context.Context, op *wallet.Walle
 		TxStatus:      types.TransactionStatusCompleted,
 		Description:   op.Description,
 		Metadata:      op.Metadata,
+		BaseModel:     types.GetDefaultBaseModel(ctx),
 	}
-	r.transactions[txn.ID] = txn
+
+	if err := s.transactions.Create(ctx, txn.ID, txn); err != nil {
+		return fmt.Errorf("failed to create transaction: %w", err)
+	}
 
 	w.Balance = w.Balance.Add(op.Amount)
-	return nil
+	return s.wallets.Update(ctx, w.ID, w)
 }
 
-func (r *InMemoryWalletStore) GetTransactionsByWalletID(ctx context.Context, walletID string, limit, offset int) ([]*wallet.Transaction, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	var result []*wallet.Transaction
-	for _, txn := range r.transactions {
-		if txn.WalletID == walletID {
-			result = append(result, txn)
-		}
-	}
-
-	// Apply pagination
-	if offset >= len(result) {
-		return []*wallet.Transaction{}, nil
-	}
-
-	end := offset + limit
-	if end > len(result) {
-		end = len(result)
-	}
-
-	return result[offset:end], nil
+func (s *InMemoryWalletStore) GetTransactionByID(ctx context.Context, id string) (*wallet.Transaction, error) {
+	return s.transactions.Get(ctx, id)
 }
 
-func (r *InMemoryWalletStore) GetTransactionByID(ctx context.Context, id string) (*wallet.Transaction, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	if txn, exists := r.transactions[id]; exists {
-		return txn, nil
-	}
-	return nil, fmt.Errorf("transaction not found")
+func (s *InMemoryWalletStore) ListWalletTransactions(ctx context.Context, f *types.WalletTransactionFilter) ([]*wallet.Transaction, error) {
+	return s.transactions.List(ctx, f, transactionFilterFn, transactionSortFn)
 }
 
-func (r *InMemoryWalletStore) UpdateTransactionStatus(ctx context.Context, id string, status types.TransactionStatus) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+func (s *InMemoryWalletStore) ListAllWalletTransactions(ctx context.Context, f *types.WalletTransactionFilter) ([]*wallet.Transaction, error) {
+	// Create a copy of the filter without pagination
+	filterCopy := *f
+	filterCopy.QueryFilter.Limit = nil
+	return s.transactions.List(ctx, &filterCopy, transactionFilterFn, transactionSortFn)
+}
 
-	txn, exists := r.transactions[id]
-	if !exists {
-		return fmt.Errorf("transaction not found")
+func (s *InMemoryWalletStore) CountWalletTransactions(ctx context.Context, f *types.WalletTransactionFilter) (int, error) {
+	return s.transactions.Count(ctx, f, transactionFilterFn)
+}
+
+func (s *InMemoryWalletStore) UpdateTransactionStatus(ctx context.Context, id string, status types.TransactionStatus) error {
+	txn, err := s.GetTransactionByID(ctx, id)
+	if err != nil {
+		return err
 	}
 
 	txn.TxStatus = status
-	return nil
+	return s.transactions.Update(ctx, id, txn)
 }
 
 func (s *InMemoryWalletStore) Clear() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.wallets = make(map[string]*wallet.Wallet)
-	s.transactions = make(map[string]*wallet.Transaction)
+	s.wallets.Clear()
+	s.transactions.Clear()
 }

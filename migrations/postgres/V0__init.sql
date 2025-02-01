@@ -111,6 +111,32 @@ CREATE TABLE public.invoice_line_items (
 );
 
 
+CREATE TABLE public.invoice_line_items (
+    id character varying(50) NOT NULL,
+    tenant_id character varying(50) NOT NULL,
+    status character varying(50) DEFAULT 'published'::character varying NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    updated_at timestamp with time zone NOT NULL,
+    created_by character varying,
+    updated_by character varying,
+    customer_id character varying(50) NOT NULL,
+    subscription_id character varying(50),
+    price_id character varying(50) NOT NULL,
+    meter_id character varying(50),
+    amount numeric(20,8) NOT NULL,
+    quantity numeric(20,8) NOT NULL,
+    currency character varying(10) NOT NULL,
+    period_start timestamp with time zone,
+    period_end timestamp with time zone,
+    metadata jsonb,
+    invoice_id character varying(50) NOT NULL,
+    plan_id character varying(50),
+    plan_display_name character varying,
+    price_type character varying,
+    meter_display_name character varying,
+    display_name character varying
+);
+
 --
 -- Name: invoices; Type: TABLE; Schema: public; Owner: -
 --
@@ -324,7 +350,8 @@ CREATE TABLE public.wallets (
     updated_at timestamp with time zone NOT NULL,
     created_by character varying,
     updated_by character varying,
-    description character varying
+    description character varying,
+    name character varying
 );
 
 

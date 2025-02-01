@@ -12,6 +12,7 @@ type Wallet struct {
 	Currency     string             `db:"currency" json:"currency"`
 	Balance      decimal.Decimal    `db:"balance" json:"balance"`
 	WalletStatus types.WalletStatus `db:"wallet_status" json:"wallet_status"`
+	Name         string             `json:"name,omitempty"`
 	Description  string             `db:"description" json:"description"`
 	Metadata     types.Metadata     `db:"metadata" json:"metadata"`
 	types.BaseModel

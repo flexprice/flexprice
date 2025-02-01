@@ -3,124 +3,112 @@ package testutil
 import (
 	"context"
 	"fmt"
-	"sort"
-	"sync"
 
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // InMemoryPriceStore implements price.Repository
 type InMemoryPriceStore struct {
-	mu     sync.RWMutex
-	prices map[string]*price.Price
+	*InMemoryStore[*price.Price]
 }
 
 func NewInMemoryPriceStore() *InMemoryPriceStore {
 	return &InMemoryPriceStore{
-		prices: make(map[string]*price.Price),
+		InMemoryStore: NewInMemoryStore[*price.Price](),
 	}
+}
+
+// priceFilterFn implements filtering logic for prices
+func priceFilterFn(ctx context.Context, p *price.Price, filter interface{}) bool {
+	if p == nil {
+		return false
+	}
+
+	f, ok := filter.(*types.PriceFilter)
+	if !ok {
+		return true // No filter applied
+	}
+
+	// Check tenant ID
+	if tenantID, ok := ctx.Value(types.CtxTenantID).(string); ok {
+		if p.TenantID != tenantID {
+			return false
+		}
+	}
+
+	// Filter by plan IDs
+	if len(f.PlanIDs) > 0 {
+		if !lo.Contains(f.PlanIDs, p.PlanID) {
+			return false
+		}
+	}
+
+	// Filter by status
+	if f.Status != nil && p.Status != *f.Status {
+		return false
+	}
+
+	// Filter by time range
+	if f.TimeRangeFilter != nil {
+		if f.StartTime != nil && p.CreatedAt.Before(*f.StartTime) {
+			return false
+		}
+		if f.EndTime != nil && p.CreatedAt.After(*f.EndTime) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// priceSortFn implements sorting logic for prices
+func priceSortFn(i, j *price.Price) bool {
+	if i == nil || j == nil {
+		return false
+	}
+	return i.CreatedAt.After(j.CreatedAt)
 }
 
 func (s *InMemoryPriceStore) Create(ctx context.Context, p *price.Price) error {
 	if p == nil {
 		return fmt.Errorf("price cannot be nil")
 	}
-
-	// Set TenantID from the context
-	tenantID, _ := ctx.Value(types.CtxTenantID).(string)
-	p.TenantID = tenantID
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if _, exists := s.prices[p.ID]; exists {
-		return fmt.Errorf("price already exists")
-	}
-
-	s.prices[p.ID] = p
-	return nil
+	return s.InMemoryStore.Create(ctx, p.ID, p)
 }
 
 func (s *InMemoryPriceStore) Get(ctx context.Context, id string) (*price.Price, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if p, exists := s.prices[id]; exists {
-		return p, nil
-	}
-	return nil, fmt.Errorf("price not found")
+	return s.InMemoryStore.Get(ctx, id)
 }
 
-func (s *InMemoryPriceStore) List(ctx context.Context, filter types.PriceFilter) ([]*price.Price, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+func (s *InMemoryPriceStore) List(ctx context.Context, filter *types.PriceFilter) ([]*price.Price, error) {
+	return s.InMemoryStore.List(ctx, filter, priceFilterFn, priceSortFn)
+}
 
-	tenantID := ctx.Value(types.CtxTenantID)
-	var result []*price.Price
-	for _, p := range s.prices {
-		if len(filter.PlanIDs) == 0 {
-			result = append(result, p)
-			continue
-		}
-
-		for _, planID := range filter.PlanIDs {
-			if p.PlanID == planID && p.TenantID == tenantID {
-				result = append(result, p)
-			}
-		}
-	}
-
-	// Sort by created date desc
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].CreatedAt.After(result[j].CreatedAt)
-	})
-
-	// Apply pagination
-	start := filter.GetOffset()
-	if start >= len(result) {
-		return []*price.Price{}, nil
-	}
-
-	end := start + filter.GetLimit()
-	if end > len(result) {
-		end = len(result)
-	}
-
-	return result[start:end], nil
+func (s *InMemoryPriceStore) Count(ctx context.Context, filter *types.PriceFilter) (int, error) {
+	return s.InMemoryStore.Count(ctx, filter, priceFilterFn)
 }
 
 func (s *InMemoryPriceStore) Update(ctx context.Context, p *price.Price) error {
 	if p == nil {
 		return fmt.Errorf("price cannot be nil")
 	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if _, exists := s.prices[p.ID]; !exists {
-		return fmt.Errorf("price not found")
-	}
-
-	s.prices[p.ID] = p
-	return nil
+	return s.InMemoryStore.Update(ctx, p.ID, p)
 }
 
 func (s *InMemoryPriceStore) Delete(ctx context.Context, id string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if _, exists := s.prices[id]; !exists {
-		return fmt.Errorf("price not found")
-	}
-
-	delete(s.prices, id)
-	return nil
+	return s.InMemoryStore.Delete(ctx, id)
 }
 
-func (s *InMemoryPriceStore) Clear() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+// ListAll returns all prices without pagination
+func (s *InMemoryPriceStore) ListAll(ctx context.Context, filter *types.PriceFilter) ([]*price.Price, error) {
+	// Create an unlimited filter
+	unlimitedFilter := &types.PriceFilter{
+		QueryFilter:     types.NewNoLimitQueryFilter(),
+		TimeRangeFilter: filter.TimeRangeFilter,
+		PlanIDs:         filter.PlanIDs,
+	}
 
-	s.prices = make(map[string]*price.Price)
+	return s.List(ctx, unlimitedFilter)
 }

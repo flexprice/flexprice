@@ -239,18 +239,31 @@ func (s *PlanServiceSuite) TestGetPlan() {
 
 func (s *PlanServiceSuite) TestGetPlans() {
 	// Prepopulate the repository with plans
-	_ = s.planRepo.Create(s.ctx, &plan.Plan{ID: "plan-1", Name: "Plan One"})
-	_ = s.planRepo.Create(s.ctx, &plan.Plan{ID: "plan-2", Name: "Plan Two"})
+	_ = s.planRepo.Create(s.ctx, &plan.Plan{
+		ID:        "plan-1",
+		Name:      "Plan One",
+		BaseModel: types.GetDefaultBaseModel(s.ctx),
+	})
+	_ = s.planRepo.Create(s.ctx, &plan.Plan{
+		ID:        "plan-2",
+		Name:      "Plan Two",
+		BaseModel: types.GetDefaultBaseModel(s.ctx),
+	})
 
-	resp, err := s.planService.GetPlans(s.ctx, types.Filter{Offset: 0, Limit: 10})
+	planFilter := types.NewPlanFilter()
+	planFilter.QueryFilter.Offset = lo.ToPtr(0)
+	planFilter.QueryFilter.Limit = lo.ToPtr(10)
+	resp, err := s.planService.GetPlans(s.ctx, planFilter)
 	s.NoError(err)
 	s.NotNil(resp)
-	s.Equal(2, resp.Total)
+	s.Equal(2, resp.Pagination.Total)
 
-	resp, err = s.planService.GetPlans(s.ctx, types.Filter{Offset: 10, Limit: 10})
+	planFilter.QueryFilter.Offset = lo.ToPtr(10)
+	planFilter.QueryFilter.Limit = lo.ToPtr(10)
+	resp, err = s.planService.GetPlans(s.ctx, planFilter)
 	s.NoError(err)
 	s.NotNil(resp)
-	s.Equal(0, resp.Total)
+	s.Equal(0, len(resp.Items))
 }
 
 func (s *PlanServiceSuite) TestUpdatePlan() {

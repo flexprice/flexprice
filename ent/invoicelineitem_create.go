@@ -200,6 +200,20 @@ func (ilic *InvoiceLineItemCreate) SetNillableMeterDisplayName(s *string) *Invoi
 	return ilic
 }
 
+// SetDisplayName sets the "display_name" field.
+func (ilic *InvoiceLineItemCreate) SetDisplayName(s string) *InvoiceLineItemCreate {
+	ilic.mutation.SetDisplayName(s)
+	return ilic
+}
+
+// SetNillableDisplayName sets the "display_name" field if the given value is not nil.
+func (ilic *InvoiceLineItemCreate) SetNillableDisplayName(s *string) *InvoiceLineItemCreate {
+	if s != nil {
+		ilic.SetDisplayName(*s)
+	}
+	return ilic
+}
+
 // SetAmount sets the "amount" field.
 func (ilic *InvoiceLineItemCreate) SetAmount(d decimal.Decimal) *InvoiceLineItemCreate {
 	ilic.mutation.SetAmount(d)
@@ -486,6 +500,10 @@ func (ilic *InvoiceLineItemCreate) createSpec() (*InvoiceLineItem, *sqlgraph.Cre
 	if value, ok := ilic.mutation.MeterDisplayName(); ok {
 		_spec.SetField(invoicelineitem.FieldMeterDisplayName, field.TypeString, value)
 		_node.MeterDisplayName = &value
+	}
+	if value, ok := ilic.mutation.DisplayName(); ok {
+		_spec.SetField(invoicelineitem.FieldDisplayName, field.TypeString, value)
+		_node.DisplayName = &value
 	}
 	if value, ok := ilic.mutation.Amount(); ok {
 		_spec.SetField(invoicelineitem.FieldAmount, field.TypeOther, value)

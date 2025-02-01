@@ -69,6 +69,26 @@ func (wu *WalletUpdate) ClearUpdatedBy() *WalletUpdate {
 	return wu
 }
 
+// SetName sets the "name" field.
+func (wu *WalletUpdate) SetName(s string) *WalletUpdate {
+	wu.mutation.SetName(s)
+	return wu
+}
+
+// SetNillableName sets the "name" field if the given value is not nil.
+func (wu *WalletUpdate) SetNillableName(s *string) *WalletUpdate {
+	if s != nil {
+		wu.SetName(*s)
+	}
+	return wu
+}
+
+// ClearName clears the value of the "name" field.
+func (wu *WalletUpdate) ClearName() *WalletUpdate {
+	wu.mutation.ClearName()
+	return wu
+}
+
 // SetCurrency sets the "currency" field.
 func (wu *WalletUpdate) SetCurrency(s string) *WalletUpdate {
 	wu.mutation.SetCurrency(s)
@@ -221,6 +241,12 @@ func (wu *WalletUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if wu.mutation.UpdatedByCleared() {
 		_spec.ClearField(wallet.FieldUpdatedBy, field.TypeString)
 	}
+	if value, ok := wu.mutation.Name(); ok {
+		_spec.SetField(wallet.FieldName, field.TypeString, value)
+	}
+	if wu.mutation.NameCleared() {
+		_spec.ClearField(wallet.FieldName, field.TypeString)
+	}
 	if value, ok := wu.mutation.Currency(); ok {
 		_spec.SetField(wallet.FieldCurrency, field.TypeString, value)
 	}
@@ -299,6 +325,26 @@ func (wuo *WalletUpdateOne) SetNillableUpdatedBy(s *string) *WalletUpdateOne {
 // ClearUpdatedBy clears the value of the "updated_by" field.
 func (wuo *WalletUpdateOne) ClearUpdatedBy() *WalletUpdateOne {
 	wuo.mutation.ClearUpdatedBy()
+	return wuo
+}
+
+// SetName sets the "name" field.
+func (wuo *WalletUpdateOne) SetName(s string) *WalletUpdateOne {
+	wuo.mutation.SetName(s)
+	return wuo
+}
+
+// SetNillableName sets the "name" field if the given value is not nil.
+func (wuo *WalletUpdateOne) SetNillableName(s *string) *WalletUpdateOne {
+	if s != nil {
+		wuo.SetName(*s)
+	}
+	return wuo
+}
+
+// ClearName clears the value of the "name" field.
+func (wuo *WalletUpdateOne) ClearName() *WalletUpdateOne {
+	wuo.mutation.ClearName()
 	return wuo
 }
 
@@ -483,6 +529,12 @@ func (wuo *WalletUpdateOne) sqlSave(ctx context.Context) (_node *Wallet, err err
 	}
 	if wuo.mutation.UpdatedByCleared() {
 		_spec.ClearField(wallet.FieldUpdatedBy, field.TypeString)
+	}
+	if value, ok := wuo.mutation.Name(); ok {
+		_spec.SetField(wallet.FieldName, field.TypeString, value)
+	}
+	if wuo.mutation.NameCleared() {
+		_spec.ClearField(wallet.FieldName, field.TypeString)
 	}
 	if value, ok := wuo.mutation.Currency(); ok {
 		_spec.SetField(wallet.FieldCurrency, field.TypeString, value)

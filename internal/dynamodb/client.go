@@ -30,3 +30,7 @@ func NewClient(cfg *config.Configuration) (*Client, error) {
 		db: dynamodb.NewFromConfig(awsCfg),
 	}, nil
 }
+
+func (c *Client) DB() *dynamodb.Client {
+	return c.db
+}

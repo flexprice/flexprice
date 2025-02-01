@@ -29,6 +29,11 @@ func (Wallet) Fields() []ent.Field {
 			}).
 			Unique().
 			Immutable(),
+		field.String("name").
+			SchemaType(map[string]string{
+				"postgres": "varchar(255)",
+			}).
+			Optional(),
 		field.String("customer_id").
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",

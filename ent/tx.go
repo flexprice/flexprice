@@ -32,6 +32,8 @@ type Tx struct {
 	Price *PriceClient
 	// Subscription is the client for interacting with the Subscription builders.
 	Subscription *SubscriptionClient
+	// SubscriptionLineItem is the client for interacting with the SubscriptionLineItem builders.
+	SubscriptionLineItem *SubscriptionLineItemClient
 	// Wallet is the client for interacting with the Wallet builders.
 	Wallet *WalletClient
 	// WalletTransaction is the client for interacting with the WalletTransaction builders.
@@ -176,6 +178,7 @@ func (tx *Tx) init() {
 	tx.Plan = NewPlanClient(tx.config)
 	tx.Price = NewPriceClient(tx.config)
 	tx.Subscription = NewSubscriptionClient(tx.config)
+	tx.SubscriptionLineItem = NewSubscriptionLineItemClient(tx.config)
 	tx.Wallet = NewWalletClient(tx.config)
 	tx.WalletTransaction = NewWalletTransactionClient(tx.config)
 }

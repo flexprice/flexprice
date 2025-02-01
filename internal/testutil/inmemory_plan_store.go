@@ -3,8 +3,6 @@ package testutil
 import (
 	"context"
 	"fmt"
-	"sort"
-	"sync"
 
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/types"
@@ -12,101 +10,97 @@ import (
 
 // InMemoryPlanStore implements plan.Repository
 type InMemoryPlanStore struct {
-	mu    sync.RWMutex
-	plans map[string]*plan.Plan
+	*InMemoryStore[*plan.Plan]
 }
 
+// NewInMemoryPlanStore creates a new in-memory plan store
 func NewInMemoryPlanStore() *InMemoryPlanStore {
 	return &InMemoryPlanStore{
-		plans: make(map[string]*plan.Plan),
+		InMemoryStore: NewInMemoryStore[*plan.Plan](),
 	}
+}
+
+// planFilterFn implements filtering logic for plans
+func planFilterFn(ctx context.Context, p *plan.Plan, filter interface{}) bool {
+	if p == nil {
+		return false
+	}
+
+	f, ok := filter.(*types.PlanFilter)
+	if !ok {
+		return true // No filter applied
+	}
+
+	// Check tenant ID
+	if tenantID, ok := ctx.Value(types.CtxTenantID).(string); ok {
+		if p.TenantID != tenantID {
+			return false
+		}
+	}
+
+	// Filter by status
+	if f.Status != nil && p.Status != *f.Status {
+		return false
+	}
+
+	// Filter by time range
+	if f.TimeRangeFilter != nil {
+		if f.StartTime != nil && p.CreatedAt.Before(*f.StartTime) {
+			return false
+		}
+		if f.EndTime != nil && p.CreatedAt.After(*f.EndTime) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// planSortFn implements sorting logic for plans
+func planSortFn(i, j *plan.Plan) bool {
+	if i == nil || j == nil {
+		return false
+	}
+	return i.CreatedAt.After(j.CreatedAt)
 }
 
 func (s *InMemoryPlanStore) Create(ctx context.Context, p *plan.Plan) error {
 	if p == nil {
 		return fmt.Errorf("plan cannot be nil")
 	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if _, exists := s.plans[p.ID]; exists {
-		return fmt.Errorf("plan already exists")
-	}
-
-	s.plans[p.ID] = p
-	return nil
+	return s.InMemoryStore.Create(ctx, p.ID, p)
 }
 
 func (s *InMemoryPlanStore) Get(ctx context.Context, id string) (*plan.Plan, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if p, exists := s.plans[id]; exists {
-		return p, nil
-	}
-	return nil, fmt.Errorf("plan not found")
+	return s.InMemoryStore.Get(ctx, id)
 }
 
-func (s *InMemoryPlanStore) List(ctx context.Context, filter types.Filter) ([]*plan.Plan, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+func (s *InMemoryPlanStore) List(ctx context.Context, filter *types.PlanFilter) ([]*plan.Plan, error) {
+	return s.InMemoryStore.List(ctx, filter, planFilterFn, planSortFn)
+}
 
-	var result []*plan.Plan
-	for _, p := range s.plans {
-		result = append(result, p)
-	}
-
-	// Sort by created date desc (default)
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].CreatedAt.After(result[j].CreatedAt)
-	})
-
-	// Apply pagination
-	start := filter.Offset
-	if start >= len(result) {
-		return []*plan.Plan{}, nil
-	}
-
-	end := start + filter.Limit
-	if end > len(result) {
-		end = len(result)
-	}
-
-	return result[start:end], nil
+func (s *InMemoryPlanStore) Count(ctx context.Context, filter *types.PlanFilter) (int, error) {
+	return s.InMemoryStore.Count(ctx, filter, planFilterFn)
 }
 
 func (s *InMemoryPlanStore) Update(ctx context.Context, p *plan.Plan) error {
 	if p == nil {
 		return fmt.Errorf("plan cannot be nil")
 	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if _, exists := s.plans[p.ID]; !exists {
-		return fmt.Errorf("plan not found")
-	}
-
-	s.plans[p.ID] = p
-	return nil
+	return s.InMemoryStore.Update(ctx, p.ID, p)
 }
 
 func (s *InMemoryPlanStore) Delete(ctx context.Context, id string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if _, exists := s.plans[id]; !exists {
-		return fmt.Errorf("plan not found")
-	}
-
-	delete(s.plans, id)
-	return nil
+	return s.InMemoryStore.Delete(ctx, id)
 }
 
-func (s *InMemoryPlanStore) Clear() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+// ListAll returns all plans without pagination
+func (s *InMemoryPlanStore) ListAll(ctx context.Context, filter *types.PlanFilter) ([]*plan.Plan, error) {
+	// Create an unlimited filter
+	unlimitedFilter := &types.PlanFilter{
+		QueryFilter:     types.NewNoLimitQueryFilter(),
+		TimeRangeFilter: filter.TimeRangeFilter,
+	}
 
-	s.plans = make(map[string]*plan.Plan)
+	return s.List(ctx, unlimitedFilter)
 }

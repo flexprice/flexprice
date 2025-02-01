@@ -110,6 +110,12 @@ func (cu *CustomerUpdate) SetNillableEmail(s *string) *CustomerUpdate {
 	return cu
 }
 
+// ClearEmail clears the value of the "email" field.
+func (cu *CustomerUpdate) ClearEmail() *CustomerUpdate {
+	cu.mutation.ClearEmail()
+	return cu
+}
+
 // Mutation returns the CustomerMutation object of the builder.
 func (cu *CustomerUpdate) Mutation() *CustomerMutation {
 	return cu.mutation
@@ -163,11 +169,6 @@ func (cu *CustomerUpdate) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Customer.name": %w`, err)}
 		}
 	}
-	if v, ok := cu.mutation.Email(); ok {
-		if err := customer.EmailValidator(v); err != nil {
-			return &ValidationError{Name: "email", err: fmt.Errorf(`ent: validator failed for field "Customer.email": %w`, err)}
-		}
-	}
 	return nil
 }
 
@@ -206,6 +207,9 @@ func (cu *CustomerUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := cu.mutation.Email(); ok {
 		_spec.SetField(customer.FieldEmail, field.TypeString, value)
+	}
+	if cu.mutation.EmailCleared() {
+		_spec.ClearField(customer.FieldEmail, field.TypeString)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, cu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -309,6 +313,12 @@ func (cuo *CustomerUpdateOne) SetNillableEmail(s *string) *CustomerUpdateOne {
 	return cuo
 }
 
+// ClearEmail clears the value of the "email" field.
+func (cuo *CustomerUpdateOne) ClearEmail() *CustomerUpdateOne {
+	cuo.mutation.ClearEmail()
+	return cuo
+}
+
 // Mutation returns the CustomerMutation object of the builder.
 func (cuo *CustomerUpdateOne) Mutation() *CustomerMutation {
 	return cuo.mutation
@@ -375,11 +385,6 @@ func (cuo *CustomerUpdateOne) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Customer.name": %w`, err)}
 		}
 	}
-	if v, ok := cuo.mutation.Email(); ok {
-		if err := customer.EmailValidator(v); err != nil {
-			return &ValidationError{Name: "email", err: fmt.Errorf(`ent: validator failed for field "Customer.email": %w`, err)}
-		}
-	}
 	return nil
 }
 
@@ -435,6 +440,9 @@ func (cuo *CustomerUpdateOne) sqlSave(ctx context.Context) (_node *Customer, err
 	}
 	if value, ok := cuo.mutation.Email(); ok {
 		_spec.SetField(customer.FieldEmail, field.TypeString, value)
+	}
+	if cuo.mutation.EmailCleared() {
+		_spec.ClearField(customer.FieldEmail, field.TypeString)
 	}
 	_node = &Customer{config: cuo.config}
 	_spec.Assign = _node.assignValues

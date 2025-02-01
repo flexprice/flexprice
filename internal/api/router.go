@@ -48,6 +48,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 
 	// Health check
 	router.GET("/health", handlers.Health.Health)
+	router.POST("/health", handlers.Health.Health)
 	// Swagger documentation
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
@@ -110,6 +111,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 
 			// other routes for customer
 			customer.GET("/:id/wallets", handlers.Wallet.GetWalletsByCustomerID)
+			customer.GET("/:id/invoices/summary", handlers.Invoice.GetCustomerInvoiceSummary)
 		}
 
 		plan := v1Private.Group("/plans")
@@ -154,6 +156,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			invoices.POST("/:id/finalize", handlers.Invoice.FinalizeInvoice)
 			invoices.POST("/:id/void", handlers.Invoice.VoidInvoice)
 			invoices.PUT("/:id/payment", handlers.Invoice.UpdatePaymentStatus)
+			invoices.POST("/preview", handlers.Invoice.GetPreviewInvoice)
 		}
 
 		// Admin routes (API Key only)

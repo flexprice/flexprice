@@ -65,8 +65,10 @@ func (s *SubscriptionServiceSuite) setupService() {
 		stores.CustomerRepo,
 		stores.InvoiceRepo,
 		s.GetPublisher(),
+		s.GetWebhookPublisher(),
 		s.GetDB(),
 		s.GetLogger(),
+		s.GetConfig(),
 	)
 }
 
@@ -569,14 +571,15 @@ func (s *SubscriptionServiceSuite) TestListSubscriptions() {
 	}{
 		{
 			name:      "list_all_subscriptions",
-			input:     &types.SubscriptionFilter{},
+			input:     &types.SubscriptionFilter{QueryFilter: types.NewDefaultQueryFilter()},
 			wantCount: 3, // 2 new + 1 from setupTestData
 			wantErr:   false,
 		},
 		{
 			name: "filter_by_customer",
 			input: &types.SubscriptionFilter{
-				CustomerID: s.testData.customer.ID,
+				QueryFilter: types.NewDefaultQueryFilter(),
+				CustomerID:  s.testData.customer.ID,
 			},
 			wantCount: 3,
 			wantErr:   false,
@@ -584,7 +587,8 @@ func (s *SubscriptionServiceSuite) TestListSubscriptions() {
 		{
 			name: "filter_by_status_active",
 			input: &types.SubscriptionFilter{
-				SubscriptionStatus: types.SubscriptionStatusActive,
+				QueryFilter:        types.NewDefaultQueryFilter(),
+				SubscriptionStatus: []types.SubscriptionStatus{types.SubscriptionStatusActive},
 			},
 			wantCount: 2,
 			wantErr:   false,
@@ -592,7 +596,8 @@ func (s *SubscriptionServiceSuite) TestListSubscriptions() {
 		{
 			name: "filter_by_status_cancelled",
 			input: &types.SubscriptionFilter{
-				SubscriptionStatus: types.SubscriptionStatusCancelled,
+				QueryFilter:        types.NewDefaultQueryFilter(),
+				SubscriptionStatus: []types.SubscriptionStatus{types.SubscriptionStatusCancelled},
 			},
 			wantCount: 1,
 			wantErr:   false,
@@ -610,17 +615,17 @@ func (s *SubscriptionServiceSuite) TestListSubscriptions() {
 
 			s.NoError(err)
 			s.NotNil(subs)
-			s.Len(subs.Subscriptions, tc.wantCount)
+			s.Len(subs.Items, tc.wantCount)
 
 			if tc.input.CustomerID != "" {
-				for _, sub := range subs.Subscriptions {
+				for _, sub := range subs.Items {
 					s.Equal(tc.input.CustomerID, sub.CustomerID)
 				}
 			}
 
-			if tc.input.SubscriptionStatus != "" {
-				for _, sub := range subs.Subscriptions {
-					s.Equal(tc.input.SubscriptionStatus, sub.SubscriptionStatus)
+			if tc.input.SubscriptionStatus != nil {
+				for _, sub := range subs.Items {
+					s.Contains(tc.input.SubscriptionStatus, sub.SubscriptionStatus)
 				}
 			}
 		})

@@ -2,11 +2,15 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
@@ -15,7 +19,10 @@ import (
 	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
+	"github.com/flexprice/flexprice/internal/publisher"
 	"github.com/flexprice/flexprice/internal/types"
+	webhookPublisher "github.com/flexprice/flexprice/internal/webhook/publisher"
+	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
@@ -27,35 +34,56 @@ type InvoiceService interface {
 	FinalizeInvoice(ctx context.Context, id string) error
 	VoidInvoice(ctx context.Context, id string) error
 	UpdatePaymentStatus(ctx context.Context, id string, status types.InvoicePaymentStatus, amount *decimal.Decimal) error
-	CreateSubscriptionInvoice(ctx context.Context, sub *subscription.Subscription, periodStart, periodEnd time.Time, usage *dto.GetUsageBySubscriptionResponse) (*dto.InvoiceResponse, error)
+	CreateSubscriptionInvoice(ctx context.Context, sub *subscription.Subscription, periodStart, periodEnd time.Time) (*dto.InvoiceResponse, error)
+	GetPreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error)
+	GetCustomerInvoiceSummary(ctx context.Context, customerID string, currency string) (*dto.CustomerInvoiceSummary, error)
+	GetCustomerMultiCurrencyInvoiceSummary(ctx context.Context, customerID string) (*dto.CustomerMultiCurrencyInvoiceSummary, error)
 }
 
 type invoiceService struct {
-	db          postgres.IClient
-	logger      *logger.Logger
-	invoiceRepo invoice.Repository
-	priceRepo   price.Repository
-	meterRepo   meter.Repository
-	planRepo    plan.Repository
-	idempGen    *idempotency.Generator
+	subscriptionRepo subscription.Repository
+	planRepo         plan.Repository
+	priceRepo        price.Repository
+	eventRepo        events.Repository
+	meterRepo        meter.Repository
+	customerRepo     customer.Repository
+	invoiceRepo      invoice.Repository
+	eventPublisher   publisher.EventPublisher
+	webhookPublisher webhookPublisher.WebhookPublisher
+	logger           *logger.Logger
+	db               postgres.IClient
+	idempGen         *idempotency.Generator
+	config           *config.Configuration
 }
 
 func NewInvoiceService(
-	invoiceRepo invoice.Repository,
-	priceRepo price.Repository,
-	meterRepo meter.Repository,
+	subscriptionRepo subscription.Repository,
 	planRepo plan.Repository,
-	logger *logger.Logger,
+	priceRepo price.Repository,
+	eventRepo events.Repository,
+	meterRepo meter.Repository,
+	customerRepo customer.Repository,
+	invoiceRepo invoice.Repository,
+	eventPublisher publisher.EventPublisher,
+	webhookPublisher webhookPublisher.WebhookPublisher,
 	db postgres.IClient,
+	logger *logger.Logger,
+	config *config.Configuration,
 ) InvoiceService {
 	return &invoiceService{
-		db:          db,
-		logger:      logger,
-		invoiceRepo: invoiceRepo,
-		priceRepo:   priceRepo,
-		meterRepo:   meterRepo,
-		planRepo:    planRepo,
-		idempGen:    idempotency.NewGenerator(),
+		subscriptionRepo: subscriptionRepo,
+		planRepo:         planRepo,
+		priceRepo:        priceRepo,
+		eventRepo:        eventRepo,
+		meterRepo:        meterRepo,
+		customerRepo:     customerRepo,
+		invoiceRepo:      invoiceRepo,
+		eventPublisher:   eventPublisher,
+		webhookPublisher: webhookPublisher,
+		config:           config,
+		db:               db,
+		logger:           logger,
+		idempGen:         idempotency.NewGenerator(),
 	}
 }
 
@@ -185,6 +213,32 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 		return nil, err
 	}
 
+	webhookPayload, err := json.Marshal(struct {
+		InvoiceID string `json:"invoice_id"`
+		TenantID  string `json:"tenant_id"`
+	}{
+		InvoiceID: resp.ID,
+		TenantID:  resp.TenantID,
+	})
+	if err != nil {
+		return resp, fmt.Errorf("failed to marshal webhook payload: %w", err)
+	}
+
+	eventName := types.WebhookEventInvoiceCreateDraft
+	if resp.InvoiceStatus == types.InvoiceStatusFinalized {
+		eventName = types.WebhookEventInvoiceUpdateFinalized
+	}
+
+	if err := s.webhookPublisher.PublishWebhook(ctx, &types.WebhookEvent{
+		EventName: eventName,
+		TenantID:  resp.TenantID,
+		Payload:   webhookPayload,
+		ID:        uuid.New().String(),
+		Timestamp: time.Now().UTC(),
+	}); err != nil {
+		return resp, fmt.Errorf("failed to publish invoice created webhook: %w", err)
+	}
+
 	return resp, nil
 }
 
@@ -193,7 +247,38 @@ func (s *invoiceService) GetInvoice(ctx context.Context, id string) (*dto.Invoic
 	if err != nil {
 		return nil, fmt.Errorf("failed to get invoice: %w", err)
 	}
-	return dto.NewInvoiceResponse(inv), nil
+
+	for _, lineItem := range inv.LineItems {
+		s.logger.Debugw("got invoice line item", "id", lineItem.ID, "display_name", lineItem.DisplayName)
+	}
+
+	// expand subscription
+	subscriptionService := NewSubscriptionService(
+		s.subscriptionRepo,
+		s.planRepo,
+		s.priceRepo,
+		s.eventRepo,
+		s.meterRepo,
+		s.customerRepo,
+		s.invoiceRepo,
+		s.eventPublisher,
+		s.webhookPublisher,
+		s.db,
+		s.logger,
+		s.config,
+	)
+
+	response := dto.NewInvoiceResponse(inv)
+
+	if inv.InvoiceType == types.InvoiceTypeSubscription {
+		subscription, err := subscriptionService.GetSubscription(ctx, *inv.SubscriptionID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get subscription: %w", err)
+		}
+		response.WithSubscription(subscription)
+	}
+
+	return response, nil
 }
 
 func (s *invoiceService) ListInvoices(ctx context.Context, filter *types.InvoiceFilter) (*dto.ListInvoicesResponse, error) {
@@ -214,7 +299,11 @@ func (s *invoiceService) ListInvoices(ctx context.Context, filter *types.Invoice
 
 	return &dto.ListInvoicesResponse{
 		Items: items,
-		Total: count,
+		Pagination: types.PaginationResponse{
+			Total:  count,
+			Limit:  filter.GetLimit(),
+			Offset: filter.GetOffset(),
+		},
 	}, nil
 }
 
@@ -236,8 +325,29 @@ func (s *invoiceService) FinalizeInvoice(ctx context.Context, id string) error {
 		return fmt.Errorf("failed to update invoice: %w", err)
 	}
 
-	// TODO: add publisher event for invoice finalized
+	// Publish invoice finalized event
+	webhookPayload, err := json.Marshal(struct {
+		InvoiceID string `json:"invoice_id"`
+		TenantID  string `json:"tenant_id"`
+	}{
+		InvoiceID: inv.ID,
+		TenantID:  inv.TenantID,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to marshal webhook payload: %w", err)
+	}
 
+	webhookEvent := &types.WebhookEvent{
+		EventName: types.WebhookEventInvoiceUpdateFinalized,
+		Payload:   json.RawMessage(webhookPayload),
+		ID:        uuid.New().String(),
+		TenantID:  inv.TenantID,
+		Timestamp: time.Now().UTC(),
+	}
+	if err := s.webhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
+		s.logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
+		// Don't return error as the invoice is already finalized
+	}
 	return nil
 }
 
@@ -263,8 +373,29 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string) error {
 		return fmt.Errorf("failed to update invoice: %w", err)
 	}
 
-	// TODO: add publisher event for invoice voided
+	webhookPayload, err := json.Marshal(struct {
+		InvoiceID string `json:"invoice_id"`
+		TenantID  string `json:"tenant_id"`
+	}{
+		InvoiceID: inv.ID,
+		TenantID:  inv.TenantID,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to marshal webhook payload: %w", err)
+	}
 
+	// Publish invoice voided event
+	webhookEvent := &types.WebhookEvent{
+		EventName: types.WebhookEventInvoiceUpdateVoided,
+		Payload:   json.RawMessage(webhookPayload),
+		ID:        uuid.New().String(),
+		TenantID:  inv.TenantID,
+		Timestamp: time.Now().UTC(),
+	}
+	if err := s.webhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
+		s.logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
+		// Don't return error as the invoice is already voided
+	}
 	return nil
 }
 
@@ -321,117 +452,238 @@ func (s *invoiceService) UpdatePaymentStatus(ctx context.Context, id string, sta
 		return fmt.Errorf("failed to update invoice: %w", err)
 	}
 
+	// Publish invoice payment update event
+	webhookPayload, err := json.Marshal(struct {
+		InvoiceID string `json:"invoice_id"`
+		TenantID  string `json:"tenant_id"`
+	}{
+		InvoiceID: inv.ID,
+		TenantID:  inv.TenantID,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to marshal webhook payload: %w", err)
+	}
+
+	webhookEvent := &types.WebhookEvent{
+		EventName: types.WebhookEventInvoiceUpdatePayment,
+		Payload:   json.RawMessage(webhookPayload),
+		ID:        uuid.New().String(),
+		TenantID:  inv.TenantID,
+		Timestamp: time.Now().UTC(),
+	}
+	if err := s.webhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
+		s.logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
+		// Don't return error as the invoice is already updated
+	}
+
 	return nil
 }
 
-func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, sub *subscription.Subscription, periodStart, periodEnd time.Time, usage *dto.GetUsageBySubscriptionResponse) (*dto.InvoiceResponse, error) {
+func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, sub *subscription.Subscription, periodStart, periodEnd time.Time) (*dto.InvoiceResponse, error) {
 	s.logger.Infow("creating subscription invoice",
 		"subscription_id", sub.ID,
 		"period_start", periodStart,
 		"period_end", periodEnd)
 
-	if usage == nil {
-		return nil, fmt.Errorf("usage is required")
-	}
+	billingService := NewBillingService(
+		s.subscriptionRepo,
+		s.planRepo,
+		s.priceRepo,
+		s.eventRepo,
+		s.meterRepo,
+		s.customerRepo,
+		s.invoiceRepo,
+		s.eventPublisher,
+		s.webhookPublisher,
+		s.db,
+		s.logger,
+		s.config,
+	)
 
-	// Get all prices for the subscription's plan
-	priceService := NewPriceService(s.priceRepo, s.meterRepo, s.logger)
-	pricesResponse, err := priceService.GetPricesByPlanID(ctx, sub.PlanID)
+	// Prepare invoice request using billing service
+	req, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, sub, periodStart, periodEnd, false)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get prices: %w", err)
+		return nil, fmt.Errorf("failed to prepare invoice request: %w", err)
 	}
 
-	// Fetch Plan info as well
-	plan, err := s.planRepo.Get(ctx, sub.PlanID)
+	// Create the invoice
+	return s.CreateInvoice(ctx, *req)
+}
+
+func (s *invoiceService) GetPreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error) {
+	billingService := NewBillingService(
+		s.subscriptionRepo,
+		s.planRepo,
+		s.priceRepo,
+		s.eventRepo,
+		s.meterRepo,
+		s.customerRepo,
+		s.invoiceRepo,
+		s.eventPublisher,
+		s.webhookPublisher,
+		s.db,
+		s.logger,
+		s.config,
+	)
+
+	sub, err := s.subscriptionRepo.Get(ctx, req.SubscriptionID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get plan: %w", err)
+		return nil, fmt.Errorf("failed to get subscription: %w", err)
 	}
 
-	// Filter prices valid for this subscription
-	validPrices := filterValidPricesForSubscription(pricesResponse.Prices, sub)
+	if req.PeriodStart == nil {
+		req.PeriodStart = &sub.CurrentPeriodStart
+	}
 
-	// Calculate total amount from usage
-	usageAmount := decimal.NewFromFloat(usage.Amount)
+	if req.PeriodEnd == nil {
+		req.PeriodEnd = &sub.CurrentPeriodEnd
+	}
 
-	// Calculate fixed charges
-	var fixedCost decimal.Decimal
-	var fixedCostLineItems []dto.CreateInvoiceLineItemRequest
+	// Prepare invoice request using billing service
+	invReq, err := billingService.PrepareSubscriptionInvoiceRequest(
+		ctx, sub, *req.PeriodStart, *req.PeriodEnd, true)
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare invoice request: %w", err)
+	}
 
-	for _, price := range validPrices {
-		if price.Price.Type == types.PRICE_TYPE_FIXED {
-			quantity := decimal.NewFromInt(1)
-			amount := priceService.CalculateCost(ctx, price.Price, quantity)
-			fixedCost = fixedCost.Add(amount)
+	// Create a draft invoice object for preview
+	inv, err := invReq.ToInvoice(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert request to invoice: %w", err)
+	}
 
-			fixedCostLineItems = append(fixedCostLineItems, dto.CreateInvoiceLineItemRequest{
-				PlanID:          &price.Price.PlanID,
-				PlanDisplayName: lo.ToPtr(plan.Name),
-				PriceID:         price.Price.ID,
-				PriceType:       lo.ToPtr(string(price.Price.Type)),
-				Amount:          amount,
-				Quantity:        quantity,
-				PeriodStart:     &periodStart,
-				PeriodEnd:       &periodEnd,
-				Metadata: types.Metadata{
-					"description": fmt.Sprintf("%s (Fixed Charge)", price.Price.LookupKey),
-				},
-			})
+	// Return preview response
+	return dto.NewInvoiceResponse(inv), nil
+}
+
+func (s *invoiceService) GetCustomerInvoiceSummary(ctx context.Context, customerID, currency string) (*dto.CustomerInvoiceSummary, error) {
+	s.logger.Debugw("getting customer invoice summary",
+		"customer_id", customerID,
+		"currency", currency,
+	)
+
+	// Get all non-voided invoices for the customer
+	filter := types.NewNoLimitInvoiceFilter()
+	filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
+	filter.CustomerID = customerID
+	filter.InvoiceStatus = []types.InvoiceStatus{types.InvoiceStatusDraft, types.InvoiceStatusFinalized}
+
+	invoicesResp, err := s.ListInvoices(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list invoices: %w", err)
+	}
+
+	summary := &dto.CustomerInvoiceSummary{
+		CustomerID:          customerID,
+		Currency:            currency,
+		TotalRevenueAmount:  decimal.Zero,
+		TotalUnpaidAmount:   decimal.Zero,
+		TotalOverdueAmount:  decimal.Zero,
+		TotalInvoiceCount:   0,
+		UnpaidInvoiceCount:  0,
+		OverdueInvoiceCount: 0,
+		UnpaidUsageCharges:  decimal.Zero,
+		UnpaidFixedCharges:  decimal.Zero,
+	}
+
+	now := time.Now().UTC()
+
+	// Process each invoice
+	for _, inv := range invoicesResp.Items {
+		// Skip invoices with different currency
+		if !types.IsMatchingCurrency(inv.Currency, currency) {
+			continue
+		}
+
+		summary.TotalRevenueAmount = summary.TotalRevenueAmount.Add(inv.AmountDue)
+		summary.TotalInvoiceCount++
+
+		// Skip paid and void invoices
+		if inv.PaymentStatus == types.InvoicePaymentStatusSucceeded {
+			continue
+		}
+
+		summary.TotalUnpaidAmount = summary.TotalUnpaidAmount.Add(inv.AmountRemaining)
+		summary.UnpaidInvoiceCount++
+
+		// Check if invoice is overdue
+		if inv.DueDate != nil && inv.DueDate.Before(now) {
+			summary.TotalOverdueAmount = summary.TotalOverdueAmount.Add(inv.AmountRemaining)
+			summary.OverdueInvoiceCount++
+		}
+
+		// Split charges by type
+		for _, item := range inv.LineItems {
+			if *item.PriceType == string(types.PRICE_TYPE_USAGE) {
+				summary.UnpaidUsageCharges = summary.UnpaidUsageCharges.Add(item.Amount)
+			} else {
+				summary.UnpaidFixedCharges = summary.UnpaidFixedCharges.Add(item.Amount)
+			}
 		}
 	}
 
-	// Total amount is sum of usage and fixed charges
-	amountDue := usageAmount.Add(fixedCost)
-	invoiceDueDate := periodEnd.Add(24 * time.Hour * types.InvoiceDefaultDueDays)
+	s.logger.Debugw("customer invoice summary calculated",
+		"customer_id", customerID,
+		"currency", currency,
+		"total_revenue", summary.TotalRevenueAmount,
+		"total_unpaid", summary.TotalUnpaidAmount,
+		"total_overdue", summary.TotalOverdueAmount,
+		"total_invoice_count", summary.TotalInvoiceCount,
+		"unpaid_invoice_count", summary.UnpaidInvoiceCount,
+		"overdue_invoice_count", summary.OverdueInvoiceCount,
+		"unpaid_usage_charges", summary.UnpaidUsageCharges,
+		"unpaid_fixed_charges", summary.UnpaidFixedCharges,
+	)
 
-	// Create invoice using CreateInvoice
-	req := dto.CreateInvoiceRequest{
-		CustomerID:     sub.CustomerID,
-		SubscriptionID: lo.ToPtr(sub.ID),
-		InvoiceType:    types.InvoiceTypeSubscription,
-		InvoiceStatus:  lo.ToPtr(types.InvoiceStatusDraft),
-		PaymentStatus:  lo.ToPtr(types.InvoicePaymentStatusPending),
-		Currency:       sub.Currency,
-		AmountDue:      amountDue,
-		Description:    fmt.Sprintf("Invoice for subscription %s", sub.ID),
-		DueDate:        lo.ToPtr(invoiceDueDate),
-		PeriodStart:    &periodStart,
-		PeriodEnd:      &periodEnd,
-		BillingReason:  types.InvoiceBillingReasonSubscriptionCycle,
-		Metadata:       types.Metadata{},
+	return summary, nil
+}
+
+func (s *invoiceService) GetCustomerMultiCurrencyInvoiceSummary(ctx context.Context, customerID string) (*dto.CustomerMultiCurrencyInvoiceSummary, error) {
+	subscriptionFilter := types.NewNoLimitSubscriptionFilter()
+	subscriptionFilter.CustomerID = customerID
+	subscriptionFilter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
+	subscriptionFilter.IncludeCanceled = true
+
+	subs, err := s.subscriptionRepo.List(ctx, subscriptionFilter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list subscriptions: %w", err)
 	}
 
-	// Add fixed charge line items
-	req.LineItems = append(req.LineItems, fixedCostLineItems...)
+	currencies := make([]string, 0, len(subs))
+	for _, sub := range subs {
+		currencies = append(currencies, sub.Currency)
 
-	// Add usage charge line items
-	for _, item := range usage.Charges {
-		lineItemAmount := decimal.NewFromFloat(item.Amount)
-		req.LineItems = append(req.LineItems, dto.CreateInvoiceLineItemRequest{
-			PlanID:           &item.Price.PlanID,
-			PlanDisplayName:  lo.ToPtr(plan.Name),
-			PriceType:        lo.ToPtr(string(item.Price.Type)),
-			PriceID:          item.Price.ID,
-			MeterID:          &item.Price.MeterID,
-			MeterDisplayName: lo.ToPtr(item.MeterDisplayName),
-			Amount:           lineItemAmount,
-			Quantity:         decimal.NewFromFloat(item.Quantity),
-			PeriodStart:      &periodStart,
-			PeriodEnd:        &periodEnd,
-			Metadata: types.Metadata{
-				"description": fmt.Sprintf("%s (Usage Charge)", item.Price.LookupKey),
-			},
-		})
+	}
+	currencies = lo.Uniq(currencies)
+
+	if len(currencies) == 0 {
+		return &dto.CustomerMultiCurrencyInvoiceSummary{
+			CustomerID: customerID,
+			Summaries:  []*dto.CustomerInvoiceSummary{},
+		}, nil
 	}
 
-	s.logger.Infow("creating invoice with fixed and usage charges",
-		"subscription_id", sub.ID,
-		"usage_amount", usageAmount,
-		"fixed_amount", fixedCost,
-		"total_amount", amountDue,
-		"fixed_line_items", len(fixedCostLineItems),
-		"usage_line_items", len(usage.Charges))
+	defaultCurrency := currencies[0] // fallback to first currency
 
-	return s.CreateInvoice(ctx, req)
+	summaries := make([]*dto.CustomerInvoiceSummary, 0, len(currencies))
+	for _, currency := range currencies {
+		summary, err := s.GetCustomerInvoiceSummary(ctx, customerID, currency)
+		if err != nil {
+			s.logger.Errorw("failed to get customer invoice summary",
+				"error", err,
+				"customer_id", customerID,
+				"currency", currency)
+			continue
+		}
+
+		summaries = append(summaries, summary)
+	}
+
+	return &dto.CustomerMultiCurrencyInvoiceSummary{
+		CustomerID:      customerID,
+		DefaultCurrency: defaultCurrency,
+		Summaries:       summaries,
+	}, nil
 }
 
 func (s *invoiceService) validatePaymentStatusTransition(from, to types.InvoicePaymentStatus) error {

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/flexprice/flexprice/ent/predicate"
 )
 
@@ -1582,6 +1583,39 @@ func VersionLT(v int) predicate.Subscription {
 // VersionLTE applies the LTE predicate on the "version" field.
 func VersionLTE(v int) predicate.Subscription {
 	return predicate.Subscription(sql.FieldLTE(FieldVersion, v))
+}
+
+// MetadataIsNil applies the IsNil predicate on the "metadata" field.
+func MetadataIsNil() predicate.Subscription {
+	return predicate.Subscription(sql.FieldIsNull(FieldMetadata))
+}
+
+// MetadataNotNil applies the NotNil predicate on the "metadata" field.
+func MetadataNotNil() predicate.Subscription {
+	return predicate.Subscription(sql.FieldNotNull(FieldMetadata))
+}
+
+// HasLineItems applies the HasEdge predicate on the "line_items" edge.
+func HasLineItems() predicate.Subscription {
+	return predicate.Subscription(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, LineItemsTable, LineItemsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasLineItemsWith applies the HasEdge predicate on the "line_items" edge with a given conditions (other predicates).
+func HasLineItemsWith(preds ...predicate.SubscriptionLineItem) predicate.Subscription {
+	return predicate.Subscription(func(s *sql.Selector) {
+		step := newLineItemsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
 }
 
 // And groups predicates with the AND operator between them.

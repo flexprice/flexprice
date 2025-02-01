@@ -28,6 +28,7 @@ type Configuration struct {
 	Event      EventConfig      `validate:"required"`
 	DynamoDB   DynamoDBConfig   `validate:"required"`
 	Temporal   TemporalConfig   `validate:"required"`
+	Webhook    Webhook
 }
 
 type DeploymentConfig struct {
@@ -142,6 +143,13 @@ func NewConfig() (*Configuration, error) {
 		}
 		cfg.Auth.APIKey.Keys = apiKeys
 	}
+
+	// tenant webhook config
+	tenantWebhookConfig := make(map[string]TenantWebhookConfig)
+	if err := v.UnmarshalKey("webhook.tenants", &tenantWebhookConfig); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal webhook tenants config: %v", err)
+	}
+	cfg.Webhook.Tenants = tenantWebhookConfig
 
 	return &cfg, nil
 }

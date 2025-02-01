@@ -117,6 +117,18 @@ func (f SubscriptionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SubscriptionMutation", m)
 }
 
+// The SubscriptionLineItemFunc type is an adapter to allow the use of ordinary
+// function as SubscriptionLineItem mutator.
+type SubscriptionLineItemFunc func(context.Context, *ent.SubscriptionLineItemMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SubscriptionLineItemFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.SubscriptionLineItemMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SubscriptionLineItemMutation", m)
+}
+
 // The WalletFunc type is an adapter to allow the use of ordinary
 // function as Wallet mutator.
 type WalletFunc func(context.Context, *ent.WalletMutation) (ent.Value, error)

@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
+	"github.com/samber/lo"
 )
 
 type CustomerHandler struct {
@@ -75,19 +76,23 @@ func (h *CustomerHandler) GetCustomer(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Param filter query types.Filter false "Filter"
+// @Param filter query types.CustomerFilter false "Filter"
 // @Success 200 {object} dto.ListCustomersResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Router /customers [get]
 func (h *CustomerHandler) GetCustomers(c *gin.Context) {
-	var filter types.Filter
+	var filter types.CustomerFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	resp, err := h.service.GetCustomers(c.Request.Context(), filter)
+	if filter.GetLimit() == 0 {
+		filter.Limit = lo.ToPtr(types.GetDefaultFilter().Limit)
+	}
+
+	resp, err := h.service.GetCustomers(c.Request.Context(), &filter)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

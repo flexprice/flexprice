@@ -24,6 +24,7 @@ import (
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/subscription"
+	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/ent/wallet"
 	"github.com/flexprice/flexprice/ent/wallettransaction"
 
@@ -53,6 +54,8 @@ type Client struct {
 	Price *PriceClient
 	// Subscription is the client for interacting with the Subscription builders.
 	Subscription *SubscriptionClient
+	// SubscriptionLineItem is the client for interacting with the SubscriptionLineItem builders.
+	SubscriptionLineItem *SubscriptionLineItemClient
 	// Wallet is the client for interacting with the Wallet builders.
 	Wallet *WalletClient
 	// WalletTransaction is the client for interacting with the WalletTransaction builders.
@@ -77,6 +80,7 @@ func (c *Client) init() {
 	c.Plan = NewPlanClient(c.config)
 	c.Price = NewPriceClient(c.config)
 	c.Subscription = NewSubscriptionClient(c.config)
+	c.SubscriptionLineItem = NewSubscriptionLineItemClient(c.config)
 	c.Wallet = NewWalletClient(c.config)
 	c.WalletTransaction = NewWalletTransactionClient(c.config)
 }
@@ -169,19 +173,20 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:               ctx,
-		config:            cfg,
-		BillingSequence:   NewBillingSequenceClient(cfg),
-		Customer:          NewCustomerClient(cfg),
-		Invoice:           NewInvoiceClient(cfg),
-		InvoiceLineItem:   NewInvoiceLineItemClient(cfg),
-		InvoiceSequence:   NewInvoiceSequenceClient(cfg),
-		Meter:             NewMeterClient(cfg),
-		Plan:              NewPlanClient(cfg),
-		Price:             NewPriceClient(cfg),
-		Subscription:      NewSubscriptionClient(cfg),
-		Wallet:            NewWalletClient(cfg),
-		WalletTransaction: NewWalletTransactionClient(cfg),
+		ctx:                  ctx,
+		config:               cfg,
+		BillingSequence:      NewBillingSequenceClient(cfg),
+		Customer:             NewCustomerClient(cfg),
+		Invoice:              NewInvoiceClient(cfg),
+		InvoiceLineItem:      NewInvoiceLineItemClient(cfg),
+		InvoiceSequence:      NewInvoiceSequenceClient(cfg),
+		Meter:                NewMeterClient(cfg),
+		Plan:                 NewPlanClient(cfg),
+		Price:                NewPriceClient(cfg),
+		Subscription:         NewSubscriptionClient(cfg),
+		SubscriptionLineItem: NewSubscriptionLineItemClient(cfg),
+		Wallet:               NewWalletClient(cfg),
+		WalletTransaction:    NewWalletTransactionClient(cfg),
 	}, nil
 }
 
@@ -199,19 +204,20 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:               ctx,
-		config:            cfg,
-		BillingSequence:   NewBillingSequenceClient(cfg),
-		Customer:          NewCustomerClient(cfg),
-		Invoice:           NewInvoiceClient(cfg),
-		InvoiceLineItem:   NewInvoiceLineItemClient(cfg),
-		InvoiceSequence:   NewInvoiceSequenceClient(cfg),
-		Meter:             NewMeterClient(cfg),
-		Plan:              NewPlanClient(cfg),
-		Price:             NewPriceClient(cfg),
-		Subscription:      NewSubscriptionClient(cfg),
-		Wallet:            NewWalletClient(cfg),
-		WalletTransaction: NewWalletTransactionClient(cfg),
+		ctx:                  ctx,
+		config:               cfg,
+		BillingSequence:      NewBillingSequenceClient(cfg),
+		Customer:             NewCustomerClient(cfg),
+		Invoice:              NewInvoiceClient(cfg),
+		InvoiceLineItem:      NewInvoiceLineItemClient(cfg),
+		InvoiceSequence:      NewInvoiceSequenceClient(cfg),
+		Meter:                NewMeterClient(cfg),
+		Plan:                 NewPlanClient(cfg),
+		Price:                NewPriceClient(cfg),
+		Subscription:         NewSubscriptionClient(cfg),
+		SubscriptionLineItem: NewSubscriptionLineItemClient(cfg),
+		Wallet:               NewWalletClient(cfg),
+		WalletTransaction:    NewWalletTransactionClient(cfg),
 	}, nil
 }
 
@@ -242,7 +248,8 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.BillingSequence, c.Customer, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence,
-		c.Meter, c.Plan, c.Price, c.Subscription, c.Wallet, c.WalletTransaction,
+		c.Meter, c.Plan, c.Price, c.Subscription, c.SubscriptionLineItem, c.Wallet,
+		c.WalletTransaction,
 	} {
 		n.Use(hooks...)
 	}
@@ -253,7 +260,8 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.BillingSequence, c.Customer, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence,
-		c.Meter, c.Plan, c.Price, c.Subscription, c.Wallet, c.WalletTransaction,
+		c.Meter, c.Plan, c.Price, c.Subscription, c.SubscriptionLineItem, c.Wallet,
+		c.WalletTransaction,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -280,6 +288,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Price.mutate(ctx, m)
 	case *SubscriptionMutation:
 		return c.Subscription.mutate(ctx, m)
+	case *SubscriptionLineItemMutation:
+		return c.SubscriptionLineItem.mutate(ctx, m)
 	case *WalletMutation:
 		return c.Wallet.mutate(ctx, m)
 	case *WalletTransactionMutation:
@@ -1493,6 +1503,22 @@ func (c *SubscriptionClient) GetX(ctx context.Context, id string) *Subscription 
 	return obj
 }
 
+// QueryLineItems queries the line_items edge of a Subscription.
+func (c *SubscriptionClient) QueryLineItems(s *Subscription) *SubscriptionLineItemQuery {
+	query := (&SubscriptionLineItemClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := s.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(subscription.Table, subscription.FieldID, id),
+			sqlgraph.To(subscriptionlineitem.Table, subscriptionlineitem.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, subscription.LineItemsTable, subscription.LineItemsColumn),
+		)
+		fromV = sqlgraph.Neighbors(s.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *SubscriptionClient) Hooks() []Hook {
 	return c.hooks.Subscription
@@ -1515,6 +1541,155 @@ func (c *SubscriptionClient) mutate(ctx context.Context, m *SubscriptionMutation
 		return (&SubscriptionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Subscription mutation op: %q", m.Op())
+	}
+}
+
+// SubscriptionLineItemClient is a client for the SubscriptionLineItem schema.
+type SubscriptionLineItemClient struct {
+	config
+}
+
+// NewSubscriptionLineItemClient returns a client for the SubscriptionLineItem from the given config.
+func NewSubscriptionLineItemClient(c config) *SubscriptionLineItemClient {
+	return &SubscriptionLineItemClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `subscriptionlineitem.Hooks(f(g(h())))`.
+func (c *SubscriptionLineItemClient) Use(hooks ...Hook) {
+	c.hooks.SubscriptionLineItem = append(c.hooks.SubscriptionLineItem, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `subscriptionlineitem.Intercept(f(g(h())))`.
+func (c *SubscriptionLineItemClient) Intercept(interceptors ...Interceptor) {
+	c.inters.SubscriptionLineItem = append(c.inters.SubscriptionLineItem, interceptors...)
+}
+
+// Create returns a builder for creating a SubscriptionLineItem entity.
+func (c *SubscriptionLineItemClient) Create() *SubscriptionLineItemCreate {
+	mutation := newSubscriptionLineItemMutation(c.config, OpCreate)
+	return &SubscriptionLineItemCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of SubscriptionLineItem entities.
+func (c *SubscriptionLineItemClient) CreateBulk(builders ...*SubscriptionLineItemCreate) *SubscriptionLineItemCreateBulk {
+	return &SubscriptionLineItemCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *SubscriptionLineItemClient) MapCreateBulk(slice any, setFunc func(*SubscriptionLineItemCreate, int)) *SubscriptionLineItemCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &SubscriptionLineItemCreateBulk{err: fmt.Errorf("calling to SubscriptionLineItemClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*SubscriptionLineItemCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &SubscriptionLineItemCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for SubscriptionLineItem.
+func (c *SubscriptionLineItemClient) Update() *SubscriptionLineItemUpdate {
+	mutation := newSubscriptionLineItemMutation(c.config, OpUpdate)
+	return &SubscriptionLineItemUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *SubscriptionLineItemClient) UpdateOne(sli *SubscriptionLineItem) *SubscriptionLineItemUpdateOne {
+	mutation := newSubscriptionLineItemMutation(c.config, OpUpdateOne, withSubscriptionLineItem(sli))
+	return &SubscriptionLineItemUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *SubscriptionLineItemClient) UpdateOneID(id string) *SubscriptionLineItemUpdateOne {
+	mutation := newSubscriptionLineItemMutation(c.config, OpUpdateOne, withSubscriptionLineItemID(id))
+	return &SubscriptionLineItemUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for SubscriptionLineItem.
+func (c *SubscriptionLineItemClient) Delete() *SubscriptionLineItemDelete {
+	mutation := newSubscriptionLineItemMutation(c.config, OpDelete)
+	return &SubscriptionLineItemDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *SubscriptionLineItemClient) DeleteOne(sli *SubscriptionLineItem) *SubscriptionLineItemDeleteOne {
+	return c.DeleteOneID(sli.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *SubscriptionLineItemClient) DeleteOneID(id string) *SubscriptionLineItemDeleteOne {
+	builder := c.Delete().Where(subscriptionlineitem.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &SubscriptionLineItemDeleteOne{builder}
+}
+
+// Query returns a query builder for SubscriptionLineItem.
+func (c *SubscriptionLineItemClient) Query() *SubscriptionLineItemQuery {
+	return &SubscriptionLineItemQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeSubscriptionLineItem},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a SubscriptionLineItem entity by its id.
+func (c *SubscriptionLineItemClient) Get(ctx context.Context, id string) (*SubscriptionLineItem, error) {
+	return c.Query().Where(subscriptionlineitem.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *SubscriptionLineItemClient) GetX(ctx context.Context, id string) *SubscriptionLineItem {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QuerySubscription queries the subscription edge of a SubscriptionLineItem.
+func (c *SubscriptionLineItemClient) QuerySubscription(sli *SubscriptionLineItem) *SubscriptionQuery {
+	query := (&SubscriptionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := sli.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(subscriptionlineitem.Table, subscriptionlineitem.FieldID, id),
+			sqlgraph.To(subscription.Table, subscription.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, subscriptionlineitem.SubscriptionTable, subscriptionlineitem.SubscriptionColumn),
+		)
+		fromV = sqlgraph.Neighbors(sli.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *SubscriptionLineItemClient) Hooks() []Hook {
+	return c.hooks.SubscriptionLineItem
+}
+
+// Interceptors returns the client interceptors.
+func (c *SubscriptionLineItemClient) Interceptors() []Interceptor {
+	return c.inters.SubscriptionLineItem
+}
+
+func (c *SubscriptionLineItemClient) mutate(ctx context.Context, m *SubscriptionLineItemMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&SubscriptionLineItemCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&SubscriptionLineItemUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&SubscriptionLineItemUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&SubscriptionLineItemDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown SubscriptionLineItem mutation op: %q", m.Op())
 	}
 }
 
@@ -1788,11 +1963,13 @@ func (c *WalletTransactionClient) mutate(ctx context.Context, m *WalletTransacti
 type (
 	hooks struct {
 		BillingSequence, Customer, Invoice, InvoiceLineItem, InvoiceSequence, Meter,
-		Plan, Price, Subscription, Wallet, WalletTransaction []ent.Hook
+		Plan, Price, Subscription, SubscriptionLineItem, Wallet,
+		WalletTransaction []ent.Hook
 	}
 	inters struct {
 		BillingSequence, Customer, Invoice, InvoiceLineItem, InvoiceSequence, Meter,
-		Plan, Price, Subscription, Wallet, WalletTransaction []ent.Interceptor
+		Plan, Price, Subscription, SubscriptionLineItem, Wallet,
+		WalletTransaction []ent.Interceptor
 	}
 )
 

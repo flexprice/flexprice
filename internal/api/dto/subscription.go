@@ -35,15 +35,12 @@ type UpdateSubscriptionRequest struct {
 
 type SubscriptionResponse struct {
 	*subscription.Subscription
-	Plan *PlanResponse `json:"plan"`
+	Plan     *PlanResponse     `json:"plan"`
+	Customer *CustomerResponse `json:"customer"`
 }
 
-type ListSubscriptionsResponse struct {
-	Subscriptions []*SubscriptionResponse `json:"subscriptions"`
-	Total         int                     `json:"total"`
-	Offset        int                     `json:"offset"`
-	Limit         int                     `json:"limit"`
-}
+// ListSubscriptionsResponse represents the response for listing subscriptions
+type ListSubscriptionsResponse = types.ListResponse[*SubscriptionResponse]
 
 func (r *CreateSubscriptionRequest) Validate() error {
 	err := validator.New().Struct(r)

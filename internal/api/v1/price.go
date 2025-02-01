@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
+	"github.com/samber/lo"
 )
 
 type PriceHandler struct {
@@ -91,7 +92,11 @@ func (h *PriceHandler) GetPrices(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.service.GetPrices(c.Request.Context(), filter)
+	if filter.GetLimit() == 0 {
+		filter.Limit = lo.ToPtr(types.GetDefaultFilter().Limit)
+	}
+
+	resp, err := h.service.GetPrices(c.Request.Context(), &filter)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -18,6 +19,7 @@ import (
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/publisher"
 	"github.com/flexprice/flexprice/internal/types"
+	webhookPublisher "github.com/flexprice/flexprice/internal/webhook/publisher"
 	"github.com/shopspring/decimal"
 )
 
@@ -33,7 +35,7 @@ type WalletService interface {
 	GetWalletByID(ctx context.Context, id string) (*dto.WalletResponse, error)
 
 	// GetWalletTransactions retrieves transactions for a wallet with pagination
-	GetWalletTransactions(ctx context.Context, walletID string, filter types.Filter) (*dto.WalletTransactionsResponse, error)
+	GetWalletTransactions(ctx context.Context, walletID string, filter *types.WalletTransactionFilter) (*dto.ListWalletTransactionsResponse, error)
 
 	// TopUpWallet adds credits to a wallet
 	TopUpWallet(ctx context.Context, walletID string, req *dto.TopUpWalletRequest) (*dto.WalletResponse, error)
@@ -54,9 +56,11 @@ type walletService struct {
 	eventRepo        events.Repository
 	meterRepo        meter.Repository
 	customerRepo     customer.Repository
-	publisher        publisher.EventPublisher
+	eventPublisher   publisher.EventPublisher
+	webhookPublisher webhookPublisher.WebhookPublisher
 	invoiceRepo      invoice.Repository
 	db               postgres.IClient
+	config           *config.Configuration
 }
 
 // NewWalletService creates a new instance of WalletService
@@ -70,8 +74,10 @@ func NewWalletService(
 	meterRepo meter.Repository,
 	customerRepo customer.Repository,
 	invoiceRepo invoice.Repository,
+	eventPublisher publisher.EventPublisher,
+	webhookPublisher webhookPublisher.WebhookPublisher,
 	db postgres.IClient,
-	publisher publisher.EventPublisher,
+	config *config.Configuration,
 ) WalletService {
 	return &walletService{
 		walletRepo:       walletRepo,
@@ -83,8 +89,10 @@ func NewWalletService(
 		meterRepo:        meterRepo,
 		customerRepo:     customerRepo,
 		invoiceRepo:      invoiceRepo,
+		eventPublisher:   eventPublisher,
+		webhookPublisher: webhookPublisher,
 		db:               db,
-		publisher:        publisher,
+		config:           config,
 	}
 }
 
@@ -123,16 +131,7 @@ func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletR
 	)
 
 	// Convert to response DTO
-	return &dto.WalletResponse{
-		ID:           w.ID,
-		CustomerID:   w.CustomerID,
-		Currency:     w.Currency,
-		Balance:      w.Balance,
-		WalletStatus: w.WalletStatus,
-		Metadata:     w.Metadata,
-		CreatedAt:    w.CreatedAt,
-		UpdatedAt:    w.UpdatedAt,
-	}, nil
+	return dto.FromWallet(w), nil
 }
 
 func (s *walletService) GetWalletsByCustomerID(ctx context.Context, customerID string) ([]*dto.WalletResponse, error) {
@@ -143,16 +142,7 @@ func (s *walletService) GetWalletsByCustomerID(ctx context.Context, customerID s
 
 	response := make([]*dto.WalletResponse, len(wallets))
 	for i, w := range wallets {
-		response[i] = &dto.WalletResponse{
-			ID:           w.ID,
-			CustomerID:   w.CustomerID,
-			Currency:     w.Currency,
-			Balance:      w.Balance,
-			WalletStatus: w.WalletStatus,
-			Metadata:     w.Metadata,
-			CreatedAt:    w.CreatedAt,
-			UpdatedAt:    w.UpdatedAt,
-		}
+		response[i] = dto.FromWallet(w)
 	}
 
 	return response, nil
@@ -164,45 +154,41 @@ func (s *walletService) GetWalletByID(ctx context.Context, id string) (*dto.Wall
 		return nil, fmt.Errorf("failed to get wallet: %w", err)
 	}
 
-	return &dto.WalletResponse{
-		ID:           w.ID,
-		CustomerID:   w.CustomerID,
-		Currency:     w.Currency,
-		Balance:      w.Balance,
-		WalletStatus: w.WalletStatus,
-		Metadata:     w.Metadata,
-		CreatedAt:    w.CreatedAt,
-		UpdatedAt:    w.UpdatedAt,
-	}, nil
+	return dto.FromWallet(w), nil
 }
 
-func (s *walletService) GetWalletTransactions(ctx context.Context, walletID string, filter types.Filter) (*dto.WalletTransactionsResponse, error) {
-	transactions, err := s.walletRepo.GetTransactionsByWalletID(ctx, walletID, filter.Limit, filter.Offset)
+func (s *walletService) GetWalletTransactions(ctx context.Context, walletID string, filter *types.WalletTransactionFilter) (*dto.ListWalletTransactionsResponse, error) {
+	if filter == nil {
+		filter = types.NewWalletTransactionFilter()
+	}
+
+	filter.WalletID = &walletID
+
+	if err := filter.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid filter: %w", err)
+	}
+
+	transactions, err := s.walletRepo.ListWalletTransactions(ctx, filter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get transactions: %w", err)
 	}
 
-	response := &dto.WalletTransactionsResponse{
-		Transactions: make([]*dto.WalletTransactionResponse, len(transactions)),
-		Filter:       filter,
-		// TODO: Add total count from repository
+	count, err := s.walletRepo.CountWalletTransactions(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count transactions: %w", err)
+	}
+
+	response := &dto.ListWalletTransactionsResponse{
+		Items: make([]*dto.WalletTransactionResponse, len(transactions)),
+		Pagination: types.NewPaginationResponse(
+			count,
+			filter.GetLimit(),
+			filter.GetOffset(),
+		),
 	}
 
 	for i, txn := range transactions {
-		response.Transactions[i] = &dto.WalletTransactionResponse{
-			ID:                txn.ID,
-			WalletID:          txn.WalletID,
-			Type:              string(txn.Type),
-			Amount:            txn.Amount,
-			BalanceBefore:     txn.BalanceBefore,
-			BalanceAfter:      txn.BalanceAfter,
-			TransactionStatus: txn.TxStatus,
-			ReferenceType:     txn.ReferenceType,
-			ReferenceID:       txn.ReferenceID,
-			Description:       txn.Description,
-			Metadata:          txn.Metadata,
-			CreatedAt:         txn.CreatedAt,
-		}
+		response.Items[i] = dto.FromWalletTransaction(txn)
 	}
 
 	return response, nil
@@ -236,6 +222,28 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 		return nil, fmt.Errorf("wallet is not active")
 	}
 
+	// Get invoice summary for unpaid amounts
+	invoiceService := NewInvoiceService(
+		s.subscriptionRepo,
+		s.planRepo,
+		s.priceRepo,
+		s.eventRepo,
+		s.meterRepo,
+		s.customerRepo,
+		s.invoiceRepo,
+		s.eventPublisher,
+		s.webhookPublisher,
+		s.db,
+		s.logger,
+		s.config,
+	)
+
+	invoiceSummary, err := invoiceService.GetCustomerInvoiceSummary(ctx, w.CustomerID, w.Currency)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get invoice summary: %w", err)
+	}
+
+	// Get current period usage for active subscriptions
 	subscriptionService := NewSubscriptionService(
 		s.subscriptionRepo,
 		s.planRepo,
@@ -244,15 +252,17 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 		s.meterRepo,
 		s.customerRepo,
 		s.invoiceRepo,
-		s.publisher,
+		s.eventPublisher,
+		s.webhookPublisher,
 		s.db,
 		s.logger,
+		s.config,
 	)
 
-	filter := &types.SubscriptionFilter{
-		CustomerID:         w.CustomerID,
-		Status:             types.StatusPublished,
-		SubscriptionStatus: types.SubscriptionStatusActive,
+	filter := types.NewSubscriptionFilter()
+	filter.CustomerID = w.CustomerID
+	filter.SubscriptionStatus = []types.SubscriptionStatus{
+		types.SubscriptionStatusActive,
 	}
 
 	subscriptionsResp, err := subscriptionService.ListSubscriptions(ctx, filter)
@@ -260,40 +270,58 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 		return nil, fmt.Errorf("failed to get subscriptions: %w", err)
 	}
 
-	totalPendingCharges := decimal.Zero
-	for _, sub := range subscriptionsResp.Subscriptions {
+	currentPeriodUsage := decimal.Zero
+	for _, sub := range subscriptionsResp.Items {
+		// Skip subscriptions with different currency
+		if !types.IsMatchingCurrency(sub.Subscription.Currency, w.Currency) {
+
+			continue
+		}
+
+		// Get current period usage for subscription
 		usageResp, err := subscriptionService.GetUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
 			SubscriptionID: sub.Subscription.ID,
 			StartTime:      sub.Subscription.CurrentPeriodStart,
 			EndTime:        time.Now().UTC(),
-			LifetimeUsage:  true,
+			LifetimeUsage:  false, // Only get current period usage
 		})
 		if err != nil {
-			s.logger.Errorw("failed to get subscription usage",
-				"subscription_id", sub.Subscription.ID,
+			s.logger.Errorw("failed to get current period usage",
+				"wallet_id", walletID,
+				"subscription_id", sub.ID,
 				"error", err,
 			)
 			continue
 		}
 
 		if usageResp.Amount > 0 {
-			totalPendingCharges = totalPendingCharges.Add(decimal.NewFromFloat(usageResp.Amount))
+			currentPeriodUsage = currentPeriodUsage.Add(decimal.NewFromFloat(usageResp.Amount))
 		}
 	}
 
-	realTimeBalance := w.Balance.Sub(totalPendingCharges)
+	// Calculate real-time balance:
+	// wallet_balance - (unpaid_invoices + current_period_usage)
+	// NOTE: in future, we can add a feature to allow customers to set a threshold for real-time balance
+	// NOTE: in future we can restrict a wallet balance to be adjusted only for usage or fixed amount
+	realTimeBalance := w.Balance.
+		Sub(invoiceSummary.TotalUnpaidAmount).
+		Sub(currentPeriodUsage)
 
 	s.logger.Debugw("calculated real-time balance",
 		"wallet_id", walletID,
 		"current_balance", w.Balance,
-		"total_pending_charges", totalPendingCharges,
+		"unpaid_invoices", invoiceSummary.TotalUnpaidAmount,
+		"current_period_usage", currentPeriodUsage,
 		"real_time_balance", realTimeBalance,
+		"currency", w.Currency,
 	)
 
 	return &dto.WalletBalanceResponse{
-		RealTimeBalance:  realTimeBalance,
-		BalanceUpdatedAt: time.Now().UTC(),
-		Wallet:           w,
+		Wallet:              w,
+		RealTimeBalance:     realTimeBalance,
+		BalanceUpdatedAt:    time.Now().UTC(),
+		UnpaidInvoiceAmount: invoiceSummary.TotalUnpaidAmount,
+		CurrentPeriodUsage:  currentPeriodUsage,
 	}, nil
 }
 

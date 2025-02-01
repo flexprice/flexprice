@@ -7,6 +7,8 @@ services:
       POSTGRES_USER: flexprice
       POSTGRES_PASSWORD: flexprice123
       POSTGRES_DB: flexprice
+    volumes:
+      - ./init-temporal-db.sh:/docker-entrypoint-initdb.d/init-temporal-db.sh
     healthcheck:
       test: pg_isready -U flexprice -d flexprice
       interval: 5s
@@ -78,18 +80,30 @@ services:
       retries: 30
 
   temporal:
-    image: temporalio/auto-setup:1.22.3
+    image: temporalio/auto-setup:1.26.2
     ports:
       - "7233:7233"
     environment:
-      - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development.yaml
       - ENABLE_ES=false
-    volumes:
-      - ./temporal-config:/etc/temporal/config/dynamicconfig
+      - DB=postgres12
+      - DB_PORT=5432
+      - DB_USER=flexprice
+      - DB_PWD=flexprice123
+      - DB_NAME=temporal
+      - DB_HOST=postgres
+      - POSTGRES_USER=flexprice
+      - POSTGRES_PWD=flexprice123
+      - POSTGRES_SEEDS=postgres
+      - TEMPORAL_PERSISTENCE_SCHEMA_DIR=/etc/temporal/schema/postgresql/v96/temporal/versioned
     depends_on:
-      - postgresql
+      postgres:
+        condition: service_healthy
 
-  temporal-admin-tools:
-    image: temporalio/admin-tools:1.22.3
+  temporal-ui:
+    image: temporalio/ui:2.31.2
+    ports:
+      - "127.0.0.1:8088:8080"
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
     depends_on:
       - temporal

@@ -12,16 +12,20 @@ import (
 
 // CreateWalletRequest represents the request to create a new wallet
 type CreateWalletRequest struct {
-	CustomerID string         `json:"customer_id" binding:"required"`
-	Currency   string         `json:"currency" binding:"required"`
-	Metadata   types.Metadata `json:"metadata,omitempty"`
+	CustomerID  string         `json:"customer_id" binding:"required"`
+	Name        string         `json:"name,omitempty"`
+	Currency    string         `json:"currency" binding:"required"`
+	Description string         `json:"description,omitempty"`
+	Metadata    types.Metadata `json:"metadata,omitempty"`
 }
 
 func (r *CreateWalletRequest) ToWallet(ctx context.Context) *wallet.Wallet {
 	return &wallet.Wallet{
 		ID:           types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET),
 		CustomerID:   r.CustomerID,
+		Name:         r.Name,
 		Currency:     r.Currency,
+		Description:  r.Description,
 		Metadata:     r.Metadata,
 		Balance:      decimal.Zero,
 		WalletStatus: types.WalletStatusActive,
@@ -37,12 +41,29 @@ func (r *CreateWalletRequest) Validate() error {
 type WalletResponse struct {
 	ID           string             `json:"id"`
 	CustomerID   string             `json:"customer_id"`
+	Name         string             `json:"name,omitempty"`
 	Currency     string             `json:"currency"`
+	Description  string             `json:"description,omitempty"`
 	Balance      decimal.Decimal    `json:"balance"`
 	WalletStatus types.WalletStatus `json:"wallet_status"`
 	Metadata     types.Metadata     `json:"metadata,omitempty"`
 	CreatedAt    time.Time          `json:"created_at"`
 	UpdatedAt    time.Time          `json:"updated_at"`
+}
+
+func FromWallet(w *wallet.Wallet) *WalletResponse {
+	return &WalletResponse{
+		ID:           w.ID,
+		CustomerID:   w.CustomerID,
+		Currency:     w.Currency,
+		Balance:      w.Balance,
+		Name:         w.Name,
+		Description:  w.Description,
+		WalletStatus: w.WalletStatus,
+		Metadata:     w.Metadata,
+		CreatedAt:    w.CreatedAt,
+		UpdatedAt:    w.UpdatedAt,
+	}
 }
 
 // WalletTransactionResponse represents a wallet transaction in API responses
@@ -61,12 +82,26 @@ type WalletTransactionResponse struct {
 	CreatedAt         time.Time               `json:"created_at"`
 }
 
-// WalletTransactionsResponse represents a paginated list of wallet transactions
-type WalletTransactionsResponse struct {
-	Transactions []*WalletTransactionResponse `json:"transactions"`
-	Total        int64                        `json:"total"`
-	Filter       types.Filter                 `json:"filter"`
+// FromWalletTransaction converts a wallet transaction to a WalletTransactionResponse
+func FromWalletTransaction(t *wallet.Transaction) *WalletTransactionResponse {
+	return &WalletTransactionResponse{
+		ID:                t.ID,
+		WalletID:          t.WalletID,
+		Type:              string(t.Type),
+		Amount:            t.Amount,
+		BalanceBefore:     t.BalanceBefore,
+		BalanceAfter:      t.BalanceAfter,
+		TransactionStatus: t.TxStatus,
+		ReferenceType:     t.ReferenceType,
+		ReferenceID:       t.ReferenceID,
+		Description:       t.Description,
+		Metadata:          t.Metadata,
+		CreatedAt:         t.CreatedAt,
+	}
 }
+
+// ListWalletTransactionsResponse represents the response for listing wallet transactions
+type ListWalletTransactionsResponse = types.ListResponse[*WalletTransactionResponse]
 
 // TopUpWalletRequest represents a request to add credits to a wallet
 type TopUpWalletRequest struct {
@@ -75,9 +110,11 @@ type TopUpWalletRequest struct {
 	Metadata    types.Metadata  `json:"metadata,omitempty"`
 }
 
-// WalletBalanceResponse represents the real-time balance of a wallet
+// WalletBalanceResponse represents the response for getting wallet balance
 type WalletBalanceResponse struct {
-	RealTimeBalance  decimal.Decimal `json:"real_time_balance"`
-	BalanceUpdatedAt time.Time       `json:"balance_updated_at"`
 	*wallet.Wallet
+	RealTimeBalance     decimal.Decimal `json:"real_time_balance"`
+	BalanceUpdatedAt    time.Time       `json:"balance_updated_at"`
+	UnpaidInvoiceAmount decimal.Decimal `json:"unpaid_invoice_amount"`
+	CurrentPeriodUsage  decimal.Decimal `json:"current_period_usage"`
 }

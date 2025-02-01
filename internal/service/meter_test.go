@@ -161,10 +161,10 @@ func (s *MeterServiceSuite) TestGetAllMeters() {
 
 	// Sort both expected and actual results by Name for comparison
 	sortMetersByName(meters)
-	sortMetersByName(result)
+	sortMeterResponseByName(result.Items)
 
-	s.Len(result, 2)
-	for i, m := range result {
+	s.Len(result.Items, 2)
+	for i, m := range result.Items {
 		s.Equal(meters[i].Name, m.Name)
 		s.Equal("api_request", m.EventName)
 		s.NotEmpty(m.Filters)
@@ -174,6 +174,12 @@ func (s *MeterServiceSuite) TestGetAllMeters() {
 
 // Helper function to sort meters by Name
 func sortMetersByName(meters []*meter.Meter) {
+	sort.Slice(meters, func(i, j int) bool {
+		return meters[i].Name < meters[j].Name
+	})
+}
+
+func sortMeterResponseByName(meters []*dto.MeterResponse) {
 	sort.Slice(meters, func(i, j int) bool {
 		return meters[i].Name < meters[j].Name
 	})

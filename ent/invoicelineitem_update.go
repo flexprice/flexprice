@@ -214,6 +214,9 @@ func (iliu *InvoiceLineItemUpdate) sqlSave(ctx context.Context) (n int, err erro
 	if iliu.mutation.MeterDisplayNameCleared() {
 		_spec.ClearField(invoicelineitem.FieldMeterDisplayName, field.TypeString)
 	}
+	if iliu.mutation.DisplayNameCleared() {
+		_spec.ClearField(invoicelineitem.FieldDisplayName, field.TypeString)
+	}
 	if value, ok := iliu.mutation.PeriodStart(); ok {
 		_spec.SetField(invoicelineitem.FieldPeriodStart, field.TypeTime, value)
 	}
@@ -467,6 +470,9 @@ func (iliuo *InvoiceLineItemUpdateOne) sqlSave(ctx context.Context) (_node *Invo
 	}
 	if iliuo.mutation.MeterDisplayNameCleared() {
 		_spec.ClearField(invoicelineitem.FieldMeterDisplayName, field.TypeString)
+	}
+	if iliuo.mutation.DisplayNameCleared() {
+		_spec.ClearField(invoicelineitem.FieldDisplayName, field.TypeString)
 	}
 	if value, ok := iliuo.mutation.PeriodStart(); ok {
 		_spec.SetField(invoicelineitem.FieldPeriodStart, field.TypeTime, value)

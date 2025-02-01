@@ -654,6 +654,16 @@ func EmailHasSuffix(v string) predicate.Customer {
 	return predicate.Customer(sql.FieldHasSuffix(FieldEmail, v))
 }
 
+// EmailIsNil applies the IsNil predicate on the "email" field.
+func EmailIsNil() predicate.Customer {
+	return predicate.Customer(sql.FieldIsNull(FieldEmail))
+}
+
+// EmailNotNil applies the NotNil predicate on the "email" field.
+func EmailNotNil() predicate.Customer {
+	return predicate.Customer(sql.FieldNotNull(FieldEmail))
+}
+
 // EmailEqualFold applies the EqualFold predicate on the "email" field.
 func EmailEqualFold(v string) predicate.Customer {
 	return predicate.Customer(sql.FieldEqualFold(FieldEmail, v))

@@ -4,6 +4,7 @@ package ent
 
 import (
 	"context"
+	"database/sql/driver"
 	"fmt"
 	"math"
 
@@ -13,15 +14,17 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/subscription"
+	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 )
 
 // SubscriptionQuery is the builder for querying Subscription entities.
 type SubscriptionQuery struct {
 	config
-	ctx        *QueryContext
-	order      []subscription.OrderOption
-	inters     []Interceptor
-	predicates []predicate.Subscription
+	ctx           *QueryContext
+	order         []subscription.OrderOption
+	inters        []Interceptor
+	predicates    []predicate.Subscription
+	withLineItems *SubscriptionLineItemQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -56,6 +59,28 @@ func (sq *SubscriptionQuery) Unique(unique bool) *SubscriptionQuery {
 func (sq *SubscriptionQuery) Order(o ...subscription.OrderOption) *SubscriptionQuery {
 	sq.order = append(sq.order, o...)
 	return sq
+}
+
+// QueryLineItems chains the current query on the "line_items" edge.
+func (sq *SubscriptionQuery) QueryLineItems() *SubscriptionLineItemQuery {
+	query := (&SubscriptionLineItemClient{config: sq.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := sq.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := sq.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(subscription.Table, subscription.FieldID, selector),
+			sqlgraph.To(subscriptionlineitem.Table, subscriptionlineitem.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, subscription.LineItemsTable, subscription.LineItemsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(sq.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
 }
 
 // First returns the first Subscription entity from the query.
@@ -245,15 +270,27 @@ func (sq *SubscriptionQuery) Clone() *SubscriptionQuery {
 		return nil
 	}
 	return &SubscriptionQuery{
-		config:     sq.config,
-		ctx:        sq.ctx.Clone(),
-		order:      append([]subscription.OrderOption{}, sq.order...),
-		inters:     append([]Interceptor{}, sq.inters...),
-		predicates: append([]predicate.Subscription{}, sq.predicates...),
+		config:        sq.config,
+		ctx:           sq.ctx.Clone(),
+		order:         append([]subscription.OrderOption{}, sq.order...),
+		inters:        append([]Interceptor{}, sq.inters...),
+		predicates:    append([]predicate.Subscription{}, sq.predicates...),
+		withLineItems: sq.withLineItems.Clone(),
 		// clone intermediate query.
 		sql:  sq.sql.Clone(),
 		path: sq.path,
 	}
+}
+
+// WithLineItems tells the query-builder to eager-load the nodes that are connected to
+// the "line_items" edge. The optional arguments are used to configure the query builder of the edge.
+func (sq *SubscriptionQuery) WithLineItems(opts ...func(*SubscriptionLineItemQuery)) *SubscriptionQuery {
+	query := (&SubscriptionLineItemClient{config: sq.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	sq.withLineItems = query
+	return sq
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -332,8 +369,11 @@ func (sq *SubscriptionQuery) prepareQuery(ctx context.Context) error {
 
 func (sq *SubscriptionQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Subscription, error) {
 	var (
-		nodes = []*Subscription{}
-		_spec = sq.querySpec()
+		nodes       = []*Subscription{}
+		_spec       = sq.querySpec()
+		loadedTypes = [1]bool{
+			sq.withLineItems != nil,
+		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*Subscription).scanValues(nil, columns)
@@ -341,6 +381,7 @@ func (sq *SubscriptionQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]
 	_spec.Assign = func(columns []string, values []any) error {
 		node := &Subscription{config: sq.config}
 		nodes = append(nodes, node)
+		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
@@ -352,7 +393,45 @@ func (sq *SubscriptionQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
+	if query := sq.withLineItems; query != nil {
+		if err := sq.loadLineItems(ctx, query, nodes,
+			func(n *Subscription) { n.Edges.LineItems = []*SubscriptionLineItem{} },
+			func(n *Subscription, e *SubscriptionLineItem) { n.Edges.LineItems = append(n.Edges.LineItems, e) }); err != nil {
+			return nil, err
+		}
+	}
 	return nodes, nil
+}
+
+func (sq *SubscriptionQuery) loadLineItems(ctx context.Context, query *SubscriptionLineItemQuery, nodes []*Subscription, init func(*Subscription), assign func(*Subscription, *SubscriptionLineItem)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[string]*Subscription)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(subscriptionlineitem.FieldSubscriptionID)
+	}
+	query.Where(predicate.SubscriptionLineItem(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(subscription.LineItemsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.SubscriptionID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "subscription_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
 }
 
 func (sq *SubscriptionQuery) sqlCount(ctx context.Context) (int, error) {

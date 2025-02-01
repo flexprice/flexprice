@@ -30,6 +30,7 @@ type UsageParams struct {
 type GetEventsParams struct {
 	ExternalCustomerID string         `json:"external_customer_id"`
 	EventName          string         `json:"event_name" validate:"required"`
+	EventID            string         `json:"event_id"`
 	StartTime          time.Time      `json:"start_time" validate:"required"`
 	EndTime            time.Time      `json:"end_time" validate:"required"`
 	IterFirst          *EventIterator `json:"iter_first"`

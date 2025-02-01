@@ -55,3 +55,7 @@ func GetCurrencyConfig(code string) CurrencyConfig {
 	}
 	return CurrencyConfig{Precision: DEFAULT_PRECISION}
 }
+
+func IsMatchingCurrency(a, b string) bool {
+	return strings.EqualFold(a, b)
+}

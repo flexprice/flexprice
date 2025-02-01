@@ -17,7 +17,7 @@ type PriceService interface {
 	CreatePrice(ctx context.Context, req dto.CreatePriceRequest) (*dto.PriceResponse, error)
 	GetPrice(ctx context.Context, id string) (*dto.PriceResponse, error)
 	GetPricesByPlanID(ctx context.Context, planID string) (*dto.ListPricesResponse, error)
-	GetPrices(ctx context.Context, filter types.PriceFilter) (*dto.ListPricesResponse, error)
+	GetPrices(ctx context.Context, filter *types.PriceFilter) (*dto.ListPricesResponse, error)
 	UpdatePrice(ctx context.Context, id string, req dto.UpdatePriceRequest) (*dto.PriceResponse, error)
 	DeletePrice(ctx context.Context, id string) error
 	CalculateCost(ctx context.Context, price *price.Price, quantity decimal.Decimal) decimal.Decimal
@@ -66,7 +66,7 @@ func (s *priceService) GetPrice(ctx context.Context, id string) (*dto.PriceRespo
 
 func (s *priceService) GetPricesByPlanID(ctx context.Context, planID string) (*dto.ListPricesResponse, error) {
 	// Use unlimited filter to fetch all prices
-	priceFilter := types.NewUnlimitedPriceFilter().
+	priceFilter := types.NewNoLimitPriceFilter().
 		WithPlanIDs([]string{planID}).
 		WithStatus(types.StatusPublished).
 		WithExpand(string(types.ExpandMeters))
@@ -74,7 +74,8 @@ func (s *priceService) GetPricesByPlanID(ctx context.Context, planID string) (*d
 	return s.GetPrices(ctx, priceFilter)
 }
 
-func (s *priceService) GetPrices(ctx context.Context, filter types.PriceFilter) (*dto.ListPricesResponse, error) {
+func (s *priceService) GetPrices(ctx context.Context, filter *types.PriceFilter) (*dto.ListPricesResponse, error) {
+	meterService := NewMeterService(s.meterRepo)
 	// Validate expand fields
 	if err := filter.GetExpand().Validate(types.PriceExpandConfig); err != nil {
 		return nil, fmt.Errorf("invalid expand fields: %w", err)
@@ -86,43 +87,50 @@ func (s *priceService) GetPrices(ctx context.Context, filter types.PriceFilter) 
 		return nil, fmt.Errorf("failed to list prices: %w", err)
 	}
 
+	priceCount, err := s.repo.Count(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count prices: %w", err)
+	}
+
 	response := &dto.ListPricesResponse{
-		Prices: make([]dto.PriceResponse, len(prices)),
+		Items: make([]*dto.PriceResponse, len(prices)),
 	}
 
 	// If meters are requested to be expanded, fetch all meters in one query
-	var metersByID map[string]*meter.Meter
+	var metersByID map[string]*dto.MeterResponse
 	if filter.GetExpand().Has(types.ExpandMeters) && len(prices) > 0 {
 		// Fetch all meters in one query
-		meters, err := s.meterRepo.GetAllMeters(ctx)
+		metersResponse, err := meterService.GetAllMeters(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch meters: %w", err)
 		}
 
 		// Create a map for quick meter lookup
-		metersByID = make(map[string]*meter.Meter, len(meters))
-		for _, m := range meters {
+		metersByID = make(map[string]*dto.MeterResponse, len(metersResponse.Items))
+		for _, m := range metersResponse.Items {
 			metersByID[m.ID] = m
 		}
 
-		s.logger.Debugw("fetched meters for prices", "count", len(meters))
+		s.logger.Debugw("fetched meters for prices", "count", len(metersResponse.Items))
 	}
 
 	// Build response with expanded fields
 	for i, p := range prices {
-		response.Prices[i] = dto.PriceResponse{Price: p}
+		response.Items[i] = &dto.PriceResponse{Price: p}
 
 		// Add meter if requested and available
 		if filter.GetExpand().Has(types.ExpandMeters) && p.MeterID != "" {
 			if m, ok := metersByID[p.MeterID]; ok {
-				response.Prices[i].Meter = dto.ToMeterResponse(m)
+				response.Items[i].Meter = m
 			}
 		}
 	}
 
-	response.Total = len(prices)
-	response.Offset = filter.GetOffset()
-	response.Limit = filter.GetLimit()
+	response.Pagination = types.NewPaginationResponse(
+		priceCount,
+		filter.GetLimit(),
+		filter.GetOffset(),
+	)
 
 	return response, nil
 }
