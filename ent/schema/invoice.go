@@ -95,6 +95,10 @@ func (Invoice) Fields() []ent.Field {
 		field.Time("finalized_at").
 			Optional().
 			Nillable(),
+		field.String("billing_period").
+			Optional().
+			Nillable().
+			Immutable(),
 		field.Time("period_start").
 			Optional().
 			Nillable().

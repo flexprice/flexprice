@@ -3,6 +3,7 @@ package subscription
 import (
 	"time"
 
+	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -11,7 +12,7 @@ type Subscription struct {
 	ID string `db:"id" json:"id"`
 
 	// LookupKey is the key used to lookup the subscription in our system
-	LookupKey string `db:"lookup_key" json:"lookup_key"`
+	LookupKey string `db:"lookup_key" json:"lookup_key,omitempty"`
 
 	// CustomerID is the identifier for the customer in our system
 	CustomerID string `db:"customer_id" json:"customer_id"`
@@ -34,7 +35,7 @@ type Subscription struct {
 	StartDate time.Time `db:"start_date" json:"start_date"`
 
 	// EndDate is the end date of the subscription
-	EndDate *time.Time `db:"end_date" json:"end_date"`
+	EndDate *time.Time `db:"end_date" json:"end_date,omitempty"`
 
 	// CurrentPeriodStart is the end of the current period that the subscription has been invoiced for.
 	// At the end of this period, a new invoice will be created.
@@ -45,7 +46,7 @@ type Subscription struct {
 	CurrentPeriodEnd time.Time `db:"current_period_end" json:"current_period_end"`
 
 	// CanceledAt is the date the subscription was canceled
-	CancelledAt *time.Time `db:"cancelled_at" json:"cancelled_at"`
+	CancelledAt *time.Time `db:"cancelled_at" json:"cancelled_at,omitempty"`
 
 	// CancelAt is the date the subscription will be canceled
 	CancelAt *time.Time `db:"cancel_at" json:"cancel_at"`
@@ -71,7 +72,57 @@ type Subscription struct {
 	// InvoiceCadence is the cadence of the invoice. This overrides the plan's invoice cadence.
 	InvoiceCadence types.InvoiceCadence `db:"invoice_cadence" json:"invoice_cadence"`
 
+	// Version is used for optimistic locking
 	Version int `db:"version" json:"version"`
 
+	// Metadata is a map of key-value pairs that can be attached to the subscription
+	Metadata types.Metadata `db:"metadata" json:"metadata,omitempty"`
+
+	LineItems []*SubscriptionLineItem `json:"line_items,omitempty"`
+
 	types.BaseModel
+}
+
+func GetSubscriptionFromEnt(sub *ent.Subscription) *Subscription {
+	var lineItems []*SubscriptionLineItem
+	if sub.Edges.LineItems != nil {
+		lineItems = make([]*SubscriptionLineItem, len(sub.Edges.LineItems))
+		for i, item := range sub.Edges.LineItems {
+			lineItems[i] = SubscriptionLineItemFromEnt(item)
+		}
+	}
+
+	return &Subscription{
+		ID:                 sub.ID,
+		LookupKey:          sub.LookupKey,
+		CustomerID:         sub.CustomerID,
+		PlanID:             sub.PlanID,
+		SubscriptionStatus: types.SubscriptionStatus(sub.SubscriptionStatus),
+		Currency:           sub.Currency,
+		BillingAnchor:      sub.BillingAnchor,
+		StartDate:          sub.StartDate,
+		EndDate:            sub.EndDate,
+		CurrentPeriodStart: sub.CurrentPeriodStart,
+		CurrentPeriodEnd:   sub.CurrentPeriodEnd,
+		CancelledAt:        sub.CancelledAt,
+		CancelAt:           sub.CancelAt,
+		CancelAtPeriodEnd:  sub.CancelAtPeriodEnd,
+		TrialStart:         sub.TrialStart,
+		TrialEnd:           sub.TrialEnd,
+		InvoiceCadence:     types.InvoiceCadence(sub.InvoiceCadence),
+		BillingCadence:     types.BillingCadence(sub.BillingCadence),
+		BillingPeriod:      types.BillingPeriod(sub.BillingPeriod),
+		BillingPeriodCount: sub.BillingPeriodCount,
+		Version:            sub.Version,
+		Metadata:           sub.Metadata,
+		LineItems:          lineItems,
+		BaseModel: types.BaseModel{
+			TenantID:  sub.TenantID,
+			Status:    types.Status(sub.Status),
+			CreatedAt: sub.CreatedAt,
+			CreatedBy: sub.CreatedBy,
+			UpdatedAt: sub.UpdatedAt,
+			UpdatedBy: sub.UpdatedBy,
+		},
+	}
 }

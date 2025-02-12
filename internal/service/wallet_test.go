@@ -22,8 +22,9 @@ import (
 
 type WalletServiceSuite struct {
 	testutil.BaseServiceTestSuite
-	service  WalletService
-	testData struct {
+	service     WalletService
+	subsService SubscriptionService
+	testData    struct {
 		wallet   *wallet.Wallet
 		customer *customer.Customer
 		plan     *plan.Plan
@@ -68,9 +69,27 @@ func (s *WalletServiceSuite) setupService() {
 		stores.MeterRepo,
 		stores.CustomerRepo,
 		stores.InvoiceRepo,
+		stores.EntitlementRepo,
+		stores.FeatureRepo,
 		s.GetPublisher(),
 		s.GetWebhookPublisher(),
 		s.GetDB(),
+		s.GetConfig(),
+	)
+	s.subsService = NewSubscriptionService(
+		stores.SubscriptionRepo,
+		stores.PlanRepo,
+		stores.PriceRepo,
+		stores.EventRepo,
+		stores.MeterRepo,
+		stores.CustomerRepo,
+		stores.InvoiceRepo,
+		stores.EntitlementRepo,
+		stores.FeatureRepo,
+		s.GetPublisher(),
+		s.GetWebhookPublisher(),
+		s.GetDB(),
+		s.GetLogger(),
 		s.GetConfig(),
 	)
 }
@@ -246,7 +265,7 @@ func (s *WalletServiceSuite) setupTestData() {
 			ID:                 "sub_2",
 			PlanID:             s.testData.plan.ID,
 			CustomerID:         s.testData.customer.ID,
-			Currency:           "usd", // Same currency, different case
+			Currency:           "INR", // Same currency, different case
 			SubscriptionStatus: types.SubscriptionStatusActive,
 			CurrentPeriodStart: s.testData.now.Add(-24 * time.Hour),
 			BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
@@ -262,8 +281,65 @@ func (s *WalletServiceSuite) setupTestData() {
 		},
 	}
 
+	subscriptionLineItems := []*subscription.SubscriptionLineItem{
+		{
+			CustomerID:       s.testData.customer.ID,
+			PlanID:           s.testData.plan.ID,
+			PlanDisplayName:  s.testData.plan.Name,
+			PriceID:          s.testData.prices.storage.ID,
+			PriceType:        types.PRICE_TYPE_USAGE,
+			MeterID:          s.testData.meters.storage.ID,
+			MeterDisplayName: s.testData.meters.storage.Name,
+			DisplayName:      s.testData.meters.storage.Name,
+			Quantity:         decimal.NewFromInt(0),
+			BillingPeriod:    types.BILLING_PERIOD_MONTHLY,
+			StartDate:        s.testData.now.Add(-24 * time.Hour),
+			EndDate:          s.testData.now.Add(6 * 24 * time.Hour),
+			Metadata:         map[string]string{},
+			BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+		},
+		{
+			CustomerID:       s.testData.customer.ID,
+			PlanID:           s.testData.plan.ID,
+			PlanDisplayName:  s.testData.plan.Name,
+			PriceID:          s.testData.prices.storageArchive.ID,
+			PriceType:        types.PRICE_TYPE_USAGE,
+			MeterID:          s.testData.meters.storage.ID,
+			MeterDisplayName: s.testData.meters.storage.Name,
+			DisplayName:      s.testData.meters.storage.Name,
+			Quantity:         decimal.NewFromInt(0),
+			BillingPeriod:    types.BILLING_PERIOD_MONTHLY,
+			StartDate:        s.testData.now.Add(-24 * time.Hour),
+			EndDate:          s.testData.now.Add(6 * 24 * time.Hour),
+			Metadata:         map[string]string{},
+			BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+		},
+		{
+			CustomerID:       s.testData.customer.ID,
+			PlanID:           s.testData.plan.ID,
+			PlanDisplayName:  s.testData.plan.Name,
+			PriceID:          s.testData.prices.apiCalls.ID,
+			PriceType:        types.PRICE_TYPE_USAGE,
+			MeterID:          s.testData.meters.apiCalls.ID,
+			MeterDisplayName: s.testData.meters.apiCalls.Name,
+			DisplayName:      s.testData.meters.apiCalls.Name,
+			Quantity:         decimal.NewFromInt(0),
+			BillingPeriod:    types.BILLING_PERIOD_MONTHLY,
+			StartDate:        s.testData.now.Add(-24 * time.Hour),
+			EndDate:          s.testData.now.Add(6 * 24 * time.Hour),
+			Metadata:         map[string]string{},
+			BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+		},
+	}
+
 	for _, sub := range subscriptions {
-		err := s.GetStores().SubscriptionRepo.Create(s.GetContext(), sub)
+		for i, lineItem := range subscriptionLineItems {
+			lineItem.ID = s.GetUUID()
+			lineItem.SubscriptionID = sub.ID
+			lineItem.Currency = sub.Currency
+			subscriptionLineItems[i] = lineItem
+		}
+		err := s.GetStores().SubscriptionRepo.CreateWithLineItems(s.GetContext(), sub, subscriptionLineItems)
 		s.NoError(err)
 	}
 

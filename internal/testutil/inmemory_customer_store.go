@@ -29,10 +29,17 @@ func copyCustomer(c *customer.Customer) *customer.Customer {
 
 	// Deep copy of customer
 	c = &customer.Customer{
-		ID:         c.ID,
-		ExternalID: c.ExternalID,
-		Name:       c.Name,
-		Email:      c.Email,
+		ID:                c.ID,
+		ExternalID:        c.ExternalID,
+		Name:              c.Name,
+		Email:             c.Email,
+		AddressLine1:      c.AddressLine1,
+		AddressLine2:      c.AddressLine2,
+		AddressCity:       c.AddressCity,
+		AddressState:      c.AddressState,
+		AddressPostalCode: c.AddressPostalCode,
+		AddressCountry:    c.AddressCountry,
+		Metadata:          lo.Assign(map[string]string{}, c.Metadata),
 		BaseModel: types.BaseModel{
 			TenantID:  c.TenantID,
 			Status:    c.Status,
@@ -107,6 +114,11 @@ func customerFilterFn(ctx context.Context, c *customer.Customer, filter interfac
 
 	// Apply email filter
 	if f.Email != "" && !strings.EqualFold(c.Email, f.Email) {
+		return false
+	}
+
+	// Apply customer ID filter
+	if len(f.CustomerIDs) > 0 && !lo.Contains(f.CustomerIDs, c.ID) {
 		return false
 	}
 

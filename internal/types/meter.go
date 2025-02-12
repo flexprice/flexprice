@@ -4,7 +4,8 @@ package types
 type MeterFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
-	EventName string `json:"event_name,omitempty"`
+	EventName string   `json:"event_name,omitempty"`
+	MeterIDs  []string `json:"meter_ids,omitempty"`
 }
 
 // NewMeterFilter creates a new MeterFilter with default values

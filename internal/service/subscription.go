@@ -9,7 +9,9 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
@@ -41,6 +43,8 @@ type subscriptionService struct {
 	meterRepo        meter.Repository
 	customerRepo     customer.Repository
 	invoiceRepo      invoice.Repository
+	entitlementRepo  entitlement.Repository
+	featureRepo      feature.Repository
 	eventPublisher   publisher.EventPublisher
 	webhookPublisher webhookPublisher.WebhookPublisher
 	logger           *logger.Logger
@@ -56,6 +60,8 @@ func NewSubscriptionService(
 	meterRepo meter.Repository,
 	customerRepo customer.Repository,
 	invoiceRepo invoice.Repository,
+	entitlementRepo entitlement.Repository,
+	featureRepo feature.Repository,
 	eventPublisher publisher.EventPublisher,
 	webhookPublisher webhookPublisher.WebhookPublisher,
 	db postgres.IClient,
@@ -70,6 +76,8 @@ func NewSubscriptionService(
 		meterRepo:        meterRepo,
 		customerRepo:     customerRepo,
 		invoiceRepo:      invoiceRepo,
+		entitlementRepo:  entitlementRepo,
+		featureRepo:      featureRepo,
 		eventPublisher:   eventPublisher,
 		webhookPublisher: webhookPublisher,
 		db:               db,
@@ -103,7 +111,10 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	}
 
 	priceService := NewPriceService(s.priceRepo, s.meterRepo, s.logger)
-	pricesResponse, err := priceService.GetPricesByPlanID(ctx, plan.ID)
+	priceFilter := types.NewNoLimitPriceFilter().
+		WithPlanIDs([]string{plan.ID}).
+		WithExpand(string(types.ExpandMeters))
+	pricesResponse, err := priceService.GetPrices(ctx, priceFilter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get prices: %w", err)
 	}
@@ -117,68 +128,135 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		prices[i] = *p.Price
 	}
 
-	subscription := req.ToSubscription(ctx)
+	priceMap := make(map[string]*dto.PriceResponse, len(prices))
+	for _, p := range pricesResponse.Items {
+		priceMap[p.Price.ID] = p
+	}
+
+	sub := req.ToSubscription(ctx)
+
+	// Filter prices for subscription that are valid for the plan
+	validPrices := filterValidPricesForSubscription(pricesResponse.Items, sub)
+	if len(validPrices) == 0 {
+		return nil, fmt.Errorf("no valid prices found for subscription")
+	}
+
 	now := time.Now().UTC()
 
 	// Set start date and ensure it's in UTC
-	if subscription.StartDate.IsZero() {
-		subscription.StartDate = now
+	if sub.StartDate.IsZero() {
+		sub.StartDate = now
 	} else {
-		subscription.StartDate = subscription.StartDate.UTC()
+		sub.StartDate = sub.StartDate.UTC()
 	}
 
 	// Set billing anchor and ensure it's in UTC
-	if subscription.BillingAnchor.IsZero() {
-		subscription.BillingAnchor = subscription.StartDate
+	if sub.BillingAnchor.IsZero() {
+		sub.BillingAnchor = sub.StartDate
 	} else {
-		subscription.BillingAnchor = subscription.BillingAnchor.UTC()
+		sub.BillingAnchor = sub.BillingAnchor.UTC()
 		// Validate that billing anchor is not before start date
-		if subscription.BillingAnchor.Before(subscription.StartDate) {
+		if sub.BillingAnchor.Before(sub.StartDate) {
 			return nil, fmt.Errorf("billing anchor cannot be before start date")
 		}
 	}
 
-	if subscription.BillingPeriodCount == 0 {
-		subscription.BillingPeriodCount = 1
+	if sub.BillingPeriodCount == 0 {
+		sub.BillingPeriodCount = 1
 	}
 
 	// Calculate the first billing period end date
-	nextBillingDate, err := types.NextBillingDate(subscription.StartDate, subscription.BillingAnchor, subscription.BillingPeriodCount, subscription.BillingPeriod)
+	nextBillingDate, err := types.NextBillingDate(sub.StartDate, sub.BillingAnchor, sub.BillingPeriodCount, sub.BillingPeriod)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate next billing date: %w", err)
 	}
 
-	subscription.CurrentPeriodStart = subscription.StartDate
-	subscription.CurrentPeriodEnd = nextBillingDate
-	subscription.SubscriptionStatus = types.SubscriptionStatusActive
+	sub.CurrentPeriodStart = sub.StartDate
+	sub.CurrentPeriodEnd = nextBillingDate
+	sub.SubscriptionStatus = types.SubscriptionStatusActive
+
+	// Convert line items
+	lineItems := make([]*subscription.SubscriptionLineItem, 0, len(validPrices))
+	for _, price := range validPrices {
+		lineItems = append(lineItems, &subscription.SubscriptionLineItem{
+			PriceID:   price.ID,
+			BaseModel: types.GetDefaultBaseModel(ctx),
+		})
+	}
+
+	// Convert line items
+	for _, item := range lineItems {
+		price, ok := priceMap[item.PriceID]
+		if !ok {
+			return nil, fmt.Errorf("failed to get price %s: price not found", item.PriceID)
+		}
+
+		if price.Type == types.PRICE_TYPE_USAGE && price.Meter != nil {
+			item.MeterID = price.Meter.ID
+			item.MeterDisplayName = price.Meter.Name
+			item.DisplayName = price.Meter.Name
+			item.Quantity = decimal.Zero
+		} else {
+			item.DisplayName = plan.Name
+			if item.Quantity.IsZero() {
+				item.Quantity = decimal.NewFromInt(1)
+			}
+		}
+
+		if item.ID == "" {
+			item.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM)
+		}
+
+		item.SubscriptionID = sub.ID
+		item.PriceType = price.Type
+		item.PlanID = plan.ID
+		item.PlanDisplayName = plan.Name
+		item.CustomerID = sub.CustomerID
+		item.Currency = sub.Currency
+		item.BillingPeriod = sub.BillingPeriod
+		item.StartDate = sub.StartDate
+		if sub.EndDate != nil {
+			item.EndDate = *sub.EndDate
+		}
+	}
+	sub.LineItems = lineItems
 
 	s.logger.Infow("creating subscription",
-		"customer_id", subscription.CustomerID,
-		"plan_id", subscription.PlanID,
-		"start_date", subscription.StartDate,
-		"billing_anchor", subscription.BillingAnchor,
-		"current_period_start", subscription.CurrentPeriodStart,
-		"current_period_end", subscription.CurrentPeriodEnd)
+		"customer_id", sub.CustomerID,
+		"plan_id", sub.PlanID,
+		"start_date", sub.StartDate,
+		"billing_anchor", sub.BillingAnchor,
+		"current_period_start", sub.CurrentPeriodStart,
+		"current_period_end", sub.CurrentPeriodEnd,
+		"valid_prices", len(validPrices),
+		"num_line_items", len(sub.LineItems))
 
-	if err := s.subscriptionRepo.Create(ctx, subscription); err != nil {
+	// Create subscription with line items
+	if err := s.subscriptionRepo.CreateWithLineItems(ctx, sub, sub.LineItems); err != nil {
 		return nil, fmt.Errorf("failed to create subscription: %w", err)
 	}
 
-	return &dto.SubscriptionResponse{Subscription: subscription}, nil
+	response := &dto.SubscriptionResponse{Subscription: sub}
+	return response, nil
 }
 
 func (s *subscriptionService) GetSubscription(ctx context.Context, id string) (*dto.SubscriptionResponse, error) {
-	subscription, err := s.subscriptionRepo.Get(ctx, id)
+	// Get subscription with line items
+	subscription, _, err := s.subscriptionRepo.GetWithLineItems(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get subscription: %w", err)
 	}
 
+	response := &dto.SubscriptionResponse{Subscription: subscription}
+
 	// expand plan
-	planService := NewPlanService(s.planRepo, s.priceRepo, s.meterRepo, s.logger)
+	planService := NewPlanService(s.db, s.planRepo, s.priceRepo, s.meterRepo, s.entitlementRepo, s.featureRepo, s.logger)
+
 	plan, err := planService.GetPlan(ctx, subscription.PlanID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get plan: %w", err)
 	}
+	response.Plan = plan
 
 	// expand customer
 	customerService := NewCustomerService(s.customerRepo)
@@ -186,12 +264,12 @@ func (s *subscriptionService) GetSubscription(ctx context.Context, id string) (*
 	if err != nil {
 		return nil, fmt.Errorf("failed to get customer: %w", err)
 	}
-
-	return &dto.SubscriptionResponse{Subscription: subscription, Plan: plan, Customer: customer}, nil
+	response.Customer = customer
+	return response, nil
 }
 
 func (s *subscriptionService) CancelSubscription(ctx context.Context, id string, cancelAtPeriodEnd bool) error {
-	subscription, err := s.subscriptionRepo.Get(ctx, id)
+	subscription, _, err := s.subscriptionRepo.GetWithLineItems(ctx, id)
 	if err != nil {
 		return fmt.Errorf("failed to get subscription: %w", err)
 	}
@@ -213,7 +291,7 @@ func (s *subscriptionService) CancelSubscription(ctx context.Context, id string,
 }
 
 func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *types.SubscriptionFilter) (*dto.ListSubscriptionsResponse, error) {
-	planService := NewPlanService(s.planRepo, s.priceRepo, s.meterRepo, s.logger)
+	planService := NewPlanService(s.db, s.planRepo, s.priceRepo, s.meterRepo, s.entitlementRepo, s.featureRepo, s.logger)
 
 	subscriptions, err := s.subscriptionRepo.List(ctx, filter)
 	if err != nil {
@@ -234,12 +312,13 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 		),
 	}
 
+	// Collect unique plan IDs
 	planIDMap := make(map[string]*dto.PlanResponse, 0)
 	for _, sub := range subscriptions {
 		planIDMap[sub.PlanID] = nil
 	}
 
-	// Get plans
+	// Get plans in bulk
 	planFilter := types.NewNoLimitPlanFilter()
 	planFilter.PlanIDs = lo.Keys(planIDMap)
 	planResponse, err := planService.GetPlans(ctx, planFilter)
@@ -247,10 +326,12 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 		return nil, fmt.Errorf("failed to get plans: %w", err)
 	}
 
+	// Build plan map for quick lookup
 	for _, plan := range planResponse.Items {
 		planIDMap[plan.Plan.ID] = plan
 	}
 
+	// Build response with plans
 	for i, sub := range subscriptions {
 		response.Items[i] = &dto.SubscriptionResponse{
 			Subscription: sub,
@@ -267,18 +348,13 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 	eventService := NewEventService(s.eventRepo, s.meterRepo, s.eventPublisher, s.logger)
 	priceService := NewPriceService(s.priceRepo, s.meterRepo, s.logger)
 
-	subscriptionResponse, err := s.GetSubscription(ctx, req.SubscriptionID)
+	// Get subscription with line items
+	subscription, lineItems, err := s.subscriptionRepo.GetWithLineItems(ctx, req.SubscriptionID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get subscription: %w", err)
 	}
 
-	subscription := subscriptionResponse.Subscription
-	plan := subscriptionResponse.Plan
-	pricesResponse := plan.Prices
-
-	// Filter only the eligible prices
-	pricesResponse = filterValidPricesForSubscription(pricesResponse, subscription)
-
+	// Get customer
 	customer, err := s.customerRepo.Get(ctx, subscription.CustomerID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get customer: %w", err)
@@ -299,22 +375,57 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 		usageEndTime = time.Now().UTC()
 	}
 
-	// Maintain meter order as they first appear in pricesResponse
+	// Maintain meter order as they first appear in line items
 	meterOrder := []string{}
 	seenMeters := make(map[string]bool)
-	meterPrices := make(map[string][]*dto.PriceResponse)
+	meterPrices := make(map[string][]*price.Price)
 
-	// Build meterPrices in the order of appearance in pricesResponse
-	for _, priceResponse := range pricesResponse {
-		if priceResponse.Price.Type != types.PRICE_TYPE_USAGE {
+	// Collect all price IDs
+	priceIDs := make([]string, 0, len(lineItems))
+	for _, item := range lineItems {
+		if item.PriceType != types.PRICE_TYPE_USAGE {
 			continue
 		}
-		meterID := priceResponse.Price.MeterID
+		if item.MeterID == "" {
+			continue
+		}
+		priceIDs = append(priceIDs, item.PriceID)
+	}
+
+	// Fetch all prices in one call
+	priceFilter := types.NewNoLimitPriceFilter()
+	priceFilter.PriceIDs = priceIDs
+	prices, err := s.priceRepo.List(ctx, priceFilter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get prices: %w", err)
+	}
+
+	// Build price map for quick lookup
+	priceMap := make(map[string]*price.Price, len(prices))
+	for _, p := range prices {
+		priceMap[p.ID] = p
+	}
+
+	// Build meterPrices from line items
+	for _, item := range lineItems {
+		if item.PriceType != types.PRICE_TYPE_USAGE {
+			continue
+		}
+		if item.MeterID == "" {
+			continue
+		}
+		meterID := item.MeterID
 		if !seenMeters[meterID] {
 			meterOrder = append(meterOrder, meterID)
 			seenMeters[meterID] = true
 		}
-		meterPrices[meterID] = append(meterPrices[meterID], priceResponse)
+
+		// Get price details from map
+		price, ok := priceMap[item.PriceID]
+		if !ok {
+			return nil, fmt.Errorf("failed to get price %s: price not found", item.PriceID)
+		}
+		meterPrices[meterID] = append(meterPrices[meterID], price)
 	}
 
 	// Pre-fetch all meter display names
@@ -329,14 +440,14 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 		"subscription_id", req.SubscriptionID,
 		"start_time", usageStartTime,
 		"end_time", usageEndTime,
-		"num_prices", len(pricesResponse))
+		"num_meters", len(meterOrder))
 
 	for _, meterID := range meterOrder {
 		meterPriceGroup := meterPrices[meterID]
 
 		// Sort prices by filter count (stable order)
 		sort.Slice(meterPriceGroup, func(i, j int) bool {
-			return len(meterPriceGroup[i].Price.FilterValues) > len(meterPriceGroup[j].Price.FilterValues)
+			return len(meterPriceGroup[i].FilterValues) > len(meterPriceGroup[j].FilterValues)
 		})
 
 		type filterGroup struct {
@@ -348,9 +459,9 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 		filterGroups := make([]filterGroup, 0, len(meterPriceGroup))
 		for _, price := range meterPriceGroup {
 			filterGroups = append(filterGroups, filterGroup{
-				ID:           price.Price.ID,
-				Priority:     calculatePriority(price.Price.FilterValues),
-				FilterValues: price.Price.FilterValues,
+				ID:           price.ID,
+				Priority:     calculatePriority(price.FilterValues),
+				FilterValues: price.FilterValues,
 			})
 		}
 
@@ -384,11 +495,11 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 		}
 
 		// Append charges in the same order as meterPriceGroup
-		for _, priceResponse := range meterPriceGroup {
+		for _, price := range meterPriceGroup {
 			var quantity decimal.Decimal
 			var matchingUsage *events.AggregationResult
 			for _, usage := range usages {
-				if fgID, ok := usage.Metadata["filter_group_id"]; ok && fgID == priceResponse.Price.ID {
+				if fgID, ok := usage.Metadata["filter_group_id"]; ok && fgID == price.ID {
 					matchingUsage = usage
 					break
 				}
@@ -396,7 +507,7 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 
 			if matchingUsage != nil {
 				quantity = matchingUsage.Value
-				cost := priceService.CalculateCost(ctx, priceResponse.Price, quantity)
+				cost := priceService.CalculateCost(ctx, price, quantity)
 				totalCost = totalCost.Add(cost)
 
 				s.logger.Debugw("calculated usage for meter",
@@ -407,12 +518,12 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 					"meter_display_name", meterDisplayNames[meterID],
 					"subscription_id", req.SubscriptionID,
 					"usage", matchingUsage,
-					"price", priceResponse.Price,
-					"filter_values", priceResponse.Price.FilterValues,
+					"price", price,
+					"filter_values", price.FilterValues,
 				)
 
 				filteredUsageCharge := createChargeResponse(
-					priceResponse.Price,
+					price,
 					quantity,
 					cost,
 					meterDisplayNames[meterID],
@@ -527,6 +638,8 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 		s.meterRepo,
 		s.customerRepo,
 		s.invoiceRepo,
+		s.entitlementRepo,
+		s.featureRepo,
 		s.eventPublisher,
 		s.webhookPublisher,
 		s.db,
@@ -589,7 +702,11 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 			period := periods[i]
 
 			// Create and finalize invoice for this period
-			inv, err := invoiceService.CreateSubscriptionInvoice(ctx, sub, period.start, period.end)
+			inv, err := invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
+				SubscriptionID: sub.ID,
+				PeriodStart:    period.start,
+				PeriodEnd:      period.end,
+			})
 			if err != nil {
 				return fmt.Errorf("failed to create subscription invoice for period: %w", err)
 			}
@@ -688,7 +805,7 @@ func getMeterDisplayName(ctx context.Context, meterRepo meter.Repository, meterI
 func filterValidPricesForSubscription(prices []*dto.PriceResponse, subscriptionObj *subscription.Subscription) []*dto.PriceResponse {
 	var validPrices []*dto.PriceResponse
 	for _, p := range prices {
-		if p.Price.Currency == subscriptionObj.Currency &&
+		if types.IsMatchingCurrency(p.Price.Currency, subscriptionObj.Currency) &&
 			p.Price.BillingPeriod == subscriptionObj.BillingPeriod &&
 			p.Price.BillingPeriodCount == subscriptionObj.BillingPeriodCount {
 			validPrices = append(validPrices, p)

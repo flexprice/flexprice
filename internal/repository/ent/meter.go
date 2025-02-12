@@ -228,6 +228,10 @@ func (o MeterQueryOptions) applyEntityQueryOptions(ctx context.Context, f *types
 		query = query.Where(meter.EventName(string(f.EventName)))
 	}
 
+	if len(f.MeterIDs) > 0 {
+		query = query.Where(meter.IDIn(f.MeterIDs...))
+	}
+
 	// Apply time range filters if specified
 	if f.TimeRangeFilter != nil {
 		if f.StartTime != nil {

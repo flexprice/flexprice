@@ -43,6 +43,13 @@ var (
 		{Name: "external_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "name", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "email", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "address_line1", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "address_line2", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "address_city", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(100)"}},
+		{Name: "address_state", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(100)"}},
+		{Name: "address_postal_code", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "address_country", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(2)"}},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
 	}
 	// CustomersTable holds the schema information for the "customers" table.
 	CustomersTable = &schema.Table{
@@ -62,6 +69,115 @@ var (
 				Name:    "customer_tenant_id",
 				Unique:  false,
 				Columns: []*schema.Column{CustomersColumns[1]},
+			},
+		},
+	}
+	// EntitlementsColumns holds the columns for the "entitlements" table.
+	EntitlementsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "feature_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "feature_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "is_enabled", Type: field.TypeBool, Default: false},
+		{Name: "usage_limit", Type: field.TypeInt64, Nullable: true},
+		{Name: "usage_reset_period", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "is_soft_limit", Type: field.TypeBool, Default: false},
+		{Name: "static_value", Type: field.TypeString, Nullable: true},
+		{Name: "plan_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+	}
+	// EntitlementsTable holds the schema information for the "entitlements" table.
+	EntitlementsTable = &schema.Table{
+		Name:       "entitlements",
+		Columns:    EntitlementsColumns,
+		PrimaryKey: []*schema.Column{EntitlementsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "entitlements_plans_entitlements",
+				Columns:    []*schema.Column{EntitlementsColumns[14]},
+				RefColumns: []*schema.Column{PlansColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "entitlement_tenant_id_plan_id_feature_id",
+				Unique:  true,
+				Columns: []*schema.Column{EntitlementsColumns[1], EntitlementsColumns[14], EntitlementsColumns[7]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published'",
+				},
+			},
+			{
+				Name:    "entitlement_tenant_id_plan_id",
+				Unique:  false,
+				Columns: []*schema.Column{EntitlementsColumns[1], EntitlementsColumns[14]},
+			},
+			{
+				Name:    "entitlement_tenant_id_feature_id",
+				Unique:  false,
+				Columns: []*schema.Column{EntitlementsColumns[1], EntitlementsColumns[7]},
+			},
+		},
+	}
+	// FeaturesColumns holds the columns for the "features" table.
+	FeaturesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "lookup_key", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "name", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "description", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "meter_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "unit_singular", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "unit_plural", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+	}
+	// FeaturesTable holds the schema information for the "features" table.
+	FeaturesTable = &schema.Table{
+		Name:       "features",
+		Columns:    FeaturesColumns,
+		PrimaryKey: []*schema.Column{FeaturesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "idx_tenant_lookup_key_unique",
+				Unique:  true,
+				Columns: []*schema.Column{FeaturesColumns[1], FeaturesColumns[7]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "lookup_key IS NOT NULL AND status = 'published'",
+				},
+			},
+			{
+				Name:    "idx_tenant_meter_id",
+				Unique:  false,
+				Columns: []*schema.Column{FeaturesColumns[1], FeaturesColumns[11]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "meter_id IS NOT NULL",
+				},
+			},
+			{
+				Name:    "idx_tenant_type",
+				Unique:  false,
+				Columns: []*schema.Column{FeaturesColumns[1], FeaturesColumns[10]},
+			},
+			{
+				Name:    "idx_tenant_status",
+				Unique:  false,
+				Columns: []*schema.Column{FeaturesColumns[1], FeaturesColumns[2]},
+			},
+			{
+				Name:    "idx_tenant_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{FeaturesColumns[1], FeaturesColumns[3]},
 			},
 		},
 	}
@@ -88,6 +204,7 @@ var (
 		{Name: "paid_at", Type: field.TypeTime, Nullable: true},
 		{Name: "voided_at", Type: field.TypeTime, Nullable: true},
 		{Name: "finalized_at", Type: field.TypeTime, Nullable: true},
+		{Name: "billing_period", Type: field.TypeString, Nullable: true},
 		{Name: "period_start", Type: field.TypeTime, Nullable: true},
 		{Name: "period_end", Type: field.TypeTime, Nullable: true},
 		{Name: "invoice_pdf_url", Type: field.TypeString, Nullable: true},
@@ -127,12 +244,12 @@ var (
 			{
 				Name:    "idx_tenant_invoice_number_unique",
 				Unique:  true,
-				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[27]},
+				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[28]},
 			},
 			{
 				Name:    "idx_idempotency_key_unique",
 				Unique:  true,
-				Columns: []*schema.Column{InvoicesColumns[29]},
+				Columns: []*schema.Column{InvoicesColumns[30]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "idempotency_key IS NOT NULL",
 				},
@@ -140,7 +257,7 @@ var (
 			{
 				Name:    "idx_subscription_period_unique",
 				Unique:  false,
-				Columns: []*schema.Column{InvoicesColumns[8], InvoicesColumns[21], InvoicesColumns[22]},
+				Columns: []*schema.Column{InvoicesColumns[8], InvoicesColumns[22], InvoicesColumns[23]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "invoice_status != 'VOIDED' AND subscription_id IS NOT NULL",
 				},
@@ -570,6 +687,8 @@ var (
 	Tables = []*schema.Table{
 		BillingSequencesTable,
 		CustomersTable,
+		EntitlementsTable,
+		FeaturesTable,
 		InvoicesTable,
 		InvoiceLineItemsTable,
 		InvoiceSequencesTable,
@@ -584,6 +703,7 @@ var (
 )
 
 func init() {
+	EntitlementsTable.ForeignKeys[0].RefTable = PlansTable
 	InvoiceLineItemsTable.ForeignKeys[0].RefTable = InvoicesTable
 	SubscriptionLineItemsTable.ForeignKeys[0].RefTable = SubscriptionsTable
 }

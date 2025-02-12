@@ -33,6 +33,30 @@ func (f CustomerFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, er
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CustomerMutation", m)
 }
 
+// The EntitlementFunc type is an adapter to allow the use of ordinary
+// function as Entitlement mutator.
+type EntitlementFunc func(context.Context, *ent.EntitlementMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f EntitlementFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.EntitlementMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.EntitlementMutation", m)
+}
+
+// The FeatureFunc type is an adapter to allow the use of ordinary
+// function as Feature mutator.
+type FeatureFunc func(context.Context, *ent.FeatureMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f FeatureFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.FeatureMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.FeatureMutation", m)
+}
+
 // The InvoiceFunc type is an adapter to allow the use of ordinary
 // function as Invoice mutator.
 type InvoiceFunc func(context.Context, *ent.InvoiceMutation) (ent.Value, error)

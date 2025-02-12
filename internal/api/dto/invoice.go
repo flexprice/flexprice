@@ -21,6 +21,7 @@ type CreateInvoiceRequest struct {
 	AmountDue      decimal.Decimal                `json:"amount_due" validate:"required"`
 	Description    string                         `json:"description,omitempty"`
 	DueDate        *time.Time                     `json:"due_date,omitempty"`
+	BillingPeriod  *string                        `json:"billing_period,omitempty"`
 	PeriodStart    *time.Time                     `json:"period_start,omitempty"`
 	PeriodEnd      *time.Time                     `json:"period_end,omitempty"`
 	BillingReason  types.InvoiceBillingReason     `json:"billing_reason"`
@@ -44,6 +45,10 @@ func (r *CreateInvoiceRequest) Validate() error {
 	if r.InvoiceType == types.InvoiceTypeSubscription {
 		if r.SubscriptionID == nil {
 			return fmt.Errorf("subscription_id is required for subscription invoice")
+		}
+
+		if r.BillingPeriod == nil {
+			return fmt.Errorf("billing_period is required for subscription invoice")
 		}
 
 		if r.PeriodStart == nil {
@@ -89,6 +94,7 @@ func (r *CreateInvoiceRequest) ToInvoice(ctx context.Context) (*invoice.Invoice,
 		Description:     r.Description,
 		DueDate:         r.DueDate,
 		PeriodStart:     r.PeriodStart,
+		BillingPeriod:   r.BillingPeriod,
 		PeriodEnd:       r.PeriodEnd,
 		BillingReason:   string(r.BillingReason),
 		Metadata:        r.Metadata,
@@ -285,6 +291,7 @@ type InvoiceResponse struct {
 	BillingSequence *int                       `json:"billing_sequence,omitempty"`
 	Description     string                     `json:"description,omitempty"`
 	DueDate         *time.Time                 `json:"due_date,omitempty"`
+	BillingPeriod   *string                    `json:"billing_period,omitempty"`
 	PeriodStart     *time.Time                 `json:"period_start,omitempty"`
 	PeriodEnd       *time.Time                 `json:"period_end,omitempty"`
 	PaidAt          *time.Time                 `json:"paid_at,omitempty"`
@@ -304,6 +311,7 @@ type InvoiceResponse struct {
 
 	// Edges
 	Subscription *SubscriptionResponse `json:"subscription,omitempty"`
+	Customer     *CustomerResponse     `json:"customer,omitempty"`
 }
 
 // NewInvoiceResponse creates a new invoice response from domain invoice
@@ -328,6 +336,7 @@ func NewInvoiceResponse(inv *invoice.Invoice) *InvoiceResponse {
 		BillingSequence: inv.BillingSequence,
 		Description:     inv.Description,
 		DueDate:         inv.DueDate,
+		BillingPeriod:   inv.BillingPeriod,
 		PeriodStart:     inv.PeriodStart,
 		PeriodEnd:       inv.PeriodEnd,
 		PaidAt:          inv.PaidAt,
@@ -360,6 +369,12 @@ func (r *InvoiceResponse) WithSubscription(sub *SubscriptionResponse) *InvoiceRe
 	return r
 }
 
+// WithCustomer adds customer information to the invoice response
+func (r *InvoiceResponse) WithCustomer(customer *CustomerResponse) *InvoiceResponse {
+	r.Customer = customer
+	return r
+}
+
 // ListInvoicesResponse represents the response for listing invoices
 type ListInvoicesResponse = types.ListResponse[*InvoiceResponse]
 
@@ -388,4 +403,12 @@ type CustomerMultiCurrencyInvoiceSummary struct {
 	CustomerID      string                    `json:"customer_id"`
 	DefaultCurrency string                    `json:"default_currency"`
 	Summaries       []*CustomerInvoiceSummary `json:"summaries"`
+}
+
+// CreateSubscriptionInvoiceRequest represents a request to create a subscription invoice
+type CreateSubscriptionInvoiceRequest struct {
+	SubscriptionID string    `json:"subscription_id" binding:"required"`
+	PeriodStart    time.Time `json:"period_start" binding:"required"`
+	PeriodEnd      time.Time `json:"period_end" binding:"required"`
+	IsPreview      bool      `json:"is_preview"`
 }

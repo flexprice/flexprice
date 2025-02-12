@@ -64,6 +64,8 @@ func (s *SubscriptionServiceSuite) setupService() {
 		stores.MeterRepo,
 		stores.CustomerRepo,
 		stores.InvoiceRepo,
+		stores.EntitlementRepo,
+		stores.FeatureRepo,
 		s.GetPublisher(),
 		s.GetWebhookPublisher(),
 		s.GetDB(),
@@ -188,7 +190,60 @@ func (s *SubscriptionServiceSuite) setupTestData() {
 		SubscriptionStatus: types.SubscriptionStatusActive,
 		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
 	}
-	s.NoError(s.GetStores().SubscriptionRepo.Create(s.GetContext(), s.testData.subscription))
+
+	// Create line items for the subscription
+	lineItems := []*subscription.SubscriptionLineItem{
+		{
+			ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+			SubscriptionID:   s.testData.subscription.ID,
+			CustomerID:       s.testData.subscription.CustomerID,
+			PlanID:           s.testData.plan.ID,
+			PlanDisplayName:  s.testData.plan.Name,
+			PriceID:          s.testData.prices.storage.ID,
+			PriceType:        s.testData.prices.storage.Type,
+			MeterID:          s.testData.meters.storage.ID,
+			MeterDisplayName: s.testData.meters.storage.Name,
+			DisplayName:      s.testData.meters.storage.Name,
+			Quantity:         decimal.Zero,
+			Currency:         s.testData.subscription.Currency,
+			BillingPeriod:    s.testData.subscription.BillingPeriod,
+			BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+		},
+		{
+			ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+			SubscriptionID:   s.testData.subscription.ID,
+			CustomerID:       s.testData.subscription.CustomerID,
+			PlanID:           s.testData.plan.ID,
+			PlanDisplayName:  s.testData.plan.Name,
+			PriceID:          s.testData.prices.storageArchive.ID,
+			PriceType:        s.testData.prices.storageArchive.Type,
+			MeterID:          s.testData.meters.storage.ID,
+			MeterDisplayName: s.testData.meters.storage.Name,
+			DisplayName:      s.testData.meters.storage.Name,
+			Quantity:         decimal.Zero,
+			Currency:         s.testData.subscription.Currency,
+			BillingPeriod:    s.testData.subscription.BillingPeriod,
+			BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+		},
+		{
+			ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+			SubscriptionID:   s.testData.subscription.ID,
+			CustomerID:       s.testData.subscription.CustomerID,
+			PlanID:           s.testData.plan.ID,
+			PlanDisplayName:  s.testData.plan.Name,
+			PriceID:          s.testData.prices.apiCalls.ID,
+			PriceType:        s.testData.prices.apiCalls.Type,
+			MeterID:          s.testData.meters.apiCalls.ID,
+			MeterDisplayName: s.testData.meters.apiCalls.Name,
+			DisplayName:      s.testData.meters.apiCalls.Name,
+			Quantity:         decimal.Zero,
+			Currency:         s.testData.subscription.Currency,
+			BillingPeriod:    s.testData.subscription.BillingPeriod,
+			BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+		},
+	}
+
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(s.GetContext(), s.testData.subscription, lineItems))
 
 	// Create test events
 	for i := 0; i < 1500; i++ {
@@ -252,17 +307,20 @@ func (s *SubscriptionServiceSuite) TestGetUsageBySubscription() {
 					{
 						MeterDisplayName: "Storage",
 						Quantity:         decimal.NewFromInt(300).InexactFloat64(),
-						Amount:           9, // archive: 300 * 0.03
+						Amount:           30, // standard: 300 * 0.1
+						Price:            s.testData.prices.storage,
 					},
 					{
 						MeterDisplayName: "Storage",
 						Quantity:         decimal.NewFromInt(300).InexactFloat64(),
-						Amount:           30, // standard: 300 * 0.1
+						Amount:           9, // archive: 300 * 0.03
+						Price:            s.testData.prices.storageArchive,
 					},
 					{
 						MeterDisplayName: "API Calls",
 						Quantity:         decimal.NewFromInt(1500).InexactFloat64(),
 						Amount:           22.5, // tiers: (1000 *0.02=20) + (500*0.005=2.5)
+						Price:            s.testData.prices.apiCalls,
 					},
 				},
 			},

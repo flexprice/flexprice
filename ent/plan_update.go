@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/predicate"
 )
@@ -157,9 +158,45 @@ func (pu *PlanUpdate) AddTrialPeriod(i int) *PlanUpdate {
 	return pu
 }
 
+// AddEntitlementIDs adds the "entitlements" edge to the Entitlement entity by IDs.
+func (pu *PlanUpdate) AddEntitlementIDs(ids ...string) *PlanUpdate {
+	pu.mutation.AddEntitlementIDs(ids...)
+	return pu
+}
+
+// AddEntitlements adds the "entitlements" edges to the Entitlement entity.
+func (pu *PlanUpdate) AddEntitlements(e ...*Entitlement) *PlanUpdate {
+	ids := make([]string, len(e))
+	for i := range e {
+		ids[i] = e[i].ID
+	}
+	return pu.AddEntitlementIDs(ids...)
+}
+
 // Mutation returns the PlanMutation object of the builder.
 func (pu *PlanUpdate) Mutation() *PlanMutation {
 	return pu.mutation
+}
+
+// ClearEntitlements clears all "entitlements" edges to the Entitlement entity.
+func (pu *PlanUpdate) ClearEntitlements() *PlanUpdate {
+	pu.mutation.ClearEntitlements()
+	return pu
+}
+
+// RemoveEntitlementIDs removes the "entitlements" edge to Entitlement entities by IDs.
+func (pu *PlanUpdate) RemoveEntitlementIDs(ids ...string) *PlanUpdate {
+	pu.mutation.RemoveEntitlementIDs(ids...)
+	return pu
+}
+
+// RemoveEntitlements removes "entitlements" edges to Entitlement entities.
+func (pu *PlanUpdate) RemoveEntitlements(e ...*Entitlement) *PlanUpdate {
+	ids := make([]string, len(e))
+	for i := range e {
+		ids[i] = e[i].ID
+	}
+	return pu.RemoveEntitlementIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -263,6 +300,51 @@ func (pu *PlanUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := pu.mutation.AddedTrialPeriod(); ok {
 		_spec.AddField(plan.FieldTrialPeriod, field.TypeInt, value)
+	}
+	if pu.mutation.EntitlementsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   plan.EntitlementsTable,
+			Columns: []string{plan.EntitlementsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(entitlement.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := pu.mutation.RemovedEntitlementsIDs(); len(nodes) > 0 && !pu.mutation.EntitlementsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   plan.EntitlementsTable,
+			Columns: []string{plan.EntitlementsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(entitlement.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := pu.mutation.EntitlementsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   plan.EntitlementsTable,
+			Columns: []string{plan.EntitlementsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(entitlement.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, pu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -413,9 +495,45 @@ func (puo *PlanUpdateOne) AddTrialPeriod(i int) *PlanUpdateOne {
 	return puo
 }
 
+// AddEntitlementIDs adds the "entitlements" edge to the Entitlement entity by IDs.
+func (puo *PlanUpdateOne) AddEntitlementIDs(ids ...string) *PlanUpdateOne {
+	puo.mutation.AddEntitlementIDs(ids...)
+	return puo
+}
+
+// AddEntitlements adds the "entitlements" edges to the Entitlement entity.
+func (puo *PlanUpdateOne) AddEntitlements(e ...*Entitlement) *PlanUpdateOne {
+	ids := make([]string, len(e))
+	for i := range e {
+		ids[i] = e[i].ID
+	}
+	return puo.AddEntitlementIDs(ids...)
+}
+
 // Mutation returns the PlanMutation object of the builder.
 func (puo *PlanUpdateOne) Mutation() *PlanMutation {
 	return puo.mutation
+}
+
+// ClearEntitlements clears all "entitlements" edges to the Entitlement entity.
+func (puo *PlanUpdateOne) ClearEntitlements() *PlanUpdateOne {
+	puo.mutation.ClearEntitlements()
+	return puo
+}
+
+// RemoveEntitlementIDs removes the "entitlements" edge to Entitlement entities by IDs.
+func (puo *PlanUpdateOne) RemoveEntitlementIDs(ids ...string) *PlanUpdateOne {
+	puo.mutation.RemoveEntitlementIDs(ids...)
+	return puo
+}
+
+// RemoveEntitlements removes "entitlements" edges to Entitlement entities.
+func (puo *PlanUpdateOne) RemoveEntitlements(e ...*Entitlement) *PlanUpdateOne {
+	ids := make([]string, len(e))
+	for i := range e {
+		ids[i] = e[i].ID
+	}
+	return puo.RemoveEntitlementIDs(ids...)
 }
 
 // Where appends a list predicates to the PlanUpdate builder.
@@ -549,6 +667,51 @@ func (puo *PlanUpdateOne) sqlSave(ctx context.Context) (_node *Plan, err error) 
 	}
 	if value, ok := puo.mutation.AddedTrialPeriod(); ok {
 		_spec.AddField(plan.FieldTrialPeriod, field.TypeInt, value)
+	}
+	if puo.mutation.EntitlementsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   plan.EntitlementsTable,
+			Columns: []string{plan.EntitlementsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(entitlement.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := puo.mutation.RemovedEntitlementsIDs(); len(nodes) > 0 && !puo.mutation.EntitlementsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   plan.EntitlementsTable,
+			Columns: []string{plan.EntitlementsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(entitlement.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := puo.mutation.EntitlementsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   plan.EntitlementsTable,
+			Columns: []string{plan.EntitlementsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(entitlement.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_node = &Plan{config: puo.config}
 	_spec.Assign = _node.assignValues

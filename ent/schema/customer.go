@@ -44,6 +44,40 @@ func (Customer) Fields() []ent.Field {
 				"postgres": "varchar(255)",
 			}).
 			Optional(),
+		// Address fields
+		field.String("address_line1").
+			SchemaType(map[string]string{
+				"postgres": "varchar(255)",
+			}).
+			Optional(),
+		field.String("address_line2").
+			SchemaType(map[string]string{
+				"postgres": "varchar(255)",
+			}).
+			Optional(),
+		field.String("address_city").
+			SchemaType(map[string]string{
+				"postgres": "varchar(100)",
+			}).
+			Optional(),
+		field.String("address_state").
+			SchemaType(map[string]string{
+				"postgres": "varchar(100)",
+			}).
+			Optional(),
+		field.String("address_postal_code").
+			SchemaType(map[string]string{
+				"postgres": "varchar(20)",
+			}).
+			Optional(),
+		field.String("address_country").
+			SchemaType(map[string]string{
+				"postgres": "varchar(2)",
+			}).
+			Optional(),
+		// Metadata as JSON field
+		field.JSON("metadata", map[string]string{}).
+			Optional(),
 	}
 }
 

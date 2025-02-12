@@ -26,6 +26,8 @@ type Handlers struct {
 	Tenant       *v1.TenantHandler
 	Cron         *cron.SubscriptionHandler
 	Invoice      *v1.InvoiceHandler
+	Feature      *v1.FeatureHandler
+	Entitlement  *v1.EntitlementHandler
 }
 
 func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logger) *gin.Engine {
@@ -121,6 +123,9 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			plan.GET("/:id", handlers.Plan.GetPlan)
 			plan.PUT("/:id", handlers.Plan.UpdatePlan)
 			plan.DELETE("/:id", handlers.Plan.DeletePlan)
+
+			// entitlement routes
+			plan.GET("/:id/entitlements", handlers.Plan.GetPlanEntitlements)
 		}
 
 		subscription := v1Private.Group("/subscriptions")
@@ -157,6 +162,24 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			invoices.POST("/:id/void", handlers.Invoice.VoidInvoice)
 			invoices.PUT("/:id/payment", handlers.Invoice.UpdatePaymentStatus)
 			invoices.POST("/preview", handlers.Invoice.GetPreviewInvoice)
+		}
+
+		feature := v1Private.Group("/features")
+		{
+			feature.POST("", handlers.Feature.CreateFeature)
+			feature.GET("", handlers.Feature.GetFeatures)
+			feature.GET("/:id", handlers.Feature.GetFeature)
+			feature.PUT("/:id", handlers.Feature.UpdateFeature)
+			feature.DELETE("/:id", handlers.Feature.DeleteFeature)
+		}
+
+		entitlement := v1Private.Group("/entitlements")
+		{
+			entitlement.POST("", handlers.Entitlement.CreateEntitlement)
+			entitlement.GET("", handlers.Entitlement.ListEntitlements)
+			entitlement.GET("/:id", handlers.Entitlement.GetEntitlement)
+			entitlement.PUT("/:id", handlers.Entitlement.UpdateEntitlement)
+			entitlement.DELETE("/:id", handlers.Entitlement.DeleteEntitlement)
 		}
 
 		// Admin routes (API Key only)

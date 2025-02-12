@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/flexprice/flexprice/scripts/internal"
+	"github.com/flexprice/flexprice/scripts/local"
 )
 
 // Command represents a script that can be run
@@ -36,6 +37,11 @@ var commands = []Command{
 		Name:        "onboard-tenant",
 		Description: "Onboard a new tenant",
 		Run:         internal.OnboardNewTenant,
+	},
+	{
+		Name:        "migrate-subscription-line-items",
+		Description: "Migrate subscription line items",
+		Run:         local.MigrateSubscriptionLineItems,
 	},
 }
 

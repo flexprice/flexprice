@@ -10,9 +10,12 @@ type ExpandableField string
 
 // Common expandable fields
 const (
-	ExpandPrices ExpandableField = "prices"
-	ExpandPlan   ExpandableField = "plan"
-	ExpandMeters ExpandableField = "meters"
+	ExpandPrices       ExpandableField = "prices"
+	ExpandPlan         ExpandableField = "plan"
+	ExpandMeters       ExpandableField = "meters"
+	ExpandFeatures     ExpandableField = "features"
+	ExpandPlans        ExpandableField = "plans"
+	ExpandEntitlements ExpandableField = "entitlements"
 )
 
 // ExpandConfig defines which fields can be expanded and their nested expansions
@@ -27,9 +30,10 @@ type ExpandConfig struct {
 var (
 	// PlanExpandConfig defines what can be expanded on a plan
 	PlanExpandConfig = ExpandConfig{
-		AllowedFields: []ExpandableField{ExpandPrices, ExpandMeters},
+		AllowedFields: []ExpandableField{ExpandPrices, ExpandMeters, ExpandEntitlements},
 		NestedExpands: map[ExpandableField][]ExpandableField{
-			ExpandPrices: {ExpandMeters},
+			ExpandPrices:       {ExpandMeters},
+			ExpandEntitlements: {ExpandFeatures},
 		},
 	}
 
@@ -47,6 +51,13 @@ var (
 			ExpandPlan:   {ExpandPrices},
 			ExpandPrices: {ExpandMeters},
 		},
+	}
+
+	// EntitlementExpandConfig defines what can be expanded on an entitlement
+	EntitlementExpandConfig = ExpandConfig{
+		AllowedFields: []ExpandableField{ExpandFeatures},
+		NestedExpands: map[ExpandableField][]ExpandableField{
+			ExpandFeatures: {}},
 	}
 )
 

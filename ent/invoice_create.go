@@ -270,6 +270,20 @@ func (ic *InvoiceCreate) SetNillableFinalizedAt(t *time.Time) *InvoiceCreate {
 	return ic
 }
 
+// SetBillingPeriod sets the "billing_period" field.
+func (ic *InvoiceCreate) SetBillingPeriod(s string) *InvoiceCreate {
+	ic.mutation.SetBillingPeriod(s)
+	return ic
+}
+
+// SetNillableBillingPeriod sets the "billing_period" field if the given value is not nil.
+func (ic *InvoiceCreate) SetNillableBillingPeriod(s *string) *InvoiceCreate {
+	if s != nil {
+		ic.SetBillingPeriod(*s)
+	}
+	return ic
+}
+
 // SetPeriodStart sets the "period_start" field.
 func (ic *InvoiceCreate) SetPeriodStart(t time.Time) *InvoiceCreate {
 	ic.mutation.SetPeriodStart(t)
@@ -657,6 +671,10 @@ func (ic *InvoiceCreate) createSpec() (*Invoice, *sqlgraph.CreateSpec) {
 	if value, ok := ic.mutation.FinalizedAt(); ok {
 		_spec.SetField(invoice.FieldFinalizedAt, field.TypeTime, value)
 		_node.FinalizedAt = &value
+	}
+	if value, ok := ic.mutation.BillingPeriod(); ok {
+		_spec.SetField(invoice.FieldBillingPeriod, field.TypeString, value)
+		_node.BillingPeriod = &value
 	}
 	if value, ok := ic.mutation.PeriodStart(); ok {
 		_spec.SetField(invoice.FieldPeriodStart, field.TypeTime, value)

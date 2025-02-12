@@ -3,6 +3,7 @@
 package ent
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -34,7 +35,21 @@ type Customer struct {
 	// Name holds the value of the "name" field.
 	Name string `json:"name,omitempty"`
 	// Email holds the value of the "email" field.
-	Email        string `json:"email,omitempty"`
+	Email string `json:"email,omitempty"`
+	// AddressLine1 holds the value of the "address_line1" field.
+	AddressLine1 string `json:"address_line1,omitempty"`
+	// AddressLine2 holds the value of the "address_line2" field.
+	AddressLine2 string `json:"address_line2,omitempty"`
+	// AddressCity holds the value of the "address_city" field.
+	AddressCity string `json:"address_city,omitempty"`
+	// AddressState holds the value of the "address_state" field.
+	AddressState string `json:"address_state,omitempty"`
+	// AddressPostalCode holds the value of the "address_postal_code" field.
+	AddressPostalCode string `json:"address_postal_code,omitempty"`
+	// AddressCountry holds the value of the "address_country" field.
+	AddressCountry string `json:"address_country,omitempty"`
+	// Metadata holds the value of the "metadata" field.
+	Metadata     map[string]string `json:"metadata,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -43,7 +58,9 @@ func (*Customer) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case customer.FieldID, customer.FieldTenantID, customer.FieldStatus, customer.FieldCreatedBy, customer.FieldUpdatedBy, customer.FieldExternalID, customer.FieldName, customer.FieldEmail:
+		case customer.FieldMetadata:
+			values[i] = new([]byte)
+		case customer.FieldID, customer.FieldTenantID, customer.FieldStatus, customer.FieldCreatedBy, customer.FieldUpdatedBy, customer.FieldExternalID, customer.FieldName, customer.FieldEmail, customer.FieldAddressLine1, customer.FieldAddressLine2, customer.FieldAddressCity, customer.FieldAddressState, customer.FieldAddressPostalCode, customer.FieldAddressCountry:
 			values[i] = new(sql.NullString)
 		case customer.FieldCreatedAt, customer.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -122,6 +139,50 @@ func (c *Customer) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				c.Email = value.String
 			}
+		case customer.FieldAddressLine1:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field address_line1", values[i])
+			} else if value.Valid {
+				c.AddressLine1 = value.String
+			}
+		case customer.FieldAddressLine2:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field address_line2", values[i])
+			} else if value.Valid {
+				c.AddressLine2 = value.String
+			}
+		case customer.FieldAddressCity:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field address_city", values[i])
+			} else if value.Valid {
+				c.AddressCity = value.String
+			}
+		case customer.FieldAddressState:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field address_state", values[i])
+			} else if value.Valid {
+				c.AddressState = value.String
+			}
+		case customer.FieldAddressPostalCode:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field address_postal_code", values[i])
+			} else if value.Valid {
+				c.AddressPostalCode = value.String
+			}
+		case customer.FieldAddressCountry:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field address_country", values[i])
+			} else if value.Valid {
+				c.AddressCountry = value.String
+			}
+		case customer.FieldMetadata:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field metadata", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &c.Metadata); err != nil {
+					return fmt.Errorf("unmarshal field metadata: %w", err)
+				}
+			}
 		default:
 			c.selectValues.Set(columns[i], values[i])
 		}
@@ -184,6 +245,27 @@ func (c *Customer) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("email=")
 	builder.WriteString(c.Email)
+	builder.WriteString(", ")
+	builder.WriteString("address_line1=")
+	builder.WriteString(c.AddressLine1)
+	builder.WriteString(", ")
+	builder.WriteString("address_line2=")
+	builder.WriteString(c.AddressLine2)
+	builder.WriteString(", ")
+	builder.WriteString("address_city=")
+	builder.WriteString(c.AddressCity)
+	builder.WriteString(", ")
+	builder.WriteString("address_state=")
+	builder.WriteString(c.AddressState)
+	builder.WriteString(", ")
+	builder.WriteString("address_postal_code=")
+	builder.WriteString(c.AddressPostalCode)
+	builder.WriteString(", ")
+	builder.WriteString("address_country=")
+	builder.WriteString(c.AddressCountry)
+	builder.WriteString(", ")
+	builder.WriteString("metadata=")
+	builder.WriteString(fmt.Sprintf("%v", c.Metadata))
 	builder.WriteByte(')')
 	return builder.String()
 }

@@ -148,6 +148,11 @@ func meterFilterFn(ctx context.Context, m *meter.Meter, filter interface{}) bool
 		return false
 	}
 
+	// Apply meter ids filter
+	if len(f.MeterIDs) > 0 && !lo.Contains(f.MeterIDs, m.ID) {
+		return false
+	}
+
 	// Apply time range filter
 	if f.TimeRangeFilter != nil {
 		if f.StartTime != nil && m.CreatedAt.Before(*f.StartTime) {

@@ -45,6 +45,13 @@ func priceFilterFn(ctx context.Context, p *price.Price, filter interface{}) bool
 		}
 	}
 
+	// filter by price ids
+	if len(f.PriceIDs) > 0 {
+		if !lo.Contains(f.PriceIDs, p.ID) {
+			return false
+		}
+	}
+
 	// Filter by status
 	if f.Status != nil && p.Status != *f.Status {
 		return false
@@ -111,4 +118,29 @@ func (s *InMemoryPriceStore) ListAll(ctx context.Context, filter *types.PriceFil
 	}
 
 	return s.List(ctx, unlimitedFilter)
+}
+
+// CreateBulk creates multiple prices in bulk
+func (s *InMemoryPriceStore) CreateBulk(ctx context.Context, prices []*price.Price) error {
+	for _, p := range prices {
+		if err := s.Create(ctx, p); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// DeleteBulk deletes multiple prices in bulk
+func (s *InMemoryPriceStore) DeleteBulk(ctx context.Context, ids []string) error {
+	for _, id := range ids {
+		if err := s.Delete(ctx, id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Clear clears the price store
+func (s *InMemoryPriceStore) Clear() {
+	s.InMemoryStore.Clear()
 }

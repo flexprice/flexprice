@@ -109,6 +109,36 @@ func Email(v string) predicate.Customer {
 	return predicate.Customer(sql.FieldEQ(FieldEmail, v))
 }
 
+// AddressLine1 applies equality check predicate on the "address_line1" field. It's identical to AddressLine1EQ.
+func AddressLine1(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldEQ(FieldAddressLine1, v))
+}
+
+// AddressLine2 applies equality check predicate on the "address_line2" field. It's identical to AddressLine2EQ.
+func AddressLine2(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldEQ(FieldAddressLine2, v))
+}
+
+// AddressCity applies equality check predicate on the "address_city" field. It's identical to AddressCityEQ.
+func AddressCity(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldEQ(FieldAddressCity, v))
+}
+
+// AddressState applies equality check predicate on the "address_state" field. It's identical to AddressStateEQ.
+func AddressState(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldEQ(FieldAddressState, v))
+}
+
+// AddressPostalCode applies equality check predicate on the "address_postal_code" field. It's identical to AddressPostalCodeEQ.
+func AddressPostalCode(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldEQ(FieldAddressPostalCode, v))
+}
+
+// AddressCountry applies equality check predicate on the "address_country" field. It's identical to AddressCountryEQ.
+func AddressCountry(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldEQ(FieldAddressCountry, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.Customer {
 	return predicate.Customer(sql.FieldEQ(FieldTenantID, v))
@@ -672,6 +702,466 @@ func EmailEqualFold(v string) predicate.Customer {
 // EmailContainsFold applies the ContainsFold predicate on the "email" field.
 func EmailContainsFold(v string) predicate.Customer {
 	return predicate.Customer(sql.FieldContainsFold(FieldEmail, v))
+}
+
+// AddressLine1EQ applies the EQ predicate on the "address_line1" field.
+func AddressLine1EQ(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldEQ(FieldAddressLine1, v))
+}
+
+// AddressLine1NEQ applies the NEQ predicate on the "address_line1" field.
+func AddressLine1NEQ(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldNEQ(FieldAddressLine1, v))
+}
+
+// AddressLine1In applies the In predicate on the "address_line1" field.
+func AddressLine1In(vs ...string) predicate.Customer {
+	return predicate.Customer(sql.FieldIn(FieldAddressLine1, vs...))
+}
+
+// AddressLine1NotIn applies the NotIn predicate on the "address_line1" field.
+func AddressLine1NotIn(vs ...string) predicate.Customer {
+	return predicate.Customer(sql.FieldNotIn(FieldAddressLine1, vs...))
+}
+
+// AddressLine1GT applies the GT predicate on the "address_line1" field.
+func AddressLine1GT(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldGT(FieldAddressLine1, v))
+}
+
+// AddressLine1GTE applies the GTE predicate on the "address_line1" field.
+func AddressLine1GTE(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldGTE(FieldAddressLine1, v))
+}
+
+// AddressLine1LT applies the LT predicate on the "address_line1" field.
+func AddressLine1LT(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldLT(FieldAddressLine1, v))
+}
+
+// AddressLine1LTE applies the LTE predicate on the "address_line1" field.
+func AddressLine1LTE(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldLTE(FieldAddressLine1, v))
+}
+
+// AddressLine1Contains applies the Contains predicate on the "address_line1" field.
+func AddressLine1Contains(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldContains(FieldAddressLine1, v))
+}
+
+// AddressLine1HasPrefix applies the HasPrefix predicate on the "address_line1" field.
+func AddressLine1HasPrefix(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldHasPrefix(FieldAddressLine1, v))
+}
+
+// AddressLine1HasSuffix applies the HasSuffix predicate on the "address_line1" field.
+func AddressLine1HasSuffix(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldHasSuffix(FieldAddressLine1, v))
+}
+
+// AddressLine1IsNil applies the IsNil predicate on the "address_line1" field.
+func AddressLine1IsNil() predicate.Customer {
+	return predicate.Customer(sql.FieldIsNull(FieldAddressLine1))
+}
+
+// AddressLine1NotNil applies the NotNil predicate on the "address_line1" field.
+func AddressLine1NotNil() predicate.Customer {
+	return predicate.Customer(sql.FieldNotNull(FieldAddressLine1))
+}
+
+// AddressLine1EqualFold applies the EqualFold predicate on the "address_line1" field.
+func AddressLine1EqualFold(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldEqualFold(FieldAddressLine1, v))
+}
+
+// AddressLine1ContainsFold applies the ContainsFold predicate on the "address_line1" field.
+func AddressLine1ContainsFold(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldContainsFold(FieldAddressLine1, v))
+}
+
+// AddressLine2EQ applies the EQ predicate on the "address_line2" field.
+func AddressLine2EQ(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldEQ(FieldAddressLine2, v))
+}
+
+// AddressLine2NEQ applies the NEQ predicate on the "address_line2" field.
+func AddressLine2NEQ(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldNEQ(FieldAddressLine2, v))
+}
+
+// AddressLine2In applies the In predicate on the "address_line2" field.
+func AddressLine2In(vs ...string) predicate.Customer {
+	return predicate.Customer(sql.FieldIn(FieldAddressLine2, vs...))
+}
+
+// AddressLine2NotIn applies the NotIn predicate on the "address_line2" field.
+func AddressLine2NotIn(vs ...string) predicate.Customer {
+	return predicate.Customer(sql.FieldNotIn(FieldAddressLine2, vs...))
+}
+
+// AddressLine2GT applies the GT predicate on the "address_line2" field.
+func AddressLine2GT(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldGT(FieldAddressLine2, v))
+}
+
+// AddressLine2GTE applies the GTE predicate on the "address_line2" field.
+func AddressLine2GTE(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldGTE(FieldAddressLine2, v))
+}
+
+// AddressLine2LT applies the LT predicate on the "address_line2" field.
+func AddressLine2LT(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldLT(FieldAddressLine2, v))
+}
+
+// AddressLine2LTE applies the LTE predicate on the "address_line2" field.
+func AddressLine2LTE(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldLTE(FieldAddressLine2, v))
+}
+
+// AddressLine2Contains applies the Contains predicate on the "address_line2" field.
+func AddressLine2Contains(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldContains(FieldAddressLine2, v))
+}
+
+// AddressLine2HasPrefix applies the HasPrefix predicate on the "address_line2" field.
+func AddressLine2HasPrefix(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldHasPrefix(FieldAddressLine2, v))
+}
+
+// AddressLine2HasSuffix applies the HasSuffix predicate on the "address_line2" field.
+func AddressLine2HasSuffix(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldHasSuffix(FieldAddressLine2, v))
+}
+
+// AddressLine2IsNil applies the IsNil predicate on the "address_line2" field.
+func AddressLine2IsNil() predicate.Customer {
+	return predicate.Customer(sql.FieldIsNull(FieldAddressLine2))
+}
+
+// AddressLine2NotNil applies the NotNil predicate on the "address_line2" field.
+func AddressLine2NotNil() predicate.Customer {
+	return predicate.Customer(sql.FieldNotNull(FieldAddressLine2))
+}
+
+// AddressLine2EqualFold applies the EqualFold predicate on the "address_line2" field.
+func AddressLine2EqualFold(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldEqualFold(FieldAddressLine2, v))
+}
+
+// AddressLine2ContainsFold applies the ContainsFold predicate on the "address_line2" field.
+func AddressLine2ContainsFold(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldContainsFold(FieldAddressLine2, v))
+}
+
+// AddressCityEQ applies the EQ predicate on the "address_city" field.
+func AddressCityEQ(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldEQ(FieldAddressCity, v))
+}
+
+// AddressCityNEQ applies the NEQ predicate on the "address_city" field.
+func AddressCityNEQ(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldNEQ(FieldAddressCity, v))
+}
+
+// AddressCityIn applies the In predicate on the "address_city" field.
+func AddressCityIn(vs ...string) predicate.Customer {
+	return predicate.Customer(sql.FieldIn(FieldAddressCity, vs...))
+}
+
+// AddressCityNotIn applies the NotIn predicate on the "address_city" field.
+func AddressCityNotIn(vs ...string) predicate.Customer {
+	return predicate.Customer(sql.FieldNotIn(FieldAddressCity, vs...))
+}
+
+// AddressCityGT applies the GT predicate on the "address_city" field.
+func AddressCityGT(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldGT(FieldAddressCity, v))
+}
+
+// AddressCityGTE applies the GTE predicate on the "address_city" field.
+func AddressCityGTE(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldGTE(FieldAddressCity, v))
+}
+
+// AddressCityLT applies the LT predicate on the "address_city" field.
+func AddressCityLT(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldLT(FieldAddressCity, v))
+}
+
+// AddressCityLTE applies the LTE predicate on the "address_city" field.
+func AddressCityLTE(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldLTE(FieldAddressCity, v))
+}
+
+// AddressCityContains applies the Contains predicate on the "address_city" field.
+func AddressCityContains(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldContains(FieldAddressCity, v))
+}
+
+// AddressCityHasPrefix applies the HasPrefix predicate on the "address_city" field.
+func AddressCityHasPrefix(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldHasPrefix(FieldAddressCity, v))
+}
+
+// AddressCityHasSuffix applies the HasSuffix predicate on the "address_city" field.
+func AddressCityHasSuffix(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldHasSuffix(FieldAddressCity, v))
+}
+
+// AddressCityIsNil applies the IsNil predicate on the "address_city" field.
+func AddressCityIsNil() predicate.Customer {
+	return predicate.Customer(sql.FieldIsNull(FieldAddressCity))
+}
+
+// AddressCityNotNil applies the NotNil predicate on the "address_city" field.
+func AddressCityNotNil() predicate.Customer {
+	return predicate.Customer(sql.FieldNotNull(FieldAddressCity))
+}
+
+// AddressCityEqualFold applies the EqualFold predicate on the "address_city" field.
+func AddressCityEqualFold(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldEqualFold(FieldAddressCity, v))
+}
+
+// AddressCityContainsFold applies the ContainsFold predicate on the "address_city" field.
+func AddressCityContainsFold(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldContainsFold(FieldAddressCity, v))
+}
+
+// AddressStateEQ applies the EQ predicate on the "address_state" field.
+func AddressStateEQ(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldEQ(FieldAddressState, v))
+}
+
+// AddressStateNEQ applies the NEQ predicate on the "address_state" field.
+func AddressStateNEQ(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldNEQ(FieldAddressState, v))
+}
+
+// AddressStateIn applies the In predicate on the "address_state" field.
+func AddressStateIn(vs ...string) predicate.Customer {
+	return predicate.Customer(sql.FieldIn(FieldAddressState, vs...))
+}
+
+// AddressStateNotIn applies the NotIn predicate on the "address_state" field.
+func AddressStateNotIn(vs ...string) predicate.Customer {
+	return predicate.Customer(sql.FieldNotIn(FieldAddressState, vs...))
+}
+
+// AddressStateGT applies the GT predicate on the "address_state" field.
+func AddressStateGT(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldGT(FieldAddressState, v))
+}
+
+// AddressStateGTE applies the GTE predicate on the "address_state" field.
+func AddressStateGTE(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldGTE(FieldAddressState, v))
+}
+
+// AddressStateLT applies the LT predicate on the "address_state" field.
+func AddressStateLT(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldLT(FieldAddressState, v))
+}
+
+// AddressStateLTE applies the LTE predicate on the "address_state" field.
+func AddressStateLTE(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldLTE(FieldAddressState, v))
+}
+
+// AddressStateContains applies the Contains predicate on the "address_state" field.
+func AddressStateContains(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldContains(FieldAddressState, v))
+}
+
+// AddressStateHasPrefix applies the HasPrefix predicate on the "address_state" field.
+func AddressStateHasPrefix(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldHasPrefix(FieldAddressState, v))
+}
+
+// AddressStateHasSuffix applies the HasSuffix predicate on the "address_state" field.
+func AddressStateHasSuffix(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldHasSuffix(FieldAddressState, v))
+}
+
+// AddressStateIsNil applies the IsNil predicate on the "address_state" field.
+func AddressStateIsNil() predicate.Customer {
+	return predicate.Customer(sql.FieldIsNull(FieldAddressState))
+}
+
+// AddressStateNotNil applies the NotNil predicate on the "address_state" field.
+func AddressStateNotNil() predicate.Customer {
+	return predicate.Customer(sql.FieldNotNull(FieldAddressState))
+}
+
+// AddressStateEqualFold applies the EqualFold predicate on the "address_state" field.
+func AddressStateEqualFold(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldEqualFold(FieldAddressState, v))
+}
+
+// AddressStateContainsFold applies the ContainsFold predicate on the "address_state" field.
+func AddressStateContainsFold(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldContainsFold(FieldAddressState, v))
+}
+
+// AddressPostalCodeEQ applies the EQ predicate on the "address_postal_code" field.
+func AddressPostalCodeEQ(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldEQ(FieldAddressPostalCode, v))
+}
+
+// AddressPostalCodeNEQ applies the NEQ predicate on the "address_postal_code" field.
+func AddressPostalCodeNEQ(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldNEQ(FieldAddressPostalCode, v))
+}
+
+// AddressPostalCodeIn applies the In predicate on the "address_postal_code" field.
+func AddressPostalCodeIn(vs ...string) predicate.Customer {
+	return predicate.Customer(sql.FieldIn(FieldAddressPostalCode, vs...))
+}
+
+// AddressPostalCodeNotIn applies the NotIn predicate on the "address_postal_code" field.
+func AddressPostalCodeNotIn(vs ...string) predicate.Customer {
+	return predicate.Customer(sql.FieldNotIn(FieldAddressPostalCode, vs...))
+}
+
+// AddressPostalCodeGT applies the GT predicate on the "address_postal_code" field.
+func AddressPostalCodeGT(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldGT(FieldAddressPostalCode, v))
+}
+
+// AddressPostalCodeGTE applies the GTE predicate on the "address_postal_code" field.
+func AddressPostalCodeGTE(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldGTE(FieldAddressPostalCode, v))
+}
+
+// AddressPostalCodeLT applies the LT predicate on the "address_postal_code" field.
+func AddressPostalCodeLT(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldLT(FieldAddressPostalCode, v))
+}
+
+// AddressPostalCodeLTE applies the LTE predicate on the "address_postal_code" field.
+func AddressPostalCodeLTE(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldLTE(FieldAddressPostalCode, v))
+}
+
+// AddressPostalCodeContains applies the Contains predicate on the "address_postal_code" field.
+func AddressPostalCodeContains(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldContains(FieldAddressPostalCode, v))
+}
+
+// AddressPostalCodeHasPrefix applies the HasPrefix predicate on the "address_postal_code" field.
+func AddressPostalCodeHasPrefix(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldHasPrefix(FieldAddressPostalCode, v))
+}
+
+// AddressPostalCodeHasSuffix applies the HasSuffix predicate on the "address_postal_code" field.
+func AddressPostalCodeHasSuffix(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldHasSuffix(FieldAddressPostalCode, v))
+}
+
+// AddressPostalCodeIsNil applies the IsNil predicate on the "address_postal_code" field.
+func AddressPostalCodeIsNil() predicate.Customer {
+	return predicate.Customer(sql.FieldIsNull(FieldAddressPostalCode))
+}
+
+// AddressPostalCodeNotNil applies the NotNil predicate on the "address_postal_code" field.
+func AddressPostalCodeNotNil() predicate.Customer {
+	return predicate.Customer(sql.FieldNotNull(FieldAddressPostalCode))
+}
+
+// AddressPostalCodeEqualFold applies the EqualFold predicate on the "address_postal_code" field.
+func AddressPostalCodeEqualFold(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldEqualFold(FieldAddressPostalCode, v))
+}
+
+// AddressPostalCodeContainsFold applies the ContainsFold predicate on the "address_postal_code" field.
+func AddressPostalCodeContainsFold(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldContainsFold(FieldAddressPostalCode, v))
+}
+
+// AddressCountryEQ applies the EQ predicate on the "address_country" field.
+func AddressCountryEQ(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldEQ(FieldAddressCountry, v))
+}
+
+// AddressCountryNEQ applies the NEQ predicate on the "address_country" field.
+func AddressCountryNEQ(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldNEQ(FieldAddressCountry, v))
+}
+
+// AddressCountryIn applies the In predicate on the "address_country" field.
+func AddressCountryIn(vs ...string) predicate.Customer {
+	return predicate.Customer(sql.FieldIn(FieldAddressCountry, vs...))
+}
+
+// AddressCountryNotIn applies the NotIn predicate on the "address_country" field.
+func AddressCountryNotIn(vs ...string) predicate.Customer {
+	return predicate.Customer(sql.FieldNotIn(FieldAddressCountry, vs...))
+}
+
+// AddressCountryGT applies the GT predicate on the "address_country" field.
+func AddressCountryGT(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldGT(FieldAddressCountry, v))
+}
+
+// AddressCountryGTE applies the GTE predicate on the "address_country" field.
+func AddressCountryGTE(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldGTE(FieldAddressCountry, v))
+}
+
+// AddressCountryLT applies the LT predicate on the "address_country" field.
+func AddressCountryLT(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldLT(FieldAddressCountry, v))
+}
+
+// AddressCountryLTE applies the LTE predicate on the "address_country" field.
+func AddressCountryLTE(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldLTE(FieldAddressCountry, v))
+}
+
+// AddressCountryContains applies the Contains predicate on the "address_country" field.
+func AddressCountryContains(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldContains(FieldAddressCountry, v))
+}
+
+// AddressCountryHasPrefix applies the HasPrefix predicate on the "address_country" field.
+func AddressCountryHasPrefix(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldHasPrefix(FieldAddressCountry, v))
+}
+
+// AddressCountryHasSuffix applies the HasSuffix predicate on the "address_country" field.
+func AddressCountryHasSuffix(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldHasSuffix(FieldAddressCountry, v))
+}
+
+// AddressCountryIsNil applies the IsNil predicate on the "address_country" field.
+func AddressCountryIsNil() predicate.Customer {
+	return predicate.Customer(sql.FieldIsNull(FieldAddressCountry))
+}
+
+// AddressCountryNotNil applies the NotNil predicate on the "address_country" field.
+func AddressCountryNotNil() predicate.Customer {
+	return predicate.Customer(sql.FieldNotNull(FieldAddressCountry))
+}
+
+// AddressCountryEqualFold applies the EqualFold predicate on the "address_country" field.
+func AddressCountryEqualFold(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldEqualFold(FieldAddressCountry, v))
+}
+
+// AddressCountryContainsFold applies the ContainsFold predicate on the "address_country" field.
+func AddressCountryContainsFold(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldContainsFold(FieldAddressCountry, v))
+}
+
+// MetadataIsNil applies the IsNil predicate on the "metadata" field.
+func MetadataIsNil() predicate.Customer {
+	return predicate.Customer(sql.FieldIsNull(FieldMetadata))
+}
+
+// MetadataNotNil applies the NotNil predicate on the "metadata" field.
+func MetadataNotNil() predicate.Customer {
+	return predicate.Customer(sql.FieldNotNull(FieldMetadata))
 }
 
 // And groups predicates with the AND operator between them.

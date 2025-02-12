@@ -104,3 +104,26 @@ func (s *InMemoryPlanStore) ListAll(ctx context.Context, filter *types.PlanFilte
 
 	return s.List(ctx, unlimitedFilter)
 }
+
+// GetByLookupKey retrieves a plan by its lookup key
+func (s *InMemoryPlanStore) GetByLookupKey(ctx context.Context, lookupKey string) (*plan.Plan, error) {
+	plans, err := s.List(ctx, &types.PlanFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	for _, p := range plans {
+		if p.LookupKey == lookupKey && p.Status == types.StatusPublished {
+			return p, nil
+		}
+	}
+
+	return nil, fmt.Errorf("plan with lookup key %s not found", lookupKey)
+}
+
+// Clear clears the plan store
+func (s *InMemoryPlanStore) Clear() {
+	s.InMemoryStore.Clear()
+}

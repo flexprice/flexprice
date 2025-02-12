@@ -38,8 +38,29 @@ type Plan struct {
 	// InvoiceCadence holds the value of the "invoice_cadence" field.
 	InvoiceCadence string `json:"invoice_cadence,omitempty"`
 	// TrialPeriod holds the value of the "trial_period" field.
-	TrialPeriod  int `json:"trial_period,omitempty"`
+	TrialPeriod int `json:"trial_period,omitempty"`
+	// Edges holds the relations/edges for other nodes in the graph.
+	// The values are being populated by the PlanQuery when eager-loading is set.
+	Edges        PlanEdges `json:"edges"`
 	selectValues sql.SelectValues
+}
+
+// PlanEdges holds the relations/edges for other nodes in the graph.
+type PlanEdges struct {
+	// Entitlements holds the value of the entitlements edge.
+	Entitlements []*Entitlement `json:"entitlements,omitempty"`
+	// loadedTypes holds the information for reporting if a
+	// type was loaded (or requested) in eager-loading or not.
+	loadedTypes [1]bool
+}
+
+// EntitlementsOrErr returns the Entitlements value or an error if the edge
+// was not loaded in eager-loading.
+func (e PlanEdges) EntitlementsOrErr() ([]*Entitlement, error) {
+	if e.loadedTypes[0] {
+		return e.Entitlements, nil
+	}
+	return nil, &NotLoadedError{edge: "entitlements"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -151,6 +172,11 @@ func (pl *Plan) assignValues(columns []string, values []any) error {
 // This includes values selected through modifiers, order, etc.
 func (pl *Plan) Value(name string) (ent.Value, error) {
 	return pl.selectValues.Get(name)
+}
+
+// QueryEntitlements queries the "entitlements" edge of the Plan entity.
+func (pl *Plan) QueryEntitlements() *EntitlementQuery {
+	return NewPlanClient(pl.config).QueryEntitlements(pl)
 }
 
 // Update returns a builder for updating this Plan.

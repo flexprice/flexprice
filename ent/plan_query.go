@@ -4,6 +4,7 @@ package ent
 
 import (
 	"context"
+	"database/sql/driver"
 	"fmt"
 	"math"
 
@@ -11,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/predicate"
 )
@@ -18,10 +20,11 @@ import (
 // PlanQuery is the builder for querying Plan entities.
 type PlanQuery struct {
 	config
-	ctx        *QueryContext
-	order      []plan.OrderOption
-	inters     []Interceptor
-	predicates []predicate.Plan
+	ctx              *QueryContext
+	order            []plan.OrderOption
+	inters           []Interceptor
+	predicates       []predicate.Plan
+	withEntitlements *EntitlementQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -56,6 +59,28 @@ func (pq *PlanQuery) Unique(unique bool) *PlanQuery {
 func (pq *PlanQuery) Order(o ...plan.OrderOption) *PlanQuery {
 	pq.order = append(pq.order, o...)
 	return pq
+}
+
+// QueryEntitlements chains the current query on the "entitlements" edge.
+func (pq *PlanQuery) QueryEntitlements() *EntitlementQuery {
+	query := (&EntitlementClient{config: pq.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := pq.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := pq.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(plan.Table, plan.FieldID, selector),
+			sqlgraph.To(entitlement.Table, entitlement.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, plan.EntitlementsTable, plan.EntitlementsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(pq.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
 }
 
 // First returns the first Plan entity from the query.
@@ -245,15 +270,27 @@ func (pq *PlanQuery) Clone() *PlanQuery {
 		return nil
 	}
 	return &PlanQuery{
-		config:     pq.config,
-		ctx:        pq.ctx.Clone(),
-		order:      append([]plan.OrderOption{}, pq.order...),
-		inters:     append([]Interceptor{}, pq.inters...),
-		predicates: append([]predicate.Plan{}, pq.predicates...),
+		config:           pq.config,
+		ctx:              pq.ctx.Clone(),
+		order:            append([]plan.OrderOption{}, pq.order...),
+		inters:           append([]Interceptor{}, pq.inters...),
+		predicates:       append([]predicate.Plan{}, pq.predicates...),
+		withEntitlements: pq.withEntitlements.Clone(),
 		// clone intermediate query.
 		sql:  pq.sql.Clone(),
 		path: pq.path,
 	}
+}
+
+// WithEntitlements tells the query-builder to eager-load the nodes that are connected to
+// the "entitlements" edge. The optional arguments are used to configure the query builder of the edge.
+func (pq *PlanQuery) WithEntitlements(opts ...func(*EntitlementQuery)) *PlanQuery {
+	query := (&EntitlementClient{config: pq.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	pq.withEntitlements = query
+	return pq
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -332,8 +369,11 @@ func (pq *PlanQuery) prepareQuery(ctx context.Context) error {
 
 func (pq *PlanQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Plan, error) {
 	var (
-		nodes = []*Plan{}
-		_spec = pq.querySpec()
+		nodes       = []*Plan{}
+		_spec       = pq.querySpec()
+		loadedTypes = [1]bool{
+			pq.withEntitlements != nil,
+		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*Plan).scanValues(nil, columns)
@@ -341,6 +381,7 @@ func (pq *PlanQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Plan, e
 	_spec.Assign = func(columns []string, values []any) error {
 		node := &Plan{config: pq.config}
 		nodes = append(nodes, node)
+		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
@@ -352,7 +393,45 @@ func (pq *PlanQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Plan, e
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
+	if query := pq.withEntitlements; query != nil {
+		if err := pq.loadEntitlements(ctx, query, nodes,
+			func(n *Plan) { n.Edges.Entitlements = []*Entitlement{} },
+			func(n *Plan, e *Entitlement) { n.Edges.Entitlements = append(n.Edges.Entitlements, e) }); err != nil {
+			return nil, err
+		}
+	}
 	return nodes, nil
+}
+
+func (pq *PlanQuery) loadEntitlements(ctx context.Context, query *EntitlementQuery, nodes []*Plan, init func(*Plan), assign func(*Plan, *Entitlement)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[string]*Plan)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(entitlement.FieldPlanID)
+	}
+	query.Where(predicate.Entitlement(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(plan.EntitlementsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.PlanID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "plan_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
 }
 
 func (pq *PlanQuery) sqlCount(ctx context.Context) (int, error) {

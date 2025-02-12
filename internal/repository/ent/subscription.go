@@ -63,7 +63,7 @@ func (r *subscriptionRepository) Create(ctx context.Context, sub *domainSub.Subs
 	}
 
 	// Update the input subscription with created data
-	*sub = *toDomainSubscription(subscription)
+	*sub = *domainSub.GetSubscriptionFromEnt(subscription)
 	return nil
 }
 
@@ -84,7 +84,7 @@ func (r *subscriptionRepository) Get(ctx context.Context, id string) (*domainSub
 		return nil, errors.WithOp(err, "repository.subscription.Get")
 	}
 
-	return toDomainSubscription(sub), nil
+	return domainSub.GetSubscriptionFromEnt(sub), nil
 }
 
 func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subscription) error {
@@ -193,7 +193,7 @@ func (r *subscriptionRepository) List(ctx context.Context, filter *types.Subscri
 	// Convert to domain model
 	result := make([]*domainSub.Subscription, len(subs))
 	for i, sub := range subs {
-		result[i] = toDomainSubscription(sub)
+		result[i] = domainSub.GetSubscriptionFromEnt(sub)
 	}
 
 	return result, nil
@@ -248,7 +248,7 @@ func (r *subscriptionRepository) ListAllTenant(ctx context.Context, filter *type
 	// Convert to domain model
 	result := make([]*domainSub.Subscription, len(subs))
 	for i, sub := range subs {
-		result[i] = toDomainSubscription(sub)
+		result[i] = domainSub.GetSubscriptionFromEnt(sub)
 	}
 
 	return result, nil
@@ -405,36 +405,71 @@ func (o *SubscriptionQueryOptions) applyEntityQueryOptions(ctx context.Context, 
 	return query
 }
 
-func toDomainSubscription(sub *ent.Subscription) *domainSub.Subscription {
-	return &domainSub.Subscription{
-		ID:                 sub.ID,
-		LookupKey:          sub.LookupKey,
-		CustomerID:         sub.CustomerID,
-		PlanID:             sub.PlanID,
-		SubscriptionStatus: types.SubscriptionStatus(sub.SubscriptionStatus),
-		Currency:           sub.Currency,
-		BillingAnchor:      sub.BillingAnchor,
-		StartDate:          sub.StartDate,
-		EndDate:            sub.EndDate,
-		CurrentPeriodStart: sub.CurrentPeriodStart,
-		CurrentPeriodEnd:   sub.CurrentPeriodEnd,
-		CancelledAt:        sub.CancelledAt,
-		CancelAt:           sub.CancelAt,
-		CancelAtPeriodEnd:  sub.CancelAtPeriodEnd,
-		TrialStart:         sub.TrialStart,
-		TrialEnd:           sub.TrialEnd,
-		InvoiceCadence:     types.InvoiceCadence(sub.InvoiceCadence),
-		BillingCadence:     types.BillingCadence(sub.BillingCadence),
-		BillingPeriod:      types.BillingPeriod(sub.BillingPeriod),
-		BillingPeriodCount: sub.BillingPeriodCount,
-		Version:            sub.Version,
-		BaseModel: types.BaseModel{
-			TenantID:  sub.TenantID,
-			Status:    types.Status(sub.Status),
-			CreatedAt: sub.CreatedAt,
-			CreatedBy: sub.CreatedBy,
-			UpdatedAt: sub.UpdatedAt,
-			UpdatedBy: sub.UpdatedBy,
-		},
+// Add new methods for line items
+func (r *subscriptionRepository) CreateWithLineItems(ctx context.Context, sub *domainSub.Subscription, items []*domainSub.SubscriptionLineItem) error {
+	return r.client.WithTx(ctx, func(ctx context.Context) error {
+		// Create subscription first
+		if err := r.Create(ctx, sub); err != nil {
+			return fmt.Errorf("failed to create subscription: %w", err)
+		}
+
+		// Create line items
+		client := r.client.Querier(ctx)
+		bulk := make([]*ent.SubscriptionLineItemCreate, len(items))
+		for i, item := range items {
+			bulk[i] = client.SubscriptionLineItem.Create().
+				SetID(item.ID).
+				SetSubscriptionID(item.SubscriptionID).
+				SetCustomerID(item.CustomerID).
+				SetNillablePlanID(types.ToNillableString(item.PlanID)).
+				SetNillablePlanDisplayName(types.ToNillableString(item.PlanDisplayName)).
+				SetPriceID(item.PriceID).
+				SetNillablePriceType(types.ToNillableString(string(item.PriceType))).
+				SetNillableMeterID(types.ToNillableString(item.MeterID)).
+				SetNillableMeterDisplayName(types.ToNillableString(item.MeterDisplayName)).
+				SetNillableDisplayName(types.ToNillableString(item.DisplayName)).
+				SetQuantity(item.Quantity).
+				SetCurrency(item.Currency).
+				SetBillingPeriod(string(item.BillingPeriod)).
+				SetNillableStartDate(types.ToNillableTime(item.StartDate)).
+				SetNillableEndDate(types.ToNillableTime(item.EndDate)).
+				SetMetadata(item.Metadata).
+				SetTenantID(item.TenantID).
+				SetStatus(string(item.Status)).
+				SetCreatedBy(item.CreatedBy).
+				SetUpdatedBy(item.UpdatedBy).
+				SetCreatedAt(time.Now()).
+				SetUpdatedAt(time.Now())
+		}
+
+		if err := client.SubscriptionLineItem.CreateBulk(bulk...).Exec(ctx); err != nil {
+			return fmt.Errorf("failed to create subscription line items: %w", err)
+		}
+
+		return nil
+	})
+}
+
+func (r *subscriptionRepository) GetWithLineItems(ctx context.Context, id string) (*domainSub.Subscription, []*domainSub.SubscriptionLineItem, error) {
+	client := r.client.Querier(ctx)
+	sub, err := client.Subscription.Query().
+		Where(
+			subscription.ID(id),
+			subscription.TenantID(types.GetTenantID(ctx)),
+			subscription.Status(string(types.StatusPublished)),
+		).
+		WithLineItems().
+		Only(ctx)
+
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, nil, domainSub.NewNotFoundError(id)
+		}
+		return nil, nil, errors.WithOp(err, "repository.subscription.GetWithLineItems")
 	}
+
+	s := domainSub.GetSubscriptionFromEnt(sub)
+	s.LineItems = domainSub.GetLineItemFromEntList(sub.Edges.LineItems)
+
+	return s, s.LineItems, nil
 }

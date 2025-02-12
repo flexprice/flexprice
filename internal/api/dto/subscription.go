@@ -10,6 +10,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/go-playground/validator/v10"
+	"github.com/shopspring/decimal"
 )
 
 type CreateSubscriptionRequest struct {
@@ -25,6 +26,7 @@ type CreateSubscriptionRequest struct {
 	BillingCadence     types.BillingCadence `json:"billing_cadence" validate:"required"`
 	BillingPeriod      types.BillingPeriod  `json:"billing_period" validate:"required"`
 	BillingPeriodCount int                  `json:"billing_period_count" validate:"required,min=1"`
+	Metadata           map[string]string    `json:"metadata,omitempty"`
 }
 
 type UpdateSubscriptionRequest struct {
@@ -46,6 +48,26 @@ func (r *CreateSubscriptionRequest) Validate() error {
 	err := validator.New().Struct(r)
 	if err != nil {
 		return err
+	}
+
+	if err := r.InvoiceCadence.Validate(); err != nil {
+		return fmt.Errorf("invalid invoice cadence: %w", err)
+	}
+
+	if err := r.BillingCadence.Validate(); err != nil {
+		return fmt.Errorf("invalid billing cadence: %w", err)
+	}
+
+	if err := r.BillingPeriod.Validate(); err != nil {
+		return fmt.Errorf("invalid billing period: %w", err)
+	}
+
+	if r.BillingPeriodCount < 1 {
+		return fmt.Errorf("billing_period_count must be greater than 0")
+	}
+
+	if r.PlanID == "" {
+		return fmt.Errorf("plan_id is required")
 	}
 
 	if r.StartDate.After(time.Now().UTC()) {
@@ -89,7 +111,33 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		BillingPeriod:      r.BillingPeriod,
 		BillingPeriodCount: r.BillingPeriodCount,
 		BillingAnchor:      r.StartDate,
+		Metadata:           r.Metadata,
 		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+}
+
+// SubscriptionLineItemRequest represents the request to create a subscription line item
+type SubscriptionLineItemRequest struct {
+	PriceID     string            `json:"price_id" validate:"required"`
+	Quantity    decimal.Decimal   `json:"quantity" validate:"required"`
+	DisplayName string            `json:"display_name,omitempty"`
+	Metadata    map[string]string `json:"metadata,omitempty"`
+}
+
+// SubscriptionLineItemResponse represents the response for a subscription line item
+type SubscriptionLineItemResponse struct {
+	*subscription.SubscriptionLineItem
+}
+
+// ToSubscriptionLineItem converts a request to a domain subscription line item
+func (r *SubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.Context) *subscription.SubscriptionLineItem {
+	return &subscription.SubscriptionLineItem{
+		ID:          types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+		PriceID:     r.PriceID,
+		Quantity:    r.Quantity,
+		DisplayName: r.DisplayName,
+		Metadata:    r.Metadata,
+		BaseModel:   types.GetDefaultBaseModel(ctx),
 	}
 }
 

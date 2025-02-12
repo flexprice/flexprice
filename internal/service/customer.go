@@ -2,11 +2,11 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -28,22 +28,27 @@ func NewCustomerService(repo customer.Repository) CustomerService {
 
 func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCustomerRequest) (*dto.CustomerResponse, error) {
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid request: %w", err)
+		return nil, errors.Wrap(errors.ErrValidation, errors.ErrCodeValidation, err.Error())
 	}
 
-	customer := req.ToCustomer(ctx)
+	cust := req.ToCustomer(ctx)
 
-	if err := s.repo.Create(ctx, customer); err != nil {
-		return nil, fmt.Errorf("failed to create customer: %w", err)
+	// Validate address fields
+	if err := customer.ValidateAddress(cust); err != nil {
+		return nil, errors.Wrap(err, errors.ErrCodeValidation, "invalid address")
 	}
 
-	return &dto.CustomerResponse{Customer: customer}, nil
+	if err := s.repo.Create(ctx, cust); err != nil {
+		return nil, errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to create customer")
+	}
+
+	return &dto.CustomerResponse{Customer: cust}, nil
 }
 
 func (s *customerService) GetCustomer(ctx context.Context, id string) (*dto.CustomerResponse, error) {
 	customer, err := s.repo.Get(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get customer: %w", err)
+		return nil, errors.Wrap(err, errors.ErrCodeNotFound, "failed to get customer")
 	}
 
 	return &dto.CustomerResponse{Customer: customer}, nil
@@ -57,17 +62,17 @@ func (s *customerService) GetCustomers(ctx context.Context, filter *types.Custom
 	}
 
 	if err := filter.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid filter: %w", err)
+		return nil, errors.Wrap(err, errors.ErrCodeValidation, "invalid filter")
 	}
 
 	customers, err := s.repo.List(ctx, filter)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list customers: %w", err)
+		return nil, errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to list customers")
 	}
 
 	total, err := s.repo.Count(ctx, filter)
 	if err != nil {
-		return nil, fmt.Errorf("failed to count customers: %w", err)
+		return nil, errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to count customers")
 	}
 
 	var response []*dto.CustomerResponse
@@ -83,37 +88,71 @@ func (s *customerService) GetCustomers(ctx context.Context, filter *types.Custom
 
 func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto.UpdateCustomerRequest) (*dto.CustomerResponse, error) {
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid request: %w", err)
+		return nil, errors.Wrap(err, errors.ErrCodeValidation, err.Error())
 	}
 
-	customer, err := s.repo.Get(ctx, id)
+	cust, err := s.repo.Get(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get customer: %w", err)
+		return nil, errors.Wrap(err, errors.ErrCodeNotFound, "failed to get customer")
 	}
 
+	// Update basic fields
 	if req.ExternalID != nil {
-		customer.ExternalID = *req.ExternalID
+		cust.ExternalID = *req.ExternalID
 	}
 	if req.Name != nil {
-		customer.Name = *req.Name
+		cust.Name = *req.Name
 	}
 	if req.Email != nil {
-		customer.Email = *req.Email
+		cust.Email = *req.Email
 	}
 
-	customer.UpdatedAt = time.Now().UTC()
-	customer.UpdatedBy = types.GetUserID(ctx)
-
-	if err := s.repo.Update(ctx, customer); err != nil {
-		return nil, fmt.Errorf("failed to update customer: %w", err)
+	// Update address fields
+	if req.AddressLine1 != nil {
+		cust.AddressLine1 = *req.AddressLine1
+	}
+	if req.AddressLine2 != nil {
+		cust.AddressLine2 = *req.AddressLine2
+	}
+	if req.AddressCity != nil {
+		cust.AddressCity = *req.AddressCity
+	}
+	if req.AddressState != nil {
+		cust.AddressState = *req.AddressState
+	}
+	if req.AddressPostalCode != nil {
+		cust.AddressPostalCode = *req.AddressPostalCode
+	}
+	if req.AddressCountry != nil {
+		cust.AddressCountry = *req.AddressCountry
 	}
 
-	return &dto.CustomerResponse{Customer: customer}, nil
+	// Update metadata if provided
+	if req.Metadata != nil {
+		cust.Metadata = req.Metadata
+	}
+
+	// Validate address fields after update
+	if err := customer.ValidateAddress(cust); err != nil {
+		return nil, errors.Wrap(err, errors.ErrCodeValidation, "invalid address")
+	}
+
+	cust.UpdatedAt = time.Now().UTC()
+	cust.UpdatedBy = types.GetUserID(ctx)
+
+	if err := s.repo.Update(ctx, cust); err != nil {
+		return nil, errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to update customer")
+	}
+
+	return &dto.CustomerResponse{Customer: cust}, nil
 }
 
 func (s *customerService) DeleteCustomer(ctx context.Context, id string) error {
 	if err := s.repo.Delete(ctx, id); err != nil {
-		return fmt.Errorf("failed to delete customer: %w", err)
+		if errors.IsNotFound(err) {
+			return errors.Wrap(err, errors.ErrCodeNotFound, "customer not found")
+		}
+		return errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to delete customer")
 	}
 
 	return nil

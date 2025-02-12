@@ -59,6 +59,8 @@ type Invoice struct {
 	VoidedAt *time.Time `json:"voided_at,omitempty"`
 	// FinalizedAt holds the value of the "finalized_at" field.
 	FinalizedAt *time.Time `json:"finalized_at,omitempty"`
+	// BillingPeriod holds the value of the "billing_period" field.
+	BillingPeriod *string `json:"billing_period,omitempty"`
 	// PeriodStart holds the value of the "period_start" field.
 	PeriodStart *time.Time `json:"period_start,omitempty"`
 	// PeriodEnd holds the value of the "period_end" field.
@@ -112,7 +114,7 @@ func (*Invoice) scanValues(columns []string) ([]any, error) {
 			values[i] = new(decimal.Decimal)
 		case invoice.FieldVersion, invoice.FieldBillingSequence:
 			values[i] = new(sql.NullInt64)
-		case invoice.FieldID, invoice.FieldTenantID, invoice.FieldStatus, invoice.FieldCreatedBy, invoice.FieldUpdatedBy, invoice.FieldCustomerID, invoice.FieldSubscriptionID, invoice.FieldInvoiceType, invoice.FieldInvoiceStatus, invoice.FieldPaymentStatus, invoice.FieldCurrency, invoice.FieldDescription, invoice.FieldInvoicePdfURL, invoice.FieldBillingReason, invoice.FieldInvoiceNumber, invoice.FieldIdempotencyKey:
+		case invoice.FieldID, invoice.FieldTenantID, invoice.FieldStatus, invoice.FieldCreatedBy, invoice.FieldUpdatedBy, invoice.FieldCustomerID, invoice.FieldSubscriptionID, invoice.FieldInvoiceType, invoice.FieldInvoiceStatus, invoice.FieldPaymentStatus, invoice.FieldCurrency, invoice.FieldDescription, invoice.FieldBillingPeriod, invoice.FieldInvoicePdfURL, invoice.FieldBillingReason, invoice.FieldInvoiceNumber, invoice.FieldIdempotencyKey:
 			values[i] = new(sql.NullString)
 		case invoice.FieldCreatedAt, invoice.FieldUpdatedAt, invoice.FieldDueDate, invoice.FieldPaidAt, invoice.FieldVoidedAt, invoice.FieldFinalizedAt, invoice.FieldPeriodStart, invoice.FieldPeriodEnd:
 			values[i] = new(sql.NullTime)
@@ -261,6 +263,13 @@ func (i *Invoice) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				i.FinalizedAt = new(time.Time)
 				*i.FinalizedAt = value.Time
+			}
+		case invoice.FieldBillingPeriod:
+			if value, ok := values[j].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field billing_period", values[j])
+			} else if value.Valid {
+				i.BillingPeriod = new(string)
+				*i.BillingPeriod = value.String
 			}
 		case invoice.FieldPeriodStart:
 			if value, ok := values[j].(*sql.NullTime); !ok {
@@ -433,6 +442,11 @@ func (i *Invoice) String() string {
 	if v := i.FinalizedAt; v != nil {
 		builder.WriteString("finalized_at=")
 		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := i.BillingPeriod; v != nil {
+		builder.WriteString("billing_period=")
+		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	if v := i.PeriodStart; v != nil {

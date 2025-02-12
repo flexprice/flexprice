@@ -72,6 +72,7 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 		PaidAt:          inv.PaidAt,
 		VoidedAt:        inv.VoidedAt,
 		FinalizedAt:     inv.FinalizedAt,
+		BillingPeriod:   inv.BillingPeriod,
 		PeriodStart:     inv.PeriodStart,
 		PeriodEnd:       inv.PeriodEnd,
 		InvoicePDFURL:   inv.InvoicePDFURL,

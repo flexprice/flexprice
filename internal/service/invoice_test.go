@@ -76,6 +76,8 @@ func (s *InvoiceServiceSuite) setupService() {
 		s.GetStores().MeterRepo,
 		s.GetStores().CustomerRepo,
 		s.invoiceRepo,
+		s.GetStores().EntitlementRepo,
+		s.GetStores().FeatureRepo,
 		s.GetPublisher(),
 		s.GetWebhookPublisher(),
 		s.GetDB(),
@@ -188,7 +190,44 @@ func (s *InvoiceServiceSuite) setupTestData() {
 		SubscriptionStatus: types.SubscriptionStatusActive,
 		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
 	}
-	s.NoError(s.GetStores().SubscriptionRepo.Create(s.GetContext(), s.testData.subscription))
+
+	// Create line items for the subscription
+	lineItems := []*subscription.SubscriptionLineItem{
+		{
+			ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+			SubscriptionID:   s.testData.subscription.ID,
+			CustomerID:       s.testData.subscription.CustomerID,
+			PlanID:           s.testData.plan.ID,
+			PlanDisplayName:  s.testData.plan.Name,
+			PriceID:          s.testData.prices.storage.ID,
+			PriceType:        s.testData.prices.storage.Type,
+			MeterID:          s.testData.meters.storage.ID,
+			MeterDisplayName: s.testData.meters.storage.Name,
+			DisplayName:      "Storage",
+			Quantity:         decimal.Zero,
+			Currency:         s.testData.subscription.Currency,
+			BillingPeriod:    s.testData.subscription.BillingPeriod,
+			BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+		},
+		{
+			ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+			SubscriptionID:   s.testData.subscription.ID,
+			CustomerID:       s.testData.subscription.CustomerID,
+			PlanID:           s.testData.plan.ID,
+			PlanDisplayName:  s.testData.plan.Name,
+			PriceID:          s.testData.prices.apiCalls.ID,
+			PriceType:        s.testData.prices.apiCalls.Type,
+			MeterID:          s.testData.meters.apiCalls.ID,
+			MeterDisplayName: s.testData.meters.apiCalls.Name,
+			DisplayName:      "API Calls",
+			Quantity:         decimal.Zero,
+			Currency:         s.testData.subscription.Currency,
+			BillingPeriod:    s.testData.subscription.BillingPeriod,
+			BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+		},
+	}
+
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(s.GetContext(), s.testData.subscription, lineItems))
 
 	// Create test events
 	for i := 0; i < 500; i++ {
@@ -264,11 +303,14 @@ func (s *InvoiceServiceSuite) TestCreateSubscriptionInvoice() {
 			}
 
 			// Create subscription invoice
+			req := &dto.CreateSubscriptionInvoiceRequest{
+				SubscriptionID: s.testData.subscription.ID,
+				PeriodStart:    s.testData.subscription.CurrentPeriodStart,
+				PeriodEnd:      s.testData.subscription.CurrentPeriodEnd,
+			}
 			got, err := s.service.CreateSubscriptionInvoice(
 				s.GetContext(),
-				s.testData.subscription,
-				s.testData.subscription.CurrentPeriodStart,
-				s.testData.subscription.CurrentPeriodEnd,
+				req,
 			)
 
 			if tt.wantErr {
@@ -349,6 +391,7 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice() {
 		AmountPaid:      decimal.Zero,
 		AmountRemaining: decimal.NewFromFloat(15),
 		Description:     "Test Invoice",
+		BillingPeriod:   lo.ToPtr(string(s.testData.subscription.BillingPeriod)),
 		PeriodStart:     &s.testData.subscription.CurrentPeriodStart,
 		PeriodEnd:       &s.testData.subscription.CurrentPeriodEnd,
 		BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
@@ -438,6 +481,7 @@ func (s *InvoiceServiceSuite) TestUpdatePaymentStatus() {
 		AmountPaid:      decimal.Zero,
 		AmountRemaining: decimal.NewFromFloat(15),
 		Description:     "Test Invoice",
+		BillingPeriod:   lo.ToPtr(string(s.testData.subscription.BillingPeriod)),
 		PeriodStart:     &s.testData.subscription.CurrentPeriodStart,
 		PeriodEnd:       &s.testData.subscription.CurrentPeriodEnd,
 		BaseModel:       types.GetDefaultBaseModel(s.GetContext()),

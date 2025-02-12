@@ -7,8 +7,10 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/auth"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
@@ -39,6 +41,8 @@ type Stores struct {
 	UserRepo         user.Repository
 	TenantRepo       tenant.Repository
 	EnvironmentRepo  environment.Repository
+	EntitlementRepo  entitlement.Repository
+	FeatureRepo      feature.Repository
 }
 
 // BaseServiceTestSuite provides common functionality for all service test suites
@@ -103,6 +107,8 @@ func (s *BaseServiceTestSuite) setupStores() {
 		UserRepo:         NewInMemoryUserStore(),
 		TenantRepo:       NewInMemoryTenantStore(),
 		EnvironmentRepo:  NewInMemoryEnvironmentStore(),
+		EntitlementRepo:  NewInMemoryEntitlementStore(),
+		FeatureRepo:      NewInMemoryFeatureStore(),
 	}
 
 	s.db = NewMockPostgresClient(s.logger)
@@ -129,6 +135,8 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.UserRepo.(*InMemoryUserStore).Clear()
 	s.stores.TenantRepo.(*InMemoryTenantStore).Clear()
 	s.stores.EnvironmentRepo.(*InMemoryEnvironmentStore).Clear()
+	s.stores.EntitlementRepo.(*InMemoryEntitlementStore).Clear()
+	s.stores.FeatureRepo.(*InMemoryFeatureStore).Clear()
 }
 
 func (s *BaseServiceTestSuite) ClearStores() {

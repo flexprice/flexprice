@@ -12,12 +12,21 @@ import (
 )
 
 type PlanHandler struct {
-	service service.PlanService
-	log     *logger.Logger
+	service            service.PlanService
+	entitlementService service.EntitlementService
+	log                *logger.Logger
 }
 
-func NewPlanHandler(service service.PlanService, log *logger.Logger) *PlanHandler {
-	return &PlanHandler{service: service, log: log}
+func NewPlanHandler(
+	service service.PlanService,
+	entitlementService service.EntitlementService,
+	log *logger.Logger,
+) *PlanHandler {
+	return &PlanHandler{
+		service:            service,
+		entitlementService: entitlementService,
+		log:                log,
+	}
 }
 
 // @Summary Create a new plan
@@ -152,4 +161,31 @@ func (h *PlanHandler) DeletePlan(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "price deleted successfully"})
+}
+
+// @Summary Get plan entitlements
+// @Description Get all entitlements for a plan
+// @Tags Entitlements
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Plan ID"
+// @Success 200 {object} dto.PlanResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /plans/{id}/entitlements [get]
+func (h *PlanHandler) GetPlanEntitlements(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		return
+	}
+
+	resp, err := h.entitlementService.GetPlanEntitlements(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
 }

@@ -31,6 +31,20 @@ const (
 	FieldName = "name"
 	// FieldEmail holds the string denoting the email field in the database.
 	FieldEmail = "email"
+	// FieldAddressLine1 holds the string denoting the address_line1 field in the database.
+	FieldAddressLine1 = "address_line1"
+	// FieldAddressLine2 holds the string denoting the address_line2 field in the database.
+	FieldAddressLine2 = "address_line2"
+	// FieldAddressCity holds the string denoting the address_city field in the database.
+	FieldAddressCity = "address_city"
+	// FieldAddressState holds the string denoting the address_state field in the database.
+	FieldAddressState = "address_state"
+	// FieldAddressPostalCode holds the string denoting the address_postal_code field in the database.
+	FieldAddressPostalCode = "address_postal_code"
+	// FieldAddressCountry holds the string denoting the address_country field in the database.
+	FieldAddressCountry = "address_country"
+	// FieldMetadata holds the string denoting the metadata field in the database.
+	FieldMetadata = "metadata"
 	// Table holds the table name of the customer in the database.
 	Table = "customers"
 )
@@ -47,6 +61,13 @@ var Columns = []string{
 	FieldExternalID,
 	FieldName,
 	FieldEmail,
+	FieldAddressLine1,
+	FieldAddressLine2,
+	FieldAddressCity,
+	FieldAddressState,
+	FieldAddressPostalCode,
+	FieldAddressCountry,
+	FieldMetadata,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -127,4 +148,34 @@ func ByName(opts ...sql.OrderTermOption) OrderOption {
 // ByEmail orders the results by the email field.
 func ByEmail(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEmail, opts...).ToFunc()
+}
+
+// ByAddressLine1 orders the results by the address_line1 field.
+func ByAddressLine1(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAddressLine1, opts...).ToFunc()
+}
+
+// ByAddressLine2 orders the results by the address_line2 field.
+func ByAddressLine2(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAddressLine2, opts...).ToFunc()
+}
+
+// ByAddressCity orders the results by the address_city field.
+func ByAddressCity(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAddressCity, opts...).ToFunc()
+}
+
+// ByAddressState orders the results by the address_state field.
+func ByAddressState(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAddressState, opts...).ToFunc()
+}
+
+// ByAddressPostalCode orders the results by the address_postal_code field.
+func ByAddressPostalCode(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAddressPostalCode, opts...).ToFunc()
+}
+
+// ByAddressCountry orders the results by the address_country field.
+func ByAddressCountry(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAddressCountry, opts...).ToFunc()
 }

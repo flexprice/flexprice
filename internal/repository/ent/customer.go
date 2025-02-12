@@ -2,12 +2,12 @@ package ent
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/customer"
 	domainCustomer "github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
@@ -42,6 +42,13 @@ func (r *customerRepository) Create(ctx context.Context, c *domainCustomer.Custo
 		SetExternalID(c.ExternalID).
 		SetName(c.Name).
 		SetEmail(c.Email).
+		SetAddressLine1(c.AddressLine1).
+		SetAddressLine2(c.AddressLine2).
+		SetAddressCity(c.AddressCity).
+		SetAddressState(c.AddressState).
+		SetAddressPostalCode(c.AddressPostalCode).
+		SetAddressCountry(c.AddressCountry).
+		SetMetadata(c.Metadata).
 		SetStatus(string(c.Status)).
 		SetCreatedAt(c.CreatedAt).
 		SetUpdatedAt(c.UpdatedAt).
@@ -50,7 +57,7 @@ func (r *customerRepository) Create(ctx context.Context, c *domainCustomer.Custo
 		Save(ctx)
 
 	if err != nil {
-		return fmt.Errorf("failed to create customer: %w", err)
+		return errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to create customer")
 	}
 
 	*c = *domainCustomer.FromEnt(customer)
@@ -71,9 +78,9 @@ func (r *customerRepository) Get(ctx context.Context, id string) (*domainCustome
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return nil, fmt.Errorf("customer not found")
+			return nil, errors.Wrap(err, errors.ErrCodeNotFound, "customer not found")
 		}
-		return nil, fmt.Errorf("failed to get customer: %w", err)
+		return nil, errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to get customer")
 	}
 
 	return domainCustomer.FromEnt(c), nil
@@ -88,7 +95,7 @@ func (r *customerRepository) List(ctx context.Context, filter *types.CustomerFil
 
 	customers, err := query.All(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list customers: %w", err)
+		return nil, errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to list customers")
 	}
 
 	return domainCustomer.FromEntList(customers), nil
@@ -101,7 +108,12 @@ func (r *customerRepository) Count(ctx context.Context, filter *types.CustomerFi
 	query = ApplyBaseFilters(ctx, query, filter, r.queryOpts)
 	query = r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
 
-	return query.Count(ctx)
+	count, err := query.Count(ctx)
+	if err != nil {
+		return 0, errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to count customers")
+	}
+
+	return count, nil
 }
 
 func (r *customerRepository) ListAll(ctx context.Context, filter *types.CustomerFilter) ([]*domainCustomer.Customer, error) {
@@ -113,7 +125,7 @@ func (r *customerRepository) ListAll(ctx context.Context, filter *types.Customer
 
 	customers, err := query.All(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list customers: %w", err)
+		return nil, errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to list customers")
 	}
 
 	return domainCustomer.FromEntList(customers), nil
@@ -136,15 +148,22 @@ func (r *customerRepository) Update(ctx context.Context, c *domainCustomer.Custo
 		SetExternalID(c.ExternalID).
 		SetName(c.Name).
 		SetEmail(c.Email).
+		SetAddressLine1(c.AddressLine1).
+		SetAddressLine2(c.AddressLine2).
+		SetAddressCity(c.AddressCity).
+		SetAddressState(c.AddressState).
+		SetAddressPostalCode(c.AddressPostalCode).
+		SetAddressCountry(c.AddressCountry).
+		SetMetadata(c.Metadata).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return fmt.Errorf("customer not found")
+			return errors.Wrap(err, errors.ErrCodeNotFound, "customer not found")
 		}
-		return fmt.Errorf("failed to update customer: %w", err)
+		return errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to update customer")
 	}
 
 	return nil
@@ -170,9 +189,9 @@ func (r *customerRepository) Delete(ctx context.Context, id string) error {
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return fmt.Errorf("customer not found")
+			return errors.Wrap(err, errors.ErrCodeNotFound, "customer not found")
 		}
-		return fmt.Errorf("failed to delete customer: %w", err)
+		return errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to delete customer")
 	}
 
 	return nil
@@ -248,6 +267,10 @@ func (o CustomerQueryOptions) applyEntityQueryOptions(ctx context.Context, f *ty
 
 	if f.Email != "" {
 		query = query.Where(customer.Email(f.Email))
+	}
+
+	if len(f.CustomerIDs) > 0 {
+		query = query.Where(customer.IDIn(f.CustomerIDs...))
 	}
 
 	return query

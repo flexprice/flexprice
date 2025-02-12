@@ -33,17 +33,18 @@ func (r *planRepository) Create(ctx context.Context, p *domainPlan.Plan) error {
 	r.log.Debugw("creating plan",
 		"plan_id", p.ID,
 		"tenant_id", p.TenantID,
+		"name", p.Name,
 		"lookup_key", p.LookupKey,
 	)
 
 	plan, err := client.Plan.Create().
 		SetID(p.ID).
-		SetTenantID(p.TenantID).
-		SetLookupKey(p.LookupKey).
 		SetName(p.Name).
 		SetDescription(p.Description).
+		SetLookupKey(p.LookupKey).
 		SetInvoiceCadence(string(p.InvoiceCadence)).
 		SetTrialPeriod(p.TrialPeriod).
+		SetTenantID(p.TenantID).
 		SetStatus(string(p.Status)).
 		SetCreatedAt(p.CreatedAt).
 		SetUpdatedAt(p.UpdatedAt).
@@ -133,6 +134,26 @@ func (r *planRepository) Count(ctx context.Context, filter *types.PlanFilter) (i
 	}
 
 	return count, nil
+}
+
+func (r *planRepository) GetByLookupKey(ctx context.Context, lookupKey string) (*domainPlan.Plan, error) {
+	r.log.Debugw("getting plan by lookup key", "lookup_key", lookupKey)
+
+	plan, err := r.client.Querier(ctx).Plan.Query().
+		Where(
+			plan.LookupKey(lookupKey),
+			plan.TenantID(types.GetTenantID(ctx)),
+			plan.Status(string(types.StatusPublished)),
+		).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, fmt.Errorf("plan with lookup key %s not found", lookupKey)
+		}
+		return nil, fmt.Errorf("getting plan by lookup key: %w", err)
+	}
+
+	return domainPlan.FromEnt(plan), nil
 }
 
 func (r *planRepository) Update(ctx context.Context, p *domainPlan.Plan) error {
@@ -239,13 +260,24 @@ func (o PlanQueryOptions) GetFieldName(field string) string {
 	}
 }
 
-func (o PlanQueryOptions) applyEntityQueryOptions(ctx context.Context, filter *types.PlanFilter, query PlanQuery) PlanQuery {
-	if filter == nil {
+func (o PlanQueryOptions) applyEntityQueryOptions(ctx context.Context, f *types.PlanFilter, query PlanQuery) PlanQuery {
+	if f == nil {
 		return query
 	}
 
-	if len(filter.PlanIDs) > 0 {
-		query = query.Where(plan.IDIn(filter.PlanIDs...))
+	// Apply plan IDs filter if specified
+	if len(f.PlanIDs) > 0 {
+		query = query.Where(plan.IDIn(f.PlanIDs...))
+	}
+
+	// Apply time range filters if specified
+	if f.TimeRangeFilter != nil {
+		if f.StartTime != nil {
+			query = query.Where(plan.CreatedAtGTE(*f.StartTime))
+		}
+		if f.EndTime != nil {
+			query = query.Where(plan.CreatedAtLTE(*f.EndTime))
+		}
 	}
 
 	return query

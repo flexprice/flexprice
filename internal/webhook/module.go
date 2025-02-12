@@ -44,11 +44,19 @@ var Module = fx.Options(
 // providePayloadBuilderFactory creates a new payload builder factory with all required services
 func providePayloadBuilderFactory(
 	invoiceService service.InvoiceService,
-	// Add other services as needed
+	planService service.PlanService,
+	priceService service.PriceService,
+	entitlementService service.EntitlementService,
+	featureService service.FeatureService,
+	subscriptionService service.SubscriptionService,
 ) payload.PayloadBuilderFactory {
 	services := payload.NewServices(
 		invoiceService,
-		// Add other services as needed
+		planService,
+		priceService,
+		entitlementService,
+		featureService,
+		subscriptionService,
 	)
 	return payload.NewPayloadBuilderFactory(services)
 }

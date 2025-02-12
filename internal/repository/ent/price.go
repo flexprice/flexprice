@@ -224,6 +224,74 @@ func (r *priceRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
+func (r *priceRepository) CreateBulk(ctx context.Context, prices []*domainPrice.Price) error {
+	if len(prices) == 0 {
+		return nil
+	}
+
+	r.log.Debugw("creating prices in bulk", "count", len(prices))
+
+	builders := make([]*ent.PriceCreate, len(prices))
+	for i, p := range prices {
+		builders[i] = r.client.Querier(ctx).Price.Create().
+			SetID(p.ID).
+			SetTenantID(p.TenantID).
+			SetAmount(p.Amount.InexactFloat64()).
+			SetCurrency(p.Currency).
+			SetDisplayAmount(p.DisplayAmount).
+			SetPlanID(p.PlanID).
+			SetType(string(p.Type)).
+			SetBillingPeriod(string(p.BillingPeriod)).
+			SetBillingPeriodCount(p.BillingPeriodCount).
+			SetBillingModel(string(p.BillingModel)).
+			SetBillingCadence(string(p.BillingCadence)).
+			SetNillableMeterID(lo.ToPtr(p.MeterID)).
+			SetFilterValues(map[string][]string(p.FilterValues)).
+			SetNillableTierMode(lo.ToPtr(string(p.TierMode))).
+			SetTiers(p.ToEntTiers()).
+			SetTransformQuantity(schema.TransformQuantity(p.TransformQuantity)).
+			SetLookupKey(p.LookupKey).
+			SetDescription(p.Description).
+			SetMetadata(map[string]string(p.Metadata)).
+			SetStatus(string(p.Status)).
+			SetCreatedAt(p.CreatedAt).
+			SetUpdatedAt(p.UpdatedAt).
+			SetCreatedBy(p.CreatedBy).
+			SetUpdatedBy(p.UpdatedBy)
+	}
+
+	_, err := r.client.Querier(ctx).Price.CreateBulk(builders...).Save(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create prices in bulk: %w", err)
+	}
+
+	return nil
+}
+
+func (r *priceRepository) DeleteBulk(ctx context.Context, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
+	r.log.Debugw("deleting prices in bulk", "count", len(ids))
+
+	_, err := r.client.Querier(ctx).Price.Update().
+		Where(
+			price.IDIn(ids...),
+			price.TenantID(types.GetTenantID(ctx)),
+		).
+		SetStatus(string(types.StatusArchived)).
+		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		Save(ctx)
+
+	if err != nil {
+		return fmt.Errorf("failed to delete prices in bulk: %w", err)
+	}
+
+	return nil
+}
+
 // PriceQuery type alias for better readability
 type PriceQuery = *ent.PriceQuery
 
@@ -277,12 +345,14 @@ func (o PriceQueryOptions) applyEntityQueryOptions(ctx context.Context, f *types
 		return query
 	}
 
-	// Apply tenant filter first
-	query = o.ApplyTenantFilter(ctx, query)
-
 	// Apply plan IDs filter if specified
 	if len(f.PlanIDs) > 0 {
 		query = query.Where(price.PlanIDIn(f.PlanIDs...))
+	}
+
+	// Apply price IDs filter if specified
+	if len(f.PriceIDs) > 0 {
+		query = query.Where(price.IDIn(f.PriceIDs...))
 	}
 
 	// Apply time range filters if specified

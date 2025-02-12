@@ -18,6 +18,10 @@ type Tx struct {
 	BillingSequence *BillingSequenceClient
 	// Customer is the client for interacting with the Customer builders.
 	Customer *CustomerClient
+	// Entitlement is the client for interacting with the Entitlement builders.
+	Entitlement *EntitlementClient
+	// Feature is the client for interacting with the Feature builders.
+	Feature *FeatureClient
 	// Invoice is the client for interacting with the Invoice builders.
 	Invoice *InvoiceClient
 	// InvoiceLineItem is the client for interacting with the InvoiceLineItem builders.
@@ -171,6 +175,8 @@ func (tx *Tx) Client() *Client {
 func (tx *Tx) init() {
 	tx.BillingSequence = NewBillingSequenceClient(tx.config)
 	tx.Customer = NewCustomerClient(tx.config)
+	tx.Entitlement = NewEntitlementClient(tx.config)
+	tx.Feature = NewFeatureClient(tx.config)
 	tx.Invoice = NewInvoiceClient(tx.config)
 	tx.InvoiceLineItem = NewInvoiceLineItemClient(tx.config)
 	tx.InvoiceSequence = NewInvoiceSequenceClient(tx.config)

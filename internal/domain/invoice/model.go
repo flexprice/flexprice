@@ -27,6 +27,7 @@ type Invoice struct {
 	DueDate         *time.Time                 `json:"due_date,omitempty"`
 	PaidAt          *time.Time                 `json:"paid_at,omitempty"`
 	VoidedAt        *time.Time                 `json:"voided_at,omitempty"`
+	BillingPeriod   *string                    `json:"billing_period,omitempty"`
 	FinalizedAt     *time.Time                 `json:"finalized_at,omitempty"`
 	PeriodStart     *time.Time                 `json:"period_start,omitempty"`
 	PeriodEnd       *time.Time                 `json:"period_end,omitempty"`
@@ -72,6 +73,7 @@ func FromEnt(e *ent.Invoice) *Invoice {
 		PaidAt:          e.PaidAt,
 		VoidedAt:        e.VoidedAt,
 		FinalizedAt:     e.FinalizedAt,
+		BillingPeriod:   e.BillingPeriod,
 		PeriodStart:     e.PeriodStart,
 		PeriodEnd:       e.PeriodEnd,
 		InvoicePDFURL:   e.InvoicePdfURL,
@@ -126,6 +128,10 @@ func (i *Invoice) Validate() error {
 		if i.PeriodEnd.Before(*i.PeriodStart) {
 			return NewValidationError("period_end", "must be after period_start")
 		}
+	}
+
+	if i.InvoiceType == types.InvoiceTypeSubscription && i.BillingPeriod == nil {
+		return NewValidationError("billing_period", "must be set for subscription invoices")
 	}
 
 	// validate line items if present

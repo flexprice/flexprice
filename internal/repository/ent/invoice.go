@@ -52,6 +52,7 @@ func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoi
 		SetNillablePaidAt(inv.PaidAt).
 		SetNillableVoidedAt(inv.VoidedAt).
 		SetNillableFinalizedAt(inv.FinalizedAt).
+		SetNillableBillingPeriod(inv.BillingPeriod).
 		SetNillableInvoicePdfURL(inv.InvoicePDFURL).
 		SetBillingReason(inv.BillingReason).
 		SetMetadata(inv.Metadata).
@@ -103,6 +104,7 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 			SetNillableVoidedAt(inv.VoidedAt).
 			SetNillableFinalizedAt(inv.FinalizedAt).
 			SetNillableInvoicePdfURL(inv.InvoicePDFURL).
+			SetNillableBillingPeriod(inv.BillingPeriod).
 			SetBillingReason(inv.BillingReason).
 			SetMetadata(inv.Metadata).
 			SetVersion(inv.Version).

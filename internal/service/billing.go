@@ -8,12 +8,15 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	"github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/publisher"
@@ -34,10 +37,10 @@ type BillingCalculationResult struct {
 // BillingService handles all billing calculations
 type BillingService interface {
 	// CalculateFixedCharges calculates all fixed charges for a subscription
-	CalculateFixedCharges(ctx context.Context, sub *subscription.Subscription, plan *plan.Plan, prices []*dto.PriceResponse, periodStart, periodEnd time.Time) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error)
+	CalculateFixedCharges(ctx context.Context, sub *subscription.Subscription, periodStart, periodEnd time.Time) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error)
 
 	// CalculateUsageCharges calculates all usage-based charges
-	CalculateUsageCharges(ctx context.Context, sub *subscription.Subscription, plan *plan.Plan, prices []*dto.PriceResponse, usage *dto.GetUsageBySubscriptionResponse, periodStart, periodEnd time.Time) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error)
+	CalculateUsageCharges(ctx context.Context, sub *subscription.Subscription, usage *dto.GetUsageBySubscriptionResponse, periodStart, periodEnd time.Time) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error)
 
 	// CalculateAllCharges calculates both fixed and usage charges
 	CalculateAllCharges(ctx context.Context, sub *subscription.Subscription, usage *dto.GetUsageBySubscriptionResponse, periodStart, periodEnd time.Time) (*BillingCalculationResult, error)
@@ -54,6 +57,8 @@ type billingService struct {
 	meterRepo        meter.Repository
 	customerRepo     customer.Repository
 	invoiceRepo      invoice.Repository
+	entitlementRepo  entitlement.Repository
+	featureRepo      feature.Repository
 	eventPublisher   publisher.EventPublisher
 	webhookPublisher webhookPublisher.WebhookPublisher
 	logger           *logger.Logger
@@ -69,6 +74,8 @@ func NewBillingService(
 	meterRepo meter.Repository,
 	customerRepo customer.Repository,
 	invoiceRepo invoice.Repository,
+	entitlementRepo entitlement.Repository,
+	featureRepo feature.Repository,
 	eventPublisher publisher.EventPublisher,
 	webhookPublisher webhookPublisher.WebhookPublisher,
 	db postgres.IClient,
@@ -83,6 +90,8 @@ func NewBillingService(
 		meterRepo:        meterRepo,
 		customerRepo:     customerRepo,
 		invoiceRepo:      invoiceRepo,
+		entitlementRepo:  entitlementRepo,
+		featureRepo:      featureRepo,
 		eventPublisher:   eventPublisher,
 		webhookPublisher: webhookPublisher,
 		db:               db,
@@ -94,8 +103,6 @@ func NewBillingService(
 func (s *billingService) CalculateFixedCharges(
 	ctx context.Context,
 	sub *subscription.Subscription,
-	plan *plan.Plan,
-	prices []*dto.PriceResponse,
 	periodStart,
 	periodEnd time.Time,
 ) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error) {
@@ -104,27 +111,35 @@ func (s *billingService) CalculateFixedCharges(
 
 	priceService := NewPriceService(s.priceRepo, s.meterRepo, s.logger)
 
-	for _, price := range prices {
-		if price.Price.Type == types.PRICE_TYPE_FIXED {
-			quantity := decimal.NewFromInt(1)
-			amount := priceService.CalculateCost(ctx, price.Price, quantity)
-			fixedCost = fixedCost.Add(amount)
-
-			fixedCostLineItems = append(fixedCostLineItems, dto.CreateInvoiceLineItemRequest{
-				PlanID:          &price.Price.PlanID,
-				PlanDisplayName: lo.ToPtr(plan.Name),
-				PriceID:         price.Price.ID,
-				PriceType:       lo.ToPtr(string(price.Price.Type)),
-				DisplayName:     lo.ToPtr(plan.Name), // For fixed prices, use plan name
-				Amount:          amount,
-				Quantity:        quantity,
-				PeriodStart:     &periodStart,
-				PeriodEnd:       &periodEnd,
-				Metadata: types.Metadata{
-					"description": fmt.Sprintf("%s (Fixed Charge)", price.Price.LookupKey),
-				},
-			})
+	// Process fixed charges from line items
+	for _, item := range sub.LineItems {
+		if item.PriceType != types.PRICE_TYPE_FIXED {
+			continue
 		}
+
+		price, err := priceService.GetPrice(ctx, item.PriceID)
+		if err != nil {
+			return nil, fixedCost, errors.WithOp(err, "price.get")
+		}
+
+		amount := priceService.CalculateCost(ctx, price.Price, item.Quantity)
+
+		fixedCostLineItems = append(fixedCostLineItems, dto.CreateInvoiceLineItemRequest{
+			PlanID:          lo.ToPtr(item.PlanID),
+			PlanDisplayName: lo.ToPtr(item.PlanDisplayName),
+			PriceID:         item.PriceID,
+			PriceType:       lo.ToPtr(string(item.PriceType)),
+			DisplayName:     lo.ToPtr(item.DisplayName),
+			Amount:          amount,
+			Quantity:        item.Quantity,
+			PeriodStart:     lo.ToPtr(periodStart),
+			PeriodEnd:       lo.ToPtr(periodEnd),
+			Metadata: types.Metadata{
+				"description": fmt.Sprintf("%s (Fixed Charge)", item.DisplayName),
+			},
+		})
+
+		fixedCost = fixedCost.Add(amount)
 	}
 
 	return fixedCostLineItems, fixedCost, nil
@@ -133,8 +148,6 @@ func (s *billingService) CalculateFixedCharges(
 func (s *billingService) CalculateUsageCharges(
 	ctx context.Context,
 	sub *subscription.Subscription,
-	plan *plan.Plan,
-	prices []*dto.PriceResponse,
 	usage *dto.GetUsageBySubscriptionResponse,
 	periodStart,
 	periodEnd time.Time,
@@ -146,24 +159,46 @@ func (s *billingService) CalculateUsageCharges(
 	usageCharges := make([]dto.CreateInvoiceLineItemRequest, 0)
 	totalUsageCost := decimal.Zero
 
-	for _, item := range usage.Charges {
-		lineItemAmount := decimal.NewFromFloat(item.Amount)
+	// Process usage charges from line items
+	for _, item := range sub.LineItems {
+		if item.PriceType != types.PRICE_TYPE_USAGE {
+			continue
+		}
+
+		// Find matching usage charge
+		var matchingCharge *dto.SubscriptionUsageByMetersResponse
+		for _, charge := range usage.Charges {
+			if charge.Price.ID == item.PriceID {
+				matchingCharge = charge
+				break
+			}
+		}
+
+		if matchingCharge == nil {
+			s.logger.Debugw("no matching charge found for usage line item",
+				"subscription_id", sub.ID,
+				"line_item_id", item.ID,
+				"price_id", item.PriceID)
+			continue
+		}
+
+		lineItemAmount := decimal.NewFromFloat(matchingCharge.Amount)
 		totalUsageCost = totalUsageCost.Add(lineItemAmount)
 
 		usageCharges = append(usageCharges, dto.CreateInvoiceLineItemRequest{
-			PlanID:           &item.Price.PlanID,
-			PlanDisplayName:  lo.ToPtr(plan.Name),
-			PriceType:        lo.ToPtr(string(item.Price.Type)),
-			PriceID:          item.Price.ID,
-			MeterID:          &item.Price.MeterID,
+			PlanID:           lo.ToPtr(item.PlanID),
+			PlanDisplayName:  lo.ToPtr(item.PlanDisplayName),
+			PriceType:        lo.ToPtr(string(item.PriceType)),
+			PriceID:          item.PriceID,
+			MeterID:          lo.ToPtr(item.MeterID),
 			MeterDisplayName: lo.ToPtr(item.MeterDisplayName),
-			DisplayName:      lo.ToPtr(item.MeterDisplayName), // For usage prices, use meter display name
+			DisplayName:      lo.ToPtr(item.DisplayName),
 			Amount:           lineItemAmount,
-			Quantity:         decimal.NewFromFloat(item.Quantity),
-			PeriodStart:      &periodStart,
-			PeriodEnd:        &periodEnd,
+			Quantity:         decimal.NewFromFloat(matchingCharge.Quantity),
+			PeriodStart:      lo.ToPtr(periodStart),
+			PeriodEnd:        lo.ToPtr(periodEnd),
 			Metadata: types.Metadata{
-				"description": fmt.Sprintf("%s (Usage Charge)", item.Price.LookupKey),
+				"description": fmt.Sprintf("%s (Usage Charge)", item.DisplayName),
 			},
 		})
 	}
@@ -182,29 +217,14 @@ func (s *billingService) CalculateAllCharges(
 	periodStart,
 	periodEnd time.Time,
 ) (*BillingCalculationResult, error) {
-	// Get plan and prices
-	plan, err := s.planRepo.Get(ctx, sub.PlanID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get plan: %w", err)
-	}
-
-	priceService := NewPriceService(s.priceRepo, s.meterRepo, s.logger)
-	pricesResponse, err := priceService.GetPricesByPlanID(ctx, plan.ID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get prices: %w", err)
-	}
-
-	// Filter valid prices for subscription
-	validPrices := filterValidPricesForSubscription(pricesResponse.Items, sub)
-
 	// Calculate fixed charges
-	fixedCharges, fixedTotal, err := s.CalculateFixedCharges(ctx, sub, plan, validPrices, periodStart, periodEnd)
+	fixedCharges, fixedTotal, err := s.CalculateFixedCharges(ctx, sub, periodStart, periodEnd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate fixed charges: %w", err)
 	}
 
 	// Calculate usage charges
-	usageCharges, usageTotal, err := s.CalculateUsageCharges(ctx, sub, plan, validPrices, usage, periodStart, periodEnd)
+	usageCharges, usageTotal, err := s.CalculateUsageCharges(ctx, sub, usage, periodStart, periodEnd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate usage charges: %w", err)
 	}
@@ -239,6 +259,8 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		s.meterRepo,
 		s.customerRepo,
 		s.invoiceRepo,
+		s.entitlementRepo,
+		s.featureRepo,
 		s.eventPublisher,
 		s.webhookPublisher,
 		s.db,
@@ -281,6 +303,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		AmountDue:      result.TotalAmount,
 		Description:    description,
 		DueDate:        lo.ToPtr(invoiceDueDate),
+		BillingPeriod:  lo.ToPtr(string(sub.BillingPeriod)),
 		PeriodStart:    &periodStart,
 		PeriodEnd:      &periodEnd,
 		BillingReason:  types.InvoiceBillingReasonSubscriptionCycle,

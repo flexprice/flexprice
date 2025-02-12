@@ -7,6 +7,8 @@ import (
 
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/customer"
+	"github.com/flexprice/flexprice/ent/entitlement"
+	"github.com/flexprice/flexprice/ent/feature"
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/ent/invoicesequence"
@@ -80,6 +82,84 @@ func init() {
 	customerDescName := customerFields[2].Descriptor()
 	// customer.NameValidator is a validator for the "name" field. It is called by the builders before save.
 	customer.NameValidator = customerDescName.Validators[0].(func(string) error)
+	entitlementMixin := schema.Entitlement{}.Mixin()
+	entitlementMixinFields0 := entitlementMixin[0].Fields()
+	_ = entitlementMixinFields0
+	entitlementFields := schema.Entitlement{}.Fields()
+	_ = entitlementFields
+	// entitlementDescTenantID is the schema descriptor for tenant_id field.
+	entitlementDescTenantID := entitlementMixinFields0[0].Descriptor()
+	// entitlement.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	entitlement.TenantIDValidator = entitlementDescTenantID.Validators[0].(func(string) error)
+	// entitlementDescStatus is the schema descriptor for status field.
+	entitlementDescStatus := entitlementMixinFields0[1].Descriptor()
+	// entitlement.DefaultStatus holds the default value on creation for the status field.
+	entitlement.DefaultStatus = entitlementDescStatus.Default.(string)
+	// entitlementDescCreatedAt is the schema descriptor for created_at field.
+	entitlementDescCreatedAt := entitlementMixinFields0[2].Descriptor()
+	// entitlement.DefaultCreatedAt holds the default value on creation for the created_at field.
+	entitlement.DefaultCreatedAt = entitlementDescCreatedAt.Default.(func() time.Time)
+	// entitlementDescUpdatedAt is the schema descriptor for updated_at field.
+	entitlementDescUpdatedAt := entitlementMixinFields0[3].Descriptor()
+	// entitlement.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	entitlement.DefaultUpdatedAt = entitlementDescUpdatedAt.Default.(func() time.Time)
+	// entitlement.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	entitlement.UpdateDefaultUpdatedAt = entitlementDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// entitlementDescPlanID is the schema descriptor for plan_id field.
+	entitlementDescPlanID := entitlementFields[1].Descriptor()
+	// entitlement.PlanIDValidator is a validator for the "plan_id" field. It is called by the builders before save.
+	entitlement.PlanIDValidator = entitlementDescPlanID.Validators[0].(func(string) error)
+	// entitlementDescFeatureID is the schema descriptor for feature_id field.
+	entitlementDescFeatureID := entitlementFields[2].Descriptor()
+	// entitlement.FeatureIDValidator is a validator for the "feature_id" field. It is called by the builders before save.
+	entitlement.FeatureIDValidator = entitlementDescFeatureID.Validators[0].(func(string) error)
+	// entitlementDescFeatureType is the schema descriptor for feature_type field.
+	entitlementDescFeatureType := entitlementFields[3].Descriptor()
+	// entitlement.FeatureTypeValidator is a validator for the "feature_type" field. It is called by the builders before save.
+	entitlement.FeatureTypeValidator = entitlementDescFeatureType.Validators[0].(func(string) error)
+	// entitlementDescIsEnabled is the schema descriptor for is_enabled field.
+	entitlementDescIsEnabled := entitlementFields[4].Descriptor()
+	// entitlement.DefaultIsEnabled holds the default value on creation for the is_enabled field.
+	entitlement.DefaultIsEnabled = entitlementDescIsEnabled.Default.(bool)
+	// entitlementDescIsSoftLimit is the schema descriptor for is_soft_limit field.
+	entitlementDescIsSoftLimit := entitlementFields[7].Descriptor()
+	// entitlement.DefaultIsSoftLimit holds the default value on creation for the is_soft_limit field.
+	entitlement.DefaultIsSoftLimit = entitlementDescIsSoftLimit.Default.(bool)
+	// entitlementDescID is the schema descriptor for id field.
+	entitlementDescID := entitlementFields[0].Descriptor()
+	// entitlement.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	entitlement.IDValidator = entitlementDescID.Validators[0].(func(string) error)
+	featureMixin := schema.Feature{}.Mixin()
+	featureMixinFields0 := featureMixin[0].Fields()
+	_ = featureMixinFields0
+	featureFields := schema.Feature{}.Fields()
+	_ = featureFields
+	// featureDescTenantID is the schema descriptor for tenant_id field.
+	featureDescTenantID := featureMixinFields0[0].Descriptor()
+	// feature.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	feature.TenantIDValidator = featureDescTenantID.Validators[0].(func(string) error)
+	// featureDescStatus is the schema descriptor for status field.
+	featureDescStatus := featureMixinFields0[1].Descriptor()
+	// feature.DefaultStatus holds the default value on creation for the status field.
+	feature.DefaultStatus = featureDescStatus.Default.(string)
+	// featureDescCreatedAt is the schema descriptor for created_at field.
+	featureDescCreatedAt := featureMixinFields0[2].Descriptor()
+	// feature.DefaultCreatedAt holds the default value on creation for the created_at field.
+	feature.DefaultCreatedAt = featureDescCreatedAt.Default.(func() time.Time)
+	// featureDescUpdatedAt is the schema descriptor for updated_at field.
+	featureDescUpdatedAt := featureMixinFields0[3].Descriptor()
+	// feature.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	feature.DefaultUpdatedAt = featureDescUpdatedAt.Default.(func() time.Time)
+	// feature.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	feature.UpdateDefaultUpdatedAt = featureDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// featureDescName is the schema descriptor for name field.
+	featureDescName := featureFields[2].Descriptor()
+	// feature.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	feature.NameValidator = featureDescName.Validators[0].(func(string) error)
+	// featureDescType is the schema descriptor for type field.
+	featureDescType := featureFields[4].Descriptor()
+	// feature.TypeValidator is a validator for the "type" field. It is called by the builders before save.
+	feature.TypeValidator = featureDescType.Validators[0].(func(string) error)
 	invoiceMixin := schema.Invoice{}.Mixin()
 	invoiceMixinFields0 := invoiceMixin[0].Fields()
 	_ = invoiceMixinFields0
@@ -136,7 +216,7 @@ func init() {
 	// invoice.DefaultAmountRemaining holds the default value on creation for the amount_remaining field.
 	invoice.DefaultAmountRemaining = invoiceDescAmountRemaining.Default.(decimal.Decimal)
 	// invoiceDescVersion is the schema descriptor for version field.
-	invoiceDescVersion := invoiceFields[20].Descriptor()
+	invoiceDescVersion := invoiceFields[21].Descriptor()
 	// invoice.DefaultVersion holds the default value on creation for the version field.
 	invoice.DefaultVersion = invoiceDescVersion.Default.(int)
 	invoicelineitemMixin := schema.InvoiceLineItem{}.Mixin()

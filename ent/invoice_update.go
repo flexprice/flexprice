@@ -552,6 +552,9 @@ func (iu *InvoiceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if iu.mutation.FinalizedAtCleared() {
 		_spec.ClearField(invoice.FieldFinalizedAt, field.TypeTime)
 	}
+	if iu.mutation.BillingPeriodCleared() {
+		_spec.ClearField(invoice.FieldBillingPeriod, field.TypeString)
+	}
 	if iu.mutation.PeriodStartCleared() {
 		_spec.ClearField(invoice.FieldPeriodStart, field.TypeTime)
 	}
@@ -1219,6 +1222,9 @@ func (iuo *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err e
 	}
 	if iuo.mutation.FinalizedAtCleared() {
 		_spec.ClearField(invoice.FieldFinalizedAt, field.TypeTime)
+	}
+	if iuo.mutation.BillingPeriodCleared() {
+		_spec.ClearField(invoice.FieldBillingPeriod, field.TypeString)
 	}
 	if iuo.mutation.PeriodStartCleared() {
 		_spec.ClearField(invoice.FieldPeriodStart, field.TypeTime)

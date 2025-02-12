@@ -17,6 +17,8 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/customer"
+	"github.com/flexprice/flexprice/ent/entitlement"
+	"github.com/flexprice/flexprice/ent/feature"
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/ent/invoicesequence"
@@ -40,6 +42,10 @@ type Client struct {
 	BillingSequence *BillingSequenceClient
 	// Customer is the client for interacting with the Customer builders.
 	Customer *CustomerClient
+	// Entitlement is the client for interacting with the Entitlement builders.
+	Entitlement *EntitlementClient
+	// Feature is the client for interacting with the Feature builders.
+	Feature *FeatureClient
 	// Invoice is the client for interacting with the Invoice builders.
 	Invoice *InvoiceClient
 	// InvoiceLineItem is the client for interacting with the InvoiceLineItem builders.
@@ -73,6 +79,8 @@ func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
 	c.BillingSequence = NewBillingSequenceClient(c.config)
 	c.Customer = NewCustomerClient(c.config)
+	c.Entitlement = NewEntitlementClient(c.config)
+	c.Feature = NewFeatureClient(c.config)
 	c.Invoice = NewInvoiceClient(c.config)
 	c.InvoiceLineItem = NewInvoiceLineItemClient(c.config)
 	c.InvoiceSequence = NewInvoiceSequenceClient(c.config)
@@ -177,6 +185,8 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		config:               cfg,
 		BillingSequence:      NewBillingSequenceClient(cfg),
 		Customer:             NewCustomerClient(cfg),
+		Entitlement:          NewEntitlementClient(cfg),
+		Feature:              NewFeatureClient(cfg),
 		Invoice:              NewInvoiceClient(cfg),
 		InvoiceLineItem:      NewInvoiceLineItemClient(cfg),
 		InvoiceSequence:      NewInvoiceSequenceClient(cfg),
@@ -208,6 +218,8 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		config:               cfg,
 		BillingSequence:      NewBillingSequenceClient(cfg),
 		Customer:             NewCustomerClient(cfg),
+		Entitlement:          NewEntitlementClient(cfg),
+		Feature:              NewFeatureClient(cfg),
 		Invoice:              NewInvoiceClient(cfg),
 		InvoiceLineItem:      NewInvoiceLineItemClient(cfg),
 		InvoiceSequence:      NewInvoiceSequenceClient(cfg),
@@ -247,9 +259,9 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.BillingSequence, c.Customer, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence,
-		c.Meter, c.Plan, c.Price, c.Subscription, c.SubscriptionLineItem, c.Wallet,
-		c.WalletTransaction,
+		c.BillingSequence, c.Customer, c.Entitlement, c.Feature, c.Invoice,
+		c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Plan, c.Price, c.Subscription,
+		c.SubscriptionLineItem, c.Wallet, c.WalletTransaction,
 	} {
 		n.Use(hooks...)
 	}
@@ -259,9 +271,9 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.BillingSequence, c.Customer, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence,
-		c.Meter, c.Plan, c.Price, c.Subscription, c.SubscriptionLineItem, c.Wallet,
-		c.WalletTransaction,
+		c.BillingSequence, c.Customer, c.Entitlement, c.Feature, c.Invoice,
+		c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Plan, c.Price, c.Subscription,
+		c.SubscriptionLineItem, c.Wallet, c.WalletTransaction,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -274,6 +286,10 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.BillingSequence.mutate(ctx, m)
 	case *CustomerMutation:
 		return c.Customer.mutate(ctx, m)
+	case *EntitlementMutation:
+		return c.Entitlement.mutate(ctx, m)
+	case *FeatureMutation:
+		return c.Feature.mutate(ctx, m)
 	case *InvoiceMutation:
 		return c.Invoice.mutate(ctx, m)
 	case *InvoiceLineItemMutation:
@@ -562,6 +578,288 @@ func (c *CustomerClient) mutate(ctx context.Context, m *CustomerMutation) (Value
 		return (&CustomerDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Customer mutation op: %q", m.Op())
+	}
+}
+
+// EntitlementClient is a client for the Entitlement schema.
+type EntitlementClient struct {
+	config
+}
+
+// NewEntitlementClient returns a client for the Entitlement from the given config.
+func NewEntitlementClient(c config) *EntitlementClient {
+	return &EntitlementClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `entitlement.Hooks(f(g(h())))`.
+func (c *EntitlementClient) Use(hooks ...Hook) {
+	c.hooks.Entitlement = append(c.hooks.Entitlement, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `entitlement.Intercept(f(g(h())))`.
+func (c *EntitlementClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Entitlement = append(c.inters.Entitlement, interceptors...)
+}
+
+// Create returns a builder for creating a Entitlement entity.
+func (c *EntitlementClient) Create() *EntitlementCreate {
+	mutation := newEntitlementMutation(c.config, OpCreate)
+	return &EntitlementCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Entitlement entities.
+func (c *EntitlementClient) CreateBulk(builders ...*EntitlementCreate) *EntitlementCreateBulk {
+	return &EntitlementCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *EntitlementClient) MapCreateBulk(slice any, setFunc func(*EntitlementCreate, int)) *EntitlementCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &EntitlementCreateBulk{err: fmt.Errorf("calling to EntitlementClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*EntitlementCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &EntitlementCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Entitlement.
+func (c *EntitlementClient) Update() *EntitlementUpdate {
+	mutation := newEntitlementMutation(c.config, OpUpdate)
+	return &EntitlementUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *EntitlementClient) UpdateOne(e *Entitlement) *EntitlementUpdateOne {
+	mutation := newEntitlementMutation(c.config, OpUpdateOne, withEntitlement(e))
+	return &EntitlementUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *EntitlementClient) UpdateOneID(id string) *EntitlementUpdateOne {
+	mutation := newEntitlementMutation(c.config, OpUpdateOne, withEntitlementID(id))
+	return &EntitlementUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Entitlement.
+func (c *EntitlementClient) Delete() *EntitlementDelete {
+	mutation := newEntitlementMutation(c.config, OpDelete)
+	return &EntitlementDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *EntitlementClient) DeleteOne(e *Entitlement) *EntitlementDeleteOne {
+	return c.DeleteOneID(e.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *EntitlementClient) DeleteOneID(id string) *EntitlementDeleteOne {
+	builder := c.Delete().Where(entitlement.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &EntitlementDeleteOne{builder}
+}
+
+// Query returns a query builder for Entitlement.
+func (c *EntitlementClient) Query() *EntitlementQuery {
+	return &EntitlementQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeEntitlement},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Entitlement entity by its id.
+func (c *EntitlementClient) Get(ctx context.Context, id string) (*Entitlement, error) {
+	return c.Query().Where(entitlement.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *EntitlementClient) GetX(ctx context.Context, id string) *Entitlement {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryPlan queries the plan edge of a Entitlement.
+func (c *EntitlementClient) QueryPlan(e *Entitlement) *PlanQuery {
+	query := (&PlanClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := e.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(entitlement.Table, entitlement.FieldID, id),
+			sqlgraph.To(plan.Table, plan.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, entitlement.PlanTable, entitlement.PlanColumn),
+		)
+		fromV = sqlgraph.Neighbors(e.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *EntitlementClient) Hooks() []Hook {
+	return c.hooks.Entitlement
+}
+
+// Interceptors returns the client interceptors.
+func (c *EntitlementClient) Interceptors() []Interceptor {
+	return c.inters.Entitlement
+}
+
+func (c *EntitlementClient) mutate(ctx context.Context, m *EntitlementMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&EntitlementCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&EntitlementUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&EntitlementUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&EntitlementDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Entitlement mutation op: %q", m.Op())
+	}
+}
+
+// FeatureClient is a client for the Feature schema.
+type FeatureClient struct {
+	config
+}
+
+// NewFeatureClient returns a client for the Feature from the given config.
+func NewFeatureClient(c config) *FeatureClient {
+	return &FeatureClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `feature.Hooks(f(g(h())))`.
+func (c *FeatureClient) Use(hooks ...Hook) {
+	c.hooks.Feature = append(c.hooks.Feature, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `feature.Intercept(f(g(h())))`.
+func (c *FeatureClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Feature = append(c.inters.Feature, interceptors...)
+}
+
+// Create returns a builder for creating a Feature entity.
+func (c *FeatureClient) Create() *FeatureCreate {
+	mutation := newFeatureMutation(c.config, OpCreate)
+	return &FeatureCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Feature entities.
+func (c *FeatureClient) CreateBulk(builders ...*FeatureCreate) *FeatureCreateBulk {
+	return &FeatureCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *FeatureClient) MapCreateBulk(slice any, setFunc func(*FeatureCreate, int)) *FeatureCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &FeatureCreateBulk{err: fmt.Errorf("calling to FeatureClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*FeatureCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &FeatureCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Feature.
+func (c *FeatureClient) Update() *FeatureUpdate {
+	mutation := newFeatureMutation(c.config, OpUpdate)
+	return &FeatureUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *FeatureClient) UpdateOne(f *Feature) *FeatureUpdateOne {
+	mutation := newFeatureMutation(c.config, OpUpdateOne, withFeature(f))
+	return &FeatureUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *FeatureClient) UpdateOneID(id string) *FeatureUpdateOne {
+	mutation := newFeatureMutation(c.config, OpUpdateOne, withFeatureID(id))
+	return &FeatureUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Feature.
+func (c *FeatureClient) Delete() *FeatureDelete {
+	mutation := newFeatureMutation(c.config, OpDelete)
+	return &FeatureDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *FeatureClient) DeleteOne(f *Feature) *FeatureDeleteOne {
+	return c.DeleteOneID(f.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *FeatureClient) DeleteOneID(id string) *FeatureDeleteOne {
+	builder := c.Delete().Where(feature.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &FeatureDeleteOne{builder}
+}
+
+// Query returns a query builder for Feature.
+func (c *FeatureClient) Query() *FeatureQuery {
+	return &FeatureQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeFeature},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Feature entity by its id.
+func (c *FeatureClient) Get(ctx context.Context, id string) (*Feature, error) {
+	return c.Query().Where(feature.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *FeatureClient) GetX(ctx context.Context, id string) *Feature {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *FeatureClient) Hooks() []Hook {
+	return c.hooks.Feature
+}
+
+// Interceptors returns the client interceptors.
+func (c *FeatureClient) Interceptors() []Interceptor {
+	return c.inters.Feature
+}
+
+func (c *FeatureClient) mutate(ctx context.Context, m *FeatureMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&FeatureCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&FeatureUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&FeatureUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&FeatureDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Feature mutation op: %q", m.Op())
 	}
 }
 
@@ -1235,6 +1533,22 @@ func (c *PlanClient) GetX(ctx context.Context, id string) *Plan {
 		panic(err)
 	}
 	return obj
+}
+
+// QueryEntitlements queries the entitlements edge of a Plan.
+func (c *PlanClient) QueryEntitlements(pl *Plan) *EntitlementQuery {
+	query := (&EntitlementClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := pl.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(plan.Table, plan.FieldID, id),
+			sqlgraph.To(entitlement.Table, entitlement.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, plan.EntitlementsTable, plan.EntitlementsColumn),
+		)
+		fromV = sqlgraph.Neighbors(pl.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
 }
 
 // Hooks returns the client hooks.
@@ -1962,14 +2276,14 @@ func (c *WalletTransactionClient) mutate(ctx context.Context, m *WalletTransacti
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		BillingSequence, Customer, Invoice, InvoiceLineItem, InvoiceSequence, Meter,
-		Plan, Price, Subscription, SubscriptionLineItem, Wallet,
-		WalletTransaction []ent.Hook
+		BillingSequence, Customer, Entitlement, Feature, Invoice, InvoiceLineItem,
+		InvoiceSequence, Meter, Plan, Price, Subscription, SubscriptionLineItem,
+		Wallet, WalletTransaction []ent.Hook
 	}
 	inters struct {
-		BillingSequence, Customer, Invoice, InvoiceLineItem, InvoiceSequence, Meter,
-		Plan, Price, Subscription, SubscriptionLineItem, Wallet,
-		WalletTransaction []ent.Interceptor
+		BillingSequence, Customer, Entitlement, Feature, Invoice, InvoiceLineItem,
+		InvoiceSequence, Meter, Plan, Price, Subscription, SubscriptionLineItem,
+		Wallet, WalletTransaction []ent.Interceptor
 	}
 )
 

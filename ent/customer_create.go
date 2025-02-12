@@ -122,6 +122,96 @@ func (cc *CustomerCreate) SetNillableEmail(s *string) *CustomerCreate {
 	return cc
 }
 
+// SetAddressLine1 sets the "address_line1" field.
+func (cc *CustomerCreate) SetAddressLine1(s string) *CustomerCreate {
+	cc.mutation.SetAddressLine1(s)
+	return cc
+}
+
+// SetNillableAddressLine1 sets the "address_line1" field if the given value is not nil.
+func (cc *CustomerCreate) SetNillableAddressLine1(s *string) *CustomerCreate {
+	if s != nil {
+		cc.SetAddressLine1(*s)
+	}
+	return cc
+}
+
+// SetAddressLine2 sets the "address_line2" field.
+func (cc *CustomerCreate) SetAddressLine2(s string) *CustomerCreate {
+	cc.mutation.SetAddressLine2(s)
+	return cc
+}
+
+// SetNillableAddressLine2 sets the "address_line2" field if the given value is not nil.
+func (cc *CustomerCreate) SetNillableAddressLine2(s *string) *CustomerCreate {
+	if s != nil {
+		cc.SetAddressLine2(*s)
+	}
+	return cc
+}
+
+// SetAddressCity sets the "address_city" field.
+func (cc *CustomerCreate) SetAddressCity(s string) *CustomerCreate {
+	cc.mutation.SetAddressCity(s)
+	return cc
+}
+
+// SetNillableAddressCity sets the "address_city" field if the given value is not nil.
+func (cc *CustomerCreate) SetNillableAddressCity(s *string) *CustomerCreate {
+	if s != nil {
+		cc.SetAddressCity(*s)
+	}
+	return cc
+}
+
+// SetAddressState sets the "address_state" field.
+func (cc *CustomerCreate) SetAddressState(s string) *CustomerCreate {
+	cc.mutation.SetAddressState(s)
+	return cc
+}
+
+// SetNillableAddressState sets the "address_state" field if the given value is not nil.
+func (cc *CustomerCreate) SetNillableAddressState(s *string) *CustomerCreate {
+	if s != nil {
+		cc.SetAddressState(*s)
+	}
+	return cc
+}
+
+// SetAddressPostalCode sets the "address_postal_code" field.
+func (cc *CustomerCreate) SetAddressPostalCode(s string) *CustomerCreate {
+	cc.mutation.SetAddressPostalCode(s)
+	return cc
+}
+
+// SetNillableAddressPostalCode sets the "address_postal_code" field if the given value is not nil.
+func (cc *CustomerCreate) SetNillableAddressPostalCode(s *string) *CustomerCreate {
+	if s != nil {
+		cc.SetAddressPostalCode(*s)
+	}
+	return cc
+}
+
+// SetAddressCountry sets the "address_country" field.
+func (cc *CustomerCreate) SetAddressCountry(s string) *CustomerCreate {
+	cc.mutation.SetAddressCountry(s)
+	return cc
+}
+
+// SetNillableAddressCountry sets the "address_country" field if the given value is not nil.
+func (cc *CustomerCreate) SetNillableAddressCountry(s *string) *CustomerCreate {
+	if s != nil {
+		cc.SetAddressCountry(*s)
+	}
+	return cc
+}
+
+// SetMetadata sets the "metadata" field.
+func (cc *CustomerCreate) SetMetadata(m map[string]string) *CustomerCreate {
+	cc.mutation.SetMetadata(m)
+	return cc
+}
+
 // SetID sets the "id" field.
 func (cc *CustomerCreate) SetID(s string) *CustomerCreate {
 	cc.mutation.SetID(s)
@@ -282,6 +372,34 @@ func (cc *CustomerCreate) createSpec() (*Customer, *sqlgraph.CreateSpec) {
 	if value, ok := cc.mutation.Email(); ok {
 		_spec.SetField(customer.FieldEmail, field.TypeString, value)
 		_node.Email = value
+	}
+	if value, ok := cc.mutation.AddressLine1(); ok {
+		_spec.SetField(customer.FieldAddressLine1, field.TypeString, value)
+		_node.AddressLine1 = value
+	}
+	if value, ok := cc.mutation.AddressLine2(); ok {
+		_spec.SetField(customer.FieldAddressLine2, field.TypeString, value)
+		_node.AddressLine2 = value
+	}
+	if value, ok := cc.mutation.AddressCity(); ok {
+		_spec.SetField(customer.FieldAddressCity, field.TypeString, value)
+		_node.AddressCity = value
+	}
+	if value, ok := cc.mutation.AddressState(); ok {
+		_spec.SetField(customer.FieldAddressState, field.TypeString, value)
+		_node.AddressState = value
+	}
+	if value, ok := cc.mutation.AddressPostalCode(); ok {
+		_spec.SetField(customer.FieldAddressPostalCode, field.TypeString, value)
+		_node.AddressPostalCode = value
+	}
+	if value, ok := cc.mutation.AddressCountry(); ok {
+		_spec.SetField(customer.FieldAddressCountry, field.TypeString, value)
+		_node.AddressCountry = value
+	}
+	if value, ok := cc.mutation.Metadata(); ok {
+		_spec.SetField(customer.FieldMetadata, field.TypeJSON, value)
+		_node.Metadata = value
 	}
 	return _node, _spec
 }

@@ -12,6 +12,12 @@ type BillingSequence func(*sql.Selector)
 // Customer is the predicate function for customer builders.
 type Customer func(*sql.Selector)
 
+// Entitlement is the predicate function for entitlement builders.
+type Entitlement func(*sql.Selector)
+
+// Feature is the predicate function for feature builders.
+type Feature func(*sql.Selector)
+
 // Invoice is the predicate function for invoice builders.
 type Invoice func(*sql.Selector)
 

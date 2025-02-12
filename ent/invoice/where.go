@@ -166,6 +166,11 @@ func FinalizedAt(v time.Time) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldFinalizedAt, v))
 }
 
+// BillingPeriod applies equality check predicate on the "billing_period" field. It's identical to BillingPeriodEQ.
+func BillingPeriod(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldBillingPeriod, v))
+}
+
 // PeriodStart applies equality check predicate on the "period_start" field. It's identical to PeriodStartEQ.
 func PeriodStart(v time.Time) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldPeriodStart, v))
@@ -1359,6 +1364,81 @@ func FinalizedAtIsNil() predicate.Invoice {
 // FinalizedAtNotNil applies the NotNil predicate on the "finalized_at" field.
 func FinalizedAtNotNil() predicate.Invoice {
 	return predicate.Invoice(sql.FieldNotNull(FieldFinalizedAt))
+}
+
+// BillingPeriodEQ applies the EQ predicate on the "billing_period" field.
+func BillingPeriodEQ(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldBillingPeriod, v))
+}
+
+// BillingPeriodNEQ applies the NEQ predicate on the "billing_period" field.
+func BillingPeriodNEQ(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNEQ(FieldBillingPeriod, v))
+}
+
+// BillingPeriodIn applies the In predicate on the "billing_period" field.
+func BillingPeriodIn(vs ...string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldIn(FieldBillingPeriod, vs...))
+}
+
+// BillingPeriodNotIn applies the NotIn predicate on the "billing_period" field.
+func BillingPeriodNotIn(vs ...string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotIn(FieldBillingPeriod, vs...))
+}
+
+// BillingPeriodGT applies the GT predicate on the "billing_period" field.
+func BillingPeriodGT(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGT(FieldBillingPeriod, v))
+}
+
+// BillingPeriodGTE applies the GTE predicate on the "billing_period" field.
+func BillingPeriodGTE(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGTE(FieldBillingPeriod, v))
+}
+
+// BillingPeriodLT applies the LT predicate on the "billing_period" field.
+func BillingPeriodLT(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLT(FieldBillingPeriod, v))
+}
+
+// BillingPeriodLTE applies the LTE predicate on the "billing_period" field.
+func BillingPeriodLTE(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLTE(FieldBillingPeriod, v))
+}
+
+// BillingPeriodContains applies the Contains predicate on the "billing_period" field.
+func BillingPeriodContains(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldContains(FieldBillingPeriod, v))
+}
+
+// BillingPeriodHasPrefix applies the HasPrefix predicate on the "billing_period" field.
+func BillingPeriodHasPrefix(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldHasPrefix(FieldBillingPeriod, v))
+}
+
+// BillingPeriodHasSuffix applies the HasSuffix predicate on the "billing_period" field.
+func BillingPeriodHasSuffix(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldHasSuffix(FieldBillingPeriod, v))
+}
+
+// BillingPeriodIsNil applies the IsNil predicate on the "billing_period" field.
+func BillingPeriodIsNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldIsNull(FieldBillingPeriod))
+}
+
+// BillingPeriodNotNil applies the NotNil predicate on the "billing_period" field.
+func BillingPeriodNotNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotNull(FieldBillingPeriod))
+}
+
+// BillingPeriodEqualFold applies the EqualFold predicate on the "billing_period" field.
+func BillingPeriodEqualFold(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEqualFold(FieldBillingPeriod, v))
+}
+
+// BillingPeriodContainsFold applies the ContainsFold predicate on the "billing_period" field.
+func BillingPeriodContainsFold(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldContainsFold(FieldBillingPeriod, v))
 }
 
 // PeriodStartEQ applies the EQ predicate on the "period_start" field.

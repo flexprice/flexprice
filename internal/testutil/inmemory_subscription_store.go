@@ -12,11 +12,13 @@ import (
 // InMemorySubscriptionStore implements subscription.Repository
 type InMemorySubscriptionStore struct {
 	*InMemoryStore[*subscription.Subscription]
+	lineItems map[string][]*subscription.SubscriptionLineItem // map[subscriptionID][]lineItems
 }
 
 func NewInMemorySubscriptionStore() *InMemorySubscriptionStore {
 	return &InMemorySubscriptionStore{
 		InMemoryStore: NewInMemoryStore[*subscription.Subscription](),
+		lineItems:     make(map[string][]*subscription.SubscriptionLineItem),
 	}
 }
 
@@ -110,11 +112,29 @@ func (s *InMemorySubscriptionStore) Create(ctx context.Context, sub *subscriptio
 }
 
 func (s *InMemorySubscriptionStore) Get(ctx context.Context, id string) (*subscription.Subscription, error) {
-	return s.InMemoryStore.Get(ctx, id)
+	sub, err := s.InMemoryStore.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	// Attach line items if they exist
+	if items, ok := s.lineItems[id]; ok {
+		sub.LineItems = items
+	}
+	return sub, nil
 }
 
 func (s *InMemorySubscriptionStore) List(ctx context.Context, filter *types.SubscriptionFilter) ([]*subscription.Subscription, error) {
-	return s.InMemoryStore.List(ctx, filter, subscriptionFilterFn, subscriptionSortFn)
+	subs, err := s.InMemoryStore.List(ctx, filter, subscriptionFilterFn, subscriptionSortFn)
+	if err != nil {
+		return nil, err
+	}
+	// Attach line items to each subscription
+	for _, sub := range subs {
+		if items, ok := s.lineItems[sub.ID]; ok {
+			sub.LineItems = items
+		}
+	}
+	return subs, nil
 }
 
 func (s *InMemorySubscriptionStore) Count(ctx context.Context, filter *types.SubscriptionFilter) (int, error) {
@@ -129,6 +149,8 @@ func (s *InMemorySubscriptionStore) Update(ctx context.Context, sub *subscriptio
 }
 
 func (s *InMemorySubscriptionStore) Delete(ctx context.Context, id string) error {
+	// Delete line items first
+	delete(s.lineItems, id)
 	return s.InMemoryStore.Delete(ctx, id)
 }
 
@@ -155,4 +177,25 @@ func (s *InMemorySubscriptionStore) ListAll(ctx context.Context, filter *types.S
 // NOTE: This is a potentially expensive operation and to be used only for CRONs
 func (s *InMemorySubscriptionStore) ListAllTenant(ctx context.Context, filter *types.SubscriptionFilter) ([]*subscription.Subscription, error) {
 	return s.ListAll(ctx, filter)
+}
+
+// CreateWithLineItems creates a subscription with its line items
+func (s *InMemorySubscriptionStore) CreateWithLineItems(ctx context.Context, sub *subscription.Subscription, items []*subscription.SubscriptionLineItem) error {
+	if err := s.Create(ctx, sub); err != nil {
+		return err
+	}
+	s.lineItems[sub.ID] = items
+	sub.LineItems = items
+	return nil
+}
+
+// GetWithLineItems gets a subscription with its line items
+func (s *InMemorySubscriptionStore) GetWithLineItems(ctx context.Context, id string) (*subscription.Subscription, []*subscription.SubscriptionLineItem, error) {
+	sub, err := s.Get(ctx, id)
+	if err != nil {
+		return nil, nil, err
+	}
+	items := s.lineItems[id]
+	sub.LineItems = items
+	return sub, items, nil
 }

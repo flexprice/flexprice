@@ -8,8 +8,9 @@ import (
 type CustomerFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
-	ExternalID string `json:"external_id,omitempty" form:"external_id" validate:"omitempty"`
-	Email      string `json:"email,omitempty" form:"email" validate:"omitempty,email"`
+	CustomerIDs []string `json:"customer_ids,omitempty" form:"customer_ids" validate:"omitempty"`
+	ExternalID  string   `json:"external_id,omitempty" form:"external_id" validate:"omitempty"`
+	Email       string   `json:"email,omitempty" form:"email" validate:"omitempty,email"`
 }
 
 // NewCustomerFilter creates a new CustomerFilter with default values
