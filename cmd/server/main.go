@@ -55,17 +55,32 @@ func main() {
 	// Core dependencies
 	opts = append(opts,
 		fx.Provide(
+			// Config
 			config.NewConfig,
+
+			// Logger
 			logger.NewLogger,
+
+			// Monitoring
 			sentry.NewSentryService,
+
+			// DB
 			postgres.NewDB,
 			postgres.NewEntClient,
 			postgres.NewClient,
 			clickhouse.NewClickHouseStore,
+
+			// Optional DBs
 			dynamodb.NewClient,
+
+			// Producers and Consumers
 			kafka.NewProducer,
 			kafka.NewConsumer,
+
+			// Event Publisher
 			publisher.NewEventPublisher,
+
+			// Repositories
 			repository.NewEventRepository,
 			repository.NewMeterRepository,
 			repository.NewUserRepository,
@@ -86,15 +101,18 @@ func main() {
 		),
 	)
 
-	// Webhook module
+	// Webhook module (must be initialised before services)
 	opts = append(opts, webhook.Module)
 
 	// Service layer
 	opts = append(opts,
 		fx.Provide(
+			// Core services
 			service.NewTenantService,
 			service.NewAuthService,
 			service.NewUserService,
+
+			// Business services
 			service.NewMeterService,
 			service.NewEventService,
 			service.NewPriceService,
@@ -197,13 +215,13 @@ func startServer(
 		startAPIServer(lc, r, cfg, log)
 		startConsumer(lc, consumer, eventRepo, cfg, log)
 		startMessageRouter(lc, router, webhookService, log)
-		startTemporalWorker(lc, temporalClient, &cfg.Temporal, temporalService, log)
+		startTemporalWorker(lc, temporalClient, &cfg.Temporal, log)
 	case types.ModeAPI:
 		startAPIServer(lc, r, cfg, log)
 		startMessageRouter(lc, router, webhookService, log)
 
 	case types.ModeTemporalWorker:
-		startTemporalWorker(lc, temporalClient, &cfg.Temporal, temporalService, log)
+		startTemporalWorker(lc, temporalClient, &cfg.Temporal, log)
 	case types.ModeConsumer:
 		if consumer == nil {
 			log.Fatal("Kafka consumer required for consumer mode")
@@ -223,7 +241,6 @@ func startTemporalWorker(
 	lc fx.Lifecycle,
 	temporalClient *temporal.TemporalClient,
 	cfg *config.TemporalConfig,
-	temporalService *service.TemporalService,
 	log *logger.Logger,
 ) {
 	worker := temporal.NewWorker(temporalClient, *cfg, log)

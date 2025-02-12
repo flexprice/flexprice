@@ -115,17 +115,23 @@ type TemporalConfig struct {
 func NewConfig() (*Configuration, error) {
 	v := viper.New()
 
+	// Step 1: Load `.env` if it exists
 	_ = godotenv.Load()
 
+	// Step 2: Initialize Viper
 	v.SetConfigName("config")
 	v.SetConfigType("yaml")
 	v.AddConfigPath("./internal/config")
 	v.AddConfigPath("./config")
 
+	// Step 3: Set up environment variables support
 	v.SetEnvPrefix("FLEXPRICE")
 	v.AutomaticEnv()
+
+	// Step 4: Environment variable key mapping (e.g., FLEXPRICE_KAFKA_CONSUMER_GROUP)
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
+	// Step 5: Read the YAML file
 	if err := v.ReadInConfig(); err != nil && !errors.As(err, &viper.ConfigFileNotFoundError{}) {
 		return nil, err
 	}
@@ -135,6 +141,7 @@ func NewConfig() (*Configuration, error) {
 		return nil, fmt.Errorf("unable to decode into config struct, %v", err)
 	}
 
+	// Step 6: Parse API keys
 	apiKeysStr := v.GetString("auth.api_key.keys")
 	if apiKeysStr != "" {
 		var apiKeys map[string]APIKeyDetails
@@ -159,6 +166,8 @@ func (c Configuration) Validate() error {
 	return validate.Struct(c)
 }
 
+// GetDefaultConfig returns a default configuration for local development
+// This is useful for running scripts or other non-web applications
 func GetDefaultConfig() *Configuration {
 	return &Configuration{
 		Deployment: DeploymentConfig{Mode: types.ModeLocal},
@@ -197,7 +206,7 @@ func (c PostgresConfig) GetDSN() string {
 func (c *TemporalConfig) GetClientOptions() client.Options {
 	return client.Options{
 		HostPort:  c.Address,
-		Namespace: c.TaskQueue,
+		Namespace: c.Namespace,
 		ConnectionOptions: client.ConnectionOptions{
 			MaxPayloadSize: 2 * 1024 * 1024, // 2MB
 		},
