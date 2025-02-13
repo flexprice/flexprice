@@ -98,6 +98,10 @@ func main() {
 
 			// PubSub
 			pubsubRouter.NewRouter,
+
+			// Temporal
+			provideTemporalClient,
+			provideTemporalService,
 		),
 	)
 
@@ -132,8 +136,6 @@ func main() {
 			provideHandlers,
 			provideRouter,
 			provideTemporalConfig,
-			temporal.NewTemporalClient,
-			provideTemporalService,
 		),
 		fx.Invoke(
 			sentry.RegisterHooks,
@@ -159,7 +161,7 @@ func provideHandlers(
 	walletService service.WalletService,
 	tenantService service.TenantService,
 	invoiceService service.InvoiceService,
-	temporalService *service.TemporalService,
+	temporalService *temporal.Service,
 	featureService service.FeatureService,
 	entitlementService service.EntitlementService,
 ) api.Handlers {
@@ -190,8 +192,12 @@ func provideTemporalConfig(cfg *config.Configuration) *config.TemporalConfig {
 	return &cfg.Temporal
 }
 
-func provideTemporalService(cfg *config.TemporalConfig, log *logger.Logger) (*service.TemporalService, error) {
-	return service.NewTemporalService(cfg, log)
+func provideTemporalService(cfg *config.TemporalConfig, log *logger.Logger) (*temporal.Service, error) {
+	return temporal.NewService(cfg, log)
+}
+
+func provideTemporalClient(cfg *config.TemporalConfig, log *logger.Logger) (*temporal.TemporalClient, error) {
+	return temporal.NewTemporalClient(cfg, log)
 }
 
 func startServer(
@@ -201,7 +207,7 @@ func startServer(
 	consumer kafka.MessageConsumer,
 	eventRepo events.Repository,
 	temporalClient *temporal.TemporalClient,
-	temporalService *service.TemporalService,
+	temporalService *temporal.Service,
 	webhookService *webhook.WebhookService,
 	router *pubsubRouter.Router,
 	log *logger.Logger,

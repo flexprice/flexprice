@@ -5,7 +5,8 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/temporal/models"
-	"go.temporal.io/sdk/temporal"
+	temporalsdk "go.temporal.io/sdk/temporal"
+
 	"go.temporal.io/sdk/workflow"
 )
 
@@ -16,7 +17,7 @@ func CronBillingWorkflow(ctx workflow.Context, input models.BillingWorkflowInput
 
 	activityOptions := workflow.ActivityOptions{
 		StartToCloseTimeout: time.Minute * 3,
-		RetryPolicy: &temporal.RetryPolicy{
+		RetryPolicy: &temporalsdk.RetryPolicy{
 			InitialInterval:    time.Second,
 			BackoffCoefficient: 2.0,
 			MaximumInterval:    time.Minute,
