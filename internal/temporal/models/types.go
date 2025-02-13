@@ -34,9 +34,24 @@ type InvoiceItem struct {
 	Amount      float64 `json:"amount"`
 }
 
+// GenerateInvoiceRequest represents the request to generate an invoice
+type GenerateInvoiceRequest struct {
+	CustomerID     string    `json:"customer_id"`
+	SubscriptionID string    `json:"subscription_id"`
+	PeriodStart    time.Time `json:"period_start"`
+	PeriodEnd      time.Time `json:"period_end"`
+}
+
+// CalculatePriceRequest represents the request to calculate price
+type CalculatePriceRequest struct {
+	CustomerID     string      `json:"customer_id"`
+	SubscriptionID string      `json:"subscription_id"`
+	UsageData      interface{} `json:"usage_data"`
+}
+
 // Service interfaces for dependencies
 type InvoiceService interface {
-	GenerateInvoice(ctx context.Context, req *dto.GenerateInvoiceRequest) (*dto.InvoiceResponse, error)
+	GenerateInvoice(ctx context.Context, req *GenerateInvoiceRequest) (*dto.InvoiceResponse, error)
 }
 
 type PlanService interface {
@@ -44,5 +59,5 @@ type PlanService interface {
 }
 
 type PriceService interface {
-	CalculatePrice(ctx context.Context, req *dto.CalculatePriceRequest) (*dto.PriceResponse, error)
+	CalculatePrice(ctx context.Context, req *CalculatePriceRequest) (*dto.PriceResponse, error)
 }
