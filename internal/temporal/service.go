@@ -40,17 +40,20 @@ func (s *Service) StartBillingWorkflow(ctx context.Context, input models.Billing
 		CronSchedule: "*/5 * * * *", // Runs every 5 minutes
 	}
 
-	_, err := s.client.ExecuteWorkflow(ctx, workflowOptions, "CronBillingWorkflow", input)
+	we, err := s.client.ExecuteWorkflow(ctx, workflowOptions, "CronBillingWorkflow", input)
 	if err != nil {
 		s.log.Error("Failed to start workflow", "error", err)
 		return nil, err
 	}
 
+	var result models.BillingWorkflowResult
+	if err := we.Get(ctx, &result); err != nil {
+		s.log.Error("Failed to get workflow result", "error", err)
+		return nil, err
+	}
+
 	s.log.Info("Successfully started billing workflow", "workflowID", workflowID)
-	return &models.BillingWorkflowResult{
-		InvoiceID: workflowID,
-		Status:    "scheduled",
-	}, nil
+	return &result, nil
 }
 
 // Close closes the temporal client

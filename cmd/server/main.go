@@ -177,8 +177,7 @@ func provideHandlers(
 		Subscription: v1.NewSubscriptionHandler(subscriptionService, logger),
 		Wallet:       v1.NewWalletHandler(walletService, logger),
 		Tenant:       v1.NewTenantHandler(tenantService, logger),
-		Cron:         cron.NewSubscriptionHandler(subscriptionService, logger),
-		Invoice:      v1.NewInvoiceHandler(invoiceService, logger),
+		Cron:         cron.NewSubscriptionHandler(subscriptionService, temporalService, logger),
 		Feature:      v1.NewFeatureHandler(featureService, logger),
 		Entitlement:  v1.NewEntitlementHandler(entitlementService, logger),
 	}

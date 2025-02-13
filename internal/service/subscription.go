@@ -33,6 +33,7 @@ type SubscriptionService interface {
 	ListSubscriptions(ctx context.Context, filter *types.SubscriptionFilter) (*dto.ListSubscriptionsResponse, error)
 	GetUsageBySubscription(ctx context.Context, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error)
 	UpdateBillingPeriods(ctx context.Context) (*dto.SubscriptionUpdatePeriodResponse, error)
+	Get(ctx context.Context, id string) (*subscription.Subscription, error)
 }
 
 type subscriptionService struct {
@@ -821,4 +822,12 @@ func calculatePriority(filterValues map[string][]string) int {
 	}
 	priority += len(filterValues) * 10
 	return priority
+}
+
+func (s *subscriptionService) Get(ctx context.Context, id string) (*subscription.Subscription, error) {
+	subscription, _, err := s.subscriptionRepo.GetWithLineItems(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get subscription: %w", err)
+	}
+	return subscription, nil
 }
