@@ -2,7 +2,6 @@ package workflows
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	"go.temporal.io/sdk/workflow"
@@ -14,9 +13,9 @@ func CalculateChargesWorkflow(ctx workflow.Context, input models.BillingWorkflow
 		"customerID", input.CustomerID,
 		"subscriptionID", input.SubscriptionID)
 
-	// Just return a mock result for now
+	// Use workflow.Now(ctx) for deterministic behavior
 	return &models.CalculationResult{
-		InvoiceID:   fmt.Sprintf("INV-%s-%d", input.CustomerID, time.Now().Unix()),
+		InvoiceID:   fmt.Sprintf("INV-%s-%d", input.CustomerID, workflow.Now(ctx).Unix()),
 		TotalAmount: 100.0,
 		Items: []models.InvoiceItem{
 			{

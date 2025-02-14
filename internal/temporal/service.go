@@ -46,14 +46,15 @@ func (s *Service) StartBillingWorkflow(ctx context.Context, input models.Billing
 		return nil, err
 	}
 
-	var result models.BillingWorkflowResult
-	if err := we.Get(ctx, &result); err != nil {
-		s.log.Error("Failed to get workflow result", "error", err)
-		return nil, err
-	}
+	// For cron workflows, return immediately with scheduled status
+	s.log.Info("Successfully scheduled billing workflow",
+		"workflowID", workflowID,
+		"runID", we.GetRunID())
 
-	s.log.Info("Successfully started billing workflow", "workflowID", workflowID)
-	return &result, nil
+	return &models.BillingWorkflowResult{
+		InvoiceID: workflowID,
+		Status:    "scheduled",
+	}, nil
 }
 
 // Close closes the temporal client
