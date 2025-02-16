@@ -40,7 +40,7 @@ func (s *CustomerServiceSuite) TestCreateCustomer() {
 		setup         func()
 		request       dto.CreateCustomerRequest
 		expectedError bool
-		errorCode     string
+		errorCode     errors.ErrCode
 	}{
 		{
 			name: "successful_creation",
@@ -153,7 +153,7 @@ func (s *CustomerServiceSuite) TestGetCustomer() {
 		name          string
 		id            string
 		expectedError bool
-		errorCode     string
+		errorCode     errors.ErrCode
 	}{
 		{
 			name:          "customer_found",
@@ -258,7 +258,7 @@ func (s *CustomerServiceSuite) TestUpdateCustomer() {
 		id            string
 		req           dto.UpdateCustomerRequest
 		expectedError bool
-		errorCode     string
+		errorCode     errors.ErrCode
 	}{
 		{
 			name: "valid_update",

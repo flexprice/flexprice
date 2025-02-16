@@ -38,14 +38,14 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 	var req dto.CreateTaskRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.Error("failed to bind request", "error", err)
-		NewErrorResponse(c, http.StatusBadRequest, "invalid request", err)
+		c.Error(errors.Wrap(err, errors.ErrCodeValidation, "invalid JSON"))
 		return
 	}
 
 	task, err := h.taskService.CreateTask(c.Request.Context(), req)
 	if err != nil {
 		h.logger.Error("failed to create task", "error", err)
-		NewErrorResponse(c, http.StatusInternalServerError, "failed to create task", err)
+		c.Error(err)
 		return
 	}
 

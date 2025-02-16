@@ -195,6 +195,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		}
 
 		tasks := v1Private.Group("/tasks")
+		tasks.Use(middleware.ErrHandler())
 		{
 			tasks.POST("", handlers.Task.CreateTask)
 			tasks.GET("", handlers.Task.ListTasks)

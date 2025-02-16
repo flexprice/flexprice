@@ -43,3 +43,6 @@ research/*
 
 # local adhoc scripts not production ready
 scripts/hacks/*
+
+# continue files
+.continue/*
