@@ -107,9 +107,11 @@ type SentryConfig struct {
 }
 
 type TemporalConfig struct {
-	Address   string `mapstructure:"address" validate:"required"`
-	TaskQueue string `mapstructure:"task_queue" validate:"required"`
-	Namespace string `mapstructure:"namespace" validate:"required"`
+	Address    string `mapstructure:"address" validate:"required"`
+	TaskQueue  string `mapstructure:"task_queue" validate:"required"`
+	Namespace  string `mapstructure:"namespace" validate:"required"`
+	APIKey     string `mapstructure:"api_key"`
+	APIKeyName string `mapstructure:"api_key_name"`
 }
 
 func NewConfig() (*Configuration, error) {
@@ -204,11 +206,12 @@ func (c PostgresConfig) GetDSN() string {
 }
 
 func (c *TemporalConfig) GetClientOptions() client.Options {
-	return client.Options{
+	options := client.Options{
 		HostPort:  c.Address,
 		Namespace: c.Namespace,
 		ConnectionOptions: client.ConnectionOptions{
-			MaxPayloadSize: 2 * 1024 * 1024, // 2MB
+			TLS: &tls.Config{}, // Enable TLS
 		},
 	}
+	return options
 }

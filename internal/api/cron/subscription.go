@@ -54,8 +54,8 @@ func (h *SubscriptionHandler) GenerateInvoice(c *gin.Context) {
 		return
 	}
 
-	// Get subscription details
-	subscription, err := h.subscriptionService.Get(ctx, subscriptionID)
+	// Use the GetSubscription method to get subscription details
+	subscription, err := h.subscriptionService.GetSubscription(ctx, subscriptionID)
 	if err != nil {
 		h.logger.Errorw("failed to get subscription",
 			"error", err,

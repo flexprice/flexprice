@@ -191,12 +191,12 @@ func provideTemporalConfig(cfg *config.Configuration) *config.TemporalConfig {
 	return &cfg.Temporal
 }
 
-func provideTemporalService(cfg *config.TemporalConfig, log *logger.Logger) (*temporal.Service, error) {
-	return temporal.NewService(cfg, log)
-}
-
 func provideTemporalClient(cfg *config.TemporalConfig, log *logger.Logger) (*temporal.TemporalClient, error) {
 	return temporal.NewTemporalClient(cfg, log)
+}
+
+func provideTemporalService(temporalClient *temporal.TemporalClient, cfg *config.TemporalConfig, log *logger.Logger) (*temporal.Service, error) {
+	return temporal.NewService(temporalClient, cfg, log)
 }
 
 func startServer(
@@ -376,7 +376,7 @@ func startMessageRouter(
 	logger *logger.Logger,
 ) {
 	// Register handlers before starting the router
-	// webhookService.RegisterHandler(router)
+	webhookService.RegisterHandler(router)
 
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {

@@ -12,20 +12,15 @@ import (
 
 // Service handles Temporal workflow operations
 type Service struct {
-	client client.Client
+	client *TemporalClient // Changed to use TemporalClient
 	log    *logger.Logger
 	cfg    *config.TemporalConfig
 }
 
 // NewService creates a new Temporal service
-func NewService(cfg *config.TemporalConfig, log *logger.Logger) (*Service, error) {
-	c, err := client.NewClient(cfg.GetClientOptions())
-	if err != nil {
-		return nil, fmt.Errorf("failed to create temporal client: %w", err)
-	}
-
+func NewService(client *TemporalClient, cfg *config.TemporalConfig, log *logger.Logger) (*Service, error) {
 	return &Service{
-		client: c,
+		client: client,
 		log:    log,
 		cfg:    cfg,
 	}, nil
@@ -40,7 +35,7 @@ func (s *Service) StartBillingWorkflow(ctx context.Context, input models.Billing
 		CronSchedule: "*/5 * * * *", // Runs every 5 minutes
 	}
 
-	we, err := s.client.ExecuteWorkflow(ctx, workflowOptions, "CronBillingWorkflow", input)
+	we, err := s.client.Client.ExecuteWorkflow(ctx, workflowOptions, "CronBillingWorkflow", input)
 	if err != nil {
 		s.log.Error("Failed to start workflow", "error", err)
 		return nil, err
@@ -60,6 +55,6 @@ func (s *Service) StartBillingWorkflow(ctx context.Context, input models.Billing
 // Close closes the temporal client
 func (s *Service) Close() {
 	if s.client != nil {
-		s.client.Close()
+		s.client.Client.Close()
 	}
 }

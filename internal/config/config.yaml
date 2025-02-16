@@ -86,9 +86,11 @@ webhook:
         - "tenant.updated"
 
 temporal:
-  address: "localhost:7233"
+  address: "127.0.0.1:7233"
   namespace: "default"
   task_queue: "billing-task-queue"
+  api_key: "strong api key"
+  api_key_name: "secret name"
   client_name: "flexprice-client"
   retry:
     initial_interval_seconds: 1
