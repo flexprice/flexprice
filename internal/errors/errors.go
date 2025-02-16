@@ -3,6 +3,9 @@ package errors
 import (
 	"errors"
 	"fmt"
+	"net/http"
+
+	cockroacherr "github.com/cockroachdb/errors"
 )
 
 // Common error types that can be used across the application
@@ -136,4 +139,28 @@ func IsPermissionDenied(err error) bool {
 // IsHTTPClient checks if an error is an http client error
 func IsHTTPClient(err error) bool {
 	return errors.Is(err, ErrHTTPClient)
+}
+
+func HttpStatusFromErr(err error) int {
+	var saferr cockroacherr.SafeDetailer
+	if cockroacherr.As(err, &saferr) {
+		if details := saferr.SafeDetails(); len(details) > 0 {
+			switch details[0] {
+			case ErrCodeAlreadyExists, ErrCodeVersionConflict:
+				return http.StatusConflict
+			case ErrCodeNotFound:
+				return http.StatusNotFound
+			case ErrCodeValidation:
+				return http.StatusBadRequest
+			case ErrCodePermissionDenied:
+				return http.StatusForbidden
+			case ErrCodeSystemError:
+				return http.StatusInternalServerError
+			default:
+				return http.StatusInternalServerError
+			}
+		}
+	}
+
+	return http.StatusInternalServerError
 }

@@ -32,13 +32,13 @@ func NewTenantHandler(service service.TenantService, log *logger.Logger) *Tenant
 func (h *TenantHandler) CreateTenant(c *gin.Context) {
 	var req dto.CreateTenantRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		NewErrorResponse(c, http.StatusBadRequest, "Invalid request payload", err)
+		c.Error(err)
 		return
 	}
 
 	resp, err := h.service.CreateTenant(c.Request.Context(), req)
 	if err != nil {
-		NewErrorResponse(c, http.StatusInternalServerError, "Failed to create tenant", err)
+		c.Error(err)
 		return
 	}
 
@@ -61,7 +61,7 @@ func (h *TenantHandler) GetTenantByID(c *gin.Context) {
 
 	resp, err := h.service.GetTenantByID(c.Request.Context(), id)
 	if err != nil {
-		NewErrorResponse(c, http.StatusNotFound, "Tenant not found", err)
+		c.Error(err)
 		return
 	}
 

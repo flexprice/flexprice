@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/cockroachdb/errors"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/auth"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 )
 
 type TenantService interface {
@@ -30,7 +32,7 @@ func NewTenantService(repo tenant.Repository, cfg *config.Configuration) TenantS
 
 func (s *tenantService) CreateTenant(ctx context.Context, req dto.CreateTenantRequest) (*dto.TenantResponse, error) {
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid request: %w", err)
+		return nil, errors.WithSafeDetails(fmt.Errorf("invalid request: %w", err), ierr.ErrCodeValidation)
 	}
 
 	newTenant := req.ToTenant(ctx)
