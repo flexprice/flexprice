@@ -52,7 +52,7 @@ func (s *PlanServiceSuite) TestCreatePlan() {
 				{
 					CreatePriceRequest: &dto.CreatePriceRequest{
 						Amount:             "100",
-						Currency:           "USD",
+						Currency:           "usd",
 						Type:               types.PRICE_TYPE_USAGE,
 						BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 						BillingPeriodCount: 1,
@@ -88,7 +88,7 @@ func (s *PlanServiceSuite) TestCreatePlan() {
 				{
 					CreatePriceRequest: &dto.CreatePriceRequest{
 						Amount:             "100",
-						Currency:           "USD",
+						Currency:           "usd",
 						Type:               types.PRICE_TYPE_FIXED,
 						BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 						BillingPeriodCount: 1,
@@ -100,7 +100,7 @@ func (s *PlanServiceSuite) TestCreatePlan() {
 				{
 					CreatePriceRequest: &dto.CreatePriceRequest{
 						Amount:             "200",
-						Currency:           "USD",
+						Currency:           "usd",
 						Type:               types.PRICE_TYPE_USAGE,
 						BillingPeriod:      types.BILLING_PERIOD_ANNUAL,
 						BillingPeriodCount: 1,
@@ -142,7 +142,7 @@ func (s *PlanServiceSuite) TestCreatePlan() {
 				{
 					CreatePriceRequest: &dto.CreatePriceRequest{
 						Amount:       "100",
-						Currency:     "USD",
+						Currency:     "usd",
 						Type:         types.PRICE_TYPE_USAGE,
 						BillingModel: types.BILLING_MODEL_TIERED,
 						Description:  "Invalid Tiered Price",
@@ -165,7 +165,7 @@ func (s *PlanServiceSuite) TestCreatePlan() {
 				{
 					CreatePriceRequest: &dto.CreatePriceRequest{
 						Amount:       "-100",
-						Currency:     "USD",
+						Currency:     "usd",
 						Type:         types.PRICE_TYPE_USAGE,
 						BillingModel: types.BILLING_MODEL_FLAT_FEE,
 						Description:  "Negative Price",
@@ -188,7 +188,7 @@ func (s *PlanServiceSuite) TestCreatePlan() {
 				{
 					CreatePriceRequest: &dto.CreatePriceRequest{
 						Amount:       "100",
-						Currency:     "USD",
+						Currency:     "usd",
 						Type:         types.PRICE_TYPE_USAGE,
 						BillingModel: types.BILLING_MODEL_FLAT_FEE,
 						Description:  "Missing MeterID",

@@ -50,6 +50,11 @@ func (r *CreateSubscriptionRequest) Validate() error {
 		return err
 	}
 
+	// Validate currency
+	if err := types.ValidateCurrencyCode(r.Currency); err != nil {
+		return err
+	}
+
 	if err := r.InvoiceCadence.Validate(); err != nil {
 		return fmt.Errorf("invalid invoice cadence: %w", err)
 	}

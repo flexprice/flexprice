@@ -3,6 +3,7 @@ package dto
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -26,7 +27,7 @@ type CreateInvoiceRequest struct {
 	PeriodEnd      *time.Time                     `json:"period_end,omitempty"`
 	BillingReason  types.InvoiceBillingReason     `json:"billing_reason"`
 	InvoiceStatus  *types.InvoiceStatus           `json:"invoice_status,omitempty"`
-	PaymentStatus  *types.InvoicePaymentStatus    `json:"payment_status,omitempty"`
+	PaymentStatus  *types.PaymentStatus           `json:"payment_status,omitempty"`
 	AmountPaid     *decimal.Decimal               `json:"amount_paid,omitempty"`
 	LineItems      []CreateInvoiceLineItemRequest `json:"line_items,omitempty"`
 	Metadata       types.Metadata                 `json:"metadata,omitempty"`
@@ -83,13 +84,19 @@ func (r *CreateInvoiceRequest) Validate() error {
 	return nil
 }
 
+// ToInvoice converts a create invoice request to an invoice
 func (r *CreateInvoiceRequest) ToInvoice(ctx context.Context) (*invoice.Invoice, error) {
+	// Validate currency
+	if err := types.ValidateCurrencyCode(r.Currency); err != nil {
+		return nil, err
+	}
+
 	inv := &invoice.Invoice{
 		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
 		CustomerID:      r.CustomerID,
 		SubscriptionID:  r.SubscriptionID,
 		InvoiceType:     r.InvoiceType,
-		Currency:        r.Currency,
+		Currency:        strings.ToLower(r.Currency),
 		AmountDue:       r.AmountDue,
 		Description:     r.Description,
 		DueDate:         r.DueDate,
@@ -110,7 +117,7 @@ func (r *CreateInvoiceRequest) ToInvoice(ctx context.Context) (*invoice.Invoice,
 	if r.PaymentStatus != nil {
 		inv.PaymentStatus = *r.PaymentStatus
 	} else {
-		inv.PaymentStatus = types.InvoicePaymentStatusPending
+		inv.PaymentStatus = types.PaymentStatusPending
 	}
 
 	if r.AmountPaid != nil {
@@ -251,7 +258,7 @@ func NewInvoiceLineItemResponse(item *invoice.InvoiceLineItem) *InvoiceLineItemR
 
 // UpdateInvoicePaymentRequest represents the request to update invoice payment status
 type UpdateInvoicePaymentRequest struct {
-	PaymentStatus types.InvoicePaymentStatus `json:"payment_status" validate:"required"`
+	PaymentStatus types.PaymentStatus `json:"payment_status" validate:"required"`
 }
 
 func (r *UpdateInvoicePaymentRequest) Validate() error {
@@ -261,13 +268,13 @@ func (r *UpdateInvoicePaymentRequest) Validate() error {
 	return nil
 }
 
-// UpdateInvoicePaymentStatusRequest represents a request to update an invoice's payment status
-type UpdateInvoicePaymentStatusRequest struct {
-	PaymentStatus types.InvoicePaymentStatus `json:"payment_status" binding:"required"`
-	Amount        *decimal.Decimal           `json:"amount,omitempty"`
+// UpdatePaymentStatusRequest represents a request to update an invoice's payment status
+type UpdatePaymentStatusRequest struct {
+	PaymentStatus types.PaymentStatus `json:"payment_status" binding:"required"`
+	Amount        *decimal.Decimal    `json:"amount,omitempty"`
 }
 
-func (r *UpdateInvoicePaymentStatusRequest) Validate() error {
+func (r *UpdatePaymentStatusRequest) Validate() error {
 	if r.Amount != nil && r.Amount.IsNegative() {
 		return fmt.Errorf("amount must be non-negative")
 	}
@@ -281,7 +288,7 @@ type InvoiceResponse struct {
 	SubscriptionID  *string                    `json:"subscription_id,omitempty"`
 	InvoiceType     types.InvoiceType          `json:"invoice_type"`
 	InvoiceStatus   types.InvoiceStatus        `json:"invoice_status"`
-	PaymentStatus   types.InvoicePaymentStatus `json:"payment_status"`
+	PaymentStatus   types.PaymentStatus        `json:"payment_status"`
 	Currency        string                     `json:"currency"`
 	AmountDue       decimal.Decimal            `json:"amount_due"`
 	AmountPaid      decimal.Decimal            `json:"amount_paid"`

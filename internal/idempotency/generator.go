@@ -14,6 +14,9 @@ type Scope string
 const (
 	ScopeSubscriptionInvoice Scope = "subscription_invoice"
 	ScopeOneOffInvoice       Scope = "one_off_invoice"
+
+	// Payment
+	ScopePayment Scope = "payment"
 )
 
 // Generator generates idempotency keys

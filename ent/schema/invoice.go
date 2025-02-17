@@ -59,7 +59,7 @@ func (Invoice) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
 			}).
-			Default(string(types.InvoicePaymentStatusPending)),
+			Default(string(types.PaymentStatusPending)),
 		field.String("currency").
 			SchemaType(map[string]string{
 				"postgres": "varchar(10)",

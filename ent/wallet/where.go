@@ -125,6 +125,21 @@ func WalletStatus(v string) predicate.Wallet {
 	return predicate.Wallet(sql.FieldEQ(FieldWalletStatus, v))
 }
 
+// AutoTopupTrigger applies equality check predicate on the "auto_topup_trigger" field. It's identical to AutoTopupTriggerEQ.
+func AutoTopupTrigger(v string) predicate.Wallet {
+	return predicate.Wallet(sql.FieldEQ(FieldAutoTopupTrigger, v))
+}
+
+// AutoTopupMinBalance applies equality check predicate on the "auto_topup_min_balance" field. It's identical to AutoTopupMinBalanceEQ.
+func AutoTopupMinBalance(v decimal.Decimal) predicate.Wallet {
+	return predicate.Wallet(sql.FieldEQ(FieldAutoTopupMinBalance, v))
+}
+
+// AutoTopupAmount applies equality check predicate on the "auto_topup_amount" field. It's identical to AutoTopupAmountEQ.
+func AutoTopupAmount(v decimal.Decimal) predicate.Wallet {
+	return predicate.Wallet(sql.FieldEQ(FieldAutoTopupAmount, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.Wallet {
 	return predicate.Wallet(sql.FieldEQ(FieldTenantID, v))
@@ -878,6 +893,181 @@ func WalletStatusEqualFold(v string) predicate.Wallet {
 // WalletStatusContainsFold applies the ContainsFold predicate on the "wallet_status" field.
 func WalletStatusContainsFold(v string) predicate.Wallet {
 	return predicate.Wallet(sql.FieldContainsFold(FieldWalletStatus, v))
+}
+
+// AutoTopupTriggerEQ applies the EQ predicate on the "auto_topup_trigger" field.
+func AutoTopupTriggerEQ(v string) predicate.Wallet {
+	return predicate.Wallet(sql.FieldEQ(FieldAutoTopupTrigger, v))
+}
+
+// AutoTopupTriggerNEQ applies the NEQ predicate on the "auto_topup_trigger" field.
+func AutoTopupTriggerNEQ(v string) predicate.Wallet {
+	return predicate.Wallet(sql.FieldNEQ(FieldAutoTopupTrigger, v))
+}
+
+// AutoTopupTriggerIn applies the In predicate on the "auto_topup_trigger" field.
+func AutoTopupTriggerIn(vs ...string) predicate.Wallet {
+	return predicate.Wallet(sql.FieldIn(FieldAutoTopupTrigger, vs...))
+}
+
+// AutoTopupTriggerNotIn applies the NotIn predicate on the "auto_topup_trigger" field.
+func AutoTopupTriggerNotIn(vs ...string) predicate.Wallet {
+	return predicate.Wallet(sql.FieldNotIn(FieldAutoTopupTrigger, vs...))
+}
+
+// AutoTopupTriggerGT applies the GT predicate on the "auto_topup_trigger" field.
+func AutoTopupTriggerGT(v string) predicate.Wallet {
+	return predicate.Wallet(sql.FieldGT(FieldAutoTopupTrigger, v))
+}
+
+// AutoTopupTriggerGTE applies the GTE predicate on the "auto_topup_trigger" field.
+func AutoTopupTriggerGTE(v string) predicate.Wallet {
+	return predicate.Wallet(sql.FieldGTE(FieldAutoTopupTrigger, v))
+}
+
+// AutoTopupTriggerLT applies the LT predicate on the "auto_topup_trigger" field.
+func AutoTopupTriggerLT(v string) predicate.Wallet {
+	return predicate.Wallet(sql.FieldLT(FieldAutoTopupTrigger, v))
+}
+
+// AutoTopupTriggerLTE applies the LTE predicate on the "auto_topup_trigger" field.
+func AutoTopupTriggerLTE(v string) predicate.Wallet {
+	return predicate.Wallet(sql.FieldLTE(FieldAutoTopupTrigger, v))
+}
+
+// AutoTopupTriggerContains applies the Contains predicate on the "auto_topup_trigger" field.
+func AutoTopupTriggerContains(v string) predicate.Wallet {
+	return predicate.Wallet(sql.FieldContains(FieldAutoTopupTrigger, v))
+}
+
+// AutoTopupTriggerHasPrefix applies the HasPrefix predicate on the "auto_topup_trigger" field.
+func AutoTopupTriggerHasPrefix(v string) predicate.Wallet {
+	return predicate.Wallet(sql.FieldHasPrefix(FieldAutoTopupTrigger, v))
+}
+
+// AutoTopupTriggerHasSuffix applies the HasSuffix predicate on the "auto_topup_trigger" field.
+func AutoTopupTriggerHasSuffix(v string) predicate.Wallet {
+	return predicate.Wallet(sql.FieldHasSuffix(FieldAutoTopupTrigger, v))
+}
+
+// AutoTopupTriggerIsNil applies the IsNil predicate on the "auto_topup_trigger" field.
+func AutoTopupTriggerIsNil() predicate.Wallet {
+	return predicate.Wallet(sql.FieldIsNull(FieldAutoTopupTrigger))
+}
+
+// AutoTopupTriggerNotNil applies the NotNil predicate on the "auto_topup_trigger" field.
+func AutoTopupTriggerNotNil() predicate.Wallet {
+	return predicate.Wallet(sql.FieldNotNull(FieldAutoTopupTrigger))
+}
+
+// AutoTopupTriggerEqualFold applies the EqualFold predicate on the "auto_topup_trigger" field.
+func AutoTopupTriggerEqualFold(v string) predicate.Wallet {
+	return predicate.Wallet(sql.FieldEqualFold(FieldAutoTopupTrigger, v))
+}
+
+// AutoTopupTriggerContainsFold applies the ContainsFold predicate on the "auto_topup_trigger" field.
+func AutoTopupTriggerContainsFold(v string) predicate.Wallet {
+	return predicate.Wallet(sql.FieldContainsFold(FieldAutoTopupTrigger, v))
+}
+
+// AutoTopupMinBalanceEQ applies the EQ predicate on the "auto_topup_min_balance" field.
+func AutoTopupMinBalanceEQ(v decimal.Decimal) predicate.Wallet {
+	return predicate.Wallet(sql.FieldEQ(FieldAutoTopupMinBalance, v))
+}
+
+// AutoTopupMinBalanceNEQ applies the NEQ predicate on the "auto_topup_min_balance" field.
+func AutoTopupMinBalanceNEQ(v decimal.Decimal) predicate.Wallet {
+	return predicate.Wallet(sql.FieldNEQ(FieldAutoTopupMinBalance, v))
+}
+
+// AutoTopupMinBalanceIn applies the In predicate on the "auto_topup_min_balance" field.
+func AutoTopupMinBalanceIn(vs ...decimal.Decimal) predicate.Wallet {
+	return predicate.Wallet(sql.FieldIn(FieldAutoTopupMinBalance, vs...))
+}
+
+// AutoTopupMinBalanceNotIn applies the NotIn predicate on the "auto_topup_min_balance" field.
+func AutoTopupMinBalanceNotIn(vs ...decimal.Decimal) predicate.Wallet {
+	return predicate.Wallet(sql.FieldNotIn(FieldAutoTopupMinBalance, vs...))
+}
+
+// AutoTopupMinBalanceGT applies the GT predicate on the "auto_topup_min_balance" field.
+func AutoTopupMinBalanceGT(v decimal.Decimal) predicate.Wallet {
+	return predicate.Wallet(sql.FieldGT(FieldAutoTopupMinBalance, v))
+}
+
+// AutoTopupMinBalanceGTE applies the GTE predicate on the "auto_topup_min_balance" field.
+func AutoTopupMinBalanceGTE(v decimal.Decimal) predicate.Wallet {
+	return predicate.Wallet(sql.FieldGTE(FieldAutoTopupMinBalance, v))
+}
+
+// AutoTopupMinBalanceLT applies the LT predicate on the "auto_topup_min_balance" field.
+func AutoTopupMinBalanceLT(v decimal.Decimal) predicate.Wallet {
+	return predicate.Wallet(sql.FieldLT(FieldAutoTopupMinBalance, v))
+}
+
+// AutoTopupMinBalanceLTE applies the LTE predicate on the "auto_topup_min_balance" field.
+func AutoTopupMinBalanceLTE(v decimal.Decimal) predicate.Wallet {
+	return predicate.Wallet(sql.FieldLTE(FieldAutoTopupMinBalance, v))
+}
+
+// AutoTopupMinBalanceIsNil applies the IsNil predicate on the "auto_topup_min_balance" field.
+func AutoTopupMinBalanceIsNil() predicate.Wallet {
+	return predicate.Wallet(sql.FieldIsNull(FieldAutoTopupMinBalance))
+}
+
+// AutoTopupMinBalanceNotNil applies the NotNil predicate on the "auto_topup_min_balance" field.
+func AutoTopupMinBalanceNotNil() predicate.Wallet {
+	return predicate.Wallet(sql.FieldNotNull(FieldAutoTopupMinBalance))
+}
+
+// AutoTopupAmountEQ applies the EQ predicate on the "auto_topup_amount" field.
+func AutoTopupAmountEQ(v decimal.Decimal) predicate.Wallet {
+	return predicate.Wallet(sql.FieldEQ(FieldAutoTopupAmount, v))
+}
+
+// AutoTopupAmountNEQ applies the NEQ predicate on the "auto_topup_amount" field.
+func AutoTopupAmountNEQ(v decimal.Decimal) predicate.Wallet {
+	return predicate.Wallet(sql.FieldNEQ(FieldAutoTopupAmount, v))
+}
+
+// AutoTopupAmountIn applies the In predicate on the "auto_topup_amount" field.
+func AutoTopupAmountIn(vs ...decimal.Decimal) predicate.Wallet {
+	return predicate.Wallet(sql.FieldIn(FieldAutoTopupAmount, vs...))
+}
+
+// AutoTopupAmountNotIn applies the NotIn predicate on the "auto_topup_amount" field.
+func AutoTopupAmountNotIn(vs ...decimal.Decimal) predicate.Wallet {
+	return predicate.Wallet(sql.FieldNotIn(FieldAutoTopupAmount, vs...))
+}
+
+// AutoTopupAmountGT applies the GT predicate on the "auto_topup_amount" field.
+func AutoTopupAmountGT(v decimal.Decimal) predicate.Wallet {
+	return predicate.Wallet(sql.FieldGT(FieldAutoTopupAmount, v))
+}
+
+// AutoTopupAmountGTE applies the GTE predicate on the "auto_topup_amount" field.
+func AutoTopupAmountGTE(v decimal.Decimal) predicate.Wallet {
+	return predicate.Wallet(sql.FieldGTE(FieldAutoTopupAmount, v))
+}
+
+// AutoTopupAmountLT applies the LT predicate on the "auto_topup_amount" field.
+func AutoTopupAmountLT(v decimal.Decimal) predicate.Wallet {
+	return predicate.Wallet(sql.FieldLT(FieldAutoTopupAmount, v))
+}
+
+// AutoTopupAmountLTE applies the LTE predicate on the "auto_topup_amount" field.
+func AutoTopupAmountLTE(v decimal.Decimal) predicate.Wallet {
+	return predicate.Wallet(sql.FieldLTE(FieldAutoTopupAmount, v))
+}
+
+// AutoTopupAmountIsNil applies the IsNil predicate on the "auto_topup_amount" field.
+func AutoTopupAmountIsNil() predicate.Wallet {
+	return predicate.Wallet(sql.FieldIsNull(FieldAutoTopupAmount))
+}
+
+// AutoTopupAmountNotNil applies the NotNil predicate on the "auto_topup_amount" field.
+func AutoTopupAmountNotNil() predicate.Wallet {
+	return predicate.Wallet(sql.FieldNotNull(FieldAutoTopupAmount))
 }
 
 // And groups predicates with the AND operator between them.

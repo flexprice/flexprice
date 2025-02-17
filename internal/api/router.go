@@ -28,6 +28,8 @@ type Handlers struct {
 	Invoice      *v1.InvoiceHandler
 	Feature      *v1.FeatureHandler
 	Entitlement  *v1.EntitlementHandler
+	Payment      *v1.PaymentHandler
+	Task         *v1.TaskHandler
 }
 
 func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logger) *gin.Engine {
@@ -110,6 +112,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			customer.GET("/:id", handlers.Customer.GetCustomer)
 			customer.PUT("/:id", handlers.Customer.UpdateCustomer)
 			customer.DELETE("/:id", handlers.Customer.DeleteCustomer)
+			customer.GET("/lookup/:lookup_key", handlers.Customer.GetCustomerByLookupKey)
 
 			// other routes for customer
 			customer.GET("/:id/wallets", handlers.Wallet.GetWalletsByCustomerID)
@@ -145,6 +148,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			wallet.POST("/:id/top-up", handlers.Wallet.TopUpWallet)
 			wallet.POST("/:id/terminate", handlers.Wallet.TerminateWallet)
 			wallet.GET("/:id/balance/real-time", handlers.Wallet.GetWalletBalance)
+			wallet.PUT("/:id", handlers.Wallet.UpdateWallet)
 		}
 		// Tenant routes
 		tenantRoutes := v1Private.Group("/tenants")
@@ -180,6 +184,25 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			entitlement.GET("/:id", handlers.Entitlement.GetEntitlement)
 			entitlement.PUT("/:id", handlers.Entitlement.UpdateEntitlement)
 			entitlement.DELETE("/:id", handlers.Entitlement.DeleteEntitlement)
+		}
+
+		payments := v1Private.Group("/payments")
+		{
+			payments.POST("", handlers.Payment.CreatePayment)
+			payments.GET("", handlers.Payment.ListPayments)
+			payments.GET("/:id", handlers.Payment.GetPayment)
+			payments.PUT("/:id", handlers.Payment.UpdatePayment)
+			payments.DELETE("/:id", handlers.Payment.DeletePayment)
+			payments.POST("/:id/process", handlers.Payment.ProcessPayment)
+		}
+
+		tasks := v1Private.Group("/tasks")
+		{
+			tasks.POST("", handlers.Task.CreateTask)
+			tasks.GET("", handlers.Task.ListTasks)
+			tasks.GET("/:id", handlers.Task.GetTask)
+			tasks.PUT("/:id/status", handlers.Task.UpdateTaskStatus)
+			tasks.POST("/:id/process", handlers.Task.ProcessTask)
 		}
 
 		// Admin routes (API Key only)

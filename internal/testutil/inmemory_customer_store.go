@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	customerrors "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 )
@@ -63,6 +64,25 @@ func (s *InMemoryCustomerStore) Get(ctx context.Context, id string) (*customer.C
 		return nil, err
 	}
 	return copyCustomer(c), nil
+}
+
+func (s *InMemoryCustomerStore) GetByLookupKey(ctx context.Context, lookupKey string) (*customer.Customer, error) {
+	// Create a filter function that matches by external_id and tenant_id
+	filterFn := func(ctx context.Context, c *customer.Customer, _ interface{}) bool {
+		return c.ExternalID == lookupKey && c.TenantID == types.GetTenantID(ctx)
+	}
+
+	// List all customers with our filter
+	customers, err := s.InMemoryStore.List(ctx, nil, filterFn, nil)
+	if err != nil {
+		return nil, customerrors.Wrap(err, customerrors.ErrCodeInvalidOperation, "failed to list customers")
+	}
+
+	if len(customers) == 0 {
+		return nil, customerrors.Wrap(customerrors.ErrNotFound, customerrors.ErrCodeNotFound, "customer not found")
+	}
+
+	return copyCustomer(customers[0]), nil
 }
 
 func (s *InMemoryCustomerStore) List(ctx context.Context, filter *types.CustomerFilter) ([]*customer.Customer, error) {

@@ -62,6 +62,25 @@ func (Wallet) Fields() []ent.Field {
 				"postgres": "varchar(50)",
 			}).
 			Default("active"),
+		field.String("auto_topup_trigger").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable().
+			Default("disabled"),
+		field.Other("auto_topup_min_balance", decimal.Decimal{}).
+			SchemaType(map[string]string{
+				"postgres": "numeric(20,9)",
+			}).
+			Optional().
+			Nillable(),
+		field.Other("auto_topup_amount", decimal.Decimal{}).
+			SchemaType(map[string]string{
+				"postgres": "numeric(20,9)",
+			}).
+			Optional().
+			Nillable(),
 	}
 }
 

@@ -17,6 +17,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
+	"github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/publisher"
@@ -47,6 +48,9 @@ type WalletService interface {
 
 	// TerminateWallet terminates a wallet by closing it and debiting remaining balance
 	TerminateWallet(ctx context.Context, walletID string) error
+
+	// UpdateWallet updates a wallet
+	UpdateWallet(ctx context.Context, id string, req *dto.UpdateWalletRequest) (*wallet.Wallet, error)
 }
 
 type walletService struct {
@@ -369,4 +373,43 @@ func (s *walletService) TerminateWallet(ctx context.Context, walletID string) er
 
 		return nil
 	})
+}
+
+func (s *walletService) UpdateWallet(ctx context.Context, id string, req *dto.UpdateWalletRequest) (*wallet.Wallet, error) {
+	if err := req.Validate(); err != nil {
+		return nil, errors.Wrap(err, errors.ErrCodeValidation, "update wallet")
+	}
+
+	// Get existing wallet
+	existing, err := s.walletRepo.GetWalletByID(ctx, id)
+	if err != nil {
+		return nil, errors.Wrap(err, errors.ErrCodeNotFound, "update wallet")
+	}
+
+	// Update fields if provided
+	if req.Name != nil {
+		existing.Name = *req.Name
+	}
+	if req.Description != nil {
+		existing.Description = *req.Description
+	}
+	if req.Metadata != nil {
+		existing.Metadata = *req.Metadata
+	}
+	if req.AutoTopupTrigger != nil {
+		existing.AutoTopupTrigger = *req.AutoTopupTrigger
+	}
+	if req.AutoTopupMinBalance != nil {
+		existing.AutoTopupMinBalance = *req.AutoTopupMinBalance
+	}
+	if req.AutoTopupAmount != nil {
+		existing.AutoTopupAmount = *req.AutoTopupAmount
+	}
+
+	// Update wallet
+	if err := s.walletRepo.UpdateWallet(ctx, id, existing); err != nil {
+		return nil, errors.Wrap(err, errors.ErrCodeSystemError, "update wallet")
+	}
+
+	return existing, nil
 }

@@ -371,3 +371,64 @@ func (s *CustomerServiceSuite) TestDeleteCustomer() {
 		})
 	}
 }
+
+func (s *CustomerServiceSuite) TestGetCustomerByLookupKey() {
+	customer := &customer.Customer{
+		ID:                "cust-1",
+		ExternalID:        "ext-1",
+		Name:              "Test Customer",
+		Email:             "test@example.com",
+		AddressLine1:      "123 Main St",
+		AddressLine2:      "Apt 4B",
+		AddressCity:       "New York",
+		AddressState:      "NY",
+		AddressPostalCode: "10001",
+		AddressCountry:    "US",
+		Metadata: map[string]string{
+			"source": "web",
+		},
+	}
+	_ = s.repo.Create(s.ctx, customer)
+
+	testCases := []struct {
+		name          string
+		lookupKey     string
+		expectedError bool
+		errorCode     string
+	}{
+		{
+			name:          "customer_found",
+			lookupKey:     "ext-1",
+			expectedError: false,
+		},
+		{
+			name:          "customer_not_found",
+			lookupKey:     "nonexistent-key",
+			expectedError: true,
+			errorCode:     errors.ErrCodeNotFound,
+		},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			resp, err := s.customerService.GetCustomerByLookupKey(s.ctx, tc.lookupKey)
+
+			if tc.expectedError {
+				s.Error(err)
+				s.Nil(resp)
+				if tc.errorCode != "" {
+					var ierr *errors.InternalError
+					s.True(stderrors.As(err, &ierr))
+					s.Equal(tc.errorCode, ierr.Code)
+				}
+			} else {
+				s.NoError(err)
+				s.NotNil(resp)
+				s.Equal(customer.Name, resp.Customer.Name)
+				s.Equal(customer.AddressLine1, resp.Customer.AddressLine1)
+				s.Equal(customer.AddressCountry, resp.Customer.AddressCountry)
+				s.Equal(customer.Metadata["source"], resp.Customer.Metadata["source"])
+			}
+		})
+	}
+}

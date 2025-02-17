@@ -10,13 +10,14 @@ import (
 )
 
 type IngestEventRequest struct {
-	EventName          string                 `json:"event_name" validate:"required" binding:"required" example:"api_request"`
-	EventID            string                 `json:"event_id" example:"event123"`
-	CustomerID         string                 `json:"customer_id" example:"customer456"`
-	ExternalCustomerID string                 `json:"external_customer_id" validate:"required" binding:"required" example:"customer456"`
-	Timestamp          time.Time              `json:"timestamp" example:"2024-03-20T15:04:05Z"`
-	Source             string                 `json:"source" example:"api"`
-	Properties         map[string]interface{} `json:"properties" swaggertype:"object,string,number" example:"{\"request_size\":100,\"response_status\":200}"`
+	EventName          string                 `json:"event_name" validate:"required" binding:"required" example:"api_request" csv:"event_name"`
+	EventID            string                 `json:"event_id" example:"event123" csv:"event_id"`
+	CustomerID         string                 `json:"customer_id" example:"customer456" csv:"customer_id"`
+	ExternalCustomerID string                 `json:"external_customer_id" validate:"required" binding:"required" example:"customer456" csv:"external_customer_id"`
+	Timestamp          time.Time              `json:"timestamp" example:"2024-03-20T15:04:05Z" csv:"-"` // Handled separately due to parsing
+	TimestampStr       string                 `json:"-" csv:"timestamp"`                                // Used for CSV parsing
+	Source             string                 `json:"source" example:"api" csv:"source"`
+	Properties         map[string]interface{} `json:"properties" swaggertype:"object,string,number" example:"{\"request_size\":100,\"response_status\":200}" csv:"-"` // Handled separately for dynamic columns
 }
 
 type GetUsageRequest struct {

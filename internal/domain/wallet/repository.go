@@ -21,6 +21,9 @@ type Repository interface {
 	// UpdateWalletStatus updates the status of a wallet
 	UpdateWalletStatus(ctx context.Context, id string, status types.WalletStatus) error
 
+	// UpdateWallet updates a wallet
+	UpdateWallet(ctx context.Context, id string, wallet *Wallet) error
+
 	// DebitWallet debits amount from wallet
 	DebitWallet(ctx context.Context, req *WalletOperation) error
 

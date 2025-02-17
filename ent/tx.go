@@ -30,6 +30,10 @@ type Tx struct {
 	InvoiceSequence *InvoiceSequenceClient
 	// Meter is the client for interacting with the Meter builders.
 	Meter *MeterClient
+	// Payment is the client for interacting with the Payment builders.
+	Payment *PaymentClient
+	// PaymentAttempt is the client for interacting with the PaymentAttempt builders.
+	PaymentAttempt *PaymentAttemptClient
 	// Plan is the client for interacting with the Plan builders.
 	Plan *PlanClient
 	// Price is the client for interacting with the Price builders.
@@ -38,6 +42,8 @@ type Tx struct {
 	Subscription *SubscriptionClient
 	// SubscriptionLineItem is the client for interacting with the SubscriptionLineItem builders.
 	SubscriptionLineItem *SubscriptionLineItemClient
+	// Task is the client for interacting with the Task builders.
+	Task *TaskClient
 	// Wallet is the client for interacting with the Wallet builders.
 	Wallet *WalletClient
 	// WalletTransaction is the client for interacting with the WalletTransaction builders.
@@ -181,10 +187,13 @@ func (tx *Tx) init() {
 	tx.InvoiceLineItem = NewInvoiceLineItemClient(tx.config)
 	tx.InvoiceSequence = NewInvoiceSequenceClient(tx.config)
 	tx.Meter = NewMeterClient(tx.config)
+	tx.Payment = NewPaymentClient(tx.config)
+	tx.PaymentAttempt = NewPaymentAttemptClient(tx.config)
 	tx.Plan = NewPlanClient(tx.config)
 	tx.Price = NewPriceClient(tx.config)
 	tx.Subscription = NewSubscriptionClient(tx.config)
 	tx.SubscriptionLineItem = NewSubscriptionLineItemClient(tx.config)
+	tx.Task = NewTaskClient(tx.config)
 	tx.Wallet = NewWalletClient(tx.config)
 	tx.WalletTransaction = NewWalletTransactionClient(tx.config)
 }

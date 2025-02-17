@@ -18,6 +18,8 @@ func GetAggregator(aggregationType types.AggregationType) events.Aggregator {
 		return &SumAggregator{}
 	case types.AggregationAvg:
 		return &AvgAggregator{}
+	case types.AggregationCountUnique:
+		return &CountUniqueAggregator{}
 	}
 	return nil
 }
@@ -217,6 +219,59 @@ func (a *CountAggregator) GetQuery(ctx context.Context, params *events.UsagePara
 
 func (a *CountAggregator) GetType() types.AggregationType {
 	return types.AggregationCount
+}
+
+// CountUniqueAggregator implements count unique aggregation
+type CountUniqueAggregator struct{}
+
+func (a *CountUniqueAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
+	windowSize := formatWindowSize(params.WindowSize)
+	selectClause := ""
+	groupByClause := ""
+
+	if windowSize != "" {
+		selectClause = fmt.Sprintf("%s AS window_size,", windowSize)
+		groupByClause = "GROUP BY window_size ORDER BY window_size"
+	}
+
+	externalCustomerFilter := ""
+	if params.ExternalCustomerID != "" {
+		externalCustomerFilter = fmt.Sprintf("AND external_customer_id = '%s'", params.ExternalCustomerID)
+	}
+
+	customerFilter := ""
+	if params.CustomerID != "" {
+		customerFilter = fmt.Sprintf("AND customer_id = '%s'", params.CustomerID)
+	}
+
+	filterConditions := buildFilterConditions(params.Filters)
+	timeConditions := buildTimeConditions(params)
+
+	return fmt.Sprintf(`
+        SELECT 
+            %s count(DISTINCT %s) as total
+        FROM events
+        PREWHERE event_name = '%s'
+            AND tenant_id = '%s'
+			%s
+			%s
+            %s
+            %s
+        %s
+    `,
+		selectClause,
+		getDeduplicationKey(),
+		params.EventName,
+		types.GetTenantID(ctx),
+		externalCustomerFilter,
+		customerFilter,
+		filterConditions,
+		timeConditions,
+		groupByClause)
+}
+
+func (a *CountUniqueAggregator) GetType() types.AggregationType {
+	return types.AggregationCountUnique
 }
 
 // AvgAggregator implements avg aggregation

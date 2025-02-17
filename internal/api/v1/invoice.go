@@ -187,7 +187,7 @@ func (h *InvoiceHandler) VoidInvoice(c *gin.Context) {
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Invoice ID"
-// @Param request body dto.UpdateInvoicePaymentStatusRequest true "Payment Status Update Request"
+// @Param request body dto.UpdatePaymentStatusRequest true "Payment Status Update Request"
 // @Success 200 {object} dto.InvoiceResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
@@ -195,7 +195,7 @@ func (h *InvoiceHandler) VoidInvoice(c *gin.Context) {
 // @Router /invoices/{id}/payment [put]
 func (h *InvoiceHandler) UpdatePaymentStatus(c *gin.Context) {
 	id := c.Param("id")
-	var req dto.UpdateInvoicePaymentStatusRequest
+	var req dto.UpdatePaymentStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.Error("Failed to bind request body", "error", err)
 		NewErrorResponse(c, http.StatusBadRequest, "failed to bind request body", err)

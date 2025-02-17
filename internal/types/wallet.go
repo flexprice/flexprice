@@ -1,6 +1,10 @@
 package types
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/samber/lo"
+)
 
 // WalletStatus represents the current state of a wallet
 type WalletStatus string
@@ -10,6 +14,36 @@ const (
 	WalletStatusFrozen WalletStatus = "frozen"
 	WalletStatusClosed WalletStatus = "closed"
 )
+
+// AutoTopupTrigger represents the type of trigger for auto top-up
+type AutoTopupTrigger string
+
+const (
+	// AutoTopupTriggerDisabled represents disabled auto top-up
+	AutoTopupTriggerDisabled AutoTopupTrigger = "disabled"
+	// AutoTopupTriggerBalanceBelowThreshold represents auto top-up when balance goes below threshold
+	AutoTopupTriggerBalanceBelowThreshold AutoTopupTrigger = "balance_below_threshold"
+)
+
+func (t AutoTopupTrigger) Validate() error {
+	allowedValues := []string{
+		string(AutoTopupTriggerDisabled),
+		string(AutoTopupTriggerBalanceBelowThreshold),
+	}
+	if t == "" {
+		return nil
+	}
+
+	if !lo.Contains(allowedValues, string(t)) {
+		return fmt.Errorf("invalid auto top-up trigger: %s", t)
+	}
+	return nil
+}
+
+// String returns the string representation of AutoTopupTrigger
+func (t AutoTopupTrigger) String() string {
+	return string(t)
+}
 
 type WalletTransactionFilter struct {
 	*QueryFilter

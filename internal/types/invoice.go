@@ -84,33 +84,6 @@ func (s InvoiceStatus) Validate() error {
 	return nil
 }
 
-type InvoicePaymentStatus string
-
-const (
-	// InvoicePaymentStatusPending indicates payment is pending
-	InvoicePaymentStatusPending InvoicePaymentStatus = "PENDING"
-	// InvoicePaymentStatusSucceeded indicates payment was successful
-	InvoicePaymentStatusSucceeded InvoicePaymentStatus = "SUCCEEDED"
-	// InvoicePaymentStatusFailed indicates payment failed
-	InvoicePaymentStatusFailed InvoicePaymentStatus = "FAILED"
-)
-
-func (s InvoicePaymentStatus) String() string {
-	return string(s)
-}
-
-func (s InvoicePaymentStatus) Validate() error {
-	allowed := []InvoicePaymentStatus{
-		InvoicePaymentStatusPending,
-		InvoicePaymentStatusSucceeded,
-		InvoicePaymentStatusFailed,
-	}
-	if !lo.Contains(allowed, s) {
-		return fmt.Errorf("invalid invoice payment status: %s", s)
-	}
-	return nil
-}
-
 type InvoiceBillingReason string
 
 const (
@@ -149,11 +122,11 @@ const (
 type InvoiceFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
-	CustomerID     string                 `json:"customer_id,omitempty" form:"customer_id"`
-	SubscriptionID string                 `json:"subscription_id,omitempty" form:"subscription_id"`
-	InvoiceType    InvoiceType            `json:"invoice_type,omitempty" form:"invoice_type"`
-	InvoiceStatus  []InvoiceStatus        `json:"invoice_status,omitempty" form:"invoice_status"`
-	PaymentStatus  []InvoicePaymentStatus `json:"payment_status,omitempty" form:"payment_status"`
+	CustomerID     string          `json:"customer_id,omitempty" form:"customer_id"`
+	SubscriptionID string          `json:"subscription_id,omitempty" form:"subscription_id"`
+	InvoiceType    InvoiceType     `json:"invoice_type,omitempty" form:"invoice_type"`
+	InvoiceStatus  []InvoiceStatus `json:"invoice_status,omitempty" form:"invoice_status"`
+	PaymentStatus  []PaymentStatus `json:"payment_status,omitempty" form:"payment_status"`
 }
 
 // NewInvoiceFilter creates a new invoice filter with default options

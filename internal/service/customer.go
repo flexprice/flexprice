@@ -16,6 +16,7 @@ type CustomerService interface {
 	GetCustomers(ctx context.Context, filter *types.CustomerFilter) (*dto.ListCustomersResponse, error)
 	UpdateCustomer(ctx context.Context, id string, req dto.UpdateCustomerRequest) (*dto.CustomerResponse, error)
 	DeleteCustomer(ctx context.Context, id string) error
+	GetCustomerByLookupKey(ctx context.Context, lookupKey string) (*dto.CustomerResponse, error)
 }
 
 type customerService struct {
@@ -156,4 +157,13 @@ func (s *customerService) DeleteCustomer(ctx context.Context, id string) error {
 	}
 
 	return nil
+}
+
+func (s *customerService) GetCustomerByLookupKey(ctx context.Context, lookupKey string) (*dto.CustomerResponse, error) {
+	customer, err := s.repo.GetByLookupKey(ctx, lookupKey)
+	if err != nil {
+		return nil, errors.Wrap(err, errors.ErrCodeNotFound, "failed to get customer by lookup key")
+	}
+
+	return &dto.CustomerResponse{Customer: customer}, nil
 }

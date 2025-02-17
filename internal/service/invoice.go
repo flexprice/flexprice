@@ -35,7 +35,7 @@ type InvoiceService interface {
 	ListInvoices(ctx context.Context, filter *types.InvoiceFilter) (*dto.ListInvoicesResponse, error)
 	FinalizeInvoice(ctx context.Context, id string) error
 	VoidInvoice(ctx context.Context, id string) error
-	UpdatePaymentStatus(ctx context.Context, id string, status types.InvoicePaymentStatus, amount *decimal.Decimal) error
+	UpdatePaymentStatus(ctx context.Context, id string, status types.PaymentStatus, amount *decimal.Decimal) error
 	CreateSubscriptionInvoice(ctx context.Context, req *dto.CreateSubscriptionInvoiceRequest) (*dto.InvoiceResponse, error)
 	GetPreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error)
 	GetCustomerInvoiceSummary(ctx context.Context, customerID string, currency string) (*dto.CustomerInvoiceSummary, error)
@@ -178,14 +178,14 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 				inv.InvoiceStatus = types.InvoiceStatusFinalized
 			}
 			if req.PaymentStatus == nil {
-				inv.PaymentStatus = types.InvoicePaymentStatusSucceeded
+				inv.PaymentStatus = types.PaymentStatusSucceeded
 			}
 		} else if req.InvoiceType == types.InvoiceTypeSubscription {
 			if req.InvoiceStatus == nil {
 				inv.InvoiceStatus = types.InvoiceStatusDraft
 			}
 			if req.PaymentStatus == nil {
-				inv.PaymentStatus = types.InvoicePaymentStatusPending
+				inv.PaymentStatus = types.PaymentStatusPending
 			}
 		}
 
@@ -266,14 +266,19 @@ func (s *invoiceService) GetInvoice(ctx context.Context, id string) (*dto.Invoic
 			return nil, fmt.Errorf("failed to get subscription: %w", err)
 		}
 		response.WithSubscription(subscription)
+		if subscription.Customer != nil {
+			response.Customer = subscription.Customer
+		}
 	}
 
-	// Get customer information
-	customer, err := s.customerRepo.Get(ctx, inv.CustomerID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get customer: %w", err)
+	// Get customer information if not already set
+	if response.Customer == nil {
+		customer, err := s.customerRepo.Get(ctx, inv.CustomerID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get customer: %w", err)
+		}
+		response.WithCustomer(&dto.CustomerResponse{Customer: customer})
 	}
-	response.WithCustomer(&dto.CustomerResponse{Customer: customer})
 
 	return response, nil
 }
@@ -362,9 +367,9 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string) error {
 		return fmt.Errorf("invoice status - %s is not allowed", inv.InvoiceStatus)
 	}
 
-	allowedPaymentStatuses := []types.InvoicePaymentStatus{
-		types.InvoicePaymentStatusPending,
-		types.InvoicePaymentStatusFailed,
+	allowedPaymentStatuses := []types.PaymentStatus{
+		types.PaymentStatusPending,
+		types.PaymentStatusFailed,
 	}
 	if !lo.Contains(allowedPaymentStatuses, inv.PaymentStatus) {
 		return fmt.Errorf("invoice payment status - %s is not allowed", inv.PaymentStatus)
@@ -382,7 +387,7 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string) error {
 	return nil
 }
 
-func (s *invoiceService) UpdatePaymentStatus(ctx context.Context, id string, status types.InvoicePaymentStatus, amount *decimal.Decimal) error {
+func (s *invoiceService) UpdatePaymentStatus(ctx context.Context, id string, status types.PaymentStatus, amount *decimal.Decimal) error {
 	inv, err := s.invoiceRepo.Get(ctx, id)
 	if err != nil {
 		return fmt.Errorf("failed to get invoice: %w", err)
@@ -411,16 +416,16 @@ func (s *invoiceService) UpdatePaymentStatus(ctx context.Context, id string, sta
 	inv.PaymentStatus = status
 
 	switch status {
-	case types.InvoicePaymentStatusPending:
+	case types.PaymentStatusPending:
 		if amount != nil {
 			inv.AmountPaid = *amount
 			inv.AmountRemaining = inv.AmountDue.Sub(*amount)
 		}
-	case types.InvoicePaymentStatusSucceeded:
+	case types.PaymentStatusSucceeded:
 		inv.AmountPaid = inv.AmountDue
 		inv.AmountRemaining = decimal.Zero
 		inv.PaidAt = &now
-	case types.InvoicePaymentStatusFailed:
+	case types.PaymentStatusFailed:
 		inv.AmountPaid = decimal.Zero
 		inv.AmountRemaining = inv.AmountDue
 		inv.PaidAt = nil
@@ -578,7 +583,7 @@ func (s *invoiceService) GetCustomerInvoiceSummary(ctx context.Context, customer
 		summary.TotalInvoiceCount++
 
 		// Skip paid and void invoices
-		if inv.PaymentStatus == types.InvoicePaymentStatusSucceeded {
+		if inv.PaymentStatus == types.PaymentStatusSucceeded {
 			continue
 		}
 
@@ -665,18 +670,18 @@ func (s *invoiceService) GetCustomerMultiCurrencyInvoiceSummary(ctx context.Cont
 	}, nil
 }
 
-func (s *invoiceService) validatePaymentStatusTransition(from, to types.InvoicePaymentStatus) error {
+func (s *invoiceService) validatePaymentStatusTransition(from, to types.PaymentStatus) error {
 	// Define allowed transitions
-	allowedTransitions := map[types.InvoicePaymentStatus][]types.InvoicePaymentStatus{
-		types.InvoicePaymentStatusPending: {
-			types.InvoicePaymentStatusPending,
-			types.InvoicePaymentStatusSucceeded,
-			types.InvoicePaymentStatusFailed,
+	allowedTransitions := map[types.PaymentStatus][]types.PaymentStatus{
+		types.PaymentStatusPending: {
+			types.PaymentStatusPending,
+			types.PaymentStatusSucceeded,
+			types.PaymentStatusFailed,
 		},
-		types.InvoicePaymentStatusFailed: {
-			types.InvoicePaymentStatusPending,
-			types.InvoicePaymentStatusFailed,
-			types.InvoicePaymentStatusSucceeded,
+		types.PaymentStatusFailed: {
+			types.PaymentStatusPending,
+			types.PaymentStatusFailed,
+			types.PaymentStatusSucceeded,
 		},
 	}
 

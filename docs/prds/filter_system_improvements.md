@@ -36,7 +36,7 @@ type InvoiceFilter struct {
     SubscriptionID string                 `json:"subscription_id,omitempty" form:"subscription_id"`
     InvoiceType    InvoiceType            `json:"invoice_type,omitempty" form:"invoice_type"`
     InvoiceStatus  []InvoiceStatus        `json:"invoice_status,omitempty" form:"invoice_status"`
-    PaymentStatus  []InvoicePaymentStatus `json:"payment_status,omitempty" form:"payment_status"`
+    PaymentStatus  []PaymentStatus `json:"payment_status,omitempty" form:"payment_status"`
 }
 
 // SubscriptionFilter example

@@ -171,6 +171,48 @@ func (wc *WalletCreate) SetNillableWalletStatus(s *string) *WalletCreate {
 	return wc
 }
 
+// SetAutoTopupTrigger sets the "auto_topup_trigger" field.
+func (wc *WalletCreate) SetAutoTopupTrigger(s string) *WalletCreate {
+	wc.mutation.SetAutoTopupTrigger(s)
+	return wc
+}
+
+// SetNillableAutoTopupTrigger sets the "auto_topup_trigger" field if the given value is not nil.
+func (wc *WalletCreate) SetNillableAutoTopupTrigger(s *string) *WalletCreate {
+	if s != nil {
+		wc.SetAutoTopupTrigger(*s)
+	}
+	return wc
+}
+
+// SetAutoTopupMinBalance sets the "auto_topup_min_balance" field.
+func (wc *WalletCreate) SetAutoTopupMinBalance(d decimal.Decimal) *WalletCreate {
+	wc.mutation.SetAutoTopupMinBalance(d)
+	return wc
+}
+
+// SetNillableAutoTopupMinBalance sets the "auto_topup_min_balance" field if the given value is not nil.
+func (wc *WalletCreate) SetNillableAutoTopupMinBalance(d *decimal.Decimal) *WalletCreate {
+	if d != nil {
+		wc.SetAutoTopupMinBalance(*d)
+	}
+	return wc
+}
+
+// SetAutoTopupAmount sets the "auto_topup_amount" field.
+func (wc *WalletCreate) SetAutoTopupAmount(d decimal.Decimal) *WalletCreate {
+	wc.mutation.SetAutoTopupAmount(d)
+	return wc
+}
+
+// SetNillableAutoTopupAmount sets the "auto_topup_amount" field if the given value is not nil.
+func (wc *WalletCreate) SetNillableAutoTopupAmount(d *decimal.Decimal) *WalletCreate {
+	if d != nil {
+		wc.SetAutoTopupAmount(*d)
+	}
+	return wc
+}
+
 // SetID sets the "id" field.
 func (wc *WalletCreate) SetID(s string) *WalletCreate {
 	wc.mutation.SetID(s)
@@ -231,6 +273,10 @@ func (wc *WalletCreate) defaults() {
 	if _, ok := wc.mutation.WalletStatus(); !ok {
 		v := wallet.DefaultWalletStatus
 		wc.mutation.SetWalletStatus(v)
+	}
+	if _, ok := wc.mutation.AutoTopupTrigger(); !ok {
+		v := wallet.DefaultAutoTopupTrigger
+		wc.mutation.SetAutoTopupTrigger(v)
 	}
 }
 
@@ -361,6 +407,18 @@ func (wc *WalletCreate) createSpec() (*Wallet, *sqlgraph.CreateSpec) {
 	if value, ok := wc.mutation.WalletStatus(); ok {
 		_spec.SetField(wallet.FieldWalletStatus, field.TypeString, value)
 		_node.WalletStatus = value
+	}
+	if value, ok := wc.mutation.AutoTopupTrigger(); ok {
+		_spec.SetField(wallet.FieldAutoTopupTrigger, field.TypeString, value)
+		_node.AutoTopupTrigger = &value
+	}
+	if value, ok := wc.mutation.AutoTopupMinBalance(); ok {
+		_spec.SetField(wallet.FieldAutoTopupMinBalance, field.TypeOther, value)
+		_node.AutoTopupMinBalance = &value
+	}
+	if value, ok := wc.mutation.AutoTopupAmount(); ok {
+		_spec.SetField(wallet.FieldAutoTopupAmount, field.TypeOther, value)
+		_node.AutoTopupAmount = &value
 	}
 	return _node, _spec
 }

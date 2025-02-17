@@ -275,6 +275,7 @@ func (s *entitlementService) GetPlanEntitlements(ctx context.Context, planID str
 	filter := types.NewNoLimitEntitlementFilter()
 	filter.WithPlanIDs([]string{planID})
 	filter.WithStatus(types.StatusPublished)
+	filter.WithExpand(string(types.ExpandFeatures))
 
 	// Use the standard list function to get the entitlements with expansion
 	return s.ListEntitlements(ctx, filter)

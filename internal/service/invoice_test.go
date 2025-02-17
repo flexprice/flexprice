@@ -142,7 +142,7 @@ func (s *InvoiceServiceSuite) setupTestData() {
 	s.testData.prices.apiCalls = &price.Price{
 		ID:                 "price_api_calls",
 		Amount:             decimal.Zero,
-		Currency:           "USD",
+		Currency:           "usd",
 		PlanID:             s.testData.plan.ID,
 		Type:               types.PRICE_TYPE_USAGE,
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
@@ -163,7 +163,7 @@ func (s *InvoiceServiceSuite) setupTestData() {
 	s.testData.prices.storage = &price.Price{
 		ID:                 "price_storage",
 		Amount:             decimal.NewFromFloat(0.1),
-		Currency:           "USD",
+		Currency:           "usd",
 		PlanID:             s.testData.plan.ID,
 		Type:               types.PRICE_TYPE_USAGE,
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
@@ -184,7 +184,7 @@ func (s *InvoiceServiceSuite) setupTestData() {
 		StartDate:          s.testData.now.Add(-30 * 24 * time.Hour),
 		CurrentPeriodStart: s.testData.now.Add(-24 * time.Hour),
 		CurrentPeriodEnd:   s.testData.now.Add(6 * 24 * time.Hour),
-		Currency:           "USD",
+		Currency:           "usd",
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
 		SubscriptionStatus: types.SubscriptionStatusActive,
@@ -326,8 +326,8 @@ func (s *InvoiceServiceSuite) TestCreateSubscriptionInvoice() {
 			}
 			s.Equal(types.InvoiceTypeSubscription, got.InvoiceType)
 			s.Equal(types.InvoiceStatusDraft, got.InvoiceStatus)
-			s.Equal(types.InvoicePaymentStatusPending, got.PaymentStatus)
-			s.Equal("USD", got.Currency)
+			s.Equal(types.PaymentStatusPending, got.PaymentStatus)
+			s.Equal("usd", got.Currency)
 			s.True(tt.expectedAmount.Equal(got.AmountDue), "amount due mismatch")
 			s.True(decimal.Zero.Equal(got.AmountPaid), "amount paid mismatch")
 			s.True(tt.expectedAmount.Equal(got.AmountRemaining), "amount remaining mismatch")
@@ -385,8 +385,8 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice() {
 		SubscriptionID:  &s.testData.subscription.ID,
 		InvoiceType:     types.InvoiceTypeSubscription,
 		InvoiceStatus:   types.InvoiceStatusDraft,
-		PaymentStatus:   types.InvoicePaymentStatusPending,
-		Currency:        "USD",
+		PaymentStatus:   types.PaymentStatusPending,
+		Currency:        "usd",
 		AmountDue:       decimal.NewFromFloat(15),
 		AmountPaid:      decimal.Zero,
 		AmountRemaining: decimal.NewFromFloat(15),
@@ -404,7 +404,7 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice() {
 				MeterID:        &s.testData.meters.apiCalls.ID,
 				Amount:         decimal.NewFromFloat(10),
 				Quantity:       decimal.NewFromFloat(100),
-				Currency:       "USD",
+				Currency:       "usd",
 				PeriodStart:    &s.testData.subscription.CurrentPeriodStart,
 				PeriodEnd:      &s.testData.subscription.CurrentPeriodEnd,
 				BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
@@ -417,7 +417,7 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice() {
 				MeterID:        &s.testData.meters.storage.ID,
 				Amount:         decimal.NewFromFloat(5),
 				Quantity:       decimal.NewFromFloat(50),
-				Currency:       "USD",
+				Currency:       "usd",
 				PeriodStart:    &s.testData.subscription.CurrentPeriodStart,
 				PeriodEnd:      &s.testData.subscription.CurrentPeriodEnd,
 				BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
@@ -475,8 +475,8 @@ func (s *InvoiceServiceSuite) TestUpdatePaymentStatus() {
 		SubscriptionID:  &s.testData.subscription.ID,
 		InvoiceType:     types.InvoiceTypeSubscription,
 		InvoiceStatus:   types.InvoiceStatusFinalized,
-		PaymentStatus:   types.InvoicePaymentStatusPending,
-		Currency:        "USD",
+		PaymentStatus:   types.PaymentStatusPending,
+		Currency:        "usd",
 		AmountDue:       decimal.NewFromFloat(15),
 		AmountPaid:      decimal.Zero,
 		AmountRemaining: decimal.NewFromFloat(15),
@@ -494,7 +494,7 @@ func (s *InvoiceServiceSuite) TestUpdatePaymentStatus() {
 				MeterID:        &s.testData.meters.apiCalls.ID,
 				Amount:         decimal.NewFromFloat(10),
 				Quantity:       decimal.NewFromFloat(100),
-				Currency:       "USD",
+				Currency:       "usd",
 				PeriodStart:    &s.testData.subscription.CurrentPeriodStart,
 				PeriodEnd:      &s.testData.subscription.CurrentPeriodEnd,
 				BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
@@ -507,7 +507,7 @@ func (s *InvoiceServiceSuite) TestUpdatePaymentStatus() {
 				MeterID:        &s.testData.meters.storage.ID,
 				Amount:         decimal.NewFromFloat(5),
 				Quantity:       decimal.NewFromFloat(50),
-				Currency:       "USD",
+				Currency:       "usd",
 				PeriodStart:    &s.testData.subscription.CurrentPeriodStart,
 				PeriodEnd:      &s.testData.subscription.CurrentPeriodEnd,
 				BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
@@ -519,20 +519,20 @@ func (s *InvoiceServiceSuite) TestUpdatePaymentStatus() {
 	tests := []struct {
 		name    string
 		id      string
-		status  types.InvoicePaymentStatus
+		status  types.PaymentStatus
 		amount  *decimal.Decimal
 		wantErr bool
 	}{
 		{
 			name:   "successful payment status update to succeeded",
 			id:     finalizedInvoice.ID,
-			status: types.InvoicePaymentStatusSucceeded,
+			status: types.PaymentStatusSucceeded,
 			amount: &decimal.Decimal{},
 		},
 		{
 			name:    "error when invoice not found",
 			id:      "invalid_id",
-			status:  types.InvoicePaymentStatusSucceeded,
+			status:  types.PaymentStatusSucceeded,
 			wantErr: true,
 		},
 	}
@@ -540,7 +540,7 @@ func (s *InvoiceServiceSuite) TestUpdatePaymentStatus() {
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
 			// Set the amount to the full amount due for successful payment
-			if tt.status == types.InvoicePaymentStatusSucceeded {
+			if tt.status == types.PaymentStatusSucceeded {
 				amount := finalizedInvoice.AmountDue
 				tt.amount = &amount
 			}
@@ -556,7 +556,7 @@ func (s *InvoiceServiceSuite) TestUpdatePaymentStatus() {
 			inv, err := s.invoiceRepo.Get(s.GetContext(), tt.id)
 			s.NoError(err)
 			s.Equal(tt.status, inv.PaymentStatus)
-			if tt.status == types.InvoicePaymentStatusSucceeded {
+			if tt.status == types.PaymentStatusSucceeded {
 				s.True(inv.AmountDue.Equal(inv.AmountPaid), "amount paid should equal amount due")
 				s.True(decimal.Zero.Equal(inv.AmountRemaining), "amount remaining should be zero")
 			}
@@ -582,9 +582,9 @@ func (s *InvoiceServiceSuite) TestGetCustomerInvoiceSummary() {
 		{
 			ID:              "inv_1",
 			CustomerID:      customer.ID,
-			Currency:        "USD",
+			Currency:        "usd",
 			InvoiceStatus:   types.InvoiceStatusFinalized,
-			PaymentStatus:   types.InvoicePaymentStatusPending,
+			PaymentStatus:   types.PaymentStatusPending,
 			AmountDue:       decimal.NewFromInt(100),
 			AmountRemaining: decimal.NewFromInt(100),
 			DueDate:         lo.ToPtr(now.Add(-24 * time.Hour)), // Overdue
@@ -594,14 +594,14 @@ func (s *InvoiceServiceSuite) TestGetCustomerInvoiceSummary() {
 					InvoiceID: "inv_1",
 					Amount:    decimal.NewFromInt(60),
 					PriceType: lo.ToPtr(string(types.PRICE_TYPE_USAGE)),
-					Currency:  "USD",
+					Currency:  "usd",
 				},
 				{
 					ID:        "line_2",
 					InvoiceID: "inv_1",
 					Amount:    decimal.NewFromInt(40),
 					PriceType: lo.ToPtr(string(types.PRICE_TYPE_FIXED)),
-					Currency:  "USD",
+					Currency:  "usd",
 				},
 			},
 			BaseModel: types.GetDefaultBaseModel(s.GetContext()),
@@ -609,9 +609,9 @@ func (s *InvoiceServiceSuite) TestGetCustomerInvoiceSummary() {
 		{
 			ID:              "inv_2",
 			CustomerID:      customer.ID,
-			Currency:        "USD",
+			Currency:        "usd",
 			InvoiceStatus:   types.InvoiceStatusFinalized,
-			PaymentStatus:   types.InvoicePaymentStatusSucceeded,
+			PaymentStatus:   types.PaymentStatusSucceeded,
 			AmountDue:       decimal.NewFromInt(200),
 			AmountRemaining: decimal.Zero,
 			BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
@@ -621,7 +621,7 @@ func (s *InvoiceServiceSuite) TestGetCustomerInvoiceSummary() {
 			CustomerID:      customer.ID,
 			Currency:        "EUR", // Different currency
 			InvoiceStatus:   types.InvoiceStatusFinalized,
-			PaymentStatus:   types.InvoicePaymentStatusPending,
+			PaymentStatus:   types.PaymentStatusPending,
 			AmountDue:       decimal.NewFromInt(300),
 			AmountRemaining: decimal.NewFromInt(300),
 			LineItems: []*invoice.InvoiceLineItem{
@@ -640,7 +640,7 @@ func (s *InvoiceServiceSuite) TestGetCustomerInvoiceSummary() {
 			CustomerID:      customer.ID,
 			Currency:        "usd", // Same as USD but different case
 			InvoiceStatus:   types.InvoiceStatusFinalized,
-			PaymentStatus:   types.InvoicePaymentStatusPending,
+			PaymentStatus:   types.PaymentStatusPending,
 			AmountDue:       decimal.NewFromInt(150),
 			AmountRemaining: decimal.NewFromInt(150),
 			LineItems: []*invoice.InvoiceLineItem{
@@ -673,10 +673,10 @@ func (s *InvoiceServiceSuite) TestGetCustomerInvoiceSummary() {
 		{
 			name:       "Success - USD currency",
 			customerID: customer.ID,
-			currency:   "USD",
+			currency:   "usd",
 			expectedSummary: &dto.CustomerInvoiceSummary{
 				CustomerID:          customer.ID,
-				Currency:            "USD",
+				Currency:            "usd",
 				TotalRevenueAmount:  decimal.NewFromInt(450), // 100 + 200 + 150
 				TotalUnpaidAmount:   decimal.NewFromInt(250), // 100 + 150
 				TotalOverdueAmount:  decimal.NewFromInt(100), // inv_1
@@ -724,10 +724,10 @@ func (s *InvoiceServiceSuite) TestGetCustomerInvoiceSummary() {
 		{
 			name:       "Success - Invalid customer ID",
 			customerID: "invalid_id",
-			currency:   "USD",
+			currency:   "usd",
 			expectedSummary: &dto.CustomerInvoiceSummary{
 				CustomerID:          "invalid_id",
-				Currency:            "USD",
+				Currency:            "usd",
 				TotalRevenueAmount:  decimal.Zero,
 				TotalUnpaidAmount:   decimal.Zero,
 				TotalOverdueAmount:  decimal.Zero,

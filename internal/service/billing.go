@@ -298,7 +298,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		SubscriptionID: lo.ToPtr(sub.ID),
 		InvoiceType:    types.InvoiceTypeSubscription,
 		InvoiceStatus:  lo.ToPtr(types.InvoiceStatusDraft),
-		PaymentStatus:  lo.ToPtr(types.InvoicePaymentStatusPending),
+		PaymentStatus:  lo.ToPtr(types.PaymentStatusPending),
 		Currency:       sub.Currency,
 		AmountDue:      result.TotalAmount,
 		Description:    description,

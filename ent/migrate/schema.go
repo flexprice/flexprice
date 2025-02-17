@@ -386,6 +386,108 @@ var (
 			},
 		},
 	}
+	// PaymentsColumns holds the columns for the "payments" table.
+	PaymentsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "idempotency_key", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "destination_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "destination_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "payment_method_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "payment_method_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "payment_gateway", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "gateway_payment_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "amount", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "currency", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(10)"}},
+		{Name: "payment_status", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "track_attempts", Type: field.TypeBool, Default: false},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "succeeded_at", Type: field.TypeTime, Nullable: true},
+		{Name: "failed_at", Type: field.TypeTime, Nullable: true},
+		{Name: "refunded_at", Type: field.TypeTime, Nullable: true},
+		{Name: "error_message", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+	}
+	// PaymentsTable holds the schema information for the "payments" table.
+	PaymentsTable = &schema.Table{
+		Name:       "payments",
+		Columns:    PaymentsColumns,
+		PrimaryKey: []*schema.Column{PaymentsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "idx_tenant_destination_status",
+				Unique:  false,
+				Columns: []*schema.Column{PaymentsColumns[1], PaymentsColumns[8], PaymentsColumns[9], PaymentsColumns[16], PaymentsColumns[2]},
+			},
+			{
+				Name:    "idx_tenant_payment_method_status",
+				Unique:  false,
+				Columns: []*schema.Column{PaymentsColumns[1], PaymentsColumns[10], PaymentsColumns[11], PaymentsColumns[16], PaymentsColumns[2]},
+			},
+			{
+				Name:    "idx_tenant_gateway_payment",
+				Unique:  false,
+				Columns: []*schema.Column{PaymentsColumns[1], PaymentsColumns[12], PaymentsColumns[13]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "payment_gateway IS NOT NULL AND gateway_payment_id IS NOT NULL",
+				},
+			},
+		},
+	}
+	// PaymentAttemptsColumns holds the columns for the "payment_attempts" table.
+	PaymentAttemptsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "payment_status", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "attempt_number", Type: field.TypeInt, Default: 1, SchemaType: map[string]string{"postgres": "integer"}},
+		{Name: "gateway_attempt_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "error_message", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "payment_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+	}
+	// PaymentAttemptsTable holds the schema information for the "payment_attempts" table.
+	PaymentAttemptsTable = &schema.Table{
+		Name:       "payment_attempts",
+		Columns:    PaymentAttemptsColumns,
+		PrimaryKey: []*schema.Column{PaymentAttemptsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "payment_attempts_payments_attempts",
+				Columns:    []*schema.Column{PaymentAttemptsColumns[12]},
+				RefColumns: []*schema.Column{PaymentsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "idx_payment_attempt_number_unique",
+				Unique:  true,
+				Columns: []*schema.Column{PaymentAttemptsColumns[12], PaymentAttemptsColumns[8]},
+			},
+			{
+				Name:    "idx_payment_attempt_status",
+				Unique:  false,
+				Columns: []*schema.Column{PaymentAttemptsColumns[12], PaymentAttemptsColumns[2]},
+			},
+			{
+				Name:    "idx_gateway_attempt",
+				Unique:  false,
+				Columns: []*schema.Column{PaymentAttemptsColumns[9]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "gateway_attempt_id IS NOT NULL",
+				},
+			},
+		},
+	}
 	// PlansColumns holds the columns for the "plans" table.
 	PlansColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -605,6 +707,54 @@ var (
 			},
 		},
 	}
+	// TasksColumns holds the columns for the "tasks" table.
+	TasksColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "task_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "entity_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "file_url", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "file_name", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "file_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(10)"}},
+		{Name: "task_status", Type: field.TypeString, Default: "PENDING", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "total_records", Type: field.TypeInt, Nullable: true},
+		{Name: "processed_records", Type: field.TypeInt, Default: 0},
+		{Name: "successful_records", Type: field.TypeInt, Default: 0},
+		{Name: "failed_records", Type: field.TypeInt, Default: 0},
+		{Name: "error_summary", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "started_at", Type: field.TypeTime, Nullable: true},
+		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
+		{Name: "failed_at", Type: field.TypeTime, Nullable: true},
+	}
+	// TasksTable holds the schema information for the "tasks" table.
+	TasksTable = &schema.Table{
+		Name:       "tasks",
+		Columns:    TasksColumns,
+		PrimaryKey: []*schema.Column{TasksColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "idx_tasks_tenant_type_status",
+				Unique:  false,
+				Columns: []*schema.Column{TasksColumns[1], TasksColumns[7], TasksColumns[8], TasksColumns[2]},
+			},
+			{
+				Name:    "idx_tasks_tenant_user",
+				Unique:  false,
+				Columns: []*schema.Column{TasksColumns[1], TasksColumns[5], TasksColumns[2]},
+			},
+			{
+				Name:    "idx_tasks_tenant_task_status",
+				Unique:  false,
+				Columns: []*schema.Column{TasksColumns[1], TasksColumns[12], TasksColumns[2]},
+			},
+		},
+	}
 	// WalletsColumns holds the columns for the "wallets" table.
 	WalletsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -621,6 +771,9 @@ var (
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 		{Name: "balance", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(20,9)"}},
 		{Name: "wallet_status", Type: field.TypeString, Default: "active", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "auto_topup_trigger", Type: field.TypeString, Nullable: true, Default: "disabled", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "auto_topup_min_balance", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,9)"}},
+		{Name: "auto_topup_amount", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,9)"}},
 	}
 	// WalletsTable holds the schema information for the "wallets" table.
 	WalletsTable = &schema.Table{
@@ -693,10 +846,13 @@ var (
 		InvoiceLineItemsTable,
 		InvoiceSequencesTable,
 		MetersTable,
+		PaymentsTable,
+		PaymentAttemptsTable,
 		PlansTable,
 		PricesTable,
 		SubscriptionsTable,
 		SubscriptionLineItemsTable,
+		TasksTable,
 		WalletsTable,
 		WalletTransactionsTable,
 	}
@@ -705,5 +861,6 @@ var (
 func init() {
 	EntitlementsTable.ForeignKeys[0].RefTable = PlansTable
 	InvoiceLineItemsTable.ForeignKeys[0].RefTable = InvoicesTable
+	PaymentAttemptsTable.ForeignKeys[0].RefTable = PaymentsTable
 	SubscriptionLineItemsTable.ForeignKeys[0].RefTable = SubscriptionsTable
 }

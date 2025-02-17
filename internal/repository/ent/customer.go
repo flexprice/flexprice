@@ -86,6 +86,29 @@ func (r *customerRepository) Get(ctx context.Context, id string) (*domainCustome
 	return domainCustomer.FromEnt(c), nil
 }
 
+func (r *customerRepository) GetByLookupKey(ctx context.Context, lookupKey string) (*domainCustomer.Customer, error) {
+	client := r.client.Querier(ctx)
+
+	r.log.Debugw("getting customer by lookup key", "lookup_key", lookupKey)
+
+	c, err := client.Customer.Query().
+		Where(
+			customer.ExternalID(lookupKey),
+			customer.TenantID(types.GetTenantID(ctx)),
+			customer.Status(string(types.StatusPublished)),
+		).
+		Only(ctx)
+
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, errors.Wrap(err, errors.ErrCodeNotFound, "customer not found")
+		}
+		return nil, errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to get customer by lookup key")
+	}
+
+	return domainCustomer.FromEnt(c), nil
+}
+
 func (r *customerRepository) List(ctx context.Context, filter *types.CustomerFilter) ([]*domainCustomer.Customer, error) {
 	client := r.client.Querier(ctx)
 

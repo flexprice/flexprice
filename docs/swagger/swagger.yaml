@@ -157,7 +157,7 @@ definitions:
       metadata:
         $ref: '#/definitions/types.Metadata'
       payment_status:
-        $ref: '#/definitions/types.InvoicePaymentStatus'
+        $ref: '#/definitions/types.PaymentStatus'
       period_end:
         type: string
       period_start:
@@ -192,6 +192,34 @@ definitions:
     - aggregation
     - event_name
     - name
+    type: object
+  dto.CreatePaymentRequest:
+    properties:
+      amount:
+        type: number
+      currency:
+        type: string
+      destination_id:
+        type: string
+      destination_type:
+        $ref: '#/definitions/types.PaymentDestinationType'
+      idempotency_key:
+        type: string
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      payment_method_id:
+        type: string
+      payment_method_type:
+        $ref: '#/definitions/types.PaymentMethodType'
+      process_payment:
+        default: true
+        type: boolean
+    required:
+    - amount
+    - currency
+    - destination_id
+    - destination_type
+    - payment_method_type
     type: object
   dto.CreatePlanEntitlementRequest:
     properties:
@@ -392,6 +420,27 @@ definitions:
     - plan_id
     - start_date
     type: object
+  dto.CreateTaskRequest:
+    properties:
+      entity_type:
+        $ref: '#/definitions/types.EntityType'
+      file_name:
+        type: string
+      file_type:
+        $ref: '#/definitions/types.FileType'
+      file_url:
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      task_type:
+        $ref: '#/definitions/types.TaskType'
+    required:
+    - entity_type
+    - file_type
+    - file_url
+    - task_type
+    type: object
   dto.CreateTenantRequest:
     properties:
       name:
@@ -401,6 +450,14 @@ definitions:
     type: object
   dto.CreateWalletRequest:
     properties:
+      auto_topup_amount:
+        type: number
+      auto_topup_min_balance:
+        type: number
+      auto_topup_trigger:
+        allOf:
+        - $ref: '#/definitions/types.AutoTopupTrigger'
+        default: disabled
       currency:
         type: string
       customer_id:
@@ -761,6 +818,7 @@ definitions:
       properties:
         additionalProperties:
           type: string
+        description: Handled separately for dynamic columns
         example:
           '"response_status"': 200}
           '{"request_size"': "100"
@@ -769,6 +827,7 @@ definitions:
         example: api
         type: string
       timestamp:
+        description: Handled separately due to parsing
         example: "2024-03-20T15:04:05Z"
         type: string
     required:
@@ -875,7 +934,7 @@ definitions:
       paid_at:
         type: string
       payment_status:
-        $ref: '#/definitions/types.InvoicePaymentStatus'
+        $ref: '#/definitions/types.PaymentStatus'
       period_end:
         type: string
       period_start:
@@ -948,6 +1007,15 @@ definitions:
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
     type: object
+  dto.ListPaymentsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/dto.PaymentResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
   dto.ListPlansResponse:
     properties:
       items:
@@ -971,6 +1039,15 @@ definitions:
       items:
         items:
           $ref: '#/definitions/dto.SubscriptionResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
+  dto.ListTasksResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/dto.TaskResponse'
         type: array
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
@@ -1025,6 +1102,76 @@ definitions:
         type: string
       updated_at:
         example: "2024-03-20T15:04:05Z"
+        type: string
+    type: object
+  dto.PaymentAttemptResponse:
+    properties:
+      attempt_number:
+        type: integer
+      created_at:
+        type: string
+      created_by:
+        type: string
+      error_message:
+        type: string
+      id:
+        type: string
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      payment_id:
+        type: string
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+    type: object
+  dto.PaymentResponse:
+    properties:
+      amount:
+        type: number
+      attempts:
+        items:
+          $ref: '#/definitions/dto.PaymentAttemptResponse'
+        type: array
+      created_at:
+        type: string
+      created_by:
+        type: string
+      currency:
+        type: string
+      destination_id:
+        type: string
+      destination_type:
+        $ref: '#/definitions/types.PaymentDestinationType'
+      error_message:
+        type: string
+      failed_at:
+        type: string
+      id:
+        type: string
+      idempotency_key:
+        type: string
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      payment_method_id:
+        type: string
+      payment_method_type:
+        $ref: '#/definitions/types.PaymentMethodType'
+      payment_status:
+        $ref: '#/definitions/types.PaymentStatus'
+      refunded_at:
+        type: string
+      succeeded_at:
+        type: string
+      tenant_id:
+        type: string
+      track_attempts:
+        type: boolean
+      updated_at:
+        type: string
+      updated_by:
         type: string
     type: object
   dto.PlanResponse:
@@ -1286,6 +1433,54 @@ definitions:
       quantity:
         type: number
     type: object
+  dto.TaskResponse:
+    properties:
+      completed_at:
+        type: string
+      created_at:
+        type: string
+      created_by:
+        type: string
+      entity_type:
+        $ref: '#/definitions/types.EntityType'
+      error_summary:
+        type: string
+      failed_at:
+        type: string
+      failed_records:
+        type: integer
+      file_name:
+        type: string
+      file_type:
+        $ref: '#/definitions/types.FileType'
+      file_url:
+        type: string
+      id:
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      processed_records:
+        type: integer
+      started_at:
+        type: string
+      status:
+        type: string
+      successful_records:
+        type: integer
+      task_status:
+        $ref: '#/definitions/types.TaskStatus'
+      task_type:
+        $ref: '#/definitions/types.TaskType'
+      tenant_id:
+        type: string
+      total_records:
+        type: integer
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+    type: object
   dto.TenantResponse:
     properties:
       created_at:
@@ -1373,21 +1568,28 @@ definitions:
       unit_singular:
         type: string
     type: object
-  dto.UpdateInvoicePaymentStatusRequest:
-    properties:
-      amount:
-        type: number
-      payment_status:
-        $ref: '#/definitions/types.InvoicePaymentStatus'
-    required:
-    - payment_status
-    type: object
   dto.UpdateMeterRequest:
     properties:
       filters:
         items:
           $ref: '#/definitions/meter.Filter'
         type: array
+    type: object
+  dto.UpdatePaymentRequest:
+    properties:
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      payment_status:
+        type: string
+    type: object
+  dto.UpdatePaymentStatusRequest:
+    properties:
+      amount:
+        type: number
+      payment_status:
+        $ref: '#/definitions/types.PaymentStatus'
+    required:
+    - payment_status
     type: object
   dto.UpdatePlanEntitlementRequest:
     properties:
@@ -1502,6 +1704,30 @@ definitions:
           type: string
         type: object
     type: object
+  dto.UpdateTaskStatusRequest:
+    properties:
+      task_status:
+        $ref: '#/definitions/types.TaskStatus'
+    required:
+    - task_status
+    type: object
+  dto.UpdateWalletRequest:
+    properties:
+      auto_topup_amount:
+        type: number
+      auto_topup_min_balance:
+        type: number
+      auto_topup_trigger:
+        allOf:
+        - $ref: '#/definitions/types.AutoTopupTrigger'
+        default: disabled
+      description:
+        type: string
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      name:
+        type: string
+    type: object
   dto.UsageResult:
     properties:
       value:
@@ -1520,6 +1746,12 @@ definitions:
     type: object
   dto.WalletBalanceResponse:
     properties:
+      auto_topup_amount:
+        type: number
+      auto_topup_min_balance:
+        type: number
+      auto_topup_trigger:
+        $ref: '#/definitions/types.AutoTopupTrigger'
       balance:
         type: number
       balance_updated_at:
@@ -1559,6 +1791,12 @@ definitions:
     type: object
   dto.WalletResponse:
     properties:
+      auto_topup_amount:
+        type: number
+      auto_topup_min_balance:
+        type: number
+      auto_topup_trigger:
+        $ref: '#/definitions/types.AutoTopupTrigger'
       balance:
         type: number
       created_at:
@@ -1825,11 +2063,21 @@ definitions:
     - COUNT
     - SUM
     - AVG
+    - COUNT_UNIQUE
     type: string
     x-enum-varnames:
     - AggregationCount
     - AggregationSum
     - AggregationAvg
+    - AggregationCountUnique
+  types.AutoTopupTrigger:
+    enum:
+    - disabled
+    - balance_below_threshold
+    type: string
+    x-enum-varnames:
+    - AutoTopupTriggerDisabled
+    - AutoTopupTriggerBalanceBelowThreshold
   types.BillingCadence:
     enum:
     - RECURRING
@@ -1868,6 +2116,14 @@ definitions:
     x-enum-varnames:
     - BILLING_TIER_VOLUME
     - BILLING_TIER_SLAB
+  types.EntityType:
+    enum:
+    - EVENTS
+    - PRICES
+    type: string
+    x-enum-varnames:
+    - EntityTypeEvents
+    - EntityTypePrices
   types.FeatureType:
     enum:
     - metered
@@ -1878,6 +2134,14 @@ definitions:
     - FeatureTypeMetered
     - FeatureTypeBoolean
     - FeatureTypeStatic
+  types.FileType:
+    enum:
+    - CSV
+    - JSON
+    type: string
+    x-enum-varnames:
+    - FileTypeCSV
+    - FileTypeJSON
   types.InvoiceBillingReason:
     enum:
     - SUBSCRIPTION_CREATE
@@ -1898,16 +2162,6 @@ definitions:
     x-enum-varnames:
     - InvoiceCadenceArrear
     - InvoiceCadenceAdvance
-  types.InvoicePaymentStatus:
-    enum:
-    - PENDING
-    - SUCCEEDED
-    - FAILED
-    type: string
-    x-enum-varnames:
-    - InvoicePaymentStatusPending
-    - InvoicePaymentStatusSucceeded
-    - InvoicePaymentStatusFailed
   types.InvoiceStatus:
     enum:
     - DRAFT
@@ -1941,6 +2195,40 @@ definitions:
       total:
         type: integer
     type: object
+  types.PaymentDestinationType:
+    enum:
+    - INVOICE
+    type: string
+    x-enum-varnames:
+    - PaymentDestinationTypeInvoice
+  types.PaymentMethodType:
+    enum:
+    - CARD
+    - ACH
+    - OFFLINE
+    - CREDITS
+    type: string
+    x-enum-varnames:
+    - PaymentMethodTypeCard
+    - PaymentMethodTypeACH
+    - PaymentMethodTypeOffline
+    - PaymentMethodTypeCredits
+  types.PaymentStatus:
+    enum:
+    - PENDING
+    - PROCESSING
+    - SUCCEEDED
+    - FAILED
+    - REFUNDED
+    - PARTIALLY_REFUNDED
+    type: string
+    x-enum-varnames:
+    - PaymentStatusPending
+    - PaymentStatusProcessing
+    - PaymentStatusSucceeded
+    - PaymentStatusFailed
+    - PaymentStatusRefunded
+    - PaymentStatusPartiallyRefunded
   types.PriceType:
     enum:
     - USAGE
@@ -1987,6 +2275,26 @@ definitions:
     - SubscriptionStatusPastDue
     - SubscriptionStatusTrialing
     - SubscriptionStatusUnpaid
+  types.TaskStatus:
+    enum:
+    - PENDING
+    - PROCESSING
+    - COMPLETED
+    - FAILED
+    type: string
+    x-enum-varnames:
+    - TaskStatusPending
+    - TaskStatusProcessing
+    - TaskStatusCompleted
+    - TaskStatusFailed
+  types.TaskType:
+    enum:
+    - IMPORT
+    - EXPORT
+    type: string
+    x-enum-varnames:
+    - TaskTypeImport
+    - TaskTypeExport
   types.TransactionStatus:
     enum:
     - pending
@@ -2358,6 +2666,41 @@ paths:
       summary: Get wallets by customer ID
       tags:
       - Wallets
+  /customers/lookup/{lookup_key}:
+    get:
+      consumes:
+      - application/json
+      description: Get a customer by lookup key (external_id)
+      parameters:
+      - description: Customer Lookup Key (external_id)
+        in: path
+        name: lookup_key
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.CustomerResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get a customer by lookup key
+      tags:
+      - Customers
   /entitlements:
     get:
       consumes:
@@ -3142,8 +3485,11 @@ paths:
         items:
           enum:
           - PENDING
+          - PROCESSING
           - SUCCEEDED
           - FAILED
+          - REFUNDED
+          - PARTIALLY_REFUNDED
           type: string
         name: payment_status
         type: array
@@ -3288,7 +3634,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/dto.UpdateInvoicePaymentStatusRequest'
+          $ref: '#/definitions/dto.UpdatePaymentStatusRequest'
       produces:
       - application/json
       responses:
@@ -3602,6 +3948,253 @@ paths:
       summary: 'Disable meter [TODO: Deprecate]'
       tags:
       - Meters
+  /payments:
+    get:
+      consumes:
+      - application/json
+      description: List payments with the specified filter
+      parameters:
+      - in: query
+        name: currency
+        type: string
+      - in: query
+        name: destination_id
+        type: string
+      - in: query
+        name: destination_type
+        type: string
+      - in: query
+        name: end_time
+        type: string
+      - in: query
+        name: expand
+        type: string
+      - in: query
+        maximum: 1000
+        minimum: 1
+        name: limit
+        type: integer
+      - in: query
+        minimum: 0
+        name: offset
+        type: integer
+      - enum:
+        - asc
+        - desc
+        in: query
+        name: order
+        type: string
+      - in: query
+        name: payment_gateway
+        type: string
+      - collectionFormat: csv
+        in: query
+        items:
+          type: string
+        name: payment_ids
+        type: array
+      - in: query
+        name: payment_method_type
+        type: string
+      - in: query
+        name: payment_status
+        type: string
+      - in: query
+        name: sort
+        type: string
+      - in: query
+        name: start_time
+        type: string
+      - enum:
+        - published
+        - deleted
+        - archived
+        in: query
+        name: status
+        type: string
+        x-enum-varnames:
+        - StatusPublished
+        - StatusDeleted
+        - StatusArchived
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ListPaymentsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List payments
+      tags:
+      - Payments
+    post:
+      consumes:
+      - application/json
+      description: Create a new payment with the specified configuration
+      parameters:
+      - description: Payment configuration
+        in: body
+        name: payment
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreatePaymentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.PaymentResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create a new payment
+      tags:
+      - Payments
+  /payments/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a payment
+      parameters:
+      - description: Payment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/gin.H'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Delete a payment
+      tags:
+      - Payments
+    get:
+      consumes:
+      - application/json
+      description: Get a payment by ID
+      parameters:
+      - description: Payment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.PaymentResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get a payment by ID
+      tags:
+      - Payments
+    put:
+      consumes:
+      - application/json
+      description: Update a payment with the specified configuration
+      parameters:
+      - description: Payment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Payment configuration
+        in: body
+        name: payment
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdatePaymentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.PaymentResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update a payment
+      tags:
+      - Payments
+  /payments/{id}/process:
+    post:
+      consumes:
+      - application/json
+      description: Process a payment
+      parameters:
+      - description: Payment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.PaymentResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Process a payment
+      tags:
+      - Payments
   /plans:
     get:
       consumes:
@@ -4204,6 +4797,232 @@ paths:
       summary: Get usage by subscription
       tags:
       - Subscriptions
+  /tasks:
+    get:
+      consumes:
+      - application/json
+      description: List tasks with optional filtering
+      parameters:
+      - in: query
+        name: created_by
+        type: string
+      - in: query
+        name: end_time
+        type: string
+      - enum:
+        - EVENTS
+        - PRICES
+        in: query
+        name: entity_type
+        type: string
+        x-enum-varnames:
+        - EntityTypeEvents
+        - EntityTypePrices
+      - in: query
+        name: expand
+        type: string
+      - in: query
+        maximum: 1000
+        minimum: 1
+        name: limit
+        type: integer
+      - in: query
+        minimum: 0
+        name: offset
+        type: integer
+      - enum:
+        - asc
+        - desc
+        in: query
+        name: order
+        type: string
+      - in: query
+        name: sort
+        type: string
+      - in: query
+        name: start_time
+        type: string
+      - enum:
+        - published
+        - deleted
+        - archived
+        in: query
+        name: status
+        type: string
+        x-enum-varnames:
+        - StatusPublished
+        - StatusDeleted
+        - StatusArchived
+      - enum:
+        - PENDING
+        - PROCESSING
+        - COMPLETED
+        - FAILED
+        in: query
+        name: task_status
+        type: string
+        x-enum-varnames:
+        - TaskStatusPending
+        - TaskStatusProcessing
+        - TaskStatusCompleted
+        - TaskStatusFailed
+      - enum:
+        - IMPORT
+        - EXPORT
+        in: query
+        name: task_type
+        type: string
+        x-enum-varnames:
+        - TaskTypeImport
+        - TaskTypeExport
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ListTasksResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      summary: List tasks
+      tags:
+      - Tasks
+    post:
+      consumes:
+      - application/json
+      description: Create a new import/export task
+      parameters:
+      - description: Task details
+        in: body
+        name: task
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateTaskRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.TaskResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      summary: Create a new task
+      tags:
+      - Tasks
+  /tasks/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Get detailed information about a task
+      parameters:
+      - description: Task ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.TaskResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      summary: Get a task by ID
+      tags:
+      - Tasks
+  /tasks/{id}/process:
+    post:
+      consumes:
+      - application/json
+      description: Start processing a task
+      parameters:
+      - description: Task ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/gin.H'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      summary: Process a task
+      tags:
+      - Tasks
+  /tasks/{id}/status:
+    put:
+      consumes:
+      - application/json
+      description: Update the status of a task
+      parameters:
+      - description: Task ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: New status
+        in: body
+        name: status
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateTaskStatusRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.TaskResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      summary: Update task status
+      tags:
+      - Tasks
   /tenants:
     post:
       consumes:
@@ -4355,6 +5174,44 @@ paths:
       summary: Get wallet by ID
       tags:
       - Wallets
+    put:
+      consumes:
+      - application/json
+      description: Update a wallet's details including auto top-up configuration
+      parameters:
+      - description: Wallet ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Update wallet request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateWalletRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.WalletResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.ErrorResponse'
+      summary: Update a wallet
+      tags:
+      - wallets
   /wallets/{id}/balance/real-time:
     get:
       consumes:

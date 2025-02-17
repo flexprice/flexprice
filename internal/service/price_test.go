@@ -38,7 +38,7 @@ func (s *PriceServiceSuite) SetupTest() {
 func (s *PriceServiceSuite) TestCreatePrice() {
 	req := dto.CreatePriceRequest{
 		Amount:             "100",
-		Currency:           "USD",
+		Currency:           "usd",
 		PlanID:             "plan-1",
 		Type:               types.PRICE_TYPE_USAGE,
 		MeterID:            "meter-1",
@@ -80,7 +80,7 @@ func (s *PriceServiceSuite) TestGetPrice() {
 	price := &price.Price{
 		ID:       "price-1",
 		Amount:   decimal.NewFromInt(100),
-		Currency: "USD",
+		Currency: "usd",
 		PlanID:   "plan-1",
 	}
 	_ = s.priceRepo.Create(s.ctx, price)
@@ -101,14 +101,14 @@ func (s *PriceServiceSuite) TestGetPrices() {
 	_ = s.priceRepo.Create(s.ctx, &price.Price{
 		ID:        "price-1",
 		Amount:    decimal.NewFromInt(100),
-		Currency:  "USD",
+		Currency:  "usd",
 		PlanID:    "plan-1",
 		BaseModel: types.GetDefaultBaseModel(s.ctx),
 	})
 	_ = s.priceRepo.Create(s.ctx, &price.Price{
 		ID:        "price-2",
 		Amount:    decimal.NewFromInt(200),
-		Currency:  "USD",
+		Currency:  "usd",
 		PlanID:    "plan-1",
 		BaseModel: types.GetDefaultBaseModel(s.ctx),
 	})
@@ -146,7 +146,7 @@ func (s *PriceServiceSuite) TestUpdatePrice() {
 	price := &price.Price{
 		ID:       "price-1",
 		Amount:   decimal.NewFromInt(100),
-		Currency: "USD",
+		Currency: "usd",
 		PlanID:   "plan-1",
 	}
 	_ = s.priceRepo.Create(s.ctx, price)
@@ -165,7 +165,7 @@ func (s *PriceServiceSuite) TestUpdatePrice() {
 
 func (s *PriceServiceSuite) TestDeletePrice() {
 	// Create a price
-	price := &price.Price{ID: "price-1", Amount: decimal.NewFromInt(100), Currency: "USD"}
+	price := &price.Price{ID: "price-1", Amount: decimal.NewFromInt(100), Currency: "usd"}
 	_ = s.priceRepo.Create(s.ctx, price)
 
 	err := s.priceService.DeletePrice(s.ctx, "price-1")

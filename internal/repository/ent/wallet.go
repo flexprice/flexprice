@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/ent/wallet"
 	"github.com/flexprice/flexprice/ent/wallettransaction"
 	walletdomain "github.com/flexprice/flexprice/internal/domain/wallet"
+	"github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
@@ -41,6 +42,9 @@ func (r *walletRepository) CreateWallet(ctx context.Context, w *walletdomain.Wal
 		SetMetadata(w.Metadata).
 		SetBalance(w.Balance).
 		SetWalletStatus(string(w.WalletStatus)).
+		SetAutoTopupTrigger(string(w.AutoTopupTrigger)).
+		SetAutoTopupMinBalance(w.AutoTopupMinBalance).
+		SetAutoTopupAmount(w.AutoTopupAmount).
 		SetStatus(string(w.Status)).
 		SetCreatedBy(w.CreatedBy).
 		Save(ctx)
@@ -337,15 +341,34 @@ func (r *walletRepository) UpdateTransactionStatus(ctx context.Context, id strin
 
 // Helper function to convert Ent wallet to domain wallet
 func toDomainWallet(w *ent.Wallet) *walletdomain.Wallet {
+	// Set default values for nullable fields
+	autoTopupTrigger := types.AutoTopupTriggerDisabled
+	if w.AutoTopupTrigger != nil {
+		autoTopupTrigger = types.AutoTopupTrigger(*w.AutoTopupTrigger)
+	}
+
+	autoTopupMinBalance := decimal.Zero
+	if w.AutoTopupMinBalance != nil {
+		autoTopupMinBalance = *w.AutoTopupMinBalance
+	}
+
+	autoTopupAmount := decimal.Zero
+	if w.AutoTopupAmount != nil && !w.AutoTopupAmount.IsZero() {
+		autoTopupAmount = *w.AutoTopupAmount
+	}
+
 	return &walletdomain.Wallet{
-		ID:           w.ID,
-		Name:         w.Name,
-		CustomerID:   w.CustomerID,
-		Currency:     w.Currency,
-		Description:  w.Description,
-		Metadata:     w.Metadata,
-		Balance:      w.Balance,
-		WalletStatus: types.WalletStatus(w.WalletStatus),
+		ID:                  w.ID,
+		Name:                w.Name,
+		CustomerID:          w.CustomerID,
+		Currency:            w.Currency,
+		Description:         w.Description,
+		Metadata:            w.Metadata,
+		Balance:             w.Balance,
+		WalletStatus:        types.WalletStatus(w.WalletStatus),
+		AutoTopupTrigger:    autoTopupTrigger,
+		AutoTopupMinBalance: autoTopupMinBalance,
+		AutoTopupAmount:     autoTopupAmount,
 		BaseModel: types.BaseModel{
 			TenantID:  w.TenantID,
 			Status:    types.Status(w.Status),
@@ -463,4 +486,51 @@ func (o WalletTransactionQueryOptions) applyEntityQueryOptions(ctx context.Conte
 	}
 
 	return query
+}
+
+func (r *walletRepository) UpdateWallet(ctx context.Context, id string, w *walletdomain.Wallet) error {
+	client := r.client.Querier(ctx)
+	update := client.Wallet.Update().
+		Where(
+			wallet.ID(id),
+			wallet.TenantID(types.GetTenantID(ctx)),
+			wallet.StatusEQ(string(types.StatusPublished)),
+		)
+
+	if w.Name != "" {
+		update.SetName(w.Name)
+	}
+	if w.Description != "" {
+		update.SetDescription(w.Description)
+	}
+	if w.Metadata != nil {
+		update.SetMetadata(w.Metadata)
+	}
+	if w.AutoTopupTrigger != "" {
+		if w.AutoTopupTrigger == types.AutoTopupTriggerDisabled {
+			// When disabling auto top-up, set all related fields to NULL
+			update.SetAutoTopupTrigger(string(types.AutoTopupTriggerDisabled))
+			update.ClearAutoTopupMinBalance()
+			update.ClearAutoTopupAmount()
+		} else {
+			// When enabling auto top-up, set all required fields
+			update.SetAutoTopupTrigger(string(w.AutoTopupTrigger))
+			update.SetAutoTopupMinBalance(w.AutoTopupMinBalance)
+			update.SetAutoTopupAmount(w.AutoTopupAmount)
+		}
+	}
+
+	update.SetUpdatedBy(types.GetUserID(ctx))
+	update.SetUpdatedAt(time.Now().UTC())
+
+	count, err := update.Save(ctx)
+	if err != nil {
+		return errors.Wrap(err, errors.ErrCodeSystemError, "update wallet")
+	}
+
+	if count == 0 {
+		return errors.New(errors.ErrCodeNotFound, "wallet not found or already updated")
+	}
+
+	return nil
 }

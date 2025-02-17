@@ -146,7 +146,7 @@ func (s *WalletServiceSuite) setupTestData() {
 	s.testData.prices.apiCalls = &price.Price{
 		ID:                 "price_api_calls",
 		Amount:             decimal.Zero,
-		Currency:           "USD",
+		Currency:           "usd",
 		PlanID:             s.testData.plan.ID,
 		Type:               types.PRICE_TYPE_USAGE,
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
@@ -167,7 +167,7 @@ func (s *WalletServiceSuite) setupTestData() {
 	s.testData.prices.storage = &price.Price{
 		ID:                 "price_storage",
 		Amount:             decimal.NewFromFloat(0.1),
-		Currency:           "USD",
+		Currency:           "usd",
 		PlanID:             s.testData.plan.ID,
 		Type:               types.PRICE_TYPE_USAGE,
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
@@ -183,7 +183,7 @@ func (s *WalletServiceSuite) setupTestData() {
 	s.testData.prices.storageArchive = &price.Price{
 		ID:                 "price_storage_archive",
 		Amount:             decimal.NewFromFloat(0.03),
-		Currency:           "USD",
+		Currency:           "usd",
 		PlanID:             s.testData.plan.ID,
 		Type:               types.PRICE_TYPE_USAGE,
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
@@ -204,7 +204,7 @@ func (s *WalletServiceSuite) setupTestData() {
 		StartDate:          s.testData.now.Add(-30 * 24 * time.Hour),
 		CurrentPeriodStart: s.testData.now.Add(-24 * time.Hour),
 		CurrentPeriodEnd:   s.testData.now.Add(6 * 24 * time.Hour),
-		Currency:           "USD",
+		Currency:           "usd",
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
 		SubscriptionStatus: types.SubscriptionStatusActive,
@@ -256,7 +256,7 @@ func (s *WalletServiceSuite) setupTestData() {
 			ID:                 "sub_1",
 			PlanID:             s.testData.plan.ID,
 			CustomerID:         s.testData.customer.ID,
-			Currency:           "USD",
+			Currency:           "usd",
 			SubscriptionStatus: types.SubscriptionStatusActive,
 			CurrentPeriodStart: s.testData.now.Add(-24 * time.Hour),
 			BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
@@ -348,9 +348,9 @@ func (s *WalletServiceSuite) setupTestData() {
 		{
 			ID:              "inv_1",
 			CustomerID:      s.testData.customer.ID,
-			Currency:        "USD",
+			Currency:        "usd",
 			InvoiceStatus:   types.InvoiceStatusFinalized,
-			PaymentStatus:   types.InvoicePaymentStatusPending,
+			PaymentStatus:   types.PaymentStatusPending,
 			AmountDue:       decimal.NewFromInt(100),
 			AmountRemaining: decimal.NewFromInt(100),
 			BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
@@ -360,7 +360,7 @@ func (s *WalletServiceSuite) setupTestData() {
 			CustomerID:      s.testData.customer.ID,
 			Currency:        "usd",
 			InvoiceStatus:   types.InvoiceStatusFinalized,
-			PaymentStatus:   types.InvoicePaymentStatusPending,
+			PaymentStatus:   types.PaymentStatusPending,
 			AmountDue:       decimal.NewFromInt(150),
 			AmountRemaining: decimal.NewFromInt(150),
 			BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
@@ -370,7 +370,7 @@ func (s *WalletServiceSuite) setupTestData() {
 			CustomerID:      s.testData.customer.ID,
 			Currency:        "EUR",
 			InvoiceStatus:   types.InvoiceStatusFinalized,
-			PaymentStatus:   types.InvoicePaymentStatusPending,
+			PaymentStatus:   types.PaymentStatusPending,
 			AmountDue:       decimal.NewFromInt(200),
 			AmountRemaining: decimal.NewFromInt(200),
 			BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
@@ -385,7 +385,7 @@ func (s *WalletServiceSuite) setupTestData() {
 	s.testData.wallet = &wallet.Wallet{
 		ID:           "wallet-1",
 		CustomerID:   s.testData.customer.ID,
-		Currency:     "USD",
+		Currency:     "usd",
 		Balance:      decimal.NewFromInt(1000),
 		WalletStatus: types.WalletStatusActive,
 		BaseModel:    types.GetDefaultBaseModel(s.GetContext()),
@@ -396,7 +396,7 @@ func (s *WalletServiceSuite) setupTestData() {
 func (s *WalletServiceSuite) TestCreateWallet() {
 	req := &dto.CreateWalletRequest{
 		CustomerID: "customer-2",
-		Currency:   "USD",
+		Currency:   "usd",
 		Metadata:   types.Metadata{"key": "value"},
 	}
 
@@ -499,7 +499,7 @@ func (s *WalletServiceSuite) TestGetWalletBalance() {
 	inactiveWallet := &wallet.Wallet{
 		ID:           "wallet_inactive",
 		CustomerID:   s.testData.customer.ID,
-		Currency:     "USD",
+		Currency:     "usd",
 		Balance:      decimal.NewFromInt(1000),
 		WalletStatus: types.WalletStatusClosed,
 		BaseModel:    types.GetDefaultBaseModel(s.GetContext()),

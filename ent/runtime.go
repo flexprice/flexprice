@@ -13,11 +13,14 @@ import (
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/ent/invoicesequence"
 	"github.com/flexprice/flexprice/ent/meter"
+	"github.com/flexprice/flexprice/ent/payment"
+	"github.com/flexprice/flexprice/ent/paymentattempt"
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/schema"
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
+	"github.com/flexprice/flexprice/ent/task"
 	"github.com/flexprice/flexprice/ent/wallet"
 	"github.com/flexprice/flexprice/ent/wallettransaction"
 	"github.com/shopspring/decimal"
@@ -333,6 +336,94 @@ func init() {
 	meterDescResetUsage := meterFields[5].Descriptor()
 	// meter.DefaultResetUsage holds the default value on creation for the reset_usage field.
 	meter.DefaultResetUsage = meterDescResetUsage.Default.(string)
+	paymentMixin := schema.Payment{}.Mixin()
+	paymentMixinFields0 := paymentMixin[0].Fields()
+	_ = paymentMixinFields0
+	paymentFields := schema.Payment{}.Fields()
+	_ = paymentFields
+	// paymentDescTenantID is the schema descriptor for tenant_id field.
+	paymentDescTenantID := paymentMixinFields0[0].Descriptor()
+	// payment.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	payment.TenantIDValidator = paymentDescTenantID.Validators[0].(func(string) error)
+	// paymentDescStatus is the schema descriptor for status field.
+	paymentDescStatus := paymentMixinFields0[1].Descriptor()
+	// payment.DefaultStatus holds the default value on creation for the status field.
+	payment.DefaultStatus = paymentDescStatus.Default.(string)
+	// paymentDescCreatedAt is the schema descriptor for created_at field.
+	paymentDescCreatedAt := paymentMixinFields0[2].Descriptor()
+	// payment.DefaultCreatedAt holds the default value on creation for the created_at field.
+	payment.DefaultCreatedAt = paymentDescCreatedAt.Default.(func() time.Time)
+	// paymentDescUpdatedAt is the schema descriptor for updated_at field.
+	paymentDescUpdatedAt := paymentMixinFields0[3].Descriptor()
+	// payment.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	payment.DefaultUpdatedAt = paymentDescUpdatedAt.Default.(func() time.Time)
+	// payment.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	payment.UpdateDefaultUpdatedAt = paymentDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// paymentDescDestinationType is the schema descriptor for destination_type field.
+	paymentDescDestinationType := paymentFields[2].Descriptor()
+	// payment.DestinationTypeValidator is a validator for the "destination_type" field. It is called by the builders before save.
+	payment.DestinationTypeValidator = paymentDescDestinationType.Validators[0].(func(string) error)
+	// paymentDescDestinationID is the schema descriptor for destination_id field.
+	paymentDescDestinationID := paymentFields[3].Descriptor()
+	// payment.DestinationIDValidator is a validator for the "destination_id" field. It is called by the builders before save.
+	payment.DestinationIDValidator = paymentDescDestinationID.Validators[0].(func(string) error)
+	// paymentDescPaymentMethodType is the schema descriptor for payment_method_type field.
+	paymentDescPaymentMethodType := paymentFields[4].Descriptor()
+	// payment.PaymentMethodTypeValidator is a validator for the "payment_method_type" field. It is called by the builders before save.
+	payment.PaymentMethodTypeValidator = paymentDescPaymentMethodType.Validators[0].(func(string) error)
+	// paymentDescAmount is the schema descriptor for amount field.
+	paymentDescAmount := paymentFields[8].Descriptor()
+	// payment.DefaultAmount holds the default value on creation for the amount field.
+	payment.DefaultAmount = paymentDescAmount.Default.(decimal.Decimal)
+	// paymentDescCurrency is the schema descriptor for currency field.
+	paymentDescCurrency := paymentFields[9].Descriptor()
+	// payment.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
+	payment.CurrencyValidator = paymentDescCurrency.Validators[0].(func(string) error)
+	// paymentDescPaymentStatus is the schema descriptor for payment_status field.
+	paymentDescPaymentStatus := paymentFields[10].Descriptor()
+	// payment.PaymentStatusValidator is a validator for the "payment_status" field. It is called by the builders before save.
+	payment.PaymentStatusValidator = paymentDescPaymentStatus.Validators[0].(func(string) error)
+	// paymentDescTrackAttempts is the schema descriptor for track_attempts field.
+	paymentDescTrackAttempts := paymentFields[11].Descriptor()
+	// payment.DefaultTrackAttempts holds the default value on creation for the track_attempts field.
+	payment.DefaultTrackAttempts = paymentDescTrackAttempts.Default.(bool)
+	paymentattemptMixin := schema.PaymentAttempt{}.Mixin()
+	paymentattemptMixinFields0 := paymentattemptMixin[0].Fields()
+	_ = paymentattemptMixinFields0
+	paymentattemptFields := schema.PaymentAttempt{}.Fields()
+	_ = paymentattemptFields
+	// paymentattemptDescTenantID is the schema descriptor for tenant_id field.
+	paymentattemptDescTenantID := paymentattemptMixinFields0[0].Descriptor()
+	// paymentattempt.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	paymentattempt.TenantIDValidator = paymentattemptDescTenantID.Validators[0].(func(string) error)
+	// paymentattemptDescStatus is the schema descriptor for status field.
+	paymentattemptDescStatus := paymentattemptMixinFields0[1].Descriptor()
+	// paymentattempt.DefaultStatus holds the default value on creation for the status field.
+	paymentattempt.DefaultStatus = paymentattemptDescStatus.Default.(string)
+	// paymentattemptDescCreatedAt is the schema descriptor for created_at field.
+	paymentattemptDescCreatedAt := paymentattemptMixinFields0[2].Descriptor()
+	// paymentattempt.DefaultCreatedAt holds the default value on creation for the created_at field.
+	paymentattempt.DefaultCreatedAt = paymentattemptDescCreatedAt.Default.(func() time.Time)
+	// paymentattemptDescUpdatedAt is the schema descriptor for updated_at field.
+	paymentattemptDescUpdatedAt := paymentattemptMixinFields0[3].Descriptor()
+	// paymentattempt.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	paymentattempt.DefaultUpdatedAt = paymentattemptDescUpdatedAt.Default.(func() time.Time)
+	// paymentattempt.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	paymentattempt.UpdateDefaultUpdatedAt = paymentattemptDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// paymentattemptDescPaymentID is the schema descriptor for payment_id field.
+	paymentattemptDescPaymentID := paymentattemptFields[1].Descriptor()
+	// paymentattempt.PaymentIDValidator is a validator for the "payment_id" field. It is called by the builders before save.
+	paymentattempt.PaymentIDValidator = paymentattemptDescPaymentID.Validators[0].(func(string) error)
+	// paymentattemptDescPaymentStatus is the schema descriptor for payment_status field.
+	paymentattemptDescPaymentStatus := paymentattemptFields[2].Descriptor()
+	// paymentattempt.PaymentStatusValidator is a validator for the "payment_status" field. It is called by the builders before save.
+	paymentattempt.PaymentStatusValidator = paymentattemptDescPaymentStatus.Validators[0].(func(string) error)
+	// paymentattemptDescAttemptNumber is the schema descriptor for attempt_number field.
+	paymentattemptDescAttemptNumber := paymentattemptFields[3].Descriptor()
+	// paymentattempt.DefaultAttemptNumber holds the default value on creation for the attempt_number field.
+	paymentattempt.DefaultAttemptNumber = paymentattemptDescAttemptNumber.Default.(int)
+	// paymentattempt.AttemptNumberValidator is a validator for the "attempt_number" field. It is called by the builders before save.
+	paymentattempt.AttemptNumberValidator = paymentattemptDescAttemptNumber.Validators[0].(func(int) error)
 	planMixin := schema.Plan{}.Mixin()
 	planMixinFields0 := planMixin[0].Fields()
 	_ = planMixinFields0
@@ -549,6 +640,61 @@ func init() {
 	subscriptionlineitemDescBillingPeriod := subscriptionlineitemFields[12].Descriptor()
 	// subscriptionlineitem.BillingPeriodValidator is a validator for the "billing_period" field. It is called by the builders before save.
 	subscriptionlineitem.BillingPeriodValidator = subscriptionlineitemDescBillingPeriod.Validators[0].(func(string) error)
+	taskMixin := schema.Task{}.Mixin()
+	taskMixinFields0 := taskMixin[0].Fields()
+	_ = taskMixinFields0
+	taskFields := schema.Task{}.Fields()
+	_ = taskFields
+	// taskDescTenantID is the schema descriptor for tenant_id field.
+	taskDescTenantID := taskMixinFields0[0].Descriptor()
+	// task.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	task.TenantIDValidator = taskDescTenantID.Validators[0].(func(string) error)
+	// taskDescStatus is the schema descriptor for status field.
+	taskDescStatus := taskMixinFields0[1].Descriptor()
+	// task.DefaultStatus holds the default value on creation for the status field.
+	task.DefaultStatus = taskDescStatus.Default.(string)
+	// taskDescCreatedAt is the schema descriptor for created_at field.
+	taskDescCreatedAt := taskMixinFields0[2].Descriptor()
+	// task.DefaultCreatedAt holds the default value on creation for the created_at field.
+	task.DefaultCreatedAt = taskDescCreatedAt.Default.(func() time.Time)
+	// taskDescUpdatedAt is the schema descriptor for updated_at field.
+	taskDescUpdatedAt := taskMixinFields0[3].Descriptor()
+	// task.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	task.DefaultUpdatedAt = taskDescUpdatedAt.Default.(func() time.Time)
+	// task.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	task.UpdateDefaultUpdatedAt = taskDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// taskDescTaskType is the schema descriptor for task_type field.
+	taskDescTaskType := taskFields[1].Descriptor()
+	// task.TaskTypeValidator is a validator for the "task_type" field. It is called by the builders before save.
+	task.TaskTypeValidator = taskDescTaskType.Validators[0].(func(string) error)
+	// taskDescEntityType is the schema descriptor for entity_type field.
+	taskDescEntityType := taskFields[2].Descriptor()
+	// task.EntityTypeValidator is a validator for the "entity_type" field. It is called by the builders before save.
+	task.EntityTypeValidator = taskDescEntityType.Validators[0].(func(string) error)
+	// taskDescFileURL is the schema descriptor for file_url field.
+	taskDescFileURL := taskFields[3].Descriptor()
+	// task.FileURLValidator is a validator for the "file_url" field. It is called by the builders before save.
+	task.FileURLValidator = taskDescFileURL.Validators[0].(func(string) error)
+	// taskDescFileType is the schema descriptor for file_type field.
+	taskDescFileType := taskFields[5].Descriptor()
+	// task.FileTypeValidator is a validator for the "file_type" field. It is called by the builders before save.
+	task.FileTypeValidator = taskDescFileType.Validators[0].(func(string) error)
+	// taskDescTaskStatus is the schema descriptor for task_status field.
+	taskDescTaskStatus := taskFields[6].Descriptor()
+	// task.DefaultTaskStatus holds the default value on creation for the task_status field.
+	task.DefaultTaskStatus = taskDescTaskStatus.Default.(string)
+	// taskDescProcessedRecords is the schema descriptor for processed_records field.
+	taskDescProcessedRecords := taskFields[8].Descriptor()
+	// task.DefaultProcessedRecords holds the default value on creation for the processed_records field.
+	task.DefaultProcessedRecords = taskDescProcessedRecords.Default.(int)
+	// taskDescSuccessfulRecords is the schema descriptor for successful_records field.
+	taskDescSuccessfulRecords := taskFields[9].Descriptor()
+	// task.DefaultSuccessfulRecords holds the default value on creation for the successful_records field.
+	task.DefaultSuccessfulRecords = taskDescSuccessfulRecords.Default.(int)
+	// taskDescFailedRecords is the schema descriptor for failed_records field.
+	taskDescFailedRecords := taskFields[10].Descriptor()
+	// task.DefaultFailedRecords holds the default value on creation for the failed_records field.
+	task.DefaultFailedRecords = taskDescFailedRecords.Default.(int)
 	walletMixin := schema.Wallet{}.Mixin()
 	walletMixinFields0 := walletMixin[0].Fields()
 	_ = walletMixinFields0
@@ -588,6 +734,10 @@ func init() {
 	walletDescWalletStatus := walletFields[7].Descriptor()
 	// wallet.DefaultWalletStatus holds the default value on creation for the wallet_status field.
 	wallet.DefaultWalletStatus = walletDescWalletStatus.Default.(string)
+	// walletDescAutoTopupTrigger is the schema descriptor for auto_topup_trigger field.
+	walletDescAutoTopupTrigger := walletFields[8].Descriptor()
+	// wallet.DefaultAutoTopupTrigger holds the default value on creation for the auto_topup_trigger field.
+	wallet.DefaultAutoTopupTrigger = walletDescAutoTopupTrigger.Default.(string)
 	wallettransactionMixin := schema.WalletTransaction{}.Mixin()
 	wallettransactionMixinFields0 := wallettransactionMixin[0].Fields()
 	_ = wallettransactionMixinFields0

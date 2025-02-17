@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/types"
@@ -152,4 +153,36 @@ func (h *CustomerHandler) DeleteCustomer(c *gin.Context) {
 	}
 
 	c.Status(http.StatusNoContent)
+}
+
+// @Summary Get a customer by lookup key
+// @Description Get a customer by lookup key (external_id)
+// @Tags Customers
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param lookup_key path string true "Customer Lookup Key (external_id)"
+// @Success 200 {object} dto.CustomerResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /customers/lookup/{lookup_key} [get]
+func (h *CustomerHandler) GetCustomerByLookupKey(c *gin.Context) {
+	lookupKey := c.Param("lookup_key")
+	if lookupKey == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "lookup key is required"})
+		return
+	}
+
+	resp, err := h.service.GetCustomerByLookupKey(c.Request.Context(), lookupKey)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
 }

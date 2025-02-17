@@ -40,6 +40,12 @@ const (
 	FieldBalance = "balance"
 	// FieldWalletStatus holds the string denoting the wallet_status field in the database.
 	FieldWalletStatus = "wallet_status"
+	// FieldAutoTopupTrigger holds the string denoting the auto_topup_trigger field in the database.
+	FieldAutoTopupTrigger = "auto_topup_trigger"
+	// FieldAutoTopupMinBalance holds the string denoting the auto_topup_min_balance field in the database.
+	FieldAutoTopupMinBalance = "auto_topup_min_balance"
+	// FieldAutoTopupAmount holds the string denoting the auto_topup_amount field in the database.
+	FieldAutoTopupAmount = "auto_topup_amount"
 	// Table holds the table name of the wallet in the database.
 	Table = "wallets"
 )
@@ -60,6 +66,9 @@ var Columns = []string{
 	FieldMetadata,
 	FieldBalance,
 	FieldWalletStatus,
+	FieldAutoTopupTrigger,
+	FieldAutoTopupMinBalance,
+	FieldAutoTopupAmount,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -91,6 +100,8 @@ var (
 	DefaultBalance decimal.Decimal
 	// DefaultWalletStatus holds the default value on creation for the "wallet_status" field.
 	DefaultWalletStatus string
+	// DefaultAutoTopupTrigger holds the default value on creation for the "auto_topup_trigger" field.
+	DefaultAutoTopupTrigger string
 )
 
 // OrderOption defines the ordering options for the Wallet queries.
@@ -159,4 +170,19 @@ func ByBalance(opts ...sql.OrderTermOption) OrderOption {
 // ByWalletStatus orders the results by the wallet_status field.
 func ByWalletStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldWalletStatus, opts...).ToFunc()
+}
+
+// ByAutoTopupTrigger orders the results by the auto_topup_trigger field.
+func ByAutoTopupTrigger(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAutoTopupTrigger, opts...).ToFunc()
+}
+
+// ByAutoTopupMinBalance orders the results by the auto_topup_min_balance field.
+func ByAutoTopupMinBalance(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAutoTopupMinBalance, opts...).ToFunc()
+}
+
+// ByAutoTopupAmount orders the results by the auto_topup_amount field.
+func ByAutoTopupAmount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAutoTopupAmount, opts...).ToFunc()
 }

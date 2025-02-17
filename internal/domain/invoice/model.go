@@ -10,32 +10,32 @@ import (
 
 // Invoice represents the invoice domain model
 type Invoice struct {
-	ID              string                     `json:"id"`
-	CustomerID      string                     `json:"customer_id"`
-	SubscriptionID  *string                    `json:"subscription_id,omitempty"`
-	InvoiceType     types.InvoiceType          `json:"invoice_type"`
-	InvoiceStatus   types.InvoiceStatus        `json:"invoice_status"`
-	PaymentStatus   types.InvoicePaymentStatus `json:"payment_status"`
-	Currency        string                     `json:"currency"`
-	AmountDue       decimal.Decimal            `json:"amount_due"`
-	AmountPaid      decimal.Decimal            `json:"amount_paid"`
-	AmountRemaining decimal.Decimal            `json:"amount_remaining"`
-	InvoiceNumber   *string                    `json:"invoice_number"`
-	IdempotencyKey  *string                    `json:"idempotency_key"`
-	BillingSequence *int                       `json:"billing_sequence"`
-	Description     string                     `json:"description,omitempty"`
-	DueDate         *time.Time                 `json:"due_date,omitempty"`
-	PaidAt          *time.Time                 `json:"paid_at,omitempty"`
-	VoidedAt        *time.Time                 `json:"voided_at,omitempty"`
-	BillingPeriod   *string                    `json:"billing_period,omitempty"`
-	FinalizedAt     *time.Time                 `json:"finalized_at,omitempty"`
-	PeriodStart     *time.Time                 `json:"period_start,omitempty"`
-	PeriodEnd       *time.Time                 `json:"period_end,omitempty"`
-	InvoicePDFURL   *string                    `json:"invoice_pdf_url,omitempty"`
-	BillingReason   string                     `json:"billing_reason,omitempty"`
-	Metadata        types.Metadata             `json:"metadata,omitempty"`
-	LineItems       []*InvoiceLineItem         `json:"line_items,omitempty"`
-	Version         int                        `json:"version"`
+	ID              string              `json:"id"`
+	CustomerID      string              `json:"customer_id"`
+	SubscriptionID  *string             `json:"subscription_id,omitempty"`
+	InvoiceType     types.InvoiceType   `json:"invoice_type"`
+	InvoiceStatus   types.InvoiceStatus `json:"invoice_status"`
+	PaymentStatus   types.PaymentStatus `json:"payment_status"`
+	Currency        string              `json:"currency"`
+	AmountDue       decimal.Decimal     `json:"amount_due"`
+	AmountPaid      decimal.Decimal     `json:"amount_paid"`
+	AmountRemaining decimal.Decimal     `json:"amount_remaining"`
+	InvoiceNumber   *string             `json:"invoice_number"`
+	IdempotencyKey  *string             `json:"idempotency_key"`
+	BillingSequence *int                `json:"billing_sequence"`
+	Description     string              `json:"description,omitempty"`
+	DueDate         *time.Time          `json:"due_date,omitempty"`
+	PaidAt          *time.Time          `json:"paid_at,omitempty"`
+	VoidedAt        *time.Time          `json:"voided_at,omitempty"`
+	BillingPeriod   *string             `json:"billing_period,omitempty"`
+	FinalizedAt     *time.Time          `json:"finalized_at,omitempty"`
+	PeriodStart     *time.Time          `json:"period_start,omitempty"`
+	PeriodEnd       *time.Time          `json:"period_end,omitempty"`
+	InvoicePDFURL   *string             `json:"invoice_pdf_url,omitempty"`
+	BillingReason   string              `json:"billing_reason,omitempty"`
+	Metadata        types.Metadata      `json:"metadata,omitempty"`
+	LineItems       []*InvoiceLineItem  `json:"line_items,omitempty"`
+	Version         int                 `json:"version"`
 	types.BaseModel
 }
 
@@ -60,7 +60,7 @@ func FromEnt(e *ent.Invoice) *Invoice {
 		SubscriptionID:  e.SubscriptionID,
 		InvoiceType:     types.InvoiceType(e.InvoiceType),
 		InvoiceStatus:   types.InvoiceStatus(e.InvoiceStatus),
-		PaymentStatus:   types.InvoicePaymentStatus(e.PaymentStatus),
+		PaymentStatus:   types.PaymentStatus(e.PaymentStatus),
 		Currency:        e.Currency,
 		AmountDue:       e.AmountDue,
 		AmountPaid:      e.AmountPaid,

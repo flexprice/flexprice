@@ -44,7 +44,6 @@ func (s *EventServiceSuite) SetupTest() {
 
 func (s *EventServiceSuite) TearDownTest() {
 	s.publisher.Clear()
-	s.eventRepo.Clear()
 }
 
 func (s *EventServiceSuite) TestCreateEvent() {

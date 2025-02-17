@@ -2,7 +2,6 @@ package webhook
 
 import (
 	"github.com/flexprice/flexprice/internal/config"
-	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/pubsub"
 	"github.com/flexprice/flexprice/internal/pubsub/memory"
@@ -18,9 +17,6 @@ import (
 var Module = fx.Options(
 	// Core dependencies
 	fx.Provide(
-		// HTTP Client for webhook delivery
-		httpclient.NewDefaultClient,
-
 		// PubSub for sending webhook events
 		providePubSub,
 	),

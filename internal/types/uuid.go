@@ -38,4 +38,7 @@ const (
 	UUID_PREFIX_TENANT                 = "tenant"
 	UUID_PREFIX_FEATURE                = "feat"
 	UUID_PREFIX_ENTITLEMENT            = "ent"
+	UUID_PREFIX_PAYMENT                = "pay"
+	UUID_PREFIX_PAYMENT_ATTEMPT        = "attempt"
+	UUID_PREFIX_TASK                   = "task"
 )

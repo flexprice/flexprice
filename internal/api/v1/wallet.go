@@ -11,11 +11,13 @@ import (
 	"github.com/samber/lo"
 )
 
+// WalletHandler handles wallet-related HTTP requests
 type WalletHandler struct {
 	walletService service.WalletService
 	logger        *logger.Logger
 }
 
+// NewWalletHandler creates a new wallet handler
 func NewWalletHandler(walletService service.WalletService, logger *logger.Logger) *WalletHandler {
 	return &WalletHandler{
 		walletService: walletService,
@@ -238,4 +240,36 @@ func (h *WalletHandler) TerminateWallet(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "wallet terminated successfully"})
+}
+
+// UpdateWallet godoc
+// @Summary Update a wallet
+// @Description Update a wallet's details including auto top-up configuration
+// @Tags wallets
+// @Accept json
+// @Produce json
+// @Param id path string true "Wallet ID"
+// @Param request body dto.UpdateWalletRequest true "Update wallet request"
+// @Success 200 {object} dto.WalletResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /wallets/{id} [put]
+func (h *WalletHandler) UpdateWallet(c *gin.Context) {
+	ctx := c.Request.Context()
+	id := c.Param("id")
+
+	var req dto.UpdateWalletRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		NewErrorResponse(c, http.StatusBadRequest, "invalid request", err)
+		return
+	}
+
+	updated, err := h.walletService.UpdateWallet(ctx, id, &req)
+	if err != nil {
+		NewErrorResponse(c, http.StatusInternalServerError, "failed to update wallet", err)
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.FromWallet(updated))
 }

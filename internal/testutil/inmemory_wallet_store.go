@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/wallet"
+	"github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -248,4 +249,45 @@ func (s *InMemoryWalletStore) UpdateTransactionStatus(ctx context.Context, id st
 func (s *InMemoryWalletStore) Clear() {
 	s.wallets.Clear()
 	s.transactions.Clear()
+}
+
+// UpdateWallet updates a wallet in the in-memory store
+func (s *InMemoryWalletStore) UpdateWallet(ctx context.Context, id string, w *wallet.Wallet) error {
+	// Check if wallet exists and belongs to tenant
+	existing, err := s.wallets.Get(ctx, id)
+	if err != nil || existing.TenantID != types.GetTenantID(ctx) || existing.Status != types.StatusPublished {
+		return errors.New(errors.ErrCodeNotFound, "wallet not found")
+	}
+
+	// Update fields if provided
+	if w.Name != "" {
+		existing.Name = w.Name
+	}
+	if w.Description != "" {
+		existing.Description = w.Description
+	}
+	if w.Metadata != nil {
+		existing.Metadata = w.Metadata
+	}
+	if w.AutoTopupTrigger != "" {
+		existing.AutoTopupTrigger = w.AutoTopupTrigger
+	}
+	if !w.AutoTopupMinBalance.IsZero() {
+		existing.AutoTopupMinBalance = w.AutoTopupMinBalance
+	}
+	if !w.AutoTopupAmount.IsZero() {
+		existing.AutoTopupAmount = w.AutoTopupAmount
+	}
+
+	// Update metadata
+	existing.UpdatedBy = types.GetUserID(ctx)
+	existing.UpdatedAt = time.Now().UTC()
+
+	// Save back to store
+	if err := s.wallets.Update(ctx, id, existing); err != nil {
+		return errors.Wrap(err, errors.ErrCodeSystemError, "failed to update wallet")
+	}
+	*w = *existing
+
+	return nil
 }
