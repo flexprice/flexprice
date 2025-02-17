@@ -13,7 +13,6 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/joho/godotenv"
 	"github.com/spf13/viper"
-	"go.temporal.io/sdk/client"
 )
 
 type Configuration struct {
@@ -134,8 +133,14 @@ func NewConfig() (*Configuration, error) {
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
 	// Step 5: Read the YAML file
-	if err := v.ReadInConfig(); err != nil && !errors.As(err, &viper.ConfigFileNotFoundError{}) {
-		return nil, err
+	// Step 5: Read the YAML file
+	if err := v.ReadInConfig(); err != nil {
+		fmt.Printf("Error reading config file: %v\n", err)
+		if !errors.As(err, &viper.ConfigFileNotFoundError{}) {
+			return nil, err
+		}
+	} else {
+		fmt.Printf("Using config file: %s\n", v.ConfigFileUsed())
 	}
 
 	var cfg Configuration
@@ -145,6 +150,7 @@ func NewConfig() (*Configuration, error) {
 
 	// Step 6: Parse API keys
 	apiKeysStr := v.GetString("auth.api_key.keys")
+	// Parse API keys JSON if present
 	if apiKeysStr != "" {
 		var apiKeys map[string]APIKeyDetails
 		if err := json.Unmarshal([]byte(apiKeysStr), &apiKeys); err != nil {
@@ -203,15 +209,4 @@ func (c PostgresConfig) GetDSN() string {
 		c.Port,
 		c.SSLMode,
 	)
-}
-
-func (c *TemporalConfig) GetClientOptions() client.Options {
-	options := client.Options{
-		HostPort:  c.Address,
-		Namespace: c.Namespace,
-		ConnectionOptions: client.ConnectionOptions{
-			TLS: &tls.Config{}, // Enable TLS
-		},
-	}
-	return options
 }

@@ -1,10 +1,7 @@
 package models
 
 import (
-	"context"
 	"time"
-
-	"github.com/flexprice/flexprice/internal/api/dto"
 )
 
 // BillingWorkflowInput represents the input for a billing workflow
@@ -47,17 +44,4 @@ type CalculatePriceRequest struct {
 	CustomerID     string      `json:"customer_id"`
 	SubscriptionID string      `json:"subscription_id"`
 	UsageData      interface{} `json:"usage_data"`
-}
-
-// Service interfaces for dependencies
-type InvoiceService interface {
-	GenerateInvoice(ctx context.Context, req *GenerateInvoiceRequest) (*dto.InvoiceResponse, error)
-}
-
-type PlanService interface {
-	GetPlan(ctx context.Context, id string) (*dto.PlanResponse, error)
-}
-
-type PriceService interface {
-	CalculatePrice(ctx context.Context, req *CalculatePriceRequest) (*dto.PriceResponse, error)
 }

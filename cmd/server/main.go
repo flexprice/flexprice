@@ -139,7 +139,7 @@ func main() {
 		),
 		fx.Invoke(
 			sentry.RegisterHooks,
-			startServer, // ✅ Ensure it's called only once here
+			startServer,
 		),
 	)
 
@@ -178,6 +178,7 @@ func provideHandlers(
 		Wallet:       v1.NewWalletHandler(walletService, logger),
 		Tenant:       v1.NewTenantHandler(tenantService, logger),
 		Cron:         cron.NewSubscriptionHandler(subscriptionService, temporalService, logger),
+		Invoice:      v1.NewInvoiceHandler(invoiceService, temporalService, logger),
 		Feature:      v1.NewFeatureHandler(featureService, logger),
 		Entitlement:  v1.NewEntitlementHandler(entitlementService, logger),
 	}
@@ -215,8 +216,12 @@ func startServer(
 	if mode == "" {
 		mode = types.ModeLocal
 	}
+
 	switch mode {
 	case types.ModeLocal:
+		if consumer == nil {
+			log.Fatal("Kafka consumer required for local mode")
+		}
 		startAPIServer(lc, r, cfg, log)
 		startConsumer(lc, consumer, eventRepo, cfg, log)
 		startMessageRouter(lc, router, webhookService, log)

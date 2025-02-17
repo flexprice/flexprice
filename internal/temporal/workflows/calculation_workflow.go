@@ -13,7 +13,6 @@ func CalculateChargesWorkflow(ctx workflow.Context, input models.BillingWorkflow
 		"customerID", input.CustomerID,
 		"subscriptionID", input.SubscriptionID)
 
-	// Use workflow.Now(ctx) for deterministic behavior
 	return &models.CalculationResult{
 		InvoiceID:   fmt.Sprintf("INV-%s-%d", input.CustomerID, workflow.Now(ctx).Unix()),
 		TotalAmount: 100.0,

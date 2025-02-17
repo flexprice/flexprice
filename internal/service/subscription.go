@@ -822,11 +822,3 @@ func calculatePriority(filterValues map[string][]string) int {
 	priority += len(filterValues) * 10
 	return priority
 }
-
-func (s *subscriptionService) Get(ctx context.Context, id string) (*subscription.Subscription, error) {
-	subscription, _, err := s.subscriptionRepo.GetWithLineItems(ctx, id)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get subscription: %w", err)
-	}
-	return subscription, nil
-}

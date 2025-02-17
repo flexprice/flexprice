@@ -162,7 +162,6 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			invoices.POST("/:id/void", handlers.Invoice.VoidInvoice)
 			invoices.PUT("/:id/payment", handlers.Invoice.UpdatePaymentStatus)
 			invoices.POST("/preview", handlers.Invoice.GetPreviewInvoice)
-			invoices.POST("/generate", handlers.Invoice.GenerateInvoice)
 		}
 
 		feature := v1Private.Group("/features")
@@ -189,7 +188,6 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		{
 			// All admin routes to go here
 		}
-
 	}
 
 	// Cron routes
