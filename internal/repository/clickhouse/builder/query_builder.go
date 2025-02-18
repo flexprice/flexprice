@@ -181,6 +181,8 @@ func (qb *QueryBuilder) WithAggregation(ctx context.Context, aggType types.Aggre
 		aggClause = fmt.Sprintf("SUM(CAST(JSONExtractString(properties, '%s') AS Float64))", propertyName)
 	case types.AggregationAvg:
 		aggClause = fmt.Sprintf("AVG(CAST(JSONExtractString(properties, '%s') AS Float64))", propertyName)
+	case types.AggregationCountUnique:
+		aggClause = fmt.Sprintf("COUNT(DISTINCT JSONExtractString(properties, '%s'))", propertyName)
 	}
 
 	qb.finalQuery = fmt.Sprintf("SELECT best_match_group as filter_group_id, %s as value FROM best_matches GROUP BY best_match_group ORDER BY best_match_group", aggClause)

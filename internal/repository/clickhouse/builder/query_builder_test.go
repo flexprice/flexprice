@@ -36,7 +36,7 @@ func TestQueryBuilder_WithBaseFilters(t *testing.T) {
 		{
 			name: "base filters without customer ID",
 			params: &events.UsageParams{
-				EventName:  "api_calls",
+				EventName: "api_calls",
 				StartTime: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 				EndTime:   time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
 			},
@@ -176,6 +176,18 @@ func TestQueryBuilder_WithAggregation(t *testing.T) {
 			propertyName: "response_time",
 			wantSQL:      "SELECT best_match_group as filter_group_id, AVG(CAST(JSONExtractString(properties, 'response_time') AS Float64)) as value FROM best_matches GROUP BY best_match_group ORDER BY best_match_group",
 		},
+		{
+			name:         "count unique aggregation",
+			aggType:      types.AggregationCountUnique,
+			propertyName: "region",
+			wantSQL:      "SELECT best_match_group as filter_group_id, COUNT(DISTINCT JSONExtractString(properties, 'region')) as value FROM best_matches GROUP BY best_match_group ORDER BY best_match_group",
+		},
+		{
+			name:         "count unique aggregation with user property",
+			aggType:      types.AggregationCountUnique,
+			propertyName: "user",
+			wantSQL:      "SELECT best_match_group as filter_group_id, COUNT(DISTINCT JSONExtractString(properties, 'user')) as value FROM best_matches GROUP BY best_match_group ORDER BY best_match_group",
+		},
 	}
 
 	for _, tt := range tests {
@@ -192,11 +204,11 @@ func TestQueryBuilder_WithAggregation(t *testing.T) {
 
 func TestQueryBuilder_CompleteFlow(t *testing.T) {
 	tests := []struct {
-		name     string
-		params   *events.UsageParams
-		groups   []events.FilterGroup
-		aggType  types.AggregationType
-		wantSQL  string
+		name    string
+		params  *events.UsageParams
+		groups  []events.FilterGroup
+		aggType types.AggregationType
+		wantSQL string
 	}{
 		{
 			name: "complete flow with multiple filter groups and sum aggregation",

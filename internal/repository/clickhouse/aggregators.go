@@ -227,11 +227,15 @@ type CountUniqueAggregator struct{}
 func (a *CountUniqueAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
 	windowSize := formatWindowSize(params.WindowSize)
 	selectClause := ""
+	windowClause := ""
 	groupByClause := ""
+	windowGroupBy := ""
 
 	if windowSize != "" {
-		selectClause = fmt.Sprintf("%s AS window_size,", windowSize)
+		selectClause = "window_size,"
+		windowClause = fmt.Sprintf("%s AS window_size,", windowSize)
 		groupByClause = "GROUP BY window_size ORDER BY window_size"
+		windowGroupBy = ", window_size"
 	}
 
 	externalCustomerFilter := ""
@@ -249,24 +253,32 @@ func (a *CountUniqueAggregator) GetQuery(ctx context.Context, params *events.Usa
 
 	return fmt.Sprintf(`
         SELECT 
-            %s count(DISTINCT %s) as total
-        FROM events
-        PREWHERE event_name = '%s'
-            AND tenant_id = '%s'
-			%s
-			%s
-            %s
-            %s
+            %s count(DISTINCT property_value) as total
+        FROM (
+            SELECT
+                %s JSONExtractString(assumeNotNull(properties), '%s') as property_value
+            FROM events
+            PREWHERE event_name = '%s'
+                AND tenant_id = '%s'
+				%s
+				%s
+                %s
+                %s
+            GROUP BY %s, property_value %s
+        )
         %s
     `,
 		selectClause,
-		getDeduplicationKey(),
+		windowClause,
+		params.PropertyName,
 		params.EventName,
 		types.GetTenantID(ctx),
 		externalCustomerFilter,
 		customerFilter,
 		filterConditions,
 		timeConditions,
+		getDeduplicationKey(),
+		windowGroupBy,
 		groupByClause)
 }
 

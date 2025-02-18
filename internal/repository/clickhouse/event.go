@@ -152,6 +152,7 @@ func (r *EventRepository) GetUsageWithFilters(ctx context.Context, params *event
 	query, queryParams := qb.Build()
 
 	r.logger.Debugw("executing filter groups query",
+		"aggregation_type", params.AggregationType,
 		"event_name", params.EventName,
 		"filter_groups", len(params.FilterGroups),
 		"query", query,
