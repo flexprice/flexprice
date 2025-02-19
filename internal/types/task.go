@@ -25,7 +25,7 @@ func (t TaskType) Validate() error {
 		TaskTypeExport,
 	}
 	if !lo.Contains(allowed, t) {
-		return errors.New(errors.ErrCodeValidation, "invalid task type")
+		return errors.New(errors.ErrValidation, "invalid task type")
 	}
 	return nil
 }
@@ -47,7 +47,7 @@ func (e EntityType) Validate() error {
 		EntityTypePrices,
 	}
 	if !lo.Contains(allowed, e) {
-		return errors.New(errors.ErrCodeValidation, "invalid entity type")
+		return errors.New(errors.ErrValidation, "invalid entity type")
 	}
 	return nil
 }
@@ -69,7 +69,7 @@ func (f FileType) Validate() error {
 		FileTypeJSON,
 	}
 	if !lo.Contains(allowed, f) {
-		return errors.New(errors.ErrCodeValidation, "invalid file type")
+		return errors.New(errors.ErrValidation, "invalid file type")
 	}
 	return nil
 }
@@ -95,7 +95,7 @@ func (s TaskStatus) Validate() error {
 		TaskStatusFailed,
 	}
 	if !lo.Contains(allowed, s) {
-		return errors.New(errors.ErrCodeValidation, "invalid task status")
+		return errors.New(errors.ErrValidation, "invalid task status")
 	}
 	return nil
 }

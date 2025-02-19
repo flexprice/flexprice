@@ -154,11 +154,11 @@ func (r *CreatePaymentRequest) ToPayment(ctx context.Context) (*payment.Payment,
 		p.PaymentGateway = nil
 		p.GatewayPaymentID = nil
 		if p.PaymentMethodID != "" {
-			return nil, errors.New(errors.ErrCodeValidation, "payment method id is not allowed for offline payment method type")
+			return nil, errors.New(errors.ErrValidation, "payment method id is not allowed for offline payment method type")
 		}
 	} else {
 		if p.PaymentMethodID == "" {
-			return nil, errors.New(errors.ErrCodeValidation, "payment method id is required for online payment method type")
+			return nil, errors.New(errors.ErrValidation, "payment method id is required for online payment method type")
 		}
 		p.TrackAttempts = true
 	}

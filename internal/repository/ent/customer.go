@@ -57,7 +57,7 @@ func (r *customerRepository) Create(ctx context.Context, c *domainCustomer.Custo
 		Save(ctx)
 
 	if err != nil {
-		return errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to create customer")
+		return errors.WrapAs(err, errors.ErrInvalidOperation, "failed to create customer")
 	}
 
 	*c = *domainCustomer.FromEnt(customer)
@@ -78,9 +78,9 @@ func (r *customerRepository) Get(ctx context.Context, id string) (*domainCustome
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return nil, errors.Wrap(err, errors.ErrCodeNotFound, "customer not found")
+			return nil, errors.WrapAs(err, errors.ErrNotFound, "customer not found")
 		}
-		return nil, errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to get customer")
+		return nil, errors.WrapAs(err, errors.ErrInvalidOperation, "failed to get customer")
 	}
 
 	return domainCustomer.FromEnt(c), nil
@@ -95,7 +95,7 @@ func (r *customerRepository) List(ctx context.Context, filter *types.CustomerFil
 
 	customers, err := query.All(ctx)
 	if err != nil {
-		return nil, errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to list customers")
+		return nil, errors.WrapAs(err, errors.ErrInvalidOperation, "failed to list customers")
 	}
 
 	return domainCustomer.FromEntList(customers), nil
@@ -110,7 +110,7 @@ func (r *customerRepository) Count(ctx context.Context, filter *types.CustomerFi
 
 	count, err := query.Count(ctx)
 	if err != nil {
-		return 0, errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to count customers")
+		return 0, errors.WrapAs(err, errors.ErrInvalidOperation, "failed to count customers")
 	}
 
 	return count, nil
@@ -125,7 +125,7 @@ func (r *customerRepository) ListAll(ctx context.Context, filter *types.Customer
 
 	customers, err := query.All(ctx)
 	if err != nil {
-		return nil, errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to list customers")
+		return nil, errors.WrapAs(err, errors.ErrInvalidOperation, "failed to list customers")
 	}
 
 	return domainCustomer.FromEntList(customers), nil
@@ -161,9 +161,9 @@ func (r *customerRepository) Update(ctx context.Context, c *domainCustomer.Custo
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return errors.Wrap(err, errors.ErrCodeNotFound, "customer not found")
+			return errors.WrapAs(err, errors.ErrNotFound, "customer not found")
 		}
-		return errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to update customer")
+		return errors.WrapAs(err, errors.ErrInvalidOperation, "failed to update customer")
 	}
 
 	return nil
@@ -189,9 +189,9 @@ func (r *customerRepository) Delete(ctx context.Context, id string) error {
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return errors.Wrap(err, errors.ErrCodeNotFound, "customer not found")
+			return errors.WrapAs(err, errors.ErrNotFound, "customer not found")
 		}
-		return errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to delete customer")
+		return errors.WrapAs(err, errors.ErrInvalidOperation, "failed to delete customer")
 	}
 
 	return nil

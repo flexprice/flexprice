@@ -72,7 +72,7 @@ func (r *taskRepository) Get(ctx context.Context, id string) (*domainTask.Task, 
 		Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return nil, errors.Wrap(err, errors.ErrCodeNotFound, "task not found")
+			return nil, errors.WrapAs(err, errors.ErrNotFound, "task not found")
 		}
 		return nil, fmt.Errorf("getting task: %w", err)
 	}
@@ -146,7 +146,7 @@ func (r *taskRepository) Update(ctx context.Context, t *domainTask.Task) error {
 		return fmt.Errorf("failed to update task: %w", err)
 	}
 	if n == 0 {
-		return errors.Wrap(err, errors.ErrCodeNotFound, "task not found")
+		return errors.WrapAs(err, errors.ErrNotFound, "task not found")
 	}
 
 	return nil

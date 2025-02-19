@@ -107,23 +107,23 @@ func ValidateAddressPostalCode(postalCode string, country string) bool {
 // ValidateAddress validates all address fields
 func ValidateAddress(c *Customer) error {
 	if !ValidateAddressCountry(c.AddressCountry) {
-		return errors.Wrap(errors.ErrValidation, errors.ErrCodeValidation, "invalid country code format")
+		return errors.New(errors.ErrValidation, "invalid country code format")
 	}
 	if !ValidateAddressPostalCode(c.AddressPostalCode, c.AddressCountry) {
-		return errors.Wrap(errors.ErrValidation, errors.ErrCodeValidation, "invalid postal code format")
+		return errors.New(errors.ErrValidation, "invalid postal code format")
 	}
 	// Validate field lengths
 	if len(c.AddressLine1) > 255 {
-		return errors.Wrap(errors.ErrValidation, errors.ErrCodeValidation, "address line 1 too long")
+		return errors.New(errors.ErrValidation, "address line 1 too long")
 	}
 	if len(c.AddressLine2) > 255 {
-		return errors.Wrap(errors.ErrValidation, errors.ErrCodeValidation, "address line 2 too long")
+		return errors.New(errors.ErrValidation, "address line 2 too long")
 	}
 	if len(c.AddressCity) > 100 {
-		return errors.Wrap(errors.ErrValidation, errors.ErrCodeValidation, "city name too long")
+		return errors.New(errors.ErrValidation, "city name too long")
 	}
 	if len(c.AddressState) > 100 {
-		return errors.Wrap(errors.ErrValidation, errors.ErrCodeValidation, "state name too long")
+		return errors.New(errors.ErrValidation, "state name too long")
 	}
 	return nil
 }

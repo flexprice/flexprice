@@ -64,7 +64,7 @@ func (s *paymentService) CreatePayment(ctx context.Context, req dto.CreatePaymen
 	}
 
 	if p.DestinationType != types.PaymentDestinationTypeInvoice {
-		return nil, errors.New(errors.ErrCodeValidation, "invalid destination type")
+		return nil, errors.New(errors.ErrValidation, "invalid destination type")
 	}
 
 	// validate the destination
@@ -76,15 +76,15 @@ func (s *paymentService) CreatePayment(ctx context.Context, req dto.CreatePaymen
 
 	// invoice validations
 	if invoice.PaymentStatus == types.PaymentStatusSucceeded {
-		return nil, errors.New(errors.ErrCodeValidation, "invoice is already paid")
+		return nil, errors.New(errors.ErrValidation, "invoice is already paid")
 	}
 
 	if invoice.InvoiceStatus == types.InvoiceStatusVoided {
-		return nil, errors.New(errors.ErrCodeValidation, "invoice is voided")
+		return nil, errors.New(errors.ErrValidation, "invoice is voided")
 	}
 
 	if !types.IsMatchingCurrency(invoice.Currency, p.Currency) {
-		return nil, errors.New(errors.ErrCodeValidation, "invoice currency does not match payment currency")
+		return nil, errors.New(errors.ErrValidation, "invoice currency does not match payment currency")
 	}
 
 	// check if the payment method is credits
@@ -92,11 +92,11 @@ func (s *paymentService) CreatePayment(ctx context.Context, req dto.CreatePaymen
 		// Find wallets for the customer
 		wallets, err := s.walletRepo.GetWalletsByCustomerID(ctx, invoice.CustomerID)
 		if err != nil {
-			return nil, errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to find wallets")
+			return nil, err
 		}
 
 		if len(wallets) == 0 {
-			return nil, errors.New(errors.ErrCodeNotFound, "no wallets found for customer")
+			return nil, errors.New(errors.ErrNotFound, "no wallets found for customer")
 		}
 
 		// Find first active wallet with matching currency and sufficient balance
@@ -111,7 +111,7 @@ func (s *paymentService) CreatePayment(ctx context.Context, req dto.CreatePaymen
 		}
 
 		if selectedWallet == nil {
-			return nil, errors.New(errors.ErrCodeInvalidOperation, "no wallet with sufficient balance found")
+			return nil, errors.New(errors.ErrInvalidOperation, "no wallet with sufficient balance found")
 		}
 
 		p.PaymentMethodID = selectedWallet.ID

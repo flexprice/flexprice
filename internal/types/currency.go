@@ -70,7 +70,7 @@ func IsMatchingCurrency(a, b string) bool {
 // TODO : use some library to validate iso 3166-1 alpha-3 currency codes
 func ValidateCurrencyCode(currency string) error {
 	if len(currency) != 3 {
-		return errors.New(errors.ErrCodeValidation, "invalid currency code")
+		return errors.New(errors.ErrValidation, "invalid currency code")
 	}
 	return nil
 }

@@ -3,10 +3,11 @@ package httpclient
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/flexprice/flexprice/internal/errors"
 )
 
 // Request represents an HTTP request
@@ -57,7 +58,7 @@ func (c *DefaultClient) Send(ctx context.Context, req *Request) (*Response, erro
 
 	httpReq, err := http.NewRequestWithContext(ctx, req.Method, req.URL, body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, errors.WrapAs(err, errors.ErrHTTPClient, "failed to create request")
 	}
 
 	// Set Content-Length if body is present
@@ -74,14 +75,14 @@ func (c *DefaultClient) Send(ctx context.Context, req *Request) (*Response, erro
 	// Make request
 	resp, err := c.client.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
+		return nil, errors.WrapAs(err, errors.ErrHTTPClient, "failed to send request")
 	}
 	defer resp.Body.Close()
 
 	// Read response body
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
+		return nil, errors.WrapAs(err, errors.ErrHTTPClient, "failed to read response body")
 	}
 
 	// Copy response headers

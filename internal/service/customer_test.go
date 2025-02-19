@@ -40,7 +40,7 @@ func (s *CustomerServiceSuite) TestCreateCustomer() {
 		setup         func()
 		request       dto.CreateCustomerRequest
 		expectedError bool
-		errorCode     string
+		err           error
 	}{
 		{
 			name: "successful_creation",
@@ -74,7 +74,7 @@ func (s *CustomerServiceSuite) TestCreateCustomer() {
 				AddressCountry: "USA", // Invalid: should be 2 characters
 			},
 			expectedError: true,
-			errorCode:     errors.ErrCodeValidation,
+			err:           errors.ErrValidation,
 		},
 		{
 			name: "invalid_postal_code",
@@ -84,7 +84,7 @@ func (s *CustomerServiceSuite) TestCreateCustomer() {
 				AddressPostalCode: "12345678901234567890123", // Too long
 			},
 			expectedError: true,
-			errorCode:     errors.ErrCodeValidation,
+			err:           errors.ErrValidation,
 		},
 		{
 			name: "invalid_address_line1",
@@ -94,7 +94,7 @@ func (s *CustomerServiceSuite) TestCreateCustomer() {
 				AddressLine1: string(make([]byte, 256)), // Too long
 			},
 			expectedError: true,
-			errorCode:     errors.ErrCodeValidation,
+			err:           errors.ErrValidation,
 		},
 	}
 
@@ -109,10 +109,10 @@ func (s *CustomerServiceSuite) TestCreateCustomer() {
 			if tc.expectedError {
 				s.Error(err)
 				s.Nil(resp)
-				if tc.errorCode != "" {
+				if tc.err != nil {
 					var ierr *errors.InternalError
 					s.True(stderrors.As(err, &ierr))
-					s.Equal(tc.errorCode, ierr.Code)
+					s.True(stderrors.Is(err, tc.err))
 				}
 			} else {
 				s.NoError(err)
@@ -153,7 +153,7 @@ func (s *CustomerServiceSuite) TestGetCustomer() {
 		name          string
 		id            string
 		expectedError bool
-		errorCode     string
+		err           error
 	}{
 		{
 			name:          "customer_found",
@@ -164,7 +164,7 @@ func (s *CustomerServiceSuite) TestGetCustomer() {
 			name:          "customer_not_found",
 			id:            "nonexistent-id",
 			expectedError: true,
-			errorCode:     errors.ErrCodeNotFound,
+			err:           errors.ErrNotFound,
 		},
 	}
 
@@ -175,10 +175,10 @@ func (s *CustomerServiceSuite) TestGetCustomer() {
 			if tc.expectedError {
 				s.Error(err)
 				s.Nil(resp)
-				if tc.errorCode != "" {
+				if tc.err != nil {
 					var ierr *errors.InternalError
 					s.True(stderrors.As(err, &ierr))
-					s.Equal(tc.errorCode, ierr.Code)
+					s.True(stderrors.Is(err, tc.err))
 				}
 			} else {
 				s.NoError(err)
@@ -258,7 +258,7 @@ func (s *CustomerServiceSuite) TestUpdateCustomer() {
 		id            string
 		req           dto.UpdateCustomerRequest
 		expectedError bool
-		errorCode     string
+		err           error
 	}{
 		{
 			name: "valid_update",
@@ -279,7 +279,7 @@ func (s *CustomerServiceSuite) TestUpdateCustomer() {
 				AddressCountry: lo.ToPtr("GBR"), // Invalid: should be 2 characters
 			},
 			expectedError: true,
-			errorCode:     errors.ErrCodeValidation,
+			err:           errors.ErrValidation,
 		},
 		{
 			name: "customer_not_found",
@@ -288,7 +288,7 @@ func (s *CustomerServiceSuite) TestUpdateCustomer() {
 				Name: lo.ToPtr("New Name"),
 			},
 			expectedError: true,
-			errorCode:     errors.ErrCodeNotFound,
+			err:           errors.ErrNotFound,
 		},
 	}
 
@@ -299,10 +299,10 @@ func (s *CustomerServiceSuite) TestUpdateCustomer() {
 			if tc.expectedError {
 				s.Error(err)
 				s.Nil(resp)
-				if tc.errorCode != "" {
+				if tc.err != nil {
 					var ierr *errors.InternalError
 					s.True(stderrors.As(err, &ierr))
-					s.Equal(tc.errorCode, ierr.Code)
+					s.True(stderrors.As(err, tc.err))
 				}
 			} else {
 				s.NoError(err)
@@ -333,7 +333,7 @@ func (s *CustomerServiceSuite) TestDeleteCustomer() {
 		name          string
 		id            string
 		expectedError bool
-		errorCode     string
+		err           error
 	}{
 		{
 			name:          "delete_existing_customer",
@@ -353,10 +353,10 @@ func (s *CustomerServiceSuite) TestDeleteCustomer() {
 
 			if tc.expectedError {
 				s.Error(err)
-				if tc.errorCode != "" {
+				if tc.err != nil {
 					var ierr *errors.InternalError
 					s.True(stderrors.As(err, &ierr))
-					s.Equal(tc.errorCode, ierr.Code)
+					s.True(stderrors.Is(err, tc.err))
 				}
 			} else {
 				s.NoError(err)
@@ -366,7 +366,7 @@ func (s *CustomerServiceSuite) TestDeleteCustomer() {
 				s.Error(err)
 				var ierr *errors.InternalError
 				s.True(stderrors.As(err, &ierr))
-				s.Equal(errors.ErrCodeNotFound, ierr.Code)
+				s.True(stderrors.Is(err, errors.ErrNotFound))
 			}
 		})
 	}

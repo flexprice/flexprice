@@ -27,7 +27,7 @@ func (r *CreateTaskRequest) Validate() error {
 		return err
 	}
 	if r.FileURL == "" {
-		return errors.New(errors.ErrCodeValidation, "file_url cannot be empty")
+		return errors.New(errors.ErrValidation, "file_url cannot be empty")
 	}
 	if err := r.FileType.Validate(); err != nil {
 		return err
@@ -36,7 +36,7 @@ func (r *CreateTaskRequest) Validate() error {
 	validator := validator.New()
 	err := validator.Struct(r)
 	if err != nil {
-		return errors.New(errors.ErrCodeValidation, err.Error())
+		return errors.New(errors.ErrValidation, err.Error())
 	}
 	return nil
 }
@@ -124,7 +124,7 @@ type UpdateTaskStatusRequest struct {
 
 func (r *UpdateTaskStatusRequest) Validate() error {
 	if r.TaskStatus == "" {
-		return errors.New(errors.ErrCodeValidation, "task_status cannot be empty")
+		return errors.New(errors.ErrValidation, "task_status cannot be empty")
 	}
 	return nil
 }

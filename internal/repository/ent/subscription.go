@@ -127,7 +127,7 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 			).
 			Exist(ctx)
 		if err != nil {
-			return errors.WithOp(err, "repository.subscription.Update.CheckExists")
+			return errors.WithOp(err, "repository.subscription.Update.CheckExists").Mark(errors.ErrValidation)
 		}
 		if !exists {
 			return domainSub.NewNotFoundError(sub.ID)

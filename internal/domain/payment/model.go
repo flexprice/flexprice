@@ -50,28 +50,28 @@ type PaymentAttempt struct {
 // Validate validates the payment
 func (p *Payment) Validate() error {
 	if p.Amount.IsZero() || p.Amount.IsNegative() {
-		return errors.New(errors.ErrCodeValidation, "invalid amount")
+		return errors.New(errors.ErrValidation, "invalid amount")
 	}
 	if err := p.DestinationType.Validate(); err != nil {
-		return errors.New(errors.ErrCodeValidation, "invalid destination type")
+		return errors.New(errors.ErrValidation, "invalid destination type")
 	}
 	if p.DestinationID == "" {
-		return errors.New(errors.ErrCodeValidation, "invalid destination id")
+		return errors.New(errors.ErrValidation, "invalid destination id")
 	}
 	if p.PaymentMethodType == "" {
-		return errors.New(errors.ErrCodeValidation, "invalid payment method type")
+		return errors.New(errors.ErrValidation, "invalid payment method type")
 	}
 	if p.Currency == "" {
-		return errors.New(errors.ErrCodeValidation, "invalid currency")
+		return errors.New(errors.ErrValidation, "invalid currency")
 	}
 
 	// payment method type validations
 	if p.PaymentMethodType == types.PaymentMethodTypeOffline {
 		if p.PaymentMethodID != "" {
-			return errors.New(errors.ErrCodeValidation, "payment method id is not allowed for offline payment method type")
+			return errors.New(errors.ErrValidation, "payment method id is not allowed for offline payment method type")
 		}
 	} else if p.PaymentMethodID == "" {
-		return errors.New(errors.ErrCodeValidation, "invalid payment method id")
+		return errors.New(errors.ErrValidation, "invalid payment method id")
 	}
 
 	return nil
@@ -80,10 +80,10 @@ func (p *Payment) Validate() error {
 // Validate validates the payment attempt
 func (pa *PaymentAttempt) Validate() error {
 	if pa.PaymentID == "" {
-		return errors.New(errors.ErrCodeValidation, "invalid payment id")
+		return errors.New(errors.ErrValidation, "invalid payment id")
 	}
 	if pa.AttemptNumber <= 0 {
-		return errors.New(errors.ErrCodeValidation, "invalid attempt number")
+		return errors.New(errors.ErrValidation, "invalid attempt number")
 	}
 	return nil
 }

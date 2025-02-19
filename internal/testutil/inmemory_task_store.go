@@ -58,7 +58,7 @@ func (s *InMemoryTaskStore) Create(ctx context.Context, t *task.Task) error {
 func (s *InMemoryTaskStore) Get(ctx context.Context, id string) (*task.Task, error) {
 	t, err := s.InMemoryStore.Get(ctx, id)
 	if err != nil {
-		return nil, errors.Wrap(err, errors.ErrCodeNotFound, "task not found")
+		return nil, errors.WrapAs(err, errors.ErrNotFound, "task not found")
 	}
 	return copyTask(t), nil
 }

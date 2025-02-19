@@ -171,7 +171,7 @@ func (s *taskService) ProcessTask(ctx context.Context, id string) error {
 	case types.EntityTypeEvents:
 		processErr = s.processEvents(ctx, t, tracker)
 	default:
-		processErr = errors.New(errors.ErrCodeInvalidOperation, fmt.Sprintf("unsupported entity type: %s", t.EntityType))
+		processErr = errors.New(errors.ErrInvalidOperation, fmt.Sprintf("unsupported entity type: %s", t.EntityType))
 	}
 
 	// Update final status based on error
@@ -199,7 +199,7 @@ func (s *taskService) processEvents(ctx context.Context, t *task.Task, tracker t
 		// Extract file ID from Google Drive URL
 		fileID := extractGoogleDriveFileID(downloadURL)
 		if fileID == "" {
-			return errors.New(errors.ErrCodeValidation, "invalid Google Drive URL")
+			return errors.New(errors.ErrValidation, "invalid Google Drive URL")
 		}
 		downloadURL = fmt.Sprintf("https://drive.google.com/uc?export=download&id=%s", fileID)
 		s.logger.Debug("converted Google Drive URL", "original", t.FileURL, "download_url", downloadURL)
@@ -214,12 +214,12 @@ func (s *taskService) processEvents(ctx context.Context, t *task.Task, tracker t
 	resp, err := s.client.Send(ctx, req)
 	if err != nil {
 		s.logger.Error("failed to download file", "error", err, "url", downloadURL)
-		return errors.Wrap(err, errors.ErrCodeHTTPClient, "failed to download file")
+		return errors.Wrap(err, "failed to download file")
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		s.logger.Error("failed to download file", "status_code", resp.StatusCode, "url", downloadURL)
-		return errors.New(errors.ErrCodeHTTPClient, fmt.Sprintf("failed to download file: %d", resp.StatusCode))
+		return errors.Newf(errors.ErrHTTPClient, "failed to download file: %d", resp.StatusCode)
 	}
 
 	// Log the first few bytes of the response for debugging
@@ -246,7 +246,7 @@ func (s *taskService) processEvents(ctx context.Context, t *task.Task, tracker t
 		s.logger.Error("failed to read CSV headers",
 			"error", err,
 			"content_preview", string(resp.Body[:previewLen]))
-		return errors.Wrap(err, errors.ErrCodeValidation, "failed to read CSV headers")
+		return errors.WrapAs(err, errors.ErrValidation, "failed to read CSV headers")
 	}
 
 	s.logger.Debug("parsed CSV headers", "headers", headers)
@@ -354,7 +354,7 @@ func (s *taskService) processEvents(ctx context.Context, t *task.Task, tracker t
 
 	// Return error if any events failed
 	if failureCount > 0 {
-		return errors.New(errors.ErrCodeValidation, fmt.Sprintf("%d events failed to process", failureCount))
+		return errors.New(errors.ErrValidation, fmt.Sprintf("%d events failed to process", failureCount))
 	}
 
 	return nil
@@ -382,7 +382,7 @@ func (s *taskService) parseTimestamp(eventReq *dto.IngestEventRequest) error {
 	if eventReq.TimestampStr != "" {
 		timestamp, err := time.Parse(time.RFC3339, eventReq.TimestampStr)
 		if err != nil {
-			return errors.Wrap(err, errors.ErrCodeValidation, "invalid timestamp format")
+			return errors.WrapAs(err, errors.ErrValidation, "invalid timestamp format")
 		}
 		eventReq.Timestamp = timestamp
 	} else {
@@ -400,7 +400,7 @@ func validateRequiredColumns(headers []string) error {
 
 	for _, required := range requiredColumns {
 		if !headerSet[required] {
-			return errors.New(errors.ErrCodeValidation, fmt.Sprintf("missing required column: %s", required))
+			return errors.New(errors.ErrValidation, fmt.Sprintf("missing required column: %s", required))
 		}
 	}
 	return nil

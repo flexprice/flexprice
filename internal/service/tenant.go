@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/cockroachdb/errors"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/auth"
 	"github.com/flexprice/flexprice/internal/config"
@@ -32,7 +31,7 @@ func NewTenantService(repo tenant.Repository, cfg *config.Configuration) TenantS
 
 func (s *tenantService) CreateTenant(ctx context.Context, req dto.CreateTenantRequest) (*dto.TenantResponse, error) {
 	if err := req.Validate(); err != nil {
-		return nil, errors.WithSafeDetails(fmt.Errorf("invalid request: %w", err), ierr.ErrCodeValidation)
+		return nil, ierr.WrapAs(err, ierr.ErrValidation, "validation error")
 	}
 
 	newTenant := req.ToTenant(ctx)

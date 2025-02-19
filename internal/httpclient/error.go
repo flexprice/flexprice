@@ -2,31 +2,24 @@ package httpclient
 
 import (
 	goerrors "errors"
-
-	"github.com/flexprice/flexprice/internal/errors"
+	"fmt"
 )
 
 // Error represents an HTTP client error
 type Error struct {
-	*errors.InternalError
 	StatusCode int
 	Response   []byte
 }
 
-func (e *Error) Unwrap() error {
-	return e.InternalError.Unwrap()
-}
-
 func (e *Error) Error() string {
-	return e.InternalError.Error()
+	return fmt.Sprintf("%d - %v", e.StatusCode, e.Response)
 }
 
 // NewError creates a new HTTP client error
 func NewError(statusCode int, response []byte) *Error {
 	return &Error{
-		InternalError: errors.New(errors.ErrCodeHTTPClient, "http client error"),
-		StatusCode:    statusCode,
-		Response:      response,
+		StatusCode: statusCode,
+		Response:   response,
 	}
 }
 

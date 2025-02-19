@@ -90,7 +90,7 @@ func (r *paymentRepository) Get(ctx context.Context, id string) (*domainPayment.
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return nil, errors.New(errors.ErrCodeNotFound, "payment not found")
+			return nil, errors.New(errors.ErrNotFound, "payment not found")
 		}
 		return nil, fmt.Errorf("failed to get payment: %w", err)
 	}
@@ -164,7 +164,7 @@ func (r *paymentRepository) Update(ctx context.Context, p *domainPayment.Payment
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return errors.New(errors.ErrCodeNotFound, "payment not found")
+			return errors.New(errors.ErrNotFound, "payment not found")
 		}
 		return fmt.Errorf("failed to update payment: %w", err)
 	}
@@ -190,7 +190,7 @@ func (r *paymentRepository) Delete(ctx context.Context, id string) error {
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return errors.New(errors.ErrCodeNotFound, "payment not found")
+			return errors.New(errors.ErrNotFound, "payment not found")
 		}
 		return fmt.Errorf("failed to delete payment: %w", err)
 	}
@@ -216,7 +216,7 @@ func (r *paymentRepository) GetByIdempotencyKey(ctx context.Context, key string)
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return nil, errors.New(errors.ErrCodeNotFound, "payment not found")
+			return nil, errors.New(errors.ErrNotFound, "payment not found")
 		}
 		return nil, fmt.Errorf("failed to get payment by idempotency key: %w", err)
 	}
@@ -276,7 +276,7 @@ func (r *paymentRepository) GetAttempt(ctx context.Context, id string) (*domainP
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return nil, errors.New(errors.ErrCodeNotFound, "payment attempt not found")
+			return nil, errors.New(errors.ErrNotFound, "payment attempt not found")
 		}
 		return nil, fmt.Errorf("failed to get payment attempt: %w", err)
 	}
@@ -309,7 +309,7 @@ func (r *paymentRepository) UpdateAttempt(ctx context.Context, a *domainPayment.
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return errors.New(errors.ErrCodeNotFound, "payment attempt not found")
+			return errors.New(errors.ErrNotFound, "payment attempt not found")
 		}
 		return fmt.Errorf("failed to update payment attempt: %w", err)
 	}
@@ -356,7 +356,7 @@ func (r *paymentRepository) GetLatestAttempt(ctx context.Context, paymentID stri
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return nil, errors.New(errors.ErrCodeNotFound, "payment attempt not found")
+			return nil, errors.New(errors.ErrNotFound, "payment attempt not found")
 		}
 		return nil, fmt.Errorf("failed to get latest payment attempt: %w", err)
 	}
