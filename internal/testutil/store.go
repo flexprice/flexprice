@@ -2,10 +2,10 @@ package testutil
 
 import (
 	"context"
-	"fmt"
 	"sort"
 	"sync"
 
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -34,7 +34,12 @@ func (s *InMemoryStore[T]) Create(ctx context.Context, id string, item T) error 
 	defer s.mu.Unlock()
 
 	if _, exists := s.items[id]; exists {
-		return fmt.Errorf("item already exists")
+		return ierr.NewError("item already exists").
+			WithHint("An item with this ID already exists").
+			WithReportableDetails(map[string]any{
+				"id": id,
+			}).
+			Mark(ierr.ErrAlreadyExists)
 	}
 
 	s.items[id] = item
@@ -51,7 +56,12 @@ func (s *InMemoryStore[T]) Get(ctx context.Context, id string) (T, error) {
 	}
 
 	var zero T
-	return zero, fmt.Errorf("item not found")
+	return zero, ierr.NewError("item not found").
+		WithHintf("Item with ID %s was not found", id).
+		WithReportableDetails(map[string]any{
+			"id": id,
+		}).
+		Mark(ierr.ErrNotFound)
 }
 
 // List retrieves items based on filter
@@ -110,7 +120,12 @@ func (s *InMemoryStore[T]) Update(ctx context.Context, id string, item T) error 
 	defer s.mu.Unlock()
 
 	if _, exists := s.items[id]; !exists {
-		return fmt.Errorf("item not found")
+		return ierr.NewError("item not found").
+			WithHintf("Item with ID %s was not found", id).
+			WithReportableDetails(map[string]any{
+				"id": id,
+			}).
+			Mark(ierr.ErrNotFound)
 	}
 
 	s.items[id] = item
@@ -123,7 +138,12 @@ func (s *InMemoryStore[T]) Delete(ctx context.Context, id string) error {
 	defer s.mu.Unlock()
 
 	if _, exists := s.items[id]; !exists {
-		return fmt.Errorf("item not found")
+		return ierr.NewError("item not found").
+			WithHintf("Item with ID %s was not found", id).
+			WithReportableDetails(map[string]any{
+				"id": id,
+			}).
+			Mark(ierr.ErrNotFound)
 	}
 
 	delete(s.items, id)

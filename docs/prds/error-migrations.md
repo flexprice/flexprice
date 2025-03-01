@@ -150,7 +150,7 @@ feature.Use(middleware.ErrorHandler())
 
 - [x] Feature
 - [x] Invoice
-- [ ] Customer
+- [x] Customer
 - [x] Subscription
 - [ ] Plan
 - [ ] Price

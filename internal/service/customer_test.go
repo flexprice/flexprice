@@ -3,12 +3,11 @@ package service
 
 import (
 	"context"
-	stderrors "errors"
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
-	"github.com/flexprice/flexprice/internal/domain/customer"
-	"github.com/flexprice/flexprice/internal/errors"
+	domainCustomer "github.com/flexprice/flexprice/internal/domain/customer"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -37,18 +36,13 @@ func (s *CustomerServiceSuite) SetupTest() {
 func (s *CustomerServiceSuite) TestCreateCustomer() {
 	testCases := []struct {
 		name          string
-		setup         func()
 		request       dto.CreateCustomerRequest
+		setup         func()
 		expectedError bool
 		errorCode     string
 	}{
 		{
-			name: "successful_creation",
-			setup: func() {
-				// Ensure the repository is empty before test
-				s.repo = testutil.NewInMemoryCustomerStore()
-				s.customerService = &customerService{repo: s.repo}
-			},
+			name: "valid_customer",
 			request: dto.CreateCustomerRequest{
 				ExternalID:        "ext-1",
 				Name:              "Test Customer",
@@ -74,7 +68,7 @@ func (s *CustomerServiceSuite) TestCreateCustomer() {
 				AddressCountry: "USA", // Invalid: should be 2 characters
 			},
 			expectedError: true,
-			errorCode:     errors.ErrCodeValidation,
+			errorCode:     ierr.ErrCodeValidation,
 		},
 		{
 			name: "invalid_postal_code",
@@ -84,7 +78,7 @@ func (s *CustomerServiceSuite) TestCreateCustomer() {
 				AddressPostalCode: "12345678901234567890123", // Too long
 			},
 			expectedError: true,
-			errorCode:     errors.ErrCodeValidation,
+			errorCode:     ierr.ErrCodeValidation,
 		},
 		{
 			name: "invalid_address_line1",
@@ -94,7 +88,7 @@ func (s *CustomerServiceSuite) TestCreateCustomer() {
 				AddressLine1: string(make([]byte, 256)), // Too long
 			},
 			expectedError: true,
-			errorCode:     errors.ErrCodeValidation,
+			errorCode:     ierr.ErrCodeValidation,
 		},
 	}
 
@@ -109,10 +103,8 @@ func (s *CustomerServiceSuite) TestCreateCustomer() {
 			if tc.expectedError {
 				s.Error(err)
 				s.Nil(resp)
-				if tc.errorCode != "" {
-					var ierr *errors.InternalError
-					s.True(stderrors.As(err, &ierr))
-					s.Equal(tc.errorCode, ierr.Code)
+				if tc.errorCode == ierr.ErrCodeValidation {
+					s.True(ierr.IsValidation(err), "Expected validation error")
 				}
 			} else {
 				s.NoError(err)
@@ -127,13 +119,16 @@ func (s *CustomerServiceSuite) TestCreateCustomer() {
 				s.Equal(tc.request.AddressPostalCode, resp.Customer.AddressPostalCode)
 				s.Equal(tc.request.AddressCountry, resp.Customer.AddressCountry)
 				s.Equal(tc.request.Metadata, resp.Customer.Metadata)
+				s.NotEmpty(resp.Customer.ID)
+				s.NotEmpty(resp.Customer.CreatedAt)
+				s.NotEmpty(resp.Customer.UpdatedAt)
 			}
 		})
 	}
 }
 
 func (s *CustomerServiceSuite) TestGetCustomer() {
-	customer := &customer.Customer{
+	customer := &domainCustomer.Customer{
 		ID:                "cust-1",
 		Name:              "Test Customer",
 		Email:             "test@example.com",
@@ -150,10 +145,12 @@ func (s *CustomerServiceSuite) TestGetCustomer() {
 	_ = s.repo.Create(s.ctx, customer)
 
 	testCases := []struct {
-		name          string
-		id            string
-		expectedError bool
-		errorCode     string
+		name             string
+		id               string
+		setup            func()
+		expectedError    bool
+		errorCode        string
+		expectedCustomer *domainCustomer.Customer
 	}{
 		{
 			name:          "customer_found",
@@ -164,7 +161,7 @@ func (s *CustomerServiceSuite) TestGetCustomer() {
 			name:          "customer_not_found",
 			id:            "nonexistent-id",
 			expectedError: true,
-			errorCode:     errors.ErrCodeNotFound,
+			errorCode:     ierr.ErrCodeNotFound,
 		},
 	}
 
@@ -175,10 +172,8 @@ func (s *CustomerServiceSuite) TestGetCustomer() {
 			if tc.expectedError {
 				s.Error(err)
 				s.Nil(resp)
-				if tc.errorCode != "" {
-					var ierr *errors.InternalError
-					s.True(stderrors.As(err, &ierr))
-					s.Equal(tc.errorCode, ierr.Code)
+				if tc.errorCode == ierr.ErrCodeNotFound {
+					s.True(ierr.IsNotFound(err), "Expected not found error")
 				}
 			} else {
 				s.NoError(err)
@@ -196,13 +191,13 @@ func (s *CustomerServiceSuite) TestGetCustomers() {
 	// Reset and prepopulate the repository with customers
 	s.repo = testutil.NewInMemoryCustomerStore()
 	s.customerService = &customerService{repo: s.repo}
-	_ = s.repo.Create(s.ctx, &customer.Customer{
+	_ = s.repo.Create(s.ctx, &domainCustomer.Customer{
 		ID:             "cust-1",
 		Name:           "Customer One",
 		Email:          "one@example.com",
 		AddressCountry: "US",
 	})
-	_ = s.repo.Create(s.ctx, &customer.Customer{
+	_ = s.repo.Create(s.ctx, &domainCustomer.Customer{
 		ID:             "cust-2",
 		Name:           "Customer Two",
 		Email:          "two@example.com",
@@ -246,7 +241,7 @@ func (s *CustomerServiceSuite) TestGetCustomers() {
 
 func (s *CustomerServiceSuite) TestUpdateCustomer() {
 	// Prepopulate the repository with a customer
-	_ = s.repo.Create(s.ctx, &customer.Customer{
+	_ = s.repo.Create(s.ctx, &domainCustomer.Customer{
 		ID:             "cust-1",
 		Name:           "Old Name",
 		Email:          "old@example.com",
@@ -256,14 +251,15 @@ func (s *CustomerServiceSuite) TestUpdateCustomer() {
 	testCases := []struct {
 		name          string
 		id            string
-		req           dto.UpdateCustomerRequest
+		request       dto.UpdateCustomerRequest
+		setup         func()
 		expectedError bool
 		errorCode     string
 	}{
 		{
 			name: "valid_update",
 			id:   "cust-1",
-			req: dto.UpdateCustomerRequest{
+			request: dto.UpdateCustomerRequest{
 				Name:              lo.ToPtr("New Name"),
 				Email:             lo.ToPtr("new@example.com"),
 				AddressCountry:    lo.ToPtr("GB"),
@@ -275,46 +271,54 @@ func (s *CustomerServiceSuite) TestUpdateCustomer() {
 		{
 			name: "invalid_country_code",
 			id:   "cust-1",
-			req: dto.UpdateCustomerRequest{
+			request: dto.UpdateCustomerRequest{
 				AddressCountry: lo.ToPtr("GBR"), // Invalid: should be 2 characters
 			},
+			setup: func() {
+				// Create a customer to update
+				s.repo.Create(s.ctx, &domainCustomer.Customer{
+					ID:             "cust-1",
+					Name:           "Original Name",
+					AddressCountry: "US",
+				})
+			},
 			expectedError: true,
-			errorCode:     errors.ErrCodeValidation,
+			errorCode:     ierr.ErrCodeValidation,
 		},
 		{
 			name: "customer_not_found",
 			id:   "nonexistent-id",
-			req: dto.UpdateCustomerRequest{
+			request: dto.UpdateCustomerRequest{
 				Name: lo.ToPtr("New Name"),
 			},
 			expectedError: true,
-			errorCode:     errors.ErrCodeNotFound,
+			errorCode:     ierr.ErrCodeNotFound,
 		},
 	}
 
 	for _, tc := range testCases {
 		s.Run(tc.name, func() {
-			resp, err := s.customerService.UpdateCustomer(s.ctx, tc.id, tc.req)
+			resp, err := s.customerService.UpdateCustomer(s.ctx, tc.id, tc.request)
 
 			if tc.expectedError {
 				s.Error(err)
 				s.Nil(resp)
-				if tc.errorCode != "" {
-					var ierr *errors.InternalError
-					s.True(stderrors.As(err, &ierr))
-					s.Equal(tc.errorCode, ierr.Code)
+				if tc.errorCode == ierr.ErrCodeNotFound {
+					s.True(ierr.IsNotFound(err), "Expected not found error")
+				} else if tc.errorCode == ierr.ErrCodeValidation {
+					s.True(ierr.IsValidation(err), "Expected validation error")
 				}
 			} else {
 				s.NoError(err)
 				s.NotNil(resp)
-				if tc.req.Name != nil {
-					s.Equal(*tc.req.Name, resp.Customer.Name)
+				if tc.request.Name != nil {
+					s.Equal(*tc.request.Name, resp.Customer.Name)
 				}
-				if tc.req.AddressCountry != nil {
-					s.Equal(*tc.req.AddressCountry, resp.Customer.AddressCountry)
+				if tc.request.AddressCountry != nil {
+					s.Equal(*tc.request.AddressCountry, resp.Customer.AddressCountry)
 				}
-				if tc.req.AddressCity != nil {
-					s.Equal(*tc.req.AddressCity, resp.Customer.AddressCity)
+				if tc.request.AddressCity != nil {
+					s.Equal(*tc.request.AddressCity, resp.Customer.AddressCity)
 				}
 			}
 		})
@@ -323,7 +327,7 @@ func (s *CustomerServiceSuite) TestUpdateCustomer() {
 
 func (s *CustomerServiceSuite) TestDeleteCustomer() {
 	// Prepopulate the repository with a customer
-	_ = s.repo.Create(s.ctx, &customer.Customer{
+	_ = s.repo.Create(s.ctx, &domainCustomer.Customer{
 		ID:    "cust-1",
 		Name:  "To Be Deleted",
 		Email: "delete@example.com",
@@ -332,6 +336,7 @@ func (s *CustomerServiceSuite) TestDeleteCustomer() {
 	testCases := []struct {
 		name          string
 		id            string
+		setup         func()
 		expectedError bool
 		errorCode     string
 	}{
@@ -353,27 +358,22 @@ func (s *CustomerServiceSuite) TestDeleteCustomer() {
 
 			if tc.expectedError {
 				s.Error(err)
-				if tc.errorCode != "" {
-					var ierr *errors.InternalError
-					s.True(stderrors.As(err, &ierr))
-					s.Equal(tc.errorCode, ierr.Code)
+				if tc.errorCode == ierr.ErrCodeNotFound {
+					s.True(ierr.IsNotFound(err), "Expected not found error after deletion")
 				}
 			} else {
 				s.NoError(err)
-
-				// Ensure the customer no longer exists
+				// Verify the customer was deleted
 				_, err := s.customerService.GetCustomer(s.ctx, tc.id)
 				s.Error(err)
-				var ierr *errors.InternalError
-				s.True(stderrors.As(err, &ierr))
-				s.Equal(errors.ErrCodeNotFound, ierr.Code)
+				s.True(ierr.IsNotFound(err), "Expected not found error after deletion")
 			}
 		})
 	}
 }
 
 func (s *CustomerServiceSuite) TestGetCustomerByLookupKey() {
-	customer := &customer.Customer{
+	customer := &domainCustomer.Customer{
 		ID:                "cust-1",
 		ExternalID:        "ext-1",
 		Name:              "Test Customer",
@@ -391,10 +391,12 @@ func (s *CustomerServiceSuite) TestGetCustomerByLookupKey() {
 	_ = s.repo.Create(s.ctx, customer)
 
 	testCases := []struct {
-		name          string
-		lookupKey     string
-		expectedError bool
-		errorCode     string
+		name             string
+		lookupKey        string
+		setup            func()
+		expectedError    bool
+		errorCode        string
+		expectedCustomer *domainCustomer.Customer
 	}{
 		{
 			name:          "customer_found",
@@ -405,7 +407,7 @@ func (s *CustomerServiceSuite) TestGetCustomerByLookupKey() {
 			name:          "customer_not_found",
 			lookupKey:     "nonexistent-key",
 			expectedError: true,
-			errorCode:     errors.ErrCodeNotFound,
+			errorCode:     ierr.ErrCodeNotFound,
 		},
 	}
 
@@ -416,10 +418,8 @@ func (s *CustomerServiceSuite) TestGetCustomerByLookupKey() {
 			if tc.expectedError {
 				s.Error(err)
 				s.Nil(resp)
-				if tc.errorCode != "" {
-					var ierr *errors.InternalError
-					s.True(stderrors.As(err, &ierr))
-					s.Equal(tc.errorCode, ierr.Code)
+				if tc.errorCode == ierr.ErrCodeNotFound {
+					s.True(ierr.IsNotFound(err), "Expected not found error")
 				}
 			} else {
 				s.NoError(err)

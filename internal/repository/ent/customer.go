@@ -7,7 +7,7 @@ import (
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/customer"
 	domainCustomer "github.com/flexprice/flexprice/internal/domain/customer"
-	"github.com/flexprice/flexprice/internal/errors"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
@@ -63,7 +63,18 @@ func (r *customerRepository) Create(ctx context.Context, c *domainCustomer.Custo
 		Save(ctx)
 
 	if err != nil {
-		return errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to create customer")
+		if ent.IsConstraintError(err) {
+			return ierr.WithError(err).
+				WithHint("A customer with this identifier already exists").
+				WithReportableDetails(map[string]any{
+					"external_id": c.ExternalID,
+					"email": c.Email,
+				}).
+				Mark(ierr.ErrAlreadyExists)
+		}
+		return ierr.WithError(err).
+			WithHint("Failed to create customer").
+			Mark(ierr.ErrDatabase)
 	}
 
 	*c = *domainCustomer.FromEnt(customer)
@@ -84,9 +95,16 @@ func (r *customerRepository) Get(ctx context.Context, id string) (*domainCustome
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return nil, errors.Wrap(err, errors.ErrCodeNotFound, "customer not found")
+			return nil, ierr.WithError(err).
+				WithHintf("Customer with ID %s was not found", id).
+				WithReportableDetails(map[string]any{
+					"customer_id": id,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-		return nil, errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to get customer")
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get customer").
+			Mark(ierr.ErrDatabase)
 	}
 
 	return domainCustomer.FromEnt(c), nil
@@ -107,9 +125,16 @@ func (r *customerRepository) GetByLookupKey(ctx context.Context, lookupKey strin
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return nil, errors.Wrap(err, errors.ErrCodeNotFound, "customer not found")
+			return nil, ierr.WithError(err).
+				WithHintf("Customer with lookup key %s was not found", lookupKey).
+				WithReportableDetails(map[string]any{
+					"lookup_key": lookupKey,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-		return nil, errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to get customer by lookup key")
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get customer by lookup key").
+			Mark(ierr.ErrDatabase)
 	}
 
 	return domainCustomer.FromEnt(c), nil
@@ -124,7 +149,9 @@ func (r *customerRepository) List(ctx context.Context, filter *types.CustomerFil
 
 	customers, err := query.All(ctx)
 	if err != nil {
-		return nil, errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to list customers")
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list customers").
+			Mark(ierr.ErrDatabase)
 	}
 
 	return domainCustomer.FromEntList(customers), nil
@@ -139,7 +166,9 @@ func (r *customerRepository) Count(ctx context.Context, filter *types.CustomerFi
 
 	count, err := query.Count(ctx)
 	if err != nil {
-		return 0, errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to count customers")
+		return 0, ierr.WithError(err).
+			WithHint("Failed to count customers").
+			Mark(ierr.ErrDatabase)
 	}
 
 	return count, nil
@@ -154,7 +183,9 @@ func (r *customerRepository) ListAll(ctx context.Context, filter *types.Customer
 
 	customers, err := query.All(ctx)
 	if err != nil {
-		return nil, errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to list customers")
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list customers").
+			Mark(ierr.ErrDatabase)
 	}
 
 	return domainCustomer.FromEntList(customers), nil
@@ -190,9 +221,25 @@ func (r *customerRepository) Update(ctx context.Context, c *domainCustomer.Custo
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return errors.Wrap(err, errors.ErrCodeNotFound, "customer not found")
+			return ierr.WithError(err).
+				WithHintf("Customer with ID %s was not found", c.ID).
+				WithReportableDetails(map[string]any{
+					"customer_id": c.ID,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-		return errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to update customer")
+		if ent.IsConstraintError(err) {
+			return ierr.WithError(err).
+				WithHint("A customer with this identifier already exists").
+				WithReportableDetails(map[string]any{
+					"external_id": c.ExternalID,
+					"email": c.Email,
+				}).
+				Mark(ierr.ErrAlreadyExists)
+		}
+		return ierr.WithError(err).
+			WithHint("Failed to update customer").
+			Mark(ierr.ErrDatabase)
 	}
 
 	return nil
@@ -218,9 +265,16 @@ func (r *customerRepository) Delete(ctx context.Context, id string) error {
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return errors.Wrap(err, errors.ErrCodeNotFound, "customer not found")
+			return ierr.WithError(err).
+				WithHintf("Customer with ID %s was not found", id).
+				WithReportableDetails(map[string]any{
+					"customer_id": id,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-		return errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to delete customer")
+		return ierr.WithError(err).
+			WithHint("Failed to delete customer").
+			Mark(ierr.ErrDatabase)
 	}
 
 	return nil

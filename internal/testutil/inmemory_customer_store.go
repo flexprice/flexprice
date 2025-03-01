@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/flexprice/flexprice/internal/domain/customer"
-	customerrors "github.com/flexprice/flexprice/internal/errors"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 )
@@ -82,11 +82,18 @@ func (s *InMemoryCustomerStore) GetByLookupKey(ctx context.Context, lookupKey st
 	// List all customers with our filter
 	customers, err := s.InMemoryStore.List(ctx, nil, filterFn, nil)
 	if err != nil {
-		return nil, customerrors.Wrap(err, customerrors.ErrCodeInvalidOperation, "failed to list customers")
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list customers").
+			Mark(ierr.ErrDatabase)
 	}
 
 	if len(customers) == 0 {
-		return nil, customerrors.Wrap(customerrors.ErrNotFound, customerrors.ErrCodeNotFound, "customer not found")
+		return nil, ierr.NewError("customer not found").
+			WithHintf("Customer with lookup key %s was not found", lookupKey).
+			WithReportableDetails(map[string]any{
+				"lookup_key": lookupKey,
+			}).
+			Mark(ierr.ErrNotFound)
 	}
 
 	return copyCustomer(customers[0]), nil

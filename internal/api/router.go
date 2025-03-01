@@ -119,6 +119,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		}
 
 		customer := v1Private.Group("/customers")
+		customer.Use(middleware.ErrorHandler())
 		{
 			customer.POST("", handlers.Customer.CreateCustomer)
 			customer.GET("", handlers.Customer.GetCustomers)
@@ -183,6 +184,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		}
 
 		feature := v1Private.Group("/features")
+		feature.Use(middleware.ErrorHandler())
 		{
 			feature.POST("", handlers.Feature.CreateFeature)
 			feature.GET("", handlers.Feature.ListFeatures)

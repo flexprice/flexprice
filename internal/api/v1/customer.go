@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
-	"github.com/flexprice/flexprice/internal/errors"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/types"
@@ -35,13 +35,15 @@ func NewCustomerHandler(service service.CustomerService, log *logger.Logger) *Cu
 func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 	var req dto.CreateCustomerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
 	resp, err := h.service.CreateCustomer(c.Request.Context(), req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.Error(err)
 		return
 	}
 
@@ -64,7 +66,7 @@ func (h *CustomerHandler) GetCustomer(c *gin.Context) {
 
 	resp, err := h.service.GetCustomer(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.Error(err)
 		return
 	}
 
@@ -85,7 +87,9 @@ func (h *CustomerHandler) GetCustomer(c *gin.Context) {
 func (h *CustomerHandler) GetCustomers(c *gin.Context) {
 	var filter types.CustomerFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid filter parameters").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
@@ -95,7 +99,7 @@ func (h *CustomerHandler) GetCustomers(c *gin.Context) {
 
 	resp, err := h.service.GetCustomers(c.Request.Context(), &filter)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.Error(err)
 		return
 	}
 
@@ -119,13 +123,15 @@ func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
 
 	var req dto.UpdateCustomerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
 	resp, err := h.service.UpdateCustomer(c.Request.Context(), id, req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.Error(err)
 		return
 	}
 
@@ -148,7 +154,7 @@ func (h *CustomerHandler) DeleteCustomer(c *gin.Context) {
 
 	err := h.service.DeleteCustomer(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.Error(err)
 		return
 	}
 
@@ -170,17 +176,15 @@ func (h *CustomerHandler) DeleteCustomer(c *gin.Context) {
 func (h *CustomerHandler) GetCustomerByLookupKey(c *gin.Context) {
 	lookupKey := c.Param("lookup_key")
 	if lookupKey == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "lookup key is required"})
+		c.Error(ierr.NewError("lookup key is required").
+			WithHint("Lookup key is required").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
 	resp, err := h.service.GetCustomerByLookupKey(c.Request.Context(), lookupKey)
 	if err != nil {
-		if errors.IsNotFound(err) {
-			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.Error(err)
 		return
 	}
 
