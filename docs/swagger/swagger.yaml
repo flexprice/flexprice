@@ -119,7 +119,6 @@ definitions:
       unit_singular:
         type: string
     required:
-    - lookup_key
     - name
     - type
     type: object
@@ -2016,6 +2015,21 @@ definitions:
       wallet_id:
         type: string
     type: object
+  errors.ErrorDetail:
+    properties:
+      details:
+        additionalProperties: {}
+        type: object
+      message:
+        type: string
+    type: object
+  errors.ErrorResponse:
+    properties:
+      error:
+        $ref: '#/definitions/errors.ErrorDetail'
+      success:
+        type: boolean
+    type: object
   gin.H:
     additionalProperties: {}
     type: object
@@ -3779,11 +3793,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/v1.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/v1.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
       summary: List invoices
       tags:
       - Invoices
@@ -3808,11 +3822,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/v1.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/v1.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
       summary: Create a new invoice
       tags:
       - Invoices
@@ -3837,11 +3851,11 @@ paths:
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/v1.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/v1.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
       summary: Get an invoice by ID
       tags:
       - Invoices
@@ -3866,11 +3880,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/v1.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/v1.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
       summary: Finalize an invoice
       tags:
       - Invoices
@@ -3901,15 +3915,15 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/v1.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/v1.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/v1.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
       security:
       - ApiKeyAuth: []
       summary: Update invoice payment status
@@ -3936,11 +3950,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/v1.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/v1.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
       summary: Void an invoice
       tags:
       - Invoices
@@ -3966,11 +3980,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/v1.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/v1.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
       summary: Get a preview invoice
       tags:
       - Invoices

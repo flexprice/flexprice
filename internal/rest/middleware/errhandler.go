@@ -9,18 +9,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ErrorResponse represents the standard error response structure
-type ErrorResponse struct {
-	Success bool        `json:"success"`
-	Error   ErrorDetail `json:"error"`
-}
-
-// ErrorDetail contains error information
-type ErrorDetail struct {
-	Display string         `json:"message"`
-	Details map[string]any `json:"details,omitempty"`
-}
-
 // ErrorHandler middleware handles error responses
 func ErrorHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -35,9 +23,9 @@ func ErrorHandler() gin.HandlerFunc {
 			// Get safe details
 			details := getSafeDetails(err)
 
-			response := ErrorResponse{
+			response := ierr.ErrorResponse{
 				Success: false,
-				Error: ErrorDetail{
+				Error: ierr.ErrorDetail{
 					Display: display,
 					Details: details,
 				},

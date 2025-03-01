@@ -37,8 +37,8 @@ func NewInvoiceHandler(invoiceService service.InvoiceService, temporalService *t
 // @Produce json
 // @Param invoice body dto.CreateInvoiceRequest true "Invoice details"
 // @Success 201 {object} dto.InvoiceResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
 // @Router /invoices [post]
 func (h *InvoiceHandler) CreateInvoice(c *gin.Context) {
 	var req dto.CreateInvoiceRequest
@@ -66,8 +66,8 @@ func (h *InvoiceHandler) CreateInvoice(c *gin.Context) {
 // @Produce json
 // @Param id path string true "Invoice ID"
 // @Success 200 {object} dto.InvoiceResponse
-// @Failure 404 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
 // @Router /invoices/{id} [get]
 func (h *InvoiceHandler) GetInvoice(c *gin.Context) {
 	id := c.Param("id")
@@ -93,8 +93,8 @@ func (h *InvoiceHandler) GetInvoice(c *gin.Context) {
 // @Produce json
 // @Param filter query types.InvoiceFilter false "Filter"
 // @Success 200 {object} dto.ListInvoicesResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
 // @Router /invoices [get]
 func (h *InvoiceHandler) ListInvoices(c *gin.Context) {
 	var filter types.InvoiceFilter
@@ -133,8 +133,8 @@ func (h *InvoiceHandler) ListInvoices(c *gin.Context) {
 // @Produce json
 // @Param id path string true "Invoice ID"
 // @Success 200 {object} gin.H
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
 // @Router /invoices/{id}/finalize [post]
 func (h *InvoiceHandler) FinalizeInvoice(c *gin.Context) {
 	id := c.Param("id")
@@ -160,8 +160,8 @@ func (h *InvoiceHandler) FinalizeInvoice(c *gin.Context) {
 // @Produce json
 // @Param id path string true "Invoice ID"
 // @Success 200 {object} gin.H
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
 // @Router /invoices/{id}/void [post]
 func (h *InvoiceHandler) VoidInvoice(c *gin.Context) {
 	id := c.Param("id")
@@ -189,9 +189,9 @@ func (h *InvoiceHandler) VoidInvoice(c *gin.Context) {
 // @Param id path string true "Invoice ID"
 // @Param request body dto.UpdatePaymentStatusRequest true "Payment Status Update Request"
 // @Success 200 {object} dto.InvoiceResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
 // @Router /invoices/{id}/payment [put]
 func (h *InvoiceHandler) UpdatePaymentStatus(c *gin.Context) {
 	id := c.Param("id")
@@ -242,8 +242,8 @@ func (h *InvoiceHandler) UpdatePaymentStatus(c *gin.Context) {
 // @Produce json
 // @Param request body dto.GetPreviewInvoiceRequest true "Preview Invoice Request"
 // @Success 200 {object} dto.InvoiceResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
 // @Router /invoices/preview [post]
 func (h *InvoiceHandler) GetPreviewInvoice(c *gin.Context) {
 	var req dto.GetPreviewInvoiceRequest
