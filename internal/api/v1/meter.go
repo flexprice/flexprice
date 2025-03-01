@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/types"
@@ -28,21 +29,24 @@ func NewMeterHandler(service service.MeterService, log *logger.Logger) *MeterHan
 // @Security ApiKeyAuth
 // @Param meter body dto.CreateMeterRequest true "Meter configuration"
 // @Success 201 {object} dto.MeterResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
 // @Router /meters [post]
 func (h *MeterHandler) CreateMeter(c *gin.Context) {
 	ctx := c.Request.Context()
 	var req dto.CreateMeterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request payload"})
+		h.log.Error("Failed to bind JSON", "error", err)
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
 	meter, err := h.service.CreateMeter(ctx, &req)
 	if err != nil {
-		h.log.Error("Failed to create meter ", "error", err)
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to create meter"})
+		h.log.Error("Failed to create meter", "error", err)
+		c.Error(err)
 		return
 	}
 
@@ -56,13 +60,16 @@ func (h *MeterHandler) CreateMeter(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Param filter query types.MeterFilter false "Filter"
 // @Success 200 {array} dto.MeterResponse
-// @Failure 500 {object} ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
 // @Router /meters [get]
 func (h *MeterHandler) GetAllMeters(c *gin.Context) {
 	ctx := c.Request.Context()
 	var filter types.MeterFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid filter parameters"})
+		h.log.Error("Failed to bind query", "error", err)
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid filter parameters").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
@@ -73,7 +80,7 @@ func (h *MeterHandler) GetAllMeters(c *gin.Context) {
 	response, err := h.service.GetMeters(ctx, &filter)
 	if err != nil {
 		h.log.Error("Failed to get meters", "error", err)
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to get meters"})
+		c.Error(err)
 		return
 	}
 
@@ -87,8 +94,8 @@ func (h *MeterHandler) GetAllMeters(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Param id path string true "Meter ID"
 // @Success 200 {object} dto.MeterResponse
-// @Failure 404 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
 // @Router /meters/{id} [get]
 func (h *MeterHandler) GetMeter(c *gin.Context) {
 	id := c.Param("id")
@@ -96,7 +103,7 @@ func (h *MeterHandler) GetMeter(c *gin.Context) {
 	meter, err := h.service.GetMeter(ctx, id)
 	if err != nil {
 		h.log.Error("Failed to get meter", "error", err)
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to get meter"})
+		c.Error(err)
 		return
 	}
 	c.JSON(http.StatusOK, dto.ToMeterResponse(meter))
@@ -109,15 +116,15 @@ func (h *MeterHandler) GetMeter(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Param id path string true "Meter ID"
 // @Success 200 {object} map[string]string "message:Meter disabled successfully"
-// @Failure 404 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
 // @Router /meters/{id}/disable [post]
 func (h *MeterHandler) DisableMeter(c *gin.Context) {
 	id := c.Param("id")
 	ctx := c.Request.Context()
 	if err := h.service.DisableMeter(ctx, id); err != nil {
 		h.log.Error("Failed to disable meter", "error", err)
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to disable meter"})
+		c.Error(err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Meter disabled successfully"})
@@ -130,15 +137,15 @@ func (h *MeterHandler) DisableMeter(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Param id path string true "Meter ID"
 // @Success 200 {object} map[string]string "message:Meter deleted successfully"
-// @Failure 404 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
 // @Router /meters/{id} [delete]
 func (h *MeterHandler) DeleteMeter(c *gin.Context) {
 	id := c.Param("id")
 	ctx := c.Request.Context()
 	if err := h.service.DisableMeter(ctx, id); err != nil {
 		h.log.Error("Failed to delete meter", "error", err)
-		NewErrorResponse(c, http.StatusInternalServerError, "Failed to delete meter", err)
+		c.Error(err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Meter deleted successfully"})
@@ -153,33 +160,40 @@ func (h *MeterHandler) DeleteMeter(c *gin.Context) {
 // @Param id path string true "Meter ID"
 // @Param meter body dto.UpdateMeterRequest true "Meter configuration"
 // @Success 200 {object} dto.MeterResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
 // @Router /meters/{id} [put]
 func (h *MeterHandler) UpdateMeter(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Meter ID is required"})
+		c.Error(ierr.NewError("meter ID is required").
+			WithHint("Meter ID is required").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
 	ctx := c.Request.Context()
 	var req dto.UpdateMeterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request payload"})
+		h.log.Error("Failed to bind JSON", "error", err)
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request payload").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
 	if len(req.Filters) == 0 {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Filters cannot be empty"})
+		c.Error(ierr.NewError("filters cannot be empty").
+			WithHint("At least one filter must be provided").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
 	meter, err := h.service.UpdateMeter(ctx, id, req.Filters)
 	if err != nil {
 		h.log.Error("Failed to update meter", "error", err)
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to update meter"})
+		c.Error(err)
 		return
 	}
 

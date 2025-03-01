@@ -2,12 +2,12 @@ package ent
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/meter"
 	domainMeter "github.com/flexprice/flexprice/internal/domain/meter"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
@@ -52,7 +52,14 @@ func (r *meterRepository) CreateMeter(ctx context.Context, m *domainMeter.Meter)
 		Save(ctx)
 
 	if err != nil {
-		return fmt.Errorf("failed to create meter: %w", err)
+		return ierr.WithError(err).
+			WithMessage("failed to create meter").
+			WithHint("Failed to create meter").
+			WithReportableDetails(map[string]any{
+				"meter_id": m.ID,
+				"tenant_id": m.TenantID,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	*m = *domainMeter.FromEnt(meter)
@@ -71,9 +78,23 @@ func (r *meterRepository) GetMeter(ctx context.Context, id string) (*domainMeter
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return nil, fmt.Errorf("meter not found")
+			return nil, ierr.WithError(err).
+				WithMessage("meter not found").
+				WithHint("Meter not found").
+				WithReportableDetails(map[string]any{
+					"meter_id": id,
+					"tenant_id": types.GetTenantID(ctx),
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-		return nil, fmt.Errorf("failed to get meter: %w", err)
+		return nil, ierr.WithError(err).
+			WithMessage("failed to get meter").
+			WithHint("Failed to retrieve meter").
+			WithReportableDetails(map[string]any{
+				"meter_id": id,
+				"tenant_id": types.GetTenantID(ctx),
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return domainMeter.FromEnt(m), nil
@@ -92,7 +113,14 @@ func (r *meterRepository) List(ctx context.Context, filter *types.MeterFilter) (
 	// Execute query
 	meters, err := query.All(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list meters: %w", err)
+		return nil, ierr.WithError(err).
+			WithMessage("failed to list meters").
+			WithHint("Failed to retrieve meters").
+			WithReportableDetails(map[string]any{
+				"tenant_id": types.GetTenantID(ctx),
+				"filter": filter,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	// Convert to domain models
@@ -126,7 +154,19 @@ func (r *meterRepository) Count(ctx context.Context, filter *types.MeterFilter) 
 	// Apply entity-specific filters
 	query = r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
 
-	return query.Count(ctx)
+	count, err := query.Count(ctx)
+	if err != nil {
+		return 0, ierr.WithError(err).
+			WithMessage("failed to count meters").
+			WithHint("Failed to count meters").
+			WithReportableDetails(map[string]any{
+				"tenant_id": types.GetTenantID(ctx),
+				"filter": filter,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	return count, nil
 }
 
 func (r *meterRepository) DisableMeter(ctx context.Context, id string) error {
@@ -144,9 +184,23 @@ func (r *meterRepository) DisableMeter(ctx context.Context, id string) error {
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return fmt.Errorf("meter not found")
+			return ierr.WithError(err).
+				WithMessage("meter not found").
+				WithHint("Meter not found").
+				WithReportableDetails(map[string]any{
+					"meter_id": id,
+					"tenant_id": types.GetTenantID(ctx),
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-		return fmt.Errorf("failed to disable meter: %w", err)
+		return ierr.WithError(err).
+			WithMessage("failed to disable meter").
+			WithHint("Failed to disable meter").
+			WithReportableDetails(map[string]any{
+				"meter_id": id,
+				"tenant_id": types.GetTenantID(ctx),
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return nil
@@ -173,9 +227,23 @@ func (r *meterRepository) UpdateMeter(ctx context.Context, id string, filters []
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return fmt.Errorf("meter not found")
+			return ierr.WithError(err).
+				WithMessage("meter not found").
+				WithHint("Meter not found").
+				WithReportableDetails(map[string]any{
+					"meter_id": id,
+					"tenant_id": types.GetTenantID(ctx),
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-		return fmt.Errorf("failed to update meter: %w", err)
+		return ierr.WithError(err).
+			WithMessage("failed to update meter").
+			WithHint("Failed to update meter").
+			WithReportableDetails(map[string]any{
+				"meter_id": id,
+				"tenant_id": types.GetTenantID(ctx),
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return nil

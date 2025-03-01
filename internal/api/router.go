@@ -100,6 +100,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		}
 
 		meters := v1Private.Group("/meters")
+		meters.Use(middleware.ErrorHandler())
 		{
 			meters.POST("", handlers.Meter.CreateMeter)
 			meters.GET("", handlers.Meter.GetAllMeters)

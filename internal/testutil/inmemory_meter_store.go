@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 )
@@ -57,15 +58,54 @@ func (s *InMemoryMeterStore) CreateMeter(ctx context.Context, m *meter.Meter) er
 		m.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
 
-	return s.InMemoryStore.Create(ctx, m.ID, copyMeter(m))
+	err := s.InMemoryStore.Create(ctx, m.ID, copyMeter(m))
+	if err != nil {
+		if IsAlreadyExistsError(err) {
+			return ierr.WithError(err).
+				WithMessage("meter already exists").
+				WithHint("Meter already exists").
+				WithReportableDetails(map[string]any{
+					"meter_id": m.ID,
+				}).
+				Mark(ierr.ErrAlreadyExists)
+		}
+		return ierr.WithError(err).
+			WithMessage("failed to create meter").
+			WithHint("Failed to create meter").
+			Mark(ierr.ErrDatabase)
+	}
+	return nil
 }
 
 func (s *InMemoryMeterStore) GetMeter(ctx context.Context, id string) (*meter.Meter, error) {
-	return s.InMemoryStore.Get(ctx, id)
+	m, err := s.InMemoryStore.Get(ctx, id)
+	if err != nil {
+		if IsNotFoundError(err) {
+			return nil, ierr.WithError(err).
+				WithMessage("meter not found").
+				WithHint("Meter not found").
+				WithReportableDetails(map[string]any{
+					"meter_id": id,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+		return nil, ierr.WithError(err).
+			WithMessage("failed to get meter").
+			WithHint("Failed to retrieve meter").
+			Mark(ierr.ErrDatabase)
+	}
+	return m, nil
 }
 
 func (s *InMemoryMeterStore) List(ctx context.Context, filter *types.MeterFilter) ([]*meter.Meter, error) {
-	return s.InMemoryStore.List(ctx, filter, meterFilterFn, meterSortFn)
+	meters, err := s.InMemoryStore.List(ctx, filter, meterFilterFn, meterSortFn)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithMessage("failed to list meters").
+			WithHint("Failed to retrieve meters").
+			Mark(ierr.ErrDatabase)
+	}
+	return meters, nil
 }
 
 func (s *InMemoryMeterStore) ListAll(ctx context.Context, filter *types.MeterFilter) ([]*meter.Meter, error) {
@@ -75,7 +115,14 @@ func (s *InMemoryMeterStore) ListAll(ctx context.Context, filter *types.MeterFil
 }
 
 func (s *InMemoryMeterStore) Count(ctx context.Context, filter *types.MeterFilter) (int, error) {
-	return s.InMemoryStore.Count(ctx, filter, meterFilterFn)
+	count, err := s.InMemoryStore.Count(ctx, filter, meterFilterFn)
+	if err != nil {
+		return 0, ierr.WithError(err).
+			WithMessage("failed to count meters").
+			WithHint("Failed to count meters").
+			Mark(ierr.ErrDatabase)
+	}
+	return count, nil
 }
 
 func (s *InMemoryMeterStore) DisableMeter(ctx context.Context, id string) error {
@@ -85,7 +132,17 @@ func (s *InMemoryMeterStore) DisableMeter(ctx context.Context, id string) error 
 	}
 
 	m.Status = types.StatusDeleted
-	return s.InMemoryStore.Update(ctx, m.ID, m)
+	err = s.InMemoryStore.Update(ctx, m.ID, m)
+	if err != nil {
+		return ierr.WithError(err).
+			WithMessage("failed to disable meter").
+			WithHint("Failed to disable meter").
+			WithReportableDetails(map[string]any{
+				"meter_id": id,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+	return nil
 }
 
 func (s *InMemoryMeterStore) UpdateMeter(ctx context.Context, id string, filters []meter.Filter) error {
@@ -128,7 +185,17 @@ func (s *InMemoryMeterStore) UpdateMeter(ctx context.Context, id string, filters
 	}
 
 	m.Filters = updatedFilters
-	return s.InMemoryStore.Update(ctx, m.ID, m)
+	err = s.InMemoryStore.Update(ctx, m.ID, m)
+	if err != nil {
+		return ierr.WithError(err).
+			WithMessage("failed to update meter").
+			WithHint("Failed to update meter").
+			WithReportableDetails(map[string]any{
+				"meter_id": id,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+	return nil
 }
 
 // meterFilterFn implements filtering logic for meters

@@ -2,10 +2,10 @@ package service
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -28,22 +28,32 @@ func NewMeterService(meterRepo meter.Repository) MeterService {
 
 func (s *meterService) CreateMeter(ctx context.Context, req *dto.CreateMeterRequest) (*meter.Meter, error) {
 	if req == nil {
-		return nil, fmt.Errorf("meter cannot be nil")
+		return nil, ierr.NewError("meter cannot be nil").
+			WithHint("Meter data is required").
+			Mark(ierr.ErrValidation)
 	}
 
 	if req.EventName == "" {
-		return nil, fmt.Errorf("event_name is required")
+		return nil, ierr.NewError("event_name is required").
+			WithHint("Event name is required").
+			Mark(ierr.ErrValidation)
 	}
 
 	meter := req.ToMeter(types.GetTenantID(ctx), types.GetUserID(ctx))
 	meter.EnvironmentID = types.GetEnvironmentID(ctx)
 
 	if err := meter.Validate(); err != nil {
-		return nil, fmt.Errorf("validate meter: %w", err)
+		return nil, ierr.WithError(err).
+			WithMessage("validate meter").
+			WithHint("Invalid meter configuration").
+			Mark(ierr.ErrValidation)
 	}
 
 	if err := s.meterRepo.CreateMeter(ctx, meter); err != nil {
-		return nil, fmt.Errorf("create meter: %w", err)
+		return nil, ierr.WithError(err).
+			WithMessage("create meter").
+			WithHint("Failed to create meter").
+			Mark(ierr.ErrDatabase)
 	}
 
 	return meter, nil
@@ -51,7 +61,9 @@ func (s *meterService) CreateMeter(ctx context.Context, req *dto.CreateMeterRequ
 
 func (s *meterService) GetMeter(ctx context.Context, id string) (*meter.Meter, error) {
 	if id == "" {
-		return nil, fmt.Errorf("id is required")
+		return nil, ierr.NewError("id is required").
+			WithHint("Meter ID is required").
+			Mark(ierr.ErrValidation)
 	}
 	return s.meterRepo.GetMeter(ctx, id)
 }
@@ -62,17 +74,26 @@ func (s *meterService) GetMeters(ctx context.Context, filter *types.MeterFilter)
 	}
 
 	if err := filter.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid filter: %w", err)
+		return nil, ierr.WithError(err).
+			WithMessage("invalid filter").
+			WithHint("Invalid filter parameters").
+			Mark(ierr.ErrValidation)
 	}
 
 	meters, err := s.meterRepo.List(ctx, filter)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list meters: %w", err)
+		return nil, ierr.WithError(err).
+			WithMessage("failed to list meters").
+			WithHint("Failed to retrieve meters").
+			Mark(ierr.ErrDatabase)
 	}
 
 	count, err := s.meterRepo.Count(ctx, filter)
 	if err != nil {
-		return nil, fmt.Errorf("failed to count meters: %w", err)
+		return nil, ierr.WithError(err).
+			WithMessage("failed to count meters").
+			WithHint("Failed to count meters").
+			Mark(ierr.ErrDatabase)
 	}
 
 	response := &dto.ListMetersResponse{
@@ -91,12 +112,18 @@ func (s *meterService) GetAllMeters(ctx context.Context) (*dto.ListMetersRespons
 	filter := types.NewNoLimitMeterFilter()
 	meters, err := s.meterRepo.ListAll(ctx, filter)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list meters: %w", err)
+		return nil, ierr.WithError(err).
+			WithMessage("failed to list meters").
+			WithHint("Failed to retrieve all meters").
+			Mark(ierr.ErrDatabase)
 	}
 
 	count, err := s.meterRepo.Count(ctx, filter)
 	if err != nil {
-		return nil, fmt.Errorf("failed to count meters: %w", err)
+		return nil, ierr.WithError(err).
+			WithMessage("failed to count meters").
+			WithHint("Failed to count meters").
+			Mark(ierr.ErrDatabase)
 	}
 
 	response := &dto.ListMetersResponse{
@@ -112,7 +139,9 @@ func (s *meterService) GetAllMeters(ctx context.Context) (*dto.ListMetersRespons
 
 func (s *meterService) DisableMeter(ctx context.Context, id string) error {
 	if id == "" {
-		return fmt.Errorf("id is required")
+		return ierr.NewError("id is required").
+			WithHint("Meter ID is required").
+			Mark(ierr.ErrValidation)
 	}
 	return s.meterRepo.DisableMeter(ctx, id)
 }
@@ -130,17 +159,24 @@ func contains(slice []string, value string) bool {
 func (s *meterService) UpdateMeter(ctx context.Context, id string, filters []meter.Filter) (*meter.Meter, error) {
 	// Validate input
 	if id == "" {
-		return nil, fmt.Errorf("id is required")
+		return nil, ierr.NewError("id is required").
+			WithHint("Meter ID is required").
+			Mark(ierr.ErrValidation)
 	}
 
 	if len(filters) == 0 {
-		return nil, fmt.Errorf("filters cannot be empty")
+		return nil, ierr.NewError("filters cannot be empty").
+			WithHint("At least one filter must be provided").
+			Mark(ierr.ErrValidation)
 	}
 
 	// Fetch the existing meter
 	existingMeter, err := s.meterRepo.GetMeter(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("fetch meter: %w", err)
+		return nil, ierr.WithError(err).
+			WithMessage("fetch meter").
+			WithHint("Failed to retrieve meter").
+			Mark(ierr.ErrDatabase)
 	}
 
 	// Merge filters
@@ -148,7 +184,10 @@ func (s *meterService) UpdateMeter(ctx context.Context, id string, filters []met
 
 	// Update only the filters field in the database
 	if err := s.meterRepo.UpdateMeter(ctx, id, mergedFilters); err != nil {
-		return nil, fmt.Errorf("update filters: %w", err)
+		return nil, ierr.WithError(err).
+			WithMessage("update filters").
+			WithHint("Failed to update meter filters").
+			Mark(ierr.ErrDatabase)
 	}
 
 	// Return the updated meter object
