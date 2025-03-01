@@ -175,7 +175,7 @@ func (s *FeatureServiceSuite) TestCreateFeature() {
 				Type:        types.FeatureTypeMetered,
 			},
 			wantErr:   true,
-			errString: "meter_id is required for meter features",
+			errString: "meter_id is required for metered features",
 		},
 		{
 			name: "error - missing name",
@@ -196,7 +196,7 @@ func (s *FeatureServiceSuite) TestCreateFeature() {
 				MeterID:     "non_existent_meter",
 			},
 			wantErr:   true,
-			errString: "failed to get meter",
+			errString: "item not found",
 		},
 		{
 			name: "error - archived meter",
@@ -208,7 +208,7 @@ func (s *FeatureServiceSuite) TestCreateFeature() {
 				MeterID:     archivedMeter.ID,
 			},
 			wantErr:   true,
-			errString: "cannot create feature with archived meter",
+			errString: "invalid meter status",
 		},
 	}
 

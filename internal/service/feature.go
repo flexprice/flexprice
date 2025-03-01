@@ -2,11 +2,11 @@ package service
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -36,36 +36,48 @@ func NewFeatureService(repo feature.Repository, meterRepo meter.Repository, logg
 
 func (s *featureService) CreateFeature(ctx context.Context, req dto.CreateFeatureRequest) (*dto.FeatureResponse, error) {
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid request: %w", err)
+		return nil, err // Validation errors are already properly formatted in the DTO
 	}
 
 	// Validate meter existence and status for metered features
 	if req.Type == types.FeatureTypeMetered {
 		meter, err := s.meterRepo.GetMeter(ctx, req.MeterID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get meter: %w", err)
+			return nil, ierr.WithError(err).
+				WithHintf("Could not find meter for the feature").
+				Mark(ierr.ErrValidation)
 		}
 		if meter.Status != types.StatusPublished {
-			return nil, fmt.Errorf("cannot create feature with archived meter")
+			return nil, ierr.NewError("invalid meter status").
+				WithHint("The meter must be in active").
+				Mark(ierr.ErrValidation)
 		}
 	}
 
-	feature, err := req.ToFeature(ctx)
+	featureModel, err := req.ToFeature(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse feature: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to process feature data").
+			Mark(ierr.ErrValidation)
 	}
 
-	if err := s.repo.Create(ctx, feature); err != nil {
-		return nil, fmt.Errorf("failed to create feature: %w", err)
+	if err := s.repo.Create(ctx, featureModel); err != nil {
+		return nil, err // Repository errors are already properly formatted
 	}
 
-	return &dto.FeatureResponse{Feature: feature}, nil
+	return &dto.FeatureResponse{Feature: featureModel}, nil
 }
 
 func (s *featureService) GetFeature(ctx context.Context, id string) (*dto.FeatureResponse, error) {
+	if id == "" {
+		return nil, ierr.NewError("feature ID is required").
+			WithHint("Feature ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
 	feature, err := s.repo.Get(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get feature: %w", err)
+		return nil, err // Repository errors are already properly formatted
 	}
 
 	response := &dto.FeatureResponse{Feature: feature}
@@ -74,7 +86,9 @@ func (s *featureService) GetFeature(ctx context.Context, id string) (*dto.Featur
 	if feature.Type == types.FeatureTypeMetered && feature.MeterID != "" {
 		meter, err := s.meterRepo.GetMeter(ctx, feature.MeterID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get meter: %w", err)
+			return nil, ierr.WithError(err).
+				WithHintf("Failed to get meter %s for feature %s", feature.MeterID, feature.ID).
+				Mark(ierr.ErrSystem)
 		}
 		response.Meter = dto.ToMeterResponse(meter)
 	}
@@ -99,12 +113,12 @@ func (s *featureService) GetFeatures(ctx context.Context, filter *types.FeatureF
 
 	features, err := s.repo.List(ctx, filter)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list features: %w", err)
+		return nil, err
 	}
 
 	featureCount, err := s.repo.Count(ctx, filter)
 	if err != nil {
-		return nil, fmt.Errorf("failed to count features: %w", err)
+		return nil, err
 	}
 
 	response := &dto.ListFeaturesResponse{
@@ -128,7 +142,9 @@ func (s *featureService) GetFeatures(ctx context.Context, filter *types.FeatureF
 			meterFilter.MeterIDs = meterIDs
 			meters, err := s.meterRepo.List(ctx, meterFilter)
 			if err != nil {
-				return nil, fmt.Errorf("failed to fetch meters: %w", err)
+				return nil, ierr.WithError(err).
+					WithHint("Failed to fetch meters for features").
+					Mark(ierr.ErrSystem)
 			}
 
 			// Create a map for quick meter lookup
@@ -162,9 +178,15 @@ func (s *featureService) GetFeatures(ctx context.Context, filter *types.FeatureF
 }
 
 func (s *featureService) UpdateFeature(ctx context.Context, id string, req dto.UpdateFeatureRequest) (*dto.FeatureResponse, error) {
+	if id == "" {
+		return nil, ierr.NewError("feature ID is required").
+			WithHint("Feature ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
 	feature, err := s.repo.Get(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get feature: %w", err)
+		return nil, err // Repository errors are already properly formatted
 	}
 
 	if req.Description != nil {
@@ -184,16 +206,29 @@ func (s *featureService) UpdateFeature(ctx context.Context, id string, req dto.U
 		feature.UnitPlural = *req.UnitPlural
 	}
 
+	// Validate units are set together
+	if (feature.UnitSingular == "" && feature.UnitPlural != "") || (feature.UnitPlural == "" && feature.UnitSingular != "") {
+		return nil, ierr.NewError("unit_singular and unit_plural must be set together").
+			WithHint("Unit singular and unit plural must be set together").
+			Mark(ierr.ErrValidation)
+	}
+
 	if err := s.repo.Update(ctx, feature); err != nil {
-		return nil, fmt.Errorf("failed to update feature: %w", err)
+		return nil, err // Repository errors are already properly formatted
 	}
 
 	return &dto.FeatureResponse{Feature: feature}, nil
 }
 
 func (s *featureService) DeleteFeature(ctx context.Context, id string) error {
+	if id == "" {
+		return ierr.NewError("feature ID is required").
+			WithHint("Feature ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
 	if err := s.repo.Delete(ctx, id); err != nil {
-		return fmt.Errorf("failed to delete feature: %w", err)
+		return err
 	}
 	return nil
 }

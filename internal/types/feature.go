@@ -1,8 +1,7 @@
 package types
 
 import (
-	"fmt"
-
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/samber/lo"
 )
 
@@ -29,7 +28,17 @@ func (f FeatureType) Validate() error {
 		FeatureTypeStatic,
 	}
 	if !lo.Contains(allowed, f) {
-		return fmt.Errorf("invalid feature type: %s", f)
+		return ierr.NewError("invalid feature type").
+			WithHint("Invalid feature type").
+			WithReportableDetails(map[string]any{
+				"type": f,
+				"allowed_types": []string{
+					string(FeatureTypeMetered),
+					string(FeatureTypeBoolean),
+					string(FeatureTypeStatic),
+				},
+			}).
+			Mark(ierr.ErrValidation)
 	}
 	return nil
 }

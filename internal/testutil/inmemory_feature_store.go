@@ -2,9 +2,9 @@ package testutil
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/flexprice/flexprice/internal/domain/feature"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 )
@@ -90,7 +90,9 @@ func featureSortFn(i, j *feature.Feature) bool {
 
 func (s *InMemoryFeatureStore) Create(ctx context.Context, f *feature.Feature) error {
 	if f == nil {
-		return fmt.Errorf("feature cannot be nil")
+		return ierr.NewError("feature cannot be nil").
+			WithHint("Feature data is required").
+			Mark(ierr.ErrValidation)
 	}
 
 	// Set environment ID from context if not already set
@@ -98,34 +100,129 @@ func (s *InMemoryFeatureStore) Create(ctx context.Context, f *feature.Feature) e
 		f.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
 
-	return s.InMemoryStore.Create(ctx, f.ID, f)
+	err := s.InMemoryStore.Create(ctx, f.ID, f)
+	if err != nil {
+		if err.Error() == "item already exists" {
+			return ierr.WithError(err).
+				WithHint("A feature with this ID already exists").
+				WithReportableDetails(map[string]any{
+					"feature_id": f.ID,
+				}).
+				Mark(ierr.ErrAlreadyExists)
+		}
+		return ierr.WithError(err).
+			WithHint("Failed to create feature").
+			Mark(ierr.ErrDatabase)
+	}
+	return nil
 }
 
 func (s *InMemoryFeatureStore) Get(ctx context.Context, id string) (*feature.Feature, error) {
-	return s.InMemoryStore.Get(ctx, id)
+	feature, err := s.InMemoryStore.Get(ctx, id)
+	if err != nil {
+		if err.Error() == "item not found" {
+			return nil, ierr.WithError(err).
+				WithHintf("Feature with ID %s was not found", id).
+				WithReportableDetails(map[string]any{
+					"feature_id": id,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+		return nil, ierr.WithError(err).
+			WithHintf("Failed to get feature with ID %s", id).
+			Mark(ierr.ErrDatabase)
+	}
+	return feature, nil
 }
 
 func (s *InMemoryFeatureStore) List(ctx context.Context, filter *types.FeatureFilter) ([]*feature.Feature, error) {
-	return s.InMemoryStore.List(ctx, filter, featureFilterFn, featureSortFn)
+	features, err := s.InMemoryStore.List(ctx, filter, featureFilterFn, featureSortFn)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list features").
+			WithReportableDetails(map[string]any{
+				"filter": filter,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+	return features, nil
 }
 
 func (s *InMemoryFeatureStore) Count(ctx context.Context, filter *types.FeatureFilter) (int, error) {
-	return s.InMemoryStore.Count(ctx, filter, featureFilterFn)
+	count, err := s.InMemoryStore.Count(ctx, filter, featureFilterFn)
+	if err != nil {
+		return 0, ierr.WithError(err).
+			WithHint("Failed to count features").
+			WithReportableDetails(map[string]any{
+				"filter": filter,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+	return count, nil
 }
 
 func (s *InMemoryFeatureStore) Update(ctx context.Context, f *feature.Feature) error {
 	if f == nil {
-		return fmt.Errorf("feature cannot be nil")
+		return ierr.NewError("feature cannot be nil").
+			WithHint("Feature data is required").
+			Mark(ierr.ErrValidation)
 	}
-	return s.InMemoryStore.Update(ctx, f.ID, f)
+
+	err := s.InMemoryStore.Update(ctx, f.ID, f)
+	if err != nil {
+		if err.Error() == "item not found" {
+			return ierr.WithError(err).
+				WithHintf("Feature with ID %s was not found", f.ID).
+				WithReportableDetails(map[string]any{
+					"feature_id": f.ID,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+		return ierr.WithError(err).
+			WithHintf("Failed to update feature with ID %s", f.ID).
+			Mark(ierr.ErrDatabase)
+	}
+	return nil
 }
 
 func (s *InMemoryFeatureStore) Delete(ctx context.Context, id string) error {
-	return s.InMemoryStore.Delete(ctx, id)
+	err := s.InMemoryStore.Delete(ctx, id)
+	if err != nil {
+		if err.Error() == "item not found" {
+			return ierr.WithError(err).
+				WithHintf("Feature with ID %s was not found", id).
+				WithReportableDetails(map[string]any{
+					"feature_id": id,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+		return ierr.WithError(err).
+			WithHintf("Failed to delete feature with ID %s", id).
+			Mark(ierr.ErrDatabase)
+	}
+	return nil
 }
 
 // ListAll returns all features without pagination
 func (s *InMemoryFeatureStore) ListAll(ctx context.Context, filter *types.FeatureFilter) ([]*feature.Feature, error) {
+	if filter == nil {
+		filter = types.NewNoLimitFeatureFilter()
+	}
+
+	if filter.QueryFilter == nil {
+		filter.QueryFilter = types.NewNoLimitQueryFilter()
+	}
+
+	if !filter.IsUnlimited() {
+		filter.QueryFilter.Limit = nil
+	}
+
+	if err := filter.Validate(); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Invalid filter parameters").
+			Mark(ierr.ErrValidation)
+	}
+
 	// Create an unlimited filter
 	unlimitedFilter := &types.FeatureFilter{
 		QueryFilter:     types.NewNoLimitQueryFilter(),
@@ -142,7 +239,9 @@ func (s *InMemoryFeatureStore) CreateBulk(ctx context.Context, features []*featu
 
 	for _, f := range features {
 		if f == nil {
-			return nil, fmt.Errorf("feature cannot be nil")
+			return nil, ierr.NewError("feature cannot be nil").
+				WithHint("Feature data is required").
+				Mark(ierr.ErrValidation)
 		}
 
 		// Set environment ID from context if not already set
@@ -150,7 +249,7 @@ func (s *InMemoryFeatureStore) CreateBulk(ctx context.Context, features []*featu
 			f.EnvironmentID = environmentID
 		}
 
-		if err := s.InMemoryStore.Create(ctx, f.ID, f); err != nil {
+		if err := s.Create(ctx, f); err != nil {
 			return nil, err
 		}
 	}
@@ -159,7 +258,7 @@ func (s *InMemoryFeatureStore) CreateBulk(ctx context.Context, features []*featu
 
 func (s *InMemoryFeatureStore) DeleteBulk(ctx context.Context, ids []string) error {
 	for _, id := range ids {
-		if err := s.InMemoryStore.Delete(ctx, id); err != nil {
+		if err := s.Delete(ctx, id); err != nil {
 			return err
 		}
 	}

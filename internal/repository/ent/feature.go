@@ -2,12 +2,12 @@ package ent
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/feature"
 	domainFeature "github.com/flexprice/flexprice/internal/domain/feature"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
@@ -62,7 +62,17 @@ func (r *featureRepository) Create(ctx context.Context, f *domainFeature.Feature
 		Save(ctx)
 
 	if err != nil {
-		return fmt.Errorf("failed to create feature: %w", err)
+		if ent.IsConstraintError(err) {
+			return ierr.WithError(err).
+				WithHint("A feature with this lookup key already exists").
+				WithReportableDetails(map[string]any{
+					"lookup_key": f.LookupKey,
+				}).
+				Mark(ierr.ErrAlreadyExists)
+		}
+		return ierr.WithError(err).
+			WithHint("Failed to create feature").
+			Mark(ierr.ErrDatabase)
 	}
 
 	*f = *domainFeature.FromEnt(feature)
@@ -86,9 +96,16 @@ func (r *featureRepository) Get(ctx context.Context, id string) (*domainFeature.
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return nil, fmt.Errorf("feature not found")
+			return nil, ierr.WithError(err).
+				WithHintf("Feature with ID %s was not found", id).
+				WithReportableDetails(map[string]any{
+					"feature_id": id,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-		return nil, fmt.Errorf("failed to get feature: %w", err)
+		return nil, ierr.WithError(err).
+			WithHintf("Failed to get feature with ID %s", id).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return domainFeature.FromEnt(f), nil
@@ -112,7 +129,12 @@ func (r *featureRepository) List(ctx context.Context, filter *types.FeatureFilte
 
 	features, err := query.All(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list features: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list features").
+			WithReportableDetails(map[string]any{
+				"filter": filter,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return domainFeature.FromEntList(features), nil
@@ -127,7 +149,12 @@ func (r *featureRepository) Count(ctx context.Context, filter *types.FeatureFilt
 
 	count, err := query.Count(ctx)
 	if err != nil {
-		return 0, fmt.Errorf("failed to count features: %w", err)
+		return 0, ierr.WithError(err).
+			WithHint("Failed to count features").
+			WithReportableDetails(map[string]any{
+				"filter": filter,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return count, nil
@@ -147,7 +174,9 @@ func (r *featureRepository) ListAll(ctx context.Context, filter *types.FeatureFi
 	}
 
 	if err := filter.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid filter: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Invalid filter parameters").
+			Mark(ierr.ErrValidation)
 	}
 
 	return r.List(ctx, filter)
@@ -179,9 +208,16 @@ func (r *featureRepository) Update(ctx context.Context, f *domainFeature.Feature
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return fmt.Errorf("feature not found")
+			return ierr.WithError(err).
+				WithHintf("Feature with ID %s was not found", f.ID).
+				WithReportableDetails(map[string]any{
+					"feature_id": f.ID,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-		return fmt.Errorf("failed to update feature: %w", err)
+		return ierr.WithError(err).
+			WithHintf("Failed to update feature with ID %s", f.ID).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return nil
@@ -207,9 +243,16 @@ func (r *featureRepository) Delete(ctx context.Context, id string) error {
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return fmt.Errorf("feature not found")
+			return ierr.WithError(err).
+				WithHintf("Feature with ID %s was not found", id).
+				WithReportableDetails(map[string]any{
+					"feature_id": id,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-		return fmt.Errorf("failed to delete feature: %w", err)
+		return ierr.WithError(err).
+			WithHintf("Failed to delete feature with ID %s", id).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return nil

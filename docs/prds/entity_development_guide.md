@@ -360,8 +360,8 @@ and will return a proper error response to the client  refer `internal/rest/midd
    - Use `ierr.NewError()` to create new errors
    - Use `ierr.WithError()` to wrap existing errors
    - Always end builder chains with `Mark()` to categorize the error
-   - Use `WithHint()` for user-friendly messages
-   - Use `WithReportableDetails()` for structured error information
+   - Use `WithHint()` for user-friendly messages which can be shown to the user
+   - Use `WithReportableDetails()` for highlingting any specific parameters or values which are relevant to the error and we rarely need to use this only when super important
 
 2. **Error Context and Details**
    - Use `WithHintf()` to add formatted context to errors
@@ -372,12 +372,11 @@ and will return a proper error response to the client  refer `internal/rest/midd
 3. **Error Categorization**
    - Use appropriate error markers from `internal/errors/errors.go`
    - Be consistent with error codes across similar operations
-   - Map database errors to domain-specific errors
 
 4. **Logging**
    - Log errors at the API layer
    - Include operation context and error details
-   - Don't log sensitive information
+   - Don't log sensitive information like email_id, phone_number, etc
    - Use appropriate log levels (error, warn, info)
 
 5. **API Responses**

@@ -24,7 +24,9 @@ type CreateFeatureRequest struct {
 
 func (r *CreateFeatureRequest) Validate() error {
 	if r.Name == "" {
-		return ierr.NewError("name is required").WithHintf("name is required").Mark(ierr.ErrValidation)
+		return ierr.NewError("name is required").
+			WithHint("Name is required").
+			Mark(ierr.ErrValidation)
 	}
 
 	if err := r.Type.Validate(); err != nil {
@@ -36,17 +38,24 @@ func (r *CreateFeatureRequest) Validate() error {
 			}
 		}
 
-		return ierr.WithError(err).WithHint("struct validation failed").WithReportableDetails(details).Mark(ierr.ErrValidation)
+		return ierr.WithError(err).
+			WithHint("Invalid feature type").
+			WithReportableDetails(details).
+			Mark(ierr.ErrValidation)
 	}
 
 	if r.Type == types.FeatureTypeMetered {
 		if r.MeterID == "" {
-			return ierr.NewError("meter_id is required for meter features").WithHint("meter_id is required for meter features").Mark(ierr.ErrValidation)
+			return ierr.NewError("meter_id is required for metered features").
+				WithHint("Please select a valid metered feature").
+				Mark(ierr.ErrValidation)
 		}
 	}
 
 	if (r.UnitSingular == "" && r.UnitPlural != "") || (r.UnitPlural == "" && r.UnitSingular != "") {
-		return ierr.NewError("unit_singular and unit_plural must be set together").WithHint("unit_singular and unit_plural must be set together").Mark(ierr.ErrValidation)
+		return ierr.NewError("unit_singular and unit_plural must be set together").
+			WithHint("Please provide both unit singular and unit plural").
+			Mark(ierr.ErrValidation)
 	}
 
 	return nil
