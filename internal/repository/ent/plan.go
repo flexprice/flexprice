@@ -2,12 +2,12 @@ package ent
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/plan"
 	domainPlan "github.com/flexprice/flexprice/internal/domain/plan"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
@@ -59,7 +59,13 @@ func (r *planRepository) Create(ctx context.Context, p *domainPlan.Plan) error {
 		Save(ctx)
 
 	if err != nil {
-		return fmt.Errorf("failed to create plan: %w", err)
+		return ierr.WithError(err).
+			WithHint("Failed to create plan").
+			WithReportableDetails(map[string]any{
+				"plan_id":   p.ID,
+				"plan_name": p.Name,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	*p = *domainPlan.FromEnt(plan)
@@ -69,12 +75,9 @@ func (r *planRepository) Create(ctx context.Context, p *domainPlan.Plan) error {
 func (r *planRepository) Get(ctx context.Context, id string) (*domainPlan.Plan, error) {
 	client := r.client.Querier(ctx)
 
-	r.log.Debugw("getting plan",
-		"plan_id", id,
-		"tenant_id", types.GetTenantID(ctx),
-	)
+	r.log.Debugw("getting plan", "plan_id", id)
 
-	p, err := client.Plan.Query().
+	plan, err := client.Plan.Query().
 		Where(
 			plan.ID(id),
 			plan.TenantID(types.GetTenantID(ctx)),
@@ -83,12 +86,22 @@ func (r *planRepository) Get(ctx context.Context, id string) (*domainPlan.Plan, 
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return nil, fmt.Errorf("plan not found")
+			return nil, ierr.WithError(err).
+				WithHintf("Plan with ID %s was not found", id).
+				WithReportableDetails(map[string]any{
+					"plan_id": id,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-		return nil, fmt.Errorf("failed to get plan: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get plan").
+			WithReportableDetails(map[string]any{
+				"plan_id": id,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
-	return domainPlan.FromEnt(p), nil
+	return domainPlan.FromEnt(plan), nil
 }
 
 func (r *planRepository) List(ctx context.Context, filter *types.PlanFilter) ([]*domainPlan.Plan, error) {
@@ -105,7 +118,9 @@ func (r *planRepository) List(ctx context.Context, filter *types.PlanFilter) ([]
 
 	plans, err := query.All(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list plans: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list plans").
+			Mark(ierr.ErrDatabase)
 	}
 
 	return domainPlan.FromEntList(plans), nil
@@ -136,7 +151,9 @@ func (r *planRepository) Count(ctx context.Context, filter *types.PlanFilter) (i
 
 	count, err := query.Count(ctx)
 	if err != nil {
-		return 0, fmt.Errorf("failed to count plans: %w", err)
+		return 0, ierr.WithError(err).
+			WithHint("Failed to count plans").
+			Mark(ierr.ErrDatabase)
 	}
 
 	return count, nil
@@ -154,9 +171,19 @@ func (r *planRepository) GetByLookupKey(ctx context.Context, lookupKey string) (
 		Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return nil, fmt.Errorf("plan with lookup key %s not found", lookupKey)
+			return nil, ierr.WithError(err).
+				WithHintf("Plan with lookup key %s was not found", lookupKey).
+				WithReportableDetails(map[string]any{
+					"lookup_key": lookupKey,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-		return nil, fmt.Errorf("getting plan by lookup key: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get plan by lookup key").
+			WithReportableDetails(map[string]any{
+				"lookup_key": lookupKey,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return domainPlan.FromEnt(plan), nil
@@ -186,9 +213,19 @@ func (r *planRepository) Update(ctx context.Context, p *domainPlan.Plan) error {
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return fmt.Errorf("plan not found")
+			return ierr.WithError(err).
+				WithHintf("Plan with ID %s was not found", p.ID).
+				WithReportableDetails(map[string]any{
+					"plan_id": p.ID,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-		return fmt.Errorf("failed to update plan: %w", err)
+		return ierr.WithError(err).
+			WithHint("Failed to update plan").
+			WithReportableDetails(map[string]any{
+				"plan_id": p.ID,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return nil
@@ -214,9 +251,19 @@ func (r *planRepository) Delete(ctx context.Context, id string) error {
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return fmt.Errorf("plan not found")
+			return ierr.WithError(err).
+				WithHintf("Plan with ID %s was not found", id).
+				WithReportableDetails(map[string]any{
+					"plan_id": id,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-		return fmt.Errorf("failed to delete plan: %w", err)
+		return ierr.WithError(err).
+			WithHint("Failed to delete plan").
+			WithReportableDetails(map[string]any{
+				"plan_id": id,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return nil

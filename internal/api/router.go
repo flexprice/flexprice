@@ -134,6 +134,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		}
 
 		plan := v1Private.Group("/plans")
+		plan.Use(middleware.ErrorHandler())
 		{
 			plan.POST("", handlers.Plan.CreatePlan)
 			plan.GET("", handlers.Plan.GetPlans)

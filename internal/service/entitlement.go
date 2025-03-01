@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
+	"github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -258,7 +259,9 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 func (s *entitlementService) UpdateEntitlement(ctx context.Context, id string, req dto.UpdateEntitlementRequest) (*dto.EntitlementResponse, error) {
 	existing, err := s.repo.Get(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("entitlement not found: %w", err)
+		return nil, errors.NewError("entitlement not found").
+			WithHint("The specified entitlement could not be found").
+			Mark(errors.ErrNotFound)
 	}
 
 	// Update fields
@@ -286,12 +289,18 @@ func (s *entitlementService) UpdateEntitlement(ctx context.Context, id string, r
 
 	// Validate updated entitlement
 	if err := existing.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid entitlement: %w", err)
+		return nil, errors.NewError("invalid entitlement").
+			WithHint("The entitlement data is invalid").
+			WithMessage(err.Error()).
+			Mark(errors.ErrValidation)
 	}
 
 	result, err := s.repo.Update(ctx, existing)
 	if err != nil {
-		return nil, fmt.Errorf("failed to update entitlement: %w", err)
+		return nil, errors.NewError("failed to update entitlement").
+			WithHint("An error occurred while updating the entitlement").
+			WithMessage(err.Error()).
+			Mark(errors.ErrSystem)
 	}
 
 	response := &dto.EntitlementResponse{Entitlement: result}

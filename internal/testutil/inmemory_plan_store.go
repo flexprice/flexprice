@@ -2,9 +2,9 @@ package testutil
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/flexprice/flexprice/internal/domain/plan"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -71,7 +71,9 @@ func planSortFn(i, j *plan.Plan) bool {
 
 func (s *InMemoryPlanStore) Create(ctx context.Context, p *plan.Plan) error {
 	if p == nil {
-		return fmt.Errorf("plan cannot be nil")
+		return ierr.NewError("plan cannot be nil").
+			WithHint("Plan object is required").
+			Mark(ierr.ErrValidation)
 	}
 
 	// Set environment ID from context if not already set
@@ -96,7 +98,9 @@ func (s *InMemoryPlanStore) Count(ctx context.Context, filter *types.PlanFilter)
 
 func (s *InMemoryPlanStore) Update(ctx context.Context, p *plan.Plan) error {
 	if p == nil {
-		return fmt.Errorf("plan cannot be nil")
+		return ierr.NewError("plan cannot be nil").
+			WithHint("Plan object is required").
+			Mark(ierr.ErrValidation)
 	}
 	return s.InMemoryStore.Update(ctx, p.ID, p)
 }
@@ -133,7 +137,12 @@ func (s *InMemoryPlanStore) GetByLookupKey(ctx context.Context, lookupKey string
 		}
 	}
 
-	return nil, fmt.Errorf("plan with lookup key %s not found", lookupKey)
+	return nil, ierr.NewError("plan not found").
+		WithHintf("Plan with lookup key %s was not found", lookupKey).
+		WithReportableDetails(map[string]any{
+			"lookup_key": lookupKey,
+		}).
+		Mark(ierr.ErrNotFound)
 }
 
 // Clear clears the plan store
