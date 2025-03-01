@@ -2,9 +2,9 @@ package testutil
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/flexprice/flexprice/internal/domain/price"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 )
@@ -85,7 +85,9 @@ func priceSortFn(i, j *price.Price) bool {
 
 func (s *InMemoryPriceStore) Create(ctx context.Context, p *price.Price) error {
 	if p == nil {
-		return fmt.Errorf("price cannot be nil")
+		return ierr.NewError("price cannot be nil").
+			WithHint("Price data is required").
+			Mark(ierr.ErrValidation)
 	}
 
 	// Set environment ID from context if not already set
@@ -93,30 +95,101 @@ func (s *InMemoryPriceStore) Create(ctx context.Context, p *price.Price) error {
 		p.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
 
-	return s.InMemoryStore.Create(ctx, p.ID, p)
+	err := s.InMemoryStore.Create(ctx, p.ID, p)
+	if err != nil {
+		if IsAlreadyExistsError(err) {
+			return ierr.WithError(err).
+				WithHint("A price with this identifier already exists").
+				WithReportableDetails(map[string]any{
+					"price_id": p.ID,
+				}).
+				Mark(ierr.ErrAlreadyExists)
+		}
+		return ierr.WithError(err).
+			WithHint("Failed to create price").
+			Mark(ierr.ErrDatabase)
+	}
+	return nil
 }
 
 func (s *InMemoryPriceStore) Get(ctx context.Context, id string) (*price.Price, error) {
-	return s.InMemoryStore.Get(ctx, id)
+	p, err := s.InMemoryStore.Get(ctx, id)
+	if err != nil {
+		if IsNotFoundError(err) {
+			return nil, ierr.WithError(err).
+				WithHintf("Price with ID %s was not found", id).
+				WithReportableDetails(map[string]any{
+					"price_id": id,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get price").
+			Mark(ierr.ErrDatabase)
+	}
+	return p, nil
 }
 
 func (s *InMemoryPriceStore) List(ctx context.Context, filter *types.PriceFilter) ([]*price.Price, error) {
-	return s.InMemoryStore.List(ctx, filter, priceFilterFn, priceSortFn)
+	prices, err := s.InMemoryStore.List(ctx, filter, priceFilterFn, priceSortFn)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list prices").
+			Mark(ierr.ErrDatabase)
+	}
+	return prices, nil
 }
 
 func (s *InMemoryPriceStore) Count(ctx context.Context, filter *types.PriceFilter) (int, error) {
-	return s.InMemoryStore.Count(ctx, filter, priceFilterFn)
+	count, err := s.InMemoryStore.Count(ctx, filter, priceFilterFn)
+	if err != nil {
+		return 0, ierr.WithError(err).
+			WithHint("Failed to count prices").
+			Mark(ierr.ErrDatabase)
+	}
+	return count, nil
 }
 
 func (s *InMemoryPriceStore) Update(ctx context.Context, p *price.Price) error {
 	if p == nil {
-		return fmt.Errorf("price cannot be nil")
+		return ierr.NewError("price cannot be nil").
+			WithHint("Price data is required").
+			Mark(ierr.ErrValidation)
 	}
-	return s.InMemoryStore.Update(ctx, p.ID, p)
+
+	err := s.InMemoryStore.Update(ctx, p.ID, p)
+	if err != nil {
+		if IsNotFoundError(err) {
+			return ierr.WithError(err).
+				WithHintf("Price with ID %s was not found", p.ID).
+				WithReportableDetails(map[string]any{
+					"price_id": p.ID,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+		return ierr.WithError(err).
+			WithHint("Failed to update price").
+			Mark(ierr.ErrDatabase)
+	}
+	return nil
 }
 
 func (s *InMemoryPriceStore) Delete(ctx context.Context, id string) error {
-	return s.InMemoryStore.Delete(ctx, id)
+	err := s.InMemoryStore.Delete(ctx, id)
+	if err != nil {
+		if IsNotFoundError(err) {
+			return ierr.WithError(err).
+				WithHintf("Price with ID %s was not found", id).
+				WithReportableDetails(map[string]any{
+					"price_id": id,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+		return ierr.WithError(err).
+			WithHint("Failed to delete price").
+			Mark(ierr.ErrDatabase)
+	}
+	return nil
 }
 
 // ListAll returns all prices without pagination
@@ -135,7 +208,9 @@ func (s *InMemoryPriceStore) ListAll(ctx context.Context, filter *types.PriceFil
 func (s *InMemoryPriceStore) CreateBulk(ctx context.Context, prices []*price.Price) error {
 	for _, p := range prices {
 		if err := s.Create(ctx, p); err != nil {
-			return err
+			return ierr.WithError(err).
+				WithHint("Failed to create prices in bulk").
+				Mark(ierr.ErrDatabase)
 		}
 	}
 	return nil
@@ -145,7 +220,9 @@ func (s *InMemoryPriceStore) CreateBulk(ctx context.Context, prices []*price.Pri
 func (s *InMemoryPriceStore) DeleteBulk(ctx context.Context, ids []string) error {
 	for _, id := range ids {
 		if err := s.Delete(ctx, id); err != nil {
-			return err
+			return ierr.WithError(err).
+				WithHint("Failed to delete prices in bulk").
+				Mark(ierr.ErrDatabase)
 		}
 	}
 	return nil
@@ -154,4 +231,14 @@ func (s *InMemoryPriceStore) DeleteBulk(ctx context.Context, ids []string) error
 // Clear clears the price store
 func (s *InMemoryPriceStore) Clear() {
 	s.InMemoryStore.Clear()
+}
+
+// IsNotFoundError checks if an error is a not found error
+func IsNotFoundError(err error) bool {
+	return ierr.IsNotFound(err)
+}
+
+// IsAlreadyExistsError checks if an error is an already exists error
+func IsAlreadyExistsError(err error) bool {
+	return ierr.IsAlreadyExists(err)
 }

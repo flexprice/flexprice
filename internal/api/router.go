@@ -110,6 +110,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		}
 
 		price := v1Private.Group("/prices")
+		price.Use(middleware.ErrorHandler())
 		{
 			price.POST("", handlers.Price.CreatePrice)
 			price.GET("", handlers.Price.GetPrices)

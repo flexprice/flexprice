@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/types"
@@ -28,19 +29,21 @@ func NewPriceHandler(service service.PriceService, log *logger.Logger) *PriceHan
 // @Security ApiKeyAuth
 // @Param price body dto.CreatePriceRequest true "Price configuration"
 // @Success 201 {object} dto.PriceResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
 // @Router /prices [post]
 func (h *PriceHandler) CreatePrice(c *gin.Context) {
 	var req dto.CreatePriceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
 	resp, err := h.service.CreatePrice(c.Request.Context(), req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.Error(err)
 		return
 	}
 
@@ -55,19 +58,21 @@ func (h *PriceHandler) CreatePrice(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Param id path string true "Price ID"
 // @Success 200 {object} dto.PriceResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
 // @Router /prices/{id} [get]
 func (h *PriceHandler) GetPrice(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		c.Error(ierr.NewError("id is required").
+			WithHint("Price ID is required").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
 	resp, err := h.service.GetPrice(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.Error(err)
 		return
 	}
 
@@ -82,13 +87,15 @@ func (h *PriceHandler) GetPrice(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Param filter query types.PriceFilter true "Filter"
 // @Success 200 {object} dto.ListPricesResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
 // @Router /prices [get]
 func (h *PriceHandler) GetPrices(c *gin.Context) {
 	var filter types.PriceFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid filter parameters").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
@@ -98,7 +105,7 @@ func (h *PriceHandler) GetPrices(c *gin.Context) {
 
 	resp, err := h.service.GetPrices(c.Request.Context(), &filter)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.Error(err)
 		return
 	}
 
@@ -114,25 +121,29 @@ func (h *PriceHandler) GetPrices(c *gin.Context) {
 // @Param id path string true "Price ID"
 // @Param price body dto.UpdatePriceRequest true "Price configuration"
 // @Success 200 {object} dto.PriceResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
 // @Router /prices/{id} [put]
 func (h *PriceHandler) UpdatePrice(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		c.Error(ierr.NewError("id is required").
+			WithHint("Price ID is required").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
 	var req dto.UpdatePriceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
 	resp, err := h.service.UpdatePrice(c.Request.Context(), id, req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.Error(err)
 		return
 	}
 
@@ -153,12 +164,14 @@ func (h *PriceHandler) UpdatePrice(c *gin.Context) {
 func (h *PriceHandler) DeletePrice(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		c.Error(ierr.NewError("id is required").
+			WithHint("Price ID is required").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
 	if err := h.service.DeletePrice(c.Request.Context(), id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.Error(err)
 		return
 	}
 

@@ -2,13 +2,13 @@ package ent
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/schema"
 	domainPrice "github.com/flexprice/flexprice/internal/domain/price"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
@@ -73,7 +73,18 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 		Save(ctx)
 
 	if err != nil {
-		return fmt.Errorf("failed to create price: %w", err)
+		if ent.IsConstraintError(err) {
+			return ierr.WithError(err).
+				WithHint("A price with this identifier already exists").
+				WithReportableDetails(map[string]any{
+					"price_id":   p.ID,
+					"lookup_key": p.LookupKey,
+				}).
+				Mark(ierr.ErrAlreadyExists)
+		}
+		return ierr.WithError(err).
+			WithHint("Failed to create price").
+			Mark(ierr.ErrDatabase)
 	}
 
 	*p = *domainPrice.FromEnt(price)
@@ -97,9 +108,16 @@ func (r *priceRepository) Get(ctx context.Context, id string) (*domainPrice.Pric
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return nil, fmt.Errorf("price not found")
+			return nil, ierr.WithError(err).
+				WithHintf("Price with ID %s was not found", id).
+				WithReportableDetails(map[string]any{
+					"price_id": id,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-		return nil, fmt.Errorf("failed to get price: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get price").
+			Mark(ierr.ErrDatabase)
 	}
 
 	return domainPrice.FromEnt(p), nil
@@ -123,7 +141,9 @@ func (r *priceRepository) List(ctx context.Context, filter *types.PriceFilter) (
 
 	prices, err := query.All(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list prices: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list prices").
+			Mark(ierr.ErrDatabase)
 	}
 
 	return domainPrice.FromEntList(prices), nil
@@ -138,7 +158,9 @@ func (r *priceRepository) Count(ctx context.Context, filter *types.PriceFilter) 
 
 	count, err := query.Count(ctx)
 	if err != nil {
-		return 0, fmt.Errorf("failed to count prices: %w", err)
+		return 0, ierr.WithError(err).
+			WithHint("Failed to count prices").
+			Mark(ierr.ErrDatabase)
 	}
 
 	return count, nil
@@ -154,7 +176,9 @@ func (r *priceRepository) ListAll(ctx context.Context, filter *types.PriceFilter
 	}
 
 	if err := filter.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid filter: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Invalid filter parameters").
+			Mark(ierr.ErrValidation)
 	}
 
 	return r.List(ctx, filter)
@@ -194,9 +218,16 @@ func (r *priceRepository) Update(ctx context.Context, p *domainPrice.Price) erro
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return fmt.Errorf("price not found")
+			return ierr.WithError(err).
+				WithHintf("Price with ID %s was not found", p.ID).
+				WithReportableDetails(map[string]any{
+					"price_id": p.ID,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-		return fmt.Errorf("failed to update price: %w", err)
+		return ierr.WithError(err).
+			WithHint("Failed to update price").
+			Mark(ierr.ErrDatabase)
 	}
 
 	return nil
@@ -222,9 +253,16 @@ func (r *priceRepository) Delete(ctx context.Context, id string) error {
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return fmt.Errorf("price not found")
+			return ierr.WithError(err).
+				WithHintf("Price with ID %s was not found", id).
+				WithReportableDetails(map[string]any{
+					"price_id": id,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-		return fmt.Errorf("failed to delete price: %w", err)
+		return ierr.WithError(err).
+			WithHint("Failed to delete price").
+			Mark(ierr.ErrDatabase)
 	}
 
 	return nil
@@ -265,17 +303,19 @@ func (r *priceRepository) CreateBulk(ctx context.Context, prices []*domainPrice.
 			SetLookupKey(p.LookupKey).
 			SetDescription(p.Description).
 			SetMetadata(map[string]string(p.Metadata)).
-			SetEnvironmentID(p.EnvironmentID).
 			SetStatus(string(p.Status)).
 			SetCreatedAt(p.CreatedAt).
 			SetUpdatedAt(p.UpdatedAt).
 			SetCreatedBy(p.CreatedBy).
-			SetUpdatedBy(p.UpdatedBy)
+			SetUpdatedBy(p.UpdatedBy).
+			SetEnvironmentID(p.EnvironmentID)
 	}
 
 	_, err := r.client.Querier(ctx).Price.CreateBulk(builders...).Save(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to create prices in bulk: %w", err)
+		return ierr.WithError(err).
+			WithHint("Failed to create prices in bulk").
+			Mark(ierr.ErrDatabase)
 	}
 
 	return nil
@@ -299,7 +339,9 @@ func (r *priceRepository) DeleteBulk(ctx context.Context, ids []string) error {
 		Save(ctx)
 
 	if err != nil {
-		return fmt.Errorf("failed to delete prices in bulk: %w", err)
+		return ierr.WithError(err).
+			WithHint("Failed to delete prices in bulk").
+			Mark(ierr.ErrDatabase)
 	}
 
 	return nil
