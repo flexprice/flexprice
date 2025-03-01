@@ -197,6 +197,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		}
 
 		entitlement := v1Private.Group("/entitlements")
+		entitlement.Use(middleware.ErrorHandler())
 		{
 			entitlement.POST("", handlers.Entitlement.CreateEntitlement)
 			entitlement.GET("", handlers.Entitlement.ListEntitlements)

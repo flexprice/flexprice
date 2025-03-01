@@ -9,7 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
-	"github.com/flexprice/flexprice/internal/errors"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -52,28 +52,63 @@ func NewEntitlementService(
 
 func (s *entitlementService) CreateEntitlement(ctx context.Context, req dto.CreateEntitlementRequest) (*dto.EntitlementResponse, error) {
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid request: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation)
 	}
 
 	if req.PlanID == "" {
-		return nil, fmt.Errorf("plan_id is required")
+		return nil, ierr.NewError("plan_id is required").
+			Mark(ierr.ErrValidation)
 	}
 
 	// Validate plan exists
 	plan, err := s.planRepo.Get(ctx, req.PlanID)
 	if err != nil {
-		return nil, fmt.Errorf("plan not found: %w", err)
+		if ierr.IsNotFound(err) {
+			return nil, ierr.WithError(err).
+				WithHint("Plan not found").
+				WithReportableDetails(map[string]interface{}{
+					"plan_id": req.PlanID,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+		return nil, ierr.WithError(err).
+			WithHint("Failed to validate plan").
+			WithReportableDetails(map[string]interface{}{
+				"plan_id": req.PlanID,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	// Validate feature exists
 	feature, err := s.featureRepo.Get(ctx, req.FeatureID)
 	if err != nil {
-		return nil, fmt.Errorf("feature not found: %w", err)
+		if ierr.IsNotFound(err) {
+			return nil, ierr.WithError(err).
+				WithHint("Feature not found").
+				WithReportableDetails(map[string]interface{}{
+					"feature_id": req.FeatureID,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+		return nil, ierr.WithError(err).
+			WithHint("Failed to validate feature").
+			WithReportableDetails(map[string]interface{}{
+				"feature_id": req.FeatureID,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	// Validate feature type matches
 	if feature.Type != req.FeatureType {
-		return nil, fmt.Errorf("feature type mismatch: expected %s, got %s", feature.Type, req.FeatureType)
+		return nil, ierr.NewError("feature type mismatch").
+			WithHint(fmt.Sprintf("Expected %s, got %s", feature.Type, req.FeatureType)).
+			WithReportableDetails(map[string]interface{}{
+				"expected": feature.Type,
+				"actual":   req.FeatureType,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	// Create entitlement
@@ -81,7 +116,22 @@ func (s *entitlementService) CreateEntitlement(ctx context.Context, req dto.Crea
 
 	result, err := s.repo.Create(ctx, e)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create entitlement: %w", err)
+		if ierr.IsAlreadyExists(err) {
+			return nil, ierr.WithError(err).
+				WithHint("An entitlement with this plan and feature already exists").
+				WithReportableDetails(map[string]interface{}{
+					"plan_id":    req.PlanID,
+					"feature_id": req.FeatureID,
+				}).
+				Mark(ierr.ErrAlreadyExists)
+		}
+		return nil, ierr.WithError(err).
+			WithHint("Failed to create entitlement").
+			WithReportableDetails(map[string]interface{}{
+				"plan_id":    req.PlanID,
+				"feature_id": req.FeatureID,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	response := &dto.EntitlementResponse{Entitlement: result}
@@ -94,9 +144,27 @@ func (s *entitlementService) CreateEntitlement(ctx context.Context, req dto.Crea
 }
 
 func (s *entitlementService) GetEntitlement(ctx context.Context, id string) (*dto.EntitlementResponse, error) {
+	if id == "" {
+		return nil, ierr.NewError("entitlement_id is required").
+			Mark(ierr.ErrValidation)
+	}
+
 	result, err := s.repo.Get(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get entitlement: %w", err)
+		if ierr.IsNotFound(err) {
+			return nil, ierr.WithError(err).
+				WithHint("Entitlement not found").
+				WithReportableDetails(map[string]interface{}{
+					"id": id,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get entitlement").
+			WithReportableDetails(map[string]interface{}{
+				"id": id,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	response := &dto.EntitlementResponse{Entitlement: result}
@@ -104,13 +172,39 @@ func (s *entitlementService) GetEntitlement(ctx context.Context, id string) (*dt
 	// Add expanded fields
 	feature, err := s.featureRepo.Get(ctx, result.FeatureID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get feature: %w", err)
+		if ierr.IsNotFound(err) {
+			return nil, ierr.WithError(err).
+				WithHint("Feature not found").
+				WithReportableDetails(map[string]interface{}{
+					"feature_id": result.FeatureID,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get feature").
+			WithReportableDetails(map[string]interface{}{
+				"feature_id": result.FeatureID,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 	response.Feature = &dto.FeatureResponse{Feature: feature}
 
 	plan, err := s.planRepo.Get(ctx, result.PlanID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get plan: %w", err)
+		if ierr.IsNotFound(err) {
+			return nil, ierr.WithError(err).
+				WithHint("Plan not found").
+				WithReportableDetails(map[string]interface{}{
+					"plan_id": result.PlanID,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get plan").
+			WithReportableDetails(map[string]interface{}{
+				"plan_id": result.PlanID,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 	response.Plan = &dto.PlanResponse{Plan: plan}
 
@@ -134,12 +228,16 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 
 	entitlements, err := s.repo.List(ctx, filter)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list entitlements: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list entitlements").
+			Mark(ierr.ErrDatabase)
 	}
 
 	count, err := s.repo.Count(ctx, filter)
 	if err != nil {
-		return nil, fmt.Errorf("failed to count entitlements: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to count entitlements").
+			Mark(ierr.ErrDatabase)
 	}
 
 	response := &dto.ListEntitlementsResponse{
@@ -163,7 +261,9 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 				featureFilter.FeatureIDs = featureIDs
 				features, err := s.featureRepo.List(ctx, featureFilter)
 				if err != nil {
-					return nil, fmt.Errorf("failed to fetch features: %w", err)
+					return nil, ierr.WithError(err).
+						WithHint("Failed to fetch features").
+						Mark(ierr.ErrDatabase)
 				}
 
 				featuresByID = make(map[string]*feature.Feature, len(features))
@@ -187,7 +287,9 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 				meterFilter.MeterIDs = meterIDs
 				meters, err := s.meterRepo.List(ctx, meterFilter)
 				if err != nil {
-					return nil, fmt.Errorf("failed to fetch meters: %w", err)
+					return nil, ierr.WithError(err).
+						WithHint("Failed to fetch meters").
+						Mark(ierr.ErrDatabase)
 				}
 
 				metersByID = make(map[string]*meter.Meter, len(meters))
@@ -210,7 +312,9 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 				planFilter.PlanIDs = planIDs
 				plans, err := s.planRepo.List(ctx, planFilter)
 				if err != nil {
-					return nil, fmt.Errorf("failed to fetch plans: %w", err)
+					return nil, ierr.WithError(err).
+						WithHint("Failed to fetch plans").
+						Mark(ierr.ErrDatabase)
 				}
 
 				plansByID = make(map[string]*plan.Plan, len(plans))
@@ -257,14 +361,23 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 }
 
 func (s *entitlementService) UpdateEntitlement(ctx context.Context, id string, req dto.UpdateEntitlementRequest) (*dto.EntitlementResponse, error) {
-	existing, err := s.repo.Get(ctx, id)
-	if err != nil {
-		return nil, errors.NewError("entitlement not found").
-			WithHint("The specified entitlement could not be found").
-			Mark(errors.ErrNotFound)
+	if id == "" {
+		return nil, ierr.NewError("entitlement_id is required").
+			WithHint("Entitlement ID is required").
+			Mark(ierr.ErrValidation)
 	}
 
-	// Update fields
+	// No need to validate the request as there's no Validate method
+
+	// Get existing entitlement
+	existing, err := s.repo.Get(ctx, id)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve entitlement").
+			Mark(ierr.ErrDatabase)
+	}
+
+	// Update fields if provided
 	if req.IsEnabled != nil {
 		existing.IsEnabled = *req.IsEnabled
 	}
@@ -289,18 +402,20 @@ func (s *entitlementService) UpdateEntitlement(ctx context.Context, id string, r
 
 	// Validate updated entitlement
 	if err := existing.Validate(); err != nil {
-		return nil, errors.NewError("invalid entitlement").
+		return nil, ierr.NewError("invalid entitlement").
 			WithHint("The entitlement data is invalid").
 			WithMessage(err.Error()).
-			Mark(errors.ErrValidation)
+			Mark(ierr.ErrValidation)
 	}
 
 	result, err := s.repo.Update(ctx, existing)
 	if err != nil {
-		return nil, errors.NewError("failed to update entitlement").
-			WithHint("An error occurred while updating the entitlement").
-			WithMessage(err.Error()).
-			Mark(errors.ErrSystem)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to update entitlement").
+			WithReportableDetails(map[string]interface{}{
+				"id": id,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	response := &dto.EntitlementResponse{Entitlement: result}
@@ -308,10 +423,12 @@ func (s *entitlementService) UpdateEntitlement(ctx context.Context, id string, r
 }
 
 func (s *entitlementService) DeleteEntitlement(ctx context.Context, id string) error {
-	if err := s.repo.Delete(ctx, id); err != nil {
-		return fmt.Errorf("failed to delete entitlement: %w", err)
+	if id == "" {
+		return ierr.NewError("entitlement_id is required").
+			Mark(ierr.ErrValidation)
 	}
-	return nil
+
+	return s.repo.Delete(ctx, id)
 }
 
 func (s *entitlementService) GetPlanEntitlements(ctx context.Context, planID string) (*dto.ListEntitlementsResponse, error) {

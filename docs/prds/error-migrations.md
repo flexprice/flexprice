@@ -155,7 +155,7 @@ feature.Use(middleware.ErrorHandler())
 - [x] Plan
 - [x] Price
 - [x] Meter
-- [ ] Entitlement
+- [x] Entitlement
 - [ ] Payment
 - [ ] Wallet
 - [ ] User

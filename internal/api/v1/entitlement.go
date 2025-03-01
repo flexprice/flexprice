@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/types"
@@ -27,19 +28,23 @@ func NewEntitlementHandler(service service.EntitlementService, log *logger.Logge
 // @Security ApiKeyAuth
 // @Param entitlement body dto.CreateEntitlementRequest true "Entitlement configuration"
 // @Success 201 {object} dto.EntitlementResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
 // @Router /entitlements [post]
 func (h *EntitlementHandler) CreateEntitlement(c *gin.Context) {
 	var req dto.CreateEntitlementRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		h.log.Error("Failed to bind JSON", "error", err)
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
 	resp, err := h.service.CreateEntitlement(c.Request.Context(), req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.log.Error("Failed to create entitlement", "error", err)
+		c.Error(err)
 		return
 	}
 
@@ -54,19 +59,22 @@ func (h *EntitlementHandler) CreateEntitlement(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Param id path string true "Entitlement ID"
 // @Success 200 {object} dto.EntitlementResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
 // @Router /entitlements/{id} [get]
 func (h *EntitlementHandler) GetEntitlement(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		c.Error(ierr.NewError("id is required").
+			WithHint("Entitlement ID is required").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
 	resp, err := h.service.GetEntitlement(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.log.Error("Failed to get entitlement", "error", err)
+		c.Error(err)
 		return
 	}
 
@@ -81,13 +89,16 @@ func (h *EntitlementHandler) GetEntitlement(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Param filter query types.EntitlementFilter true "Filter"
 // @Success 200 {object} dto.ListEntitlementsResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
 // @Router /entitlements [get]
 func (h *EntitlementHandler) ListEntitlements(c *gin.Context) {
 	var filter types.EntitlementFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		h.log.Error("Failed to bind query", "error", err)
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid filter parameters").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
@@ -98,7 +109,8 @@ func (h *EntitlementHandler) ListEntitlements(c *gin.Context) {
 
 	resp, err := h.service.ListEntitlements(c.Request.Context(), &filter)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.log.Error("Failed to list entitlements", "error", err)
+		c.Error(err)
 		return
 	}
 
@@ -114,25 +126,31 @@ func (h *EntitlementHandler) ListEntitlements(c *gin.Context) {
 // @Param id path string true "Entitlement ID"
 // @Param entitlement body dto.UpdateEntitlementRequest true "Entitlement configuration"
 // @Success 200 {object} dto.EntitlementResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
 // @Router /entitlements/{id} [put]
 func (h *EntitlementHandler) UpdateEntitlement(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		c.Error(ierr.NewError("id is required").
+			WithHint("Entitlement ID is required").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
 	var req dto.UpdateEntitlementRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		h.log.Error("Failed to bind JSON", "error", err)
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
 	resp, err := h.service.UpdateEntitlement(c.Request.Context(), id, req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.log.Error("Failed to update entitlement", "error", err)
+		c.Error(err)
 		return
 	}
 
@@ -147,18 +165,21 @@ func (h *EntitlementHandler) UpdateEntitlement(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Param id path string true "Entitlement ID"
 // @Success 200 {object} gin.H
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
 // @Router /entitlements/{id} [delete]
 func (h *EntitlementHandler) DeleteEntitlement(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		c.Error(ierr.NewError("id is required").
+			WithHint("Entitlement ID is required").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
 	if err := h.service.DeleteEntitlement(c.Request.Context(), id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.log.Error("Failed to delete entitlement", "error", err)
+		c.Error(err)
 		return
 	}
 

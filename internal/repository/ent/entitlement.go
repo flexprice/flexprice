@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/entitlement"
 	domainEntitlement "github.com/flexprice/flexprice/internal/domain/entitlement"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
@@ -28,14 +29,11 @@ func NewEntitlementRepository(client postgres.IClient, log *logger.Logger) domai
 }
 
 func (r *entitlementRepository) Create(ctx context.Context, e *domainEntitlement.Entitlement) (*domainEntitlement.Entitlement, error) {
-	client := r.client.Querier(ctx)
+	if e == nil {
+		return nil, ierr.NewError("entitlement cannot be nil").Mark(ierr.ErrValidation)
+	}
 
-	r.log.Debugw("creating entitlement",
-		"entitlement_id", e.ID,
-		"tenant_id", e.TenantID,
-		"plan_id", e.PlanID,
-		"feature_id", e.FeatureID,
-	)
+	client := r.client.Querier(ctx)
 
 	// Set environment ID from context if not already set
 	if e.EnvironmentID == "" {
@@ -62,7 +60,22 @@ func (r *entitlementRepository) Create(ctx context.Context, e *domainEntitlement
 		Save(ctx)
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to create entitlement: %w", err)
+		if ent.IsConstraintError(err) {
+			return nil, ierr.WithError(err).
+				WithHint("An entitlement with this plan and feature already exists").
+				WithReportableDetails(map[string]interface{}{
+					"plan_id":    e.PlanID,
+					"feature_id": e.FeatureID,
+				}).
+				Mark(ierr.ErrAlreadyExists)
+		}
+		return nil, ierr.WithError(err).
+			WithHint("Failed to create entitlement").
+			WithReportableDetails(map[string]interface{}{
+				"plan_id":    e.PlanID,
+				"feature_id": e.FeatureID,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return domainEntitlement.FromEnt(result), nil
@@ -85,9 +98,15 @@ func (r *entitlementRepository) Get(ctx context.Context, id string) (*domainEnti
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return nil, fmt.Errorf("entitlement not found")
+			return nil, ierr.WithError(err).
+				WithHint("Entitlement not found").
+				WithReportableDetails(map[string]interface{}{"id": id}).
+				Mark(ierr.ErrNotFound)
 		}
-		return nil, fmt.Errorf("failed to get entitlement: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get entitlement").
+			WithReportableDetails(map[string]interface{}{"id": id}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return domainEntitlement.FromEnt(result), nil
@@ -111,7 +130,14 @@ func (r *entitlementRepository) List(ctx context.Context, filter *types.Entitlem
 
 	results, err := query.All(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list entitlements: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list entitlements").
+			WithReportableDetails(map[string]interface{}{
+				"plan_ids":     filter.PlanIDs,
+				"feature_ids":  filter.FeatureIDs,
+				"feature_type": filter.FeatureType,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return domainEntitlement.FromEntList(results), nil
@@ -126,7 +152,14 @@ func (r *entitlementRepository) Count(ctx context.Context, filter *types.Entitle
 
 	count, err := query.Count(ctx)
 	if err != nil {
-		return 0, fmt.Errorf("failed to count entitlements: %w", err)
+		return 0, ierr.WithError(err).
+			WithHint("Failed to count entitlements").
+			WithReportableDetails(map[string]interface{}{
+				"plan_ids":     filter.PlanIDs,
+				"feature_ids":  filter.FeatureIDs,
+				"feature_type": filter.FeatureType,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return count, nil
@@ -153,6 +186,10 @@ func (r *entitlementRepository) ListAll(ctx context.Context, filter *types.Entit
 }
 
 func (r *entitlementRepository) Update(ctx context.Context, e *domainEntitlement.Entitlement) (*domainEntitlement.Entitlement, error) {
+	if e == nil {
+		return nil, ierr.NewError("entitlement cannot be nil").Mark(ierr.ErrValidation)
+	}
+
 	client := r.client.Querier(ctx)
 
 	r.log.Debugw("updating entitlement",
@@ -177,9 +214,15 @@ func (r *entitlementRepository) Update(ctx context.Context, e *domainEntitlement
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return nil, fmt.Errorf("entitlement not found")
+			return nil, ierr.WithError(err).
+				WithHint("Entitlement not found").
+				WithReportableDetails(map[string]interface{}{"id": e.ID}).
+				Mark(ierr.ErrNotFound)
 		}
-		return nil, fmt.Errorf("failed to update entitlement: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to update entitlement").
+			WithReportableDetails(map[string]interface{}{"id": e.ID}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return domainEntitlement.FromEnt(result), nil
@@ -205,9 +248,15 @@ func (r *entitlementRepository) Delete(ctx context.Context, id string) error {
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return fmt.Errorf("entitlement not found")
+			return ierr.WithError(err).
+				WithHint("Entitlement not found").
+				WithReportableDetails(map[string]interface{}{"id": id}).
+				Mark(ierr.ErrNotFound)
 		}
-		return fmt.Errorf("failed to delete entitlement: %w", err)
+		return ierr.WithError(err).
+			WithHint("Failed to delete entitlement").
+			WithReportableDetails(map[string]interface{}{"id": id}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return nil
@@ -251,7 +300,12 @@ func (r *entitlementRepository) CreateBulk(ctx context.Context, entitlements []*
 
 	results, err := client.Entitlement.CreateBulk(builders...).Save(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create entitlements in bulk: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to create entitlements in bulk").
+			WithReportableDetails(map[string]interface{}{
+				"count": len(entitlements),
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return domainEntitlement.FromEntList(results), nil
@@ -275,7 +329,12 @@ func (r *entitlementRepository) DeleteBulk(ctx context.Context, ids []string) er
 		Save(ctx)
 
 	if err != nil {
-		return fmt.Errorf("failed to delete entitlements in bulk: %w", err)
+		return ierr.WithError(err).
+			WithHint("Failed to delete entitlements in bulk").
+			WithReportableDetails(map[string]interface{}{
+				"count": len(ids),
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return nil
