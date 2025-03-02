@@ -3,7 +3,7 @@ package wallet
 import (
 	"time"
 
-	"github.com/flexprice/flexprice/internal/errors"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
@@ -27,11 +27,18 @@ type WalletOperation struct {
 
 func (w *WalletOperation) Validate() error {
 	if err := w.Type.Validate(); err != nil {
-		return errors.New(errors.ErrCodeValidation, "invalid transaction type")
+		return ierr.NewError("invalid transaction type").
+			WithHint("Transaction type must be either credit or debit").
+			WithReportableDetails(map[string]interface{}{
+				"type": w.Type,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	if w.Amount.IsZero() && w.CreditAmount.IsZero() {
-		return errors.New(errors.ErrCodeValidation, "amount or credit_amount must be provided")
+		return ierr.NewError("amount or credit_amount must be provided").
+			WithHint("Either amount or credit amount must be specified for the operation").
+			Mark(ierr.ErrValidation)
 	}
 
 	if err := w.TransactionReason.Validate(); err != nil {
@@ -45,11 +52,21 @@ func (w *WalletOperation) Validate() error {
 	if w.ExpiryDate != nil {
 		expiryTime := types.ParseYYYYMMDDToDate(w.ExpiryDate)
 		if expiryTime == nil {
-			return errors.New(errors.ErrCodeValidation, "invalid expiry date")
+			return ierr.NewError("invalid expiry date").
+				WithHint("Expiry date must be in YYYYMMDD format").
+				WithReportableDetails(map[string]interface{}{
+					"expiry_date": w.ExpiryDate,
+				}).
+				Mark(ierr.ErrValidation)
 		}
 
 		if expiryTime.Before(time.Now().UTC()) {
-			return errors.New(errors.ErrCodeValidation, "expiry date cannot be in the past")
+			return ierr.NewError("expiry date cannot be in the past").
+				WithHint("Expiry date must be in the future").
+				WithReportableDetails(map[string]interface{}{
+					"expiry_date": expiryTime,
+				}).
+				Mark(ierr.ErrValidation)
 		}
 	}
 

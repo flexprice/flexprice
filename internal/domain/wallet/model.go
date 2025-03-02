@@ -2,7 +2,7 @@ package wallet
 
 import (
 	"github.com/flexprice/flexprice/ent"
-	"github.com/flexprice/flexprice/internal/errors"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -35,11 +35,26 @@ func (w *Wallet) TableName() string {
 
 func (w *Wallet) Validate() error {
 	if w.ConversionRate.LessThanOrEqual(decimal.Zero) {
-		return errors.New(errors.ErrCodeValidation, "conversion rate must be greater than 0")
+		return ierr.NewError("conversion rate must be greater than 0").
+			WithHint("Conversion rate must be a positive value").
+			WithReportableDetails(map[string]interface{}{
+				"conversion_rate": w.ConversionRate,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
-	if !w.Balance.Equal(w.CreditBalance.Mul(w.ConversionRate)) {
-		return errors.New(errors.ErrCodeValidation, "balance and credit balance do not match")
+	// Verify balance = credit_balance * conversion_rate
+	expectedBalance := w.CreditBalance.Mul(w.ConversionRate)
+	if !w.Balance.Equal(expectedBalance) {
+		return ierr.NewError("balance and credit balance do not match").
+			WithHint("Balance must equal credit balance multiplied by conversion rate").
+			WithReportableDetails(map[string]interface{}{
+				"balance":         w.Balance,
+				"credit_balance":  w.CreditBalance,
+				"conversion_rate": w.ConversionRate,
+				"expected":        expectedBalance,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	return nil

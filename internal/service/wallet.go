@@ -7,7 +7,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
-	"github.com/flexprice/flexprice/internal/errors"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
@@ -61,13 +61,20 @@ func NewWalletService(params ServiceParams) WalletService {
 
 func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletRequest) (*dto.WalletResponse, error) {
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid request: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Invalid wallet request").
+			Mark(ierr.ErrValidation)
 	}
 
 	// Check if customer already has an active wallet
 	existingWallets, err := s.WalletRepo.GetWalletsByCustomerID(ctx, req.CustomerID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check existing wallets: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to check existing wallets").
+			WithReportableDetails(map[string]interface{}{
+				"customer_id": req.CustomerID,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	for _, w := range existingWallets {
@@ -76,7 +83,14 @@ func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletR
 				"customer_id", req.CustomerID,
 				"existing_wallet_id", w.ID,
 			)
-			return nil, fmt.Errorf("customer already has an active wallet with ID: %s", w.ID)
+			return nil, ierr.NewError("customer already has an active wallet").
+				WithHint("A customer can only have one active wallet per currency").
+				WithReportableDetails(map[string]interface{}{
+					"customer_id": req.CustomerID,
+					"wallet_id":   w.ID,
+					"currency":    req.Currency,
+				}).
+				Mark(ierr.ErrAlreadyExists)
 		}
 	}
 
@@ -84,7 +98,7 @@ func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletR
 
 	// Create wallet in DB and update the wallet object
 	if err := s.WalletRepo.CreateWallet(ctx, w); err != nil {
-		return nil, fmt.Errorf("failed to create wallet: %w", err)
+		return nil, err // Repository already using ierr
 	}
 
 	s.Logger.Debugw("created wallet",
@@ -98,9 +112,15 @@ func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletR
 }
 
 func (s *walletService) GetWalletsByCustomerID(ctx context.Context, customerID string) ([]*dto.WalletResponse, error) {
+	if customerID == "" {
+		return nil, ierr.NewError("customer_id is required").
+			WithHint("Customer ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
 	wallets, err := s.WalletRepo.GetWalletsByCustomerID(ctx, customerID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get wallets: %w", err)
+		return nil, err // Repository already using ierr
 	}
 
 	response := make([]*dto.WalletResponse, len(wallets))
@@ -112,33 +132,50 @@ func (s *walletService) GetWalletsByCustomerID(ctx context.Context, customerID s
 }
 
 func (s *walletService) GetWalletByID(ctx context.Context, id string) (*dto.WalletResponse, error) {
+	if id == "" {
+		return nil, ierr.NewError("wallet_id is required").
+			WithHint("Wallet ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
 	w, err := s.WalletRepo.GetWalletByID(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get wallet: %w", err)
+		return nil, err // Repository already using ierr
 	}
 
 	return dto.FromWallet(w), nil
 }
 
 func (s *walletService) GetWalletTransactions(ctx context.Context, walletID string, filter *types.WalletTransactionFilter) (*dto.ListWalletTransactionsResponse, error) {
+	if walletID == "" {
+		return nil, ierr.NewError("wallet_id is required").
+			WithHint("Wallet ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Ensure filter is initialized
 	if filter == nil {
 		filter = types.NewWalletTransactionFilter()
 	}
 
+	// Set wallet ID in filter
 	filter.WalletID = &walletID
 
 	if err := filter.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid filter: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Invalid filter").
+			Mark(ierr.ErrValidation)
 	}
 
 	transactions, err := s.WalletRepo.ListWalletTransactions(ctx, filter)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get transactions: %w", err)
+		return nil, err // Repository already using ierr
 	}
 
+	// Get total count
 	count, err := s.WalletRepo.CountWalletTransactions(ctx, filter)
 	if err != nil {
-		return nil, fmt.Errorf("failed to count transactions: %w", err)
+		return nil, err // Repository already using ierr
 	}
 
 	response := &dto.ListWalletTransactionsResponse{
@@ -186,7 +223,7 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 	}
 
 	if err := s.CreditWallet(ctx, creditReq); err != nil {
-		return nil, fmt.Errorf("failed to credit wallet: %w", err)
+		return nil, err // Repository already using ierr
 	}
 
 	// Get updated wallet
@@ -200,7 +237,7 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 
 	w, err := s.WalletRepo.GetWalletByID(ctx, walletID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get wallet: %w", err)
+		return nil, err
 	}
 
 	if w.WalletStatus != types.WalletStatusActive {
@@ -216,7 +253,7 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 
 	invoiceSummary, err := invoiceService.GetCustomerInvoiceSummary(ctx, w.CustomerID, w.Currency)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get invoice summary: %w", err)
+		return nil, err
 	}
 
 	// Get current period usage for active subscriptions
@@ -230,7 +267,7 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 
 	subscriptionsResp, err := subscriptionService.ListSubscriptions(ctx, filter)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get subscriptions: %w", err)
+		return nil, err
 	}
 
 	currentPeriodUsage := decimal.Zero
@@ -292,11 +329,13 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 func (s *walletService) TerminateWallet(ctx context.Context, walletID string) error {
 	w, err := s.WalletRepo.GetWalletByID(ctx, walletID)
 	if err != nil {
-		return fmt.Errorf("failed to get wallet: %w", err)
+		return err
 	}
 
 	if w.WalletStatus == types.WalletStatusClosed {
-		return fmt.Errorf("wallet is already closed")
+		return ierr.NewError("wallet is already closed").
+			WithHint("Wallet is already terminated").
+			Mark(ierr.ErrInvalidOperation)
 	}
 
 	// Use client's WithTx for atomic operations
@@ -314,13 +353,13 @@ func (s *walletService) TerminateWallet(ctx context.Context, walletID string) er
 			}
 
 			if err := s.DebitWallet(ctx, debitReq); err != nil {
-				return fmt.Errorf("failed to debit wallet: %w", err)
+				return err
 			}
 		}
 
 		// Update wallet status to closed
 		if err := s.WalletRepo.UpdateWalletStatus(ctx, walletID, types.WalletStatusClosed); err != nil {
-			return fmt.Errorf("failed to close wallet: %w", err)
+			return err
 		}
 
 		return nil
@@ -329,13 +368,20 @@ func (s *walletService) TerminateWallet(ctx context.Context, walletID string) er
 
 func (s *walletService) UpdateWallet(ctx context.Context, id string, req *dto.UpdateWalletRequest) (*wallet.Wallet, error) {
 	if err := req.Validate(); err != nil {
-		return nil, errors.Wrap(err, errors.ErrCodeValidation, "update wallet")
+		return nil, ierr.WithError(err).
+			WithHint("Invalid wallet request").
+			Mark(ierr.ErrValidation)
 	}
 
 	// Get existing wallet
 	existing, err := s.WalletRepo.GetWalletByID(ctx, id)
 	if err != nil {
-		return nil, errors.Wrap(err, errors.ErrCodeNotFound, "update wallet")
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get wallet").
+			WithReportableDetails(map[string]interface{}{
+				"wallet_id": id,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	// Update fields if provided
@@ -363,7 +409,12 @@ func (s *walletService) UpdateWallet(ctx context.Context, id string, req *dto.Up
 
 	// Update wallet
 	if err := s.WalletRepo.UpdateWallet(ctx, id, existing); err != nil {
-		return nil, errors.Wrap(err, errors.ErrCodeSystemError, "update wallet")
+		return nil, ierr.WithError(err).
+			WithHint("Failed to update wallet").
+			WithReportableDetails(map[string]interface{}{
+				"wallet_id": id,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return existing, nil
@@ -372,7 +423,9 @@ func (s *walletService) UpdateWallet(ctx context.Context, id string, req *dto.Up
 // DebitWallet processes a debit operation on a wallet
 func (s *walletService) DebitWallet(ctx context.Context, req *wallet.WalletOperation) error {
 	if req.Type != types.TransactionTypeDebit {
-		return fmt.Errorf("invalid transaction type")
+		return ierr.NewError("invalid transaction type").
+			WithHint("Invalid transaction type").
+			Mark(ierr.ErrValidation)
 	}
 
 	if req.ReferenceType == "" || req.ReferenceID == "" {
@@ -386,7 +439,9 @@ func (s *walletService) DebitWallet(ctx context.Context, req *wallet.WalletOpera
 // CreditWallet processes a credit operation on a wallet
 func (s *walletService) CreditWallet(ctx context.Context, req *wallet.WalletOperation) error {
 	if req.Type != types.TransactionTypeCredit {
-		return fmt.Errorf("invalid transaction type")
+		return ierr.NewError("invalid transaction type").
+			WithHint("Invalid transaction type").
+			Mark(ierr.ErrValidation)
 	}
 
 	if req.ReferenceType == "" || req.ReferenceID == "" {
@@ -411,11 +466,15 @@ func (s *walletService) validateWalletOperation(w *wallet.Wallet, req *wallet.Wa
 	} else if req.CreditAmount.GreaterThan(decimal.Zero) {
 		req.Amount = req.CreditAmount.Mul(w.ConversionRate)
 	} else {
-		return errors.New(errors.ErrCodeInvalidOperation, "amount or credit amount is required")
+		return ierr.NewError("amount or credit amount is required").
+			WithHint("Amount or credit amount is required").
+			Mark(ierr.ErrValidation)
 	}
 
 	if req.CreditAmount.LessThanOrEqual(decimal.Zero) {
-		return errors.New(errors.ErrCodeInvalidOperation, "wallet transaction amount must be greater than 0")
+		return ierr.NewError("wallet transaction amount must be greater than 0").
+			WithHint("Wallet transaction amount must be greater than 0").
+			Mark(ierr.ErrValidation)
 	}
 
 	return nil
@@ -439,7 +498,13 @@ func (s *walletService) processDebitOperation(ctx context.Context, req *wallet.W
 	}
 
 	if totalAvailable.LessThan(req.CreditAmount) {
-		return errors.New(errors.ErrCodeInvalidOperation, "insufficient balance")
+		return ierr.NewError("insufficient balance").
+			WithHint("Insufficient balance to process debit operation").
+			WithReportableDetails(map[string]interface{}{
+				"wallet_id": req.WalletID,
+				"amount":    req.CreditAmount,
+			}).
+			Mark(ierr.ErrInvalidOperation)
 	}
 
 	// Process debit across credits
@@ -458,7 +523,7 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 		// Get wallet
 		w, err := s.WalletRepo.GetWalletByID(ctx, req.WalletID)
 		if err != nil {
-			return fmt.Errorf("failed to get wallet: %w", err)
+			return err
 		}
 
 		// Validate operation
@@ -532,24 +597,44 @@ func (s *walletService) ExpireCredits(ctx context.Context, transactionID string)
 	// Get the transaction
 	tx, err := s.WalletRepo.GetTransactionByID(ctx, transactionID)
 	if err != nil {
-		return fmt.Errorf("failed to get transaction: %w", err)
+		return err
 	}
 
 	// Validate transaction
 	if tx.Type != types.TransactionTypeCredit {
-		return errors.New(errors.ErrCodeInvalidOperation, "can only expire credit transactions")
+		return ierr.NewError("can only expire credit transactions").
+			WithHint("Only credit transactions can be expired").
+			WithReportableDetails(map[string]interface{}{
+				"transaction_id": transactionID,
+			}).
+			Mark(ierr.ErrInvalidOperation)
 	}
 
 	if tx.ExpiryDate == nil {
-		return errors.New(errors.ErrCodeInvalidOperation, "transaction has no expiry date")
+		return ierr.NewError("transaction has no expiry date").
+			WithHint("Transaction must have an expiry date to be expired").
+			WithReportableDetails(map[string]interface{}{
+				"transaction_id": transactionID,
+			}).
+			Mark(ierr.ErrInvalidOperation)
 	}
 
 	if tx.ExpiryDate.After(time.Now().UTC()) {
-		return errors.New(errors.ErrCodeInvalidOperation, "transaction has not expired yet")
+		return ierr.NewError("transaction has not expired yet").
+			WithHint("Transaction must have expired to be expired").
+			WithReportableDetails(map[string]interface{}{
+				"transaction_id": transactionID,
+			}).
+			Mark(ierr.ErrInvalidOperation)
 	}
 
 	if tx.CreditsAvailable.IsZero() {
-		return errors.New(errors.ErrCodeInvalidOperation, "no credits available to expire")
+		return ierr.NewError("no credits available to expire").
+			WithHint("Transaction has no credits available to expire").
+			WithReportableDetails(map[string]interface{}{
+				"transaction_id": transactionID,
+			}).
+			Mark(ierr.ErrInvalidOperation)
 	}
 
 	// Create a debit operation for the expired credits
@@ -571,7 +656,7 @@ func (s *walletService) ExpireCredits(ctx context.Context, transactionID string)
 	return s.DB.WithTx(ctx, func(ctx context.Context) error {
 		// Process debit operation
 		if err := s.DebitWallet(ctx, debitReq); err != nil {
-			return fmt.Errorf("failed to debit expired credits: %w", err)
+			return err
 		}
 		return nil
 	})

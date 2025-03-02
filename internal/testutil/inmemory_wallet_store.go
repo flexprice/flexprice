@@ -2,12 +2,11 @@ package testutil
 
 import (
 	"context"
-	"fmt"
 	"sort"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/wallet"
-	"github.com/flexprice/flexprice/internal/errors"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
@@ -144,7 +143,9 @@ func transactionSortFn(i, j *wallet.Transaction) bool {
 
 func (s *InMemoryWalletStore) CreateWallet(ctx context.Context, w *wallet.Wallet) error {
 	if w == nil {
-		return fmt.Errorf("wallet cannot be nil")
+		return ierr.NewError("wallet cannot be nil").
+			WithHint("A valid wallet object must be provided").
+			Mark(ierr.ErrValidation)
 	}
 
 	// Set default status if not set
@@ -164,7 +165,16 @@ func (s *InMemoryWalletStore) CreateWallet(ctx context.Context, w *wallet.Wallet
 }
 
 func (s *InMemoryWalletStore) GetWalletByID(ctx context.Context, id string) (*wallet.Wallet, error) {
-	return s.wallets.Get(ctx, id)
+	wallet, err := s.wallets.Get(ctx, id)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve wallet").
+			WithReportableDetails(map[string]interface{}{
+				"wallet_id": id,
+			}).
+			Mark(ierr.ErrNotFound)
+	}
+	return wallet, nil
 }
 
 func (s *InMemoryWalletStore) GetWalletsByCustomerID(ctx context.Context, customerID string) ([]*wallet.Wallet, error) {
@@ -177,17 +187,41 @@ func (s *InMemoryWalletStore) GetWalletsByCustomerID(ctx context.Context, custom
 	}
 
 	// List all wallets with the customer ID filter
-	return s.wallets.List(ctx, nil, filterFn, nil)
+	wallets, err := s.wallets.List(ctx, nil, filterFn, nil)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve customer wallets").
+			WithReportableDetails(map[string]interface{}{
+				"customer_id": customerID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+	return wallets, nil
 }
 
 func (s *InMemoryWalletStore) UpdateWalletStatus(ctx context.Context, id string, status types.WalletStatus) error {
 	w, err := s.GetWalletByID(ctx, id)
 	if err != nil {
-		return err
+		return ierr.WithError(err).
+			WithHint("Failed to retrieve wallet for status update").
+			WithReportableDetails(map[string]interface{}{
+				"wallet_id": id,
+				"status":    status,
+			}).
+			Mark(ierr.ErrNotFound)
 	}
 
 	w.WalletStatus = status
-	return s.wallets.Update(ctx, id, w)
+	if err := s.wallets.Update(ctx, id, w); err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to update wallet status").
+			WithReportableDetails(map[string]interface{}{
+				"wallet_id": id,
+				"status":    status,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+	return nil
 }
 
 // FindEligibleCredits retrieves valid credits for debit operation with pagination
@@ -217,7 +251,13 @@ func (s *InMemoryWalletStore) FindEligibleCredits(ctx context.Context, walletID 
 	}, nil)
 
 	if err != nil {
-		return nil, fmt.Errorf("query valid credits: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to query valid credits").
+			WithReportableDetails(map[string]interface{}{
+				"wallet_id":       walletID,
+				"required_amount": requiredAmount,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	// Sort credits by expiry date (ascending) and credit amount (descending)
@@ -269,7 +309,13 @@ func (s *InMemoryWalletStore) ConsumeCredits(ctx context.Context, credits []*wal
 		credit.UpdatedBy = types.GetUserID(ctx)
 
 		if err := s.transactions.Update(ctx, credit.ID, credit); err != nil {
-			return fmt.Errorf("update credit available amount: %w", err)
+			return ierr.WithError(err).
+				WithHint("Failed to update credit available amount").
+				WithReportableDetails(map[string]interface{}{
+					"credit_id": credit.ID,
+					"amount":    toConsume,
+				}).
+				Mark(ierr.ErrDatabase)
 		}
 
 		remainingAmount = remainingAmount.Sub(toConsume)
@@ -284,15 +330,31 @@ func (s *InMemoryWalletStore) CreateTransaction(ctx context.Context, tx *wallet.
 	if tx.EnvironmentID == "" {
 		tx.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
-	
-	return s.transactions.Create(ctx, tx.ID, tx)
+
+	if err := s.transactions.Create(ctx, tx.ID, tx); err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to create wallet transaction").
+			WithReportableDetails(map[string]interface{}{
+				"wallet_id": tx.WalletID,
+				"type":      tx.Type,
+				"amount":    tx.Amount,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	return nil
 }
 
 // UpdateWalletBalance updates the wallet's balance and credit balance
 func (s *InMemoryWalletStore) UpdateWalletBalance(ctx context.Context, walletID string, finalBalance, newCreditBalance decimal.Decimal) error {
 	w, err := s.GetWalletByID(ctx, walletID)
 	if err != nil {
-		return err
+		return ierr.WithError(err).
+			WithHint("Failed to retrieve wallet for balance update").
+			WithReportableDetails(map[string]interface{}{
+				"wallet_id": walletID,
+			}).
+			Mark(ierr.ErrNotFound)
 	}
 
 	w.Balance = finalBalance
@@ -300,36 +362,99 @@ func (s *InMemoryWalletStore) UpdateWalletBalance(ctx context.Context, walletID 
 	w.UpdatedAt = time.Now().UTC()
 	w.UpdatedBy = types.GetUserID(ctx)
 
-	return s.wallets.Update(ctx, walletID, w)
+	if err := s.wallets.Update(ctx, walletID, w); err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to update wallet balance").
+			WithReportableDetails(map[string]interface{}{
+				"wallet_id":      walletID,
+				"balance":        finalBalance,
+				"credit_balance": newCreditBalance,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	return nil
 }
 
 func (s *InMemoryWalletStore) GetTransactionByID(ctx context.Context, id string) (*wallet.Transaction, error) {
-	return s.transactions.Get(ctx, id)
+	tx, err := s.transactions.Get(ctx, id)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve transaction").
+			WithReportableDetails(map[string]interface{}{
+				"transaction_id": id,
+			}).
+			Mark(ierr.ErrNotFound)
+	}
+	return tx, nil
 }
 
 func (s *InMemoryWalletStore) ListWalletTransactions(ctx context.Context, f *types.WalletTransactionFilter) ([]*wallet.Transaction, error) {
-	return s.transactions.List(ctx, f, transactionFilterFn, transactionSortFn)
+	transactions, err := s.transactions.List(ctx, f, transactionFilterFn, transactionSortFn)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list wallet transactions").
+			WithReportableDetails(map[string]interface{}{
+				"wallet_id": f.WalletID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+	return transactions, nil
 }
 
 func (s *InMemoryWalletStore) ListAllWalletTransactions(ctx context.Context, f *types.WalletTransactionFilter) ([]*wallet.Transaction, error) {
 	// Create a copy of the filter without pagination
 	filterCopy := *f
 	filterCopy.QueryFilter.Limit = nil
-	return s.transactions.List(ctx, &filterCopy, transactionFilterFn, transactionSortFn)
+
+	transactions, err := s.transactions.List(ctx, &filterCopy, transactionFilterFn, transactionSortFn)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list all wallet transactions").
+			WithReportableDetails(map[string]interface{}{
+				"wallet_id": f.WalletID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+	return transactions, nil
 }
 
 func (s *InMemoryWalletStore) CountWalletTransactions(ctx context.Context, f *types.WalletTransactionFilter) (int, error) {
-	return s.transactions.Count(ctx, f, transactionFilterFn)
+	count, err := s.transactions.Count(ctx, f, transactionFilterFn)
+	if err != nil {
+		return 0, ierr.WithError(err).
+			WithHint("Failed to count wallet transactions").
+			WithReportableDetails(map[string]interface{}{
+				"wallet_id": f.WalletID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+	return count, nil
 }
 
 func (s *InMemoryWalletStore) UpdateTransactionStatus(ctx context.Context, id string, status types.TransactionStatus) error {
 	txn, err := s.GetTransactionByID(ctx, id)
 	if err != nil {
-		return err
+		return ierr.WithError(err).
+			WithHint("Failed to retrieve transaction for status update").
+			WithReportableDetails(map[string]interface{}{
+				"transaction_id": id,
+				"status":         status,
+			}).
+			Mark(ierr.ErrNotFound)
 	}
 
 	txn.TxStatus = status
-	return s.transactions.Update(ctx, id, txn)
+	if err := s.transactions.Update(ctx, id, txn); err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to update transaction status").
+			WithReportableDetails(map[string]interface{}{
+				"transaction_id": id,
+				"status":         status,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+	return nil
 }
 
 func (s *InMemoryWalletStore) Clear() {
@@ -342,7 +467,12 @@ func (s *InMemoryWalletStore) UpdateWallet(ctx context.Context, id string, w *wa
 	// Check if wallet exists and belongs to tenant
 	existing, err := s.wallets.Get(ctx, id)
 	if err != nil || existing.TenantID != types.GetTenantID(ctx) || existing.Status != types.StatusPublished {
-		return errors.New(errors.ErrCodeNotFound, "wallet not found")
+		return ierr.NewError("wallet not found").
+			WithHint("The wallet may not exist or may not belong to this tenant").
+			WithReportableDetails(map[string]interface{}{
+				"wallet_id": id,
+			}).
+			Mark(ierr.ErrNotFound)
 	}
 
 	// Update fields if provided
@@ -373,7 +503,12 @@ func (s *InMemoryWalletStore) UpdateWallet(ctx context.Context, id string, w *wa
 
 	// Save back to store
 	if err := s.wallets.Update(ctx, id, existing); err != nil {
-		return errors.Wrap(err, errors.ErrCodeSystemError, "failed to update wallet")
+		return ierr.WithError(err).
+			WithHint("Failed to update wallet").
+			WithReportableDetails(map[string]interface{}{
+				"wallet_id": id,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 	*w = *existing
 

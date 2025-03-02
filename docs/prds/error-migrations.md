@@ -156,8 +156,8 @@ feature.Use(middleware.ErrorHandler())
 - [x] Price
 - [x] Meter
 - [x] Entitlement
-- [ ] Payment
-- [ ] Wallet
+- [x] Payment
+- [x] Wallet
 - [ ] User
 - [ ] Tenant
 - [ ] Environment

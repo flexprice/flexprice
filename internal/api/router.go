@@ -158,6 +158,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		}
 
 		wallet := v1Private.Group("/wallets")
+		wallet.Use(middleware.ErrorHandler())
 		{
 			wallet.POST("", handlers.Wallet.CreateWallet)
 			wallet.GET("/:id", handlers.Wallet.GetWalletByID)
