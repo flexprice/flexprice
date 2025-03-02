@@ -6,7 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
-	"github.com/flexprice/flexprice/internal/errors"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -38,30 +38,56 @@ func NewPaymentService(params ServiceParams) PaymentService {
 func (s *paymentService) CreatePayment(ctx context.Context, req dto.CreatePaymentRequest) (*dto.PaymentResponse, error) {
 	p, err := req.ToPayment(ctx)
 	if err != nil {
-		return nil, err
+		return nil, err // Already using ierr in the DTO
 	}
 
 	if p.DestinationType != types.PaymentDestinationTypeInvoice {
-		return nil, errors.New(errors.ErrCodeValidation, "invalid destination type")
+		return nil, ierr.NewError("invalid destination type").
+			WithHint("Only invoice destination type is supported").
+			WithReportableDetails(map[string]interface{}{
+				"destination_type": p.DestinationType,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	// validate the destination
 	invoice, err := s.InvoiceRepo.Get(ctx, p.DestinationID)
 	if err != nil {
-		return nil, err
+		return nil, ierr.WithError(err).
+			WithHint("Failed to validate invoice").
+			WithReportableDetails(map[string]interface{}{
+				"invoice_id": p.DestinationID,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	// invoice validations
 	if invoice.PaymentStatus == types.PaymentStatusSucceeded {
-		return nil, errors.New(errors.ErrCodeValidation, "invoice is already paid")
+		return nil, ierr.NewError("invoice is already paid").
+			WithHint("Cannot create payment for an already paid invoice").
+			WithReportableDetails(map[string]interface{}{
+				"invoice_id": p.DestinationID,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	if invoice.InvoiceStatus == types.InvoiceStatusVoided {
-		return nil, errors.New(errors.ErrCodeValidation, "invoice is voided")
+		return nil, ierr.NewError("invoice is voided").
+			WithHint("Cannot create payment for a voided invoice").
+			WithReportableDetails(map[string]interface{}{
+				"invoice_id": p.DestinationID,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	if !types.IsMatchingCurrency(invoice.Currency, p.Currency) {
-		return nil, errors.New(errors.ErrCodeValidation, "invoice currency does not match payment currency")
+		return nil, ierr.NewError("invoice currency does not match payment currency").
+			WithHint("Payment currency must match invoice currency").
+			WithReportableDetails(map[string]interface{}{
+				"invoice_currency": invoice.Currency,
+				"payment_currency": p.Currency,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	// check if the payment method is credits
@@ -69,11 +95,21 @@ func (s *paymentService) CreatePayment(ctx context.Context, req dto.CreatePaymen
 		// Find wallets for the customer
 		wallets, err := s.WalletRepo.GetWalletsByCustomerID(ctx, invoice.CustomerID)
 		if err != nil {
-			return nil, errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to find wallets")
+			return nil, ierr.WithError(err).
+				WithHint("Failed to find customer wallets").
+				WithReportableDetails(map[string]interface{}{
+					"customer_id": invoice.CustomerID,
+				}).
+				Mark(ierr.ErrDatabase)
 		}
 
 		if len(wallets) == 0 {
-			return nil, errors.New(errors.ErrCodeNotFound, "no wallets found for customer")
+			return nil, ierr.NewError("no wallets found for customer").
+				WithHint("Customer must have at least one wallet to use credits").
+				WithReportableDetails(map[string]interface{}{
+					"customer_id": invoice.CustomerID,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
 
 		// Find first active wallet with matching currency and sufficient balance
@@ -88,7 +124,14 @@ func (s *paymentService) CreatePayment(ctx context.Context, req dto.CreatePaymen
 		}
 
 		if selectedWallet == nil {
-			return nil, errors.New(errors.ErrCodeInvalidOperation, "no wallet with sufficient balance found")
+			return nil, ierr.NewError("no wallet with sufficient balance found").
+				WithHint("Customer must have an active wallet with sufficient balance").
+				WithReportableDetails(map[string]interface{}{
+					"customer_id": invoice.CustomerID,
+					"amount":      p.Amount,
+					"currency":    p.Currency,
+				}).
+				Mark(ierr.ErrInvalidOperation)
 		}
 
 		p.PaymentMethodID = selectedWallet.ID
@@ -107,18 +150,25 @@ func (s *paymentService) CreatePayment(ctx context.Context, req dto.CreatePaymen
 
 	// validate the payment object before creating it
 	if err := p.Validate(); err != nil {
-		return nil, err
+		return nil, ierr.WithError(err).
+			WithHint("Invalid payment data").
+			Mark(ierr.ErrValidation)
 	}
 
 	if err := s.PaymentRepo.Create(ctx, p); err != nil {
-		return nil, err
+		return nil, err // Repository already using ierr
 	}
 
 	if req.ProcessPayment {
 		paymentProcessor := NewPaymentProcessorService(s.ServiceParams)
 		p, err = paymentProcessor.ProcessPayment(ctx, p.ID)
 		if err != nil {
-			return nil, err
+			return nil, ierr.WithError(err).
+				WithHint("Failed to process payment").
+				WithReportableDetails(map[string]interface{}{
+					"payment_id": p.ID,
+				}).
+				Mark(ierr.ErrInvalidOperation)
 		}
 	}
 
@@ -127,9 +177,15 @@ func (s *paymentService) CreatePayment(ctx context.Context, req dto.CreatePaymen
 
 // GetPayment gets a payment by ID
 func (s *paymentService) GetPayment(ctx context.Context, id string) (*dto.PaymentResponse, error) {
+	if id == "" {
+		return nil, ierr.NewError("payment_id is required").
+			WithHint("Payment ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
 	p, err := s.PaymentRepo.Get(ctx, id)
 	if err != nil {
-		return nil, err
+		return nil, err // Repository already using ierr
 	}
 
 	return dto.NewPaymentResponse(p), nil
@@ -137,9 +193,15 @@ func (s *paymentService) GetPayment(ctx context.Context, id string) (*dto.Paymen
 
 // UpdatePayment updates a payment
 func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.UpdatePaymentRequest) (*dto.PaymentResponse, error) {
+	if id == "" {
+		return nil, ierr.NewError("payment_id is required").
+			WithHint("Payment ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
 	p, err := s.PaymentRepo.Get(ctx, id)
 	if err != nil {
-		return nil, err
+		return nil, err // Repository already using ierr
 	}
 
 	if req.PaymentStatus != nil {
@@ -150,7 +212,7 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 	}
 
 	if err := s.PaymentRepo.Update(ctx, p); err != nil {
-		return nil, err
+		return nil, err // Repository already using ierr
 	}
 
 	return dto.NewPaymentResponse(p), nil
@@ -158,14 +220,20 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 
 // ListPayments lists payments based on filter
 func (s *paymentService) ListPayments(ctx context.Context, filter *types.PaymentFilter) (*dto.ListPaymentsResponse, error) {
+	if filter == nil {
+		filter = &types.PaymentFilter{
+			QueryFilter: types.NewDefaultQueryFilter(),
+		}
+	}
+
 	payments, err := s.PaymentRepo.List(ctx, filter)
 	if err != nil {
-		return nil, err
+		return nil, err // Repository already using ierr
 	}
 
 	count, err := s.PaymentRepo.Count(ctx, filter)
 	if err != nil {
-		return nil, err
+		return nil, err // Repository already using ierr
 	}
 
 	items := make([]*dto.PaymentResponse, len(payments))
@@ -185,5 +253,11 @@ func (s *paymentService) ListPayments(ctx context.Context, filter *types.Payment
 
 // DeletePayment deletes a payment
 func (s *paymentService) DeletePayment(ctx context.Context, id string) error {
-	return s.PaymentRepo.Delete(ctx, id)
+	if id == "" {
+		return ierr.NewError("payment_id is required").
+			WithHint("Payment ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	return s.PaymentRepo.Delete(ctx, id) // Repository already using ierr
 }

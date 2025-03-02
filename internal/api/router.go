@@ -207,6 +207,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		}
 
 		payments := v1Private.Group("/payments")
+		payments.Use(middleware.ErrorHandler())
 		{
 			payments.POST("", handlers.Payment.CreatePayment)
 			payments.GET("", handlers.Payment.ListPayments)

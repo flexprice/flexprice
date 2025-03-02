@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/types"
@@ -29,19 +30,23 @@ func NewPaymentHandler(service service.PaymentService, processor service.Payment
 // @Security ApiKeyAuth
 // @Param payment body dto.CreatePaymentRequest true "Payment configuration"
 // @Success 201 {object} dto.PaymentResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
 // @Router /payments [post]
 func (h *PaymentHandler) CreatePayment(c *gin.Context) {
 	var req dto.CreatePaymentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		h.log.Error("Failed to bind JSON", "error", err)
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
 	resp, err := h.service.CreatePayment(c.Request.Context(), req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.log.Error("Failed to create payment", "error", err)
+		c.Error(err)
 		return
 	}
 
@@ -56,19 +61,22 @@ func (h *PaymentHandler) CreatePayment(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Param id path string true "Payment ID"
 // @Success 200 {object} dto.PaymentResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
 // @Router /payments/{id} [get]
 func (h *PaymentHandler) GetPayment(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		c.Error(ierr.NewError("id is required").
+			WithHint("Payment ID is required").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
 	resp, err := h.service.GetPayment(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.log.Error("Failed to get payment", "error", err)
+		c.Error(err)
 		return
 	}
 
@@ -84,25 +92,31 @@ func (h *PaymentHandler) GetPayment(c *gin.Context) {
 // @Param id path string true "Payment ID"
 // @Param payment body dto.UpdatePaymentRequest true "Payment configuration"
 // @Success 200 {object} dto.PaymentResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
 // @Router /payments/{id} [put]
 func (h *PaymentHandler) UpdatePayment(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		c.Error(ierr.NewError("id is required").
+			WithHint("Payment ID is required").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
 	var req dto.UpdatePaymentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		h.log.Error("Failed to bind JSON", "error", err)
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
 	resp, err := h.service.UpdatePayment(c.Request.Context(), id, req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.log.Error("Failed to update payment", "error", err)
+		c.Error(err)
 		return
 	}
 
@@ -117,13 +131,16 @@ func (h *PaymentHandler) UpdatePayment(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Param filter query types.PaymentFilter true "Filter"
 // @Success 200 {object} dto.ListPaymentsResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
 // @Router /payments [get]
 func (h *PaymentHandler) ListPayments(c *gin.Context) {
 	var filter types.PaymentFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		h.log.Error("Failed to bind query", "error", err)
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid filter parameters").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
@@ -133,7 +150,8 @@ func (h *PaymentHandler) ListPayments(c *gin.Context) {
 
 	resp, err := h.service.ListPayments(c.Request.Context(), &filter)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.log.Error("Failed to list payments", "error", err)
+		c.Error(err)
 		return
 	}
 
@@ -148,18 +166,21 @@ func (h *PaymentHandler) ListPayments(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Param id path string true "Payment ID"
 // @Success 200 {object} gin.H
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
 // @Router /payments/{id} [delete]
 func (h *PaymentHandler) DeletePayment(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		c.Error(ierr.NewError("id is required").
+			WithHint("Payment ID is required").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
 	if err := h.service.DeletePayment(c.Request.Context(), id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.log.Error("Failed to delete payment", "error", err)
+		c.Error(err)
 		return
 	}
 
@@ -174,19 +195,22 @@ func (h *PaymentHandler) DeletePayment(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Param id path string true "Payment ID"
 // @Success 200 {object} dto.PaymentResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
 // @Router /payments/{id}/process [post]
 func (h *PaymentHandler) ProcessPayment(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		c.Error(ierr.NewError("id is required").
+			WithHint("Payment ID is required").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
 	p, err := h.processor.ProcessPayment(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.log.Error("Failed to process payment", "error", err)
+		c.Error(err)
 		return
 	}
 

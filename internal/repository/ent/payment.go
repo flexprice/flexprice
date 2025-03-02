@@ -2,14 +2,13 @@ package ent
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/payment"
 	"github.com/flexprice/flexprice/ent/paymentattempt"
 	domainPayment "github.com/flexprice/flexprice/internal/domain/payment"
-	"github.com/flexprice/flexprice/internal/errors"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
@@ -72,7 +71,14 @@ func (r *paymentRepository) Create(ctx context.Context, p *domainPayment.Payment
 		Save(ctx)
 
 	if err != nil {
-		return fmt.Errorf("failed to create payment: %w", err)
+		return ierr.WithError(err).
+			WithHint("Failed to create payment").
+			WithReportableDetails(map[string]interface{}{
+				"payment_id":       p.ID,
+				"destination_id":   p.DestinationID,
+				"destination_type": p.DestinationType,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	*p = *domainPayment.FromEnt(payment)
@@ -97,9 +103,19 @@ func (r *paymentRepository) Get(ctx context.Context, id string) (*domainPayment.
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return nil, errors.New(errors.ErrCodeNotFound, "payment not found")
+			return nil, ierr.WithError(err).
+				WithHint("Payment not found").
+				WithReportableDetails(map[string]interface{}{
+					"payment_id": id,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-		return nil, fmt.Errorf("failed to get payment: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve payment").
+			WithReportableDetails(map[string]interface{}{
+				"payment_id": id,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return domainPayment.FromEnt(p), nil
@@ -123,7 +139,12 @@ func (r *paymentRepository) List(ctx context.Context, filter *types.PaymentFilte
 
 	payments, err := query.All(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list payments: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list payments").
+			WithReportableDetails(map[string]interface{}{
+				"filter": filter,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return domainPayment.FromEntList(payments), nil
@@ -138,7 +159,12 @@ func (r *paymentRepository) Count(ctx context.Context, filter *types.PaymentFilt
 
 	count, err := query.Count(ctx)
 	if err != nil {
-		return 0, fmt.Errorf("failed to count payments: %w", err)
+		return 0, ierr.WithError(err).
+			WithHint("Failed to count payments").
+			WithReportableDetails(map[string]interface{}{
+				"filter": filter,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return count, nil
@@ -171,9 +197,19 @@ func (r *paymentRepository) Update(ctx context.Context, p *domainPayment.Payment
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return errors.New(errors.ErrCodeNotFound, "payment not found")
+			return ierr.WithError(err).
+				WithHint("Payment not found").
+				WithReportableDetails(map[string]interface{}{
+					"payment_id": p.ID,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-		return fmt.Errorf("failed to update payment: %w", err)
+		return ierr.WithError(err).
+			WithHint("Failed to update payment").
+			WithReportableDetails(map[string]interface{}{
+				"payment_id": p.ID,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return nil
@@ -197,9 +233,19 @@ func (r *paymentRepository) Delete(ctx context.Context, id string) error {
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return errors.New(errors.ErrCodeNotFound, "payment not found")
+			return ierr.WithError(err).
+				WithHint("Payment not found").
+				WithReportableDetails(map[string]interface{}{
+					"payment_id": id,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-		return fmt.Errorf("failed to delete payment: %w", err)
+		return ierr.WithError(err).
+			WithHint("Failed to delete payment").
+			WithReportableDetails(map[string]interface{}{
+				"payment_id": id,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return nil
@@ -223,9 +269,19 @@ func (r *paymentRepository) GetByIdempotencyKey(ctx context.Context, key string)
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return nil, errors.New(errors.ErrCodeNotFound, "payment not found")
+			return nil, ierr.WithError(err).
+				WithHint("Payment not found").
+				WithReportableDetails(map[string]interface{}{
+					"idempotency_key": key,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-		return nil, fmt.Errorf("failed to get payment by idempotency key: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get payment by idempotency key").
+			WithReportableDetails(map[string]interface{}{
+				"idempotency_key": key,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return domainPayment.FromEnt(p), nil
@@ -266,7 +322,13 @@ func (r *paymentRepository) CreateAttempt(ctx context.Context, a *domainPayment.
 		Save(ctx)
 
 	if err != nil {
-		return fmt.Errorf("failed to create payment attempt: %w", err)
+		return ierr.WithError(err).
+			WithHint("Failed to create payment attempt").
+			WithReportableDetails(map[string]interface{}{
+				"attempt_id": a.ID,
+				"payment_id": a.PaymentID,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	*a = *domainPayment.FromEntAttempt(attempt)
@@ -289,9 +351,19 @@ func (r *paymentRepository) GetAttempt(ctx context.Context, id string) (*domainP
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return nil, errors.New(errors.ErrCodeNotFound, "payment attempt not found")
+			return nil, ierr.WithError(err).
+				WithHint("Payment attempt not found").
+				WithReportableDetails(map[string]interface{}{
+					"attempt_id": id,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-		return nil, fmt.Errorf("failed to get payment attempt: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get payment attempt").
+			WithReportableDetails(map[string]interface{}{
+				"attempt_id": id,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return domainPayment.FromEntAttempt(a), nil
@@ -322,9 +394,20 @@ func (r *paymentRepository) UpdateAttempt(ctx context.Context, a *domainPayment.
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return errors.New(errors.ErrCodeNotFound, "payment attempt not found")
+			return ierr.WithError(err).
+				WithHint("Payment attempt not found").
+				WithReportableDetails(map[string]interface{}{
+					"attempt_id": a.ID,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-		return fmt.Errorf("failed to update payment attempt: %w", err)
+		return ierr.WithError(err).
+			WithHint("Failed to update payment attempt").
+			WithReportableDetails(map[string]interface{}{
+				"attempt_id": a.ID,
+				"payment_id": a.PaymentID,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return nil
@@ -346,7 +429,12 @@ func (r *paymentRepository) ListAttempts(ctx context.Context, paymentID string) 
 		All(ctx)
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to list payment attempts: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list payment attempts").
+			WithReportableDetails(map[string]interface{}{
+				"payment_id": paymentID,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return domainPayment.FromEntAttemptList(attempts), nil
@@ -369,9 +457,19 @@ func (r *paymentRepository) GetLatestAttempt(ctx context.Context, paymentID stri
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return nil, errors.New(errors.ErrCodeNotFound, "payment attempt not found")
+			return nil, ierr.WithError(err).
+				WithHint("Payment attempt not found").
+				WithReportableDetails(map[string]interface{}{
+					"payment_id": paymentID,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-		return nil, fmt.Errorf("failed to get latest payment attempt: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get latest payment attempt").
+			WithReportableDetails(map[string]interface{}{
+				"payment_id": paymentID,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return domainPayment.FromEntAttempt(a), nil
