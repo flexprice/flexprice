@@ -5,7 +5,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/go-playground/validator/v10"
+	"github.com/flexprice/flexprice/internal/validator"
 )
 
 type CreateCustomerRequest struct {
@@ -42,7 +42,7 @@ type CustomerResponse struct {
 type ListCustomersResponse = types.ListResponse[*CustomerResponse]
 
 func (r *CreateCustomerRequest) Validate() error {
-	return validator.New().Struct(r)
+	return validator.ValidateRequest(r)
 }
 
 func (r *CreateCustomerRequest) ToCustomer(ctx context.Context) *customer.Customer {
@@ -64,5 +64,5 @@ func (r *CreateCustomerRequest) ToCustomer(ctx context.Context) *customer.Custom
 }
 
 func (r *UpdateCustomerRequest) Validate() error {
-	return validator.New().Struct(r)
+	return validator.ValidateRequest(r)
 }

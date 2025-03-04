@@ -29,9 +29,7 @@ func NewCustomerService(repo customer.Repository) CustomerService {
 
 func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCustomerRequest) (*dto.CustomerResponse, error) {
 	if err := req.Validate(); err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Invalid customer data provided").
-			Mark(ierr.ErrValidation)
+		return nil, err
 	}
 
 	cust := req.ToCustomer(ctx)
@@ -111,9 +109,7 @@ func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto
 	}
 
 	if err := req.Validate(); err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Invalid customer data provided").
-			Mark(ierr.ErrValidation)
+		return nil, err
 	}
 
 	cust, err := s.repo.Get(ctx, id)

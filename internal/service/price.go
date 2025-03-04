@@ -92,7 +92,10 @@ func (s *priceService) GetPricesByPlanID(ctx context.Context, planID string) (*d
 }
 
 func (s *priceService) GetPrices(ctx context.Context, filter *types.PriceFilter) (*dto.ListPricesResponse, error) {
-	meterService := NewMeterService(s.meterRepo)
+	if filter == nil {
+		filter = types.NewDefaultPriceFilter()
+	}
+
 	// Validate expand fields
 	if err := filter.GetExpand().Validate(types.PriceExpandConfig); err != nil {
 		return nil, ierr.WithError(err).
@@ -100,131 +103,236 @@ func (s *priceService) GetPrices(ctx context.Context, filter *types.PriceFilter)
 			Mark(ierr.ErrValidation)
 	}
 
-	// Fetch prices
+	// Get prices
 	prices, err := s.repo.List(ctx, filter)
 	if err != nil {
-		return nil, err // Repository errors are already properly formatted
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve prices").
+			Mark(ierr.ErrDatabase)
 	}
 
-	priceCount, err := s.repo.Count(ctx, filter)
+	// Get count
+	count, err := s.repo.Count(ctx, filter)
 	if err != nil {
-		return nil, err // Repository errors are already properly formatted
+		return nil, ierr.WithError(err).
+			WithHint("Failed to count prices").
+			Mark(ierr.ErrDatabase)
 	}
 
+	// Build response
 	response := &dto.ListPricesResponse{
 		Items: make([]*dto.PriceResponse, len(prices)),
+		Pagination: types.PaginationResponse{
+			Total:  count,
+			Limit:  filter.GetLimit(),
+			Offset: filter.GetOffset(),
+		},
 	}
 
-	// If meters are requested to be expanded, fetch all meters in one query
-	var metersByID map[string]*dto.MeterResponse
-	if filter.GetExpand().Has(types.ExpandMeters) && len(prices) > 0 {
-		// Fetch all meters in one query
-		metersResponse, err := meterService.GetAllMeters(ctx)
-		if err != nil {
-			return nil, ierr.WithError(err).
-				WithHint("Failed to fetch meters for prices").
-				Mark(ierr.ErrDatabase)
-		}
-
-		// Create a map for quick meter lookup
-		metersByID = make(map[string]*dto.MeterResponse, len(metersResponse.Items))
-		for _, m := range metersResponse.Items {
-			metersByID[m.ID] = m
-		}
-
-		s.logger.Debugw("fetched meters for prices", "count", len(metersResponse.Items))
+	// If no prices found, return empty response
+	if len(prices) == 0 {
+		return response, nil
 	}
 
-	// Build response with expanded fields
-	for i, p := range prices {
-		response.Items[i] = &dto.PriceResponse{Price: p}
+	// Expand meters if requested
+	if filter.GetExpand().Has(types.ExpandMeters) {
+		// Collect meter IDs
+		meterIDs := make([]string, 0)
+		for _, p := range prices {
+			if p.MeterID != "" {
+				meterIDs = append(meterIDs, p.MeterID)
+			}
+		}
 
-		// Add meter if requested and available
-		if filter.GetExpand().Has(types.ExpandMeters) && p.MeterID != "" {
-			if m, ok := metersByID[p.MeterID]; ok {
-				response.Items[i].Meter = m
+		// Get meters if needed
+		var meters []*meter.Meter
+		if len(meterIDs) > 0 {
+			meterFilter := types.NewNoLimitMeterFilter()
+			meterFilter.IDs = meterIDs
+
+			meters, err = s.meterRepo.ListAll(ctx, meterFilter)
+			if err != nil {
+				return nil, ierr.WithError(err).
+					WithHint("Failed to retrieve meters").
+					Mark(ierr.ErrDatabase)
+			}
+		}
+
+		// Create meter map for quick lookup
+		meterMap := make(map[string]*meter.Meter)
+		for _, m := range meters {
+			meterMap[m.ID] = m
+		}
+
+		// Build response with meters
+		for i, p := range prices {
+			priceResp := &dto.PriceResponse{
+				Price: p,
+			}
+
+			// Add meter if available
+			if p.MeterID != "" {
+				if m, ok := meterMap[p.MeterID]; ok {
+					priceResp.Meter = m
+				}
+			}
+
+			response.Items[i] = priceResp
+		}
+	} else {
+		// Simple response without meters
+		for i, p := range prices {
+			response.Items[i] = &dto.PriceResponse{
+				Price: p,
 			}
 		}
 	}
-
-	response.Pagination = types.NewPaginationResponse(
-		priceCount,
-		filter.GetLimit(),
-		filter.GetOffset(),
-	)
 
 	return response, nil
 }
 
 func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.UpdatePriceRequest) (*dto.PriceResponse, error) {
 	if id == "" {
-		return nil, ierr.NewError("price_id is required").
-			WithHint("Price ID is required").
+		return nil, ierr.NewError("price ID is required").
+			WithHint("Please provide a valid price ID").
 			Mark(ierr.ErrValidation)
 	}
 
-	price, err := s.repo.Get(ctx, id)
+	// Validate request
+	if err := req.Validate(); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Invalid price data").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Get existing price
+	existingPrice, err := s.repo.Get(ctx, id)
 	if err != nil {
-		return nil, err // Repository errors are already properly formatted
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve price").
+			WithReportableDetails(map[string]interface{}{
+				"price_id": id,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
-	price.Description = req.Description
-	price.Metadata = req.Metadata
-	price.LookupKey = req.LookupKey
-
-	if err := s.repo.Update(ctx, price); err != nil {
-		return nil, err // Repository errors are already properly formatted
+	// Apply updates
+	if req.Description != nil {
+		existingPrice.Description = *req.Description
 	}
 
-	return &dto.PriceResponse{Price: price}, nil
+	if req.Metadata != nil {
+		existingPrice.Metadata = *req.Metadata
+	}
+
+	// Update price
+	if err := s.repo.Update(ctx, existingPrice); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to update price").
+			WithReportableDetails(map[string]interface{}{
+				"price_id": id,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	return &dto.PriceResponse{Price: existingPrice}, nil
 }
 
 func (s *priceService) DeletePrice(ctx context.Context, id string) error {
 	if id == "" {
-		return ierr.NewError("price_id is required").
-			WithHint("Price ID is required").
+		return ierr.NewError("price ID is required").
+			WithHint("Please provide a valid price ID").
 			Mark(ierr.ErrValidation)
 	}
 
-	if err := s.repo.Delete(ctx, id); err != nil {
-		return err // Repository errors are already properly formatted
+	// Check if price exists
+	_, err := s.repo.Get(ctx, id)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to retrieve price").
+			WithReportableDetails(map[string]interface{}{
+				"price_id": id,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
+
+	// Delete price
+	if err := s.repo.Delete(ctx, id); err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to delete price").
+			WithReportableDetails(map[string]interface{}{
+				"price_id": id,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
 	return nil
 }
 
-// CalculateCost calculates the cost for a given price and usage
-// returns the cost in main currency units (e.g., 1.00 = $1.00)
 func (s *priceService) CalculateCost(ctx context.Context, price *price.Price, quantity decimal.Decimal) decimal.Decimal {
-	cost := decimal.Zero
-	if quantity.IsZero() {
-		return cost
+	if price == nil {
+		s.logger.Error("Cannot calculate cost for nil price")
+		return decimal.Zero
 	}
 
-	switch price.BillingModel {
-	case types.BILLING_MODEL_FLAT_FEE:
-		cost = price.CalculateAmount(quantity)
-
-	case types.BILLING_MODEL_PACKAGE:
-		if price.TransformQuantity.DivideBy <= 0 {
-			return decimal.Zero
-		}
-
-		transformedQuantity := quantity.Div(decimal.NewFromInt(int64(price.TransformQuantity.DivideBy)))
-
-		if price.TransformQuantity.Round == types.ROUND_UP {
-			transformedQuantity = transformedQuantity.Ceil()
-		} else if price.TransformQuantity.Round == types.ROUND_DOWN {
-			transformedQuantity = transformedQuantity.Floor()
-		}
-
-		cost = price.CalculateAmount(transformedQuantity)
-
-	case types.BILLING_MODEL_TIERED:
-		cost = s.calculateTieredCost(ctx, price, quantity)
+	// For flat fee, just return the amount
+	if price.BillingModel == types.BillingModelFlatFee {
+		return price.Amount
 	}
 
-	finalCost := cost.Round(types.GetCurrencyPrecision(price.Currency))
-	return finalCost
+	// For per unit pricing, multiply by quantity
+	if price.BillingModel == types.BillingModelPerUnit {
+		return price.Amount.Mul(quantity)
+	}
+
+	// For tiered pricing, calculate based on tiers
+	if price.BillingModel == types.BillingModelTiered {
+		// Apply quantity transformation if needed
+		transformedQuantity := quantity
+		if price.TransformQuantity.DivideBy > 0 {
+			transformedQuantity = quantity.Div(decimal.NewFromInt(int64(price.TransformQuantity.DivideBy)))
+			
+			// Apply rounding if specified
+			if price.TransformQuantity.Round == "up" {
+				transformedQuantity = transformedQuantity.Ceil()
+			} else if price.TransformQuantity.Round == "down" {
+				transformedQuantity = transformedQuantity.Floor()
+			}
+		}
+
+		// Calculate cost based on tier mode
+		if price.TierMode == types.BillingTierGraduated {
+			return s.calculateGraduatedTierCost(price, transformedQuantity)
+		} else if price.TierMode == types.BillingTierVolume {
+			return s.calculateVolumeTierCost(price, transformedQuantity)
+		}
+	}
+
+	// For package pricing, calculate based on package size
+	if price.BillingModel == types.BillingModelPackage {
+		// Apply quantity transformation
+		transformedQuantity := quantity
+		if price.TransformQuantity.DivideBy > 0 {
+			transformedQuantity = quantity.Div(decimal.NewFromInt(int64(price.TransformQuantity.DivideBy)))
+			
+			// Apply rounding if specified
+			if price.TransformQuantity.Round == "up" {
+				transformedQuantity = transformedQuantity.Ceil()
+			} else if price.TransformQuantity.Round == "down" {
+				transformedQuantity = transformedQuantity.Floor()
+			} else {
+				// Default to ceiling for package pricing
+				transformedQuantity = transformedQuantity.Ceil()
+			}
+		}
+
+		// Multiply package count by price
+		return price.Amount.Mul(transformedQuantity)
+	}
+
+	// Default fallback
+	s.logger.Warn("Unsupported billing model, returning zero", "billing_model", price.BillingModel)
+	return decimal.Zero
 }
 
 // calculateTieredCost calculates cost for tiered pricing

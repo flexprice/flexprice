@@ -2,10 +2,11 @@ package dto
 
 import (
 	"context"
-	"errors"
 
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/validator"
 )
 
 // CreateEntitlementRequest represents the request to create a new entitlement
@@ -21,8 +22,14 @@ type CreateEntitlementRequest struct {
 }
 
 func (r *CreateEntitlementRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+
 	if r.FeatureID == "" {
-		return errors.New("feature_id is required")
+		return ierr.NewError("feature_id is required").
+			WithHint("Feature ID is required").
+			Mark(ierr.ErrValidation)
 	}
 
 	if err := r.FeatureType.Validate(); err != nil {
@@ -39,7 +46,9 @@ func (r *CreateEntitlementRequest) Validate() error {
 		}
 	case types.FeatureTypeStatic:
 		if r.StaticValue == "" {
-			return errors.New("static_value is required for static features")
+			return ierr.NewError("static_value is required for static features").
+				WithHint("Static value is required for static features").
+				Mark(ierr.ErrValidation)
 		}
 	}
 

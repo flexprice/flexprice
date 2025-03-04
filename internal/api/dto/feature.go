@@ -3,12 +3,9 @@ package dto
 import (
 	"context"
 
-	"github.com/cockroachdb/errors"
-
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/go-playground/validator/v10"
 )
 
 type CreateFeatureRequest struct {
@@ -30,18 +27,7 @@ func (r *CreateFeatureRequest) Validate() error {
 	}
 
 	if err := r.Type.Validate(); err != nil {
-		details := map[string]any{}
-		var validateErrs validator.ValidationErrors
-		if errors.As(err, &validateErrs) {
-			for _, err := range validateErrs {
-				details[err.Field()] = err.Error()
-			}
-		}
-
-		return ierr.WithError(err).
-			WithHint("Invalid feature type").
-			WithReportableDetails(details).
-			Mark(ierr.ErrValidation)
+		return err
 	}
 
 	if r.Type == types.FeatureTypeMetered {

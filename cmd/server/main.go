@@ -24,6 +24,7 @@ import (
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/temporal"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/validator"
 	"github.com/flexprice/flexprice/internal/webhook"
 	"go.uber.org/fx"
 
@@ -59,6 +60,9 @@ func main() {
 		fx.Provide(
 			// Config
 			config.NewConfig,
+
+			// Validator
+			validator.NewValidator,
 
 			// Logger
 			logger.NewLogger,

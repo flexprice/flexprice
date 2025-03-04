@@ -3,15 +3,14 @@ package service
 import (
 	"context"
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
-	"github.com/flexprice/flexprice/internal/domain/errors"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/publisher"
 	"github.com/flexprice/flexprice/internal/types"
@@ -50,7 +49,9 @@ func NewEventService(
 
 func (s *eventService) CreateEvent(ctx context.Context, createEventRequest *dto.IngestEventRequest) error {
 	if err := validator.New().Struct(createEventRequest); err != nil {
-		return fmt.Errorf("validation failed: %w", err)
+		return ierr.WithError(err).
+			WithHint("Invalid event format").
+			Mark(ierr.ErrValidation)
 	}
 
 	tenantID := types.GetTenantID(ctx)
@@ -79,12 +80,20 @@ func (s *eventService) CreateEvent(ctx context.Context, createEventRequest *dto.
 
 func (s *eventService) GetUsage(ctx context.Context, getUsageRequest *dto.GetUsageRequest) (*events.AggregationResult, error) {
 	if err := getUsageRequest.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid request: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Invalid usage request format").
+			Mark(ierr.ErrValidation)
 	}
 
 	result, err := s.eventRepo.GetUsage(ctx, getUsageRequest.ToUsageParams())
 	if err != nil {
-		return nil, fmt.Errorf("failed to get usage: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve usage data").
+			WithReportableDetails(map[string]interface{}{
+				"event_name":       getUsageRequest.EventName,
+				"aggregation_type": getUsageRequest.AggregationType,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return result, nil
@@ -94,95 +103,101 @@ func (s *eventService) GetUsageByMeter(ctx context.Context, req *dto.GetUsageByM
 	m, err := s.meterRepo.GetMeter(ctx, req.MeterID)
 	if err != nil {
 		s.logger.Errorf("failed to get meter: %v", err)
-		return nil, errors.NewAttributeNotFoundError("meter")
+		return nil, ierr.WithError(err).
+			WithHint("Meter not found").
+			WithReportableDetails(map[string]interface{}{
+				"meter_id": req.MeterID,
+			}).
+			Mark(ierr.ErrNotFound)
 	}
 
 	getUsageRequest := dto.GetUsageRequest{
-		ExternalCustomerID: req.ExternalCustomerID,
-		CustomerID:         req.CustomerID,
-		EventName:          m.EventName,
-		PropertyName:       m.Aggregation.Field,
-		AggregationType:    string(m.Aggregation.Type),
-		StartTime:          req.StartTime,
-		WindowSize:         req.WindowSize,
-		EndTime:            req.EndTime,
-		Filters:            req.Filters,
+		EventName:       m.EventName,
+		AggregationType: m.Aggregation.Type,
+		PropertyName:    m.Aggregation.Field,
+		StartTime:       req.StartTime,
+		EndTime:         req.EndTime,
+		WindowSize:      req.WindowSize,
 	}
 
-	usage, err := s.GetUsage(ctx, &getUsageRequest)
-	if err != nil {
-		return nil, fmt.Errorf("failed to calculate usage: %w", err)
-	}
-
-	if m.ResetUsage == types.ResetUsageNever {
-		getHistoricUsageRequest := getUsageRequest
-		getHistoricUsageRequest.StartTime = time.Time{}
-		getHistoricUsageRequest.EndTime = req.StartTime
-		getHistoricUsageRequest.WindowSize = ""
-
-		historicUsage, err := s.GetUsage(ctx, &getHistoricUsageRequest)
+	// For historical usage, we need to get both historical and current usage
+	if req.IncludeHistorical && !req.StartTime.IsZero() {
+		historicalResult, err := s.GetUsage(ctx, &getUsageRequest)
 		if err != nil {
-			return nil, fmt.Errorf("calculate before usage: %w", err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to retrieve historical usage data").
+				WithReportableDetails(map[string]interface{}{
+					"meter_id": req.MeterID,
+				}).
+				Mark(ierr.ErrDatabase)
 		}
 
-		return s.combineResults(historicUsage, usage, m), nil
+		// If we have current usage, combine them
+		if req.CurrentStartTime != nil && req.CurrentEndTime != nil {
+			currentRequest := getUsageRequest
+			currentRequest.StartTime = *req.CurrentStartTime
+			currentRequest.EndTime = *req.CurrentEndTime
+
+			currentResult, err := s.GetUsage(ctx, &currentRequest)
+			if err != nil {
+				return nil, ierr.WithError(err).
+					WithHint("Failed to retrieve current usage data").
+					WithReportableDetails(map[string]interface{}{
+						"meter_id": req.MeterID,
+					}).
+					Mark(ierr.ErrDatabase)
+			}
+
+			return s.combineResults(historicalResult, currentResult, m), nil
+		}
+
+		return historicalResult, nil
 	}
 
-	return usage, nil
+	// Regular usage query
+	return s.GetUsage(ctx, &getUsageRequest)
 }
 
 func (s *eventService) GetUsageByMeterWithFilters(ctx context.Context, req *dto.GetUsageByMeterRequest, filterGroups map[string]map[string][]string) ([]*events.AggregationResult, error) {
 	m, err := s.meterRepo.GetMeter(ctx, req.MeterID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get meter: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Meter not found").
+			WithReportableDetails(map[string]interface{}{
+				"meter_id": req.MeterID,
+			}).
+			Mark(ierr.ErrNotFound)
 	}
 
-	meterFilters := make(map[string][]string)
-	for _, filter := range m.Filters {
-		meterFilters[filter.Key] = filter.Values
-	}
-
-	// Extract and sort priceIDs for stable ordering
-	priceIDs := make([]string, 0, len(filterGroups))
-	for priceID := range filterGroups {
-		priceIDs = append(priceIDs, priceID)
-	}
-	sort.Strings(priceIDs)
-
-	prioritizedGroups := make([]events.FilterGroup, 0, len(filterGroups))
-	// Assign priority deterministically
-	for i, priceID := range priceIDs {
-		priority := len(priceIDs) - i
-		prioritizedGroups = append(prioritizedGroups, events.FilterGroup{
-			ID:       priceID,
-			Priority: priority,
-			Filters:  filterGroups[priceID],
+	// Convert filter groups to the format expected by the repository
+	convertedFilterGroups := make([]events.FilterGroup, 0, len(filterGroups))
+	for id, filters := range filterGroups {
+		convertedFilterGroups = append(convertedFilterGroups, events.FilterGroup{
+			ID:      id,
+			Filters: filters,
 		})
 	}
 
 	params := &events.UsageWithFiltersParams{
 		UsageParams: &events.UsageParams{
-			EventName:          m.EventName,
-			PropertyName:       m.Aggregation.Field,
-			AggregationType:    m.Aggregation.Type,
-			ExternalCustomerID: req.ExternalCustomerID,
-			StartTime:          req.StartTime,
-			EndTime:            req.EndTime,
-			Filters:            meterFilters,
+			EventName:       m.EventName,
+			AggregationType: m.Aggregation.Type,
+			PropertyName:    m.Aggregation.Field,
+			StartTime:       req.StartTime,
+			EndTime:         req.EndTime,
+			WindowSize:      req.WindowSize,
 		},
-		FilterGroups: prioritizedGroups,
+		FilterGroups: convertedFilterGroups,
 	}
 
 	results, err := s.eventRepo.GetUsageWithFilters(ctx, params)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get usage with filters: %w", err)
-	}
-
-	if len(results) == 0 {
-		s.logger.Debugw("no usage found for meter with filters",
-			"meter_id", m.ID,
-			"filter_groups", len(filterGroups))
-		return results, nil
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve usage data with filters").
+			WithReportableDetails(map[string]interface{}{
+				"meter_id": req.MeterID,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return results, nil
@@ -208,64 +223,58 @@ func (s *eventService) combineResults(historicUsage, currentUsage *events.Aggreg
 }
 
 func (s *eventService) GetEvents(ctx context.Context, req *dto.GetEventsRequest) (*dto.GetEventsResponse, error) {
-	if req.PageSize <= 0 || req.PageSize > 50 {
-		req.PageSize = 50
+	if err := req.Validate(); err != nil {
+		return nil, err
 	}
 
-	iterFirst, err := parseEventIteratorToStruct(req.IterFirstKey)
-	if err != nil {
-		return nil, fmt.Errorf("invalid before cursor key: %w", err)
-	}
-
-	iterLast, err := parseEventIteratorToStruct(req.IterLastKey)
-	if err != nil {
-		return nil, fmt.Errorf("invalid after cursor key: %w", err)
-	}
-
-	eventsList, err := s.eventRepo.GetEvents(ctx, &events.GetEventsParams{
-		ExternalCustomerID: req.ExternalCustomerID,
+	// Convert DTO to repository params
+	params := &events.GetEventsParams{
 		EventName:          req.EventName,
-		EventID:            req.EventID,
+		ExternalCustomerID: req.ExternalCustomerID,
 		StartTime:          req.StartTime,
 		EndTime:            req.EndTime,
-		IterFirst:          iterFirst,
-		IterLast:           iterLast,
-		PageSize:           req.PageSize + 1,
-	})
+		PageSize:           req.PageSize,
+		EventID:            req.EventID,
+	}
+
+	// Handle pagination
+	if req.NextCursor != "" {
+		params.IterFirst = &req.NextCursor
+	}
+
+	// Get events from repository
+	eventsList, err := s.eventRepo.GetEvents(ctx, params)
 	if err != nil {
-		return nil, fmt.Errorf("get events: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve events").
+			WithReportableDetails(map[string]interface{}{
+				"event_name": req.EventName,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
-	hasMore := len(eventsList) > req.PageSize
-	if hasMore {
-		eventsList = eventsList[:req.PageSize]
-	}
-
+	// Build response
 	response := &dto.GetEventsResponse{
-		Events:  make([]dto.Event, len(eventsList)),
-		HasMore: hasMore,
+		Events: make([]dto.EventResponse, 0, len(eventsList)),
 	}
 
-	if len(eventsList) > 0 {
-		firstEvent := eventsList[0]
-		lastEvent := eventsList[len(eventsList)-1]
-		response.IterFirstKey = createEventIteratorKey(firstEvent.Timestamp, firstEvent.ID)
-
-		if hasMore {
-			response.IterLastKey = createEventIteratorKey(lastEvent.Timestamp, lastEvent.ID)
-		}
-	}
-
-	for i, event := range eventsList {
-		response.Events[i] = dto.Event{
+	// Convert events to DTO
+	for _, event := range eventsList {
+		response.Events = append(response.Events, dto.EventResponse{
 			ID:                 event.ID,
+			EventName:          event.EventName,
 			ExternalCustomerID: event.ExternalCustomerID,
 			CustomerID:         event.CustomerID,
-			EventName:          event.EventName,
 			Timestamp:          event.Timestamp,
-			Properties:         event.Properties,
 			Source:             event.Source,
-		}
+			Properties:         event.Properties,
+		})
+	}
+
+	// Set pagination cursors
+	if len(eventsList) > 0 {
+		lastEvent := eventsList[len(eventsList)-1]
+		response.NextCursor = createEventIteratorKey(lastEvent.Timestamp, lastEvent.ID)
 	}
 
 	return response, nil

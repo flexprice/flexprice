@@ -41,11 +41,6 @@ func (h *AuthHandler) SignUp(c *gin.Context) {
 		return
 	}
 
-	if err := req.Validate(); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
 	// For Supabase auth, extract token from Authorization header if available
 	if req.Token == "" {
 		authHeader := c.GetHeader("Authorization")
@@ -81,7 +76,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	if err := req.Validate(); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.Error(err)
 		return
 	}
 

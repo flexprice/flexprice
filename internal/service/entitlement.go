@@ -52,9 +52,7 @@ func NewEntitlementService(
 
 func (s *entitlementService) CreateEntitlement(ctx context.Context, req dto.CreateEntitlementRequest) (*dto.EntitlementResponse, error) {
 	if err := req.Validate(); err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Invalid request format").
-			Mark(ierr.ErrValidation)
+		return nil, err
 	}
 
 	if req.PlanID == "" {

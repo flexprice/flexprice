@@ -6,7 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/go-playground/validator/v10"
+	"github.com/flexprice/flexprice/internal/validator"
 )
 
 type IngestEventRequest struct {
@@ -107,11 +107,11 @@ func FromAggregationResult(result *events.AggregationResult) *GetUsageResponse {
 }
 
 func (r *IngestEventRequest) Validate() error {
-	return validator.New().Struct(r)
+	return validator.ValidateRequest(r)
 }
 
 func (r *GetUsageRequest) Validate() error {
-	return validator.New().Struct(r)
+	return validator.ValidateRequest(r)
 }
 
 func (r *GetUsageRequest) ToUsageParams() *events.UsageParams {
@@ -133,7 +133,7 @@ func (r *GetUsageRequest) ToUsageParams() *events.UsageParams {
 }
 
 func (r *GetUsageByMeterRequest) Validate() error {
-	err := validator.New().Struct(r)
+	err := validator.ValidateRequest(r)
 	if err != nil {
 		return err
 	}
@@ -146,5 +146,5 @@ func (r *GetUsageByMeterRequest) Validate() error {
 }
 
 func (r *GetEventsRequest) Validate() error {
-	return validator.New().Struct(r)
+	return validator.ValidateRequest(r)
 }

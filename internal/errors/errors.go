@@ -10,15 +10,15 @@ import (
 // Common error types that can be used across the application
 // TODO: move to errors.New from cockroachdb/errors
 var (
-	ErrNotFound         = New(ErrCodeNotFound, "resource not found")
-	ErrAlreadyExists    = New(ErrCodeAlreadyExists, "resource already exists")
-	ErrVersionConflict  = New(ErrCodeVersionConflict, "version conflict")
-	ErrValidation       = New(ErrCodeValidation, "validation error")
-	ErrInvalidOperation = New(ErrCodeInvalidOperation, "invalid operation")
-	ErrPermissionDenied = New(ErrCodePermissionDenied, "permission denied")
-	ErrHTTPClient       = New(ErrCodeHTTPClient, "http client error")
-	ErrDatabase         = New(ErrCodeDatabase, "database error")
-	ErrSystem           = New(ErrCodeSystemError, "system error")
+	ErrNotFound         = new(ErrCodeNotFound, "resource not found")
+	ErrAlreadyExists    = new(ErrCodeAlreadyExists, "resource already exists")
+	ErrVersionConflict  = new(ErrCodeVersionConflict, "version conflict")
+	ErrValidation       = new(ErrCodeValidation, "validation error")
+	ErrInvalidOperation = new(ErrCodeInvalidOperation, "invalid operation")
+	ErrPermissionDenied = new(ErrCodePermissionDenied, "permission denied")
+	ErrHTTPClient       = new(ErrCodeHTTPClient, "http client error")
+	ErrDatabase         = new(ErrCodeDatabase, "database error")
+	ErrSystem           = new(ErrCodeSystemError, "system error")
 	// maps errors to http status codes
 	statusCodeMap = map[error]int{
 		ErrHTTPClient:       http.StatusInternalServerError,
@@ -83,7 +83,7 @@ func (e *InternalError) Is(target error) bool {
 }
 
 // New creates a new InternalError
-func New(code string, message string) *InternalError {
+func new(code string, message string) *InternalError {
 	return &InternalError{
 		Code:    code,
 		Message: message,
@@ -91,7 +91,7 @@ func New(code string, message string) *InternalError {
 }
 
 // Wrap wraps an existing error with additional context
-func Wrap(err error, code string, message string) *InternalError {
+func wrap(err error, code string, message string) *InternalError {
 	if err == nil {
 		return nil
 	}
@@ -103,7 +103,7 @@ func Wrap(err error, code string, message string) *InternalError {
 }
 
 // WithOp adds operation information to an error
-func WithOp(err error, op string) *InternalError {
+func withOp(err error, op string) *InternalError {
 	if err == nil {
 		return nil
 	}
@@ -119,6 +119,10 @@ func WithOp(err error, op string) *InternalError {
 
 	e.Op = op
 	return e
+}
+
+func as(err error, target any) bool {
+	return errors.As(err, target)
 }
 
 // IsNotFound checks if an error is a not found error

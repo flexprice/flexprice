@@ -1,7 +1,7 @@
 package dto
 
 import (
-	"github.com/go-playground/validator/v10"
+	"github.com/flexprice/flexprice/internal/validator"
 )
 
 type SignUpRequest struct {
@@ -24,9 +24,9 @@ type AuthResponse struct {
 }
 
 func (r *SignUpRequest) Validate() error {
-	return validator.New().Struct(r)
+	return validator.ValidateRequest(r)
 }
 
 func (r *LoginRequest) Validate() error {
-	return validator.New().Struct(r)
+	return validator.ValidateRequest(r)
 }

@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -27,13 +26,13 @@ func NewEnvironmentService(repo environment.Repository) EnvironmentService {
 
 func (s *environmentService) CreateEnvironment(ctx context.Context, req dto.CreateEnvironmentRequest) (*dto.EnvironmentResponse, error) {
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid request: %w", err)
+		return nil, err
 	}
 
 	env := req.ToEnvironment(ctx)
 
 	if err := s.repo.Create(ctx, env); err != nil {
-		return nil, fmt.Errorf("failed to create environment: %w", err)
+		return nil, err
 	}
 
 	return dto.NewEnvironmentResponse(env), nil
@@ -42,7 +41,7 @@ func (s *environmentService) CreateEnvironment(ctx context.Context, req dto.Crea
 func (s *environmentService) GetEnvironment(ctx context.Context, id string) (*dto.EnvironmentResponse, error) {
 	env, err := s.repo.Get(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get environment: %w", err)
+		return nil, err
 	}
 
 	return dto.NewEnvironmentResponse(env), nil
@@ -51,7 +50,7 @@ func (s *environmentService) GetEnvironment(ctx context.Context, id string) (*dt
 func (s *environmentService) GetEnvironments(ctx context.Context, filter types.Filter) (*dto.ListEnvironmentsResponse, error) {
 	environments, err := s.repo.List(ctx, filter)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get environments: %w", err)
+		return nil, err
 	}
 
 	response := &dto.ListEnvironmentsResponse{
@@ -70,12 +69,12 @@ func (s *environmentService) GetEnvironments(ctx context.Context, filter types.F
 
 func (s *environmentService) UpdateEnvironment(ctx context.Context, id string, req dto.UpdateEnvironmentRequest) (*dto.EnvironmentResponse, error) {
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid request: %w", err)
+		return nil, err
 	}
 
 	env, err := s.repo.Get(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get environment: %w", err)
+		return nil, err
 	}
 
 	if req.Name != "" {
@@ -87,7 +86,7 @@ func (s *environmentService) UpdateEnvironment(ctx context.Context, id string, r
 	env.UpdatedAt = time.Now()
 
 	if err := s.repo.Update(ctx, env); err != nil {
-		return nil, fmt.Errorf("failed to update environment: %w", err)
+		return nil, err
 	}
 
 	return dto.NewEnvironmentResponse(env), nil

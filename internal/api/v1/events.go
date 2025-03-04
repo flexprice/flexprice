@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/gin-gonic/gin"
@@ -32,27 +33,29 @@ func NewEventsHandler(eventService service.EventService, log *logger.Logger) *Ev
 // @Security ApiKeyAuth
 // @Param event body dto.IngestEventRequest true "Event data"
 // @Success 202 {object} map[string]string "message:Event accepted for processing"
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
 // @Router /events [post]
 func (h *EventsHandler) IngestEvent(c *gin.Context) {
 	ctx := c.Request.Context()
 	var req dto.IngestEventRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.log.Error("Failed to bind JSON", "error", err)
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request payload"})
+		c.Error(ierr.NewError("invalid request payload").
+			WithHint("Invalid request payload").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
 	if err := req.Validate(); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		c.Error(err)
 		return
 	}
 
 	err := h.eventService.CreateEvent(ctx, &req)
 	if err != nil {
 		h.log.Error("Failed to ingest event", "error", err)
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to ingest event"})
+		c.Error(err)
 		return
 	}
 

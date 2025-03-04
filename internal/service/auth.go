@@ -59,9 +59,7 @@ func NewAuthService(
 // SignUp creates a new user and returns an auth token
 func (s *authService) SignUp(ctx context.Context, req *dto.SignUpRequest) (*dto.AuthResponse, error) {
 	if err := req.Validate(); err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Invalid request format").
-			Mark(ierr.ErrValidation)
+		return nil, err
 	}
 
 	// Check if user already exists in our system

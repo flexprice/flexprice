@@ -6,7 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/go-playground/validator/v10"
+	"github.com/flexprice/flexprice/internal/validator"
 )
 
 type CreateEnvironmentRequest struct {
@@ -35,7 +35,7 @@ type ListEnvironmentsResponse struct {
 }
 
 func (r *CreateEnvironmentRequest) Validate() error {
-	return validator.New().Struct(r)
+	return validator.ValidateRequest(r)
 }
 
 func (r *CreateEnvironmentRequest) ToEnvironment(ctx context.Context) *environment.Environment {
@@ -48,7 +48,7 @@ func (r *CreateEnvironmentRequest) ToEnvironment(ctx context.Context) *environme
 }
 
 func (r *UpdateEnvironmentRequest) Validate() error {
-	return validator.New().Struct(r)
+	return validator.ValidateRequest(r)
 }
 
 func NewEnvironmentResponse(e *environment.Environment) *EnvironmentResponse {

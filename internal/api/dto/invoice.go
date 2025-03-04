@@ -8,10 +8,8 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/go-playground/validator/v10"
+	"github.com/flexprice/flexprice/internal/validator"
 	"github.com/shopspring/decimal"
-
-	"github.com/cockroachdb/errors"
 )
 
 // CreateInvoiceRequest represents the request to create a new invoice
@@ -36,16 +34,8 @@ type CreateInvoiceRequest struct {
 }
 
 func (r *CreateInvoiceRequest) Validate() error {
-	validate := validator.New()
-	if err := validate.Struct(r); err != nil {
-		details := make(map[string]any)
-		var validateErrs validator.ValidationErrors
-		if errors.As(err, &validateErrs) {
-			for _, err := range validateErrs {
-				details[err.Field()] = err.Error()
-			}
-		}
-		return ierr.WithError(err).WithHint("request validation failed").WithReportableDetails(details).Mark(ierr.ErrValidation)
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
 	}
 
 	if r.AmountDue.IsNegative() {
@@ -176,14 +166,8 @@ type CreateInvoiceLineItemRequest struct {
 }
 
 func (r *CreateInvoiceLineItemRequest) Validate() error {
-	validate := validator.New()
-	if err := validate.Struct(r); err != nil {
-		return ierr.WithError(err).
-			WithHint("Request validation failed").
-			WithReportableDetails(map[string]interface{}{
-				"request": r,
-			}).
-			Mark(ierr.ErrValidation)
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
 	}
 
 	if r.Amount.IsNegative() {

@@ -14,7 +14,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 type PlanService interface {
@@ -121,142 +120,293 @@ func (s *planService) CreatePlan(ctx context.Context, req dto.CreatePlanRequest)
 }
 
 func (s *planService) GetPlan(ctx context.Context, id string) (*dto.PlanResponse, error) {
-	plan, err := s.planRepo.Get(ctx, id)
-	if err != nil {
-		return nil, err // Repository already returns properly formatted errors
+	if id == "" {
+		return nil, ierr.NewError("plan ID is required").
+			WithHint("Please provide a valid plan ID").
+			Mark(ierr.ErrValidation)
 	}
 
-	priceService := NewPriceService(s.priceRepo, s.meterRepo, s.logger)
-	entitlementService := NewEntitlementService(s.entitlementRepo, s.planRepo, s.featureRepo, s.meterRepo, s.logger)
-
-	// Get prices for the plan
-	pricesResponse, err := priceService.GetPricesByPlanID(ctx, plan.ID)
+	plan, err := s.planRepo.Get(ctx, id)
 	if err != nil {
 		return nil, ierr.WithError(err).
-			WithHint("Failed to get prices for plan").
+			WithHint("Failed to retrieve plan").
+			WithReportableDetails(map[string]interface{}{
+				"plan_id": id,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	// Get prices for the plan
+	prices, err := s.priceRepo.ListAll(ctx, types.NewNoLimitPriceFilter().WithPlanIDs([]string{plan.ID}))
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve plan prices").
+			WithReportableDetails(map[string]interface{}{
+				"plan_id": id,
+			}).
 			Mark(ierr.ErrDatabase)
 	}
 
 	// Get entitlements for the plan
-	entitlements, err := entitlementService.GetPlanEntitlements(ctx, plan.ID)
+	entitlements, err := s.entitlementRepo.ListAll(ctx, types.NewNoLimitEntitlementFilter().WithPlanIDs([]string{plan.ID}))
 	if err != nil {
 		return nil, ierr.WithError(err).
-			WithHint("Failed to get entitlements for plan").
+			WithHint("Failed to retrieve plan entitlements").
+			WithReportableDetails(map[string]interface{}{
+				"plan_id": id,
+			}).
 			Mark(ierr.ErrDatabase)
 	}
 
-	response := &dto.PlanResponse{
-		Plan:         plan,
-		Prices:       pricesResponse.Items,
-		Entitlements: entitlements.Items,
+	// Get features for the entitlements
+	featureIDs := make([]string, 0, len(entitlements))
+	for _, e := range entitlements {
+		featureIDs = append(featureIDs, e.FeatureID)
 	}
+
+	var features []*feature.Feature
+	if len(featureIDs) > 0 {
+		features, err = s.featureRepo.ListAll(ctx, types.NewNoLimitFeatureFilter().WithIDs(featureIDs))
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Failed to retrieve features").
+				WithReportableDetails(map[string]interface{}{
+					"plan_id": id,
+				}).
+				Mark(ierr.ErrDatabase)
+		}
+	}
+
+	// Get meters for the prices
+	meterIDs := make([]string, 0, len(prices))
+	for _, p := range prices {
+		if p.MeterID != "" {
+			meterIDs = append(meterIDs, p.MeterID)
+		}
+	}
+
+	var meters []*meter.Meter
+	if len(meterIDs) > 0 {
+		meters, err = s.meterRepo.ListAll(ctx, types.NewNoLimitMeterFilter().WithIDs(meterIDs))
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Failed to retrieve meters").
+				WithReportableDetails(map[string]interface{}{
+					"plan_id": id,
+				}).
+				Mark(ierr.ErrDatabase)
+		}
+	}
+
+	// Build response
+	response := &dto.PlanResponse{
+		Plan: plan,
+	}
+
+	// Add prices to response
+	response.Prices = make([]*dto.PriceResponse, len(prices))
+	for i, p := range prices {
+		priceResp := &dto.PriceResponse{
+			Price: p,
+		}
+
+		// Add meter to price if it exists
+		for _, m := range meters {
+			if m.ID == p.MeterID {
+				priceResp.Meter = m
+				break
+			}
+		}
+
+		response.Prices[i] = priceResp
+	}
+
+	// Add entitlements to response
+	response.Entitlements = make([]*dto.EntitlementResponse, len(entitlements))
+	for i, e := range entitlements {
+		entResp := &dto.EntitlementResponse{
+			Entitlement: e,
+		}
+
+		// Add feature to entitlement if it exists
+		for _, f := range features {
+			if f.ID == e.FeatureID {
+				entResp.Feature = f
+				break
+			}
+		}
+
+		response.Entitlements[i] = entResp
+	}
+
 	return response, nil
 }
 
 func (s *planService) GetPlans(ctx context.Context, filter *types.PlanFilter) (*dto.ListPlansResponse, error) {
 	if filter == nil {
-		filter = types.NewPlanFilter()
+		filter = types.NewDefaultPlanFilter()
 	}
 
-	if err := filter.Validate(); err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Invalid filter parameters").
-			Mark(ierr.ErrValidation)
-	}
-
+	// Get plans
 	plans, err := s.planRepo.List(ctx, filter)
 	if err != nil {
-		return nil, err // Repository already returns properly formatted errors
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve plans").
+			Mark(ierr.ErrDatabase)
 	}
 
+	// Get count
 	count, err := s.planRepo.Count(ctx, filter)
 	if err != nil {
-		return nil, err // Repository already returns properly formatted errors
+		return nil, ierr.WithError(err).
+			WithHint("Failed to count plans").
+			Mark(ierr.ErrDatabase)
 	}
 
+	// Build response
 	response := &dto.ListPlansResponse{
 		Items: make([]*dto.PlanResponse, len(plans)),
-		Pagination: types.NewPaginationResponse(
-			count,
-			filter.GetLimit(),
-			filter.GetOffset(),
-		),
+		Pagination: types.PaginationResponse{
+			Total:  count,
+			Limit:  filter.GetLimit(),
+			Offset: filter.GetOffset(),
+		},
 	}
 
-	if len(plans) == 0 {
-		return response, nil
-	}
-
-	for i, plan := range plans {
-		response.Items[i] = &dto.PlanResponse{Plan: plan}
-	}
-
-	// Expand entitlements and prices if requested
-	planIDs := lo.Map(plans, func(plan *plan.Plan, _ int) string {
-		return plan.ID
-	})
-
-	// Create maps for storing expanded data
-	pricesByPlanID := make(map[string][]*dto.PriceResponse)
-	entitlementsByPlanID := make(map[string][]*dto.EntitlementResponse)
-
-	priceService := NewPriceService(s.priceRepo, s.meterRepo, s.logger)
-	entitlementService := NewEntitlementService(s.entitlementRepo, s.planRepo, s.featureRepo, s.meterRepo, s.logger)
-
-	// If prices or entitlements expansion is requested, fetch them in bulk
-	// Fetch prices if requested
-	if filter.GetExpand().Has(types.ExpandPrices) {
-		priceFilter := types.NewNoLimitPriceFilter().
-			WithPlanIDs(planIDs).
-			WithStatus(types.StatusPublished)
-
-		// If meters should be expanded, propagate the expansion to prices
-		if filter.GetExpand().Has(types.ExpandMeters) {
-			priceFilter = priceFilter.WithExpand(string(types.ExpandMeters))
+	// If expand is requested, get related data
+	if filter.GetExpand().Has(types.ExpandPrices) || filter.GetExpand().Has(types.ExpandEntitlements) {
+		// Get all plan IDs
+		planIDs := make([]string, len(plans))
+		for i, p := range plans {
+			planIDs[i] = p.ID
 		}
 
-		prices, err := priceService.GetPrices(ctx, priceFilter)
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch prices: %w", err)
+		// Get prices for all plans
+		var prices []*price.Price
+		if filter.GetExpand().Has(types.ExpandPrices) {
+			prices, err = s.priceRepo.ListAll(ctx, types.NewNoLimitPriceFilter().WithPlanIDs(planIDs))
+			if err != nil {
+				return nil, ierr.WithError(err).
+					WithHint("Failed to retrieve prices").
+					Mark(ierr.ErrDatabase)
+			}
 		}
 
-		for _, p := range prices.Items {
-			pricesByPlanID[p.PlanID] = append(pricesByPlanID[p.PlanID], p)
-		}
-	}
-
-	// Fetch entitlements if requested
-	if filter.GetExpand().Has(types.ExpandEntitlements) {
-		entFilter := types.NewNoLimitEntitlementFilter().
-			WithPlanIDs(planIDs).
-			WithStatus(types.StatusPublished)
-
-		// If features should be expanded, propagate the expansion to entitlements
-		if filter.GetExpand().Has(types.ExpandFeatures) {
-			entFilter = entFilter.WithExpand(string(types.ExpandFeatures))
+		// Get entitlements for all plans
+		var entitlements []*entitlement.Entitlement
+		if filter.GetExpand().Has(types.ExpandEntitlements) {
+			entitlements, err = s.entitlementRepo.ListAll(ctx, types.NewNoLimitEntitlementFilter().WithPlanIDs(planIDs))
+			if err != nil {
+				return nil, ierr.WithError(err).
+					WithHint("Failed to retrieve entitlements").
+					Mark(ierr.ErrDatabase)
+			}
 		}
 
-		entitlements, err := entitlementService.ListEntitlements(ctx, entFilter)
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch entitlements: %w", err)
+		// Get features for all entitlements
+		var features []*feature.Feature
+		if filter.GetExpand().Has(types.ExpandEntitlements) && len(entitlements) > 0 {
+			featureIDs := make([]string, 0, len(entitlements))
+			for _, e := range entitlements {
+				featureIDs = append(featureIDs, e.FeatureID)
+			}
+
+			features, err = s.featureRepo.ListAll(ctx, types.NewNoLimitFeatureFilter().WithIDs(featureIDs))
+			if err != nil {
+				return nil, ierr.WithError(err).
+					WithHint("Failed to retrieve features").
+					Mark(ierr.ErrDatabase)
+			}
 		}
 
-		for _, e := range entitlements.Items {
-			entitlementsByPlanID[e.PlanID] = append(entitlementsByPlanID[e.PlanID], e)
+		// Get meters for all prices
+		var meters []*meter.Meter
+		if filter.GetExpand().Has(types.ExpandPrices) && len(prices) > 0 {
+			meterIDs := make([]string, 0, len(prices))
+			for _, p := range prices {
+				if p.MeterID != "" {
+					meterIDs = append(meterIDs, p.MeterID)
+				}
+			}
+
+			if len(meterIDs) > 0 {
+				meters, err = s.meterRepo.ListAll(ctx, types.NewNoLimitMeterFilter().WithIDs(meterIDs))
+				if err != nil {
+					return nil, ierr.WithError(err).
+						WithHint("Failed to retrieve meters").
+						Mark(ierr.ErrDatabase)
+				}
+			}
 		}
-	}
 
-	// Build response with expanded fields
-	for i, plan := range plans {
+		// Build plan responses with expanded data
+		for i, plan := range plans {
+			planResp := &dto.PlanResponse{
+				Plan: plan,
+			}
 
-		// Add prices if available
-		if prices, ok := pricesByPlanID[plan.ID]; ok {
-			response.Items[i].Prices = prices
+			// Add prices to plan
+			if filter.GetExpand().Has(types.ExpandPrices) {
+				planPrices := make([]*price.Price, 0)
+				for _, p := range prices {
+					if p.PlanID == plan.ID {
+						planPrices = append(planPrices, p)
+					}
+				}
+
+				planResp.Prices = make([]*dto.PriceResponse, len(planPrices))
+				for j, p := range planPrices {
+					priceResp := &dto.PriceResponse{
+						Price: p,
+					}
+
+					// Add meter to price
+					for _, m := range meters {
+						if m.ID == p.MeterID {
+							priceResp.Meter = m
+							break
+						}
+					}
+
+					planResp.Prices[j] = priceResp
+				}
+			}
+
+			// Add entitlements to plan
+			if filter.GetExpand().Has(types.ExpandEntitlements) {
+				planEntitlements := make([]*entitlement.Entitlement, 0)
+				for _, e := range entitlements {
+					if e.PlanID == plan.ID {
+						planEntitlements = append(planEntitlements, e)
+					}
+				}
+
+				planResp.Entitlements = make([]*dto.EntitlementResponse, len(planEntitlements))
+				for j, e := range planEntitlements {
+					entResp := &dto.EntitlementResponse{
+						Entitlement: e,
+					}
+
+					// Add feature to entitlement
+					for _, f := range features {
+						if f.ID == e.FeatureID {
+							entResp.Feature = f
+							break
+						}
+					}
+
+					planResp.Entitlements[j] = entResp
+				}
+			}
+
+			response.Items[i] = planResp
 		}
-
-		// Add entitlements if available
-		if entitlements, ok := entitlementsByPlanID[plan.ID]; ok {
-			response.Items[i].Entitlements = entitlements
+	} else {
+		// Simple response without expanded data
+		for i, plan := range plans {
+			response.Items[i] = &dto.PlanResponse{
+				Plan: plan,
+			}
 		}
 	}
 

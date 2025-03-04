@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/errors"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -250,7 +251,12 @@ func (p *paymentProcessor) createNewAttempt(ctx context.Context, paymentObj *pay
 	// Get latest attempt to determine attempt number
 	latestAttempt, err := p.PaymentRepo.GetLatestAttempt(ctx, paymentObj.ID)
 	if err != nil && !errors.IsNotFound(err) {
-		return nil, fmt.Errorf("failed to get latest attempt: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get latest attempt").
+			WithReportableDetails(map[string]interface{}{
+				"payment_id": paymentObj.ID,
+			}).
+			Mark(ierr.ErrSystem)
 	}
 
 	attemptNumber := 1
@@ -269,7 +275,12 @@ func (p *paymentProcessor) createNewAttempt(ctx context.Context, paymentObj *pay
 	}
 
 	if err := p.PaymentRepo.CreateAttempt(ctx, attempt); err != nil {
-		return nil, fmt.Errorf("failed to create payment attempt: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to create payment attempt").
+			WithReportableDetails(map[string]interface{}{
+				"payment_id": paymentObj.ID,
+			}).
+			Mark(ierr.ErrSystem)
 	}
 
 	return attempt, nil
