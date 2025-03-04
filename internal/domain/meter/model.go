@@ -1,11 +1,11 @@
 package meter
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/schema"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -136,27 +136,50 @@ func (m *Meter) ToEntAggregation() schema.MeterAggregation {
 // Validate validates the meter configuration
 func (m *Meter) Validate() error {
 	if m.ID == "" {
-		return fmt.Errorf("id is required")
+		return ierr.NewError("id is required").
+			WithHint("Please provide a valid meter ID").
+			Mark(ierr.ErrValidation)
 	}
 	if m.Name == "" {
-		return fmt.Errorf("name is required")
+		return ierr.NewError("name is required").
+			WithHint("Please provide a name for the meter").
+			Mark(ierr.ErrValidation)
 	}
 	if m.EventName == "" {
-		return fmt.Errorf("event_name is required")
+		return ierr.NewError("event_name is required").
+			WithHint("Please specify the event name to track").
+			Mark(ierr.ErrValidation)
 	}
 	if !m.Aggregation.Type.Validate() {
-		return fmt.Errorf("invalid aggregation type: %s", m.Aggregation.Type)
+		return ierr.NewError("invalid aggregation type").
+			WithHint("Please provide a valid aggregation type").
+			WithReportableDetails(map[string]interface{}{
+				"aggregation_type": m.Aggregation.Type,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 	if m.Aggregation.Type.RequiresField() && m.Aggregation.Field == "" {
-		return fmt.Errorf("field is required for aggregation type: %s", m.Aggregation.Type)
+		return ierr.NewError("field is required for aggregation type").
+			WithHint("Please specify a field for this aggregation type").
+			WithReportableDetails(map[string]interface{}{
+				"aggregation_type": m.Aggregation.Type,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	for _, filter := range m.Filters {
 		if filter.Key == "" {
-			return fmt.Errorf("filter key cannot be empty")
+			return ierr.NewError("filter key cannot be empty").
+				WithHint("Please provide a key for each filter").
+				Mark(ierr.ErrValidation)
 		}
 		if len(filter.Values) == 0 {
-			return fmt.Errorf("filter values cannot be empty for key: %s", filter.Key)
+			return ierr.NewError("filter values cannot be empty").
+				WithHint("Please provide at least one value for each filter").
+				WithReportableDetails(map[string]interface{}{
+					"filter_key": filter.Key,
+				}).
+				Mark(ierr.ErrValidation)
 		}
 	}
 	return nil

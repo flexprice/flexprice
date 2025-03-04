@@ -1,9 +1,8 @@
 package entitlement
 
 import (
-	"fmt"
-
 	"github.com/flexprice/flexprice/ent"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -25,13 +24,19 @@ type Entitlement struct {
 // Validate performs validation on the entitlement
 func (e *Entitlement) Validate() error {
 	if e.PlanID == "" {
-		return fmt.Errorf("plan_id is required")
+		return ierr.NewError("plan_id is required").
+			WithHint("Please provide a valid plan ID").
+			Mark(ierr.ErrValidation)
 	}
 	if e.FeatureID == "" {
-		return fmt.Errorf("feature_id is required")
+		return ierr.NewError("feature_id is required").
+			WithHint("Please provide a valid feature ID").
+			Mark(ierr.ErrValidation)
 	}
 	if e.FeatureType == "" {
-		return fmt.Errorf("feature_type is required")
+		return ierr.NewError("feature_type is required").
+			WithHint("Please specify the feature type").
+			Mark(ierr.ErrValidation)
 	}
 
 	// Validate based on feature type
@@ -39,12 +44,22 @@ func (e *Entitlement) Validate() error {
 	case types.FeatureTypeMetered:
 		if e.UsageResetPeriod != "" {
 			if err := e.UsageResetPeriod.Validate(); err != nil {
-				return fmt.Errorf("invalid usage_reset_period: %w", err)
+				return ierr.WithError(err).
+					WithHint("Invalid usage reset period").
+					WithReportableDetails(map[string]interface{}{
+						"usage_reset_period": e.UsageResetPeriod,
+					}).
+					Mark(ierr.ErrValidation)
 			}
 		}
 	case types.FeatureTypeStatic:
 		if e.StaticValue == "" {
-			return fmt.Errorf("static_value is required for static features")
+			return ierr.NewError("static_value is required for static features").
+				WithHint("Please provide a static value for this feature").
+				WithReportableDetails(map[string]interface{}{
+					"feature_type": e.FeatureType,
+				}).
+				Mark(ierr.ErrValidation)
 		}
 	}
 

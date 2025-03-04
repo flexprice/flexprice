@@ -3,12 +3,12 @@ package clickhouse
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/domain/events"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/repository/clickhouse/builder"
 	"github.com/flexprice/flexprice/internal/types"
@@ -27,12 +27,16 @@ func NewEventRepository(store *clickhouse.ClickHouseStore, logger *logger.Logger
 func (r *EventRepository) InsertEvent(ctx context.Context, event *events.Event) error {
 	propertiesJSON, err := json.Marshal(event.Properties)
 	if err != nil {
-		return fmt.Errorf("marshal properties: %w", err)
+		return ierr.WithError(err).
+			WithHint("Failed to marshal event properties").
+			WithReportableDetails(map[string]interface{}{
+				"event_id": event.ID,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
-	// Adding a layer to validate the event before inserting it
 	if err := event.Validate(); err != nil {
-		return fmt.Errorf("validate event: %w", err)
+		return err
 	}
 
 	query := `
@@ -55,7 +59,13 @@ func (r *EventRepository) InsertEvent(ctx context.Context, event *events.Event) 
 	)
 
 	if err != nil {
-		return fmt.Errorf("insert event: %w", err)
+		return ierr.WithError(err).
+			WithHint("Failed to insert event").
+			WithReportableDetails(map[string]interface{}{
+				"event_id":   event.ID,
+				"event_name": event.EventName,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return nil
@@ -69,7 +79,12 @@ type UsageResult struct {
 func (r *EventRepository) GetUsage(ctx context.Context, params *events.UsageParams) (*events.AggregationResult, error) {
 	aggregator := GetAggregator(params.AggregationType)
 	if aggregator == nil {
-		return nil, fmt.Errorf("unsupported aggregation type: %s", params.AggregationType)
+		return nil, ierr.NewError("unsupported aggregation type").
+			WithHint("The specified aggregation type is not supported").
+			WithReportableDetails(map[string]interface{}{
+				"aggregation_type": params.AggregationType,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	query := aggregator.GetQuery(ctx, params)
@@ -77,7 +92,13 @@ func (r *EventRepository) GetUsage(ctx context.Context, params *events.UsagePara
 
 	rows, err := r.store.GetConn().Query(ctx, query)
 	if err != nil {
-		return nil, fmt.Errorf("execute query: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to execute usage query").
+			WithReportableDetails(map[string]interface{}{
+				"event_name":       params.EventName,
+				"aggregation_type": params.AggregationType,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 	defer rows.Close()
 
@@ -95,17 +116,34 @@ func (r *EventRepository) GetUsage(ctx context.Context, params *events.UsagePara
 			case types.AggregationCount, types.AggregationCountUnique:
 				var countValue uint64
 				if err := rows.Scan(&windowSize, &countValue); err != nil {
-					return nil, fmt.Errorf("scan result: %w", err)
+					return nil, ierr.WithError(err).
+						WithHint("Failed to scan count result").
+						WithReportableDetails(map[string]interface{}{
+							"window_size": windowSize,
+							"count_value": countValue,
+						}).
+						Mark(ierr.ErrDatabase)
 				}
 				value = decimal.NewFromUint64(countValue)
 			case types.AggregationSum, types.AggregationAvg:
 				var floatValue float64
 				if err := rows.Scan(&windowSize, &floatValue); err != nil {
-					return nil, fmt.Errorf("scan result: %w", err)
+					return nil, ierr.WithError(err).
+						WithHint("Failed to scan float result").
+						WithReportableDetails(map[string]interface{}{
+							"window_size": windowSize,
+							"float_value": floatValue,
+						}).
+						Mark(ierr.ErrDatabase)
 				}
 				value = decimal.NewFromFloat(floatValue)
 			default:
-				return nil, fmt.Errorf("unsupported aggregation type for scanning: %s", params.AggregationType)
+				return nil, ierr.NewError("unsupported aggregation type for scanning").
+					WithHint("The specified aggregation type is not supported for scanning").
+					WithReportableDetails(map[string]interface{}{
+						"aggregation_type": params.AggregationType,
+					}).
+					Mark(ierr.ErrValidation)
 			}
 
 			result.Results = append(result.Results, events.UsageResult{
@@ -114,23 +152,37 @@ func (r *EventRepository) GetUsage(ctx context.Context, params *events.UsagePara
 			})
 		}
 	} else {
-		// Non-windowed query - process single row
 		if rows.Next() {
 			switch params.AggregationType {
 			case types.AggregationCount, types.AggregationCountUnique:
 				var value uint64
 				if err := rows.Scan(&value); err != nil {
-					return nil, fmt.Errorf("scan result: %w", err)
+					return nil, ierr.WithError(err).
+						WithHint("Failed to scan count result").
+						WithReportableDetails(map[string]interface{}{
+							"value": value,
+						}).
+						Mark(ierr.ErrDatabase)
 				}
 				result.Value = decimal.NewFromUint64(value)
 			case types.AggregationSum, types.AggregationAvg:
 				var value float64
 				if err := rows.Scan(&value); err != nil {
-					return nil, fmt.Errorf("scan result: %w", err)
+					return nil, ierr.WithError(err).
+						WithHint("Failed to scan float result").
+						WithReportableDetails(map[string]interface{}{
+							"value": value,
+						}).
+						Mark(ierr.ErrDatabase)
 				}
 				result.Value = decimal.NewFromFloat(value)
 			default:
-				return nil, fmt.Errorf("unsupported aggregation type for scanning: %s", params.AggregationType)
+				return nil, ierr.NewError("unsupported aggregation type for scanning").
+					WithHint("The specified aggregation type is not supported for scanning").
+					WithReportableDetails(map[string]interface{}{
+						"aggregation_type": params.AggregationType,
+					}).
+					Mark(ierr.ErrValidation)
 			}
 		}
 	}
@@ -139,8 +191,14 @@ func (r *EventRepository) GetUsage(ctx context.Context, params *events.UsagePara
 }
 
 func (r *EventRepository) GetUsageWithFilters(ctx context.Context, params *events.UsageWithFiltersParams) ([]*events.AggregationResult, error) {
-	if params == nil || params.UsageParams == nil {
-		return nil, fmt.Errorf("params cannot be nil")
+	aggregator := GetAggregator(params.AggregationType)
+	if aggregator == nil {
+		return nil, ierr.NewError("unsupported aggregation type").
+			WithHint("The specified aggregation type is not supported").
+			WithReportableDetails(map[string]interface{}{
+				"aggregation_type": params.AggregationType,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	// Build query using the new builder
@@ -158,10 +216,15 @@ func (r *EventRepository) GetUsageWithFilters(ctx context.Context, params *event
 		"query", query,
 		"params", queryParams)
 
-	// Execute query with named parameters
 	rows, err := r.store.GetConn().Query(ctx, query, queryParams)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute query: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to execute usage query with filters").
+			WithReportableDetails(map[string]interface{}{
+				"event_name":       params.UsageParams.EventName,
+				"aggregation_type": params.AggregationType,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 	defer rows.Close()
 
@@ -179,17 +242,32 @@ func (r *EventRepository) GetUsageWithFilters(ctx context.Context, params *event
 		case types.AggregationCount, types.AggregationCountUnique:
 			var value uint64
 			if err := rows.Scan(&filterGroupID, &value); err != nil {
-				return nil, fmt.Errorf("failed to scan count row: %w", err)
+				return nil, ierr.WithError(err).
+					WithHint("Failed to scan count row").
+					WithReportableDetails(map[string]interface{}{
+						"filter_group_id": filterGroupID,
+					}).
+					Mark(ierr.ErrDatabase)
 			}
 			result.Value = decimal.NewFromUint64(value)
 		case types.AggregationSum, types.AggregationAvg:
 			var value float64
 			if err := rows.Scan(&filterGroupID, &value); err != nil {
-				return nil, fmt.Errorf("failed to scan float row: %w", err)
+				return nil, ierr.WithError(err).
+					WithHint("Failed to scan float row").
+					WithReportableDetails(map[string]interface{}{
+						"filter_group_id": filterGroupID,
+					}).
+					Mark(ierr.ErrDatabase)
 			}
 			result.Value = decimal.NewFromFloat(value)
 		default:
-			return nil, fmt.Errorf("unsupported aggregation type: %v", params.AggregationType)
+			return nil, ierr.NewError("unsupported aggregation type").
+				WithHint("The specified aggregation type is not supported").
+				WithReportableDetails(map[string]interface{}{
+					"aggregation_type": params.AggregationType,
+				}).
+				Mark(ierr.ErrValidation)
 		}
 
 		result.Metadata = map[string]string{
@@ -199,9 +277,10 @@ func (r *EventRepository) GetUsageWithFilters(ctx context.Context, params *event
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating rows: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Error iterating rows").
+			Mark(ierr.ErrDatabase)
 	}
-
 	return results, nil
 }
 
@@ -261,7 +340,12 @@ func (r *EventRepository) GetEvents(ctx context.Context, params *events.GetEvent
 	// Execute query
 	rows, err := r.store.GetConn().Query(ctx, baseQuery, args...)
 	if err != nil {
-		return nil, fmt.Errorf("query events: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to query events").
+			WithReportableDetails(map[string]interface{}{
+				"event_name": params.EventName,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 	defer rows.Close()
 
@@ -281,11 +365,22 @@ func (r *EventRepository) GetEvents(ctx context.Context, params *events.GetEvent
 			&propertiesJSON,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("scan event: %w", err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to scan event").
+				WithReportableDetails(map[string]interface{}{
+					"event_id": event.ID,
+				}).
+				Mark(ierr.ErrDatabase)
 		}
 
 		if err := json.Unmarshal([]byte(propertiesJSON), &event.Properties); err != nil {
-			return nil, fmt.Errorf("unmarshal properties: %w", err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to unmarshal event properties").
+				WithReportableDetails(map[string]interface{}{
+					"event_id":   event.ID,
+					"properties": propertiesJSON,
+				}).
+				Mark(ierr.ErrValidation)
 		}
 
 		eventsList = append(eventsList, &event)

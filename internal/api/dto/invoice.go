@@ -2,7 +2,6 @@ package dto
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -179,20 +178,31 @@ type CreateInvoiceLineItemRequest struct {
 func (r *CreateInvoiceLineItemRequest) Validate() error {
 	validate := validator.New()
 	if err := validate.Struct(r); err != nil {
-		return err
+		return ierr.WithError(err).
+			WithHint("Request validation failed").
+			WithReportableDetails(map[string]interface{}{
+				"request": r,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	if r.Amount.IsNegative() {
-		return fmt.Errorf("amount must be non-negative")
+		return ierr.NewError("amount must be non-negative").
+			WithHint("Amount cannot be negative").
+			Mark(ierr.ErrValidation)
 	}
 
 	if r.Quantity.IsNegative() {
-		return fmt.Errorf("quantity must be non-negative")
+		return ierr.NewError("quantity must be non-negative").
+			WithHint("Quantity cannot be negative").
+			Mark(ierr.ErrValidation)
 	}
 
 	if r.PeriodStart != nil && r.PeriodEnd != nil {
 		if r.PeriodEnd.Before(*r.PeriodStart) {
-			return fmt.Errorf("period_end must be after period_start")
+			return ierr.NewError("period_end must be after period_start").
+				WithHint("Subscription cannot end before it starts").
+				Mark(ierr.ErrValidation)
 		}
 	}
 
@@ -289,7 +299,9 @@ type UpdateInvoicePaymentRequest struct {
 
 func (r *UpdateInvoicePaymentRequest) Validate() error {
 	if r.PaymentStatus == "" {
-		return fmt.Errorf("payment_status is required")
+		return ierr.NewError("payment_status is required").
+			WithHint("Payment status is required").
+			Mark(ierr.ErrValidation)
 	}
 	return nil
 }
@@ -302,7 +314,12 @@ type UpdatePaymentStatusRequest struct {
 
 func (r *UpdatePaymentStatusRequest) Validate() error {
 	if r.Amount != nil && r.Amount.IsNegative() {
-		return fmt.Errorf("amount must be non-negative")
+		return ierr.NewError("amount must be non-negative").
+			WithHint("Amount cannot be negative").
+			WithReportableDetails(map[string]interface{}{
+				"amount": r.Amount.String(),
+			}).
+			Mark(ierr.ErrValidation)
 	}
 	return nil
 }

@@ -2,14 +2,13 @@ package ent
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/secret"
 	"github.com/flexprice/flexprice/internal/cache"
 	domainSecret "github.com/flexprice/flexprice/internal/domain/secret"
-	"github.com/flexprice/flexprice/internal/errors"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
@@ -74,7 +73,14 @@ func (r *secretRepository) Create(ctx context.Context, s *domainSecret.Secret) e
 	secret, err := create.Save(ctx)
 
 	if err != nil {
-		return errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to create secret")
+		return ierr.WithError(err).
+			WithHint("Failed to create secret").
+			WithReportableDetails(map[string]interface{}{
+				"secret_id": s.ID,
+				"type":      s.Type,
+				"provider":  s.Provider,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	*s = *domainSecret.FromEnt(secret)
@@ -95,9 +101,19 @@ func (r *secretRepository) Get(ctx context.Context, id string) (*domainSecret.Se
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return nil, errors.Wrap(err, errors.ErrCodeNotFound, "secret not found")
+			return nil, ierr.WithError(err).
+				WithHint("Secret not found").
+				WithReportableDetails(map[string]interface{}{
+					"secret_id": id,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-		return nil, errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to get secret")
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve secret").
+			WithReportableDetails(map[string]interface{}{
+				"secret_id": id,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return domainSecret.FromEnt(s), nil
@@ -136,9 +152,13 @@ func (r *secretRepository) GetAPIKeyByValue(ctx context.Context, value string) (
 	s, err := query.Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return nil, errors.Wrap(err, errors.ErrCodeNotFound, "invalid API key")
+			return nil, ierr.WithError(err).
+				WithHint("Invalid API key").
+				Mark(ierr.ErrNotFound)
 		}
-		return nil, errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to verify API key")
+		return nil, ierr.WithError(err).
+			WithHint("Failed to verify API key").
+			Mark(ierr.ErrDatabase)
 	}
 
 	// Convert to domain model
@@ -162,9 +182,19 @@ func (r *secretRepository) UpdateLastUsed(ctx context.Context, id string) error 
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return errors.Wrap(err, errors.ErrCodeNotFound, "secret not found")
+			return ierr.WithError(err).
+				WithHint("Secret not found").
+				WithReportableDetails(map[string]interface{}{
+					"secret_id": id,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-		return errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to update last used timestamp")
+		return ierr.WithError(err).
+			WithHint("Failed to update last used timestamp").
+			WithReportableDetails(map[string]interface{}{
+				"secret_id": id,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return nil
@@ -182,7 +212,9 @@ func (r *secretRepository) List(ctx context.Context, filter *types.SecretFilter)
 
 	secrets, err := query.All(ctx)
 	if err != nil {
-		return nil, errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to list secrets")
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list secrets").
+			Mark(ierr.ErrDatabase)
 	}
 
 	return domainSecret.FromEntList(secrets), nil
@@ -199,7 +231,9 @@ func (r *secretRepository) Count(ctx context.Context, filter *types.SecretFilter
 
 	count, err := query.Count(ctx)
 	if err != nil {
-		return 0, errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to count secrets")
+		return 0, ierr.WithError(err).
+			WithHint("Failed to count secrets").
+			Mark(ierr.ErrDatabase)
 	}
 
 	return count, nil
@@ -219,7 +253,9 @@ func (r *secretRepository) ListAll(ctx context.Context, filter *types.SecretFilt
 	}
 
 	if err := filter.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid filter: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Invalid filter parameters").
+			Mark(ierr.ErrValidation)
 	}
 
 	return r.List(ctx, filter)
@@ -240,7 +276,12 @@ func (r *secretRepository) Delete(ctx context.Context, id string) error {
 		Exec(ctx)
 
 	if err != nil {
-		return errors.Wrap(err, errors.ErrCodeInvalidOperation, "failed to delete secret")
+		return ierr.WithError(err).
+			WithHint("Failed to delete secret").
+			WithReportableDetails(map[string]interface{}{
+				"secret_id": id,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	cacheKey := cache.GenerateKey(cache.PrefixSecret, secret.Value)

@@ -1,9 +1,9 @@
 package events
 
 import (
-	"fmt"
 	"time"
 
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/go-playground/validator/v10"
 )
@@ -74,7 +74,9 @@ func NewEvent(
 // Validate validates the event
 func (e *Event) Validate() error {
 	if e.CustomerID == "" && e.ExternalCustomerID == "" {
-		return fmt.Errorf("customer_id or external_customer_id is required")
+		return ierr.NewError("customer_id or external_customer_id is required").
+			WithHint("Customer ID or external customer ID is required").
+			Mark(ierr.ErrValidation)
 	}
 
 	return validator.New().Struct(e)

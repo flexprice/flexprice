@@ -2,11 +2,11 @@ package ent
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/flexprice/flexprice/ent"
 	entEnvironment "github.com/flexprice/flexprice/ent/environment"
 	domainEnvironment "github.com/flexprice/flexprice/internal/domain/environment"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
@@ -44,7 +44,13 @@ func (r *environmentRepository) Create(ctx context.Context, env *domainEnvironme
 		Save(ctx)
 
 	if err != nil {
-		return fmt.Errorf("failed to create environment: %w", err)
+		return ierr.WithError(err).
+			WithHint("Failed to create environment").
+			WithReportableDetails(map[string]interface{}{
+				"environment_id": env.ID,
+				"tenant_id":      env.TenantID,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return nil
@@ -54,7 +60,9 @@ func (r *environmentRepository) Create(ctx context.Context, env *domainEnvironme
 func (r *environmentRepository) Get(ctx context.Context, id string) (*domainEnvironment.Environment, error) {
 	tenantID, ok := ctx.Value(types.CtxTenantID).(string)
 	if !ok {
-		return nil, fmt.Errorf("tenant ID not found in context")
+		return nil, ierr.NewError("tenant ID not found in context").
+			WithHint("Tenant ID is required in the context").
+			Mark(ierr.ErrValidation)
 	}
 
 	client := r.client.Querier(ctx)
@@ -68,9 +76,21 @@ func (r *environmentRepository) Get(ctx context.Context, id string) (*domainEnvi
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return nil, fmt.Errorf("environment not found: %w", err)
+			return nil, ierr.WithError(err).
+				WithHint("Environment not found").
+				WithReportableDetails(map[string]interface{}{
+					"environment_id": id,
+					"tenant_id":      tenantID,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-		return nil, fmt.Errorf("failed to get environment: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve environment").
+			WithReportableDetails(map[string]interface{}{
+				"environment_id": id,
+				"tenant_id":      tenantID,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return domainEnvironment.FromEnt(e), nil
@@ -80,7 +100,9 @@ func (r *environmentRepository) Get(ctx context.Context, id string) (*domainEnvi
 func (r *environmentRepository) List(ctx context.Context, filter types.Filter) ([]*domainEnvironment.Environment, error) {
 	tenantID, ok := ctx.Value(types.CtxTenantID).(string)
 	if !ok {
-		return nil, fmt.Errorf("tenant ID not found in context")
+		return nil, ierr.NewError("tenant ID not found in context").
+			WithHint("Tenant ID is required in the context").
+			Mark(ierr.ErrValidation)
 	}
 
 	client := r.client.Querier(ctx)
@@ -95,7 +117,12 @@ func (r *environmentRepository) List(ctx context.Context, filter types.Filter) (
 
 	environments, err := query.All(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list environments: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list environments").
+			WithReportableDetails(map[string]interface{}{
+				"tenant_id": tenantID,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return domainEnvironment.FromEntList(environments), nil
@@ -115,9 +142,21 @@ func (r *environmentRepository) Update(ctx context.Context, env *domainEnvironme
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return fmt.Errorf("environment not found: %w", err)
+			return ierr.WithError(err).
+				WithHint("Environment not found").
+				WithReportableDetails(map[string]interface{}{
+					"environment_id": env.ID,
+					"tenant_id":      env.TenantID,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-		return fmt.Errorf("failed to update environment: %w", err)
+		return ierr.WithError(err).
+			WithHint("Failed to update environment").
+			WithReportableDetails(map[string]interface{}{
+				"environment_id": env.ID,
+				"tenant_id":      env.TenantID,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return nil

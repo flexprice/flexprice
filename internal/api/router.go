@@ -149,6 +149,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		}
 
 		subscription := v1Private.Group("/subscriptions")
+		subscription.Use(middleware.ErrorHandler())
 		{
 			subscription.POST("", handlers.Subscription.CreateSubscription)
 			subscription.GET("", handlers.Subscription.GetSubscriptions)

@@ -19,12 +19,12 @@ import (
 )
 
 const (
-	NUM_EVENTS       = 10000
-	BATCH_SIZE       = 100 // Reduced batch size
-	REQUESTS_PER_SEC = 50  // Rate limit: requests per second
+	NUM_EVENTS       = 50000
+	BATCH_SIZE       = 1000 // Reduced batch size
+	REQUESTS_PER_SEC = 75  // Rate limit: requests per second
 	MAX_RETRIES      = 1   // Maximum number of retries for failed requests
 	INITIAL_BACKOFF  = 100 // Initial backoff in milliseconds
-	API_ENDPOINT     = "https://api.cloud.flexprice.io/v1/events"
+	API_ENDPOINT     = "http://localhost:8080/v1/events"
 	TIMEOUT_SECONDS  = 5
 )
 
@@ -172,7 +172,7 @@ func ingestEvent(event dto.IngestEventRequest, limiter *rate.Limiter, wg *sync.W
 		}
 		req.Header.Add("Content-Type", "application/json")
 		req.Header.Add("Accept", "application/json")
-		req.Header.Add("Authorization", "Bearer <secret>")
+		req.Header.Add("Authorization", "Bearer eyJhbGciOiJIUzI1NiIsImtpZCI6Im9JK3lGVTQwc0NMTCszOUYiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL3Zuc3drdWxkeHFtcWh5aWV3Z3NxLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiJkZGU5YTExOC1mMTg2LTQ1YTYtOTY5Yi1hOWRhYjQ1OTBhNzUiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzQwODQ5MTM0LCJpYXQiOjE3NDA4MTMxMzQsImVtYWlsIjoiZGVtby11c2VyLXYyQGZsZXhwcmljZS5pbyIsInBob25lIjoiIiwiYXBwX21ldGFkYXRhIjp7InByb3ZpZGVyIjoiZW1haWwiLCJwcm92aWRlcnMiOlsiZW1haWwiXSwidGVuYW50X2lkIjoiMDAwMDAwMDAtMDAwMC0wMDAwLTAwMDAtMDAwMDAwMDAwMDAwIn0sInVzZXJfbWV0YWRhdGEiOnsiZW1haWwiOiJkZW1vLXVzZXItdjJAZmxleHByaWNlLmlvIiwiZW1haWxfdmVyaWZpZWQiOmZhbHNlLCJwaG9uZV92ZXJpZmllZCI6ZmFsc2UsInN1YiI6ImRkZTlhMTE4LWYxODYtNDVhNi05NjliLWE5ZGFiNDU5MGE3NSJ9LCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImFhbCI6ImFhbDEiLCJhbXIiOlt7Im1ldGhvZCI6InBhc3N3b3JkIiwidGltZXN0YW1wIjoxNzQwODEzMTM0fV0sInNlc3Npb25faWQiOiI5NGI0NGI3Ni0yN2NiLTRlOTMtYTk4Yy0zZWVlYzc2NGY5Y2EiLCJpc19hbm9ueW1vdXMiOmZhbHNlfQ.KIZ8uAGBk-_Eo6MzNgcD1OAbi9vmOhVI9cenC4rDn6k")
 
 		resp, err := client.Do(req)
 		if err != nil {

@@ -2,11 +2,11 @@ package ent
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/flexprice/flexprice/ent"
 	entUser "github.com/flexprice/flexprice/ent/user"
 	domainUser "github.com/flexprice/flexprice/internal/domain/user"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
@@ -43,7 +43,14 @@ func (r *userRepository) Create(ctx context.Context, user *domainUser.User) erro
 		Save(ctx)
 
 	if err != nil {
-		return fmt.Errorf("failed to create user: %w", err)
+		return ierr.WithError(err).
+			WithHint("Failed to create user").
+			WithReportableDetails(map[string]interface{}{
+				"user_id":   user.ID,
+				"email":     user.Email,
+				"tenant_id": user.TenantID,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return nil
@@ -53,7 +60,9 @@ func (r *userRepository) Create(ctx context.Context, user *domainUser.User) erro
 func (r *userRepository) GetByID(ctx context.Context, id string) (*domainUser.User, error) {
 	tenantID, ok := ctx.Value(types.CtxTenantID).(string)
 	if !ok {
-		return nil, fmt.Errorf("tenant ID not found in context")
+		return nil, ierr.NewError("tenant ID not found in context").
+			WithHint("Tenant ID is required in the context").
+			Mark(ierr.ErrValidation)
 	}
 
 	client := r.client.Querier(ctx)
@@ -67,9 +76,21 @@ func (r *userRepository) GetByID(ctx context.Context, id string) (*domainUser.Us
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return nil, fmt.Errorf("user not found: %w", err)
+			return nil, ierr.WithError(err).
+				WithHint("User not found").
+				WithReportableDetails(map[string]interface{}{
+					"user_id":   id,
+					"tenant_id": tenantID,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-		return nil, fmt.Errorf("failed to get user: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve user").
+			WithReportableDetails(map[string]interface{}{
+				"user_id":   id,
+				"tenant_id": tenantID,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return domainUser.FromEnt(user), nil
@@ -94,9 +115,19 @@ func (r *userRepository) GetByEmail(ctx context.Context, email string) (*domainU
 	user, err := query.Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return nil, fmt.Errorf("user not found by email: %w", err)
+			return nil, ierr.WithError(err).
+				WithHint("User not found with the provided email").
+				WithReportableDetails(map[string]interface{}{
+					"email": email,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-		return nil, fmt.Errorf("failed to get user by email: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve user by email").
+			WithReportableDetails(map[string]interface{}{
+				"email": email,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return domainUser.FromEnt(user), nil

@@ -2,11 +2,11 @@ package ent
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/flexprice/flexprice/ent"
 	entAuth "github.com/flexprice/flexprice/ent/auth"
 	domainAuth "github.com/flexprice/flexprice/internal/domain/auth"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
@@ -28,7 +28,12 @@ func NewAuthRepository(client postgres.IClient, logger *logger.Logger) domainAut
 // CreateAuth creates a new auth record
 func (r *authRepository) CreateAuth(ctx context.Context, auth *domainAuth.Auth) error {
 	if !r.ValidateProvider(auth.Provider) {
-		return fmt.Errorf("invalid provider: %s", auth.Provider)
+		return ierr.NewError("invalid provider").
+			WithHint("Only supported authentication providers are allowed").
+			WithReportableDetails(map[string]interface{}{
+				"provider": string(auth.Provider),
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	r.logger.Debugw("creating auth", "user_id", auth.UserID, "provider", auth.Provider)
@@ -45,7 +50,13 @@ func (r *authRepository) CreateAuth(ctx context.Context, auth *domainAuth.Auth) 
 		Save(ctx)
 
 	if err != nil {
-		return fmt.Errorf("failed to create auth: %w", err)
+		return ierr.WithError(err).
+			WithHint("Failed to create authentication record").
+			WithReportableDetails(map[string]interface{}{
+				"user_id":  auth.UserID,
+				"provider": auth.Provider,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return nil
@@ -63,9 +74,19 @@ func (r *authRepository) GetAuthByUserID(ctx context.Context, userID string) (*d
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return nil, fmt.Errorf("auth not found: %w", err)
+			return nil, ierr.WithError(err).
+				WithHint("Authentication record not found").
+				WithReportableDetails(map[string]interface{}{
+					"user_id": userID,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-		return nil, fmt.Errorf("failed to get auth: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve authentication record").
+			WithReportableDetails(map[string]interface{}{
+				"user_id": userID,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return domainAuth.FromEnt(auth), nil
@@ -74,7 +95,12 @@ func (r *authRepository) GetAuthByUserID(ctx context.Context, userID string) (*d
 // UpdateAuth updates an auth record
 func (r *authRepository) UpdateAuth(ctx context.Context, auth *domainAuth.Auth) error {
 	if !r.ValidateProvider(auth.Provider) {
-		return fmt.Errorf("invalid provider")
+		return ierr.NewError("invalid provider").
+			WithHint("Only supported authentication providers are allowed").
+			WithReportableDetails(map[string]interface{}{
+				"provider": auth.Provider,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	r.logger.Debugw("updating auth", "user_id", auth.UserID, "provider", auth.Provider)
@@ -91,9 +117,20 @@ func (r *authRepository) UpdateAuth(ctx context.Context, auth *domainAuth.Auth) 
 
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return fmt.Errorf("auth not found: %w", err)
+			return ierr.WithError(err).
+				WithHint("Authentication record not found").
+				WithReportableDetails(map[string]interface{}{
+					"user_id": auth.UserID,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-		return fmt.Errorf("failed to update auth: %w", err)
+		return ierr.WithError(err).
+			WithHint("Failed to update authentication record").
+			WithReportableDetails(map[string]interface{}{
+				"user_id":  auth.UserID,
+				"provider": auth.Provider,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return nil
@@ -110,7 +147,12 @@ func (r *authRepository) DeleteAuth(ctx context.Context, userID string) error {
 		Exec(ctx)
 
 	if err != nil {
-		return fmt.Errorf("failed to delete auth: %w", err)
+		return ierr.WithError(err).
+			WithHint("Failed to delete authentication record").
+			WithReportableDetails(map[string]interface{}{
+				"user_id": userID,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return nil

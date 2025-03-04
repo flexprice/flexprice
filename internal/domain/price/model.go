@@ -8,6 +8,7 @@ import (
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/schema"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -91,7 +92,12 @@ func (p *Price) GetCurrencySymbol() string {
 // ValidateAmount checks if amount is within valid range for price definition
 func (p *Price) ValidateAmount() error {
 	if p.Amount.LessThan(decimal.Zero) {
-		return fmt.Errorf("amount must be greater than 0")
+		return ierr.NewError("amount must be greater than 0").
+			WithHint("Please provide a positive amount value").
+			WithReportableDetails(map[string]interface{}{
+				"amount": p.Amount.String(),
+			}).
+			Mark(ierr.ErrValidation)
 	}
 	return nil
 }
@@ -189,7 +195,9 @@ func (j *JSONBTiers) Scan(value interface{}) error {
 	}
 	bytes, ok := value.([]byte)
 	if !ok {
-		return fmt.Errorf("invalid type for jsonb tiers")
+		return ierr.NewError("invalid type for jsonb tiers").
+			WithHint("Invalid type for JSONB tiers").
+			Mark(ierr.ErrValidation)
 	}
 	return json.Unmarshal(bytes, j)
 }

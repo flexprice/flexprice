@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -13,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/errors"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
@@ -59,7 +59,9 @@ func NewAuthService(
 // SignUp creates a new user and returns an auth token
 func (s *authService) SignUp(ctx context.Context, req *dto.SignUpRequest) (*dto.AuthResponse, error) {
 	if err := req.Validate(); err != nil {
-		return nil, errors.Wrap(errors.ErrValidation, errors.ErrCodeValidation, "invalid request")
+		return nil, ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation)
 	}
 
 	// Check if user already exists in our system
@@ -68,7 +70,12 @@ func (s *authService) SignUp(ctx context.Context, req *dto.SignUpRequest) (*dto.
 		// TODO: Check if the user is already onboarded to a tenant
 		// if not, return an error
 		// if yes, return the auth response with the user info
-		return nil, errors.Wrap(errors.ErrAlreadyExists, errors.ErrCodeAlreadyExists, "user already exists")
+		return nil, ierr.NewError("user already exists").
+			WithHint("An account with this email already exists").
+			WithReportableDetails(map[string]interface{}{
+				"email": req.Email,
+			}).
+			Mark(ierr.ErrAlreadyExists)
 	}
 
 	// Generate a tenant ID
@@ -81,7 +88,9 @@ func (s *authService) SignUp(ctx context.Context, req *dto.SignUpRequest) (*dto.
 		TenantID: tenantID,
 	})
 	if err != nil {
-		return nil, errors.Wrap(err, errors.ErrCodeSystemError, "unable to sign up")
+		return nil, ierr.WithError(err).
+			WithHint("Failed to sign up with authentication provider").
+			Mark(ierr.ErrSystem)
 	}
 
 	response := &dto.AuthResponse{
@@ -96,7 +105,9 @@ func (s *authService) SignUp(ctx context.Context, req *dto.SignUpRequest) (*dto.
 			auth := auth.NewAuth(authResponse.ID, s.authProvider.GetProvider(), authResponse.ProviderToken)
 			err = s.authRepo.CreateAuth(ctx, auth)
 			if err != nil {
-				return fmt.Errorf("unable to create auth: %w", err)
+				return ierr.WithError(err).
+					WithHint("Failed to create authentication record").
+					Mark(ierr.ErrDatabase)
 			}
 		}
 
@@ -107,8 +118,9 @@ func (s *authService) SignUp(ctx context.Context, req *dto.SignUpRequest) (*dto.
 			req.TenantName,
 			response.TenantID,
 		)
+
 		if err != nil {
-			return fmt.Errorf("failed to onboard tenant: %w", err)
+			return err
 		}
 
 		return nil
@@ -125,14 +137,14 @@ func (s *authService) SignUp(ctx context.Context, req *dto.SignUpRequest) (*dto.
 func (s *authService) Login(ctx context.Context, req *dto.LoginRequest) (*dto.AuthResponse, error) {
 	user, err := s.userRepo.GetByEmail(ctx, req.Email)
 	if err != nil {
-		return nil, fmt.Errorf("unable to get user: %w", err)
+		return nil, err
 	}
 
 	var auth *auth.Auth
 	if s.authProvider.GetProvider() == types.AuthProviderFlexprice {
 		auth, err = s.authRepo.GetAuthByUserID(ctx, user.ID)
 		if err != nil {
-			return nil, fmt.Errorf("unable to fetch user authentication channel: %w", err)
+			return nil, err
 		}
 	}
 
@@ -142,12 +154,20 @@ func (s *authService) Login(ctx context.Context, req *dto.LoginRequest) (*dto.Au
 		Email:    user.Email,
 		Password: req.Password,
 	}, auth)
+
 	if err != nil {
-		return nil, fmt.Errorf("unable to login: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to authenticate").
+			Mark(ierr.ErrPermissionDenied)
 	}
 
 	if authResponse.ID != user.ID {
-		return nil, errors.Wrap(errors.ErrPermissionDenied, errors.ErrCodePermissionDenied, "user not found")
+		return nil, ierr.NewError("user not found").
+			WithHint("User not found").
+			WithReportableDetails(map[string]interface{}{
+				"user_id": user.ID,
+			}).
+			Mark(ierr.ErrPermissionDenied)
 	}
 
 	response := &dto.AuthResponse{

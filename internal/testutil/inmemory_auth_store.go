@@ -2,10 +2,10 @@ package testutil
 
 import (
 	"context"
-	"errors"
 	"sync"
 
 	"github.com/flexprice/flexprice/internal/domain/auth"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 )
 
 // InMemoryAuthRepository is an in-memory implementation of the auth.Repository interface
@@ -36,7 +36,12 @@ func (r *InMemoryAuthRepository) UpdateAuth(ctx context.Context, auth *auth.Auth
 	defer r.mu.Unlock()
 
 	if _, exists := r.auths[auth.UserID]; !exists {
-		return errors.New("auth record not found")
+		return ierr.NewError("auth record not found").
+			WithHint("Authentication record not found").
+			WithReportableDetails(map[string]interface{}{
+				"user_id": auth.UserID,
+			}).
+			Mark(ierr.ErrNotFound)
 	}
 
 	r.auths[auth.UserID] = auth
@@ -50,7 +55,12 @@ func (r *InMemoryAuthRepository) GetAuthByUserID(ctx context.Context, userID str
 
 	auth, exists := r.auths[userID]
 	if !exists {
-		return nil, errors.New("auth record not found")
+		return nil, ierr.NewError("auth record not found").
+			WithHint("Authentication record not found").
+			WithReportableDetails(map[string]interface{}{
+				"user_id": userID,
+			}).
+			Mark(ierr.ErrNotFound)
 	}
 
 	return auth, nil

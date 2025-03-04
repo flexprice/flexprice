@@ -2,13 +2,12 @@ package ent
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/task"
 	domainTask "github.com/flexprice/flexprice/internal/domain/task"
-	"github.com/flexprice/flexprice/internal/errors"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
@@ -64,7 +63,14 @@ func (r *taskRepository) Create(ctx context.Context, t *domainTask.Task) error {
 
 	if err != nil {
 		r.logger.Error("failed to create task", "error", err)
-		return fmt.Errorf("creating task: %w", err)
+		return ierr.WithError(err).
+			WithHint("Failed to create task").
+			WithReportableDetails(map[string]interface{}{
+				"task_id":     t.ID,
+				"task_type":   t.TaskType,
+				"entity_type": t.EntityType,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	*t = *domainTask.FromEnt(task)
@@ -80,9 +86,19 @@ func (r *taskRepository) Get(ctx context.Context, id string) (*domainTask.Task, 
 		Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return nil, errors.Wrap(err, errors.ErrCodeNotFound, "task not found")
+			return nil, ierr.WithError(err).
+				WithHint("Task not found").
+				WithReportableDetails(map[string]interface{}{
+					"task_id": id,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-		return nil, fmt.Errorf("getting task: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve task").
+			WithReportableDetails(map[string]interface{}{
+				"task_id": id,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return domainTask.FromEnt(task), nil
@@ -99,7 +115,9 @@ func (r *taskRepository) List(ctx context.Context, filter *types.TaskFilter) ([]
 
 	tasks, err := query.All(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("listing tasks: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list tasks").
+			Mark(ierr.ErrDatabase)
 	}
 
 	return domainTask.FromEntList(tasks), nil
@@ -113,7 +131,9 @@ func (r *taskRepository) Count(ctx context.Context, filter *types.TaskFilter) (i
 
 	count, err := query.Count(ctx)
 	if err != nil {
-		return 0, fmt.Errorf("counting tasks: %w", err)
+		return 0, ierr.WithError(err).
+			WithHint("Failed to count tasks").
+			Mark(ierr.ErrDatabase)
 	}
 	return count, nil
 }
@@ -152,10 +172,20 @@ func (r *taskRepository) Update(ctx context.Context, t *domainTask.Task) error {
 	// Execute update
 	n, err := query.Save(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to update task: %w", err)
+		return ierr.WithError(err).
+			WithHint("Failed to update task").
+			WithReportableDetails(map[string]interface{}{
+				"task_id": t.ID,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 	if n == 0 {
-		return errors.Wrap(err, errors.ErrCodeNotFound, "task not found")
+		return ierr.NewError("task not found").
+			WithHint("The task may not exist or may have been deleted").
+			WithReportableDetails(map[string]interface{}{
+				"task_id": t.ID,
+			}).
+			Mark(ierr.ErrNotFound)
 	}
 
 	return nil
@@ -174,7 +204,12 @@ func (r *taskRepository) Delete(ctx context.Context, id string) error {
 		Save(ctx)
 
 	if err != nil {
-		return fmt.Errorf("deleting task: %w", err)
+		return ierr.WithError(err).
+			WithHint("Failed to delete task").
+			WithReportableDetails(map[string]interface{}{
+				"task_id": id,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return nil
