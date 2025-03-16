@@ -2,6 +2,7 @@ package ent
 
 import (
 	"context"
+	"strings"
 
 	"github.com/flexprice/flexprice/ent"
 	entTenant "github.com/flexprice/flexprice/ent/tenant"
@@ -28,6 +29,15 @@ func NewTenantRepository(client postgres.IClient, logger *logger.Logger) domainT
 func (r *tenantRepository) Create(ctx context.Context, tenant *domainTenant.Tenant) error {
 	r.logger.Debugw("creating tenant", "tenant_id", tenant.ID, "name", tenant.Name)
 
+	addressLines := strings.Split(tenant.TenantBillingInfo.Address.Street, "\n")
+	var addressLine1, addressLine2 string
+	if len(addressLines) > 0 {
+		addressLine1 = addressLines[0]
+	}
+	if len(addressLines) > 1 {
+		addressLine2 = strings.Join(addressLines[1:], "\n")
+	}
+
 	client := r.client.Querier(ctx)
 	_, err := client.Tenant.
 		Create().
@@ -36,6 +46,18 @@ func (r *tenantRepository) Create(ctx context.Context, tenant *domainTenant.Tena
 		SetStatus(string(tenant.Status)).
 		SetCreatedAt(tenant.CreatedAt).
 		SetUpdatedAt(tenant.UpdatedAt).
+		SetBillingInfo(map[string]interface{}{
+			"address": map[string]interface{}{
+				"address_line_1": addressLine1,
+				"address_line_2": addressLine2,
+				"city":           tenant.TenantBillingInfo.Address.City,
+				"state":          tenant.TenantBillingInfo.Address.State,
+				"postal_code":    tenant.TenantBillingInfo.Address.PostalCode,
+			},
+			"email":      tenant.TenantBillingInfo.Email,
+			"website":    tenant.TenantBillingInfo.Website,
+			"help_email": tenant.TenantBillingInfo.HelpEmail,
+		}).
 		Save(ctx)
 
 	if err != nil {

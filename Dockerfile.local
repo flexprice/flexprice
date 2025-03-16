@@ -1,5 +1,5 @@
- # Build stage
-FROM golang:1.23.3-alpine3.20 as builder
+# Build stage
+FROM golang:1.23.3-alpine3.20 AS builder
 WORKDIR /app
 
 # Install build dependencies
@@ -18,12 +18,14 @@ ENV CGO_ENABLED=0 \
 RUN go build -ldflags="-w -s" -o app cmd/server/main.go
 
 # Final stage
+FROM ghcr.io/typst/typst:v0.13.1 AS typst
 FROM alpine:3.20
 RUN apk --no-cache add ca-certificates tzdata
 
 WORKDIR /app
 COPY --from=builder /app/app .
 COPY --from=builder /app/internal/config ./config
+COPY --from=typst /bin/typst /usr/local/bin/
 
 ENV TZ=UTC 
 

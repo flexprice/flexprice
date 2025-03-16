@@ -954,6 +954,10 @@ func init() {
 	tenant.DefaultUpdatedAt = tenantDescUpdatedAt.Default.(func() time.Time)
 	// tenant.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	tenant.UpdateDefaultUpdatedAt = tenantDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// tenantDescBillingInfo is the schema descriptor for billing_info field.
+	tenantDescBillingInfo := tenantFields[5].Descriptor()
+	// tenant.DefaultBillingInfo holds the default value on creation for the billing_info field.
+	tenant.DefaultBillingInfo = tenantDescBillingInfo.Default.(map[string]interface{})
 	userMixin := schema.User{}.Mixin()
 	userMixinFields0 := userMixin[0].Fields()
 	_ = userMixinFields0

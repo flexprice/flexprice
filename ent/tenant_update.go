@@ -62,6 +62,18 @@ func (tu *TenantUpdate) SetUpdatedAt(t time.Time) *TenantUpdate {
 	return tu
 }
 
+// SetBillingInfo sets the "billing_info" field.
+func (tu *TenantUpdate) SetBillingInfo(m map[string]interface{}) *TenantUpdate {
+	tu.mutation.SetBillingInfo(m)
+	return tu
+}
+
+// ClearBillingInfo clears the value of the "billing_info" field.
+func (tu *TenantUpdate) ClearBillingInfo() *TenantUpdate {
+	tu.mutation.ClearBillingInfo()
+	return tu
+}
+
 // Mutation returns the TenantMutation object of the builder.
 func (tu *TenantUpdate) Mutation() *TenantMutation {
 	return tu.mutation
@@ -134,6 +146,12 @@ func (tu *TenantUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if value, ok := tu.mutation.UpdatedAt(); ok {
 		_spec.SetField(tenant.FieldUpdatedAt, field.TypeTime, value)
 	}
+	if value, ok := tu.mutation.BillingInfo(); ok {
+		_spec.SetField(tenant.FieldBillingInfo, field.TypeJSON, value)
+	}
+	if tu.mutation.BillingInfoCleared() {
+		_spec.ClearField(tenant.FieldBillingInfo, field.TypeJSON)
+	}
 	if n, err = sqlgraph.UpdateNodes(ctx, tu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{tenant.Label}
@@ -185,6 +203,18 @@ func (tuo *TenantUpdateOne) SetNillableStatus(s *string) *TenantUpdateOne {
 // SetUpdatedAt sets the "updated_at" field.
 func (tuo *TenantUpdateOne) SetUpdatedAt(t time.Time) *TenantUpdateOne {
 	tuo.mutation.SetUpdatedAt(t)
+	return tuo
+}
+
+// SetBillingInfo sets the "billing_info" field.
+func (tuo *TenantUpdateOne) SetBillingInfo(m map[string]interface{}) *TenantUpdateOne {
+	tuo.mutation.SetBillingInfo(m)
+	return tuo
+}
+
+// ClearBillingInfo clears the value of the "billing_info" field.
+func (tuo *TenantUpdateOne) ClearBillingInfo() *TenantUpdateOne {
+	tuo.mutation.ClearBillingInfo()
 	return tuo
 }
 
@@ -289,6 +319,12 @@ func (tuo *TenantUpdateOne) sqlSave(ctx context.Context) (_node *Tenant, err err
 	}
 	if value, ok := tuo.mutation.UpdatedAt(); ok {
 		_spec.SetField(tenant.FieldUpdatedAt, field.TypeTime, value)
+	}
+	if value, ok := tuo.mutation.BillingInfo(); ok {
+		_spec.SetField(tenant.FieldBillingInfo, field.TypeJSON, value)
+	}
+	if tuo.mutation.BillingInfoCleared() {
+		_spec.ClearField(tenant.FieldBillingInfo, field.TypeJSON)
 	}
 	_node = &Tenant{config: tuo.config}
 	_spec.Assign = _node.assignValues

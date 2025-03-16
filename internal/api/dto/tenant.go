@@ -9,8 +9,24 @@ import (
 	"github.com/flexprice/flexprice/internal/validator"
 )
 
+type Address struct {
+	Street     string `json:"street"`
+	City       string `json:"city"`
+	State      string `json:"state"`
+	PostalCode string `json:"postal_code"`
+	Country    string `json:"country"`
+}
+
+type TenantBillingInfo struct {
+	Address   Address `json:"address,omitempty"`
+	Email     string  `json:"email,omitempty" validate:"omitempty,email"`
+	Website   string  `json:"website,omitempty"`
+	HelpEmail string  `json:"help_email,omitempty"`
+}
+
 type CreateTenantRequest struct {
-	Name string `json:"name" validate:"required"`
+	Name              string            `json:"name" validate:"required"`
+	TenantBillingInfo TenantBillingInfo `json:"tenant_billing_info"`
 }
 
 type TenantResponse struct {
@@ -37,6 +53,18 @@ func (r *CreateTenantRequest) ToTenant(ctx context.Context) *tenant.Tenant {
 		Status:    types.StatusPublished,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
+		TenantBillingInfo: tenant.TenantBillingInfo{
+			Address: tenant.Address{
+				Street:     r.TenantBillingInfo.Address.Street,
+				City:       r.TenantBillingInfo.Address.City,
+				State:      r.TenantBillingInfo.Address.State,
+				PostalCode: r.TenantBillingInfo.Address.PostalCode,
+				Country:    r.TenantBillingInfo.Address.Country,
+			},
+			Email:     r.TenantBillingInfo.Email,
+			Website:   r.TenantBillingInfo.Website,
+			HelpEmail: r.TenantBillingInfo.HelpEmail,
+		},
 	}
 }
 

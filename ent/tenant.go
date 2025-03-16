@@ -3,6 +3,7 @@
 package ent
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -24,7 +25,9 @@ type Tenant struct {
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
-	UpdatedAt    time.Time `json:"updated_at,omitempty"`
+	UpdatedAt time.Time `json:"updated_at,omitempty"`
+	// BillingInfo holds the value of the "billing_info" field.
+	BillingInfo  map[string]interface{} `json:"billing_info,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -33,6 +36,8 @@ func (*Tenant) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case tenant.FieldBillingInfo:
+			values[i] = new([]byte)
 		case tenant.FieldID, tenant.FieldName, tenant.FieldStatus:
 			values[i] = new(sql.NullString)
 		case tenant.FieldCreatedAt, tenant.FieldUpdatedAt:
@@ -82,6 +87,14 @@ func (t *Tenant) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				t.UpdatedAt = value.Time
 			}
+		case tenant.FieldBillingInfo:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field billing_info", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &t.BillingInfo); err != nil {
+					return fmt.Errorf("unmarshal field billing_info: %w", err)
+				}
+			}
 		default:
 			t.selectValues.Set(columns[i], values[i])
 		}
@@ -129,6 +142,9 @@ func (t *Tenant) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
 	builder.WriteString(t.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(", ")
+	builder.WriteString("billing_info=")
+	builder.WriteString(fmt.Sprintf("%v", t.BillingInfo))
 	builder.WriteByte(')')
 	return builder.String()
 }

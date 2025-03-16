@@ -21,6 +21,8 @@ const (
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
 	FieldUpdatedAt = "updated_at"
+	// FieldBillingInfo holds the string denoting the billing_info field in the database.
+	FieldBillingInfo = "billing_info"
 	// Table holds the table name of the tenant in the database.
 	Table = "tenants"
 )
@@ -32,6 +34,7 @@ var Columns = []string{
 	FieldStatus,
 	FieldCreatedAt,
 	FieldUpdatedAt,
+	FieldBillingInfo,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -55,6 +58,8 @@ var (
 	DefaultUpdatedAt func() time.Time
 	// UpdateDefaultUpdatedAt holds the default value on update for the "updated_at" field.
 	UpdateDefaultUpdatedAt func() time.Time
+	// DefaultBillingInfo holds the default value on creation for the "billing_info" field.
+	DefaultBillingInfo map[string]interface{}
 )
 
 // OrderOption defines the ordering options for the Tenant queries.
