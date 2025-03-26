@@ -24,6 +24,9 @@ type Environment func(*sql.Selector)
 // Feature is the predicate function for feature builders.
 type Feature func(*sql.Selector)
 
+// IntegrationEntity is the predicate function for integrationentity builders.
+type IntegrationEntity func(*sql.Selector)
+
 // Invoice is the predicate function for invoice builders.
 type Invoice func(*sql.Selector)
 

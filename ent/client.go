@@ -21,6 +21,7 @@ import (
 	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/ent/environment"
 	"github.com/flexprice/flexprice/ent/feature"
+	"github.com/flexprice/flexprice/ent/integrationentity"
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/ent/invoicesequence"
@@ -59,6 +60,8 @@ type Client struct {
 	Environment *EnvironmentClient
 	// Feature is the client for interacting with the Feature builders.
 	Feature *FeatureClient
+	// IntegrationEntity is the client for interacting with the IntegrationEntity builders.
+	IntegrationEntity *IntegrationEntityClient
 	// Invoice is the client for interacting with the Invoice builders.
 	Invoice *InvoiceClient
 	// InvoiceLineItem is the client for interacting with the InvoiceLineItem builders.
@@ -110,6 +113,7 @@ func (c *Client) init() {
 	c.Entitlement = NewEntitlementClient(c.config)
 	c.Environment = NewEnvironmentClient(c.config)
 	c.Feature = NewFeatureClient(c.config)
+	c.IntegrationEntity = NewIntegrationEntityClient(c.config)
 	c.Invoice = NewInvoiceClient(c.config)
 	c.InvoiceLineItem = NewInvoiceLineItemClient(c.config)
 	c.InvoiceSequence = NewInvoiceSequenceClient(c.config)
@@ -225,6 +229,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Entitlement:          NewEntitlementClient(cfg),
 		Environment:          NewEnvironmentClient(cfg),
 		Feature:              NewFeatureClient(cfg),
+		IntegrationEntity:    NewIntegrationEntityClient(cfg),
 		Invoice:              NewInvoiceClient(cfg),
 		InvoiceLineItem:      NewInvoiceLineItemClient(cfg),
 		InvoiceSequence:      NewInvoiceSequenceClient(cfg),
@@ -267,6 +272,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Entitlement:          NewEntitlementClient(cfg),
 		Environment:          NewEnvironmentClient(cfg),
 		Feature:              NewFeatureClient(cfg),
+		IntegrationEntity:    NewIntegrationEntityClient(cfg),
 		Invoice:              NewInvoiceClient(cfg),
 		InvoiceLineItem:      NewInvoiceLineItemClient(cfg),
 		InvoiceSequence:      NewInvoiceSequenceClient(cfg),
@@ -314,8 +320,8 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.Auth, c.BillingSequence, c.Customer, c.Entitlement, c.Environment, c.Feature,
-		c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Payment,
-		c.PaymentAttempt, c.Plan, c.Price, c.Secret, c.Subscription,
+		c.IntegrationEntity, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter,
+		c.Payment, c.PaymentAttempt, c.Plan, c.Price, c.Secret, c.Subscription,
 		c.SubscriptionLineItem, c.SubscriptionPause, c.Task, c.Tenant, c.User,
 		c.Wallet, c.WalletTransaction,
 	} {
@@ -328,8 +334,8 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.Auth, c.BillingSequence, c.Customer, c.Entitlement, c.Environment, c.Feature,
-		c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Payment,
-		c.PaymentAttempt, c.Plan, c.Price, c.Secret, c.Subscription,
+		c.IntegrationEntity, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter,
+		c.Payment, c.PaymentAttempt, c.Plan, c.Price, c.Secret, c.Subscription,
 		c.SubscriptionLineItem, c.SubscriptionPause, c.Task, c.Tenant, c.User,
 		c.Wallet, c.WalletTransaction,
 	} {
@@ -352,6 +358,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Environment.mutate(ctx, m)
 	case *FeatureMutation:
 		return c.Feature.mutate(ctx, m)
+	case *IntegrationEntityMutation:
+		return c.IntegrationEntity.mutate(ctx, m)
 	case *InvoiceMutation:
 		return c.Invoice.mutate(ctx, m)
 	case *InvoiceLineItemMutation:
@@ -1202,6 +1210,139 @@ func (c *FeatureClient) mutate(ctx context.Context, m *FeatureMutation) (Value, 
 		return (&FeatureDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Feature mutation op: %q", m.Op())
+	}
+}
+
+// IntegrationEntityClient is a client for the IntegrationEntity schema.
+type IntegrationEntityClient struct {
+	config
+}
+
+// NewIntegrationEntityClient returns a client for the IntegrationEntity from the given config.
+func NewIntegrationEntityClient(c config) *IntegrationEntityClient {
+	return &IntegrationEntityClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `integrationentity.Hooks(f(g(h())))`.
+func (c *IntegrationEntityClient) Use(hooks ...Hook) {
+	c.hooks.IntegrationEntity = append(c.hooks.IntegrationEntity, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `integrationentity.Intercept(f(g(h())))`.
+func (c *IntegrationEntityClient) Intercept(interceptors ...Interceptor) {
+	c.inters.IntegrationEntity = append(c.inters.IntegrationEntity, interceptors...)
+}
+
+// Create returns a builder for creating a IntegrationEntity entity.
+func (c *IntegrationEntityClient) Create() *IntegrationEntityCreate {
+	mutation := newIntegrationEntityMutation(c.config, OpCreate)
+	return &IntegrationEntityCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of IntegrationEntity entities.
+func (c *IntegrationEntityClient) CreateBulk(builders ...*IntegrationEntityCreate) *IntegrationEntityCreateBulk {
+	return &IntegrationEntityCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *IntegrationEntityClient) MapCreateBulk(slice any, setFunc func(*IntegrationEntityCreate, int)) *IntegrationEntityCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &IntegrationEntityCreateBulk{err: fmt.Errorf("calling to IntegrationEntityClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*IntegrationEntityCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &IntegrationEntityCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for IntegrationEntity.
+func (c *IntegrationEntityClient) Update() *IntegrationEntityUpdate {
+	mutation := newIntegrationEntityMutation(c.config, OpUpdate)
+	return &IntegrationEntityUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *IntegrationEntityClient) UpdateOne(ie *IntegrationEntity) *IntegrationEntityUpdateOne {
+	mutation := newIntegrationEntityMutation(c.config, OpUpdateOne, withIntegrationEntity(ie))
+	return &IntegrationEntityUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *IntegrationEntityClient) UpdateOneID(id string) *IntegrationEntityUpdateOne {
+	mutation := newIntegrationEntityMutation(c.config, OpUpdateOne, withIntegrationEntityID(id))
+	return &IntegrationEntityUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for IntegrationEntity.
+func (c *IntegrationEntityClient) Delete() *IntegrationEntityDelete {
+	mutation := newIntegrationEntityMutation(c.config, OpDelete)
+	return &IntegrationEntityDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *IntegrationEntityClient) DeleteOne(ie *IntegrationEntity) *IntegrationEntityDeleteOne {
+	return c.DeleteOneID(ie.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *IntegrationEntityClient) DeleteOneID(id string) *IntegrationEntityDeleteOne {
+	builder := c.Delete().Where(integrationentity.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &IntegrationEntityDeleteOne{builder}
+}
+
+// Query returns a query builder for IntegrationEntity.
+func (c *IntegrationEntityClient) Query() *IntegrationEntityQuery {
+	return &IntegrationEntityQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeIntegrationEntity},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a IntegrationEntity entity by its id.
+func (c *IntegrationEntityClient) Get(ctx context.Context, id string) (*IntegrationEntity, error) {
+	return c.Query().Where(integrationentity.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *IntegrationEntityClient) GetX(ctx context.Context, id string) *IntegrationEntity {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *IntegrationEntityClient) Hooks() []Hook {
+	return c.hooks.IntegrationEntity
+}
+
+// Interceptors returns the client interceptors.
+func (c *IntegrationEntityClient) Interceptors() []Interceptor {
+	return c.inters.IntegrationEntity
+}
+
+func (c *IntegrationEntityClient) mutate(ctx context.Context, m *IntegrationEntityMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&IntegrationEntityCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&IntegrationEntityUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&IntegrationEntityUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&IntegrationEntityDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown IntegrationEntity mutation op: %q", m.Op())
 	}
 }
 
@@ -3613,16 +3754,17 @@ func (c *WalletTransactionClient) mutate(ctx context.Context, m *WalletTransacti
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		Auth, BillingSequence, Customer, Entitlement, Environment, Feature, Invoice,
-		InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt, Plan, Price,
-		Secret, Subscription, SubscriptionLineItem, SubscriptionPause, Task, Tenant,
-		User, Wallet, WalletTransaction []ent.Hook
+		Auth, BillingSequence, Customer, Entitlement, Environment, Feature,
+		IntegrationEntity, Invoice, InvoiceLineItem, InvoiceSequence, Meter, Payment,
+		PaymentAttempt, Plan, Price, Secret, Subscription, SubscriptionLineItem,
+		SubscriptionPause, Task, Tenant, User, Wallet, WalletTransaction []ent.Hook
 	}
 	inters struct {
-		Auth, BillingSequence, Customer, Entitlement, Environment, Feature, Invoice,
-		InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt, Plan, Price,
-		Secret, Subscription, SubscriptionLineItem, SubscriptionPause, Task, Tenant,
-		User, Wallet, WalletTransaction []ent.Interceptor
+		Auth, BillingSequence, Customer, Entitlement, Environment, Feature,
+		IntegrationEntity, Invoice, InvoiceLineItem, InvoiceSequence, Meter, Payment,
+		PaymentAttempt, Plan, Price, Secret, Subscription, SubscriptionLineItem,
+		SubscriptionPause, Task, Tenant, User, Wallet,
+		WalletTransaction []ent.Interceptor
 	}
 )
 
