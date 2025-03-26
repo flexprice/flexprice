@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
+	"github.com/flexprice/flexprice/internal/domain/integration"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/payment"
@@ -101,4 +102,8 @@ func NewTaskRepository(p RepositoryParams) task.Repository {
 
 func NewSecretRepository(p RepositoryParams) secret.Repository {
 	return entRepo.NewSecretRepository(p.EntClient, p.Logger)
+}
+
+func NewIntegrationRepository(p RepositoryParams) integration.Repository {
+	return entRepo.NewIntegrationRepository(p.EntClient, p.Logger)
 }
