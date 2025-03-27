@@ -81,6 +81,18 @@ func (f FeatureFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, err
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.FeatureMutation", m)
 }
 
+// The IntegrationEntityFunc type is an adapter to allow the use of ordinary
+// function as IntegrationEntity mutator.
+type IntegrationEntityFunc func(context.Context, *ent.IntegrationEntityMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f IntegrationEntityFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.IntegrationEntityMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IntegrationEntityMutation", m)
+}
+
 // The InvoiceFunc type is an adapter to allow the use of ordinary
 // function as Invoice mutator.
 type InvoiceFunc func(context.Context, *ent.InvoiceMutation) (ent.Value, error)

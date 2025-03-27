@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
+	"github.com/flexprice/flexprice/internal/domain/integration"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/payment"
@@ -28,8 +29,7 @@ import (
 	webhookPublisher "github.com/flexprice/flexprice/internal/webhook/publisher"
 )
 
-// ServiceParams holds common dependencies for services
-// TODO: start using this for all services init
+// ServiceParams contains common dependencies for services
 type ServiceParams struct {
 	Logger       *logger.Logger
 	Config       *config.Configuration
@@ -38,24 +38,24 @@ type ServiceParams struct {
 	S3           s3.Service
 
 	// Repositories
-	AuthRepo           auth.Repository
-	UserRepo           user.Repository
-	EventRepo          events.Repository
-	ProcessedEventRepo events.ProcessedEventRepository
-	MeterRepo          meter.Repository
-	PriceRepo          price.Repository
-	CustomerRepo       customer.Repository
-	PlanRepo           plan.Repository
-	SubRepo            subscription.Repository
-	WalletRepo         wallet.Repository
-	TenantRepo         tenant.Repository
-	InvoiceRepo        invoice.Repository
-	FeatureRepo        feature.Repository
-	EntitlementRepo    entitlement.Repository
-	PaymentRepo        payment.Repository
-	SecretRepo         secret.Repository
-	EnvironmentRepo    environment.Repository
-	TaskRepo           task.Repository
+	AuthRepo        auth.Repository
+	UserRepo        user.Repository
+	EventRepo       events.Repository
+	MeterRepo       meter.Repository
+	PriceRepo       price.Repository
+	CustomerRepo    customer.Repository
+	PlanRepo        plan.Repository
+	SubRepo         subscription.Repository
+	WalletRepo      wallet.Repository
+	TenantRepo      tenant.Repository
+	InvoiceRepo     invoice.Repository
+	FeatureRepo     feature.Repository
+	EntitlementRepo entitlement.Repository
+	PaymentRepo     payment.Repository
+	SecretRepo      secret.Repository
+	EnvironmentRepo environment.Repository
+	TaskRepo        task.Repository
+	IntegrationRepo integration.Repository
 
 	// Publishers
 	EventPublisher   publisher.EventPublisher
@@ -90,36 +90,31 @@ func NewServiceParams(
 	environmentRepo environment.Repository,
 	eventPublisher publisher.EventPublisher,
 	webhookPublisher webhookPublisher.WebhookPublisher,
-	s3Service s3.Service,
-	client httpclient.Client,
 	taskRepo task.Repository,
+	integrationRepo integration.Repository,
 ) ServiceParams {
 	return ServiceParams{
-		Logger:             logger,
-		Config:             config,
-		DB:                 db,
-		PDFGenerator:       pdfGenerator,
-		AuthRepo:           authRepo,
-		UserRepo:           userRepo,
-		EventRepo:          eventRepo,
-		ProcessedEventRepo: processedEventRepo,
-		MeterRepo:          meterRepo,
-		PriceRepo:          priceRepo,
-		CustomerRepo:       customerRepo,
-		PlanRepo:           planRepo,
-		SubRepo:            subRepo,
-		WalletRepo:         walletRepo,
-		TenantRepo:         tenantRepo,
-		InvoiceRepo:        invoiceRepo,
-		FeatureRepo:        featureRepo,
-		EntitlementRepo:    entitlementRepo,
-		PaymentRepo:        paymentRepo,
-		SecretRepo:         secretRepo,
-		EnvironmentRepo:    environmentRepo,
-		EventPublisher:     eventPublisher,
-		WebhookPublisher:   webhookPublisher,
-		S3:                 s3Service,
-		Client:             client,
-		TaskRepo:           taskRepo,
+		Logger:           logger,
+		Config:           config,
+		DB:               db,
+		UserRepo:         userRepo,
+		EventRepo:        eventRepo,
+		MeterRepo:        meterRepo,
+		PriceRepo:        priceRepo,
+		CustomerRepo:     customerRepo,
+		PlanRepo:         planRepo,
+		SubRepo:          subRepo,
+		WalletRepo:       walletRepo,
+		TenantRepo:       tenantRepo,
+		InvoiceRepo:      invoiceRepo,
+		FeatureRepo:      featureRepo,
+		EntitlementRepo:  entitlementRepo,
+		PaymentRepo:      paymentRepo,
+		SecretRepo:       secretRepo,
+		EnvironmentRepo:  environmentRepo,
+		TaskRepo:         taskRepo,
+		IntegrationRepo:  integrationRepo,
+		EventPublisher:   eventPublisher,
+		WebhookPublisher: webhookPublisher,
 	}
 }

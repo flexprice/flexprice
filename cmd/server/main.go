@@ -127,6 +127,8 @@ func main() {
 			repository.NewPaymentRepository,
 			repository.NewTaskRepository,
 			repository.NewSecretRepository,
+			repository.NewIntegrationRepository,
+
 			// PubSub
 			pubsubRouter.NewRouter,
 
@@ -168,6 +170,8 @@ func main() {
 			service.NewSecretService,
 			service.NewOnboardingService,
 			service.NewBillingService,
+			service.NewEntitySyncService,
+			service.NewGatewayService,
 		),
 	)
 

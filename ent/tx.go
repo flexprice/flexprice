@@ -26,6 +26,8 @@ type Tx struct {
 	Environment *EnvironmentClient
 	// Feature is the client for interacting with the Feature builders.
 	Feature *FeatureClient
+	// IntegrationEntity is the client for interacting with the IntegrationEntity builders.
+	IntegrationEntity *IntegrationEntityClient
 	// Invoice is the client for interacting with the Invoice builders.
 	Invoice *InvoiceClient
 	// InvoiceLineItem is the client for interacting with the InvoiceLineItem builders.
@@ -197,6 +199,7 @@ func (tx *Tx) init() {
 	tx.Entitlement = NewEntitlementClient(tx.config)
 	tx.Environment = NewEnvironmentClient(tx.config)
 	tx.Feature = NewFeatureClient(tx.config)
+	tx.IntegrationEntity = NewIntegrationEntityClient(tx.config)
 	tx.Invoice = NewInvoiceClient(tx.config)
 	tx.InvoiceLineItem = NewInvoiceLineItemClient(tx.config)
 	tx.InvoiceSequence = NewInvoiceSequenceClient(tx.config)

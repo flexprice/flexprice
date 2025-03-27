@@ -44,6 +44,6 @@ const (
 	UUID_PREFIX_PAYMENT_ATTEMPT        = "attempt"
 	UUID_PREFIX_TASK                   = "task"
 	UUID_PREFIX_SECRET                 = "secret"
-
-	UUID_PREFIX_WEBHOOK_EVENT = "webhook"
+	UUID_PREFIX_WEBHOOK_EVENT          = "webhook"
+	UUID_PREFIX_INTEGRATION            = "int"
 )
