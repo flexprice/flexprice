@@ -218,7 +218,7 @@
       inset: 6pt,
       stroke: none,
       [Subtotal], [#currency#format-number(amount-due)],
-      [Tax], if vat == 0 { [-] } else { [#currency#format-number(calc.round(vat, digits: 2))] },
+      [Tax], if vat == 0 { [-] } else { [#currency#format-number(calc.round(amount-due * vat, digits: 2))] },
       table.hline(stroke: 1pt + styling.line-color),
       [*Total Amount*], [*#currency#format-number(amount-due + calc.round(amount-due * vat, digits: 2))*],
     )
