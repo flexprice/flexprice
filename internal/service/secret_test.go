@@ -300,14 +300,14 @@ func (s *SecretServiceSuite) TestGetIntegrationCredentials() {
 
 	tests := []struct {
 		name           string
-		provider       string
+		provider       types.SecretProvider
 		wantErr        bool
 		errString      string
 		wantCredential string
 	}{
 		{
 			name:           "successful retrieval",
-			provider:       string(types.SecretProviderStripe),
+			provider:       types.SecretProviderStripe,
 			wantCredential: "test_stripe_key",
 		},
 		{

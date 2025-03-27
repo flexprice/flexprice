@@ -31,32 +31,6 @@ func (t TaskType) Validate() error {
 	return nil
 }
 
-type EntityType string
-
-const (
-	EntityTypeEvents    EntityType = "EVENTS"
-	EntityTypePrices    EntityType = "PRICES"
-	EntityTypeCustomers EntityType = "CUSTOMERS"
-)
-
-func (e EntityType) String() string {
-	return string(e)
-}
-
-func (e EntityType) Validate() error {
-	allowed := []EntityType{
-		EntityTypeEvents,
-		EntityTypePrices,
-		EntityTypeCustomers,
-	}
-	if !lo.Contains(allowed, e) {
-		return ierr.NewError("invalid entity type").
-			WithHint("Invalid entity type").
-			Mark(ierr.ErrValidation)
-	}
-	return nil
-}
-
 type FileType string
 
 const (

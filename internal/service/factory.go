@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
+	"github.com/flexprice/flexprice/internal/domain/integration"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/payment"
@@ -15,6 +16,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	"github.com/flexprice/flexprice/internal/domain/task"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
@@ -24,8 +26,7 @@ import (
 	webhookPublisher "github.com/flexprice/flexprice/internal/webhook/publisher"
 )
 
-// ServiceParams holds common dependencies for services
-// TODO: start using this for all services init
+// ServiceParams contains common dependencies for services
 type ServiceParams struct {
 	Logger *logger.Logger
 	Config *config.Configuration
@@ -48,6 +49,8 @@ type ServiceParams struct {
 	PaymentRepo     payment.Repository
 	SecretRepo      secret.Repository
 	EnvironmentRepo environment.Repository
+	TaskRepo        task.Repository
+	IntegrationRepo integration.Repository
 
 	// Publishers
 	EventPublisher   publisher.EventPublisher
@@ -77,12 +80,13 @@ func NewServiceParams(
 	environmentRepo environment.Repository,
 	eventPublisher publisher.EventPublisher,
 	webhookPublisher webhookPublisher.WebhookPublisher,
+	taskRepo task.Repository,
+	integrationRepo integration.Repository,
 ) ServiceParams {
 	return ServiceParams{
 		Logger:           logger,
 		Config:           config,
 		DB:               db,
-		AuthRepo:         authRepo,
 		UserRepo:         userRepo,
 		EventRepo:        eventRepo,
 		MeterRepo:        meterRepo,
@@ -98,6 +102,8 @@ func NewServiceParams(
 		PaymentRepo:      paymentRepo,
 		SecretRepo:       secretRepo,
 		EnvironmentRepo:  environmentRepo,
+		TaskRepo:         taskRepo,
+		IntegrationRepo:  integrationRepo,
 		EventPublisher:   eventPublisher,
 		WebhookPublisher: webhookPublisher,
 	}
