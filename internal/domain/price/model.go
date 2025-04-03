@@ -173,6 +173,26 @@ func FormatAmountToFloat64WithPrecision(amount decimal.Decimal, currency string)
 	return amount.Round(types.GetCurrencyPrecision(currency)).InexactFloat64()
 }
 
+// GetDaysInBillingInterval returns the number of days in the billing interval
+func (p *Price) GetDaysInBillingInterval() int {
+	windowSize := 0
+	switch p.BillingPeriod {
+	case types.BILLING_PERIOD_DAILY:
+		windowSize = 1
+	case types.BILLING_PERIOD_WEEKLY:
+		windowSize = 7
+	case types.BILLING_PERIOD_MONTHLY:
+		windowSize = 30
+	case types.BILLING_PERIOD_QUARTER:
+		windowSize = 90
+	case types.BILLING_PERIOD_HALF_YEAR:
+		windowSize = 180
+	case types.BILLING_PERIOD_ANNUAL:
+		windowSize = 365
+	}
+	return windowSize * p.BillingPeriodCount
+}
+
 // PriceTransform is the quantity transformation in case of PACKAGE billing model
 // NOTE: We need to apply this to the quantity before calculating the effective price
 type TransformQuantity struct {

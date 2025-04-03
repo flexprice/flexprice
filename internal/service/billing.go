@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/plan"
+	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -66,6 +67,9 @@ type BillingService interface {
 
 	// GetCustomerUsageSummary returns usage summaries for a customer's features
 	GetCustomerUsageSummary(ctx context.Context, customerID string, req *dto.GetCustomerUsageSummaryRequest) (*dto.CustomerUsageSummaryResponse, error)
+	
+	// CalculateProrationCharges calculates charges from proration results
+	CalculateProrationCharges(ctx context.Context, sub *subscription.Subscription, prorationResult *proration.ProrationResult) (*BillingCalculationResult, error)
 }
 
 type billingService struct {
@@ -1089,4 +1093,47 @@ func (s *billingService) getUsagePercent(usage decimal.Decimal, limit *int64) de
 	}
 
 	return usage.Div(decimal.NewFromInt(*limit))
+}
+
+// CalculateProrationCharges converts proration results to billing calculation results
+func (s *billingService) CalculateProrationCharges(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	prorationResult *proration.ProrationResult,
+) (*BillingCalculationResult, error) {
+	// Convert proration line items to invoice line items
+	fixedCharges := make([]dto.CreateInvoiceLineItemRequest, 0)
+
+	// Add credit line items
+	for _, credit := range prorationResult.Credits {
+		fixedCharges = append(fixedCharges, dto.CreateInvoiceLineItemRequest{
+			DisplayName: lo.ToPtr(credit.Description),
+			Amount:      credit.Amount,
+			PriceID:     credit.PriceID,
+			Quantity:    credit.Quantity,
+			PeriodStart: lo.ToPtr(credit.PeriodStart),
+			PeriodEnd:   lo.ToPtr(credit.PeriodEnd),
+			PriceType:   lo.ToPtr(string(credit.Type)),
+		})
+	}
+
+	// Add charge line items
+	for _, charge := range prorationResult.Charges {
+		fixedCharges = append(fixedCharges, dto.CreateInvoiceLineItemRequest{
+			DisplayName: lo.ToPtr(charge.Description),
+			Amount:      charge.Amount,
+			PriceID:     charge.PriceID,
+			Quantity:    charge.Quantity,
+			PeriodStart: lo.ToPtr(charge.PeriodStart),
+			PeriodEnd:   lo.ToPtr(charge.PeriodEnd),
+			PriceType:   lo.ToPtr(string(charge.Type)),
+		})
+	}
+
+	return &BillingCalculationResult{
+		FixedCharges: fixedCharges,
+		UsageCharges: []dto.CreateInvoiceLineItemRequest{}, // No usage charges in proration
+		TotalAmount:  prorationResult.NetAmount,
+		Currency:     prorationResult.Currency,
+	}, nil
 }

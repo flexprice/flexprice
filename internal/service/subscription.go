@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -31,6 +32,15 @@ type SubscriptionService interface {
 	ListPauses(ctx context.Context, subscriptionID string) (*dto.ListSubscriptionPausesResponse, error)
 	CalculatePauseImpact(ctx context.Context, subscriptionID string, req *dto.PauseSubscriptionRequest) (*types.BillingImpactDetails, error)
 	CalculateResumeImpact(ctx context.Context, subscriptionID string, req *dto.ResumeSubscriptionRequest) (*types.BillingImpactDetails, error)
+
+	// Subscription update methods
+	UpdateSubscription(ctx context.Context, subscriptionID string, req *dto.UpdateSubscriptionRequest) (*dto.SubscriptionResponse, error)
+	PreviewSubscriptionUpdate(ctx context.Context, subscriptionID string, req *dto.UpdateSubscriptionRequest) (*dto.SubscriptionResponse, error)
+
+	// CancelSubscriptionWithOptions cancels a subscription with the specified options
+	CancelSubscriptionWithOptions(ctx context.Context, id string, req dto.CancelSubscriptionRequest) (*dto.SubscriptionResponse, error)
+	// PreviewCancelSubscription previews the effect of canceling a subscription without actually doing it
+	PreviewCancelSubscription(ctx context.Context, id string, req dto.CancelSubscriptionRequest) (*dto.SubscriptionResponse, error)
 }
 
 type subscriptionService struct {
@@ -165,54 +175,18 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	// Convert line items
 	lineItems := make([]*subscription.SubscriptionLineItem, 0, len(validPrices))
 	for _, price := range validPrices {
-		lineItems = append(lineItems, &subscription.SubscriptionLineItem{
-			PriceID:       price.ID,
-			EnvironmentID: types.GetEnvironmentID(ctx),
-			BaseModel:     types.GetDefaultBaseModel(ctx),
-		})
-	}
-
-	// Convert line items
-	for _, item := range lineItems {
-		price, ok := priceMap[item.PriceID]
+		price, ok := priceMap[price.ID]
 		if !ok {
 			return nil, ierr.NewError("failed to get price %s: price not found").
 				WithHint("Ensure all prices are valid and available").
 				WithReportableDetails(map[string]interface{}{
-					"price_id": item.PriceID,
+					"price_id": price.ID,
 				}).
 				Mark(ierr.ErrDatabase)
 		}
 
-		if price.Type == types.PRICE_TYPE_USAGE && price.Meter != nil {
-			item.MeterID = price.Meter.ID
-			item.MeterDisplayName = price.Meter.Name
-			item.DisplayName = price.Meter.Name
-			item.Quantity = decimal.Zero
-		} else {
-			item.DisplayName = plan.Name
-			if item.Quantity.IsZero() {
-				item.Quantity = decimal.NewFromInt(1)
-			}
-		}
-
-		if item.ID == "" {
-			item.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM)
-		}
-
-		item.SubscriptionID = sub.ID
-		item.PriceType = price.Type
-		item.PlanID = plan.ID
-		item.PlanDisplayName = plan.Name
-		item.CustomerID = sub.CustomerID
-		item.Currency = sub.Currency
-		item.BillingPeriod = sub.BillingPeriod
-		item.InvoiceCadence = price.InvoiceCadence
-		item.TrialPeriod = price.TrialPeriod
-		item.StartDate = sub.StartDate
-		if sub.EndDate != nil {
-			item.EndDate = *sub.EndDate
-		}
+		item := s.createSubscriptionLineItem(ctx, decimal.NewFromInt(1), sub, plan, price)
+		lineItems = append(lineItems, item)
 	}
 	sub.LineItems = lineItems
 
@@ -248,6 +222,51 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 
 	response := &dto.SubscriptionResponse{Subscription: sub}
 	return response, nil
+}
+
+func (s *subscriptionService) createSubscriptionLineItem(ctx context.Context,
+	quantity decimal.Decimal,
+	sub *subscription.Subscription,
+	plan *plan.Plan,
+	price *dto.PriceResponse,
+) *subscription.SubscriptionLineItem {
+	item := &subscription.SubscriptionLineItem{}
+	item.PriceID = price.ID
+	item.Quantity = quantity
+	item.EnvironmentID = types.GetEnvironmentID(ctx)
+	item.BaseModel = types.GetDefaultBaseModel(ctx)
+
+	if price.Type == types.PRICE_TYPE_USAGE && price.Meter != nil {
+		item.MeterID = price.Meter.ID
+		item.MeterDisplayName = price.Meter.Name
+		item.DisplayName = price.Meter.Name
+		item.Quantity = decimal.Zero
+	} else {
+		item.DisplayName = plan.Name
+		if item.Quantity.IsZero() {
+			item.Quantity = decimal.NewFromInt(1)
+		}
+	}
+
+	if item.ID == "" {
+		item.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM)
+	}
+
+	item.SubscriptionID = sub.ID
+	item.PriceType = price.Type
+	item.PlanID = plan.ID
+	item.PlanDisplayName = plan.Name
+	item.CustomerID = sub.CustomerID
+	item.Currency = sub.Currency
+	item.BillingPeriod = sub.BillingPeriod
+	item.InvoiceCadence = price.InvoiceCadence
+	item.TrialPeriod = price.TrialPeriod
+	item.StartDate = sub.StartDate
+	if sub.EndDate != nil {
+		item.EndDate = *sub.EndDate
+	}
+
+	return item
 }
 
 func (s *subscriptionService) GetSubscription(ctx context.Context, id string) (*dto.SubscriptionResponse, error) {
@@ -1496,4 +1515,118 @@ func (s *subscriptionService) calculateBillingImpact(
 	}
 
 	return impact, nil
+}
+
+// UpdateSubscription updates a subscription with the specified changes
+func (s *subscriptionService) UpdateSubscription(ctx context.Context, subscriptionID string, req *dto.UpdateSubscriptionRequest) (*dto.SubscriptionResponse, error) {
+	// Validate the request
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Use the new architecture to handle the update preview
+	orchestrator := NewSubscriptionUpdateOrchestrator(s.ServiceParams)
+	factory := NewSubscriptionOperationFactory(s.ServiceParams)
+
+	// Create operations from the request
+	operations, err := factory.CreateFromRequest(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	// Process the update preview
+	result, err := orchestrator.ProcessUpdateWithOperations(
+		ctx,
+		subscriptionID,
+		operations,
+		false, // This is not a preview
+	)
+
+	return result, err
+}
+
+// PreviewSubscriptionUpdate previews the effect of updating a subscription without actually doing it
+func (s *subscriptionService) PreviewSubscriptionUpdate(ctx context.Context, subscriptionID string, req *dto.UpdateSubscriptionRequest) (*dto.SubscriptionResponse, error) {
+	// Validate the request
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Use the new architecture to handle the update preview
+	orchestrator := NewSubscriptionUpdateOrchestrator(s.ServiceParams)
+	factory := NewSubscriptionOperationFactory(s.ServiceParams)
+
+	// Create operations from the request
+	operations, err := factory.CreateFromRequest(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	// Process the update preview
+	result, err := orchestrator.ProcessUpdateWithOperations(
+		ctx,
+		subscriptionID,
+		operations,
+		true, // This is a preview
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// CancelSubscriptionWithOptions cancels a subscription with the specified options
+func (s *subscriptionService) CancelSubscriptionWithOptions(ctx context.Context, id string, req dto.CancelSubscriptionRequest) (*dto.SubscriptionResponse, error) {
+	// Use the new architecture to handle the cancellation
+	orchestrator := NewSubscriptionUpdateOrchestrator(s.ServiceParams)
+	factory := NewSubscriptionOperationFactory(s.ServiceParams)
+
+	// Create the cancellation operation
+	cancelOp := factory.CreateCancellationOperation(
+		req.CancelAtPeriodEnd,
+		req.ProrationOpts,
+	)
+
+	// Process the cancellation
+	result, err := orchestrator.ProcessUpdateWithOperations(
+		ctx,
+		id,
+		[]SubscriptionChangeOperation{cancelOp},
+		false, // Not a preview
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// PreviewCancelSubscription previews the effect of canceling a subscription without actually doing it
+func (s *subscriptionService) PreviewCancelSubscription(ctx context.Context, id string, req dto.CancelSubscriptionRequest) (*dto.SubscriptionResponse, error) {
+	// Use the new architecture to handle the cancellation preview
+	orchestrator := NewSubscriptionUpdateOrchestrator(s.ServiceParams)
+	factory := NewSubscriptionOperationFactory(s.ServiceParams)
+
+	// Create the cancellation operation
+	cancelOp := factory.CreateCancellationOperation(
+		req.CancelAtPeriodEnd,
+		req.ProrationOpts,
+	)
+
+	// Process the cancellation preview
+	result, err := orchestrator.ProcessUpdateWithOperations(
+		ctx,
+		id,
+		[]SubscriptionChangeOperation{cancelOp},
+		true, // This is a preview
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }

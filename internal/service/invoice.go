@@ -483,6 +483,7 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 
 func (s *invoiceService) GetPreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error) {
 	billingService := NewBillingService(s.ServiceParams)
+	prorationService := NewProrationService(s.ServiceParams)
 
 	sub, _, err := s.SubRepo.GetWithLineItems(ctx, req.SubscriptionID)
 	if err != nil {
@@ -497,11 +498,49 @@ func (s *invoiceService) GetPreviewInvoice(ctx context.Context, req dto.GetPrevi
 		req.PeriodEnd = &sub.CurrentPeriodEnd
 	}
 
-	// Prepare invoice request using billing service with the preview reference point
-	invReq, err := billingService.PrepareSubscriptionInvoiceRequest(
-		ctx, sub, *req.PeriodStart, *req.PeriodEnd, types.ReferencePointPreview)
-	if err != nil {
-		return nil, err
+	var invReq *dto.CreateInvoiceRequest
+
+	// Check if this is a proration preview request
+	if req.ProrationParams != nil { // Get proration calculation
+		prorationResult, err := prorationService.CalculateProration(ctx, sub, req.ProrationParams)
+		if err != nil {
+			return nil, err
+		}
+
+		// Mark as preview
+		prorationResult.IsPreview = true
+
+		// Get billing calculation result from proration result
+		billingResult, err := billingService.CalculateProrationCharges(ctx, sub, prorationResult)
+		if err != nil {
+			return nil, err
+		}
+
+		// Create preview invoice from billing result
+		invReq = &dto.CreateInvoiceRequest{
+			CustomerID:     sub.CustomerID,
+			SubscriptionID: lo.ToPtr(sub.ID),
+			InvoiceType:    types.InvoiceTypeSubscription,
+			InvoiceStatus:  lo.ToPtr(types.InvoiceStatusDraft),
+			Currency:       prorationResult.Currency,
+			AmountDue:      prorationResult.NetAmount,
+			Description:    fmt.Sprintf("Preview: Subscription update - %s", prorationResult.Action),
+			BillingReason:  types.InvoiceBillingReasonSubscriptionUpdate,
+			EnvironmentID:  sub.EnvironmentID,
+			LineItems:      billingResult.FixedCharges,
+			Metadata: types.Metadata{
+				"is_preview":     "true",
+				"proration_type": string(prorationResult.Action),
+			},
+		}
+	} else {
+		// Standard invoice preview (non-proration)
+		// Prepare invoice request using billing service with the preview reference point
+		invReq, err = billingService.PrepareSubscriptionInvoiceRequest(
+			ctx, sub, *req.PeriodStart, *req.PeriodEnd, types.ReferencePointPreview)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Create a draft invoice object for preview
