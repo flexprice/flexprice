@@ -7148,6 +7148,9 @@ const docTemplate = `{
                 "period_start": {
                     "type": "string"
                 },
+                "proration_params": {
+                    "$ref": "#/definitions/proration.ProrationParams"
+                },
                 "subscription_id": {
                     "type": "string"
                 }
@@ -9351,6 +9354,44 @@ const docTemplate = `{
                 }
             }
         },
+        "proration.ProrationParams": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "$ref": "#/definitions/types.ProrationAction"
+                },
+                "line_item_id": {
+                    "description": "ID of the line item being changed (can be empty for add_item action)",
+                    "type": "string"
+                },
+                "new_price_id": {
+                    "description": "New price ID (nil for cancellation or remove_item)",
+                    "type": "string"
+                },
+                "new_quantity": {
+                    "description": "New quantity",
+                    "type": "number"
+                },
+                "old_price_id": {
+                    "description": "Old price ID (nil for add_item)",
+                    "type": "string"
+                },
+                "old_quantity": {
+                    "description": "Old quantity (nil for add_item)",
+                    "type": "number"
+                },
+                "proration_behavior": {
+                    "$ref": "#/definitions/types.ProrationBehavior"
+                },
+                "proration_date": {
+                    "description": "When the proration takes effect",
+                    "type": "string"
+                },
+                "proration_strategy": {
+                    "$ref": "#/definitions/types.ProrationStrategy"
+                }
+            }
+        },
         "subscription.SubscriptionLineItem": {
             "type": "object",
             "properties": {
@@ -9628,12 +9669,14 @@ const docTemplate = `{
                 "SUBSCRIPTION_CREATE",
                 "SUBSCRIPTION_CYCLE",
                 "SUBSCRIPTION_UPDATE",
+                "SUBSCRIPTION_CANCELLATION",
                 "MANUAL"
             ],
             "x-enum-varnames": [
                 "InvoiceBillingReasonSubscriptionCreate",
                 "InvoiceBillingReasonSubscriptionCycle",
                 "InvoiceBillingReasonSubscriptionUpdate",
+                "InvoiceBillingReasonSubscriptionCancellation",
                 "InvoiceBillingReasonManual"
             ]
         },
@@ -9776,6 +9819,47 @@ const docTemplate = `{
             "x-enum-varnames": [
                 "PRICE_TYPE_USAGE",
                 "PRICE_TYPE_FIXED"
+            ]
+        },
+        "types.ProrationAction": {
+            "type": "string",
+            "enum": [
+                "plan_change",
+                "quantity_change",
+                "cancellation",
+                "add_item",
+                "remove_item"
+            ],
+            "x-enum-varnames": [
+                "ProrationActionPlanChange",
+                "ProrationActionQuantityChange",
+                "ProrationActionCancellation",
+                "ProrationActionAddItem",
+                "ProrationActionRemoveItem"
+            ]
+        },
+        "types.ProrationBehavior": {
+            "type": "string",
+            "enum": [
+                "create_prorations",
+                "always_invoice",
+                "none"
+            ],
+            "x-enum-varnames": [
+                "ProrationBehaviorCreateProrations",
+                "ProrationBehaviorAlwaysInvoice",
+                "ProrationBehaviorNone"
+            ]
+        },
+        "types.ProrationStrategy": {
+            "type": "string",
+            "enum": [
+                "day_based",
+                "second_based"
+            ],
+            "x-enum-varnames": [
+                "ProrationStrategyDayBased",
+                "ProrationStrategySecondBased"
             ]
         },
         "types.ResetUsage": {

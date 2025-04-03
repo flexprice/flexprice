@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/proration"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
@@ -422,9 +423,17 @@ func (r *InvoiceResponse) WithCustomer(customer *CustomerResponse) *InvoiceRespo
 type ListInvoicesResponse = types.ListResponse[*InvoiceResponse]
 
 type GetPreviewInvoiceRequest struct {
-	SubscriptionID string     `json:"subscription_id" binding:"required"`
-	PeriodStart    *time.Time `json:"period_start,omitempty"`
-	PeriodEnd      *time.Time `json:"period_end,omitempty"`
+	SubscriptionID  string                     `json:"subscription_id" binding:"required"`
+	PeriodStart     *time.Time                 `json:"period_start,omitempty"`
+	PeriodEnd       *time.Time                 `json:"period_end,omitempty"`
+	ProrationParams *proration.ProrationParams `json:"proration_params,omitempty"`
+}
+
+func (r *GetPreviewInvoiceRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+	return nil
 }
 
 // CustomerInvoiceSummary represents a summary of customer's invoice status

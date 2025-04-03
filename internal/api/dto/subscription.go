@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -28,10 +29,53 @@ type CreateSubscriptionRequest struct {
 	Metadata           map[string]string    `json:"metadata,omitempty"`
 }
 
+// UpdateSubscriptionRequest represents a request to update a subscription.
 type UpdateSubscriptionRequest struct {
-	Status            types.SubscriptionStatus `json:"status"`
-	CancelAt          *time.Time               `json:"cancel_at,omitempty"`
-	CancelAtPeriodEnd bool                     `json:"cancel_at_period_end,omitempty"`
+	// Items to be updated, added, or removed
+	Items []*SubscriptionItemParam `json:"items" binding:"required,dive" validate:"required"`
+
+	// Proration behavior determines how changes are prorated
+	// Options: "create_prorations" (default), "none", "always_invoice"
+	ProrationBehavior types.ProrationBehavior `json:"proration_behavior,omitempty"`
+
+	// ProrationDate is the date to use for proration calculations
+	// If not provided, the current time will be used
+	ProrationDate *time.Time `json:"proration_date,omitempty"`
+
+	// ProrationStrategy determines how proration coefficients are calculated
+	// Options: "day_based" (default), "second_based"
+	ProrationStrategy types.ProrationStrategy `json:"proration_strategy,omitempty"`
+
+	// Metadata is a map of key-value pairs for storing additional information
+	Metadata types.Metadata `json:"metadata,omitempty"`
+}
+
+// SubscriptionItemParam represents a subscription item to be updated, added, or removed
+type SubscriptionItemParam struct {
+	// ID of the existing subscription item (line item)
+	// If provided, the item will be updated
+	// If not provided, a new item will be added
+	ID string `json:"id,omitempty"`
+
+	// PriceID is the ID of the price to use for this item
+	// Required when adding a new item
+	// When updating an existing item, if not provided, only the quantity will be updated
+	PriceID *string `json:"price_id,omitempty"`
+
+	// Quantity is the number of units for this item
+	// Required when adding a new item
+	// When updating an existing item, if not provided, the quantity will remain unchanged
+	Quantity *int64 `json:"quantity,omitempty"`
+
+	// Deleted indicates if this item should be removed from the subscription
+	// Only applicable when ID is provided
+	Deleted bool `json:"deleted,omitempty"`
+
+	// Metadata is a map of key-value pairs for storing additional information
+	Metadata types.Metadata `json:"metadata,omitempty"`
+
+	// DisplayName is a user-friendly name for this item
+	DisplayName *string `json:"display_name,omitempty"`
 }
 
 type SubscriptionResponse struct {
@@ -212,4 +256,79 @@ type SubscriptionUpdatePeriodResponseItem struct {
 	PeriodEnd      time.Time `json:"period_end"`
 	Success        bool      `json:"success"`
 	Error          string    `json:"error"`
+}
+
+func (r *UpdateSubscriptionRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+
+	// Validate items
+	if len(r.Items) == 0 {
+		return ierr.NewError("at least one item is required").Mark(ierr.ErrValidation)
+	}
+
+	for _, item := range r.Items {
+		// For new items, price_id and quantity are required
+		if item.ID == "" && !item.Deleted {
+			if item.PriceID == nil {
+				return ierr.NewError("price_id is required for new items").
+					WithHint("Price ID is required for new items").
+					Mark(ierr.ErrValidation)
+			}
+			if item.Quantity == nil {
+				return ierr.NewError("quantity is required for new items").
+					WithHint("Quantity is required for new items").
+					Mark(ierr.ErrValidation)
+			}
+		}
+
+		// For existing items being updated, at least one of price_id or quantity must be provided
+		if item.ID != "" && !item.Deleted && item.PriceID == nil && item.Quantity == nil {
+			return ierr.NewError("at least one of price_id or quantity must be provided when updating an item").
+				WithHint("At least one of price_id or quantity must be provided when updating an item").
+				Mark(ierr.ErrValidation)
+		}
+
+		// For items being deleted, only ID and deleted=true should be provided
+		if item.Deleted && item.ID == "" {
+			return ierr.NewError("id is required when deleting an item").
+				WithHint("Line item ID is required when deleting an item").
+				Mark(ierr.ErrValidation)
+		}
+
+		// Quantity must be positive
+		if item.Quantity != nil && *item.Quantity < 0 {
+			return ierr.NewError("quantity must be non-negative").
+				WithHint("Quantity must be non-negative").
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	// Validate proration behavior if provided
+	if r.ProrationBehavior != "" {
+		if err := r.ProrationBehavior.Validate(); err != nil {
+			return err
+		}
+	}
+
+	// Validate proration strategy if provided
+	if r.ProrationStrategy != "" {
+		if err := r.ProrationStrategy.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// CancelSubscriptionRequest represents a request to cancel a subscription
+type CancelSubscriptionRequest struct {
+	// CancelAtPeriodEnd determines if the subscription should be canceled at the end of the current period
+	// If true, the subscription will remain active until the end of the current period
+	// If false, the subscription will be canceled immediately
+	CancelAtPeriodEnd bool `json:"cancel_at_period_end"`
+
+	// ProrationOpts contains options for how to handle proration when canceling
+	// If nil, default proration behavior will be used
+	ProrationOpts *proration.ProrationParams `json:"proration_opts,omitempty"`
 }

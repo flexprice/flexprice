@@ -87,6 +87,25 @@ type Subscription struct {
 	types.BaseModel
 }
 
+func (s *Subscription) Copy() *Subscription {
+	newSub := *s
+	newSub.LineItems = make([]*SubscriptionLineItem, len(s.LineItems))
+	for i, item := range s.LineItems {
+		itemCopy := *item
+		newSub.LineItems[i] = &itemCopy
+	}
+	return &newSub
+}
+
+func (s *Subscription) GetLineItemByID(id string) *SubscriptionLineItem {
+	for _, item := range s.LineItems {
+		if item.ID == id {
+			return item
+		}
+	}
+	return nil
+}
+
 func GetSubscriptionFromEnt(sub *ent.Subscription) *Subscription {
 	var lineItems []*SubscriptionLineItem
 	if sub.Edges.LineItems != nil {
