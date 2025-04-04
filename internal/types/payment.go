@@ -111,6 +111,7 @@ type PaymentFilter struct {
 	PaymentStatus     *string  `form:"payment_status"`
 	PaymentGateway    *string  `form:"payment_gateway"`
 	Currency          *string  `form:"currency"`
+	InvoiceNo         *string  `form:"invoice_no"`
 }
 
 // NewNoLimitPaymentFilter creates a new payment filter with no limit
