@@ -30,17 +30,17 @@ type InvoiceData struct {
 // BillerInfo contains company information for the invoice issuer
 type BillerInfo struct {
 	Name                string      `json:"name"`
-	Email               string      `json:"email,omitempty"`
-	Website             string      `json:"website,omitempty"`
-	HelpEmail           string      `json:"help_email,omitempty"`
-	PaymentInstructions string      `json:"payment_instructions,omitempty"`
+	Email               string      `json:"email"`
+	Website             string      `json:"website"`
+	HelpEmail           string      `json:"help_email"`
+	PaymentInstructions string      `json:"payment_instructions"`
 	Address             AddressInfo `json:"address"`
 }
 
 // RecipientInfo contains customer information for the invoice recipient
 type RecipientInfo struct {
 	Name    string      `json:"name"`
-	Email   string      `json:"email,omitempty"`
+	Email   string      `json:"email"`
 	Address AddressInfo `json:"address"`
 }
 
@@ -49,8 +49,8 @@ type AddressInfo struct {
 	Street     string `json:"street"`
 	City       string `json:"city"`
 	State      string `json:"state"`
-	PostalCode string `json:"postal_code,omitempty"`
-	Country    string `json:"country,omitempty"`
+	PostalCode string `json:"postal_code"`
+	Country    string `json:"country"`
 }
 
 // LineItemData represents an invoice line item for PDF generation
@@ -58,8 +58,8 @@ type LineItemData struct {
 	PlanDisplayName string     `json:"plan_display_name"`
 	DisplayName     string     `json:"display_name"`
 	Description     string     `json:"description"`
-	PeriodStart     CustomTime `json:"period_start,omitempty"`
-	PeriodEnd       CustomTime `json:"period_end,omitempty"`
+	PeriodStart     CustomTime `json:"period_start"`
+	PeriodEnd       CustomTime `json:"period_end"`
 	Amount          float64    `json:"amount"`
 	Quantity        float64    `json:"quantity"`
 	Currency        string     `json:"currency"`
