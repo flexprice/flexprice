@@ -167,3 +167,22 @@ Whether you're a newbie coder or a wizard 🧙‍♀️, your perspective is gol
 🏗️ [Local Development Setup](SETUP.md)
 
 ❤️ [Code of Conduct](CODE_OF_CONDUCT.md)
+
+## Contributors
+
+<a href="https://github.com/flexprice/flexprice/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=flexprice/flexprice" />
+</a>
+
+## Repo Activity
+
+![Alt](https://repobeats.axiom.co/api/embed/4d6e208eab20ff0615787615c4fa022591adfa6b.svg "Repobeats analytics image")
+
+<!-- LICENSE -->
+
+## License
+
+Flexprice is a commercial open source company, which means some parts of this open source repository require a commercial license. The concept is called "Open Core" where the core technology (99%) is fully open source, licensed under [AGPLv3](https://opensource.org/license/agpl-v3) and the last 1% is covered under a commercial license (["/ee" Enterprise Edition"]).
+
+> [!TIP]
+> We work closely with the community and always invite feedback about what should be open and what is fine to be commercial. This list is not set and stone and we have moved things from commercial to open in the past. Please open a [discussion](https://github.com/flexprice/flexprice/discussions) if you feel like something is wrong.
