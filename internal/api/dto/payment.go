@@ -99,6 +99,7 @@ func NewPaymentResponse(p *payment.Payment) *PaymentResponse {
 		UpdatedAt:         p.UpdatedAt,
 		CreatedBy:         p.CreatedBy,
 		UpdatedBy:         p.UpdatedBy,
+		InvoiceNumber:     p.InvoiceNumber,
 	}
 
 	if p.Attempts != nil {

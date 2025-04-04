@@ -365,7 +365,40 @@ func (m *InMemoryPaymentStore) GetPaymentsForDestination(ctx context.Context, de
 		QueryFilter:     types.NewNoLimitQueryFilter(),
 	}
 
-	return m.List(ctx, filter)
+	payments, err := m.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	// If not invoice destination type, return as is
+	if destinationType != types.PaymentDestinationTypeInvoice {
+		return payments, nil
+	}
+
+	// For invoice payments, fetch the invoice to get its number
+	invoiceFilter := &types.InvoiceFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		InvoiceIDs:  []string{destinationID},
+	}
+
+	// Get the invoice repository from the payment store
+	invoiceRepo := NewInMemoryInvoiceStore()
+	invoices, err := invoiceRepo.List(ctx, invoiceFilter)
+	if err != nil {
+		return nil, err
+	}
+
+	// If invoice found, set its number in the payment response
+	if len(invoices) > 0 {
+		invoice := invoices[0]
+		for _, p := range payments {
+			if p.DestinationType == types.PaymentDestinationTypeInvoice && p.DestinationID == invoice.ID {
+				p.InvoiceNumber = invoice.InvoiceNumber
+			}
+		}
+	}
+
+	return payments, nil
 }
 
 // GetCreatedPayments returns all payments that were created, in order of creation

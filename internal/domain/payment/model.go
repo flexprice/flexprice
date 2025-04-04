@@ -31,6 +31,7 @@ type Payment struct {
 	ErrorMessage      *string                      `json:"error_message,omitempty"`
 	Attempts          []*PaymentAttempt            `json:"attempts,omitempty"`
 	EnvironmentID     string                       `json:"environment_id"`
+	InvoiceNumber     *string                      `json:"invoice_number,omitempty"`
 
 	types.BaseModel
 }
