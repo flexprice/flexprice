@@ -223,7 +223,12 @@ func (s *paymentService) GetPayment(ctx context.Context, id string) (*dto.Paymen
 	response := dto.NewPaymentResponse(p)
 	if p.DestinationType == types.PaymentDestinationTypeInvoice {
 		invoice, err := s.InvoiceRepo.Get(ctx, p.DestinationID)
-		if err == nil && invoice != nil {
+		
+		if err != nil {
+			return nil, err // Repository already using ierr
+		}
+
+		if invoice != nil {
 			response.InvoiceNumber = invoice.InvoiceNumber
 		}
 	}
