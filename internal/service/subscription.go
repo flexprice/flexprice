@@ -539,6 +539,13 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 				}
 			}
 
+			// if no matching usage, create a 0 value usage rather than ommiting it
+			if matchingUsage == nil {
+				matchingUsage = &events.AggregationResult{
+					Value: decimal.Zero,
+				}
+			}
+
 			if matchingUsage != nil {
 				quantity = matchingUsage.Value
 				cost := priceService.CalculateCost(ctx, price, quantity)
