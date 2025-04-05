@@ -37,6 +37,7 @@ func (r *paymentRepository) Create(ctx context.Context, p *domainPayment.Payment
 		"destination_type", p.DestinationType,
 		"destination_id", p.DestinationID,
 		"amount", p.Amount,
+		"invoice_number", p.InvoiceNumber,
 	)
 
 	// Set environment ID from context if not already set
@@ -570,6 +571,8 @@ func (o PaymentQueryOptions) applyEntityQueryOptions(_ context.Context, f *types
 	if f.Currency != nil {
 		query = query.Where(payment.Currency(*f.Currency))
 	}
+
+
 
 	// Apply time range filters if specified
 	if f.TimeRangeFilter != nil {

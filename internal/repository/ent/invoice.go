@@ -604,6 +604,9 @@ func (o InvoiceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types
 	if f.SubscriptionID != "" {
 		query = query.Where(invoice.SubscriptionID(f.SubscriptionID))
 	}
+	if len(f.InvoiceIDs) > 0 {
+		query = query.Where(invoice.IDIn(f.InvoiceIDs...))
+	}
 	if f.InvoiceType != "" {
 		query = query.Where(invoice.InvoiceType(string(f.InvoiceType)))
 	}

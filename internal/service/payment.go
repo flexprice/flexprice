@@ -10,6 +10,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // PaymentService defines the interface for payment operations
@@ -117,7 +118,8 @@ func (s *paymentService) CreatePayment(ctx context.Context, req *dto.CreatePayme
 		}
 	}
 
-	return dto.NewPaymentResponse(p), nil
+	response := dto.NewPaymentResponse(p)
+	return response, nil
 }
 
 func (s *paymentService) validateInvoicePaymentEligibility(_ context.Context, invoice *invoice.Invoice, p *dto.CreatePaymentRequest) error {
@@ -218,7 +220,19 @@ func (s *paymentService) GetPayment(ctx context.Context, id string) (*dto.Paymen
 		return nil, err // Repository already using ierr
 	}
 
-	return dto.NewPaymentResponse(p), nil
+	response := dto.NewPaymentResponse(p)
+	if p.DestinationType == types.PaymentDestinationTypeInvoice {
+		invoice, err := s.InvoiceRepo.Get(ctx, p.DestinationID)
+		
+		if err != nil {
+			return nil, err // Repository already using ierr
+		}
+
+		if invoice != nil {
+			response.InvoiceNumber = invoice.InvoiceNumber
+		}
+	}
+	return response, nil
 }
 
 // UpdatePayment updates a payment
@@ -266,9 +280,43 @@ func (s *paymentService) ListPayments(ctx context.Context, filter *types.Payment
 		return nil, err // Repository already using ierr
 	}
 
+	invoiceMap := make(map[string]*invoice.Invoice)
+
+	// Collect all invoice IDs from payments
+	for _, p := range payments {
+		if p.DestinationType == types.PaymentDestinationTypeInvoice {
+			invoiceMap[p.DestinationID] = nil
+		}
+	}
+
+	// Create a map of invoice ID to invoice number
+	if len(invoiceMap) > 0 {
+		// Fetch all invoices in a single query
+		invoiceFilter := &types.InvoiceFilter{
+			QueryFilter: types.NewNoLimitQueryFilter(),
+			InvoiceIDs:  lo.Keys(invoiceMap),
+		}
+		invoices, err := s.InvoiceRepo.List(ctx, invoiceFilter)
+
+		if err != nil {
+			return nil, err // Repository already using ierr
+		}
+
+		for _, inv := range invoices {
+			invoiceMap[inv.ID] = inv
+		}
+	}
+
+	// Create payment responses with invoice numbers
 	items := make([]*dto.PaymentResponse, len(payments))
 	for i, p := range payments {
-		items[i] = dto.NewPaymentResponse(p)
+		response := dto.NewPaymentResponse(p)
+		if p.DestinationType == types.PaymentDestinationTypeInvoice {
+			if invoice, exists := invoiceMap[p.DestinationID]; exists {
+				response.InvoiceNumber = invoice.InvoiceNumber
+			}
+		}
+		items[i] = response
 	}
 
 	return &dto.ListPaymentsResponse{

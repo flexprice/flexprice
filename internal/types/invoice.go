@@ -150,6 +150,7 @@ type InvoiceFilter struct {
 	PaymentStatus     []PaymentStatus  `json:"payment_status,omitempty" form:"payment_status"`
 	AmountDueGt       *decimal.Decimal `json:"amount_due_gt,omitempty" form:"amount_due_gt"`
 	AmountRemainingGt *decimal.Decimal `json:"amount_remaining_gt,omitempty" form:"amount_remaining_gt"`
+	InvoiceIDs        []string         `json:"invoice_ids,omitempty" form:"invoice_ids"`
 }
 
 // NewInvoiceFilter creates a new invoice filter with default options
