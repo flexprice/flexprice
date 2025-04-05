@@ -269,7 +269,7 @@ func (s *subscriptionService) GetSubscription(ctx context.Context, id string) (*
 	}
 
 	// expand plan
-	planService := NewPlanService(s.DB, s.PlanRepo, s.PriceRepo, s.MeterRepo, s.EntitlementRepo, s.FeatureRepo, s.Logger)
+	planService := NewPlanService(s.DB, s.PlanRepo, s.PriceRepo, s.SubRepo, s.MeterRepo, s.EntitlementRepo, s.FeatureRepo, s.Logger)
 
 	plan, err := planService.GetPlan(ctx, subscription.PlanID)
 	if err != nil {
@@ -320,7 +320,7 @@ func (s *subscriptionService) CancelSubscription(ctx context.Context, id string,
 }
 
 func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *types.SubscriptionFilter) (*dto.ListSubscriptionsResponse, error) {
-	planService := NewPlanService(s.DB, s.PlanRepo, s.PriceRepo, s.MeterRepo, s.EntitlementRepo, s.FeatureRepo, s.Logger)
+	planService := NewPlanService(s.DB, s.PlanRepo, s.PriceRepo, s.SubRepo, s.MeterRepo, s.EntitlementRepo, s.FeatureRepo, s.Logger)
 
 	subscriptions, err := s.SubRepo.List(ctx, filter)
 	if err != nil {

@@ -648,6 +648,7 @@ func (s *onboardingService) createDefaultPlans(ctx context.Context, features []*
 		s.DB,
 		s.PlanRepo,
 		s.PriceRepo,
+		s.SubRepo,
 		s.MeterRepo,
 		s.EntitlementRepo,
 		s.FeatureRepo,
