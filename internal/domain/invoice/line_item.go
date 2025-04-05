@@ -17,7 +17,7 @@ type InvoiceLineItem struct {
 	SubscriptionID   *string         `json:"subscription_id,omitempty"`
 	PlanID           *string         `json:"plan_id,omitempty"`
 	PlanDisplayName  *string         `json:"plan_display_name,omitempty"`
-	PriceID          string          `json:"price_id"`
+	PriceID          *string         `json:"price_id,omitempty"`
 	PriceType        *string         `json:"price_type,omitempty"`
 	MeterID          *string         `json:"meter_id,omitempty"`
 	MeterDisplayName *string         `json:"meter_display_name,omitempty"`

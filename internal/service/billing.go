@@ -105,7 +105,7 @@ func (s *billingService) CalculateFixedCharges(
 		fixedCostLineItems = append(fixedCostLineItems, dto.CreateInvoiceLineItemRequest{
 			PlanID:          lo.ToPtr(item.PlanID),
 			PlanDisplayName: lo.ToPtr(item.PlanDisplayName),
-			PriceID:         item.PriceID,
+			PriceID:         lo.ToPtr(item.PriceID),
 			PriceType:       lo.ToPtr(string(item.PriceType)),
 			DisplayName:     lo.ToPtr(item.DisplayName),
 			Amount:          amount,
@@ -226,7 +226,7 @@ func (s *billingService) CalculateUsageCharges(
 			PlanID:           lo.ToPtr(item.PlanID),
 			PlanDisplayName:  lo.ToPtr(item.PlanDisplayName),
 			PriceType:        lo.ToPtr(string(item.PriceType)),
-			PriceID:          item.PriceID,
+			PriceID:          lo.ToPtr(item.PriceID),
 			MeterID:          lo.ToPtr(item.MeterID),
 			MeterDisplayName: lo.ToPtr(item.MeterDisplayName),
 			DisplayName:      lo.ToPtr(item.DisplayName),
@@ -461,7 +461,7 @@ func (s *billingService) checkIfChargeInvoiced(
 ) bool {
 	for _, item := range invoice.LineItems {
 		// match the price id
-		if item.PriceID == charge.PriceID {
+		if lo.FromPtr(item.PriceID) == charge.PriceID {
 			// match the period start and end
 			if item.PeriodStart.Equal(periodStart) &&
 				item.PeriodEnd.Equal(periodEnd) {

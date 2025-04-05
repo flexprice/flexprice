@@ -138,15 +138,9 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 			if req.InvoiceStatus == nil {
 				inv.InvoiceStatus = types.InvoiceStatusFinalized
 			}
-			if req.PaymentStatus == nil {
-				inv.PaymentStatus = types.PaymentStatusSucceeded
-			}
 		} else if req.InvoiceType == types.InvoiceTypeSubscription {
 			if req.InvoiceStatus == nil {
 				inv.InvoiceStatus = types.InvoiceStatusDraft
-			}
-			if req.PaymentStatus == nil {
-				inv.PaymentStatus = types.PaymentStatusPending
 			}
 		}
 
@@ -158,6 +152,14 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 
 		// Calculated Amount Remaining
 		inv.AmountRemaining = inv.AmountDue.Sub(inv.AmountPaid)
+
+		if req.PaymentStatus == nil || lo.FromPtr(req.PaymentStatus) == "" {
+			if inv.AmountRemaining.IsZero() {
+				inv.PaymentStatus = types.PaymentStatusSucceeded
+			} else {
+				inv.PaymentStatus = types.PaymentStatusPending
+			}
+		}
 
 		// Validate invoice
 		if err := inv.Validate(); err != nil {

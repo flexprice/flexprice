@@ -386,7 +386,7 @@ func (s *BillingServiceSuite) TestPrepareSubscriptionInvoiceRequest() {
 							InvoiceID:      "inv_test_1",
 							CustomerID:     s.testData.customer.ID,
 							SubscriptionID: lo.ToPtr(s.testData.subscription.ID),
-							PriceID:        s.testData.prices.fixed.ID,
+							PriceID:        lo.ToPtr(s.testData.prices.fixed.ID),
 							PlanID:         lo.ToPtr(s.testData.plan.ID),
 							Amount:         decimal.NewFromInt(10),
 							Quantity:       decimal.NewFromInt(1),
@@ -433,7 +433,7 @@ func (s *BillingServiceSuite) TestPrepareSubscriptionInvoiceRequest() {
 							InvoiceID:      "inv_test_2",
 							CustomerID:     s.testData.customer.ID,
 							SubscriptionID: lo.ToPtr(s.testData.subscription.ID),
-							PriceID:        s.testData.prices.apiCalls.ID,
+							PriceID:        lo.ToPtr(s.testData.prices.apiCalls.ID),
 							PlanID:         lo.ToPtr(s.testData.plan.ID),
 							Amount:         decimal.NewFromInt(10),
 							Quantity:       decimal.NewFromInt(500),
@@ -447,7 +447,7 @@ func (s *BillingServiceSuite) TestPrepareSubscriptionInvoiceRequest() {
 							InvoiceID:      "inv_test_2",
 							CustomerID:     s.testData.customer.ID,
 							SubscriptionID: lo.ToPtr(s.testData.subscription.ID),
-							PriceID:        s.testData.prices.storageArchive.ID,
+							PriceID:        lo.ToPtr(s.testData.prices.storageArchive.ID),
 							PlanID:         lo.ToPtr(s.testData.plan.ID),
 							Amount:         decimal.NewFromInt(5),
 							Quantity:       decimal.NewFromInt(1),
@@ -520,7 +520,7 @@ func (s *BillingServiceSuite) TestPrepareSubscriptionInvoiceRequest() {
 					// Find the corresponding subscription line item
 					var subLineItem *subscription.SubscriptionLineItem
 					for _, sli := range sub.LineItems {
-						if sli.PriceID == li.PriceID {
+						if sli.PriceID == lo.FromPtr(li.PriceID) {
 							subLineItem = sli
 							break
 						}
@@ -536,7 +536,7 @@ func (s *BillingServiceSuite) TestPrepareSubscriptionInvoiceRequest() {
 					// Find the corresponding subscription line item
 					var subLineItem *subscription.SubscriptionLineItem
 					for _, sli := range sub.LineItems {
-						if sli.PriceID == li.PriceID {
+						if sli.PriceID == lo.FromPtr(li.PriceID) {
 							subLineItem = sli
 							break
 						}
@@ -558,7 +558,7 @@ func (s *BillingServiceSuite) TestPrepareSubscriptionInvoiceRequest() {
 func (s *BillingServiceSuite) validatePeriodStartInvoice(req *dto.CreateInvoiceRequest, sub *subscription.Subscription) {
 	// Verify we only have the fixed price with advance cadence
 	s.Equal(1, len(req.LineItems))
-	s.Equal(s.testData.prices.fixed.ID, req.LineItems[0].PriceID)
+	s.Equal(s.testData.prices.fixed.ID, lo.FromPtr(req.LineItems[0].PriceID))
 
 	// Verify the period matches the current subscription period
 	s.Equal(sub.CurrentPeriodStart, *req.PeriodStart)
@@ -572,7 +572,7 @@ func (s *BillingServiceSuite) validatePeriodEndInvoice(req *dto.CreateInvoiceReq
 	// Check that we have the expected price IDs
 	priceIDs := make(map[string]bool)
 	for _, li := range req.LineItems {
-		priceIDs[li.PriceID] = true
+		priceIDs[lo.FromPtr(li.PriceID)] = true
 	}
 
 	s.True(priceIDs[s.testData.prices.apiCalls.ID], "Should include API calls price")
@@ -591,7 +591,7 @@ func (s *BillingServiceSuite) validatePreviewInvoice(req *dto.CreateInvoiceReque
 	// Check that we have the expected price IDs
 	priceIDs := make(map[string]bool)
 	for _, li := range req.LineItems {
-		priceIDs[li.PriceID] = true
+		priceIDs[lo.FromPtr(li.PriceID)] = true
 	}
 
 	s.True(priceIDs[s.testData.prices.apiCalls.ID], "Should include API calls price")
@@ -612,7 +612,7 @@ func (s *BillingServiceSuite) validateExistingInvoiceCheckAdvance(req *dto.Creat
 func (s *BillingServiceSuite) validateNextPeriodAdvanceOnly(req *dto.CreateInvoiceRequest, sub *subscription.Subscription) {
 	// Should only have the fixed price for next period
 	s.Equal(1, len(req.LineItems))
-	s.Equal(s.testData.prices.fixed.ID, req.LineItems[0].PriceID)
+	s.Equal(s.testData.prices.fixed.ID, lo.FromPtr(req.LineItems[0].PriceID))
 
 	// Verify the period matches the current subscription period
 	s.Equal(sub.CurrentPeriodStart, *req.PeriodStart)
@@ -660,7 +660,7 @@ func (s *BillingServiceSuite) TestFilterLineItemsToBeInvoiced() {
 							InvoiceID:      "inv_test_2",
 							CustomerID:     s.testData.customer.ID,
 							SubscriptionID: lo.ToPtr(s.testData.subscription.ID),
-							PriceID:        s.testData.prices.fixed.ID, // Fixed charge with advance cadence
+							PriceID:        lo.ToPtr(s.testData.prices.fixed.ID), // Fixed charge with advance cadence
 							PlanID:         lo.ToPtr(s.testData.plan.ID),
 							Amount:         decimal.NewFromInt(10),
 							Quantity:       decimal.NewFromInt(1),
@@ -703,7 +703,7 @@ func (s *BillingServiceSuite) TestFilterLineItemsToBeInvoiced() {
 							InvoiceID:      "inv_test_3",
 							CustomerID:     s.testData.customer.ID,
 							SubscriptionID: lo.ToPtr(s.testData.subscription.ID),
-							PriceID:        s.testData.prices.apiCalls.ID, // Usage charge with arrear cadence
+							PriceID:        lo.ToPtr(s.testData.prices.apiCalls.ID), // Usage charge with arrear cadence
 							PlanID:         lo.ToPtr(s.testData.plan.ID),
 							Amount:         decimal.NewFromInt(10),
 							Quantity:       decimal.NewFromInt(500),
@@ -717,7 +717,7 @@ func (s *BillingServiceSuite) TestFilterLineItemsToBeInvoiced() {
 							InvoiceID:      "inv_test_3",
 							CustomerID:     s.testData.customer.ID,
 							SubscriptionID: lo.ToPtr(s.testData.subscription.ID),
-							PriceID:        s.testData.prices.storageArchive.ID, // Fixed charge with arrear cadence
+							PriceID:        lo.ToPtr(s.testData.prices.storageArchive.ID), // Fixed charge with arrear cadence
 							PlanID:         lo.ToPtr(s.testData.plan.ID),
 							Amount:         decimal.NewFromInt(5),
 							Quantity:       decimal.NewFromInt(1),
@@ -760,7 +760,7 @@ func (s *BillingServiceSuite) TestFilterLineItemsToBeInvoiced() {
 							InvoiceID:      "inv_test_4",
 							CustomerID:     s.testData.customer.ID,
 							SubscriptionID: lo.ToPtr(s.testData.subscription.ID),
-							PriceID:        s.testData.prices.fixed.ID, // Fixed charge with advance cadence
+							PriceID:        lo.ToPtr(s.testData.prices.fixed.ID), // Fixed charge with advance cadence
 							PlanID:         lo.ToPtr(s.testData.plan.ID),
 							Amount:         decimal.NewFromInt(10),
 							Quantity:       decimal.NewFromInt(1),
@@ -774,7 +774,7 @@ func (s *BillingServiceSuite) TestFilterLineItemsToBeInvoiced() {
 							InvoiceID:      "inv_test_4",
 							CustomerID:     s.testData.customer.ID,
 							SubscriptionID: lo.ToPtr(s.testData.subscription.ID),
-							PriceID:        s.testData.prices.apiCalls.ID, // Usage charge with arrear cadence
+							PriceID:        lo.ToPtr(s.testData.prices.apiCalls.ID), // Usage charge with arrear cadence
 							PlanID:         lo.ToPtr(s.testData.plan.ID),
 							Amount:         decimal.NewFromInt(10),
 							Quantity:       decimal.NewFromInt(500),
@@ -788,7 +788,7 @@ func (s *BillingServiceSuite) TestFilterLineItemsToBeInvoiced() {
 							InvoiceID:      "inv_test_4",
 							CustomerID:     s.testData.customer.ID,
 							SubscriptionID: lo.ToPtr(s.testData.subscription.ID),
-							PriceID:        s.testData.prices.storageArchive.ID, // Fixed charge with arrear cadence
+							PriceID:        lo.ToPtr(s.testData.prices.storageArchive.ID), // Fixed charge with arrear cadence
 							PlanID:         lo.ToPtr(s.testData.plan.ID),
 							Amount:         decimal.NewFromInt(5),
 							Quantity:       decimal.NewFromInt(1),

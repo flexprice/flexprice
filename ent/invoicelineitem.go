@@ -45,7 +45,7 @@ type InvoiceLineItem struct {
 	// PlanDisplayName holds the value of the "plan_display_name" field.
 	PlanDisplayName *string `json:"plan_display_name,omitempty"`
 	// PriceID holds the value of the "price_id" field.
-	PriceID string `json:"price_id,omitempty"`
+	PriceID *string `json:"price_id,omitempty"`
 	// PriceType holds the value of the "price_type" field.
 	PriceType *string `json:"price_type,omitempty"`
 	// MeterID holds the value of the "meter_id" field.
@@ -205,7 +205,8 @@ func (ili *InvoiceLineItem) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field price_id", values[i])
 			} else if value.Valid {
-				ili.PriceID = value.String
+				ili.PriceID = new(string)
+				*ili.PriceID = value.String
 			}
 		case invoicelineitem.FieldPriceType:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -358,8 +359,10 @@ func (ili *InvoiceLineItem) String() string {
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	builder.WriteString("price_id=")
-	builder.WriteString(ili.PriceID)
+	if v := ili.PriceID; v != nil {
+		builder.WriteString("price_id=")
+		builder.WriteString(*v)
+	}
 	builder.WriteString(", ")
 	if v := ili.PriceType; v != nil {
 		builder.WriteString("price_type=")

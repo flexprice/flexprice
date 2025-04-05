@@ -339,7 +339,7 @@ func (s *onboardingService) createEventRequest(eventMsg *types.OnboardingEventsM
 func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, userID, email, tenantName, tenantID string) error {
 	// Use default tenant name if not provided
 	if tenantName == "" {
-		tenantName = "ACME Inc"
+		tenantName = "Flexprice"
 	}
 
 	// Create tenant

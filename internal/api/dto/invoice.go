@@ -87,7 +87,7 @@ func (r *CreateInvoiceRequest) Validate() error {
 	if len(r.LineItems) > 0 {
 		var totalAmount decimal.Decimal
 		for _, item := range r.LineItems {
-			if err := item.Validate(); err != nil {
+			if err := item.Validate(r.InvoiceType); err != nil {
 				return ierr.WithError(err).WithHint("invalid line item").Mark(ierr.ErrValidation)
 			}
 			totalAmount = totalAmount.Add(item.Amount)
@@ -140,8 +140,6 @@ func (r *CreateInvoiceRequest) ToInvoice(ctx context.Context) (*invoice.Invoice,
 
 	if r.PaymentStatus != nil {
 		inv.PaymentStatus = *r.PaymentStatus
-	} else {
-		inv.PaymentStatus = types.PaymentStatusPending
 	}
 
 	if r.AmountPaid != nil {
@@ -161,7 +159,7 @@ func (r *CreateInvoiceRequest) ToInvoice(ctx context.Context) (*invoice.Invoice,
 
 // CreateInvoiceLineItemRequest represents a request to create a line item
 type CreateInvoiceLineItemRequest struct {
-	PriceID          string          `json:"price_id" validate:"required"`
+	PriceID          *string         `json:"price_id,omitempty"`
 	PlanID           *string         `json:"plan_id,omitempty"`
 	PlanDisplayName  *string         `json:"plan_display_name,omitempty"`
 	PriceType        *string         `json:"price_type,omitempty"`
@@ -175,7 +173,7 @@ type CreateInvoiceLineItemRequest struct {
 	Metadata         types.Metadata  `json:"metadata,omitempty"`
 }
 
-func (r *CreateInvoiceLineItemRequest) Validate() error {
+func (r *CreateInvoiceLineItemRequest) Validate(invoiceType types.InvoiceType) error {
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
 	}
@@ -196,6 +194,14 @@ func (r *CreateInvoiceLineItemRequest) Validate() error {
 		if r.PeriodEnd.Before(*r.PeriodStart) {
 			return ierr.NewError("period_end must be after period_start").
 				WithHint("Subscription cannot end before it starts").
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	if invoiceType == types.InvoiceTypeSubscription {
+		if r.PriceID == nil {
+			return ierr.NewError("price_id is required for subscription invoice").
+				WithHint("price_id is required for subscription invoice").
 				Mark(ierr.ErrValidation)
 		}
 	}
@@ -233,7 +239,7 @@ type InvoiceLineItemResponse struct {
 	InvoiceID        string          `json:"invoice_id"`
 	CustomerID       string          `json:"customer_id"`
 	SubscriptionID   *string         `json:"subscription_id,omitempty"`
-	PriceID          string          `json:"price_id"`
+	PriceID          *string         `json:"price_id"`
 	PlanID           *string         `json:"plan_id,omitempty"`
 	PlanDisplayName  *string         `json:"plan_display_name,omitempty"`
 	PriceType        *string         `json:"price_type,omitempty"`

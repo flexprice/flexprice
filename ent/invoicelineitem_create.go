@@ -172,6 +172,14 @@ func (ilic *InvoiceLineItemCreate) SetPriceID(s string) *InvoiceLineItemCreate {
 	return ilic
 }
 
+// SetNillablePriceID sets the "price_id" field if the given value is not nil.
+func (ilic *InvoiceLineItemCreate) SetNillablePriceID(s *string) *InvoiceLineItemCreate {
+	if s != nil {
+		ilic.SetPriceID(*s)
+	}
+	return ilic
+}
+
 // SetPriceType sets the "price_type" field.
 func (ilic *InvoiceLineItemCreate) SetPriceType(s string) *InvoiceLineItemCreate {
 	ilic.mutation.SetPriceType(s)
@@ -403,14 +411,6 @@ func (ilic *InvoiceLineItemCreate) check() error {
 			return &ValidationError{Name: "customer_id", err: fmt.Errorf(`ent: validator failed for field "InvoiceLineItem.customer_id": %w`, err)}
 		}
 	}
-	if _, ok := ilic.mutation.PriceID(); !ok {
-		return &ValidationError{Name: "price_id", err: errors.New(`ent: missing required field "InvoiceLineItem.price_id"`)}
-	}
-	if v, ok := ilic.mutation.PriceID(); ok {
-		if err := invoicelineitem.PriceIDValidator(v); err != nil {
-			return &ValidationError{Name: "price_id", err: fmt.Errorf(`ent: validator failed for field "InvoiceLineItem.price_id": %w`, err)}
-		}
-	}
 	if _, ok := ilic.mutation.Amount(); !ok {
 		return &ValidationError{Name: "amount", err: errors.New(`ent: missing required field "InvoiceLineItem.amount"`)}
 	}
@@ -509,7 +509,7 @@ func (ilic *InvoiceLineItemCreate) createSpec() (*InvoiceLineItem, *sqlgraph.Cre
 	}
 	if value, ok := ilic.mutation.PriceID(); ok {
 		_spec.SetField(invoicelineitem.FieldPriceID, field.TypeString, value)
-		_node.PriceID = value
+		_node.PriceID = &value
 	}
 	if value, ok := ilic.mutation.PriceType(); ok {
 		_spec.SetField(invoicelineitem.FieldPriceType, field.TypeString, value)

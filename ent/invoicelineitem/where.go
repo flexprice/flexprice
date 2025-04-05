@@ -1021,6 +1021,16 @@ func PriceIDHasSuffix(v string) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldHasSuffix(FieldPriceID, v))
 }
 
+// PriceIDIsNil applies the IsNil predicate on the "price_id" field.
+func PriceIDIsNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldIsNull(FieldPriceID))
+}
+
+// PriceIDNotNil applies the NotNil predicate on the "price_id" field.
+func PriceIDNotNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNotNull(FieldPriceID))
+}
+
 // PriceIDEqualFold applies the EqualFold predicate on the "price_id" field.
 func PriceIDEqualFold(v string) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldEqualFold(FieldPriceID, v))

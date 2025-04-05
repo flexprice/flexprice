@@ -9073,7 +9073,7 @@ func (m *InvoiceLineItemMutation) PriceID() (r string, exists bool) {
 // OldPriceID returns the old "price_id" field's value of the InvoiceLineItem entity.
 // If the InvoiceLineItem object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *InvoiceLineItemMutation) OldPriceID(ctx context.Context) (v string, err error) {
+func (m *InvoiceLineItemMutation) OldPriceID(ctx context.Context) (v *string, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldPriceID is only allowed on UpdateOne operations")
 	}
@@ -9087,9 +9087,22 @@ func (m *InvoiceLineItemMutation) OldPriceID(ctx context.Context) (v string, err
 	return oldValue.PriceID, nil
 }
 
+// ClearPriceID clears the value of the "price_id" field.
+func (m *InvoiceLineItemMutation) ClearPriceID() {
+	m.price_id = nil
+	m.clearedFields[invoicelineitem.FieldPriceID] = struct{}{}
+}
+
+// PriceIDCleared returns if the "price_id" field was cleared in this mutation.
+func (m *InvoiceLineItemMutation) PriceIDCleared() bool {
+	_, ok := m.clearedFields[invoicelineitem.FieldPriceID]
+	return ok
+}
+
 // ResetPriceID resets all changes to the "price_id" field.
 func (m *InvoiceLineItemMutation) ResetPriceID() {
 	m.price_id = nil
+	delete(m.clearedFields, invoicelineitem.FieldPriceID)
 }
 
 // SetPriceType sets the "price_type" field.
@@ -10001,6 +10014,9 @@ func (m *InvoiceLineItemMutation) ClearedFields() []string {
 	if m.FieldCleared(invoicelineitem.FieldPlanDisplayName) {
 		fields = append(fields, invoicelineitem.FieldPlanDisplayName)
 	}
+	if m.FieldCleared(invoicelineitem.FieldPriceID) {
+		fields = append(fields, invoicelineitem.FieldPriceID)
+	}
 	if m.FieldCleared(invoicelineitem.FieldPriceType) {
 		fields = append(fields, invoicelineitem.FieldPriceType)
 	}
@@ -10053,6 +10069,9 @@ func (m *InvoiceLineItemMutation) ClearField(name string) error {
 		return nil
 	case invoicelineitem.FieldPlanDisplayName:
 		m.ClearPlanDisplayName()
+		return nil
+	case invoicelineitem.FieldPriceID:
+		m.ClearPriceID()
 		return nil
 	case invoicelineitem.FieldPriceType:
 		m.ClearPriceType()
