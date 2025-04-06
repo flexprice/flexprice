@@ -366,7 +366,7 @@ func (s *SubscriptionServiceSuite) TestGetUsageBySubscription() {
 					{
 						MeterDisplayName: "API Calls",
 						Quantity:         decimal.NewFromInt(0).InexactFloat64(),
-						Amount:          0,
+						Amount:           0,
 						Price:            s.testData.prices.apiCalls,
 					},
 				},
@@ -586,12 +586,13 @@ func (s *SubscriptionServiceSuite) TestCancelSubscription() {
 	activeSub := &subscription.Subscription{
 		ID:                 "sub_to_cancel",
 		CustomerID:         s.testData.customer.ID,
+		Currency:           s.testData.subscription.Currency,
 		PlanID:             s.testData.plan.ID,
 		SubscriptionStatus: types.SubscriptionStatusActive,
 		StartDate:          s.testData.now,
 		EndDate:            lo.ToPtr(s.testData.now.Add(30 * 24 * time.Hour)),
-		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
-		BillingPeriodCount: 1,
+		BillingPeriod:      types.BillingPeriod(s.testData.subscription.BillingPeriod),
+		BillingPeriodCount: s.testData.subscription.BillingPeriodCount,
 		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
 		LineItems:          []*subscription.SubscriptionLineItem{},
 	}

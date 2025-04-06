@@ -109,6 +109,8 @@ const (
 	InvoiceBillingReasonSubscriptionCycle InvoiceBillingReason = "SUBSCRIPTION_CYCLE"
 	// InvoiceBillingReasonSubscriptionUpdate indicates invoice is for subscription update
 	InvoiceBillingReasonSubscriptionUpdate InvoiceBillingReason = "SUBSCRIPTION_UPDATE"
+	// InvoiceBillingReasonSubscriptionCancellation indicates invoice is for subscription cancellation
+	InvoiceBillingReasonSubscriptionCancellation InvoiceBillingReason = "SUBSCRIPTION_CANCELLATION"
 	// InvoiceBillingReasonManual indicates invoice is created manually
 	InvoiceBillingReasonManual InvoiceBillingReason = "MANUAL"
 )
@@ -122,6 +124,7 @@ func (r InvoiceBillingReason) Validate() error {
 		InvoiceBillingReasonSubscriptionCreate,
 		InvoiceBillingReasonSubscriptionCycle,
 		InvoiceBillingReasonSubscriptionUpdate,
+		InvoiceBillingReasonSubscriptionCancellation,
 		InvoiceBillingReasonManual,
 	}
 	if !lo.Contains(allowed, r) {

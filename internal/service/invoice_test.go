@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -1104,6 +1105,431 @@ func (s *InvoiceServiceSuite) TestAttemptPayment() {
 				expectedRemaining := updatedInv.AmountDue.Sub(tc.expectedAmountPaid)
 				s.True(expectedRemaining.Equal(updatedInv.AmountRemaining),
 					"Expected amount remaining %s, got %s", expectedRemaining, updatedInv.AmountRemaining)
+			}
+		})
+	}
+}
+
+func (s *InvoiceServiceSuite) TestGetPreviewInvoice() {
+	// Setup test data for preview invoice tests
+	s.setupTestData()
+
+	// Create a fixed price for proration tests
+	fixedPrice := &price.Price{
+		ID:                 "price_fixed_test",
+		Amount:             decimal.NewFromInt(10), // $10/month
+		Currency:           "usd",
+		PlanID:             s.testData.plan.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(s.GetContext(), fixedPrice))
+
+	// Create a new subscription with the fixed price line item
+	// This is more reliable than trying to update an existing subscription
+	testSubscription := &subscription.Subscription{
+		ID:                 "sub_proration_test",
+		PlanID:             s.testData.plan.ID,
+		CustomerID:         s.testData.customer.ID,
+		StartDate:          s.testData.now.Add(-30 * 24 * time.Hour),
+		CurrentPeriodStart: s.testData.now.Add(-24 * time.Hour),
+		CurrentPeriodEnd:   s.testData.now.Add(6 * 24 * time.Hour),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
+	}
+
+	// Create the fixed line item
+	fixedLineItem := &subscription.SubscriptionLineItem{
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+		SubscriptionID:  testSubscription.ID,
+		CustomerID:      testSubscription.CustomerID,
+		PlanID:          s.testData.plan.ID,
+		PlanDisplayName: s.testData.plan.Name,
+		PriceID:         fixedPrice.ID,
+		PriceType:       fixedPrice.Type,
+		DisplayName:     "Fixed Monthly Fee",
+		Quantity:        decimal.NewFromInt(1),
+		Currency:        testSubscription.Currency,
+		BillingPeriod:   testSubscription.BillingPeriod,
+		InvoiceCadence:  fixedPrice.InvoiceCadence,
+		BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
+	}
+
+	// Create the subscription with the line item
+	lineItems := []*subscription.SubscriptionLineItem{fixedLineItem}
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(s.GetContext(), testSubscription, lineItems))
+
+	// Store the fixed line item ID for use in the proration tests
+	fixedLineItemID := fixedLineItem.ID
+
+	// Verify the line item was created correctly
+	sub, items, err := s.GetStores().SubscriptionRepo.GetWithLineItems(s.GetContext(), testSubscription.ID)
+	s.NoError(err)
+	s.NotNil(sub)
+	s.Equal(1, len(items), "Expected 1 line item")
+	s.Equal(fixedLineItemID, items[0].ID, "Line item ID should match")
+	s.Equal(fixedPrice.ID, items[0].PriceID, "Price ID should match")
+
+	// Test cases
+	tests := []struct {
+		name               string
+		setupFunc          func() dto.GetPreviewInvoiceRequest
+		wantErr            bool
+		expectedErrorMsg   string
+		validateResultFunc func(*dto.InvoiceResponse)
+	}{
+		{
+			name: "Basic preview invoice without proration",
+			setupFunc: func() dto.GetPreviewInvoiceRequest {
+				return dto.GetPreviewInvoiceRequest{
+					SubscriptionID: testSubscription.ID,
+					// Use default period start/end (nil)
+				}
+			},
+			wantErr: false,
+			validateResultFunc: func(resp *dto.InvoiceResponse) {
+				s.NotNil(resp)
+				s.Equal(testSubscription.ID, *resp.SubscriptionID)
+				s.Equal(s.testData.customer.ID, resp.CustomerID)
+				s.Equal(types.InvoiceTypeSubscription, resp.InvoiceType)
+				s.Equal(types.InvoiceStatusDraft, resp.InvoiceStatus)
+				s.Equal("usd", resp.Currency)
+				s.Contains(resp.Description, "Preview")
+				s.True(resp.Metadata["is_preview"] == "true", "Metadata should indicate this is a preview")
+
+				// Don't check line items count as it may vary based on the test environment
+			},
+		},
+		{
+			name: "Preview invoice with plan change proration",
+			setupFunc: func() dto.GetPreviewInvoiceRequest {
+				// Create a premium price for proration test
+				premiumPrice := &price.Price{
+					ID:                 "price_premium_test",
+					Amount:             decimal.NewFromInt(20), // $20/month (more expensive than basic)
+					Currency:           "usd",
+					PlanID:             s.testData.plan.ID,
+					Type:               types.PRICE_TYPE_FIXED,
+					BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+					BillingPeriodCount: 1,
+					BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+					BillingCadence:     types.BILLING_CADENCE_RECURRING,
+					InvoiceCadence:     types.InvoiceCadenceAdvance,
+					BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
+				}
+				s.NoError(s.GetStores().PriceRepo.Create(s.GetContext(), premiumPrice))
+
+				// Setup proration parameters for plan change
+				prorationDate := testSubscription.CurrentPeriodStart.Add(5 * 24 * time.Hour) // 5 days into the period
+
+				// Create proration params for plan change
+				prorationParams := &proration.ProrationParams{
+					LineItemID:        fixedLineItemID,
+					OldPriceID:        lo.ToPtr(fixedPrice.ID),
+					NewPriceID:        lo.ToPtr(premiumPrice.ID),
+					OldQuantity:       lo.ToPtr(decimal.NewFromInt(1)),
+					NewQuantity:       lo.ToPtr(decimal.NewFromInt(1)),
+					ProrationDate:     prorationDate,
+					ProrationBehavior: types.ProrationBehaviorCreateProrations,
+					ProrationStrategy: types.ProrationStrategyDayBased,
+					Action:            types.ProrationActionPlanChange,
+				}
+
+				return dto.GetPreviewInvoiceRequest{
+					SubscriptionID:  testSubscription.ID,
+					ProrationParams: prorationParams,
+				}
+			},
+			wantErr: false,
+			validateResultFunc: func(resp *dto.InvoiceResponse) {
+				s.NotNil(resp)
+				s.Equal(testSubscription.ID, *resp.SubscriptionID)
+				s.Equal(s.testData.customer.ID, resp.CustomerID)
+				s.Equal(types.InvoiceTypeSubscription, resp.InvoiceType)
+				s.Equal(types.InvoiceStatusDraft, resp.InvoiceStatus)
+				s.Equal("usd", resp.Currency)
+				s.Contains(resp.Description, "Preview")
+				s.Contains(resp.Description, "Subscription update")
+				s.True(resp.Metadata["is_preview"] == "true", "Metadata should indicate this is a preview")
+				s.Equal("plan_change", resp.Metadata["proration_type"], "Metadata should indicate proration type")
+
+				// Verify line items - should have at least 2 items (credit and charge)
+				s.GreaterOrEqual(len(resp.LineItems), 2, "Should have at least two line items for proration")
+
+				// Verify we have both the old price and new price in the line items
+				foundOldPrice := false
+				foundNewPrice := false
+				for _, item := range resp.LineItems {
+					if item.PriceID == fixedPrice.ID {
+						foundOldPrice = true
+					}
+					if item.PriceID == "price_premium_test" {
+						foundNewPrice = true
+					}
+				}
+				s.True(foundOldPrice, "Should have a line item for the old price")
+				s.True(foundNewPrice, "Should have a line item for the new price")
+			},
+		},
+		{
+			name: "Preview invoice with quantity change proration",
+			setupFunc: func() dto.GetPreviewInvoiceRequest {
+				// Setup proration parameters for quantity change
+				prorationDate := testSubscription.CurrentPeriodStart.Add(10 * 24 * time.Hour) // 10 days into the period
+
+				// Create proration params for quantity change
+				prorationParams := &proration.ProrationParams{
+					LineItemID:        fixedLineItemID,
+					OldPriceID:        lo.ToPtr(fixedPrice.ID),
+					NewPriceID:        lo.ToPtr(fixedPrice.ID), // Same price, different quantity
+					OldQuantity:       lo.ToPtr(decimal.NewFromInt(1)),
+					NewQuantity:       lo.ToPtr(decimal.NewFromInt(5)), // Increase quantity to 5
+					ProrationDate:     prorationDate,
+					ProrationBehavior: types.ProrationBehaviorCreateProrations,
+					ProrationStrategy: types.ProrationStrategyDayBased,
+					Action:            types.ProrationActionQuantityChange,
+				}
+
+				return dto.GetPreviewInvoiceRequest{
+					SubscriptionID:  testSubscription.ID,
+					ProrationParams: prorationParams,
+				}
+			},
+			wantErr: false,
+			validateResultFunc: func(resp *dto.InvoiceResponse) {
+				s.NotNil(resp)
+				s.Equal(testSubscription.ID, *resp.SubscriptionID)
+				s.Equal(s.testData.customer.ID, resp.CustomerID)
+				s.Equal(types.InvoiceTypeSubscription, resp.InvoiceType)
+				s.Equal(types.InvoiceStatusDraft, resp.InvoiceStatus)
+				s.Equal("usd", resp.Currency)
+				s.Contains(resp.Description, "Preview")
+				s.Contains(resp.Description, "Subscription update")
+				s.True(resp.Metadata["is_preview"] == "true", "Metadata should indicate this is a preview")
+				s.Equal("quantity_change", resp.Metadata["proration_type"], "Metadata should indicate proration type")
+
+				// Verify line items - should have at least 2 items (credit and charge)
+				s.GreaterOrEqual(len(resp.LineItems), 2, "Should have at least two line items for proration")
+
+				// Verify we have the price ID in the line items with different quantities
+				var oldQuantityItem, newQuantityItem *dto.InvoiceLineItemResponse
+				for _, item := range resp.LineItems {
+					if item.PriceID == fixedPrice.ID {
+						if oldQuantityItem == nil {
+							oldQuantityItem = item
+						} else {
+							newQuantityItem = item
+							break
+						}
+					}
+				}
+
+				s.NotNil(oldQuantityItem, "Should have a line item for the old quantity")
+				s.NotNil(newQuantityItem, "Should have a line item for the new quantity")
+
+				// One should be for quantity 1, the other for quantity 5
+				quantities := []decimal.Decimal{oldQuantityItem.Quantity, newQuantityItem.Quantity}
+				s.Contains(quantities, decimal.NewFromInt(1), "Should have a line item with quantity 1")
+				s.Contains(quantities, decimal.NewFromInt(5), "Should have a line item with quantity 5")
+			},
+		},
+		{
+			name: "Preview invoice with add item proration",
+			setupFunc: func() dto.GetPreviewInvoiceRequest {
+				// Create an addon price for proration test
+				addonPrice := &price.Price{
+					ID:                 "price_addon_test",
+					Amount:             decimal.NewFromInt(5), // $5/month addon
+					Currency:           "usd",
+					PlanID:             s.testData.plan.ID,
+					Type:               types.PRICE_TYPE_FIXED,
+					BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+					BillingPeriodCount: 1,
+					BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+					BillingCadence:     types.BILLING_CADENCE_RECURRING,
+					InvoiceCadence:     types.InvoiceCadenceAdvance,
+					BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
+				}
+				s.NoError(s.GetStores().PriceRepo.Create(s.GetContext(), addonPrice))
+
+				// Setup proration parameters for adding an item
+				prorationDate := testSubscription.CurrentPeriodStart.Add(15 * 24 * time.Hour) // 15 days into the period
+
+				// Create proration params for adding an item
+				prorationParams := &proration.ProrationParams{
+					NewPriceID:        lo.ToPtr(addonPrice.ID),
+					NewQuantity:       lo.ToPtr(decimal.NewFromInt(1)),
+					ProrationDate:     prorationDate,
+					ProrationBehavior: types.ProrationBehaviorCreateProrations,
+					ProrationStrategy: types.ProrationStrategyDayBased,
+					Action:            types.ProrationActionAddItem,
+				}
+
+				return dto.GetPreviewInvoiceRequest{
+					SubscriptionID:  testSubscription.ID,
+					ProrationParams: prorationParams,
+				}
+			},
+			wantErr: false,
+			validateResultFunc: func(resp *dto.InvoiceResponse) {
+				s.NotNil(resp)
+				s.Equal(testSubscription.ID, *resp.SubscriptionID)
+				s.Equal(s.testData.customer.ID, resp.CustomerID)
+				s.Equal(types.InvoiceTypeSubscription, resp.InvoiceType)
+				s.Equal(types.InvoiceStatusDraft, resp.InvoiceStatus)
+				s.Equal("usd", resp.Currency)
+				s.Contains(resp.Description, "Preview")
+				s.Contains(resp.Description, "Subscription update")
+				s.True(resp.Metadata["is_preview"] == "true", "Metadata should indicate this is a preview")
+				s.Equal("add_item", resp.Metadata["proration_type"], "Metadata should indicate proration type")
+
+				// Verify line items - should have at least 1 item (charge for the new item)
+				s.GreaterOrEqual(len(resp.LineItems), 1, "Should have at least one line item for proration")
+
+				// Verify we have the new price ID in the line items
+				foundNewPrice := false
+				for _, item := range resp.LineItems {
+					if item.PriceID == "price_addon_test" {
+						foundNewPrice = true
+						break
+					}
+				}
+				s.True(foundNewPrice, "Should have a line item for the new addon price")
+			},
+		},
+		{
+			name: "Preview invoice with remove item proration",
+			setupFunc: func() dto.GetPreviewInvoiceRequest {
+				// Setup proration parameters for removing an item
+				prorationDate := testSubscription.CurrentPeriodStart.Add(20 * 24 * time.Hour) // 20 days into the period
+
+				// Create proration params for removing an item
+				prorationParams := &proration.ProrationParams{
+					LineItemID:        fixedLineItemID,
+					ProrationDate:     prorationDate,
+					ProrationBehavior: types.ProrationBehaviorCreateProrations,
+					ProrationStrategy: types.ProrationStrategyDayBased,
+					Action:            types.ProrationActionRemoveItem,
+				}
+
+				return dto.GetPreviewInvoiceRequest{
+					SubscriptionID:  testSubscription.ID,
+					ProrationParams: prorationParams,
+				}
+			},
+			wantErr: false,
+			validateResultFunc: func(resp *dto.InvoiceResponse) {
+				s.NotNil(resp)
+				s.Equal(testSubscription.ID, *resp.SubscriptionID)
+				s.Equal(s.testData.customer.ID, resp.CustomerID)
+				s.Equal(types.InvoiceTypeSubscription, resp.InvoiceType)
+				s.Equal(types.InvoiceStatusDraft, resp.InvoiceStatus)
+				s.Equal("usd", resp.Currency)
+				s.Contains(resp.Description, "Preview")
+				s.Contains(resp.Description, "Subscription update")
+				s.True(resp.Metadata["is_preview"] == "true", "Metadata should indicate this is a preview")
+				s.Equal("remove_item", resp.Metadata["proration_type"], "Metadata should indicate proration type")
+
+				// Verify line items - should have at least 1 item (credit for the removed item)
+				s.GreaterOrEqual(len(resp.LineItems), 1, "Should have at least one line item for proration")
+
+				// Verify we have the price ID of the removed item in the line items
+				foundPrice := false
+				for _, item := range resp.LineItems {
+					if item.PriceID == fixedPrice.ID {
+						foundPrice = true
+						break
+					}
+				}
+				s.True(foundPrice, "Should have a line item for the removed price")
+			},
+		},
+		{
+			name: "Preview invoice with subscription cancellation proration",
+			setupFunc: func() dto.GetPreviewInvoiceRequest {
+				// Setup proration parameters for cancellation
+				prorationDate := testSubscription.CurrentPeriodStart.Add(25 * 24 * time.Hour) // 25 days into the period
+
+				// Create proration params for cancellation
+				prorationParams := &proration.ProrationParams{
+					ProrationDate:     prorationDate,
+					ProrationBehavior: types.ProrationBehaviorCreateProrations,
+					ProrationStrategy: types.ProrationStrategyDayBased,
+					Action:            types.ProrationActionCancellation,
+				}
+
+				return dto.GetPreviewInvoiceRequest{
+					SubscriptionID:  testSubscription.ID,
+					ProrationParams: prorationParams,
+				}
+			},
+			wantErr: false,
+			validateResultFunc: func(resp *dto.InvoiceResponse) {
+				s.NotNil(resp)
+				s.Equal(testSubscription.ID, *resp.SubscriptionID)
+				s.Equal(s.testData.customer.ID, resp.CustomerID)
+				s.Equal(types.InvoiceTypeSubscription, resp.InvoiceType)
+				s.Equal(types.InvoiceStatusDraft, resp.InvoiceStatus)
+				s.Equal("usd", resp.Currency)
+				s.Contains(resp.Description, "Preview")
+				s.Contains(resp.Description, "Subscription update")
+				s.True(resp.Metadata["is_preview"] == "true", "Metadata should indicate this is a preview")
+				s.Equal("cancellation", resp.Metadata["proration_type"], "Metadata should indicate proration type")
+
+				// Verify we have at least one line item for the fixed price
+				foundFixedPrice := false
+				for _, item := range resp.LineItems {
+					if item.PriceID == fixedPrice.ID {
+						foundFixedPrice = true
+						break
+					}
+				}
+				s.True(foundFixedPrice, "Should have a line item for the fixed price")
+			},
+		},
+		{
+			name: "Invalid subscription ID",
+			setupFunc: func() dto.GetPreviewInvoiceRequest {
+				return dto.GetPreviewInvoiceRequest{
+					SubscriptionID: "invalid_subscription_id",
+				}
+			},
+			wantErr:          true,
+			expectedErrorMsg: "not found",
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			// Setup test case
+			req := tt.setupFunc()
+
+			// Call the method
+			resp, err := s.service.GetPreviewInvoice(s.GetContext(), req)
+
+			// Check error
+			if tt.wantErr {
+				s.Error(err)
+				if tt.expectedErrorMsg != "" {
+					s.Contains(err.Error(), tt.expectedErrorMsg)
+				}
+				return
+			}
+
+			s.NoError(err)
+			s.NotNil(resp)
+
+			// Validate result
+			if tt.validateResultFunc != nil {
+				tt.validateResultFunc(resp)
 			}
 		})
 	}
