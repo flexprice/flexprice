@@ -212,8 +212,24 @@ func (s *eventService) combineResults(historicUsage, currentUsage *events.Aggreg
 }
 
 func (s *eventService) GetEvents(ctx context.Context, req *dto.GetEventsRequest) (*dto.GetEventsResponse, error) {
-	if req.PageSize <= 0 || req.PageSize > 50 {
-		req.PageSize = 50
+	// Set up pagination params
+	var useOffsetPagination bool
+
+	if req.IterFirstKey != "" || req.IterLastKey != "" {
+		useOffsetPagination = false
+	} else {
+		useOffsetPagination = true
+	}
+
+	// Initialize pageSize from request
+	pageSize := req.PageSize
+	if pageSize <= 0 {
+		pageSize = 50
+	}
+
+	offset := req.Offset
+	if offset < 0 {
+		offset = 0
 	}
 
 	iterFirst, err := parseEventIteratorToStruct(req.IterFirstKey)
@@ -226,42 +242,69 @@ func (s *eventService) GetEvents(ctx context.Context, req *dto.GetEventsRequest)
 		return nil, err
 	}
 
-	eventsList, err := s.eventRepo.GetEvents(ctx, &events.GetEventsParams{
+	// Set up params for repository call
+	params := &events.GetEventsParams{
 		ExternalCustomerID: req.ExternalCustomerID,
 		EventName:          req.EventName,
 		EventID:            req.EventID,
 		StartTime:          req.StartTime,
 		EndTime:            req.EndTime,
-		IterFirst:          iterFirst,
-		IterLast:           iterLast,
-		PageSize:           req.PageSize + 1,
-	})
+		PropertyFilters:    req.PropertyFilters,
+		CountTotal:         true,
+	}
+
+	if !useOffsetPagination {
+		params.IterFirst = iterFirst
+		params.IterLast = iterLast
+		params.PageSize = pageSize + 1 // +1 to check for more results
+	} else {
+		params.PageSize = pageSize
+		params.Offset = offset
+	}
+
+	eventsList, totalCount, err := s.eventRepo.GetEvents(ctx, params)
 	if err != nil {
 		return nil, err
 	}
 
-	hasMore := len(eventsList) > req.PageSize
-	if hasMore {
-		eventsList = eventsList[:req.PageSize]
-	}
-
 	response := &dto.GetEventsResponse{
-		Events:  make([]dto.Event, len(eventsList)),
-		HasMore: hasMore,
+		Events: make([]dto.Event, 0, len(eventsList)),
 	}
+	response.TotalCount = totalCount
 
-	if len(eventsList) > 0 {
-		firstEvent := eventsList[0]
-		lastEvent := eventsList[len(eventsList)-1]
-		response.IterFirstKey = createEventIteratorKey(firstEvent.Timestamp, firstEvent.ID)
-
+	// Handle cursor-based pagination results
+	if !useOffsetPagination {
+		hasMore := len(eventsList) > pageSize
 		if hasMore {
-			response.IterLastKey = createEventIteratorKey(lastEvent.Timestamp, lastEvent.ID)
+			eventsList = eventsList[:pageSize]
 		}
+		response.HasMore = hasMore
+
+		if len(eventsList) > 0 {
+			firstEvent := eventsList[0]
+			lastEvent := eventsList[len(eventsList)-1]
+			response.IterFirstKey = createEventIteratorKey(firstEvent.Timestamp, firstEvent.ID)
+
+			if hasMore {
+				response.IterLastKey = createEventIteratorKey(lastEvent.Timestamp, lastEvent.ID)
+			}
+		}
+	} else {
+		if len(eventsList) > 0 {
+			response.IterFirstKey = createEventIteratorKey(eventsList[0].Timestamp, eventsList[0].ID)
+			response.IterLastKey = createEventIteratorKey(eventsList[len(eventsList)-1].Timestamp, eventsList[len(eventsList)-1].ID)
+		}
+
+		if totalCount > uint64(pageSize) && uint64(offset+pageSize) < totalCount {
+			response.HasMore = true
+		}
+
+		response.Offset = offset + pageSize
 	}
 
-	for i, event := range eventsList {
-		response.Events[i] = dto.Event{
+	// Add events to response
+	for _, event := range eventsList {
+		response.Events = append(response.Events, dto.Event{
 			ID:                 event.ID,
 			ExternalCustomerID: event.ExternalCustomerID,
 			CustomerID:         event.CustomerID,
@@ -269,7 +312,7 @@ func (s *eventService) GetEvents(ctx context.Context, req *dto.GetEventsRequest)
 			Timestamp:          event.Timestamp,
 			Properties:         event.Properties,
 			Source:             event.Source,
-		}
+		})
 	}
 
 	return response, nil

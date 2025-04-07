@@ -13,7 +13,7 @@ type Repository interface {
 	BulkInsertEvents(ctx context.Context, events []*Event) error
 	GetUsage(ctx context.Context, params *UsageParams) (*AggregationResult, error)
 	GetUsageWithFilters(ctx context.Context, params *UsageWithFiltersParams) ([]*AggregationResult, error)
-	GetEvents(ctx context.Context, params *GetEventsParams) ([]*Event, error)
+	GetEvents(ctx context.Context, params *GetEventsParams) ([]*Event, uint64, error)
 }
 
 type UsageParams struct {
@@ -29,14 +29,17 @@ type UsageParams struct {
 }
 
 type GetEventsParams struct {
-	ExternalCustomerID string         `json:"external_customer_id"`
-	EventName          string         `json:"event_name" validate:"required"`
-	EventID            string         `json:"event_id"`
-	StartTime          time.Time      `json:"start_time" validate:"required"`
-	EndTime            time.Time      `json:"end_time" validate:"required"`
-	IterFirst          *EventIterator `json:"iter_first"`
-	IterLast           *EventIterator `json:"iter_last"`
-	PageSize           int            `json:"page_size"`
+	ExternalCustomerID string              `json:"external_customer_id"`
+	EventName          string              `json:"event_name" validate:"required"`
+	EventID            string              `json:"event_id"`
+	StartTime          time.Time           `json:"start_time" validate:"required"`
+	EndTime            time.Time           `json:"end_time" validate:"required"`
+	IterFirst          *EventIterator      `json:"iter_first"`
+	IterLast           *EventIterator      `json:"iter_last"`
+	PageSize           int                 `json:"page_size"`
+	PropertyFilters    map[string][]string `json:"property_filters,omitempty"`
+	Offset             int                 `json:"offset"`
+	CountTotal         bool                `json:"count_total"`
 }
 
 type UsageResult struct {

@@ -100,6 +100,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			events.POST("", handlers.Events.IngestEvent)
 			events.POST("/bulk", handlers.Events.BulkIngestEvent)
 			events.GET("", handlers.Events.GetEvents)
+			events.POST("/query", handlers.Events.QueryEvents)
 			events.POST("/usage", handlers.Events.GetUsage)
 			events.POST("/usage/meter", handlers.Events.GetUsageByMeter)
 		}

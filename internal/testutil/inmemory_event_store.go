@@ -118,12 +118,12 @@ func (s *InMemoryEventStore) GetUsage(ctx context.Context, params *events.UsageP
 	return result, nil
 }
 
-func (s *InMemoryEventStore) GetEvents(ctx context.Context, params *events.GetEventsParams) ([]*events.Event, error) {
+func (s *InMemoryEventStore) GetEvents(ctx context.Context, params *events.GetEventsParams) ([]*events.Event, uint64, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	// Convert map to slice for sorting
-	var eventsList []*events.Event
+	// First, collect all events that match the base criteria (without iterator filters)
+	var allMatchingEvents []*events.Event
 	for _, event := range s.events {
 		// Apply filters
 		if params.ExternalCustomerID != "" && event.ExternalCustomerID != params.ExternalCustomerID {
@@ -139,20 +139,70 @@ func (s *InMemoryEventStore) GetEvents(ctx context.Context, params *events.GetEv
 			continue
 		}
 
-		// Handle pagination using composite keys (timestamp, id)
-		if params.IterFirst != nil {
-			// Skip events that are older or equal to the reference point
+		// Apply property filters
+		if params.PropertyFilters != nil && len(params.PropertyFilters) > 0 {
+			propertyFilterMatched := true
+			for property, values := range params.PropertyFilters {
+				if len(values) == 0 {
+					continue
+				}
+
+				if propValue, ok := event.Properties[property]; !ok {
+					propertyFilterMatched = false
+					break
+				} else {
+					// Convert property value to string for comparison
+					propValueStr := fmt.Sprintf("%v", propValue)
+
+					valueMatched := false
+					for _, value := range values {
+						if propValueStr == value {
+							valueMatched = true
+							break
+						}
+					}
+
+					if !valueMatched {
+						propertyFilterMatched = false
+						break
+					}
+				}
+			}
+
+			if !propertyFilterMatched {
+				continue
+			}
+		}
+
+		allMatchingEvents = append(allMatchingEvents, event)
+	}
+
+	// Sort all matching events by timestamp DESC, id DESC
+	sort.Slice(allMatchingEvents, func(i, j int) bool {
+		if allMatchingEvents[i].Timestamp.Equal(allMatchingEvents[j].Timestamp) {
+			return allMatchingEvents[i].ID > allMatchingEvents[j].ID
+		}
+		return allMatchingEvents[i].Timestamp.After(allMatchingEvents[j].Timestamp)
+	})
+
+	// Total count of all matching events (before any pagination)
+	totalCount := uint64(len(allMatchingEvents))
+
+	// Now apply iterator filters to get the correct page
+	var filteredEvents []*events.Event
+	if params.IterFirst != nil {
+		for _, event := range allMatchingEvents {
 			if event.Timestamp.Equal(params.IterFirst.Timestamp) {
-				// If timestamps are equal, we want to skip this event and all events with smaller IDs
 				if event.ID <= params.IterFirst.ID {
 					continue
 				}
 			} else if !event.Timestamp.After(params.IterFirst.Timestamp) {
 				continue
 			}
-
-		} else if params.IterLast != nil {
-			// For IterLast, we want events OLDER than the reference point
+			filteredEvents = append(filteredEvents, event)
+		}
+	} else if params.IterLast != nil {
+		for _, event := range allMatchingEvents {
 			if event.Timestamp.Equal(params.IterLast.Timestamp) {
 				if event.ID >= params.IterLast.ID {
 					continue
@@ -160,25 +210,24 @@ func (s *InMemoryEventStore) GetEvents(ctx context.Context, params *events.GetEv
 			} else if !event.Timestamp.Before(params.IterLast.Timestamp) {
 				continue
 			}
+			filteredEvents = append(filteredEvents, event)
 		}
-
-		eventsList = append(eventsList, event)
+	} else {
+		// If no iterators, use all matching events
+		filteredEvents = allMatchingEvents
 	}
 
-	// Sort by timestamp DESC, id DESC
-	sort.Slice(eventsList, func(i, j int) bool {
-		if eventsList[i].Timestamp.Equal(eventsList[j].Timestamp) {
-			return eventsList[i].ID > eventsList[j].ID
-		}
-		return eventsList[i].Timestamp.After(eventsList[j].Timestamp)
-	})
-
-	// Apply limit
-	if len(eventsList) > params.PageSize {
-		eventsList = eventsList[:params.PageSize]
+	// Apply offset
+	if params.Offset > 0 && params.Offset < len(filteredEvents) {
+		filteredEvents = filteredEvents[params.Offset:]
 	}
 
-	return eventsList, nil
+	// Apply page size limit
+	if params.PageSize > 0 && params.PageSize < len(filteredEvents) {
+		filteredEvents = filteredEvents[:params.PageSize]
+	}
+
+	return filteredEvents, totalCount, nil
 }
 
 func (s *InMemoryEventStore) GetUsageWithFilters(ctx context.Context, params *events.UsageWithFiltersParams) ([]*events.AggregationResult, error) {

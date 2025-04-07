@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -175,22 +176,6 @@ func (h *EventsHandler) GetUsage(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// @Summary Get raw events
-// @Description Retrieve raw events with pagination and filtering
-// @Tags Events
-// @Produce json
-// @Security ApiKeyAuth
-// @Param external_customer_id query string false "External Customer ID"
-// @Param event_name query string false "Event Name"
-// @Param start_time query string false "Start Time (RFC3339)"
-// @Param end_time query string false "End Time (RFC3339)"
-// @Param iter_first_key query string false "Iter First Key (unix_timestamp_nanoseconds::event_id)"
-// @Param iter_last_key query string false "Iter Last Key (unix_timestamp_nanoseconds::event_id)"
-// @Param page_size query int false "Page Size (1-50)"
-// @Success 200 {object} dto.GetEventsResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /events [get]
 func (h *EventsHandler) GetEvents(c *gin.Context) {
 	ctx := c.Request.Context()
 	externalCustomerID := c.Query("external_customer_id")
@@ -200,13 +185,44 @@ func (h *EventsHandler) GetEvents(c *gin.Context) {
 	iterFirstKey := c.Query("iter_first_key")
 	iterLastKey := c.Query("iter_last_key")
 	eventID := c.Query("event_id")
+	propertyFiltersStr := c.Query("property_filters")
 
+	// Parse property filters from query string (format: key1:value1,value2;key2:value3)
+	propertyFilters := make(map[string][]string)
+	if propertyFiltersStr != "" {
+		filterGroups := strings.Split(propertyFiltersStr, ";")
+		for _, group := range filterGroups {
+			parts := strings.Split(group, ":")
+			if len(parts) == 2 {
+				key := parts[0]
+				values := strings.Split(parts[1], ",")
+				propertyFilters[key] = values
+			}
+		}
+	}
+
+	// Parse pagination parameters
 	pageSize := 50
 	if size := c.Query("page_size"); size != "" {
 		if parsed, err := strconv.Atoi(size); err == nil {
-			if parsed > 0 && parsed <= 100 {
+			if parsed > 0 && parsed <= 50 {
 				pageSize = parsed
 			}
+		}
+	}
+
+	offset := 0
+	if offsetStr := c.Query("offset"); offsetStr != "" {
+		if parsed, err := strconv.Atoi(offsetStr); err == nil && parsed >= 0 {
+			offset = parsed
+		}
+	}
+
+	// Parse count_total parameter
+	countTotal := false
+	if countTotalStr := c.Query("count_total"); countTotalStr != "" {
+		if parsed, err := strconv.ParseBool(countTotalStr); err == nil {
+			countTotal = parsed
 		}
 	}
 
@@ -227,9 +243,51 @@ func (h *EventsHandler) GetEvents(c *gin.Context) {
 		PageSize:           pageSize,
 		IterFirstKey:       iterFirstKey,
 		IterLastKey:        iterLastKey,
+		PropertyFilters:    propertyFilters,
+		Offset:             offset,
+		CountTotal:         countTotal,
 	})
 	if err != nil {
 		h.log.Error("Failed to get events", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, events)
+}
+
+// @Summary List raw events
+// @Description Retrieve raw events with pagination and filtering
+// @Tags Events
+// @Produce json
+// @Security ApiKeyAuth
+// @Param request body dto.GetEventsRequest true "Request body"
+// @Success 200 {object} dto.GetEventsResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /events/query [post]
+func (h *EventsHandler) QueryEvents(c *gin.Context) {
+	ctx := c.Request.Context()
+	var err error
+
+	var req dto.GetEventsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Please check the request payload").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	req.StartTime, req.EndTime, err = validateStartAndEndTime(req.StartTime, req.EndTime)
+	if err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Please check the request payload").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	events, err := h.eventService.GetEvents(ctx, &req)
+	if err != nil {
 		c.Error(err)
 		return
 	}

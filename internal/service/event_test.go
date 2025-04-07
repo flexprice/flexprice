@@ -83,7 +83,7 @@ func (s *EventServiceSuite) TestCreateEvent() {
 					EndTime:            input.Timestamp.Add(time.Hour),
 					PageSize:           10,
 				}
-				storedEvents, err := s.eventRepo.GetEvents(s.ctx, params)
+				storedEvents, _, err := s.eventRepo.GetEvents(s.ctx, params)
 				s.NoError(err)
 				s.Len(storedEvents, 1)
 
@@ -378,6 +378,9 @@ func (s *EventServiceSuite) TestGetEvents() {
 			Timestamp:          now.Add(-4 * time.Hour),
 			Properties: map[string]interface{}{
 				"duration_ms": float64(100),
+				"model":       "gpt-3.5",
+				"type":        "completion",
+				"region":      "us-east-1",
 			},
 		},
 		{
@@ -387,6 +390,9 @@ func (s *EventServiceSuite) TestGetEvents() {
 			Timestamp:          now.Add(-3 * time.Hour),
 			Properties: map[string]interface{}{
 				"duration_ms": float64(150),
+				"model":       "gpt-4",
+				"type":        "completion",
+				"region":      "us-east-1",
 			},
 		},
 		{
@@ -396,6 +402,9 @@ func (s *EventServiceSuite) TestGetEvents() {
 			Timestamp:          now.Add(-2 * time.Hour),
 			Properties: map[string]interface{}{
 				"duration_ms": float64(200),
+				"model":       "gpt-4o",
+				"type":        "embedding",
+				"region":      "us-west-2",
 			},
 		},
 		{
@@ -405,6 +414,9 @@ func (s *EventServiceSuite) TestGetEvents() {
 			Timestamp:          now.Add(-1 * time.Hour),
 			Properties: map[string]interface{}{
 				"duration_ms": float64(250),
+				"model":       "gpt-4o",
+				"type":        "completion",
+				"region":      "eu-west-1",
 			},
 		},
 	}
@@ -437,6 +449,8 @@ func (s *EventServiceSuite) TestGetEvents() {
 		s.True(result.HasMore)
 		s.Equal("evt-4", result.Events[0].ID) // Most recent first
 		s.Equal("evt-3", result.Events[1].ID)
+		s.Equal(uint64(4), result.TotalCount) // Total count should be 4
+		s.Equal(2, result.Offset)             // Offset should be incremented by PageSize
 
 		// Second page using last key
 		result, err = s.service.GetEvents(s.ctx, &dto.GetEventsRequest{
@@ -450,6 +464,73 @@ func (s *EventServiceSuite) TestGetEvents() {
 		s.False(result.HasMore)
 		s.Equal("evt-2", result.Events[0].ID)
 		s.Equal("evt-1", result.Events[1].ID)
+		// For cursor-based pagination, we should still have the total count
+		s.Equal(uint64(4), result.TotalCount)
+	})
+
+	s.Run("get_events_with_property_filters", func() {
+		// Test single property filter
+		result, err := s.service.GetEvents(s.ctx, &dto.GetEventsRequest{
+			ExternalCustomerID: "cust-1",
+			PropertyFilters: map[string][]string{
+				"model": {"gpt-4o"},
+			},
+		})
+		s.NoError(err)
+		s.NotNil(result)
+		s.Len(result.Events, 2)
+		s.Equal("evt-4", result.Events[0].ID)
+		s.Equal("evt-3", result.Events[1].ID)
+
+		// Test multiple property filters
+		result, err = s.service.GetEvents(s.ctx, &dto.GetEventsRequest{
+			ExternalCustomerID: "cust-1",
+			PropertyFilters: map[string][]string{
+				"model": {"gpt-4o"},
+				"type":  {"completion"},
+			},
+		})
+		s.NoError(err)
+		s.NotNil(result)
+		s.Len(result.Events, 1)
+		s.Equal("evt-4", result.Events[0].ID)
+
+		// Test multiple values for a property
+		result, err = s.service.GetEvents(s.ctx, &dto.GetEventsRequest{
+			ExternalCustomerID: "cust-1",
+			PropertyFilters: map[string][]string{
+				"model": {"gpt-4", "gpt-3.5"},
+			},
+		})
+		s.NoError(err)
+		s.NotNil(result)
+		s.Len(result.Events, 2)
+		s.Equal("evt-2", result.Events[0].ID)
+		s.Equal("evt-1", result.Events[1].ID)
+
+		// Test combination of standard filters and property filters
+		result, err = s.service.GetEvents(s.ctx, &dto.GetEventsRequest{
+			ExternalCustomerID: "cust-1",
+			PropertyFilters: map[string][]string{
+				"region": {"us-east-1"},
+			},
+		})
+		s.NoError(err)
+		s.NotNil(result)
+		s.Len(result.Events, 2)
+		s.Equal("evt-2", result.Events[0].ID)
+		s.Equal("evt-1", result.Events[1].ID)
+
+		// Test with no matching properties
+		result, err = s.service.GetEvents(s.ctx, &dto.GetEventsRequest{
+			ExternalCustomerID: "cust-1",
+			PropertyFilters: map[string][]string{
+				"non_existent_property": {"some_value"},
+			},
+		})
+		s.NoError(err)
+		s.NotNil(result)
+		s.Len(result.Events, 0)
 	})
 
 	s.Run("get_events_with_iter_first_key", func() {
@@ -469,6 +550,8 @@ func (s *EventServiceSuite) TestGetEvents() {
 			Timestamp:          now,
 			Properties: map[string]interface{}{
 				"duration_ms": float64(300),
+				"model":       "gpt-4o",
+				"type":        "completion",
 			},
 		}
 

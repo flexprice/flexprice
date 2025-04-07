@@ -1289,85 +1289,6 @@ const docTemplate = `{
             }
         },
         "/events": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Retrieve raw events with pagination and filtering",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Events"
-                ],
-                "summary": "Get raw events",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "External Customer ID",
-                        "name": "external_customer_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Event Name",
-                        "name": "event_name",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Start Time (RFC3339)",
-                        "name": "start_time",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "End Time (RFC3339)",
-                        "name": "end_time",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Iter First Key (unix_timestamp_nanoseconds::event_id)",
-                        "name": "iter_first_key",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Iter Last Key (unix_timestamp_nanoseconds::event_id)",
-                        "name": "iter_last_key",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Page Size (1-50)",
-                        "name": "page_size",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.GetEventsResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            },
             "post": {
                 "security": [
                     {
@@ -1458,6 +1379,54 @@ const docTemplate = `{
                             "additionalProperties": {
                                 "type": "string"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/events/query": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Retrieve raw events with pagination and filtering",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Events"
+                ],
+                "summary": "List raw events",
+                "parameters": [
+                    {
+                        "description": "Request body",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.GetEventsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.GetEventsResponse"
                         }
                     },
                     "400": {
@@ -6174,7 +6143,6 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "amount",
-                "price_id",
                 "quantity"
             ],
             "properties": {
@@ -7116,6 +7084,55 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.GetEventsRequest": {
+            "type": "object",
+            "required": [
+                "event_name"
+            ],
+            "properties": {
+                "count_total": {
+                    "type": "boolean"
+                },
+                "end_time": {
+                    "type": "string",
+                    "example": "2024-12-09T00:00:00Z"
+                },
+                "event_id": {
+                    "type": "string"
+                },
+                "event_name": {
+                    "type": "string"
+                },
+                "external_customer_id": {
+                    "type": "string"
+                },
+                "iter_first_key": {
+                    "type": "string"
+                },
+                "iter_last_key": {
+                    "type": "string"
+                },
+                "offset": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "property_filters": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "start_time": {
+                    "type": "string",
+                    "example": "2024-11-09T00:00:00Z"
+                }
+            }
+        },
         "dto.GetEventsResponse": {
             "type": "object",
             "properties": {
@@ -7133,6 +7150,12 @@ const docTemplate = `{
                 },
                 "iter_last_key": {
                     "type": "string"
+                },
+                "offset": {
+                    "type": "integer"
+                },
+                "total_count": {
+                    "type": "integer"
                 }
             }
         },

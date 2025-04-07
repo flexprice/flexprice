@@ -229,7 +229,6 @@ definitions:
         type: number
     required:
     - amount
-    - price_id
     - quantity
     type: object
   dto.CreateInvoiceRequest:
@@ -843,6 +842,39 @@ definitions:
       usage_percent:
         type: number
     type: object
+  dto.GetEventsRequest:
+    properties:
+      count_total:
+        type: boolean
+      end_time:
+        example: "2024-12-09T00:00:00Z"
+        type: string
+      event_id:
+        type: string
+      event_name:
+        type: string
+      external_customer_id:
+        type: string
+      iter_first_key:
+        type: string
+      iter_last_key:
+        type: string
+      offset:
+        type: integer
+      page_size:
+        type: integer
+      property_filters:
+        additionalProperties:
+          items:
+            type: string
+          type: array
+        type: object
+      start_time:
+        example: "2024-11-09T00:00:00Z"
+        type: string
+    required:
+    - event_name
+    type: object
   dto.GetEventsResponse:
     properties:
       events:
@@ -855,6 +887,10 @@ definitions:
         type: string
       iter_last_key:
         type: string
+      offset:
+        type: integer
+      total_count:
+        type: integer
     type: object
   dto.GetPreviewInvoiceRequest:
     properties:
@@ -3723,57 +3759,6 @@ paths:
       tags:
       - Environments
   /events:
-    get:
-      description: Retrieve raw events with pagination and filtering
-      parameters:
-      - description: External Customer ID
-        in: query
-        name: external_customer_id
-        type: string
-      - description: Event Name
-        in: query
-        name: event_name
-        type: string
-      - description: Start Time (RFC3339)
-        in: query
-        name: start_time
-        type: string
-      - description: End Time (RFC3339)
-        in: query
-        name: end_time
-        type: string
-      - description: Iter First Key (unix_timestamp_nanoseconds::event_id)
-        in: query
-        name: iter_first_key
-        type: string
-      - description: Iter Last Key (unix_timestamp_nanoseconds::event_id)
-        in: query
-        name: iter_last_key
-        type: string
-      - description: Page Size (1-50)
-        in: query
-        name: page_size
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/dto.GetEventsResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Get raw events
-      tags:
-      - Events
     post:
       consumes:
       - application/json
@@ -3839,6 +3824,36 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Bulk Ingest events
+      tags:
+      - Events
+  /events/query:
+    post:
+      description: Retrieve raw events with pagination and filtering
+      parameters:
+      - description: Request body
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.GetEventsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.GetEventsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List raw events
       tags:
       - Events
   /events/usage:
