@@ -229,7 +229,7 @@ func (s *featureService) DeleteFeature(ctx context.Context, id string) error {
 	if len(entitlements) > 0 {
 		return ierr.NewError("feature is linked to some plans").
 			WithHint("Feature is linked to some plans, please remove the feature from the plans first").
-			Mark(ierr.ErrValidation)
+			Mark(ierr.ErrInvalidOperation)
 	}
 
 	if err := s.repo.Delete(ctx, id); err != nil {
