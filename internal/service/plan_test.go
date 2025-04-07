@@ -35,6 +35,7 @@ func (s *PlanServiceSuite) setupService() {
 		s.GetDB(),
 		stores.PlanRepo,
 		stores.PriceRepo,
+		stores.SubscriptionRepo,
 		stores.MeterRepo,
 		stores.EntitlementRepo,
 		stores.FeatureRepo,

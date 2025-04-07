@@ -428,31 +428,22 @@ func (s *planService) UpdatePlan(ctx context.Context, id string, req dto.UpdateP
 
 func (s *planService) DeletePlan(ctx context.Context, id string) error {
 
-	entitlements, err := s.entitlementRepo.List(ctx, &types.EntitlementFilter{
-		QueryFilter: types.NewNoLimitQueryFilter(),
-		PlanIDs:     []string{id},
-	})
-
-	if err != nil {
-		return err
+	if id == "" {
+		return ierr.NewError("plan ID is required").
+			WithHint("Plan ID is required").
+			Mark(ierr.ErrValidation)
 	}
 
+	filters := types.NewNoLimitQueryFilter()
+	filters.Status = lo.ToPtr(types.StatusPublished)
+
 	subscriptions, err := s.subscriptionRepo.List(ctx, &types.SubscriptionFilter{
-		QueryFilter: types.NewNoLimitQueryFilter(),
+		QueryFilter: filters,
 		PlanID:      id,
 	})
 
 	if err != nil {
 		return err
-	}
-
-	if len(entitlements) > 0 {
-		return ierr.NewError("plan is still associated with entitlements or subscriptions").
-			WithHint("This plan has associated entitlements. Please remove the entitlements before deleting the plan").
-			WithReportableDetails(map[string]interface{}{
-				"plan_id": id,
-			}).
-			Mark(ierr.ErrDatabase)
 	}
 
 	if len(subscriptions) > 0 {
