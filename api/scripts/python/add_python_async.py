@@ -25,9 +25,10 @@ import asyncio
 import threading
 import logging
 from typing import Dict, Any, Optional, List, Union, Callable
-from queue import Queue
+from queue import Queue, Empty
 import time
 import random
+import traceback
 
 logger = logging.getLogger(__name__)
 
@@ -86,13 +87,23 @@ class AsyncEventProcessor:
                 event_data = self.event_queue.get(block=True, timeout=0.5)
                 if event_data is None:
                     continue
+                
+                # Validate event_data structure
+                if not isinstance(event_data, tuple) or len(event_data) != 3:
+                    logger.error(f"Invalid event data format: {event_data}")
+                    self.event_queue.task_done()
+                    continue
                     
                 event, api_instance, callback = event_data
                 self._process_event(event, api_instance, callback)
                 self.event_queue.task_done()
+            except Empty:
+                # Empty queue is normal, just continue polling
+                pass
             except Exception as e:
                 if not isinstance(e, asyncio.TimeoutError):
-                    logger.error(f"Error in event processor: {str(e)}")
+                    error_details = traceback.format_exc()
+                    logger.error(f"Error in event processor: {str(e)}\n{error_details}")
     
     def _process_event(self, event, api_instance, callback):
         """Process a single event with retries."""
@@ -112,10 +123,13 @@ class AsyncEventProcessor:
                 
                 if callback:
                     callback(result=result, error=None, success=True)
+                
+                logger.info(f"Successfully sent event to FlexPrice API")
                 return
             except Exception as e:
                 last_error = e
-                logger.warning(f"Event delivery failed (attempt {attempt+1}/{self.max_retries+1}): {str(e)}")
+                error_details = traceback.format_exc()
+                logger.warning(f"Event delivery failed (attempt {attempt+1}/{self.max_retries+1}): {str(e)}\n{error_details}")
                 attempt += 1
                 
         # All retries failed
@@ -136,10 +150,19 @@ class AsyncEventProcessor:
             bool: True if the event was queued, False if the queue is full
         """
         try:
+            # Validate inputs
+            if event is None:
+                logger.error("Cannot submit None event")
+                return False
+            if api_instance is None:
+                logger.error("Cannot submit event with None api_instance")
+                return False
+                
             self.event_queue.put_nowait((event, api_instance, callback))
+            logger.debug(f"Event queued for async processing")
             return True
         except Exception as e:
-            logger.error(f"Failed to queue event: {str(e)}")
+            logger.error(f"Failed to queue event: {str(e)}\n{traceback.format_exc()}")
             return False
 
 # Global processor instance
