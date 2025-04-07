@@ -34,22 +34,24 @@ type ServiceParams struct {
 	PDFGenerator pdf.Generator
 
 	// Repositories
-	AuthRepo        auth.Repository
-	UserRepo        user.Repository
-	EventRepo       events.Repository
-	MeterRepo       meter.Repository
-	PriceRepo       price.Repository
-	CustomerRepo    customer.Repository
-	PlanRepo        plan.Repository
-	SubRepo         subscription.Repository
-	WalletRepo      wallet.Repository
-	TenantRepo      tenant.Repository
-	InvoiceRepo     invoice.Repository
-	FeatureRepo     feature.Repository
-	EntitlementRepo entitlement.Repository
-	PaymentRepo     payment.Repository
-	SecretRepo      secret.Repository
-	EnvironmentRepo environment.Repository
+	AuthRepo         auth.Repository
+	UserRepo         user.Repository
+	EventRepo        events.Repository
+	MeterRepo        meter.Repository
+	PriceRepo        price.Repository
+	CustomerRepo     customer.Repository
+	PlanRepo         plan.Repository
+	SubRepo          subscription.Repository
+	WalletRepo       wallet.Repository
+	TenantRepo       tenant.Repository
+	InvoiceRepo      invoice.Repository
+	FeatureRepo      feature.Repository
+	EntitlementRepo  entitlement.Repository
+	PaymentRepo      payment.Repository
+	SecretRepo       secret.Repository
+	EnvironmentRepo  environment.Repository
+	SubscriptionRepo subscription.Repository
+
 
 	// Publishers
 	EventPublisher   publisher.EventPublisher

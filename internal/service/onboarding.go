@@ -903,7 +903,7 @@ func (s *onboardingService) createDefaultCustomers(ctx context.Context) ([]*dto.
 	s.Logger.Infow("creating default customers for Cursor pricing model")
 
 	// Create a customer service instance
-	customerService := NewCustomerService(s.CustomerRepo)
+	customerService := NewCustomerService(s.CustomerRepo, s.SubscriptionRepo, s.InvoiceRepo, s.WalletRepo)
 
 	// Create a default customer
 	customer := dto.CreateCustomerRequest{

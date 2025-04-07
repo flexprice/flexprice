@@ -81,7 +81,7 @@ func (s *tenantService) createTenantAsBillingCustomer(ctx context.Context, t *te
 	}
 
 	// Create customer in billing tenant
-	customerService := NewCustomerService(s.CustomerRepo)
+	customerService := NewCustomerService(s.CustomerRepo, s.SubscriptionRepo, s.InvoiceRepo, s.WalletRepo)
 	_, err := customerService.CreateCustomer(billingCtx, createCustomerReq)
 	return err
 }
@@ -172,7 +172,7 @@ func (s *tenantService) UpdateTenant(ctx context.Context, id string, req dto.Upd
 
 func (s *tenantService) GetBillingUsage(ctx context.Context) (*dto.TenantBillingUsage, error) {
 	billingService := NewBillingService(s.ServiceParams)
-	customerService := NewCustomerService(s.CustomerRepo)
+	customerService := NewCustomerService(s.CustomerRepo, s.SubscriptionRepo, s.InvoiceRepo, s.WalletRepo)
 	subscriptionService := NewSubscriptionService(s.ServiceParams)
 
 	response := &dto.TenantBillingUsage{}
