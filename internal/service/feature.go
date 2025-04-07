@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -21,16 +22,18 @@ type FeatureService interface {
 }
 
 type featureService struct {
-	repo      feature.Repository
-	meterRepo meter.Repository
-	logger    *logger.Logger
+	repo            feature.Repository
+	meterRepo       meter.Repository
+	entitlementRepo entitlement.Repository
+	logger          *logger.Logger
 }
 
-func NewFeatureService(repo feature.Repository, meterRepo meter.Repository, logger *logger.Logger) FeatureService {
+func NewFeatureService(repo feature.Repository, meterRepo meter.Repository, entitlementRepo entitlement.Repository, logger *logger.Logger) FeatureService {
 	return &featureService{
-		repo:      repo,
-		meterRepo: meterRepo,
-		logger:    logger,
+		repo:            repo,
+		meterRepo:       meterRepo,
+		entitlementRepo: entitlementRepo,
+		logger:          logger,
 	}
 }
 
@@ -213,8 +216,25 @@ func (s *featureService) DeleteFeature(ctx context.Context, id string) error {
 			Mark(ierr.ErrValidation)
 	}
 
+	filter := types.NewNoLimitEntitlementFilter()
+	filter.FeatureIDs = []string{id}
+	filter.Status = lo.ToPtr(types.StatusPublished)
+
+	entitlements, err := s.entitlementRepo.List(ctx, filter)
+
+	if err != nil {
+		return err
+	}
+
+	if len(entitlements) > 0 {
+		return ierr.NewError("feature is linked to some plans").
+			WithHint("Feature is linked to some plans, please remove the feature from the plans first").
+			Mark(ierr.ErrValidation)
+	}
+
 	if err := s.repo.Delete(ctx, id); err != nil {
 		return err
 	}
+
 	return nil
 }
