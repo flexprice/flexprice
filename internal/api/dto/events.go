@@ -70,7 +70,7 @@ type GetUsageByMeterRequest struct {
 
 type GetEventsRequest struct {
 	ExternalCustomerID string              `json:"external_customer_id"`
-	EventName          string              `json:"event_name" binding:"required"`
+	EventName          string              `json:"event_name"`
 	EventID            string              `json:"event_id"`
 	StartTime          time.Time           `json:"start_time" example:"2024-11-09T00:00:00Z"`
 	EndTime            time.Time           `json:"end_time" example:"2024-12-09T00:00:00Z"`

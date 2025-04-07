@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "flexprice"
-version = "0.0.1"
+version = "1.0.5"
 description = "Official Python SDK of Flexprice"
 authors = ["Flexprice <tech@flexprice.io>"]
 license = "Apache 2.0"
@@ -12,7 +12,7 @@ include = ["flexprice/py.typed"]
 [tool.poetry.dependencies]
 python = "^3.8"
 
-urllib3 = ">= 1.25.3, < 3.0.0"
+urllib3 = ">= 2.0.0, < 3.0.0"
 python-dateutil = ">= 2.8.2"
 pydantic = ">= 2"
 typing-extensions = ">= 4.7.1"

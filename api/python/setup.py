@@ -27,10 +27,10 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 NAME = "flexprice"
-VERSION = "1.0.5"
+VERSION = "1.0.8"
 PYTHON_REQUIRES = ">= 3.8"
 REQUIRES = [
-    "urllib3 >= 1.25.3, < 3.0.0",
+    "urllib3 >=2.0.0, <3.0.0",
     "python-dateutil >= 2.8.2",
     "pydantic >= 2",
     "typing-extensions >= 4.7.1",
@@ -61,5 +61,10 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
+    project_urls={
+        "Source": "https://github.com/flexprice/python-sdk",
+        "Documentation": "https://docs.flexprice.io",
+        "Bug Tracker": "https://github.com/flexprice/python-sdk/issues",
+    },
     python_requires=PYTHON_REQUIRES,
 )
