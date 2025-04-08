@@ -39,10 +39,7 @@ func (Feature) Fields() []ent.Field {
 				"postgres": "varchar(50)",
 			}).
 			NotEmpty(),
-		field.String("description").
-			SchemaType(map[string]string{
-				"postgres": "varchar(50)",
-			}).
+		field.Text("description").
 			Optional().
 			Nillable(),
 		field.String("type").
