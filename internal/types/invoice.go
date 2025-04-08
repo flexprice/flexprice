@@ -143,6 +143,7 @@ const (
 type InvoiceFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
+	InvoiceIDs        []string         `json:"invoice_ids,omitempty" form:"invoice_ids"`
 	CustomerID        string           `json:"customer_id,omitempty" form:"customer_id"`
 	SubscriptionID    string           `json:"subscription_id,omitempty" form:"subscription_id"`
 	InvoiceType       InvoiceType      `json:"invoice_type,omitempty" form:"invoice_type"`
