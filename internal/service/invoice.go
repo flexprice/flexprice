@@ -611,7 +611,7 @@ func (s *invoiceService) GetCustomerMultiCurrencyInvoiceSummary(ctx context.Cont
 	subscriptionFilter := types.NewNoLimitSubscriptionFilter()
 	subscriptionFilter.CustomerID = customerID
 	subscriptionFilter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
-	subscriptionFilter.IncludeCanceled = true
+	subscriptionFilter.SubscriptionStatusNotIn = []types.SubscriptionStatus{types.SubscriptionStatusCancelled}
 
 	subs, err := s.SubRepo.List(ctx, subscriptionFilter)
 	if err != nil {

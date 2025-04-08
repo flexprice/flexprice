@@ -434,12 +434,14 @@ func (s *planService) DeletePlan(ctx context.Context, id string) error {
 			Mark(ierr.ErrValidation)
 	}
 
-	filters := types.NewNoLimitQueryFilter()
-	filters.Status = lo.ToPtr(types.StatusPublished)
+	subscriptionFilters := types.NewDefaultQueryFilter()
+	subscriptionFilters.Status = lo.ToPtr(types.StatusPublished)
+	subscriptionFilters.Limit = lo.ToPtr(1)
 
 	subscriptions, err := s.subscriptionRepo.List(ctx, &types.SubscriptionFilter{
-		QueryFilter: filters,
-		PlanID:      id,
+		QueryFilter:             subscriptionFilters,
+		PlanID:                  id,
+		SubscriptionStatusNotIn: []types.SubscriptionStatus{types.SubscriptionStatusCancelled},
 	})
 
 	if err != nil {
@@ -448,7 +450,7 @@ func (s *planService) DeletePlan(ctx context.Context, id string) error {
 
 	if len(subscriptions) > 0 {
 		return ierr.NewError("plan is still associated with subscriptions").
-			WithHint("This plan has active subscriptions associated with it. Please delete the subscriptions before removing the plan.").
+			WithHint("Please remove the active subscriptions before deleting this plan.").
 			WithReportableDetails(map[string]interface{}{
 				"plan_id": id,
 			}).

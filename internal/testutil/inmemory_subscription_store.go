@@ -274,15 +274,15 @@ func (s *InMemorySubscriptionStore) Delete(ctx context.Context, id string) error
 func (s *InMemorySubscriptionStore) ListAll(ctx context.Context, filter *types.SubscriptionFilter) ([]*subscription.Subscription, error) {
 	// Create an unlimited filter
 	unlimitedFilter := &types.SubscriptionFilter{
-		QueryFilter:        types.NewNoLimitQueryFilter(),
-		TimeRangeFilter:    filter.TimeRangeFilter,
-		CustomerID:         filter.CustomerID,
-		PlanID:             filter.PlanID,
-		SubscriptionStatus: filter.SubscriptionStatus,
-		BillingCadence:     filter.BillingCadence,
-		BillingPeriod:      filter.BillingPeriod,
-		IncludeCanceled:    filter.IncludeCanceled,
-		ActiveAt:           filter.ActiveAt,
+		QueryFilter:             types.NewNoLimitQueryFilter(),
+		TimeRangeFilter:         filter.TimeRangeFilter,
+		CustomerID:              filter.CustomerID,
+		PlanID:                  filter.PlanID,
+		SubscriptionStatus:      filter.SubscriptionStatus,
+		BillingCadence:          filter.BillingCadence,
+		BillingPeriod:           filter.BillingPeriod,
+		SubscriptionStatusNotIn: filter.SubscriptionStatusNotIn,
+		ActiveAt:                filter.ActiveAt,
 	}
 
 	return s.List(ctx, unlimitedFilter)
