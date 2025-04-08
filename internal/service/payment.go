@@ -10,6 +10,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // PaymentService defines the interface for payment operations
@@ -225,7 +226,9 @@ func (s *paymentService) GetPayment(ctx context.Context, id string) (*dto.Paymen
 			return nil, err
 		}
 
-		response.InvoiceNumber = *invoice.InvoiceNumber
+		if invoice.InvoiceNumber != nil {
+			response.InvoiceNumber = invoice.InvoiceNumber
+		}
 	}
 	return response, nil
 }
@@ -282,6 +285,7 @@ func (s *paymentService) ListPayments(ctx context.Context, filter *types.Payment
 			invoiceIDs = append(invoiceIDs, p.DestinationID)
 		}
 	}
+	invoiceIDs = lo.Uniq(invoiceIDs)
 
 	// Create a map of invoice ID to invoice number
 	invoiceNumberMap := make(map[string]*string)
@@ -292,10 +296,11 @@ func (s *paymentService) ListPayments(ctx context.Context, filter *types.Payment
 			InvoiceIDs:  invoiceIDs,
 		}
 		invoices, err := s.InvoiceRepo.List(ctx, invoiceFilter)
-		if err == nil {
-			for _, inv := range invoices {
-				invoiceNumberMap[inv.ID] = inv.InvoiceNumber
-			}
+		if err != nil {
+			return nil, err
+		}
+		for _, inv := range invoices {
+			invoiceNumberMap[inv.ID] = inv.InvoiceNumber
 		}
 	}
 
@@ -304,7 +309,7 @@ func (s *paymentService) ListPayments(ctx context.Context, filter *types.Payment
 		response := dto.NewPaymentResponse(p)
 		if p.DestinationType == types.PaymentDestinationTypeInvoice {
 			if invoiceNumber, exists := invoiceNumberMap[p.DestinationID]; exists {
-				response.InvoiceNumber = *invoiceNumber
+				response.InvoiceNumber = invoiceNumber
 			}
 		}
 		items[i] = response

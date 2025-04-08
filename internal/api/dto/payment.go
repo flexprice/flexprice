@@ -48,7 +48,7 @@ type PaymentResponse struct {
 	RefundedAt        *time.Time                   `json:"refunded_at,omitempty"`
 	ErrorMessage      *string                      `json:"error_message,omitempty"`
 	Attempts          []*PaymentAttemptResponse    `json:"attempts,omitempty"`
-	InvoiceNumber     string                       `json:"invoice_number,omitempty"`
+	InvoiceNumber     *string                      `json:"invoice_number,omitempty"`
 	TenantID          string                       `json:"tenant_id"`
 	CreatedAt         time.Time                    `json:"created_at"`
 	UpdatedAt         time.Time                    `json:"updated_at"`
