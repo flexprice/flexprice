@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 type CustomerService interface {
@@ -195,8 +196,21 @@ func (s *customerService) DeleteCustomer(ctx context.Context, id string) error {
 			Mark(ierr.ErrValidation)
 	}
 
-	subscriptionFilter := types.NewNoLimitSubscriptionFilter()
+	customer, err := s.repo.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	if customer.Status != types.StatusPublished {
+		return ierr.NewError("customer is not published").
+			WithHint("Customer does not exist").
+			Mark(ierr.ErrNotFound)
+	}
+
+	subscriptionFilter := types.NewSubscriptionFilter()
 	subscriptionFilter.CustomerID = id
+	subscriptionFilter.SubscriptionStatusNotIn = []types.SubscriptionStatus{types.SubscriptionStatusCancelled}
+	subscriptionFilter.Limit = lo.ToPtr(1)
 	subscriptions, err := s.subscriptionRepo.List(ctx, subscriptionFilter)
 	if err != nil {
 		return err
@@ -208,8 +222,9 @@ func (s *customerService) DeleteCustomer(ctx context.Context, id string) error {
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	invoiceFilter := types.NewNoLimitInvoiceFilter()
+	invoiceFilter := types.NewInvoiceFilter()
 	invoiceFilter.CustomerID = id
+	invoiceFilter.Limit = lo.ToPtr(1)
 	invoices, err := s.invoiceRepo.List(ctx, invoiceFilter)
 	if err != nil {
 		return err
@@ -233,7 +248,6 @@ func (s *customerService) DeleteCustomer(ctx context.Context, id string) error {
 	}
 
 	if err := s.repo.Delete(ctx, id); err != nil {
-		// No need to wrap the error as the repository already returns properly formatted errors
 		return err
 	}
 

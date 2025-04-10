@@ -7,6 +7,9 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainCustomer "github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
+	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -29,7 +32,10 @@ func (s *CustomerServiceSuite) SetupTest() {
 	s.ctx = context.Background()
 	s.repo = testutil.NewInMemoryCustomerStore()
 	s.customerService = &customerService{
-		repo: s.repo,
+		repo:             s.repo,
+		subscriptionRepo: testutil.NewInMemorySubscriptionStore(),
+		invoiceRepo:      testutil.NewInMemoryInvoiceStore(),
+		walletRepo:       testutil.NewInMemoryWalletStore(),
 	}
 }
 
@@ -326,13 +332,6 @@ func (s *CustomerServiceSuite) TestUpdateCustomer() {
 }
 
 func (s *CustomerServiceSuite) TestDeleteCustomer() {
-	// Prepopulate the repository with a customer
-	_ = s.repo.Create(s.ctx, &domainCustomer.Customer{
-		ID:    "cust-1",
-		Name:  "To Be Deleted",
-		Email: "delete@example.com",
-	})
-
 	testCases := []struct {
 		name          string
 		id            string
@@ -341,25 +340,133 @@ func (s *CustomerServiceSuite) TestDeleteCustomer() {
 		errorCode     string
 	}{
 		{
-			name:          "delete_existing_customer",
-			id:            "cust-1",
+			name: "delete_existing_customer",
+			id:   "cust-1",
+			setup: func() {
+				_ = s.repo.Create(s.ctx, &domainCustomer.Customer{
+					ID:    "cust-1",
+					Name:  "To Be Deleted",
+					Email: "delete@example.com",
+					BaseModel: types.BaseModel{
+						Status: types.StatusPublished,
+					},
+				})
+			},
 			expectedError: false,
 		},
 		{
 			name:          "delete_nonexistent_customer",
 			id:            "nonexistent-id",
 			expectedError: true,
+			errorCode:     ierr.ErrCodeNotFound,
+		},
+		{
+			name: "delete_unpublished_customer",
+			id:   "cust-unpublished",
+			setup: func() {
+				_ = s.repo.Create(s.ctx, &domainCustomer.Customer{
+					ID:    "cust-unpublished",
+					Name:  "Unpublished Customer",
+					Email: "unpublished@example.com",
+					BaseModel: types.BaseModel{
+						Status: types.StatusDeleted,
+					},
+				})
+			},
+			expectedError: true,
+			errorCode:     ierr.ErrCodeNotFound,
+		},
+		{
+			name: "customer_with_active_subscription",
+			id:   "cust-2",
+			setup: func() {
+				_ = s.repo.Create(s.ctx, &domainCustomer.Customer{
+					ID:    "cust-2",
+					Name:  "Customer with Subscription",
+					Email: "sub@example.com",
+					BaseModel: types.BaseModel{
+						Status: types.StatusPublished,
+					},
+				})
+				_ = s.customerService.subscriptionRepo.Create(s.ctx, &subscription.Subscription{
+					ID:                 "sub-1",
+					CustomerID:         "cust-2",
+					SubscriptionStatus: types.SubscriptionStatusActive,
+				})
+			},
+			expectedError: true,
+			errorCode:     ierr.ErrCodeInvalidOperation,
+		},
+		{
+			name: "customer_with_invoices",
+			id:   "cust-3",
+			setup: func() {
+				_ = s.repo.Create(s.ctx, &domainCustomer.Customer{
+					ID:    "cust-3",
+					Name:  "Customer with Invoice",
+					Email: "invoice@example.com",
+					BaseModel: types.BaseModel{
+						Status: types.StatusPublished,
+					},
+				})
+				_ = s.customerService.invoiceRepo.Create(s.ctx, &invoice.Invoice{
+					ID:         "inv-1",
+					CustomerID: "cust-3",
+				})
+			},
+			expectedError: true,
+			errorCode:     ierr.ErrCodeInvalidOperation,
+		},
+		{
+			name: "customer_with_wallets",
+			id:   "cust-4",
+			setup: func() {
+				_ = s.repo.Create(s.ctx, &domainCustomer.Customer{
+					ID:    "cust-4",
+					Name:  "Customer with Wallet",
+					Email: "wallet@example.com",
+					BaseModel: types.BaseModel{
+						Status: types.StatusPublished,
+					},
+				})
+				_ = s.customerService.walletRepo.CreateWallet(s.ctx, &wallet.Wallet{
+					ID:         "wallet-1",
+					CustomerID: "cust-4",
+				})
+			},
+			expectedError: true,
+			errorCode:     ierr.ErrCodeInvalidOperation,
 		},
 	}
 
 	for _, tc := range testCases {
 		s.Run(tc.name, func() {
+			// Reset repositories for each test case
+			s.SetupTest()
+
+			if tc.setup != nil {
+				tc.setup()
+			}
+
 			err := s.customerService.DeleteCustomer(s.ctx, tc.id)
 
 			if tc.expectedError {
 				s.Error(err)
 				if tc.errorCode == ierr.ErrCodeNotFound {
-					s.True(ierr.IsNotFound(err), "Expected not found error after deletion")
+					s.True(ierr.IsNotFound(err), "Expected not found error")
+					if tc.name == "delete_unpublished_customer" {
+						s.Contains(err.Error(), "customer is not published")
+					}
+				} else if tc.errorCode == ierr.ErrCodeInvalidOperation {
+					s.True(ierr.IsInvalidOperation(err), "Expected invalid operation error")
+					switch tc.name {
+					case "customer_with_active_subscription":
+						s.Contains(err.Error(), "customer cannot be deleted due to active subscriptions")
+					case "customer_with_invoices":
+						s.Contains(err.Error(), "customer cannot be deleted due to active invoices")
+					case "customer_with_wallets":
+						s.Contains(err.Error(), "customer cannot be deleted due to associated wallets")
+					}
 				}
 			} else {
 				s.NoError(err)
