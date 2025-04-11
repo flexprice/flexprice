@@ -2520,10 +2520,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/dto.MeterResponse"
-                            }
+                            "$ref": "#/definitions/dto.ListMetersResponse"
                         }
                     },
                     "500": {
@@ -7086,9 +7083,6 @@ const docTemplate = `{
         },
         "dto.GetEventsRequest": {
             "type": "object",
-            "required": [
-                "event_name"
-            ],
             "properties": {
                 "count_total": {
                     "type": "boolean"
@@ -7644,6 +7638,20 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/dto.InvoiceResponse"
+                    }
+                },
+                "pagination": {
+                    "$ref": "#/definitions/types.PaginationResponse"
+                }
+            }
+        },
+        "dto.ListMetersResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.MeterResponse"
                     }
                 },
                 "pagination": {

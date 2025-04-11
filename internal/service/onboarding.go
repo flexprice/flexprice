@@ -355,6 +355,17 @@ func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, userID
 		return err
 	}
 
+	tenantService := NewTenantService(s.ServiceParams)
+
+	resp, err := tenantService.CreateTenant(ctx, dto.CreateTenantRequest{
+		Name: tenantName,
+	})
+	if err != nil {
+		return err
+	}
+
+	tenantID = resp.ID
+
 	// Create a new user without a tenant ID initially
 	newUser := &user.User{
 		ID:    userID,
@@ -386,7 +397,7 @@ func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, userID
 			Name: envType.DisplayTitle(),
 			Type: envType,
 			BaseModel: types.BaseModel{
-				TenantID:  newTenant.ID,
+				TenantID:  tenantID,
 				Status:    types.StatusPublished,
 				CreatedBy: userID,
 				UpdatedBy: userID,
@@ -404,7 +415,7 @@ func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, userID
 		}
 	}
 
-	err := s.SetupSandboxEnvironment(ctx, tenantID, userID, sandboxEnvironmentID)
+	err = s.SetupSandboxEnvironment(ctx, tenantID, userID, sandboxEnvironmentID)
 	if err != nil {
 		return err
 	}

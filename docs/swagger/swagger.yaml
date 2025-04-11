@@ -872,8 +872,6 @@ definitions:
       start_time:
         example: "2024-11-09T00:00:00Z"
         type: string
-    required:
-    - event_name
     type: object
   dto.GetEventsResponse:
     properties:
@@ -1220,6 +1218,15 @@ definitions:
       items:
         items:
           $ref: '#/definitions/dto.InvoiceResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
+  dto.ListMetersResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/dto.MeterResponse'
         type: array
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
@@ -4554,9 +4561,7 @@ paths:
         "200":
           description: OK
           schema:
-            items:
-              $ref: '#/definitions/dto.MeterResponse'
-            type: array
+            $ref: '#/definitions/dto.ListMetersResponse'
         "500":
           description: Internal Server Error
           schema:

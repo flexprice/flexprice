@@ -93,7 +93,7 @@ func (s *authService) SignUp(ctx context.Context, req *dto.SignUpRequest) (*dto.
 			authResponse.ID,
 			req.Email,
 			req.TenantName,
-			response.TenantID,
+			tenantID,
 		)
 
 		if err != nil {
@@ -101,7 +101,7 @@ func (s *authService) SignUp(ctx context.Context, req *dto.SignUpRequest) (*dto.
 		}
 
 		// Assign tenant to user in auth provider
-		if err := s.authProvider.AssignUserToTenant(ctx, authResponse.ID, response.TenantID); err != nil {
+		if err := s.authProvider.AssignUserToTenant(ctx, authResponse.ID, tenantID); err != nil {
 			return ierr.WithError(err).
 				WithHint("Unable to assign tenant to user in auth provider").
 				Mark(ierr.ErrSystem)

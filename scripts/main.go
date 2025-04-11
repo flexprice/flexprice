@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/flexprice/flexprice/scripts/hacks/lago"
 	"github.com/flexprice/flexprice/scripts/internal"
 	"github.com/flexprice/flexprice/scripts/local"
 )
@@ -53,20 +54,26 @@ var commands = []Command{
 		Description: "Migrate entities to use environment_id",
 		Run:         internal.MigrateEnvironments,
 	},
+	{
+		Name:        "migrate-from-lago",
+		Description: "Migrate from Lago to Flexprice",
+		Run:         lago.RunMigration,
+	},
 }
 
 func main() {
 	// Define command line flags
 	var (
-		listCommands bool
-		cmdName      string
-		email        string
-		tenant       string
-		metersFile   string
-		plansFile    string
-		tenantID     string
-		userID       string
-		password     string
+		listCommands  bool
+		cmdName       string
+		email         string
+		tenant        string
+		metersFile    string
+		plansFile     string
+		tenantID      string
+		userID        string
+		password      string
+		environmentID string
 	)
 
 	flag.BoolVar(&listCommands, "list", false, "List all available commands")
@@ -78,6 +85,7 @@ func main() {
 	flag.StringVar(&tenantID, "tenant-id", "", "Tenant ID for operations")
 	flag.StringVar(&userID, "user-id", "", "User ID for operations")
 	flag.StringVar(&password, "user-password", "", "password for setting up new user")
+	flag.StringVar(&environmentID, "environment-id", "", "Environment ID for operations")
 
 	flag.Parse()
 
@@ -114,6 +122,9 @@ func main() {
 	}
 	if password != "" {
 		os.Setenv("USER_PASSWORD", password)
+	}
+	if environmentID != "" {
+		os.Setenv("ENVIRONMENT_ID", environmentID)
 	}
 
 	// Find and run the command

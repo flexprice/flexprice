@@ -59,7 +59,7 @@ func (h *MeterHandler) CreateMeter(c *gin.Context) {
 // @Produce json
 // @Security ApiKeyAuth
 // @Param filter query types.MeterFilter false "Filter"
-// @Success 200 {array} dto.MeterResponse
+// @Success 200 {object} dto.ListMetersResponse
 // @Failure 500 {object} ierr.ErrorResponse
 // @Router /meters [get]
 func (h *MeterHandler) GetAllMeters(c *gin.Context) {

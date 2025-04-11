@@ -9,6 +9,8 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 )
 
 type TenantService interface {
@@ -83,7 +85,59 @@ func (s *tenantService) createTenantAsBillingCustomer(ctx context.Context, t *te
 	// Create customer in billing tenant
 	customerService := NewCustomerService(s.CustomerRepo)
 	_, err := customerService.CreateCustomer(billingCtx, createCustomerReq)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Onboard the tenant on the free plan
+	return s.onboardTenantOnFreePlan(ctx, t)
+}
+
+func (s *tenantService) onboardTenantOnFreePlan(ctx context.Context, t *tenant.Tenant) error {
+	planService := NewPlanService(s.DB, s.PlanRepo, s.PriceRepo, s.MeterRepo, s.EntitlementRepo, s.FeatureRepo, s.Logger)
+	// List plans
+	planFilter := types.NewNoLimitPlanFilter()
+	planFilter.Expand = lo.ToPtr(string(types.ExpandPrices))
+	plans, err := planService.GetPlans(ctx, planFilter)
+	if err != nil {
+		return err
+	}
+
+	// Find the free plan
+	var freePlan *dto.PlanResponse
+	var freePrice *dto.PriceResponse
+	for _, p := range plans.Items {
+		for _, price := range p.Prices {
+			if price.Type == types.PRICE_TYPE_FIXED &&
+				price.Amount == decimal.Zero &&
+				price.BillingCadence == types.BILLING_CADENCE_RECURRING {
+				freePlan = p
+				freePrice = price
+				break
+			}
+		}
+	}
+
+	if freePlan == nil || freePrice == nil {
+		return nil
+	}
+
+	// Create a subscription for the tenant
+	subscriptionService := NewSubscriptionService(s.ServiceParams)
+	_, err = subscriptionService.CreateSubscription(ctx, dto.CreateSubscriptionRequest{
+		CustomerID:         t.ID,
+		PlanID:             freePlan.ID,
+		Currency:           freePrice.Currency,
+		BillingCadence:     freePrice.BillingCadence,
+		BillingPeriod:      freePrice.BillingPeriod,
+		BillingPeriodCount: freePrice.BillingPeriodCount,
+		StartDate:          time.Now(),
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (s *tenantService) GetTenantByID(ctx context.Context, id string) (*dto.TenantResponse, error) {
