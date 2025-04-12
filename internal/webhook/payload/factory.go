@@ -80,6 +80,16 @@ func NewPayloadBuilderFactory(services *Services) PayloadBuilderFactory {
 		return NewTransactionPayloadBuilder(f.services)
 	}
 
+	// customer builders
+	f.builders[types.WebhookEventCustomerCreated] = func() PayloadBuilder {
+		return NewCustomerPayloadBuilder(f.services)
+	}
+	f.builders[types.WebhookEventCustomerUpdated] = func() PayloadBuilder {
+		return NewCustomerPayloadBuilder(f.services)
+	}
+	f.builders[types.WebhookEventCustomerDeleted] = func() PayloadBuilder {
+		return NewCustomerPayloadBuilder(f.services)
+	}
 	return f
 }
 
