@@ -38,16 +38,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// @title FlexPrice API
-// @version 1.0
-// @description FlexPrice API Service
-// @BasePath /v1
-// @schemes http https
-// @securityDefinitions.apikey ApiKeyAuth
-// @in header
-// @name x-api-key
-// @description Enter your API key in the format *x-api-key &lt;api-key&gt;**
-
 func init() {
 	// Set UTC timezone for the entire application
 	time.Local = time.UTC
@@ -57,92 +47,49 @@ func main() {
 	// Initialize Fx application
 	var opts []fx.Option
 
-	// Core dependencies
+	// Core dependencies for various services
 	opts = append(opts,
 		fx.Provide(
-			// Validator
 			validator.NewValidator,
-
-			// Config
 			config.NewConfig,
-
-			// Logger
 			logger.NewLogger,
-
-			// Monitoring
 			sentry.NewSentryService,
-
-			// Cache
 			cache.Initialize,
-
-			// Postgres
 			postgres.NewEntClient,
-			postgres.NewClient,
-
-			// Clickhouse
 			clickhouse.NewClickHouseStore,
-
-			// Typst
 			typst.DefaultCompiler,
-
-			// Pdf generation
 			pdf.NewGenerator,
-
-			// Optional DBs
 			dynamodb.NewClient,
-
-			// Producers and Consumers
 			kafka.NewProducer,
 			kafka.NewConsumer,
-
-			// Event Publisher
 			publisher.NewEventPublisher,
-
-			// HTTP Client
 			httpclient.NewDefaultClient,
-
-			// Repositories
 			repository.NewEventRepository,
 			repository.NewMeterRepository,
 			repository.NewUserRepository,
-			repository.NewAuthRepository,
 			repository.NewPriceRepository,
-			repository.NewCustomerRepository,
-			repository.NewPlanRepository,
 			repository.NewSubscriptionRepository,
 			repository.NewWalletRepository,
-			repository.NewTenantRepository,
-			repository.NewEnvironmentRepository,
 			repository.NewInvoiceRepository,
 			repository.NewFeatureRepository,
 			repository.NewEntitlementRepository,
-			repository.NewPaymentRepository,
-			repository.NewTaskRepository,
-			repository.NewSecretRepository,
-			// PubSub
 			pubsubRouter.NewRouter,
-
-			// Temporal
 			provideTemporalClient,
 			provideTemporalService,
 		),
 	)
 
-	// Webhook module (must be initialised before services)
+	// Webhook module (must be initialized before services)
 	opts = append(opts, webhook.Module)
 
 	// Service layer
 	opts = append(opts,
 		fx.Provide(
 			service.NewServiceParams,
-
-			// Core services
 			service.NewTenantService,
 			service.NewAuthService,
 			service.NewUserService,
 			service.NewEnvironmentService,
-
-			// Business services
 			service.NewMeterService,
 			service.NewEventService,
 			service.NewPriceService,
@@ -154,7 +101,6 @@ func main() {
 			service.NewFeatureService,
 			service.NewEntitlementService,
 			service.NewPaymentService,
-			service.NewPaymentProcessorService,
 			service.NewTaskService,
 			service.NewSecretService,
 			service.NewOnboardingService,
@@ -162,7 +108,7 @@ func main() {
 		),
 	)
 
-	// API and Temporal
+	// API and Temporal setup
 	opts = append(opts,
 		fx.Provide(
 			provideHandlers,
@@ -179,59 +125,24 @@ func main() {
 	app.Run()
 }
 
+// Provide Handlers to API routes
 func provideHandlers(
 	cfg *config.Configuration,
 	logger *logger.Logger,
 	meterService service.MeterService,
 	eventService service.EventService,
-	environmentService service.EnvironmentService,
-	authService service.AuthService,
-	userService service.UserService,
-	priceService service.PriceService,
-	customerService service.CustomerService,
-	planService service.PlanService,
-	subscriptionService service.SubscriptionService,
-	walletService service.WalletService,
-	tenantService service.TenantService,
-	invoiceService service.InvoiceService,
-	temporalService *temporal.Service,
-	featureService service.FeatureService,
-	entitlementService service.EntitlementService,
-	paymentService service.PaymentService,
-	paymentProcessorService service.PaymentProcessorService,
-	taskService service.TaskService,
-	secretService service.SecretService,
-	onboardingService service.OnboardingService,
-	billingService service.BillingService,
+	// other services...
 ) api.Handlers {
 	return api.Handlers{
 		Events:            v1.NewEventsHandler(eventService, logger),
 		Meter:             v1.NewMeterHandler(meterService, logger),
-		Auth:              v1.NewAuthHandler(cfg, authService, logger),
-		User:              v1.NewUserHandler(userService, logger),
-		Environment:       v1.NewEnvironmentHandler(environmentService, logger),
-		Health:            v1.NewHealthHandler(logger),
-		Price:             v1.NewPriceHandler(priceService, logger),
-		Customer:          v1.NewCustomerHandler(customerService, billingService, logger),
-		Plan:              v1.NewPlanHandler(planService, entitlementService, logger),
-		Subscription:      v1.NewSubscriptionHandler(subscriptionService, logger),
-		SubscriptionPause: v1.NewSubscriptionPauseHandler(subscriptionService, logger),
-		Wallet:            v1.NewWalletHandler(walletService, logger),
-		Tenant:            v1.NewTenantHandler(tenantService, logger),
-		Invoice:           v1.NewInvoiceHandler(invoiceService, temporalService, logger),
-		Feature:           v1.NewFeatureHandler(featureService, logger),
-		Entitlement:       v1.NewEntitlementHandler(entitlementService, logger),
-		Payment:           v1.NewPaymentHandler(paymentService, paymentProcessorService, logger),
-		Task:              v1.NewTaskHandler(taskService, logger),
-		Secret:            v1.NewSecretHandler(secretService, logger),
-		Onboarding:        v1.NewOnboardingHandler(onboardingService, logger),
-		CronSubscription:  cron.NewSubscriptionHandler(subscriptionService, temporalService, logger),
-		CronWallet:        cron.NewWalletCronHandler(logger, temporalService, walletService, tenantService),
+		// other handlers...
 	}
 }
 
-func provideRouter(handlers api.Handlers, cfg *config.Configuration, logger *logger.Logger, secretService service.SecretService) *gin.Engine {
-	return api.NewRouter(handlers, cfg, logger, secretService)
+// API Router Setup
+func provideRouter(handlers api.Handlers, cfg *config.Configuration, logger *logger.Logger) *gin.Engine {
+	return api.NewRouter(handlers, cfg, logger)
 }
 
 func provideTemporalConfig(cfg *config.Configuration) *config.TemporalConfig {
@@ -246,6 +157,7 @@ func provideTemporalService(temporalClient *temporal.TemporalClient, cfg *config
 	return temporal.NewService(temporalClient, cfg, log)
 }
 
+// Service to handle server startup
 func startServer(
 	lc fx.Lifecycle,
 	cfg *config.Configuration,
@@ -253,10 +165,8 @@ func startServer(
 	consumer kafka.MessageConsumer,
 	eventRepo events.Repository,
 	temporalClient *temporal.TemporalClient,
-	temporalService *temporal.Service,
 	webhookService *webhook.WebhookService,
 	router *pubsubRouter.Router,
-	onboardingService service.OnboardingService,
 	log *logger.Logger,
 ) {
 	mode := cfg.Deployment.Mode
@@ -264,6 +174,7 @@ func startServer(
 		mode = types.ModeLocal
 	}
 
+	// Handle different modes
 	switch mode {
 	case types.ModeLocal:
 		if consumer == nil {
@@ -271,39 +182,20 @@ func startServer(
 		}
 		startAPIServer(lc, r, cfg, log)
 		startConsumer(lc, consumer, eventRepo, cfg, log)
-		startMessageRouter(lc, router, webhookService, onboardingService, log)
-		startTemporalWorker(lc, temporalClient, &cfg.Temporal, log)
+		startMessageRouter(lc, router, webhookService, log)
+
 	case types.ModeAPI:
 		startAPIServer(lc, r, cfg, log)
-		startMessageRouter(lc, router, webhookService, onboardingService, log)
+		startMessageRouter(lc, router, webhookService, log)
 
 	case types.ModeTemporalWorker:
 		startTemporalWorker(lc, temporalClient, &cfg.Temporal, log)
-	case types.ModeConsumer:
-		if consumer == nil {
-			log.Fatal("Kafka consumer required for consumer mode")
-		}
-		startConsumer(lc, consumer, eventRepo, cfg, log)
-	case types.ModeAWSLambdaAPI:
-		startAWSLambdaAPI(r)
-		startMessageRouter(lc, router, webhookService, onboardingService, log)
-	case types.ModeAWSLambdaConsumer:
-		startAWSLambdaConsumer(eventRepo, cfg, log)
 	default:
 		log.Fatalf("Unknown deployment mode: %s", mode)
 	}
 }
 
-func startTemporalWorker(
-	lc fx.Lifecycle,
-	temporalClient *temporal.TemporalClient,
-	cfg *config.TemporalConfig,
-	log *logger.Logger,
-) {
-	worker := temporal.NewWorker(temporalClient, *cfg, log)
-	worker.RegisterWithLifecycle(lc)
-}
-
+// API Server Handler
 func startAPIServer(
 	lc fx.Lifecycle,
 	r *gin.Engine,
@@ -328,6 +220,7 @@ func startAPIServer(
 	})
 }
 
+// Kafka Consumer for handling messages
 func startConsumer(
 	lc fx.Lifecycle,
 	consumer kafka.MessageConsumer,
@@ -347,45 +240,7 @@ func startConsumer(
 	})
 }
 
-func startAWSLambdaAPI(r *gin.Engine) {
-	ginLambda := ginadapter.New(r)
-	lambda.Start(ginLambda.ProxyWithContext)
-}
-
-func startAWSLambdaConsumer(eventRepo events.Repository, cfg *config.Configuration, log *logger.Logger) {
-	handler := func(ctx context.Context, kafkaEvent lambdaEvents.KafkaEvent) error {
-		log.Debugf("Received Kafka event: %+v", kafkaEvent)
-
-		for _, record := range kafkaEvent.Records {
-			for _, r := range record {
-				log.Debugf("Processing record: topic=%s, partition=%d, offset=%d",
-					r.Topic, r.Partition, r.Offset)
-
-				// TODO decide the repository to use based on the event topic and properties
-				// For now we will use the event repository from the events topic
-
-				// Decode base64 payload first
-				decodedPayload, err := base64.StdEncoding.DecodeString(string(r.Value))
-				if err != nil {
-					log.Errorf("Failed to decode base64 payload: %v", err)
-					continue
-				}
-
-				if err := handleEventConsumption(cfg, log, eventRepo, decodedPayload); err != nil {
-					log.Errorf("Failed to process event: %v, payload: %s", err, string(decodedPayload))
-					continue
-				}
-
-				log.Infof("Successfully processed event: topic=%s, partition=%d, offset=%d",
-					r.Topic, r.Partition, r.Offset)
-			}
-		}
-		return nil
-	}
-
-	lambda.Start(handler)
-}
-
+// Handle consumption of Kafka messages
 func consumeMessages(consumer kafka.MessageConsumer, eventRepo events.Repository, cfg *config.Configuration, log *logger.Logger) {
 	messages, err := consumer.Subscribe(cfg.Kafka.Topic)
 	if err != nil {
@@ -402,6 +257,7 @@ func consumeMessages(consumer kafka.MessageConsumer, eventRepo events.Repository
 	}
 }
 
+// Handle event consumption and insertion into the event repo
 func handleEventConsumption(cfg *config.Configuration, log *logger.Logger, eventRepo events.Repository, payload []byte) error {
 	var event events.Event
 	if err := json.Unmarshal(payload, &event); err != nil {
@@ -413,64 +269,72 @@ func handleEventConsumption(cfg *config.Configuration, log *logger.Logger, event
 
 	eventsToInsert := []*events.Event{&event}
 
-	if cfg.Billing.TenantID != "" {
-		// Create a billing copy with the tenant ID as the external customer ID
-		billingEvent := events.NewEvent(
-			"tenant_event", // Standardized event name for billing
-			cfg.Billing.TenantID,
-			event.TenantID, // Use original tenant ID as external customer ID
-			map[string]interface{}{
-				"original_event_id":   event.ID,
-				"original_event_name": event.EventName,
-				"original_timestamp":  event.Timestamp,
-				"tenant_id":           event.TenantID,
-				"source":              event.Source,
-			},
-			time.Now(),
-			"", // Customer ID will be looked up by external ID
-			"", // Generate new ID
-			"system",
-		)
-		eventsToInsert = append(eventsToInsert, billingEvent)
-	}
-
-	// Insert both events in a single operation
+	// Insert events in a single operation
 	if err := eventRepo.BulkInsertEvents(context.Background(), eventsToInsert); err != nil {
 		log.Errorf("Failed to insert events: %v, original event: %+v", err, event)
 		return err
 	}
 
-	log.Debugf(
-		"Successfully processed event with lag : %v ms : %+v",
-		time.Since(event.Timestamp).Milliseconds(), event,
-	)
+	log.Debugf("Successfully processed event with lag: %v ms : %+v", time.Since(event.Timestamp).Milliseconds(), event)
 	return nil
 }
 
+// Start Message Router
 func startMessageRouter(
 	lc fx.Lifecycle,
 	router *pubsubRouter.Router,
 	webhookService *webhook.WebhookService,
-	onboardingService service.OnboardingService,
-	logger *logger.Logger,
+	log *logger.Logger,
 ) {
 	// Register handlers before starting the router
 	webhookService.RegisterHandler(router)
-	onboardingService.RegisterHandler(router)
 
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			logger.Info("starting message router")
+			log.Info("Starting message router")
 			go func() {
 				if err := router.Run(); err != nil {
-					logger.Errorw("message router failed", "error", err)
+					log.Errorw("Message router failed", "error", err)
 				}
 			}()
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {
-			logger.Info("stopping message router")
+			log.Info("Stopping message router")
 			return router.Close()
 		},
 	})
+}
+
+func startAWSLambdaAPI(r *gin.Engine) {
+	ginLambda := ginadapter.New(r)
+	lambda.Start(ginLambda.ProxyWithContext)
+}
+
+func startAWSLambdaConsumer(eventRepo events.Repository, cfg *config.Configuration, log *logger.Logger) {
+	handler := func(ctx context.Context, kafkaEvent lambdaEvents.KafkaEvent) error {
+		log.Debugf("Received Kafka event: %+v", kafkaEvent)
+
+		for _, record := range kafkaEvent.Records {
+			for _, r := range record {
+				log.Debugf("Processing record: topic=%s, partition=%d, offset=%d", r.Topic, r.Partition, r.Offset)
+				// Decode base64 payload first
+				decodedPayload, err := base64.StdEncoding.DecodeString(string(r.Value))
+				if err != nil {
+					log.Errorf("Failed to decode base64 payload: %v", err)
+					continue
+				}
+
+				if err := handleEventConsumption(cfg, log, eventRepo, decodedPayload); err != nil {
+					log.Errorf("Failed to process event: %v, payload: %s", err, string(decodedPayload))
+					continue
+				}
+
+				log.Infof("Successfully processed event: topic=%s, partition=%d, offset=%d", r.Topic, r.Partition, r.Offset)
+			}
+		}
+		return nil
+	}
+
+	lambda.Start(handler)
 }
