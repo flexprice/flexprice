@@ -281,7 +281,7 @@ func (s *subscriptionService) GetSubscription(ctx context.Context, id string) (*
 	response.Plan = plan
 
 	// expand customer
-	customerService := NewCustomerService(s.CustomerRepo, s.SubRepo, s.InvoiceRepo, s.WalletRepo)
+	customerService := NewCustomerService(s.ServiceParams)
 	customer, err := customerService.GetCustomer(ctx, subscription.CustomerID)
 	if err != nil {
 		return nil, err

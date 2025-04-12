@@ -15,9 +15,11 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	"github.com/flexprice/flexprice/internal/domain/task"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
+	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/pdf"
 	"github.com/flexprice/flexprice/internal/postgres"
@@ -52,10 +54,14 @@ type ServiceParams struct {
 	PaymentRepo     payment.Repository
 	SecretRepo      secret.Repository
 	EnvironmentRepo environment.Repository
+	TaskRepo        task.Repository
 
 	// Publishers
 	EventPublisher   publisher.EventPublisher
 	WebhookPublisher webhookPublisher.WebhookPublisher
+
+	// http client
+	Client httpclient.Client
 }
 
 // Common service params
@@ -83,6 +89,8 @@ func NewServiceParams(
 	eventPublisher publisher.EventPublisher,
 	webhookPublisher webhookPublisher.WebhookPublisher,
 	s3Service s3.Service,
+	client httpclient.Client,
+	taskRepo task.Repository,
 ) ServiceParams {
 	return ServiceParams{
 		Logger:           logger,
@@ -108,5 +116,7 @@ func NewServiceParams(
 		EventPublisher:   eventPublisher,
 		WebhookPublisher: webhookPublisher,
 		S3:               s3Service,
+		Client:           client,
+		TaskRepo:         taskRepo,
 	}
 }

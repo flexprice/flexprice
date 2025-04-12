@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 )
 
 type InvoicePayloadBuilder struct {
@@ -20,10 +21,7 @@ func NewInvoicePayloadBuilder(services *Services) PayloadBuilder {
 
 // BuildPayload builds the webhook payload for invoice events
 func (b *InvoicePayloadBuilder) BuildPayload(ctx context.Context, eventType string, data json.RawMessage) (json.RawMessage, error) {
-	parsedPayload := struct {
-		InvoiceID string `json:"invoice_id"`
-		TenantID  string `json:"tenant_id"`
-	}{}
+	var parsedPayload webhookDto.InternalInvoiceEvent
 
 	err := json.Unmarshal(data, &parsedPayload)
 	if err != nil {
@@ -49,6 +47,8 @@ func (b *InvoicePayloadBuilder) BuildPayload(ctx context.Context, eventType stri
 		return nil, err
 	}
 
+	payload := webhookDto.NewInvoiceWebhookPayload(invoice)
+
 	// Return the invoice response as is
-	return json.Marshal(invoice)
+	return json.Marshal(payload)
 }

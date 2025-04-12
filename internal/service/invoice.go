@@ -1015,6 +1015,7 @@ func (s *invoiceService) publishInternalWebhookEvent(ctx context.Context, eventN
 		InvoiceID: invoiceID,
 		TenantID:  types.GetTenantID(ctx),
 	})
+
 	if err != nil {
 		s.Logger.Errorw("failed to marshal webhook payload", "error", err)
 		return

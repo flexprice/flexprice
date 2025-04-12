@@ -48,14 +48,32 @@ func (s *TaskServiceSuite) TearDownTest() {
 
 func (s *TaskServiceSuite) setupService() {
 	s.service = NewTaskService(
-		s.GetStores().TaskRepo,
-		s.GetStores().EventRepo,
-		s.GetStores().MeterRepo,
-		s.GetStores().CustomerRepo,
-		s.GetPublisher(),
-		s.GetDB(),
-		s.GetLogger(),
-		s.client,
+		ServiceParams{
+			Logger:           s.GetLogger(),
+			Config:           s.GetConfig(),
+			DB:               s.GetDB(),
+			Client:           s.client,
+			EventRepo:        s.GetStores().EventRepo,
+			TaskRepo:         s.GetStores().TaskRepo,
+			CustomerRepo:     s.GetStores().CustomerRepo,
+			EventPublisher:   s.GetPublisher(),
+			WebhookPublisher: s.GetWebhookPublisher(),
+			PDFGenerator:     s.GetPDFGenerator(),
+			AuthRepo:         s.GetStores().AuthRepo,
+			UserRepo:         s.GetStores().UserRepo,
+			EnvironmentRepo:  s.GetStores().EnvironmentRepo,
+			FeatureRepo:      s.GetStores().FeatureRepo,
+			EntitlementRepo:  s.GetStores().EntitlementRepo,
+			PaymentRepo:      s.GetStores().PaymentRepo,
+			SecretRepo:       s.GetStores().SecretRepo,
+			InvoiceRepo:      s.GetStores().InvoiceRepo,
+			WalletRepo:       s.GetStores().WalletRepo,
+			TenantRepo:       s.GetStores().TenantRepo,
+			PlanRepo:         s.GetStores().PlanRepo,
+			PriceRepo:        s.GetStores().PriceRepo,
+			MeterRepo:        s.GetStores().MeterRepo,
+			SubRepo:          s.GetStores().SubscriptionRepo,
+		},
 	)
 }
 

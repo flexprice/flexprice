@@ -14,18 +14,10 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
-	"github.com/flexprice/flexprice/internal/domain/customer"
-	"github.com/flexprice/flexprice/internal/domain/events"
-	"github.com/flexprice/flexprice/internal/domain/invoice"
-	"github.com/flexprice/flexprice/internal/domain/meter"
-	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/task"
-	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/postgres"
-	"github.com/flexprice/flexprice/internal/publisher"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -38,38 +30,14 @@ type TaskService interface {
 }
 
 type taskService struct {
-	taskRepo         task.Repository
-	eventRepo        events.Repository
-	meterRepo        meter.Repository
-	customerRepo     customer.Repository
-	subscriptionRepo subscription.Repository
-	invoiceRepo      invoice.Repository
-	walletRepo       wallet.Repository
-	publisher        publisher.EventPublisher
-	logger           *logger.Logger
-	db               postgres.IClient
-	client           httpclient.Client
+	ServiceParams
 }
 
 func NewTaskService(
-	taskRepo task.Repository,
-	eventRepo events.Repository,
-	meterRepo meter.Repository,
-	customerRepo customer.Repository,
-	publisher publisher.EventPublisher,
-	db postgres.IClient,
-	logger *logger.Logger,
-	client httpclient.Client,
+	serviceParams ServiceParams,
 ) TaskService {
 	return &taskService{
-		taskRepo:     taskRepo,
-		eventRepo:    eventRepo,
-		meterRepo:    meterRepo,
-		customerRepo: customerRepo,
-		publisher:    publisher,
-		logger:       logger,
-		db:           db,
-		client:       client,
+		ServiceParams: serviceParams,
 	}
 }
 
@@ -83,15 +51,15 @@ func (s *taskService) CreateTask(ctx context.Context, req dto.CreateTaskRequest)
 		return nil, err
 	}
 
-	if err := s.taskRepo.Create(ctx, t); err != nil {
-		s.logger.Error("failed to create task", "error", err)
+	if err := s.TaskRepo.Create(ctx, t); err != nil {
+		s.Logger.Error("failed to create task", "error", err)
 		return nil, err
 	}
 
 	// Start processing the task in sync for now
 	// TODO: Start processing the task in async using temporal
 	if err := s.ProcessTask(ctx, t.ID); err != nil {
-		s.logger.Error("failed to process task", "error", err)
+		s.Logger.Error("failed to process task", "error", err)
 		return nil, err
 	}
 
@@ -99,7 +67,7 @@ func (s *taskService) CreateTask(ctx context.Context, req dto.CreateTaskRequest)
 }
 
 func (s *taskService) GetTask(ctx context.Context, id string) (*dto.TaskResponse, error) {
-	t, err := s.taskRepo.Get(ctx, id)
+	t, err := s.TaskRepo.Get(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -108,12 +76,12 @@ func (s *taskService) GetTask(ctx context.Context, id string) (*dto.TaskResponse
 }
 
 func (s *taskService) ListTasks(ctx context.Context, filter *types.TaskFilter) (*dto.ListTasksResponse, error) {
-	tasks, err := s.taskRepo.List(ctx, filter)
+	tasks, err := s.TaskRepo.List(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
 
-	count, err := s.taskRepo.Count(ctx, filter)
+	count, err := s.TaskRepo.Count(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +102,7 @@ func (s *taskService) ListTasks(ctx context.Context, filter *types.TaskFilter) (
 }
 
 func (s *taskService) UpdateTaskStatus(ctx context.Context, id string, status types.TaskStatus) error {
-	t, err := s.taskRepo.Get(ctx, id)
+	t, err := s.TaskRepo.Get(ctx, id)
 	if err != nil {
 		return ierr.WithError(err).
 			WithHint("Failed to get task").
@@ -163,7 +131,7 @@ func (s *taskService) UpdateTaskStatus(ctx context.Context, id string, status ty
 		t.FailedAt = &now
 	}
 
-	if err := s.taskRepo.Update(ctx, t); err != nil {
+	if err := s.TaskRepo.Update(ctx, t); err != nil {
 		return ierr.WithError(err).
 			WithHint("Failed to update task").
 			Mark(ierr.ErrValidation)
@@ -181,7 +149,7 @@ func (s *taskService) ProcessTask(ctx context.Context, id string) error {
 	}
 
 	// Refresh task after status update
-	t, err := s.taskRepo.Get(ctx, id)
+	t, err := s.TaskRepo.Get(ctx, id)
 	if err != nil {
 		return ierr.WithError(err).
 			WithHint("Failed to get task").
@@ -189,7 +157,7 @@ func (s *taskService) ProcessTask(ctx context.Context, id string) error {
 	}
 
 	// Create progress tracker with the task object
-	tracker := newProgressTracker(ctx, t, 100, 30*time.Second, s.taskRepo, s.logger)
+	tracker := newProgressTracker(ctx, t, 100, 30*time.Second, s.TaskRepo, s.Logger)
 
 	// Process based on entity type
 	var processErr error
@@ -214,14 +182,14 @@ func (s *taskService) ProcessTask(ctx context.Context, id string) error {
 	if processErr != nil {
 		// Ensure we mark the task as failed
 		if err := s.UpdateTaskStatus(ctx, id, types.TaskStatusFailed); err != nil {
-			s.logger.Error("failed to update task status", "error", err)
+			s.Logger.Error("failed to update task status", "error", err)
 		}
 		return processErr
 	}
 
 	// Only mark as completed if there was no error
 	if err := s.UpdateTaskStatus(ctx, id, types.TaskStatusCompleted); err != nil {
-		s.logger.Error("failed to update task status", "error", err)
+		s.Logger.Error("failed to update task status", "error", err)
 		return err
 	}
 
@@ -244,7 +212,7 @@ func (s *taskService) downloadFile(ctx context.Context, t *task.Task) ([]byte, e
 				Mark(ierr.ErrValidation)
 		}
 		downloadURL = fmt.Sprintf("https://drive.google.com/uc?export=download&id=%s", fileID)
-		s.logger.Debugw("converted Google Drive URL", "original", t.FileURL, "download_url", downloadURL)
+		s.Logger.Debugw("converted Google Drive URL", "original", t.FileURL, "download_url", downloadURL)
 	}
 
 	// Download file
@@ -253,16 +221,16 @@ func (s *taskService) downloadFile(ctx context.Context, t *task.Task) ([]byte, e
 		URL:    downloadURL,
 	}
 
-	resp, err := s.client.Send(ctx, req)
+	resp, err := s.Client.Send(ctx, req)
 	if err != nil {
-		s.logger.Error("failed to download file", "error", err, "url", downloadURL)
+		s.Logger.Error("failed to download file", "error", err, "url", downloadURL)
 		errorSummary := fmt.Sprintf("Failed to download file: %v", err)
 		t.ErrorSummary = &errorSummary
 		return nil, err
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		s.logger.Error("failed to download file", "status_code", resp.StatusCode, "url", downloadURL)
+		s.Logger.Error("failed to download file", "status_code", resp.StatusCode, "url", downloadURL)
 		errorSummary := fmt.Sprintf("Failed to download file: HTTP %d", resp.StatusCode)
 		t.ErrorSummary = &errorSummary
 		return nil, ierr.NewError(fmt.Sprintf("failed to download file: %d", resp.StatusCode)).
@@ -279,7 +247,7 @@ func (s *taskService) downloadFile(ctx context.Context, t *task.Task) ([]byte, e
 	if len(resp.Body) < previewLen {
 		previewLen = len(resp.Body)
 	}
-	s.logger.Debugw("received file content preview",
+	s.Logger.Debugw("received file content preview",
 		"preview", string(resp.Body[:previewLen]),
 		"content_type", resp.Headers["Content-Type"],
 		"content_length", len(resp.Body))
@@ -293,7 +261,7 @@ func (s *taskService) prepareCSVReader(fileContent []byte) (*csv.Reader, error) 
 	if len(fileContent) >= 3 && fileContent[0] == 0xEF && fileContent[1] == 0xBB && fileContent[2] == 0xBF {
 		// BOM detected, remove it
 		fileContent = fileContent[3:]
-		s.logger.Debug("DEBUG: BOM detected and removed from file content")
+		s.Logger.Debug("DEBUG: BOM detected and removed from file content")
 	}
 
 	reader := csv.NewReader(bytes.NewReader(fileContent))
@@ -335,7 +303,7 @@ func (s *taskService) processCSVFile(
 		if len(fileContent) < previewLen {
 			previewLen = len(fileContent)
 		}
-		s.logger.Error("failed to read CSV headers",
+		s.Logger.Error("failed to read CSV headers",
 			"error", err,
 			"content_preview", string(fileContent[:previewLen]))
 		errorSummary := fmt.Sprintf("Failed to read CSV headers: %v", err)
@@ -348,7 +316,7 @@ func (s *taskService) processCSVFile(
 			Mark(ierr.ErrValidation)
 	}
 
-	s.logger.Debugw("parsed CSV headers", "headers", headers)
+	s.Logger.Debugw("parsed CSV headers", "headers", headers)
 
 	// Process headers with the provided function
 	standardHeaders, specialColumns, err := processHeadersFunc(headers)
@@ -359,8 +327,8 @@ func (s *taskService) processCSVFile(
 	}
 
 	// Debug: Print processed headers
-	s.logger.Debug("DEBUG: Processed standard headers: %#v\n", standardHeaders)
-	s.logger.Debug("DEBUG: Special columns: %#v\n", specialColumns)
+	s.Logger.Debug("DEBUG: Processed standard headers: %#v\n", standardHeaders)
+	s.Logger.Debug("DEBUG: Special columns: %#v\n", specialColumns)
 
 	// Validate required columns
 	if err := validateHeaders(standardHeaders); err != nil {
@@ -381,7 +349,7 @@ func (s *taskService) processCSVFile(
 			break
 		}
 		if err != nil {
-			s.logger.Error("failed to read CSV line", "line", lineNum, "error", err)
+			s.Logger.Error("failed to read CSV line", "line", lineNum, "error", err)
 			errorLines = append(errorLines, fmt.Sprintf("Line %d: Failed to read - %v", lineNum, err))
 			tracker.Increment(false, err)
 			failureCount++
@@ -420,8 +388,8 @@ func (s *taskService) processCSVFile(
 		}
 
 		// Update the task one final time to ensure error summary is saved
-		if err := s.taskRepo.Update(ctx, t); err != nil {
-			s.logger.Error("failed to update task with error summary", "error", err)
+		if err := s.TaskRepo.Update(ctx, t); err != nil {
+			s.Logger.Error("failed to update task with error summary", "error", err)
 		}
 
 		entityName := strings.ToLower(string(t.EntityType))
@@ -482,32 +450,32 @@ func (s *taskService) processEvents(ctx context.Context, t *task.Task, tracker t
 
 		// Parse property fields
 		if err := s.parsePropertyFields(record, propertyColumns, eventReq); err != nil {
-			s.logger.Error("failed to parse property fields", "line", lineNum, "error", err)
+			s.Logger.Error("failed to parse property fields", "line", lineNum, "error", err)
 			return false, err
 		}
 
 		// Validate the event request
 		if err := eventReq.Validate(); err != nil {
-			s.logger.Error("failed to validate event", "line", lineNum, "error", err)
+			s.Logger.Error("failed to validate event", "line", lineNum, "error", err)
 			return false, err
 		}
 
 		// Parse timestamp
 		if err := s.parseTimestamp(eventReq); err != nil {
-			s.logger.Error("failed to parse timestamp", "line", lineNum, "error", err)
+			s.Logger.Error("failed to parse timestamp", "line", lineNum, "error", err)
 			return false, err
 		}
 
 		// Process event
 		eventSvc := NewEventService(
-			s.eventRepo,
-			s.meterRepo,
-			s.publisher,
-			s.logger,
+			s.EventRepo,
+			s.MeterRepo,
+			s.EventPublisher,
+			s.Logger,
 		)
 		err := eventSvc.CreateEvent(ctx, eventReq)
 		if err != nil {
-			s.logger.Error("failed to create event", "line", lineNum, "error", err)
+			s.Logger.Error("failed to create event", "line", lineNum, "error", err)
 			return false, err
 		}
 
@@ -528,7 +496,7 @@ func (s *taskService) processEvents(ctx context.Context, t *task.Task, tracker t
 func (s *taskService) processCustomers(ctx context.Context, t *task.Task, tracker task.ProgressTracker) error {
 	// Define header processor for customers
 	processCustomerHeaders := func(headers []string) ([]string, map[int]string, error) {
-		s.logger.Debug("DEBUG: Processing customer headers: %v\n", headers)
+		s.Logger.Debug("DEBUG: Processing customer headers: %v\n", headers)
 		metadataColumns := make(map[int]string) // index -> metadata key
 		standardHeaders := make([]string, 0)
 		for i, header := range headers {
@@ -543,14 +511,14 @@ func (s *taskService) processCustomers(ctx context.Context, t *task.Task, tracke
 			if strings.HasPrefix(header, "metadata.") {
 				metadataKey := strings.TrimPrefix(header, "metadata.")
 				metadataColumns[i] = metadataKey
-				s.logger.Debug("DEBUG: Found metadata column at index %d: %s -> %s\n", i, header, metadataKey)
+				s.Logger.Debug("DEBUG: Found metadata column at index %d: %s -> %s\n", i, header, metadataKey)
 			} else {
 				standardHeaders = append(standardHeaders, header)
-				s.logger.Debug("DEBUG: Found standard column at index %d: %s\n", i, header)
+				s.Logger.Debug("DEBUG: Found standard column at index %d: %s\n", i, header)
 			}
 		}
-		s.logger.Debug("DEBUG: Final standard headers: %v\n", standardHeaders)
-		s.logger.Debug("DEBUG: Final metadata columns: %v\n", metadataColumns)
+		s.Logger.Debug("DEBUG: Final standard headers: %v\n", standardHeaders)
+		s.Logger.Debug("DEBUG: Final metadata columns: %v\n", metadataColumns)
 		return standardHeaders, metadataColumns, nil
 	}
 
@@ -564,7 +532,7 @@ func (s *taskService) processCustomers(ctx context.Context, t *task.Task, tracke
 		customerID := ""
 
 		// Process customer
-		customerSvc := NewCustomerService(s.customerRepo, s.subscriptionRepo, s.invoiceRepo, s.walletRepo)
+		customerSvc := NewCustomerService(s.ServiceParams)
 
 		// Map standard fields
 		for i, header := range standardHeaders {
@@ -598,17 +566,17 @@ func (s *taskService) processCustomers(ctx context.Context, t *task.Task, tracke
 
 		// Parse metadata fields
 		if err := s.parseCustomerMetadataFields(record, metadataColumns, customerReq); err != nil {
-			s.logger.Error("failed to parse metadata fields", "line", lineNum, "error", err)
+			s.Logger.Error("failed to parse metadata fields", "line", lineNum, "error", err)
 			return false, err
 		}
 
-		s.logger.Debugw("parsed customer request", "customer_req", customerReq)
+		s.Logger.Debugw("parsed customer request", "customer_req", customerReq)
 
 		// Check if customer with this external ID already exists
 		if customerID != "" {
 			customer, err := customerSvc.GetCustomer(ctx, customerID)
 			if err != nil {
-				s.logger.Error("failed to search for existing customer", "line", lineNum, "external_id", customerReq.ExternalID, "error", err)
+				s.Logger.Error("failed to search for existing customer", "line", lineNum, "external_id", customerReq.ExternalID, "error", err)
 				return false, err
 			}
 
@@ -664,11 +632,11 @@ func (s *taskService) processCustomers(ctx context.Context, t *task.Task, tracke
 				// Update the customer
 				_, err := customerSvc.UpdateCustomer(ctx, existingCustomer.ID, updateReq)
 				if err != nil {
-					s.logger.Error("failed to update customer", "line", lineNum, "customer_id", existingCustomer.ID, "error", err)
+					s.Logger.Error("failed to update customer", "line", lineNum, "customer_id", existingCustomer.ID, "error", err)
 					return false, err
 				}
 
-				s.logger.Info("updated existing customer", "line", lineNum, "customer_id", existingCustomer.ID, "external_id", customerReq.ExternalID)
+				s.Logger.Info("updated existing customer", "line", lineNum, "customer_id", existingCustomer.ID, "external_id", customerReq.ExternalID)
 				return true, nil
 			}
 		}
@@ -676,11 +644,11 @@ func (s *taskService) processCustomers(ctx context.Context, t *task.Task, tracke
 		// If no existing customer found, create a new one
 		_, err := customerSvc.CreateCustomer(ctx, *customerReq)
 		if err != nil {
-			s.logger.Error("failed to create customer", "line", lineNum, "error", err)
+			s.Logger.Error("failed to create customer", "line", lineNum, "error", err)
 			return false, err
 		}
 
-		s.logger.Info("created new customer", "line", lineNum, "external_id", customerReq.ExternalID)
+		s.Logger.Info("created new customer", "line", lineNum, "external_id", customerReq.ExternalID)
 		return true, nil
 	}
 

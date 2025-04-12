@@ -2,15 +2,14 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
-	"github.com/flexprice/flexprice/internal/domain/invoice"
-	"github.com/flexprice/flexprice/internal/domain/subscription"
-	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/samber/lo"
 )
 
@@ -24,14 +23,11 @@ type CustomerService interface {
 }
 
 type customerService struct {
-	repo             customer.Repository
-	subscriptionRepo subscription.Repository
-	invoiceRepo      invoice.Repository
-	walletRepo       wallet.Repository
+	ServiceParams
 }
 
-func NewCustomerService(repo customer.Repository, subscriptionRepo subscription.Repository, invoiceRepo invoice.Repository, walletRepo wallet.Repository) CustomerService {
-	return &customerService{repo: repo, subscriptionRepo: subscriptionRepo, invoiceRepo: invoiceRepo, walletRepo: walletRepo}
+func NewCustomerService(params ServiceParams) CustomerService {
+	return &customerService{ServiceParams: params}
 }
 
 func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCustomerRequest) (*dto.CustomerResponse, error) {
@@ -48,11 +44,11 @@ func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCust
 			Mark(ierr.ErrValidation)
 	}
 
-	if err := s.repo.Create(ctx, cust); err != nil {
+	if err := s.CustomerRepo.Create(ctx, cust); err != nil {
 		// No need to wrap the error as the repository already returns properly formatted errors
 		return nil, err
 	}
-
+	s.publishWebhookEvent(ctx, types.WebhookEventCustomerCreated, cust.ID)
 	return &dto.CustomerResponse{Customer: cust}, nil
 }
 
@@ -63,7 +59,7 @@ func (s *customerService) GetCustomer(ctx context.Context, id string) (*dto.Cust
 			Mark(ierr.ErrValidation)
 	}
 
-	customer, err := s.repo.Get(ctx, id)
+	customer, err := s.CustomerRepo.Get(ctx, id)
 	if err != nil {
 		// No need to wrap the error as the repository already returns properly formatted errors
 		return nil, err
@@ -85,13 +81,13 @@ func (s *customerService) GetCustomers(ctx context.Context, filter *types.Custom
 			Mark(ierr.ErrValidation)
 	}
 
-	customers, err := s.repo.List(ctx, filter)
+	customers, err := s.CustomerRepo.List(ctx, filter)
 	if err != nil {
 		// No need to wrap the error as the repository already returns properly formatted errors
 		return nil, err
 	}
 
-	total, err := s.repo.Count(ctx, filter)
+	total, err := s.CustomerRepo.Count(ctx, filter)
 	if err != nil {
 		// No need to wrap the error as the repository already returns properly formatted errors
 		return nil, err
@@ -119,7 +115,7 @@ func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto
 		return nil, err
 	}
 
-	cust, err := s.repo.Get(ctx, id)
+	cust, err := s.CustomerRepo.Get(ctx, id)
 	if err != nil {
 		// No need to wrap the error as the repository already returns properly formatted errors
 		return nil, err
@@ -181,11 +177,12 @@ func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto
 	cust.UpdatedAt = time.Now().UTC()
 	cust.UpdatedBy = types.GetUserID(ctx)
 
-	if err := s.repo.Update(ctx, cust); err != nil {
+	if err := s.CustomerRepo.Update(ctx, cust); err != nil {
 		// No need to wrap the error as the repository already returns properly formatted errors
 		return nil, err
 	}
 
+	s.publishWebhookEvent(ctx, types.WebhookEventCustomerUpdated, cust.ID)
 	return &dto.CustomerResponse{Customer: cust}, nil
 }
 
@@ -196,7 +193,7 @@ func (s *customerService) DeleteCustomer(ctx context.Context, id string) error {
 			Mark(ierr.ErrValidation)
 	}
 
-	customer, err := s.repo.Get(ctx, id)
+	customer, err := s.CustomerRepo.Get(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -211,7 +208,7 @@ func (s *customerService) DeleteCustomer(ctx context.Context, id string) error {
 	subscriptionFilter.CustomerID = id
 	subscriptionFilter.SubscriptionStatusNotIn = []types.SubscriptionStatus{types.SubscriptionStatusCancelled}
 	subscriptionFilter.Limit = lo.ToPtr(1)
-	subscriptions, err := s.subscriptionRepo.List(ctx, subscriptionFilter)
+	subscriptions, err := s.SubRepo.List(ctx, subscriptionFilter)
 	if err != nil {
 		return err
 	}
@@ -225,7 +222,7 @@ func (s *customerService) DeleteCustomer(ctx context.Context, id string) error {
 	invoiceFilter := types.NewInvoiceFilter()
 	invoiceFilter.CustomerID = id
 	invoiceFilter.Limit = lo.ToPtr(1)
-	invoices, err := s.invoiceRepo.List(ctx, invoiceFilter)
+	invoices, err := s.InvoiceRepo.List(ctx, invoiceFilter)
 	if err != nil {
 		return err
 	}
@@ -236,7 +233,7 @@ func (s *customerService) DeleteCustomer(ctx context.Context, id string) error {
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	wallets, err := s.walletRepo.GetWalletsByCustomerID(ctx, id)
+	wallets, err := s.WalletRepo.GetWalletsByCustomerID(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -247,10 +244,11 @@ func (s *customerService) DeleteCustomer(ctx context.Context, id string) error {
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	if err := s.repo.Delete(ctx, id); err != nil {
+	if err := s.CustomerRepo.Delete(ctx, id); err != nil {
 		return err
 	}
 
+	s.publishWebhookEvent(ctx, types.WebhookEventCustomerDeleted, id)
 	return nil
 }
 
@@ -261,10 +259,33 @@ func (s *customerService) GetCustomerByLookupKey(ctx context.Context, lookupKey 
 			Mark(ierr.ErrValidation)
 	}
 
-	customer, err := s.repo.GetByLookupKey(ctx, lookupKey)
+	customer, err := s.CustomerRepo.GetByLookupKey(ctx, lookupKey)
 	if err != nil {
 		return nil, err
 	}
 
 	return &dto.CustomerResponse{Customer: customer}, nil
+}
+
+func (s *customerService) publishWebhookEvent(ctx context.Context, eventName string, customerID string) {
+	webhookPayload, err := json.Marshal(webhookDto.InternalCustomerEvent{
+		CustomerID: customerID,
+		TenantID:   types.GetTenantID(ctx),
+	})
+
+	if err != nil {
+		s.Logger.Errorw("failed to marshal webhook payload", "error", err)
+		return
+	}
+
+	webhookEvent := &types.WebhookEvent{
+		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WEBHOOK_EVENT),
+		EventName: eventName,
+		TenantID:  types.GetTenantID(ctx),
+		Timestamp: time.Now().UTC(),
+		Payload:   json.RawMessage(webhookPayload),
+	}
+	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
+		s.Logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
+	}
 }

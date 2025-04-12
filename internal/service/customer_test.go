@@ -18,10 +18,9 @@ import (
 )
 
 type CustomerServiceSuite struct {
-	suite.Suite
-	ctx             context.Context
-	customerService *customerService
-	repo            *testutil.InMemoryCustomerStore
+	testutil.BaseServiceTestSuite
+	service CustomerService
+	ctx     context.Context
 }
 
 func TestCustomerService(t *testing.T) {
@@ -29,14 +28,31 @@ func TestCustomerService(t *testing.T) {
 }
 
 func (s *CustomerServiceSuite) SetupTest() {
+	s.BaseServiceTestSuite.SetupTest()
 	s.ctx = context.Background()
-	s.repo = testutil.NewInMemoryCustomerStore()
-	s.customerService = &customerService{
-		repo:             s.repo,
-		subscriptionRepo: testutil.NewInMemorySubscriptionStore(),
-		invoiceRepo:      testutil.NewInMemoryInvoiceStore(),
-		walletRepo:       testutil.NewInMemoryWalletStore(),
-	}
+	s.service = NewCustomerService(ServiceParams{
+		Logger:           s.GetLogger(),
+		Config:           s.GetConfig(),
+		DB:               s.GetDB(),
+		SubRepo:          s.GetStores().SubscriptionRepo,
+		PlanRepo:         s.GetStores().PlanRepo,
+		PriceRepo:        s.GetStores().PriceRepo,
+		EventRepo:        s.GetStores().EventRepo,
+		MeterRepo:        s.GetStores().MeterRepo,
+		CustomerRepo:     s.GetStores().CustomerRepo,
+		InvoiceRepo:      s.GetStores().InvoiceRepo,
+		EntitlementRepo:  s.GetStores().EntitlementRepo,
+		EnvironmentRepo:  s.GetStores().EnvironmentRepo,
+		FeatureRepo:      s.GetStores().FeatureRepo,
+		TenantRepo:       s.GetStores().TenantRepo,
+		UserRepo:         s.GetStores().UserRepo,
+		AuthRepo:         s.GetStores().AuthRepo,
+		WalletRepo:       s.GetStores().WalletRepo,
+		PaymentRepo:      s.GetStores().PaymentRepo,
+		EventPublisher:   s.GetPublisher(),
+		WebhookPublisher: s.GetWebhookPublisher(),
+	})
+
 }
 
 func (s *CustomerServiceSuite) TestCreateCustomer() {
@@ -104,7 +120,7 @@ func (s *CustomerServiceSuite) TestCreateCustomer() {
 				tc.setup()
 			}
 
-			resp, err := s.customerService.CreateCustomer(s.ctx, tc.request)
+			resp, err := s.service.CreateCustomer(s.ctx, tc.request)
 
 			if tc.expectedError {
 				s.Error(err)
@@ -148,7 +164,7 @@ func (s *CustomerServiceSuite) TestGetCustomer() {
 			"source": "web",
 		},
 	}
-	_ = s.repo.Create(s.ctx, customer)
+	_ = s.GetStores().CustomerRepo.Create(s.ctx, customer)
 
 	testCases := []struct {
 		name             string
@@ -173,7 +189,7 @@ func (s *CustomerServiceSuite) TestGetCustomer() {
 
 	for _, tc := range testCases {
 		s.Run(tc.name, func() {
-			resp, err := s.customerService.GetCustomer(s.ctx, tc.id)
+			resp, err := s.service.GetCustomer(s.ctx, tc.id)
 
 			if tc.expectedError {
 				s.Error(err)
@@ -195,15 +211,13 @@ func (s *CustomerServiceSuite) TestGetCustomer() {
 
 func (s *CustomerServiceSuite) TestGetCustomers() {
 	// Reset and prepopulate the repository with customers
-	s.repo = testutil.NewInMemoryCustomerStore()
-	s.customerService = &customerService{repo: s.repo}
-	_ = s.repo.Create(s.ctx, &domainCustomer.Customer{
+	_ = s.GetStores().CustomerRepo.Create(s.ctx, &domainCustomer.Customer{
 		ID:             "cust-1",
 		Name:           "Customer One",
 		Email:          "one@example.com",
 		AddressCountry: "US",
 	})
-	_ = s.repo.Create(s.ctx, &domainCustomer.Customer{
+	_ = s.GetStores().CustomerRepo.Create(s.ctx, &domainCustomer.Customer{
 		ID:             "cust-2",
 		Name:           "Customer Two",
 		Email:          "two@example.com",
@@ -231,7 +245,7 @@ func (s *CustomerServiceSuite) TestGetCustomers() {
 
 	for _, tc := range testCases {
 		s.Run(tc.name, func() {
-			resp, err := s.customerService.GetCustomers(s.ctx, tc.filter)
+			resp, err := s.service.GetCustomers(s.ctx, tc.filter)
 
 			if tc.expectedError {
 				s.Error(err)
@@ -247,7 +261,7 @@ func (s *CustomerServiceSuite) TestGetCustomers() {
 
 func (s *CustomerServiceSuite) TestUpdateCustomer() {
 	// Prepopulate the repository with a customer
-	_ = s.repo.Create(s.ctx, &domainCustomer.Customer{
+	_ = s.GetStores().CustomerRepo.Create(s.ctx, &domainCustomer.Customer{
 		ID:             "cust-1",
 		Name:           "Old Name",
 		Email:          "old@example.com",
@@ -282,8 +296,8 @@ func (s *CustomerServiceSuite) TestUpdateCustomer() {
 			},
 			setup: func() {
 				// Create a customer to update
-				s.repo.Create(s.ctx, &domainCustomer.Customer{
-					ID:             "cust-1",
+				s.service.CreateCustomer(s.ctx, dto.CreateCustomerRequest{
+					ExternalID:     "cust-1",
 					Name:           "Original Name",
 					AddressCountry: "US",
 				})
@@ -304,7 +318,7 @@ func (s *CustomerServiceSuite) TestUpdateCustomer() {
 
 	for _, tc := range testCases {
 		s.Run(tc.name, func() {
-			resp, err := s.customerService.UpdateCustomer(s.ctx, tc.id, tc.request)
+			resp, err := s.service.UpdateCustomer(s.ctx, tc.id, tc.request)
 
 			if tc.expectedError {
 				s.Error(err)
@@ -343,7 +357,7 @@ func (s *CustomerServiceSuite) TestDeleteCustomer() {
 			name: "delete_existing_customer",
 			id:   "cust-1",
 			setup: func() {
-				_ = s.repo.Create(s.ctx, &domainCustomer.Customer{
+				_ = s.GetStores().CustomerRepo.Create(s.ctx, &domainCustomer.Customer{
 					ID:    "cust-1",
 					Name:  "To Be Deleted",
 					Email: "delete@example.com",
@@ -364,7 +378,7 @@ func (s *CustomerServiceSuite) TestDeleteCustomer() {
 			name: "delete_unpublished_customer",
 			id:   "cust-unpublished",
 			setup: func() {
-				_ = s.repo.Create(s.ctx, &domainCustomer.Customer{
+				_ = s.GetStores().CustomerRepo.Create(s.ctx, &domainCustomer.Customer{
 					ID:    "cust-unpublished",
 					Name:  "Unpublished Customer",
 					Email: "unpublished@example.com",
@@ -380,7 +394,7 @@ func (s *CustomerServiceSuite) TestDeleteCustomer() {
 			name: "customer_with_active_subscription",
 			id:   "cust-2",
 			setup: func() {
-				_ = s.repo.Create(s.ctx, &domainCustomer.Customer{
+				_ = s.GetStores().CustomerRepo.Create(s.ctx, &domainCustomer.Customer{
 					ID:    "cust-2",
 					Name:  "Customer with Subscription",
 					Email: "sub@example.com",
@@ -388,7 +402,7 @@ func (s *CustomerServiceSuite) TestDeleteCustomer() {
 						Status: types.StatusPublished,
 					},
 				})
-				_ = s.customerService.subscriptionRepo.Create(s.ctx, &subscription.Subscription{
+				_ = s.GetStores().SubscriptionRepo.Create(s.ctx, &subscription.Subscription{
 					ID:                 "sub-1",
 					CustomerID:         "cust-2",
 					SubscriptionStatus: types.SubscriptionStatusActive,
@@ -401,7 +415,7 @@ func (s *CustomerServiceSuite) TestDeleteCustomer() {
 			name: "customer_with_invoices",
 			id:   "cust-3",
 			setup: func() {
-				_ = s.repo.Create(s.ctx, &domainCustomer.Customer{
+				_ = s.GetStores().CustomerRepo.Create(s.ctx, &domainCustomer.Customer{
 					ID:    "cust-3",
 					Name:  "Customer with Invoice",
 					Email: "invoice@example.com",
@@ -409,7 +423,7 @@ func (s *CustomerServiceSuite) TestDeleteCustomer() {
 						Status: types.StatusPublished,
 					},
 				})
-				_ = s.customerService.invoiceRepo.Create(s.ctx, &invoice.Invoice{
+				_ = s.GetStores().InvoiceRepo.Create(s.ctx, &invoice.Invoice{
 					ID:         "inv-1",
 					CustomerID: "cust-3",
 				})
@@ -421,7 +435,7 @@ func (s *CustomerServiceSuite) TestDeleteCustomer() {
 			name: "customer_with_wallets",
 			id:   "cust-4",
 			setup: func() {
-				_ = s.repo.Create(s.ctx, &domainCustomer.Customer{
+				_ = s.GetStores().CustomerRepo.Create(s.ctx, &domainCustomer.Customer{
 					ID:    "cust-4",
 					Name:  "Customer with Wallet",
 					Email: "wallet@example.com",
@@ -429,7 +443,7 @@ func (s *CustomerServiceSuite) TestDeleteCustomer() {
 						Status: types.StatusPublished,
 					},
 				})
-				_ = s.customerService.walletRepo.CreateWallet(s.ctx, &wallet.Wallet{
+				_ = s.GetStores().WalletRepo.CreateWallet(s.ctx, &wallet.Wallet{
 					ID:         "wallet-1",
 					CustomerID: "cust-4",
 				})
@@ -448,7 +462,7 @@ func (s *CustomerServiceSuite) TestDeleteCustomer() {
 				tc.setup()
 			}
 
-			err := s.customerService.DeleteCustomer(s.ctx, tc.id)
+			err := s.service.DeleteCustomer(s.ctx, tc.id)
 
 			if tc.expectedError {
 				s.Error(err)
@@ -471,7 +485,7 @@ func (s *CustomerServiceSuite) TestDeleteCustomer() {
 			} else {
 				s.NoError(err)
 				// Verify the customer was deleted
-				_, err := s.customerService.GetCustomer(s.ctx, tc.id)
+				_, err := s.service.GetCustomer(s.ctx, tc.id)
 				s.Error(err)
 				s.True(ierr.IsNotFound(err), "Expected not found error after deletion")
 			}
@@ -495,7 +509,7 @@ func (s *CustomerServiceSuite) TestGetCustomerByLookupKey() {
 			"source": "web",
 		},
 	}
-	_ = s.repo.Create(s.ctx, customer)
+	_ = s.GetStores().CustomerRepo.Create(s.ctx, customer)
 
 	testCases := []struct {
 		name             string
@@ -520,7 +534,7 @@ func (s *CustomerServiceSuite) TestGetCustomerByLookupKey() {
 
 	for _, tc := range testCases {
 		s.Run(tc.name, func() {
-			resp, err := s.customerService.GetCustomerByLookupKey(s.ctx, tc.lookupKey)
+			resp, err := s.service.GetCustomerByLookupKey(s.ctx, tc.lookupKey)
 
 			if tc.expectedError {
 				s.Error(err)
