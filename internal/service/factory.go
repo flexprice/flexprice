@@ -92,6 +92,8 @@ func NewServiceParams(
 	client httpclient.Client,
 	taskRepo task.Repository,
 	s3Service s3.Service,
+	client httpclient.Client,
+	taskRepo task.Repository,
 ) ServiceParams {
 	return ServiceParams{
 		Logger:           logger,
@@ -120,5 +122,7 @@ func NewServiceParams(
 		Client:           client,
 		TaskRepo:         taskRepo,
 		S3:               s3Service,
+		Client:           client,
+		TaskRepo:         taskRepo,
 	}
 }
