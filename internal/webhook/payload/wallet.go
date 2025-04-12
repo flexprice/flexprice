@@ -1,0 +1,43 @@
+package payload
+
+import (
+	"context"
+	"encoding/json"
+
+	ierr "github.com/flexprice/flexprice/internal/errors"
+	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
+)
+
+type WalletPayloadBuilder struct {
+	services *Services
+}
+
+func NewWalletPayloadBuilder(services *Services) PayloadBuilder {
+	return WalletPayloadBuilder{
+		services: services,
+	}
+}
+
+func (b WalletPayloadBuilder) BuildPayload(ctx context.Context, eventType string, data json.RawMessage) (json.RawMessage, error) {
+	// Validate input data
+	var parsedPayload webhookDto.InternalWalletEvent
+
+	err := json.Unmarshal(data, &parsedPayload)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Unable to unmarshal wallet event payload").
+			Mark(ierr.ErrInvalidOperation)
+	}
+
+	// Create payload
+	walletData, err := b.services.WalletService.GetWalletByID(ctx, parsedPayload.WalletID)
+	if err != nil {
+		return nil, err
+	}
+
+	payload := webhookDto.NewWalletWebhookPayload(walletData)
+
+	// Marshal payload
+	return json.Marshal(payload)
+
+}

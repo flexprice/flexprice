@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/shopspring/decimal"
 )
 
@@ -105,6 +107,7 @@ func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletR
 	)
 
 	// Convert to response DTO
+	s.publishWebhookEvent(ctx, types.WebhookEventWalletCreated, w.ID)
 	return dto.FromWallet(w), nil
 }
 
@@ -222,6 +225,9 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 	if err := s.CreditWallet(ctx, creditReq); err != nil {
 		return nil, err
 	}
+
+	// Publish webhook event
+	s.publishWebhookEvent(ctx, types.WebhookEventWalletTransactionCreated, walletID)
 
 	// Get updated wallet
 	return s.GetWalletByID(ctx, walletID)
@@ -359,6 +365,9 @@ func (s *walletService) TerminateWallet(ctx context.Context, walletID string) er
 			return err
 		}
 
+		// Publish webhook event
+		s.publishWebhookEvent(ctx, types.WebhookEventWalletTerminated, walletID)
+
 		return nil
 	})
 }
@@ -413,6 +422,9 @@ func (s *walletService) UpdateWallet(ctx context.Context, id string, req *dto.Up
 			}).
 			Mark(ierr.ErrDatabase)
 	}
+
+	// Publish webhook event
+	s.publishWebhookEvent(ctx, types.WebhookEventWalletUpdated, id)
 
 	return existing, nil
 }
@@ -649,6 +661,9 @@ func (s *walletService) ExpireCredits(ctx context.Context, transactionID string)
 		},
 	}
 
+	// Publish webhook event
+	s.publishWebhookEvent(ctx, types.WebhookEventWalletTransactionPaymentSuccess, tx.WalletID)
+
 	// Process the debit operation within a transaction
 	return s.DB.WithTx(ctx, func(ctx context.Context) error {
 		// Process debit operation
@@ -657,4 +672,28 @@ func (s *walletService) ExpireCredits(ctx context.Context, transactionID string)
 		}
 		return nil
 	})
+}
+
+func (s *walletService) publishWebhookEvent(ctx context.Context, eventName string, walletID string) {
+
+	webhookPayload, err := json.Marshal(webhookDto.InternalWalletEvent{
+		WalletID: walletID,
+		TenantID: types.GetTenantID(ctx),
+	})
+
+	if err != nil {
+		s.Logger.Errorw("failed to marshal webhook payload", "error", err)
+		return
+	}
+
+	webhookEvent := &types.WebhookEvent{
+		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WEBHOOK_EVENT),
+		EventName: eventName,
+		TenantID:  types.GetTenantID(ctx),
+		Timestamp: time.Now().UTC(),
+		Payload:   json.RawMessage(webhookPayload),
+	}
+	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
+		s.Logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
+	}
 }

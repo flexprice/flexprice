@@ -45,6 +45,7 @@ func providePayloadBuilderFactory(
 	entitlementService service.EntitlementService,
 	featureService service.FeatureService,
 	subscriptionService service.SubscriptionService,
+	walletService service.WalletService,
 ) payload.PayloadBuilderFactory {
 	services := payload.NewServices(
 		invoiceService,
@@ -53,6 +54,7 @@ func providePayloadBuilderFactory(
 		entitlementService,
 		featureService,
 		subscriptionService,
+		walletService,
 	)
 	return payload.NewPayloadBuilderFactory(services)
 }

@@ -33,18 +33,15 @@ const (
 
 // wallet event names
 const (
-	WebhookEventWalletCreated                    = "wallet.created"
-	WebhookEventWalletUpdated                    = "wallet.updated"
-	WebhookEventWalletTerminated                 = "wallet.terminated"
-	WebhookEventWalletDepletedOngoingBalance     = "wallet.depleted_ongoing_balance"
-	WebhookEventWalletTransactionCreated         = "wallet.transaction.created"
-	WebhookEventWalletTransactionUpdated         = "wallet.transaction.updated"
-	WebhookEventWalletTransactionPaymentFailure  = "wallet.transaction.payment_failure"
-	WebhookEventWalletTransactionPaymentSuccess  = "wallet.transaction.payment_success"
-	WebhookEventWalletTransactionPaymentPending  = "wallet.transaction.payment_pending"
-	WebhookEventWalletTransactionPaymentDeclined = "wallet.transaction.payment_declined"
-	WebhookEventWalletTransactionPaymentFailed   = "wallet.transaction.payment_failed"
-	WebhookEventWalletTransactionPaymentReversed = "wallet.transaction.payment_reversed"
+	WebhookEventWalletCreated                   = "wallet.created"
+	WebhookEventWalletUpdated                   = "wallet.updated"
+	WebhookEventWalletTerminated                = "wallet.terminated"
+	WebhookEventWalletDepletedOngoingBalance    = "wallet.depleted_ongoing_balance"
+	WebhookEventWalletTransactionCreated        = "wallet.transaction.created"
+	WebhookEventWalletTransactionUpdated        = "wallet.transaction.updated"
+	WebhookEventWalletTransactionPaymentFailure = "wallet.transaction.payment_failure"
+	WebhookEventWalletTransactionPaymentSuccess = "wallet.transaction.payment_success"
+	WebhookEventWalletTransactionPaymentFailed  = "wallet.transaction.payment_failed"
 )
 
 // payment event names
