@@ -249,7 +249,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	}
 
 	response := &dto.SubscriptionResponse{Subscription: sub}
-	s.publishWebhookEvent(ctx, types.WebhookEventSubscriptionCreated, sub.ID)
+	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionCreated, sub.ID)
 	return response, nil
 }
 
@@ -319,7 +319,7 @@ func (s *subscriptionService) CancelSubscription(ctx context.Context, id string,
 		return err
 	}
 
-	s.publishWebhookEvent(ctx, types.WebhookEventSubscriptionCancelled, subscription.ID)
+	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionCancelled, subscription.ID)
 	return nil
 }
 
@@ -1017,7 +1017,7 @@ func (s *subscriptionService) PauseSubscription(
 	response.BillingImpact = impact
 
 	// Return the response
-	s.publishWebhookEvent(ctx, types.WebhookEventSubscriptionPaused, subscriptionID)
+	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionPaused, subscriptionID)
 	return response, nil
 }
 
@@ -1162,7 +1162,7 @@ func (s *subscriptionService) ResumeSubscription(
 	}
 
 	// Publish the webhook event
-	s.publishWebhookEvent(ctx, types.WebhookEventSubscriptionResumed, subscriptionID)
+	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionResumed, subscriptionID)
 
 	// Return the response
 	return &dto.ResumeSubscriptionResponse{
@@ -1513,7 +1513,7 @@ func (s *subscriptionService) calculateBillingImpact(
 	return impact, nil
 }
 
-func (s *subscriptionService) publishWebhookEvent(ctx context.Context, eventName string, subscriptionID string) {
+func (s *subscriptionService) publishInternalWebhookEvent(ctx context.Context, eventName string, subscriptionID string) {
 
 	eventPayload := webhookDto.InternalSubscriptionEvent{
 		SubscriptionID: subscriptionID,

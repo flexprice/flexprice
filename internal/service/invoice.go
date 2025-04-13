@@ -188,7 +188,7 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 		eventName = types.WebhookEventInvoiceUpdateFinalized
 	}
 
-	s.publishWebhookEvent(ctx, eventName, resp.ID)
+	s.publishInternalWebhookEvent(ctx, eventName, resp.ID)
 	return resp, nil
 }
 
@@ -300,7 +300,7 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 		return err
 	}
 
-	s.publishWebhookEvent(ctx, types.WebhookEventInvoiceUpdateFinalized, inv.ID)
+	s.publishInternalWebhookEvent(ctx, types.WebhookEventInvoiceUpdateFinalized, inv.ID)
 	return nil
 }
 
@@ -344,7 +344,7 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string) error {
 		return err
 	}
 
-	s.publishWebhookEvent(ctx, types.WebhookEventInvoiceUpdateVoided, inv.ID)
+	s.publishInternalWebhookEvent(ctx, types.WebhookEventInvoiceUpdateVoided, inv.ID)
 	return nil
 }
 
@@ -434,7 +434,7 @@ func (s *invoiceService) UpdatePaymentStatus(ctx context.Context, id string, sta
 		return err
 	}
 
-	s.publishWebhookEvent(ctx, types.WebhookEventInvoiceUpdatePayment, inv.ID)
+	s.publishInternalWebhookEvent(ctx, types.WebhookEventInvoiceUpdatePayment, inv.ID)
 	return nil
 }
 
@@ -969,7 +969,7 @@ func (s *invoiceService) getBillerInfo(t *tenant.Tenant) *pdf.BillerInfo {
 	return &billerInfo
 }
 
-func (s *invoiceService) publishWebhookEvent(ctx context.Context, eventName string, invoiceID string) {
+func (s *invoiceService) publishInternalWebhookEvent(ctx context.Context, eventName string, invoiceID string) {
 	webhookPayload, err := json.Marshal(struct {
 		InvoiceID string `json:"invoice_id"`
 		TenantID  string `json:"tenant_id"`

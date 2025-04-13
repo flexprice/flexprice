@@ -31,6 +31,9 @@ type WalletService interface {
 	// TopUpWallet adds credits to a wallet
 	TopUpWallet(ctx context.Context, walletID string, req *dto.TopUpWalletRequest) (*dto.WalletResponse, error)
 
+	// GetWalletTransactionByID retrieves a transaction by its ID
+	GetWalletTransactionByID(ctx context.Context, transactionID string) (*dto.WalletTransactionResponse, error)
+
 	// GetWalletBalance retrieves the real-time balance of a wallet
 	GetWalletBalance(ctx context.Context, walletID string) (*dto.WalletBalanceResponse, error)
 
@@ -107,7 +110,7 @@ func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletR
 	)
 
 	// Convert to response DTO
-	s.publishWebhookEvent(ctx, types.WebhookEventWalletCreated, w.ID)
+	s.publishInternalWalletWebhookEvent(ctx, types.WebhookEventWalletCreated, w.ID)
 	return dto.FromWallet(w), nil
 }
 
@@ -226,10 +229,6 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 		return nil, err
 	}
 
-	// Publish webhook event
-	s.publishWebhookEvent(ctx, types.WebhookEventWalletTransactionCreated, walletID)
-
-	// Get updated wallet
 	return s.GetWalletByID(ctx, walletID)
 }
 
@@ -342,7 +341,7 @@ func (s *walletService) TerminateWallet(ctx context.Context, walletID string) er
 	}
 
 	// Use client's WithTx for atomic operations
-	return s.DB.WithTx(ctx, func(ctx context.Context) error {
+	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
 		// Debit remaining balance if any
 		if w.CreditBalance.GreaterThan(decimal.Zero) {
 			debitReq := &wallet.WalletOperation{
@@ -365,11 +364,16 @@ func (s *walletService) TerminateWallet(ctx context.Context, walletID string) er
 			return err
 		}
 
-		// Publish webhook event
-		s.publishWebhookEvent(ctx, types.WebhookEventWalletTerminated, walletID)
-
 		return nil
 	})
+
+	if err != nil {
+		return err
+	}
+
+	// Publish webhook event
+	s.publishInternalWalletWebhookEvent(ctx, types.WebhookEventWalletTerminated, walletID)
+	return nil
 }
 
 func (s *walletService) UpdateWallet(ctx context.Context, id string, req *dto.UpdateWalletRequest) (*wallet.Wallet, error) {
@@ -424,8 +428,7 @@ func (s *walletService) UpdateWallet(ctx context.Context, id string, req *dto.Up
 	}
 
 	// Publish webhook event
-	s.publishWebhookEvent(ctx, types.WebhookEventWalletUpdated, id)
-
+	s.publishInternalWalletWebhookEvent(ctx, types.WebhookEventWalletUpdated, id)
 	return existing, nil
 }
 
@@ -597,7 +600,9 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 		}
 
 		s.Logger.Debugw("Wallet operation completed")
+		s.publishInternalTransactionWebhookEvent(ctx, types.WebhookEventWalletTransactionCreated, tx.ID)
 		return nil
+
 	})
 }
 
@@ -661,24 +666,63 @@ func (s *walletService) ExpireCredits(ctx context.Context, transactionID string)
 		},
 	}
 
-	// Publish webhook event
-	s.publishWebhookEvent(ctx, types.WebhookEventWalletTransactionPaymentSuccess, tx.WalletID)
-
 	// Process the debit operation within a transaction
-	return s.DB.WithTx(ctx, func(ctx context.Context) error {
+	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
 		// Process debit operation
 		if err := s.DebitWallet(ctx, debitReq); err != nil {
 			return err
 		}
 		return nil
 	})
+
+	if err != nil {
+		return err
+	}
+
+	// TODO: Implement a retry mechanism or handle the error appropriately.
+	s.publishInternalTransactionWebhookEvent(ctx, types.WebhookEventWalletTransactionPaymentSuccess, tx.ID)
+
+	return nil
 }
 
-func (s *walletService) publishWebhookEvent(ctx context.Context, eventName string, walletID string) {
+func (s *walletService) publishInternalWalletWebhookEvent(ctx context.Context, eventName string, walletID string) {
 
 	webhookPayload, err := json.Marshal(webhookDto.InternalWalletEvent{
-		WalletID: walletID,
-		TenantID: types.GetTenantID(ctx),
+		WalletID:  walletID,
+		TenantID:  types.GetTenantID(ctx),
+		EventType: eventName,
+	})
+
+	if err != nil {
+		s.Logger.Errorw("failed to marshal webhook payload", "error", err)
+		return
+	}
+
+	webhookEvent := &types.WebhookEvent{
+		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WEBHOOK_EVENT),
+		EventName: eventName,
+		TenantID:  types.GetTenantID(ctx),
+		Timestamp: time.Now().UTC(),
+		Payload:   json.RawMessage(webhookPayload),
+	}
+	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
+		s.Logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
+	}
+}
+
+func (s *walletService) GetWalletTransactionByID(ctx context.Context, transactionID string) (*dto.WalletTransactionResponse, error) {
+	tx, err := s.WalletRepo.GetTransactionByID(ctx, transactionID)
+	if err != nil {
+		return nil, err
+	}
+	return dto.FromWalletTransaction(tx), nil
+}
+
+func (s *walletService) publishInternalTransactionWebhookEvent(ctx context.Context, eventName string, transactionID string) {
+
+	webhookPayload, err := json.Marshal(webhookDto.InternalTransactionEvent{
+		TransactionID: transactionID,
+		TenantID:      types.GetTenantID(ctx),
 	})
 
 	if err != nil {

@@ -68,13 +68,13 @@ func NewPayloadBuilderFactory(services *Services) PayloadBuilderFactory {
 		return NewWalletPayloadBuilder(f.services)
 	}
 	f.builders[types.WebhookEventWalletTransactionCreated] = func() PayloadBuilder {
-		return NewWalletPayloadBuilder(f.services)
+		return NewTransactionPayloadBuilder(f.services)
 	}
 	f.builders[types.WebhookEventWalletTransactionUpdated] = func() PayloadBuilder {
-		return NewWalletPayloadBuilder(f.services)
+		return NewTransactionPayloadBuilder(f.services)
 	}
 	f.builders[types.WebhookEventWalletTransactionPaymentFailure] = func() PayloadBuilder {
-		return NewWalletPayloadBuilder(f.services)
+		return NewTransactionPayloadBuilder(f.services)
 	}
 	f.builders[types.WebhookEventWalletTransactionPaymentSuccess] = func() PayloadBuilder {
 		return NewWalletPayloadBuilder(f.services)
