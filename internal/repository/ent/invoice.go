@@ -607,6 +607,9 @@ func (o InvoiceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types
 	if f.InvoiceType != "" {
 		query = query.Where(invoice.InvoiceType(string(f.InvoiceType)))
 	}
+	if len(f.InvoiceIDs) > 0 {
+		query = query.Where(invoice.IDIn(f.InvoiceIDs...))
+	}
 	if len(f.InvoiceStatus) > 0 {
 		invoiceStatuses := make([]string, len(f.InvoiceStatus))
 		for i, status := range f.InvoiceStatus {

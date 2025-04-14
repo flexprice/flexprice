@@ -111,8 +111,8 @@ type SubscriptionFilter struct {
 	BillingCadence []BillingCadence `json:"billing_cadence,omitempty" form:"billing_cadence"`
 	// BillingPeriod filters by billing period
 	BillingPeriod []BillingPeriod `json:"billing_period,omitempty" form:"billing_period"`
-	// IncludeCanceled includes canceled subscriptions if true
-	IncludeCanceled bool `json:"include_canceled,omitempty" form:"include_canceled"`
+	// SubscriptionStatusNotIn filters by subscription status not in the list
+	SubscriptionStatusNotIn []SubscriptionStatus `json:"-"`
 	// ActiveAt filters subscriptions that are active at the given time
 	ActiveAt *time.Time `json:"active_at,omitempty" form:"active_at"`
 

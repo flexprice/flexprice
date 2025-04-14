@@ -7,5 +7,5 @@ import (
 
 // PayloadBuilder interface for building event-specific payloads
 type PayloadBuilder interface {
-	BuildPayload(ctx context.Context, eventType string, data interface{}) (json.RawMessage, error)
+	BuildPayload(ctx context.Context, eventType string, data json.RawMessage) (json.RawMessage, error)
 }

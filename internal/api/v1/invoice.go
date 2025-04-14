@@ -341,11 +341,13 @@ func (h *InvoiceHandler) AttemptPayment(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "payment processed successfully"})
 }
+
 // GetInvoicePDF godoc
 // @Summary Get PDF for an invoice
 // @Description Retrieve the PDF document for a specific invoice by its ID
 // @Tags Invoices
 // @Param id path string true "Invoice ID"
+// @Param url query bool false "Return presigned URL from s3 instead of PDF"
 // @Success 200 {file} application/pdf
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 404 {object} ierr.ErrorResponse
@@ -355,6 +357,17 @@ func (h *InvoiceHandler) GetInvoicePDF(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
 		c.Error(ierr.NewError("invalid invoice id").WithHint("invalid invoice id").Mark(ierr.ErrValidation))
+		return
+	}
+
+	if c.Query("url") == "true" {
+		url, err := h.invoiceService.GetInvoicePDFUrl(c.Request.Context(), id)
+		if err != nil {
+			h.logger.Errorw("failed to get invoice pdf url", "error", err, "invoice_id", id)
+			c.Error(err)
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"presigned_url": url})
 		return
 	}
 

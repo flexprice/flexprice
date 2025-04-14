@@ -114,3 +114,11 @@ secrets:
 billing:
   tenant_id: ""
   environment_id: ""
+
+s3:
+  enabled: false
+  region: "ap-south-1"
+  invoice:
+    bucket: "flexprice-invoices"
+    presign_expiry_duration: "1h"
+    key_prefix: ""

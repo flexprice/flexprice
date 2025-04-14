@@ -15,8 +15,8 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
+	"github.com/flexprice/flexprice/internal/s3"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
@@ -35,6 +35,7 @@ type InvoiceService interface {
 	GetCustomerMultiCurrencyInvoiceSummary(ctx context.Context, customerID string) (*dto.CustomerMultiCurrencyInvoiceSummary, error)
 	AttemptPayment(ctx context.Context, id string) error
 	GetInvoicePDF(ctx context.Context, id string) ([]byte, error)
+	GetInvoicePDFUrl(ctx context.Context, id string) (string, error)
 }
 
 type invoiceService struct {
@@ -611,7 +612,7 @@ func (s *invoiceService) GetCustomerMultiCurrencyInvoiceSummary(ctx context.Cont
 	subscriptionFilter := types.NewNoLimitSubscriptionFilter()
 	subscriptionFilter.CustomerID = customerID
 	subscriptionFilter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
-	subscriptionFilter.IncludeCanceled = true
+	subscriptionFilter.SubscriptionStatusNotIn = []types.SubscriptionStatus{types.SubscriptionStatusCancelled}
 
 	subs, err := s.SubRepo.List(ctx, subscriptionFilter)
 	if err != nil {
@@ -694,31 +695,6 @@ func (s *invoiceService) validatePaymentStatusTransition(from, to types.PaymentS
 		Mark(ierr.ErrValidation)
 }
 
-func (s *invoiceService) publishWebhookEvent(ctx context.Context, eventName string, invoiceID string) {
-	webhookPayload, err := json.Marshal(struct {
-		InvoiceID string `json:"invoice_id"`
-		TenantID  string `json:"tenant_id"`
-	}{
-		InvoiceID: invoiceID,
-		TenantID:  types.GetTenantID(ctx),
-	})
-	if err != nil {
-		s.Logger.Errorw("failed to marshal webhook payload", "error", err)
-		return
-	}
-
-	webhookEvent := &types.WebhookEvent{
-		ID:        uuid.New().String(),
-		EventName: eventName,
-		TenantID:  types.GetTenantID(ctx),
-		Timestamp: time.Now().UTC(),
-		Payload:   json.RawMessage(webhookPayload),
-	}
-	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-		s.Logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
-	}
-}
-
 // AttemptPayment attempts to pay an invoice using available wallets
 func (s *invoiceService) AttemptPayment(ctx context.Context, id string) error {
 	s.Logger.Infow("attempting payment for invoice", "invoice_id", id)
@@ -790,6 +766,42 @@ func (s *invoiceService) performPaymentAttemptActions(ctx context.Context, inv *
 	}
 
 	return nil
+}
+
+func (s *invoiceService) GetInvoicePDFUrl(ctx context.Context, id string) (string, error) {
+	if s.S3 == nil {
+		return "", ierr.NewError("s3 is not enabled").
+			WithHint("s3 is not enabled but is required to generate invoice pdf url.").
+			Mark(ierr.ErrSystem)
+	}
+
+	tenantId := types.GetTenantID(ctx)
+
+	key := fmt.Sprintf("%s/%s", tenantId, id)
+
+	exists, err := s.S3.Exists(ctx, key, s3.DocumentTypeInvoice)
+	if err != nil {
+		return "", err
+	}
+
+	if !exists {
+		data, err := s.GetInvoicePDF(ctx, id)
+		if err != nil {
+			return "", err
+		}
+
+		err = s.S3.UploadDocument(ctx, s3.NewPdfDocument(key, data, s3.DocumentTypeInvoice))
+		if err != nil {
+			return "", err
+		}
+	}
+
+	url, err := s.S3.GetPresignedUrl(ctx, key, s3.DocumentTypeInvoice)
+	if err != nil {
+		return "", err
+	}
+
+	return url, nil
 }
 
 // GetInvoicePDF implements InvoiceService.
@@ -993,4 +1005,29 @@ func (s *invoiceService) getBillerInfo(t *tenant.Tenant) *pdf.BillerInfo {
 	}
 
 	return &billerInfo
+}
+
+func (s *invoiceService) publishWebhookEvent(ctx context.Context, eventName string, invoiceID string) {
+	webhookPayload, err := json.Marshal(struct {
+		InvoiceID string `json:"invoice_id"`
+		TenantID  string `json:"tenant_id"`
+	}{
+		InvoiceID: invoiceID,
+		TenantID:  types.GetTenantID(ctx),
+	})
+	if err != nil {
+		s.Logger.Errorw("failed to marshal webhook payload", "error", err)
+		return
+	}
+
+	webhookEvent := &types.WebhookEvent{
+		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WEBHOOK_EVENT),
+		EventName: eventName,
+		TenantID:  types.GetTenantID(ctx),
+		Timestamp: time.Now().UTC(),
+		Payload:   json.RawMessage(webhookPayload),
+	}
+	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
+		s.Logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
+	}
 }

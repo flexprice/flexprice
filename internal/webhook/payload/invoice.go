@@ -19,13 +19,13 @@ func NewInvoicePayloadBuilder(services *Services) PayloadBuilder {
 }
 
 // BuildPayload builds the webhook payload for invoice events
-func (b *InvoicePayloadBuilder) BuildPayload(ctx context.Context, eventType string, data interface{}) (json.RawMessage, error) {
+func (b *InvoicePayloadBuilder) BuildPayload(ctx context.Context, eventType string, data json.RawMessage) (json.RawMessage, error) {
 	parsedPayload := struct {
 		InvoiceID string `json:"invoice_id"`
 		TenantID  string `json:"tenant_id"`
 	}{}
 
-	err := json.Unmarshal(data.(json.RawMessage), &parsedPayload)
+	err := json.Unmarshal(data, &parsedPayload)
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Unable to unmarshal invoice event payload").

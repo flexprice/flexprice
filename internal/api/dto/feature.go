@@ -4,19 +4,21 @@ import (
 	"context"
 
 	"github.com/flexprice/flexprice/internal/domain/feature"
+	"github.com/flexprice/flexprice/internal/domain/meter"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
 type CreateFeatureRequest struct {
-	Name         string            `json:"name" binding:"required"`
-	Description  string            `json:"description"`
-	LookupKey    string            `json:"lookup_key"`
-	Type         types.FeatureType `json:"type" binding:"required"`
-	MeterID      string            `json:"meter_id,omitempty"`
-	Metadata     types.Metadata    `json:"metadata,omitempty"`
-	UnitSingular string            `json:"unit_singular,omitempty"`
-	UnitPlural   string            `json:"unit_plural,omitempty"`
+	Name         string              `json:"name" binding:"required"`
+	Description  string              `json:"description"`
+	LookupKey    string              `json:"lookup_key"`
+	Type         types.FeatureType   `json:"type" binding:"required"`
+	MeterID      string              `json:"meter_id,omitempty"`
+	Meter        *CreateMeterRequest `json:"meter,omitempty"`
+	Metadata     types.Metadata      `json:"metadata,omitempty"`
+	UnitSingular string              `json:"unit_singular,omitempty"`
+	UnitPlural   string              `json:"unit_plural,omitempty"`
 }
 
 func (r *CreateFeatureRequest) Validate() error {
@@ -31,10 +33,15 @@ func (r *CreateFeatureRequest) Validate() error {
 	}
 
 	if r.Type == types.FeatureTypeMetered {
-		if r.MeterID == "" {
-			return ierr.NewError("meter_id is required for metered features").
-				WithHint("Please select a valid metered feature").
+		if r.MeterID == "" && r.Meter == nil {
+			return ierr.NewError("either meter_id or meter must be provided").
+				WithHint("Please provide meter details to setup a metered feature").
 				Mark(ierr.ErrValidation)
+		}
+		if r.Meter != nil {
+			if err := r.Meter.Validate(); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -69,6 +76,7 @@ type UpdateFeatureRequest struct {
 	Metadata     *types.Metadata `json:"metadata,omitempty"`
 	UnitSingular *string         `json:"unit_singular,omitempty"`
 	UnitPlural   *string         `json:"unit_plural,omitempty"`
+	Filters      *[]meter.Filter `json:"filters,omitempty"`
 }
 
 type FeatureResponse struct {

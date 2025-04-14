@@ -21,3 +21,46 @@ const (
 	WebhookEventInvoiceUpdatePayment   = "invoice.updated.payment"
 	WebhookEventInvoiceUpdateVoided    = "invoice.update.voided"
 )
+
+// subscription event names
+const (
+	WebhookEventSubscriptionCreated   = "subscription.created"
+	WebhookEventSubscriptionPaused    = "subscription.paused"
+	WebhookEventSubscriptionCancelled = "subscription.cancelled"
+	WebhookEventSubscriptionResumed   = "subscription.resumed"
+	WebhookEventSubscriptionExpired   = "subscription.expired"
+)
+
+// wallet event names
+const (
+	WebhookEventWalletCreated                    = "wallet.created"
+	WebhookEventWalletUpdated                    = "wallet.updated"
+	WebhookEventWalletTerminated                 = "wallet.terminated"
+	WebhookEventWalletDepletedOngoingBalance     = "wallet.depleted_ongoing_balance"
+	WebhookEventWalletTransactionCreated         = "wallet.transaction.created"
+	WebhookEventWalletTransactionUpdated         = "wallet.transaction.updated"
+	WebhookEventWalletTransactionPaymentFailure  = "wallet.transaction.payment_failure"
+	WebhookEventWalletTransactionPaymentSuccess  = "wallet.transaction.payment_success"
+	WebhookEventWalletTransactionPaymentPending  = "wallet.transaction.payment_pending"
+	WebhookEventWalletTransactionPaymentDeclined = "wallet.transaction.payment_declined"
+	WebhookEventWalletTransactionPaymentFailed   = "wallet.transaction.payment_failed"
+	WebhookEventWalletTransactionPaymentReversed = "wallet.transaction.payment_reversed"
+)
+
+// payment event names
+const (
+	WebhookEventPaymentCreated  = "payment.created"
+	WebhookEventPaymentUpdated  = "payment.updated"
+	WebhookEventPaymentFailed   = "payment.failed"
+	WebhookEventPaymentSuccess  = "payment.success"
+	WebhookEventPaymentPending  = "payment.pending"
+	WebhookEventPaymentDeclined = "payment.declined"
+	WebhookEventPaymentReversed = "payment.reversed"
+)
+
+// customer event names
+const (
+	WebhookEventCustomerCreated = "customer.created"
+	WebhookEventCustomerUpdated = "customer.updated"
+	WebhookEventCustomerDeleted = "customer.deleted"
+)

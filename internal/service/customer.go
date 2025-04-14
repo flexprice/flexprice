@@ -6,8 +6,12 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
+	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 type CustomerService interface {
@@ -20,11 +24,14 @@ type CustomerService interface {
 }
 
 type customerService struct {
-	repo customer.Repository
+	repo             customer.Repository
+	subscriptionRepo subscription.Repository
+	invoiceRepo      invoice.Repository
+	walletRepo       wallet.Repository
 }
 
-func NewCustomerService(repo customer.Repository) CustomerService {
-	return &customerService{repo: repo}
+func NewCustomerService(repo customer.Repository, subscriptionRepo subscription.Repository, invoiceRepo invoice.Repository, walletRepo wallet.Repository) CustomerService {
+	return &customerService{repo: repo, subscriptionRepo: subscriptionRepo, invoiceRepo: invoiceRepo, walletRepo: walletRepo}
 }
 
 func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCustomerRequest) (*dto.CustomerResponse, error) {
@@ -189,8 +196,58 @@ func (s *customerService) DeleteCustomer(ctx context.Context, id string) error {
 			Mark(ierr.ErrValidation)
 	}
 
+	customer, err := s.repo.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	if customer.Status != types.StatusPublished {
+		return ierr.NewError("customer is not published").
+			WithHint("Customer does not exist").
+			Mark(ierr.ErrNotFound)
+	}
+
+	subscriptionFilter := types.NewSubscriptionFilter()
+	subscriptionFilter.CustomerID = id
+	subscriptionFilter.SubscriptionStatusNotIn = []types.SubscriptionStatus{types.SubscriptionStatusCancelled}
+	subscriptionFilter.Limit = lo.ToPtr(1)
+	subscriptions, err := s.subscriptionRepo.List(ctx, subscriptionFilter)
+	if err != nil {
+		return err
+	}
+
+	if len(subscriptions) > 0 {
+		return ierr.NewError("customer cannot be deleted due to active subscriptions").
+			WithHint("Please cancel all subscriptions before deleting the customer").
+			Mark(ierr.ErrInvalidOperation)
+	}
+
+	invoiceFilter := types.NewInvoiceFilter()
+	invoiceFilter.CustomerID = id
+	invoiceFilter.Limit = lo.ToPtr(1)
+	invoices, err := s.invoiceRepo.List(ctx, invoiceFilter)
+	if err != nil {
+		return err
+	}
+
+	if len(invoices) > 0 {
+		return ierr.NewError("customer cannot be deleted due to active invoices").
+			WithHint("Customer cannot be deleted due to active invoices").
+			Mark(ierr.ErrInvalidOperation)
+	}
+
+	wallets, err := s.walletRepo.GetWalletsByCustomerID(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	if len(wallets) > 0 {
+		return ierr.NewError("customer cannot be deleted due to associated wallets").
+			WithHint("Customer cannot be deleted due to associated wallets").
+			Mark(ierr.ErrInvalidOperation)
+	}
+
 	if err := s.repo.Delete(ctx, id); err != nil {
-		// No need to wrap the error as the repository already returns properly formatted errors
 		return err
 	}
 

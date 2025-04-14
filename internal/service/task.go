@@ -16,8 +16,11 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/task"
+	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -35,14 +38,17 @@ type TaskService interface {
 }
 
 type taskService struct {
-	taskRepo     task.Repository
-	eventRepo    events.Repository
-	meterRepo    meter.Repository
-	customerRepo customer.Repository
-	publisher    publisher.EventPublisher
-	logger       *logger.Logger
-	db           postgres.IClient
-	client       httpclient.Client
+	taskRepo         task.Repository
+	eventRepo        events.Repository
+	meterRepo        meter.Repository
+	customerRepo     customer.Repository
+	subscriptionRepo subscription.Repository
+	invoiceRepo      invoice.Repository
+	walletRepo       wallet.Repository
+	publisher        publisher.EventPublisher
+	logger           *logger.Logger
+	db               postgres.IClient
+	client           httpclient.Client
 }
 
 func NewTaskService(
@@ -558,7 +564,7 @@ func (s *taskService) processCustomers(ctx context.Context, t *task.Task, tracke
 		customerID := ""
 
 		// Process customer
-		customerSvc := NewCustomerService(s.customerRepo)
+		customerSvc := NewCustomerService(s.customerRepo, s.subscriptionRepo, s.invoiceRepo, s.walletRepo)
 
 		// Map standard fields
 		for i, header := range standardHeaders {

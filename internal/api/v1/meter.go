@@ -21,17 +21,6 @@ func NewMeterHandler(service service.MeterService, log *logger.Logger) *MeterHan
 	return &MeterHandler{service: service, log: log}
 }
 
-// @Summary Create meter
-// @Description Create a new meter with the specified configuration
-// @Tags Meters
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param meter body dto.CreateMeterRequest true "Meter configuration"
-// @Success 201 {object} dto.MeterResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /meters [post]
 func (h *MeterHandler) CreateMeter(c *gin.Context) {
 	ctx := c.Request.Context()
 	var req dto.CreateMeterRequest
@@ -53,15 +42,6 @@ func (h *MeterHandler) CreateMeter(c *gin.Context) {
 	c.JSON(http.StatusCreated, dto.ToMeterResponse(meter))
 }
 
-// @Summary List meters
-// @Description Get all meters
-// @Tags Meters
-// @Produce json
-// @Security ApiKeyAuth
-// @Param filter query types.MeterFilter false "Filter"
-// @Success 200 {object} dto.ListMetersResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /meters [get]
 func (h *MeterHandler) GetAllMeters(c *gin.Context) {
 	ctx := c.Request.Context()
 	var filter types.MeterFilter
@@ -87,16 +67,6 @@ func (h *MeterHandler) GetAllMeters(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// @Summary Get meter
-// @Description Get a specific meter by ID
-// @Tags Meters
-// @Produce json
-// @Security ApiKeyAuth
-// @Param id path string true "Meter ID"
-// @Success 200 {object} dto.MeterResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /meters/{id} [get]
 func (h *MeterHandler) GetMeter(c *gin.Context) {
 	id := c.Param("id")
 	ctx := c.Request.Context()
@@ -109,16 +79,6 @@ func (h *MeterHandler) GetMeter(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.ToMeterResponse(meter))
 }
 
-// @Summary Disable meter [TODO: Deprecate]
-// @Description Disable an existing meter
-// @Tags Meters
-// @Produce json
-// @Security ApiKeyAuth
-// @Param id path string true "Meter ID"
-// @Success 200 {object} map[string]string "message:Meter disabled successfully"
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /meters/{id}/disable [post]
 func (h *MeterHandler) DisableMeter(c *gin.Context) {
 	id := c.Param("id")
 	ctx := c.Request.Context()
@@ -130,16 +90,6 @@ func (h *MeterHandler) DisableMeter(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Meter disabled successfully"})
 }
 
-// @Summary Delete meter
-// @Description Delete an existing meter
-// @Tags Meters
-// @Produce json
-// @Security ApiKeyAuth
-// @Param id path string true "Meter ID"
-// @Success 200 {object} map[string]string "message:Meter deleted successfully"
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /meters/{id} [delete]
 func (h *MeterHandler) DeleteMeter(c *gin.Context) {
 	id := c.Param("id")
 	ctx := c.Request.Context()
@@ -151,19 +101,6 @@ func (h *MeterHandler) DeleteMeter(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Meter deleted successfully"})
 }
 
-// @Summary Update meter
-// @Description Update an existing meter
-// @Tags Meters
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param id path string true "Meter ID"
-// @Param meter body dto.UpdateMeterRequest true "Meter configuration"
-// @Success 200 {object} dto.MeterResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /meters/{id} [put]
 func (h *MeterHandler) UpdateMeter(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {

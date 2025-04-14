@@ -55,15 +55,15 @@ run: run-server
 
 # Run all tests
 test: install-typst
-	go test -v -race ./... 
+	go test -v -race ./internal/...
 
 # Run tests with verbose output
 test-verbose:
-	go test -v ./...
+	go test -v ./internal/...
 
 # Run tests with coverage report
 test-coverage:
-	go test -coverprofile=coverage.out ./...
+	go test -coverprofile=coverage.out ./internal/...
 	go tool cover -html=coverage.out -o coverage.html
 
 # Database related targets
@@ -267,6 +267,8 @@ generate-go-sdk: install-openapi-generator
 		--git-repo-id=go-sdk \
 		--git-user-id=flexprice \
 		--global-property apiTests=false,modelTests=false
+	@chmod +x api/scripts/go/add_go_async.sh
+	@./api/scripts/go/add_go_async.sh
 	@echo "Go SDK generated successfully"
 
 # Generate Python SDK

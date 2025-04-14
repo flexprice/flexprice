@@ -1,0 +1,14 @@
+{
+    "go.lintFlags": ["-exclude=api/scripts/go/async.go"],
+    "go.lintTool": "golangci-lint",
+    "go.lintOnSave": "package",
+    "[go]": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "golang.go"
+    },
+    "gopls": {
+        "build.directoryFilters": [
+            "-api/scripts/go"
+        ]
+    }
+}

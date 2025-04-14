@@ -413,9 +413,13 @@ func (o *SubscriptionQueryOptions) applyEntityQueryOptions(_ context.Context, f 
 		query = query.Where(subscription.BillingPeriodIn(periods...))
 	}
 
-	// Apply canceled filter
-	if !f.IncludeCanceled {
-		query = query.Where(subscription.CancelledAtIsNil())
+	// Apply subscription status not in filter
+	if len(f.SubscriptionStatusNotIn) > 0 {
+		statuses := make([]string, len(f.SubscriptionStatusNotIn))
+		for i, status := range f.SubscriptionStatusNotIn {
+			statuses[i] = string(status)
+		}
+		query = query.Where(subscription.SubscriptionStatusNotIn(statuses...))
 	}
 
 	// Apply active at filter

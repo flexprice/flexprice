@@ -10,6 +10,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // PaymentService defines the interface for payment operations
@@ -218,7 +219,18 @@ func (s *paymentService) GetPayment(ctx context.Context, id string) (*dto.Paymen
 		return nil, err // Repository already using ierr
 	}
 
-	return dto.NewPaymentResponse(p), nil
+	response := dto.NewPaymentResponse(p)
+	if p.DestinationType == types.PaymentDestinationTypeInvoice {
+		invoice, err := s.InvoiceRepo.Get(ctx, p.DestinationID)
+		if err != nil {
+			return nil, err
+		}
+
+		if invoice.InvoiceNumber != nil {
+			response.InvoiceNumber = invoice.InvoiceNumber
+		}
+	}
+	return response, nil
 }
 
 // UpdatePayment updates a payment
@@ -266,9 +278,41 @@ func (s *paymentService) ListPayments(ctx context.Context, filter *types.Payment
 		return nil, err // Repository already using ierr
 	}
 
+	// Collect all invoice IDs from payments
+	invoiceIDs := make([]string, 0)
+	for _, p := range payments {
+		if p.DestinationType == types.PaymentDestinationTypeInvoice {
+			invoiceIDs = append(invoiceIDs, p.DestinationID)
+		}
+	}
+	invoiceIDs = lo.Uniq(invoiceIDs)
+
+	// Create a map of invoice ID to invoice number
+	invoiceNumberMap := make(map[string]*string)
+	if len(invoiceIDs) > 0 {
+		// Fetch all invoices in a single query
+		invoiceFilter := &types.InvoiceFilter{
+			QueryFilter: types.NewDefaultQueryFilter(),
+			InvoiceIDs:  invoiceIDs,
+		}
+		invoices, err := s.InvoiceRepo.List(ctx, invoiceFilter)
+		if err != nil {
+			return nil, err
+		}
+		for _, inv := range invoices {
+			invoiceNumberMap[inv.ID] = inv.InvoiceNumber
+		}
+	}
+
 	items := make([]*dto.PaymentResponse, len(payments))
 	for i, p := range payments {
-		items[i] = dto.NewPaymentResponse(p)
+		response := dto.NewPaymentResponse(p)
+		if p.DestinationType == types.PaymentDestinationTypeInvoice {
+			if invoiceNumber, exists := invoiceNumberMap[p.DestinationID]; exists {
+				response.InvoiceNumber = invoiceNumber
+			}
+		}
+		items[i] = response
 	}
 
 	return &dto.ListPaymentsResponse{

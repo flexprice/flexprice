@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
@@ -25,32 +26,35 @@ type PlanService interface {
 }
 
 type planService struct {
-	planRepo        plan.Repository
-	priceRepo       price.Repository
-	meterRepo       meter.Repository
-	entitlementRepo entitlement.Repository
-	featureRepo     feature.Repository
-	client          postgres.IClient
-	logger          *logger.Logger
+	planRepo         plan.Repository
+	priceRepo        price.Repository
+	subscriptionRepo subscription.Repository
+	meterRepo        meter.Repository
+	entitlementRepo  entitlement.Repository
+	featureRepo      feature.Repository
+	client           postgres.IClient
+	logger           *logger.Logger
 }
 
 func NewPlanService(
 	client postgres.IClient,
 	planRepo plan.Repository,
 	priceRepo price.Repository,
+	subscriptionRepo subscription.Repository,
 	meterRepo meter.Repository,
 	entitlementRepo entitlement.Repository,
 	featureRepo feature.Repository,
 	logger *logger.Logger,
 ) PlanService {
 	return &planService{
-		client:          client,
-		planRepo:        planRepo,
-		priceRepo:       priceRepo,
-		meterRepo:       meterRepo,
-		entitlementRepo: entitlementRepo,
-		featureRepo:     featureRepo,
-		logger:          logger,
+		client:           client,
+		planRepo:         planRepo,
+		priceRepo:        priceRepo,
+		subscriptionRepo: subscriptionRepo,
+		meterRepo:        meterRepo,
+		entitlementRepo:  entitlementRepo,
+		featureRepo:      featureRepo,
+		logger:           logger,
 	}
 }
 
@@ -423,7 +427,37 @@ func (s *planService) UpdatePlan(ctx context.Context, id string, req dto.UpdateP
 }
 
 func (s *planService) DeletePlan(ctx context.Context, id string) error {
-	err := s.planRepo.Delete(ctx, id)
+
+	if id == "" {
+		return ierr.NewError("plan ID is required").
+			WithHint("Plan ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	subscriptionFilters := types.NewDefaultQueryFilter()
+	subscriptionFilters.Status = lo.ToPtr(types.StatusPublished)
+	subscriptionFilters.Limit = lo.ToPtr(1)
+
+	subscriptions, err := s.subscriptionRepo.List(ctx, &types.SubscriptionFilter{
+		QueryFilter:             subscriptionFilters,
+		PlanID:                  id,
+		SubscriptionStatusNotIn: []types.SubscriptionStatus{types.SubscriptionStatusCancelled},
+	})
+
+	if err != nil {
+		return err
+	}
+
+	if len(subscriptions) > 0 {
+		return ierr.NewError("plan is still associated with subscriptions").
+			WithHint("Please remove the active subscriptions before deleting this plan.").
+			WithReportableDetails(map[string]interface{}{
+				"plan_id": id,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	err = s.planRepo.Delete(ctx, id)
 	if err != nil {
 		return err
 	}

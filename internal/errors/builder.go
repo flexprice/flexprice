@@ -18,6 +18,10 @@ func NewError(msg string) *ErrorBuilder {
 	return &ErrorBuilder{err: errors.New(msg)}
 }
 
+func NewErrorf(format string, args ...any) *ErrorBuilder {
+	return &ErrorBuilder{err: errors.Newf(format, args...)}
+}
+
 // WithError starts a builder chain with an existing error
 func WithError(err error) *ErrorBuilder {
 	return &ErrorBuilder{err: err}
