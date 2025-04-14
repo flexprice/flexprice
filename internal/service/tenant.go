@@ -7,10 +7,10 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/auth"
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 type TenantService interface {
@@ -59,6 +59,8 @@ func (s *tenantService) CreateTenant(ctx context.Context, req dto.CreateTenantRe
 // createTenantAsBillingCustomer creates a customer in the billing tenant using the tenant details
 func (s *tenantService) createTenantAsBillingCustomer(ctx context.Context, t *tenant.Tenant) error {
 	if s.Config.Billing.TenantID == "" {
+		s.Logger.Warnw("Billing tenant ID is not set, skipping customer creation",
+			"tenant_id", t.ID)
 		return nil
 	}
 
@@ -84,16 +86,25 @@ func (s *tenantService) createTenantAsBillingCustomer(ctx context.Context, t *te
 
 	// Create customer in billing tenant
 	customerService := NewCustomerService(s.CustomerRepo)
-	_, err := customerService.CreateCustomer(billingCtx, createCustomerReq)
+	customer, err := customerService.CreateCustomer(billingCtx, createCustomerReq)
 	if err != nil {
 		return err
 	}
 
 	// Onboard the tenant on the free plan
-	return s.onboardTenantOnFreePlan(ctx, t)
+	return s.onboardTenantOnFreePlan(ctx, t, customer.Customer)
 }
 
-func (s *tenantService) onboardTenantOnFreePlan(ctx context.Context, t *tenant.Tenant) error {
+func (s *tenantService) onboardTenantOnFreePlan(ctx context.Context, t *tenant.Tenant, customer *customer.Customer) error {
+	// Create a context with the billing tenant ID
+	billingCtx := getBillingContext(ctx, s.Config)
+	flexpriceTenantID := billingCtx.Value(types.CtxTenantID)
+	flexpriceEnvironmentID := billingCtx.Value(types.CtxEnvironmentID)
+
+	// inject the tenant id into the context
+	ctx = context.WithValue(ctx, types.CtxTenantID, flexpriceTenantID)
+	ctx = context.WithValue(ctx, types.CtxEnvironmentID, flexpriceEnvironmentID)
+
 	planService := NewPlanService(s.DB, s.PlanRepo, s.PriceRepo, s.MeterRepo, s.EntitlementRepo, s.FeatureRepo, s.Logger)
 	// List plans
 	planFilter := types.NewNoLimitPlanFilter()
@@ -109,23 +120,27 @@ func (s *tenantService) onboardTenantOnFreePlan(ctx context.Context, t *tenant.T
 	for _, p := range plans.Items {
 		for _, price := range p.Prices {
 			if price.Type == types.PRICE_TYPE_FIXED &&
-				price.Amount == decimal.Zero &&
-				price.BillingCadence == types.BILLING_CADENCE_RECURRING {
+				price.BillingCadence == types.BILLING_CADENCE_RECURRING &&
+				price.Amount.IsZero() {
 				freePlan = p
 				freePrice = price
 				break
 			}
 		}
+
 	}
 
 	if freePlan == nil || freePrice == nil {
+		s.Logger.Warnw("No free plan found, skipping onboarding",
+			"tenant_id", t.ID)
 		return nil
 	}
 
 	// Create a subscription for the tenant
 	subscriptionService := NewSubscriptionService(s.ServiceParams)
+
 	_, err = subscriptionService.CreateSubscription(ctx, dto.CreateSubscriptionRequest{
-		CustomerID:         t.ID,
+		CustomerID:         customer.ID,
 		PlanID:             freePlan.ID,
 		Currency:           freePrice.Currency,
 		BillingCadence:     freePrice.BillingCadence,
@@ -134,6 +149,9 @@ func (s *tenantService) onboardTenantOnFreePlan(ctx context.Context, t *tenant.T
 		StartDate:          time.Now(),
 	})
 	if err != nil {
+		s.Logger.Errorw("Failed to create subscription",
+			"tenant_id", t.ID,
+			"error", err)
 		return err
 	}
 
