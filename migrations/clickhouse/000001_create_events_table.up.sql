@@ -14,7 +14,7 @@ CREATE TABLE flexprice.events (
     CONSTRAINT check_event_id CHECK id != '',
     CONSTRAINT check_environment_id CHECK environment_id != ''
 )
-ENGINE = ReplacingMergeTree(ingested_at)
+ENGINE = ReplacingMergeTree()
 PARTITION BY toYYYYMM(timestamp)
 PRIMARY KEY (tenant_id, environment_id)
 ORDER BY (tenant_id, environment_id, timestamp, id)
