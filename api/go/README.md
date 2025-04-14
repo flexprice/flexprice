@@ -10,6 +10,8 @@ go get github.com/flexprice/go-sdk
 
 ## Usage
 
+### Basic API Usage
+
 ```go
 package main
 
@@ -121,12 +123,97 @@ func main() {
 }
 ```
 
+### Async Client Usage
+
+The FlexPrice Go SDK includes an asynchronous client for more efficient event tracking, especially for high-volume applications:
+
+```go
+func RunAsyncSample(client *flexprice.APIClient) {
+	// Create an AsyncClient with debug enabled
+	asyncConfig := flexprice.DefaultAsyncConfig()
+	asyncConfig.Debug = true
+	asyncClient := client.NewAsyncClientWithConfig(asyncConfig)
+
+	// Example 1: Simple event
+	err := asyncClient.Enqueue(
+		"api_request",
+		"customer-123",
+		map[string]interface{}{
+			"path":             "/api/resource",
+			"method":           "GET",
+			"status":           "200",
+			"response_time_ms": 150,
+		},
+	)
+	if err != nil {
+		log.Fatalf("Failed to enqueue event: %v", err)
+	}
+	fmt.Println("Enqueued simple event")
+
+	// Example 2: Event with additional options
+	err = asyncClient.EnqueueWithOptions(flexprice.EventOptions{
+		EventName:          "file_upload",
+		ExternalCustomerID: "customer-123",
+		CustomerID:         "cust_456",  // Optional internal FlexPrice ID
+		EventID:            "event_789", // Custom event ID
+		Properties: map[string]interface{}{
+			"file_size_bytes": 1048576,
+			"file_type":       "image/jpeg",
+			"storage_bucket":  "user_uploads",
+		},
+		Source:    "upload_service",
+		Timestamp: time.Now().Format(time.RFC3339),
+	})
+	if err != nil {
+		log.Fatalf("Failed to enqueue event: %v", err)
+	}
+	fmt.Println("Enqueued event with custom options")
+
+	// Example 3: Batch multiple events
+	for i := 0; i < 10; i++ {
+		err = asyncClient.Enqueue(
+			"batch_example",
+			fmt.Sprintf("customer-%d", i),
+			map[string]interface{}{
+				"index": i,
+				"batch": "demo",
+			},
+		)
+		if err != nil {
+			log.Fatalf("Failed to enqueue batch event: %v", err)
+		}
+	}
+	fmt.Println("Enqueued 10 batch events")
+
+	// Wait for a moment to let the API requests complete
+	fmt.Println("Waiting for events to be processed...")
+	time.Sleep(time.Second * 5)
+	
+	// Explicitly close the client - this will flush any remaining events
+	fmt.Println("Closing client...")
+	asyncClient.Close()
+	
+	fmt.Println("Example completed successfully!")
+}
+```
+
+## Async Client Benefits
+
+The async client provides several advantages:
+
+1. **Efficient Batching**: Events are automatically batched for more efficient API usage
+2. **Background Processing**: Events are sent asynchronously, not blocking your application
+3. **Auto-Generated IDs**: EventIDs are automatically generated if not provided
+4. **Rich Property Types**: Properties support various types (numbers, booleans, etc.)
+5. **Detailed Logging**: Enable debug mode for comprehensive logging
+
 ## Features
 
 - Complete API coverage
 - Type-safe client
 - Detailed documentation
 - Error handling
+- Batch processing for high-volume applications
 
 ## Documentation
 

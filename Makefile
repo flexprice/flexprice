@@ -267,6 +267,8 @@ generate-go-sdk: install-openapi-generator
 		--git-repo-id=go-sdk \
 		--git-user-id=flexprice \
 		--global-property apiTests=false,modelTests=false
+	@chmod +x api/scripts/go/add_go_async.sh
+	@./api/scripts/go/add_go_async.sh
 	@echo "Go SDK generated successfully"
 
 # Generate Python SDK
