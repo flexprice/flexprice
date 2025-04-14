@@ -85,7 +85,7 @@ func (s *tenantService) createTenantAsBillingCustomer(ctx context.Context, t *te
 	}
 
 	// Create customer in billing tenant
-	customerService := NewCustomerService(s.CustomerRepo)
+	customerService := NewCustomerService(s.CustomerRepo, s.SubRepo, s.InvoiceRepo, s.WalletRepo)
 	customer, err := customerService.CreateCustomer(billingCtx, createCustomerReq)
 	if err != nil {
 		return err
@@ -105,7 +105,7 @@ func (s *tenantService) onboardTenantOnFreePlan(ctx context.Context, t *tenant.T
 	ctx = context.WithValue(ctx, types.CtxTenantID, flexpriceTenantID)
 	ctx = context.WithValue(ctx, types.CtxEnvironmentID, flexpriceEnvironmentID)
 
-	planService := NewPlanService(s.DB, s.PlanRepo, s.PriceRepo, s.MeterRepo, s.EntitlementRepo, s.FeatureRepo, s.Logger)
+	planService := NewPlanService(s.DB, s.PlanRepo, s.PriceRepo, s.SubRepo, s.MeterRepo, s.EntitlementRepo, s.FeatureRepo, s.Logger)
 	// List plans
 	planFilter := types.NewNoLimitPlanFilter()
 	planFilter.Expand = lo.ToPtr(string(types.ExpandPrices))
