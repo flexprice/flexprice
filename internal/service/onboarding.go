@@ -11,7 +11,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/price"
-	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/pubsub"
@@ -342,23 +341,11 @@ func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, userID
 		tenantName = "Flexprice"
 	}
 
-	// Create tenant
-	newTenant := &tenant.Tenant{
-		ID:        tenantID,
-		Name:      tenantName,
-		Status:    types.StatusPublished,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-
-	if err := s.TenantRepo.Create(ctx, newTenant); err != nil {
-		return err
-	}
-
 	tenantService := NewTenantService(s.ServiceParams)
 
 	resp, err := tenantService.CreateTenant(ctx, dto.CreateTenantRequest{
 		Name: tenantName,
+		ID:   tenantID,
 	})
 	if err != nil {
 		return err

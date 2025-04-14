@@ -50,6 +50,7 @@ func (r *TenantBillingDetails) ToDomain() tenant.TenantBillingDetails {
 type CreateTenantRequest struct {
 	Name           string                `json:"name" validate:"required"`
 	BillingDetails *TenantBillingDetails `json:"billing_details,omitempty"`
+	ID             string                `json:"-"`
 }
 
 type TenantResponse struct {
@@ -76,8 +77,12 @@ func (r *CreateTenantRequest) ToTenant(ctx context.Context) *tenant.Tenant {
 		billingDetails = r.BillingDetails.ToDomain()
 	}
 
+	if r.ID == "" {
+		r.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TENANT)
+	}
+
 	return &tenant.Tenant{
-		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TENANT),
+		ID:             r.ID,
 		Name:           r.Name,
 		Status:         types.StatusPublished,
 		BillingDetails: billingDetails,
