@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 
-	"github.com/flexprice/flexprice/scripts/hacks/lago"
 	"github.com/flexprice/flexprice/scripts/internal"
 	"github.com/flexprice/flexprice/scripts/local"
 )
@@ -53,11 +52,6 @@ var commands = []Command{
 		Name:        "migrate-environments",
 		Description: "Migrate entities to use environment_id",
 		Run:         internal.MigrateEnvironments,
-	},
-	{
-		Name:        "migrate-from-lago",
-		Description: "Migrate from Lago to Flexprice",
-		Run:         lago.RunMigration,
 	},
 }
 
