@@ -16,6 +16,9 @@ type Event struct {
 	// Tenant identifier
 	TenantID string `json:"tenant_id" ch:"tenant_id" validate:"required"`
 
+	// Environment identifier
+	EnvironmentID string `json:"environment_id" ch:"environment_id"`
+
 	// Event name is an identifier for the event and will be used for filtering and aggregation
 	EventName string `json:"event_name" ch:"event_name" validate:"required"`
 
@@ -46,6 +49,7 @@ func NewEvent(
 	properties map[string]interface{},
 	timestamp time.Time,
 	eventID, customerID, source string,
+	environmentID string, // Add environmentID parameter
 ) *Event {
 	if eventID == "" {
 		eventID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_EVENT)
@@ -68,6 +72,7 @@ func NewEvent(
 		EventName:          eventName,
 		Timestamp:          timestamp,
 		Properties:         properties,
+		EnvironmentID:      environmentID,
 	}
 }
 

@@ -31,7 +31,7 @@ func TestQueryBuilder_WithBaseFilters(t *testing.T) {
 				CustomerID:         "cust_123",
 				ExternalCustomerID: "ext_123",
 			},
-			wantSQL: "WITH base_events AS (SELECT * FROM (SELECT DISTINCT ON (id, tenant_id, external_customer_id, customer_id, event_name) * FROM events WHERE event_name = 'audio_transcription' AND tenant_id = '00000000-0000-0000-0000-000000000000' AND timestamp >= toDateTime64('2024-01-01 00:00:00.000', 3) AND timestamp < toDateTime64('2024-01-02 00:00:00.000', 3) AND external_customer_id = 'ext_123' AND customer_id = 'cust_123' ORDER BY id, tenant_id, external_customer_id, customer_id, event_name, timestamp DESC))",
+			wantSQL: "WITH base_events AS (SELECT * FROM (SELECT DISTINCT ON (tenant_id, environment_id, timestamp, id) * FROM events WHERE event_name = 'audio_transcription' AND tenant_id = '00000000-0000-0000-0000-000000000000' AND timestamp >= toDateTime64('2024-01-01 00:00:00.000', 3) AND timestamp < toDateTime64('2024-01-02 00:00:00.000', 3) AND external_customer_id = 'ext_123' AND customer_id = 'cust_123' ORDER BY tenant_id, environment_id, timestamp, id DESC))",
 		},
 		{
 			name: "base filters without customer ID",
@@ -40,7 +40,7 @@ func TestQueryBuilder_WithBaseFilters(t *testing.T) {
 				StartTime: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 				EndTime:   time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
 			},
-			wantSQL: "WITH base_events AS (SELECT * FROM (SELECT DISTINCT ON (id, tenant_id, external_customer_id, customer_id, event_name) * FROM events WHERE event_name = 'api_calls' AND tenant_id = '00000000-0000-0000-0000-000000000000' AND timestamp >= toDateTime64('2024-01-01 00:00:00.000', 3) AND timestamp < toDateTime64('2024-01-02 00:00:00.000', 3) ORDER BY id, tenant_id, external_customer_id, customer_id, event_name, timestamp DESC))",
+			wantSQL: "WITH base_events AS (SELECT * FROM (SELECT DISTINCT ON (tenant_id, environment_id, timestamp, id) * FROM events WHERE event_name = 'api_calls' AND tenant_id = '00000000-0000-0000-0000-000000000000' AND timestamp >= toDateTime64('2024-01-01 00:00:00.000', 3) AND timestamp < toDateTime64('2024-01-02 00:00:00.000', 3) ORDER BY tenant_id, environment_id, timestamp, id DESC))",
 		},
 	}
 

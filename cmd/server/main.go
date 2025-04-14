@@ -434,6 +434,7 @@ func handleEventConsumption(cfg *config.Configuration, log *logger.Logger, event
 			"", // Customer ID will be looked up by external ID
 			"", // Generate new ID
 			"system",
+			cfg.Billing.EnvironmentID,
 		)
 		eventsToInsert = append(eventsToInsert, billingEvent)
 	}

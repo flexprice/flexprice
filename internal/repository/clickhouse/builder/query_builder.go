@@ -28,7 +28,7 @@ func NewQueryBuilder() *QueryBuilder {
 
 // getDeduplicationKey returns the columns used for deduplication
 func (qb *QueryBuilder) getDeduplicationKey() string {
-	return "id, tenant_id, external_customer_id, customer_id, event_name"
+	return "tenant_id, environment_id, timestamp, id"
 }
 
 func (qb *QueryBuilder) WithBaseFilters(ctx context.Context, params *events.UsageParams) *QueryBuilder {
@@ -39,6 +39,12 @@ func (qb *QueryBuilder) WithBaseFilters(ctx context.Context, params *events.Usag
 	tenantID := types.GetTenantID(ctx)
 	if tenantID != "" {
 		conditions = append(conditions, fmt.Sprintf("tenant_id = '%s'", tenantID))
+	}
+
+	// Add environment_id filter if present in context
+	environmentID := types.GetEnvironmentID(ctx)
+	if environmentID != "" {
+		conditions = append(conditions, fmt.Sprintf("environment_id = '%s'", environmentID))
 	}
 
 	conditions = append(conditions, parseTimeConditions(params)...)
@@ -75,7 +81,7 @@ func (qb *QueryBuilder) WithBaseFilters(ctx context.Context, params *events.Usag
 	qb.params = params
 	qb.baseQuery = fmt.Sprintf(`base_events AS (
 			SELECT * FROM (
-				SELECT DISTINCT ON (%s) * FROM events WHERE %s ORDER BY %s, timestamp DESC
+				SELECT DISTINCT ON (%s) * FROM events WHERE %s ORDER BY %s DESC
 			)
 		)`,
 		qb.getDeduplicationKey(),

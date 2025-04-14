@@ -43,9 +43,9 @@ func (r *EventRepository) InsertEvent(ctx context.Context, event *events.Event) 
 
 	query := `
 		INSERT INTO events (
-			id, external_customer_id, customer_id, tenant_id, event_name, timestamp, source, properties
+			id, external_customer_id, customer_id, tenant_id, event_name, timestamp, source, properties, environment_id
 		) VALUES (
-			?, ?, ?, ?, ?, ?, ?, ?
+			?, ?, ?, ?, ?, ?, ?, ?, ?
 		)
 	`
 
@@ -58,6 +58,7 @@ func (r *EventRepository) InsertEvent(ctx context.Context, event *events.Event) 
 		event.Timestamp,
 		event.Source,
 		string(propertiesJSON),
+		event.EnvironmentID,
 	)
 
 	if err != nil {
@@ -86,7 +87,7 @@ func (r *EventRepository) BulkInsertEvents(ctx context.Context, events []*events
 		// Prepare batch statement
 		batch, err := r.store.GetConn().PrepareBatch(ctx, `
 		INSERT INTO events (
-			id, external_customer_id, customer_id, tenant_id, event_name, timestamp, source, properties
+			id, external_customer_id, customer_id, tenant_id, event_name, timestamp, source, properties, environment_id
 		)
 	`)
 		if err != nil {
@@ -120,6 +121,7 @@ func (r *EventRepository) BulkInsertEvents(ctx context.Context, events []*events
 				event.Timestamp,
 				event.Source,
 				string(propertiesJSON),
+				event.EnvironmentID,
 			)
 
 			if err != nil {
@@ -372,12 +374,20 @@ func (r *EventRepository) GetEvents(ctx context.Context, params *events.GetEvent
 			event_name,
 			timestamp,
 			source,
-			properties
-		FROM events
+			properties,
+			environment_id
+		FROM events FINAL
 		WHERE tenant_id = ?
 	`
 	args := make([]interface{}, 0)
 	args = append(args, types.GetTenantID(ctx))
+
+	// Add environment_id filter if present in context
+	environmentID := types.GetEnvironmentID(ctx)
+	if environmentID != "" {
+		baseQuery += " AND environment_id = ?"
+		args = append(args, environmentID)
+	}
 
 	// Apply filters
 	if params.EventID != "" {
@@ -491,6 +501,7 @@ func (r *EventRepository) GetEvents(ctx context.Context, params *events.GetEvent
 			&event.Timestamp,
 			&event.Source,
 			&propertiesJSON,
+			&event.EnvironmentID,
 		)
 		if err != nil {
 			return nil, 0, ierr.WithError(err).

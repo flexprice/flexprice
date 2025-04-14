@@ -170,6 +170,7 @@ func (s *EventServiceSuite) TestGetUsage() {
 			evt.EventID,
 			evt.CustomerID,
 			evt.Source,
+			types.GetEnvironmentID(s.ctx),
 		)
 		err := s.eventRepo.InsertEvent(s.ctx, event)
 		s.NoError(err)
@@ -343,6 +344,7 @@ func (s *EventServiceSuite) TestGetUsageByMeter() {
 			evt.EventID,
 			evt.CustomerID,
 			evt.Source,
+			types.GetEnvironmentID(s.ctx),
 		)
 		err := s.eventRepo.InsertEvent(s.ctx, event)
 		s.NoError(err)
@@ -432,6 +434,7 @@ func (s *EventServiceSuite) TestGetEvents() {
 			evt.EventID,
 			evt.CustomerID,
 			evt.Source,
+			types.GetEnvironmentID(s.ctx),
 		)
 		err := s.eventRepo.InsertEvent(s.ctx, event)
 		s.NoError(err)

@@ -76,7 +76,7 @@ func (s *BaseServiceTestSuite) SetupSuite() {
 	// Initialize logger with test config
 	cfg := &config.Configuration{
 		Logging: config.LoggingConfig{
-			Level: types.LogLevelDebug,
+			Level: types.LogLevelInfo,
 		},
 	}
 	var err error

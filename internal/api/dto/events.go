@@ -43,6 +43,7 @@ func (r *IngestEventRequest) ToEvent(ctx context.Context) *events.Event {
 		r.EventID,
 		r.CustomerID,
 		r.Source,
+		types.GetEnvironmentID(ctx),
 	)
 }
 
@@ -99,6 +100,7 @@ type Event struct {
 	Timestamp          time.Time              `json:"timestamp"`
 	Properties         map[string]interface{} `json:"properties"`
 	Source             string                 `json:"source"`
+	EnvironmentID      string                 `json:"environment_id"`
 }
 
 type GetUsageResponse struct {
