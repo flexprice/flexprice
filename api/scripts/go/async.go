@@ -12,6 +12,8 @@ access to all required type definitions.
 The linter will show errors when editing this file standalone, which is expected
 and can be ignored. The file will compile correctly when copied to the SDK.
 */
+
+// nolint
 package flexprice
 
 import (
