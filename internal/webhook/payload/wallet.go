@@ -63,7 +63,7 @@ func (b TransactionPayloadBuilder) BuildPayload(
 	err := json.Unmarshal(data, &parsedPayload)
 	if err != nil {
 		return nil, ierr.WithError(err).
-			WithHint("Unable to unmarshal wallet event payload").
+			WithHint("Unable to unmarshal InternalTransactionEvent payload").
 			Mark(ierr.ErrInvalidOperation)
 	}
 
