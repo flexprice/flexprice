@@ -77,7 +77,7 @@ func NewPayloadBuilderFactory(services *Services) PayloadBuilderFactory {
 		return NewTransactionPayloadBuilder(f.services)
 	}
 	f.builders[types.WebhookEventWalletTransactionPaymentSuccess] = func() PayloadBuilder {
-		return NewWalletPayloadBuilder(f.services)
+		return NewTransactionPayloadBuilder(f.services)
 	}
 
 	return f
