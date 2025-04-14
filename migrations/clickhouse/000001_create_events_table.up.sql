@@ -6,12 +6,13 @@ CREATE TABLE flexprice.events (
     event_name String,
     customer_id Nullable(String),
     source Nullable(String),
-    timestamp DateTime64(3),
+    timestamp DateTime64(3) DEFAULT now(),
     ingested_at DateTime64(3) DEFAULT now(),
     properties String,
     CONSTRAINT check_event_name CHECK event_name != '',
     CONSTRAINT check_tenant_id CHECK tenant_id != '',
-    CONSTRAINT check_event_id CHECK id != ''
+    CONSTRAINT check_event_id CHECK id != '',
+    CONSTRAINT check_environment_id CHECK environment_id != ''
 )
 ENGINE = ReplacingMergeTree(ingested_at)
 PARTITION BY toYYYYMM(timestamp)

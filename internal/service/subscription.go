@@ -639,8 +639,8 @@ func (s *subscriptionService) UpdateBillingPeriods(ctx context.Context) (*dto.Su
 		for _, sub := range subs {
 			// update context to include the tenant id
 			ctx = context.WithValue(ctx, types.CtxTenantID, sub.TenantID)
-			// clean the environment id to make sure it's not used
-			ctx = context.WithValue(ctx, types.CtxEnvironmentID, "")
+			ctx = context.WithValue(ctx, types.CtxEnvironmentID, sub.EnvironmentID)
+			ctx = context.WithValue(ctx, types.CtxUserID, sub.CreatedBy)
 
 			item := &dto.SubscriptionUpdatePeriodResponseItem{
 				SubscriptionID: sub.ID,
