@@ -6627,6 +6627,9 @@
                 "customer_id": {
                     "type": "string"
                 },
+                "environment_id": {
+                    "type": "string"
+                },
                 "event_name": {
                     "type": "string"
                 },
@@ -6740,31 +6743,40 @@
                     "type": "boolean"
                 },
                 "end_time": {
+                    "description": "End time of the events to be fetched in ISO 8601 format\nDefaults to now if not provided",
                     "type": "string",
                     "example": "2024-12-09T00:00:00Z"
                 },
                 "event_id": {
+                    "description": "Event ID is the idempotency key for the event",
                     "type": "string"
                 },
                 "event_name": {
+                    "description": "Event name / Unique identifier for the event in your system",
                     "type": "string"
                 },
                 "external_customer_id": {
+                    "description": "Customer ID in your system that was sent with the event",
                     "type": "string"
                 },
                 "iter_first_key": {
+                    "description": "First key to iterate over the events",
                     "type": "string"
                 },
                 "iter_last_key": {
+                    "description": "Last key to iterate over the events",
                     "type": "string"
                 },
                 "offset": {
+                    "description": "Offset to fetch the events and is set to 0 by default",
                     "type": "integer"
                 },
                 "page_size": {
+                    "description": "Page size to fetch the events and is set to 50 by default",
                     "type": "integer"
                 },
                 "property_filters": {
+                    "description": "Property filters to filter the events by the keys in `properties` field of the event",
                     "type": "object",
                     "additionalProperties": {
                         "type": "array",
@@ -6774,6 +6786,7 @@
                     }
                 },
                 "start_time": {
+                    "description": "Start time of the events to be fetched in ISO 8601 format\nDefaults to last 7 days from now if not provided",
                     "type": "string",
                     "example": "2024-11-09T00:00:00Z"
                 }
@@ -7290,20 +7303,6 @@
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/dto.InvoiceResponse"
-                    }
-                },
-                "pagination": {
-                    "$ref": "#/definitions/types.PaginationResponse"
-                }
-            }
-        },
-        "dto.ListMetersResponse": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.MeterResponse"
                     }
                 },
                 "pagination": {

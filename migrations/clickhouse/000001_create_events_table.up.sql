@@ -19,3 +19,11 @@ PARTITION BY toYYYYMM(timestamp)
 PRIMARY KEY (tenant_id, environment_id)
 ORDER BY (tenant_id, environment_id, timestamp, id)
 SETTINGS index_granularity = 8192, allow_nullable_key = 1;
+
+-- Bloom Filter for external_customer_id
+ALTER TABLE flexprice.events
+ADD INDEX external_customer_id_idx external_customer_id TYPE bloom_filter GRANULARITY 8192;
+
+-- Set Index for event_name
+ALTER TABLE flexprice.events
+ADD INDEX event_name_idx event_name TYPE set(0) GRANULARITY 8192;
