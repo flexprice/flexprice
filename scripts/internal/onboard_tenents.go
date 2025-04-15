@@ -102,7 +102,7 @@ func SyncBillingCustomers() error {
 	billingCtx = context.WithValue(billingCtx, types.CtxEnvironmentID, cfg.Billing.EnvironmentID)
 
 	// Create customer service for checking existing customers
-	customerService := service.NewCustomerService(customerRepo, subscriptionRepo, invoiceRepo, walletRepo)
+	customerService := service.NewCustomerService(serviceParams)
 
 	// Process each tenant
 	var tenantsToSync []*tenant.Tenant
