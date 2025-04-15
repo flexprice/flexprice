@@ -53,6 +53,11 @@ var commands = []Command{
 		Description: "Migrate entities to use environment_id",
 		Run:         internal.MigrateEnvironments,
 	},
+	{
+		Name:        "sync-billing-customers",
+		Description: "Sync billing customers",
+		Run:         internal.SyncBillingCustomers,
+	},
 }
 
 func main() {

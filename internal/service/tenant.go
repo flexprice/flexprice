@@ -20,6 +20,7 @@ type TenantService interface {
 	GetAllTenants(ctx context.Context) ([]*dto.TenantResponse, error)
 	UpdateTenant(ctx context.Context, id string, req dto.UpdateTenantRequest) (*dto.TenantResponse, error)
 	GetBillingUsage(ctx context.Context) (*dto.TenantBillingUsage, error)
+	CreateTenantAsBillingCustomer(ctx context.Context, t *tenant.Tenant) error
 }
 
 type tenantService struct {
@@ -46,7 +47,7 @@ func (s *tenantService) CreateTenant(ctx context.Context, req dto.CreateTenantRe
 	}
 
 	// Create a customer in the billing tenant for this new tenant
-	if err := s.createTenantAsBillingCustomer(ctx, newTenant); err != nil {
+	if err := s.CreateTenantAsBillingCustomer(ctx, newTenant); err != nil {
 		// Log error but don't fail tenant creation
 		s.Logger.Errorw("Failed to create billing customer for tenant",
 			"tenant_id", newTenant.ID,
@@ -56,8 +57,8 @@ func (s *tenantService) CreateTenant(ctx context.Context, req dto.CreateTenantRe
 	return dto.NewTenantResponse(newTenant), nil
 }
 
-// createTenantAsBillingCustomer creates a customer in the billing tenant using the tenant details
-func (s *tenantService) createTenantAsBillingCustomer(ctx context.Context, t *tenant.Tenant) error {
+// CreateTenantAsBillingCustomer creates a customer in the billing tenant using the tenant details
+func (s *tenantService) CreateTenantAsBillingCustomer(ctx context.Context, t *tenant.Tenant) error {
 	if s.Config.Billing.TenantID == "" {
 		s.Logger.Warnw("Billing tenant ID is not set, skipping customer creation",
 			"tenant_id", t.ID)
