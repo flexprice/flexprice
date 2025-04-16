@@ -269,10 +269,6 @@ type TopUpWalletRequest struct {
 	Amount decimal.Decimal `json:"amount" binding:"required"`
 	// description to add any specific details about the transaction
 	Description string `json:"description,omitempty"`
-	// purchased_credits when true, the credits are added as purchased credits
-	PurchasedCredits bool `json:"purchased_credits"`
-	// generate_invoice when true, an invoice will be generated for the transaction
-	GenerateInvoice bool `json:"generate_invoice"`
 	// expiry_date YYYYMMDD format in UTC timezone (optional to set nil means no expiry)
 	// for ex 20250101 means the credits will expire on 2025-01-01 00:00:00 UTC
 	// hence they will be available for use until 2024-12-31 23:59:59 UTC
@@ -281,7 +277,12 @@ type TopUpWalletRequest struct {
 	ReferenceType string `json:"reference_type,omitempty"`
 	// reference_id is the ID of the reference ex payment ID, invoice ID, request ID
 	ReferenceID string         `json:"reference_id,omitempty"`
-	Metadata    types.Metadata `json:"metadata,omitempty"`
+	// idempotency_key is a unique key for the transaction
+	IdempotencyKey *string `json:"idempotency_key" binding:"required"`
+	// transaction_reason is the reason for the transaction
+	TransactionReason types.TransactionReason `json:"transaction_reason,omitempty" binding:"required"`
+	// metadata is a map of key-value pairs to store any additional information about the transaction
+	Metadata types.Metadata `json:"metadata,omitempty"`
 }
 
 func (r *TopUpWalletRequest) Validate() error {
@@ -291,6 +292,18 @@ func (r *TopUpWalletRequest) Validate() error {
 			WithReportableDetails(map[string]interface{}{
 				"amount": r.Amount,
 			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	allowedTransactionReasons := []types.TransactionReason{
+		types.TransactionReasonFreeCredit,
+		types.TransactionReasonPurchasedCreditInvoiced,
+		types.TransactionReasonPurchasedCreditDirect,
+	}
+
+	if !lo.Contains(allowedTransactionReasons, r.TransactionReason) {
+		return ierr.NewError("transaction_reason must be one of the allowed values").
+			WithHint("Invalid transaction reason").
 			Mark(ierr.ErrValidation)
 	}
 

@@ -921,8 +921,10 @@ func (s *InvoiceServiceSuite) setupWallets() {
 
 	// Top up the promotional wallet
 	_, err = walletService.TopUpWallet(s.GetContext(), promoWallet.ID, &dto.TopUpWalletRequest{
-		Amount:      decimal.NewFromInt(50),
-		Description: "Test top-up for AttemptPayment",
+		Amount:            decimal.NewFromInt(50),
+		IdempotencyKey:    lo.ToPtr("test_topup_1"),
+		TransactionReason: types.TransactionReasonFreeCredit,
+		Description:       "Test top-up for AttemptPayment",
 	})
 	s.NoError(err)
 
@@ -938,8 +940,10 @@ func (s *InvoiceServiceSuite) setupWallets() {
 
 	// Top up the prepaid wallet
 	_, err = walletService.TopUpWallet(s.GetContext(), prepaidWallet.ID, &dto.TopUpWalletRequest{
-		Amount:      decimal.NewFromInt(100),
-		Description: "Test top-up for AttemptPayment",
+		Amount:            decimal.NewFromInt(100),
+		IdempotencyKey:    lo.ToPtr("test_topup_2"),
+		TransactionReason: types.TransactionReasonFreeCredit,
+		Description:       "Test top-up for AttemptPayment",
 	})
 	s.NoError(err)
 }
@@ -951,6 +955,7 @@ func (s *InvoiceServiceSuite) TestAttemptPayment() {
 	testCases := []struct {
 		name                 string
 		setupInvoice         func() *invoice.Invoice
+		setupWallets         func()
 		expectedError        bool
 		expectedErrorMessage string
 		expectedPaymentState types.PaymentStatus
@@ -975,6 +980,9 @@ func (s *InvoiceServiceSuite) TestAttemptPayment() {
 				s.NoError(s.invoiceRepo.Create(s.GetContext(), inv))
 				return inv
 			},
+			setupWallets: func() {
+				s.setupWallets() // Ensure wallets are set up with sufficient balance
+			},
 			expectedError:        false,
 			expectedPaymentState: types.PaymentStatusSucceeded,
 			expectedAmountPaid:   decimal.NewFromInt(100),
@@ -997,6 +1005,9 @@ func (s *InvoiceServiceSuite) TestAttemptPayment() {
 				}
 				s.NoError(s.invoiceRepo.Create(s.GetContext(), inv))
 				return inv
+			},
+			setupWallets: func() {
+				s.setupWallets() // Ensure wallets are set up with limited balance
 			},
 			expectedError:        false,
 			expectedPaymentState: types.PaymentStatusPending, // Still pending as it's partially paid
@@ -1021,27 +1032,33 @@ func (s *InvoiceServiceSuite) TestAttemptPayment() {
 				s.NoError(s.invoiceRepo.Create(s.GetContext(), inv))
 				return inv
 			},
+			setupWallets: func() {
+				s.setupWallets()
+			},
 			expectedError:        true,
 			expectedErrorMessage: "invoice must be finalized",
 		},
 		{
-			name: "Invoice not in pending payment state",
+			name: "Invoice already paid",
 			setupInvoice: func() *invoice.Invoice {
 				inv := &invoice.Invoice{
-					ID:              "inv_test_not_pending",
+					ID:              "inv_test_already_paid",
 					CustomerID:      s.testData.customer.ID,
 					InvoiceType:     types.InvoiceTypeOneOff,
 					InvoiceStatus:   types.InvoiceStatusFinalized,
-					PaymentStatus:   types.PaymentStatusSucceeded, // Not pending
+					PaymentStatus:   types.PaymentStatusSucceeded, // Already paid
 					Currency:        "usd",
 					AmountDue:       decimal.NewFromInt(100),
 					AmountPaid:      decimal.NewFromInt(100),
 					AmountRemaining: decimal.Zero,
-					Description:     "Test Invoice - Not Pending",
+					Description:     "Test Invoice - Already Paid",
 					BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
 				}
 				s.NoError(s.invoiceRepo.Create(s.GetContext(), inv))
 				return inv
+			},
+			setupWallets: func() {
+				s.setupWallets()
 			},
 			expectedError:        true,
 			expectedErrorMessage: "invoice is already paid by payment status",
@@ -1064,6 +1081,9 @@ func (s *InvoiceServiceSuite) TestAttemptPayment() {
 				}
 				s.NoError(s.invoiceRepo.Create(s.GetContext(), inv))
 				return inv
+			},
+			setupWallets: func() {
+				s.setupWallets()
 			},
 			expectedError:        true,
 			expectedErrorMessage: "invoice has no remaining amount to pay",
@@ -1107,16 +1127,35 @@ func (s *InvoiceServiceSuite) TestAttemptPayment() {
 		s.Run(tc.name, func() {
 			// Setup invoice for this test case
 			inv := tc.setupInvoice()
-			s.setupWallets()
+
+			// Setup wallets if specified
+			if tc.setupWallets != nil {
+				tc.setupWallets()
+			}
 
 			// Attempt payment
 			err := s.service.AttemptPayment(s.GetContext(), inv.ID)
 
 			if tc.expectedError {
-				s.Error(err)
+				s.Require().Error(err, "Expected an error for test case: %s", tc.name)
+
+				// Check for specific error message if provided
 				if tc.expectedErrorMessage != "" {
-					s.Contains(err.Error(), tc.expectedErrorMessage)
+					s.Contains(err.Error(), tc.expectedErrorMessage,
+						"Error message mismatch for test case: %s\nFull error: %v",
+						tc.name, err)
 				}
+
+				// Additional debugging: log wallets for the customer
+				wallets, walletErr := s.GetStores().WalletRepo.GetWalletsByCustomerID(s.GetContext(), inv.CustomerID)
+				s.NoError(walletErr, "Failed to retrieve wallets for customer")
+				s.T().Logf("Wallets for customer %s: %+v", inv.CustomerID, wallets)
+
+				// Log customer details
+				customer, custErr := s.GetStores().CustomerRepo.Get(s.GetContext(), inv.CustomerID)
+				s.NoError(custErr, "Failed to retrieve customer details")
+				s.T().Logf("Customer details: %+v", customer)
+
 				return
 			}
 

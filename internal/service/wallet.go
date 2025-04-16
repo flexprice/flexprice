@@ -11,6 +11,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -226,6 +227,121 @@ func (s *walletService) GetWalletTransactions(ctx context.Context, walletID stri
 
 // Update the TopUpWallet method to use the new processWalletOperation
 func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *dto.TopUpWalletRequest) (*dto.WalletResponse, error) {
+	var referenceType types.WalletTxReferenceType
+	var referenceID string
+
+	idempotencyKey := req.IdempotencyKey
+
+	if err := req.Validate(); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Invalid top up wallet request").
+			Mark(ierr.ErrValidation)
+	}
+
+	// this case is for free credits
+	if req.TransactionReason == types.TransactionReasonFreeCredit {
+		referenceType = types.WalletTxReferenceTypeExternal
+		referenceID = *req.IdempotencyKey
+	}
+
+	// this case is for when credits are purchased directly without invoice
+	if req.TransactionReason == types.TransactionReasonPurchasedCreditDirect {
+		referenceType = types.WalletTxReferenceTypeExternal
+		referenceID = *req.IdempotencyKey
+	}
+
+	// this case is for when credits are purchased and flexprice system generates an invoice and payment
+	if req.TransactionReason == types.TransactionReasonPurchasedCreditInvoiced {
+		referenceType = types.WalletTxReferenceTypeExternal
+		referenceID = *req.IdempotencyKey
+
+		// create services
+		invoiceService := NewInvoiceService(s.ServiceParams)
+		customerService := NewCustomerService(s.ServiceParams)
+		paymentService := NewPaymentService(s.ServiceParams)
+
+		// get customer data from wallet
+		w, err := s.WalletRepo.GetWalletByID(ctx, walletID)
+		if err != nil {
+			return nil, err
+		}
+
+		// get customer data from wallet
+		customer, err := customerService.GetCustomer(ctx, w.CustomerID)
+		if err != nil {
+			return nil, err
+		}
+
+		dueDate := time.Now().UTC()
+		displayName := "Purchased Credits"
+
+		err = s.DB.WithTx(ctx, func(ctx context.Context) error {
+
+			// create invoice with payment status pending
+			invoiceData := &dto.CreateInvoiceRequest{
+				CustomerID:     customer.ID,
+				AmountDue:      req.Amount,
+				Currency:       w.Currency,
+				InvoiceType:    types.InvoiceTypeCredit,
+				DueDate:        &dueDate,
+				IdempotencyKey: idempotencyKey,
+				InvoiceStatus:  lo.ToPtr(types.InvoiceStatusFinalized),
+				LineItems: []dto.CreateInvoiceLineItemRequest{
+					{
+						Amount:      req.Amount,
+						Quantity:    decimal.NewFromInt(1),
+						DisplayName: &displayName,
+					},
+				},
+				PaymentStatus: lo.ToPtr(types.PaymentStatusPending),
+			}
+
+			invoice, err := invoiceService.CreateInvoice(ctx, *invoiceData)
+			if err != nil {
+				return err
+			}
+			s.Logger.Infof("created invoice: %+v", invoice)
+
+			paymentData := &dto.CreatePaymentRequest{
+				IdempotencyKey:    *idempotencyKey,
+				DestinationType:   types.PaymentDestinationTypeInvoice,
+				DestinationID:     invoice.ID,
+				PaymentMethodType: types.PaymentMethodTypeOffline,
+				Amount:            req.Amount,
+				Currency:          w.Currency,
+				ProcessPayment:    false,
+			}
+
+			// create payment
+			s.Logger.Infof("creating payment: %+v", paymentData)
+			payment, err := paymentService.CreatePayment(ctx, paymentData)
+			if err != nil {
+				return err
+			}
+
+			// update invoice payment status to paid
+			s.Logger.Infof("updating invoice payment status to paid: %s", invoice.ID)
+			if err := invoiceService.UpdatePaymentStatus(ctx, invoice.ID, types.PaymentStatusSucceeded, &req.Amount); err != nil {
+				return err
+			}
+
+			// mark payment as succeeded
+			s.Logger.Infof("processing payment: %s", payment.ID)
+			if _, err := paymentService.UpdatePayment(ctx, payment.ID, dto.UpdatePaymentRequest{
+				PaymentStatus: lo.ToPtr(string(types.PaymentStatusSucceeded)),
+			}); err != nil {
+				return err
+			}
+
+			return nil
+		})
+
+		if err != nil {
+			return nil, err
+		}
+
+	}
+
 	// Create a credit operation
 	creditReq := &wallet.WalletOperation{
 		WalletID:          walletID,
@@ -233,23 +349,10 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 		CreditAmount:      req.Amount,
 		Description:       req.Description,
 		Metadata:          req.Metadata,
-		TransactionReason: types.TransactionReasonFreeCredit,
-		ReferenceType:     types.WalletTxReferenceTypeRequest,
-		ReferenceID:       types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION),
+		TransactionReason: req.TransactionReason,
+		ReferenceType:     referenceType,
+		ReferenceID:       referenceID,
 		ExpiryDate:        req.ExpiryDate,
-	}
-
-	if req.PurchasedCredits {
-		if req.GenerateInvoice {
-			creditReq.TransactionReason = types.TransactionReasonPurchasedCreditInvoiced
-		} else {
-			creditReq.TransactionReason = types.TransactionReasonPurchasedCreditDirect
-		}
-	}
-
-	if creditReq.ReferenceID == "" || creditReq.ReferenceType == "" {
-		creditReq.ReferenceID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION)
-		creditReq.ReferenceType = types.WalletTxReferenceTypeRequest
 	}
 
 	if err := s.CreditWallet(ctx, creditReq); err != nil {

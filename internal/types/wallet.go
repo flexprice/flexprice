@@ -90,8 +90,6 @@ func (t TransactionReason) Validate() error {
 type WalletTxReferenceType string
 
 const (
-	// WalletTxReferenceTypeInvoice is used for flexprice system invoice IDs
-	WalletTxReferenceTypeInvoice WalletTxReferenceType = "INVOICE"
 	// WalletTxReferenceTypePayment is used for flexprice system payment IDs
 	WalletTxReferenceTypePayment WalletTxReferenceType = "PAYMENT"
 	// WalletTxReferenceTypeExternal is used for external reference IDs in case
@@ -103,7 +101,6 @@ const (
 
 func (t WalletTxReferenceType) Validate() error {
 	allowedValues := []string{
-		string(WalletTxReferenceTypeInvoice),
 		string(WalletTxReferenceTypePayment),
 		string(WalletTxReferenceTypeExternal),
 		string(WalletTxReferenceTypeRequest),
