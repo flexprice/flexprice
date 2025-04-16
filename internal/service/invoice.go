@@ -406,8 +406,6 @@ func (s *invoiceService) UpdatePaymentStatus(ctx context.Context, id string, sta
 		return err
 	}
 
-	s.Logger.Infof("validated payment status transition for invoice: %s", inv.ID)
-
 	// Validate the request amount
 	if amount != nil && amount.IsNegative() {
 		return ierr.NewError("amount must be non-negative").
