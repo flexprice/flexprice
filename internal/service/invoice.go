@@ -401,6 +401,8 @@ func (s *invoiceService) UpdatePaymentStatus(ctx context.Context, id string, sta
 		return err
 	}
 
+	s.Logger.Infof("validated payment status transition for invoice: %s", inv.ID)
+
 	// Validate the request amount
 	if amount != nil && amount.IsNegative() {
 		return ierr.NewError("amount must be non-negative").
@@ -584,7 +586,8 @@ func (s *invoiceService) GetCustomerInvoiceSummary(ctx context.Context, customer
 
 		// Split charges by type
 		for _, item := range inv.LineItems {
-			if *item.PriceType == string(types.PRICE_TYPE_USAGE) {
+			// Safely handle nil PriceType
+			if item.PriceType != nil && *item.PriceType == string(types.PRICE_TYPE_USAGE) {
 				summary.UnpaidUsageCharges = summary.UnpaidUsageCharges.Add(item.Amount)
 			} else {
 				summary.UnpaidFixedCharges = summary.UnpaidFixedCharges.Add(item.Amount)
@@ -697,7 +700,6 @@ func (s *invoiceService) validatePaymentStatusTransition(from, to types.PaymentS
 
 // AttemptPayment attempts to pay an invoice using available wallets
 func (s *invoiceService) AttemptPayment(ctx context.Context, id string) error {
-	s.Logger.Infow("attempting payment for invoice", "invoice_id", id)
 
 	// Get invoice
 	inv, err := s.InvoiceRepo.Get(ctx, id)
