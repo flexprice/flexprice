@@ -140,7 +140,7 @@ func (s *InMemoryEventStore) GetEvents(ctx context.Context, params *events.GetEv
 		}
 
 		// Apply property filters
-		if params.PropertyFilters != nil && len(params.PropertyFilters) > 0 {
+		if len(params.PropertyFilters) > 0 {
 			propertyFilterMatched := true
 			for property, values := range params.PropertyFilters {
 				if len(values) == 0 {

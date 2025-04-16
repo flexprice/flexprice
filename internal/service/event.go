@@ -135,6 +135,8 @@ func (s *eventService) GetUsageByMeter(ctx context.Context, req *dto.GetUsageByM
 	return usage, nil
 }
 
+// GetUsageByMeterWithFilters returns usage for a meter with specific filters on top of the meter as defined in the price
+// TODO : deprecate this flow completely as we now allow only one meter per price without filters
 func (s *eventService) GetUsageByMeterWithFilters(ctx context.Context, req *dto.GetUsageByMeterRequest, filterGroups map[string]map[string][]string) ([]*events.AggregationResult, error) {
 	m, err := s.meterRepo.GetMeter(ctx, req.MeterID)
 	if err != nil {

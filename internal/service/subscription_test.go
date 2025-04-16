@@ -25,8 +25,9 @@ type BaseSubscriptionData struct {
 		customer *customer.Customer
 		plan     *plan.Plan
 		meters   struct {
-			apiCalls *meter.Meter
-			storage  *meter.Meter
+			apiCalls       *meter.Meter
+			storage        *meter.Meter
+			storageArchive *meter.Meter
 		}
 		prices struct {
 			apiCalls       *price.Price
@@ -124,9 +125,41 @@ func (s *SubscriptionServiceSuite) setupTestData() {
 			Type:  types.AggregationSum,
 			Field: "bytes_used",
 		},
+		Filters: []meter.Filter{
+			{
+				Key:    "region",
+				Values: []string{"us-east-1"},
+			},
+			{
+				Key:    "tier",
+				Values: []string{"standard"},
+			},
+		},
 		BaseModel: types.GetDefaultBaseModel(s.GetContext()),
 	}
 	s.NoError(s.GetStores().MeterRepo.CreateMeter(s.GetContext(), s.testData.meters.storage))
+
+	s.testData.meters.storageArchive = &meter.Meter{
+		ID:        "meter_storage_archive",
+		Name:      "Storage Archive",
+		EventName: "storage_usage",
+		Aggregation: meter.Aggregation{
+			Type:  types.AggregationSum,
+			Field: "bytes_used",
+		},
+		Filters: []meter.Filter{
+			{
+				Key:    "region",
+				Values: []string{"us-east-1"},
+			},
+			{
+				Key:    "tier",
+				Values: []string{"archive"},
+			},
+		},
+		BaseModel: types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(s.GetContext(), s.testData.meters.storageArchive))
 
 	// Create test prices
 	upTo1000 := uint64(1000)
@@ -166,7 +199,6 @@ func (s *SubscriptionServiceSuite) setupTestData() {
 		BillingCadence:     types.BILLING_CADENCE_RECURRING,
 		InvoiceCadence:     types.InvoiceCadenceAdvance,
 		MeterID:            s.testData.meters.storage.ID,
-		FilterValues:       map[string][]string{"region": {"us-east-1"}, "tier": {"standard"}},
 		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
 	}
 	s.NoError(s.GetStores().PriceRepo.Create(s.GetContext(), s.testData.prices.storage))
@@ -182,8 +214,7 @@ func (s *SubscriptionServiceSuite) setupTestData() {
 		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
 		BillingCadence:     types.BILLING_CADENCE_RECURRING,
 		InvoiceCadence:     types.InvoiceCadenceAdvance,
-		MeterID:            s.testData.meters.storage.ID,
-		FilterValues:       map[string][]string{"region": {"us-east-1"}, "tier": {"archive"}},
+		MeterID:            s.testData.meters.storageArchive.ID,
 		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
 	}
 	s.NoError(s.GetStores().PriceRepo.Create(s.GetContext(), s.testData.prices.storageArchive))
@@ -229,9 +260,9 @@ func (s *SubscriptionServiceSuite) setupTestData() {
 			PlanDisplayName:  s.testData.plan.Name,
 			PriceID:          s.testData.prices.storageArchive.ID,
 			PriceType:        s.testData.prices.storageArchive.Type,
-			MeterID:          s.testData.meters.storage.ID,
-			MeterDisplayName: s.testData.meters.storage.Name,
-			DisplayName:      s.testData.meters.storage.Name,
+			MeterID:          s.testData.meters.storageArchive.ID,
+			MeterDisplayName: s.testData.meters.storageArchive.Name,
+			DisplayName:      s.testData.meters.storageArchive.Name,
 			Quantity:         decimal.Zero,
 			Currency:         s.testData.subscription.Currency,
 			BillingPeriod:    s.testData.subscription.BillingPeriod,
@@ -323,7 +354,7 @@ func (s *SubscriptionServiceSuite) TestGetUsageBySubscription() {
 						Price:            s.testData.prices.storage,
 					},
 					{
-						MeterDisplayName: "Storage",
+						MeterDisplayName: "Storage Archive",
 						Quantity:         decimal.NewFromInt(300).InexactFloat64(),
 						Amount:           9, // archive: 300 * 0.03
 						Price:            s.testData.prices.storageArchive,
@@ -358,7 +389,7 @@ func (s *SubscriptionServiceSuite) TestGetUsageBySubscription() {
 						Price:            s.testData.prices.storage,
 					},
 					{
-						MeterDisplayName: "Storage",
+						MeterDisplayName: "Storage Archive",
 						Quantity:         decimal.NewFromInt(0).InexactFloat64(),
 						Amount:           0,
 						Price:            s.testData.prices.storageArchive,
@@ -366,7 +397,7 @@ func (s *SubscriptionServiceSuite) TestGetUsageBySubscription() {
 					{
 						MeterDisplayName: "API Calls",
 						Quantity:         decimal.NewFromInt(0).InexactFloat64(),
-						Amount:          0,
+						Amount:           0,
 						Price:            s.testData.prices.apiCalls,
 					},
 				},
@@ -391,7 +422,7 @@ func (s *SubscriptionServiceSuite) TestGetUsageBySubscription() {
 						Price:            s.testData.prices.storage,
 					},
 					{
-						MeterDisplayName: "Storage",
+						MeterDisplayName: "Storage Archive",
 						Quantity:         decimal.NewFromInt(300).InexactFloat64(),
 						Amount:           9, // archive: 300 * 0.03
 						Price:            s.testData.prices.storageArchive,

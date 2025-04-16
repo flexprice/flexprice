@@ -376,7 +376,7 @@ func (r *EventRepository) GetEvents(ctx context.Context, params *events.GetEvent
 			source,
 			properties,
 			environment_id
-		FROM events FINAL
+		FROM events
 		WHERE tenant_id = ?
 	`
 	args := make([]interface{}, 0)
@@ -412,7 +412,7 @@ func (r *EventRepository) GetEvents(ctx context.Context, params *events.GetEvent
 	}
 
 	// Apply property filters
-	if params.PropertyFilters != nil && len(params.PropertyFilters) > 0 {
+	if len(params.PropertyFilters) > 0 {
 		for property, values := range params.PropertyFilters {
 			if len(values) > 0 {
 				if len(values) == 1 {

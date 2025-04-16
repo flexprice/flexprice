@@ -226,12 +226,6 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*price.Price, error) 
 		}
 	}
 
-	// Initialize empty JSONB fields with proper zero values
-	filterValues := make(price.JSONBFilters)
-	if r.FilterValues != nil {
-		filterValues = price.JSONBFilters(r.FilterValues)
-	}
-
 	metadata := make(price.JSONBMetadata)
 	if r.Metadata != nil {
 		metadata = price.JSONBMetadata(r.Metadata)
@@ -293,7 +287,6 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*price.Price, error) 
 		InvoiceCadence:     r.InvoiceCadence,
 		TrialPeriod:        r.TrialPeriod,
 		MeterID:            r.MeterID,
-		FilterValues:       filterValues,
 		LookupKey:          r.LookupKey,
 		Description:        r.Description,
 		Metadata:           metadata,
