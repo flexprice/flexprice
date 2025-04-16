@@ -25,7 +25,7 @@ func GetAggregator(aggregationType types.AggregationType) events.Aggregator {
 }
 
 func getDeduplicationKey() string {
-	return "id, tenant_id, external_customer_id, customer_id, event_name"
+	return "id"
 }
 
 func formatClickHouseDateTime(t time.Time) string {
@@ -140,8 +140,9 @@ func (a *SumAggregator) GetQuery(ctx context.Context, params *events.UsageParams
             SELECT
                 %s anyLast(JSONExtractFloat(assumeNotNull(properties), '%s')) as value
             FROM events
-            PREWHERE event_name = '%s' 
-                AND tenant_id = '%s'
+            PREWHERE tenant_id = '%s'
+				AND environment_id = '%s'
+				AND event_name = '%s'
 				%s
 				%s
                 %s
@@ -153,8 +154,9 @@ func (a *SumAggregator) GetQuery(ctx context.Context, params *events.UsageParams
 		selectClause,
 		windowClause,
 		params.PropertyName,
-		params.EventName,
 		types.GetTenantID(ctx),
+		types.GetEnvironmentID(ctx),
+		params.EventName,
 		externalCustomerFilter,
 		customerFilter,
 		filterConditions,
@@ -198,8 +200,9 @@ func (a *CountAggregator) GetQuery(ctx context.Context, params *events.UsagePara
         SELECT 
             %s count(DISTINCT %s) as total
         FROM events
-        PREWHERE event_name = '%s'
-            AND tenant_id = '%s'
+        PREWHERE tenant_id = '%s'
+			AND environment_id = '%s'
+			AND event_name = '%s'
 			%s
 			%s
             %s
@@ -208,8 +211,9 @@ func (a *CountAggregator) GetQuery(ctx context.Context, params *events.UsagePara
     `,
 		selectClause,
 		getDeduplicationKey(),
-		params.EventName,
 		types.GetTenantID(ctx),
+		types.GetEnvironmentID(ctx),
+		params.EventName,
 		externalCustomerFilter,
 		customerFilter,
 		filterConditions,
@@ -258,8 +262,9 @@ func (a *CountUniqueAggregator) GetQuery(ctx context.Context, params *events.Usa
             SELECT
                 %s JSONExtractString(assumeNotNull(properties), '%s') as property_value
             FROM events
-            PREWHERE event_name = '%s'
-                AND tenant_id = '%s'
+            PREWHERE tenant_id = '%s'
+				AND environment_id = '%s'
+				AND event_name = '%s'
 				%s
 				%s
                 %s
@@ -271,8 +276,9 @@ func (a *CountUniqueAggregator) GetQuery(ctx context.Context, params *events.Usa
 		selectClause,
 		windowClause,
 		params.PropertyName,
-		params.EventName,
 		types.GetTenantID(ctx),
+		types.GetEnvironmentID(ctx),
+		params.EventName,
 		externalCustomerFilter,
 		customerFilter,
 		filterConditions,
@@ -323,8 +329,9 @@ func (a *AvgAggregator) GetQuery(ctx context.Context, params *events.UsageParams
             SELECT
                 %s anyLast(JSONExtractFloat(assumeNotNull(properties), '%s')) as value
             FROM events
-            PREWHERE event_name = '%s' 
-                AND tenant_id = '%s'
+            PREWHERE tenant_id = '%s'
+				AND environment_id = '%s'
+				AND event_name = '%s' 
 				%s
 				%s
 				%s
@@ -336,8 +343,9 @@ func (a *AvgAggregator) GetQuery(ctx context.Context, params *events.UsageParams
 		selectClause,
 		windowClause,
 		params.PropertyName,
-		params.EventName,
 		types.GetTenantID(ctx),
+		types.GetEnvironmentID(ctx),
+		params.EventName,
 		externalCustomerFilter,
 		customerFilter,
 		filterConditions,

@@ -118,9 +118,14 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 		}
 
 		// 4. Generate invoice number
-		invoiceNumber, err := s.InvoiceRepo.GetNextInvoiceNumber(ctx)
-		if err != nil {
-			return err
+		var invoiceNumber string
+		if req.InvoiceNumber != nil {
+			invoiceNumber = *req.InvoiceNumber
+		} else {
+			invoiceNumber, err = s.InvoiceRepo.GetNextInvoiceNumber(ctx)
+			if err != nil {
+				return err
+			}
 		}
 
 		// 5. Create invoice

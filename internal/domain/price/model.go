@@ -76,8 +76,6 @@ type Price struct {
 	// Description of the price
 	Description string `db:"description" json:"description"`
 
-	FilterValues JSONBFilters `db:"filter_values,jsonb" json:"filter_values"`
-
 	TransformQuantity JSONBTransformQuantity `db:"transform_quantity,jsonb" json:"transform_quantity"`
 
 	Metadata JSONBMetadata `db:"metadata,jsonb" json:"metadata"`
@@ -324,7 +322,6 @@ func FromEnt(e *ent.Price) *Price {
 		MeterID:            lo.FromPtr(e.MeterID),
 		LookupKey:          e.LookupKey,
 		Description:        e.Description,
-		FilterValues:       JSONBFilters(e.FilterValues),
 		TransformQuantity:  JSONBTransformQuantity(e.TransformQuantity),
 		Metadata:           JSONBMetadata(e.Metadata),
 		EnvironmentID:      e.EnvironmentID,

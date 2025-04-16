@@ -28,8 +28,9 @@ type InvoiceServiceSuite struct {
 		customer *customer.Customer
 		plan     *plan.Plan
 		meters   struct {
-			apiCalls *meter.Meter
-			storage  *meter.Meter
+			apiCalls       *meter.Meter
+			storage        *meter.Meter
+			storageArchive *meter.Meter
 		}
 		prices struct {
 			apiCalls       *price.Price
@@ -134,9 +135,41 @@ func (s *InvoiceServiceSuite) setupTestData() {
 			Type:  types.AggregationSum,
 			Field: "bytes_used",
 		},
+		Filters: []meter.Filter{
+			{
+				Key:    "region",
+				Values: []string{"us-east-1"},
+			},
+			{
+				Key:    "tier",
+				Values: []string{"standard"},
+			},
+		},
 		BaseModel: types.GetDefaultBaseModel(s.GetContext()),
 	}
 	s.NoError(s.GetStores().MeterRepo.CreateMeter(s.GetContext(), s.testData.meters.storage))
+
+	s.testData.meters.storageArchive = &meter.Meter{
+		ID:        "meter_storage_archive",
+		Name:      "Storage Archive",
+		EventName: "storage_usage",
+		Aggregation: meter.Aggregation{
+			Type:  types.AggregationSum,
+			Field: "bytes_used",
+		},
+		Filters: []meter.Filter{
+			{
+				Key:    "region",
+				Values: []string{"us-east-1"},
+			},
+			{
+				Key:    "tier",
+				Values: []string{"archive"},
+			},
+		},
+		BaseModel: types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(s.GetContext(), s.testData.meters.storageArchive))
 
 	// Create test prices
 	upTo1000 := uint64(1000)
@@ -176,7 +209,6 @@ func (s *InvoiceServiceSuite) setupTestData() {
 		BillingCadence:     types.BILLING_CADENCE_RECURRING,
 		InvoiceCadence:     types.InvoiceCadenceArrear,
 		MeterID:            s.testData.meters.storage.ID,
-		FilterValues:       map[string][]string{"region": {"us-east-1"}, "tier": {"standard"}},
 		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
 	}
 	s.NoError(s.GetStores().PriceRepo.Create(s.GetContext(), s.testData.prices.storage))

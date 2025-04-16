@@ -3,12 +3,9 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"sort"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
-	"github.com/flexprice/flexprice/internal/domain/events"
-	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -398,6 +395,7 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 		usageStartTime = subscription.CurrentPeriodStart
 	}
 
+	// TODO: handle this to honour line item level end time
 	usageEndTime := req.EndTime
 	if usageEndTime.IsZero() {
 		usageEndTime = subscription.CurrentPeriodEnd
@@ -407,11 +405,6 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 		usageStartTime = time.Time{}
 		usageEndTime = time.Now().UTC()
 	}
-
-	// Maintain meter order as they first appear in line items
-	meterOrder := []string{}
-	seenMeters := make(map[string]bool)
-	meterPrices := make(map[string][]*price.Price)
 
 	// Collect all price IDs
 	priceIDs := make([]string, 0, len(lineItems))
@@ -428,48 +421,24 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 	// Fetch all prices in one call
 	priceFilter := types.NewNoLimitPriceFilter()
 	priceFilter.PriceIDs = priceIDs
-	prices, err := s.PriceRepo.List(ctx, priceFilter)
+	priceFilter.Expand = lo.ToPtr(string(types.ExpandMeters))
+	pricesList, err := priceService.GetPrices(ctx, priceFilter)
 	if err != nil {
 		return nil, err
 	}
 
 	// Build price map for quick lookup
-	priceMap := make(map[string]*price.Price, len(prices))
-	for _, p := range prices {
-		priceMap[p.ID] = p
-	}
-
-	// Build meterPrices from line items
-	for _, item := range lineItems {
-		if item.PriceType != types.PRICE_TYPE_USAGE {
-			continue
-		}
-		if item.MeterID == "" {
-			continue
-		}
-		meterID := item.MeterID
-		if !seenMeters[meterID] {
-			meterOrder = append(meterOrder, meterID)
-			seenMeters[meterID] = true
-		}
-
-		// Get price details from map
-		price, ok := priceMap[item.PriceID]
-		if !ok {
-			return nil, ierr.NewError("failed to get price %s: price not found").
-				WithHint("Ensure all prices are valid and available").
-				WithReportableDetails(map[string]interface{}{
-					"price_id": item.PriceID,
-				}).
-				Mark(ierr.ErrDatabase)
-		}
-		meterPrices[meterID] = append(meterPrices[meterID], price)
-	}
-
+	priceMap := make(map[string]*price.Price, len(pricesList.Items))
+	meterMap := make(map[string]*dto.MeterResponse, len(pricesList.Items))
 	// Pre-fetch all meter display names
 	meterDisplayNames := make(map[string]string)
-	for _, meterID := range meterOrder {
-		meterDisplayNames[meterID] = getMeterDisplayName(ctx, s.MeterRepo, meterID, meterDisplayNames)
+
+	for _, p := range pricesList.Items {
+		priceMap[p.ID] = p.Price
+		meterMap[p.Price.MeterID] = p.Meter
+		if p.Meter != nil {
+			meterDisplayNames[p.Price.MeterID] = p.Meter.Name
+		}
 	}
 
 	totalCost := decimal.Zero
@@ -478,108 +447,73 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 		"subscription_id", req.SubscriptionID,
 		"start_time", usageStartTime,
 		"end_time", usageEndTime,
-		"num_meters", len(meterOrder))
+		"metered_line_items", len(priceIDs))
 
-	for _, meterID := range meterOrder {
-		meterPriceGroup := meterPrices[meterID]
-
-		// Sort prices by filter count (stable order)
-		sort.Slice(meterPriceGroup, func(i, j int) bool {
-			return len(meterPriceGroup[i].FilterValues) > len(meterPriceGroup[j].FilterValues)
-		})
-
-		type filterGroup struct {
-			ID           string
-			Priority     int
-			FilterValues map[string][]string
+	for _, lineItem := range lineItems {
+		if lineItem.PriceType != types.PRICE_TYPE_USAGE {
+			continue
 		}
 
-		filterGroups := make([]filterGroup, 0, len(meterPriceGroup))
-		for _, price := range meterPriceGroup {
-			filterGroups = append(filterGroups, filterGroup{
-				ID:           price.ID,
-				Priority:     calculatePriority(price.FilterValues),
-				FilterValues: price.FilterValues,
-			})
+		if lineItem.MeterID == "" {
+			continue
 		}
 
-		// Sort filter groups by priority and ID
-		sort.SliceStable(filterGroups, func(i, j int) bool {
-			pi := calculatePriority(filterGroups[i].FilterValues)
-			pj := calculatePriority(filterGroups[j].FilterValues)
-			if pi != pj {
-				return pi > pj
-			}
-			return filterGroups[i].ID < filterGroups[j].ID
-		})
-
-		filterGroupsMap := make(map[string]map[string][]string)
-		for _, group := range filterGroups {
-			if len(group.FilterValues) == 0 {
-				filterGroupsMap[group.ID] = map[string][]string{}
-			} else {
-				filterGroupsMap[group.ID] = group.FilterValues
-			}
+		price := priceMap[lineItem.PriceID]
+		meter := meterMap[lineItem.MeterID]
+		meterID := lineItem.MeterID
+		meterDisplayName := ""
+		if meter, ok := meterDisplayNames[meterID]; ok {
+			meterDisplayName = meter
 		}
 
-		usages, err := eventService.GetUsageByMeterWithFilters(ctx, &dto.GetUsageByMeterRequest{
+		usageRequest := &dto.GetUsageByMeterRequest{
 			MeterID:            meterID,
 			ExternalCustomerID: customer.ExternalID,
 			StartTime:          usageStartTime,
 			EndTime:            usageEndTime,
-		}, filterGroupsMap)
+			Filters:            make(map[string][]string),
+		}
+
+		for _, filter := range meter.Filters {
+			usageRequest.Filters[filter.Key] = filter.Values
+		}
+
+		// TODO: make this a bulk call
+		usage, err := eventService.GetUsageByMeter(ctx, usageRequest)
 		if err != nil {
 			return nil, err
 		}
 
-		// Append charges in the same order as meterPriceGroup
-		for _, price := range meterPriceGroup {
-			var quantity decimal.Decimal
-			var matchingUsage *events.AggregationResult
-			for _, usage := range usages {
-				if fgID, ok := usage.Metadata["filter_group_id"]; ok && fgID == price.ID {
-					matchingUsage = usage
-					break
-				}
-			}
-
-			// if no matching usage, create a 0 value usage rather than ommiting it
-			if matchingUsage == nil {
-				matchingUsage = &events.AggregationResult{
-					Value: decimal.Zero,
-				}
-			}
-
-			if matchingUsage != nil {
-				quantity = matchingUsage.Value
-				cost := priceService.CalculateCost(ctx, price, quantity)
-				totalCost = totalCost.Add(cost)
-
-				s.Logger.Debugw("calculated usage for meter",
-					"meter_id", meterID,
-					"quantity", quantity,
-					"cost", cost,
-					"total_cost", totalCost,
-					"meter_display_name", meterDisplayNames[meterID],
-					"subscription_id", req.SubscriptionID,
-					"usage", matchingUsage,
-					"price", price,
-					"filter_values", price.FilterValues,
-				)
-
-				filteredUsageCharge := createChargeResponse(
-					price,
-					quantity,
-					cost,
-					meterDisplayNames[meterID],
-				)
-
-				if filteredUsageCharge == nil {
-					continue
-				}
-				response.Charges = append(response.Charges, filteredUsageCharge)
-			}
+		if usage == nil {
+			continue
 		}
+
+		quantity := usage.Value
+		cost := priceService.CalculateCost(ctx, price, quantity)
+		totalCost = totalCost.Add(cost)
+
+		s.Logger.Debugw("calculated usage for meter",
+			"meter_id", meterID,
+			"quantity", quantity,
+			"cost", cost,
+			"total_cost", totalCost,
+			"meter_display_name", meterDisplayName,
+			"subscription_id", req.SubscriptionID,
+			"usage", usage,
+			"price", price,
+		)
+
+		filteredUsageCharge := createChargeResponse(
+			price,
+			quantity,
+			cost,
+			meterDisplayName,
+		)
+
+		if filteredUsageCharge == nil {
+			continue
+		}
+		response.Charges = append(response.Charges, filteredUsageCharge)
 	}
 
 	response.StartTime = usageStartTime
@@ -910,29 +844,10 @@ func createChargeResponse(priceObj *price.Price, quantity decimal.Decimal, cost 
 		Currency:         priceObj.Currency,
 		DisplayAmount:    price.GetDisplayAmountWithPrecision(cost, priceObj.Currency),
 		Quantity:         quantity.InexactFloat64(),
-		FilterValues:     priceObj.FilterValues,
 		MeterID:          priceObj.MeterID,
 		MeterDisplayName: meterDisplayName,
 		Price:            priceObj,
 	}
-}
-
-func getMeterDisplayName(ctx context.Context, meterRepo meter.Repository, meterID string, cache map[string]string) string {
-	if name, ok := cache[meterID]; ok {
-		return name
-	}
-
-	m, err := meterRepo.GetMeter(ctx, meterID)
-	if err != nil {
-		return meterID
-	}
-
-	displayName := m.Name
-	if displayName == "" {
-		displayName = m.EventName
-	}
-	cache[meterID] = displayName
-	return displayName
 }
 
 func filterValidPricesForSubscription(prices []*dto.PriceResponse, subscriptionObj *subscription.Subscription) []*dto.PriceResponse {
@@ -945,15 +860,6 @@ func filterValidPricesForSubscription(prices []*dto.PriceResponse, subscriptionO
 		}
 	}
 	return validPrices
-}
-
-func calculatePriority(filterValues map[string][]string) int {
-	priority := 0
-	for _, values := range filterValues {
-		priority += len(values)
-	}
-	priority += len(filterValues) * 10
-	return priority
 }
 
 // PauseSubscription pauses a subscription

@@ -60,7 +60,6 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 		SetNillableMeterID(lo.ToPtr(p.MeterID)).
 		SetInvoiceCadence(string(p.InvoiceCadence)).
 		SetTrialPeriod(p.TrialPeriod).
-		SetFilterValues(map[string][]string(p.FilterValues)).
 		SetNillableTierMode(lo.ToPtr(string(p.TierMode))).
 		SetTiers(p.ToEntTiers()).
 		SetTransformQuantity(schema.TransformQuantity(p.TransformQuantity)).
@@ -208,7 +207,6 @@ func (r *priceRepository) Update(ctx context.Context, p *domainPrice.Price) erro
 		SetBillingModel(string(p.BillingModel)).
 		SetBillingCadence(string(p.BillingCadence)).
 		SetNillableMeterID(lo.ToPtr(p.MeterID)).
-		SetFilterValues(map[string][]string(p.FilterValues)).
 		SetNillableTierMode(lo.ToPtr(string(p.TierMode))).
 		SetTiers(p.ToEntTiers()).
 		SetTransformQuantity(schema.TransformQuantity(p.TransformQuantity)).
@@ -301,7 +299,6 @@ func (r *priceRepository) CreateBulk(ctx context.Context, prices []*domainPrice.
 			SetInvoiceCadence(string(p.InvoiceCadence)).
 			SetTrialPeriod(p.TrialPeriod).
 			SetNillableMeterID(lo.ToPtr(p.MeterID)).
-			SetFilterValues(map[string][]string(p.FilterValues)).
 			SetNillableTierMode(lo.ToPtr(string(p.TierMode))).
 			SetTiers(p.ToEntTiers()).
 			SetTransformQuantity(schema.TransformQuantity(p.TransformQuantity)).

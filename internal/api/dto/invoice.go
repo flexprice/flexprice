@@ -14,6 +14,7 @@ import (
 
 // CreateInvoiceRequest represents the request to create a new invoice
 type CreateInvoiceRequest struct {
+	InvoiceNumber  *string                        `json:"invoice_number,omitempty"`
 	CustomerID     string                         `json:"customer_id" validate:"required"`
 	SubscriptionID *string                        `json:"subscription_id,omitempty"`
 	IdempotencyKey *string                        `json:"idempotency_key"`
