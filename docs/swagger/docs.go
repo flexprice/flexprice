@@ -5874,6 +5874,9 @@ const docTemplate = `{
                 "idempotency_key": {
                     "type": "string"
                 },
+                "invoice_number": {
+                    "type": "string"
+                },
                 "invoice_status": {
                     "$ref": "#/definitions/types.InvoiceStatus"
                 },
