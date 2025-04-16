@@ -6,6 +6,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
+	"github.com/shopspring/decimal"
 )
 
 // Event represents the base event structure
@@ -41,6 +42,21 @@ type Event struct {
 
 	// ExternalCustomerID is the identifier of the customer in the external system ex Customer DB or Stripe
 	ExternalCustomerID string `json:"external_customer_id" ch:"external_customer_id"`
+}
+
+// ProcessedEvent represents an event that has been processed and had its cost calculated
+type ProcessedEvent struct {
+	Event
+	// Processing fields
+	ProcessedAt           *time.Time      `json:"processed_at" ch:"processed_at,timezone('UTC')"`
+	SubscriptionID        string          `json:"subscription_id" ch:"subscription_id"`
+	PriceID               string          `json:"price_id" ch:"price_id"`
+	MeterID               string          `json:"meter_id" ch:"meter_id"`
+	AggregationField      string          `json:"aggregation_field" ch:"aggregation_field"`
+	AggregationFieldValue string          `json:"aggregation_field_value" ch:"aggregation_field_value"`
+	Currency              string          `json:"currency" ch:"currency"`
+	Quantity              uint64          `json:"quantity" ch:"quantity"`
+	Cost                  decimal.Decimal `json:"cost" ch:"cost"`
 }
 
 // NewEvent creates a new event with defaults
@@ -85,4 +101,11 @@ func (e *Event) Validate() error {
 	}
 
 	return validator.ValidateRequest(e)
+}
+
+// ToProcessedEvent converts an Event to a ProcessedEvent without the processing fields
+func (e *Event) ToProcessedEvent() *ProcessedEvent {
+	return &ProcessedEvent{
+		Event: *e,
+	}
 }

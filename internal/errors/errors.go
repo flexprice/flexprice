@@ -19,6 +19,7 @@ var (
 	ErrHTTPClient       = new(ErrCodeHTTPClient, "http client error")
 	ErrDatabase         = new(ErrCodeDatabase, "database error")
 	ErrSystem           = new(ErrCodeSystemError, "system error")
+	ErrInternal         = new(ErrCodeInternalError, "internal error")
 	// maps errors to http status codes
 	statusCodeMap = map[error]int{
 		ErrHTTPClient:       http.StatusInternalServerError,
@@ -30,12 +31,14 @@ var (
 		ErrInvalidOperation: http.StatusBadRequest,
 		ErrPermissionDenied: http.StatusForbidden,
 		ErrSystem:           http.StatusInternalServerError,
+		ErrInternal:         http.StatusInternalServerError,
 	}
 )
 
 const (
 	ErrCodeHTTPClient       = "http_client_error"
 	ErrCodeSystemError      = "system_error"
+	ErrCodeInternalError    = "internal_error"
 	ErrCodeNotFound         = "not_found"
 	ErrCodeAlreadyExists    = "already_exists"
 	ErrCodeVersionConflict  = "version_conflict"
@@ -105,6 +108,10 @@ func IsDatabase(err error) bool {
 
 func IsSystem(err error) bool {
 	return errors.Is(err, ErrSystem)
+}
+
+func IsInternal(err error) bool {
+	return errors.Is(err, ErrInternal)
 }
 
 // IsAlreadyExists checks if an error is an already exists error
