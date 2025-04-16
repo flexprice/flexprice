@@ -25,7 +25,7 @@ func GetAggregator(aggregationType types.AggregationType) events.Aggregator {
 }
 
 func getDeduplicationKey() string {
-	return "id, tenant_id, external_customer_id, customer_id, event_name"
+	return "id"
 }
 
 func formatClickHouseDateTime(t time.Time) string {
