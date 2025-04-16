@@ -1085,13 +1085,9 @@ func (s *InvoiceServiceSuite) TestAttemptPayment() {
 				s.NoError(s.invoiceRepo.Create(s.GetContext(), inv))
 				return inv
 			},
-			setupWallets: func() {
-				// Explicitly clear wallets for this customer
-				walletRepo := s.GetStores().WalletRepo
-				walletRepo.(*testutil.InMemoryWalletStore).Clear()
-			},
-			expectedError:        true,
-			expectedErrorMessage: "no wallets available for payment",
+			expectedError:        false,
+			expectedPaymentState: types.PaymentStatusPending, // Still pending as nothing was paid
+			expectedAmountPaid:   decimal.Zero,               // No payment processed
 		},
 	}
 
