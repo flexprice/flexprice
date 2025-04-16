@@ -75,6 +75,15 @@ func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoi
 		Save(ctx)
 
 	if err != nil {
+		if ent.IsConstraintError(err) {
+			return ierr.WithError(err).
+				WithHint("Invoice with this number already exists in the tenant").
+				WithReportableDetails(map[string]any{
+					"invoice_number": inv.InvoiceNumber,
+				}).
+				Mark(ierr.ErrAlreadyExists)
+		}
+
 		r.logger.Error("failed to create invoice", "error", err)
 		return ierr.WithError(err).WithHint("invoice creation failed").Mark(ierr.ErrDatabase)
 	}
@@ -131,6 +140,14 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 			SetEnvironmentID(inv.EnvironmentID).
 			Save(ctx)
 		if err != nil {
+			if ent.IsConstraintError(err) {
+				return ierr.WithError(err).
+					WithHint("Invoice with this number already exists in the tenant").
+					WithReportableDetails(map[string]any{
+						"invoice_number": inv.InvoiceNumber,
+					}).
+					Mark(ierr.ErrAlreadyExists)
+			}
 			r.logger.Error("failed to create invoice", "error", err)
 			return ierr.WithError(err).WithHint("invoice creation failed").Mark(ierr.ErrDatabase)
 		}
