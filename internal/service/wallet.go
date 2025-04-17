@@ -297,7 +297,6 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Context, walletID string, idempotencyKey *string, req *dto.TopUpWalletRequest) (string, error) {
 	// Initialize required services
 	invoiceService := NewInvoiceService(s.ServiceParams)
-	customerService := NewCustomerService(s.ServiceParams)
 	paymentService := NewPaymentService(s.ServiceParams)
 
 	// Retrieve wallet and customer details
@@ -306,16 +305,11 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 		return "", err
 	}
 
-	customer, err := customerService.GetCustomer(ctx, w.CustomerID)
-	if err != nil {
-		return "", err
-	}
-
 	var paymentID string
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
 		// Create invoice for credit purchase
 		invoice, err := invoiceService.CreateInvoice(ctx, dto.CreateInvoiceRequest{
-			CustomerID:     customer.ID,
+			CustomerID:     w.CustomerID,
 			AmountDue:      s.GetCurrencyAmountFromCredits(req.CreditsToAdd, w.ConversionRate),
 			Currency:       w.Currency,
 			InvoiceType:    types.InvoiceTypeCredit,
