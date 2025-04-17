@@ -101,6 +101,7 @@ func (WalletTransaction) Fields() []ent.Field {
 			),
 		field.String("idempotency_key").
 			Nillable().
+			Immutable().
 			Optional(),
 		field.String("transaction_reason").
 			SchemaType(map[string]string{

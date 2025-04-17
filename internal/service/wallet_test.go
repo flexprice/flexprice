@@ -19,6 +19,7 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/suite"
 )
 
 type WalletServiceSuite struct {
@@ -45,7 +46,7 @@ type WalletServiceSuite struct {
 }
 
 func TestWalletService(t *testing.T) {
-	// suite.Run(t, new(WalletServiceSuite))
+	suite.Run(t, new(WalletServiceSuite))
 }
 
 func (s *WalletServiceSuite) SetupTest() {

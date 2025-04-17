@@ -138,8 +138,7 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 		inv.BillingSequence = billingSeq
 
 		// Setting default values
-		// TODO: handle credit invoice status
-		if req.InvoiceType == types.InvoiceTypeOneOff {
+		if req.InvoiceType == types.InvoiceTypeOneOff || req.InvoiceType == types.InvoiceTypeCredit {
 			if req.InvoiceStatus == nil {
 				inv.InvoiceStatus = types.InvoiceStatusFinalized
 			}

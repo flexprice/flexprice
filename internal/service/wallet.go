@@ -52,6 +52,10 @@ type WalletService interface {
 
 	// ExpireCredits expires credits for a given transaction
 	ExpireCredits(ctx context.Context, transactionID string) error
+
+	// conversion rate operations
+	GetCurrencyAmountFromCredits(credits decimal.Decimal, conversionRate decimal.Decimal) decimal.Decimal
+	GetCreditsFromCurrencyAmount(amount decimal.Decimal, conversionRate decimal.Decimal) decimal.Decimal
 }
 
 type walletService struct {
@@ -66,6 +70,7 @@ func NewWalletService(params ServiceParams) WalletService {
 }
 
 func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletRequest) (*dto.WalletResponse, error) {
+	response := &dto.WalletResponse{}
 
 	if err := req.Validate(); err != nil {
 		return nil, ierr.WithError(err).
@@ -100,11 +105,13 @@ func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletR
 
 	w := req.ToWallet(ctx)
 
+	// create a DB transaction
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
 		// Create wallet in DB and update the wallet object
 		if err := s.WalletRepo.CreateWallet(ctx, w); err != nil {
 			return err // Repository already using ierr
 		}
+		response = dto.FromWallet(w)
 
 		s.Logger.Debugw("created wallet",
 			"wallet_id", w.ID,
@@ -114,14 +121,16 @@ func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletR
 
 		// Load initial credits to wallet
 		if req.InitialCreditsToLoad.GreaterThan(decimal.Zero) {
-			_, err := s.TopUpWallet(ctx, w.ID, &dto.TopUpWalletRequest{
+			topUpResp, err := s.TopUpWallet(ctx, w.ID, &dto.TopUpWalletRequest{
 				CreditsToAdd:      req.InitialCreditsToLoad,
 				TransactionReason: types.TransactionReasonFreeCredit,
+				ExpiryDate:        req.InitialCreditsToLoadExpiryDate,
 			})
 
 			if err != nil {
 				return err
 			}
+			response = topUpResp
 		}
 
 		return nil
@@ -132,10 +141,9 @@ func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletR
 	}
 
 	// Convert to response DTO
-	walletResponse := dto.FromWallet(w)
 	s.publishInternalWalletWebhookEvent(ctx, types.WebhookEventWalletCreated, w.ID)
 
-	return walletResponse, nil
+	return response, nil
 }
 
 func (s *walletService) GetWalletsByCustomerID(ctx context.Context, customerID string) ([]*dto.WalletResponse, error) {
@@ -223,7 +231,7 @@ func (s *walletService) GetWalletTransactions(ctx context.Context, walletID stri
 
 // Update the TopUpWallet method to use the new processWalletOperation
 func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *dto.TopUpWalletRequest) (*dto.WalletResponse, error) {
-
+	// Create a credit operation
 	if err := req.Validate(); err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Invalid top up wallet request").
@@ -301,7 +309,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 		// Create invoice for credit purchase
 		invoice, err := invoiceService.CreateInvoice(ctx, dto.CreateInvoiceRequest{
 			CustomerID:     customer.ID,
-			AmountDue:      req.CreditsToAdd,
+			AmountDue:      s.GetCurrencyAmountFromCredits(req.CreditsToAdd, w.ConversionRate),
 			Currency:       w.Currency,
 			InvoiceType:    types.InvoiceTypeCredit,
 			DueDate:        lo.ToPtr(time.Now().UTC()),
@@ -309,7 +317,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 			InvoiceStatus:  lo.ToPtr(types.InvoiceStatusFinalized),
 			LineItems: []dto.CreateInvoiceLineItemRequest{
 				{
-					Amount:      req.CreditsToAdd,
+					Amount:      s.GetCurrencyAmountFromCredits(req.CreditsToAdd, w.ConversionRate),
 					Quantity:    decimal.NewFromInt(1),
 					DisplayName: lo.ToPtr("Purchased Credits"),
 				},
@@ -327,7 +335,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 			DestinationType:   types.PaymentDestinationTypeInvoice,
 			DestinationID:     invoice.ID,
 			PaymentMethodType: types.PaymentMethodTypeOffline,
-			Amount:            req.CreditsToAdd,
+			Amount:            s.GetCurrencyAmountFromCredits(req.CreditsToAdd, w.ConversionRate),
 			Currency:          w.Currency,
 			ProcessPayment:    true,
 		})
@@ -850,4 +858,13 @@ func (s *walletService) publishInternalTransactionWebhookEvent(ctx context.Conte
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
 		s.Logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
 	}
+}
+
+// conversion rate operations
+func (s *walletService) GetCurrencyAmountFromCredits(credits decimal.Decimal, conversionRate decimal.Decimal) decimal.Decimal {
+	return credits.Mul(conversionRate)
+}
+
+func (s *walletService) GetCreditsFromCurrencyAmount(amount decimal.Decimal, conversionRate decimal.Decimal) decimal.Decimal {
+	return amount.Div(conversionRate)
 }
