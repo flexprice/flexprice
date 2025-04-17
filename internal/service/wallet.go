@@ -469,6 +469,7 @@ func (s *walletService) TerminateWallet(ctx context.Context, walletID string) er
 				Description:       "Wallet termination - remaining balance debit",
 				TransactionReason: types.TransactionReasonWalletTermination,
 				ReferenceType:     types.WalletTxReferenceTypeRequest,
+				IdempotencyKey:    walletID,
 				ReferenceID:       types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION),
 			}
 
