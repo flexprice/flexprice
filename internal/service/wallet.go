@@ -117,6 +117,7 @@ func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletR
 			"wallet_id", w.ID,
 			"customer_id", w.CustomerID,
 			"currency", w.Currency,
+			"conversion_rate", w.ConversionRate,
 		)
 
 		// Load initial credits to wallet
@@ -231,6 +232,12 @@ func (s *walletService) GetWalletTransactions(ctx context.Context, walletID stri
 
 // Update the TopUpWallet method to use the new processWalletOperation
 func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *dto.TopUpWalletRequest) (*dto.WalletResponse, error) {
+	// NOTE: This is a temporary fix to allow amount to be used instead of credits_to_add
+	// This will be removed in a future version
+	if req.CreditsToAdd.IsZero() && !req.Amount.IsZero() {
+		req.CreditsToAdd = req.Amount
+	}
+
 	// Create a credit operation
 	if err := req.Validate(); err != nil {
 		return nil, ierr.WithError(err).
@@ -238,8 +245,13 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 			Mark(ierr.ErrValidation)
 	}
 
-	// Generate or use provided idempotency key
+	if req.CreditsToAdd.IsZero() && req.Amount.IsZero() {
+		return nil, ierr.NewError("credits_to_add or amount is required").
+			WithHint("Credits to add or amount is required").
+			Mark(ierr.ErrValidation)
+	}
 
+	// Generate or use provided idempotency key
 	var idempotencyKey string
 	if lo.FromPtr(req.IdempotencyKey) != "" {
 		idempotencyKey = lo.FromPtr(req.IdempotencyKey)

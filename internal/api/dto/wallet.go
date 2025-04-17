@@ -269,7 +269,7 @@ type TopUpWalletRequest struct {
 	// this is deprecated and will be removed in a future version
 	Amount decimal.Decimal `json:"amount"`
 	// credits_to_add is the number of credits to add to the wallet
-	CreditsToAdd decimal.Decimal `json:"credits_to_add," binding:"required"`
+	CreditsToAdd decimal.Decimal `json:"credits_to_add" binding:"required"`
 	// description to add any specific details about the transaction
 	Description string `json:"description,omitempty"`
 	// expiry_date YYYYMMDD format in UTC timezone (optional to set nil means no expiry)

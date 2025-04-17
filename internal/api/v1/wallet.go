@@ -199,10 +199,6 @@ func (h *WalletHandler) TopUpWallet(c *gin.Context) {
 		return
 	}
 
-	if req.CreditsToAdd.IsZero() && !req.Amount.IsZero() {
-		req.CreditsToAdd = req.Amount.Div(req.Amount)
-	}
-
 	wallet, err := h.walletService.TopUpWallet(c.Request.Context(), walletID, &req)
 	if err != nil {
 		h.logger.Error("Failed to top up wallet", "error", err)
