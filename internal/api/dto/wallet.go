@@ -266,7 +266,10 @@ type ListWalletTransactionsResponse = types.ListResponse[*WalletTransactionRespo
 // TopUpWalletRequest represents a request to add credits to a wallet
 type TopUpWalletRequest struct {
 	// amount is the number of credits to add to the wallet
-	Amount decimal.Decimal `json:"amount" binding:"required"`
+	// this is deprecated and will be removed in a future version
+	Amount decimal.Decimal `json:"amount"`
+	// credits_to_add is the number of credits to add to the wallet
+	CreditsToAdd decimal.Decimal `json:"credits_to_add," binding:"required"`
 	// description to add any specific details about the transaction
 	Description string `json:"description,omitempty"`
 	// expiry_date YYYYMMDD format in UTC timezone (optional to set nil means no expiry)
@@ -286,11 +289,11 @@ type TopUpWalletRequest struct {
 }
 
 func (r *TopUpWalletRequest) Validate() error {
-	if r.Amount.LessThanOrEqual(decimal.Zero) {
-		return ierr.NewError("amount must be greater than 0").
-			WithHint("Top-up amount must be a positive value").
+	if r.CreditsToAdd.LessThanOrEqual(decimal.Zero) {
+		return ierr.NewError("credits_to_add must be greater than 0").
+			WithHint("Credits to add must be a positive value").
 			WithReportableDetails(map[string]interface{}{
-				"amount": r.Amount,
+				"credits_to_add": r.CreditsToAdd,
 			}).
 			Mark(ierr.ErrValidation)
 	}

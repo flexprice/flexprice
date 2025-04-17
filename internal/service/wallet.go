@@ -140,7 +140,7 @@ func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletR
 	// Load initial credits to wallet
 	if req.InitialCreditsToLoad.GreaterThan(decimal.Zero) {
 		_, err := s.TopUpWallet(ctx, w.ID, &dto.TopUpWalletRequest{
-			Amount:            req.InitialCreditsToLoad,
+			CreditsToAdd:      req.InitialCreditsToLoad,
 			TransactionReason: types.TransactionReasonFreeCredit,
 		})
 
@@ -297,7 +297,7 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 			// create invoice with payment status pending
 			invoiceData := &dto.CreateInvoiceRequest{
 				CustomerID:     customer.ID,
-				AmountDue:      req.Amount,
+				AmountDue:      req.CreditsToAdd,	
 				Currency:       w.Currency,
 				InvoiceType:    types.InvoiceTypeCredit,
 				DueDate:        &dueDate,
@@ -305,7 +305,7 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 				InvoiceStatus:  lo.ToPtr(types.InvoiceStatusFinalized),
 				LineItems: []dto.CreateInvoiceLineItemRequest{
 					{
-						Amount:      req.Amount,
+						Amount:      req.CreditsToAdd,
 						Quantity:    decimal.NewFromInt(1),
 						DisplayName: &displayName,
 					},
@@ -324,7 +324,7 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 				DestinationType:   types.PaymentDestinationTypeInvoice,
 				DestinationID:     invoice.ID,
 				PaymentMethodType: types.PaymentMethodTypeOffline,
-				Amount:            req.Amount,
+				Amount:            req.CreditsToAdd,
 				Currency:          w.Currency,
 				ProcessPayment:    false,
 			}
@@ -338,7 +338,7 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 
 			// update invoice payment status to paid
 			s.Logger.Infof("updating invoice payment status to paid: %s", invoice.ID)
-			if err := invoiceService.UpdatePaymentStatus(ctx, invoice.ID, types.PaymentStatusSucceeded, &req.Amount); err != nil {
+			if err := invoiceService.UpdatePaymentStatus(ctx, invoice.ID, types.PaymentStatusSucceeded, &req.CreditsToAdd); err != nil {
 				return err
 			}
 
@@ -363,7 +363,7 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 	creditReq := &wallet.WalletOperation{
 		WalletID:          walletID,
 		Type:              types.TransactionTypeCredit,
-		CreditAmount:      req.Amount,
+		CreditAmount:      req.CreditsToAdd,
 		Description:       req.Description,
 		Metadata:          req.Metadata,
 		TransactionReason: req.TransactionReason,

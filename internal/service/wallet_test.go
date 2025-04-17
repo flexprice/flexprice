@@ -483,7 +483,7 @@ func (s *WalletServiceSuite) TestGetWalletsByCustomerID() {
 
 func (s *WalletServiceSuite) TestTopUpWallet() {
 	topUpReq := &dto.TopUpWalletRequest{
-		Amount:            decimal.NewFromInt(500),
+		CreditsToAdd:      decimal.NewFromInt(500),
 		IdempotencyKey:    lo.ToPtr("test_topup_1"),
 		TransactionReason: types.TransactionReasonFreeCredit,
 	}
@@ -712,7 +712,7 @@ func (s *WalletServiceSuite) TestWalletConversionRateHandling() {
 
 			// Top up wallet
 			topUpReq := &dto.TopUpWalletRequest{
-				Amount:            tc.creditAmount,
+				CreditsToAdd:      tc.creditAmount,
 				IdempotencyKey:    lo.ToPtr("test_topup_1"),
 				TransactionReason: types.TransactionReasonFreeCredit,
 			}
@@ -1039,7 +1039,7 @@ func (s *WalletServiceSuite) TestDebitWithMultipleCredits() {
 	// Add all credits
 	for _, credit := range credits {
 		op := &dto.TopUpWalletRequest{
-			Amount:            credit.amount,
+			CreditsToAdd:      credit.amount,
 			Description:       "Test credit",
 			ExpiryDate:        credit.expiry,
 			IdempotencyKey:    lo.ToPtr("test_topup_1"),

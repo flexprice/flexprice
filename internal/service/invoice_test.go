@@ -921,7 +921,7 @@ func (s *InvoiceServiceSuite) setupWallets() {
 
 	// Top up the promotional wallet
 	_, err = walletService.TopUpWallet(s.GetContext(), promoWallet.ID, &dto.TopUpWalletRequest{
-		Amount:            decimal.NewFromInt(50),
+		CreditsToAdd:      decimal.NewFromInt(50),
 		IdempotencyKey:    lo.ToPtr("test_topup_1"),
 		TransactionReason: types.TransactionReasonFreeCredit,
 		Description:       "Test top-up for AttemptPayment",
@@ -940,7 +940,7 @@ func (s *InvoiceServiceSuite) setupWallets() {
 
 	// Top up the prepaid wallet
 	_, err = walletService.TopUpWallet(s.GetContext(), prepaidWallet.ID, &dto.TopUpWalletRequest{
-		Amount:            decimal.NewFromInt(100),
+		CreditsToAdd:      decimal.NewFromInt(100),
 		IdempotencyKey:    lo.ToPtr("test_topup_2"),
 		TransactionReason: types.TransactionReasonFreeCredit,
 		Description:       "Test top-up for AttemptPayment",
