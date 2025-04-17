@@ -8238,13 +8238,17 @@ const docTemplate = `{
         "dto.TopUpWalletRequest": {
             "type": "object",
             "required": [
-                "amount",
+                "credits_to_add",
                 "idempotency_key",
                 "transaction_reason"
             ],
             "properties": {
                 "amount": {
-                    "description": "amount is the number of credits to add to the wallet",
+                    "description": "amount is the number of credits to add to the wallet\nthis is deprecated and will be removed in a future version",
+                    "type": "number"
+                },
+                "credits_to_add": {
+                    "description": "credits_to_add is the number of credits to add to the wallet",
                     "type": "number"
                 },
                 "description": {

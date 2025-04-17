@@ -86,11 +86,9 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 			return ierr.WithError(err).WithHint("failed to check idempotency").Mark(ierr.ErrDatabase)
 		}
 		if existing != nil {
-			s.Logger.Infow("returning existing invoice for idempotency key",
-				"idempotency_key", idempKey,
-				"invoice_id", existing.ID)
-			resp = dto.NewInvoiceResponse(existing)
-			return nil
+			s.Logger.Infof("invoice already exists, returning existing invoice")
+			err = ierr.NewError("invoice already exists").WithHint("invoice already exists").Mark(ierr.ErrAlreadyExists)
+			return err
 		}
 
 		// 3. For subscription invoices, validate period uniqueness and get billing sequence
@@ -140,6 +138,7 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 		inv.BillingSequence = billingSeq
 
 		// Setting default values
+		// TODO: handle credit invoice status
 		if req.InvoiceType == types.InvoiceTypeOneOff {
 			if req.InvoiceStatus == nil {
 				inv.InvoiceStatus = types.InvoiceStatusFinalized

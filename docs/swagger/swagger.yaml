@@ -1900,7 +1900,12 @@ definitions:
   dto.TopUpWalletRequest:
     properties:
       amount:
-        description: amount is the number of credits to add to the wallet
+        description: |-
+          amount is the number of credits to add to the wallet
+          this is deprecated and will be removed in a future version
+        type: number
+      credits_to_add:
+        description: credits_to_add is the number of credits to add to the wallet
         type: number
       description:
         description: description to add any specific details about the transaction
@@ -1932,7 +1937,7 @@ definitions:
         - $ref: '#/definitions/types.TransactionReason'
         description: transaction_reason is the reason for the transaction
     required:
-    - amount
+    - credits_to_add
     - idempotency_key
     - transaction_reason
     type: object

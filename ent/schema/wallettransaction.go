@@ -128,7 +128,7 @@ func (WalletTransaction) Indexes() []ent.Index {
 		index.Fields("tenant_id", "environment_id", "idempotency_key").
 			Unique().
 			Annotations(
-				entsql.IndexWhere("idempotency_key IS NOT NULL AND idempotency_key <> ''"),
+				entsql.IndexWhere("idempotency_key IS NOT NULL AND idempotency_key <> '' AND status='published'"),
 			).
 			StorageKey("idx_tenant_environment_idempotency_key"),
 	}
