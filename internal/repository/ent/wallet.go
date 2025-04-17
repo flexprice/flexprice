@@ -299,6 +299,7 @@ func (r *walletRepository) CreateTransaction(ctx context.Context, tx *walletdoma
 		SetUpdatedAt(tx.UpdatedAt).
 		SetUpdatedBy(tx.UpdatedBy).
 		SetEnvironmentID(tx.EnvironmentID).
+		SetIdempotencyKey(tx.IdempotencyKey).
 		Save(ctx)
 
 	if err != nil {

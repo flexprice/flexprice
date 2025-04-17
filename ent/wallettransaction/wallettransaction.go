@@ -53,6 +53,8 @@ const (
 	FieldExpiryDate = "expiry_date"
 	// FieldCreditsAvailable holds the string denoting the credits_available field in the database.
 	FieldCreditsAvailable = "credits_available"
+	// FieldIdempotencyKey holds the string denoting the idempotency_key field in the database.
+	FieldIdempotencyKey = "idempotency_key"
 	// FieldTransactionReason holds the string denoting the transaction_reason field in the database.
 	FieldTransactionReason = "transaction_reason"
 	// Table holds the table name of the wallettransaction in the database.
@@ -82,6 +84,7 @@ var Columns = []string{
 	FieldTransactionStatus,
 	FieldExpiryDate,
 	FieldCreditsAvailable,
+	FieldIdempotencyKey,
 	FieldTransactionReason,
 }
 
@@ -221,6 +224,11 @@ func ByExpiryDate(opts ...sql.OrderTermOption) OrderOption {
 // ByCreditsAvailable orders the results by the credits_available field.
 func ByCreditsAvailable(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCreditsAvailable, opts...).ToFunc()
+}
+
+// ByIdempotencyKey orders the results by the idempotency_key field.
+func ByIdempotencyKey(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIdempotencyKey, opts...).ToFunc()
 }
 
 // ByTransactionReason orders the results by the transaction_reason field.
