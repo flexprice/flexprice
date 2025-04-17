@@ -12,12 +12,8 @@ on:
         required: false
         default: false
         type: boolean
-  push:
-    branches:
-      - main
-      - master
-    paths:
-      - 'docs/swagger/swagger-3-0.json'
+  release:
+    types: [published]
 
 # Add permissions for writing to repositories
 permissions:
@@ -56,6 +52,29 @@ jobs:
         run: |
           npm install -g @openapitools/openapi-generator-cli
           openapi-generator-cli version || echo "OpenAPI Generator installation verification failed but continuing..."
+      
+      - name: Get SDK Version
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          elif [ "${{ github.event_name }}" == "release" ]; then
+            # Extract version from release tag, removing 'v' prefix if present
+            RELEASE_TAG="${{ github.event.release.tag_name }}"
+            echo "Debug: RELEASE_TAG=${RELEASE_TAG}"
+            VERSION="${RELEASE_TAG#v}"
+            echo "Debug: VERSION=${VERSION}"
+          else
+            CURRENT_DATE=$(date +'%Y%m%d')
+            SHORT_SHA=${GITHUB_SHA::8}
+            VERSION="0.1.0-${CURRENT_DATE}-${SHORT_SHA}"
+          fi
+          
+          # Set version both as output and environment variable
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          
+          echo "Publishing version: ${VERSION}"
 
       - name: Generate SDKs
         run: |
@@ -81,29 +100,17 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Get SDK Version
-        id: get_version
-        run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
-          else
-            CURRENT_DATE=$(date +'%Y%m%d')
-            SHORT_SHA=${GITHUB_SHA::8}
-            echo "VERSION=0.1.0-${CURRENT_DATE}-${SHORT_SHA}" >> $GITHUB_ENV
-          fi
-          echo "Publishing version: ${{ env.VERSION }}"
-
       - name: Prepare Go SDK
         if: success()
         run: |
-          echo "Running Go SDK publish with VERSION=${{ env.VERSION }} and DRY_RUN=${{ github.event.inputs.dry_run || false }}"
+          echo "Running Go SDK publish with VERSION=${{ steps.get_version.outputs.version }} and DRY_RUN=${{ github.event.inputs.dry_run || false }}"
           mkdir -p api/go || true
-          make sdk-publish-go VERSION=${{ env.VERSION }} DRY_RUN=${{ github.event.inputs.dry_run || false }}
+          make sdk-publish-go VERSION=${{ steps.get_version.outputs.version }} DRY_RUN=${{ github.event.inputs.dry_run || false }}
 
       - name: Prepare JavaScript SDK
         if: success()
         run: |
-          echo "Running JavaScript SDK publish with VERSION=${{ env.VERSION }} and DRY_RUN=${{ github.event.inputs.dry_run || false }}"
+          echo "Running JavaScript SDK publish with VERSION=${{ steps.get_version.outputs.version }} and DRY_RUN=${{ github.event.inputs.dry_run || false }}"
           mkdir -p api/javascript || true
           
           # Install dependencies first to ensure babel is available
@@ -111,14 +118,14 @@ jobs:
           npm ci || npm install || echo "No dependencies to install, continuing..."
           cd ../..
           
-          make sdk-publish-js VERSION=${{ env.VERSION }} DRY_RUN=${{ github.event.inputs.dry_run || false }}
+          make sdk-publish-js VERSION=${{ steps.get_version.outputs.version }} DRY_RUN=${{ github.event.inputs.dry_run || false }}
 
       - name: Prepare Python SDK
         if: success()
         run: |
-          echo "Running Python SDK publish with VERSION=${{ env.VERSION }} and DRY_RUN=${{ github.event.inputs.dry_run || false }}"
+          echo "Running Python SDK publish with VERSION=${{ steps.get_version.outputs.version }} and DRY_RUN=${{ github.event.inputs.dry_run || false }}"
           mkdir -p api/python || true
-          make sdk-publish-py VERSION=${{ env.VERSION }} DRY_RUN=${{ github.event.inputs.dry_run || false }}
+          make sdk-publish-py VERSION=${{ steps.get_version.outputs.version }} DRY_RUN=${{ github.event.inputs.dry_run || false }}
 
       - name: Publish Go SDK to GitHub
         if: success() && (github.event.inputs.dry_run != 'true')

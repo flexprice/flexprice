@@ -319,8 +319,7 @@ sdk-publish-all-with-version:
 # Test GitHub workflow locally using act
 test-github-workflow:
 	@echo "Testing GitHub workflow locally..."
-	@test -n "$(VERSION)" || (echo "Error: VERSION is required"; exit 1)
 	@./scripts/ensure-act.sh
-	@act workflow_dispatch -e .github/workflows/test-event.json -s GITHUB_TOKEN="$(shell cat .secrets.git)" -P ubuntu-latest=catthehacker/ubuntu:act-latest --container-architecture linux/amd64 --action-offline-mode
+	@act release -e .github/workflows/test-event.json -s SDK_DEPLOY_GIT_TOKEN="$(shell cat .secrets.git)" -P ubuntu-latest=catthehacker/ubuntu:act-latest --container-architecture linux/amd64 --action-offline-mode
 
 .PHONY: sdk-publish-js sdk-publish-py sdk-publish-go sdk-publish-all sdk-publish-all-with-version test-github-workflow
