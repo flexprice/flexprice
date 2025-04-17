@@ -118,6 +118,9 @@ func (Wallet) Edges() []ent.Edge {
 // Indexes of the Wallet.
 func (Wallet) Indexes() []ent.Index {
 	return []ent.Index{
+		index.Fields("tenant_id", "environment_id", "customer_id").
+			Unique().
+			Annotations(entsql.IndexWhere("status = 'published'")),
 		index.Fields("tenant_id", "environment_id", "customer_id", "status"),
 		index.Fields("tenant_id", "environment_id", "status", "wallet_status"),
 	}

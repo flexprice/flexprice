@@ -121,7 +121,7 @@ func (Price) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("tenant_id", "environment_id", "lookup_key").
 			Unique().
-			Annotations(entsql.IndexWhere("status != 'deleted' AND lookup_key IS NOT NULL AND lookup_key != ''")),
+			Annotations(entsql.IndexWhere("status = 'published' AND lookup_key IS NOT NULL AND lookup_key != ''")),
 		index.Fields("tenant_id", "environment_id", "plan_id"),
 		index.Fields("tenant_id", "environment_id"),
 	}

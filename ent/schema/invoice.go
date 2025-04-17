@@ -164,6 +164,7 @@ func (Invoice) Indexes() []ent.Index {
 			StorageKey("idx_tenant_due_date_status"),
 		index.Fields("tenant_id", "environment_id", "invoice_number").
 			Unique().
+			Annotations(entsql.IndexWhere("invoice_number IS NOT NULL AND invoice_number != '' AND status = 'published'")).
 			StorageKey("idx_tenant_invoice_number_unique"),
 		index.Fields("idempotency_key").
 			Unique().
