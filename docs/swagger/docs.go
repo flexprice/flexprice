@@ -6336,7 +6336,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.WalletConfig"
                 },
                 "conversion_rate": {
-                    "description": "conversion_rate is the conversion rate of the currency to credits\namount in the currency = conversion_rate * number of credits\nex if conversion_rate is 1, then 1 USD = 1 credit\nex if conversion_rate is 10, then 1 USD = 10 credits",
+                    "description": "amount in the currency =  number of credits * conversion_rate\nex if conversion_rate is 1, then 1 USD = 1 credit\nex if conversion_rate is 2, then 1 USD = 0.5 credits\nex if conversion_rate is 0.5, then 1 USD = 2 credits",
                     "type": "number",
                     "default": 1
                 },

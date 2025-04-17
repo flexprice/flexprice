@@ -575,10 +575,10 @@ definitions:
       conversion_rate:
         default: 1
         description: |-
-          conversion_rate is the conversion rate of the currency to credits
-          amount in the currency = conversion_rate * number of credits
+          amount in the currency =  number of credits * conversion_rate
           ex if conversion_rate is 1, then 1 USD = 1 credit
-          ex if conversion_rate is 10, then 1 USD = 10 credits
+          ex if conversion_rate is 2, then 1 USD = 0.5 credits
+          ex if conversion_rate is 0.5, then 1 USD = 2 credits
         type: number
       currency:
         type: string
