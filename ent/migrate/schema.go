@@ -1115,7 +1115,7 @@ var (
 				Unique:  true,
 				Columns: []*schema.Column{WalletTransactionsColumns[1], WalletTransactionsColumns[7], WalletTransactionsColumns[21]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "idempotency_key IS NOT NULL AND idempotency_key <> ''",
+					Where: "idempotency_key IS NOT NULL AND idempotency_key <> '' AND status='published'",
 				},
 			},
 		},

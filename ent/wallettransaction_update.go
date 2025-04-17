@@ -239,26 +239,6 @@ func (wtu *WalletTransactionUpdate) SetNillableCreditsAvailable(d *decimal.Decim
 	return wtu
 }
 
-// SetIdempotencyKey sets the "idempotency_key" field.
-func (wtu *WalletTransactionUpdate) SetIdempotencyKey(s string) *WalletTransactionUpdate {
-	wtu.mutation.SetIdempotencyKey(s)
-	return wtu
-}
-
-// SetNillableIdempotencyKey sets the "idempotency_key" field if the given value is not nil.
-func (wtu *WalletTransactionUpdate) SetNillableIdempotencyKey(s *string) *WalletTransactionUpdate {
-	if s != nil {
-		wtu.SetIdempotencyKey(*s)
-	}
-	return wtu
-}
-
-// ClearIdempotencyKey clears the value of the "idempotency_key" field.
-func (wtu *WalletTransactionUpdate) ClearIdempotencyKey() *WalletTransactionUpdate {
-	wtu.mutation.ClearIdempotencyKey()
-	return wtu
-}
-
 // Mutation returns the WalletTransactionMutation object of the builder.
 func (wtu *WalletTransactionUpdate) Mutation() *WalletTransactionMutation {
 	return wtu.mutation
@@ -387,9 +367,6 @@ func (wtu *WalletTransactionUpdate) sqlSave(ctx context.Context) (n int, err err
 	}
 	if value, ok := wtu.mutation.CreditsAvailable(); ok {
 		_spec.SetField(wallettransaction.FieldCreditsAvailable, field.TypeOther, value)
-	}
-	if value, ok := wtu.mutation.IdempotencyKey(); ok {
-		_spec.SetField(wallettransaction.FieldIdempotencyKey, field.TypeString, value)
 	}
 	if wtu.mutation.IdempotencyKeyCleared() {
 		_spec.ClearField(wallettransaction.FieldIdempotencyKey, field.TypeString)
@@ -624,26 +601,6 @@ func (wtuo *WalletTransactionUpdateOne) SetNillableCreditsAvailable(d *decimal.D
 	return wtuo
 }
 
-// SetIdempotencyKey sets the "idempotency_key" field.
-func (wtuo *WalletTransactionUpdateOne) SetIdempotencyKey(s string) *WalletTransactionUpdateOne {
-	wtuo.mutation.SetIdempotencyKey(s)
-	return wtuo
-}
-
-// SetNillableIdempotencyKey sets the "idempotency_key" field if the given value is not nil.
-func (wtuo *WalletTransactionUpdateOne) SetNillableIdempotencyKey(s *string) *WalletTransactionUpdateOne {
-	if s != nil {
-		wtuo.SetIdempotencyKey(*s)
-	}
-	return wtuo
-}
-
-// ClearIdempotencyKey clears the value of the "idempotency_key" field.
-func (wtuo *WalletTransactionUpdateOne) ClearIdempotencyKey() *WalletTransactionUpdateOne {
-	wtuo.mutation.ClearIdempotencyKey()
-	return wtuo
-}
-
 // Mutation returns the WalletTransactionMutation object of the builder.
 func (wtuo *WalletTransactionUpdateOne) Mutation() *WalletTransactionMutation {
 	return wtuo.mutation
@@ -802,9 +759,6 @@ func (wtuo *WalletTransactionUpdateOne) sqlSave(ctx context.Context) (_node *Wal
 	}
 	if value, ok := wtuo.mutation.CreditsAvailable(); ok {
 		_spec.SetField(wallettransaction.FieldCreditsAvailable, field.TypeOther, value)
-	}
-	if value, ok := wtuo.mutation.IdempotencyKey(); ok {
-		_spec.SetField(wallettransaction.FieldIdempotencyKey, field.TypeString, value)
 	}
 	if wtuo.mutation.IdempotencyKeyCleared() {
 		_spec.ClearField(wallettransaction.FieldIdempotencyKey, field.TypeString)
