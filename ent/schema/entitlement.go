@@ -81,6 +81,7 @@ func (Entitlement) Indexes() []ent.Index {
 		index.Fields("tenant_id", "environment_id", "plan_id", "feature_id").
 			Unique().
 			Annotations(entsql.IndexWhere("status = 'published'")),
+
 		index.Fields("tenant_id", "environment_id", "plan_id"),
 		index.Fields("tenant_id", "environment_id", "feature_id"),
 	}
