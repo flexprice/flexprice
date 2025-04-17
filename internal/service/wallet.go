@@ -275,6 +275,7 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 			return nil, err
 		}
 		referenceID = paymentID
+		referenceType = types.WalletTxReferenceTypePayment
 	}
 
 	// Create wallet credit operation
