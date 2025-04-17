@@ -444,7 +444,7 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 	return &dto.WalletBalanceResponse{
 		Wallet:                w,
 		RealTimeBalance:       realTimeBalance,
-		RealTimeCreditBalance: realTimeBalance.Div(w.ConversionRate),
+		RealTimeCreditBalance: s.GetCreditsFromCurrencyAmount(realTimeBalance, w.ConversionRate),
 		BalanceUpdatedAt:      time.Now().UTC(),
 		UnpaidInvoiceAmount:   invoiceSummary.TotalUnpaidAmount,
 		CurrentPeriodUsage:    currentPeriodUsage,
@@ -598,9 +598,9 @@ func (s *walletService) validateWalletOperation(w *wallet.Wallet, req *wallet.Wa
 
 	// Convert amount to credit amount if provided and perform credit operation
 	if req.Amount.GreaterThan(decimal.Zero) {
-		req.CreditAmount = req.Amount.Div(w.ConversionRate)
+		req.CreditAmount = s.GetCreditsFromCurrencyAmount(req.Amount, w.ConversionRate)
 	} else if req.CreditAmount.GreaterThan(decimal.Zero) {
-		req.Amount = req.CreditAmount.Mul(w.ConversionRate)
+		req.Amount = s.GetCurrencyAmountFromCredits(req.CreditAmount, w.ConversionRate)
 	} else {
 		return ierr.NewError("amount or credit amount is required").
 			WithHint("Amount or credit amount is required").
@@ -681,7 +681,7 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 			newCreditBalance = w.CreditBalance.Add(req.CreditAmount)
 		}
 
-		finalBalance := newCreditBalance.Mul(w.ConversionRate)
+		finalBalance := s.GetCurrencyAmountFromCredits(newCreditBalance, w.ConversionRate)
 
 		// Create transaction record
 		tx := &wallet.Transaction{
@@ -785,6 +785,7 @@ func (s *walletService) ExpireCredits(ctx context.Context, transactionID string)
 		TransactionReason: types.TransactionReasonCreditExpired,
 		ReferenceType:     types.WalletTxReferenceTypeRequest,
 		ReferenceID:       tx.ID,
+		IdempotencyKey:    tx.ID,
 		Metadata: types.Metadata{
 			"expired_transaction_id": tx.ID,
 			"expiry_date":            tx.ExpiryDate.Format(time.RFC3339),
