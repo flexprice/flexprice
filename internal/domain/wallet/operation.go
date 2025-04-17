@@ -23,6 +23,7 @@ type WalletOperation struct {
 	Metadata          types.Metadata              `json:"metadata,omitempty"`
 	ExpiryDate        *int                        `json:"expiry_date,omitempty"` // YYYYMMDD format
 	TransactionReason types.TransactionReason     `json:"transaction_reason,omitempty"`
+	IdempotencyKey    *string                     `json:"idempotency_key,omitempty"`
 }
 
 func (w *WalletOperation) Validate() error {

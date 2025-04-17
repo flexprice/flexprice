@@ -26,6 +26,7 @@ type Transaction struct {
 	CreditsAvailable    decimal.Decimal             `db:"credits_available" json:"credits_available"`
 	TransactionReason   types.TransactionReason     `db:"transaction_reason" json:"transaction_reason"`
 	EnvironmentID       string                      `db:"environment_id" json:"environment_id"`
+	IdempotencyKey      string                      `db:"idempotency_key" json:"idempotency_key"`
 	types.BaseModel
 }
 

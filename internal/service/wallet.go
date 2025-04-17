@@ -326,6 +326,7 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 		ReferenceType:     referenceType,
 		ReferenceID:       referenceID,
 		ExpiryDate:        req.ExpiryDate,
+		IdempotencyKey:    idempotencyKey,
 	}
 
 	if err := s.CreditWallet(ctx, creditReq); err != nil {
@@ -678,6 +679,7 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 			ExpiryDate:          types.ParseYYYYMMDDToDate(req.ExpiryDate),
 			CreditBalanceBefore: w.CreditBalance,
 			CreditBalanceAfter:  newCreditBalance,
+			IdempotencyKey:      *req.IdempotencyKey,
 			EnvironmentID:       types.GetEnvironmentID(ctx),
 			BaseModel:           types.GetDefaultBaseModel(ctx),
 		}
