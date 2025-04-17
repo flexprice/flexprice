@@ -65,6 +65,8 @@ func NewWalletService(params ServiceParams) WalletService {
 }
 
 func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletRequest) (*dto.WalletResponse, error) {
+	response := &dto.WalletResponse{}
+
 	if err := req.Validate(); err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Invalid wallet request").
@@ -105,6 +107,8 @@ func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletR
 			return err // Repository already using ierr
 		}
 
+		response = dto.FromWallet(w)
+
 		s.Logger.Debugw("created wallet",
 			"wallet_id", w.ID,
 			"customer_id", w.CustomerID,
@@ -113,7 +117,7 @@ func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletR
 
 		// Load initial credits to wallet
 		if req.InitialCreditsToLoad.GreaterThan(decimal.Zero) {
-			_, err := s.TopUpWallet(ctx, w.ID, &dto.TopUpWalletRequest{
+			topUpResp, err := s.TopUpWallet(ctx, w.ID, &dto.TopUpWalletRequest{
 				Amount:     req.InitialCreditsToLoad,
 				ExpiryDate: req.InitialCreditsToLoadExpiryDate,
 			})
@@ -121,6 +125,8 @@ func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletR
 			if err != nil {
 				return err
 			}
+
+			response = topUpResp
 		}
 
 		return nil
@@ -132,7 +138,7 @@ func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletR
 
 	// Convert to response DTO
 	s.publishInternalWalletWebhookEvent(ctx, types.WebhookEventWalletCreated, w.ID)
-	return dto.FromWallet(w), nil
+	return response, nil
 }
 
 func (s *walletService) GetWalletsByCustomerID(ctx context.Context, customerID string) ([]*dto.WalletResponse, error) {
