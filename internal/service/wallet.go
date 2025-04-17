@@ -230,7 +230,12 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 	var referenceType types.WalletTxReferenceType
 	var referenceID string
 
-	idempotencyKey := req.IdempotencyKey
+	var idempotencyKey *string
+	if lo.FromPtr(req.IdempotencyKey) != "" {
+		idempotencyKey = req.IdempotencyKey
+	} else {
+		idempotencyKey = lo.ToPtr(types.GenerateUUID())
+	}
 
 	if err := req.Validate(); err != nil {
 		return nil, ierr.WithError(err).
@@ -241,19 +246,19 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 	// this case is for free credits
 	if req.TransactionReason == types.TransactionReasonFreeCredit {
 		referenceType = types.WalletTxReferenceTypeExternal
-		referenceID = *req.IdempotencyKey
+		referenceID = lo.FromPtr(idempotencyKey)
 	}
 
 	// this case is for when credits are purchased directly without invoice
 	if req.TransactionReason == types.TransactionReasonPurchasedCreditDirect {
 		referenceType = types.WalletTxReferenceTypeExternal
-		referenceID = *req.IdempotencyKey
+		referenceID = lo.FromPtr(idempotencyKey)
 	}
 
 	// this case is for when credits are purchased and flexprice system generates an invoice and payment
 	if req.TransactionReason == types.TransactionReasonPurchasedCreditInvoiced {
 		referenceType = types.WalletTxReferenceTypeExternal
-		referenceID = *req.IdempotencyKey
+		referenceID = lo.FromPtr(idempotencyKey)
 
 		// create services
 		invoiceService := NewInvoiceService(s.ServiceParams)
@@ -303,7 +308,7 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 			s.Logger.Infof("created invoice: %+v", invoice)
 
 			paymentData := &dto.CreatePaymentRequest{
-				IdempotencyKey:    *idempotencyKey,
+				IdempotencyKey:    lo.FromPtr(idempotencyKey),
 				DestinationType:   types.PaymentDestinationTypeInvoice,
 				DestinationID:     invoice.ID,
 				PaymentMethodType: types.PaymentMethodTypeOffline,
@@ -353,6 +358,7 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 		ReferenceType:     referenceType,
 		ReferenceID:       referenceID,
 		ExpiryDate:        req.ExpiryDate,
+		IdempotencyKey:    idempotencyKey,
 	}
 
 	if err := s.CreditWallet(ctx, creditReq); err != nil {
@@ -705,6 +711,7 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 			ExpiryDate:          types.ParseYYYYMMDDToDate(req.ExpiryDate),
 			CreditBalanceBefore: w.CreditBalance,
 			CreditBalanceAfter:  newCreditBalance,
+			IdempotencyKey:      *req.IdempotencyKey,
 			EnvironmentID:       types.GetEnvironmentID(ctx),
 			BaseModel:           types.GetDefaultBaseModel(ctx),
 		}
