@@ -574,6 +574,11 @@ definitions:
         $ref: '#/definitions/types.WalletConfig'
       conversion_rate:
         default: 1
+        description: |-
+          conversion_rate is the conversion rate of the currency to credits
+          amount in the currency = conversion_rate * number of credits
+          ex if conversion_rate is 1, then 1 USD = 1 credit
+          ex if conversion_rate is 10, then 1 USD = 10 credits
         type: number
       currency:
         type: string
@@ -581,6 +586,19 @@ definitions:
         type: string
       description:
         type: string
+      initial_credits_to_load:
+        default: 0
+        description: |-
+          initial_credits_to_load is the number of credits to load to the wallet
+          if not provided, the wallet will be created with 0 balance
+          NOTE: this is not the amount in the currency, but the number of credits
+        type: number
+      initial_credits_to_load_expiry_date:
+        description: |-
+          initial_credits_to_load_expiry_date YYYYMMDD format in UTC timezone (optional to set nil means no expiry)
+          for ex 20250101 means the credits will expire on 2025-01-01 00:00:00 UTC
+          hence they will be available for use until 2024-12-31 23:59:59 UTC
+        type: integer
       metadata:
         $ref: '#/definitions/types.Metadata'
       name:

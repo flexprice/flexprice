@@ -26,7 +26,19 @@ type CreateWalletRequest struct {
 	AutoTopupAmount     decimal.Decimal        `json:"auto_topup_amount,omitempty"`
 	WalletType          types.WalletType       `json:"wallet_type"`
 	Config              *types.WalletConfig    `json:"config,omitempty"`
-	ConversionRate      decimal.Decimal        `json:"conversion_rate" default:"1"`
+	// conversion_rate is the conversion rate of the currency to credits
+	// amount in the currency = conversion_rate * number of credits
+	// ex if conversion_rate is 1, then 1 USD = 1 credit
+	// ex if conversion_rate is 10, then 1 USD = 10 credits
+	ConversionRate decimal.Decimal `json:"conversion_rate" default:"1"`
+	// initial_credits_to_load is the number of credits to load to the wallet
+	// if not provided, the wallet will be created with 0 balance
+	// NOTE: this is not the amount in the currency, but the number of credits
+	InitialCreditsToLoad decimal.Decimal `json:"initial_credits_to_load,omitempty" default:"0"`
+	// initial_credits_to_load_expiry_date YYYYMMDD format in UTC timezone (optional to set nil means no expiry)
+	// for ex 20250101 means the credits will expire on 2025-01-01 00:00:00 UTC
+	// hence they will be available for use until 2024-12-31 23:59:59 UTC
+	InitialCreditsToLoadExpiryDate *int `json:"initial_credits_to_load_expiry_date,omitempty"`
 }
 
 // UpdateWalletRequest represents the request to update a wallet
@@ -268,8 +280,8 @@ type TopUpWalletRequest struct {
 	// reference_type is the type of the reference ex payment, invoice, request
 	ReferenceType string `json:"reference_type,omitempty"`
 	// reference_id is the ID of the reference ex payment ID, invoice ID, request ID
-	ReferenceID string `json:"reference_id,omitempty"`
-	Metadata types.Metadata `json:"metadata,omitempty"`
+	ReferenceID string         `json:"reference_id,omitempty"`
+	Metadata    types.Metadata `json:"metadata,omitempty"`
 }
 
 func (r *TopUpWalletRequest) Validate() error {

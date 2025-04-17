@@ -6333,6 +6333,7 @@
                     "$ref": "#/definitions/types.WalletConfig"
                 },
                 "conversion_rate": {
+                    "description": "conversion_rate is the conversion rate of the currency to credits\namount in the currency = conversion_rate * number of credits\nex if conversion_rate is 1, then 1 USD = 1 credit\nex if conversion_rate is 10, then 1 USD = 10 credits",
                     "type": "number",
                     "default": 1
                 },
@@ -6344,6 +6345,15 @@
                 },
                 "description": {
                     "type": "string"
+                },
+                "initial_credits_to_load": {
+                    "description": "initial_credits_to_load is the number of credits to load to the wallet\nif not provided, the wallet will be created with 0 balance\nNOTE: this is not the amount in the currency, but the number of credits",
+                    "type": "number",
+                    "default": 0
+                },
+                "initial_credits_to_load_expiry_date": {
+                    "description": "initial_credits_to_load_expiry_date YYYYMMDD format in UTC timezone (optional to set nil means no expiry)\nfor ex 20250101 means the credits will expire on 2025-01-01 00:00:00 UTC\nhence they will be available for use until 2024-12-31 23:59:59 UTC",
+                    "type": "integer"
                 },
                 "metadata": {
                     "$ref": "#/definitions/types.Metadata"
