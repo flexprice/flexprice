@@ -1911,16 +1911,14 @@ definitions:
           for ex 20250101 means the credits will expire on 2025-01-01 00:00:00 UTC
           hence they will be available for use until 2024-12-31 23:59:59 UTC
         type: integer
-      generate_invoice:
-        description: generate_invoice when true, an invoice will be generated for
-          the transaction
-        type: boolean
+      idempotency_key:
+        description: idempotency_key is a unique key for the transaction
+        type: string
       metadata:
-        $ref: '#/definitions/types.Metadata'
-      purchased_credits:
-        description: purchased_credits when true, the credits are added as purchased
-          credits
-        type: boolean
+        allOf:
+        - $ref: '#/definitions/types.Metadata'
+        description: metadata is a map of key-value pairs to store any additional
+          information about the transaction
       reference_id:
         description: reference_id is the ID of the reference ex payment ID, invoice
           ID, request ID
@@ -1929,8 +1927,14 @@ definitions:
         description: reference_type is the type of the reference ex payment, invoice,
           request
         type: string
+      transaction_reason:
+        allOf:
+        - $ref: '#/definitions/types.TransactionReason'
+        description: transaction_reason is the reason for the transaction
     required:
     - amount
+    - idempotency_key
+    - transaction_reason
     type: object
   dto.UpdateCustomerRequest:
     properties:
@@ -2941,13 +2945,11 @@ definitions:
     - WalletStatusClosed
   types.WalletTxReferenceType:
     enum:
-    - INVOICE
     - PAYMENT
     - EXTERNAL
     - REQUEST
     type: string
     x-enum-varnames:
-    - WalletTxReferenceTypeInvoice
     - WalletTxReferenceTypePayment
     - WalletTxReferenceTypeExternal
     - WalletTxReferenceTypeRequest

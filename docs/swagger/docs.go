@@ -8238,7 +8238,9 @@ const docTemplate = `{
         "dto.TopUpWalletRequest": {
             "type": "object",
             "required": [
-                "amount"
+                "amount",
+                "idempotency_key",
+                "transaction_reason"
             ],
             "properties": {
                 "amount": {
@@ -8253,16 +8255,17 @@ const docTemplate = `{
                     "description": "expiry_date YYYYMMDD format in UTC timezone (optional to set nil means no expiry)\nfor ex 20250101 means the credits will expire on 2025-01-01 00:00:00 UTC\nhence they will be available for use until 2024-12-31 23:59:59 UTC",
                     "type": "integer"
                 },
-                "generate_invoice": {
-                    "description": "generate_invoice when true, an invoice will be generated for the transaction",
-                    "type": "boolean"
+                "idempotency_key": {
+                    "description": "idempotency_key is a unique key for the transaction",
+                    "type": "string"
                 },
                 "metadata": {
-                    "$ref": "#/definitions/types.Metadata"
-                },
-                "purchased_credits": {
-                    "description": "purchased_credits when true, the credits are added as purchased credits",
-                    "type": "boolean"
+                    "description": "metadata is a map of key-value pairs to store any additional information about the transaction",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.Metadata"
+                        }
+                    ]
                 },
                 "reference_id": {
                     "description": "reference_id is the ID of the reference ex payment ID, invoice ID, request ID",
@@ -8271,6 +8274,14 @@ const docTemplate = `{
                 "reference_type": {
                     "description": "reference_type is the type of the reference ex payment, invoice, request",
                     "type": "string"
+                },
+                "transaction_reason": {
+                    "description": "transaction_reason is the reason for the transaction",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.TransactionReason"
+                        }
+                    ]
                 }
             }
         },
@@ -9669,13 +9680,11 @@ const docTemplate = `{
         "types.WalletTxReferenceType": {
             "type": "string",
             "enum": [
-                "INVOICE",
                 "PAYMENT",
                 "EXTERNAL",
                 "REQUEST"
             ],
             "x-enum-varnames": [
-                "WalletTxReferenceTypeInvoice",
                 "WalletTxReferenceTypePayment",
                 "WalletTxReferenceTypeExternal",
                 "WalletTxReferenceTypeRequest"
