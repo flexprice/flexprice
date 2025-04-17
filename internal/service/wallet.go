@@ -137,6 +137,18 @@ func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletR
 		return nil, err
 	}
 
+	// Load initial credits to wallet
+	if req.InitialCreditsToLoad.GreaterThan(decimal.Zero) {
+		_, err := s.TopUpWallet(ctx, w.ID, &dto.TopUpWalletRequest{
+			Amount:            req.InitialCreditsToLoad,
+			TransactionReason: types.TransactionReasonFreeCredit,
+		})
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// Convert to response DTO
 	s.publishInternalWalletWebhookEvent(ctx, types.WebhookEventWalletCreated, w.ID)
 	return response, nil

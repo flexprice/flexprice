@@ -276,7 +276,7 @@ type TopUpWalletRequest struct {
 	// reference_type is the type of the reference ex payment, invoice, request
 	ReferenceType string `json:"reference_type,omitempty"`
 	// reference_id is the ID of the reference ex payment ID, invoice ID, request ID
-	ReferenceID string         `json:"reference_id,omitempty"`
+	ReferenceID string `json:"reference_id,omitempty"`
 	// idempotency_key is a unique key for the transaction
 	IdempotencyKey *string `json:"idempotency_key" binding:"required"`
 	// transaction_reason is the reason for the transaction
