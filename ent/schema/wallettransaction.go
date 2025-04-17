@@ -99,6 +99,9 @@ func (WalletTransaction) Fields() []ent.Field {
 			Annotations(
 				entsql.Default("0"),
 			),
+		field.String("idempotency_key").
+			Nillable().
+			Optional(),
 		field.String("transaction_reason").
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
@@ -122,6 +125,11 @@ func (WalletTransaction) Indexes() []ent.Index {
 		index.Fields("tenant_id", "environment_id", "wallet_id", "type", "credits_available", "expiry_date").
 			StorageKey("idx_tenant_wallet_type_credits_available_expiry_date").
 			Annotations(entsql.IndexWhere("credits_available > 0 AND type = 'credit'")),
-		// TODO: Add unique index for reference type and ID
+		index.Fields("tenant_id", "environment_id", "idempotency_key").
+			Unique().
+			Annotations(
+				entsql.IndexWhere("idempotency_key IS NOT NULL AND idempotency_key <> ''"),
+			).
+			StorageKey("idx_tenant_environment_idempotency_key"),
 	}
 }

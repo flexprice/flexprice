@@ -21,6 +21,7 @@ type WalletOperation struct {
 	ReferenceID       string                      `json:"reference_id,omitempty"`
 	Description       string                      `json:"description,omitempty"`
 	Metadata          types.Metadata              `json:"metadata,omitempty"`
+	IdempotencyKey    string                      `json:"idempotency_key,omitempty"`
 	ExpiryDate        *int                        `json:"expiry_date,omitempty"` // YYYYMMDD format
 	TransactionReason types.TransactionReason     `json:"transaction_reason,omitempty"`
 }

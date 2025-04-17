@@ -358,7 +358,7 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 		ReferenceType:     referenceType,
 		ReferenceID:       referenceID,
 		ExpiryDate:        req.ExpiryDate,
-		IdempotencyKey:    idempotencyKey,
+		IdempotencyKey:    lo.FromPtr(idempotencyKey),
 	}
 
 	if err := s.CreditWallet(ctx, creditReq); err != nil {
@@ -711,8 +711,8 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 			ExpiryDate:          types.ParseYYYYMMDDToDate(req.ExpiryDate),
 			CreditBalanceBefore: w.CreditBalance,
 			CreditBalanceAfter:  newCreditBalance,
-			IdempotencyKey:      *req.IdempotencyKey,
 			EnvironmentID:       types.GetEnvironmentID(ctx),
+			IdempotencyKey:      req.IdempotencyKey,
 			BaseModel:           types.GetDefaultBaseModel(ctx),
 		}
 
@@ -797,6 +797,7 @@ func (s *walletService) ExpireCredits(ctx context.Context, transactionID string)
 		TransactionReason: types.TransactionReasonCreditExpired,
 		ReferenceType:     types.WalletTxReferenceTypeRequest,
 		ReferenceID:       tx.ID,
+		IdempotencyKey:    tx.IdempotencyKey,
 		Metadata: types.Metadata{
 			"expired_transaction_id": tx.ID,
 			"expiry_date":            tx.ExpiryDate.Format(time.RFC3339),

@@ -25,6 +25,7 @@ type Transaction struct {
 	ExpiryDate          *time.Time                  `db:"expiry_date" json:"expiry_date"`
 	CreditsAvailable    decimal.Decimal             `db:"credits_available" json:"credits_available"`
 	TransactionReason   types.TransactionReason     `db:"transaction_reason" json:"transaction_reason"`
+	IdempotencyKey      string                      `db:"idempotency_key" json:"idempotency_key"`
 	EnvironmentID       string                      `db:"environment_id" json:"environment_id"`
 	types.BaseModel
 }

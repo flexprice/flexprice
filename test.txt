@@ -1,0 +1,983 @@
+Installing typst binary for Darwin
+Added ~/.local/bin to your PATH in ~/.bashrc. Please run 'source ~/.bashrc' to update your current session.
+go test -v -race ./internal/...
+?   	github.com/flexprice/flexprice/internal/api	[no test files]
+?   	github.com/flexprice/flexprice/internal/api/cron	[no test files]
+?   	github.com/flexprice/flexprice/internal/api/dto	[no test files]
+?   	github.com/flexprice/flexprice/internal/api/v1	[no test files]
+?   	github.com/flexprice/flexprice/internal/auth	[no test files]
+?   	github.com/flexprice/flexprice/internal/cache	[no test files]
+?   	github.com/flexprice/flexprice/internal/clickhouse	[no test files]
+?   	github.com/flexprice/flexprice/internal/config	[no test files]
+?   	github.com/flexprice/flexprice/internal/domain/auth	[no test files]
+?   	github.com/flexprice/flexprice/internal/domain/customer	[no test files]
+?   	github.com/flexprice/flexprice/internal/domain/entitlement	[no test files]
+?   	github.com/flexprice/flexprice/internal/domain/environment	[no test files]
+?   	github.com/flexprice/flexprice/internal/domain/errors	[no test files]
+?   	github.com/flexprice/flexprice/internal/domain/events	[no test files]
+?   	github.com/flexprice/flexprice/internal/domain/feature	[no test files]
+?   	github.com/flexprice/flexprice/internal/domain/invoice	[no test files]
+?   	github.com/flexprice/flexprice/internal/domain/meter	[no test files]
+?   	github.com/flexprice/flexprice/internal/domain/payment	[no test files]
+?   	github.com/flexprice/flexprice/internal/domain/pdf	[no test files]
+?   	github.com/flexprice/flexprice/internal/domain/plan	[no test files]
+?   	github.com/flexprice/flexprice/internal/domain/price	[no test files]
+?   	github.com/flexprice/flexprice/internal/domain/secret	[no test files]
+?   	github.com/flexprice/flexprice/internal/domain/subscription	[no test files]
+?   	github.com/flexprice/flexprice/internal/domain/task	[no test files]
+?   	github.com/flexprice/flexprice/internal/domain/tenant	[no test files]
+?   	github.com/flexprice/flexprice/internal/domain/user	[no test files]
+?   	github.com/flexprice/flexprice/internal/domain/wallet	[no test files]
+?   	github.com/flexprice/flexprice/internal/dynamodb	[no test files]
+?   	github.com/flexprice/flexprice/internal/errors	[no test files]
+?   	github.com/flexprice/flexprice/internal/httpclient	[no test files]
+?   	github.com/flexprice/flexprice/internal/idempotency	[no test files]
+?   	github.com/flexprice/flexprice/internal/kafka	[no test files]
+?   	github.com/flexprice/flexprice/internal/logger	[no test files]
+=== RUN   TestRenderInvoicePdf
+--- PASS: TestRenderInvoicePdf (0.00s)
+=== RUN   TestRenderInvoicePdf_Error
+--- PASS: TestRenderInvoicePdf_Error (0.00s)
+PASS
+ok  	github.com/flexprice/flexprice/internal/pdf	(cached)
+?   	github.com/flexprice/flexprice/internal/postgres	[no test files]
+?   	github.com/flexprice/flexprice/internal/publisher	[no test files]
+?   	github.com/flexprice/flexprice/internal/pubsub	[no test files]
+?   	github.com/flexprice/flexprice/internal/pubsub/kafka	[no test files]
+?   	github.com/flexprice/flexprice/internal/pubsub/memory	[no test files]
+?   	github.com/flexprice/flexprice/internal/pubsub/router	[no test files]
+?   	github.com/flexprice/flexprice/internal/repository	[no test files]
+?   	github.com/flexprice/flexprice/internal/repository/clickhouse	[no test files]
+=== RUN   TestQueryBuilder_WithBaseFilters
+=== RUN   TestQueryBuilder_WithBaseFilters/base_filters_with_all_params
+=== RUN   TestQueryBuilder_WithBaseFilters/base_filters_without_customer_ID
+--- PASS: TestQueryBuilder_WithBaseFilters (0.00s)
+    --- PASS: TestQueryBuilder_WithBaseFilters/base_filters_with_all_params (0.00s)
+    --- PASS: TestQueryBuilder_WithBaseFilters/base_filters_without_customer_ID (0.00s)
+=== RUN   TestQueryBuilder_WithFilterGroups
+=== RUN   TestQueryBuilder_WithFilterGroups/multiple_filter_groups_with_different_priorities
+=== RUN   TestQueryBuilder_WithFilterGroups/single_filter_group
+--- PASS: TestQueryBuilder_WithFilterGroups (0.00s)
+    --- PASS: TestQueryBuilder_WithFilterGroups/multiple_filter_groups_with_different_priorities (0.00s)
+    --- PASS: TestQueryBuilder_WithFilterGroups/single_filter_group (0.00s)
+=== RUN   TestQueryBuilder_WithAggregation
+=== RUN   TestQueryBuilder_WithAggregation/count_aggregation
+=== RUN   TestQueryBuilder_WithAggregation/sum_aggregation
+=== RUN   TestQueryBuilder_WithAggregation/avg_aggregation
+=== RUN   TestQueryBuilder_WithAggregation/count_unique_aggregation
+=== RUN   TestQueryBuilder_WithAggregation/count_unique_aggregation_with_user_property
+--- PASS: TestQueryBuilder_WithAggregation (0.00s)
+    --- PASS: TestQueryBuilder_WithAggregation/count_aggregation (0.00s)
+    --- PASS: TestQueryBuilder_WithAggregation/sum_aggregation (0.00s)
+    --- PASS: TestQueryBuilder_WithAggregation/avg_aggregation (0.00s)
+    --- PASS: TestQueryBuilder_WithAggregation/count_unique_aggregation (0.00s)
+    --- PASS: TestQueryBuilder_WithAggregation/count_unique_aggregation_with_user_property (0.00s)
+=== RUN   TestQueryBuilder_CompleteFlow
+=== RUN   TestQueryBuilder_CompleteFlow/complete_flow_with_multiple_filter_groups_and_sum_aggregation
+--- PASS: TestQueryBuilder_CompleteFlow (0.00s)
+    --- PASS: TestQueryBuilder_CompleteFlow/complete_flow_with_multiple_filter_groups_and_sum_aggregation (0.00s)
+PASS
+ok  	github.com/flexprice/flexprice/internal/repository/clickhouse/builder	(cached)
+?   	github.com/flexprice/flexprice/internal/repository/ent	[no test files]
+?   	github.com/flexprice/flexprice/internal/rest/middleware	[no test files]
+?   	github.com/flexprice/flexprice/internal/s3	[no test files]
+?   	github.com/flexprice/flexprice/internal/security	[no test files]
+?   	github.com/flexprice/flexprice/internal/sentry	[no test files]
+=== RUN   TestAuthService
+{"level":"info","timestamp":"2025-04-17T14:24:44.114+0530","caller":"cache/init.go:9","msg":"Initializing cache system"}
+{"level":"info","timestamp":"2025-04-17T14:24:44.114+0530","caller":"cache/init.go:14","msg":"Cache system initialized"}
+=== RUN   TestAuthService/TestSignUp
+=== RUN   TestAuthService/TestSignUp/successful_signup
+{"level":"warn","timestamp":"2025-04-17T14:24:44.791+0530","caller":"service/tenant.go:63","msg":"Billing tenant ID is not set, skipping customer creation","tenant_id":"tenant_01JS1FA94MPAD1EBJDB4Q0TB61"}
+{"level":"info","timestamp":"2025-04-17T14:24:44.791+0530","caller":"service/onboarding.go:444","msg":"setting up sandbox environment with Cursor pricing model","tenant_id":"tenant_01JS1FA94MPAD1EBJDB4Q0TB61","user_id":"user_01JS1FA9SQBBAGWR2RYT50A9HP","environment_id":"env_01JS1FA9SQBBAGWR2RYXRKP6M2"}
+{"level":"info","timestamp":"2025-04-17T14:24:44.791+0530","caller":"service/onboarding.go:498","msg":"creating default meters for Cursor pricing model"}
+{"level":"info","timestamp":"2025-04-17T14:24:44.791+0530","caller":"service/onboarding.go:545","msg":"created completions meter","meter_id":"meter_01JS1FA9SQBBAGWR2RZ1X6ZV4Z"}
+{"level":"info","timestamp":"2025-04-17T14:24:44.791+0530","caller":"service/onboarding.go:551","msg":"created slow premium requests meter","meter_id":"meter_01JS1FA9SQBBAGWR2RZ4MJ6B2S"}
+{"level":"info","timestamp":"2025-04-17T14:24:44.791+0530","caller":"service/onboarding.go:557","msg":"created fast premium requests meter","meter_id":"meter_01JS1FA9SQBBAGWR2RZ6P4MMKZ"}
+{"level":"info","timestamp":"2025-04-17T14:24:44.791+0530","caller":"service/onboarding.go:563","msg":"creating default features for Cursor pricing model"}
+{"level":"info","timestamp":"2025-04-17T14:24:44.791+0530","caller":"service/onboarding.go:636","msg":"created feature","feature_id":"feat_01JS1FA9SQBBAGWR2RZ82N2D00","feature_name":"SSO","feature_type":"static"}
+{"level":"info","timestamp":"2025-04-17T14:24:44.791+0530","caller":"service/onboarding.go:636","msg":"created feature","feature_id":"feat_01JS1FA9SQBBAGWR2RZARJJT0A","feature_name":"Admin Dashboard","feature_type":"boolean"}
+{"level":"info","timestamp":"2025-04-17T14:24:44.791+0530","caller":"service/onboarding.go:636","msg":"created feature","feature_id":"feat_01JS1FA9SQBBAGWR2RZD3RYP4G","feature_name":"Team Billing","feature_type":"boolean"}
+{"level":"info","timestamp":"2025-04-17T14:24:44.791+0530","caller":"service/onboarding.go:636","msg":"created feature","feature_id":"feat_01JS1FA9SQBBAGWR2RZEXF64R2","feature_name":"Privacy Mode","feature_type":"boolean"}
+{"level":"info","timestamp":"2025-04-17T14:24:44.792+0530","caller":"service/onboarding.go:636","msg":"created feature","feature_id":"feat_01JS1FA9SQBBAGWR2RZJ348W0S","feature_name":"Premium Requests (Fast)","feature_type":"metered"}
+{"level":"info","timestamp":"2025-04-17T14:24:44.792+0530","caller":"service/onboarding.go:636","msg":"created feature","feature_id":"feat_01JS1FA9SRZ03VE42XNPQ08TE4","feature_name":"Premium Requests (Slow)","feature_type":"metered"}
+{"level":"info","timestamp":"2025-04-17T14:24:44.792+0530","caller":"service/onboarding.go:636","msg":"created feature","feature_id":"feat_01JS1FA9SRZ03VE42XNR24BSSF","feature_name":"Completions","feature_type":"metered"}
+{"level":"info","timestamp":"2025-04-17T14:24:44.792+0530","caller":"service/onboarding.go:648","msg":"creating default plans for Cursor pricing model"}
+{"level":"info","timestamp":"2025-04-17T14:24:44.792+0530","caller":"service/onboarding.go:712","msg":"creating default prices for Cursor pricing model"}
+{"level":"info","timestamp":"2025-04-17T14:24:44.792+0530","caller":"service/onboarding.go:988","msg":"creating default entitlements for Cursor pricing model"}
+{"level":"info","timestamp":"2025-04-17T14:24:44.792+0530","caller":"service/onboarding.go:700","msg":"created plan","plan_id":"plan_01JS1FA9SRZ03VE42XNSSRY4BF","plan_name":"Business"}
+{"level":"info","timestamp":"2025-04-17T14:24:44.792+0530","caller":"service/onboarding.go:700","msg":"created plan","plan_id":"plan_01JS1FA9SRZ03VE42XPMD35AK0","plan_name":"Pro"}
+{"level":"info","timestamp":"2025-04-17T14:24:44.792+0530","caller":"service/onboarding.go:700","msg":"created plan","plan_id":"plan_01JS1FA9SRZ03VE42XQ3F0RWCA","plan_name":"Hobby"}
+{"level":"info","timestamp":"2025-04-17T14:24:44.793+0530","caller":"service/onboarding.go:908","msg":"creating default customers for Cursor pricing model"}
+{"level":"info","timestamp":"2025-04-17T14:24:44.793+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FA9SSKNQ72VW38KE7QNGQ","event_name":"customer.created","tenant_id":"tenant_01JS1FA94MPAD1EBJDB4Q0TB61"}
+{"level":"info","timestamp":"2025-04-17T14:24:44.793+0530","caller":"service/onboarding.go:925","msg":"created customer","customer_id":"cust_01JS1FA9SSKNQ72VW38H2DQ9Q0","customer_name":"Demo User","customer_email":"demo@example.com"}
+{"level":"info","timestamp":"2025-04-17T14:24:44.793+0530","caller":"service/onboarding.go:935","msg":"creating default subscriptions for Cursor pricing model"}
+{"level":"info","timestamp":"2025-04-17T14:24:44.793+0530","caller":"service/subscription.go:218","msg":"creating subscription","customer_id":"cust_01JS1FA9SSKNQ72VW38H2DQ9Q0","plan_id":"plan_01JS1FA9SRZ03VE42XPMD35AK0","start_date":"2025-04-17T08:54:44.793Z","billing_anchor":"2025-04-17T08:54:44.793Z","current_period_start":"2025-04-17T08:54:44.793Z","current_period_end":"2025-05-17T08:54:44.000Z","valid_prices":3,"num_line_items":3}
+{"level":"info","timestamp":"2025-04-17T14:24:44.793+0530","caller":"service/invoice.go:449","msg":"creating subscription invoice","subscription_id":"subs_01JS1FA9SSKNQ72VW38P386KGB","period_start":"2025-04-17T08:54:44.793Z","period_end":"2025-05-17T08:54:44.000Z","reference_point":"period_start"}
+{"level":"info","timestamp":"2025-04-17T14:24:44.793+0530","caller":"service/billing.go:274","msg":"preparing subscription invoice request","subscription_id":"subs_01JS1FA9SSKNQ72VW38P386KGB","period_start":"2025-04-17T08:54:44.793Z","period_end":"2025-05-17T08:54:44.000Z","reference_point":"period_start"}
+{"level":"info","timestamp":"2025-04-17T14:24:44.794+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FA9ST3XFMDJF7J49YC78W","event_name":"invoice.create.drafted","tenant_id":"tenant_01JS1FA94MPAD1EBJDB4Q0TB61"}
+{"level":"info","timestamp":"2025-04-17T14:24:44.794+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FA9ST3XFMDJF7J5C7DN1E","event_name":"invoice.update.finalized","tenant_id":"tenant_01JS1FA94MPAD1EBJDB4Q0TB61"}
+{"level":"info","timestamp":"2025-04-17T14:24:44.794+0530","caller":"service/wallet_payment.go:89","msg":"no suitable wallets found for payment","customer_id":"cust_01JS1FA9SSKNQ72VW38H2DQ9Q0","invoice_id":"inv_01JS1FA9ST3XFMDJF7HXYS3094","currency":"usd"}
+{"level":"info","timestamp":"2025-04-17T14:24:44.794+0530","caller":"service/invoice.go:759","msg":"no payments processed for invoice","invoice_id":"inv_01JS1FA9ST3XFMDJF7HXYS3094","amount_remaining":"20"}
+{"level":"info","timestamp":"2025-04-17T14:24:44.794+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FA9ST3XFMDJF7J7MZB97B","event_name":"subscription.created","tenant_id":"tenant_01JS1FA94MPAD1EBJDB4Q0TB61"}
+{"level":"info","timestamp":"2025-04-17T14:24:44.794+0530","caller":"service/onboarding.go:979","msg":"created subscription","subscription_id":"subs_01JS1FA9SSKNQ72VW38P386KGB","subscription_status":"published"}
+{"level":"info","timestamp":"2025-04-17T14:24:44.794+0530","caller":"service/onboarding.go:485","msg":"successfully set up sandbox environment with Cursor pricing model","tenant_id":"tenant_01JS1FA94MPAD1EBJDB4Q0TB61","user_id":"user_01JS1FA9SQBBAGWR2RYT50A9HP","environment_id":"env_01JS1FA9SQBBAGWR2RYXRKP6M2"}
+=== RUN   TestAuthService/TestSignUp/duplicate_email
+--- PASS: TestAuthService (0.69s)
+    --- PASS: TestAuthService/TestSignUp (0.68s)
+        --- PASS: TestAuthService/TestSignUp/successful_signup (0.68s)
+        --- PASS: TestAuthService/TestSignUp/duplicate_email (0.00s)
+=== RUN   TestBillingService
+{"level":"info","timestamp":"2025-04-17T14:24:44.798+0530","caller":"cache/init.go:9","msg":"Initializing cache system"}
+{"level":"info","timestamp":"2025-04-17T14:24:44.798+0530","caller":"cache/init.go:14","msg":"Cache system initialized"}
+=== RUN   TestBillingService/TestClassifyLineItems
+=== RUN   TestBillingService/TestFilterLineItemsToBeInvoiced
+=== RUN   TestBillingService/TestFilterLineItemsToBeInvoiced/no_existing_invoices
+=== RUN   TestBillingService/TestFilterLineItemsToBeInvoiced/fixed_advance_already_invoiced
+=== RUN   TestBillingService/TestFilterLineItemsToBeInvoiced/arrear_charges_already_invoiced
+=== RUN   TestBillingService/TestFilterLineItemsToBeInvoiced/all_line_items_already_invoiced
+=== RUN   TestBillingService/TestFilterLineItemsToBeInvoiced/different_period
+=== RUN   TestBillingService/TestPrepareSubscriptionInvoiceRequest
+=== RUN   TestBillingService/TestPrepareSubscriptionInvoiceRequest/period_start_reference_point
+{"level":"info","timestamp":"2025-04-17T14:24:44.804+0530","caller":"service/billing.go:274","msg":"preparing subscription invoice request","subscription_id":"sub_123","period_start":"2025-04-16T08:54:44.802Z","period_end":"2025-04-23T08:54:44.802Z","reference_point":"period_start"}
+=== RUN   TestBillingService/TestPrepareSubscriptionInvoiceRequest/period_end_reference_point
+{"level":"info","timestamp":"2025-04-17T14:24:44.804+0530","caller":"service/billing.go:274","msg":"preparing subscription invoice request","subscription_id":"sub_123","period_start":"2025-04-16T08:54:44.802Z","period_end":"2025-04-23T08:54:44.802Z","reference_point":"period_end"}
+=== RUN   TestBillingService/TestPrepareSubscriptionInvoiceRequest/preview_reference_point
+{"level":"info","timestamp":"2025-04-17T14:24:44.805+0530","caller":"service/billing.go:274","msg":"preparing subscription invoice request","subscription_id":"sub_123","period_start":"2025-04-16T08:54:44.802Z","period_end":"2025-04-23T08:54:44.802Z","reference_point":"preview"}
+=== RUN   TestBillingService/TestPrepareSubscriptionInvoiceRequest/existing_invoice_check_advance
+{"level":"info","timestamp":"2025-04-17T14:24:44.805+0530","caller":"service/billing.go:274","msg":"preparing subscription invoice request","subscription_id":"sub_123","period_start":"2025-04-16T08:54:44.802Z","period_end":"2025-04-23T08:54:44.802Z","reference_point":"period_start"}
+=== RUN   TestBillingService/TestPrepareSubscriptionInvoiceRequest/existing_invoice_check_arrear
+{"level":"info","timestamp":"2025-04-17T14:24:44.805+0530","caller":"service/billing.go:274","msg":"preparing subscription invoice request","subscription_id":"sub_123","period_start":"2025-04-16T08:54:44.802Z","period_end":"2025-04-23T08:54:44.802Z","reference_point":"period_end"}
+--- PASS: TestBillingService (0.01s)
+    --- PASS: TestBillingService/TestClassifyLineItems (0.00s)
+    --- PASS: TestBillingService/TestFilterLineItemsToBeInvoiced (0.00s)
+        --- PASS: TestBillingService/TestFilterLineItemsToBeInvoiced/no_existing_invoices (0.00s)
+        --- PASS: TestBillingService/TestFilterLineItemsToBeInvoiced/fixed_advance_already_invoiced (0.00s)
+        --- PASS: TestBillingService/TestFilterLineItemsToBeInvoiced/arrear_charges_already_invoiced (0.00s)
+        --- PASS: TestBillingService/TestFilterLineItemsToBeInvoiced/all_line_items_already_invoiced (0.00s)
+        --- PASS: TestBillingService/TestFilterLineItemsToBeInvoiced/different_period (0.00s)
+    --- PASS: TestBillingService/TestPrepareSubscriptionInvoiceRequest (0.00s)
+        --- PASS: TestBillingService/TestPrepareSubscriptionInvoiceRequest/period_start_reference_point (0.00s)
+        --- PASS: TestBillingService/TestPrepareSubscriptionInvoiceRequest/period_end_reference_point (0.00s)
+        --- PASS: TestBillingService/TestPrepareSubscriptionInvoiceRequest/preview_reference_point (0.00s)
+        --- PASS: TestBillingService/TestPrepareSubscriptionInvoiceRequest/existing_invoice_check_advance (0.00s)
+        --- PASS: TestBillingService/TestPrepareSubscriptionInvoiceRequest/existing_invoice_check_arrear (0.00s)
+=== RUN   TestCustomerService
+{"level":"info","timestamp":"2025-04-17T14:24:44.809+0530","caller":"cache/init.go:9","msg":"Initializing cache system"}
+{"level":"info","timestamp":"2025-04-17T14:24:44.809+0530","caller":"cache/init.go:14","msg":"Cache system initialized"}
+=== RUN   TestCustomerService/TestCreateCustomer
+=== RUN   TestCustomerService/TestCreateCustomer/valid_customer
+{"level":"info","timestamp":"2025-04-17T14:24:44.810+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FA9TANB95507ZHD6AFF24","event_name":"customer.created","tenant_id":""}
+=== RUN   TestCustomerService/TestCreateCustomer/invalid_country_code
+=== RUN   TestCustomerService/TestCreateCustomer/invalid_postal_code
+=== RUN   TestCustomerService/TestCreateCustomer/invalid_address_line1
+=== RUN   TestCustomerService/TestDeleteCustomer
+=== RUN   TestCustomerService/TestDeleteCustomer/delete_existing_customer
+{"level":"info","timestamp":"2025-04-17T14:24:44.811+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FA9TB8EMDM0E88W2M3C9A","event_name":"customer.deleted","tenant_id":""}
+=== RUN   TestCustomerService/TestDeleteCustomer/delete_nonexistent_customer
+=== RUN   TestCustomerService/TestDeleteCustomer/delete_unpublished_customer
+=== RUN   TestCustomerService/TestDeleteCustomer/customer_with_active_subscription
+=== RUN   TestCustomerService/TestDeleteCustomer/customer_with_invoices
+=== RUN   TestCustomerService/TestDeleteCustomer/customer_with_wallets
+=== RUN   TestCustomerService/TestGetCustomer
+=== RUN   TestCustomerService/TestGetCustomer/customer_found
+=== RUN   TestCustomerService/TestGetCustomer/customer_not_found
+=== RUN   TestCustomerService/TestGetCustomerByLookupKey
+=== RUN   TestCustomerService/TestGetCustomerByLookupKey/customer_found
+=== RUN   TestCustomerService/TestGetCustomerByLookupKey/customer_not_found
+=== RUN   TestCustomerService/TestGetCustomers
+=== RUN   TestCustomerService/TestGetCustomers/all_customers
+=== RUN   TestCustomerService/TestUpdateCustomer
+=== RUN   TestCustomerService/TestUpdateCustomer/valid_update
+{"level":"info","timestamp":"2025-04-17T14:24:44.812+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FA9TCWR5A4P6M9QAJW8EN","event_name":"customer.updated","tenant_id":""}
+=== RUN   TestCustomerService/TestUpdateCustomer/invalid_country_code
+=== RUN   TestCustomerService/TestUpdateCustomer/customer_not_found
+--- PASS: TestCustomerService (0.01s)
+    --- PASS: TestCustomerService/TestCreateCustomer (0.00s)
+        --- PASS: TestCustomerService/TestCreateCustomer/valid_customer (0.00s)
+        --- PASS: TestCustomerService/TestCreateCustomer/invalid_country_code (0.00s)
+        --- PASS: TestCustomerService/TestCreateCustomer/invalid_postal_code (0.00s)
+        --- PASS: TestCustomerService/TestCreateCustomer/invalid_address_line1 (0.00s)
+    --- PASS: TestCustomerService/TestDeleteCustomer (0.00s)
+        --- PASS: TestCustomerService/TestDeleteCustomer/delete_existing_customer (0.00s)
+        --- PASS: TestCustomerService/TestDeleteCustomer/delete_nonexistent_customer (0.00s)
+        --- PASS: TestCustomerService/TestDeleteCustomer/delete_unpublished_customer (0.00s)
+        --- PASS: TestCustomerService/TestDeleteCustomer/customer_with_active_subscription (0.00s)
+        --- PASS: TestCustomerService/TestDeleteCustomer/customer_with_invoices (0.00s)
+        --- PASS: TestCustomerService/TestDeleteCustomer/customer_with_wallets (0.00s)
+    --- PASS: TestCustomerService/TestGetCustomer (0.00s)
+        --- PASS: TestCustomerService/TestGetCustomer/customer_found (0.00s)
+        --- PASS: TestCustomerService/TestGetCustomer/customer_not_found (0.00s)
+    --- PASS: TestCustomerService/TestGetCustomerByLookupKey (0.00s)
+        --- PASS: TestCustomerService/TestGetCustomerByLookupKey/customer_found (0.00s)
+        --- PASS: TestCustomerService/TestGetCustomerByLookupKey/customer_not_found (0.00s)
+    --- PASS: TestCustomerService/TestGetCustomers (0.00s)
+        --- PASS: TestCustomerService/TestGetCustomers/all_customers (0.00s)
+    --- PASS: TestCustomerService/TestUpdateCustomer (0.00s)
+        --- PASS: TestCustomerService/TestUpdateCustomer/valid_update (0.00s)
+        --- PASS: TestCustomerService/TestUpdateCustomer/invalid_country_code (0.00s)
+        --- PASS: TestCustomerService/TestUpdateCustomer/customer_not_found (0.00s)
+=== RUN   TestEntitlementService
+{"level":"info","timestamp":"2025-04-17T14:24:44.816+0530","caller":"cache/init.go:9","msg":"Initializing cache system"}
+{"level":"info","timestamp":"2025-04-17T14:24:44.816+0530","caller":"cache/init.go:14","msg":"Cache system initialized"}
+=== RUN   TestEntitlementService/TestCreateEntitlement
+=== RUN   TestEntitlementService/TestCreateEntitlement/Valid_Boolean_Entitlement
+=== RUN   TestEntitlementService/TestCreateEntitlement/Valid_Metered_Entitlement
+=== RUN   TestEntitlementService/TestCreateEntitlement/Valid_Static_Entitlement
+=== RUN   TestEntitlementService/TestCreateEntitlement/Invalid_Feature_ID
+=== RUN   TestEntitlementService/TestCreateEntitlement/Missing_Static_Value
+=== RUN   TestEntitlementService/TestDeleteEntitlement
+=== RUN   TestEntitlementService/TestGetEntitlement
+=== RUN   TestEntitlementService/TestListEntitlements
+=== RUN   TestEntitlementService/TestUpdateEntitlement
+--- PASS: TestEntitlementService (0.01s)
+    --- PASS: TestEntitlementService/TestCreateEntitlement (0.00s)
+        --- PASS: TestEntitlementService/TestCreateEntitlement/Valid_Boolean_Entitlement (0.00s)
+        --- PASS: TestEntitlementService/TestCreateEntitlement/Valid_Metered_Entitlement (0.00s)
+        --- PASS: TestEntitlementService/TestCreateEntitlement/Valid_Static_Entitlement (0.00s)
+        --- PASS: TestEntitlementService/TestCreateEntitlement/Invalid_Feature_ID (0.00s)
+        --- PASS: TestEntitlementService/TestCreateEntitlement/Missing_Static_Value (0.00s)
+    --- PASS: TestEntitlementService/TestDeleteEntitlement (0.00s)
+    --- PASS: TestEntitlementService/TestGetEntitlement (0.00s)
+    --- PASS: TestEntitlementService/TestListEntitlements (0.00s)
+    --- PASS: TestEntitlementService/TestUpdateEntitlement (0.00s)
+=== RUN   TestEnvironmentService
+=== RUN   TestEnvironmentService/TestCreateEnvironment
+=== RUN   TestEnvironmentService/TestGetEnvironmentByID
+=== RUN   TestEnvironmentService/TestListEnvironments
+=== RUN   TestEnvironmentService/TestUpdateEnvironment
+--- PASS: TestEnvironmentService (0.00s)
+    --- PASS: TestEnvironmentService/TestCreateEnvironment (0.00s)
+    --- PASS: TestEnvironmentService/TestGetEnvironmentByID (0.00s)
+    --- PASS: TestEnvironmentService/TestListEnvironments (0.00s)
+    --- PASS: TestEnvironmentService/TestUpdateEnvironment (0.00s)
+=== RUN   TestEventService
+=== RUN   TestEventService/TestCreateEvent
+=== RUN   TestEventService/TestCreateEvent/successful_event_creation
+=== RUN   TestEventService/TestCreateEvent/missing_required_fields
+=== RUN   TestEventService/TestGetEvents
+=== RUN   TestEventService/TestGetEvents/get_events_with_pagination
+=== RUN   TestEventService/TestGetEvents/get_events_with_property_filters
+=== RUN   TestEventService/TestGetEvents/get_events_with_iter_first_key
+=== RUN   TestEventService/TestGetUsage
+=== RUN   TestEventService/TestGetUsage/count_all_events
+=== RUN   TestEventService/TestGetUsage/sum_duration_with_status_filter
+=== RUN   TestEventService/TestGetUsage/sum_duration_with_multiple_status_values
+=== RUN   TestEventService/TestGetUsage/count_with_region_filter
+=== RUN   TestEventService/TestGetUsageByMeter
+--- PASS: TestEventService (0.31s)
+    --- PASS: TestEventService/TestCreateEvent (0.20s)
+        --- PASS: TestEventService/TestCreateEvent/successful_event_creation (0.10s)
+        --- PASS: TestEventService/TestCreateEvent/missing_required_fields (0.10s)
+    --- PASS: TestEventService/TestGetEvents (0.10s)
+        --- PASS: TestEventService/TestGetEvents/get_events_with_pagination (0.00s)
+        --- PASS: TestEventService/TestGetEvents/get_events_with_property_filters (0.00s)
+        --- PASS: TestEventService/TestGetEvents/get_events_with_iter_first_key (0.10s)
+    --- PASS: TestEventService/TestGetUsage (0.00s)
+        --- PASS: TestEventService/TestGetUsage/count_all_events (0.00s)
+        --- PASS: TestEventService/TestGetUsage/sum_duration_with_status_filter (0.00s)
+        --- PASS: TestEventService/TestGetUsage/sum_duration_with_multiple_status_values (0.00s)
+        --- PASS: TestEventService/TestGetUsage/count_with_region_filter (0.00s)
+    --- PASS: TestEventService/TestGetUsageByMeter (0.00s)
+=== RUN   TestFeatureService
+{"level":"info","timestamp":"2025-04-17T14:24:45.146+0530","caller":"cache/init.go:9","msg":"Initializing cache system"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.147+0530","caller":"cache/init.go:14","msg":"Cache system initialized"}
+=== RUN   TestFeatureService/TestCreateFeature
+=== RUN   TestFeatureService/TestCreateFeature/successful_creation_of_metered_feature
+=== RUN   TestFeatureService/TestCreateFeature/successful_creation_of_boolean_feature
+=== RUN   TestFeatureService/TestCreateFeature/error_-_missing_meter_ID_and__for_metered_feature
+=== RUN   TestFeatureService/TestCreateFeature/error_-_missing_name
+=== RUN   TestFeatureService/TestCreateFeature/error_-_non-existent_meter
+=== RUN   TestFeatureService/TestCreateFeature/error_-_archived_meter
+=== RUN   TestFeatureService/TestDeleteFeature
+=== RUN   TestFeatureService/TestDeleteFeature/successful_deletion_of_metered_feature
+=== RUN   TestFeatureService/TestDeleteFeature/successful_deletion_of_boolean_feature
+=== RUN   TestFeatureService/TestDeleteFeature/error_-_feature_not_found
+=== RUN   TestFeatureService/TestDeleteFeature/error_-_empty_feature_ID
+=== RUN   TestFeatureService/TestGetFeature
+=== RUN   TestFeatureService/TestGetFeature/successful_retrieval_of_metered_feature
+=== RUN   TestFeatureService/TestGetFeature/successful_retrieval_of_boolean_feature
+=== RUN   TestFeatureService/TestGetFeature/error_-_feature_not_found
+=== RUN   TestFeatureService/TestGetFeatures
+=== RUN   TestFeatureService/TestGetFeatures/get_all_features
+=== RUN   TestFeatureService/TestGetFeatures/get_features_with_pagination
+=== RUN   TestFeatureService/TestGetFeatures/get_features_with_meter_expansion
+=== RUN   TestFeatureService/TestGetFeatures/get_features_by_IDs
+=== RUN   TestFeatureService/TestGetFeatures/get_features_by_lookup_key
+=== RUN   TestFeatureService/TestUpdateFeature
+=== RUN   TestFeatureService/TestUpdateFeature/successful_update_of_metered_feature
+=== RUN   TestFeatureService/TestUpdateFeature/successful_update_of_boolean_feature
+=== RUN   TestFeatureService/TestUpdateFeature/error_-_feature_not_found
+--- PASS: TestFeatureService (0.02s)
+    --- PASS: TestFeatureService/TestCreateFeature (0.00s)
+        --- PASS: TestFeatureService/TestCreateFeature/successful_creation_of_metered_feature (0.00s)
+        --- PASS: TestFeatureService/TestCreateFeature/successful_creation_of_boolean_feature (0.00s)
+        --- PASS: TestFeatureService/TestCreateFeature/error_-_missing_meter_ID_and__for_metered_feature (0.00s)
+        --- PASS: TestFeatureService/TestCreateFeature/error_-_missing_name (0.00s)
+        --- PASS: TestFeatureService/TestCreateFeature/error_-_non-existent_meter (0.00s)
+        --- PASS: TestFeatureService/TestCreateFeature/error_-_archived_meter (0.00s)
+    --- PASS: TestFeatureService/TestDeleteFeature (0.00s)
+        --- PASS: TestFeatureService/TestDeleteFeature/successful_deletion_of_metered_feature (0.00s)
+        --- PASS: TestFeatureService/TestDeleteFeature/successful_deletion_of_boolean_feature (0.00s)
+        --- PASS: TestFeatureService/TestDeleteFeature/error_-_feature_not_found (0.00s)
+        --- PASS: TestFeatureService/TestDeleteFeature/error_-_empty_feature_ID (0.00s)
+    --- PASS: TestFeatureService/TestGetFeature (0.00s)
+        --- PASS: TestFeatureService/TestGetFeature/successful_retrieval_of_metered_feature (0.00s)
+        --- PASS: TestFeatureService/TestGetFeature/successful_retrieval_of_boolean_feature (0.00s)
+        --- PASS: TestFeatureService/TestGetFeature/error_-_feature_not_found (0.00s)
+    --- PASS: TestFeatureService/TestGetFeatures (0.00s)
+        --- PASS: TestFeatureService/TestGetFeatures/get_all_features (0.00s)
+        --- PASS: TestFeatureService/TestGetFeatures/get_features_with_pagination (0.00s)
+        --- PASS: TestFeatureService/TestGetFeatures/get_features_with_meter_expansion (0.00s)
+        --- PASS: TestFeatureService/TestGetFeatures/get_features_by_IDs (0.00s)
+        --- PASS: TestFeatureService/TestGetFeatures/get_features_by_lookup_key (0.00s)
+    --- PASS: TestFeatureService/TestUpdateFeature (0.00s)
+        --- PASS: TestFeatureService/TestUpdateFeature/successful_update_of_metered_feature (0.00s)
+        --- PASS: TestFeatureService/TestUpdateFeature/successful_update_of_boolean_feature (0.00s)
+        --- PASS: TestFeatureService/TestUpdateFeature/error_-_feature_not_found (0.00s)
+=== RUN   TestInvoiceService
+{"level":"info","timestamp":"2025-04-17T14:24:45.162+0530","caller":"cache/init.go:9","msg":"Initializing cache system"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.162+0530","caller":"cache/init.go:14","msg":"Cache system initialized"}
+=== RUN   TestInvoiceService/TestAttemptPayment
+=== RUN   TestInvoiceService/TestAttemptPayment/Successfully_pay_invoice_with_wallets
+{"level":"info","timestamp":"2025-04-17T14:24:45.167+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA5FPARBVSVJS21PE03N","event_name":"wallet.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.167+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA5FPARBVSVJS6011QQN","event_name":"wallet.transaction.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.167+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA5FPARBVSVJS89MS00H","event_name":"wallet.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.167+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA5FPARBVSVJS9K2ZVEH","event_name":"wallet.transaction.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.168+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA5GHHA9XZ8PN2SK9VYG","event_name":"wallet.transaction.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.168+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA5GHHA9XZ8PNBTA357H","event_name":"wallet.transaction.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.168+0530","caller":"service/wallet_payment.go:155","msg":"payment processed using wallets","invoice_id":"inv_test_full_payment","amount_paid":"100","remaining_amount":"0"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.168+0530","caller":"service/invoice.go:763","msg":"invoice fully paid with wallets","invoice_id":"inv_test_full_payment","amount_paid":"100"}
+=== RUN   TestInvoiceService/TestAttemptPayment/Partially_pay_invoice_with_insufficient_wallet_balance
+{"level":"info","timestamp":"2025-04-17T14:24:45.169+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA5HA2NG5JQ3VF9VZM5A","event_name":"wallet.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.169+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA5HA2NG5JQ3VJV35KSB","event_name":"wallet.transaction.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.169+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA5HA2NG5JQ3VMY6HZ27","event_name":"wallet.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.169+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA5HA2NG5JQ3VRPK4XSM","event_name":"wallet.transaction.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.169+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA5HA2NG5JQ3W134HE88","event_name":"wallet.transaction.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.170+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA5J54TAXSRB9JN1GV5H","event_name":"wallet.transaction.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.170+0530","caller":"service/wallet_payment.go:155","msg":"payment processed using wallets","invoice_id":"inv_test_partial_payment","amount_paid":"150","remaining_amount":"50"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.170+0530","caller":"service/invoice.go:767","msg":"invoice partially paid with wallets","invoice_id":"inv_test_partial_payment","amount_paid":"150","amount_remaining":"50"}
+=== RUN   TestInvoiceService/TestAttemptPayment/Invoice_not_in_finalized_state
+{"level":"info","timestamp":"2025-04-17T14:24:45.170+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA5J54TAXSRB9R0K7P4V","event_name":"wallet.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.170+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA5J54TAXSRB9Y842GNW","event_name":"wallet.transaction.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.171+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA5KBDEMRRVVR381EFWJ","event_name":"wallet.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.171+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA5KBDEMRRVVR8JE86HA","event_name":"wallet.transaction.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+    invoice_test.go:1152: Wallets for customer cust_123: [0xc0002be600 0xc0002be000]
+    invoice_test.go:1157: Customer details: &{ID:cust_123 ExternalID:ext_cust_123 Name:Test Customer Email:test@example.com AddressLine1: AddressLine2: AddressCity: AddressState: AddressPostalCode: AddressCountry: Metadata:map[] EnvironmentID: BaseModel:{TenantID:00000000-0000-0000-0000-000000000000 Status:published CreatedAt:2025-04-17 08:54:45.163307 +0000 UTC UpdatedAt:2025-04-17 08:54:45.163307 +0000 UTC CreatedBy:00000000-0000-0000-0000-000000000000 UpdatedBy:00000000-0000-0000-0000-000000000000}}
+=== RUN   TestInvoiceService/TestAttemptPayment/Invoice_already_paid
+{"level":"info","timestamp":"2025-04-17T14:24:45.172+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA5KBDEMRRVVR9W7BK0R","event_name":"wallet.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.172+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA5MJQC5VT401HDHAMBV","event_name":"wallet.transaction.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.172+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA5MJQC5VT401M76R3R7","event_name":"wallet.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.172+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA5MJQC5VT401R56MAYF","event_name":"wallet.transaction.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+    invoice_test.go:1152: Wallets for customer cust_123: [0xc0002bed80 0xc0002bf380]
+    invoice_test.go:1157: Customer details: &{ID:cust_123 ExternalID:ext_cust_123 Name:Test Customer Email:test@example.com AddressLine1: AddressLine2: AddressCity: AddressState: AddressPostalCode: AddressCountry: Metadata:map[] EnvironmentID: BaseModel:{TenantID:00000000-0000-0000-0000-000000000000 Status:published CreatedAt:2025-04-17 08:54:45.163307 +0000 UTC UpdatedAt:2025-04-17 08:54:45.163307 +0000 UTC CreatedBy:00000000-0000-0000-0000-000000000000 UpdatedBy:00000000-0000-0000-0000-000000000000}}
+=== RUN   TestInvoiceService/TestAttemptPayment/No_remaining_amount_to_pay
+{"level":"info","timestamp":"2025-04-17T14:24:45.173+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA5NXKB7FF7KFTTFCJHM","event_name":"wallet.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.173+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA5NXKB7FF7KG0FF0A5P","event_name":"wallet.transaction.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.173+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA5NXKB7FF7KG3Z5CE06","event_name":"wallet.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.173+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA5NXKB7FF7KG687DEZ6","event_name":"wallet.transaction.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+    invoice_test.go:1152: Wallets for customer cust_123: [0xc0002bfb00 0xc0003ce180]
+    invoice_test.go:1157: Customer details: &{ID:cust_123 ExternalID:ext_cust_123 Name:Test Customer Email:test@example.com AddressLine1: AddressLine2: AddressCity: AddressState: AddressPostalCode: AddressCountry: Metadata:map[] EnvironmentID: BaseModel:{TenantID:00000000-0000-0000-0000-000000000000 Status:published CreatedAt:2025-04-17 08:54:45.163307 +0000 UTC UpdatedAt:2025-04-17 08:54:45.163307 +0000 UTC CreatedBy:00000000-0000-0000-0000-000000000000 UpdatedBy:00000000-0000-0000-0000-000000000000}}
+=== RUN   TestInvoiceService/TestAttemptPayment/Customer_with_no_wallets
+{"level":"info","timestamp":"2025-04-17T14:24:45.173+0530","caller":"service/wallet_payment.go:89","msg":"no suitable wallets found for payment","customer_id":"cust_no_wallets","invoice_id":"inv_test_no_wallets","currency":"usd"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.174+0530","caller":"service/invoice.go:759","msg":"no payments processed for invoice","invoice_id":"inv_test_no_wallets","amount_remaining":"100"}
+=== RUN   TestInvoiceService/TestCreateSubscriptionInvoice
+=== RUN   TestInvoiceService/TestCreateSubscriptionInvoice/period_start_reference_point
+{"level":"info","timestamp":"2025-04-17T14:24:45.178+0530","caller":"service/invoice.go:449","msg":"creating subscription invoice","subscription_id":"sub_123","period_start":"2025-04-16T08:54:45.174Z","period_end":"2025-04-23T08:54:45.174Z","reference_point":"period_start"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.178+0530","caller":"service/billing.go:274","msg":"preparing subscription invoice request","subscription_id":"sub_123","period_start":"2025-04-16T08:54:45.174Z","period_end":"2025-04-23T08:54:45.174Z","reference_point":"period_start"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.178+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA5TB7FF9CNDWYH8AG5E","event_name":"invoice.create.drafted","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.178+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA5TB7FF9CNDX1TN0PBX","event_name":"invoice.update.finalized","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"error","timestamp":"2025-04-17T14:24:45.178+0530","caller":"service/invoice.go:376","msg":"failed to process payment for invoice","error":"invoice has no remaining amount to pay","invoice_id":"inv_01JS1FAA5TB7FF9CNDWVMAD5T4","stacktrace":"github.com/flexprice/flexprice/internal/service.(*invoiceService).ProcessDraftInvoice\n\t/Users/omkar/Developer/source code/flexprice/flexprice/internal/service/invoice.go:376\ngithub.com/flexprice/flexprice/internal/service.(*invoiceService).CreateSubscriptionInvoice\n\t/Users/omkar/Developer/source code/flexprice/flexprice/internal/service/invoice.go:485\ngithub.com/flexprice/flexprice/internal/service.(*InvoiceServiceSuite).TestCreateSubscriptionInvoice.func5\n\t/Users/omkar/Developer/source code/flexprice/flexprice/internal/service/invoice_test.go:408\ngithub.com/stretchr/testify/suite.(*Suite).Run.func1\n\t/Users/omkar/go/pkg/mod/github.com/stretchr/testify@v1.10.0/suite/suite.go:115\ntesting.tRunner\n\t/usr/local/go/src/testing/testing.go:1792"}
+=== RUN   TestInvoiceService/TestCreateSubscriptionInvoice/period_end_reference_point_-_no_charges_to_invoice
+{"level":"info","timestamp":"2025-04-17T14:24:45.179+0530","caller":"service/invoice.go:449","msg":"creating subscription invoice","subscription_id":"sub_123","period_start":"2025-04-16T08:54:45.174Z","period_end":"2025-04-23T08:54:45.174Z","reference_point":"period_end"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.179+0530","caller":"service/billing.go:274","msg":"preparing subscription invoice request","subscription_id":"sub_123","period_start":"2025-04-16T08:54:45.174Z","period_end":"2025-04-23T08:54:45.174Z","reference_point":"period_end"}
+=== RUN   TestInvoiceService/TestCreateSubscriptionInvoice/period_end_reference_point_with_proper_setup
+{"level":"info","timestamp":"2025-04-17T14:24:45.179+0530","caller":"service/invoice.go:449","msg":"creating subscription invoice","subscription_id":"sub_123","period_start":"2025-04-16T08:54:45.174Z","period_end":"2025-04-23T08:54:45.174Z","reference_point":"period_end"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.180+0530","caller":"service/billing.go:274","msg":"preparing subscription invoice request","subscription_id":"sub_123","period_start":"2025-04-16T08:54:45.174Z","period_end":"2025-04-23T08:54:45.174Z","reference_point":"period_end"}
+=== RUN   TestInvoiceService/TestCreateSubscriptionInvoice/no_usage_data_available
+{"level":"info","timestamp":"2025-04-17T14:24:45.180+0530","caller":"service/invoice.go:449","msg":"creating subscription invoice","subscription_id":"sub_123","period_start":"2025-04-16T08:54:45.174Z","period_end":"2025-04-23T08:54:45.174Z","reference_point":"period_start"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.180+0530","caller":"service/billing.go:274","msg":"preparing subscription invoice request","subscription_id":"sub_123","period_start":"2025-04-16T08:54:45.174Z","period_end":"2025-04-23T08:54:45.174Z","reference_point":"period_start"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.180+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA5WB0P0FTMCXKAGT38Y","event_name":"invoice.create.drafted","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.180+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA5WB0P0FTMCXNA4PW91","event_name":"invoice.update.finalized","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"error","timestamp":"2025-04-17T14:24:45.180+0530","caller":"service/invoice.go:376","msg":"failed to process payment for invoice","error":"invoice has no remaining amount to pay","invoice_id":"inv_01JS1FAA5WB0P0FTMCXGZCR7HK","stacktrace":"github.com/flexprice/flexprice/internal/service.(*invoiceService).ProcessDraftInvoice\n\t/Users/omkar/Developer/source code/flexprice/flexprice/internal/service/invoice.go:376\ngithub.com/flexprice/flexprice/internal/service.(*invoiceService).CreateSubscriptionInvoice\n\t/Users/omkar/Developer/source code/flexprice/flexprice/internal/service/invoice.go:485\ngithub.com/flexprice/flexprice/internal/service.(*InvoiceServiceSuite).TestCreateSubscriptionInvoice.func5\n\t/Users/omkar/Developer/source code/flexprice/flexprice/internal/service/invoice_test.go:408\ngithub.com/stretchr/testify/suite.(*Suite).Run.func1\n\t/Users/omkar/go/pkg/mod/github.com/stretchr/testify@v1.10.0/suite/suite.go:115\ntesting.tRunner\n\t/usr/local/go/src/testing/testing.go:1792"}
+=== RUN   TestInvoiceService/TestFinalizeInvoice
+=== RUN   TestInvoiceService/TestFinalizeInvoice/successful_finalization
+{"level":"info","timestamp":"2025-04-17T14:24:45.184+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA601VGS5SA450NZDEAD","event_name":"invoice.update.finalized","tenant_id":"00000000-0000-0000-0000-000000000000"}
+=== RUN   TestInvoiceService/TestFinalizeInvoice/error_when_invoice_not_found
+=== RUN   TestInvoiceService/TestGetCustomerInvoiceSummary
+=== RUN   TestInvoiceService/TestGetCustomerInvoiceSummary/Success_-_USD_currency
+=== RUN   TestInvoiceService/TestGetCustomerInvoiceSummary/Success_-_EUR_currency
+=== RUN   TestInvoiceService/TestGetCustomerInvoiceSummary/Success_-_No_invoices_found
+=== RUN   TestInvoiceService/TestGetCustomerInvoiceSummary/Success_-_Invalid_customer_ID
+=== RUN   TestInvoiceService/TestUpdatePaymentStatus
+=== RUN   TestInvoiceService/TestUpdatePaymentStatus/successful_payment_status_update_to_succeeded
+{"level":"info","timestamp":"2025-04-17T14:24:45.190+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA66A6J4XGVCYKG67NN4","event_name":"invoice.updated.payment","tenant_id":"00000000-0000-0000-0000-000000000000"}
+=== RUN   TestInvoiceService/TestUpdatePaymentStatus/error_when_invoice_not_found
+--- PASS: TestInvoiceService (0.04s)
+    --- PASS: TestInvoiceService/TestAttemptPayment (0.01s)
+        --- PASS: TestInvoiceService/TestAttemptPayment/Successfully_pay_invoice_with_wallets (0.00s)
+        --- PASS: TestInvoiceService/TestAttemptPayment/Partially_pay_invoice_with_insufficient_wallet_balance (0.00s)
+        --- PASS: TestInvoiceService/TestAttemptPayment/Invoice_not_in_finalized_state (0.00s)
+        --- PASS: TestInvoiceService/TestAttemptPayment/Invoice_already_paid (0.00s)
+        --- PASS: TestInvoiceService/TestAttemptPayment/No_remaining_amount_to_pay (0.00s)
+        --- PASS: TestInvoiceService/TestAttemptPayment/Customer_with_no_wallets (0.00s)
+    --- PASS: TestInvoiceService/TestCreateSubscriptionInvoice (0.01s)
+        --- PASS: TestInvoiceService/TestCreateSubscriptionInvoice/period_start_reference_point (0.00s)
+        --- PASS: TestInvoiceService/TestCreateSubscriptionInvoice/period_end_reference_point_-_no_charges_to_invoice (0.00s)
+        --- PASS: TestInvoiceService/TestCreateSubscriptionInvoice/period_end_reference_point_with_proper_setup (0.00s)
+        --- PASS: TestInvoiceService/TestCreateSubscriptionInvoice/no_usage_data_available (0.00s)
+    --- PASS: TestInvoiceService/TestFinalizeInvoice (0.00s)
+        --- PASS: TestInvoiceService/TestFinalizeInvoice/successful_finalization (0.00s)
+        --- PASS: TestInvoiceService/TestFinalizeInvoice/error_when_invoice_not_found (0.00s)
+    --- PASS: TestInvoiceService/TestGetCustomerInvoiceSummary (0.00s)
+        --- PASS: TestInvoiceService/TestGetCustomerInvoiceSummary/Success_-_USD_currency (0.00s)
+        --- PASS: TestInvoiceService/TestGetCustomerInvoiceSummary/Success_-_EUR_currency (0.00s)
+        --- PASS: TestInvoiceService/TestGetCustomerInvoiceSummary/Success_-_No_invoices_found (0.00s)
+        --- PASS: TestInvoiceService/TestGetCustomerInvoiceSummary/Success_-_Invalid_customer_ID (0.00s)
+    --- PASS: TestInvoiceService/TestUpdatePaymentStatus (0.00s)
+        --- PASS: TestInvoiceService/TestUpdatePaymentStatus/successful_payment_status_update_to_succeeded (0.00s)
+        --- PASS: TestInvoiceService/TestUpdatePaymentStatus/error_when_invoice_not_found (0.00s)
+=== RUN   TestMeterService
+=== RUN   TestMeterService/TestCreateMeter
+=== RUN   TestMeterService/TestCreateMeter/successful_meter_creation
+=== RUN   TestMeterService/TestCreateMeter/nil_meter
+=== RUN   TestMeterService/TestCreateMeter/invalid_meter_missing_name
+=== RUN   TestMeterService/TestCreateMeter/invalid_meter_missing_event_name
+=== RUN   TestMeterService/TestDisableMeter
+=== RUN   TestMeterService/TestDisableMeter/successful_disable
+=== RUN   TestMeterService/TestDisableMeter/empty_id
+=== RUN   TestMeterService/TestDisableMeter/non_existent_meter
+=== RUN   TestMeterService/TestGetAllMeters
+=== RUN   TestMeterService/TestGetMeter
+=== RUN   TestMeterService/TestUpdateMeter
+=== RUN   TestMeterService/TestUpdateMeter/add_new_filter
+=== RUN   TestMeterService/TestUpdateMeter/add_existing_filter_value
+=== RUN   TestMeterService/TestUpdateMeter/add_duplicate_filter_value
+=== RUN   TestMeterService/TestUpdateMeter/empty_id
+=== RUN   TestMeterService/TestUpdateMeter/non_existent_meter
+--- PASS: TestMeterService (0.01s)
+    --- PASS: TestMeterService/TestCreateMeter (0.00s)
+        --- PASS: TestMeterService/TestCreateMeter/successful_meter_creation (0.00s)
+        --- PASS: TestMeterService/TestCreateMeter/nil_meter (0.00s)
+        --- PASS: TestMeterService/TestCreateMeter/invalid_meter_missing_name (0.00s)
+        --- PASS: TestMeterService/TestCreateMeter/invalid_meter_missing_event_name (0.00s)
+    --- PASS: TestMeterService/TestDisableMeter (0.00s)
+        --- PASS: TestMeterService/TestDisableMeter/successful_disable (0.00s)
+        --- PASS: TestMeterService/TestDisableMeter/empty_id (0.00s)
+        --- PASS: TestMeterService/TestDisableMeter/non_existent_meter (0.00s)
+    --- PASS: TestMeterService/TestGetAllMeters (0.00s)
+    --- PASS: TestMeterService/TestGetMeter (0.00s)
+    --- PASS: TestMeterService/TestUpdateMeter (0.00s)
+        --- PASS: TestMeterService/TestUpdateMeter/add_new_filter (0.00s)
+        --- PASS: TestMeterService/TestUpdateMeter/add_existing_filter_value (0.00s)
+        --- PASS: TestMeterService/TestUpdateMeter/add_duplicate_filter_value (0.00s)
+        --- PASS: TestMeterService/TestUpdateMeter/empty_id (0.00s)
+        --- PASS: TestMeterService/TestUpdateMeter/non_existent_meter (0.00s)
+=== RUN   TestPlanService
+{"level":"info","timestamp":"2025-04-17T14:24:45.201+0530","caller":"cache/init.go:9","msg":"Initializing cache system"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.201+0530","caller":"cache/init.go:14","msg":"Cache system initialized"}
+=== RUN   TestPlanService/TestCreatePlan
+=== RUN   TestPlanService/TestCreatePlan/Valid_Plan_with_Single_Price
+=== RUN   TestPlanService/TestCreatePlan/Valid_Plan_with_Multiple_Prices
+=== RUN   TestPlanService/TestCreatePlan/Plan_with_No_Prices
+=== RUN   TestPlanService/TestCreatePlan/Invalid_Price_Missing_TierMode
+=== RUN   TestPlanService/TestCreatePlan/Invalid_Price_Negative_Amount
+=== RUN   TestPlanService/TestCreatePlan/Invalid_Price_Missing_MeterID
+=== RUN   TestPlanService/TestCreatePlanWithEntitlements
+=== RUN   TestPlanService/TestCreatePlanWithEntitlements/Plan_with_Boolean_Entitlement
+=== RUN   TestPlanService/TestCreatePlanWithEntitlements/Plan_with_Metered_Entitlement
+=== RUN   TestPlanService/TestCreatePlanWithEntitlements/Plan_with_Static_Entitlement
+=== RUN   TestPlanService/TestDeletePlan
+=== RUN   TestPlanService/TestGetPlan
+=== RUN   TestPlanService/TestGetPlans
+=== RUN   TestPlanService/TestUpdatePlan
+=== RUN   TestPlanService/TestUpdatePlanEntitlements
+--- PASS: TestPlanService (0.01s)
+    --- PASS: TestPlanService/TestCreatePlan (0.00s)
+        --- PASS: TestPlanService/TestCreatePlan/Valid_Plan_with_Single_Price (0.00s)
+        --- PASS: TestPlanService/TestCreatePlan/Valid_Plan_with_Multiple_Prices (0.00s)
+        --- PASS: TestPlanService/TestCreatePlan/Plan_with_No_Prices (0.00s)
+        --- PASS: TestPlanService/TestCreatePlan/Invalid_Price_Missing_TierMode (0.00s)
+        --- PASS: TestPlanService/TestCreatePlan/Invalid_Price_Negative_Amount (0.00s)
+        --- PASS: TestPlanService/TestCreatePlan/Invalid_Price_Missing_MeterID (0.00s)
+    --- PASS: TestPlanService/TestCreatePlanWithEntitlements (0.00s)
+        --- PASS: TestPlanService/TestCreatePlanWithEntitlements/Plan_with_Boolean_Entitlement (0.00s)
+        --- PASS: TestPlanService/TestCreatePlanWithEntitlements/Plan_with_Metered_Entitlement (0.00s)
+        --- PASS: TestPlanService/TestCreatePlanWithEntitlements/Plan_with_Static_Entitlement (0.00s)
+    --- PASS: TestPlanService/TestDeletePlan (0.00s)
+    --- PASS: TestPlanService/TestGetPlan (0.00s)
+    --- PASS: TestPlanService/TestGetPlans (0.00s)
+    --- PASS: TestPlanService/TestUpdatePlan (0.00s)
+    --- PASS: TestPlanService/TestUpdatePlanEntitlements (0.00s)
+=== RUN   TestPriceService
+=== RUN   TestPriceService/TestCreatePrice
+=== RUN   TestPriceService/TestDeletePrice
+=== RUN   TestPriceService/TestGetPrice
+=== RUN   TestPriceService/TestGetPrices
+=== RUN   TestPriceService/TestUpdatePrice
+--- PASS: TestPriceService (0.00s)
+    --- PASS: TestPriceService/TestCreatePrice (0.00s)
+    --- PASS: TestPriceService/TestDeletePrice (0.00s)
+    --- PASS: TestPriceService/TestGetPrice (0.00s)
+    --- PASS: TestPriceService/TestGetPrices (0.00s)
+    --- PASS: TestPriceService/TestUpdatePrice (0.00s)
+=== RUN   TestSecretService
+{"level":"info","timestamp":"2025-04-17T14:24:45.213+0530","caller":"cache/init.go:9","msg":"Initializing cache system"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.213+0530","caller":"cache/init.go:14","msg":"Cache system initialized"}
+=== RUN   TestSecretService/TestCreateAPIKey
+=== RUN   TestSecretService/TestCreateAPIKey/successful_creation_of_private_API_key
+=== RUN   TestSecretService/TestCreateAPIKey/successful_creation_of_publishable_API_key
+=== RUN   TestSecretService/TestCreateAPIKey/error_-_missing_name
+=== RUN   TestSecretService/TestCreateAPIKey/error_-_invalid_type
+=== RUN   TestSecretService/TestCreateIntegration
+=== RUN   TestSecretService/TestCreateIntegration/successful_creation_of_integration
+=== RUN   TestSecretService/TestCreateIntegration/error_-_missing_name
+=== RUN   TestSecretService/TestCreateIntegration/error_-_missing_credentials
+=== RUN   TestSecretService/TestCreateIntegration/error_-_invalid_provider
+=== RUN   TestSecretService/TestDelete
+=== RUN   TestSecretService/TestDelete/successful_deletion_of_API_key
+=== RUN   TestSecretService/TestDelete/successful_deletion_of_integration
+=== RUN   TestSecretService/TestDelete/error_-_secret_not_found
+=== RUN   TestSecretService/TestGetIntegrationCredentials
+=== RUN   TestSecretService/TestGetIntegrationCredentials/successful_retrieval
+=== RUN   TestSecretService/TestGetIntegrationCredentials/error_-_provider_not_found
+=== RUN   TestSecretService/TestListAPIKeys
+=== RUN   TestSecretService/TestListAPIKeys/list_all_API_keys
+=== RUN   TestSecretService/TestListAPIKeys/list_with_pagination
+=== RUN   TestSecretService/TestListIntegrations
+=== RUN   TestSecretService/TestListIntegrations/list_all_integrations
+=== RUN   TestSecretService/TestListIntegrations/list_with_provider_filter
+=== RUN   TestSecretService/TestVerifyAPIKey
+=== RUN   TestSecretService/TestVerifyAPIKey/successful_verification
+=== RUN   TestSecretService/TestVerifyAPIKey/error_-_empty_API_key
+=== RUN   TestSecretService/TestVerifyAPIKey/error_-_invalid_API_key
+--- PASS: TestSecretService (0.01s)
+    --- PASS: TestSecretService/TestCreateAPIKey (0.00s)
+        --- PASS: TestSecretService/TestCreateAPIKey/successful_creation_of_private_API_key (0.00s)
+        --- PASS: TestSecretService/TestCreateAPIKey/successful_creation_of_publishable_API_key (0.00s)
+        --- PASS: TestSecretService/TestCreateAPIKey/error_-_missing_name (0.00s)
+        --- PASS: TestSecretService/TestCreateAPIKey/error_-_invalid_type (0.00s)
+    --- PASS: TestSecretService/TestCreateIntegration (0.00s)
+        --- PASS: TestSecretService/TestCreateIntegration/successful_creation_of_integration (0.00s)
+        --- PASS: TestSecretService/TestCreateIntegration/error_-_missing_name (0.00s)
+        --- PASS: TestSecretService/TestCreateIntegration/error_-_missing_credentials (0.00s)
+        --- PASS: TestSecretService/TestCreateIntegration/error_-_invalid_provider (0.00s)
+    --- PASS: TestSecretService/TestDelete (0.00s)
+        --- PASS: TestSecretService/TestDelete/successful_deletion_of_API_key (0.00s)
+        --- PASS: TestSecretService/TestDelete/successful_deletion_of_integration (0.00s)
+        --- PASS: TestSecretService/TestDelete/error_-_secret_not_found (0.00s)
+    --- PASS: TestSecretService/TestGetIntegrationCredentials (0.00s)
+        --- PASS: TestSecretService/TestGetIntegrationCredentials/successful_retrieval (0.00s)
+        --- PASS: TestSecretService/TestGetIntegrationCredentials/error_-_provider_not_found (0.00s)
+    --- PASS: TestSecretService/TestListAPIKeys (0.00s)
+        --- PASS: TestSecretService/TestListAPIKeys/list_all_API_keys (0.00s)
+        --- PASS: TestSecretService/TestListAPIKeys/list_with_pagination (0.00s)
+    --- PASS: TestSecretService/TestListIntegrations (0.00s)
+        --- PASS: TestSecretService/TestListIntegrations/list_all_integrations (0.00s)
+        --- PASS: TestSecretService/TestListIntegrations/list_with_provider_filter (0.00s)
+    --- PASS: TestSecretService/TestVerifyAPIKey (0.00s)
+        --- PASS: TestSecretService/TestVerifyAPIKey/successful_verification (0.00s)
+        --- PASS: TestSecretService/TestVerifyAPIKey/error_-_empty_API_key (0.00s)
+        --- PASS: TestSecretService/TestVerifyAPIKey/error_-_invalid_API_key (0.00s)
+=== RUN   TestSubscriptionPauseService
+{"level":"info","timestamp":"2025-04-17T14:24:45.222+0530","caller":"cache/init.go:9","msg":"Initializing cache system"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.222+0530","caller":"cache/init.go:14","msg":"Cache system initialized"}
+=== RUN   TestSubscriptionPauseService/TestCalculatePauseImpact
+=== RUN   TestSubscriptionPauseService/TestCalculatePauseImpact/calculate_impact_with_days
+=== RUN   TestSubscriptionPauseService/TestCalculatePauseImpact/calculate_impact_with_end_date
+=== RUN   TestSubscriptionPauseService/TestCalculatePauseImpact/invalid_subscription_id
+=== RUN   TestSubscriptionPauseService/TestCalculateResumeImpact
+=== RUN   TestSubscriptionPauseService/TestCalculateResumeImpact/calculate_resume_impact
+=== RUN   TestSubscriptionPauseService/TestCalculateResumeImpact/invalid_subscription_id
+=== RUN   TestSubscriptionPauseService/TestCalculateResumeImpact/not_paused_subscription
+=== RUN   TestSubscriptionPauseService/TestGetPause
+=== RUN   TestSubscriptionPauseService/TestGetPause/existing_pause
+=== RUN   TestSubscriptionPauseService/TestGetPause/non_existent_pause
+=== RUN   TestSubscriptionPauseService/TestListPauses
+=== RUN   TestSubscriptionPauseService/TestListPauses/subscription_with_pauses
+=== RUN   TestSubscriptionPauseService/TestListPauses/subscription_without_pauses
+=== RUN   TestSubscriptionPauseService/TestListPauses/non_existent_subscription
+=== RUN   TestSubscriptionPauseService/TestPauseSubscription
+=== RUN   TestSubscriptionPauseService/TestPauseSubscription/successful_immediate_pause
+{"level":"info","timestamp":"2025-04-17T14:24:45.224+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA78ZNC3HY3EQDC2S4RT","event_name":"subscription.paused","tenant_id":"00000000-0000-0000-0000-000000000000"}
+=== RUN   TestSubscriptionPauseService/TestPauseSubscription/invalid_subscription_id
+=== RUN   TestSubscriptionPauseService/TestPauseSubscription/already_paused_subscription
+=== RUN   TestSubscriptionPauseService/TestPauseSubscription/both_pause_end_and_days_specified
+=== RUN   TestSubscriptionPauseService/TestResumeSubscription
+=== RUN   TestSubscriptionPauseService/TestResumeSubscription/successful_immediate_resume
+{"level":"info","timestamp":"2025-04-17T14:24:45.224+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA78ZNC3HY3EQGRQS0P3","event_name":"subscription.resumed","tenant_id":"00000000-0000-0000-0000-000000000000"}
+=== RUN   TestSubscriptionPauseService/TestResumeSubscription/invalid_subscription_id
+=== RUN   TestSubscriptionPauseService/TestResumeSubscription/not_paused_subscription
+=== RUN   TestSubscriptionPauseService/TestUpdateBillingPeriodsWithPausedSubscriptions
+{"level":"info","timestamp":"2025-04-17T14:24:45.225+0530","caller":"service/subscription.go:535","msg":"starting billing period updates","current_time":"2025-04-17T08:54:45.225Z"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.225+0530","caller":"service/subscription.go:564","msg":"processing subscription batch","batch_size":1,"offset":0}
+--- PASS: TestSubscriptionPauseService (0.01s)
+    --- PASS: TestSubscriptionPauseService/TestCalculatePauseImpact (0.00s)
+        --- PASS: TestSubscriptionPauseService/TestCalculatePauseImpact/calculate_impact_with_days (0.00s)
+        --- PASS: TestSubscriptionPauseService/TestCalculatePauseImpact/calculate_impact_with_end_date (0.00s)
+        --- PASS: TestSubscriptionPauseService/TestCalculatePauseImpact/invalid_subscription_id (0.00s)
+    --- PASS: TestSubscriptionPauseService/TestCalculateResumeImpact (0.00s)
+        --- PASS: TestSubscriptionPauseService/TestCalculateResumeImpact/calculate_resume_impact (0.00s)
+        --- PASS: TestSubscriptionPauseService/TestCalculateResumeImpact/invalid_subscription_id (0.00s)
+        --- PASS: TestSubscriptionPauseService/TestCalculateResumeImpact/not_paused_subscription (0.00s)
+    --- PASS: TestSubscriptionPauseService/TestGetPause (0.00s)
+        --- PASS: TestSubscriptionPauseService/TestGetPause/existing_pause (0.00s)
+        --- PASS: TestSubscriptionPauseService/TestGetPause/non_existent_pause (0.00s)
+    --- PASS: TestSubscriptionPauseService/TestListPauses (0.00s)
+        --- PASS: TestSubscriptionPauseService/TestListPauses/subscription_with_pauses (0.00s)
+        --- PASS: TestSubscriptionPauseService/TestListPauses/subscription_without_pauses (0.00s)
+        --- PASS: TestSubscriptionPauseService/TestListPauses/non_existent_subscription (0.00s)
+    --- PASS: TestSubscriptionPauseService/TestPauseSubscription (0.00s)
+        --- PASS: TestSubscriptionPauseService/TestPauseSubscription/successful_immediate_pause (0.00s)
+        --- PASS: TestSubscriptionPauseService/TestPauseSubscription/invalid_subscription_id (0.00s)
+        --- PASS: TestSubscriptionPauseService/TestPauseSubscription/already_paused_subscription (0.00s)
+        --- PASS: TestSubscriptionPauseService/TestPauseSubscription/both_pause_end_and_days_specified (0.00s)
+    --- PASS: TestSubscriptionPauseService/TestResumeSubscription (0.00s)
+        --- PASS: TestSubscriptionPauseService/TestResumeSubscription/successful_immediate_resume (0.00s)
+        --- PASS: TestSubscriptionPauseService/TestResumeSubscription/invalid_subscription_id (0.00s)
+        --- PASS: TestSubscriptionPauseService/TestResumeSubscription/not_paused_subscription (0.00s)
+    --- PASS: TestSubscriptionPauseService/TestUpdateBillingPeriodsWithPausedSubscriptions (0.00s)
+=== RUN   TestSubscriptionService
+{"level":"info","timestamp":"2025-04-17T14:24:45.228+0530","caller":"cache/init.go:9","msg":"Initializing cache system"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.229+0530","caller":"cache/init.go:14","msg":"Cache system initialized"}
+=== RUN   TestSubscriptionService/TestCancelSubscription
+=== RUN   TestSubscriptionService/TestCancelSubscription/cancel_active_subscription
+{"level":"info","timestamp":"2025-04-17T14:24:45.234+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA7J8Q70YACMY58YJHRH","event_name":"subscription.cancelled","tenant_id":"00000000-0000-0000-0000-000000000000"}
+=== RUN   TestSubscriptionService/TestCancelSubscription/cancel_non_existent_subscription
+=== RUN   TestSubscriptionService/TestCancelSubscription/cancel_already_canceled_subscription
+=== RUN   TestSubscriptionService/TestCreateSubscription
+=== RUN   TestSubscriptionService/TestCreateSubscription/successful_subscription_creation
+{"level":"info","timestamp":"2025-04-17T14:24:45.240+0530","caller":"service/subscription.go:218","msg":"creating subscription","customer_id":"cust_123","plan_id":"plan_123","start_date":"2025-04-17T08:54:45.235Z","billing_anchor":"2025-04-17T08:54:45.235Z","current_period_start":"2025-04-17T08:54:45.235Z","current_period_end":"2025-05-17T08:54:45.000Z","valid_prices":3,"num_line_items":3}
+{"level":"info","timestamp":"2025-04-17T14:24:45.240+0530","caller":"service/invoice.go:449","msg":"creating subscription invoice","subscription_id":"subs_01JS1FAA7RBCXMJB7Q8FYCY6F0","period_start":"2025-04-17T08:54:45.235Z","period_end":"2025-05-17T08:54:45.000Z","reference_point":"period_start"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.240+0530","caller":"service/billing.go:274","msg":"preparing subscription invoice request","subscription_id":"subs_01JS1FAA7RBCXMJB7Q8FYCY6F0","period_start":"2025-04-17T08:54:45.235Z","period_end":"2025-05-17T08:54:45.000Z","reference_point":"period_start"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.240+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA7RBCXMJB7Q8MGHZ0SA","event_name":"invoice.create.drafted","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.240+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA7RBCXMJB7Q8PMW19JB","event_name":"invoice.update.finalized","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"error","timestamp":"2025-04-17T14:24:45.240+0530","caller":"service/invoice.go:376","msg":"failed to process payment for invoice","error":"invoice has no remaining amount to pay","invoice_id":"inv_01JS1FAA7RBCXMJB7Q8MFZMPP4","stacktrace":"github.com/flexprice/flexprice/internal/service.(*invoiceService).ProcessDraftInvoice\n\t/Users/omkar/Developer/source code/flexprice/flexprice/internal/service/invoice.go:376\ngithub.com/flexprice/flexprice/internal/service.(*invoiceService).CreateSubscriptionInvoice\n\t/Users/omkar/Developer/source code/flexprice/flexprice/internal/service/invoice.go:485\ngithub.com/flexprice/flexprice/internal/service.(*subscriptionService).CreateSubscription.func1\n\t/Users/omkar/Developer/source code/flexprice/flexprice/internal/service/subscription.go:236\ngithub.com/flexprice/flexprice/internal/testutil.(*MockPostgresClient).WithTx\n\t/Users/omkar/Developer/source code/flexprice/flexprice/internal/testutil/mock_postgres_client.go:35\ngithub.com/flexprice/flexprice/internal/service.(*subscriptionService).CreateSubscription\n\t/Users/omkar/Developer/source code/flexprice/flexprice/internal/service/subscription.go:228\ngithub.com/flexprice/flexprice/internal/service.(*SubscriptionServiceSuite).TestCreateSubscription.func1\n\t/Users/omkar/Developer/source code/flexprice/flexprice/internal/service/subscription_test.go:560\ngithub.com/stretchr/testify/suite.(*Suite).Run.func1\n\t/Users/omkar/go/pkg/mod/github.com/stretchr/testify@v1.10.0/suite/suite.go:115\ntesting.tRunner\n\t/usr/local/go/src/testing/testing.go:1792"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.241+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA7S20C8CTBQ5QQDZ2D1","event_name":"subscription.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+=== RUN   TestSubscriptionService/TestCreateSubscription/invalid_customer_id
+=== RUN   TestSubscriptionService/TestCreateSubscription/invalid_plan_id
+=== RUN   TestSubscriptionService/TestCreateSubscription/end_date_before_start_date
+=== RUN   TestSubscriptionService/TestGetSubscription
+=== RUN   TestSubscriptionService/TestGetSubscription/existing_subscription
+=== RUN   TestSubscriptionService/TestGetSubscription/non_existent_subscription
+=== RUN   TestSubscriptionService/TestGetUsageBySubscription
+=== RUN   TestSubscriptionService/TestGetUsageBySubscription/successful_usage_calculation_with_multiple_meters_and_filters
+=== RUN   TestSubscriptionService/TestGetUsageBySubscription/zero_usage_period
+=== RUN   TestSubscriptionService/TestGetUsageBySubscription/default_to_current_period_when_no_times_specified
+=== RUN   TestSubscriptionService/TestGetUsageBySubscription/invalid_subscription_ID
+=== RUN   TestSubscriptionService/TestGetUsageBySubscription/subscription_not_active
+=== RUN   TestSubscriptionService/TestListSubscriptions
+=== RUN   TestSubscriptionService/TestListSubscriptions/list_all_subscriptions
+=== RUN   TestSubscriptionService/TestListSubscriptions/filter_by_customer
+=== RUN   TestSubscriptionService/TestListSubscriptions/filter_by_status_active
+=== RUN   TestSubscriptionService/TestListSubscriptions/filter_by_status_cancelled
+=== RUN   TestSubscriptionService/TestProcessSubscriptionPeriod
+{"level":"info","timestamp":"2025-04-17T14:24:45.265+0530","caller":"service/invoice.go:449","msg":"creating subscription invoice","subscription_id":"sub_123","period_start":"2025-04-16T08:54:45.265Z","period_end":"2025-04-16T09:54:45.265Z","reference_point":"period_end"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.265+0530","caller":"service/billing.go:274","msg":"preparing subscription invoice request","subscription_id":"sub_123","period_start":"2025-04-16T08:54:45.265Z","period_end":"2025-04-16T09:54:45.265Z","reference_point":"period_end"}
+{"level":"error","timestamp":"2025-04-17T14:24:45.265+0530","caller":"service/subscription.go:830","msg":"failed to process subscription period","subscription_id":"sub_123","error":"no charges to invoice","errorVerbose":"no charges to invoice\n(1) forced error mark\n  | \"already_exists: resource already exists\"\n  | github.com/flexprice/flexprice/internal/errors/*errors.InternalError::\nWraps: (2) All charges have already been invoiced\nWraps: (3) attached stack trace\n  -- stack trace:\n  | github.com/flexprice/flexprice/internal/errors.NewError\n  | \t/Users/omkar/Developer/source code/flexprice/flexprice/internal/errors/builder.go:18\n  | github.com/flexprice/flexprice/internal/service.(*billingService).PrepareSubscriptionInvoiceRequest\n  | \t/Users/omkar/Developer/source code/flexprice/flexprice/internal/service/billing.go:351\n  | github.com/flexprice/flexprice/internal/service.(*invoiceService).CreateSubscriptionInvoice\n  | \t/Users/omkar/Developer/source code/flexprice/flexprice/internal/service/invoice.go:468\n  | github.com/flexprice/flexprice/internal/service.(*subscriptionService).processSubscriptionPeriod.func1\n  | \t/Users/omkar/Developer/source code/flexprice/flexprice/internal/service/subscription.go:776\n  | github.com/flexprice/flexprice/internal/testutil.(*MockPostgresClient).WithTx\n  | \t/Users/omkar/Developer/source code/flexprice/flexprice/internal/testutil/mock_postgres_client.go:35\n  | github.com/flexprice/flexprice/internal/service.(*subscriptionService).processSubscriptionPeriod\n  | \t/Users/omkar/Developer/source code/flexprice/flexprice/internal/service/subscription.go:770\n  | github.com/flexprice/flexprice/internal/service.(*SubscriptionServiceSuite).TestProcessSubscriptionPeriod\n  | \t/Users/omkar/Developer/source code/flexprice/flexprice/internal/service/subscription_test.go:794\n  | reflect.Value.call\n  | \t/usr/local/go/src/reflect/value.go:584\n  | reflect.Value.Call\n  | \t/usr/local/go/src/reflect/value.go:368\n  | github.com/stretchr/testify/suite.Run.func1\n  | \t/Users/omkar/go/pkg/mod/github.com/stretchr/testify@v1.10.0/suite/suite.go:202\n  | testing.tRunner\n  | \t/usr/local/go/src/testing/testing.go:1792\n  | runtime.goexit\n  | \t/usr/local/go/src/runtime/asm_arm64.s:1223\nWraps: (4) no charges to invoice\nError types: (1) *markers.withMark (2) *hintdetail.withHint (3) *withstack.withStack (4) *errutil.leafError","stacktrace":"github.com/flexprice/flexprice/internal/service.(*subscriptionService).processSubscriptionPeriod\n\t/Users/omkar/Developer/source code/flexprice/flexprice/internal/service/subscription.go:830\ngithub.com/flexprice/flexprice/internal/service.(*SubscriptionServiceSuite).TestProcessSubscriptionPeriod\n\t/Users/omkar/Developer/source code/flexprice/flexprice/internal/service/subscription_test.go:794\nreflect.Value.call\n\t/usr/local/go/src/reflect/value.go:584\nreflect.Value.Call\n\t/usr/local/go/src/reflect/value.go:368\ngithub.com/stretchr/testify/suite.Run.func1\n\t/Users/omkar/go/pkg/mod/github.com/stretchr/testify@v1.10.0/suite/suite.go:202\ntesting.tRunner\n\t/usr/local/go/src/testing/testing.go:1792"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.265+0530","caller":"service/invoice.go:449","msg":"creating subscription invoice","subscription_id":"sub_123","period_start":"2025-04-16T08:54:45.265Z","period_end":"2025-04-16T09:54:45.265Z","reference_point":"period_end"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.265+0530","caller":"service/billing.go:274","msg":"preparing subscription invoice request","subscription_id":"sub_123","period_start":"2025-04-16T08:54:45.265Z","period_end":"2025-04-16T09:54:45.265Z","reference_point":"period_end"}
+{"level":"error","timestamp":"2025-04-17T14:24:45.265+0530","caller":"service/subscription.go:830","msg":"failed to process subscription period","subscription_id":"sub_123","error":"no charges to invoice","errorVerbose":"no charges to invoice\n(1) forced error mark\n  | \"already_exists: resource already exists\"\n  | github.com/flexprice/flexprice/internal/errors/*errors.InternalError::\nWraps: (2) All charges have already been invoiced\nWraps: (3) attached stack trace\n  -- stack trace:\n  | github.com/flexprice/flexprice/internal/errors.NewError\n  | \t/Users/omkar/Developer/source code/flexprice/flexprice/internal/errors/builder.go:18\n  | github.com/flexprice/flexprice/internal/service.(*billingService).PrepareSubscriptionInvoiceRequest\n  | \t/Users/omkar/Developer/source code/flexprice/flexprice/internal/service/billing.go:351\n  | github.com/flexprice/flexprice/internal/service.(*invoiceService).CreateSubscriptionInvoice\n  | \t/Users/omkar/Developer/source code/flexprice/flexprice/internal/service/invoice.go:468\n  | github.com/flexprice/flexprice/internal/service.(*subscriptionService).processSubscriptionPeriod.func1\n  | \t/Users/omkar/Developer/source code/flexprice/flexprice/internal/service/subscription.go:776\n  | github.com/flexprice/flexprice/internal/testutil.(*MockPostgresClient).WithTx\n  | \t/Users/omkar/Developer/source code/flexprice/flexprice/internal/testutil/mock_postgres_client.go:35\n  | github.com/flexprice/flexprice/internal/service.(*subscriptionService).processSubscriptionPeriod\n  | \t/Users/omkar/Developer/source code/flexprice/flexprice/internal/service/subscription.go:770\n  | github.com/flexprice/flexprice/internal/service.(*SubscriptionServiceSuite).TestProcessSubscriptionPeriod\n  | \t/Users/omkar/Developer/source code/flexprice/flexprice/internal/service/subscription_test.go:848\n  | reflect.Value.call\n  | \t/usr/local/go/src/reflect/value.go:584\n  | reflect.Value.Call\n  | \t/usr/local/go/src/reflect/value.go:368\n  | github.com/stretchr/testify/suite.Run.func1\n  | \t/Users/omkar/go/pkg/mod/github.com/stretchr/testify@v1.10.0/suite/suite.go:202\n  | testing.tRunner\n  | \t/usr/local/go/src/testing/testing.go:1792\n  | runtime.goexit\n  | \t/usr/local/go/src/runtime/asm_arm64.s:1223\nWraps: (4) no charges to invoice\nError types: (1) *markers.withMark (2) *hintdetail.withHint (3) *withstack.withStack (4) *errutil.leafError","stacktrace":"github.com/flexprice/flexprice/internal/service.(*subscriptionService).processSubscriptionPeriod\n\t/Users/omkar/Developer/source code/flexprice/flexprice/internal/service/subscription.go:830\ngithub.com/flexprice/flexprice/internal/service.(*SubscriptionServiceSuite).TestProcessSubscriptionPeriod\n\t/Users/omkar/Developer/source code/flexprice/flexprice/internal/service/subscription_test.go:848\nreflect.Value.call\n\t/usr/local/go/src/reflect/value.go:584\nreflect.Value.Call\n\t/usr/local/go/src/reflect/value.go:368\ngithub.com/stretchr/testify/suite.Run.func1\n\t/Users/omkar/go/pkg/mod/github.com/stretchr/testify@v1.10.0/suite/suite.go:202\ntesting.tRunner\n\t/usr/local/go/src/testing/testing.go:1792"}
+--- PASS: TestSubscriptionService (0.04s)
+    --- PASS: TestSubscriptionService/TestCancelSubscription (0.01s)
+        --- PASS: TestSubscriptionService/TestCancelSubscription/cancel_active_subscription (0.00s)
+        --- PASS: TestSubscriptionService/TestCancelSubscription/cancel_non_existent_subscription (0.00s)
+        --- PASS: TestSubscriptionService/TestCancelSubscription/cancel_already_canceled_subscription (0.00s)
+    --- PASS: TestSubscriptionService/TestCreateSubscription (0.01s)
+        --- PASS: TestSubscriptionService/TestCreateSubscription/successful_subscription_creation (0.00s)
+        --- PASS: TestSubscriptionService/TestCreateSubscription/invalid_customer_id (0.00s)
+        --- PASS: TestSubscriptionService/TestCreateSubscription/invalid_plan_id (0.00s)
+        --- PASS: TestSubscriptionService/TestCreateSubscription/end_date_before_start_date (0.00s)
+    --- PASS: TestSubscriptionService/TestGetSubscription (0.01s)
+        --- PASS: TestSubscriptionService/TestGetSubscription/existing_subscription (0.00s)
+        --- PASS: TestSubscriptionService/TestGetSubscription/non_existent_subscription (0.00s)
+    --- PASS: TestSubscriptionService/TestGetUsageBySubscription (0.01s)
+        --- PASS: TestSubscriptionService/TestGetUsageBySubscription/successful_usage_calculation_with_multiple_meters_and_filters (0.00s)
+        --- PASS: TestSubscriptionService/TestGetUsageBySubscription/zero_usage_period (0.00s)
+        --- PASS: TestSubscriptionService/TestGetUsageBySubscription/default_to_current_period_when_no_times_specified (0.00s)
+        --- PASS: TestSubscriptionService/TestGetUsageBySubscription/invalid_subscription_ID (0.00s)
+        --- PASS: TestSubscriptionService/TestGetUsageBySubscription/subscription_not_active (0.00s)
+    --- PASS: TestSubscriptionService/TestListSubscriptions (0.01s)
+        --- PASS: TestSubscriptionService/TestListSubscriptions/list_all_subscriptions (0.00s)
+        --- PASS: TestSubscriptionService/TestListSubscriptions/filter_by_customer (0.00s)
+        --- PASS: TestSubscriptionService/TestListSubscriptions/filter_by_status_active (0.00s)
+        --- PASS: TestSubscriptionService/TestListSubscriptions/filter_by_status_cancelled (0.00s)
+    --- PASS: TestSubscriptionService/TestProcessSubscriptionPeriod (0.01s)
+=== RUN   TestTaskService
+{"level":"info","timestamp":"2025-04-17T14:24:45.269+0530","caller":"cache/init.go:9","msg":"Initializing cache system"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.269+0530","caller":"cache/init.go:14","msg":"Cache system initialized"}
+=== RUN   TestTaskService/TestCreateTask
+=== RUN   TestTaskService/TestCreateTask/successful_task_creation
+=== RUN   TestTaskService/TestCreateTask/invalid_task_type
+=== RUN   TestTaskService/TestCreateTask/invalid_entity_type
+=== RUN   TestTaskService/TestCreateTask/empty_file_url
+=== RUN   TestTaskService/TestGetTask
+=== RUN   TestTaskService/TestGetTask/existing_task
+=== RUN   TestTaskService/TestGetTask/non_existent_task
+=== RUN   TestTaskService/TestListTasks
+=== RUN   TestTaskService/TestListTasks/list_all_tasks
+=== RUN   TestTaskService/TestListTasks/filter_by_status_completed
+=== RUN   TestTaskService/TestListTasks/filter_by_status_failed
+=== RUN   TestTaskService/TestProcessTask
+=== RUN   TestTaskService/TestProcessTask/process_pending_task
+=== RUN   TestTaskService/TestProcessTask/process_task_with_invalid_csv
+=== RUN   TestTaskService/TestProcessTask/process_task_with_missing_required_fields
+=== RUN   TestTaskService/TestProcessTaskWithCustomers
+=== RUN   TestTaskService/TestProcessTaskWithCustomers/process_customer_import_success
+{"level":"info","timestamp":"2025-04-17T14:24:45.272+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA8RZ47CTFSW9KY7M88C","event_name":"customer.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.272+0530","caller":"service/task.go:651","msg":"created new customerline2external_idcust_ext_1"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.272+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA8RZ47CTFSW9T57EMH0","event_name":"customer.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.272+0530","caller":"service/task.go:651","msg":"created new customerline3external_idcust_ext_2"}
+=== RUN   TestTaskService/TestProcessTaskWithCustomers/process_customer_import_missing_required_fields
+=== RUN   TestTaskService/TestProcessTaskWithCustomers/process_customer_import_with_update
+{"level":"info","timestamp":"2025-04-17T14:24:45.273+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA8STH443GER9G98Y546","event_name":"customer.updated","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.273+0530","caller":"service/task.go:639","msg":"updated existing customerline2customer_idcust_existing_1external_idcust_ext_1"}
+=== RUN   TestTaskService/TestUpdateTaskStatus
+=== RUN   TestTaskService/TestUpdateTaskStatus/pending_to_processing
+=== RUN   TestTaskService/TestUpdateTaskStatus/processing_to_completed
+=== RUN   TestTaskService/TestUpdateTaskStatus/completed_to_processing
+=== RUN   TestTaskService/TestUpdateTaskStatus/non_existent_task
+--- PASS: TestTaskService (0.01s)
+    --- PASS: TestTaskService/TestCreateTask (0.00s)
+        --- PASS: TestTaskService/TestCreateTask/successful_task_creation (0.00s)
+        --- PASS: TestTaskService/TestCreateTask/invalid_task_type (0.00s)
+        --- PASS: TestTaskService/TestCreateTask/invalid_entity_type (0.00s)
+        --- PASS: TestTaskService/TestCreateTask/empty_file_url (0.00s)
+    --- PASS: TestTaskService/TestGetTask (0.00s)
+        --- PASS: TestTaskService/TestGetTask/existing_task (0.00s)
+        --- PASS: TestTaskService/TestGetTask/non_existent_task (0.00s)
+    --- PASS: TestTaskService/TestListTasks (0.00s)
+        --- PASS: TestTaskService/TestListTasks/list_all_tasks (0.00s)
+        --- PASS: TestTaskService/TestListTasks/filter_by_status_completed (0.00s)
+        --- PASS: TestTaskService/TestListTasks/filter_by_status_failed (0.00s)
+    --- PASS: TestTaskService/TestProcessTask (0.00s)
+        --- PASS: TestTaskService/TestProcessTask/process_pending_task (0.00s)
+        --- PASS: TestTaskService/TestProcessTask/process_task_with_invalid_csv (0.00s)
+        --- PASS: TestTaskService/TestProcessTask/process_task_with_missing_required_fields (0.00s)
+    --- PASS: TestTaskService/TestProcessTaskWithCustomers (0.00s)
+        --- PASS: TestTaskService/TestProcessTaskWithCustomers/process_customer_import_success (0.00s)
+        --- PASS: TestTaskService/TestProcessTaskWithCustomers/process_customer_import_missing_required_fields (0.00s)
+        --- PASS: TestTaskService/TestProcessTaskWithCustomers/process_customer_import_with_update (0.00s)
+    --- PASS: TestTaskService/TestUpdateTaskStatus (0.00s)
+        --- PASS: TestTaskService/TestUpdateTaskStatus/pending_to_processing (0.00s)
+        --- PASS: TestTaskService/TestUpdateTaskStatus/processing_to_completed (0.00s)
+        --- PASS: TestTaskService/TestUpdateTaskStatus/completed_to_processing (0.00s)
+        --- PASS: TestTaskService/TestUpdateTaskStatus/non_existent_task (0.00s)
+=== RUN   TestTenantService
+{"level":"info","timestamp":"2025-04-17T14:24:45.277+0530","caller":"cache/init.go:9","msg":"Initializing cache system"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.277+0530","caller":"cache/init.go:14","msg":"Cache system initialized"}
+=== RUN   TestTenantService/TestCreateTenant
+=== RUN   TestTenantService/TestCreateTenant/valid_tenant
+{"level":"warn","timestamp":"2025-04-17T14:24:45.277+0530","caller":"service/tenant.go:63","msg":"Billing tenant ID is not set, skipping customer creation","tenant_id":"tenant_01JS1FAA8X74GH1WMRT9NY6RJW"}
+=== RUN   TestTenantService/TestCreateTenant/invalid_tenant
+=== RUN   TestTenantService/TestGetTenantByID
+=== RUN   TestTenantService/TestGetTenantByID/tenant_found
+=== RUN   TestTenantService/TestGetTenantByID/tenant_not_found
+=== RUN   TestTenantService/TestGetTenantWithBillingDetails
+=== RUN   TestTenantService/TestGetTenantWithBillingDetails/tenant_with_billing_details
+=== RUN   TestTenantService/TestGetTenantWithBillingDetails/tenant_without_billing_details
+=== RUN   TestTenantService/TestGetTenantWithBillingDetails/tenant_not_found
+--- PASS: TestTenantService (0.00s)
+    --- PASS: TestTenantService/TestCreateTenant (0.00s)
+        --- PASS: TestTenantService/TestCreateTenant/valid_tenant (0.00s)
+        --- PASS: TestTenantService/TestCreateTenant/invalid_tenant (0.00s)
+    --- PASS: TestTenantService/TestGetTenantByID (0.00s)
+        --- PASS: TestTenantService/TestGetTenantByID/tenant_found (0.00s)
+        --- PASS: TestTenantService/TestGetTenantByID/tenant_not_found (0.00s)
+    --- PASS: TestTenantService/TestGetTenantWithBillingDetails (0.00s)
+        --- PASS: TestTenantService/TestGetTenantWithBillingDetails/tenant_with_billing_details (0.00s)
+        --- PASS: TestTenantService/TestGetTenantWithBillingDetails/tenant_without_billing_details (0.00s)
+        --- PASS: TestTenantService/TestGetTenantWithBillingDetails/tenant_not_found (0.00s)
+=== RUN   TestUserService
+=== RUN   TestUserService/TestGetUserInfo
+=== RUN   TestUserService/TestGetUserInfo/user_found
+=== RUN   TestUserService/TestGetUserInfo/user_not_found
+--- PASS: TestUserService (0.00s)
+    --- PASS: TestUserService/TestGetUserInfo (0.00s)
+        --- PASS: TestUserService/TestGetUserInfo/user_found (0.00s)
+        --- PASS: TestUserService/TestGetUserInfo/user_not_found (0.00s)
+=== RUN   TestWalletPaymentService
+{"level":"info","timestamp":"2025-04-17T14:24:45.283+0530","caller":"cache/init.go:9","msg":"Initializing cache system"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.283+0530","caller":"cache/init.go:14","msg":"Cache system initialized"}
+=== RUN   TestWalletPaymentService/TestGetWalletsForPaymentWithDifferentStrategies
+=== RUN   TestWalletPaymentService/TestGetWalletsForPaymentWithDifferentStrategies/PromotionalFirstStrategy
+=== RUN   TestWalletPaymentService/TestGetWalletsForPaymentWithDifferentStrategies/PrepaidFirstStrategy
+=== RUN   TestWalletPaymentService/TestGetWalletsForPaymentWithDifferentStrategies/BalanceOptimizedStrategy
+=== RUN   TestWalletPaymentService/TestInvoiceWithNoRemainingAmount
+=== RUN   TestWalletPaymentService/TestNilInvoice
+=== RUN   TestWalletPaymentService/TestProcessInvoicePaymentWithInsufficientBalance
+{"level":"info","timestamp":"2025-04-17T14:24:45.285+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA95SZQGFNZDDBRNFVK3","event_name":"wallet.transaction.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.285+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA95SZQGFNZDDHH7S82H","event_name":"wallet.transaction.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.286+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA96SJMPWMQCWDM8XGQE","event_name":"wallet.transaction.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.286+0530","caller":"service/wallet_payment.go:155","msg":"payment processed using wallets","invoice_id":"inv_large_amount","amount_paid":"260","remaining_amount":"740"}
+=== RUN   TestWalletPaymentService/TestProcessInvoicePaymentWithNoWallets
+{"level":"info","timestamp":"2025-04-17T14:24:45.286+0530","caller":"service/wallet_payment.go:89","msg":"no suitable wallets found for payment","customer_id":"cust_no_wallets","invoice_id":"inv_no_wallets","currency":"usd"}
+=== RUN   TestWalletPaymentService/TestProcessInvoicePaymentWithWallets
+=== RUN   TestWalletPaymentService/TestProcessInvoicePaymentWithWallets/Full_payment_with_promotional_first_strategy
+{"level":"info","timestamp":"2025-04-17T14:24:45.286+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA96SJMPWMQCXK41HDHR","event_name":"wallet.transaction.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.286+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA96SJMPWMQCXSP45HYQ","event_name":"wallet.transaction.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.286+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA96SJMPWMQCXYCMWXMH","event_name":"wallet.transaction.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.287+0530","caller":"service/wallet_payment.go:155","msg":"payment processed using wallets","invoice_id":"inv_test_wallet_payment","amount_paid":"150","remaining_amount":"0"}
+=== RUN   TestWalletPaymentService/TestProcessInvoicePaymentWithWallets/Limited_number_of_wallets
+{"level":"info","timestamp":"2025-04-17T14:24:45.287+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA97DVY8M7P3NG2EQVQ1","event_name":"wallet.transaction.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.287+0530","caller":"service/wallet_payment.go:155","msg":"payment processed using wallets","invoice_id":"inv_test_wallet_payment","amount_paid":"50","remaining_amount":"100"}
+=== RUN   TestWalletPaymentService/TestProcessInvoicePaymentWithWallets/PrepaidFirst_strategy
+{"level":"info","timestamp":"2025-04-17T14:24:45.287+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA97DVY8M7P3NXS0ME40","event_name":"wallet.transaction.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.287+0530","caller":"service/wallet_payment.go:155","msg":"payment processed using wallets","invoice_id":"inv_test_wallet_payment","amount_paid":"150","remaining_amount":"0"}
+=== RUN   TestWalletPaymentService/TestProcessInvoicePaymentWithWallets/BalanceOptimized_strategy
+{"level":"info","timestamp":"2025-04-17T14:24:45.287+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA97DVY8M7P3PB6YHY0E","event_name":"wallet.transaction.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.288+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA982GGVCBV02QZRFN68","event_name":"wallet.transaction.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.288+0530","caller":"publisher/publisher.go:73","msg":"successfully published webhook event","event_id":"webhook_01JS1FAA982GGVCBV02YMDWSN1","event_name":"wallet.transaction.created","tenant_id":"00000000-0000-0000-0000-000000000000"}
+{"level":"info","timestamp":"2025-04-17T14:24:45.288+0530","caller":"service/wallet_payment.go:155","msg":"payment processed using wallets","invoice_id":"inv_test_wallet_payment","amount_paid":"150","remaining_amount":"0"}
+--- PASS: TestWalletPaymentService (0.01s)
+    --- PASS: TestWalletPaymentService/TestGetWalletsForPaymentWithDifferentStrategies (0.00s)
+        --- PASS: TestWalletPaymentService/TestGetWalletsForPaymentWithDifferentStrategies/PromotionalFirstStrategy (0.00s)
+        --- PASS: TestWalletPaymentService/TestGetWalletsForPaymentWithDifferentStrategies/PrepaidFirstStrategy (0.00s)
+        --- PASS: TestWalletPaymentService/TestGetWalletsForPaymentWithDifferentStrategies/BalanceOptimizedStrategy (0.00s)
+    --- PASS: TestWalletPaymentService/TestInvoiceWithNoRemainingAmount (0.00s)
+    --- PASS: TestWalletPaymentService/TestNilInvoice (0.00s)
+    --- PASS: TestWalletPaymentService/TestProcessInvoicePaymentWithInsufficientBalance (0.00s)
+    --- PASS: TestWalletPaymentService/TestProcessInvoicePaymentWithNoWallets (0.00s)
+    --- PASS: TestWalletPaymentService/TestProcessInvoicePaymentWithWallets (0.00s)
+        --- PASS: TestWalletPaymentService/TestProcessInvoicePaymentWithWallets/Full_payment_with_promotional_first_strategy (0.00s)
+        --- PASS: TestWalletPaymentService/TestProcessInvoicePaymentWithWallets/Limited_number_of_wallets (0.00s)
+        --- PASS: TestWalletPaymentService/TestProcessInvoicePaymentWithWallets/PrepaidFirst_strategy (0.00s)
+        --- PASS: TestWalletPaymentService/TestProcessInvoicePaymentWithWallets/BalanceOptimized_strategy (0.00s)
+=== RUN   TestWalletService
+--- PASS: TestWalletService (0.00s)
+PASS
+ok  	github.com/flexprice/flexprice/internal/service	(cached)
+?   	github.com/flexprice/flexprice/internal/temporal	[no test files]
+?   	github.com/flexprice/flexprice/internal/temporal/activities	[no test files]
+?   	github.com/flexprice/flexprice/internal/temporal/models	[no test files]
+?   	github.com/flexprice/flexprice/internal/temporal/workflows	[no test files]
+?   	github.com/flexprice/flexprice/internal/testutil	[no test files]
+=== RUN   TestNextBillingDate_Daily
+=== RUN   TestNextBillingDate_Daily/simple_10_days
+=== RUN   TestNextBillingDate_Daily/cross_month_boundary
+=== RUN   TestNextBillingDate_Daily/cross_year_boundary
+=== RUN   TestNextBillingDate_Daily/leap_year_February
+=== RUN   TestNextBillingDate_Daily/non_leap_year_February
+=== RUN   TestNextBillingDate_Daily/invalid_unit
+=== RUN   TestNextBillingDate_Daily/timezone:_IST_crossing_day_boundary
+=== RUN   TestNextBillingDate_Daily/timezone:_PST_to_next_day_in_UTC
+=== RUN   TestNextBillingDate_Daily/timezone:_JST_crossing_month_boundary
+--- PASS: TestNextBillingDate_Daily (0.00s)
+    --- PASS: TestNextBillingDate_Daily/simple_10_days (0.00s)
+    --- PASS: TestNextBillingDate_Daily/cross_month_boundary (0.00s)
+    --- PASS: TestNextBillingDate_Daily/cross_year_boundary (0.00s)
+    --- PASS: TestNextBillingDate_Daily/leap_year_February (0.00s)
+    --- PASS: TestNextBillingDate_Daily/non_leap_year_February (0.00s)
+    --- PASS: TestNextBillingDate_Daily/invalid_unit (0.00s)
+    --- PASS: TestNextBillingDate_Daily/timezone:_IST_crossing_day_boundary (0.00s)
+    --- PASS: TestNextBillingDate_Daily/timezone:_PST_to_next_day_in_UTC (0.00s)
+    --- PASS: TestNextBillingDate_Daily/timezone:_JST_crossing_month_boundary (0.00s)
+=== RUN   TestNextBillingDate_Monthly
+=== RUN   TestNextBillingDate_Monthly/simple_month
+=== RUN   TestNextBillingDate_Monthly/31st_to_shorter_month
+=== RUN   TestNextBillingDate_Monthly/preserve_billing_anchor_day
+=== RUN   TestNextBillingDate_Monthly/leap_year_February_to_March
+=== RUN   TestNextBillingDate_Monthly/cross_year_with_month_end
+=== RUN   TestNextBillingDate_Monthly/timezone:_IST_crossing_month_with_DST
+=== RUN   TestNextBillingDate_Monthly/timezone:_PST_leap_year_February_with_time
+=== RUN   TestNextBillingDate_Monthly/timezone:_JST_month-end_consistency
+--- PASS: TestNextBillingDate_Monthly (0.00s)
+    --- PASS: TestNextBillingDate_Monthly/simple_month (0.00s)
+    --- PASS: TestNextBillingDate_Monthly/31st_to_shorter_month (0.00s)
+    --- PASS: TestNextBillingDate_Monthly/preserve_billing_anchor_day (0.00s)
+    --- PASS: TestNextBillingDate_Monthly/leap_year_February_to_March (0.00s)
+    --- PASS: TestNextBillingDate_Monthly/cross_year_with_month_end (0.00s)
+    --- PASS: TestNextBillingDate_Monthly/timezone:_IST_crossing_month_with_DST (0.00s)
+    --- PASS: TestNextBillingDate_Monthly/timezone:_PST_leap_year_February_with_time (0.00s)
+    --- PASS: TestNextBillingDate_Monthly/timezone:_JST_month-end_consistency (0.00s)
+=== RUN   TestNextBillingDate_Annual
+=== RUN   TestNextBillingDate_Annual/simple_year
+=== RUN   TestNextBillingDate_Annual/leap_year_to_non-leap_year_Feb_29
+=== RUN   TestNextBillingDate_Annual/preserve_billing_anchor_across_years
+=== RUN   TestNextBillingDate_Annual/multiple_years_crossing_leap_years
+=== RUN   TestNextBillingDate_Annual/timezone:_IST_leap_year_to_non-leap_year
+=== RUN   TestNextBillingDate_Annual/timezone:_PST_crossing_year_boundary
+=== RUN   TestNextBillingDate_Annual/timezone:_JST_preserving_time_across_years
+--- PASS: TestNextBillingDate_Annual (0.00s)
+    --- PASS: TestNextBillingDate_Annual/simple_year (0.00s)
+    --- PASS: TestNextBillingDate_Annual/leap_year_to_non-leap_year_Feb_29 (0.00s)
+    --- PASS: TestNextBillingDate_Annual/preserve_billing_anchor_across_years (0.00s)
+    --- PASS: TestNextBillingDate_Annual/multiple_years_crossing_leap_years (0.00s)
+    --- PASS: TestNextBillingDate_Annual/timezone:_IST_leap_year_to_non-leap_year (0.00s)
+    --- PASS: TestNextBillingDate_Annual/timezone:_PST_crossing_year_boundary (0.00s)
+    --- PASS: TestNextBillingDate_Annual/timezone:_JST_preserving_time_across_years (0.00s)
+=== RUN   TestParseYYYYMMDDToDate
+=== RUN   TestParseYYYYMMDDToDate/Valid_date_-_beginning_of_year
+=== RUN   TestParseYYYYMMDDToDate/Valid_date_-_end_of_year
+=== RUN   TestParseYYYYMMDDToDate/Valid_date_-_middle_of_month
+=== RUN   TestParseYYYYMMDDToDate/Nil_input
+=== RUN   TestParseYYYYMMDDToDate/Leap_year_-_February_29
+=== RUN   TestParseYYYYMMDDToDate/Non-leap_year_-_February_28
+=== RUN   TestParseYYYYMMDDToDate/Single_digit_month_and_day
+=== RUN   TestParseYYYYMMDDToDate/Maximum_valid_date
+=== RUN   TestParseYYYYMMDDToDate/Minimum_valid_date
+=== RUN   TestParseYYYYMMDDToDate/Edge_case_-_last_day_of_different_months
+=== RUN   TestParseYYYYMMDDToDate/Edge_case_-_first_day_after_leap_day
+=== RUN   TestParseYYYYMMDDToDate/Invalid_date_-_February_30_(normalized_to_March_2)
+=== RUN   TestParseYYYYMMDDToDate/Invalid_date_-_Month_13_(normalized_to_next_year)
+=== RUN   TestParseYYYYMMDDToDate/Invalid_date_-_Day_32_(normalized_to_next_month)
+=== RUN   TestParseYYYYMMDDToDate/Edge_case_-_Zero_month_(normalized)
+=== RUN   TestParseYYYYMMDDToDate/Edge_case_-_Zero_day_(normalized)
+=== RUN   TestParseYYYYMMDDToDate/Edge_case_-_All_zeros_except_year
+=== RUN   TestParseYYYYMMDDToDate/Edge_case_-_Negative_year
+--- PASS: TestParseYYYYMMDDToDate (0.00s)
+    --- PASS: TestParseYYYYMMDDToDate/Valid_date_-_beginning_of_year (0.00s)
+    --- PASS: TestParseYYYYMMDDToDate/Valid_date_-_end_of_year (0.00s)
+    --- PASS: TestParseYYYYMMDDToDate/Valid_date_-_middle_of_month (0.00s)
+    --- PASS: TestParseYYYYMMDDToDate/Nil_input (0.00s)
+    --- PASS: TestParseYYYYMMDDToDate/Leap_year_-_February_29 (0.00s)
+    --- PASS: TestParseYYYYMMDDToDate/Non-leap_year_-_February_28 (0.00s)
+    --- PASS: TestParseYYYYMMDDToDate/Single_digit_month_and_day (0.00s)
+    --- PASS: TestParseYYYYMMDDToDate/Maximum_valid_date (0.00s)
+    --- PASS: TestParseYYYYMMDDToDate/Minimum_valid_date (0.00s)
+    --- PASS: TestParseYYYYMMDDToDate/Edge_case_-_last_day_of_different_months (0.00s)
+    --- PASS: TestParseYYYYMMDDToDate/Edge_case_-_first_day_after_leap_day (0.00s)
+    --- PASS: TestParseYYYYMMDDToDate/Invalid_date_-_February_30_(normalized_to_March_2) (0.00s)
+    --- PASS: TestParseYYYYMMDDToDate/Invalid_date_-_Month_13_(normalized_to_next_year) (0.00s)
+    --- PASS: TestParseYYYYMMDDToDate/Invalid_date_-_Day_32_(normalized_to_next_month) (0.00s)
+    --- PASS: TestParseYYYYMMDDToDate/Edge_case_-_Zero_month_(normalized) (0.00s)
+    --- PASS: TestParseYYYYMMDDToDate/Edge_case_-_Zero_day_(normalized) (0.00s)
+    --- PASS: TestParseYYYYMMDDToDate/Edge_case_-_All_zeros_except_year (0.00s)
+    --- PASS: TestParseYYYYMMDDToDate/Edge_case_-_Negative_year (0.00s)
+=== RUN   TestParseYYYYMMDDToDate_SpecificBehaviors
+=== RUN   TestParseYYYYMMDDToDate_SpecificBehaviors/Verify_UTC_timezone
+=== RUN   TestParseYYYYMMDDToDate_SpecificBehaviors/Verify_time_components_are_zero
+=== RUN   TestParseYYYYMMDDToDate_SpecificBehaviors/Verify_date_normalization
+=== RUN   TestParseYYYYMMDDToDate_SpecificBehaviors/Verify_leap_year_handling
+--- PASS: TestParseYYYYMMDDToDate_SpecificBehaviors (0.00s)
+    --- PASS: TestParseYYYYMMDDToDate_SpecificBehaviors/Verify_UTC_timezone (0.00s)
+    --- PASS: TestParseYYYYMMDDToDate_SpecificBehaviors/Verify_time_components_are_zero (0.00s)
+    --- PASS: TestParseYYYYMMDDToDate_SpecificBehaviors/Verify_date_normalization (0.00s)
+    --- PASS: TestParseYYYYMMDDToDate_SpecificBehaviors/Verify_leap_year_handling (0.00s)
+PASS
+ok  	github.com/flexprice/flexprice/internal/types	(cached)
+=== RUN   TestTypstCompiler
+=== RUN   TestTypstCompiler/TestBasicTypstCompilation
+    typst_test.go:32: Skipping tests because typst is not available in the system
+=== RUN   TestTypstCompiler/TestInvoiceCompilation
+    typst_test.go:32: Skipping tests because typst is not available in the system
+=== RUN   TestTypstCompiler/TestNewCompiler
+    typst_test.go:32: Skipping tests because typst is not available in the system
+=== RUN   TestTypstCompiler/TestTemplateCompilation
+    typst_test.go:32: Skipping tests because typst is not available in the system
+=== RUN   TestTypstCompiler/TestTemplateCompilationEdgeCases
+    typst_test.go:32: Skipping tests because typst is not available in the system
+--- PASS: TestTypstCompiler (0.02s)
+    --- SKIP: TestTypstCompiler/TestBasicTypstCompilation (0.00s)
+    --- SKIP: TestTypstCompiler/TestInvoiceCompilation (0.00s)
+    --- SKIP: TestTypstCompiler/TestNewCompiler (0.00s)
+    --- SKIP: TestTypstCompiler/TestTemplateCompilation (0.00s)
+    --- SKIP: TestTypstCompiler/TestTemplateCompilationEdgeCases (0.00s)
+PASS
+ok  	github.com/flexprice/flexprice/internal/typst	(cached)
+?   	github.com/flexprice/flexprice/internal/validator	[no test files]
+?   	github.com/flexprice/flexprice/internal/webhook	[no test files]
+?   	github.com/flexprice/flexprice/internal/webhook/dto	[no test files]
+?   	github.com/flexprice/flexprice/internal/webhook/handler	[no test files]
+?   	github.com/flexprice/flexprice/internal/webhook/payload	[no test files]
+?   	github.com/flexprice/flexprice/internal/webhook/publisher	[no test files]
