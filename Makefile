@@ -320,6 +320,19 @@ sdk-publish-all-with-version:
 test-github-workflow:
 	@echo "Testing GitHub workflow locally..."
 	@./scripts/ensure-act.sh
-	@act release -e .github/workflows/test-event.json -s SDK_DEPLOY_GIT_TOKEN="$(shell cat .secrets.git)" -P ubuntu-latest=catthehacker/ubuntu:act-latest --container-architecture linux/amd64 --action-offline-mode
+	@if [ ! -f .env ]; then \
+		echo "Error: .env file not found. Please create a .env file with SDK_DEPLOY_GIT_TOKEN, NPM_AUTH_TOKEN, and PYPI_API_TOKEN"; \
+		exit 1; \
+	fi
+	@SDK_DEPLOY_GIT_TOKEN=$$(grep SDK_DEPLOY_GIT_TOKEN .env | cut -d '=' -f2) \
+	NPM_AUTH_TOKEN=$$(grep NPM_AUTH_TOKEN .env | cut -d '=' -f2) \
+	PYPI_API_TOKEN=$$(grep PYPI_API_TOKEN .env | cut -d '=' -f2) \
+	act release -e .github/workflows/test-event.json \
+	 -s SDK_DEPLOY_GIT_TOKEN="$$SDK_DEPLOY_GIT_TOKEN" \
+	 -s NPM_AUTH_TOKEN="$$NPM_AUTH_TOKEN" \
+	 -s PYPI_API_TOKEN="$$PYPI_API_TOKEN" \
+	 -P ubuntu-latest=catthehacker/ubuntu:act-latest \
+	 --container-architecture linux/amd64 \
+	 --action-offline-mode
 
 .PHONY: sdk-publish-js sdk-publish-py sdk-publish-go sdk-publish-all sdk-publish-all-with-version test-github-workflow

@@ -33,7 +33,17 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '18'
+          registry-url: 'https://registry.npmjs.org'
           
+      - name: Install GitHub CLI
+        run: |
+          type -p curl >/dev/null || (apt update && apt install curl -y)
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
+          && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
+          && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+          && apt update \
+          && apt install gh -y
+        
       - name: Install Java (manual)
         run: |
           echo "Installing Java..."
@@ -99,6 +109,11 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
+          
+      - name: Install Python build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
 
       - name: Prepare Go SDK
         if: success()
@@ -164,9 +179,21 @@ jobs:
           git remote set-url origin https://x-access-token:${{ secrets.SDK_DEPLOY_GIT_TOKEN }}@github.com/flexprice/go-sdk.git || true
           git push -f origin main || echo "Push failed but continuing"
           git push --tags || echo "Tag push failed but continuing"
+          
+          # Create GitHub Release
+          gh auth login --with-token <<< "${{ secrets.SDK_DEPLOY_GIT_TOKEN }}"
+          gh release create "v${{ env.VERSION }}" \
+            --repo="flexprice/go-sdk" \
+            --title="v${{ env.VERSION }}" \
+            --notes="Release version ${{ env.VERSION }}" \
+            --target main \
+            || echo "Release creation failed but continuing"
+            
           echo "Go SDK publishing steps completed"
+        env:
+          GH_TOKEN: ${{ secrets.SDK_DEPLOY_GIT_TOKEN }}
 
-      - name: Publish JavaScript SDK to GitHub
+      - name: Publish JavaScript SDK to GitHub and npm
         if: success() && (github.event.inputs.dry_run != 'true')
         run: |
           # Clone the JavaScript SDK repository
@@ -186,8 +213,13 @@ jobs:
           
           # Build the SDK to ensure dist files are generated
           cd ~/javascript-sdk-repo
+          # Clean existing dist directory
+          rm -rf dist
           npm ci || npm install || echo "Installing dependencies failed but continuing..."
           npm run build || echo "Building SDK failed but continuing..."
+          
+          # Update package.json version
+          npm version ${{ env.VERSION }} --no-git-tag-version || echo "Version update failed but continuing..."
           
           # Push to GitHub
           git config user.name "GitHub Actions"
@@ -200,9 +232,25 @@ jobs:
           git remote set-url origin https://x-access-token:${{ secrets.SDK_DEPLOY_GIT_TOKEN }}@github.com/flexprice/javascript-sdk.git || true
           git push -f origin main || echo "Push failed but continuing"
           git push --tags || echo "Tag push failed but continuing"
+          
+          # Create GitHub Release
+          gh auth login --with-token <<< "${{ secrets.SDK_DEPLOY_GIT_TOKEN }}"
+          gh release create "v${{ env.VERSION }}" \
+            --repo="flexprice/javascript-sdk" \
+            --title="v${{ env.VERSION }}" \
+            --notes="Release version ${{ env.VERSION }}" \
+            --target main \
+            || echo "Release creation failed but continuing"
+          
+          # Publish to npm
+          npm publish --access public || echo "npm publish failed but continuing"
+          
           echo "JavaScript SDK publishing steps completed"
+        env:
+          GH_TOKEN: ${{ secrets.SDK_DEPLOY_GIT_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
 
-      - name: Publish Python SDK to GitHub
+      - name: Publish Python SDK to GitHub and PyPI
         if: success() && (github.event.inputs.dry_run != 'true')
         run: |
           # Clone the Python SDK repository
@@ -220,11 +268,16 @@ jobs:
           mkdir -p api/python/examples || true
           cp api/python/examples/README.md ~/python-sdk-repo/README.md || echo "README not found but continuing"
           
-          # Install dependencies and build package
-          cd ~/python-sdk-repo
-          python -m pip install --upgrade pip setuptools wheel || echo "Installing build dependencies failed but continuing..."
-          
           # Push to GitHub
+          cd ~/python-sdk-repo
+          
+          # Update version in setup.py or pyproject.toml
+          if [ -f "setup.py" ]; then
+            sed -i "s/version=.*,/version='${{ env.VERSION }}',/" setup.py
+          elif [ -f "pyproject.toml" ]; then
+            sed -i "s/version = .*/version = \"${{ env.VERSION }}\"/" pyproject.toml
+          fi
+          
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git add . || echo "Nothing to add"
@@ -235,7 +288,33 @@ jobs:
           git remote set-url origin https://x-access-token:${{ secrets.SDK_DEPLOY_GIT_TOKEN }}@github.com/flexprice/python-sdk.git || true
           git push -f origin main || echo "Push failed but continuing"
           git push --tags || echo "Tag push failed but continuing"
+          
+          # Create GitHub Release
+          gh auth login --with-token <<< "${{ secrets.SDK_DEPLOY_GIT_TOKEN }}"
+          gh release create "v${{ env.VERSION }}" \
+            --repo="flexprice/python-sdk" \
+            --title="v${{ env.VERSION }}" \
+            --notes="Release version ${{ env.VERSION }}" \
+            --target main \
+            || echo "Release creation failed but continuing"
+          
+          # Build and publish to PyPI
+          # Clean dist directory
+          rm -rf dist build *.egg-info
+          python -m build
+          # Create .pypirc file for authentication
+          echo "[pypi]" > ~/.pypirc
+          echo "username = __token__" >> ~/.pypirc
+          echo "password = ${{ secrets.PYPI_API_TOKEN }}" >> ~/.pypirc
+          chmod 600 ~/.pypirc
+          # Upload using twine with config file
+          python -m twine upload --config-file ~/.pypirc dist/*
+          
           echo "Python SDK publishing steps completed"
+        env:
+          GH_TOKEN: ${{ secrets.SDK_DEPLOY_GIT_TOKEN }}
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
 
       - name: Dry Run Info
         if: github.event.inputs.dry_run == 'true'
