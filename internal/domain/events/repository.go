@@ -39,6 +39,7 @@ type GetEventsParams struct {
 	PageSize           int                 `json:"page_size"`
 	PropertyFilters    map[string][]string `json:"property_filters,omitempty"`
 	Offset             int                 `json:"offset"`
+	Source             string              `json:"source"`
 	CountTotal         bool                `json:"count_total"`
 }
 

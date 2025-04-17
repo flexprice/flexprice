@@ -410,6 +410,10 @@ func (r *EventRepository) GetEvents(ctx context.Context, params *events.GetEvent
 		baseQuery += " AND timestamp <= ?"
 		args = append(args, params.EndTime)
 	}
+	if params.Source != "" {
+		baseQuery += " AND source = ?"
+		args = append(args, params.Source)
+	}
 
 	// Apply property filters
 	if len(params.PropertyFilters) > 0 {

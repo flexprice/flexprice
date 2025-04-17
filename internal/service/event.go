@@ -252,6 +252,7 @@ func (s *eventService) GetEvents(ctx context.Context, req *dto.GetEventsRequest)
 		StartTime:          req.StartTime,
 		EndTime:            req.EndTime,
 		PropertyFilters:    req.PropertyFilters,
+		Source:             req.Source,
 		CountTotal:         true,
 	}
 
@@ -314,6 +315,7 @@ func (s *eventService) GetEvents(ctx context.Context, req *dto.GetEventsRequest)
 			Timestamp:          event.Timestamp,
 			Properties:         event.Properties,
 			Source:             event.Source,
+			EnvironmentID:      event.EnvironmentID,
 		})
 	}
 
