@@ -245,12 +245,6 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 			Mark(ierr.ErrValidation)
 	}
 
-	if req.CreditsToAdd.IsZero() && req.Amount.IsZero() {
-		return nil, ierr.NewError("credits_to_add or amount is required").
-			WithHint("Credits to add or amount is required").
-			Mark(ierr.ErrValidation)
-	}
-
 	// Generate or use provided idempotency key
 	var idempotencyKey string
 	if lo.FromPtr(req.IdempotencyKey) != "" {
