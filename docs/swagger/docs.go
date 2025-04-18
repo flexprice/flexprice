@@ -8238,13 +8238,12 @@ const docTemplate = `{
         "dto.TopUpWalletRequest": {
             "type": "object",
             "required": [
-                "credits_to_add",
                 "idempotency_key",
                 "transaction_reason"
             ],
             "properties": {
                 "amount": {
-                    "description": "amount is the number of credits to add to the wallet\nthis is deprecated and will be removed in a future version",
+                    "description": "amount is the amount in the currency of the wallet to be added\nNOTE: this is not the number of credits to add, but the amount in the currency\namount = credits_to_add * conversion_rate\nif both amount and credits_to_add are provided, amount will be ignored\nex if the wallet has a conversion_rate of 2 then adding an amount of\n10 USD in the wallet wil add 5 credits in the wallet",
                     "type": "number"
                 },
                 "credits_to_add": {
@@ -8271,21 +8270,8 @@ const docTemplate = `{
                         }
                     ]
                 },
-                "reference_id": {
-                    "description": "reference_id is the ID of the reference ex payment ID, invoice ID, request ID",
-                    "type": "string"
-                },
-                "reference_type": {
-                    "description": "reference_type is the type of the reference ex payment, invoice, request",
-                    "type": "string"
-                },
                 "transaction_reason": {
-                    "description": "transaction_reason is the reason for the transaction",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.TransactionReason"
-                        }
-                    ]
+                    "$ref": "#/definitions/types.TransactionReason"
                 }
             }
         },

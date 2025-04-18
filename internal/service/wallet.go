@@ -232,10 +232,17 @@ func (s *walletService) GetWalletTransactions(ctx context.Context, walletID stri
 
 // Update the TopUpWallet method to use the new processWalletOperation
 func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *dto.TopUpWalletRequest) (*dto.WalletResponse, error) {
-	// NOTE: This is a temporary fix to allow amount to be used instead of credits_to_add
-	// This will be removed in a future version
+	w, err := s.WalletRepo.GetWalletByID(ctx, walletID)
+	if err != nil {
+		return nil, ierr.NewError("Wallet not found").
+			WithHint("Wallet not found").
+			Mark(ierr.ErrNotFound)
+	}
+
+	// If Credits to Add is not provided then convert the currency amount to credits
+	// If both provided we give priority to Credits to add
 	if req.CreditsToAdd.IsZero() && !req.Amount.IsZero() {
-		req.CreditsToAdd = req.Amount
+		req.CreditsToAdd = s.GetCreditsFromCurrencyAmount(req.Amount, w.ConversionRate)
 	}
 
 	// Create a credit operation

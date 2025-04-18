@@ -1901,8 +1901,12 @@ definitions:
     properties:
       amount:
         description: |-
-          amount is the number of credits to add to the wallet
-          this is deprecated and will be removed in a future version
+          amount is the amount in the currency of the wallet to be added
+          NOTE: this is not the number of credits to add, but the amount in the currency
+          amount = credits_to_add * conversion_rate
+          if both amount and credits_to_add are provided, amount will be ignored
+          ex if the wallet has a conversion_rate of 2 then adding an amount of
+          10 USD in the wallet wil add 5 credits in the wallet
         type: number
       credits_to_add:
         description: credits_to_add is the number of credits to add to the wallet
@@ -1924,20 +1928,9 @@ definitions:
         - $ref: '#/definitions/types.Metadata'
         description: metadata is a map of key-value pairs to store any additional
           information about the transaction
-      reference_id:
-        description: reference_id is the ID of the reference ex payment ID, invoice
-          ID, request ID
-        type: string
-      reference_type:
-        description: reference_type is the type of the reference ex payment, invoice,
-          request
-        type: string
       transaction_reason:
-        allOf:
-        - $ref: '#/definitions/types.TransactionReason'
-        description: transaction_reason is the reason for the transaction
+        $ref: '#/definitions/types.TransactionReason'
     required:
-    - credits_to_add
     - idempotency_key
     - transaction_reason
     type: object

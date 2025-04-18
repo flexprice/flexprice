@@ -265,25 +265,24 @@ type ListWalletTransactionsResponse = types.ListResponse[*WalletTransactionRespo
 
 // TopUpWalletRequest represents a request to add credits to a wallet
 type TopUpWalletRequest struct {
-	// amount is the number of credits to add to the wallet
-	// this is deprecated and will be removed in a future version
-	Amount decimal.Decimal `json:"amount"`
 	// credits_to_add is the number of credits to add to the wallet
-	CreditsToAdd decimal.Decimal `json:"credits_to_add" binding:"required"`
-	// description to add any specific details about the transaction
-	Description string `json:"description,omitempty"`
+	CreditsToAdd decimal.Decimal `json:"credits_to_add"`
+	// amount is the amount in the currency of the wallet to be added
+	// NOTE: this is not the number of credits to add, but the amount in the currency
+	// amount = credits_to_add * conversion_rate
+	// if both amount and credits_to_add are provided, amount will be ignored
+	// ex if the wallet has a conversion_rate of 2 then adding an amount of
+	// 10 USD in the wallet wil add 5 credits in the wallet
+	Amount            decimal.Decimal         `json:"amount"`
+	TransactionReason types.TransactionReason `json:"transaction_reason,omitempty" binding:"required"`
 	// expiry_date YYYYMMDD format in UTC timezone (optional to set nil means no expiry)
 	// for ex 20250101 means the credits will expire on 2025-01-01 00:00:00 UTC
 	// hence they will be available for use until 2024-12-31 23:59:59 UTC
 	ExpiryDate *int `json:"expiry_date,omitempty"`
-	// reference_type is the type of the reference ex payment, invoice, request
-	ReferenceType string `json:"reference_type,omitempty"`
-	// reference_id is the ID of the reference ex payment ID, invoice ID, request ID
-	ReferenceID string `json:"reference_id,omitempty"`
 	// idempotency_key is a unique key for the transaction
 	IdempotencyKey *string `json:"idempotency_key" binding:"required"`
-	// transaction_reason is the reason for the transaction
-	TransactionReason types.TransactionReason `json:"transaction_reason,omitempty" binding:"required"`
+	// description to add any specific details about the transaction
+	Description string `json:"description,omitempty"`
 	// metadata is a map of key-value pairs to store any additional information about the transaction
 	Metadata types.Metadata `json:"metadata,omitempty"`
 }
@@ -307,6 +306,10 @@ func (r *TopUpWalletRequest) Validate() error {
 	if !lo.Contains(allowedTransactionReasons, r.TransactionReason) {
 		return ierr.NewError("transaction_reason must be one of the allowed values").
 			WithHint("Invalid transaction reason").
+			WithReportableDetails(map[string]interface{}{
+				"transaction_reason": r.TransactionReason,
+				"allowed_reasons":    allowedTransactionReasons,
+			}).
 			Mark(ierr.ErrValidation)
 	}
 
