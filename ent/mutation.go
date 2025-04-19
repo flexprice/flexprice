@@ -19252,6 +19252,7 @@ type SubscriptionMutation struct {
 	metadata                *map[string]string
 	pause_status            *string
 	active_pause_id         *string
+	billing_cycle           *string
 	clearedFields           map[string]struct{}
 	line_items              map[string]struct{}
 	removedline_items       map[string]struct{}
@@ -20595,6 +20596,42 @@ func (m *SubscriptionMutation) ResetActivePauseID() {
 	delete(m.clearedFields, subscription.FieldActivePauseID)
 }
 
+// SetBillingCycle sets the "billing_cycle" field.
+func (m *SubscriptionMutation) SetBillingCycle(s string) {
+	m.billing_cycle = &s
+}
+
+// BillingCycle returns the value of the "billing_cycle" field in the mutation.
+func (m *SubscriptionMutation) BillingCycle() (r string, exists bool) {
+	v := m.billing_cycle
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBillingCycle returns the old "billing_cycle" field's value of the Subscription entity.
+// If the Subscription object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionMutation) OldBillingCycle(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBillingCycle is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBillingCycle requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBillingCycle: %w", err)
+	}
+	return oldValue.BillingCycle, nil
+}
+
+// ResetBillingCycle resets all changes to the "billing_cycle" field.
+func (m *SubscriptionMutation) ResetBillingCycle() {
+	m.billing_cycle = nil
+}
+
 // AddLineItemIDs adds the "line_items" edge to the SubscriptionLineItem entity by ids.
 func (m *SubscriptionMutation) AddLineItemIDs(ids ...string) {
 	if m.line_items == nil {
@@ -20737,7 +20774,7 @@ func (m *SubscriptionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SubscriptionMutation) Fields() []string {
-	fields := make([]string, 0, 29)
+	fields := make([]string, 0, 30)
 	if m.tenant_id != nil {
 		fields = append(fields, subscription.FieldTenantID)
 	}
@@ -20825,6 +20862,9 @@ func (m *SubscriptionMutation) Fields() []string {
 	if m.active_pause_id != nil {
 		fields = append(fields, subscription.FieldActivePauseID)
 	}
+	if m.billing_cycle != nil {
+		fields = append(fields, subscription.FieldBillingCycle)
+	}
 	return fields
 }
 
@@ -20891,6 +20931,8 @@ func (m *SubscriptionMutation) Field(name string) (ent.Value, bool) {
 		return m.PauseStatus()
 	case subscription.FieldActivePauseID:
 		return m.ActivePauseID()
+	case subscription.FieldBillingCycle:
+		return m.BillingCycle()
 	}
 	return nil, false
 }
@@ -20958,6 +21000,8 @@ func (m *SubscriptionMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldPauseStatus(ctx)
 	case subscription.FieldActivePauseID:
 		return m.OldActivePauseID(ctx)
+	case subscription.FieldBillingCycle:
+		return m.OldBillingCycle(ctx)
 	}
 	return nil, fmt.Errorf("unknown Subscription field %s", name)
 }
@@ -21169,6 +21213,13 @@ func (m *SubscriptionMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetActivePauseID(v)
+		return nil
+	case subscription.FieldBillingCycle:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBillingCycle(v)
 		return nil
 	}
 	return fmt.Errorf("unknown Subscription field %s", name)
@@ -21401,6 +21452,9 @@ func (m *SubscriptionMutation) ResetField(name string) error {
 		return nil
 	case subscription.FieldActivePauseID:
 		m.ResetActivePauseID()
+		return nil
+	case subscription.FieldBillingCycle:
+		m.ResetBillingCycle()
 		return nil
 	}
 	return fmt.Errorf("unknown Subscription field %s", name)

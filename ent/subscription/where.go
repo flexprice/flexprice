@@ -205,6 +205,11 @@ func ActivePauseID(v string) predicate.Subscription {
 	return predicate.Subscription(sql.FieldEQ(FieldActivePauseID, v))
 }
 
+// BillingCycle applies equality check predicate on the "billing_cycle" field. It's identical to BillingCycleEQ.
+func BillingCycle(v string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldEQ(FieldBillingCycle, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.Subscription {
 	return predicate.Subscription(sql.FieldEQ(FieldTenantID, v))
@@ -1753,6 +1758,71 @@ func ActivePauseIDEqualFold(v string) predicate.Subscription {
 // ActivePauseIDContainsFold applies the ContainsFold predicate on the "active_pause_id" field.
 func ActivePauseIDContainsFold(v string) predicate.Subscription {
 	return predicate.Subscription(sql.FieldContainsFold(FieldActivePauseID, v))
+}
+
+// BillingCycleEQ applies the EQ predicate on the "billing_cycle" field.
+func BillingCycleEQ(v string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldEQ(FieldBillingCycle, v))
+}
+
+// BillingCycleNEQ applies the NEQ predicate on the "billing_cycle" field.
+func BillingCycleNEQ(v string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldNEQ(FieldBillingCycle, v))
+}
+
+// BillingCycleIn applies the In predicate on the "billing_cycle" field.
+func BillingCycleIn(vs ...string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldIn(FieldBillingCycle, vs...))
+}
+
+// BillingCycleNotIn applies the NotIn predicate on the "billing_cycle" field.
+func BillingCycleNotIn(vs ...string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldNotIn(FieldBillingCycle, vs...))
+}
+
+// BillingCycleGT applies the GT predicate on the "billing_cycle" field.
+func BillingCycleGT(v string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldGT(FieldBillingCycle, v))
+}
+
+// BillingCycleGTE applies the GTE predicate on the "billing_cycle" field.
+func BillingCycleGTE(v string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldGTE(FieldBillingCycle, v))
+}
+
+// BillingCycleLT applies the LT predicate on the "billing_cycle" field.
+func BillingCycleLT(v string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldLT(FieldBillingCycle, v))
+}
+
+// BillingCycleLTE applies the LTE predicate on the "billing_cycle" field.
+func BillingCycleLTE(v string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldLTE(FieldBillingCycle, v))
+}
+
+// BillingCycleContains applies the Contains predicate on the "billing_cycle" field.
+func BillingCycleContains(v string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldContains(FieldBillingCycle, v))
+}
+
+// BillingCycleHasPrefix applies the HasPrefix predicate on the "billing_cycle" field.
+func BillingCycleHasPrefix(v string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldHasPrefix(FieldBillingCycle, v))
+}
+
+// BillingCycleHasSuffix applies the HasSuffix predicate on the "billing_cycle" field.
+func BillingCycleHasSuffix(v string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldHasSuffix(FieldBillingCycle, v))
+}
+
+// BillingCycleEqualFold applies the EqualFold predicate on the "billing_cycle" field.
+func BillingCycleEqualFold(v string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldEqualFold(FieldBillingCycle, v))
+}
+
+// BillingCycleContainsFold applies the ContainsFold predicate on the "billing_cycle" field.
+func BillingCycleContainsFold(v string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldContainsFold(FieldBillingCycle, v))
 }
 
 // HasLineItems applies the HasEdge predicate on the "line_items" edge.

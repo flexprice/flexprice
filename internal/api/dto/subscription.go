@@ -26,6 +26,14 @@ type CreateSubscriptionRequest struct {
 	BillingPeriod      types.BillingPeriod  `json:"billing_period" validate:"required"`
 	BillingPeriodCount int                  `json:"billing_period_count" validate:"required,min=1"`
 	Metadata           map[string]string    `json:"metadata,omitempty"`
+	// BillingCycle is the cycle of the billing anchor.
+	// This is used to determine the billing date for the subscription (i.e set the billing anchor)
+	// If not set, the default value is anniversary. Possible values are anniversary and calendar.
+	// Anniversary billing means the billing anchor will be the start date of the subscription.
+	// Calendar billing means the billing anchor will be the appropriate date based on the billing period.
+	// For example, if the billing period is month and the start date is 2025-04-15 then in case of
+	// calendar billing the billing anchor will be 2025-05-01 vs 2025-04-15 for anniversary billing.
+	BillingCycle types.BillingCycle `json:"billing_cycle"`
 }
 
 type UpdateSubscriptionRequest struct {
@@ -59,6 +67,10 @@ func (r *CreateSubscriptionRequest) Validate() error {
 	}
 
 	if err := r.BillingPeriod.Validate(); err != nil {
+		return err
+	}
+
+	if err := r.BillingCycle.Validate(); err != nil {
 		return err
 	}
 
@@ -143,6 +155,7 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		Metadata:           r.Metadata,
 		EnvironmentID:      types.GetEnvironmentID(ctx),
 		BaseModel:          types.GetDefaultBaseModel(ctx),
+		BillingCycle:       r.BillingCycle,
 	}
 }
 

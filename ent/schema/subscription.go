@@ -112,6 +112,10 @@ func (Subscription) Fields() []ent.Field {
 			}).
 			Optional().
 			Nillable(),
+		field.String("billing_cycle").
+			NotEmpty().
+			Immutable().
+			Default(string(types.BillingCycleAnniversary)),
 	}
 }
 

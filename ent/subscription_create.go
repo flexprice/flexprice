@@ -372,6 +372,20 @@ func (sc *SubscriptionCreate) SetNillableActivePauseID(s *string) *SubscriptionC
 	return sc
 }
 
+// SetBillingCycle sets the "billing_cycle" field.
+func (sc *SubscriptionCreate) SetBillingCycle(s string) *SubscriptionCreate {
+	sc.mutation.SetBillingCycle(s)
+	return sc
+}
+
+// SetNillableBillingCycle sets the "billing_cycle" field if the given value is not nil.
+func (sc *SubscriptionCreate) SetNillableBillingCycle(s *string) *SubscriptionCreate {
+	if s != nil {
+		sc.SetBillingCycle(*s)
+	}
+	return sc
+}
+
 // SetID sets the "id" field.
 func (sc *SubscriptionCreate) SetID(s string) *SubscriptionCreate {
 	sc.mutation.SetID(s)
@@ -495,6 +509,10 @@ func (sc *SubscriptionCreate) defaults() {
 		v := subscription.DefaultPauseStatus
 		sc.mutation.SetPauseStatus(v)
 	}
+	if _, ok := sc.mutation.BillingCycle(); !ok {
+		v := subscription.DefaultBillingCycle
+		sc.mutation.SetBillingCycle(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -582,6 +600,14 @@ func (sc *SubscriptionCreate) check() error {
 	}
 	if _, ok := sc.mutation.PauseStatus(); !ok {
 		return &ValidationError{Name: "pause_status", err: errors.New(`ent: missing required field "Subscription.pause_status"`)}
+	}
+	if _, ok := sc.mutation.BillingCycle(); !ok {
+		return &ValidationError{Name: "billing_cycle", err: errors.New(`ent: missing required field "Subscription.billing_cycle"`)}
+	}
+	if v, ok := sc.mutation.BillingCycle(); ok {
+		if err := subscription.BillingCycleValidator(v); err != nil {
+			return &ValidationError{Name: "billing_cycle", err: fmt.Errorf(`ent: validator failed for field "Subscription.billing_cycle": %w`, err)}
+		}
 	}
 	return nil
 }
@@ -733,6 +759,10 @@ func (sc *SubscriptionCreate) createSpec() (*Subscription, *sqlgraph.CreateSpec)
 	if value, ok := sc.mutation.ActivePauseID(); ok {
 		_spec.SetField(subscription.FieldActivePauseID, field.TypeString, value)
 		_node.ActivePauseID = &value
+	}
+	if value, ok := sc.mutation.BillingCycle(); ok {
+		_spec.SetField(subscription.FieldBillingCycle, field.TypeString, value)
+		_node.BillingCycle = value
 	}
 	if nodes := sc.mutation.LineItemsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

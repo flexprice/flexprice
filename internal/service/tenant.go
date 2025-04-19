@@ -148,6 +148,7 @@ func (s *tenantService) onboardTenantOnFreePlan(ctx context.Context, t *tenant.T
 		BillingPeriod:      freePrice.BillingPeriod,
 		BillingPeriodCount: freePrice.BillingPeriodCount,
 		StartDate:          time.Now(),
+		BillingCycle:       types.BillingCycleAnniversary,
 	})
 	if err != nil {
 		s.Logger.Errorw("Failed to create subscription",

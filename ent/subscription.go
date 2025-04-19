@@ -76,6 +76,8 @@ type Subscription struct {
 	PauseStatus string `json:"pause_status,omitempty"`
 	// ActivePauseID holds the value of the "active_pause_id" field.
 	ActivePauseID *string `json:"active_pause_id,omitempty"`
+	// BillingCycle holds the value of the "billing_cycle" field.
+	BillingCycle string `json:"billing_cycle,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the SubscriptionQuery when eager-loading is set.
 	Edges        SubscriptionEdges `json:"edges"`
@@ -122,7 +124,7 @@ func (*Subscription) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case subscription.FieldBillingPeriodCount, subscription.FieldVersion:
 			values[i] = new(sql.NullInt64)
-		case subscription.FieldID, subscription.FieldTenantID, subscription.FieldStatus, subscription.FieldCreatedBy, subscription.FieldUpdatedBy, subscription.FieldEnvironmentID, subscription.FieldLookupKey, subscription.FieldCustomerID, subscription.FieldPlanID, subscription.FieldSubscriptionStatus, subscription.FieldCurrency, subscription.FieldBillingCadence, subscription.FieldBillingPeriod, subscription.FieldPauseStatus, subscription.FieldActivePauseID:
+		case subscription.FieldID, subscription.FieldTenantID, subscription.FieldStatus, subscription.FieldCreatedBy, subscription.FieldUpdatedBy, subscription.FieldEnvironmentID, subscription.FieldLookupKey, subscription.FieldCustomerID, subscription.FieldPlanID, subscription.FieldSubscriptionStatus, subscription.FieldCurrency, subscription.FieldBillingCadence, subscription.FieldBillingPeriod, subscription.FieldPauseStatus, subscription.FieldActivePauseID, subscription.FieldBillingCycle:
 			values[i] = new(sql.NullString)
 		case subscription.FieldCreatedAt, subscription.FieldUpdatedAt, subscription.FieldBillingAnchor, subscription.FieldStartDate, subscription.FieldEndDate, subscription.FieldCurrentPeriodStart, subscription.FieldCurrentPeriodEnd, subscription.FieldCancelledAt, subscription.FieldCancelAt, subscription.FieldTrialStart, subscription.FieldTrialEnd:
 			values[i] = new(sql.NullTime)
@@ -329,6 +331,12 @@ func (s *Subscription) assignValues(columns []string, values []any) error {
 				s.ActivePauseID = new(string)
 				*s.ActivePauseID = value.String
 			}
+		case subscription.FieldBillingCycle:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field billing_cycle", values[i])
+			} else if value.Valid {
+				s.BillingCycle = value.String
+			}
 		default:
 			s.selectValues.Set(columns[i], values[i])
 		}
@@ -473,6 +481,9 @@ func (s *Subscription) String() string {
 		builder.WriteString("active_pause_id=")
 		builder.WriteString(*v)
 	}
+	builder.WriteString(", ")
+	builder.WriteString("billing_cycle=")
+	builder.WriteString(s.BillingCycle)
 	builder.WriteByte(')')
 	return builder.String()
 }

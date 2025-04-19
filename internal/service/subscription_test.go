@@ -30,9 +30,12 @@ type BaseSubscriptionData struct {
 			storageArchive *meter.Meter
 		}
 		prices struct {
-			apiCalls       *price.Price
-			storage        *price.Price
-			storageArchive *price.Price
+			apiCalls             *price.Price
+			storage              *price.Price
+			storageArchive       *price.Price
+			apiCallsAnnual       *price.Price
+			storageAnnual        *price.Price
+			storageArchiveAnnual *price.Price
 		}
 		subscription *subscription.Subscription
 		now          time.Time
@@ -165,6 +168,7 @@ func (s *SubscriptionServiceSuite) setupTestData() {
 	upTo1000 := uint64(1000)
 	upTo5000 := uint64(5000)
 
+	// Monthly prices
 	s.testData.prices.apiCalls = &price.Price{
 		ID:                 "price_api_calls",
 		Amount:             decimal.Zero,
@@ -217,7 +221,63 @@ func (s *SubscriptionServiceSuite) setupTestData() {
 		MeterID:            s.testData.meters.storageArchive.ID,
 		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
 	}
+
 	s.NoError(s.GetStores().PriceRepo.Create(s.GetContext(), s.testData.prices.storageArchive))
+
+	// Annual prices
+	s.testData.prices.apiCallsAnnual = &price.Price{
+		ID:                 "price_api_calls_annual",
+		Amount:             decimal.Zero,
+		Currency:           "usd",
+		PlanID:             s.testData.plan.ID,
+		Type:               types.PRICE_TYPE_USAGE,
+		BillingPeriod:      types.BILLING_PERIOD_ANNUAL,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_TIERED,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		TierMode:           types.BILLING_TIER_SLAB,
+		MeterID:            s.testData.meters.apiCalls.ID,
+		Tiers: []price.PriceTier{
+			{UpTo: &upTo1000, UnitAmount: decimal.NewFromFloat(0.18)},
+			{UpTo: &upTo5000, UnitAmount: decimal.NewFromFloat(0.045)},
+			{UpTo: nil, UnitAmount: decimal.NewFromFloat(0.09)},
+		},
+		BaseModel: types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(s.GetContext(), s.testData.prices.apiCallsAnnual))
+
+	s.testData.prices.storageAnnual = &price.Price{
+		ID:                 "price_storage_annual",
+		Amount:             decimal.NewFromFloat(0.9),
+		Currency:           "usd",
+		PlanID:             s.testData.plan.ID,
+		Type:               types.PRICE_TYPE_USAGE,
+		BillingPeriod:      types.BILLING_PERIOD_ANNUAL,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		MeterID:            s.testData.meters.storage.ID,
+		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(s.GetContext(), s.testData.prices.storageAnnual))
+
+	s.testData.prices.storageArchiveAnnual = &price.Price{
+		ID:                 "price_storage_archive_annual",
+		Amount:             decimal.NewFromFloat(0.25),
+		Currency:           "usd",
+		PlanID:             s.testData.plan.ID,
+		Type:               types.PRICE_TYPE_USAGE,
+		BillingPeriod:      types.BILLING_PERIOD_ANNUAL,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		MeterID:            s.testData.meters.storageArchive.ID,
+		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(s.GetContext(), s.testData.prices.storageArchiveAnnual))
 
 	s.testData.now = time.Now().UTC()
 	s.testData.subscription = &subscription.Subscription{
@@ -508,6 +568,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 				BillingCadence:     types.BILLING_CADENCE_RECURRING,
 				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 				BillingPeriodCount: 1,
+				BillingCycle:       types.BillingCycleAnniversary,
 			},
 			wantErr: false,
 		},
@@ -522,6 +583,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 				BillingCadence:     types.BILLING_CADENCE_RECURRING,
 				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 				BillingPeriodCount: 1,
+				BillingCycle:       types.BillingCycleAnniversary,
 			},
 			wantErr: true,
 		},
@@ -536,6 +598,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 				BillingCadence:     types.BILLING_CADENCE_RECURRING,
 				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 				BillingPeriodCount: 1,
+				BillingCycle:       types.BillingCycleAnniversary,
 			},
 			wantErr: true,
 		},
@@ -550,6 +613,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 				BillingCadence:     types.BILLING_CADENCE_RECURRING,
 				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 				BillingPeriodCount: 1,
+				BillingCycle:       types.BillingCycleAnniversary,
 			},
 			wantErr: true,
 		},
@@ -877,4 +941,75 @@ func (s *SubscriptionServiceSuite) TestProcessSubscriptionPeriod() {
 	sub.CurrentPeriodEnd = originalPeriodEnd
 	err = s.GetStores().SubscriptionRepo.Update(s.GetContext(), sub)
 	s.NoError(err)
+}
+
+func (s *SubscriptionServiceSuite) TestSubscriptionAnchor_CalendarAndAnniversary() {
+	ist, err := time.LoadLocation("Asia/Kolkata")
+	s.NoError(err)
+	pst, err := time.LoadLocation("America/Los_Angeles")
+	s.NoError(err)
+	tests := []struct {
+		name          string
+		startDate     time.Time
+		billingPeriod types.BillingPeriod
+		billingCycle  types.BillingCycle
+		expectAnchor  time.Time
+	}{
+		{
+			name:          "calendar billing, monthly, mid-month",
+			startDate:     time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC),
+			billingPeriod: types.BILLING_PERIOD_MONTHLY,
+			billingCycle:  types.BillingCycleCalendar,
+			expectAnchor:  types.CalculateCalendarBillingAnchor(time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC), types.BILLING_PERIOD_MONTHLY),
+		},
+		{
+			name:          "calendar billing, monthly, end of month",
+			startDate:     time.Date(2024, 1, 31, 23, 59, 59, 0, time.UTC),
+			billingPeriod: types.BILLING_PERIOD_MONTHLY,
+			billingCycle:  types.BillingCycleCalendar,
+			expectAnchor:  types.CalculateCalendarBillingAnchor(time.Date(2024, 1, 31, 23, 59, 59, 0, time.UTC), types.BILLING_PERIOD_MONTHLY),
+		},
+		{
+			name:          "calendar billing, annual, leap year",
+			startDate:     time.Date(2024, 2, 29, 12, 0, 0, 0, time.UTC),
+			billingPeriod: types.BILLING_PERIOD_ANNUAL,
+			billingCycle:  types.BillingCycleCalendar,
+			expectAnchor:  types.CalculateCalendarBillingAnchor(time.Date(2024, 2, 29, 12, 0, 0, 0, time.UTC), types.BILLING_PERIOD_ANNUAL),
+		},
+		{
+			name:          "anniversary billing, monthly",
+			startDate:     time.Date(2024, 1, 15, 10, 0, 0, 0, ist),
+			billingPeriod: types.BILLING_PERIOD_MONTHLY,
+			billingCycle:  types.BillingCycleAnniversary,
+			expectAnchor:  time.Date(2024, 1, 15, 10, 0, 0, 0, ist).UTC(),
+		},
+		{
+			name:          "anniversary billing, annual, leap year",
+			startDate:     time.Date(2024, 2, 29, 12, 0, 0, 0, pst),
+			billingPeriod: types.BILLING_PERIOD_ANNUAL,
+			billingCycle:  types.BillingCycleAnniversary,
+			expectAnchor:  time.Date(2024, 2, 29, 12, 0, 0, 0, pst).UTC(),
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			input := dto.CreateSubscriptionRequest{
+				CustomerID:         s.testData.customer.ID,
+				PlanID:             s.testData.plan.ID,
+				StartDate:          tt.startDate,
+				Currency:           "usd",
+				BillingCadence:     types.BILLING_CADENCE_RECURRING,
+				BillingPeriod:      tt.billingPeriod,
+				BillingPeriodCount: 1,
+				BillingCycle:       tt.billingCycle,
+			}
+			resp, err := s.service.CreateSubscription(s.GetContext(), input)
+			s.NoError(err)
+			s.NotNil(resp)
+			// The anchor should match expected (allowing for UTC conversion)
+			gotAnchor := resp.BillingAnchor.UTC()
+			s.Equal(tt.expectAnchor, gotAnchor, "expected anchor %v, got %v", tt.expectAnchor, gotAnchor)
+		})
+	}
 }

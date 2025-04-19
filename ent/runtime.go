@@ -757,6 +757,12 @@ func init() {
 	subscriptionDescPauseStatus := subscriptionFields[21].Descriptor()
 	// subscription.DefaultPauseStatus holds the default value on creation for the pause_status field.
 	subscription.DefaultPauseStatus = subscriptionDescPauseStatus.Default.(string)
+	// subscriptionDescBillingCycle is the schema descriptor for billing_cycle field.
+	subscriptionDescBillingCycle := subscriptionFields[23].Descriptor()
+	// subscription.DefaultBillingCycle holds the default value on creation for the billing_cycle field.
+	subscription.DefaultBillingCycle = subscriptionDescBillingCycle.Default.(string)
+	// subscription.BillingCycleValidator is a validator for the "billing_cycle" field. It is called by the builders before save.
+	subscription.BillingCycleValidator = subscriptionDescBillingCycle.Validators[0].(func(string) error)
 	subscriptionlineitemMixin := schema.SubscriptionLineItem{}.Mixin()
 	subscriptionlineitemMixinFields0 := subscriptionlineitemMixin[0].Fields()
 	_ = subscriptionlineitemMixinFields0

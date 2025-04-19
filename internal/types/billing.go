@@ -71,3 +71,83 @@ func (r InvoiceReferencePoint) Validate() error {
 
 	return nil
 }
+
+// BillingCycle is the cycle of the billing anchor.
+// This is used to determine the billing anchor for the subscription.
+// It can be either anniversary or calendar.
+// If it's anniversary, the billing anchor will be the start date of the subscription.
+// If it's calendar, the billing anchor will be the appropriate date based on the billing period.
+type BillingCycle string
+
+const (
+	BillingCycleAnniversary BillingCycle = "anniversary"
+	BillingCycleCalendar    BillingCycle = "calendar"
+)
+
+func (b BillingCycle) Validate() error {
+	allowedValues := []BillingCycle{
+		BillingCycleAnniversary,
+		BillingCycleCalendar,
+	}
+
+	if !lo.Contains(allowedValues, b) {
+		return ierr.NewError("invalid billing cycle").
+			WithHint("Invalid billing cycle").
+			WithReportableDetails(map[string]any{
+				"allowed_values": allowedValues,
+				"provided_value": b,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}
+
+func CalculateCalendarBillingAnchor(startDate time.Time, billingPeriod BillingPeriod) time.Time {
+	now := startDate.UTC()
+
+	switch billingPeriod {
+	case BILLING_PERIOD_DAILY:
+		// Start of next day: 00:00:00
+		return time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, time.UTC)
+
+	case BILLING_PERIOD_WEEKLY:
+		// Start of next week (Monday)
+		daysUntilMonday := (8 - int(now.Weekday())) % 7
+		if daysUntilMonday == 0 {
+			daysUntilMonday = 7
+		}
+		return time.Date(now.Year(), now.Month(), now.Day()+daysUntilMonday, 0, 0, 0, 0, time.UTC)
+
+	case BILLING_PERIOD_MONTHLY:
+		// Start of next month
+		return time.Date(now.Year(), now.Month()+1, 1, 0, 0, 0, 0, time.UTC)
+
+	case BILLING_PERIOD_QUARTER:
+		// Start of next quarter
+		quarter := (int(now.Month())-1)/3 + 1
+		startNextQuarterMonth := time.Month(quarter*3 + 1)
+		if startNextQuarterMonth > 12 {
+			startNextQuarterMonth -= 12
+			return time.Date(now.Year()+1, startNextQuarterMonth, 1, 0, 0, 0, 0, time.UTC)
+		}
+		return time.Date(now.Year(), startNextQuarterMonth, 1, 0, 0, 0, 0, time.UTC)
+
+	case BILLING_PERIOD_HALF_YEAR:
+		// Start of next half-year
+		halfYear := (int(now.Month())-1)/6 + 1
+		startNextHalfYearMonth := time.Month(halfYear*6 + 1)
+		if startNextHalfYearMonth > 12 {
+			startNextHalfYearMonth -= 12
+			return time.Date(now.Year()+1, startNextHalfYearMonth, 1, 0, 0, 0, 0, time.UTC)
+		}
+		return time.Date(now.Year(), startNextHalfYearMonth, 1, 0, 0, 0, 0, time.UTC)
+
+	case BILLING_PERIOD_ANNUAL:
+		// Start of next year
+		return time.Date(now.Year()+1, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	default:
+		return now
+	}
+}

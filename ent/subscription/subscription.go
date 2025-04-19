@@ -72,6 +72,8 @@ const (
 	FieldPauseStatus = "pause_status"
 	// FieldActivePauseID holds the string denoting the active_pause_id field in the database.
 	FieldActivePauseID = "active_pause_id"
+	// FieldBillingCycle holds the string denoting the billing_cycle field in the database.
+	FieldBillingCycle = "billing_cycle"
 	// EdgeLineItems holds the string denoting the line_items edge name in mutations.
 	EdgeLineItems = "line_items"
 	// EdgePauses holds the string denoting the pauses edge name in mutations.
@@ -126,6 +128,7 @@ var Columns = []string{
 	FieldMetadata,
 	FieldPauseStatus,
 	FieldActivePauseID,
+	FieldBillingCycle,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -179,6 +182,10 @@ var (
 	DefaultVersion int
 	// DefaultPauseStatus holds the default value on creation for the "pause_status" field.
 	DefaultPauseStatus string
+	// DefaultBillingCycle holds the default value on creation for the "billing_cycle" field.
+	DefaultBillingCycle string
+	// BillingCycleValidator is a validator for the "billing_cycle" field. It is called by the builders before save.
+	BillingCycleValidator func(string) error
 )
 
 // OrderOption defines the ordering options for the Subscription queries.
@@ -327,6 +334,11 @@ func ByPauseStatus(opts ...sql.OrderTermOption) OrderOption {
 // ByActivePauseID orders the results by the active_pause_id field.
 func ByActivePauseID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldActivePauseID, opts...).ToFunc()
+}
+
+// ByBillingCycle orders the results by the billing_cycle field.
+func ByBillingCycle(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBillingCycle, opts...).ToFunc()
 }
 
 // ByLineItemsCount orders the results by line_items count.

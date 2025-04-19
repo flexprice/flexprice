@@ -58,6 +58,7 @@ func (r *subscriptionRepository) Create(ctx context.Context, sub *domainSub.Subs
 		SetBillingCadence(string(sub.BillingCadence)).
 		SetBillingPeriod(string(sub.BillingPeriod)).
 		SetBillingPeriodCount(sub.BillingPeriodCount).
+		SetBillingCycle(string(sub.BillingCycle)).
 		SetStatus(string(sub.Status)).
 		SetCreatedBy(sub.CreatedBy).
 		SetUpdatedBy(sub.UpdatedBy).
