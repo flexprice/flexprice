@@ -96,6 +96,71 @@ func (s *eventService) GetUsage(ctx context.Context, getUsageRequest *dto.GetUsa
 	return result, nil
 }
 
+// handleMissingDataPoints generates a complete set of data points with zero values for hour and day window sizes
+func (s *eventService) handleMissingDataPoints(
+	results []events.UsageResult,
+	startTime,
+	endTime time.Time,
+	windowSize types.WindowSize,
+) *events.AggregationResult {
+	// Only process for hour and day window sizes
+	var windowDuration time.Duration
+	switch windowSize {
+	case types.WindowSizeHour:
+		windowDuration = time.Hour
+	case types.WindowSizeDay:
+		windowDuration = 24 * time.Hour
+	default:
+		// For other window sizes, return original results
+		return &events.AggregationResult{
+			Results: results,
+			Value:   calculateTotalValue(results),
+		}
+	}
+
+	// Create a map of existing results for quick lookup
+	resultMap := make(map[time.Time]decimal.Decimal)
+	for _, result := range results {
+		resultMap[result.WindowSize] = result.Value
+	}
+
+	// Generate complete set of results with zero values
+	completeResults := make([]events.UsageResult, 0)
+	currentTime := startTime.Truncate(windowDuration)
+	endTimeTruncated := endTime.Truncate(windowDuration)
+	totalValue := decimal.Zero
+
+	for currentTime.Before(endTimeTruncated) || currentTime.Equal(endTimeTruncated) {
+		// Look up value, default to zero if not found
+		value, exists := resultMap[currentTime]
+		if !exists {
+			value = decimal.Zero
+		}
+
+		completeResults = append(completeResults, events.UsageResult{
+			WindowSize: currentTime,
+			Value:      value,
+		})
+
+		totalValue = totalValue.Add(value)
+		currentTime = currentTime.Add(windowDuration)
+	}
+
+	return &events.AggregationResult{
+		Value:   totalValue,
+		Results: completeResults,
+	}
+}
+
+// Helper function to calculate total value
+func calculateTotalValue(results []events.UsageResult) decimal.Decimal {
+	totalValue := decimal.Zero
+	for _, result := range results {
+		totalValue = totalValue.Add(result.Value)
+	}
+	return totalValue
+}
+
 func (s *eventService) GetUsageByMeter(ctx context.Context, req *dto.GetUsageByMeterRequest) (*events.AggregationResult, error) {
 	m, err := s.meterRepo.GetMeter(ctx, req.MeterID)
 	if err != nil {
@@ -118,15 +183,10 @@ func (s *eventService) GetUsageByMeter(ctx context.Context, req *dto.GetUsageByM
 		return s.GetUsage(ctx, &getUsageRequest)
 	}
 
-	// Determine window duration
-	var windowDuration time.Duration
+	// Validate window size
 	switch req.WindowSize {
-	case types.WindowSizeMinute:
-		windowDuration = time.Minute
-	case types.WindowSizeHour:
-		windowDuration = time.Hour
-	case types.WindowSizeDay:
-		windowDuration = 24 * time.Hour
+	case types.WindowSizeMinute, types.WindowSizeHour, types.WindowSizeDay:
+		// Valid window sizes
 	default:
 		return nil, fmt.Errorf("unsupported window size: %s", req.WindowSize)
 	}
@@ -137,34 +197,17 @@ func (s *eventService) GetUsageByMeter(ctx context.Context, req *dto.GetUsageByM
 		return nil, err
 	}
 
-	// Create a map of existing results for quick lookup
-	resultMap := make(map[time.Time]decimal.Decimal)
-	if usage != nil && usage.Results != nil {
-		for _, result := range usage.Results {
-			resultMap[result.WindowSize] = result.Value
-		}
-	}
+	// Handle missing data points
+	processedUsage := s.handleMissingDataPoints(
+		usage.Results,
+		req.StartTime,
+		req.EndTime,
+		req.WindowSize,
+	)
 
-	// Generate complete set of results with zero values
-	completeResults := make([]events.UsageResult, 0)
-	currentTime := req.StartTime
-	totalValue := decimal.Zero
-
-	for currentTime.Before(req.EndTime) || currentTime.Equal(req.EndTime) {
-		// Look up value, default to zero if not found
-		value, exists := resultMap[currentTime]
-		if !exists {
-			value = decimal.Zero
-		}
-
-		completeResults = append(completeResults, events.UsageResult{
-			WindowSize: currentTime,
-			Value:      value,
-		})
-
-		totalValue = totalValue.Add(value)
-		currentTime = currentTime.Add(windowDuration)
-	}
+	// Set additional metadata from original usage
+	processedUsage.EventName = m.EventName
+	processedUsage.Type = m.Aggregation.Type
 
 	// Handle historic usage for meters that don't reset
 	if m.ResetUsage == types.ResetUsageNever {
@@ -178,15 +221,10 @@ func (s *eventService) GetUsageByMeter(ctx context.Context, req *dto.GetUsageByM
 			return nil, err
 		}
 
-		return s.combineResults(historicUsage, usage, m), nil
+		return s.combineResults(historicUsage, processedUsage, m), nil
 	}
 
-	return &events.AggregationResult{
-		Value:     totalValue,
-		Results:   completeResults,
-		EventName: m.EventName,
-		Type:      m.Aggregation.Type,
-	}, nil
+	return processedUsage, nil
 }
 
 // GetUsageByMeterWithFilters returns usage for a meter with specific filters on top of the meter as defined in the price
