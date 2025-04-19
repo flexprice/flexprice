@@ -121,7 +121,7 @@ func (s *eventService) handleMissingDataPoints(
 	// Create a map of existing results for quick lookup
 	resultMap := make(map[time.Time]decimal.Decimal)
 	for _, result := range results {
-		resultMap[result.WindowSize] = result.Value
+		resultMap[result.WindowSize.Truncate(windowDuration)] = result.Value
 	}
 
 	// Generate complete set of results with zero values
