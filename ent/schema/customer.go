@@ -92,7 +92,7 @@ func (Customer) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("tenant_id", "environment_id", "external_id").
 			Unique().
-			Annotations(entsql.IndexWhere("status != 'deleted'" + " AND external_id != ''")),
+			Annotations(entsql.IndexWhere("(external_id IS NOT NULL AND external_id != '') AND status = 'published'")),
 		index.Fields("tenant_id", "environment_id"),
 	}
 }
