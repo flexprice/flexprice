@@ -113,11 +113,60 @@ func (s *eventService) GetUsageByMeter(ctx context.Context, req *dto.GetUsageByM
 		Filters:            req.Filters,
 	}
 
+	// If no WindowSize is specified, return original usage
+	if req.WindowSize == "" {
+		return s.GetUsage(ctx, &getUsageRequest)
+	}
+
+	// Determine window duration
+	var windowDuration time.Duration
+	switch req.WindowSize {
+	case types.WindowSizeMinute:
+		windowDuration = time.Minute
+	case types.WindowSizeHour:
+		windowDuration = time.Hour
+	case types.WindowSizeDay:
+		windowDuration = 24 * time.Hour
+	default:
+		return nil, fmt.Errorf("unsupported window size: %s", req.WindowSize)
+	}
+
+	// Get original usage
 	usage, err := s.GetUsage(ctx, &getUsageRequest)
 	if err != nil {
 		return nil, err
 	}
 
+	// Create a map of existing results for quick lookup
+	resultMap := make(map[time.Time]decimal.Decimal)
+	if usage != nil && usage.Results != nil {
+		for _, result := range usage.Results {
+			resultMap[result.WindowSize] = result.Value
+		}
+	}
+
+	// Generate complete set of results with zero values
+	completeResults := make([]events.UsageResult, 0)
+	currentTime := req.StartTime
+	totalValue := decimal.Zero
+
+	for currentTime.Before(req.EndTime) || currentTime.Equal(req.EndTime) {
+		// Look up value, default to zero if not found
+		value, exists := resultMap[currentTime]
+		if !exists {
+			value = decimal.Zero
+		}
+
+		completeResults = append(completeResults, events.UsageResult{
+			WindowSize: currentTime,
+			Value:      value,
+		})
+
+		totalValue = totalValue.Add(value)
+		currentTime = currentTime.Add(windowDuration)
+	}
+
+	// Handle historic usage for meters that don't reset
 	if m.ResetUsage == types.ResetUsageNever {
 		getHistoricUsageRequest := getUsageRequest
 		getHistoricUsageRequest.StartTime = time.Time{}
@@ -132,7 +181,12 @@ func (s *eventService) GetUsageByMeter(ctx context.Context, req *dto.GetUsageByM
 		return s.combineResults(historicUsage, usage, m), nil
 	}
 
-	return usage, nil
+	return &events.AggregationResult{
+		Value:     totalValue,
+		Results:   completeResults,
+		EventName: m.EventName,
+		Type:      m.Aggregation.Type,
+	}, nil
 }
 
 // GetUsageByMeterWithFilters returns usage for a meter with specific filters on top of the meter as defined in the price
