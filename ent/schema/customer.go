@@ -9,7 +9,6 @@ import (
 )
 
 var Idx_tenant_environment_external_id_unique = "idx_tenant_environment_external_id_unique"
-var Idx_tenant_environment_email_unique = "idx_tenant_environment_email_unique"
 
 // Customer holds the schema definition for the Customer entity.
 type Customer struct {
@@ -97,10 +96,6 @@ func (Customer) Indexes() []ent.Index {
 			Unique().
 			Annotations(entsql.IndexWhere("(external_id IS NOT NULL AND external_id != '') AND status = 'published'")).
 			StorageKey(Idx_tenant_environment_external_id_unique),
-		index.Fields("tenant_id", "environment_id", "email").
-			Unique().
-			Annotations(entsql.IndexWhere("(email IS NOT NULL AND email != '') AND status = 'published'")).
-			StorageKey(Idx_tenant_environment_email_unique),
 		index.Fields("tenant_id", "environment_id"),
 	}
 }

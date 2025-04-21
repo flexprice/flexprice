@@ -78,14 +78,6 @@ func (r *customerRepository) Create(ctx context.Context, c *domainCustomer.Custo
 						}).
 						Mark(ierr.ErrAlreadyExists)
 				}
-				if pgErr.ConstraintName == schema.Idx_tenant_environment_email_unique {
-					return ierr.WithError(err).
-						WithHint("A customer with this email already exists").
-						WithReportableDetails(map[string]any{
-							"email": c.Email,
-						}).
-						Mark(ierr.ErrAlreadyExists)
-				}
 			}
 			return ierr.WithError(err).
 				WithHint("Failed to create customer").
