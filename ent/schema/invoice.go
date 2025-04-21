@@ -162,14 +162,11 @@ func (Invoice) Indexes() []ent.Index {
 			StorageKey("idx_tenant_customer_status").
 			Annotations(entsql.IndexWhere("status = 'published'")),
 		index.Fields("tenant_id", "environment_id", "subscription_id", "invoice_status", "payment_status", "status").
-			StorageKey("idx_tenant_subscription_status").
-			Annotations(entsql.IndexWhere("status = 'published'")),
+			StorageKey("idx_tenant_subscription_status"),
 		index.Fields("tenant_id", "environment_id", "invoice_type", "invoice_status", "payment_status", "status").
-			StorageKey("idx_tenant_type_status").
-			Annotations(entsql.IndexWhere("status = 'published'")),
+			StorageKey("idx_tenant_type_status"),
 		index.Fields("tenant_id", "environment_id", "due_date", "invoice_status", "payment_status", "status").
-			StorageKey("idx_tenant_due_date_status").
-			Annotations(entsql.IndexWhere("status = 'published'")),
+			StorageKey("idx_tenant_due_date_status"),
 
 		// Invoice number is unique per tenant and environment
 		index.Fields("tenant_id", "environment_id", "invoice_number").
