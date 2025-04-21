@@ -409,7 +409,6 @@ func consumeMessages(consumer kafka.MessageConsumer, eventRepo events.Repository
 
 func handleEventConsumption(cfg *config.Configuration, log *logger.Logger, eventRepo events.Repository, payload []byte) error {
 	var event events.Event
-	sentryService := sentry.NewSentryService(cfg, log)
 
 	if err := json.Unmarshal(payload, &event); err != nil {
 		log.Errorf("Failed to unmarshal event: %v, payload: %s", err, string(payload))
@@ -456,12 +455,11 @@ func handleEventConsumption(cfg *config.Configuration, log *logger.Logger, event
 		"timestamp":  event.Timestamp,
 		"lag":        lag,
 	}
-
-	sentryService.CaptureCustomEvent(&types.SentryEvent{
+	sentry.CaptureCustotrymSenEvent(&types.SentryEvent{
 		Message: string(types.EventTypeEventIngestion),
 		Extra:   eventMetadata,
 		Level:   sentryGo.LevelInfo,
-	})
+	}, log, cfg)
 
 	log.Debugf(
 		"Successfully processed event with lag : %v ms : %+v",

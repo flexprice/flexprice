@@ -106,8 +106,8 @@ func (s *Service) Flush(timeout uint) bool {
 }
 
 // CaptureCustomEvent captures a custom event in Sentry with detailed information
-func (s *Service) CaptureCustomEvent(event *types.SentryEvent) {
-	if !s.cfg.Sentry.Enabled {
+func CaptureCustotrymSenEvent(event *types.SentryEvent, logger *logger.Logger, cfg *config.Configuration) {
+	if !cfg.Sentry.Enabled {
 		return
 	}
 
@@ -122,7 +122,7 @@ func (s *Service) CaptureCustomEvent(event *types.SentryEvent) {
 	sentry.CaptureEvent(se)
 
 	// Log the event locally for additional context
-	s.logger.Infow("Sentry custom event captured",
+	logger.Infow("Sentry custom event captured",
 		"event_type", event.Message,
 		"level", event.Level,
 		"data", event.Extra,
