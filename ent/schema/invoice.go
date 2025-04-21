@@ -12,6 +12,7 @@ import (
 )
 
 var Idx_tenant_environment_invoice_number_unique = "idx_tenant_environment_invoice_number_unique"
+
 var Idx_tenant_environment_idempotency_key_unique = "idx_tenant_environment_idempotency_key_unique"
 
 // Invoice holds the schema definition for the Invoice entity.
@@ -175,7 +176,6 @@ func (Invoice) Indexes() []ent.Index {
 			Unique().
 			Annotations(entsql.IndexWhere("invoice_number IS NOT NULL AND invoice_number != '' AND status = 'published'")).
 			StorageKey(Idx_tenant_environment_invoice_number_unique),
-
 		// idempotency key is unique per tenant and environment
 		index.Fields("tenant_id", "environment_id", "idempotency_key").
 			Unique().

@@ -108,14 +108,6 @@ var (
 				},
 			},
 			{
-				Name:    "idx_tenant_environment_email_unique",
-				Unique:  true,
-				Columns: []*schema.Column{CustomersColumns[1], CustomersColumns[7], CustomersColumns[10]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "(email IS NOT NULL AND email != '') AND status = 'published'",
-				},
-			},
-			{
 				Name:    "customer_tenant_id_environment_id",
 				Unique:  false,
 				Columns: []*schema.Column{CustomersColumns[1], CustomersColumns[7]},

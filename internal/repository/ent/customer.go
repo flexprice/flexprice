@@ -13,7 +13,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/jackc/pgconn"
+	"github.com/lib/pq"
 )
 
 type customerRepository struct {
@@ -68,9 +68,9 @@ func (r *customerRepository) Create(ctx context.Context, c *domainCustomer.Custo
 	if err != nil {
 		if ent.IsConstraintError(err) {
 
-			var pgErr *pgconn.PgError
-			if errors.As(err, &pgErr) {
-				if pgErr.ConstraintName == schema.Idx_tenant_environment_external_id_unique {
+			var pqErr *pq.Error
+			if errors.As(err, &pqErr) {
+				if pqErr.Constraint == schema.Idx_tenant_environment_external_id_unique {
 					return ierr.WithError(err).
 						WithHint("A customer with this identifier already exists").
 						WithReportableDetails(map[string]any{
