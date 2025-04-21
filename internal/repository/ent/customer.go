@@ -135,6 +135,7 @@ func (r *customerRepository) GetByLookupKey(ctx context.Context, lookupKey strin
 			customer.ExternalID(lookupKey),
 			customer.TenantID(types.GetTenantID(ctx)),
 			customer.Status(string(types.StatusPublished)),
+			customer.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		Only(ctx)
 

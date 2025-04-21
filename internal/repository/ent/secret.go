@@ -75,7 +75,7 @@ func (r *secretRepository) Create(ctx context.Context, s *domainSecret.Secret) e
 	if err != nil {
 		if ent.IsConstraintError(err) {
 			return ierr.WithError(err).
-				WithHint("Failed to create secret").
+				WithHint("Api key with same name already exists").
 				WithReportableDetails(map[string]interface{}{
 					"secret_id": s.ID,
 					"type":      s.Type,
