@@ -455,7 +455,7 @@ func handleEventConsumption(cfg *config.Configuration, log *logger.Logger, event
 		"timestamp":  event.Timestamp,
 		"lag":        lag,
 	}
-	sentry.CaptureCustotrymSenEvent(&types.SentryEvent{
+	sentry.CaptureCustomSentryEvent(&types.SentryEvent{
 		Message: string(types.EventTypeEventIngestion),
 		Extra:   eventMetadata,
 		Level:   sentryGo.LevelInfo,

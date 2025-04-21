@@ -105,8 +105,8 @@ func (s *Service) Flush(timeout uint) bool {
 	return sentry.Flush(time.Duration(timeout) * time.Second)
 }
 
-// CaptureCustomEvent captures a custom event in Sentry with detailed information
-func CaptureCustotrymSenEvent(event *types.SentryEvent, logger *logger.Logger, cfg *config.Configuration) {
+// CaptureCustomSentryEvent captures a custom event in Sentry with detailed information
+func CaptureCustomSentryEvent(event *types.SentryEvent, logger *logger.Logger, cfg *config.Configuration) {
 	if !cfg.Sentry.Enabled {
 		return
 	}
