@@ -2,17 +2,20 @@ package ent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
+	"github.com/flexprice/flexprice/ent/schema"
 	domainInvoice "github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/jackc/pgconn"
 	"github.com/samber/lo"
 )
 
@@ -85,6 +88,36 @@ func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoi
 		}
 
 		r.logger.Error("failed to create invoice", "error", err)
+		if ent.IsConstraintError(err) {
+			var pqErr *pgconn.PgError
+			if errors.As(err, &pqErr) {
+				if pqErr.ConstraintName == schema.Idx_tenant_environment_invoice_number_unique {
+					return ierr.WithError(err).
+						WithHint("Invoice with same invoice number already exists").
+						WithReportableDetails(map[string]any{
+							"invoice_id":     inv.ID,
+							"invoice_number": inv.InvoiceNumber,
+						}).
+						Mark(ierr.ErrAlreadyExists)
+				}
+				if pqErr.ConstraintName == schema.Idx_tenant_environment_idempotency_key_unique {
+					return ierr.WithError(err).
+						WithHint("Invoice with same idempotency key already exists").
+						WithReportableDetails(map[string]any{
+							"invoice_id":      inv.ID,
+							"idempotency_key": inv.IdempotencyKey,
+						}).
+						Mark(ierr.ErrAlreadyExists)
+				}
+			}
+
+			return ierr.WithError(err).
+				WithHint("invoice creation failed").
+				WithReportableDetails(map[string]any{
+					"invoice_id": inv.ID,
+				}).
+				Mark(ierr.ErrAlreadyExists)
+		}
 		return ierr.WithError(err).WithHint("invoice creation failed").Mark(ierr.ErrDatabase)
 	}
 

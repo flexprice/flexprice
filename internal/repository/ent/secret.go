@@ -73,16 +73,23 @@ func (r *secretRepository) Create(ctx context.Context, s *domainSecret.Secret) e
 	secret, err := create.Save(ctx)
 
 	if err != nil {
+		if ent.IsConstraintError(err) {
+			return ierr.WithError(err).
+				WithHint("Failed to create secret").
+				WithReportableDetails(map[string]interface{}{
+					"secret_id": s.ID,
+					"type":      s.Type,
+					"provider":  s.Provider,
+				}).
+				Mark(ierr.ErrAlreadyExists)
+		}
 		return ierr.WithError(err).
 			WithHint("Failed to create secret").
 			WithReportableDetails(map[string]interface{}{
 				"secret_id": s.ID,
-				"type":      s.Type,
-				"provider":  s.Provider,
 			}).
 			Mark(ierr.ErrDatabase)
 	}
-
 	*s = *domainSecret.FromEnt(secret)
 	return nil
 }

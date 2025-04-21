@@ -2,15 +2,18 @@ package ent
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/customer"
+	"github.com/flexprice/flexprice/ent/schema"
 	domainCustomer "github.com/flexprice/flexprice/internal/domain/customer"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/jackc/pgconn"
 )
 
 type customerRepository struct {
@@ -64,11 +67,31 @@ func (r *customerRepository) Create(ctx context.Context, c *domainCustomer.Custo
 
 	if err != nil {
 		if ent.IsConstraintError(err) {
+
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) {
+				if pgErr.ConstraintName == schema.Idx_tenant_environment_external_id_unique {
+					return ierr.WithError(err).
+						WithHint("A customer with this identifier already exists").
+						WithReportableDetails(map[string]any{
+							"external_id": c.ExternalID,
+						}).
+						Mark(ierr.ErrAlreadyExists)
+				}
+				if pgErr.ConstraintName == schema.Idx_tenant_environment_email_unique {
+					return ierr.WithError(err).
+						WithHint("A customer with this email already exists").
+						WithReportableDetails(map[string]any{
+							"email": c.Email,
+						}).
+						Mark(ierr.ErrAlreadyExists)
+				}
+			}
 			return ierr.WithError(err).
-				WithHint("A customer with this identifier already exists").
+				WithHint("Failed to create customer").
 				WithReportableDetails(map[string]any{
 					"external_id": c.ExternalID,
-					"email": c.Email,
+					"email":       c.Email,
 				}).
 				Mark(ierr.ErrAlreadyExists)
 		}
@@ -90,7 +113,6 @@ func (r *customerRepository) Get(ctx context.Context, id string) (*domainCustome
 		Where(
 			customer.ID(id),
 			customer.TenantID(types.GetTenantID(ctx)),
-			customer.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		Only(ctx)
 
@@ -121,7 +143,6 @@ func (r *customerRepository) GetByLookupKey(ctx context.Context, lookupKey strin
 			customer.ExternalID(lookupKey),
 			customer.TenantID(types.GetTenantID(ctx)),
 			customer.Status(string(types.StatusPublished)),
-			customer.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		Only(ctx)
 
@@ -235,7 +256,7 @@ func (r *customerRepository) Update(ctx context.Context, c *domainCustomer.Custo
 				WithHint("A customer with this identifier already exists").
 				WithReportableDetails(map[string]any{
 					"external_id": c.ExternalID,
-					"email": c.Email,
+					"email":       c.Email,
 				}).
 				Mark(ierr.ErrAlreadyExists)
 		}

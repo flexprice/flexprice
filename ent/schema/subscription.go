@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
@@ -131,7 +132,8 @@ func (Subscription) Edges() []ent.Edge {
 func (Subscription) Indexes() []ent.Index {
 	return []ent.Index{
 		// Common query patterns from repository layer
-		index.Fields("tenant_id", "environment_id", "customer_id", "status"),
+		index.Fields("tenant_id", "environment_id", "customer_id", "status").
+			Annotations(entsql.IndexWhere("status = 'published'")),
 		index.Fields("tenant_id", "environment_id", "plan_id", "status"),
 		index.Fields("tenant_id", "environment_id", "subscription_status", "status"),
 		// For billing period updates

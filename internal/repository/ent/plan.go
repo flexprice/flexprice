@@ -64,7 +64,7 @@ func (r *planRepository) Create(ctx context.Context, p *domainPlan.Plan) error {
 					"plan_id":   p.ID,
 					"plan_name": p.Name,
 				}).
-				Mark(ierr.ErrDatabase)
+				Mark(ierr.ErrAlreadyExists)
 		}
 		return ierr.WithError(err).
 			WithHint("Failed to create plan").

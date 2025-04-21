@@ -9,6 +9,8 @@ import (
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
 )
 
+var Idx_tenant_environment_lookup_key = "idx_tenant_environment_lookup_key"
+
 // Plan holds the schema definition for the Plan entity.
 type Plan struct {
 	ent.Schema
@@ -58,6 +60,7 @@ func (Plan) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("tenant_id", "environment_id", "lookup_key").
 			Unique().
+			StorageKey(Idx_tenant_environment_lookup_key).
 			Annotations(entsql.IndexWhere("status = 'published'" + " AND lookup_key IS NOT NULL AND lookup_key != ''")),
 		index.Fields("tenant_id", "environment_id"),
 	}

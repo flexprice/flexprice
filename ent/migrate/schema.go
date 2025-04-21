@@ -104,7 +104,7 @@ var (
 				Unique:  true,
 				Columns: []*schema.Column{CustomersColumns[1], CustomersColumns[7], CustomersColumns[8]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "status != 'deleted' AND external_id != ''",
+					Where: "(external_id IS NOT NULL AND external_id != '') AND status = 'published'",
 				},
 			},
 			{
@@ -305,31 +305,46 @@ var (
 				Name:    "idx_tenant_customer_status",
 				Unique:  false,
 				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[8], InvoicesColumns[11], InvoicesColumns[12], InvoicesColumns[2]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published'",
+				},
 			},
 			{
 				Name:    "idx_tenant_subscription_status",
 				Unique:  false,
 				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[9], InvoicesColumns[11], InvoicesColumns[12], InvoicesColumns[2]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published'",
+				},
 			},
 			{
 				Name:    "idx_tenant_type_status",
 				Unique:  false,
 				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[10], InvoicesColumns[11], InvoicesColumns[12], InvoicesColumns[2]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published'",
+				},
 			},
 			{
 				Name:    "idx_tenant_due_date_status",
 				Unique:  false,
 				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[18], InvoicesColumns[11], InvoicesColumns[12], InvoicesColumns[2]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published'",
+				},
 			},
 			{
-				Name:    "idx_tenant_invoice_number_unique",
+				Name:    "idx_tenant_environment_invoice_number_unique",
 				Unique:  true,
 				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[29]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "invoice_number IS NOT NULL AND invoice_number != '' AND status = 'published'",
+				},
 			},
 			{
-				Name:    "idx_idempotency_key_unique",
+				Name:    "idx_tenant_environment_idempotency_key_unique",
 				Unique:  true,
-				Columns: []*schema.Column{InvoicesColumns[31]},
+				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[31]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "idempotency_key IS NOT NULL",
 				},
@@ -593,11 +608,11 @@ var (
 		PrimaryKey: []*schema.Column{PlansColumns[0]},
 		Indexes: []*schema.Index{
 			{
-				Name:    "plan_tenant_id_environment_id_lookup_key",
+				Name:    "idx_tenant_environment_lookup_key",
 				Unique:  true,
 				Columns: []*schema.Column{PlansColumns[1], PlansColumns[7], PlansColumns[8]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "status != 'deleted' AND lookup_key IS NOT NULL AND lookup_key != ''",
+					Where: "status = 'published' AND lookup_key IS NOT NULL AND lookup_key != ''",
 				},
 			},
 			{
@@ -648,13 +663,8 @@ var (
 				Unique:  true,
 				Columns: []*schema.Column{PricesColumns[1], PricesColumns[7], PricesColumns[24]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "status != 'deleted' AND lookup_key IS NOT NULL AND lookup_key != ''",
+					Where: "status = 'published' AND lookup_key IS NOT NULL AND lookup_key != ''",
 				},
-			},
-			{
-				Name:    "price_tenant_id_environment_id_plan_id",
-				Unique:  false,
-				Columns: []*schema.Column{PricesColumns[1], PricesColumns[7], PricesColumns[11]},
 			},
 			{
 				Name:    "price_tenant_id_environment_id",
@@ -689,6 +699,14 @@ var (
 		Columns:    SecretsColumns,
 		PrimaryKey: []*schema.Column{SecretsColumns[0]},
 		Indexes: []*schema.Index{
+			{
+				Name:    "secret_tenant_id_environment_id_name",
+				Unique:  true,
+				Columns: []*schema.Column{SecretsColumns[1], SecretsColumns[7], SecretsColumns[8]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published'",
+				},
+			},
 			{
 				Name:    "secret_type_value_status",
 				Unique:  false,
@@ -750,6 +768,9 @@ var (
 				Name:    "subscription_tenant_id_environment_id_customer_id_status",
 				Unique:  false,
 				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7], SubscriptionsColumns[9], SubscriptionsColumns[2]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published'",
+				},
 			},
 			{
 				Name:    "subscription_tenant_id_environment_id_plan_id_status",

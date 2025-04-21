@@ -2,7 +2,6 @@ package schema
 
 import (
 	"entgo.io/ent"
-	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	"github.com/flexprice/flexprice/ent/schema/mixin"
@@ -72,9 +71,6 @@ func (Secret) Edges() []ent.Edge {
 func (Secret) Indexes() []ent.Index {
 	return []ent.Index{
 		// Primary query patterns
-		index.Fields("tenant_id", "environment_id", "name").
-			Unique().
-			Annotations(entsql.IndexWhere("status = 'published'")),
 		index.Fields("type", "value", "status"), // API keys are queried by type and status
 		index.Fields("tenant_id", "environment_id", "type", "status"),
 		index.Fields("tenant_id", "environment_id", "provider", "status"),

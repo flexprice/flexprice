@@ -11,6 +11,9 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+var Idx_tenant_environment_invoice_number_unique = "idx_tenant_environment_invoice_number_unique"
+var Idx_tenant_environment_idempotency_key_unique = "idx_tenant_environment_idempotency_key_unique"
+
 // Invoice holds the schema definition for the Invoice entity.
 type Invoice struct {
 	ent.Schema
@@ -155,20 +158,28 @@ func (Invoice) Edges() []ent.Edge {
 func (Invoice) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("tenant_id", "environment_id", "customer_id", "invoice_status", "payment_status", "status").
-			StorageKey("idx_tenant_customer_status"),
+			StorageKey("idx_tenant_customer_status").
+			Annotations(entsql.IndexWhere("status = 'published'")),
 		index.Fields("tenant_id", "environment_id", "subscription_id", "invoice_status", "payment_status", "status").
-			StorageKey("idx_tenant_subscription_status"),
+			StorageKey("idx_tenant_subscription_status").
+			Annotations(entsql.IndexWhere("status = 'published'")),
 		index.Fields("tenant_id", "environment_id", "invoice_type", "invoice_status", "payment_status", "status").
-			StorageKey("idx_tenant_type_status"),
+			StorageKey("idx_tenant_type_status").
+			Annotations(entsql.IndexWhere("status = 'published'")),
 		index.Fields("tenant_id", "environment_id", "due_date", "invoice_status", "payment_status", "status").
-			StorageKey("idx_tenant_due_date_status"),
+			StorageKey("idx_tenant_due_date_status").
+			Annotations(entsql.IndexWhere("status = 'published'")),
+
+		// Invoice number is unique per tenant and environment
 		index.Fields("tenant_id", "environment_id", "invoice_number").
 			Unique().
 			Annotations(entsql.IndexWhere("invoice_number IS NOT NULL AND invoice_number != '' AND status = 'published'")).
-			StorageKey("idx_tenant_invoice_number_unique"),
-		index.Fields("idempotency_key").
+			StorageKey(Idx_tenant_environment_invoice_number_unique),
+
+		// idempotency key is unique per tenant and environment
+		index.Fields("tenant_id", "environment_id", "idempotency_key").
 			Unique().
-			StorageKey("idx_idempotency_key_unique").
+			StorageKey(Idx_tenant_environment_idempotency_key_unique).
 			Annotations(entsql.IndexWhere("idempotency_key IS NOT NULL")),
 		index.Fields("subscription_id", "period_start", "period_end").
 			StorageKey("idx_subscription_period_unique").
