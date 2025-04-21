@@ -100,11 +100,19 @@ var (
 		PrimaryKey: []*schema.Column{CustomersColumns[0]},
 		Indexes: []*schema.Index{
 			{
-				Name:    "customer_tenant_id_environment_id_external_id",
+				Name:    "idx_tenant_environment_external_id_unique",
 				Unique:  true,
 				Columns: []*schema.Column{CustomersColumns[1], CustomersColumns[7], CustomersColumns[8]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "(external_id IS NOT NULL AND external_id != '') AND status = 'published'",
+				},
+			},
+			{
+				Name:    "idx_tenant_environment_email_unique",
+				Unique:  true,
+				Columns: []*schema.Column{CustomersColumns[1], CustomersColumns[7], CustomersColumns[10]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "(email IS NOT NULL AND email != '') AND status = 'published'",
 				},
 			},
 			{
@@ -699,14 +707,6 @@ var (
 		Columns:    SecretsColumns,
 		PrimaryKey: []*schema.Column{SecretsColumns[0]},
 		Indexes: []*schema.Index{
-			{
-				Name:    "secret_tenant_id_environment_id_name",
-				Unique:  true,
-				Columns: []*schema.Column{SecretsColumns[1], SecretsColumns[7], SecretsColumns[8]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published'",
-				},
-			},
 			{
 				Name:    "secret_type_value_status",
 				Unique:  false,
