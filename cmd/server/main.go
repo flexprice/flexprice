@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api"
@@ -456,9 +457,10 @@ func handleEventConsumption(cfg *config.Configuration, log *logger.Logger, event
 		"lag":        lag,
 	}
 	sentry.CaptureCustomSentryEvent(&types.SentryEvent{
-		Message: string(types.EventTypeEventIngestion),
+		Message: fmt.Sprintf("Successfully processed event with lag : %v ms : %+v", lag, event),
 		Extra:   eventMetadata,
 		Level:   sentryGo.LevelInfo,
+		Tags:    map[string]string{"event_name": event.EventName},
 	}, log, cfg)
 
 	log.Debugf(
