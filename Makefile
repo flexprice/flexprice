@@ -203,7 +203,7 @@ restart-flexprice: stop-flexprice start-flexprice
 dev-setup:
 	@echo "Setting up FlexPrice development environment..."
 	@echo "Step 1: Starting infrastructure services..."
-	@docker compose up -d postgres kafka clickhouse temporal temporal-ui
+	@docker compose up -d postgres kafka kafka-ui clickhouse temporal temporal-ui
 	@echo "Step 2: Building FlexPrice application image..."
 	@make build-image
 	@echo "Step 3: Running database migrations and initializing Kafka..."
