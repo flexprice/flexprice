@@ -37,6 +37,10 @@ swagger-3-0: install-swag
 up:
 	docker compose up -d --build
 
+.PHONY: up-local
+up-local:
+	docker compose --profile dev up -d --build
+
 .PHONY: down
 down:
 	docker compose down
@@ -162,7 +166,7 @@ clean-docker:
 
 # Full local setup
 .PHONY: setup-local
-setup-local: up init-db init-kafka
+setup-local: up-local init-db init-kafka
 	@echo "Local setup complete. You can now run 'make run-server-local' to start the server"
 
 # Clean everything and start fresh
@@ -203,7 +207,7 @@ restart-flexprice: stop-flexprice start-flexprice
 dev-setup:
 	@echo "Setting up FlexPrice development environment..."
 	@echo "Step 1: Starting infrastructure services..."
-	@docker compose up -d postgres kafka clickhouse temporal temporal-ui
+	@docker compose up -d postgres kafka clickhouse temporal temporal-ui kafka-ui
 	@echo "Step 2: Building FlexPrice application image..."
 	@make build-image
 	@echo "Step 3: Running database migrations and initializing Kafka..."
