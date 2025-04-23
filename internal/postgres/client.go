@@ -49,24 +49,38 @@ func NewEntClient(config *config.Configuration, logger *logger.Logger) (*ent.Cli
 	// Get DSN from config
 	dsn := config.Postgres.GetDSN()
 
-	// Open PostgreSQL connection
-	db, err := sql.Open("postgres", dsn)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to postgres: %w", err)
+	var driver dialect.Driver
+	var err error
+
+	if config.Telemetry.Enabled {
+		// Use OpenTelemetry instrumented driver
+		driver, err = NewOtelEntDriver("postgres", dsn, config, logger)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create otel postgres driver: %w", err)
+		}
+	} else {
+		// Use standard driver
+		db, err := sql.Open("postgres", dsn)
+		if err != nil {
+			return nil, fmt.Errorf("failed to connect to postgres: %w", err)
+		}
+
+		// Configure connection pool
+		db.SetMaxOpenConns(config.Postgres.MaxOpenConns)
+		db.SetMaxIdleConns(config.Postgres.MaxIdleConns)
+		db.SetConnMaxLifetime(time.Duration(config.Postgres.ConnMaxLifetimeMinutes) * time.Minute)
+
+		driver = entsql.OpenDB(dialect.Postgres, db)
 	}
-
-	// Configure connection pool
-	db.SetMaxOpenConns(config.Postgres.MaxOpenConns)
-	db.SetMaxIdleConns(config.Postgres.MaxIdleConns)
-	db.SetConnMaxLifetime(time.Duration(config.Postgres.ConnMaxLifetimeMinutes) * time.Minute)
-
-	// Create driver
-	drv := entsql.OpenDB(dialect.Postgres, db)
 
 	// Create client with options
 	opts := []ent.Option{
-		ent.Driver(drv),
-		ent.Debug(), // Enable debug logging
+		ent.Driver(driver),
+	}
+
+	// Enable debug logging if needed
+	if config.Deployment.Mode == types.ModeLocal {
+		opts = append(opts, ent.Debug())
 	}
 
 	client := ent.NewClient(opts...)
@@ -75,7 +89,9 @@ func NewEntClient(config *config.Configuration, logger *logger.Logger) (*ent.Cli
 		"host", config.Postgres.Host,
 		"port", config.Postgres.Port,
 		"auto_migrate", config.Postgres.AutoMigrate,
+		"telemetry_enabled", config.Telemetry.Enabled,
 	)
+
 	// Run the auto migration tool if enabled
 	if config.Postgres.AutoMigrate {
 		logger.Debugw("running auto migration")

@@ -24,6 +24,7 @@ type Configuration struct {
 	Logging    LoggingConfig    `validate:"required"`
 	Postgres   PostgresConfig   `validate:"required"`
 	Sentry     SentryConfig     `validate:"required"`
+	Telemetry  TelemetryConfig  `validate:"omitempty"`
 	Event      EventConfig      `validate:"required"`
 	DynamoDB   DynamoDBConfig   `validate:"required"`
 	Temporal   TemporalConfig   `validate:"required"`
@@ -118,6 +119,14 @@ type SentryConfig struct {
 	DSN         string  `mapstructure:"dsn"`
 	Environment string  `mapstructure:"environment"`
 	SampleRate  float64 `mapstructure:"sample_rate" default:"1.0"`
+}
+
+type TelemetryConfig struct {
+	Enabled          bool   `mapstructure:"enabled" default:"false"`
+	OtelCollectorURL string `mapstructure:"otel_collector_url" validate:"omitempty"`
+	ServiceName      string `mapstructure:"service_name" default:"flexprice"`
+	ServiceVersion   string `mapstructure:"service_version" default:"0.1.0"`
+	Environment      string `mapstructure:"environment" default:"development"`
 }
 
 type TemporalConfig struct {

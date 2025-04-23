@@ -24,6 +24,7 @@ import (
 	s3 "github.com/flexprice/flexprice/internal/s3"
 	"github.com/flexprice/flexprice/internal/sentry"
 	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/telemetry"
 	"github.com/flexprice/flexprice/internal/temporal"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/typst"
@@ -134,6 +135,9 @@ func main() {
 
 	// Webhook module (must be initialised before services)
 	opts = append(opts, webhook.Module)
+
+	// Telemetry module
+	opts = append(opts, telemetry.Module())
 
 	// Service layer
 	opts = append(opts,
