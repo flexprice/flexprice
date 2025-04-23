@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
+	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
@@ -46,9 +47,10 @@ func newMigrationScript() (*migrationScript, error) {
 
 	// Create postgres client
 	pgClient := postgres.NewClient(entClient, log)
+	cache := cache.NewInMemoryCache()
 
 	// Initialize repositories
-	tenantRepo := entRepo.NewTenantRepository(pgClient, log)
+	tenantRepo := entRepo.NewTenantRepository(pgClient, log, cache)
 	environmentRepo := entRepo.NewEnvironmentRepository(pgClient, log)
 
 	return &migrationScript{
