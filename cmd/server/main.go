@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api"
@@ -22,13 +23,14 @@ import (
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
 	"github.com/flexprice/flexprice/internal/repository"
 	s3 "github.com/flexprice/flexprice/internal/s3"
-	"github.com/flexprice/flexprice/internal/sentry"
+	sentry "github.com/flexprice/flexprice/internal/sentry"
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/temporal"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/typst"
 	"github.com/flexprice/flexprice/internal/validator"
 	"github.com/flexprice/flexprice/internal/webhook"
+	sentryGo "github.com/getsentry/sentry-go"
 	"go.uber.org/fx"
 
 	lambdaEvents "github.com/aws/aws-lambda-go/events"
@@ -408,6 +410,7 @@ func consumeMessages(consumer kafka.MessageConsumer, eventRepo events.Repository
 
 func handleEventConsumption(cfg *config.Configuration, log *logger.Logger, eventRepo events.Repository, payload []byte) error {
 	var event events.Event
+
 	if err := json.Unmarshal(payload, &event); err != nil {
 		log.Errorf("Failed to unmarshal event: %v, payload: %s", err, string(payload))
 		return err
@@ -445,9 +448,24 @@ func handleEventConsumption(cfg *config.Configuration, log *logger.Logger, event
 		return err
 	}
 
+	lag := time.Since(event.Timestamp).Milliseconds()
+	eventMetadata := map[string]interface{}{
+		"event_name": event.EventName,
+		"tenant_id":  event.TenantID,
+		"source":     event.Source,
+		"timestamp":  event.Timestamp,
+		"lag":        lag,
+	}
+	sentry.CaptureCustomSentryEvent(&types.SentryEvent{
+		Message: fmt.Sprintf("Successfully processed event with lag : %v ms : %+v", lag, event),
+		Extra:   eventMetadata,
+		Level:   sentryGo.LevelInfo,
+		Tags:    map[string]string{"event_name": event.EventName},
+	}, log, cfg)
+
 	log.Debugf(
 		"Successfully processed event with lag : %v ms : %+v",
-		time.Since(event.Timestamp).Milliseconds(), event,
+		lag, event,
 	)
 	return nil
 }

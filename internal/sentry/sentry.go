@@ -6,6 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/getsentry/sentry-go"
 	"go.uber.org/fx"
 )
@@ -102,4 +103,31 @@ func (s *Service) Flush(timeout uint) bool {
 		return true
 	}
 	return sentry.Flush(time.Duration(timeout) * time.Second)
+}
+
+// CaptureCustomSentryEvent captures a custom event in Sentry with detailed information
+func CaptureCustomSentryEvent(event *types.SentryEvent, logger *logger.Logger, cfg *config.Configuration) {
+
+	if !cfg.Sentry.Enabled {
+		logger.Infof("Sentry is disabled, skipping event capture")
+		return
+	}
+
+	// Create a new Sentry event
+	se := sentry.NewEvent()
+	se.Message = event.Message
+	se.Level = sentry.Level(event.Level)
+	se.Extra = event.Extra
+	se.Timestamp = time.Now()
+	se.Tags = event.Tags
+
+	// Capture the event
+	sentry.CaptureEvent(se)
+
+	// Log the event locally for additional context
+	logger.Infow("Sentry custom event captured",
+		"event_type", event.Message,
+		"level", event.Level,
+		"data", event.Extra,
+	)
 }
