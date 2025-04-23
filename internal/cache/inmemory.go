@@ -33,9 +33,10 @@ func InitializeInMemoryCache() {
 
 // NewInMemoryCache creates a new InMemoryCache instance
 func NewInMemoryCache() Cache {
-	return &InMemoryCache{
-		cache: goCache.New(DefaultExpiration, DefaultCleanupInterval),
+	if globalCache == nil {
+		InitializeInMemoryCache()
 	}
+	return globalCache
 }
 
 // GetCache returns the global cache instance
