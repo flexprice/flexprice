@@ -6,6 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/feature"
+	"github.com/flexprice/flexprice/internal/cache"
 	domainFeature "github.com/flexprice/flexprice/internal/domain/feature"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -17,13 +18,15 @@ type featureRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts FeatureQueryOptions
+	cache     cache.Cache
 }
 
-func NewFeatureRepository(client postgres.IClient, log *logger.Logger) domainFeature.Repository {
+func NewFeatureRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainFeature.Repository {
 	return &featureRepository{
 		client:    client,
 		log:       log,
 		queryOpts: FeatureQueryOptions{},
+		cache:     cache,
 	}
 }
 
@@ -91,6 +94,11 @@ func (r *featureRepository) Create(ctx context.Context, f *domainFeature.Feature
 }
 
 func (r *featureRepository) Get(ctx context.Context, id string) (*domainFeature.Feature, error) {
+	// Try to get from cache first
+	if cachedFeature := r.GetCache(ctx, id); cachedFeature != nil {
+		return cachedFeature, nil
+	}
+
 	client := r.client.Querier(ctx)
 
 	r.log.Debugw("getting feature",
@@ -129,6 +137,9 @@ func (r *featureRepository) Get(ctx context.Context, id string) (*domainFeature.
 
 	SetSpanSuccess(span)
 	return domainFeature.FromEnt(f), nil
+	featureData := domainFeature.FromEnt(f)
+	r.SetCache(ctx, featureData)
+	return featureData, nil
 }
 
 func (r *featureRepository) List(ctx context.Context, filter *types.FeatureFilter) ([]*domainFeature.Feature, error) {
@@ -266,6 +277,7 @@ func (r *featureRepository) Update(ctx context.Context, f *domainFeature.Feature
 	}
 
 	SetSpanSuccess(span)
+	r.DeleteCache(ctx, f.ID)
 	return nil
 }
 
@@ -313,6 +325,7 @@ func (r *featureRepository) Delete(ctx context.Context, id string) error {
 	}
 
 	SetSpanSuccess(span)
+	r.DeleteCache(ctx, id)
 	return nil
 }
 
@@ -421,4 +434,28 @@ func (o FeatureQueryOptions) applyEntityQueryOptions(_ context.Context, f *types
 	}
 
 	return query
+}
+
+func (r *featureRepository) SetCache(ctx context.Context, feature *domainFeature.Feature) {
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	cacheKey := cache.GenerateKey(cache.PrefixFeature, tenantID, environmentID, feature.ID)
+	r.cache.Set(ctx, cacheKey, feature, cache.ExpiryDefaultInMemory)
+}
+
+func (r *featureRepository) GetCache(ctx context.Context, key string) *domainFeature.Feature {
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	cacheKey := cache.GenerateKey(cache.PrefixFeature, tenantID, environmentID, key)
+	if value, found := r.cache.Get(ctx, cacheKey); found {
+		return value.(*domainFeature.Feature)
+	}
+	return nil
+}
+
+func (r *featureRepository) DeleteCache(ctx context.Context, featureID string) {
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	cacheKey := cache.GenerateKey(cache.PrefixFeature, tenantID, environmentID, featureID)
+	r.cache.Delete(ctx, cacheKey)
 }

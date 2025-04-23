@@ -29,18 +29,20 @@ type Cache interface {
 
 // Predefined cache key prefixes for different entity types
 const (
-	PrefixSecret      = "secret:v1:"
-	PrefixCustomer    = "customer:v1:"
-	PrefixUser        = "user:v1:"
-	PrefixTenant      = "tenant:v1:"
-	PrefixPlan        = "plan:v1:"
-	PrefixPrice       = "price:v1:"
-	PrefixMeter       = "meter:v1:"
-	PrefixEvent       = "event:v1:"
-	PrefixWallet      = "wallet:v1:"
-	PrefixInvoice     = "invoice:v1:"
-	PrefixFeature     = "feature:v1:"
-	PrefixEntitlement = "entitlement:v1:"
+	PrefixSecret       = "secret:v1:"
+	PrefixCustomer     = "customer:v1:"
+	PrefixUser         = "user:v1:"
+	PrefixTenant       = "tenant:v1:"
+	PrefixPlan         = "plan:v1:"
+	PrefixSubscription = "subscription:v1:"
+	PrefixPrice        = "price:v1:"
+	PrefixMeter        = "meter:v1:"
+	PrefixEvent        = "event:v1:"
+	PrefixWallet       = "wallet:v1:"
+	PrefixInvoice      = "invoice:v1:"
+	PrefixFeature      = "feature:v1:"
+	PrefixEntitlement  = "entitlement:v1:"
+	PrefixPayment      = "payment:v1:"
 )
 
 // GenerateKey creates a cache key from a prefix and a set of parameters

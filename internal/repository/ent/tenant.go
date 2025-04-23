@@ -5,6 +5,7 @@ import (
 
 	"github.com/flexprice/flexprice/ent"
 	entTenant "github.com/flexprice/flexprice/ent/tenant"
+	"github.com/flexprice/flexprice/internal/cache"
 	domainTenant "github.com/flexprice/flexprice/internal/domain/tenant"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -14,13 +15,15 @@ import (
 type tenantRepository struct {
 	client postgres.IClient
 	logger *logger.Logger
+	cache  cache.Cache
 }
 
 // NewTenantRepository creates a new tenant repository
-func NewTenantRepository(client postgres.IClient, logger *logger.Logger) domainTenant.Repository {
+func NewTenantRepository(client postgres.IClient, logger *logger.Logger, cache cache.Cache) domainTenant.Repository {
 	return &tenantRepository{
 		client: client,
 		logger: logger,
+		cache:  cache,
 	}
 }
 
@@ -68,6 +71,10 @@ func (r *tenantRepository) GetByID(ctx context.Context, id string) (*domainTenan
 		"tenant_id": id,
 	})
 	defer FinishSpan(span)
+	// Try to get from cache first
+	if cachedTenant := r.GetCache(ctx, id); cachedTenant != nil {
+		return cachedTenant, nil
+	}
 
 	client := r.client.Querier(ctx)
 	tenant, err := client.Tenant.
@@ -96,7 +103,9 @@ func (r *tenantRepository) GetByID(ctx context.Context, id string) (*domainTenan
 	}
 
 	SetSpanSuccess(span)
-	return domainTenant.FromEnt(tenant), nil
+	tenantData := domainTenant.FromEnt(tenant)
+	r.SetCache(ctx, tenantData)
+	return tenantData, nil
 }
 
 // List retrieves all tenants
@@ -147,5 +156,24 @@ func (r *tenantRepository) Update(ctx context.Context, tenant *domainTenant.Tena
 	}
 
 	SetSpanSuccess(span)
+	r.DeleteCache(ctx, tenant.ID)
 	return nil
+}
+
+func (r *tenantRepository) SetCache(ctx context.Context, tenant *domainTenant.Tenant) {
+	cacheKey := cache.GenerateKey(cache.PrefixTenant, tenant.ID)
+	r.cache.Set(ctx, cacheKey, tenant, cache.ExpiryDefaultInMemory)
+}
+
+func (r *tenantRepository) GetCache(ctx context.Context, key string) *domainTenant.Tenant {
+	cacheKey := cache.GenerateKey(cache.PrefixTenant, key)
+	if value, found := r.cache.Get(ctx, cacheKey); found {
+		return value.(*domainTenant.Tenant)
+	}
+	return nil
+}
+
+func (r *tenantRepository) DeleteCache(ctx context.Context, key string) {
+	cacheKey := cache.GenerateKey(cache.PrefixTenant, key)
+	r.cache.Delete(ctx, cacheKey)
 }

@@ -18,13 +18,15 @@ type secretRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts SecretQueryOptions
+	cache     cache.Cache
 }
 
-func NewSecretRepository(client postgres.IClient, log *logger.Logger) domainSecret.Repository {
+func NewSecretRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainSecret.Repository {
 	return &secretRepository{
 		client:    client,
 		log:       log,
 		queryOpts: SecretQueryOptions{},
+		cache:     cache,
 	}
 }
 
@@ -141,13 +143,8 @@ func (r *secretRepository) Get(ctx context.Context, id string) (*domainSecret.Se
 
 func (r *secretRepository) GetAPIKeyByValue(ctx context.Context, value string) (*domainSecret.Secret, error) {
 	// Generate cache key
-	cacheKey := cache.GenerateKey(cache.PrefixSecret, value)
-	memCache := cache.GetInMemoryCache()
-
-	// Try to get from cache first
-	if cachedValue, found := memCache.Get(ctx, cacheKey); found {
-		r.log.Debugw("cache hit", "key", cacheKey)
-		return cachedValue.(*domainSecret.Secret), nil
+	if cachedSecret := r.GetCache(ctx, value); cachedSecret != nil {
+		return cachedSecret, nil
 	}
 
 	// Not found in cache, fetch from database
@@ -184,8 +181,7 @@ func (r *secretRepository) GetAPIKeyByValue(ctx context.Context, value string) (
 	// Convert to domain model
 	result := domainSecret.FromEnt(s)
 	// Store in cache for future use (default expiry)
-	memCache.Set(ctx, cacheKey, result, cache.ExpiryDefaultInMemory)
-
+	r.SetCache(ctx, result)
 	return result, nil
 }
 
@@ -216,7 +212,7 @@ func (r *secretRepository) UpdateLastUsed(ctx context.Context, id string) error 
 			}).
 			Mark(ierr.ErrDatabase)
 	}
-
+	r.DeleteCache(ctx, id)
 	return nil
 }
 
@@ -304,9 +300,7 @@ func (r *secretRepository) Delete(ctx context.Context, id string) error {
 			Mark(ierr.ErrDatabase)
 	}
 
-	cacheKey := cache.GenerateKey(cache.PrefixSecret, secret.Value)
-	cache.GetInMemoryCache().Delete(ctx, cacheKey)
-	r.log.Debugw("deleted from cache", "key", cacheKey)
+	r.DeleteCache(ctx, secret.Value)
 	return nil
 }
 
@@ -412,4 +406,22 @@ func (o SecretQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.
 	}
 
 	return query
+}
+
+func (r *secretRepository) SetCache(ctx context.Context, secret *domainSecret.Secret) {
+	cacheKey := cache.GenerateKey(cache.PrefixSecret, secret.Value)
+	r.cache.Set(ctx, cacheKey, secret, cache.ExpiryDefaultInMemory)
+}
+
+func (r *secretRepository) GetCache(ctx context.Context, key string) *domainSecret.Secret {
+	cacheKey := cache.GenerateKey(cache.PrefixSecret, key)
+	if value, found := r.cache.Get(ctx, cacheKey); found {
+		return value.(*domainSecret.Secret)
+	}
+	return nil
+}
+
+func (r *secretRepository) DeleteCache(ctx context.Context, key string) {
+	cacheKey := cache.GenerateKey(cache.PrefixSecret, key)
+	r.cache.Delete(ctx, cacheKey)
 }
