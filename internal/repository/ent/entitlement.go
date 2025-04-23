@@ -6,6 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/entitlement"
+	"github.com/flexprice/flexprice/internal/cache"
 	domainEntitlement "github.com/flexprice/flexprice/internal/domain/entitlement"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -17,13 +18,15 @@ type entitlementRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts EntitlementQueryOptions
+	cache     cache.Cache
 }
 
-func NewEntitlementRepository(client postgres.IClient, log *logger.Logger) domainEntitlement.Repository {
+func NewEntitlementRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainEntitlement.Repository {
 	return &entitlementRepository{
 		client:    client,
 		log:       log,
 		queryOpts: EntitlementQueryOptions{},
+		cache:     cache,
 	}
 }
 
@@ -86,6 +89,11 @@ func (r *entitlementRepository) Create(ctx context.Context, e *domainEntitlement
 }
 
 func (r *entitlementRepository) Get(ctx context.Context, id string) (*domainEntitlement.Entitlement, error) {
+	// Try to get from cache first
+	if cachedEntitlement := r.GetCache(ctx, id); cachedEntitlement != nil {
+		return cachedEntitlement, nil
+	}
+
 	client := r.client.Querier(ctx)
 
 	r.log.Debugw("getting entitlement",
@@ -121,7 +129,9 @@ func (r *entitlementRepository) Get(ctx context.Context, id string) (*domainEnti
 			Mark(ierr.ErrDatabase)
 	}
 
-	return domainEntitlement.FromEnt(result), nil
+	entitlementData := domainEntitlement.FromEnt(result)
+	r.SetCache(ctx, entitlementData)
+	return entitlementData, nil
 }
 
 func (r *entitlementRepository) List(ctx context.Context, filter *types.EntitlementFilter) ([]*domainEntitlement.Entitlement, error) {
@@ -268,7 +278,7 @@ func (r *entitlementRepository) Update(ctx context.Context, e *domainEntitlement
 			WithReportableDetails(map[string]interface{}{"id": e.ID}).
 			Mark(ierr.ErrDatabase)
 	}
-
+	r.DeleteCache(ctx, e.ID)
 	return domainEntitlement.FromEnt(result), nil
 }
 
@@ -310,6 +320,7 @@ func (r *entitlementRepository) Delete(ctx context.Context, id string) error {
 			Mark(ierr.ErrDatabase)
 	}
 
+	r.DeleteCache(ctx, id)
 	return nil
 }
 
@@ -543,4 +554,28 @@ func (o EntitlementQueryOptions) applyEntityQueryOptions(_ context.Context, f *t
 	}
 
 	return query
+}
+
+func (r *entitlementRepository) SetCache(ctx context.Context, entitlement *domainEntitlement.Entitlement) {
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	cacheKey := cache.GenerateKey(cache.PrefixEntitlement, tenantID, environmentID, entitlement.ID)
+	r.cache.Set(ctx, cacheKey, entitlement, cache.ExpiryDefaultInMemory)
+}
+
+func (r *entitlementRepository) GetCache(ctx context.Context, key string) *domainEntitlement.Entitlement {
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	cacheKey := cache.GenerateKey(cache.PrefixEntitlement, tenantID, environmentID, key)
+	if value, found := r.cache.Get(ctx, cacheKey); found {
+		return value.(*domainEntitlement.Entitlement)
+	}
+	return nil
+}
+
+func (r *entitlementRepository) DeleteCache(ctx context.Context, entitlementID string) {
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	cacheKey := cache.GenerateKey(cache.PrefixEntitlement, tenantID, environmentID, entitlementID)
+	r.cache.Delete(ctx, cacheKey)
 }

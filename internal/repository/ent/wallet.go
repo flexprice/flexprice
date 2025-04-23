@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/wallet"
 	"github.com/flexprice/flexprice/ent/wallettransaction"
+	"github.com/flexprice/flexprice/internal/cache"
 	walletdomain "github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -20,12 +21,14 @@ type walletRepository struct {
 	client    postgres.IClient
 	logger    *logger.Logger
 	queryOpts WalletTransactionQueryOptions
+	cache     cache.Cache
 }
 
-func NewWalletRepository(client postgres.IClient, logger *logger.Logger) walletdomain.Repository {
+func NewWalletRepository(client postgres.IClient, logger *logger.Logger, cache cache.Cache) walletdomain.Repository {
 	return &walletRepository{
 		client: client,
 		logger: logger,
+		cache:  cache,
 	}
 }
 
@@ -87,6 +90,11 @@ func (r *walletRepository) CreateWallet(ctx context.Context, w *walletdomain.Wal
 }
 
 func (r *walletRepository) GetWalletByID(ctx context.Context, id string) (*walletdomain.Wallet, error) {
+	// Try to get from cache first
+	if cachedWallet := r.GetCache(ctx, id); cachedWallet != nil {
+		return cachedWallet, nil
+	}
+
 	client := r.client.Querier(ctx)
 
 	// Start a span for this repository operation
@@ -122,7 +130,9 @@ func (r *walletRepository) GetWalletByID(ctx context.Context, id string) (*walle
 			Mark(ierr.ErrDatabase)
 	}
 
-	return walletdomain.FromEnt(w), nil
+	walletData := walletdomain.FromEnt(w)
+	r.SetCache(ctx, walletData)
+	return walletData, nil
 }
 
 func (r *walletRepository) GetWalletsByCustomerID(ctx context.Context, customerID string) ([]*walletdomain.Wallet, error) {
@@ -208,6 +218,7 @@ func (r *walletRepository) UpdateWalletStatus(ctx context.Context, id string, st
 			Mark(ierr.ErrNotFound)
 	}
 
+	r.DeleteCache(ctx, id)
 	return nil
 }
 
@@ -412,7 +423,7 @@ func (r *walletRepository) UpdateWalletBalance(ctx context.Context, walletID str
 			}).
 			Mark(ierr.ErrDatabase)
 	}
-
+	r.DeleteCache(ctx, walletID)
 	return nil
 }
 
@@ -743,5 +754,30 @@ func (r *walletRepository) UpdateWallet(ctx context.Context, id string, w *walle
 			Mark(ierr.ErrNotFound)
 	}
 
+	r.DeleteCache(ctx, id)
 	return nil
+}
+
+func (r *walletRepository) SetCache(ctx context.Context, wallet *walletdomain.Wallet) {
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	cacheKey := cache.GenerateKey(cache.PrefixWallet, tenantID, environmentID, wallet.ID)
+	r.cache.Set(ctx, cacheKey, wallet, cache.ExpiryDefaultInMemory)
+}
+
+func (r *walletRepository) GetCache(ctx context.Context, key string) *walletdomain.Wallet {
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	cacheKey := cache.GenerateKey(cache.PrefixWallet, tenantID, environmentID, key)
+	if value, found := r.cache.Get(ctx, cacheKey); found {
+		return value.(*walletdomain.Wallet)
+	}
+	return nil
+}
+
+func (r *walletRepository) DeleteCache(ctx context.Context, walletID string) {
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	cacheKey := cache.GenerateKey(cache.PrefixWallet, tenantID, environmentID, walletID)
+	r.cache.Delete(ctx, cacheKey)
 }
