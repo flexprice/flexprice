@@ -103,3 +103,87 @@ func (s *Service) Flush(timeout uint) bool {
 	}
 	return sentry.Flush(time.Duration(timeout) * time.Second)
 }
+
+// StartDBSpan starts a new database span in the current transaction
+func (s *Service) StartDBSpan(ctx context.Context, operation string, params map[string]interface{}) (*sentry.Span, context.Context) {
+	if !s.cfg.Sentry.Enabled {
+		return nil, ctx
+	}
+
+	span := sentry.StartSpan(ctx, operation)
+	if span != nil {
+		span.Description = operation
+		span.Op = "db.postgres"
+
+		for k, v := range params {
+			span.SetData(k, v)
+		}
+	}
+
+	return span, span.Context()
+}
+
+// StartClickHouseSpan starts a new ClickHouse span in the current transaction
+func (s *Service) StartClickHouseSpan(ctx context.Context, operation string, params map[string]interface{}) (*sentry.Span, context.Context) {
+	if !s.cfg.Sentry.Enabled {
+		return nil, ctx
+	}
+
+	span := sentry.StartSpan(ctx, operation)
+	if span != nil {
+		span.Description = operation
+		span.Op = "db.clickhouse"
+
+		for k, v := range params {
+			span.SetData(k, v)
+		}
+	}
+
+	return span, span.Context()
+}
+
+// StartKafkaConsumerSpan starts a new Kafka consumer span in the current transaction
+func (s *Service) StartKafkaConsumerSpan(ctx context.Context, topic string) (*sentry.Span, context.Context) {
+	if !s.cfg.Sentry.Enabled {
+		return nil, ctx
+	}
+
+	span := sentry.StartSpan(ctx, "kafka.consume."+topic)
+	if span != nil {
+		span.Description = "Consuming message from " + topic
+		span.Op = "kafka.consume"
+		span.SetData("topic", topic)
+	}
+
+	return span, span.Context()
+}
+
+// MonitorEventProcessing tracks event processing in Sentry
+func (s *Service) MonitorEventProcessing(ctx context.Context, eventName string, eventTimestamp time.Time, metadata map[string]interface{}) (*sentry.Span, context.Context) {
+	if !s.cfg.Sentry.Enabled {
+		return nil, ctx
+	}
+
+	span := sentry.StartSpan(ctx, "event.process."+eventName)
+	if span != nil {
+		span.Description = "Processing event: " + eventName
+		span.Op = "event.process"
+		span.SetData("event_name", eventName)
+
+		// Calculate lag
+		lag := time.Since(eventTimestamp)
+		span.SetData("lag_ms", lag.Milliseconds())
+
+		// Alert on high lag (5 minutes or more)
+		if lag >= 5*time.Minute {
+			span.Status = sentry.SpanStatusDeadlineExceeded
+			sentry.CaptureMessage("High event processing lag detected: " + lag.String() + " for event: " + eventName)
+		}
+
+		for k, v := range metadata {
+			span.SetData(k, v)
+		}
+	}
+
+	return span, span.Context()
+}
