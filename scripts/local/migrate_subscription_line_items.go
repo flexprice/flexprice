@@ -14,6 +14,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	entRepo "github.com/flexprice/flexprice/internal/repository/ent"
+	"github.com/flexprice/flexprice/internal/sentry"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
@@ -42,7 +43,7 @@ func MigrateSubscriptionLineItems() error {
 	if err != nil {
 		return fmt.Errorf("failed to create database client: %w", err)
 	}
-	client := postgres.NewClient(entClient, logger)
+	client := postgres.NewClient(entClient, logger, sentry.NewSentryService(cfg, logger))
 
 	cache := cache.NewInMemoryCache()
 

@@ -136,7 +136,6 @@ func (r *featureRepository) Get(ctx context.Context, id string) (*domainFeature.
 	}
 
 	SetSpanSuccess(span)
-	return domainFeature.FromEnt(f), nil
 	featureData := domainFeature.FromEnt(f)
 	r.SetCache(ctx, featureData)
 	return featureData, nil

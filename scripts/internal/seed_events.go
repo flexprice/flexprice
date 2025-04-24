@@ -15,6 +15,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/repository"
+	"github.com/flexprice/flexprice/internal/sentry"
 	"github.com/flexprice/flexprice/internal/types"
 	"golang.org/x/time/rate"
 )
@@ -109,7 +110,8 @@ func SeedEventsFromMeters() error {
 	if err != nil {
 		log.Fatalf("Failed to connect to postgres: %v", err)
 	}
-	client := postgres.NewClient(entClient, log)
+
+	client := postgres.NewClient(entClient, log, sentry.NewSentryService(cfg, log))
 
 	// Initialize repositories
 	repoParams := repository.RepositoryParams{

@@ -121,7 +121,6 @@ func (r *meterRepository) GetMeter(ctx context.Context, id string) (*domainMeter
 	}
 
 	SetSpanSuccess(span)
-	return domainMeter.FromEnt(m), nil
 	meter := domainMeter.FromEnt(m)
 	// Set cache
 	r.SetCache(ctx, meter)

@@ -151,7 +151,6 @@ func (r *customerRepository) Get(ctx context.Context, id string) (*domainCustome
 	}
 
 	SetSpanSuccess(span)
-	return domainCustomer.FromEnt(c), nil
 	customer := domainCustomer.FromEnt(c)
 
 	// Set cache
