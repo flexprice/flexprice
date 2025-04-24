@@ -239,9 +239,7 @@ func (tb *tracedBatch) Flush() error {
 	ctx := context.Background()
 	span, _ := tb.sentry.StartClickHouseSpan(ctx, "clickhouse.batch_flush", nil)
 	if span != nil {
-		if span != nil {
-			defer span.Finish()
-		}
+		defer span.Finish()
 	}
 
 	return tb.batch.Flush()
