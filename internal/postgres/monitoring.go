@@ -29,7 +29,9 @@ func (c *SentryClient) WithTx(ctx context.Context, fn func(context.Context) erro
 	span, spanCtx := c.sentry.StartDBSpan(ctx, "postgres.transaction", map[string]interface{}{
 		"operation": "transaction",
 	})
-	defer span.Finish()
+	if span != nil {
+		defer span.Finish()
+	}
 
 	// Use the original client's WithTx but with the new span context
 	return c.client.WithTx(spanCtx, fn)
