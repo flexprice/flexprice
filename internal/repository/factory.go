@@ -58,7 +58,7 @@ func NewPriceRepository(p RepositoryParams) price.Repository {
 }
 
 func NewCustomerRepository(p RepositoryParams) customer.Repository {
-	return entRepo.NewCustomerRepository(p.EntClient, p.Logger)
+	return entRepo.NewCustomerRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewPlanRepository(p RepositoryParams) plan.Repository {
