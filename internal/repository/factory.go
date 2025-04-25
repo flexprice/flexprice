@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/domain/auth"
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -33,6 +34,7 @@ type RepositoryParams struct {
 	Logger       *logger.Logger
 	EntClient    postgres.IClient
 	ClickHouseDB *clickhouse.ClickHouseStore
+	Cache        cache.Cache
 }
 
 func NewEventRepository(p RepositoryParams) events.Repository {
