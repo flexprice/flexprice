@@ -465,5 +465,16 @@ func (r *planRepository) DeleteCache(ctx context.Context, planID string) {
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
 	cacheKey := cache.GenerateKey(cache.PrefixPlan, tenantID, environmentID, planID)
+	// delete cache
 	r.cache.Delete(ctx, cacheKey)
+
+	// get plan
+	plan, err := r.Get(ctx, planID)
+	if err != nil {
+		r.log.Errorw("failed to get plan", "error", err)
+	}
+
+	// delete idempotency key
+	lookupCacheKey := cache.GenerateKey(cache.PrefixPlan, tenantID, environmentID, plan.LookupKey)
+	r.cache.Delete(ctx, lookupCacheKey)
 }

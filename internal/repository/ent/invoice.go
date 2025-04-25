@@ -832,4 +832,12 @@ func (r *invoiceRepository) DeleteCache(ctx context.Context, key string) {
 	environmentID := types.GetEnvironmentID(ctx)
 	cacheKey := cache.GenerateKey(cache.PrefixInvoice, tenantID, environmentID, key)
 	r.cache.Delete(ctx, cacheKey)
+
+	// get idempotency key
+	invoice, err := r.Get(ctx, key)
+	if err != nil {
+		r.logger.Errorw("failed to get invoice by idempotency key", "error", err)
+	}
+	idempotencyKey := cache.GenerateKey(cache.PrefixInvoice, tenantID, environmentID, invoice.IdempotencyKey)
+	r.cache.Delete(ctx, idempotencyKey)
 }

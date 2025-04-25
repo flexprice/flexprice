@@ -151,7 +151,6 @@ func (r *customerRepository) Get(ctx context.Context, id string) (*domainCustome
 	}
 
 	SetSpanSuccess(span)
-	return domainCustomer.FromEnt(c), nil
 	customer := domainCustomer.FromEnt(c)
 
 	// Set cache
@@ -610,5 +609,14 @@ func (r *customerRepository) DeleteCache(ctx context.Context, customerID string)
 	environmentID := types.GetEnvironmentID(ctx)
 	custIdKey := cache.GenerateKey(cache.PrefixCustomer, tenantID, environmentID, customerID)
 	r.cache.Delete(ctx, custIdKey)
+
+	// delete lookup cache
+	customer, err := r.Get(ctx, customerID)
+	if err != nil {
+		r.log.Errorw("failed to get customer", "error", err)
+	}
+	lookupCacheKey := cache.GenerateKey(cache.PrefixCustomer, tenantID, environmentID, customer.ExternalID)
+	r.cache.Delete(ctx, lookupCacheKey)
+
 	r.log.Debugw("cache deleted", "key", custIdKey)
 }
