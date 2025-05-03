@@ -16,6 +16,15 @@ type Repository interface {
 	GetEvents(ctx context.Context, params *GetEventsParams) ([]*Event, uint64, error)
 }
 
+// ProcessedEventRepository defines operations for processed events
+type ProcessedEventRepository interface {
+	InsertProcessedEvent(ctx context.Context, event *ProcessedEvent) error
+	BulkInsertProcessedEvents(ctx context.Context, events []*ProcessedEvent) error
+	GetProcessedEvents(ctx context.Context, params *GetProcessedEventsParams) ([]*ProcessedEvent, uint64, error)
+	GetUsageSummary(ctx context.Context, params *UsageSummaryParams) (decimal.Decimal, error)
+	FindUnprocessedEvents(ctx context.Context, customerID, subscriptionID string) ([]*ProcessedEvent, error)
+}
+
 type UsageParams struct {
 	ExternalCustomerID string                `json:"external_customer_id"`
 	CustomerID         string                `json:"customer_id"`
@@ -26,6 +35,32 @@ type UsageParams struct {
 	StartTime          time.Time             `json:"start_time" validate:"required"`
 	EndTime            time.Time             `json:"end_time" validate:"required"`
 	Filters            map[string][]string   `json:"filters"`
+}
+
+// UsageSummaryParams defines parameters for querying pre-computed usage
+type UsageSummaryParams struct {
+	StartTime      time.Time `json:"start_time" validate:"required"`
+	EndTime        time.Time `json:"end_time" validate:"required"`
+	CustomerID     string    `json:"customer_id"`
+	SubscriptionID string    `json:"subscription_id"`
+	MeterID        string    `json:"meter_id"`
+	PriceID        string    `json:"price_id"`
+	FeatureID      string    `json:"feature_id"`
+}
+
+// GetProcessedEventsParams defines parameters for querying processed events
+type GetProcessedEventsParams struct {
+	StartTime      time.Time         `json:"start_time" validate:"required"`
+	EndTime        time.Time         `json:"end_time" validate:"required"`
+	CustomerID     string            `json:"customer_id"`
+	SubscriptionID string            `json:"subscription_id"`
+	MeterID        string            `json:"meter_id"`
+	FeatureID      string            `json:"feature_id"`
+	PriceID        string            `json:"price_id"`
+	EventStatus    types.EventStatus `json:"event_status"`
+	Offset         int               `json:"offset"`
+	Limit          int               `json:"limit"`
+	CountTotal     bool              `json:"count_total"`
 }
 
 type GetEventsParams struct {

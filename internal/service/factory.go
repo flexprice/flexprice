@@ -38,23 +38,24 @@ type ServiceParams struct {
 	S3           s3.Service
 
 	// Repositories
-	AuthRepo        auth.Repository
-	UserRepo        user.Repository
-	EventRepo       events.Repository
-	MeterRepo       meter.Repository
-	PriceRepo       price.Repository
-	CustomerRepo    customer.Repository
-	PlanRepo        plan.Repository
-	SubRepo         subscription.Repository
-	WalletRepo      wallet.Repository
-	TenantRepo      tenant.Repository
-	InvoiceRepo     invoice.Repository
-	FeatureRepo     feature.Repository
-	EntitlementRepo entitlement.Repository
-	PaymentRepo     payment.Repository
-	SecretRepo      secret.Repository
-	EnvironmentRepo environment.Repository
-	TaskRepo        task.Repository
+	AuthRepo           auth.Repository
+	UserRepo           user.Repository
+	EventRepo          events.Repository
+	ProcessedEventRepo events.ProcessedEventRepository
+	MeterRepo          meter.Repository
+	PriceRepo          price.Repository
+	CustomerRepo       customer.Repository
+	PlanRepo           plan.Repository
+	SubRepo            subscription.Repository
+	WalletRepo         wallet.Repository
+	TenantRepo         tenant.Repository
+	InvoiceRepo        invoice.Repository
+	FeatureRepo        feature.Repository
+	EntitlementRepo    entitlement.Repository
+	PaymentRepo        payment.Repository
+	SecretRepo         secret.Repository
+	EnvironmentRepo    environment.Repository
+	TaskRepo           task.Repository
 
 	// Publishers
 	EventPublisher   publisher.EventPublisher
@@ -73,6 +74,7 @@ func NewServiceParams(
 	authRepo auth.Repository,
 	userRepo user.Repository,
 	eventRepo events.Repository,
+	processedEventRepo events.ProcessedEventRepository,
 	meterRepo meter.Repository,
 	priceRepo price.Repository,
 	customerRepo customer.Repository,
@@ -91,33 +93,33 @@ func NewServiceParams(
 	s3Service s3.Service,
 	client httpclient.Client,
 	taskRepo task.Repository,
-
 ) ServiceParams {
 	return ServiceParams{
-		Logger:           logger,
-		Config:           config,
-		DB:               db,
-		PDFGenerator:     pdfGenerator,
-		AuthRepo:         authRepo,
-		UserRepo:         userRepo,
-		EventRepo:        eventRepo,
-		MeterRepo:        meterRepo,
-		PriceRepo:        priceRepo,
-		CustomerRepo:     customerRepo,
-		PlanRepo:         planRepo,
-		SubRepo:          subRepo,
-		WalletRepo:       walletRepo,
-		TenantRepo:       tenantRepo,
-		InvoiceRepo:      invoiceRepo,
-		FeatureRepo:      featureRepo,
-		EntitlementRepo:  entitlementRepo,
-		PaymentRepo:      paymentRepo,
-		SecretRepo:       secretRepo,
-		EnvironmentRepo:  environmentRepo,
-		EventPublisher:   eventPublisher,
-		WebhookPublisher: webhookPublisher,
-		S3:               s3Service,
-		Client:           client,
-		TaskRepo:         taskRepo,
+		Logger:             logger,
+		Config:             config,
+		DB:                 db,
+		PDFGenerator:       pdfGenerator,
+		AuthRepo:           authRepo,
+		UserRepo:           userRepo,
+		EventRepo:          eventRepo,
+		ProcessedEventRepo: processedEventRepo,
+		MeterRepo:          meterRepo,
+		PriceRepo:          priceRepo,
+		CustomerRepo:       customerRepo,
+		PlanRepo:           planRepo,
+		SubRepo:            subRepo,
+		WalletRepo:         walletRepo,
+		TenantRepo:         tenantRepo,
+		InvoiceRepo:        invoiceRepo,
+		FeatureRepo:        featureRepo,
+		EntitlementRepo:    entitlementRepo,
+		PaymentRepo:        paymentRepo,
+		SecretRepo:         secretRepo,
+		EnvironmentRepo:    environmentRepo,
+		EventPublisher:     eventPublisher,
+		WebhookPublisher:   webhookPublisher,
+		S3:                 s3Service,
+		Client:             client,
+		TaskRepo:           taskRepo,
 	}
 }

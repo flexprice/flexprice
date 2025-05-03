@@ -41,6 +41,10 @@ func NewEventRepository(p RepositoryParams) events.Repository {
 	return clickhouseRepo.NewEventRepository(p.ClickHouseDB, p.Logger)
 }
 
+func NewProcessedEventRepository(p RepositoryParams) events.ProcessedEventRepository {
+	return clickhouseRepo.NewProcessedEventRepository(p.ClickHouseDB, p.Logger)
+}
+
 func NewMeterRepository(p RepositoryParams) meter.Repository {
 	return entRepo.NewMeterRepository(p.EntClient, p.Logger, p.Cache)
 }
