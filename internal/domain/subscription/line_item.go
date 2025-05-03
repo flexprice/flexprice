@@ -52,6 +52,10 @@ func (li *SubscriptionLineItem) IsActive() bool {
 	return true
 }
 
+func (li *SubscriptionLineItem) IsUsage() bool {
+	return li.PriceType == types.PRICE_TYPE_USAGE && li.MeterID != ""
+}
+
 // FromEntList converts a list of Ent SubscriptionLineItems to domain SubscriptionLineItems
 func GetLineItemFromEntList(list []*ent.SubscriptionLineItem) []*SubscriptionLineItem {
 	if list == nil {

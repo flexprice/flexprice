@@ -349,6 +349,7 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 	// Get plans in bulk
 	planFilter := types.NewNoLimitPlanFilter()
 	planFilter.PlanIDs = lo.Keys(planIDMap)
+	planFilter.Expand = filter.Expand // pass on the filters to next layer
 	planResponse, err := planService.GetPlans(ctx, planFilter)
 	if err != nil {
 		return nil, err
