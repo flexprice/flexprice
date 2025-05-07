@@ -32,6 +32,10 @@ func NewCalculator(calculatorType CalculatorType) Calculator {
 type dayBasedCalculator struct{}
 
 func (c *dayBasedCalculator) Calculate(ctx context.Context, params ProrationParams) (*ProrationResult, error) {
+	if params.ProrationBehavior == types.ProrationBehaviorNone {
+		return nil, nil
+	}
+
 	if err := validateParams(params); err != nil {
 		return nil, ierr.WithError(err).
 			WithHintf("invalid proration params: %+v", err).
@@ -88,41 +92,51 @@ func (c *dayBasedCalculator) Calculate(ctx context.Context, params ProrationPara
 		billingMode = types.BillingModeInAdvance
 	}
 
-	// --- Calculate Credit for Old Item (if applicable) ---
-	if params.Action != types.ProrationActionAddItem {
+	// Credits are issued for existing items that are being modified/removed when:
+	// 1. The action involves an existing item (upgrade, downgrade, quantity change, remove, cancel)
+	// 2. The billing mode is in advance (we've already collected payment)
+	shouldIssueCredit := (params.Action == types.ProrationActionUpgrade ||
+		params.Action == types.ProrationActionDowngrade ||
+		params.Action == types.ProrationActionQuantityChange ||
+		params.Action == types.ProrationActionRemoveItem ||
+		params.Action == types.ProrationActionCancellation) &&
+		billingMode == types.BillingModeInAdvance
+
+	if shouldIssueCredit {
 		oldItemTotal := params.OldPricePerUnit.Mul(params.OldQuantity)
-		potentialCredit := oldItemTotal.Mul(prorationCoefficient) // Credit for unused time
+		potentialCredit := oldItemTotal.Mul(prorationCoefficient)
+		cappedCredit := c.capCreditAmount(potentialCredit, params.OriginalAmountPaid, params.PreviousCreditsIssued)
 
-		// Only issue credits if billed in advance
-		if billingMode == types.BillingModeInAdvance {
-			// Apply credit capping based on original amount paid and previous credits
-			cappedCredit := c.capCreditAmount(potentialCredit, params.OriginalAmountPaid, params.PreviousCreditsIssued)
-
-			if cappedCredit.GreaterThan(decimal.Zero) {
-				creditItem := ProrationLineItem{
-					Description: c.generateCreditDescription(params),
-					Amount:      cappedCredit.Neg(), // Negative for credit
-					StartDate:   params.ProrationDate,
-					EndDate:     params.CurrentPeriodEnd,
-					Quantity:    params.OldQuantity,
-					PriceID:     params.OldPriceID,
-					IsCredit:    true,
-				}
-				result.CreditItems = append(result.CreditItems, creditItem)
-				result.NetAmount = result.NetAmount.Add(creditItem.Amount)
+		if cappedCredit.GreaterThan(decimal.Zero) {
+			creditItem := ProrationLineItem{
+				Description: c.generateCreditDescription(params),
+				Amount:      cappedCredit.Neg(),
+				StartDate:   params.ProrationDate,
+				EndDate:     params.CurrentPeriodEnd,
+				Quantity:    params.OldQuantity,
+				PriceID:     params.OldPriceID,
+				IsCredit:    true,
 			}
+			result.CreditItems = append(result.CreditItems, creditItem)
+			result.NetAmount = result.NetAmount.Add(creditItem.Amount)
 		}
 	}
 
-	// --- Calculate Charge for New Item (if applicable) ---
-	if params.Action != types.ProrationActionRemoveItem && params.Action != types.ProrationActionCancellation {
+	// Charges are issued for new/modified items when:
+	// 1. The action involves adding or modifying an item (add, upgrade, downgrade, quantity change)
+	shouldIssueCharge := params.Action == types.ProrationActionAddItem ||
+		params.Action == types.ProrationActionUpgrade ||
+		params.Action == types.ProrationActionDowngrade ||
+		params.Action == types.ProrationActionQuantityChange
+
+	if shouldIssueCharge {
 		newItemTotal := params.NewPricePerUnit.Mul(params.NewQuantity)
-		proratedCharge := newItemTotal.Mul(prorationCoefficient) // Charge for remaining time
+		proratedCharge := newItemTotal.Mul(prorationCoefficient)
 
 		if proratedCharge.GreaterThan(decimal.Zero) {
 			chargeItem := ProrationLineItem{
 				Description: c.generateChargeDescription(params),
-				Amount:      proratedCharge, // Positive for charge
+				Amount:      proratedCharge,
 				StartDate:   params.ProrationDate,
 				EndDate:     params.CurrentPeriodEnd,
 				Quantity:    params.NewQuantity,
@@ -329,32 +343,44 @@ func (c *secondBasedCalculator) Calculate(ctx context.Context, params ProrationP
 		billingMode = types.BillingModeInAdvance
 	}
 
-	// Calculate credit for old item
-	if params.Action != types.ProrationActionAddItem {
+	// Credits are issued for existing items that are being modified/removed when:
+	// 1. The action involves an existing item (upgrade, downgrade, quantity change, remove, cancel)
+	// 2. The billing mode is in advance (we've already collected payment)
+	shouldIssueCredit := (params.Action == types.ProrationActionUpgrade ||
+		params.Action == types.ProrationActionDowngrade ||
+		params.Action == types.ProrationActionQuantityChange ||
+		params.Action == types.ProrationActionRemoveItem ||
+		params.Action == types.ProrationActionCancellation) &&
+		billingMode == types.BillingModeInAdvance
+
+	if shouldIssueCredit {
 		oldItemTotal := params.OldPricePerUnit.Mul(params.OldQuantity)
 		potentialCredit := oldItemTotal.Mul(prorationCoefficient)
+		cappedCredit := c.capCreditAmount(potentialCredit, params.OriginalAmountPaid, params.PreviousCreditsIssued)
 
-		if billingMode == types.BillingModeInAdvance {
-			cappedCredit := c.capCreditAmount(potentialCredit, params.OriginalAmountPaid, params.PreviousCreditsIssued)
-
-			if cappedCredit.GreaterThan(decimal.Zero) {
-				creditItem := ProrationLineItem{
-					Description: c.generateCreditDescription(params),
-					Amount:      cappedCredit.Neg(),
-					StartDate:   params.ProrationDate,
-					EndDate:     params.CurrentPeriodEnd,
-					Quantity:    params.OldQuantity,
-					PriceID:     params.OldPriceID,
-					IsCredit:    true,
-				}
-				result.CreditItems = append(result.CreditItems, creditItem)
-				result.NetAmount = result.NetAmount.Add(creditItem.Amount)
+		if cappedCredit.GreaterThan(decimal.Zero) {
+			creditItem := ProrationLineItem{
+				Description: c.generateCreditDescription(params),
+				Amount:      cappedCredit.Neg(),
+				StartDate:   params.ProrationDate,
+				EndDate:     params.CurrentPeriodEnd,
+				Quantity:    params.OldQuantity,
+				PriceID:     params.OldPriceID,
+				IsCredit:    true,
 			}
+			result.CreditItems = append(result.CreditItems, creditItem)
+			result.NetAmount = result.NetAmount.Add(creditItem.Amount)
 		}
 	}
 
-	// Calculate charge for new item
-	if params.Action != types.ProrationActionRemoveItem && params.Action != types.ProrationActionCancellation {
+	// Charges are issued for new/modified items when:
+	// 1. The action involves adding or modifying an item (add, upgrade, downgrade, quantity change)
+	shouldIssueCharge := params.Action == types.ProrationActionAddItem ||
+		params.Action == types.ProrationActionUpgrade ||
+		params.Action == types.ProrationActionDowngrade ||
+		params.Action == types.ProrationActionQuantityChange
+
+	if shouldIssueCharge {
 		newItemTotal := params.NewPricePerUnit.Mul(params.NewQuantity)
 		proratedCharge := newItemTotal.Mul(prorationCoefficient)
 
