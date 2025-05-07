@@ -61,12 +61,12 @@ func (s *prorationService) CalculateProration(ctx context.Context, params prorat
 // ApplyProration implements the logic to persist proration effects.
 func (s *prorationService) ApplyProration(ctx context.Context,
 	result *proration.ProrationResult,
-	behavior proration.ProrationBehavior,
+	behavior types.ProrationBehavior,
 	tenantID string,
 	environmentID string,
 	subscriptionID string,
 ) error {
-	if behavior == proration.ProrationBehaviorNone || result == nil {
+	if behavior == types.ProrationBehaviorNone || result == nil {
 		// Nothing to apply for previews or empty results
 		return nil
 	}
@@ -78,7 +78,7 @@ func (s *prorationService) ApplyProration(ctx context.Context,
 		zap.String("behavior", string(behavior)),
 	)
 
-	if behavior == proration.ProrationBehaviorCreateInvoiceItems {
+	if behavior == types.ProrationBehaviorCreateProrations {
 		// Check if there's an existing invoice for the current period
 		exists, err := s.invoiceRepo.ExistsForPeriod(ctx, subscriptionID, result.ProrationDate, result.ProrationDate)
 		if err != nil {

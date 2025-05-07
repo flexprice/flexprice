@@ -253,7 +253,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			if err := prorationService.ApplyProration(
 				ctx,
 				prorationResult,
-				proration.ProrationBehaviorCreateInvoiceItems,
+				types.ProrationBehaviorCreateProrations,
 				types.GetTenantID(ctx),
 				types.GetEnvironmentID(ctx),
 				sub.ID,

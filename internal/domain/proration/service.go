@@ -2,6 +2,8 @@ package proration
 
 import (
 	"context"
+
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // Service defines the operations for handling proration.
@@ -15,7 +17,7 @@ type Service interface {
 	// (or potentially credit notes) via the Invoice service/repository.
 	ApplyProration(ctx context.Context,
 		result *ProrationResult,
-		behavior ProrationBehavior,
+		behavior types.ProrationBehavior,
 		tenantID string,
 		environmentID string,
 		subscriptionID string,

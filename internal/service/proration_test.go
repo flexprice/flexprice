@@ -179,7 +179,7 @@ func TestApplyProration_CreateInvoiceItems_NewInvoice(t *testing.T) {
 	mockInvRepo.On("Create", ctx, mock.AnythingOfType("*invoice.Invoice")).Return(nil)
 	mockInvRepo.On("AddLineItems", ctx, mock.AnythingOfType("string"), mock.AnythingOfType("[]*invoice.InvoiceLineItem")).Return(nil)
 
-	err := svc.ApplyProration(ctx, result, proration.ProrationBehaviorCreateInvoiceItems, "tenant_123", "env_123", "sub_123")
+	err := svc.ApplyProration(ctx, result, types.ProrationBehaviorCreateProrations, "tenant_123", "env_123", "sub_123")
 
 	assert.NoError(t, err)
 	mockInvRepo.AssertExpectations(t)
@@ -233,7 +233,7 @@ func TestApplyProration_CreateInvoiceItems_ExistingInvoice(t *testing.T) {
 	mockInvRepo.On("List", ctx, mock.AnythingOfType("*types.InvoiceFilter")).Return([]*invoice.Invoice{existingInvoice}, nil)
 	mockInvRepo.On("AddLineItems", ctx, "inv_123", mock.AnythingOfType("[]*invoice.InvoiceLineItem")).Return(nil)
 
-	err := svc.ApplyProration(ctx, result, proration.ProrationBehaviorCreateInvoiceItems, "tenant_123", "env_123", "sub_123")
+	err := svc.ApplyProration(ctx, result, types.ProrationBehaviorCreateProrations, "tenant_123", "env_123", "sub_123")
 
 	assert.NoError(t, err)
 	mockInvRepo.AssertExpectations(t)
@@ -252,7 +252,7 @@ func TestApplyProration_NoAction(t *testing.T) {
 		Currency:  "USD",
 	}
 
-	err := svc.ApplyProration(ctx, result, proration.ProrationBehaviorNone, "tenant_123", "env_123", "sub_123")
+	err := svc.ApplyProration(ctx, result, types.ProrationBehaviorNone, "tenant_123", "env_123", "sub_123")
 
 	assert.NoError(t, err)
 	mockInvRepo.AssertNotCalled(t, "ExistsForPeriod")
@@ -278,7 +278,7 @@ func TestApplyProration_ErrorCases(t *testing.T) {
 	t.Run("ExistsForPeriod error", func(t *testing.T) {
 		mockInvRepo.On("ExistsForPeriod", ctx, "sub_123", now, now).Return(false, assert.AnError).Once()
 
-		err := svc.ApplyProration(ctx, result, proration.ProrationBehaviorCreateInvoiceItems, "tenant_123", "env_123", "sub_123")
+		err := svc.ApplyProration(ctx, result, types.ProrationBehaviorCreateProrations, "tenant_123", "env_123", "sub_123")
 
 		assert.Error(t, err)
 		mockInvRepo.AssertExpectations(t)
@@ -288,7 +288,7 @@ func TestApplyProration_ErrorCases(t *testing.T) {
 		mockInvRepo.On("ExistsForPeriod", ctx, "sub_123", now, now).Return(false, nil).Once()
 		mockInvRepo.On("GetNextInvoiceNumber", ctx).Return("", assert.AnError).Once()
 
-		err := svc.ApplyProration(ctx, result, proration.ProrationBehaviorCreateInvoiceItems, "tenant_123", "env_123", "sub_123")
+		err := svc.ApplyProration(ctx, result, types.ProrationBehaviorCreateProrations, "tenant_123", "env_123", "sub_123")
 
 		assert.Error(t, err)
 		mockInvRepo.AssertExpectations(t)
@@ -299,7 +299,7 @@ func TestApplyProration_ErrorCases(t *testing.T) {
 		mockInvRepo.On("GetNextInvoiceNumber", ctx).Return("INV-001", nil).Once()
 		mockInvRepo.On("GetNextBillingSequence", ctx, "sub_123").Return(0, assert.AnError).Once()
 
-		err := svc.ApplyProration(ctx, result, proration.ProrationBehaviorCreateInvoiceItems, "tenant_123", "env_123", "sub_123")
+		err := svc.ApplyProration(ctx, result, types.ProrationBehaviorCreateProrations, "tenant_123", "env_123", "sub_123")
 
 		assert.Error(t, err)
 		mockInvRepo.AssertExpectations(t)
@@ -311,7 +311,7 @@ func TestApplyProration_ErrorCases(t *testing.T) {
 		mockInvRepo.On("GetNextBillingSequence", ctx, "sub_123").Return(1, nil).Once()
 		mockInvRepo.On("Create", ctx, mock.AnythingOfType("*invoice.Invoice")).Return(assert.AnError).Once()
 
-		err := svc.ApplyProration(ctx, result, proration.ProrationBehaviorCreateInvoiceItems, "tenant_123", "env_123", "sub_123")
+		err := svc.ApplyProration(ctx, result, types.ProrationBehaviorCreateProrations, "tenant_123", "env_123", "sub_123")
 
 		assert.Error(t, err)
 		mockInvRepo.AssertExpectations(t)
@@ -321,7 +321,7 @@ func TestApplyProration_ErrorCases(t *testing.T) {
 		mockInvRepo.On("ExistsForPeriod", ctx, "sub_123", now, now).Return(true, nil).Once()
 		mockInvRepo.On("List", ctx, mock.AnythingOfType("*types.InvoiceFilter")).Return(nil, assert.AnError).Once()
 
-		err := svc.ApplyProration(ctx, result, proration.ProrationBehaviorCreateInvoiceItems, "tenant_123", "env_123", "sub_123")
+		err := svc.ApplyProration(ctx, result, types.ProrationBehaviorCreateProrations, "tenant_123", "env_123", "sub_123")
 
 		assert.Error(t, err)
 		mockInvRepo.AssertExpectations(t)
@@ -331,7 +331,7 @@ func TestApplyProration_ErrorCases(t *testing.T) {
 		mockInvRepo.On("ExistsForPeriod", ctx, "sub_123", now, now).Return(true, nil).Once()
 		mockInvRepo.On("List", ctx, mock.AnythingOfType("*types.InvoiceFilter")).Return([]*invoice.Invoice{}, nil).Once()
 
-		err := svc.ApplyProration(ctx, result, proration.ProrationBehaviorCreateInvoiceItems, "tenant_123", "env_123", "sub_123")
+		err := svc.ApplyProration(ctx, result, types.ProrationBehaviorCreateProrations, "tenant_123", "env_123", "sub_123")
 
 		assert.Error(t, err)
 		mockInvRepo.AssertExpectations(t)
@@ -348,7 +348,7 @@ func TestApplyProration_ErrorCases(t *testing.T) {
 		mockInvRepo.On("List", ctx, mock.AnythingOfType("*types.InvoiceFilter")).Return([]*invoice.Invoice{existingInvoice}, nil).Once()
 		mockInvRepo.On("AddLineItems", ctx, "inv_123", mock.AnythingOfType("[]*invoice.InvoiceLineItem")).Return(assert.AnError).Once()
 
-		err := svc.ApplyProration(ctx, result, proration.ProrationBehaviorCreateInvoiceItems, "tenant_123", "env_123", "sub_123")
+		err := svc.ApplyProration(ctx, result, types.ProrationBehaviorCreateProrations, "tenant_123", "env_123", "sub_123")
 
 		assert.Error(t, err)
 		mockInvRepo.AssertExpectations(t)

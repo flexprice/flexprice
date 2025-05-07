@@ -7,61 +7,6 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// ProrationAction defines the type of change triggering proration.
-type ProrationAction string
-
-const (
-	ProrationActionUpgrade        ProrationAction = "upgrade"
-	ProrationActionDowngrade      ProrationAction = "downgrade"
-	ProrationActionQuantityChange ProrationAction = "quantity_change"
-	ProrationActionCancellation   ProrationAction = "cancellation"
-	ProrationActionAddItem        ProrationAction = "add_item"
-	ProrationActionRemoveItem     ProrationAction = "remove_item"
-)
-
-// ProrationStrategy defines how the proration coefficient is calculated.
-type ProrationStrategy string
-
-const (
-	StrategyDayBased    ProrationStrategy = "day_based"    // Default
-	StrategySecondBased ProrationStrategy = "second_based" // Future enhancement
-)
-
-// ProrationBehavior defines how proration is applied (e.g., create invoice items).
-type ProrationBehavior string
-
-const (
-	ProrationBehaviorCreateInvoiceItems ProrationBehavior = "create_invoice_items" // Default: Create credits/charges on invoice
-	ProrationBehaviorNone               ProrationBehavior = "none"                 // Calculate but don't apply (e.g., for previews)
-)
-
-// BillingMode represents when a subscription is billed.
-type BillingMode string
-
-const (
-	BillingModeInAdvance BillingMode = "in_advance"
-	BillingModeInArrears BillingMode = "in_arrears"
-)
-
-// ScheduleType determines when subscription changes take effect.
-type ScheduleType string
-
-const (
-	ScheduleTypeImmediate    ScheduleType = "immediate"
-	ScheduleTypePeriodEnd    ScheduleType = "period_end"
-	ScheduleTypeSpecificDate ScheduleType = "specific_date"
-)
-
-// TerminationReason represents why a subscription is being terminated.
-type TerminationReason string
-
-const (
-	TerminationReasonUpgrade      TerminationReason = "upgrade"
-	TerminationReasonDowngrade    TerminationReason = "downgrade"
-	TerminationReasonCancellation TerminationReason = "cancellation"
-	TerminationReasonExpiration   TerminationReason = "expiration"
-)
-
 // ProrationParams holds all necessary input for calculating proration.
 type ProrationParams struct {
 	// Subscription & Line Item Context
@@ -90,8 +35,9 @@ type ProrationParams struct {
 	CustomerTimezone  string                  // Timezone of the customer
 
 	// Handling Multiple Changes / Credits
-	OriginalAmountPaid    decimal.Decimal // Amount originally paid for the item(s) being changed in this period
-	PreviousCreditsIssued decimal.Decimal // Sum of credits already issued against OriginalAmountPaid in this period
+	OriginalAmountPaid    decimal.Decimal         // Amount originally paid for the item(s) being changed in this period
+	PreviousCreditsIssued decimal.Decimal         // Sum of credits already issued against OriginalAmountPaid in this period
+	ProrationStrategy     types.ProrationStrategy // Strategy to use for proration
 }
 
 // ProrationLineItem represents a single credit or charge line item.
