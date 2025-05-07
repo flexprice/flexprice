@@ -91,7 +91,6 @@ var (
 		{Name: "address_state", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(100)"}},
 		{Name: "address_postal_code", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "address_country", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(2)"}},
-		{Name: "timezone", Type: field.TypeString, Nullable: true, Default: "UTC", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
 	}
 	// CustomersTable holds the schema information for the "customers" table.
