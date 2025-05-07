@@ -7,6 +7,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -138,6 +139,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		sub.StartDate = sub.StartDate.UTC()
 	}
 
+	// TODO: handle customer timezone here
 	if sub.BillingCycle == types.BillingCycleCalendar {
 		sub.BillingAnchor = types.CalculateCalendarBillingAnchor(sub.StartDate, sub.BillingPeriod)
 	} else {
@@ -212,6 +214,56 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		}
 	}
 	sub.LineItems = lineItems
+
+	// Handle proration for calendar billing at the start of the subscription
+	if req.BillingCycle == types.BillingCycleCalendar &&
+		req.ProrationMode == types.ProrationModeActive {
+		prorationService := NewProrationService(s.ServiceParams.ProrationCalculator, s.ServiceParams.InvoiceRepo, s.Logger)
+
+		// For each line item, calculate prorated amount
+		for _, item := range sub.LineItems {
+			price, ok := priceMap[item.PriceID]
+			if !ok {
+				continue
+			}
+
+			prorationParams := proration.ProrationParams{
+				SubscriptionID:     sub.ID,
+				LineItemID:         item.ID,
+				PlanPayInAdvance:   true,
+				CurrentPeriodStart: sub.StartDate,
+				CurrentPeriodEnd:   sub.BillingAnchor,
+				Action:             types.ProrationActionAddItem,
+				NewPriceID:         item.PriceID,
+				NewQuantity:        item.Quantity,
+				NewPricePerUnit:    price.Amount,
+				ProrationDate:      sub.StartDate,
+				ProrationBehavior:  types.ProrationBehaviorCreateProrations,
+				CustomerTimezone:   sub.CustomerTimezone,
+			}
+
+			prorationResult, err := prorationService.CalculateProration(ctx, prorationParams)
+			if err != nil {
+				return nil, ierr.WithError(err).
+					WithHintf("failed to calculate proration for new subscription: %v", err).
+					Mark(ierr.ErrSystem)
+			}
+
+			// Apply proration to create invoice items
+			if err := prorationService.ApplyProration(
+				ctx,
+				prorationResult,
+				proration.ProrationBehaviorCreateInvoiceItems,
+				types.GetTenantID(ctx),
+				types.GetEnvironmentID(ctx),
+				sub.ID,
+			); err != nil {
+				return nil, ierr.WithError(err).
+					WithHintf("failed to apply proration for new subscription: %v", err).
+					Mark(ierr.ErrSystem)
+			}
+		}
+	}
 
 	s.Logger.Infow("creating subscription",
 		"customer_id", sub.CustomerID,

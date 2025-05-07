@@ -117,6 +117,12 @@ func (Subscription) Fields() []ent.Field {
 			NotEmpty().
 			Immutable().
 			Default(string(types.BillingCycleAnniversary)),
+		field.String("customer_timezone").
+			Default("UTC"),
+		field.String("proration_mode").
+			NotEmpty().
+			Immutable().
+			Default(string(types.ProrationModeNone)),
 	}
 }
 

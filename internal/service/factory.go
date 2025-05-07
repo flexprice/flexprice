@@ -13,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/task"
@@ -62,6 +63,9 @@ type ServiceParams struct {
 
 	// http client
 	Client httpclient.Client
+
+	// Proration
+	ProrationCalculator proration.Calculator
 }
 
 // Common service params

@@ -45,6 +45,8 @@ const (
 	FieldAddressPostalCode = "address_postal_code"
 	// FieldAddressCountry holds the string denoting the address_country field in the database.
 	FieldAddressCountry = "address_country"
+	// FieldTimezone holds the string denoting the timezone field in the database.
+	FieldTimezone = "timezone"
 	// FieldMetadata holds the string denoting the metadata field in the database.
 	FieldMetadata = "metadata"
 	// Table holds the table name of the customer in the database.
@@ -70,6 +72,7 @@ var Columns = []string{
 	FieldAddressState,
 	FieldAddressPostalCode,
 	FieldAddressCountry,
+	FieldTimezone,
 	FieldMetadata,
 }
 
@@ -100,6 +103,8 @@ var (
 	ExternalIDValidator func(string) error
 	// NameValidator is a validator for the "name" field. It is called by the builders before save.
 	NameValidator func(string) error
+	// DefaultTimezone holds the default value on creation for the "timezone" field.
+	DefaultTimezone string
 )
 
 // OrderOption defines the ordering options for the Customer queries.
@@ -188,4 +193,9 @@ func ByAddressPostalCode(opts ...sql.OrderTermOption) OrderOption {
 // ByAddressCountry orders the results by the address_country field.
 func ByAddressCountry(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAddressCountry, opts...).ToFunc()
+}
+
+// ByTimezone orders the results by the timezone field.
+func ByTimezone(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTimezone, opts...).ToFunc()
 }

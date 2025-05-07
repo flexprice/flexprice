@@ -220,6 +220,20 @@ func (cc *CustomerCreate) SetNillableAddressCountry(s *string) *CustomerCreate {
 	return cc
 }
 
+// SetTimezone sets the "timezone" field.
+func (cc *CustomerCreate) SetTimezone(s string) *CustomerCreate {
+	cc.mutation.SetTimezone(s)
+	return cc
+}
+
+// SetNillableTimezone sets the "timezone" field if the given value is not nil.
+func (cc *CustomerCreate) SetNillableTimezone(s *string) *CustomerCreate {
+	if s != nil {
+		cc.SetTimezone(*s)
+	}
+	return cc
+}
+
 // SetMetadata sets the "metadata" field.
 func (cc *CustomerCreate) SetMetadata(m map[string]string) *CustomerCreate {
 	cc.mutation.SetMetadata(m)
@@ -282,6 +296,10 @@ func (cc *CustomerCreate) defaults() {
 	if _, ok := cc.mutation.EnvironmentID(); !ok {
 		v := customer.DefaultEnvironmentID
 		cc.mutation.SetEnvironmentID(v)
+	}
+	if _, ok := cc.mutation.Timezone(); !ok {
+		v := customer.DefaultTimezone
+		cc.mutation.SetTimezone(v)
 	}
 }
 
@@ -418,6 +436,10 @@ func (cc *CustomerCreate) createSpec() (*Customer, *sqlgraph.CreateSpec) {
 	if value, ok := cc.mutation.AddressCountry(); ok {
 		_spec.SetField(customer.FieldAddressCountry, field.TypeString, value)
 		_node.AddressCountry = value
+	}
+	if value, ok := cc.mutation.Timezone(); ok {
+		_spec.SetField(customer.FieldTimezone, field.TypeString, value)
+		_node.Timezone = value
 	}
 	if value, ok := cc.mutation.Metadata(); ok {
 		_spec.SetField(customer.FieldMetadata, field.TypeJSON, value)

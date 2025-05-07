@@ -91,6 +91,7 @@ var (
 		{Name: "address_state", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(100)"}},
 		{Name: "address_postal_code", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "address_country", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(2)"}},
+		{Name: "timezone", Type: field.TypeString, Nullable: true, Default: "UTC", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
 	}
 	// CustomersTable holds the schema information for the "customers" table.
@@ -313,25 +314,16 @@ var (
 				Name:    "idx_tenant_subscription_status",
 				Unique:  false,
 				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[9], InvoicesColumns[11], InvoicesColumns[12], InvoicesColumns[2]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published'",
-				},
 			},
 			{
 				Name:    "idx_tenant_type_status",
 				Unique:  false,
 				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[10], InvoicesColumns[11], InvoicesColumns[12], InvoicesColumns[2]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published'",
-				},
 			},
 			{
 				Name:    "idx_tenant_due_date_status",
 				Unique:  false,
 				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[18], InvoicesColumns[11], InvoicesColumns[12], InvoicesColumns[2]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published'",
-				},
 			},
 			{
 				Name:    "idx_tenant_environment_invoice_number_unique",
@@ -749,6 +741,8 @@ var (
 		{Name: "pause_status", Type: field.TypeString, Default: "none", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "active_pause_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "billing_cycle", Type: field.TypeString, Default: "anniversary"},
+		{Name: "customer_timezone", Type: field.TypeString, Default: "UTC"},
+		{Name: "proration_mode", Type: field.TypeString, Default: "none"},
 	}
 	// SubscriptionsTable holds the schema information for the "subscriptions" table.
 	SubscriptionsTable = &schema.Table{

@@ -50,6 +50,8 @@ type Customer struct {
 	AddressPostalCode string `json:"address_postal_code,omitempty"`
 	// AddressCountry holds the value of the "address_country" field.
 	AddressCountry string `json:"address_country,omitempty"`
+	// Timezone holds the value of the "timezone" field.
+	Timezone string `json:"timezone,omitempty"`
 	// Metadata holds the value of the "metadata" field.
 	Metadata     map[string]string `json:"metadata,omitempty"`
 	selectValues sql.SelectValues
@@ -62,7 +64,7 @@ func (*Customer) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case customer.FieldMetadata:
 			values[i] = new([]byte)
-		case customer.FieldID, customer.FieldTenantID, customer.FieldStatus, customer.FieldCreatedBy, customer.FieldUpdatedBy, customer.FieldEnvironmentID, customer.FieldExternalID, customer.FieldName, customer.FieldEmail, customer.FieldAddressLine1, customer.FieldAddressLine2, customer.FieldAddressCity, customer.FieldAddressState, customer.FieldAddressPostalCode, customer.FieldAddressCountry:
+		case customer.FieldID, customer.FieldTenantID, customer.FieldStatus, customer.FieldCreatedBy, customer.FieldUpdatedBy, customer.FieldEnvironmentID, customer.FieldExternalID, customer.FieldName, customer.FieldEmail, customer.FieldAddressLine1, customer.FieldAddressLine2, customer.FieldAddressCity, customer.FieldAddressState, customer.FieldAddressPostalCode, customer.FieldAddressCountry, customer.FieldTimezone:
 			values[i] = new(sql.NullString)
 		case customer.FieldCreatedAt, customer.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -183,6 +185,12 @@ func (c *Customer) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				c.AddressCountry = value.String
 			}
+		case customer.FieldTimezone:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field timezone", values[i])
+			} else if value.Valid {
+				c.Timezone = value.String
+			}
 		case customer.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
@@ -274,6 +282,9 @@ func (c *Customer) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("address_country=")
 	builder.WriteString(c.AddressCountry)
+	builder.WriteString(", ")
+	builder.WriteString("timezone=")
+	builder.WriteString(c.Timezone)
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
 	builder.WriteString(fmt.Sprintf("%v", c.Metadata))

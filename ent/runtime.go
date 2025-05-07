@@ -121,6 +121,10 @@ func init() {
 	customerDescName := customerFields[2].Descriptor()
 	// customer.NameValidator is a validator for the "name" field. It is called by the builders before save.
 	customer.NameValidator = customerDescName.Validators[0].(func(string) error)
+	// customerDescTimezone is the schema descriptor for timezone field.
+	customerDescTimezone := customerFields[10].Descriptor()
+	// customer.DefaultTimezone holds the default value on creation for the timezone field.
+	customer.DefaultTimezone = customerDescTimezone.Default.(string)
 	entitlementMixin := schema.Entitlement{}.Mixin()
 	entitlementMixinFields0 := entitlementMixin[0].Fields()
 	_ = entitlementMixinFields0
@@ -763,6 +767,16 @@ func init() {
 	subscription.DefaultBillingCycle = subscriptionDescBillingCycle.Default.(string)
 	// subscription.BillingCycleValidator is a validator for the "billing_cycle" field. It is called by the builders before save.
 	subscription.BillingCycleValidator = subscriptionDescBillingCycle.Validators[0].(func(string) error)
+	// subscriptionDescCustomerTimezone is the schema descriptor for customer_timezone field.
+	subscriptionDescCustomerTimezone := subscriptionFields[24].Descriptor()
+	// subscription.DefaultCustomerTimezone holds the default value on creation for the customer_timezone field.
+	subscription.DefaultCustomerTimezone = subscriptionDescCustomerTimezone.Default.(string)
+	// subscriptionDescProrationMode is the schema descriptor for proration_mode field.
+	subscriptionDescProrationMode := subscriptionFields[25].Descriptor()
+	// subscription.DefaultProrationMode holds the default value on creation for the proration_mode field.
+	subscription.DefaultProrationMode = subscriptionDescProrationMode.Default.(string)
+	// subscription.ProrationModeValidator is a validator for the "proration_mode" field. It is called by the builders before save.
+	subscription.ProrationModeValidator = subscriptionDescProrationMode.Validators[0].(func(string) error)
 	subscriptionlineitemMixin := schema.SubscriptionLineItem{}.Mixin()
 	subscriptionlineitemMixinFields0 := subscriptionlineitemMixin[0].Fields()
 	_ = subscriptionlineitemMixinFields0

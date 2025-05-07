@@ -236,6 +236,26 @@ func (cu *CustomerUpdate) ClearAddressCountry() *CustomerUpdate {
 	return cu
 }
 
+// SetTimezone sets the "timezone" field.
+func (cu *CustomerUpdate) SetTimezone(s string) *CustomerUpdate {
+	cu.mutation.SetTimezone(s)
+	return cu
+}
+
+// SetNillableTimezone sets the "timezone" field if the given value is not nil.
+func (cu *CustomerUpdate) SetNillableTimezone(s *string) *CustomerUpdate {
+	if s != nil {
+		cu.SetTimezone(*s)
+	}
+	return cu
+}
+
+// ClearTimezone clears the value of the "timezone" field.
+func (cu *CustomerUpdate) ClearTimezone() *CustomerUpdate {
+	cu.mutation.ClearTimezone()
+	return cu
+}
+
 // SetMetadata sets the "metadata" field.
 func (cu *CustomerUpdate) SetMetadata(m map[string]string) *CustomerUpdate {
 	cu.mutation.SetMetadata(m)
@@ -381,6 +401,12 @@ func (cu *CustomerUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if cu.mutation.AddressCountryCleared() {
 		_spec.ClearField(customer.FieldAddressCountry, field.TypeString)
+	}
+	if value, ok := cu.mutation.Timezone(); ok {
+		_spec.SetField(customer.FieldTimezone, field.TypeString, value)
+	}
+	if cu.mutation.TimezoneCleared() {
+		_spec.ClearField(customer.FieldTimezone, field.TypeString)
 	}
 	if value, ok := cu.mutation.Metadata(); ok {
 		_spec.SetField(customer.FieldMetadata, field.TypeJSON, value)
@@ -616,6 +642,26 @@ func (cuo *CustomerUpdateOne) ClearAddressCountry() *CustomerUpdateOne {
 	return cuo
 }
 
+// SetTimezone sets the "timezone" field.
+func (cuo *CustomerUpdateOne) SetTimezone(s string) *CustomerUpdateOne {
+	cuo.mutation.SetTimezone(s)
+	return cuo
+}
+
+// SetNillableTimezone sets the "timezone" field if the given value is not nil.
+func (cuo *CustomerUpdateOne) SetNillableTimezone(s *string) *CustomerUpdateOne {
+	if s != nil {
+		cuo.SetTimezone(*s)
+	}
+	return cuo
+}
+
+// ClearTimezone clears the value of the "timezone" field.
+func (cuo *CustomerUpdateOne) ClearTimezone() *CustomerUpdateOne {
+	cuo.mutation.ClearTimezone()
+	return cuo
+}
+
 // SetMetadata sets the "metadata" field.
 func (cuo *CustomerUpdateOne) SetMetadata(m map[string]string) *CustomerUpdateOne {
 	cuo.mutation.SetMetadata(m)
@@ -791,6 +837,12 @@ func (cuo *CustomerUpdateOne) sqlSave(ctx context.Context) (_node *Customer, err
 	}
 	if cuo.mutation.AddressCountryCleared() {
 		_spec.ClearField(customer.FieldAddressCountry, field.TypeString)
+	}
+	if value, ok := cuo.mutation.Timezone(); ok {
+		_spec.SetField(customer.FieldTimezone, field.TypeString, value)
+	}
+	if cuo.mutation.TimezoneCleared() {
+		_spec.ClearField(customer.FieldTimezone, field.TypeString)
 	}
 	if value, ok := cuo.mutation.Metadata(); ok {
 		_spec.SetField(customer.FieldMetadata, field.TypeJSON, value)
