@@ -47,10 +47,15 @@ type FeatureFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
 
+	// filters allows complex filtering based on multiple fields
+	Filters []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
+	Sort    []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
+
 	// Feature specific filters
-	FeatureIDs []string `form:"feature_ids" json:"feature_ids"`
-	MeterIDs   []string `form:"meter_ids" json:"meter_ids"`
-	LookupKey  string   `form:"lookup_key" json:"lookup_key"`
+	FeatureIDs   []string `form:"feature_ids" json:"feature_ids"`
+	MeterIDs     []string `form:"meter_ids" json:"meter_ids"`
+	LookupKey    string   `form:"lookup_key" json:"lookup_key"`
+	NameContains string   `form:"name_contains" json:"name_contains"`
 }
 
 func NewDefaultFeatureFilter() *FeatureFilter {
@@ -87,6 +92,22 @@ func (f *FeatureFilter) Validate() error {
 	if !f.GetExpand().IsEmpty() {
 		if err := f.GetExpand().Validate(FeatureExpandConfig); err != nil {
 			return err
+		}
+	}
+
+	if f.Filters != nil {
+		for _, filter := range f.Filters {
+			if err := filter.Validate(); err != nil {
+				return err
+			}
+		}
+	}
+
+	if f.Sort != nil {
+		for _, sort := range f.Sort {
+			if err := sort.Validate(); err != nil {
+				return err
+			}
 		}
 	}
 

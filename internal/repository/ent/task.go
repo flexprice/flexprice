@@ -98,6 +98,7 @@ func (r *taskRepository) Get(ctx context.Context, id string) (*domainTask.Task, 
 		Where(
 			task.ID(id),
 			task.TenantID(types.GetTenantID(ctx)),
+			task.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		Only(ctx)
 	if err != nil {
@@ -187,6 +188,7 @@ func (r *taskRepository) Update(ctx context.Context, t *domainTask.Task) error {
 		Where(
 			task.ID(t.ID),
 			task.TenantID(types.GetTenantID(ctx)),
+			task.EnvironmentID(types.GetEnvironmentID(ctx)),
 			task.Status(string(types.StatusPublished)),
 		)
 
@@ -247,6 +249,7 @@ func (r *taskRepository) Delete(ctx context.Context, id string) error {
 		Where(
 			task.ID(id),
 			task.TenantID(types.GetTenantID(ctx)),
+			task.EnvironmentID(types.GetEnvironmentID(ctx)),
 			task.Status(string(types.StatusPublished)),
 		).
 		SetStatus(string(types.StatusDeleted)).

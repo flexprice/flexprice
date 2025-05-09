@@ -116,6 +116,11 @@ func (s *featureService) GetFeatures(ctx context.Context, filter *types.FeatureF
 		filter.QueryFilter.Order = lo.ToPtr("desc")
 	}
 
+	// validate filters
+	if err := filter.Validate(); err != nil {
+		return nil, err
+	}
+
 	features, err := s.repo.List(ctx, filter)
 	if err != nil {
 		return nil, err

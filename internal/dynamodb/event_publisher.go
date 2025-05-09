@@ -33,6 +33,7 @@ func NewEventPublisher(client *Client, cfg *config.Configuration, logger *logger
 type DynamoEvent struct {
 	PK                 string                 `dynamodbav:"pk"` // TenantID
 	SK                 string                 `dynamodbav:"sk"` // EventID
+	EnvironmentID      string                 `dynamodbav:"environment_id"`
 	EventName          string                 `dynamodbav:"event_name"`
 	Properties         map[string]interface{} `dynamodbav:"properties"`
 	Timestamp          time.Time              `dynamodbav:"timestamp"`
@@ -50,6 +51,7 @@ func (p *EventPublisher) Publish(ctx context.Context, event *events.Event) error
 		Properties:         event.Properties,
 		Timestamp:          event.Timestamp,
 		Source:             event.Source,
+		EnvironmentID:      event.EnvironmentID,
 		IngestedAt:         time.Now(),
 		CustomerID:         event.CustomerID,
 		ExternalCustomerID: event.ExternalCustomerID,
@@ -71,6 +73,7 @@ func (p *EventPublisher) Publish(ctx context.Context, event *events.Event) error
 		zap.String("event_id", event.ID),
 		zap.String("tenant_id", event.TenantID),
 		zap.String("event_name", event.EventName),
+		zap.String("environment_id", event.EnvironmentID),
 	).Debug("publishing event to dynamodb")
 
 	_, err = p.client.db.PutItem(ctx, input)

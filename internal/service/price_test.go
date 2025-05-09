@@ -8,6 +8,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -31,7 +32,8 @@ func (s *PriceServiceSuite) SetupTest() {
 	s.priceRepo = testutil.NewInMemoryPriceStore()
 
 	s.priceService = &priceService{
-		repo: s.priceRepo,
+		repo:   s.priceRepo,
+		logger: logger.GetLogger(),
 	}
 }
 
@@ -175,4 +177,170 @@ func (s *PriceServiceSuite) TestDeletePrice() {
 	// Ensure the price no longer exists
 	_, err = s.priceRepo.Get(s.ctx, "price-1")
 	s.Error(err)
+}
+
+func (s *PriceServiceSuite) TestCalculateCostWithBreakup_FlatFee() {
+	price := &price.Price{
+		ID:           "price-1",
+		Amount:       decimal.NewFromInt(100),
+		Currency:     "usd",
+		BillingModel: types.BILLING_MODEL_FLAT_FEE,
+	}
+
+	quantity := decimal.NewFromInt(5)
+	result := s.priceService.CalculateCostWithBreakup(s.ctx, price, quantity)
+
+	s.Equal(decimal.NewFromInt(500).Equal(result.FinalCost), true)
+	s.Equal(decimal.NewFromInt(100).Equal(result.EffectiveUnitCost), true)
+	s.Equal(decimal.NewFromInt(100).Equal(result.TierUnitAmount), true)
+	s.Equal(-1, result.SelectedTierIndex)
+}
+
+func (s *PriceServiceSuite) TestCalculateCostWithBreakup_Package() {
+	price := &price.Price{
+		ID:           "price-2",
+		Amount:       decimal.NewFromInt(50),
+		Currency:     "usd",
+		BillingModel: types.BILLING_MODEL_PACKAGE,
+		TransformQuantity: price.JSONBTransformQuantity{
+			DivideBy: 10,
+			Round:    types.ROUND_UP,
+		},
+	}
+
+	quantity := decimal.NewFromInt(25)
+	result := s.priceService.CalculateCostWithBreakup(s.ctx, price, quantity)
+
+	s.Equal(decimal.NewFromInt(150).Equal(result.FinalCost), true) // 25/10 = 2.5, rounded up to 3, 3*50 = 150
+	s.Equal(decimal.NewFromInt(50).Equal(result.EffectiveUnitCost), true)
+	s.Equal(decimal.NewFromInt(50).Equal(result.TierUnitAmount), true)
+	s.Equal(-1, result.SelectedTierIndex)
+}
+
+func (s *PriceServiceSuite) TestCalculateCostWithBreakup_TieredVolume() {
+	upTo10 := uint64(10)
+	upTo20 := uint64(20)
+	price := &price.Price{
+		ID:           "price-3",
+		Amount:       decimal.NewFromInt(100),
+		Currency:     "usd",
+		BillingModel: types.BILLING_MODEL_TIERED,
+		TierMode:     types.BILLING_TIER_VOLUME,
+		Tiers: []price.PriceTier{
+			{
+				UpTo:       &upTo10,
+				UnitAmount: decimal.NewFromInt(50),
+			},
+			{
+				UpTo:       &upTo20,
+				UnitAmount: decimal.NewFromInt(40),
+			},
+			{
+				UnitAmount: decimal.NewFromInt(30),
+			},
+		},
+	}
+
+	// Test within first tier
+	quantity := decimal.NewFromInt(5)
+	result := s.priceService.CalculateCostWithBreakup(s.ctx, price, quantity)
+	s.Equal(decimal.NewFromInt(250).Equal(result.FinalCost), true) // 5 * 50 = 250
+	s.Equal(decimal.NewFromInt(50).Equal(result.EffectiveUnitCost), true)
+	s.Equal(decimal.NewFromInt(50).Equal(result.TierUnitAmount), true)
+	s.Equal(0, result.SelectedTierIndex)
+
+	// Test within second tier
+	quantity = decimal.NewFromInt(15)
+	result = s.priceService.CalculateCostWithBreakup(s.ctx, price, quantity)
+	s.Equal(decimal.NewFromInt(600).Equal(result.FinalCost), true) // 15 * 40 = 600
+	s.Equal(decimal.NewFromInt(40).Equal(result.EffectiveUnitCost), true)
+	s.Equal(decimal.NewFromInt(40).Equal(result.TierUnitAmount), true)
+	s.Equal(1, result.SelectedTierIndex)
+
+	// Test within third tier (unlimited)
+	quantity = decimal.NewFromInt(25)
+	result = s.priceService.CalculateCostWithBreakup(s.ctx, price, quantity)
+	s.Equal(decimal.NewFromInt(750).Equal(result.FinalCost), true) // 25 * 30 = 750
+	s.Equal(decimal.NewFromInt(30).Equal(result.EffectiveUnitCost), true)
+	s.Equal(decimal.NewFromInt(30).Equal(result.TierUnitAmount), true)
+	s.Equal(2, result.SelectedTierIndex)
+}
+
+func (s *PriceServiceSuite) TestCalculateCostWithBreakup_TieredSlab() {
+	upTo10 := uint64(10)
+	upTo20 := uint64(20)
+	price := &price.Price{
+		ID:           "price-4",
+		Amount:       decimal.NewFromInt(100),
+		Currency:     "usd",
+		BillingModel: types.BILLING_MODEL_TIERED,
+		TierMode:     types.BILLING_TIER_SLAB,
+		Tiers: []price.PriceTier{
+			{
+				UpTo:       &upTo10,
+				UnitAmount: decimal.NewFromInt(50),
+			},
+			{
+				UpTo:       &upTo20,
+				UnitAmount: decimal.NewFromInt(40),
+			},
+			{
+				UnitAmount: decimal.NewFromInt(30),
+			},
+		},
+	}
+
+	// Test within first tier
+	quantity := decimal.NewFromInt(5)
+	result := s.priceService.CalculateCostWithBreakup(s.ctx, price, quantity)
+	s.Equal(decimal.NewFromInt(250).Equal(result.FinalCost), true) // 5 * 50 = 250
+	s.Equal(decimal.NewFromInt(50).Equal(result.TierUnitAmount), true)
+	s.Equal(0, result.SelectedTierIndex)
+
+	// Test spanning first and second tiers
+	quantity = decimal.NewFromInt(15)
+	result = s.priceService.CalculateCostWithBreakup(s.ctx, price, quantity)
+
+	// The implementation calculates: (10 * 50) + (5 * 40) = 500 + 200 = 700
+	expectedFinalCost := decimal.NewFromInt(700)
+	s.Equal(expectedFinalCost.Equal(result.FinalCost), true)
+
+	expectedUnitCost := decimal.NewFromInt(700).Div(decimal.NewFromInt(15)) // 700/15
+	s.Equal(expectedUnitCost.Equal(result.EffectiveUnitCost), true)
+	s.Equal(decimal.NewFromInt(40).Equal(result.TierUnitAmount), true)
+	s.Equal(1, result.SelectedTierIndex)
+
+	// Test spanning all three tiers
+	quantity = decimal.NewFromInt(25)
+	result = s.priceService.CalculateCostWithBreakup(s.ctx, price, quantity)
+
+	// From the debug logs, the calculation is:
+	// (10 * 50) = 500 (first tier)
+	// (15 * 40) = 600 (second tier, not 10 as expected)
+	// No third tier is used
+	// Total: 500 + 600 = 1100
+	expectedFinalCost = decimal.NewFromInt(1100)
+	s.Equal(expectedFinalCost.Equal(result.FinalCost), true)
+
+	expectedUnitCost = decimal.NewFromInt(1100).Div(decimal.NewFromInt(25)) // 1100/25
+	s.Equal(expectedUnitCost.Equal(result.EffectiveUnitCost), true)
+	s.Equal(decimal.NewFromInt(40).Equal(result.TierUnitAmount), true) // Second tier is the last one used
+	s.Equal(1, result.SelectedTierIndex)                               // Index 1 (second tier)
+}
+
+func (s *PriceServiceSuite) TestCalculateCostWithBreakup_ZeroQuantity() {
+	price := &price.Price{
+		ID:           "price-5",
+		Amount:       decimal.NewFromInt(100),
+		Currency:     "usd",
+		BillingModel: types.BILLING_MODEL_FLAT_FEE,
+	}
+
+	quantity := decimal.Zero
+	result := s.priceService.CalculateCostWithBreakup(s.ctx, price, quantity)
+
+	s.Equal(decimal.Zero, result.FinalCost)
+	s.Equal(decimal.Zero, result.EffectiveUnitCost)
+	s.Equal(decimal.Zero, result.TierUnitAmount)
+	s.Equal(-1, result.SelectedTierIndex)
 }

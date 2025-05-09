@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/payment"
 	"github.com/flexprice/flexprice/ent/paymentattempt"
+	"github.com/flexprice/flexprice/internal/cache"
 	domainPayment "github.com/flexprice/flexprice/internal/domain/payment"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -18,13 +19,15 @@ type paymentRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts PaymentQueryOptions
+	cache     cache.Cache
 }
 
-func NewPaymentRepository(client postgres.IClient, log *logger.Logger) domainPayment.Repository {
+func NewPaymentRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainPayment.Repository {
 	return &paymentRepository{
 		client:    client,
 		log:       log,
 		queryOpts: PaymentQueryOptions{},
+		cache:     cache,
 	}
 }
 
@@ -96,13 +99,6 @@ func (r *paymentRepository) Create(ctx context.Context, p *domainPayment.Payment
 }
 
 func (r *paymentRepository) Get(ctx context.Context, id string) (*domainPayment.Payment, error) {
-	client := r.client.Querier(ctx)
-
-	r.log.Debugw("getting payment",
-		"payment_id", id,
-		"tenant_id", types.GetTenantID(ctx),
-	)
-
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "payment", "get", map[string]interface{}{
 		"payment_id": id,
@@ -110,9 +106,22 @@ func (r *paymentRepository) Get(ctx context.Context, id string) (*domainPayment.
 	})
 	defer FinishSpan(span)
 
+	// Try to get from cache first
+	if cachedPayment := r.GetCache(ctx, id); cachedPayment != nil {
+		return cachedPayment, nil
+	}
+
+	client := r.client.Querier(ctx)
+
+	r.log.Debugw("getting payment",
+		"payment_id", id,
+		"tenant_id", types.GetTenantID(ctx),
+	)
+
 	p, err := client.Payment.Query().
 		Where(
 			payment.ID(id),
+			payment.EnvironmentID(types.GetEnvironmentID(ctx)),
 			payment.TenantID(types.GetTenantID(ctx)),
 		).
 		WithAttempts().
@@ -136,7 +145,9 @@ func (r *paymentRepository) Get(ctx context.Context, id string) (*domainPayment.
 			Mark(ierr.ErrDatabase)
 	}
 
-	return domainPayment.FromEnt(p), nil
+	paymentData := domainPayment.FromEnt(p)
+	r.SetCache(ctx, paymentData)
+	return paymentData, nil
 }
 
 func (r *paymentRepository) List(ctx context.Context, filter *types.PaymentFilter) ([]*domainPayment.Payment, error) {
@@ -223,6 +234,7 @@ func (r *paymentRepository) Update(ctx context.Context, p *domainPayment.Payment
 
 	_, err := client.Payment.Update().
 		Where(
+			payment.EnvironmentID(types.GetEnvironmentID(ctx)),
 			payment.ID(p.ID),
 			payment.TenantID(p.TenantID),
 		).
@@ -256,6 +268,7 @@ func (r *paymentRepository) Update(ctx context.Context, p *domainPayment.Payment
 			Mark(ierr.ErrDatabase)
 	}
 
+	r.DeleteCache(ctx, p.ID)
 	return nil
 }
 
@@ -276,6 +289,7 @@ func (r *paymentRepository) Delete(ctx context.Context, id string) error {
 
 	_, err := client.Payment.Update().
 		Where(
+			payment.EnvironmentID(types.GetEnvironmentID(ctx)),
 			payment.ID(id),
 			payment.TenantID(types.GetTenantID(ctx)),
 		).
@@ -299,6 +313,7 @@ func (r *paymentRepository) Delete(ctx context.Context, id string) error {
 			Mark(ierr.ErrDatabase)
 	}
 
+	r.DeleteCache(ctx, id)
 	return nil
 }
 
@@ -320,6 +335,7 @@ func (r *paymentRepository) GetByIdempotencyKey(ctx context.Context, key string)
 	p, err := client.Payment.Query().
 		Where(
 			payment.IdempotencyKey(key),
+			payment.EnvironmentID(types.GetEnvironmentID(ctx)),
 			payment.TenantID(types.GetTenantID(ctx)),
 		).
 		WithAttempts().
@@ -419,6 +435,7 @@ func (r *paymentRepository) GetAttempt(ctx context.Context, id string) (*domainP
 		Where(
 			paymentattempt.ID(id),
 			paymentattempt.TenantID(types.GetTenantID(ctx)),
+			paymentattempt.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		Only(ctx)
 
@@ -462,6 +479,7 @@ func (r *paymentRepository) UpdateAttempt(ctx context.Context, a *domainPayment.
 
 	_, err := client.PaymentAttempt.Update().
 		Where(
+			paymentattempt.EnvironmentID(types.GetEnvironmentID(ctx)),
 			paymentattempt.ID(a.ID),
 			paymentattempt.TenantID(a.TenantID),
 		).
@@ -492,6 +510,7 @@ func (r *paymentRepository) UpdateAttempt(ctx context.Context, a *domainPayment.
 			Mark(ierr.ErrDatabase)
 	}
 
+	r.DeleteCache(ctx, a.ID)
 	return nil
 }
 
@@ -512,6 +531,7 @@ func (r *paymentRepository) ListAttempts(ctx context.Context, paymentID string) 
 		Where(
 			paymentattempt.PaymentID(paymentID),
 			paymentattempt.TenantID(types.GetTenantID(ctx)),
+			paymentattempt.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		Order(ent.Asc(paymentattempt.FieldAttemptNumber)).
 		All(ctx)
@@ -544,6 +564,7 @@ func (r *paymentRepository) GetLatestAttempt(ctx context.Context, paymentID stri
 
 	a, err := client.PaymentAttempt.Query().
 		Where(
+			paymentattempt.EnvironmentID(types.GetEnvironmentID(ctx)),
 			paymentattempt.PaymentID(paymentID),
 			paymentattempt.TenantID(types.GetTenantID(ctx)),
 		).
@@ -678,4 +699,43 @@ func (o PaymentQueryOptions) applyEntityQueryOptions(_ context.Context, f *types
 	}
 
 	return query
+}
+
+func (r *paymentRepository) SetCache(ctx context.Context, payment *domainPayment.Payment) {
+	span := cache.StartCacheSpan(ctx, "payment", "set", map[string]interface{}{
+		"payment_id": payment.ID,
+	})
+	defer cache.FinishSpan(span)
+
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	cacheKey := cache.GenerateKey(cache.PrefixPayment, tenantID, environmentID, payment.ID)
+	r.cache.Set(ctx, cacheKey, payment, cache.ExpiryDefaultInMemory)
+}
+
+func (r *paymentRepository) GetCache(ctx context.Context, key string) *domainPayment.Payment {
+	span := cache.StartCacheSpan(ctx, "payment", "get", map[string]interface{}{
+		"payment_id": key,
+	})
+	defer cache.FinishSpan(span)
+
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	cacheKey := cache.GenerateKey(cache.PrefixPayment, tenantID, environmentID, key)
+	if value, found := r.cache.Get(ctx, cacheKey); found {
+		return value.(*domainPayment.Payment)
+	}
+	return nil
+}
+
+func (r *paymentRepository) DeleteCache(ctx context.Context, paymentID string) {
+	span := cache.StartCacheSpan(ctx, "payment", "delete", map[string]interface{}{
+		"payment_id": paymentID,
+	})
+	defer cache.FinishSpan(span)
+
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	cacheKey := cache.GenerateKey(cache.PrefixPayment, tenantID, environmentID, paymentID)
+	r.cache.Delete(ctx, cacheKey)
 }

@@ -407,6 +407,146 @@ func (s *FeatureServiceSuite) TestGetFeatures() {
 	}
 }
 
+func (s *FeatureServiceSuite) TestGetFeaturesWithFiltersAndSorting() {
+	tests := []struct {
+		name           string
+		filter         *types.FeatureFilter
+		expectedTotal  int
+		expectedIDs    []string
+		expectExpanded bool
+		wantErr        bool
+		errString      string
+	}{
+		{
+			name: "sort by created_at descending",
+			filter: &types.FeatureFilter{
+				QueryFilter: &types.QueryFilter{
+					Sort:  lo.ToPtr("created_at"),
+					Order: lo.ToPtr("desc"),
+				},
+			},
+			expectedTotal: 3,
+			expectedIDs: []string{
+				s.testData.features.apiCalls.ID,
+				s.testData.features.storage.ID,
+				s.testData.features.boolean.ID,
+			},
+		},
+		{
+			name: "sort by name ascending",
+			filter: &types.FeatureFilter{
+				QueryFilter: &types.QueryFilter{
+					Sort:  lo.ToPtr("name"),
+					Order: lo.ToPtr("asc"),
+				},
+			},
+			expectedTotal: 3,
+			expectedIDs: []string{
+				s.testData.features.apiCalls.ID,
+				s.testData.features.boolean.ID,
+				s.testData.features.storage.ID,
+			},
+		},
+		{
+			name: "filter by lookup key",
+			filter: &types.FeatureFilter{
+				LookupKey: s.testData.features.storage.LookupKey,
+			},
+			expectedTotal: 1,
+			expectedIDs:   []string{s.testData.features.storage.ID},
+		},
+		{
+			name: "filter by meter ID",
+			filter: &types.FeatureFilter{
+				MeterIDs: []string{s.testData.meters.apiCalls.ID},
+			},
+			expectedTotal: 1,
+			expectedIDs:   []string{s.testData.features.apiCalls.ID},
+		},
+		{
+			name: "filter by feature IDs",
+			filter: &types.FeatureFilter{
+				FeatureIDs: []string{
+					s.testData.features.apiCalls.ID,
+					s.testData.features.boolean.ID,
+				},
+			},
+			expectedTotal: 2,
+			expectedIDs: []string{
+				s.testData.features.apiCalls.ID,
+				s.testData.features.boolean.ID,
+			},
+		},
+		{
+			name: "filter with meter expansion",
+			filter: &types.FeatureFilter{
+				QueryFilter: &types.QueryFilter{
+					Expand: lo.ToPtr("meters"),
+				},
+			},
+			expectedTotal: 3,
+			expectedIDs: []string{
+				s.testData.features.apiCalls.ID,
+				s.testData.features.storage.ID,
+				s.testData.features.boolean.ID,
+			},
+			expectExpanded: true,
+		},
+		{
+			name: "pagination with limit and offset",
+			filter: &types.FeatureFilter{
+				QueryFilter: &types.QueryFilter{
+					Limit:  lo.ToPtr(1),
+					Offset: lo.ToPtr(1),
+					Sort:   lo.ToPtr("created_at"),
+					Order:  lo.ToPtr("desc"),
+				},
+			},
+			expectedTotal: 3,
+			expectedIDs:   []string{s.testData.features.storage.ID},
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			resp, err := s.service.GetFeatures(s.GetContext(), tt.filter)
+			if tt.wantErr {
+				s.Error(err)
+				if tt.errString != "" {
+					s.Contains(err.Error(), tt.errString)
+				}
+				return
+			}
+
+			s.NoError(err)
+			s.NotNil(resp)
+			s.Equal(tt.expectedTotal, resp.Pagination.Total)
+			s.Len(resp.Items, len(tt.expectedIDs))
+
+			// Sort both expected and actual IDs for comparison
+			sort.Strings(tt.expectedIDs)
+			actualIDs := make([]string, len(resp.Items))
+			for i, item := range resp.Items {
+				actualIDs[i] = item.ID
+			}
+			sort.Strings(actualIDs)
+			s.Equal(tt.expectedIDs, actualIDs)
+
+			// Check meter expansion
+			if tt.expectExpanded {
+				for _, item := range resp.Items {
+					if item.Type == types.FeatureTypeMetered {
+						s.NotNil(item.Meter)
+						s.Equal(item.MeterID, item.Meter.ID)
+					} else {
+						s.Nil(item.Meter)
+					}
+				}
+			}
+		})
+	}
+}
+
 func (s *FeatureServiceSuite) TestUpdateFeature() {
 	tests := []struct {
 		name      string

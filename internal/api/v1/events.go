@@ -15,14 +15,16 @@ import (
 )
 
 type EventsHandler struct {
-	eventService service.EventService
-	log          *logger.Logger
+	eventService               service.EventService
+	eventPostProcessingService service.EventPostProcessingService
+	log                        *logger.Logger
 }
 
-func NewEventsHandler(eventService service.EventService, log *logger.Logger) *EventsHandler {
+func NewEventsHandler(eventService service.EventService, eventPostProcessingService service.EventPostProcessingService, log *logger.Logger) *EventsHandler {
 	return &EventsHandler{
-		eventService: eventService,
-		log:          log,
+		eventService:               eventService,
+		eventPostProcessingService: eventPostProcessingService,
+		log:                        log,
 	}
 }
 
@@ -293,6 +295,46 @@ func (h *EventsHandler) QueryEvents(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, events)
+}
+
+// @Summary Get usage analytics
+// @Description Retrieve comprehensive usage analytics with filtering, grouping, and time-series data
+// @Tags Events
+// @Produce json
+// @Security ApiKeyAuth
+// @Param request body dto.GetUsageAnalyticsRequest true "Request body"
+// @Success 200 {object} dto.GetUsageAnalyticsResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /events/analytics [post]
+func (h *EventsHandler) GetUsageAnalytics(c *gin.Context) {
+	ctx := c.Request.Context()
+	var err error
+
+	var req dto.GetUsageAnalyticsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Please check the request payload").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	req.StartTime, req.EndTime, err = validateStartAndEndTime(req.StartTime, req.EndTime)
+	if err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Please check the request payload").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	// Call the service to get detailed analytics
+	response, err := h.eventPostProcessingService.GetDetailedUsageAnalytics(ctx, &req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 func parseStartAndEndTime(startTimeStr, endTimeStr string) (time.Time, time.Time, error) {

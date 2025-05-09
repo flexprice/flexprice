@@ -6,9 +6,12 @@ import ierr "github.com/flexprice/flexprice/internal/errors"
 type CustomerFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
-	CustomerIDs []string `json:"customer_ids,omitempty" form:"customer_ids" validate:"omitempty"`
-	ExternalID  string   `json:"external_id,omitempty" form:"external_id" validate:"omitempty"`
-	Email       string   `json:"email,omitempty" form:"email" validate:"omitempty,email"`
+	// filters allows complex filtering based on multiple fields
+	Filters     []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
+	Sort        []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
+	CustomerIDs []string           `json:"customer_ids,omitempty" form:"customer_ids" validate:"omitempty"`
+	ExternalID  string             `json:"external_id,omitempty" form:"external_id" validate:"omitempty"`
+	Email       string             `json:"email,omitempty" form:"email" validate:"omitempty,email"`
 }
 
 // NewCustomerFilter creates a new CustomerFilter with default values
@@ -101,27 +104,4 @@ func (f *CustomerFilter) IsUnlimited() bool {
 		return NewDefaultQueryFilter().IsUnlimited()
 	}
 	return f.QueryFilter.IsUnlimited()
-}
-
-type CustomerSearchFilter struct {
-	Name       *string `form:"name,omitempty"`
-	ExternalID *string `form:"external_id,omitempty"`
-	Limit      *int    `form:"limit,default=10,omitempty"`
-	Offset     *int    `form:"offset,default=0,omitempty"`
-}
-
-func (f *CustomerSearchFilter) Validate() error {
-	if f.Limit != nil && (*f.Limit < 1 || *f.Limit > 1000) {
-		return ierr.NewError("invalid limit").
-			WithHint("Limit must be between 1 and 1000").
-			Mark(ierr.ErrValidation)
-	}
-
-	if f.Offset != nil && *f.Offset < 0 {
-		return ierr.NewError("invalid offset").
-			WithHint("Offset must be greater than or equal to 0").
-			Mark(ierr.ErrValidation)
-	}
-
-	return nil
 }

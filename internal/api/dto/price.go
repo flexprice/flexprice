@@ -313,3 +313,16 @@ type PriceResponse struct {
 
 // ListPricesResponse represents the response for listing prices
 type ListPricesResponse = types.ListResponse[*PriceResponse]
+
+// CostBreakup provides detailed information about cost calculation
+// including which tier was applied and the effective per unit cost
+type CostBreakup struct {
+	// EffectiveUnitCost is the per-unit cost based on the applicable tier
+	EffectiveUnitCost decimal.Decimal
+	// SelectedTierIndex is the index of the tier that was applied (-1 if no tiers)
+	SelectedTierIndex int
+	// TierUnitAmount is the unit amount of the selected tier
+	TierUnitAmount decimal.Decimal
+	// FinalCost is the total cost for the quantity
+	FinalCost decimal.Decimal
+}

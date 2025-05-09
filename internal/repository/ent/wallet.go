@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/wallet"
 	"github.com/flexprice/flexprice/ent/wallettransaction"
+	"github.com/flexprice/flexprice/internal/cache"
 	walletdomain "github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -20,12 +21,14 @@ type walletRepository struct {
 	client    postgres.IClient
 	logger    *logger.Logger
 	queryOpts WalletTransactionQueryOptions
+	cache     cache.Cache
 }
 
-func NewWalletRepository(client postgres.IClient, logger *logger.Logger) walletdomain.Repository {
+func NewWalletRepository(client postgres.IClient, logger *logger.Logger, cache cache.Cache) walletdomain.Repository {
 	return &walletRepository{
 		client: client,
 		logger: logger,
+		cache:  cache,
 	}
 }
 
@@ -87,8 +90,6 @@ func (r *walletRepository) CreateWallet(ctx context.Context, w *walletdomain.Wal
 }
 
 func (r *walletRepository) GetWalletByID(ctx context.Context, id string) (*walletdomain.Wallet, error) {
-	client := r.client.Querier(ctx)
-
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "wallet", "get_wallet_by_id", map[string]interface{}{
 		"wallet_id": id,
@@ -96,11 +97,19 @@ func (r *walletRepository) GetWalletByID(ctx context.Context, id string) (*walle
 	})
 	defer FinishSpan(span)
 
+	// Try to get from cache first
+	if cachedWallet := r.GetCache(ctx, id); cachedWallet != nil {
+		return cachedWallet, nil
+	}
+
+	client := r.client.Querier(ctx)
+
 	w, err := client.Wallet.Query().
 		Where(
 			wallet.ID(id),
 			wallet.TenantID(types.GetTenantID(ctx)),
 			wallet.StatusEQ(string(types.StatusPublished)),
+			wallet.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		Only(ctx)
 
@@ -122,7 +131,9 @@ func (r *walletRepository) GetWalletByID(ctx context.Context, id string) (*walle
 			Mark(ierr.ErrDatabase)
 	}
 
-	return walletdomain.FromEnt(w), nil
+	walletData := walletdomain.FromEnt(w)
+	r.SetCache(ctx, walletData)
+	return walletData, nil
 }
 
 func (r *walletRepository) GetWalletsByCustomerID(ctx context.Context, customerID string) ([]*walletdomain.Wallet, error) {
@@ -141,6 +152,7 @@ func (r *walletRepository) GetWalletsByCustomerID(ctx context.Context, customerI
 			wallet.TenantID(types.GetTenantID(ctx)),
 			wallet.StatusEQ(string(types.StatusPublished)),
 			wallet.WalletStatusEQ(string(types.WalletStatusActive)),
+			wallet.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		All(ctx)
 
@@ -177,6 +189,7 @@ func (r *walletRepository) UpdateWalletStatus(ctx context.Context, id string, st
 			wallet.ID(id),
 			wallet.TenantID(types.GetTenantID(ctx)),
 			wallet.StatusEQ(string(types.StatusPublished)),
+			wallet.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetWalletStatus(string(status)).
 		SetUpdatedBy(types.GetUserID(ctx)).
@@ -208,6 +221,7 @@ func (r *walletRepository) UpdateWalletStatus(ctx context.Context, id string, st
 			Mark(ierr.ErrNotFound)
 	}
 
+	r.DeleteCache(ctx, id)
 	return nil
 }
 
@@ -231,6 +245,7 @@ func (r *walletRepository) FindEligibleCredits(ctx context.Context, walletID str
 		credits, err := r.client.Querier(ctx).WalletTransaction.Query().
 			Where(
 				wallettransaction.WalletID(walletID),
+				wallettransaction.EnvironmentID(types.GetEnvironmentID(ctx)),
 				wallettransaction.Type(string(types.TransactionTypeCredit)),
 				wallettransaction.CreditsAvailableGT(decimal.Zero),
 				wallettransaction.Or(
@@ -412,7 +427,7 @@ func (r *walletRepository) UpdateWalletBalance(ctx context.Context, walletID str
 			}).
 			Mark(ierr.ErrDatabase)
 	}
-
+	r.DeleteCache(ctx, walletID)
 	return nil
 }
 
@@ -429,6 +444,7 @@ func (r *walletRepository) GetTransactionByID(ctx context.Context, id string) (*
 			wallettransaction.ID(id),
 			wallettransaction.TenantID(types.GetTenantID(ctx)),
 			wallettransaction.StatusEQ(string(types.StatusPublished)),
+			wallettransaction.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		Only(ctx)
 
@@ -557,6 +573,7 @@ func (r *walletRepository) UpdateTransactionStatus(ctx context.Context, id strin
 			wallettransaction.ID(id),
 			wallettransaction.TenantID(types.GetTenantID(ctx)),
 			wallettransaction.StatusEQ(string(types.StatusPublished)),
+			wallettransaction.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetTransactionStatus(string(status)).
 		SetUpdatedBy(types.GetUserID(ctx)).
@@ -705,6 +722,7 @@ func (r *walletRepository) UpdateWallet(ctx context.Context, id string, w *walle
 			wallet.ID(id),
 			wallet.TenantID(types.GetTenantID(ctx)),
 			wallet.StatusEQ(string(types.StatusPublished)),
+			wallet.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetName(w.Name).
 		SetDescription(w.Description).
@@ -743,5 +761,45 @@ func (r *walletRepository) UpdateWallet(ctx context.Context, id string, w *walle
 			Mark(ierr.ErrNotFound)
 	}
 
+	r.DeleteCache(ctx, id)
 	return nil
+}
+
+func (r *walletRepository) SetCache(ctx context.Context, wallet *walletdomain.Wallet) {
+	span := cache.StartCacheSpan(ctx, "wallet", "set", map[string]interface{}{
+		"wallet_id": wallet.ID,
+	})
+	defer cache.FinishSpan(span)
+
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	cacheKey := cache.GenerateKey(cache.PrefixWallet, tenantID, environmentID, wallet.ID)
+	r.cache.Set(ctx, cacheKey, wallet, cache.ExpiryDefaultInMemory)
+}
+
+func (r *walletRepository) GetCache(ctx context.Context, key string) *walletdomain.Wallet {
+	span := cache.StartCacheSpan(ctx, "wallet", "get", map[string]interface{}{
+		"wallet_id": key,
+	})
+	defer cache.FinishSpan(span)
+
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	cacheKey := cache.GenerateKey(cache.PrefixWallet, tenantID, environmentID, key)
+	if value, found := r.cache.Get(ctx, cacheKey); found {
+		return value.(*walletdomain.Wallet)
+	}
+	return nil
+}
+
+func (r *walletRepository) DeleteCache(ctx context.Context, walletID string) {
+	span := cache.StartCacheSpan(ctx, "wallet", "delete", map[string]interface{}{
+		"wallet_id": walletID,
+	})
+	defer cache.FinishSpan(span)
+
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	cacheKey := cache.GenerateKey(cache.PrefixWallet, tenantID, environmentID, walletID)
+	r.cache.Delete(ctx, cacheKey)
 }

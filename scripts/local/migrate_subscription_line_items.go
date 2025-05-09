@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
@@ -44,12 +45,14 @@ func MigrateSubscriptionLineItems() error {
 	}
 	client := postgres.NewClient(entClient, logger, sentry.NewSentryService(cfg, logger))
 
+	cache := cache.NewInMemoryCache()
+
 	// Initialize repositories
-	subscriptionRepo := entRepo.NewSubscriptionRepository(client, logger)
+	subscriptionRepo := entRepo.NewSubscriptionRepository(client, logger, cache)
 	subscriptionLineItemRepo := entRepo.NewSubscriptionLineItemRepository(client)
-	planRepo := entRepo.NewPlanRepository(client, logger)
-	priceRepo := entRepo.NewPriceRepository(client, logger)
-	meterRepo := entRepo.NewMeterRepository(client, logger)
+	planRepo := entRepo.NewPlanRepository(client, logger, cache)
+	priceRepo := entRepo.NewPriceRepository(client, logger, cache)
+	meterRepo := entRepo.NewMeterRepository(client, logger, cache)
 
 	// Get all published subscriptions without line items
 	filter := types.NewNoLimitSubscriptionFilter()

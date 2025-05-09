@@ -188,3 +188,37 @@ func (h *FeatureHandler) DeleteFeature(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "feature deleted successfully"})
 }
+
+// ListFeaturesByFilter godoc
+// @Summary List features by filter
+// @Description List features by filter
+// @Tags Features
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param filter body types.FeatureFilter true "Filter"
+// @Success 200 {object} dto.ListFeaturesResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /features/search [post]
+func (h *FeatureHandler) ListFeaturesByFilter(c *gin.Context) {
+	var filter types.FeatureFilter
+	if err := c.ShouldBindJSON(&filter); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid filter parameters").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	if filter.GetLimit() == 0 {
+		filter.Limit = lo.ToPtr(types.GetDefaultFilter().Limit)
+	}
+
+	resp, err := h.featureService.GetFeatures(c.Request.Context(), &filter)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}

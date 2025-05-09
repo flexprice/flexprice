@@ -268,16 +268,31 @@ func (h *CustomerHandler) GetCustomerUsageSummary(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+// @Summary List customers by filter
+// @Description List customers by filter
+// @Tags Customers
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param filter body types.CustomerFilter true "Filter"
+// @Success 200 {object} dto.ListCustomersResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /customers/search [post]
 func (h *CustomerHandler) ListCustomersByFilter(c *gin.Context) {
-	var filter types.CustomerSearchFilter
-	if err := c.ShouldBindQuery(&filter); err != nil {
+	var filter types.CustomerFilter
+	if err := c.ShouldBindJSON(&filter); err != nil {
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid filter parameters").
 			Mark(ierr.ErrValidation))
 		return
 	}
 
-	resp, err := h.service.ListCustomersByFilter(c.Request.Context(), &filter)
+	if filter.GetLimit() == 0 {
+		filter.Limit = lo.ToPtr(types.GetDefaultFilter().Limit)
+	}
+
+	resp, err := h.service.GetCustomers(c.Request.Context(), &filter)
 	if err != nil {
 		c.Error(err)
 		return

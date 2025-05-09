@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -47,17 +48,20 @@ func SyncBillingCustomers() error {
 	// Create postgres client wrapper
 	client := postgres.NewClient(entClient, logger, sentry.NewSentryService(cfg, logger))
 
+	// Initialize cache
+	cache := cache.GetInMemoryCache()
+
 	// Initialize repositories
-	tenantRepo := ent.NewTenantRepository(client, logger)
-	customerRepo := ent.NewCustomerRepository(client, logger)
-	subscriptionRepo := ent.NewSubscriptionRepository(client, logger)
-	invoiceRepo := ent.NewInvoiceRepository(client, logger)
-	walletRepo := ent.NewWalletRepository(client, logger)
-	planRepo := ent.NewPlanRepository(client, logger)
-	priceRepo := ent.NewPriceRepository(client, logger)
-	meterRepo := ent.NewMeterRepository(client, logger)
-	entitlementRepo := ent.NewEntitlementRepository(client, logger)
-	featureRepo := ent.NewFeatureRepository(client, logger)
+	tenantRepo := ent.NewTenantRepository(client, logger, cache)
+	customerRepo := ent.NewCustomerRepository(client, logger, cache)
+	subscriptionRepo := ent.NewSubscriptionRepository(client, logger, cache)
+	invoiceRepo := ent.NewInvoiceRepository(client, logger, cache)
+	walletRepo := ent.NewWalletRepository(client, logger, cache)
+	planRepo := ent.NewPlanRepository(client, logger, cache)
+	priceRepo := ent.NewPriceRepository(client, logger, cache)
+	meterRepo := ent.NewMeterRepository(client, logger, cache)
+	entitlementRepo := ent.NewEntitlementRepository(client, logger, cache)
+	featureRepo := ent.NewFeatureRepository(client, logger, cache)
 	authRepo := ent.NewAuthRepository(client, logger)
 
 	// Initialize pubsub for webhook publisher

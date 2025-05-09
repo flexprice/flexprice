@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/domain/auth"
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -33,14 +34,19 @@ type RepositoryParams struct {
 	Logger       *logger.Logger
 	EntClient    postgres.IClient
 	ClickHouseDB *clickhouse.ClickHouseStore
+	Cache        cache.Cache
 }
 
 func NewEventRepository(p RepositoryParams) events.Repository {
 	return clickhouseRepo.NewEventRepository(p.ClickHouseDB, p.Logger)
 }
 
+func NewProcessedEventRepository(p RepositoryParams) events.ProcessedEventRepository {
+	return clickhouseRepo.NewProcessedEventRepository(p.ClickHouseDB, p.Logger)
+}
+
 func NewMeterRepository(p RepositoryParams) meter.Repository {
-	return entRepo.NewMeterRepository(p.EntClient, p.Logger)
+	return entRepo.NewMeterRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewUserRepository(p RepositoryParams) user.Repository {
@@ -52,27 +58,27 @@ func NewAuthRepository(p RepositoryParams) auth.Repository {
 }
 
 func NewPriceRepository(p RepositoryParams) price.Repository {
-	return entRepo.NewPriceRepository(p.EntClient, p.Logger)
+	return entRepo.NewPriceRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewCustomerRepository(p RepositoryParams) customer.Repository {
-	return entRepo.NewCustomerRepository(p.EntClient, p.Logger)
+	return entRepo.NewCustomerRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewPlanRepository(p RepositoryParams) plan.Repository {
-	return entRepo.NewPlanRepository(p.EntClient, p.Logger)
+	return entRepo.NewPlanRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewSubscriptionRepository(p RepositoryParams) subscription.Repository {
-	return entRepo.NewSubscriptionRepository(p.EntClient, p.Logger)
+	return entRepo.NewSubscriptionRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewWalletRepository(p RepositoryParams) wallet.Repository {
-	return entRepo.NewWalletRepository(p.EntClient, p.Logger)
+	return entRepo.NewWalletRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewTenantRepository(p RepositoryParams) tenant.Repository {
-	return entRepo.NewTenantRepository(p.EntClient, p.Logger)
+	return entRepo.NewTenantRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewEnvironmentRepository(p RepositoryParams) environment.Repository {
@@ -80,19 +86,19 @@ func NewEnvironmentRepository(p RepositoryParams) environment.Repository {
 }
 
 func NewInvoiceRepository(p RepositoryParams) invoice.Repository {
-	return entRepo.NewInvoiceRepository(p.EntClient, p.Logger)
+	return entRepo.NewInvoiceRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewFeatureRepository(p RepositoryParams) feature.Repository {
-	return entRepo.NewFeatureRepository(p.EntClient, p.Logger)
+	return entRepo.NewFeatureRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewEntitlementRepository(p RepositoryParams) entitlement.Repository {
-	return entRepo.NewEntitlementRepository(p.EntClient, p.Logger)
+	return entRepo.NewEntitlementRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewPaymentRepository(p RepositoryParams) payment.Repository {
-	return entRepo.NewPaymentRepository(p.EntClient, p.Logger)
+	return entRepo.NewPaymentRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewTaskRepository(p RepositoryParams) task.Repository {
@@ -100,5 +106,5 @@ func NewTaskRepository(p RepositoryParams) task.Repository {
 }
 
 func NewSecretRepository(p RepositoryParams) secret.Repository {
-	return entRepo.NewSecretRepository(p.EntClient, p.Logger)
+	return entRepo.NewSecretRepository(p.EntClient, p.Logger, p.Cache)
 }

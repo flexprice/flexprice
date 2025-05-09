@@ -14,8 +14,6 @@ type Repository interface {
 	Count(ctx context.Context, filter *types.CustomerFilter) (int, error)
 	ListAll(ctx context.Context, filter *types.CustomerFilter) ([]*Customer, error)
 	Update(ctx context.Context, customer *Customer) error
-	Delete(ctx context.Context, id string) error
+	Delete(ctx context.Context, customer *Customer) error
 	GetByLookupKey(ctx context.Context, lookupKey string) (*Customer, error)
-	ListByFilter(ctx context.Context, filter *types.CustomerSearchFilter) ([]*Customer, error)
-	CountByFilter(ctx context.Context, filter *types.CustomerSearchFilter) (int, error)
 }

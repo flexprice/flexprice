@@ -58,7 +58,7 @@
   banner-image: none,
   invoice-status: "DRAFT",       // DRAFT, FINALIZED, VOIDED
   invoice-number: none,
-  issuing-date: none,
+  issuing-date: "",
   due-date: none,
   amount-due: 0,  
   notes: "",
@@ -84,7 +84,7 @@
   styling.secondary-color = rgb(styling.at("secondary-color", default: rgb("#666666")))
 
   // Set document properties
-  let issuing-date-value = if issuing-date != none { issuing-date }
+  let issuing-date-value = if issuing-date != "" { issuing-date }
         else { datetime.today().display("[year]-[month]-[day]") }
 
   set document(
@@ -196,11 +196,13 @@
     ..items.map((item) => {
       (
         item.at("plan_display_name", default: "Plan"),
-        item.at("description", default: "Recurring"),
-       if item.at("period_start", default: none) != none and 
-         item.at("period_end", default: none) != none and
-         item.at("period_start") != "" and 
-         item.at("period_end") != "" {
+        if item.at("description", default: "Recurring") != "" {
+          item.at("description", default: "Recurring")
+        } else {
+          "-"
+        },
+        if item.at("period_start", default: "") != "" and 
+         item.at("period_end", default: "") != "" {
           [#format-date(parse-date(item.at("period_start"))) - #format-date(parse-date(item.at("period_end")))]
         } else {
           "-"

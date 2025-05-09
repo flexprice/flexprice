@@ -20,7 +20,6 @@ type CustomerService interface {
 	UpdateCustomer(ctx context.Context, id string, req dto.UpdateCustomerRequest) (*dto.CustomerResponse, error)
 	DeleteCustomer(ctx context.Context, id string) error
 	GetCustomerByLookupKey(ctx context.Context, lookupKey string) (*dto.CustomerResponse, error)
-	ListCustomersByFilter(ctx context.Context, filter *types.CustomerSearchFilter) (*dto.ListCustomersResponse, error)
 }
 
 type customerService struct {
@@ -231,7 +230,7 @@ func (s *customerService) DeleteCustomer(ctx context.Context, id string) error {
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	if err := s.CustomerRepo.Delete(ctx, id); err != nil {
+	if err := s.CustomerRepo.Delete(ctx, customer); err != nil {
 		return err
 	}
 
@@ -275,43 +274,4 @@ func (s *customerService) publishWebhookEvent(ctx context.Context, eventName str
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
 		s.Logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
 	}
-}
-
-func (s *customerService) ListCustomersByFilter(ctx context.Context, filter *types.CustomerSearchFilter) (*dto.ListCustomersResponse, error) {
-	// Set default values if filter is nil
-	if filter == nil {
-		filter = &types.CustomerSearchFilter{}
-	}
-
-	if err := filter.Validate(); err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Invalid filter parameters").
-			Mark(ierr.ErrValidation)
-	}
-
-	// Retrieve customers
-	customers, err := s.CustomerRepo.ListByFilter(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-
-	// Get total count
-	total, err := s.CustomerRepo.CountByFilter(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-
-	// Convert customers to response
-	response := make([]*dto.CustomerResponse, 0, len(customers))
-	for _, c := range customers {
-		response = append(response, &dto.CustomerResponse{Customer: c})
-	}
-
-	limit := lo.FromPtr(filter.Limit)
-	offset := lo.FromPtr(filter.Offset)
-
-	return &dto.ListCustomersResponse{
-		Items:      response,
-		Pagination: types.NewPaginationResponse(total, limit, offset),
-	}, nil
 }

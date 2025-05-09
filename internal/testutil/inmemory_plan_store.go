@@ -105,8 +105,8 @@ func (s *InMemoryPlanStore) Update(ctx context.Context, p *plan.Plan) error {
 	return s.InMemoryStore.Update(ctx, p.ID, p)
 }
 
-func (s *InMemoryPlanStore) Delete(ctx context.Context, id string) error {
-	return s.InMemoryStore.Delete(ctx, id)
+func (s *InMemoryPlanStore) Delete(ctx context.Context, p *plan.Plan) error {
+	return s.InMemoryStore.Delete(ctx, p.ID)
 }
 
 // ListAll returns all plans without pagination

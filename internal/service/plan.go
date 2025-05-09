@@ -434,6 +434,12 @@ func (s *planService) DeletePlan(ctx context.Context, id string) error {
 			Mark(ierr.ErrValidation)
 	}
 
+	// check if plan exists
+	plan, err := s.planRepo.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+
 	subscriptionFilters := types.NewDefaultQueryFilter()
 	subscriptionFilters.Status = lo.ToPtr(types.StatusPublished)
 	subscriptionFilters.Limit = lo.ToPtr(1)
@@ -457,7 +463,7 @@ func (s *planService) DeletePlan(ctx context.Context, id string) error {
 			Mark(ierr.ErrDatabase)
 	}
 
-	err = s.planRepo.Delete(ctx, id)
+	err = s.planRepo.Delete(ctx, plan)
 	if err != nil {
 		return err
 	}

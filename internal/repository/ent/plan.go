@@ -6,6 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/plan"
+	"github.com/flexprice/flexprice/internal/cache"
 	domainPlan "github.com/flexprice/flexprice/internal/domain/plan"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -17,13 +18,15 @@ type planRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts PlanQueryOptions
+	cache     cache.Cache
 }
 
-func NewPlanRepository(client postgres.IClient, log *logger.Logger) domainPlan.Repository {
+func NewPlanRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainPlan.Repository {
 	return &planRepository{
 		client:    client,
 		log:       log,
 		queryOpts: PlanQueryOptions{},
+		cache:     cache,
 	}
 }
 
@@ -90,19 +93,25 @@ func (r *planRepository) Create(ctx context.Context, p *domainPlan.Plan) error {
 }
 
 func (r *planRepository) Get(ctx context.Context, id string) (*domainPlan.Plan, error) {
-	client := r.client.Querier(ctx)
-
-	r.log.Debugw("getting plan", "plan_id", id)
-
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "plan", "get", map[string]interface{}{
 		"plan_id": id,
 	})
 	defer FinishSpan(span)
 
+	// Try to get from cache first
+	if cachedPlan := r.GetCache(ctx, id); cachedPlan != nil {
+		return cachedPlan, nil
+	}
+
+	client := r.client.Querier(ctx)
+
+	r.log.Debugw("getting plan", "plan_id", id)
+
 	plan, err := client.Plan.Query().
 		Where(
 			plan.ID(id),
+			plan.EnvironmentID(types.GetEnvironmentID(ctx)),
 			plan.TenantID(types.GetTenantID(ctx)),
 		).
 		Only(ctx)
@@ -127,7 +136,9 @@ func (r *planRepository) Get(ctx context.Context, id string) (*domainPlan.Plan, 
 	}
 
 	SetSpanSuccess(span)
-	return domainPlan.FromEnt(plan), nil
+	planData := domainPlan.FromEnt(plan)
+	r.SetCache(ctx, planData)
+	return planData, nil
 }
 
 func (r *planRepository) List(ctx context.Context, filter *types.PlanFilter) ([]*domainPlan.Plan, error) {
@@ -206,17 +217,22 @@ func (r *planRepository) Count(ctx context.Context, filter *types.PlanFilter) (i
 }
 
 func (r *planRepository) GetByLookupKey(ctx context.Context, lookupKey string) (*domainPlan.Plan, error) {
-	r.log.Debugw("getting plan by lookup key", "lookup_key", lookupKey)
-
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "plan", "get_by_lookup_key", map[string]interface{}{
 		"lookup_key": lookupKey,
 	})
 	defer FinishSpan(span)
+	r.log.Debugw("getting plan by lookup key", "lookup_key", lookupKey)
+
+	// Try to get from cache first
+	if cachedPlan := r.GetCache(ctx, lookupKey); cachedPlan != nil {
+		return cachedPlan, nil
+	}
 
 	plan, err := r.client.Querier(ctx).Plan.Query().
 		Where(
 			plan.LookupKey(lookupKey),
+			plan.EnvironmentID(types.GetEnvironmentID(ctx)),
 			plan.TenantID(types.GetTenantID(ctx)),
 			plan.Status(string(types.StatusPublished)),
 		).
@@ -241,7 +257,9 @@ func (r *planRepository) GetByLookupKey(ctx context.Context, lookupKey string) (
 	}
 
 	SetSpanSuccess(span)
-	return domainPlan.FromEnt(plan), nil
+	planData := domainPlan.FromEnt(plan)
+	r.SetCache(ctx, planData)
+	return planData, nil
 }
 
 func (r *planRepository) Update(ctx context.Context, p *domainPlan.Plan) error {
@@ -301,26 +319,28 @@ func (r *planRepository) Update(ctx context.Context, p *domainPlan.Plan) error {
 	}
 
 	SetSpanSuccess(span)
+	r.DeleteCache(ctx, p)
 	return nil
 }
 
-func (r *planRepository) Delete(ctx context.Context, id string) error {
+func (r *planRepository) Delete(ctx context.Context, p *domainPlan.Plan) error {
 	client := r.client.Querier(ctx)
 
 	r.log.Debugw("deleting plan",
-		"plan_id", id,
+		"plan_id", p.ID,
 		"tenant_id", types.GetTenantID(ctx),
 	)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "plan", "delete", map[string]interface{}{
-		"plan_id": id,
+		"plan_id": p.ID,
 	})
 	defer FinishSpan(span)
 
 	_, err := client.Plan.Update().
 		Where(
-			plan.ID(id),
+			plan.ID(p.ID),
+			plan.EnvironmentID(types.GetEnvironmentID(ctx)),
 			plan.TenantID(types.GetTenantID(ctx)),
 		).
 		SetStatus(string(types.StatusArchived)).
@@ -333,21 +353,22 @@ func (r *planRepository) Delete(ctx context.Context, id string) error {
 
 		if ent.IsNotFound(err) {
 			return ierr.WithError(err).
-				WithHintf("Plan with ID %s was not found", id).
+				WithHintf("Plan with ID %s was not found", p.ID).
 				WithReportableDetails(map[string]any{
-					"plan_id": id,
+					"plan_id": p.ID,
 				}).
 				Mark(ierr.ErrNotFound)
 		}
 		return ierr.WithError(err).
 			WithHint("Failed to delete plan").
 			WithReportableDetails(map[string]any{
-				"plan_id": id,
+				"plan_id": p.ID,
 			}).
 			Mark(ierr.ErrDatabase)
 	}
 
 	SetSpanSuccess(span)
+	r.DeleteCache(ctx, p)
 	return nil
 }
 
@@ -424,4 +445,47 @@ func (o PlanQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.Pl
 	}
 
 	return query
+}
+
+func (r *planRepository) SetCache(ctx context.Context, plan *domainPlan.Plan) {
+
+	span := cache.StartCacheSpan(ctx, "plan", "set", map[string]interface{}{
+		"plan_id": plan.ID,
+	})
+	defer cache.FinishSpan(span)
+
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	cacheKey := cache.GenerateKey(cache.PrefixPlan, tenantID, environmentID, plan.ID)
+	r.cache.Set(ctx, cacheKey, plan, cache.ExpiryDefaultInMemory)
+}
+
+func (r *planRepository) GetCache(ctx context.Context, key string) *domainPlan.Plan {
+
+	span := cache.StartCacheSpan(ctx, "plan", "get", map[string]interface{}{
+		"plan_id": key,
+	})
+	defer cache.FinishSpan(span)
+
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	cacheKey := cache.GenerateKey(cache.PrefixPlan, tenantID, environmentID, key)
+	if value, found := r.cache.Get(ctx, cacheKey); found {
+		return value.(*domainPlan.Plan)
+	}
+	return nil
+}
+
+func (r *planRepository) DeleteCache(ctx context.Context, plan *domainPlan.Plan) {
+	span := cache.StartCacheSpan(ctx, "plan", "delete", map[string]interface{}{
+		"plan_id": plan.ID,
+	})
+	defer cache.FinishSpan(span)
+
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	cacheKey := cache.GenerateKey(cache.PrefixPlan, tenantID, environmentID, plan.ID)
+	lookupCacheKey := cache.GenerateKey(cache.PrefixPlan, tenantID, environmentID, plan.LookupKey)
+	r.cache.Delete(ctx, cacheKey)
+	r.cache.Delete(ctx, lookupCacheKey)
 }

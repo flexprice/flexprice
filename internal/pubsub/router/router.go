@@ -73,8 +73,9 @@ func (r *Router) AddNoPublishHandler(
 	topicName string,
 	subscriber message.Subscriber,
 	handlerFunc func(msg *message.Message) error,
+	middlewares ...message.HandlerMiddleware,
 ) {
-	r.router.AddNoPublisherHandler(
+	handler := r.router.AddNoPublisherHandler(
 		handlerName,
 		topicName,
 		subscriber,
@@ -91,6 +92,10 @@ func (r *Router) AddNoPublishHandler(
 			return err
 		},
 	)
+
+	for _, middleware := range middlewares {
+		handler.AddMiddleware(middleware)
+	}
 }
 
 // Run starts the router

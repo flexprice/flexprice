@@ -287,6 +287,7 @@ func (r *subscriptionLineItemRepository) ListBySubscription(ctx context.Context,
 		Where(
 			subscriptionlineitem.SubscriptionID(subscriptionID),
 			subscriptionlineitem.TenantID(types.GetTenantID(ctx)),
+			subscriptionlineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		All(ctx)
 
@@ -318,6 +319,7 @@ func (r *subscriptionLineItemRepository) ListByCustomer(ctx context.Context, cus
 		Where(
 			subscriptionlineitem.CustomerID(customerID),
 			subscriptionlineitem.TenantID(types.GetTenantID(ctx)),
+			subscriptionlineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		All(ctx)
 
@@ -353,7 +355,10 @@ func (r *subscriptionLineItemRepository) List(ctx context.Context, filter *types
 	}
 
 	query := client.SubscriptionLineItem.Query().
-		Where(subscriptionlineitem.TenantID(types.GetTenantID(ctx)))
+		Where(
+			subscriptionlineitem.TenantID(types.GetTenantID(ctx)),
+			subscriptionlineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
+		)
 
 	// Apply filters
 	if filter != nil {
@@ -418,7 +423,10 @@ func (r *subscriptionLineItemRepository) Count(ctx context.Context, filter *type
 	}
 
 	query := client.SubscriptionLineItem.Query().
-		Where(subscriptionlineitem.TenantID(types.GetTenantID(ctx)))
+		Where(
+			subscriptionlineitem.TenantID(types.GetTenantID(ctx)),
+			subscriptionlineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
+		)
 
 	// Apply filters
 	if filter != nil {
@@ -471,6 +479,7 @@ func (r *subscriptionLineItemRepository) GetByPriceID(ctx context.Context, price
 		Where(
 			subscriptionlineitem.PriceID(priceID),
 			subscriptionlineitem.TenantID(types.GetTenantID(ctx)),
+			subscriptionlineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		All(ctx)
 
@@ -509,6 +518,7 @@ func (r *subscriptionLineItemRepository) GetByPlanID(ctx context.Context, planID
 		Where(
 			subscriptionlineitem.PlanID(planID),
 			subscriptionlineitem.TenantID(types.GetTenantID(ctx)),
+			subscriptionlineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		All(ctx)
 

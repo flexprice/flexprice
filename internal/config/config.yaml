@@ -52,10 +52,10 @@ postgres:
   auto_migrate: false
 
 sentry:
-  enabled: false  # Set to true in production
-  dsn: ""  # Add your Sentry DSN here
-  environment: "development"  # Change to "production" in prod
-  sample_rate: 1.0  # Adjust sampling rate as needed (0.0 to 1.0)
+  enabled: false # Set to true in production
+  dsn: "" # Add your Sentry DSN here
+  environment: "development" # Change to "production" in prod
+  sample_rate: 1.0 # Adjust sampling rate as needed (0.0 to 1.0)
 
 event:
   publish_destination: "kafka"
@@ -122,3 +122,6 @@ s3:
     bucket: "flexprice-invoices"
     presign_expiry_duration: "1h"
     key_prefix: ""
+
+cache:
+  enabled: false

@@ -167,11 +167,6 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "name": "sort",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
                         "name": "start_time",
                         "in": "query"
                     },
@@ -304,6 +299,57 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/customers/search": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "List customers by filter",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "List customers by filter",
+                "parameters": [
+                    {
+                        "description": "Filter",
+                        "name": "filter",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/types.CustomerFilter"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ListCustomersResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -1409,6 +1455,54 @@ const docTemplate = `{
                 }
             }
         },
+        "/events/analytics": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Retrieve comprehensive usage analytics with filtering, grouping, and time-series data",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Events"
+                ],
+                "summary": "Get usage analytics",
+                "parameters": [
+                    {
+                        "description": "Request body",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.GetUsageAnalyticsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.GetUsageAnalyticsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/events/bulk": {
             "post": {
                 "security": [
@@ -1674,6 +1768,11 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "type": "string",
+                        "name": "name_contains",
+                        "in": "query"
+                    },
+                    {
                         "minimum": 0,
                         "type": "integer",
                         "name": "offset",
@@ -1686,11 +1785,6 @@ const docTemplate = `{
                         ],
                         "type": "string",
                         "name": "order",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "sort",
                         "in": "query"
                     },
                     {
@@ -1768,6 +1862,57 @@ const docTemplate = `{
                         "description": "Created",
                         "schema": {
                             "$ref": "#/definitions/dto.FeatureResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/features/search": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "List features by filter",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Features"
+                ],
+                "summary": "List features by filter",
+                "parameters": [
+                    {
+                        "description": "Filter",
+                        "name": "filter",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/types.FeatureFilter"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ListFeaturesResponse"
                         }
                     },
                     "400": {
@@ -6927,6 +7072,63 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.GetUsageAnalyticsRequest": {
+            "type": "object",
+            "required": [
+                "external_customer_id"
+            ],
+            "properties": {
+                "end_time": {
+                    "type": "string"
+                },
+                "external_customer_id": {
+                    "type": "string"
+                },
+                "feature_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "group_by": {
+                    "description": "allowed values: \"source\", \"feature_id\"",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "sources": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "window_size": {
+                    "description": "e.g., \"MINUTE\", \"HOUR\", \"DAY\"",
+                    "type": "string"
+                }
+            }
+        },
+        "dto.GetUsageAnalyticsResponse": {
+            "type": "object",
+            "properties": {
+                "currency": {
+                    "type": "string"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.UsageAnalyticItem"
+                    }
+                },
+                "total_cost": {
+                    "type": "number"
+                }
+            }
+        },
         "dto.GetUsageByMeterRequest": {
             "type": "object",
             "required": [
@@ -8696,6 +8898,61 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.UsageAnalyticItem": {
+            "type": "object",
+            "properties": {
+                "aggregation_type": {
+                    "$ref": "#/definitions/types.AggregationType"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "event_name": {
+                    "type": "string"
+                },
+                "feature_id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "points": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.UsageAnalyticPoint"
+                    }
+                },
+                "source": {
+                    "type": "string"
+                },
+                "total_cost": {
+                    "type": "number"
+                },
+                "total_usage": {
+                    "type": "number"
+                },
+                "unit": {
+                    "type": "string"
+                },
+                "unit_plural": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.UsageAnalyticPoint": {
+            "type": "object",
+            "properties": {
+                "cost": {
+                    "type": "number"
+                },
+                "timestamp": {
+                    "type": "string"
+                },
+                "usage": {
+                    "type": "number"
+                }
+            }
+        },
         "dto.UsageResult": {
             "type": "object",
             "properties": {
@@ -8945,6 +9202,29 @@ const docTemplate = `{
         "gin.H": {
             "type": "object",
             "additionalProperties": {}
+        },
+        "github_com_flexprice_flexprice_internal_types.Value": {
+            "type": "object",
+            "properties": {
+                "array": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "boolean": {
+                    "type": "boolean"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "number": {
+                    "type": "number"
+                },
+                "string": {
+                    "type": "string"
+                }
+            }
         },
         "meter.Aggregation": {
             "type": "object",
@@ -9374,6 +9654,79 @@ const docTemplate = `{
                 "BILLING_TIER_SLAB"
             ]
         },
+        "types.CustomerFilter": {
+            "type": "object",
+            "properties": {
+                "customer_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "email": {
+                    "type": "string"
+                },
+                "end_time": {
+                    "type": "string"
+                },
+                "expand": {
+                    "type": "string"
+                },
+                "external_id": {
+                    "type": "string"
+                },
+                "filters": {
+                    "description": "filters allows complex filtering based on multiple fields",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.FilterCondition"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "maximum": 1000,
+                    "minimum": 1
+                },
+                "offset": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "order": {
+                    "type": "string",
+                    "enum": [
+                        "asc",
+                        "desc"
+                    ]
+                },
+                "sort": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.SortCondition"
+                    }
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                }
+            }
+        },
+        "types.DataType": {
+            "type": "string",
+            "enum": [
+                "string",
+                "number",
+                "date",
+                "array"
+            ],
+            "x-enum-varnames": [
+                "DataTypeString",
+                "DataTypeNumber",
+                "DataTypeDate",
+                "DataTypeArray"
+            ]
+        },
         "types.EntityType": {
             "type": "string",
             "enum": [
@@ -9386,6 +9739,71 @@ const docTemplate = `{
                 "EntityTypePrices",
                 "EntityTypeCustomers"
             ]
+        },
+        "types.FeatureFilter": {
+            "type": "object",
+            "properties": {
+                "end_time": {
+                    "type": "string"
+                },
+                "expand": {
+                    "type": "string"
+                },
+                "feature_ids": {
+                    "description": "Feature specific filters",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "filters": {
+                    "description": "filters allows complex filtering based on multiple fields",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.FilterCondition"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "maximum": 1000,
+                    "minimum": 1
+                },
+                "lookup_key": {
+                    "type": "string"
+                },
+                "meter_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "name_contains": {
+                    "type": "string"
+                },
+                "offset": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "order": {
+                    "type": "string",
+                    "enum": [
+                        "asc",
+                        "desc"
+                    ]
+                },
+                "sort": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.SortCondition"
+                    }
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                }
+            }
         },
         "types.FeatureType": {
             "type": "string",
@@ -9409,6 +9827,46 @@ const docTemplate = `{
             "x-enum-varnames": [
                 "FileTypeCSV",
                 "FileTypeJSON"
+            ]
+        },
+        "types.FilterCondition": {
+            "type": "object",
+            "properties": {
+                "data_type": {
+                    "$ref": "#/definitions/types.DataType"
+                },
+                "field": {
+                    "type": "string"
+                },
+                "operator": {
+                    "$ref": "#/definitions/types.FilterOperatorType"
+                },
+                "value": {
+                    "$ref": "#/definitions/github_com_flexprice_flexprice_internal_types.Value"
+                }
+            }
+        },
+        "types.FilterOperatorType": {
+            "type": "string",
+            "enum": [
+                "eq",
+                "contains",
+                "gt",
+                "lt",
+                "in",
+                "not_in",
+                "before",
+                "after"
+            ],
+            "x-enum-varnames": [
+                "EQUAL",
+                "CONTAINS",
+                "GREATER_THAN",
+                "LESS_THAN",
+                "IN",
+                "NOT_IN",
+                "BEFORE",
+                "AFTER"
             ]
         },
         "types.InvoiceBillingReason": {
@@ -9615,6 +10073,28 @@ const docTemplate = `{
                 "SecretTypePrivateKey",
                 "SecretTypePublishableKey",
                 "SecretTypeIntegration"
+            ]
+        },
+        "types.SortCondition": {
+            "type": "object",
+            "properties": {
+                "direction": {
+                    "$ref": "#/definitions/types.SortDirection"
+                },
+                "field": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.SortDirection": {
+            "type": "string",
+            "enum": [
+                "asc",
+                "desc"
+            ],
+            "x-enum-varnames": [
+                "SortDirectionAsc",
+                "SortDirectionDesc"
             ]
         },
         "types.Status": {

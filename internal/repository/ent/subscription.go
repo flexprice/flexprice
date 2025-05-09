@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
+	"github.com/flexprice/flexprice/internal/cache"
 	domainSub "github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -19,13 +20,15 @@ type subscriptionRepository struct {
 	client    postgres.IClient
 	logger    *logger.Logger
 	queryOpts SubscriptionQueryOptions
+	cache     cache.Cache
 }
 
-func NewSubscriptionRepository(client postgres.IClient, logger *logger.Logger) domainSub.Repository {
+func NewSubscriptionRepository(client postgres.IClient, logger *logger.Logger, cache cache.Cache) domainSub.Repository {
 	return &subscriptionRepository{
 		client:    client,
 		logger:    logger,
 		queryOpts: SubscriptionQueryOptions{},
+		cache:     cache,
 	}
 }
 
@@ -86,19 +89,25 @@ func (r *subscriptionRepository) Create(ctx context.Context, sub *domainSub.Subs
 }
 
 func (r *subscriptionRepository) Get(ctx context.Context, id string) (*domainSub.Subscription, error) {
-	client := r.client.Querier(ctx)
-
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "subscription", "get", map[string]interface{}{
 		"subscription_id": id,
 	})
 	defer FinishSpan(span)
 
+	// Try to get from cache first
+	if cachedSub := r.GetCache(ctx, id); cachedSub != nil {
+		return cachedSub, nil
+	}
+
+	client := r.client.Querier(ctx)
+
 	sub, err := client.Subscription.Query().
 		Where(
 			subscription.ID(id),
 			subscription.TenantID(types.GetTenantID(ctx)),
 			subscription.Status(string(types.StatusPublished)),
+			subscription.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		Only(ctx)
 
@@ -116,7 +125,9 @@ func (r *subscriptionRepository) Get(ctx context.Context, id string) (*domainSub
 	}
 
 	SetSpanSuccess(span)
-	return domainSub.GetSubscriptionFromEnt(sub), nil
+	subData := domainSub.GetSubscriptionFromEnt(sub)
+	r.SetCache(ctx, subData)
+	return subData, nil
 }
 
 func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subscription) error {
@@ -136,6 +147,7 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 			subscription.ID(sub.ID),
 			subscription.TenantID(types.GetTenantID(ctx)),
 			subscription.Status(string(types.StatusPublished)),
+			subscription.EnvironmentID(types.GetEnvironmentID(ctx)),
 			subscription.Version(sub.Version), // Version check for optimistic locking
 		)
 
@@ -204,6 +216,7 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 	}
 
 	SetSpanSuccess(span)
+	r.DeleteCache(ctx, sub.ID)
 	return nil
 }
 
@@ -220,6 +233,7 @@ func (r *subscriptionRepository) Delete(ctx context.Context, id string) error {
 		Where(
 			subscription.TenantID(types.GetTenantID(ctx)),
 			subscription.Status(string(types.StatusPublished)),
+			subscription.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusArchived)).
 		SetUpdatedAt(time.Now().UTC()).
@@ -240,6 +254,7 @@ func (r *subscriptionRepository) Delete(ctx context.Context, id string) error {
 	}
 
 	SetSpanSuccess(span)
+	r.DeleteCache(ctx, id)
 	return nil
 }
 
@@ -903,4 +918,43 @@ func (r *subscriptionRepository) ListByIDs(ctx context.Context, subscriptionIDs 
 
 	SetSpanSuccess(span)
 	return result, nil
+}
+
+func (r *subscriptionRepository) SetCache(ctx context.Context, sub *domainSub.Subscription) {
+	span := cache.StartCacheSpan(ctx, "subscription", "set", map[string]interface{}{
+		"subscription_id": sub.ID,
+	})
+	defer cache.FinishSpan(span)
+
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	cacheKey := cache.GenerateKey(cache.PrefixSubscription, tenantID, environmentID, sub.ID)
+	r.cache.Set(ctx, cacheKey, sub, cache.ExpiryDefaultInMemory)
+}
+
+func (r *subscriptionRepository) GetCache(ctx context.Context, key string) *domainSub.Subscription {
+	span := cache.StartCacheSpan(ctx, "subscription", "get", map[string]interface{}{
+		"subscription_id": key,
+	})
+	defer cache.FinishSpan(span)
+
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	cacheKey := cache.GenerateKey(cache.PrefixSubscription, tenantID, environmentID, key)
+	if value, found := r.cache.Get(ctx, cacheKey); found {
+		return value.(*domainSub.Subscription)
+	}
+	return nil
+}
+
+func (r *subscriptionRepository) DeleteCache(ctx context.Context, subID string) {
+	span := cache.StartCacheSpan(ctx, "subscription", "delete", map[string]interface{}{
+		"subscription_id": subID,
+	})
+	defer cache.FinishSpan(span)
+
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	cacheKey := cache.GenerateKey(cache.PrefixSubscription, tenantID, environmentID, subID)
+	r.cache.Delete(ctx, cacheKey)
 }

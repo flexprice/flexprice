@@ -952,6 +952,44 @@ definitions:
     required:
     - subscription_id
     type: object
+  dto.GetUsageAnalyticsRequest:
+    properties:
+      end_time:
+        type: string
+      external_customer_id:
+        type: string
+      feature_ids:
+        items:
+          type: string
+        type: array
+      group_by:
+        description: 'allowed values: "source", "feature_id"'
+        items:
+          type: string
+        type: array
+      sources:
+        items:
+          type: string
+        type: array
+      start_time:
+        type: string
+      window_size:
+        description: e.g., "MINUTE", "HOUR", "DAY"
+        type: string
+    required:
+    - external_customer_id
+    type: object
+  dto.GetUsageAnalyticsResponse:
+    properties:
+      currency:
+        type: string
+      items:
+        items:
+          $ref: '#/definitions/dto.UsageAnalyticItem'
+        type: array
+      total_cost:
+        type: number
+    type: object
   dto.GetUsageByMeterRequest:
     properties:
       customer_id:
@@ -2183,6 +2221,42 @@ definitions:
       name:
         type: string
     type: object
+  dto.UsageAnalyticItem:
+    properties:
+      aggregation_type:
+        $ref: '#/definitions/types.AggregationType'
+      currency:
+        type: string
+      event_name:
+        type: string
+      feature_id:
+        type: string
+      name:
+        type: string
+      points:
+        items:
+          $ref: '#/definitions/dto.UsageAnalyticPoint'
+        type: array
+      source:
+        type: string
+      total_cost:
+        type: number
+      total_usage:
+        type: number
+      unit:
+        type: string
+      unit_plural:
+        type: string
+    type: object
+  dto.UsageAnalyticPoint:
+    properties:
+      cost:
+        type: number
+      timestamp:
+        type: string
+      usage:
+        type: number
+    type: object
   dto.UsageResult:
     properties:
       value:
@@ -2347,6 +2421,21 @@ definitions:
     type: object
   gin.H:
     additionalProperties: {}
+    type: object
+  github_com_flexprice_flexprice_internal_types.Value:
+    properties:
+      array:
+        items:
+          type: string
+        type: array
+      boolean:
+        type: boolean
+      date:
+        type: string
+      number:
+        type: number
+      string:
+        type: string
     type: object
   meter.Aggregation:
     properties:
@@ -2669,6 +2758,58 @@ definitions:
     x-enum-varnames:
     - BILLING_TIER_VOLUME
     - BILLING_TIER_SLAB
+  types.CustomerFilter:
+    properties:
+      customer_ids:
+        items:
+          type: string
+        type: array
+      email:
+        type: string
+      end_time:
+        type: string
+      expand:
+        type: string
+      external_id:
+        type: string
+      filters:
+        description: filters allows complex filtering based on multiple fields
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+    type: object
+  types.DataType:
+    enum:
+    - string
+    - number
+    - date
+    - array
+    type: string
+    x-enum-varnames:
+    - DataTypeString
+    - DataTypeNumber
+    - DataTypeDate
+    - DataTypeArray
   types.EntityType:
     enum:
     - EVENTS
@@ -2679,6 +2820,51 @@ definitions:
     - EntityTypeEvents
     - EntityTypePrices
     - EntityTypeCustomers
+  types.FeatureFilter:
+    properties:
+      end_time:
+        type: string
+      expand:
+        type: string
+      feature_ids:
+        description: Feature specific filters
+        items:
+          type: string
+        type: array
+      filters:
+        description: filters allows complex filtering based on multiple fields
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      lookup_key:
+        type: string
+      meter_ids:
+        items:
+          type: string
+        type: array
+      name_contains:
+        type: string
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+    type: object
   types.FeatureType:
     enum:
     - metered
@@ -2697,6 +2883,37 @@ definitions:
     x-enum-varnames:
     - FileTypeCSV
     - FileTypeJSON
+  types.FilterCondition:
+    properties:
+      data_type:
+        $ref: '#/definitions/types.DataType'
+      field:
+        type: string
+      operator:
+        $ref: '#/definitions/types.FilterOperatorType'
+      value:
+        $ref: '#/definitions/github_com_flexprice_flexprice_internal_types.Value'
+    type: object
+  types.FilterOperatorType:
+    enum:
+    - eq
+    - contains
+    - gt
+    - lt
+    - in
+    - not_in
+    - before
+    - after
+    type: string
+    x-enum-varnames:
+    - EQUAL
+    - CONTAINS
+    - GREATER_THAN
+    - LESS_THAN
+    - IN
+    - NOT_IN
+    - BEFORE
+    - AFTER
   types.InvoiceBillingReason:
     enum:
     - SUBSCRIPTION_CREATE
@@ -2854,6 +3071,21 @@ definitions:
     - SecretTypePrivateKey
     - SecretTypePublishableKey
     - SecretTypeIntegration
+  types.SortCondition:
+    properties:
+      direction:
+        $ref: '#/definitions/types.SortDirection'
+      field:
+        type: string
+    type: object
+  types.SortDirection:
+    enum:
+    - asc
+    - desc
+    type: string
+    x-enum-varnames:
+    - SortDirectionAsc
+    - SortDirectionDesc
   types.Status:
     enum:
     - published
@@ -3096,9 +3328,6 @@ paths:
         - desc
         in: query
         name: order
-        type: string
-      - in: query
-        name: sort
         type: string
       - in: query
         name: start_time
@@ -3443,6 +3672,38 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Get a customer by lookup key
+      tags:
+      - Customers
+  /customers/search:
+    post:
+      consumes:
+      - application/json
+      description: List customers by filter
+      parameters:
+      - description: Filter
+        in: body
+        name: filter
+        required: true
+        schema:
+          $ref: '#/definitions/types.CustomerFilter'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ListCustomersResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List customers by filter
       tags:
       - Customers
   /customers/wallets:
@@ -3898,6 +4159,37 @@ paths:
       summary: Ingest event
       tags:
       - Events
+  /events/analytics:
+    post:
+      description: Retrieve comprehensive usage analytics with filtering, grouping,
+        and time-series data
+      parameters:
+      - description: Request body
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.GetUsageAnalyticsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.GetUsageAnalyticsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get usage analytics
+      tags:
+      - Events
   /events/bulk:
     post:
       consumes:
@@ -4060,6 +4352,9 @@ paths:
         name: meter_ids
         type: array
       - in: query
+        name: name_contains
+        type: string
+      - in: query
         minimum: 0
         name: offset
         type: integer
@@ -4068,9 +4363,6 @@ paths:
         - desc
         in: query
         name: order
-        type: string
-      - in: query
-        name: sort
         type: string
       - in: query
         name: start_time
@@ -4244,6 +4536,38 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Update a feature
+      tags:
+      - Features
+  /features/search:
+    post:
+      consumes:
+      - application/json
+      description: List features by filter
+      parameters:
+      - description: Filter
+        in: body
+        name: filter
+        required: true
+        schema:
+          $ref: '#/definitions/types.FeatureFilter'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ListFeaturesResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List features by filter
       tags:
       - Features
   /invoices:

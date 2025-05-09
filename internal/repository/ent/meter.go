@@ -6,6 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/meter"
+	"github.com/flexprice/flexprice/internal/cache"
 	domainMeter "github.com/flexprice/flexprice/internal/domain/meter"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -17,13 +18,15 @@ type meterRepository struct {
 	client    postgres.IClient
 	logger    *logger.Logger
 	queryOpts MeterQueryOptions
+	cache     cache.Cache
 }
 
-func NewMeterRepository(client postgres.IClient, logger *logger.Logger) domainMeter.Repository {
+func NewMeterRepository(client postgres.IClient, logger *logger.Logger, cache cache.Cache) domainMeter.Repository {
 	return &meterRepository{
 		client:    client,
 		logger:    logger,
 		queryOpts: MeterQueryOptions{},
+		cache:     cache,
 	}
 }
 
@@ -76,18 +79,24 @@ func (r *meterRepository) CreateMeter(ctx context.Context, m *domainMeter.Meter)
 }
 
 func (r *meterRepository) GetMeter(ctx context.Context, id string) (*domainMeter.Meter, error) {
-	client := r.client.Querier(ctx)
-
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "meter", "get", map[string]interface{}{
 		"meter_id": id,
 	})
 	defer FinishSpan(span)
 
+	client := r.client.Querier(ctx)
+
+	// Try to get from cache first
+	if cachedMeter := r.GetCache(ctx, id); cachedMeter != nil {
+		return cachedMeter, nil
+	}
+
 	m, err := client.Meter.Query().
 		Where(
 			meter.ID(id),
 			meter.TenantID(types.GetTenantID(ctx)),
+			meter.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		Only(ctx)
 
@@ -114,7 +123,10 @@ func (r *meterRepository) GetMeter(ctx context.Context, id string) (*domainMeter
 	}
 
 	SetSpanSuccess(span)
-	return domainMeter.FromEnt(m), nil
+	meter := domainMeter.FromEnt(m)
+	// Set cache
+	r.SetCache(ctx, meter)
+	return meter, nil
 }
 
 func (r *meterRepository) List(ctx context.Context, filter *types.MeterFilter) ([]*domainMeter.Meter, error) {
@@ -191,6 +203,7 @@ func (r *meterRepository) Count(ctx context.Context, filter *types.MeterFilter) 
 			WithHint("Could not count meters").
 			WithReportableDetails(map[string]any{
 				"tenant_id": types.GetTenantID(ctx),
+				"filter":    filter,
 			}).
 			Mark(ierr.ErrDatabase)
 	}
@@ -212,6 +225,7 @@ func (r *meterRepository) DisableMeter(ctx context.Context, id string) error {
 		Where(
 			meter.ID(id),
 			meter.TenantID(types.GetTenantID(ctx)),
+			meter.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusArchived)).
 		SetUpdatedAt(time.Now().UTC()).
@@ -241,6 +255,7 @@ func (r *meterRepository) DisableMeter(ctx context.Context, id string) error {
 	}
 
 	SetSpanSuccess(span)
+	r.DeleteCache(ctx, id)
 	return nil
 }
 
@@ -262,6 +277,7 @@ func (r *meterRepository) UpdateMeter(ctx context.Context, id string, filters []
 		Where(
 			meter.ID(id),
 			meter.TenantID(types.GetTenantID(ctx)),
+			meter.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetFilters(m.ToEntFilters()).
 		SetUpdatedAt(time.Now().UTC()).
@@ -291,6 +307,7 @@ func (r *meterRepository) UpdateMeter(ctx context.Context, id string, filters []
 	}
 
 	SetSpanSuccess(span)
+	r.DeleteCache(ctx, id)
 	return nil
 }
 
@@ -370,4 +387,43 @@ func (o MeterQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.M
 	}
 
 	return query
+}
+
+func (r *meterRepository) SetCache(ctx context.Context, meter *domainMeter.Meter) {
+	span := cache.StartCacheSpan(ctx, "meter", "set", map[string]interface{}{
+		"meter_id": meter.ID,
+	})
+	defer cache.FinishSpan(span)
+
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	cacheKey := cache.GenerateKey(cache.PrefixMeter, tenantID, environmentID, meter.ID)
+	r.cache.Set(ctx, cacheKey, meter, cache.ExpiryDefaultInMemory)
+}
+
+func (r *meterRepository) GetCache(ctx context.Context, key string) *domainMeter.Meter {
+	span := cache.StartCacheSpan(ctx, "meter", "get", map[string]interface{}{
+		"meter_id": key,
+	})
+	defer cache.FinishSpan(span)
+
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	cacheKey := cache.GenerateKey(cache.PrefixMeter, tenantID, environmentID, key)
+	if value, found := r.cache.Get(ctx, cacheKey); found {
+		return value.(*domainMeter.Meter)
+	}
+	return nil
+}
+
+func (r *meterRepository) DeleteCache(ctx context.Context, meterID string) {
+	span := cache.StartCacheSpan(ctx, "meter", "delete", map[string]interface{}{
+		"meter_id": meterID,
+	})
+	defer cache.FinishSpan(span)
+
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	cacheKey := cache.GenerateKey(cache.PrefixMeter, tenantID, environmentID, meterID)
+	r.cache.Delete(ctx, cacheKey)
 }

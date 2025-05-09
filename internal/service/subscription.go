@@ -321,6 +321,14 @@ func (s *subscriptionService) CancelSubscription(ctx context.Context, id string,
 func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *types.SubscriptionFilter) (*dto.ListSubscriptionsResponse, error) {
 	planService := NewPlanService(s.DB, s.PlanRepo, s.PriceRepo, s.SubRepo, s.MeterRepo, s.EntitlementRepo, s.FeatureRepo, s.Logger)
 
+	if filter == nil {
+		filter = types.NewSubscriptionFilter()
+	}
+
+	if filter.QueryFilter == nil {
+		filter.QueryFilter = types.NewDefaultQueryFilter()
+	}
+
 	subscriptions, err := s.SubRepo.List(ctx, filter)
 	if err != nil {
 		return nil, err
@@ -349,6 +357,9 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 	// Get plans in bulk
 	planFilter := types.NewNoLimitPlanFilter()
 	planFilter.PlanIDs = lo.Keys(planIDMap)
+	if filter != nil && filter.Expand != nil {
+		planFilter.Expand = filter.Expand // pass on the filters to next layer
+	}
 	planResponse, err := planService.GetPlans(ctx, planFilter)
 	if err != nil {
 		return nil, err

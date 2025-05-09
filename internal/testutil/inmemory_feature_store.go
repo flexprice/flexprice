@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"context"
+	"strings"
 
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -61,6 +62,13 @@ func featureFilterFn(ctx context.Context, f *feature.Feature, filter interface{}
 	// Filter by lookup key
 	if filter_.LookupKey != "" {
 		if f.LookupKey != filter_.LookupKey {
+			return false
+		}
+	}
+
+	// Filter by name contains
+	if filter_.NameContains != "" {
+		if !strings.Contains(strings.ToLower(f.Name), strings.ToLower(filter_.NameContains)) {
 			return false
 		}
 	}
@@ -236,6 +244,7 @@ func (s *InMemoryFeatureStore) ListAll(ctx context.Context, filter *types.Featur
 		TimeRangeFilter: filter.TimeRangeFilter,
 		FeatureIDs:      filter.FeatureIDs,
 		LookupKey:       filter.LookupKey,
+		NameContains:    filter.NameContains,
 	}
 
 	return s.List(ctx, unlimitedFilter)

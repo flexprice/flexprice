@@ -31,6 +31,11 @@ type Configuration struct {
 	Secrets    SecretsConfig    `validate:"required"`
 	Billing    BillingConfig    `validate:"omitempty"`
 	S3         S3Config         `validate:"required"`
+	Cache      CacheConfig      `validate:"required"`
+}
+
+type CacheConfig struct {
+	Enabled bool `mapstructure:"enabled" validate:"required"`
 }
 
 type S3Config struct {
