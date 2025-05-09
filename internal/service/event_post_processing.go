@@ -58,6 +58,7 @@ type EventPostProcessingService interface {
 type eventPostProcessingService struct {
 	ServiceParams
 	pubSub             pubsub.PubSub
+	eventRepo          events.Repository
 	processedEventRepo events.ProcessedEventRepository
 }
 
@@ -65,11 +66,13 @@ type eventPostProcessingService struct {
 func NewEventPostProcessingService(
 	params ServiceParams,
 	pubSub pubsub.PubSub,
+	eventRepo events.Repository,
 	processedEventRepo events.ProcessedEventRepository,
 ) EventPostProcessingService {
 	return &eventPostProcessingService{
 		ServiceParams:      params,
 		pubSub:             pubSub,
+		eventRepo:          eventRepo,
 		processedEventRepo: processedEventRepo,
 	}
 }
@@ -171,8 +174,28 @@ func (s *eventPostProcessingService) processMessage(msg *message.Message) error 
 		return nil // Don't retry on unmarshal errors
 	}
 
+	events, _, err := s.eventRepo.GetEvents(ctx, &events.GetEventsParams{
+		EventID:            event.ID,
+		ExternalCustomerID: event.ExternalCustomerID,
+	})
+	if err != nil {
+		s.Logger.Errorw("failed to update event with ingested_at",
+			"error", err,
+		)
+		return err
+	}
+
+	if len(events) == 0 {
+		s.Logger.Errorw("event not found",
+			"event_id", event.ID,
+			"external_customer_id", event.ExternalCustomerID,
+		)
+		return nil // Don't retry on event not found
+	}
+
+	foundEvent := events[0]
 	// validate tenant id
-	if event.TenantID != tenantID {
+	if foundEvent.TenantID != tenantID {
 		s.Logger.Errorw("invalid tenant id",
 			"expected", tenantID,
 			"actual", event.TenantID,
@@ -182,18 +205,18 @@ func (s *eventPostProcessingService) processMessage(msg *message.Message) error 
 	}
 
 	// Process the event
-	if err := s.processEvent(ctx, &event); err != nil {
+	if err := s.processEvent(ctx, foundEvent); err != nil {
 		s.Logger.Errorw("failed to process event",
 			"error", err,
-			"event_id", event.ID,
-			"event_name", event.EventName,
+			"event_id", foundEvent.ID,
+			"event_name", foundEvent.EventName,
 		)
 		return err // Return error for retry
 	}
 
 	s.Logger.Infow("event processed successfully",
-		"event_id", event.ID,
-		"event_name", event.EventName,
+		"event_id", foundEvent.ID,
+		"event_name", foundEvent.EventName,
 	)
 
 	return nil
@@ -205,6 +228,7 @@ func (s *eventPostProcessingService) processEvent(ctx context.Context, event *ev
 		"event_id", event.ID,
 		"event_name", event.EventName,
 		"external_customer_id", event.ExternalCustomerID,
+		"ingested_at", event.IngestedAt,
 	)
 
 	processedEvents, err := s.prepareProcessedEvents(ctx, event)
@@ -571,7 +595,7 @@ func (s *eventPostProcessingService) isSupportedAggregationType(agg types.Aggreg
 func (s *eventPostProcessingService) isSupportedBillingModel(billingModel types.BillingModel) bool {
 	// We support usage-based billing models
 	// FLAT_FEE is not appropriate for usage-based billing as it doesn't depend on consumption
-	return billingModel != types.BILLING_MODEL_FLAT_FEE
+	return billingModel == types.BILLING_MODEL_FLAT_FEE
 }
 
 // isSupportedAggregationForPostProcessing checks if the aggregation type and billing model are supported

@@ -445,7 +445,8 @@ func (r *EventRepository) GetEvents(ctx context.Context, params *events.GetEvent
 			timestamp,
 			source,
 			properties,
-			environment_id
+			environment_id,
+			ingested_at
 		FROM events
 		WHERE tenant_id = ?
 	`
@@ -578,6 +579,7 @@ func (r *EventRepository) GetEvents(ctx context.Context, params *events.GetEvent
 			&event.Source,
 			&propertiesJSON,
 			&event.EnvironmentID,
+			&event.IngestedAt,
 		)
 		if err != nil {
 			SetSpanError(span, err)

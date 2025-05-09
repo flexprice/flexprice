@@ -133,6 +133,9 @@ func (s *eventService) GetUsageByMeter(ctx context.Context, req *dto.GetUsageByM
 		return nil, err
 	}
 
+	usage.PriceID = req.PriceID
+	usage.MeterID = req.MeterID
+
 	if m.ResetUsage == types.ResetUsageNever {
 		getHistoricUsageRequest := getUsageRequest
 		getHistoricUsageRequest.StartTime = time.Time{}
@@ -146,9 +149,6 @@ func (s *eventService) GetUsageByMeter(ctx context.Context, req *dto.GetUsageByM
 
 		return s.combineResults(historicUsage, usage, m), nil
 	}
-
-	usage.PriceID = req.PriceID
-	usage.MeterID = req.MeterID
 	return usage, nil
 }
 
@@ -227,6 +227,7 @@ func (s *eventService) BulkGetUsageByMeter(ctx context.Context, req []*dto.GetUs
 
 			s.logger.With(
 				"meter_id", meterID,
+				"price_id", r.PriceID,
 				"meter_index", meterIdx,
 			).Debug("starting meter usage request")
 
@@ -243,6 +244,7 @@ func (s *eventService) BulkGetUsageByMeter(ctx context.Context, req []*dto.GetUs
 
 				s.logger.With(
 					"meter_id", meterID,
+					"price_id", r.PriceID,
 					"meter_index", meterIdx,
 					"error", err,
 					"processing_time_ms", processingDuration.Milliseconds(),
@@ -255,6 +257,7 @@ func (s *eventService) BulkGetUsageByMeter(ctx context.Context, req []*dto.GetUs
 					// Add breadcrumb about the failure
 					sentrySvc.AddBreadcrumb("meter_error", fmt.Sprintf("Failed to get usage for meter %s", meterID), map[string]interface{}{
 						"meter_id": meterID,
+						"price_id": r.PriceID,
 						"error":    err.Error(),
 					})
 				}
@@ -273,6 +276,7 @@ func (s *eventService) BulkGetUsageByMeter(ctx context.Context, req []*dto.GetUs
 
 			s.logger.With(
 				"meter_id", meterID,
+				"price_id", result.PriceID,
 				"meter_index", meterIdx,
 				"processing_time_ms", processingDuration.Milliseconds(),
 			).Debug("completed meter usage request")
