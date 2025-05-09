@@ -18,11 +18,47 @@ type Repository interface {
 
 // ProcessedEventRepository defines operations for processed events
 type ProcessedEventRepository interface {
+	// Inserts a single processed event into events_processed table
 	InsertProcessedEvent(ctx context.Context, event *ProcessedEvent) error
+
+	// Bulk insert events into events_processed table
 	BulkInsertProcessedEvents(ctx context.Context, events []*ProcessedEvent) error
+
+	// Get processed events with filtering options
 	GetProcessedEvents(ctx context.Context, params *GetProcessedEventsParams) ([]*ProcessedEvent, uint64, error)
-	GetUsageSummary(ctx context.Context, params *UsageSummaryParams) (decimal.Decimal, error)
-	FindUnprocessedEvents(ctx context.Context, customerID, subscriptionID string) ([]*ProcessedEvent, error)
+
+	// Check for duplicate event using unique_hash
+	IsDuplicate(ctx context.Context, subscriptionID, meterID string, periodID uint64, uniqueHash string) (bool, error)
+
+	// Get free and billable quantity to date for a subscription line item
+	GetLineItemUsage(ctx context.Context, subLineItemID string, periodID uint64) (qty decimal.Decimal, freeUnits decimal.Decimal, err error)
+
+	// Get usage cost to date for a customer's subscription in a billing period
+	GetPeriodCost(ctx context.Context, tenantID, environmentID, customerID, subscriptionID string, periodID uint64) (decimal.Decimal, error)
+
+	// Get usage totals per feature for invoicing
+	GetPeriodFeatureTotals(ctx context.Context, tenantID, environmentID, customerID, subscriptionID string, periodID uint64) ([]*PeriodFeatureTotal, error)
+
+	// Get usage analytics for recent events
+	GetUsageAnalytics(ctx context.Context, tenantID, environmentID, customerID string, lookbackHours int) ([]*UsageAnalytic, error)
+}
+
+// Additional types needed for the new methods
+
+// PeriodFeatureTotal represents aggregated usage for a feature in a period
+type PeriodFeatureTotal struct {
+	FeatureID string          `json:"feature_id"`
+	Quantity  decimal.Decimal `json:"quantity"`
+	FreeUnits decimal.Decimal `json:"free_units"`
+	Cost      decimal.Decimal `json:"cost"`
+}
+
+// UsageAnalytic represents usage analytics data grouped by source and feature
+type UsageAnalytic struct {
+	Source    string          `json:"source"`
+	FeatureID string          `json:"feature_id"`
+	Cost      decimal.Decimal `json:"cost"`
+	Usage     decimal.Decimal `json:"usage"`
 }
 
 type UsageParams struct {
@@ -50,17 +86,16 @@ type UsageSummaryParams struct {
 
 // GetProcessedEventsParams defines parameters for querying processed events
 type GetProcessedEventsParams struct {
-	StartTime      time.Time         `json:"start_time" validate:"required"`
-	EndTime        time.Time         `json:"end_time" validate:"required"`
-	CustomerID     string            `json:"customer_id"`
-	SubscriptionID string            `json:"subscription_id"`
-	MeterID        string            `json:"meter_id"`
-	FeatureID      string            `json:"feature_id"`
-	PriceID        string            `json:"price_id"`
-	EventStatus    types.EventStatus `json:"event_status"`
-	Offset         int               `json:"offset"`
-	Limit          int               `json:"limit"`
-	CountTotal     bool              `json:"count_total"`
+	StartTime      time.Time `json:"start_time" validate:"required"`
+	EndTime        time.Time `json:"end_time" validate:"required"`
+	CustomerID     string    `json:"customer_id"`
+	SubscriptionID string    `json:"subscription_id"`
+	MeterID        string    `json:"meter_id"`
+	FeatureID      string    `json:"feature_id"`
+	PriceID        string    `json:"price_id"`
+	Offset         int       `json:"offset"`
+	Limit          int       `json:"limit"`
+	CountTotal     bool      `json:"count_total"`
 }
 
 type GetEventsParams struct {

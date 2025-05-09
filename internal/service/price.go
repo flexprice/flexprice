@@ -21,6 +21,10 @@ type PriceService interface {
 	UpdatePrice(ctx context.Context, id string, req dto.UpdatePriceRequest) (*dto.PriceResponse, error)
 	DeletePrice(ctx context.Context, id string) error
 	CalculateCost(ctx context.Context, price *price.Price, quantity decimal.Decimal) decimal.Decimal
+
+	// CalculateCostWithBreakup calculates the cost for a given price and quantity
+	// and returns detailed information about the calculation
+	CalculateCostWithBreakup(ctx context.Context, price *price.Price, quantity decimal.Decimal) dto.CostBreakup
 }
 
 type priceService struct {
@@ -288,4 +292,153 @@ func (s *priceService) calculateTieredCost(ctx context.Context, price *price.Pri
 	}
 
 	return cost
+}
+
+// CalculateCostWithBreakup calculates the cost with detailed breakdown information
+func (s *priceService) CalculateCostWithBreakup(ctx context.Context, price *price.Price, quantity decimal.Decimal) dto.CostBreakup {
+	result := dto.CostBreakup{
+		EffectiveUnitCost: decimal.Zero,
+		SelectedTierIndex: -1,
+		TierUnitAmount:    decimal.Zero,
+		FinalCost:         decimal.Zero,
+	}
+
+	if quantity.IsZero() {
+		return result
+	}
+
+	switch price.BillingModel {
+	case types.BILLING_MODEL_FLAT_FEE:
+		result.FinalCost = price.CalculateAmount(quantity)
+		result.EffectiveUnitCost = price.Amount
+		result.TierUnitAmount = price.Amount
+
+	case types.BILLING_MODEL_PACKAGE:
+		if price.TransformQuantity.DivideBy <= 0 {
+			return result
+		}
+
+		transformedQuantity := quantity.Div(decimal.NewFromInt(int64(price.TransformQuantity.DivideBy)))
+
+		if price.TransformQuantity.Round == types.ROUND_UP {
+			transformedQuantity = transformedQuantity.Ceil()
+		} else if price.TransformQuantity.Round == types.ROUND_DOWN {
+			transformedQuantity = transformedQuantity.Floor()
+		}
+
+		result.FinalCost = price.CalculateAmount(transformedQuantity)
+		result.EffectiveUnitCost = price.Amount
+		result.TierUnitAmount = price.Amount
+
+	case types.BILLING_MODEL_TIERED:
+		result = s.calculateTieredCostWithBreakup(ctx, price, quantity)
+	}
+
+	result.FinalCost = result.FinalCost.Round(types.GetCurrencyPrecision(price.Currency))
+	return result
+}
+
+// calculateTieredCostWithBreakup calculates tiered cost with detailed breakdown
+func (s *priceService) calculateTieredCostWithBreakup(ctx context.Context, price *price.Price, quantity decimal.Decimal) dto.CostBreakup {
+	result := dto.CostBreakup{
+		EffectiveUnitCost: decimal.Zero,
+		SelectedTierIndex: -1,
+		TierUnitAmount:    decimal.Zero,
+		FinalCost:         decimal.Zero,
+	}
+
+	if len(price.Tiers) == 0 {
+		s.logger.WithContext(ctx).Errorf("no tiers found for price %s", price.ID)
+		return result
+	}
+
+	// Sort price tiers by up_to value
+	sort.Slice(price.Tiers, func(i, j int) bool {
+		return price.Tiers[i].GetTierUpTo() < price.Tiers[j].GetTierUpTo()
+	})
+
+	switch price.TierMode {
+	case types.BILLING_TIER_VOLUME:
+		selectedTierIndex := len(price.Tiers) - 1
+		// Find the tier that the quantity falls into
+		for i, tier := range price.Tiers {
+			if tier.UpTo == nil {
+				selectedTierIndex = i
+				break
+			}
+			if quantity.LessThan(decimal.NewFromUint64(*tier.UpTo)) {
+				selectedTierIndex = i
+				break
+			}
+		}
+
+		selectedTier := price.Tiers[selectedTierIndex]
+		result.SelectedTierIndex = selectedTierIndex
+		result.TierUnitAmount = selectedTier.UnitAmount
+
+		// Calculate tier cost with proper rounding and handling of flat amount
+		result.FinalCost = selectedTier.CalculateTierAmount(quantity, price.Currency)
+
+		// Calculate effective unit cost (handle zero quantity case)
+		if !quantity.IsZero() {
+			result.EffectiveUnitCost = result.FinalCost.Div(quantity)
+		} else {
+			result.EffectiveUnitCost = decimal.Zero
+		}
+
+		s.logger.WithContext(ctx).Debugf(
+			"volume tier total cost for quantity %s: %s price: %s tier : %+v",
+			quantity.String(),
+			result.FinalCost.String(),
+			price.ID,
+			selectedTier,
+		)
+
+	case types.BILLING_TIER_SLAB:
+		remainingQuantity := quantity
+		for i, tier := range price.Tiers {
+			var tierQuantity = remainingQuantity
+			if tier.UpTo != nil {
+				upTo := decimal.NewFromUint64(*tier.UpTo)
+				if remainingQuantity.GreaterThan(upTo) {
+					tierQuantity = upTo
+				}
+			}
+
+			// Calculate tier cost with proper rounding and handling of flat amount
+			tierCost := tier.CalculateTierAmount(tierQuantity, price.Currency)
+			result.FinalCost = result.FinalCost.Add(tierCost)
+
+			// Record the last tier used (will be the highest tier the quantity applies to)
+			if tierQuantity.GreaterThan(decimal.Zero) {
+				result.SelectedTierIndex = i
+				result.TierUnitAmount = tier.UnitAmount
+			}
+
+			remainingQuantity = remainingQuantity.Sub(tierQuantity)
+
+			s.logger.WithContext(ctx).Debugf(
+				"slab tier total cost for quantity %s: %s price: %s tier : %+v",
+				quantity.String(),
+				tierCost.String(),
+				price.ID,
+				tier,
+			)
+
+			if remainingQuantity.LessThanOrEqual(decimal.Zero) {
+				break
+			}
+		}
+
+		// Calculate effective unit cost (handle zero quantity case)
+		if !quantity.IsZero() {
+			result.EffectiveUnitCost = result.FinalCost.Div(quantity)
+		} else {
+			result.EffectiveUnitCost = decimal.Zero
+		}
+	default:
+		s.logger.WithContext(ctx).Errorf("invalid tier mode: %s", price.TierMode)
+	}
+
+	return result
 }

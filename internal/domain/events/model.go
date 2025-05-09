@@ -49,17 +49,30 @@ type ProcessedEvent struct {
 	// Original event fields
 	Event
 	// Processing fields
-	SubscriptionID        string            `json:"subscription_id" ch:"subscription_id"`
-	PriceID               string            `json:"price_id" ch:"price_id"`
-	FeatureID             string            `json:"feature_id" ch:"feature_id"`
-	MeterID               string            `json:"meter_id" ch:"meter_id"`
-	AggregationField      string            `json:"aggregation_field" ch:"aggregation_field"`
-	AggregationFieldValue string            `json:"aggregation_field_value" ch:"aggregation_field_value"`
-	Currency              string            `json:"currency" ch:"currency"`
-	Quantity              uint64            `json:"quantity" ch:"quantity"`
-	Cost                  decimal.Decimal   `json:"cost" ch:"cost"`
-	ProcessedAt           *time.Time        `json:"processed_at" ch:"processed_at,timezone('UTC')"`
-	EventStatus           types.EventStatus `json:"event_status" ch:"event_status"`
+	SubscriptionID string `json:"subscription_id" ch:"subscription_id"`
+	SubLineItemID  string `json:"sub_line_item_id" ch:"sub_line_item_id"`
+	PriceID        string `json:"price_id" ch:"price_id"`
+	FeatureID      string `json:"feature_id" ch:"feature_id"`
+	MeterID        string `json:"meter_id" ch:"meter_id"`
+	PeriodID       uint64 `json:"period_id" ch:"period_id"`
+	Currency       string `json:"currency" ch:"currency"`
+
+	// Deduplication and metrics
+	UniqueHash     string          `json:"unique_hash" ch:"unique_hash"`
+	QtyTotal       decimal.Decimal `json:"qty_total" ch:"qty_total"`
+	QtyBillable    decimal.Decimal `json:"qty_billable" ch:"qty_billable"`
+	QtyFreeApplied decimal.Decimal `json:"qty_free_applied" ch:"qty_free_applied"`
+	TierSnapshot   decimal.Decimal `json:"tier_snapshot" ch:"tier_snapshot"`
+	UnitCost       decimal.Decimal `json:"unit_cost" ch:"unit_cost"`
+	Cost           decimal.Decimal `json:"cost" ch:"cost"`
+
+	// Audit fields
+	Version uint64 `json:"version" ch:"version"`
+	Sign    int8   `json:"sign" ch:"sign"`
+
+	// Processing metadata
+	ProcessedAt time.Time `json:"processed_at" ch:"processed_at,timezone('UTC')"`
+	FinalLagMs  uint32    `json:"final_lag_ms" ch:"final_lag_ms"`
 }
 
 // NewEvent creates a new event with defaults
@@ -109,9 +122,12 @@ func (e *Event) Validate() error {
 // ToProcessedEvent creates a new ProcessedEvent from this Event with pending status
 func (e *Event) ToProcessedEvent() *ProcessedEvent {
 	return &ProcessedEvent{
-		Event:       *e,
-		EventStatus: types.EventStatusPending,
-		Quantity:    0,
-		Cost:        decimal.Zero,
+		Event:          *e,
+		QtyTotal:       decimal.Zero,
+		QtyBillable:    decimal.Zero,
+		QtyFreeApplied: decimal.Zero,
+		TierSnapshot:   decimal.Zero,
+		UnitCost:       decimal.Zero,
+		Cost:           decimal.Zero,
 	}
 }

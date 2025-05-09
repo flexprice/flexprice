@@ -27,11 +27,12 @@ func (r *ProcessedEventRepository) InsertProcessedEvent(ctx context.Context, eve
 	query := `
 		INSERT INTO events_processed (
 			id, tenant_id, external_customer_id, customer_id, event_name, source, 
-			timestamp, ingested_at, properties, processed_at, environment_id,
-			subscription_id, price_id, meter_id, feature_id, aggregation_field, 
-			aggregation_field_value, quantity, cost, currency, event_status
+			timestamp, ingested_at, properties, environment_id,
+			subscription_id, sub_line_item_id, price_id, meter_id, feature_id, period_id,
+			unique_hash, qty_total, qty_billable, qty_free_applied, tier_snapshot, 
+			unit_cost, cost, currency, sign
 		) VALUES (
-			?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+			?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 		)
 	`
 
@@ -45,6 +46,12 @@ func (r *ProcessedEventRepository) InsertProcessedEvent(ctx context.Context, eve
 			Mark(ierr.ErrValidation)
 	}
 
+	// Default sign to 1 if not set
+	sign := event.Sign
+	if sign == 0 {
+		sign = 1
+	}
+
 	args := []interface{}{
 		event.ID,
 		event.TenantID,
@@ -55,18 +62,22 @@ func (r *ProcessedEventRepository) InsertProcessedEvent(ctx context.Context, eve
 		event.Timestamp,
 		event.IngestedAt,
 		string(propertiesJSON),
-		event.ProcessedAt,
 		event.EnvironmentID,
 		event.SubscriptionID,
+		event.SubLineItemID,
 		event.PriceID,
 		event.MeterID,
 		event.FeatureID,
-		event.AggregationField,
-		event.AggregationFieldValue,
-		event.Quantity,
+		event.PeriodID,
+		event.UniqueHash,
+		event.QtyTotal,
+		event.QtyBillable,
+		event.QtyFreeApplied,
+		event.TierSnapshot,
+		event.UnitCost,
 		event.Cost,
 		event.Currency,
-		event.EventStatus.String(),
+		sign,
 	}
 
 	err = r.store.GetConn().Exec(ctx, query, args...)
@@ -96,9 +107,10 @@ func (r *ProcessedEventRepository) BulkInsertProcessedEvents(ctx context.Context
 		batch, err := r.store.GetConn().PrepareBatch(ctx, `
 			INSERT INTO events_processed (
 				id, tenant_id, external_customer_id, customer_id, event_name, source, 
-				timestamp, ingested_at, properties, processed_at, environment_id,
-				subscription_id, price_id, meter_id, feature_id, aggregation_field, 
-				aggregation_field_value, quantity, cost, currency, event_status
+				timestamp, ingested_at, properties, environment_id,
+				subscription_id, sub_line_item_id, price_id, meter_id, feature_id, period_id,
+				unique_hash, qty_total, qty_billable, qty_free_applied, tier_snapshot, 
+				unit_cost, cost, currency, sign
 			)
 		`)
 		if err != nil {
@@ -118,6 +130,12 @@ func (r *ProcessedEventRepository) BulkInsertProcessedEvents(ctx context.Context
 					Mark(ierr.ErrValidation)
 			}
 
+			// Default sign to 1 if not set
+			sign := event.Sign
+			if sign == 0 {
+				sign = 1
+			}
+
 			err = batch.Append(
 				event.ID,
 				event.TenantID,
@@ -128,18 +146,22 @@ func (r *ProcessedEventRepository) BulkInsertProcessedEvents(ctx context.Context
 				event.Timestamp,
 				event.IngestedAt,
 				string(propertiesJSON),
-				event.ProcessedAt,
 				event.EnvironmentID,
 				event.SubscriptionID,
+				event.SubLineItemID,
 				event.PriceID,
 				event.MeterID,
 				event.FeatureID,
-				event.AggregationField,
-				event.AggregationFieldValue,
-				event.Quantity,
+				event.PeriodID,
+				event.UniqueHash,
+				event.QtyTotal,
+				event.QtyBillable,
+				event.QtyFreeApplied,
+				event.TierSnapshot,
+				event.UnitCost,
 				event.Cost,
 				event.Currency,
-				event.EventStatus.String(),
+				sign,
 			)
 
 			if err != nil {
@@ -172,10 +194,12 @@ func (r *ProcessedEventRepository) GetProcessedEvents(ctx context.Context, param
 		SELECT 
 			id, tenant_id, external_customer_id, customer_id, event_name, source, 
 			timestamp, ingested_at, properties, processed_at, environment_id,
-			subscription_id, price_id, meter_id, feature_id, aggregation_field, 
-			aggregation_field_value, quantity, cost, currency, event_status
+			subscription_id, sub_line_item_id, price_id, meter_id, feature_id, period_id,
+			unique_hash, qty_total, qty_billable, qty_free_applied, tier_snapshot, 
+			unit_cost, cost, currency, version, sign, final_lag_ms
 		FROM events_processed
 		WHERE tenant_id = ?
+		AND environment_id = ?
 		AND timestamp >= ?
 		AND timestamp <= ?
 	`
@@ -228,13 +252,6 @@ func (r *ProcessedEventRepository) GetProcessedEvents(ctx context.Context, param
 		countArgs = append(countArgs, params.PriceID)
 	}
 
-	if params.EventStatus != "" {
-		query += " AND event_status = ?"
-		countQuery += " AND event_status = ?"
-		args = append(args, params.EventStatus.String())
-		countArgs = append(countArgs, params.EventStatus.String())
-	}
-
 	// Add FINAL modifier to handle ReplacingMergeTree
 	query += " FINAL"
 	countQuery += " FINAL"
@@ -274,7 +291,6 @@ func (r *ProcessedEventRepository) GetProcessedEvents(ctx context.Context, param
 	for rows.Next() {
 		var event events.ProcessedEvent
 		var propertiesJSON string
-		var eventStatusStr string
 
 		err := rows.Scan(
 			&event.ID,
@@ -289,24 +305,28 @@ func (r *ProcessedEventRepository) GetProcessedEvents(ctx context.Context, param
 			&event.ProcessedAt,
 			&event.EnvironmentID,
 			&event.SubscriptionID,
+			&event.SubLineItemID,
 			&event.PriceID,
 			&event.MeterID,
 			&event.FeatureID,
-			&event.AggregationField,
-			&event.AggregationFieldValue,
-			&event.Quantity,
+			&event.PeriodID,
+			&event.UniqueHash,
+			&event.QtyTotal,
+			&event.QtyBillable,
+			&event.QtyFreeApplied,
+			&event.TierSnapshot,
+			&event.UnitCost,
 			&event.Cost,
 			&event.Currency,
-			&eventStatusStr,
+			&event.Version,
+			&event.Sign,
+			&event.FinalLagMs,
 		)
 		if err != nil {
 			return nil, 0, ierr.WithError(err).
 				WithHint("Failed to scan processed event").
 				Mark(ierr.ErrDatabase)
 		}
-
-		// Convert event status string to enum
-		event.EventStatus = types.EventStatus(eventStatusStr)
 
 		// Parse properties
 		if propertiesJSON != "" {
@@ -325,156 +345,162 @@ func (r *ProcessedEventRepository) GetProcessedEvents(ctx context.Context, param
 	return eventsList, totalCount, nil
 }
 
-// GetUsageSummary calculates usage summaries based on pre-computed costs
-func (r *ProcessedEventRepository) GetUsageSummary(ctx context.Context, params *events.UsageSummaryParams) (decimal.Decimal, error) {
+// IsDuplicate checks if an event with the given unique hash already exists
+func (r *ProcessedEventRepository) IsDuplicate(ctx context.Context, subscriptionID, meterID string, periodID uint64, uniqueHash string) (bool, error) {
 	query := `
-		SELECT SUM(cost) as total_cost
-		FROM events_processed
-		WHERE tenant_id = ?
-		AND environment_id = ?
-		AND timestamp >= ?
-		AND timestamp <= ?
-		AND event_status = 'processed'
+		SELECT 1 
+		FROM events_processed 
+		WHERE subscription_id = ? 
+		AND meter_id = ? 
+		AND period_id = ? 
+		AND unique_hash = ? 
+		LIMIT 1
 	`
-	args := []interface{}{types.GetTenantID(ctx), types.GetEnvironmentID(ctx), params.StartTime, params.EndTime}
 
-	// Add filters
-	if params.CustomerID != "" {
-		query += " AND customer_id = ?"
-		args = append(args, params.CustomerID)
-	}
-
-	if params.SubscriptionID != "" {
-		query += " AND subscription_id = ?"
-		args = append(args, params.SubscriptionID)
-	}
-
-	if params.PriceID != "" {
-		query += " AND price_id = ?"
-		args = append(args, params.PriceID)
-	}
-
-	if params.MeterID != "" {
-		query += " AND meter_id = ?"
-		args = append(args, params.MeterID)
-	}
-
-	if params.FeatureID != "" {
-		query += " AND feature_id = ?"
-		args = append(args, params.FeatureID)
-	}
-
-	// Handle duplicates by using ReplacingMergeTree version field
-	// The FINAL modifier ensures that for each set of rows with the same primary key,
-	// only the one with the largest version number is returned
-	query += " FINAL"
-
-	var totalCost decimal.Decimal
-	err := r.store.GetConn().QueryRow(ctx, query, args...).Scan(&totalCost)
+	var exists int
+	err := r.store.GetConn().QueryRow(ctx, query, subscriptionID, meterID, periodID, uniqueHash).Scan(&exists)
 	if err != nil {
-		return decimal.Zero, ierr.WithError(err).
-			WithHint("Failed to calculate usage summary").
+		// If no rows, it means no duplicate
+		if err.Error() == "sql: no rows in result set" {
+			return false, nil
+		}
+		return false, ierr.WithError(err).
+			WithHint("Failed to check for duplicate event").
 			Mark(ierr.ErrDatabase)
 	}
 
-	return totalCost, nil
+	return exists == 1, nil
 }
 
-// FindUnprocessedEvents finds events that need to be processed
-func (r *ProcessedEventRepository) FindUnprocessedEvents(ctx context.Context, customerID, subscriptionID string) ([]*events.ProcessedEvent, error) {
-	if customerID == "" && subscriptionID == "" {
-		return nil, ierr.NewError("at least one filter is required").
-			WithHint("Either customer ID or subscription ID is required").
-			Mark(ierr.ErrValidation)
-	}
-
+// GetLineItemUsage gets the current usage amounts for a subscription line item in a period
+func (r *ProcessedEventRepository) GetLineItemUsage(ctx context.Context, subLineItemID string, periodID uint64) (qty decimal.Decimal, freeUnits decimal.Decimal, err error) {
 	query := `
 		SELECT 
-			id, tenant_id, external_customer_id, customer_id, 
-			event_name, source, timestamp, ingested_at, properties,
-			processed_at, environment_id, subscription_id, price_id, 
-			meter_id, feature_id, aggregation_field, aggregation_field_value,
-			quantity, cost, currency, event_status
-		FROM events_processed
-		WHERE tenant_id = ?
-		AND event_status = 'pending'
+			sumMerge(qty_state) AS qty_billable,
+			sumMerge(free_state) AS qty_free
+		FROM agg_usage_period_totals
+		WHERE sub_line_item_id = ?
+		AND period_id = ?
 	`
-	args := []interface{}{types.GetTenantID(ctx)}
 
-	// Add filters
-	if customerID != "" {
-		query += " AND customer_id = ?"
-		args = append(args, customerID)
+	err = r.store.GetConn().QueryRow(ctx, query, subLineItemID, periodID).Scan(&qty, &freeUnits)
+	if err != nil {
+		// If no rows found, return zero values
+		if err.Error() == "sql: no rows in result set" {
+			return decimal.Zero, decimal.Zero, nil
+		}
+		return decimal.Zero, decimal.Zero, ierr.WithError(err).
+			WithHint("Failed to get line item usage").
+			Mark(ierr.ErrDatabase)
 	}
 
-	if subscriptionID != "" {
-		query += " AND subscription_id = ?"
-		args = append(args, subscriptionID)
+	return qty, freeUnits, nil
+}
+
+// GetPeriodCost gets the total cost for a subscription in a billing period
+func (r *ProcessedEventRepository) GetPeriodCost(ctx context.Context, tenantID, environmentID, customerID, subscriptionID string, periodID uint64) (decimal.Decimal, error) {
+	query := `
+		SELECT sumMerge(cost_state) AS cost 
+		FROM agg_usage_period_totals
+		WHERE tenant_id = ?
+		AND environment_id = ?
+		AND customer_id = ?
+		AND subscription_id = ?
+		AND period_id = ?
+	`
+
+	var cost decimal.Decimal
+	err := r.store.GetConn().QueryRow(ctx, query, tenantID, environmentID, customerID, subscriptionID, periodID).Scan(&cost)
+	if err != nil {
+		// If no rows found, return zero
+		if err.Error() == "sql: no rows in result set" {
+			return decimal.Zero, nil
+		}
+		return decimal.Zero, ierr.WithError(err).
+			WithHint("Failed to get period cost").
+			Mark(ierr.ErrDatabase)
 	}
 
-	// Add FINAL modifier for ReplacingMergeTree
-	query += " FINAL"
+	return cost, nil
+}
 
-	// Execute query
-	rows, err := r.store.GetConn().Query(ctx, query, args...)
+// GetPeriodFeatureTotals gets usage totals by feature for a subscription in a period
+func (r *ProcessedEventRepository) GetPeriodFeatureTotals(ctx context.Context, tenantID, environmentID, customerID, subscriptionID string, periodID uint64) ([]*events.PeriodFeatureTotal, error) {
+	query := `
+		SELECT 
+			feature_id,
+			sumMerge(qty_state) AS qty,
+			sumMerge(free_state) AS free,
+			sumMerge(cost_state) AS cost
+		FROM agg_usage_period_totals
+		WHERE tenant_id = ?
+		AND environment_id = ?
+		AND customer_id = ?
+		AND subscription_id = ?
+		AND period_id = ?
+		GROUP BY feature_id
+	`
+
+	rows, err := r.store.GetConn().Query(ctx, query, tenantID, environmentID, customerID, subscriptionID, periodID)
 	if err != nil {
 		return nil, ierr.WithError(err).
-			WithHint("Failed to query unprocessed events").
+			WithHint("Failed to query period feature totals").
 			Mark(ierr.ErrDatabase)
 	}
 	defer rows.Close()
 
-	var eventsList []*events.ProcessedEvent
+	var results []*events.PeriodFeatureTotal
 	for rows.Next() {
-		var event events.ProcessedEvent
-		var propertiesJSON string
-		var eventStatusStr string
-
-		err := rows.Scan(
-			&event.ID,
-			&event.TenantID,
-			&event.ExternalCustomerID,
-			&event.CustomerID,
-			&event.EventName,
-			&event.Source,
-			&event.Timestamp,
-			&event.IngestedAt,
-			&propertiesJSON,
-			&event.ProcessedAt,
-			&event.EnvironmentID,
-			&event.SubscriptionID,
-			&event.PriceID,
-			&event.MeterID,
-			&event.FeatureID,
-			&event.AggregationField,
-			&event.AggregationFieldValue,
-			&event.Quantity,
-			&event.Cost,
-			&event.Currency,
-			&eventStatusStr,
-		)
+		var total events.PeriodFeatureTotal
+		err := rows.Scan(&total.FeatureID, &total.Quantity, &total.FreeUnits, &total.Cost)
 		if err != nil {
 			return nil, ierr.WithError(err).
-				WithHint("Failed to scan event").
+				WithHint("Failed to scan period feature total").
 				Mark(ierr.ErrDatabase)
 		}
-
-		// Convert event status string to enum
-		event.EventStatus = types.EventStatus(eventStatusStr)
-
-		// Parse properties
-		if propertiesJSON != "" {
-			if err := json.Unmarshal([]byte(propertiesJSON), &event.Properties); err != nil {
-				return nil, ierr.WithError(err).
-					WithHint("Failed to unmarshal properties").
-					Mark(ierr.ErrValidation)
-			}
-		} else {
-			event.Properties = make(map[string]interface{})
-		}
-
-		eventsList = append(eventsList, &event)
+		results = append(results, &total)
 	}
 
-	return eventsList, nil
+	return results, nil
+}
+
+// GetUsageAnalytics gets recent usage analytics for a customer
+func (r *ProcessedEventRepository) GetUsageAnalytics(ctx context.Context, tenantID, environmentID, customerID string, lookbackHours int) ([]*events.UsageAnalytic, error) {
+	query := `
+		SELECT 
+			source,
+			feature_id,
+			sum(cost) AS cost,
+			sum(qty_billable) AS usage
+		FROM events_processed
+		WHERE tenant_id = ?
+		AND environment_id = ?
+		AND customer_id = ?
+		AND timestamp >= now64(3) - INTERVAL ? HOUR
+		GROUP BY source, feature_id
+		ORDER BY cost DESC
+		LIMIT 100
+	`
+
+	rows, err := r.store.GetConn().Query(ctx, query, tenantID, environmentID, customerID, lookbackHours)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to query usage analytics").
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var results []*events.UsageAnalytic
+	for rows.Next() {
+		var analytics events.UsageAnalytic
+		err := rows.Scan(&analytics.Source, &analytics.FeatureID, &analytics.Cost, &analytics.Usage)
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Failed to scan usage analytics").
+				Mark(ierr.ErrDatabase)
+		}
+		results = append(results, &analytics)
+	}
+
+	return results, nil
 }

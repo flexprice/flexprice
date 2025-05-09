@@ -2,10 +2,11 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/ThreeDotsLabs/watermill/message"
@@ -41,11 +42,16 @@ type EventPostProcessingService interface {
 	// Register message handler with the router
 	RegisterHandler(router *pubsubRouter.Router)
 
-	// Query method for processed events with different filters
-	GetUsageSummary(ctx context.Context, params *events.UsageSummaryParams) (decimal.Decimal, error)
+	// Get usage cost for a specific period
+	GetPeriodCost(ctx context.Context, tenantID, environmentID, customerID, subscriptionID string, periodID uint64) (decimal.Decimal, error)
+
+	// Get usage totals per feature for a period
+	GetPeriodFeatureTotals(ctx context.Context, tenantID, environmentID, customerID, subscriptionID string, periodID uint64) ([]*events.PeriodFeatureTotal, error)
+
+	// Get usage analytics for a customer
+	GetUsageAnalytics(ctx context.Context, tenantID, environmentID, customerID string, lookbackHours int) ([]*events.UsageAnalytic, error)
 
 	// Reprocess events for a specific customer or subscription
-	// Used when a customer or subscription is created after events have been received
 	ReprocessEvents(ctx context.Context, customerID, subscriptionID string) error
 }
 
@@ -53,21 +59,6 @@ type eventPostProcessingService struct {
 	ServiceParams
 	pubSub             pubsub.PubSub
 	processedEventRepo events.ProcessedEventRepository
-}
-
-// Package-level throttle for rate limiting event processing
-var (
-	eventThrottle     *middleware.Throttle
-	eventThrottleOnce sync.Once
-)
-
-// initEventThrottle initializes the global throttle if not already initialized
-func initEventThrottle() *middleware.Throttle {
-	eventThrottleOnce.Do(func() {
-		// Limit to 1 event per second
-		eventThrottle = middleware.NewThrottle(1, time.Second)
-	})
-	return eventThrottle
 }
 
 // NewEventPostProcessingService creates a new event post-processing service
@@ -100,8 +91,11 @@ func (s *eventPostProcessingService) PublishEvent(ctx context.Context, event *ev
 		partitionKey = fmt.Sprintf("%s:%s", event.TenantID, event.ExternalCustomerID)
 	}
 
+	partitionKeyHash := sha256.Sum256([]byte(partitionKey))
+	partitionKeyHashStr := hex.EncodeToString(partitionKeyHash[:])
+
 	// Use the partition key as the message ID to ensure consistent partitioning
-	msg := message.NewMessage(partitionKey, payload)
+	msg := message.NewMessage(partitionKeyHashStr, payload)
 
 	// Set metadata for additional context
 	msg.Metadata.Set("tenant_id", event.TenantID)
@@ -145,15 +139,17 @@ func (s *eventPostProcessingService) RegisterHandler(router *pubsubRouter.Router
 
 // Process a single event message
 func (s *eventPostProcessingService) processMessage(msg *message.Message) error {
+	// Extract tenant ID from message metadata
 	partitionKey := msg.Metadata.Get("partition_key")
+	tenantID := msg.Metadata.Get("tenant_id")
+	environmentID := msg.Metadata.Get("environment_id")
+
 	s.Logger.Debugw("processing event from message queue",
 		"message_uuid", msg.UUID,
 		"partition_key", partitionKey,
+		"tenant_id", tenantID,
+		"environment_id", environmentID,
 	)
-
-	// Extract tenant ID from message metadata
-	tenantID := msg.Metadata.Get("tenant_id")
-	environmentID := msg.Metadata.Get("environment_id")
 
 	// Create a background context with tenant ID
 	ctx := context.Background()
@@ -211,42 +207,88 @@ func (s *eventPostProcessingService) processEvent(ctx context.Context, event *ev
 		"external_customer_id", event.ExternalCustomerID,
 	)
 
-	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.Logger)
-	subscriptionService := NewSubscriptionService(s.ServiceParams)
-
-	// Create a base processed event with pending status
-	processedEvent := event.ToProcessedEvent()
-
-	// 1. Skip comprehensive processing (but still save as pending) if no external customer ID
-	if event.ExternalCustomerID == "" {
-		s.Logger.Debugw("saving event as pending due to missing external customer ID",
-			"event_id", event.ID)
-		return s.processedEventRepo.InsertProcessedEvent(ctx, processedEvent)
+	processedEvents, err := s.prepareProcessedEvents(ctx, event)
+	if err != nil {
+		s.Logger.Errorw("failed to prepare processed events",
+			"error", err,
+			"event_id", event.ID,
+		)
+		return err
 	}
 
-	// 2. Lookup customer - use cache-backed repository if available
+	if len(processedEvents) > 0 {
+		if err := s.processedEventRepo.BulkInsertProcessedEvents(ctx, processedEvents); err != nil {
+			s.Logger.Errorw("failed to insert processed events",
+				"event_id", event.ID,
+				"count", len(processedEvents),
+				"error", err,
+			)
+			return err
+		}
+
+		s.Logger.Infow("successfully processed event",
+			"event_id", event.ID,
+			"processed_events", len(processedEvents),
+		)
+	} else {
+		s.Logger.Debugw("no processed events found for event",
+			"event_id", event.ID,
+			"event_name", event.EventName,
+			"tenant_id", event.TenantID,
+			"environment_id", event.EnvironmentID,
+		)
+	}
+
+	return nil
+}
+
+// Generate a unique hash for deduplication
+// there are 2 cases:
+// 1. event_name + event_id // for non COUNT_UNIQUE aggregation types
+// 2. event_name + event_field_name + event_field_value // for COUNT_UNIQUE aggregation types
+func (s *eventPostProcessingService) generateUniqueHash(event *events.Event, meter *meter.Meter) string {
+	hashStr := fmt.Sprintf("%s:%s", event.EventName, event.ID)
+
+	// For meters with field-based aggregation, include the field value in the hash
+	if meter.Aggregation.Type == types.AggregationCountUnique && meter.Aggregation.Field != "" {
+		if fieldValue, ok := event.Properties[meter.Aggregation.Field]; ok {
+			hashStr = fmt.Sprintf("%s:%s:%v", hashStr, meter.Aggregation.Field, fieldValue)
+		}
+	}
+
+	hash := sha256.Sum256([]byte(hashStr))
+	return hex.EncodeToString(hash[:])
+}
+
+func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context, event *events.Event) ([]*events.ProcessedEvent, error) {
+	subscriptionService := NewSubscriptionService(s.ServiceParams)
+
+	// Create a base processed event
+	baseProcessedEvent := event.ToProcessedEvent()
+
+	// Results slice - will contain either a single skipped event or multiple processed events
+	results := make([]*events.ProcessedEvent, 0)
+
+	// CASE 1: Lookup customer
 	customer, err := s.CustomerRepo.GetByLookupKey(ctx, event.ExternalCustomerID)
 	if err != nil {
-		s.Logger.Warnw("customer not found for event, saving as pending",
+		s.Logger.Warnw("customer not found for event, skipping",
 			"event_id", event.ID,
 			"external_customer_id", event.ExternalCustomerID,
 			"error", err,
 		)
-		return s.processedEventRepo.InsertProcessedEvent(ctx, processedEvent)
+		// Simply skip the event if customer not found
+		// TODO: add sentry span for customer not found
+		return results, nil
 	}
-	s.Logger.Debugw("found customer for event",
-		"event_id", event.ID,
-		"customer_id", customer.ID,
-	)
 
 	// Set the customer ID in the event if it's not already set
 	if event.CustomerID == "" {
 		event.CustomerID = customer.ID
-		processedEvent.CustomerID = customer.ID
+		baseProcessedEvent.CustomerID = customer.ID
 	}
 
-	// 3. Get active subscriptions with expanded data for efficiency
-	// We request all related data in a single query to minimize DB round trips
+	// CASE 2: Get active subscriptions
 	filter := types.NewSubscriptionFilter()
 	filter.CustomerID = customer.ID
 	filter.WithLineItems = true
@@ -258,38 +300,44 @@ func (s *eventPostProcessingService) processEvent(ctx context.Context, event *ev
 
 	subscriptionsList, err := subscriptionService.ListSubscriptions(ctx, filter)
 	if err != nil {
-		s.Logger.Errorw("failed to get subscriptions, saving as pending",
+		s.Logger.Errorw("failed to get subscriptions",
 			"event_id", event.ID,
 			"customer_id", customer.ID,
 			"error", err,
 		)
-		return s.processedEventRepo.InsertProcessedEvent(ctx, processedEvent)
+		// TODO: add sentry span for failed to get subscriptions
+		return results, err
 	}
-	subscriptions := subscriptionsList.Items
-	s.Logger.Debugw("found subscriptions for customer",
-		"event_id", event.ID,
-		"customer_id", customer.ID,
-		"subscription_count", len(subscriptions),
-	)
 
+	subscriptions := subscriptionsList.Items
 	if len(subscriptions) == 0 {
-		s.Logger.Debugw("no active subscriptions found for customer, saving as pending",
+		s.Logger.Debugw("no active subscriptions found for customer, skipping",
 			"event_id", event.ID,
 			"customer_id", customer.ID,
 		)
-		return s.processedEventRepo.InsertProcessedEvent(ctx, processedEvent)
+		// TODO: add sentry span for no active subscriptions found
+		return results, nil
 	}
 
 	// Build efficient maps for lookups
-	meterMap := make(map[string]*meter.Meter)
-	priceMap := make(map[string]*price.Price)
-	featureMap := make(map[string]*feature.Feature)
-	featureMeterMap := make(map[string]*feature.Feature)
+	meterMap := make(map[string]*meter.Meter)                             // Map meter_id -> meter
+	priceMap := make(map[string]*price.Price)                             // Map price_id -> price
+	featureMap := make(map[string]*feature.Feature)                       // Map feature_id -> feature
+	featureMeterMap := make(map[string]*feature.Feature)                  // Map meter_id -> feature
+	subLineItemMap := make(map[string]*subscription.SubscriptionLineItem) // Map price_id -> line item
 
-	// Extract meters and prices from subscriptions
+	// Extract meters, prices and line items from subscriptions
 	for _, sub := range subscriptions {
 		if sub.Plan == nil || sub.Plan.Prices == nil {
 			continue
+		}
+
+		for _, item := range sub.LineItems {
+			if !item.IsUsage() || !item.IsActive() {
+				continue
+			}
+
+			subLineItemMap[item.PriceID] = item
 		}
 
 		for _, item := range sub.Plan.Prices {
@@ -306,7 +354,7 @@ func (s *eventPostProcessingService) processEvent(ctx context.Context, event *ev
 	}
 
 	// Get features if not already expanded in subscriptions
-	if len(meterMap) > 0 && (featureMap == nil || len(featureMap) == 0) {
+	if len(meterMap) > 0 && len(featureMap) == 0 {
 		featureFilter := types.NewNoLimitFeatureFilter()
 		featureFilter.MeterIDs = lo.Keys(meterMap)
 		features, err := s.FeatureRepo.List(ctx, featureFilter)
@@ -316,7 +364,8 @@ func (s *eventPostProcessingService) processEvent(ctx context.Context, event *ev
 				"event_id", event.ID,
 				"meter_count", len(meterMap),
 			)
-			return err
+			// TODO: add sentry span for failed to get features
+			return results, err
 		}
 
 		for _, f := range features {
@@ -325,8 +374,8 @@ func (s *eventPostProcessingService) processEvent(ctx context.Context, event *ev
 		}
 	}
 
-	// 5. Process the event against each subscription
-	processedEvents := make([]*events.ProcessedEvent, 0)
+	// Process the event against each subscription
+	processedEventsPerSub := make([]*events.ProcessedEvent, 0)
 
 	for _, sub := range subscriptions {
 		// Get active usage-based line items
@@ -354,10 +403,8 @@ func (s *eventPostProcessingService) processEvent(ctx context.Context, event *ev
 					"line_item_id", item.ID,
 					"price_id", item.PriceID,
 				)
-
-				return ierr.WithError(err).
-					WithHint("Price not found in the price map for subscription line item").
-					Mark(ierr.ErrValidation)
+				// Skip this item but continue with others - don't fail the whole batch
+				continue
 			}
 		}
 
@@ -373,18 +420,68 @@ func (s *eventPostProcessingService) processEvent(ctx context.Context, event *ev
 			continue
 		}
 
+		// Calculate the period ID for this subscription (epoch-ms of period start)
+		periodID, err := types.CalculatePeriodID(
+			event.Timestamp,
+			sub.StartDate,
+			sub.CurrentPeriodStart,
+			sub.CurrentPeriodEnd,
+			sub.BillingAnchor,
+			sub.BillingPeriodCount,
+			sub.BillingPeriod,
+		)
+		if err != nil {
+			s.Logger.Errorw("failed to calculate period id",
+				"event_id", event.ID,
+				"subscription_id", sub.ID,
+				"error", err,
+			)
+		}
+
 		for _, match := range matches {
+			// Find the corresponding line item
+			lineItem, ok := subLineItemMap[match.Price.ID]
+			if !ok {
+				s.Logger.Warnw("line item not found for price",
+					"event_id", event.ID,
+					"subscription_id", sub.ID,
+					"price_id", match.Price.ID,
+				)
+				continue
+			}
+
+			// Create a unique hash for deduplication
+			uniqueHash := s.generateUniqueHash(event, match.Meter)
+
+			// Check for duplicate events
+			// TODO: review if this is correct and also maybe just call for COUNT_UNIQUE and not all cases
+			isDuplicate, err := s.processedEventRepo.IsDuplicate(ctx, sub.ID, match.Meter.ID, periodID, uniqueHash)
+			if err != nil {
+				s.Logger.Errorw("failed to check for duplicate event",
+					"event_id", event.ID,
+					"error", err,
+				)
+				continue
+			}
+
+			if isDuplicate {
+				s.Logger.Debugw("duplicate event detected, skipping",
+					"event_id", event.ID,
+					"unique_hash", uniqueHash,
+				)
+				continue
+			}
+
 			// Create a new processed event for each match
 			processedEventCopy := &events.ProcessedEvent{
-				Event:            *event,
-				SubscriptionID:   sub.ID,
-				PriceID:          match.Price.ID,
-				MeterID:          match.Meter.ID,
-				AggregationField: match.Meter.Aggregation.Field,
-				EventStatus:      types.EventStatusPending,
-				Quantity:         0,
-				Cost:             decimal.Zero,
-				ProcessedAt:      lo.ToPtr(time.Now().UTC()),
+				Event:          *event,
+				SubscriptionID: sub.ID,
+				SubLineItemID:  lineItem.ID,
+				PriceID:        match.Price.ID,
+				MeterID:        match.Meter.ID,
+				PeriodID:       periodID,
+				UniqueHash:     uniqueHash,
+				Sign:           1, // Default to positive sign
 			}
 
 			// Set feature ID if available
@@ -395,30 +492,24 @@ func (s *eventPostProcessingService) processEvent(ctx context.Context, event *ev
 					"event_id", event.ID,
 					"meter_id", match.Meter.ID,
 				)
-
-				return ierr.WithError(err).
-					WithHint("Feature not found for meter").
-					Mark(ierr.ErrValidation)
+				continue
 			}
 
 			// Check if we can process this price/meter combination
-			canProcess := s.isSupportedAggregationType(match.Meter.Aggregation.Type) &&
-				s.isSupportedBillingModel(match.Price.BillingModel)
+			canProcess := s.isSupportedAggregationForPostProcessing(match.Meter.Aggregation.Type, match.Price.BillingModel)
 
 			if !canProcess {
-				s.Logger.Debugw("unsupported aggregation type or billing model, saving as pending",
+				s.Logger.Debugw("unsupported aggregation type or billing model, skipping",
 					"event_id", event.ID,
 					"meter_id", match.Meter.ID,
 					"aggregation_type", match.Meter.Aggregation.Type,
 					"billing_model", match.Price.BillingModel,
 				)
-				processedEvents = append(processedEvents, processedEventCopy)
 				continue
 			}
 
 			// Extract quantity based on meter aggregation
-			quantity, fieldValue := s.extractQuantityFromEvent(event, match.Meter)
-			processedEventCopy.AggregationFieldValue = fieldValue
+			quantity, _ := s.extractQuantityFromEvent(event, match.Meter)
 
 			// Validate the quantity is positive and within reasonable bounds
 			if quantity.IsNegative() {
@@ -430,52 +521,45 @@ func (s *eventPostProcessingService) processEvent(ctx context.Context, event *ev
 				quantity = decimal.Zero
 			}
 
-			// Convert to uint64 safely
-			if quantity.GreaterThan(decimal.NewFromInt(0)) {
-				processedEventCopy.Quantity = quantity.BigInt().Uint64()
-			}
+			// Store original quantity
+			processedEventCopy.QtyTotal = quantity
 
-			// Calculate cost based on price and quantity
-			cost := priceService.CalculateCost(ctx, match.Price, quantity)
-			processedEventCopy.Cost = cost
+			// Apply free units logic
+			freeUnitsApplied := decimal.Zero
+			billableQty := quantity
+
+			// Store free units applied and billable quantity
+			processedEventCopy.QtyFreeApplied = freeUnitsApplied
+			processedEventCopy.QtyBillable = billableQty
+
+			// Apply tiered pricing logic
+			tierSnapshot := decimal.Zero
+			processedEventCopy.TierSnapshot = tierSnapshot
+
+			// Calculate cost details using the price service
+			priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.Logger)
+			costDetails := priceService.CalculateCostWithBreakup(ctx, match.Price, billableQty)
+
+			// Set cost details on the processed event
+			processedEventCopy.UnitCost = costDetails.EffectiveUnitCost
+			processedEventCopy.Cost = costDetails.FinalCost
 			processedEventCopy.Currency = match.Price.Currency
 
-			// Mark as processed since we've calculated everything successfully
-			processedEventCopy.EventStatus = types.EventStatusProcessed
-
-			processedEvents = append(processedEvents, processedEventCopy)
+			processedEventsPerSub = append(processedEventsPerSub, processedEventCopy)
 		}
 	}
 
-	s.Logger.Debugw("event processing complete",
-		"event_id", event.ID,
-		"processed_events_count", len(processedEvents),
-	)
-
-	// 6. Insert processed events
-	if len(processedEvents) > 0 {
-		if err := s.processedEventRepo.BulkInsertProcessedEvents(ctx, processedEvents); err != nil {
-			s.Logger.Errorw("failed to insert processed events",
-				"event_id", event.ID,
-				"count", len(processedEvents),
-				"error", err,
-			)
-			return err
-		}
-
-		s.Logger.Infow("successfully processed event",
+	// Return all processed events
+	if len(processedEventsPerSub) > 0 {
+		s.Logger.Debugw("event processing complete",
 			"event_id", event.ID,
-			"processed_events", len(processedEvents),
+			"processed_events_count", len(processedEventsPerSub),
 		)
-	} else {
-		s.Logger.Debugw("no matching prices/meters found for event, saving as pending",
-			"event_id", event.ID,
-			"event_name", event.EventName,
-		)
-		return s.processedEventRepo.InsertProcessedEvent(ctx, processedEvent)
+		return processedEventsPerSub, nil
 	}
 
-	return nil
+	// If we got here, no events were processed
+	return results, nil
 }
 
 // isSupportedAggregationType checks if the aggregation type is supported for post-processing
@@ -710,64 +794,19 @@ func (s *eventPostProcessingService) extractQuantityFromEvent(
 	}
 }
 
-// GetUsageSummary returns the pre-computed usage total for the given parameters
-func (s *eventPostProcessingService) GetUsageSummary(ctx context.Context, params *events.UsageSummaryParams) (decimal.Decimal, error) {
-	// 1. Get the meter to check if we can use pre-computed values or need fallback
-	if params.MeterID == "" {
-		return s.processedEventRepo.GetUsageSummary(ctx, params)
-	}
+// GetPeriodCost returns the total cost for a subscription in a billing period
+func (s *eventPostProcessingService) GetPeriodCost(ctx context.Context, tenantID, environmentID, customerID, subscriptionID string, periodID uint64) (decimal.Decimal, error) {
+	return s.processedEventRepo.GetPeriodCost(ctx, tenantID, environmentID, customerID, subscriptionID, periodID)
+}
 
-	meter, err := s.MeterRepo.GetMeter(ctx, params.MeterID)
-	if err != nil {
-		s.Logger.Errorw("failed to get meter for usage summary",
-			"meter_id", params.MeterID,
-			"error", err,
-		)
-		return decimal.Zero, err
-	}
+// GetPeriodFeatureTotals returns usage totals by feature for a subscription in a period
+func (s *eventPostProcessingService) GetPeriodFeatureTotals(ctx context.Context, tenantID, environmentID, customerID, subscriptionID string, periodID uint64) ([]*events.PeriodFeatureTotal, error) {
+	return s.processedEventRepo.GetPeriodFeatureTotals(ctx, tenantID, environmentID, customerID, subscriptionID, periodID)
+}
 
-	// 2. Get the price to check the billing model, if price_id is provided
-	var price *price.Price
-	if params.PriceID != "" {
-		price, err = s.PriceRepo.Get(ctx, params.PriceID)
-		if err != nil {
-			s.Logger.Errorw("failed to get price for usage summary",
-				"price_id", params.PriceID,
-				"error", err,
-			)
-			return decimal.Zero, err
-		}
-	}
-
-	// 3. Check if we can use pre-computed values or need to fall back
-	usePreComputed := true
-
-	// Only supported aggregation types: COUNT and SUM
-	if meter.Aggregation.Type != types.AggregationCount && meter.Aggregation.Type != types.AggregationSum {
-		usePreComputed = false
-	}
-
-	// Don't use pre-computed for FLAT_FEE billing models
-	if price != nil && price.BillingModel == types.BILLING_MODEL_FLAT_FEE {
-		usePreComputed = false
-	}
-
-	if usePreComputed {
-		return s.processedEventRepo.GetUsageSummary(ctx, params)
-	}
-
-	// Fall back to on-demand calculation using the events repo
-	// This would delegate to the SubscriptionService.GetUsageBySubscription method
-	// For simplicity, we'll log this case but still use pre-computed data in this implementation
-	s.Logger.Infow("falling back to on-demand calculation for unsupported aggregation or billing model",
-		"meter_id", params.MeterID,
-		"aggregation_type", meter.Aggregation.Type,
-		"has_price", price != nil,
-	)
-
-	// In a real implementation, this would call the traditional usage calculation
-	// But for now, we'll still use the pre-computed data
-	return s.processedEventRepo.GetUsageSummary(ctx, params)
+// GetUsageAnalytics returns recent usage analytics for a customer
+func (s *eventPostProcessingService) GetUsageAnalytics(ctx context.Context, tenantID, environmentID, customerID string, lookbackHours int) ([]*events.UsageAnalytic, error) {
+	return s.processedEventRepo.GetUsageAnalytics(ctx, tenantID, environmentID, customerID, lookbackHours)
 }
 
 // ReprocessEvents triggers reprocessing of events for a customer or subscription
@@ -778,50 +817,14 @@ func (s *eventPostProcessingService) ReprocessEvents(ctx context.Context, custom
 			Mark(ierr.ErrValidation)
 	}
 
-	// Find pending events
-	eventsList, err := s.processedEventRepo.FindUnprocessedEvents(ctx, customerID, subscriptionID)
-	if err != nil {
-		return err
-	}
-
-	if len(eventsList) == 0 {
-		s.Logger.Infow("no pending events found",
-			"customer_id", customerID,
-			"subscription_id", subscriptionID,
-		)
-		return nil
-	}
-
-	s.Logger.Infow("reprocessing events",
+	// For v2, the reprocessing logic will be implemented differently
+	// We'll need to find matching raw events, then reprocess them
+	s.Logger.Infow("event reprocessing is not yet implemented in v2",
 		"customer_id", customerID,
 		"subscription_id", subscriptionID,
-		"event_count", len(eventsList),
 	)
 
-	// Process each event
-	for _, processedEvent := range eventsList {
-		// Convert processed event back to regular event
-		event := &events.Event{
-			ID:                 processedEvent.ID,
-			TenantID:           processedEvent.TenantID,
-			CustomerID:         processedEvent.CustomerID,
-			ExternalCustomerID: processedEvent.ExternalCustomerID,
-			EventName:          processedEvent.EventName,
-			Source:             processedEvent.Source,
-			Timestamp:          processedEvent.Timestamp,
-			IngestedAt:         processedEvent.IngestedAt,
-			Properties:         processedEvent.Properties,
-			EnvironmentID:      processedEvent.EnvironmentID,
-		}
-
-		if err := s.processEvent(ctx, event); err != nil {
-			s.Logger.Errorw("failed to reprocess event",
-				"event_id", processedEvent.ID,
-				"error", err,
-			)
-			// Continue with other events
-		}
-	}
-
-	return nil
+	return ierr.NewError("event reprocessing is not yet implemented in v2").
+		WithHint("This feature will be available in a future update").
+		Mark(ierr.ErrValidation)
 }

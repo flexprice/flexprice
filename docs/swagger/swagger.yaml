@@ -4060,6 +4060,9 @@ paths:
         name: meter_ids
         type: array
       - in: query
+        name: name_contains
+        type: string
+      - in: query
         minimum: 0
         name: offset
         type: integer

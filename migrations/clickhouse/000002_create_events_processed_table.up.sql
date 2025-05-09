@@ -1,64 +1,98 @@
-CREATE TABLE IF NOT EXISTS events_processed (
-    -- Original event fields
-    id String NOT NULL,
-    tenant_id String NOT NULL,
-    external_customer_id String  NOT NULL,
-    environment_id String NOT NULL, 
-    event_name String  NOT NULL,
-    customer_id Nullable(String),
-    source Nullable(String),
-    timestamp DateTime64(3) NOT NULL DEFAULT now(),
-    ingested_at DateTime64(3) NOT NULL DEFAULT now(),
-    properties String,
-    
-    -- Additional processing fields
-    event_status Enum('pending', 'processed', 'failed') DEFAULT 'pending',
-    processed_at DateTime64(3) DEFAULT now(),
-    subscription_id Nullable(String),
-    price_id Nullable(String),
-    meter_id Nullable(String),
-    feature_id Nullable(String),
-    aggregation_field Nullable(String),
-    aggregation_field_value Nullable(String),
-    quantity Nullable(UInt64),
-    cost Nullable(Decimal(18,9)),
-    currency Nullable(String),
+CREATE TABLE IF NOT EXISTS flexprice.events_processed (
+    /* immutable ids */
+    id                    String NOT NULL,
+    tenant_id             String NOT NULL,
+    environment_id        String NOT NULL,
+    external_customer_id  String NOT NULL,
+    event_name            String NOT NULL,
 
-    CONSTRAINT check_event_name CHECK event_name != '',
-    CONSTRAINT check_tenant_id CHECK tenant_id != '',
-    CONSTRAINT check_event_id CHECK id != '',
-    CONSTRAINT check_environment_id CHECK environment_id != ''
+    /* resolution result */
+    customer_id           String NOT NULL,
+    subscription_id       String NOT NULL,
+    sub_line_item_id      String NOT NULL,
+    price_id              String NOT NULL,
+    meter_id              String NOT NULL,
+    feature_id            String NOT NULL,
+    period_id             UInt64 NOT NULL,   -- epoch-ms period start
+
+    /* times */
+    timestamp             DateTime64(3) NOT NULL,
+    ingested_at           DateTime64(3) NOT NULL,
+    processed_at          DateTime64(3) NOT NULL DEFAULT now64(3),
+
+    /* payload snapshot */
+    source                Nullable(String),
+    properties            String CODEC(ZSTD),
+
+    /* dedup & metrics */
+    unique_hash           Nullable(String),
+    qty_total             Decimal(25,15) NOT NULL,   -- see §6 on precision
+    qty_billable          Decimal(25,15) NOT NULL,
+    qty_free_applied      Decimal(25,15) NOT NULL,
+    tier_snapshot         Decimal(25,15) NOT NULL,
+    unit_cost             Decimal(25,15) NOT NULL,
+    cost                  Decimal(25,15) NOT NULL,
+    currency              LowCardinality(String) NOT NULL,
+
+    /* audit */
+    version               UInt64 NOT NULL DEFAULT toUnixTimestamp64Milli(now64()),
+    sign                  Int8   NOT NULL DEFAULT 1,
+    final_lag_ms          UInt32 MATERIALIZED
+                              datediff('millisecond', timestamp, processed_at)
 )
-ENGINE = ReplacingMergeTree(processed_at)
+ENGINE = ReplacingMergeTree(version)
 PARTITION BY toYYYYMM(timestamp)
-PRIMARY KEY (tenant_id, environment_id)
-ORDER BY (tenant_id, environment_id, timestamp, id)
+PRIMARY KEY (tenant_id, environment_id, customer_id)
+ORDER BY (
+    tenant_id, environment_id, customer_id,
+    period_id, feature_id, timestamp, sub_line_item_id, id
+)
 SETTINGS index_granularity = 8192;
 
--- Bloom Filter for external_customer_id
-ALTER TABLE events_processed
-ADD INDEX external_customer_id_idx external_customer_id TYPE bloom_filter GRANULARITY 8192;
 
--- Bloom Filter for customer_id
-ALTER TABLE events_processed
-ADD INDEX customer_id_idx customer_id TYPE bloom_filter GRANULARITY 8192;
+ALTER TABLE flexprice.events_processed
+ADD INDEX bf_subscription subscription_id TYPE bloom_filter(0.01) GRANULARITY 128,
+ADD INDEX bf_feature      feature_id      TYPE bloom_filter(0.01) GRANULARITY 128,
+ADD INDEX bf_source       source          TYPE bloom_filter(0.01) GRANULARITY 128,
+ADD INDEX bf_unique_hash  unique_hash     TYPE bloom_filter(0.01) GRANULARITY 128,
+ADD INDEX set_event_name  event_name      TYPE set(0)             GRANULARITY 128;
 
--- Bloom Filter for subscription_id
-ALTER TABLE events_processed
-ADD INDEX subscription_id_idx subscription_id TYPE bloom_filter GRANULARITY 8192;
 
--- Bloom Filter for feature_id
-ALTER TABLE events_processed
-ADD INDEX feature_id_idx feature_id TYPE bloom_filter GRANULARITY 8192;
+------ materialized views
 
--- Set Index for event_name
-ALTER TABLE events_processed
-ADD INDEX event_name_idx event_name TYPE set(0) GRANULARITY 8192;
+CREATE TABLE IF NOT EXISTS flexprice.agg_usage_period_totals
+(
+    tenant_id   String NOT NULL,
+    environment_id String NOT NULL,
+    customer_id String NOT NULL,
+    subscription_id String NOT NULL,
+    period_id UInt64 NOT NULL,
+    feature_id String NOT NULL,
+    sub_line_item_id String NOT NULL,
+    qty_state   AggregateFunction(sum, Decimal(25,15)) NOT NULL,
+    free_state  AggregateFunction(sum, Decimal(25,15)) NOT NULL,
+    cost_state  AggregateFunction(sum, Decimal(25,15)) NOT NULL
+) ENGINE = AggregatingMergeTree()
+  PARTITION BY (tenant_id, environment_id, customer_id, period_id)
+  ORDER BY (tenant_id, environment_id, customer_id, period_id, subscription_id, feature_id, sub_line_item_id);
 
--- Set Index for source
-ALTER TABLE events_processed
-ADD INDEX source_idx source TYPE set(0) GRANULARITY 8192;
-
--- Set Index for event_status
-ALTER TABLE events_processed
-ADD INDEX event_status_idx event_status TYPE set(0) GRANULARITY 8192; 
+--------------------------------
+-- usage_period_totals
+--------------------------------
+CREATE MATERIALIZED VIEW IF NOT EXISTS flexprice.mv_usage_period_totals
+TO flexprice.agg_usage_period_totals AS
+SELECT
+    tenant_id,
+    environment_id,
+    customer_id,
+    subscription_id,
+    period_id,
+    feature_id,
+    sub_line_item_id,
+    sumState(assumeNotNull(qty_billable)) AS qty_state,
+    sumState(assumeNotNull(qty_free_applied)) AS free_state,
+    sumState(assumeNotNull(cost)) AS cost_state
+FROM flexprice.events_processed
+GROUP BY
+    tenant_id, environment_id, customer_id,
+    subscription_id, period_id, feature_id, sub_line_item_id;

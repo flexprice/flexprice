@@ -156,6 +156,10 @@ func (pt *PriceTier) CalculateTierAmount(quantity decimal.Decimal, currency stri
 	return tierCost
 }
 
+func (pt *PriceTier) GetPerUnitCost() decimal.Decimal {
+	return pt.UnitAmount
+}
+
 // GetDisplayAmount returns the amount in the currency ex $12.00
 func GetDisplayAmountWithPrecision(amount decimal.Decimal, currency string) string {
 	val := FormatAmountToStringWithPrecision(amount, currency)

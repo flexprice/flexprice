@@ -817,3 +817,278 @@ func TestNextBillingDate_Daily_CalendarBilling(t *testing.T) {
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && s[0:len(substr)] == substr
 }
+
+func TestCalculatePeriodID(t *testing.T) {
+	// Define common test values
+	billingAnchor := time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC)
+	subscriptionStart := time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC)
+	currentPeriodStart := time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC)
+	currentPeriodEnd := time.Date(2024, time.February, 15, 0, 0, 0, 0, time.UTC)
+	periodUnit := 1
+	periodType := BILLING_PERIOD_MONTHLY
+
+	// Helper function to convert time to period ID
+	expectedPeriodID := func(t time.Time) uint64 {
+		return uint64(t.Unix() * 1000)
+	}
+
+	tests := []struct {
+		name           string
+		eventTimestamp time.Time
+		subStart       time.Time
+		periodStart    time.Time
+		periodEnd      time.Time
+		anchor         time.Time
+		unit           int
+		period         BillingPeriod
+		want           uint64
+		wantErr        bool
+		errContains    string
+	}{
+		{
+			name:           "Event in current period",
+			eventTimestamp: time.Date(2024, time.January, 20, 0, 0, 0, 0, time.UTC),
+			subStart:       subscriptionStart,
+			periodStart:    currentPeriodStart,
+			periodEnd:      currentPeriodEnd,
+			anchor:         billingAnchor,
+			unit:           periodUnit,
+			period:         periodType,
+			want:           expectedPeriodID(currentPeriodStart),
+			wantErr:        false,
+		},
+		{
+			name:           "Event at period start",
+			eventTimestamp: currentPeriodStart,
+			subStart:       subscriptionStart,
+			periodStart:    currentPeriodStart,
+			periodEnd:      currentPeriodEnd,
+			anchor:         billingAnchor,
+			unit:           periodUnit,
+			period:         periodType,
+			want:           expectedPeriodID(currentPeriodStart),
+			wantErr:        false,
+		},
+		{
+			name:           "Event right before period end",
+			eventTimestamp: currentPeriodEnd.Add(-time.Second),
+			subStart:       subscriptionStart,
+			periodStart:    currentPeriodStart,
+			periodEnd:      currentPeriodEnd,
+			anchor:         billingAnchor,
+			unit:           periodUnit,
+			period:         periodType,
+			want:           expectedPeriodID(currentPeriodStart),
+			wantErr:        false,
+		},
+		{
+			name:           "Event before subscription start",
+			eventTimestamp: subscriptionStart.Add(-24 * time.Hour),
+			subStart:       subscriptionStart,
+			periodStart:    currentPeriodStart,
+			periodEnd:      currentPeriodEnd,
+			anchor:         billingAnchor,
+			unit:           periodUnit,
+			period:         periodType,
+			want:           0,
+			wantErr:        true,
+			errContains:    "event timestamp is before subscription start date",
+		},
+		{
+			name:           "Event before current period start",
+			eventTimestamp: currentPeriodStart.Add(-time.Hour),
+			subStart:       subscriptionStart.Add(-48 * time.Hour), // Sub started earlier
+			periodStart:    currentPeriodStart,
+			periodEnd:      currentPeriodEnd,
+			anchor:         billingAnchor,
+			unit:           periodUnit,
+			period:         periodType,
+			want:           0,
+			wantErr:        true,
+			errContains:    "event timestamp is before current period start",
+		},
+		{
+			name:           "Event in next period",
+			eventTimestamp: currentPeriodEnd.Add(time.Hour), // Just after current period
+			subStart:       subscriptionStart,
+			periodStart:    currentPeriodStart,
+			periodEnd:      currentPeriodEnd,
+			anchor:         billingAnchor,
+			unit:           periodUnit,
+			period:         periodType,
+			want:           expectedPeriodID(currentPeriodEnd), // Next period starts at current period end
+			wantErr:        false,
+		},
+		{
+			name:           "Event in future period (2 periods ahead)",
+			eventTimestamp: time.Date(2024, time.March, 20, 0, 0, 0, 0, time.UTC),
+			subStart:       subscriptionStart,
+			periodStart:    currentPeriodStart,
+			periodEnd:      currentPeriodEnd,
+			anchor:         billingAnchor,
+			unit:           periodUnit,
+			period:         periodType,
+			want:           expectedPeriodID(time.Date(2024, time.March, 15, 0, 0, 0, 0, time.UTC)),
+			wantErr:        false,
+		},
+		{
+			name:           "Weekly billing period",
+			eventTimestamp: time.Date(2024, time.January, 25, 0, 0, 0, 0, time.UTC),
+			subStart:       time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC),
+			periodStart:    time.Date(2024, time.January, 22, 0, 0, 0, 0, time.UTC),
+			periodEnd:      time.Date(2024, time.January, 29, 0, 0, 0, 0, time.UTC),
+			anchor:         time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC),
+			unit:           1,
+			period:         BILLING_PERIOD_WEEKLY,
+			want:           expectedPeriodID(time.Date(2024, time.January, 22, 0, 0, 0, 0, time.UTC)),
+			wantErr:        false,
+		},
+		{
+			name:           "Annual billing period",
+			eventTimestamp: time.Date(2024, time.June, 15, 0, 0, 0, 0, time.UTC),
+			subStart:       time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC),
+			periodStart:    time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC),
+			periodEnd:      time.Date(2025, time.January, 15, 0, 0, 0, 0, time.UTC),
+			anchor:         time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC),
+			unit:           1,
+			period:         BILLING_PERIOD_ANNUAL,
+			want:           expectedPeriodID(time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC)),
+			wantErr:        false,
+		},
+		{
+			name:           "Different timezone (IST)",
+			eventTimestamp: time.Date(2024, time.January, 20, 5, 30, 0, 0, ist),
+			subStart:       time.Date(2024, time.January, 15, 5, 30, 0, 0, ist),
+			periodStart:    time.Date(2024, time.January, 15, 5, 30, 0, 0, ist),
+			periodEnd:      time.Date(2024, time.February, 15, 5, 30, 0, 0, ist),
+			anchor:         time.Date(2024, time.January, 15, 5, 30, 0, 0, ist),
+			unit:           1,
+			period:         BILLING_PERIOD_MONTHLY,
+			want:           expectedPeriodID(time.Date(2024, time.January, 15, 5, 30, 0, 0, ist)),
+			wantErr:        false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := CalculatePeriodID(tt.eventTimestamp, tt.subStart, tt.periodStart, tt.periodEnd, tt.anchor, tt.unit, tt.period)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("CalculatePeriodID() error = nil, wantErr %v", tt.wantErr)
+					return
+				}
+				if !contains(err.Error(), tt.errContains) {
+					t.Errorf("CalculatePeriodID() error = %v, want to contain %v", err, tt.errContains)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("CalculatePeriodID() unexpected error = %v", err)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("CalculatePeriodID() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsBetween(t *testing.T) {
+	tests := []struct {
+		name      string
+		timestamp time.Time
+		start     time.Time
+		end       time.Time
+		want      bool
+	}{
+		{
+			name:      "Timestamp equal to start",
+			timestamp: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+			start:     time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+			end:       time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
+			want:      true,
+		},
+		{
+			name:      "Timestamp between start and end",
+			timestamp: time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC),
+			start:     time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+			end:       time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
+			want:      true,
+		},
+		{
+			name:      "Timestamp right before end",
+			timestamp: time.Date(2024, 1, 1, 23, 59, 59, 999999999, time.UTC),
+			start:     time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+			end:       time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
+			want:      true,
+		},
+		{
+			name:      "Timestamp equal to end",
+			timestamp: time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
+			start:     time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+			end:       time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
+			want:      false, // End is exclusive
+		},
+		{
+			name:      "Timestamp before start",
+			timestamp: time.Date(2023, 12, 31, 23, 59, 59, 0, time.UTC),
+			start:     time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+			end:       time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
+			want:      false,
+		},
+		{
+			name:      "Timestamp after end",
+			timestamp: time.Date(2024, 1, 2, 0, 0, 1, 0, time.UTC),
+			start:     time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+			end:       time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
+			want:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isBetween(tt.timestamp, tt.start, tt.end)
+			if got != tt.want {
+				t.Errorf("isBetween() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCalculatePeriodID_Simple(t *testing.T) {
+	tests := []struct {
+		name  string
+		input time.Time
+		want  uint64
+	}{
+		{
+			name:  "Unix epoch",
+			input: time.Unix(0, 0).UTC(),
+			want:  0,
+		},
+		{
+			name:  "1 second after epoch",
+			input: time.Unix(1, 0).UTC(),
+			want:  1000,
+		},
+		{
+			name:  "January 1, 2024",
+			input: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+			want:  1704067200000,
+		},
+		{
+			name:  "With time component",
+			input: time.Date(2024, 3, 15, 12, 30, 45, 0, time.UTC),
+			want:  1710505845000,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := calculatePeriodID(tt.input)
+			if got != tt.want {
+				t.Errorf("calculatePeriodID() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

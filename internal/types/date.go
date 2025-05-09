@@ -123,3 +123,104 @@ func NextBillingDate(currentPeriodStart, billingAnchor time.Time, unit int, peri
 func isLeapYear(year int) bool {
 	return year%4 == 0 && (year%100 != 0 || year%400 == 0)
 }
+
+// CalculatePeriodID determines the appropriate billing period start for an event timestamp
+// and returns it as a uint64 epoch millisecond timestamp (for ClickHouse period_id column)
+// It handles three cases:
+// 1. Event timestamp falls within current billing period -> return current period start
+// 2. Event timestamp is before current period start -> reject the event for now
+// TODO: we can return the previous period start if we want to but need to rethink as
+// if the current period is the switched to next period, then it means invoice is already created
+// so maybe we should not process the event at all
+// 3. Event timestamp is after current period end -> find appropriate future period
+func CalculatePeriodID(
+	eventTimestamp time.Time,
+	subStart time.Time,
+	currentPeriodStart time.Time,
+	currentPeriodEnd time.Time,
+	billingAnchor time.Time,
+	periodUnit int,
+	periodType BillingPeriod,
+) (uint64, error) {
+	// Case 1: Event falls within current billing period
+	if isBetween(eventTimestamp, currentPeriodStart, currentPeriodEnd) {
+		// Return the current period start as milliseconds since epoch
+		return calculatePeriodID(currentPeriodStart), nil
+	}
+
+	if eventTimestamp.Before(subStart) {
+		return 0, ierr.NewError("event timestamp is before subscription start date").
+			WithHint("Event timestamp is before subscription start date").
+			WithReportableDetails(
+				map[string]any{
+					"event_timestamp": eventTimestamp,
+					"sub_start":       subStart,
+				},
+			).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Case 2: Event timestamp is before current period start
+	if eventTimestamp.Before(currentPeriodStart) {
+		return 0, ierr.NewError("event timestamp is before current period start").
+			WithHint("Event timestamp is before current period start").
+			WithReportableDetails(
+				map[string]any{
+					"event_timestamp":      eventTimestamp,
+					"current_period_start": currentPeriodStart,
+				},
+			).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Case 3: Event timestamp is after current period end
+	periodStart := currentPeriodStart
+	periodEnd := currentPeriodEnd
+
+	// Iterate forward until we find the period containing the event
+	for i := 0; i < 100; i++ { // Limit to 100 iterations to prevent infinite loops
+		nextPeriodStart, err := NextBillingDate(periodStart, billingAnchor, periodUnit, periodType)
+		if err != nil {
+			return 0, err
+		}
+
+		// Calculate the next period end
+		nextPeriodEnd, err := NextBillingDate(nextPeriodStart, billingAnchor, periodUnit, periodType)
+		if err != nil {
+			return 0, err
+		}
+
+		// Check if event falls within this period
+		if isBetween(eventTimestamp, nextPeriodStart, nextPeriodEnd) {
+			return calculatePeriodID(nextPeriodStart), nil
+		}
+
+		// If this period doesn't contain the event and it's after the period end,
+		// continue iterating forward
+		periodStart = nextPeriodStart
+		periodEnd = nextPeriodEnd
+	}
+
+	return 0, ierr.NewError("failed to find appropriate period for event timestamp").
+		WithHint("Failed to find appropriate period for event timestamp").
+		WithReportableDetails(
+			map[string]any{
+				"event_timestamp": eventTimestamp,
+				"period_start":    periodStart,
+				"period_end":      periodEnd,
+				"billing_anchor":  billingAnchor,
+				"period_unit":     periodUnit,
+				"period_type":     periodType,
+			},
+		).
+		Mark(ierr.ErrValidation)
+}
+
+func isBetween(eventTimestamp time.Time, periodStart time.Time, periodEnd time.Time) bool {
+	return (eventTimestamp.Equal(periodStart) || eventTimestamp.After(periodStart)) &&
+		eventTimestamp.Before(periodEnd)
+}
+
+func calculatePeriodID(periodStart time.Time) uint64 {
+	return uint64(periodStart.Unix() * 1000)
+}
