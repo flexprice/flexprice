@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
+	"github.com/shopspring/decimal"
 )
 
 type IngestEventRequest struct {
@@ -193,4 +194,43 @@ func (r *GetUsageByMeterRequest) Validate() error {
 
 func (r *GetEventsRequest) Validate() error {
 	return validator.ValidateRequest(r)
+}
+
+type GetUsageAnalyticsRequest struct {
+	ExternalCustomerID string    `json:"external_customer_id" binding:"required"`
+	FeatureIDs         []string  `json:"feature_ids,omitempty"`
+	Sources            []string  `json:"sources,omitempty"`
+	StartTime          time.Time `json:"start_time,omitempty"`
+	EndTime            time.Time `json:"end_time,omitempty"`
+	GroupBy            []string  `json:"group_by,omitempty"`    // allowed values: "source", "feature_id"
+	WindowSize         string    `json:"window_size,omitempty"` // e.g., "MINUTE", "HOUR", "DAY"
+}
+
+// GetUsageAnalyticsResponse represents the response for the usage analytics API
+type GetUsageAnalyticsResponse struct {
+	TotalCost decimal.Decimal     `json:"total_cost"`
+	Currency  string              `json:"currency"`
+	Items     []UsageAnalyticItem `json:"items"`
+}
+
+// UsageAnalyticItem represents a single analytic item in the response
+type UsageAnalyticItem struct {
+	FeatureID       string                `json:"feature_id"`
+	FeatureName     string                `json:"name,omitempty"`
+	EventName       string                `json:"event_name,omitempty"`
+	Source          string                `json:"source,omitempty"`
+	Unit            string                `json:"unit,omitempty"`
+	UnitPlural      string                `json:"unit_plural,omitempty"`
+	AggregationType types.AggregationType `json:"aggregation_type,omitempty"`
+	TotalUsage      decimal.Decimal       `json:"total_usage"`
+	TotalCost       decimal.Decimal       `json:"total_cost"`
+	Currency        string                `json:"currency,omitempty"`
+	Points          []UsageAnalyticPoint  `json:"points,omitempty"`
+}
+
+// UsageAnalyticPoint represents a point in the time series data
+type UsageAnalyticPoint struct {
+	Timestamp time.Time       `json:"timestamp"`
+	Usage     decimal.Decimal `json:"usage"`
+	Cost      decimal.Decimal `json:"cost"`
 }

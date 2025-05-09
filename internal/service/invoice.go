@@ -837,7 +837,7 @@ func (s *invoiceService) GetInvoicePDF(ctx context.Context, id string) ([]byte, 
 }
 
 func (s *invoiceService) getInvoiceDataForPDFGen(
-	ctx context.Context,
+	_ context.Context,
 	inv *invoice.Invoice,
 	customer *customer.Customer,
 	tenant *tenant.Tenant,

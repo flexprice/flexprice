@@ -3,6 +3,9 @@ package clickhouse
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"strings"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/domain/events"
@@ -19,7 +22,10 @@ type ProcessedEventRepository struct {
 }
 
 func NewProcessedEventRepository(store *clickhouse.ClickHouseStore, logger *logger.Logger) events.ProcessedEventRepository {
-	return &ProcessedEventRepository{store: store, logger: logger}
+	return &ProcessedEventRepository{
+		store:  store,
+		logger: logger,
+	}
 }
 
 // InsertProcessedEvent inserts a single processed event
@@ -503,4 +509,282 @@ func (r *ProcessedEventRepository) GetUsageAnalytics(ctx context.Context, tenant
 	}
 
 	return results, nil
+}
+
+// GetDetailedUsageAnalytics provides comprehensive usage analytics with filtering, grouping, and time-series data
+func (r *ProcessedEventRepository) GetDetailedUsageAnalytics(ctx context.Context, params *events.UsageAnalyticsParams) ([]*events.DetailedUsageAnalytic, error) {
+	span := StartRepositorySpan(ctx, "processed_event", "get_detailed_usage_analytics", map[string]interface{}{
+		"external_customer_id": params.ExternalCustomerID,
+		"feature_ids_count":    len(params.FeatureIDs),
+		"sources_count":        len(params.Sources),
+	})
+	defer FinishSpan(span)
+
+	// Set default start/end times if not provided
+	if params.EndTime.IsZero() {
+		params.EndTime = time.Now().UTC()
+	}
+
+	if params.StartTime.IsZero() {
+		// Default to last 6 hours if not specified
+		params.StartTime = params.EndTime.Add(-6 * time.Hour)
+	}
+
+	// Set default group by if not provided
+	if len(params.GroupBy) == 0 {
+		params.GroupBy = []string{"feature_id"}
+	}
+
+	// Validate group by values
+	for _, groupBy := range params.GroupBy {
+		if groupBy != "feature_id" && groupBy != "source" {
+			return nil, ierr.NewError("invalid group_by value").
+				WithHint("Valid group_by values are 'feature_id' and 'source'").
+				WithReportableDetails(map[string]interface{}{
+					"group_by": params.GroupBy,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	// Initialize query parameters with the standard parameters that will be added later
+	// This ensures they're always in the right order
+	queryParams := []interface{}{
+		params.TenantID,
+		params.EnvironmentID,
+		params.CustomerID,
+		params.StartTime,
+		params.EndTime,
+	}
+
+	// Base query for aggregates
+	aggregateQuery := `
+		SELECT 
+			??, -- group by columns
+			SUM(qty_billable * sign) AS total_usage,
+			SUM(cost * sign) AS total_cost
+		FROM events_processed
+		WHERE tenant_id = ?
+		AND environment_id = ?
+		AND customer_id = ?
+		AND timestamp >= ?
+		AND timestamp <= ?
+		AND sign != 0
+	`
+
+	// Add group by columns based on params.GroupBy
+	groupByColumns := []string{}
+	for _, groupBy := range params.GroupBy {
+		switch groupBy {
+		case "feature_id":
+			groupByColumns = append(groupByColumns, "feature_id")
+		case "source":
+			groupByColumns = append(groupByColumns, "source")
+		}
+	}
+
+	// Replace ?? with actual group by columns
+	aggregateQuery = strings.Replace(aggregateQuery, "??", strings.Join(groupByColumns, ", "), 1)
+
+	// Add filters for feature_ids
+	filterParams := []interface{}{}
+	if len(params.FeatureIDs) > 0 {
+		placeholders := make([]string, len(params.FeatureIDs))
+		for i := range params.FeatureIDs {
+			placeholders[i] = "?"
+			filterParams = append(filterParams, params.FeatureIDs[i])
+		}
+		aggregateQuery += " AND feature_id IN (" + strings.Join(placeholders, ", ") + ")"
+	}
+
+	// Add filters for sources
+	if len(params.Sources) > 0 {
+		placeholders := make([]string, len(params.Sources))
+		for i := range params.Sources {
+			placeholders[i] = "?"
+			filterParams = append(filterParams, params.Sources[i])
+		}
+		aggregateQuery += " AND source IN (" + strings.Join(placeholders, ", ") + ")"
+	}
+
+	// Add all filter parameters after the standard parameters
+	queryParams = append(queryParams, filterParams...)
+
+	// Add group by clause
+	aggregateQuery += " GROUP BY " + strings.Join(groupByColumns, ", ")
+
+	r.logger.Debugw("executing detailed usage analytics query",
+		"query", aggregateQuery,
+		"params", queryParams,
+		"group_by", params.GroupBy,
+	)
+
+	// Execute the query
+	rows, err := r.store.GetConn().Query(ctx, aggregateQuery, queryParams...)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to execute usage analytics query").
+			WithReportableDetails(map[string]interface{}{
+				"customer_id": params.CustomerID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	// Process the results
+	results := []*events.DetailedUsageAnalytic{}
+
+	// Read the rows
+	for rows.Next() {
+		analytics := &events.DetailedUsageAnalytic{
+			Points: []events.UsageAnalyticPoint{},
+		}
+
+		// Scan the row based on group by columns
+		scanArgs := make([]interface{}, len(groupByColumns)+2) // +2 for total_usage, total_cost
+		for i, groupBy := range groupByColumns {
+			switch groupBy {
+			case "feature_id":
+				scanArgs[i] = &analytics.FeatureID
+			case "source":
+				scanArgs[i] = &analytics.Source
+			}
+		}
+
+		// Scan the aggregate values
+		scanArgs[len(groupByColumns)] = &analytics.TotalUsage
+		scanArgs[len(groupByColumns)+1] = &analytics.TotalCost
+
+		if err := rows.Scan(scanArgs...); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to scan analytics row").
+				WithReportableDetails(map[string]interface{}{
+					"customer_id": params.CustomerID,
+				}).
+				Mark(ierr.ErrDatabase)
+		}
+
+		// If we need time-series data and a window size is specified, fetch the points
+		if params.WindowSize != "" {
+			points, err := r.getAnalyticsPoints(ctx, params, analytics)
+			if err != nil {
+				SetSpanError(span, err)
+				return nil, err
+			}
+			analytics.Points = points
+		}
+
+		results = append(results, analytics)
+	}
+
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Error iterating analytics rows").
+			WithReportableDetails(map[string]interface{}{
+				"customer_id": params.CustomerID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return results, nil
+}
+
+// getAnalyticsPoints fetches time-series data points for a specific analytics item
+func (r *ProcessedEventRepository) getAnalyticsPoints(
+	ctx context.Context,
+	params *events.UsageAnalyticsParams,
+	analytics *events.DetailedUsageAnalytic,
+) ([]events.UsageAnalyticPoint, error) {
+	// Build the time window expression based on window size
+	var timeWindowExpr string
+
+	switch params.WindowSize {
+	case types.WindowSizeMinute:
+		timeWindowExpr = "toStartOfMinute(timestamp)"
+	case types.WindowSizeHour:
+		timeWindowExpr = "toStartOfHour(timestamp)"
+	case types.WindowSizeDay:
+		timeWindowExpr = "toStartOfDay(timestamp)"
+	default:
+		// Default to hourly for unknown window sizes
+		timeWindowExpr = "toStartOfHour(timestamp)"
+	}
+
+	// Build the query
+	query := fmt.Sprintf(`
+		SELECT 
+			%s AS window_time,
+			SUM(qty_billable * sign) AS usage,
+			SUM(cost * sign) AS cost
+		FROM events_processed
+		WHERE tenant_id = ?
+		AND environment_id = ?
+		AND customer_id = ?
+		AND timestamp >= ?
+		AND timestamp <= ?
+		AND sign != 0
+	`, timeWindowExpr)
+
+	// Add filters for the specific analytics item
+	queryParams := []interface{}{
+		params.TenantID,
+		params.EnvironmentID,
+		params.CustomerID,
+		params.StartTime,
+		params.EndTime,
+	}
+
+	// Add feature_id filter if present in analytics
+	if analytics.FeatureID != "" {
+		query += " AND feature_id = ?"
+		queryParams = append(queryParams, analytics.FeatureID)
+	}
+
+	// Add source filter if present in analytics
+	if analytics.Source != "" {
+		query += " AND source = ?"
+		queryParams = append(queryParams, analytics.Source)
+	}
+
+	// Group by the time window and order by time
+	query += fmt.Sprintf(" GROUP BY %s ORDER BY window_time", timeWindowExpr)
+
+	// Execute the query
+	rows, err := r.store.GetConn().Query(ctx, query, queryParams...)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to execute time-series query").
+			WithReportableDetails(map[string]interface{}{
+				"customer_id": params.CustomerID,
+				"feature_id":  analytics.FeatureID,
+				"source":      analytics.Source,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	// Process the results
+	var points []events.UsageAnalyticPoint
+
+	for rows.Next() {
+		var point events.UsageAnalyticPoint
+		if err := rows.Scan(&point.Timestamp, &point.Usage, &point.Cost); err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Failed to scan time-series point").
+				Mark(ierr.ErrDatabase)
+		}
+		points = append(points, point)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Error iterating time-series points").
+			Mark(ierr.ErrDatabase)
+	}
+
+	return points, nil
 }

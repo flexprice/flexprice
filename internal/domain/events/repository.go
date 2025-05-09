@@ -41,6 +41,9 @@ type ProcessedEventRepository interface {
 
 	// Get usage analytics for recent events
 	GetUsageAnalytics(ctx context.Context, tenantID, environmentID, customerID string, lookbackHours int) ([]*UsageAnalytic, error)
+
+	// GetDetailedUsageAnalytics provides comprehensive usage analytics with filtering, grouping, and time-series data
+	GetDetailedUsageAnalytics(ctx context.Context, params *UsageAnalyticsParams) ([]*DetailedUsageAnalytic, error)
 }
 
 // Additional types needed for the new methods

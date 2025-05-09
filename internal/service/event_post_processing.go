@@ -11,6 +11,7 @@ import (
 
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/meter"
@@ -50,6 +51,9 @@ type EventPostProcessingService interface {
 
 	// Get usage analytics for a customer
 	GetUsageAnalytics(ctx context.Context, tenantID, environmentID, customerID string, lookbackHours int) ([]*events.UsageAnalytic, error)
+
+	// Get detailed usage analytics with filtering, grouping, and time-series data
+	GetDetailedUsageAnalytics(ctx context.Context, req *dto.GetUsageAnalyticsRequest) (*dto.GetUsageAnalyticsResponse, error)
 
 	// Reprocess events for a specific customer or subscription
 	ReprocessEvents(ctx context.Context, customerID, subscriptionID string) error
@@ -833,6 +837,196 @@ func (s *eventPostProcessingService) GetUsageAnalytics(ctx context.Context, tena
 	return s.processedEventRepo.GetUsageAnalytics(ctx, tenantID, environmentID, customerID, lookbackHours)
 }
 
+// GetDetailedUsageAnalytics provides detailed usage analytics with filtering, grouping, and time-series data
+func (s *eventPostProcessingService) GetDetailedUsageAnalytics(ctx context.Context, req *dto.GetUsageAnalyticsRequest) (*dto.GetUsageAnalyticsResponse, error) {
+	// Validate the request
+	if req.ExternalCustomerID == "" {
+		return nil, ierr.NewError("external_customer_id is required").
+			WithHint("External customer ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Set default window size if needed
+	windowSize := types.WindowSize(req.WindowSize)
+	if windowSize != "" {
+		if err := windowSize.Validate(); err != nil {
+			return nil, err
+		}
+	}
+
+	// Step 1: Resolve customer
+	customer, err := s.CustomerRepo.GetByLookupKey(ctx, req.ExternalCustomerID)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Customer not found").
+			WithReportableDetails(map[string]interface{}{
+				"external_customer_id": req.ExternalCustomerID,
+			}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	// Step 2: Get active subscriptions for the customer
+	subscriptionService := NewSubscriptionService(s.ServiceParams)
+	filter := types.NewSubscriptionFilter()
+	filter.CustomerID = customer.ID
+	filter.WithLineItems = false
+	filter.SubscriptionStatus = []types.SubscriptionStatus{
+		types.SubscriptionStatusActive,
+		types.SubscriptionStatusTrialing,
+	}
+
+	subscriptionsList, err := subscriptionService.ListSubscriptions(ctx, filter)
+	if err != nil {
+		s.Logger.Errorw("failed to get subscriptions for currency validation",
+			"error", err,
+			"customer_id", customer.ID,
+		)
+		return nil, err
+	}
+
+	// Step 3: Validate currency (all subscriptions should have the same currency)
+	// This ensures analytics only works when customer has a single currency across all subscriptions
+	finalCurrency := ""
+	subscriptions := subscriptionsList.Items
+	if len(subscriptions) > 0 {
+		currency := subscriptions[0].Currency
+		for _, sub := range subscriptions {
+			if sub.Currency != currency {
+				return nil, ierr.NewError("multiple currencies detected").
+					WithHint("Analytics is only supported for customers with a single currency across all subscriptions").
+					WithReportableDetails(map[string]interface{}{
+						"customer_id": customer.ID,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+		}
+		finalCurrency = currency
+	}
+
+	// Step 4: Create the parameters object for repository call
+	params := &events.UsageAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		CustomerID:         customer.ID,
+		ExternalCustomerID: req.ExternalCustomerID,
+		FeatureIDs:         req.FeatureIDs,
+		Sources:            req.Sources,
+		StartTime:          req.StartTime,
+		EndTime:            req.EndTime,
+		GroupBy:            req.GroupBy,
+		WindowSize:         windowSize,
+	}
+
+	// Step 5: Call the repository to get base analytics data
+	analytics, err := s.processedEventRepo.GetDetailedUsageAnalytics(ctx, params)
+	if err != nil {
+		s.Logger.Errorw("failed to get detailed usage analytics",
+			"error", err,
+			"external_customer_id", req.ExternalCustomerID,
+		)
+		return nil, err
+	}
+
+	// Step 6: If no results, return early
+	if len(analytics) == 0 {
+		return s.ToGetUsageAnalyticsResponseDTO(ctx, analytics)
+	}
+
+	// Step 7: Enrich with feature and meter data from their respective repositories
+	err = s.enrichAnalyticsWithFeatureAndMeterData(ctx, analytics)
+	if err != nil {
+		s.Logger.Warnw("failed to fully enrich analytics with feature and meter data",
+			"error", err,
+			"analytics_count", len(analytics),
+		)
+		// Continue with partial data rather than failing completely
+	}
+
+	// Step 8: Set currency on all analytics items if we have subscription data
+	if len(subscriptions) > 0 && finalCurrency != "" {
+		for _, item := range analytics {
+			item.Currency = finalCurrency
+		}
+	}
+
+	return s.ToGetUsageAnalyticsResponseDTO(ctx, analytics)
+}
+
+// enrichAnalyticsWithFeatureAndMeterData fetches and adds feature and meter data to analytics results
+func (s *eventPostProcessingService) enrichAnalyticsWithFeatureAndMeterData(ctx context.Context, analytics []*events.DetailedUsageAnalytic) error {
+	// Extract all unique feature IDs
+	featureIDs := make([]string, 0)
+	featureIDSet := make(map[string]bool)
+
+	for _, item := range analytics {
+		if item.FeatureID != "" && !featureIDSet[item.FeatureID] {
+			featureIDs = append(featureIDs, item.FeatureID)
+			featureIDSet[item.FeatureID] = true
+		}
+	}
+
+	// If no feature IDs, nothing to enrich
+	if len(featureIDs) == 0 {
+		return nil
+	}
+
+	// Fetch all features in one call
+	featureFilter := types.NewNoLimitFeatureFilter()
+	featureFilter.FeatureIDs = featureIDs
+	features, err := s.FeatureRepo.List(ctx, featureFilter)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to fetch features for enrichment").
+			Mark(ierr.ErrDatabase)
+	}
+
+	// Extract all meter IDs from features
+	meterIDs := make([]string, 0)
+	meterIDSet := make(map[string]bool)
+	featureMap := make(map[string]*feature.Feature)
+
+	for _, f := range features {
+		featureMap[f.ID] = f
+		if f.MeterID != "" && !meterIDSet[f.MeterID] {
+			meterIDs = append(meterIDs, f.MeterID)
+			meterIDSet[f.MeterID] = true
+		}
+	}
+
+	// Fetch all meters in one call
+	meterFilter := types.NewNoLimitMeterFilter()
+	meterFilter.MeterIDs = meterIDs
+	meters, err := s.MeterRepo.List(ctx, meterFilter)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to fetch meters for enrichment").
+			Mark(ierr.ErrDatabase)
+	}
+
+	// Create meter map for quick lookup
+	meterMap := make(map[string]*meter.Meter)
+	for _, m := range meters {
+		meterMap[m.ID] = m
+	}
+
+	// Enrich analytics with feature and meter data
+	for _, item := range analytics {
+		if feature, ok := featureMap[item.FeatureID]; ok {
+			item.FeatureName = feature.Name
+			item.Unit = feature.UnitSingular
+			item.UnitPlural = feature.UnitPlural
+
+			if meter, ok := meterMap[feature.MeterID]; ok {
+				item.MeterID = meter.ID
+				item.EventName = meter.EventName
+				item.AggregationType = meter.Aggregation.Type
+			}
+		}
+	}
+
+	return nil
+}
+
 // ReprocessEvents triggers reprocessing of events for a customer or subscription
 func (s *eventPostProcessingService) ReprocessEvents(ctx context.Context, customerID, subscriptionID string) error {
 	if customerID == "" && subscriptionID == "" {
@@ -851,4 +1045,49 @@ func (s *eventPostProcessingService) ReprocessEvents(ctx context.Context, custom
 	return ierr.NewError("event reprocessing is not yet implemented in v2").
 		WithHint("This feature will be available in a future update").
 		Mark(ierr.ErrValidation)
+}
+
+func (s *eventPostProcessingService) ToGetUsageAnalyticsResponseDTO(ctx context.Context, analytics []*events.DetailedUsageAnalytic) (*dto.GetUsageAnalyticsResponse, error) {
+	response := &dto.GetUsageAnalyticsResponse{
+		TotalCost: decimal.Zero,
+		Currency:  "",
+		Items:     make([]dto.UsageAnalyticItem, 0, len(analytics)),
+	}
+
+	// Convert analytics to response items
+	for _, analytic := range analytics {
+		item := dto.UsageAnalyticItem{
+			FeatureID:       analytic.FeatureID,
+			FeatureName:     analytic.FeatureName,
+			EventName:       analytic.EventName,
+			Source:          analytic.Source,
+			Unit:            analytic.Unit,
+			UnitPlural:      analytic.UnitPlural,
+			AggregationType: analytic.AggregationType,
+			TotalUsage:      analytic.TotalUsage,
+			TotalCost:       analytic.TotalCost,
+			Currency:        analytic.Currency,
+			Points:          make([]dto.UsageAnalyticPoint, 0, len(analytic.Points)),
+		}
+
+		// Map time-series points if available
+		for _, point := range analytic.Points {
+			item.Points = append(item.Points, dto.UsageAnalyticPoint{
+				Timestamp: point.Timestamp,
+				Usage:     point.Usage,
+				Cost:      point.Cost,
+			})
+		}
+
+		response.Items = append(response.Items, item)
+		response.TotalCost = response.TotalCost.Add(analytic.TotalCost)
+		response.Currency = analytic.Currency
+	}
+
+	// sort by feature name
+	sort.Slice(response.Items, func(i, j int) bool {
+		return response.Items[i].FeatureName < response.Items[j].FeatureName
+	})
+
+	return response, nil
 }
