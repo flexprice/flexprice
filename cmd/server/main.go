@@ -284,7 +284,7 @@ func startServer(
 		startAPIServer(lc, r, cfg, log)
 		startConsumer(lc, consumer, eventRepo, cfg, log, sentryService, eventPostProcessingSvc)
 		startMessageRouter(lc, router, webhookService, onboardingService, log)
-		startPostProcessingConsumer(lc, router, eventPostProcessingSvc, log)
+		startPostProcessingConsumer(lc, router, eventPostProcessingSvc, cfg, log)
 		startTemporalWorker(lc, temporalClient, &cfg.Temporal, log)
 	case types.ModeAPI:
 		startAPIServer(lc, r, cfg, log)
@@ -297,7 +297,7 @@ func startServer(
 			log.Fatal("Kafka consumer required for consumer mode")
 		}
 		startConsumer(lc, consumer, eventRepo, cfg, log, sentryService, eventPostProcessingSvc)
-		startPostProcessingConsumer(lc, router, eventPostProcessingSvc, log)
+		startPostProcessingConsumer(lc, router, eventPostProcessingSvc, cfg, log)
 	case types.ModeAWSLambdaAPI:
 		startAWSLambdaAPI(r)
 		startMessageRouter(lc, router, webhookService, onboardingService, log)
@@ -579,10 +579,11 @@ func startPostProcessingConsumer(
 	lc fx.Lifecycle,
 	router *pubsubRouter.Router,
 	eventPostProcessingSvc service.EventPostProcessingService,
+	cfg *config.Configuration,
 	logger *logger.Logger,
 ) {
 	// Register handlers before starting the router
-	eventPostProcessingSvc.RegisterHandler(router)
+	eventPostProcessingSvc.RegisterHandler(router, cfg)
 
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {

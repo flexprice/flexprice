@@ -125,3 +125,7 @@ s3:
 
 cache:
   enabled: false
+
+event_post_processing:
+  topic: "events_post_processing"
+  rate_limit: 12

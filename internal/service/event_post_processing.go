@@ -12,6 +12,7 @@ import (
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/meter"
@@ -23,10 +24,6 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
-)
-
-const (
-	EventsPostProcessingTopic = "events_post_processing"
 )
 
 // PriceMatch represents a matching price and meter for an event
@@ -41,7 +38,7 @@ type EventPostProcessingService interface {
 	PublishEvent(ctx context.Context, event *events.Event) error
 
 	// Register message handler with the router
-	RegisterHandler(router *pubsubRouter.Router)
+	RegisterHandler(router *pubsubRouter.Router, cfg *config.Configuration)
 
 	// Get usage cost for a specific period
 	GetPeriodCost(ctx context.Context, tenantID, environmentID, customerID, subscriptionID string, periodID uint64) (decimal.Decimal, error)
@@ -116,7 +113,7 @@ func (s *eventPostProcessingService) PublishEvent(ctx context.Context, event *ev
 	)
 
 	// Publish to post-processing topic
-	if err := s.pubSub.Publish(ctx, EventsPostProcessingTopic, msg); err != nil {
+	if err := s.pubSub.Publish(ctx, s.Config.EventPostProcessing.Topic, msg); err != nil {
 		return ierr.WithError(err).
 			WithHint("Failed to publish event for post-processing").
 			Mark(ierr.ErrSystem)
@@ -126,21 +123,31 @@ func (s *eventPostProcessingService) PublishEvent(ctx context.Context, event *ev
 }
 
 // RegisterHandler registers a handler for the post-processing topic with rate limiting
-func (s *eventPostProcessingService) RegisterHandler(router *pubsubRouter.Router) {
+func (s *eventPostProcessingService) RegisterHandler(router *pubsubRouter.Router, cfg *config.Configuration) {
+	// handle config defaults
+	if cfg.EventPostProcessing.RateLimit == 0 {
+		cfg.EventPostProcessing.RateLimit = 1
+	}
+
+	if cfg.EventPostProcessing.Topic == "" {
+		cfg.EventPostProcessing.Topic = "events_post_processing"
+	}
+
 	// Add throttle middleware to this specific handler
-	throttle := middleware.NewThrottle(1, time.Second)
+	throttle := middleware.NewThrottle(cfg.EventPostProcessing.RateLimit, time.Second)
 
 	// Add the handler
 	router.AddNoPublishHandler(
 		"events_post_processing_handler",
-		EventsPostProcessingTopic,
+		cfg.EventPostProcessing.Topic,
 		s.pubSub,
 		s.processMessage,
 		throttle.Middleware,
 	)
 
 	s.Logger.Infow("registered event post-processing handler",
-		"topic", EventsPostProcessingTopic,
+		"topic", cfg.EventPostProcessing.Topic,
+		"rate_limit", cfg.EventPostProcessing.RateLimit,
 	)
 }
 

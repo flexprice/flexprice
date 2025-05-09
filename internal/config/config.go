@@ -16,22 +16,23 @@ import (
 )
 
 type Configuration struct {
-	Deployment DeploymentConfig `validate:"required"`
-	Server     ServerConfig     `validate:"required"`
-	Auth       AuthConfig       `validate:"required"`
-	Kafka      KafkaConfig      `validate:"required"`
-	ClickHouse ClickHouseConfig `validate:"required"`
-	Logging    LoggingConfig    `validate:"required"`
-	Postgres   PostgresConfig   `validate:"required"`
-	Sentry     SentryConfig     `validate:"required"`
-	Event      EventConfig      `validate:"required"`
-	DynamoDB   DynamoDBConfig   `validate:"required"`
-	Temporal   TemporalConfig   `validate:"required"`
-	Webhook    Webhook          `validate:"omitempty"`
-	Secrets    SecretsConfig    `validate:"required"`
-	Billing    BillingConfig    `validate:"omitempty"`
-	S3         S3Config         `validate:"required"`
-	Cache      CacheConfig      `validate:"required"`
+	Deployment          DeploymentConfig          `validate:"required"`
+	Server              ServerConfig              `validate:"required"`
+	Auth                AuthConfig                `validate:"required"`
+	Kafka               KafkaConfig               `validate:"required"`
+	ClickHouse          ClickHouseConfig          `validate:"required"`
+	Logging             LoggingConfig             `validate:"required"`
+	Postgres            PostgresConfig            `validate:"required"`
+	Sentry              SentryConfig              `validate:"required"`
+	Event               EventConfig               `validate:"required"`
+	DynamoDB            DynamoDBConfig            `validate:"required"`
+	Temporal            TemporalConfig            `validate:"required"`
+	Webhook             Webhook                   `validate:"omitempty"`
+	Secrets             SecretsConfig             `validate:"required"`
+	Billing             BillingConfig             `validate:"omitempty"`
+	S3                  S3Config                  `validate:"required"`
+	Cache               CacheConfig               `validate:"required"`
+	EventPostProcessing EventPostProcessingConfig `validate:"required"`
 }
 
 type CacheConfig struct {
@@ -141,6 +142,12 @@ type SecretsConfig struct {
 type BillingConfig struct {
 	TenantID      string `mapstructure:"tenant_id" validate:"omitempty"`
 	EnvironmentID string `mapstructure:"environment_id" validate:"omitempty"`
+}
+
+type EventPostProcessingConfig struct {
+	// Rate limit in messages consumed per second
+	Topic     string `mapstructure:"topic" validate:"required"`
+	RateLimit int64  `mapstructure:"rate_limit" validate:"required"`
 }
 
 func NewConfig() (*Configuration, error) {
