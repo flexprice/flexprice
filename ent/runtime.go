@@ -763,6 +763,16 @@ func init() {
 	subscription.DefaultBillingCycle = subscriptionDescBillingCycle.Default.(string)
 	// subscription.BillingCycleValidator is a validator for the "billing_cycle" field. It is called by the builders before save.
 	subscription.BillingCycleValidator = subscriptionDescBillingCycle.Validators[0].(func(string) error)
+	// subscriptionDescCustomerTimezone is the schema descriptor for customer_timezone field.
+	subscriptionDescCustomerTimezone := subscriptionFields[24].Descriptor()
+	// subscription.DefaultCustomerTimezone holds the default value on creation for the customer_timezone field.
+	subscription.DefaultCustomerTimezone = subscriptionDescCustomerTimezone.Default.(string)
+	// subscriptionDescProrationMode is the schema descriptor for proration_mode field.
+	subscriptionDescProrationMode := subscriptionFields[25].Descriptor()
+	// subscription.DefaultProrationMode holds the default value on creation for the proration_mode field.
+	subscription.DefaultProrationMode = subscriptionDescProrationMode.Default.(string)
+	// subscription.ProrationModeValidator is a validator for the "proration_mode" field. It is called by the builders before save.
+	subscription.ProrationModeValidator = subscriptionDescProrationMode.Validators[0].(func(string) error)
 	subscriptionlineitemMixin := schema.SubscriptionLineItem{}.Mixin()
 	subscriptionlineitemMixinFields0 := subscriptionlineitemMixin[0].Fields()
 	_ = subscriptionlineitemMixinFields0
