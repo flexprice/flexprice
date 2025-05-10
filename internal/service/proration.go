@@ -228,11 +228,55 @@ func (s *prorationService) ApplyProration(ctx context.Context,
 	return fmt.Errorf("unsupported proration behavior: %s", behavior)
 }
 
+// validateSubscriptionProrationParams validates the parameters for subscription proration calculation
+func (s *prorationService) validateSubscriptionProrationParams(params proration.SubscriptionProrationParams) error {
+	if params.Subscription == nil {
+		return fmt.Errorf("subscription is required")
+	}
+	if params.Subscription.ID == "" {
+		return fmt.Errorf("subscription ID is required")
+	}
+	if params.Subscription.StartDate.IsZero() {
+		return fmt.Errorf("subscription start date is required")
+	}
+	if params.Subscription.BillingAnchor.IsZero() {
+		return fmt.Errorf("subscription billing anchor is required")
+	}
+	if len(params.Subscription.LineItems) == 0 {
+		return fmt.Errorf("subscription must have at least one line item")
+	}
+	if params.Prices == nil {
+		return fmt.Errorf("prices map is required")
+	}
+
+	// Validate each line item has a corresponding price
+	for _, item := range params.Subscription.LineItems {
+		if item.ID == "" {
+			return fmt.Errorf("line item ID is required")
+		}
+		if item.PriceID == "" {
+			return fmt.Errorf("price ID is required for line item %s", item.ID)
+		}
+		if _, exists := params.Prices[item.PriceID]; !exists {
+			return fmt.Errorf("price not found for line item %s with price ID %s", item.ID, item.PriceID)
+		}
+		if item.Quantity.IsZero() || item.Quantity.IsNegative() {
+			return fmt.Errorf("quantity must be positive for line item %s", item.ID)
+		}
+	}
+
+	return nil
+}
+
 // CalculateAndApplySubscriptionProration handles proration for an entire subscription.
 func (s *prorationService) CalculateAndApplySubscriptionProration(
 	ctx context.Context,
 	params proration.SubscriptionProrationParams,
 ) (*proration.SubscriptionProrationResult, error) {
+	if err := s.validateSubscriptionProrationParams(params); err != nil {
+		return nil, fmt.Errorf("invalid subscription proration parameters: %w", err)
+	}
+
 	result := &proration.SubscriptionProrationResult{
 		LineItemResults: make(map[string]*proration.ProrationResult),
 	}
@@ -244,7 +288,7 @@ func (s *prorationService) CalculateAndApplySubscriptionProration(
 	}
 
 	// Calculate proration for each line item
-	for _, item := range params.LineItems {
+	for _, item := range params.Subscription.LineItems {
 		price, ok := params.Prices[item.PriceID]
 		if !ok {
 			s.logger.Debug("price not found for line item",
@@ -255,16 +299,16 @@ func (s *prorationService) CalculateAndApplySubscriptionProration(
 		prorationParams := proration.ProrationParams{
 			SubscriptionID:     params.Subscription.ID,
 			LineItemID:         item.ID,
-			PlanPayInAdvance:   true,
-			CurrentPeriodStart: params.StartDate,
-			CurrentPeriodEnd:   params.BillingAnchor,
+			PlanPayInAdvance:   price.InvoiceCadence == types.InvoiceCadenceAdvance,
+			CurrentPeriodStart: params.Subscription.StartDate,
+			CurrentPeriodEnd:   params.Subscription.BillingAnchor,
 			Action:             types.ProrationActionAddItem,
 			NewPriceID:         item.PriceID,
 			NewQuantity:        item.Quantity,
 			NewPricePerUnit:    price.Amount,
-			ProrationDate:      params.StartDate,
+			ProrationDate:      params.Subscription.StartDate,
 			ProrationBehavior:  types.ProrationBehaviorCreateProrations,
-			CustomerTimezone:   params.CustomerTimezone,
+			CustomerTimezone:   params.Subscription.CustomerTimezone,
 		}
 
 		prorationResult, err := s.CalculateProration(ctx, prorationParams)

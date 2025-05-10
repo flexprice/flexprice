@@ -220,29 +220,25 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		domainPriceMap := make(map[string]*price.Price)
 		for id, p := range priceMap {
 			domainPriceMap[id] = &price.Price{
-				ID:             p.Price.ID,
-				Amount:         p.Price.Amount,
-				Currency:       p.Price.Currency,
-				BillingPeriod:  p.Price.BillingPeriod,
-				InvoiceCadence: p.Price.InvoiceCadence,
-				Type:           p.Price.Type,
-				MeterID:        p.Price.MeterID,
-				TrialPeriod:    p.Price.TrialPeriod,
-				EnvironmentID:  p.Price.EnvironmentID,
-				BaseModel:      p.Price.BaseModel,
+				ID:             p.ID,
+				Amount:         p.Amount,
+				Currency:       p.Currency,
+				BillingPeriod:  p.BillingPeriod,
+				InvoiceCadence: p.InvoiceCadence,
+				Type:           p.Type,
+				MeterID:        p.MeterID,
+				TrialPeriod:    p.TrialPeriod,
+				EnvironmentID:  p.EnvironmentID,
+				BaseModel:      p.BaseModel,
 			}
 		}
 
 		// Calculate and apply proration for the entire subscription at once
 		prorationParams := proration.SubscriptionProrationParams{
 			Subscription:     sub,
-			LineItems:        sub.LineItems,
 			Prices:           domainPriceMap,
 			ProrationMode:    req.ProrationMode,
 			BillingCycle:     req.BillingCycle,
-			StartDate:        sub.StartDate,
-			BillingAnchor:    sub.BillingAnchor,
-			CustomerTimezone: sub.CustomerTimezone,
 		}
 
 		prorationResult, err := prorationService.CalculateAndApplySubscriptionProration(ctx, prorationParams)
