@@ -22,7 +22,7 @@ import (
 // NewCalculator creates a proration calculator.
 // The calculator determines the proration logic (day-based, second-based)
 // based on the ProrationStrategy provided in ProrationParams.
-func NewCalculator() Calculator { // Assumes Calculator interface is defined elsewhere in the package
+func NewCalculator() Calculator {
 	return &calculatorImpl{}
 }
 
@@ -55,7 +55,6 @@ func (c *calculatorImpl) Calculate(ctx context.Context, params ProrationParams) 
 
 	var prorationCoefficient decimal.Decimal
 
-	// Assumes params.ProrationStrategy exists and StrategySecondBased/StrategyDayBased are valid constants from models.go
 	switch params.ProrationStrategy {
 	case types.StrategySecondBased:
 		totalSeconds := periodEndInTZ.Sub(periodStartInTZ).Seconds()
@@ -69,15 +68,11 @@ func (c *calculatorImpl) Calculate(ctx context.Context, params ProrationParams) 
 		if remainingSeconds < 0 {
 			remainingSeconds = 0
 		}
-		// Ensure totalSeconds is not zero before division, already covered by totalSeconds <= 0 check.
 		prorationCoefficient = decimal.NewFromFloat(remainingSeconds).Div(decimal.NewFromFloat(totalSeconds))
 
-	case types.StrategyDayBased, "": // Default to day-based if strategy is empty or explicitly set to day-based
+	case types.StrategyDayBased, "": // Default to day-based if strategy is empty
 		fallthrough
-	default: // Default to day-based for any unrecognized strategies
-		// if params.ProrationStrategy != types.StrategyDayBased && params.ProrationStrategy != "" {
-		// 	// Optionally log: fmt.Printf("Warning: Unrecognized ProrationStrategy '%s', defaulting to day-based.\n", params.ProrationStrategy)
-		// }
+	default:
 		totalDays := daysInDurationWithDST(periodStartInTZ, periodEndInTZ, loc)
 		if totalDays <= 0 {
 			return nil, ierr.NewError("invalid billing period").
@@ -167,6 +162,7 @@ func (c *calculatorImpl) Calculate(ctx context.Context, params ProrationParams) 
 	return result, nil
 }
 
+// daysInDurationWithDST calculates the number of days between two dates, accounting for DST changes
 func daysInDurationWithDST(start, end time.Time, loc *time.Location) int {
 	startDay := time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, loc)
 	endDay := time.Date(end.Year(), end.Month(), end.Day(), 0, 0, 0, 0, loc)
@@ -180,6 +176,7 @@ func daysInDurationWithDST(start, end time.Time, loc *time.Location) int {
 	return days
 }
 
+// capCreditAmount ensures the credit amount doesn't exceed the original amount paid minus previous credits
 func (c *calculatorImpl) capCreditAmount(
 	potentialCredit decimal.Decimal,
 	originalAmountPaid decimal.Decimal,
@@ -277,21 +274,7 @@ func validateParams(params ProrationParams) error {
 			return fmt.Errorf("both old and new quantities must be positive for quantity_change action")
 		}
 	default:
-		// This default case handles actions not explicitly listed above for price/quantity validation.
-		// If an action is fundamentally unknown or invalid, it should ideally be caught.
-		// The original code had a final default in validateParams to catch any invalid ProrationAction.
-		// Let's ensure that behavior is preserved if params.Action is not one of the recognized types.
-		switch params.Action { // Check if action is one of the known types
-		case types.ProrationActionAddItem,
-			types.ProrationActionRemoveItem,
-			types.ProrationActionCancellation,
-			types.ProrationActionUpgrade,
-			types.ProrationActionDowngrade,
-			types.ProrationActionQuantityChange:
-			// Known action, specific validations done above.
-		default:
-			return fmt.Errorf("invalid proration action: %s", params.Action)
-		}
+		return fmt.Errorf("invalid proration action: %s", params.Action)
 	}
 	return nil
 }

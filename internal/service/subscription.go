@@ -102,12 +102,8 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			Mark(ierr.ErrValidation)
 	}
 
-	prices := make([]price.Price, len(pricesResponse.Items))
-	for i, p := range pricesResponse.Items {
-		prices[i] = *p.Price
-	}
-
-	priceMap := make(map[string]*dto.PriceResponse, len(prices))
+	// Build price map for quick lookup
+	priceMap := make(map[string]*dto.PriceResponse)
 	for _, p := range pricesResponse.Items {
 		priceMap[p.Price.ID] = p
 	}
@@ -165,7 +161,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	lineItems := make([]*subscription.SubscriptionLineItem, 0, len(validPrices))
 	for _, price := range validPrices {
 		lineItems = append(lineItems, &subscription.SubscriptionLineItem{
-			PriceID:       price.ID,
+			PriceID:       price.Price.ID,
 			EnvironmentID: types.GetEnvironmentID(ctx),
 			BaseModel:     types.GetDefaultBaseModel(ctx),
 		})
@@ -183,7 +179,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 				Mark(ierr.ErrDatabase)
 		}
 
-		if price.Type == types.PRICE_TYPE_USAGE && price.Meter != nil {
+		if price.Price.Type == types.PRICE_TYPE_USAGE && price.Meter != nil {
 			item.MeterID = price.Meter.ID
 			item.MeterDisplayName = price.Meter.Name
 			item.DisplayName = price.Meter.Name
@@ -220,49 +216,47 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		req.ProrationMode == types.ProrationModeActive {
 		prorationService := NewProrationService(s.ServiceParams.ProrationCalculator, s.ServiceParams.InvoiceRepo, s.Logger)
 
-		// For each line item, calculate prorated amount
-		for _, item := range sub.LineItems {
-			price, ok := priceMap[item.PriceID]
-			if !ok {
-				continue
-			}
-
-			prorationParams := proration.ProrationParams{
-				SubscriptionID:     sub.ID,
-				LineItemID:         item.ID,
-				PlanPayInAdvance:   true,
-				CurrentPeriodStart: sub.StartDate,
-				CurrentPeriodEnd:   sub.BillingAnchor,
-				Action:             types.ProrationActionAddItem,
-				NewPriceID:         item.PriceID,
-				NewQuantity:        item.Quantity,
-				NewPricePerUnit:    price.Amount,
-				ProrationDate:      sub.StartDate,
-				ProrationBehavior:  types.ProrationBehaviorCreateProrations,
-				CustomerTimezone:   sub.CustomerTimezone,
-			}
-
-			prorationResult, err := prorationService.CalculateProration(ctx, prorationParams)
-			if err != nil {
-				return nil, ierr.WithError(err).
-					WithHintf("failed to calculate proration for new subscription: %v", err).
-					Mark(ierr.ErrSystem)
-			}
-
-			// Apply proration to create invoice items
-			if err := prorationService.ApplyProration(
-				ctx,
-				prorationResult,
-				types.ProrationBehaviorCreateProrations,
-				types.GetTenantID(ctx),
-				types.GetEnvironmentID(ctx),
-				sub.ID,
-			); err != nil {
-				return nil, ierr.WithError(err).
-					WithHintf("failed to apply proration for new subscription: %v", err).
-					Mark(ierr.ErrSystem)
+		// Convert price map to domain type
+		domainPriceMap := make(map[string]*price.Price)
+		for id, p := range priceMap {
+			domainPriceMap[id] = &price.Price{
+				ID:             p.Price.ID,
+				Amount:         p.Price.Amount,
+				Currency:       p.Price.Currency,
+				BillingPeriod:  p.Price.BillingPeriod,
+				InvoiceCadence: p.Price.InvoiceCadence,
+				Type:           p.Price.Type,
+				MeterID:        p.Price.MeterID,
+				TrialPeriod:    p.Price.TrialPeriod,
+				EnvironmentID:  p.Price.EnvironmentID,
+				BaseModel:      p.Price.BaseModel,
 			}
 		}
+
+		// Calculate and apply proration for the entire subscription at once
+		prorationParams := proration.SubscriptionProrationParams{
+			Subscription:     sub,
+			LineItems:        sub.LineItems,
+			Prices:           domainPriceMap,
+			ProrationMode:    req.ProrationMode,
+			BillingCycle:     req.BillingCycle,
+			StartDate:        sub.StartDate,
+			BillingAnchor:    sub.BillingAnchor,
+			CustomerTimezone: sub.CustomerTimezone,
+		}
+
+		prorationResult, err := prorationService.CalculateAndApplySubscriptionProration(ctx, prorationParams)
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithHintf("failed to calculate and apply proration for new subscription: %v", err).
+				Mark(ierr.ErrSystem)
+		}
+
+		s.Logger.Infow("applied subscription proration",
+			"subscription_id", sub.ID,
+			"total_proration_amount", prorationResult.TotalProrationAmount.String(),
+			"num_line_items", len(prorationResult.LineItemResults),
+		)
 	}
 
 	s.Logger.Infow("creating subscription",

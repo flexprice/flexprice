@@ -1,3 +1,4 @@
+// Package proration provides functionality for handling subscription proration.
 package proration
 
 import (
@@ -22,6 +23,12 @@ type Service interface {
 		environmentID string,
 		subscriptionID string,
 	) error
+
+	// CalculateAndApplySubscriptionProration handles proration for an entire subscription.
+	// This is used when creating or modifying a subscription that needs proration
+	// (e.g., calendar billing with proration enabled).
+	// It will calculate and apply proration for all applicable line items in a single transaction.
+	CalculateAndApplySubscriptionProration(ctx context.Context, params SubscriptionProrationParams) (*SubscriptionProrationResult, error)
 }
 
 // Calculator performs proration calculations.

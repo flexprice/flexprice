@@ -3,6 +3,8 @@ package proration
 import (
 	"time"
 
+	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
@@ -61,4 +63,23 @@ type ProrationResult struct {
 	ProrationDate time.Time             // Effective date used for calculation
 	LineItemID    string                // ID of the affected line item (empty for new items)
 	IsPreview     bool                  // Indicates if this was calculated for a preview
+}
+
+// SubscriptionProrationParams contains all necessary information for subscription-level proration
+type SubscriptionProrationParams struct {
+	Subscription     *subscription.Subscription
+	LineItems        []*subscription.SubscriptionLineItem
+	Prices           map[string]*price.Price // Map of priceID to price
+	ProrationMode    types.ProrationMode
+	BillingCycle     types.BillingCycle
+	StartDate        time.Time
+	BillingAnchor    time.Time
+	CustomerTimezone string
+}
+
+// SubscriptionProrationResult contains the results of subscription-level proration
+type SubscriptionProrationResult struct {
+	TotalProrationAmount decimal.Decimal
+	LineItemResults      map[string]*ProrationResult // Map of lineItemID to its proration result
+	InvoiceID            string                      // ID of the invoice created/updated with proration items
 }

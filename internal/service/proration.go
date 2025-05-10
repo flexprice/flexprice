@@ -227,3 +227,68 @@ func (s *prorationService) ApplyProration(ctx context.Context,
 	// Handle other behaviors if added in the future
 	return fmt.Errorf("unsupported proration behavior: %s", behavior)
 }
+
+// CalculateAndApplySubscriptionProration handles proration for an entire subscription.
+func (s *prorationService) CalculateAndApplySubscriptionProration(
+	ctx context.Context,
+	params proration.SubscriptionProrationParams,
+) (*proration.SubscriptionProrationResult, error) {
+	result := &proration.SubscriptionProrationResult{
+		LineItemResults: make(map[string]*proration.ProrationResult),
+	}
+
+	// Only proceed if proration is needed
+	if params.BillingCycle != types.BillingCycleCalendar ||
+		params.ProrationMode != types.ProrationModeActive {
+		return result, nil
+	}
+
+	// Calculate proration for each line item
+	for _, item := range params.LineItems {
+		price, ok := params.Prices[item.PriceID]
+		if !ok {
+			s.logger.Debug("price not found for line item",
+				zap.String("priceID", item.PriceID))
+			continue
+		}
+
+		prorationParams := proration.ProrationParams{
+			SubscriptionID:     params.Subscription.ID,
+			LineItemID:         item.ID,
+			PlanPayInAdvance:   true,
+			CurrentPeriodStart: params.StartDate,
+			CurrentPeriodEnd:   params.BillingAnchor,
+			Action:             types.ProrationActionAddItem,
+			NewPriceID:         item.PriceID,
+			NewQuantity:        item.Quantity,
+			NewPricePerUnit:    price.Amount,
+			ProrationDate:      params.StartDate,
+			ProrationBehavior:  types.ProrationBehaviorCreateProrations,
+			CustomerTimezone:   params.CustomerTimezone,
+		}
+
+		prorationResult, err := s.CalculateProration(ctx, prorationParams)
+		if err != nil {
+			return nil, fmt.Errorf("failed to calculate proration for line item %s: %w", item.ID, err)
+		}
+
+		result.LineItemResults[item.ID] = prorationResult
+		result.TotalProrationAmount = result.TotalProrationAmount.Add(prorationResult.NetAmount)
+	}
+
+	// Apply all prorations atomically
+	for _, prorationResult := range result.LineItemResults {
+		if err := s.ApplyProration(
+			ctx,
+			prorationResult,
+			types.ProrationBehaviorCreateProrations,
+			types.GetTenantID(ctx),
+			types.GetEnvironmentID(ctx),
+			params.Subscription.ID,
+		); err != nil {
+			return nil, fmt.Errorf("failed to apply proration: %w", err)
+		}
+	}
+
+	return result, nil
+}
