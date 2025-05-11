@@ -118,15 +118,24 @@ func (c *calculatorImpl) Calculate(ctx context.Context, params ProrationParams) 
 		params.Action == types.ProrationActionCancellation) &&
 		billingMode == types.BillingModeInAdvance
 
+	precision := types.GetCurrencyPrecision(params.Currency)
+
 	if shouldIssueCredit {
 		oldItemTotal := params.OldPricePerUnit.Mul(params.OldQuantity)
 		potentialCredit := oldItemTotal.Mul(prorationCoefficient)
-		cappedCredit := c.capCreditAmount(potentialCredit, params.OriginalAmountPaid, params.PreviousCreditsIssued)
 
-		if cappedCredit.GreaterThan(decimal.Zero) {
+		// Only cap credit for non-quantity changes
+		var creditAmount decimal.Decimal
+		if params.Action == types.ProrationActionQuantityChange {
+			creditAmount = potentialCredit
+		} else {
+			creditAmount = c.capCreditAmount(potentialCredit, params.OriginalAmountPaid, params.PreviousCreditsIssued)
+		}
+
+		if creditAmount.GreaterThan(decimal.Zero) {
 			creditItem := ProrationLineItem{
 				Description: c.generateCreditDescription(params),
-				Amount:      cappedCredit.Neg(),
+				Amount:      creditAmount.Neg().Round(precision),
 				StartDate:   params.ProrationDate,
 				EndDate:     params.CurrentPeriodEnd,
 				Quantity:    params.OldQuantity,
@@ -145,22 +154,12 @@ func (c *calculatorImpl) Calculate(ctx context.Context, params ProrationParams) 
 
 	if shouldIssueCharge {
 		newItemTotal := params.NewPricePerUnit.Mul(params.NewQuantity)
-		// For upgrades/quantity changes, we should only charge for the difference
-		if params.Action == types.ProrationActionUpgrade ||
-			params.Action == types.ProrationActionQuantityChange {
-			oldItemTotal := params.OldPricePerUnit.Mul(params.OldQuantity)
-			newItemTotal = newItemTotal.Sub(oldItemTotal)
-		} else if params.Action == types.ProrationActionDowngrade {
-			// For downgrades, we only want to charge for the new price
-			// The old price is already handled by the credit
-			newItemTotal = params.NewPricePerUnit.Mul(params.NewQuantity)
-		}
 		proratedCharge := newItemTotal.Mul(prorationCoefficient)
 
 		if proratedCharge.GreaterThan(decimal.Zero) {
 			chargeItem := ProrationLineItem{
 				Description: c.generateChargeDescription(params),
-				Amount:      proratedCharge,
+				Amount:      proratedCharge.Round(precision),
 				StartDate:   params.ProrationDate,
 				EndDate:     params.CurrentPeriodEnd,
 				Quantity:    params.NewQuantity,
@@ -171,6 +170,9 @@ func (c *calculatorImpl) Calculate(ctx context.Context, params ProrationParams) 
 			result.NetAmount = result.NetAmount.Add(chargeItem.Amount)
 		}
 	}
+
+	// Round the final net amount according to currency precision
+	result.NetAmount = result.NetAmount.Round(precision)
 
 	return result, nil
 }

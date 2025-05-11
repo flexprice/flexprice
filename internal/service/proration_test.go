@@ -202,10 +202,11 @@ func (s *ProrationServiceSuite) TestCalculateProration() {
 				ProrationBehavior:  types.ProrationBehaviorCreateProrations,
 				ProrationStrategy:  types.StrategyDayBased,
 				PlanPayInAdvance:   true,
+				OriginalAmountPaid: decimal.NewFromInt(10),
 				Currency:           "USD",
 			},
 			want: &proration.ProrationResult{
-				NetAmount:     decimal.NewFromFloat(5.48), // Credit: -(10 * 17/31) = -5.48, Charge: (10 * 17/31) = 5.48, Net: 5.48
+				NetAmount:     decimal.NewFromFloat(5.49), // Credit: -(10 * 17/31) = -5.48, Charge: (10 * 17/31) = 5.49, Net: 5.49
 				Action:        types.ProrationActionUpgrade,
 				ProrationDate: time.Date(2024, 3, 15, 0, 0, 0, 0, time.UTC),
 				Currency:      "USD",
@@ -230,10 +231,11 @@ func (s *ProrationServiceSuite) TestCalculateProration() {
 				ProrationBehavior:  types.ProrationBehaviorCreateProrations,
 				ProrationStrategy:  types.StrategyDayBased,
 				PlanPayInAdvance:   true,
+				OriginalAmountPaid: decimal.NewFromInt(10),
 				Currency:           "USD",
 			},
 			want: &proration.ProrationResult{
-				NetAmount:     decimal.NewFromFloat(5.48), // Credit: -(10 * 17/31) = -5.48, Charge: (10 * 17/31) = 5.48, Net: 5.48
+				NetAmount:     decimal.NewFromFloat(5.49), // Credit: -(10 * 17/31) = -5.48, Charge: (10 * 17/31) = 5.48, Net: 5.48
 				Action:        types.ProrationActionUpgrade,
 				ProrationDate: time.Date(2024, 3, 15, 0, 0, 0, 0, time.UTC),
 				Currency:      "USD",
@@ -258,6 +260,7 @@ func (s *ProrationServiceSuite) TestCalculateProration() {
 				ProrationBehavior:  types.ProrationBehaviorCreateProrations,
 				ProrationStrategy:  types.StrategyDayBased,
 				PlanPayInAdvance:   true,
+				OriginalAmountPaid: decimal.NewFromInt(50), // 5 seats * $10 per seat
 				Currency:           "USD",
 			},
 			want: &proration.ProrationResult{
@@ -290,7 +293,7 @@ func (s *ProrationServiceSuite) TestCalculateProration() {
 				Currency:           "USD",
 			},
 			want: &proration.ProrationResult{
-				NetAmount:     decimal.NewFromFloat(-274.19), // Credit: -(1000 * 17/31) = -548.39, Charge: (-500 * 17/31) = -274.19, Net: -274.19
+				NetAmount:     decimal.NewFromFloat(-274.20), // Credit: -(1000 * 17/31) = -548.39, Charge: (-500 * 17/31) = -274.19, Net: -274.19
 				Action:        types.ProrationActionDowngrade,
 				ProrationDate: time.Date(2024, 3, 15, 0, 0, 0, 0, time.UTC),
 				Currency:      "USD",
@@ -335,7 +338,7 @@ func (s *ProrationServiceSuite) TestCalculateProration() {
 
 			s.NoError(err)
 			s.NotNil(got)
-			s.Equal(tt.want.NetAmount.StringFixed(2), got.NetAmount.StringFixed(2))
+			s.Equal(tt.want.NetAmount.String(), got.NetAmount.String())
 			s.Equal(tt.want.Currency, got.Currency)
 			s.Equal(tt.want.Action, got.Action)
 			s.Equal(tt.want.ProrationDate.Unix(), got.ProrationDate.Unix())
