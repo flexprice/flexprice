@@ -182,14 +182,23 @@ func (c *calculatorImpl) Calculate(ctx context.Context, params ProrationParams) 
 // days during DST shifts as partial days, this ensures each calendar day is counted exactly
 // once in the customer's timezone, which is essential for accurate billing calculations.
 func daysInDurationWithDST(start, end time.Time, loc *time.Location) int {
+	// Normalize times to midnight in customer timezone
 	startDay := time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, loc)
 	endDay := time.Date(end.Year(), end.Month(), end.Day(), 0, 0, 0, 0, loc)
+
+	// If same day, return 0
+	if startDay.Equal(endDay) {
+		return 0
+	}
+
+	// Calculate days between (exclusive of end date)
 	days := 0
 	current := startDay
-	for !current.After(endDay) {
+	for current.Before(endDay) {
 		days++
 		current = current.AddDate(0, 0, 1)
 	}
+
 	return days
 }
 

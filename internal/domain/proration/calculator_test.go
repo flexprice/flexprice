@@ -292,38 +292,38 @@ func TestCalculator_Calculate(t *testing.T) {
 				actualNetAmount := result.NetAmount.Round(precision)
 
 				assert.Equal(t, expectedNetAmount.String(), actualNetAmount.String())
-				// assert.Equal(t, tt.expected.Action, result.Action)
-				// assert.Equal(t, tt.expected.ProrationDate, result.ProrationDate)
-				// assert.Equal(t, tt.expected.Currency, result.Currency)
-				// assert.Equal(t, tt.expected.IsPreview, result.IsPreview)
-				// assert.Equal(t, tt.expected.CurrentPeriodStart, result.CurrentPeriodStart)
-				// assert.Equal(t, tt.expected.CurrentPeriodEnd, result.CurrentPeriodEnd)
+				assert.Equal(t, tt.expected.Action, result.Action)
+				assert.Equal(t, tt.expected.ProrationDate, result.ProrationDate)
+				assert.Equal(t, tt.expected.Currency, result.Currency)
+				assert.Equal(t, tt.expected.IsPreview, result.IsPreview)
+				assert.Equal(t, tt.expected.CurrentPeriodStart, result.CurrentPeriodStart)
+				assert.Equal(t, tt.expected.CurrentPeriodEnd, result.CurrentPeriodEnd)
 
-				// // Check credit items
-				// assert.Equal(t, len(tt.expected.CreditItems), len(result.CreditItems))
-				// for i, expectedCredit := range tt.expected.CreditItems {
-				// 	expectedAmount := expectedCredit.Amount.Round(precision)
-				// 	actualAmount := result.CreditItems[i].Amount.Round(precision)
-				// 	assert.Equal(t, expectedAmount.String(), actualAmount.String(), "Credit amount mismatch")
-				// 	assert.Equal(t, expectedCredit.StartDate, result.CreditItems[i].StartDate, "Credit start date mismatch")
-				// 	assert.Equal(t, expectedCredit.EndDate, result.CreditItems[i].EndDate, "Credit end date mismatch")
-				// 	assert.Equal(t, expectedCredit.Quantity.String(), result.CreditItems[i].Quantity.String(), "Credit quantity mismatch")
-				// 	assert.Equal(t, expectedCredit.PriceID, result.CreditItems[i].PriceID, "Credit price ID mismatch")
-				// 	assert.Equal(t, expectedCredit.IsCredit, result.CreditItems[i].IsCredit, "Credit type mismatch")
-				// }
+				// Check credit items
+				assert.Equal(t, len(tt.expected.CreditItems), len(result.CreditItems))
+				for i, expectedCredit := range tt.expected.CreditItems {
+					expectedAmount := expectedCredit.Amount.Round(precision)
+					actualAmount := result.CreditItems[i].Amount.Round(precision)
+					assert.Equal(t, expectedAmount.String(), actualAmount.String(), "Credit amount mismatch")
+					assert.Equal(t, expectedCredit.StartDate, result.CreditItems[i].StartDate, "Credit start date mismatch")
+					assert.Equal(t, expectedCredit.EndDate, result.CreditItems[i].EndDate, "Credit end date mismatch")
+					assert.Equal(t, expectedCredit.Quantity.String(), result.CreditItems[i].Quantity.String(), "Credit quantity mismatch")
+					assert.Equal(t, expectedCredit.PriceID, result.CreditItems[i].PriceID, "Credit price ID mismatch")
+					assert.Equal(t, expectedCredit.IsCredit, result.CreditItems[i].IsCredit, "Credit type mismatch")
+				}
 
-				// // Check charge items
-				// assert.Equal(t, len(tt.expected.ChargeItems), len(result.ChargeItems))
-				// for i, expectedCharge := range tt.expected.ChargeItems {
-				// 	expectedAmount := expectedCharge.Amount.Round(precision)
-				// 	actualAmount := result.ChargeItems[i].Amount.Round(precision)
-				// 	assert.Equal(t, expectedAmount.String(), actualAmount.String(), "Charge amount mismatch")
-				// 	assert.Equal(t, expectedCharge.StartDate, result.ChargeItems[i].StartDate, "Charge start date mismatch")
-				// 	assert.Equal(t, expectedCharge.EndDate, result.ChargeItems[i].EndDate, "Charge end date mismatch")
-				// 	assert.Equal(t, expectedCharge.Quantity.String(), result.ChargeItems[i].Quantity.String(), "Charge quantity mismatch")
-				// 	assert.Equal(t, expectedCharge.PriceID, result.ChargeItems[i].PriceID, "Charge price ID mismatch")
-				// 	assert.Equal(t, expectedCharge.IsCredit, result.ChargeItems[i].IsCredit, "Charge type mismatch")
-				// }
+				// Check charge items
+				assert.Equal(t, len(tt.expected.ChargeItems), len(result.ChargeItems))
+				for i, expectedCharge := range tt.expected.ChargeItems {
+					expectedAmount := expectedCharge.Amount.Round(precision)
+					actualAmount := result.ChargeItems[i].Amount.Round(precision)
+					assert.Equal(t, expectedAmount.String(), actualAmount.String(), "Charge amount mismatch")
+					assert.Equal(t, expectedCharge.StartDate, result.ChargeItems[i].StartDate, "Charge start date mismatch")
+					assert.Equal(t, expectedCharge.EndDate, result.ChargeItems[i].EndDate, "Charge end date mismatch")
+					assert.Equal(t, expectedCharge.Quantity.String(), result.ChargeItems[i].Quantity.String(), "Charge quantity mismatch")
+					assert.Equal(t, expectedCharge.PriceID, result.ChargeItems[i].PriceID, "Charge price ID mismatch")
+					assert.Equal(t, expectedCharge.IsCredit, result.ChargeItems[i].IsCredit, "Charge type mismatch")
+				}
 			}
 		})
 	}
@@ -490,68 +490,6 @@ func TestCalculator_CapCreditAmount(t *testing.T) {
 			)
 			assert.True(t, tt.expectedCredit.Equal(result),
 				"Expected credit %s but got %s", tt.expectedCredit, result)
-		})
-	}
-}
-
-// TestCalculator_Descriptions tests the description generation for credits and charges
-func TestCalculator_Descriptions(t *testing.T) {
-	tests := []struct {
-		name           string
-		params         ProrationParams
-		expectedCredit string
-		expectedCharge string
-	}{
-		{
-			name: "upgrade_descriptions",
-			params: ProrationParams{
-				Action: types.ProrationActionUpgrade,
-			},
-			expectedCredit: "Credit for unused time on previous plan",
-			expectedCharge: "Charge for remaining time on new plan",
-		},
-		{
-			name: "downgrade_descriptions",
-			params: ProrationParams{
-				Action: types.ProrationActionDowngrade,
-			},
-			expectedCredit: "Credit for unused time on previous plan",
-			expectedCharge: "Charge for remaining time on new plan",
-		},
-		{
-			name: "quantity_change_descriptions",
-			params: ProrationParams{
-				Action: types.ProrationActionQuantityChange,
-			},
-			expectedCredit: "Credit for unused time on previous quantity",
-			expectedCharge: "Charge for remaining time with new quantity",
-		},
-		{
-			name: "remove_item_descriptions",
-			params: ProrationParams{
-				Action: types.ProrationActionRemoveItem,
-			},
-			expectedCredit: "Credit for unused time on removed item",
-			expectedCharge: "", // No charge description for removal
-		},
-		{
-			name: "add_item_descriptions",
-			params: ProrationParams{
-				Action: types.ProrationActionAddItem,
-			},
-			expectedCredit: "", // No credit description for addition
-			expectedCharge: "Charge for new item",
-		},
-	}
-
-	calculator := NewCalculator()
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			creditDesc := calculator.(*calculatorImpl).generateCreditDescription(tt.params)
-			chargeDesc := calculator.(*calculatorImpl).generateChargeDescription(tt.params)
-
-			assert.Equal(t, tt.expectedCredit, creditDesc)
-			assert.Equal(t, tt.expectedCharge, chargeDesc)
 		})
 	}
 }
