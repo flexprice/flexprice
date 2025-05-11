@@ -40,6 +40,7 @@ type ProrationParams struct {
 	OriginalAmountPaid    decimal.Decimal         // Amount originally paid for the item(s) being changed in this period
 	PreviousCreditsIssued decimal.Decimal         // Sum of credits already issued against OriginalAmountPaid in this period
 	ProrationStrategy     types.ProrationStrategy // Strategy to use for proration
+	Currency              string                  // Currency of the proration
 }
 
 // ProrationLineItem represents a single credit or charge line item.
@@ -78,4 +79,5 @@ type SubscriptionProrationResult struct {
 	TotalProrationAmount decimal.Decimal
 	LineItemResults      map[string]*ProrationResult // Map of lineItemID to its proration result
 	InvoiceID            string                      // ID of the invoice created/updated with proration items
+	Currency             string                      // Currency of the proration
 }

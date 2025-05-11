@@ -101,6 +101,7 @@ func (c *calculatorImpl) Calculate(ctx context.Context, params ProrationParams) 
 		IsPreview:     params.ProrationBehavior == types.ProrationBehaviorNone,
 		CreditItems:   []ProrationLineItem{},
 		ChargeItems:   []ProrationLineItem{},
+		Currency:      params.Currency,
 	}
 
 	billingMode := types.BillingModeInArrears
@@ -162,7 +163,10 @@ func (c *calculatorImpl) Calculate(ctx context.Context, params ProrationParams) 
 	return result, nil
 }
 
-// daysInDurationWithDST calculates the number of days between two dates, accounting for DST changes
+// daysInDurationWithDST counts calendar days between two dates while properly handling
+// DST transitions. Unlike using time.Duration, which would incorrectly count 23 or 25 hour
+// days during DST shifts as partial days, this ensures each calendar day is counted exactly
+// once in the customer's timezone, which is essential for accurate billing calculations.
 func daysInDurationWithDST(start, end time.Time, loc *time.Location) int {
 	startDay := time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, loc)
 	endDay := time.Date(end.Year(), end.Month(), end.Day(), 0, 0, 0, 0, loc)
@@ -170,8 +174,7 @@ func daysInDurationWithDST(start, end time.Time, loc *time.Location) int {
 	current := startDay
 	for current.Before(endDay) {
 		days++
-		next := current.Add(24 * time.Hour)
-		current = time.Date(next.Year(), next.Month(), next.Day(), 0, 0, 0, 0, loc)
+		current = current.AddDate(0, 0, 1)
 	}
 	return days
 }
@@ -278,9 +281,3 @@ func validateParams(params ProrationParams) error {
 	}
 	return nil
 }
-
-// Note: The following structs and their methods have been removed as they are now consolidated into calculatorImpl:
-// - CalculatorTypeDay, CalculatorTypeSecond (constants)
-// - CalculatorType (type definition)
-// - dayBasedCalculator (struct and its methods: Calculate, capCreditAmount, generateCreditDescription, generateChargeDescription)
-// - secondBasedCalculator (struct and its methods: Calculate, capCreditAmount, generateCreditDescription, generateChargeDescription)

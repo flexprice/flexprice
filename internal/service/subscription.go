@@ -214,7 +214,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	// Handle proration for calendar billing at the start of the subscription
 	if req.BillingCycle == types.BillingCycleCalendar &&
 		req.ProrationMode == types.ProrationModeActive {
-		prorationService := NewProrationService(s.ServiceParams.ProrationCalculator, s.ServiceParams.InvoiceRepo, s.Logger)
+		prorationService := NewProrationService(s.ServiceParams)
 
 		// Convert price map to domain type
 		domainPriceMap := make(map[string]*price.Price)
@@ -235,10 +235,10 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 
 		// Calculate and apply proration for the entire subscription at once
 		prorationParams := proration.SubscriptionProrationParams{
-			Subscription:     sub,
-			Prices:           domainPriceMap,
-			ProrationMode:    req.ProrationMode,
-			BillingCycle:     req.BillingCycle,
+			Subscription:  sub,
+			Prices:        domainPriceMap,
+			ProrationMode: req.ProrationMode,
+			BillingCycle:  req.BillingCycle,
 		}
 
 		prorationResult, err := prorationService.CalculateAndApplySubscriptionProration(ctx, prorationParams)
