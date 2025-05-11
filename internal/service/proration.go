@@ -111,6 +111,7 @@ func (s *prorationService) ApplyProration(ctx context.Context,
 			}
 
 			inv = &invoice.Invoice{
+				ID:              fmt.Sprintf("inv_%s_%d", subscriptionID, nextSeq),
 				SubscriptionID:  &subscriptionID,
 				InvoiceType:     types.InvoiceTypeSubscription,
 				InvoiceStatus:   types.InvoiceStatusDraft,
@@ -139,12 +140,16 @@ func (s *prorationService) ApplyProration(ctx context.Context,
 		} else {
 			// Find the existing invoice
 			filter := &types.InvoiceFilter{
-				QueryFilter:    types.NewDefaultQueryFilter(),
-				SubscriptionID: subscriptionID,
-				TimeRangeFilter: &types.TimeRangeFilter{
-					StartTime: &result.ProrationDate,
-					EndTime:   &result.ProrationDate,
-				},
+				QueryFilter:     types.NewNoLimitQueryFilter(),
+				TimeRangeFilter: &types.TimeRangeFilter{},
+				SubscriptionID:  subscriptionID,
+			}
+			if result.CurrentPeriodStart.IsZero() {
+				filter.TimeRangeFilter.StartTime = &result.ProrationDate
+				filter.TimeRangeFilter.EndTime = &result.ProrationDate
+			} else {
+				filter.TimeRangeFilter.StartTime = &result.CurrentPeriodStart
+				filter.TimeRangeFilter.EndTime = &result.CurrentPeriodEnd
 			}
 
 			invoices, err := invoiceRepo.List(ctx, filter)
@@ -411,13 +416,13 @@ func (s *prorationService) createProrationParamsForLineItem(
 		SubscriptionID:        subscription.ID,
 		LineItemID:            item.ID,
 		PlanPayInAdvance:      price.InvoiceCadence == types.InvoiceCadenceAdvance,
-		CurrentPeriodStart:    subscription.StartDate,
-		CurrentPeriodEnd:      subscription.BillingAnchor,
+		CurrentPeriodStart:    subscription.CurrentPeriodStart,
+		CurrentPeriodEnd:      subscription.CurrentPeriodEnd,
 		Action:                action,
 		NewPriceID:            item.PriceID,
 		NewQuantity:           item.Quantity,
 		NewPricePerUnit:       price.Amount,
-		ProrationDate:         subscription.StartDate,
+		ProrationDate:         subscription.CurrentPeriodStart,
 		ProrationBehavior:     behavior,
 		CustomerTimezone:      subscription.CustomerTimezone,
 		OriginalAmountPaid:    decimal.Zero,

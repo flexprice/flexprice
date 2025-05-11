@@ -94,14 +94,16 @@ func (c *calculatorImpl) Calculate(ctx context.Context, params ProrationParams) 
 	}
 
 	result := &ProrationResult{
-		NetAmount:     decimal.Zero,
-		Action:        params.Action,
-		ProrationDate: params.ProrationDate,
-		LineItemID:    params.LineItemID,
-		IsPreview:     params.ProrationBehavior == types.ProrationBehaviorNone,
-		CreditItems:   []ProrationLineItem{},
-		ChargeItems:   []ProrationLineItem{},
-		Currency:      params.Currency,
+		NetAmount:          decimal.Zero,
+		Action:             params.Action,
+		ProrationDate:      params.ProrationDate,
+		LineItemID:         params.LineItemID,
+		IsPreview:          params.ProrationBehavior == types.ProrationBehaviorNone,
+		CreditItems:        []ProrationLineItem{},
+		ChargeItems:        []ProrationLineItem{},
+		Currency:           params.Currency,
+		CurrentPeriodStart: params.CurrentPeriodStart,
+		CurrentPeriodEnd:   params.CurrentPeriodEnd,
 	}
 
 	billingMode := types.BillingModeInArrears

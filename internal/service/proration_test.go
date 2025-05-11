@@ -1,10 +1,10 @@
 package service
 
 import (
-	"context"
 	"testing"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -119,6 +119,7 @@ func (s *ProrationServiceSuite) setupTestData() {
 		SubscriptionStatus: types.SubscriptionStatusActive,
 		CustomerTimezone:   "UTC",
 		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
+		BillingAnchor:      types.CalculateCalendarBillingAnchor(s.testData.now.Add(-30*24*time.Hour), types.BILLING_PERIOD_MONTHLY),
 	}
 
 	// Create line items
@@ -147,6 +148,34 @@ func (s *ProrationServiceSuite) setupTestData() {
 	}
 
 	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(s.GetContext(), s.testData.subscription, s.testData.subscription.LineItems))
+
+	// Create an invoice for the current period
+	nextNumber, err := s.GetStores().InvoiceRepo.GetNextInvoiceNumber(s.GetContext())
+	s.NoError(err)
+
+	nextSeq, err := s.GetStores().InvoiceRepo.GetNextBillingSequence(s.GetContext(), s.testData.subscription.ID)
+	s.NoError(err)
+
+	inv := &invoice.Invoice{
+		SubscriptionID:  &s.testData.subscription.ID,
+		InvoiceType:     types.InvoiceTypeSubscription,
+		InvoiceStatus:   types.InvoiceStatusDraft,
+		PaymentStatus:   types.PaymentStatusPending,
+		Currency:        s.testData.subscription.Currency,
+		InvoiceNumber:   &nextNumber,
+		BillingSequence: &nextSeq,
+		Description:     "Test Invoice",
+		BillingReason:   string(types.InvoiceBillingReasonSubscriptionCreate),
+		PeriodStart:     &s.testData.subscription.CurrentPeriodStart,
+		PeriodEnd:       &s.testData.subscription.CurrentPeriodEnd,
+		EnvironmentID:   s.testData.subscription.EnvironmentID,
+		BaseModel: types.BaseModel{
+			TenantID: s.testData.subscription.TenantID,
+			Status:   types.StatusPublished,
+		},
+	}
+
+	s.NoError(s.GetStores().InvoiceRepo.Create(s.GetContext(), inv))
 }
 
 func (s *ProrationServiceSuite) TestCalculateProration() {
@@ -324,10 +353,12 @@ func (s *ProrationServiceSuite) TestApplyProration() {
 			name: "create_new_invoice",
 			setup: func() *proration.ProrationResult {
 				return &proration.ProrationResult{
-					NetAmount:     decimal.NewFromInt(10),
-					Currency:      "usd",
-					Action:        types.ProrationActionUpgrade,
-					ProrationDate: s.testData.now,
+					NetAmount:          decimal.NewFromInt(10),
+					Currency:           "usd",
+					Action:             types.ProrationActionUpgrade,
+					ProrationDate:      s.testData.now,
+					CurrentPeriodStart: s.testData.subscription.CurrentPeriodStart,
+					CurrentPeriodEnd:   s.testData.subscription.CurrentPeriodEnd,
 					CreditItems: []proration.ProrationLineItem{
 						{
 							Description: "Credit for unused time",
@@ -394,101 +425,72 @@ func (s *ProrationServiceSuite) TestCalculateAndApplySubscriptionProration() {
 		params  proration.SubscriptionProrationParams
 		want    *proration.SubscriptionProrationResult
 		wantErr bool
-		setup   func()
 	}{
 		{
 			name: "calendar_billing_active_proration_multiple_items",
 			params: proration.SubscriptionProrationParams{
 				Subscription: &subscription.Subscription{
-					ID:                 "sub_test_1",
-					StartDate:          time.Date(2024, 3, 15, 0, 0, 0, 0, time.UTC),
-					BillingAnchor:      time.Date(2024, 3, 31, 0, 0, 0, 0, time.UTC),
-					CustomerTimezone:   "UTC",
-					SubscriptionStatus: types.SubscriptionStatusActive,
+					ID:                 s.testData.subscription.ID,
+					StartDate:          s.testData.subscription.StartDate,
+					CurrentPeriodStart: s.testData.subscription.CurrentPeriodStart,
+					CurrentPeriodEnd:   s.testData.subscription.CurrentPeriodEnd,
+					Currency:           s.testData.subscription.Currency,
+					BillingPeriod:      s.testData.subscription.BillingPeriod,
+					BillingPeriodCount: s.testData.subscription.BillingPeriodCount,
+					SubscriptionStatus: s.testData.subscription.SubscriptionStatus,
+					CustomerTimezone:   s.testData.subscription.CustomerTimezone,
+					BaseModel:          s.testData.subscription.BaseModel,
+					BillingAnchor:      s.testData.subscription.BillingAnchor,
 					LineItems: []*subscription.SubscriptionLineItem{
-						{
-							ID:       "li_1",
-							PriceID:  "price_base",
-							Quantity: decimal.NewFromInt(1),
-							Currency: "USD",
-						},
-						{
-							ID:       "li_2",
-							PriceID:  "price_addon",
-							Quantity: decimal.NewFromInt(2),
-							Currency: "USD",
-						},
+						s.testData.lineItems.standard,
 					},
-					BaseModel: types.GetDefaultBaseModel(context.Background()),
 				},
 				Prices: map[string]*price.Price{
-					"price_base": {
-						ID:             "price_base",
-						Amount:         decimal.NewFromInt(100),
-						Currency:       "USD",
-						InvoiceCadence: types.InvoiceCadenceAdvance,
-						BaseModel:      types.GetDefaultBaseModel(context.Background()),
-					},
-					"price_addon": {
-						ID:             "price_addon",
-						Amount:         decimal.NewFromInt(50),
-						Currency:       "USD",
-						InvoiceCadence: types.InvoiceCadenceAdvance,
-						BaseModel:      types.GetDefaultBaseModel(context.Background()),
-					},
+					s.testData.prices.standard.ID: s.testData.prices.standard,
+					s.testData.prices.premium.ID:  s.testData.prices.premium,
 				},
 				ProrationMode: types.ProrationModeActive,
 				BillingCycle:  types.BillingCycleCalendar,
 			},
 			want: &proration.SubscriptionProrationResult{
 				Currency:             "USD",
-				TotalProrationAmount: decimal.NewFromFloat(200), // Base: 100 + Addon: 2 * 50
+				TotalProrationAmount: decimal.NewFromInt(10), // Standard price amount
 				LineItemResults: map[string]*proration.ProrationResult{
-					"li_1": {
-						NetAmount:     decimal.NewFromFloat(100),
-						Currency:      "USD",
-						Action:        types.ProrationActionAddItem,
-						ProrationDate: time.Date(2024, 3, 15, 0, 0, 0, 0, time.UTC),
-					},
-					"li_2": {
-						NetAmount:     decimal.NewFromFloat(100), // 2 * 50
-						Currency:      "USD",
-						Action:        types.ProrationActionAddItem,
-						ProrationDate: time.Date(2024, 3, 15, 0, 0, 0, 0, time.UTC),
+					s.testData.lineItems.standard.ID: {
+						NetAmount:          decimal.NewFromInt(10),
+						Currency:           "USD",
+						Action:             types.ProrationActionAddItem,
+						ProrationDate:      s.testData.subscription.CurrentPeriodStart,
+						CurrentPeriodStart: s.testData.subscription.CurrentPeriodStart,
+						CurrentPeriodEnd:   s.testData.subscription.CurrentPeriodEnd,
 					},
 				},
 			},
 			wantErr: false,
 		},
 		{
-			name: "skip_proration_for_arrears_billing",
+			name: "calendar_billing_no_proration",
 			params: proration.SubscriptionProrationParams{
 				Subscription: &subscription.Subscription{
-					ID:                 "sub_test_2",
-					StartDate:          time.Date(2024, 3, 15, 0, 0, 0, 0, time.UTC),
-					BillingAnchor:      time.Date(2024, 3, 31, 0, 0, 0, 0, time.UTC),
-					CustomerTimezone:   "UTC",
-					SubscriptionStatus: types.SubscriptionStatusActive,
+					ID:                 s.testData.subscription.ID,
+					StartDate:          s.testData.subscription.StartDate,
+					CurrentPeriodStart: s.testData.subscription.CurrentPeriodStart,
+					CurrentPeriodEnd:   s.testData.subscription.CurrentPeriodEnd,
+					Currency:           s.testData.subscription.Currency,
+					BillingPeriod:      s.testData.subscription.BillingPeriod,
+					BillingPeriodCount: s.testData.subscription.BillingPeriodCount,
+					SubscriptionStatus: s.testData.subscription.SubscriptionStatus,
+					CustomerTimezone:   s.testData.subscription.CustomerTimezone,
+					BaseModel:          s.testData.subscription.BaseModel,
+					BillingAnchor:      s.testData.subscription.BillingAnchor,
 					LineItems: []*subscription.SubscriptionLineItem{
-						{
-							ID:       "li_3",
-							PriceID:  "price_usage",
-							Quantity: decimal.NewFromInt(1),
-							Currency: "USD",
-						},
+						s.testData.lineItems.standard,
 					},
-					BaseModel: types.GetDefaultBaseModel(context.Background()),
 				},
 				Prices: map[string]*price.Price{
-					"price_usage": {
-						ID:             "price_usage",
-						Amount:         decimal.NewFromInt(0),
-						Currency:       "USD",
-						InvoiceCadence: types.InvoiceCadenceArrear,
-						BaseModel:      types.GetDefaultBaseModel(context.Background()),
-					},
+					s.testData.prices.standard.ID: s.testData.prices.standard,
 				},
-				ProrationMode: types.ProrationModeActive,
+				ProrationMode: types.ProrationModeNone,
 				BillingCycle:  types.BillingCycleCalendar,
 			},
 			want: &proration.SubscriptionProrationResult{
@@ -499,18 +501,59 @@ func (s *ProrationServiceSuite) TestCalculateAndApplySubscriptionProration() {
 			wantErr: false,
 		},
 		{
-			name: "invalid_subscription_missing_line_items",
+			name: "anniversary_billing_no_proration",
 			params: proration.SubscriptionProrationParams{
 				Subscription: &subscription.Subscription{
-					ID:                 "sub_test_3",
-					StartDate:          time.Date(2024, 3, 15, 0, 0, 0, 0, time.UTC),
-					BillingAnchor:      time.Date(2024, 3, 31, 0, 0, 0, 0, time.UTC),
-					CustomerTimezone:   "UTC",
-					SubscriptionStatus: types.SubscriptionStatusActive,
-					LineItems:          []*subscription.SubscriptionLineItem{},
-					BaseModel:          types.GetDefaultBaseModel(context.Background()),
+					ID:                 s.testData.subscription.ID,
+					StartDate:          s.testData.subscription.StartDate,
+					CurrentPeriodStart: s.testData.subscription.CurrentPeriodStart,
+					CurrentPeriodEnd:   s.testData.subscription.CurrentPeriodEnd,
+					Currency:           s.testData.subscription.Currency,
+					BillingPeriod:      s.testData.subscription.BillingPeriod,
+					BillingPeriodCount: s.testData.subscription.BillingPeriodCount,
+					SubscriptionStatus: s.testData.subscription.SubscriptionStatus,
+					CustomerTimezone:   s.testData.subscription.CustomerTimezone,
+					BaseModel:          s.testData.subscription.BaseModel,
+					BillingAnchor:      s.testData.subscription.BillingAnchor,
+					LineItems: []*subscription.SubscriptionLineItem{
+						s.testData.lineItems.standard,
+					},
 				},
-				Prices:        map[string]*price.Price{},
+				Prices: map[string]*price.Price{
+					s.testData.prices.standard.ID: s.testData.prices.standard,
+				},
+				ProrationMode: types.ProrationModeActive,
+				BillingCycle:  types.BillingCycleAnniversary,
+			},
+			want: &proration.SubscriptionProrationResult{
+				Currency:             "USD",
+				TotalProrationAmount: decimal.Zero,
+				LineItemResults:      make(map[string]*proration.ProrationResult),
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid_subscription",
+			params: proration.SubscriptionProrationParams{
+				Subscription: nil,
+				Prices:       map[string]*price.Price{},
+			},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name: "missing_prices",
+			params: proration.SubscriptionProrationParams{
+				Subscription: &subscription.Subscription{
+					ID:                 s.testData.subscription.ID,
+					StartDate:          s.testData.subscription.StartDate,
+					CurrentPeriodStart: s.testData.subscription.CurrentPeriodStart,
+					CurrentPeriodEnd:   s.testData.subscription.CurrentPeriodEnd,
+					LineItems: []*subscription.SubscriptionLineItem{
+						s.testData.lineItems.standard,
+					},
+				},
+				Prices:        nil,
 				ProrationMode: types.ProrationModeActive,
 				BillingCycle:  types.BillingCycleCalendar,
 			},
@@ -518,58 +561,42 @@ func (s *ProrationServiceSuite) TestCalculateAndApplySubscriptionProration() {
 			wantErr: true,
 		},
 		{
-			name: "mixed_billing_items",
+			name: "upgrade_standard_to_premium",
 			params: proration.SubscriptionProrationParams{
 				Subscription: &subscription.Subscription{
-					ID:                 "sub_test_4",
-					StartDate:          time.Date(2024, 3, 15, 0, 0, 0, 0, time.UTC),
-					BillingAnchor:      time.Date(2024, 3, 31, 0, 0, 0, 0, time.UTC),
-					CustomerTimezone:   "UTC",
-					SubscriptionStatus: types.SubscriptionStatusActive,
+					ID:                 s.testData.subscription.ID,
+					StartDate:          s.testData.subscription.StartDate,
+					CurrentPeriodStart: s.testData.subscription.CurrentPeriodStart,
+					CurrentPeriodEnd:   s.testData.subscription.CurrentPeriodEnd,
+					Currency:           s.testData.subscription.Currency,
+					BillingPeriod:      s.testData.subscription.BillingPeriod,
+					BillingPeriodCount: s.testData.subscription.BillingPeriodCount,
+					SubscriptionStatus: s.testData.subscription.SubscriptionStatus,
+					CustomerTimezone:   s.testData.subscription.CustomerTimezone,
+					BaseModel:          s.testData.subscription.BaseModel,
+					BillingAnchor:      s.testData.subscription.BillingAnchor,
 					LineItems: []*subscription.SubscriptionLineItem{
-						{
-							ID:       "li_4",
-							PriceID:  "price_base_advance",
-							Quantity: decimal.NewFromInt(1),
-							Currency: "USD",
-						},
-						{
-							ID:       "li_5",
-							PriceID:  "price_usage_arrears",
-							Quantity: decimal.NewFromInt(1),
-							Currency: "USD",
-						},
+						s.testData.lineItems.premium,
 					},
-					BaseModel: types.GetDefaultBaseModel(context.Background()),
 				},
 				Prices: map[string]*price.Price{
-					"price_base_advance": {
-						ID:             "price_base_advance",
-						Amount:         decimal.NewFromInt(100),
-						Currency:       "USD",
-						InvoiceCadence: types.InvoiceCadenceAdvance,
-						BaseModel:      types.GetDefaultBaseModel(context.Background()),
-					},
-					"price_usage_arrears": {
-						ID:             "price_usage_arrears",
-						Amount:         decimal.NewFromInt(50),
-						Currency:       "USD",
-						InvoiceCadence: types.InvoiceCadenceArrear,
-						BaseModel:      types.GetDefaultBaseModel(context.Background()),
-					},
+					s.testData.prices.standard.ID: s.testData.prices.standard,
+					s.testData.prices.premium.ID:  s.testData.prices.premium,
 				},
 				ProrationMode: types.ProrationModeActive,
 				BillingCycle:  types.BillingCycleCalendar,
 			},
 			want: &proration.SubscriptionProrationResult{
 				Currency:             "USD",
-				TotalProrationAmount: decimal.NewFromFloat(100), // Only advance item is prorated
+				TotalProrationAmount: decimal.NewFromInt(20), // Premium price amount
 				LineItemResults: map[string]*proration.ProrationResult{
-					"li_4": {
-						NetAmount:     decimal.NewFromFloat(100),
-						Currency:      "USD",
-						Action:        types.ProrationActionAddItem,
-						ProrationDate: time.Date(2024, 3, 15, 0, 0, 0, 0, time.UTC),
+					s.testData.lineItems.premium.ID: {
+						NetAmount:          decimal.NewFromInt(20),
+						Currency:           "USD",
+						Action:             types.ProrationActionAddItem,
+						ProrationDate:      s.testData.subscription.CurrentPeriodStart,
+						CurrentPeriodStart: s.testData.subscription.CurrentPeriodStart,
+						CurrentPeriodEnd:   s.testData.subscription.CurrentPeriodEnd,
 					},
 				},
 			},
@@ -579,8 +606,38 @@ func (s *ProrationServiceSuite) TestCalculateAndApplySubscriptionProration() {
 
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
-			if tt.setup != nil {
-				tt.setup()
+			// Clear any existing invoices before each test
+			invoiceRepo := s.GetStores().InvoiceRepo.(*testutil.InMemoryInvoiceStore)
+			invoiceRepo.Clear()
+
+			// Create a new invoice for the test
+			nextNumber, err := s.GetStores().InvoiceRepo.GetNextInvoiceNumber(s.GetContext())
+			s.NoError(err)
+
+			nextSeq, err := s.GetStores().InvoiceRepo.GetNextBillingSequence(s.GetContext(), tt.params.Subscription.ID)
+			s.NoError(err)
+
+			if !tt.wantErr {
+				inv := &invoice.Invoice{
+					SubscriptionID:  &tt.params.Subscription.ID,
+					InvoiceType:     types.InvoiceTypeSubscription,
+					InvoiceStatus:   types.InvoiceStatusDraft,
+					PaymentStatus:   types.PaymentStatusPending,
+					Currency:        tt.params.Subscription.Currency,
+					InvoiceNumber:   &nextNumber,
+					BillingSequence: &nextSeq,
+					Description:     "Test Invoice",
+					BillingReason:   string(types.InvoiceBillingReasonSubscriptionCreate),
+					PeriodStart:     &tt.params.Subscription.CurrentPeriodStart,
+					PeriodEnd:       &tt.params.Subscription.CurrentPeriodEnd,
+					EnvironmentID:   tt.params.Subscription.EnvironmentID,
+					BaseModel: types.BaseModel{
+						TenantID: tt.params.Subscription.TenantID,
+						Status:   types.StatusPublished,
+					},
+				}
+
+				s.NoError(s.GetStores().InvoiceRepo.Create(s.GetContext(), inv))
 			}
 
 			got, err := s.service.CalculateAndApplySubscriptionProration(s.GetContext(), tt.params)
@@ -603,6 +660,8 @@ func (s *ProrationServiceSuite) TestCalculateAndApplySubscriptionProration() {
 				s.Equal(wantResult.Currency, gotResult.Currency)
 				s.Equal(wantResult.Action, gotResult.Action)
 				s.Equal(wantResult.ProrationDate.Unix(), gotResult.ProrationDate.Unix())
+				s.Equal(wantResult.CurrentPeriodStart.Unix(), gotResult.CurrentPeriodStart.Unix())
+				s.Equal(wantResult.CurrentPeriodEnd.Unix(), gotResult.CurrentPeriodEnd.Unix())
 			}
 		})
 	}

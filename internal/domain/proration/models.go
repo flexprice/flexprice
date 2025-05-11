@@ -56,14 +56,16 @@ type ProrationLineItem struct {
 
 // ProrationResult holds the output of a proration calculation.
 type ProrationResult struct {
-	CreditItems   []ProrationLineItem   // Items representing credits back to the customer
-	ChargeItems   []ProrationLineItem   // Items representing new charges to the customer
-	NetAmount     decimal.Decimal       // Net amount (Sum of charges - sum of credits)
-	Currency      string                // Currency code
-	Action        types.ProrationAction // The action that generated this result
-	ProrationDate time.Time             // Effective date used for calculation
-	LineItemID    string                // ID of the affected line item (empty for new items)
-	IsPreview     bool                  // Indicates if this was calculated for a preview
+	CreditItems        []ProrationLineItem   // Items representing credits back to the customer
+	ChargeItems        []ProrationLineItem   // Items representing new charges to the customer
+	NetAmount          decimal.Decimal       // Net amount (Sum of charges - sum of credits)
+	Currency           string                // Currency code
+	Action             types.ProrationAction // The action that generated this result
+	ProrationDate      time.Time             // Effective date used for calculation
+	LineItemID         string                // ID of the affected line item (empty for new items)
+	IsPreview          bool                  // Indicates if this was calculated for a preview
+	CurrentPeriodStart time.Time             // Start of the current billing period
+	CurrentPeriodEnd   time.Time             // End of the current billing period
 }
 
 // SubscriptionProrationParams contains all necessary information for subscription-level proration
