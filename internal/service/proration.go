@@ -291,6 +291,7 @@ func (s *prorationService) CalculateAndApplySubscriptionProration(
 
 	result := &proration.SubscriptionProrationResult{
 		LineItemResults: make(map[string]*proration.ProrationResult),
+		Currency:        params.Subscription.Currency,
 	}
 
 	// Only proceed if proration is needed

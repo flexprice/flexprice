@@ -606,18 +606,18 @@ func (s *ProrationServiceSuite) TestCalculateAndApplySubscriptionProration() {
 
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
-			// Clear any existing invoices before each test
-			invoiceRepo := s.GetStores().InvoiceRepo.(*testutil.InMemoryInvoiceStore)
-			invoiceRepo.Clear()
-
-			// Create a new invoice for the test
-			nextNumber, err := s.GetStores().InvoiceRepo.GetNextInvoiceNumber(s.GetContext())
-			s.NoError(err)
-
-			nextSeq, err := s.GetStores().InvoiceRepo.GetNextBillingSequence(s.GetContext(), tt.params.Subscription.ID)
-			s.NoError(err)
-
 			if !tt.wantErr {
+				// Clear any existing invoices before each test
+				invoiceRepo := s.GetStores().InvoiceRepo.(*testutil.InMemoryInvoiceStore)
+				invoiceRepo.Clear()
+
+				// Create a new invoice for the test
+				nextNumber, err := s.GetStores().InvoiceRepo.GetNextInvoiceNumber(s.GetContext())
+				s.NoError(err)
+
+				nextSeq, err := s.GetStores().InvoiceRepo.GetNextBillingSequence(s.GetContext(), tt.params.Subscription.ID)
+				s.NoError(err)
+
 				inv := &invoice.Invoice{
 					SubscriptionID:  &tt.params.Subscription.ID,
 					InvoiceType:     types.InvoiceTypeSubscription,
