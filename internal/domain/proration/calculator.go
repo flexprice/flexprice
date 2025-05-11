@@ -73,14 +73,14 @@ func (c *calculatorImpl) Calculate(ctx context.Context, params ProrationParams) 
 	case types.StrategyDayBased, "": // Default to day-based if strategy is empty
 		fallthrough
 	default:
-		totalDays := daysInDurationWithDST(periodStartInTZ, periodEndInTZ, loc)
+		totalDays := daysInDurationWithDST(periodStartInTZ, periodEndInTZ, loc) + 1
 		if totalDays <= 0 {
 			return nil, ierr.NewError("invalid billing period").
 				WithHintf("total days is zero or negative (%v to %v)", params.CurrentPeriodStart, params.CurrentPeriodEnd).
 				Mark(ierr.ErrValidation)
 		}
 
-		remainingDays := daysInDurationWithDST(prorationDateInTZ, periodEndInTZ, loc)
+		remainingDays := daysInDurationWithDST(prorationDateInTZ, periodEndInTZ, loc) + 1
 		if remainingDays < 0 {
 			remainingDays = 0
 		}
