@@ -143,6 +143,16 @@ func (c *calculatorImpl) Calculate(ctx context.Context, params ProrationParams) 
 
 	if shouldIssueCharge {
 		newItemTotal := params.NewPricePerUnit.Mul(params.NewQuantity)
+		// For upgrades/quantity changes, we should only charge for the difference
+		if params.Action == types.ProrationActionUpgrade ||
+			params.Action == types.ProrationActionQuantityChange {
+			oldItemTotal := params.OldPricePerUnit.Mul(params.OldQuantity)
+			newItemTotal = newItemTotal.Sub(oldItemTotal)
+		} else if params.Action == types.ProrationActionDowngrade {
+			// For downgrades, we only want to charge for the new price
+			// The old price is already handled by the credit
+			newItemTotal = params.NewPricePerUnit.Mul(params.NewQuantity)
+		}
 		proratedCharge := newItemTotal.Mul(prorationCoefficient)
 
 		if proratedCharge.GreaterThan(decimal.Zero) {
@@ -172,7 +182,7 @@ func daysInDurationWithDST(start, end time.Time, loc *time.Location) int {
 	endDay := time.Date(end.Year(), end.Month(), end.Day(), 0, 0, 0, 0, loc)
 	days := 0
 	current := startDay
-	for current.Before(endDay) {
+	for !current.After(endDay) {
 		days++
 		current = current.AddDate(0, 0, 1)
 	}
