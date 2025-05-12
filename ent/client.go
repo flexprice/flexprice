@@ -41,6 +41,7 @@ import (
 	"github.com/flexprice/flexprice/ent/subscriptionschedule"
 	"github.com/flexprice/flexprice/ent/subscriptionschedulephase"
 	"github.com/flexprice/flexprice/ent/task"
+	"github.com/flexprice/flexprice/ent/taxrate"
 	"github.com/flexprice/flexprice/ent/tenant"
 	"github.com/flexprice/flexprice/ent/user"
 	"github.com/flexprice/flexprice/ent/wallet"
@@ -106,6 +107,8 @@ type Client struct {
 	SubscriptionSchedulePhase *SubscriptionSchedulePhaseClient
 	// Task is the client for interacting with the Task builders.
 	Task *TaskClient
+	// TaxRate is the client for interacting with the TaxRate builders.
+	TaxRate *TaxRateClient
 	// Tenant is the client for interacting with the Tenant builders.
 	Tenant *TenantClient
 	// User is the client for interacting with the User builders.
@@ -151,6 +154,7 @@ func (c *Client) init() {
 	c.SubscriptionSchedule = NewSubscriptionScheduleClient(c.config)
 	c.SubscriptionSchedulePhase = NewSubscriptionSchedulePhaseClient(c.config)
 	c.Task = NewTaskClient(c.config)
+	c.TaxRate = NewTaxRateClient(c.config)
 	c.Tenant = NewTenantClient(c.config)
 	c.User = NewUserClient(c.config)
 	c.Wallet = NewWalletClient(c.config)
@@ -273,6 +277,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		SubscriptionSchedule:      NewSubscriptionScheduleClient(cfg),
 		SubscriptionSchedulePhase: NewSubscriptionSchedulePhaseClient(cfg),
 		Task:                      NewTaskClient(cfg),
+		TaxRate:                   NewTaxRateClient(cfg),
 		Tenant:                    NewTenantClient(cfg),
 		User:                      NewUserClient(cfg),
 		Wallet:                    NewWalletClient(cfg),
@@ -322,6 +327,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		SubscriptionSchedule:      NewSubscriptionScheduleClient(cfg),
 		SubscriptionSchedulePhase: NewSubscriptionSchedulePhaseClient(cfg),
 		Task:                      NewTaskClient(cfg),
+		TaxRate:                   NewTaxRateClient(cfg),
 		Tenant:                    NewTenantClient(cfg),
 		User:                      NewUserClient(cfg),
 		Wallet:                    NewWalletClient(cfg),
@@ -360,7 +366,7 @@ func (c *Client) Use(hooks ...Hook) {
 		c.Feature, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Payment,
 		c.PaymentAttempt, c.Plan, c.Price, c.Secret, c.Subscription,
 		c.SubscriptionLineItem, c.SubscriptionPause, c.SubscriptionSchedule,
-		c.SubscriptionSchedulePhase, c.Task, c.Tenant, c.User, c.Wallet,
+		c.SubscriptionSchedulePhase, c.Task, c.TaxRate, c.Tenant, c.User, c.Wallet,
 		c.WalletTransaction,
 	} {
 		n.Use(hooks...)
@@ -376,7 +382,7 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.Feature, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Payment,
 		c.PaymentAttempt, c.Plan, c.Price, c.Secret, c.Subscription,
 		c.SubscriptionLineItem, c.SubscriptionPause, c.SubscriptionSchedule,
-		c.SubscriptionSchedulePhase, c.Task, c.Tenant, c.User, c.Wallet,
+		c.SubscriptionSchedulePhase, c.Task, c.TaxRate, c.Tenant, c.User, c.Wallet,
 		c.WalletTransaction,
 	} {
 		n.Intercept(interceptors...)
@@ -438,6 +444,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.SubscriptionSchedulePhase.mutate(ctx, m)
 	case *TaskMutation:
 		return c.Task.mutate(ctx, m)
+	case *TaxRateMutation:
+		return c.TaxRate.mutate(ctx, m)
 	case *TenantMutation:
 		return c.Tenant.mutate(ctx, m)
 	case *UserMutation:
@@ -4293,6 +4301,139 @@ func (c *TaskClient) mutate(ctx context.Context, m *TaskMutation) (Value, error)
 	}
 }
 
+// TaxRateClient is a client for the TaxRate schema.
+type TaxRateClient struct {
+	config
+}
+
+// NewTaxRateClient returns a client for the TaxRate from the given config.
+func NewTaxRateClient(c config) *TaxRateClient {
+	return &TaxRateClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `taxrate.Hooks(f(g(h())))`.
+func (c *TaxRateClient) Use(hooks ...Hook) {
+	c.hooks.TaxRate = append(c.hooks.TaxRate, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `taxrate.Intercept(f(g(h())))`.
+func (c *TaxRateClient) Intercept(interceptors ...Interceptor) {
+	c.inters.TaxRate = append(c.inters.TaxRate, interceptors...)
+}
+
+// Create returns a builder for creating a TaxRate entity.
+func (c *TaxRateClient) Create() *TaxRateCreate {
+	mutation := newTaxRateMutation(c.config, OpCreate)
+	return &TaxRateCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of TaxRate entities.
+func (c *TaxRateClient) CreateBulk(builders ...*TaxRateCreate) *TaxRateCreateBulk {
+	return &TaxRateCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *TaxRateClient) MapCreateBulk(slice any, setFunc func(*TaxRateCreate, int)) *TaxRateCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &TaxRateCreateBulk{err: fmt.Errorf("calling to TaxRateClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*TaxRateCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &TaxRateCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for TaxRate.
+func (c *TaxRateClient) Update() *TaxRateUpdate {
+	mutation := newTaxRateMutation(c.config, OpUpdate)
+	return &TaxRateUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *TaxRateClient) UpdateOne(tr *TaxRate) *TaxRateUpdateOne {
+	mutation := newTaxRateMutation(c.config, OpUpdateOne, withTaxRate(tr))
+	return &TaxRateUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *TaxRateClient) UpdateOneID(id string) *TaxRateUpdateOne {
+	mutation := newTaxRateMutation(c.config, OpUpdateOne, withTaxRateID(id))
+	return &TaxRateUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for TaxRate.
+func (c *TaxRateClient) Delete() *TaxRateDelete {
+	mutation := newTaxRateMutation(c.config, OpDelete)
+	return &TaxRateDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *TaxRateClient) DeleteOne(tr *TaxRate) *TaxRateDeleteOne {
+	return c.DeleteOneID(tr.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *TaxRateClient) DeleteOneID(id string) *TaxRateDeleteOne {
+	builder := c.Delete().Where(taxrate.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &TaxRateDeleteOne{builder}
+}
+
+// Query returns a query builder for TaxRate.
+func (c *TaxRateClient) Query() *TaxRateQuery {
+	return &TaxRateQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeTaxRate},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a TaxRate entity by its id.
+func (c *TaxRateClient) Get(ctx context.Context, id string) (*TaxRate, error) {
+	return c.Query().Where(taxrate.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *TaxRateClient) GetX(ctx context.Context, id string) *TaxRate {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *TaxRateClient) Hooks() []Hook {
+	return c.hooks.TaxRate
+}
+
+// Interceptors returns the client interceptors.
+func (c *TaxRateClient) Interceptors() []Interceptor {
+	return c.inters.TaxRate
+}
+
+func (c *TaxRateClient) mutate(ctx context.Context, m *TaxRateMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&TaxRateCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&TaxRateUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&TaxRateUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&TaxRateDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown TaxRate mutation op: %q", m.Op())
+	}
+}
+
 // TenantClient is a client for the Tenant schema.
 type TenantClient struct {
 	config
@@ -4832,16 +4973,16 @@ type (
 		CreditNote, CreditNoteLineItem, Customer, Entitlement, Environment, Feature,
 		Invoice, InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt,
 		Plan, Price, Secret, Subscription, SubscriptionLineItem, SubscriptionPause,
-		SubscriptionSchedule, SubscriptionSchedulePhase, Task, Tenant, User, Wallet,
-		WalletTransaction []ent.Hook
+		SubscriptionSchedule, SubscriptionSchedulePhase, Task, TaxRate, Tenant, User,
+		Wallet, WalletTransaction []ent.Hook
 	}
 	inters struct {
 		Auth, BillingSequence, Costsheet, CreditGrant, CreditGrantApplication,
 		CreditNote, CreditNoteLineItem, Customer, Entitlement, Environment, Feature,
 		Invoice, InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt,
 		Plan, Price, Secret, Subscription, SubscriptionLineItem, SubscriptionPause,
-		SubscriptionSchedule, SubscriptionSchedulePhase, Task, Tenant, User, Wallet,
-		WalletTransaction []ent.Interceptor
+		SubscriptionSchedule, SubscriptionSchedulePhase, Task, TaxRate, Tenant, User,
+		Wallet, WalletTransaction []ent.Interceptor
 	}
 )
 
