@@ -38,6 +38,7 @@ import (
 	"github.com/flexprice/flexprice/ent/subscriptionschedule"
 	"github.com/flexprice/flexprice/ent/subscriptionschedulephase"
 	"github.com/flexprice/flexprice/ent/task"
+	"github.com/flexprice/flexprice/ent/taxrate"
 	"github.com/flexprice/flexprice/ent/tenant"
 	"github.com/flexprice/flexprice/ent/user"
 	"github.com/flexprice/flexprice/ent/wallet"
@@ -128,6 +129,7 @@ func checkColumn(table, column string) error {
 			subscriptionschedule.Table:      subscriptionschedule.ValidColumn,
 			subscriptionschedulephase.Table: subscriptionschedulephase.ValidColumn,
 			task.Table:                      task.ValidColumn,
+			taxrate.Table:                   taxrate.ValidColumn,
 			tenant.Table:                    tenant.ValidColumn,
 			user.Table:                      user.ValidColumn,
 			wallet.Table:                    wallet.ValidColumn,
