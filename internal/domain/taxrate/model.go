@@ -14,8 +14,8 @@ type TaxRate struct {
 	Code          string     `db:"code" json:"code"`
 	Description   string     `db:"description" json:"description"`
 	EnvironmentID string     `db:"environment_id" json:"environment_id"`
-	Percentage    *float64   `db:"percentage" json:"percentage"`
-	FixedValue    *float64   `db:"fixed_value" json:"fixed_value"`
+	Percentage    float64    `db:"percentage" json:"percentage"`
+	FixedValue    float64    `db:"fixed_value" json:"fixed_value"`
 	IsCompound    bool       `db:"is_compound" json:"is_compound"`
 	ValidFrom     *time.Time `db:"valid_from" json:"valid_from"`
 	ValidTo       *time.Time `db:"valid_to" json:"valid_to"`
@@ -32,8 +32,8 @@ func FromEnt(e *ent.TaxRate) *TaxRate {
 		Name:          e.Name,
 		Description:   lo.FromPtr(e.Description),
 		Code:          e.Code,
-		Percentage:    lo.ToPtr(e.Percentage),
-		FixedValue:    lo.ToPtr(e.FixedValue),
+		Percentage:    e.Percentage,
+		FixedValue:    e.FixedValue,
 		IsCompound:    e.IsCompound,
 		ValidFrom:     e.ValidFrom,
 		ValidTo:       e.ValidTo,
