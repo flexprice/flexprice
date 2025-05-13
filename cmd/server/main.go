@@ -184,6 +184,7 @@ func main() {
 			service.NewCreditGrantService,
 			service.NewCostSheetService,
 			service.NewCreditNoteService,
+			service.NewTaxRateService,
 		),
 	)
 

@@ -20,6 +20,7 @@ type TaxRateService interface {
 	ListTaxRates(ctx context.Context, filter *types.TaxRateFilter) (*dto.ListTaxRatesResponse, error)
 	UpdateTaxRate(ctx context.Context, id string, req dto.UpdateTaxRateRequest) (*dto.TaxRateResponse, error)
 	GetTaxRateByCode(ctx context.Context, code string) (*dto.TaxRateResponse, error)
+	DeleteTaxRate(ctx context.Context, id string) error
 
 	// Tax resolution and calculation
 	ResolveTaxRates(ctx context.Context, tenantID, customerID, planID, invoiceID, lineItemID string) ([]*taxrate.TaxRate, error)
