@@ -195,10 +195,6 @@ func (s *taxRateService) UpdateTaxRate(ctx context.Context, id string, req dto.U
 		newTaxRate.ValidTo = req.ValidTo
 	}
 
-	if req.Status != "" {
-		newTaxRate.Status = types.Status(req.Status)
-	}
-
 	// Create the new tax rate in the repository
 	if err := s.repo.Create(ctx, newTaxRate); err != nil {
 		return nil, err
