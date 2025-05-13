@@ -38,6 +38,7 @@ type Handlers struct {
 	CreditNote        *v1.CreditNoteHandler
 
 	Webhook *v1.WebhookHandler
+	TaxRate *v1.TaxRateHandler
 	// Portal handlers
 	Onboarding *v1.OnboardingHandler
 	// Cron jobs : TODO: move crons out of API based architecture
