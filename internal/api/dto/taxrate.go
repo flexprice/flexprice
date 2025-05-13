@@ -36,8 +36,8 @@ type CreateTaxRateRequest struct {
 	Name        string     `json:"name" validate:"required"`
 	Code        string     `json:"code" validate:"required"`
 	Description string     `json:"description,omitempty"`
-	Percentage  *float64   `json:"percentage"`
-	FixedValue  *float64   `json:"fixed_value"`
+	Percentage  float64    `json:"percentage" default:"0"`
+	FixedValue  float64    `json:"fixed_value" default:"0"`
 	IsCompound  bool       `json:"is_compound"`
 	ValidFrom   *time.Time `json:"valid_from"`
 	ValidTo     *time.Time `json:"valid_to"`
@@ -69,15 +69,29 @@ func (r CreateTaxRateRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	if r.Percentage != nil && *r.Percentage < 0 {
+	if r.Percentage < 0 {
 		return ierr.NewError("percentage cannot be negative").
 			WithHint("Tax rate percentage must be non-negative").
 			Mark(ierr.ErrValidation)
 	}
 
-	if r.FixedValue != nil && *r.FixedValue < 0 {
+	if r.FixedValue < 0 {
 		return ierr.NewError("fixed_value cannot be negative").
 			WithHint("Tax rate fixed value must be non-negative").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Ensure exactly one of percentage or fixedValue is provided
+	if (r.Percentage > 0 && r.FixedValue > 0) || (r.Percentage == 0 && r.FixedValue == 0) {
+		return ierr.NewError("exactly one of percentage or fixed_value must be provided").
+			WithHint("Tax rate must have either a percentage or fixed value, but not both").
+			Mark(ierr.ErrValidation)
+	}
+
+	// If percentage is provided, ensure it does not exceed 100%
+	if r.Percentage > 100 {
+		return ierr.NewError("percentage cannot exceed 100%").
+			WithHint("Tax rate percentage must be between 0 and 100").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -101,13 +115,23 @@ func (r CreateTaxRateRequest) ToTaxRate(ctx context.Context) (*taxrate.TaxRate, 
 		validTo = r.ValidTo
 	}
 
+	// Set either percentage or fixedValue, but not both
+	percentage := r.Percentage
+	fixedValue := r.FixedValue
+
+	if percentage > 0 {
+		fixedValue = 0 // Zero out fixedValue if percentage is set
+	} else if fixedValue > 0 {
+		percentage = 0 // Zero out percentage if fixedValue is set
+	}
+
 	return &taxrate.TaxRate{
 		ID:          id,
 		Name:        r.Name,
 		Code:        r.Code,
 		Description: r.Description,
-		Percentage:  r.Percentage,
-		FixedValue:  r.FixedValue,
+		Percentage:  percentage,
+		FixedValue:  fixedValue,
 		IsCompound:  r.IsCompound,
 		ValidFrom:   validFrom,
 		ValidTo:     validTo,

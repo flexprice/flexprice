@@ -65,8 +65,8 @@ func (r *taxrateRepository) Create(ctx context.Context, t *domainTaxRate.TaxRate
 		SetName(t.Name).
 		SetCode(t.Code).
 		SetDescription(t.Description).
-		SetPercentage(lo.FromPtr(t.Percentage)).
-		SetFixedValue(lo.FromPtr(t.FixedValue)).
+		SetPercentage(t.Percentage).
+		SetFixedValue(t.FixedValue).
 		SetIsCompound(t.IsCompound).
 		SetValidFrom(lo.FromPtr(t.ValidFrom)).
 		SetValidTo(lo.FromPtr(t.ValidTo)).
@@ -236,8 +236,8 @@ func (r *taxrateRepository) Update(ctx context.Context, t *domainTaxRate.TaxRate
 		SetName(t.Name).
 		SetCode(t.Code).
 		SetDescription(t.Description).
-		SetPercentage(lo.FromPtr(t.Percentage)).
-		SetFixedValue(lo.FromPtr(t.FixedValue)).
+		SetPercentage(t.Percentage).
+		SetFixedValue(t.FixedValue).
 		SetIsCompound(t.IsCompound).
 		SetValidFrom(lo.FromPtr(t.ValidFrom)).
 		SetValidTo(lo.FromPtr(t.ValidTo)).

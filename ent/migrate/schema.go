@@ -1320,7 +1320,7 @@ var (
 		{Name: "description", Type: field.TypeString, Nullable: true},
 		{Name: "code", Type: field.TypeString},
 		{Name: "percentage", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(9,6)"}},
-		{Name: "fixed_value", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(9,6)"}},
+		{Name: "fixed_value", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(18,6)"}},
 		{Name: "is_compound", Type: field.TypeBool, Default: false},
 		{Name: "valid_from", Type: field.TypeTime},
 		{Name: "valid_to", Type: field.TypeTime},

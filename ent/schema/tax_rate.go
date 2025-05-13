@@ -51,7 +51,7 @@ func (TaxRate) Fields() []ent.Field {
 			Positive(),
 		field.Float("fixed_value").
 			SchemaType(map[string]string{
-				"postgres": "numeric(9,6)",
+				"postgres": "numeric(18,6)",
 			}).
 			Optional().
 			Positive(),
