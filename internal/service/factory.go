@@ -20,6 +20,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/task"
+	"github.com/flexprice/flexprice/internal/domain/taxrate"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
@@ -66,6 +67,7 @@ type ServiceParams struct {
 	CreditNoteRepo             creditnote.Repository
 	CreditNoteLineItemRepo     creditnote.CreditNoteLineItemRepository
 	CreditGrantApplicationRepo creditgrantapplication.Repository
+	TaxRateRepo                taxrate.Repository
 
 	// Publishers
 	EventPublisher   publisher.EventPublisher
@@ -109,6 +111,7 @@ func NewServiceParams(
 	client httpclient.Client,
 	taskRepo task.Repository,
 	costSheetRepo costsheet.Repository,
+	taxRateRepo taxrate.Repository,
 ) ServiceParams {
 	return ServiceParams{
 		Logger:                     logger,
@@ -143,5 +146,6 @@ func NewServiceParams(
 		CostSheetRepo:              costSheetRepo,
 		CreditNoteRepo:             creditNoteRepo,
 		CreditNoteLineItemRepo:     creditNoteLineItemRepo,
+		TaxRateRepo:                taxRateRepo,
 	}
 }

@@ -9,16 +9,16 @@ import (
 )
 
 type TaxRate struct {
-	ID            string    `db:"id" json:"id"`
-	Name          string    `db:"name" json:"name"`
-	Code          string    `db:"code" json:"code"`
-	Description   string    `db:"description" json:"description"`
-	EnvironmentID string    `db:"environment_id" json:"environment_id"`
-	Percentage    float64   `db:"percentage" json:"percentage"`
-	FixedValue    float64   `db:"fixed_value" json:"fixed_value"`
-	IsCompound    bool      `db:"is_compound" json:"is_compound"`
-	ValidFrom     time.Time `db:"valid_from" json:"valid_from"`
-	ValidTo       time.Time `db:"valid_to" json:"valid_to"`
+	ID            string     `db:"id" json:"id"`
+	Name          string     `db:"name" json:"name"`
+	Code          string     `db:"code" json:"code"`
+	Description   string     `db:"description" json:"description"`
+	EnvironmentID string     `db:"environment_id" json:"environment_id"`
+	Percentage    *float64   `db:"percentage" json:"percentage"`
+	FixedValue    *float64   `db:"fixed_value" json:"fixed_value"`
+	IsCompound    bool       `db:"is_compound" json:"is_compound"`
+	ValidFrom     *time.Time `db:"valid_from" json:"valid_from"`
+	ValidTo       *time.Time `db:"valid_to" json:"valid_to"`
 	types.BaseModel
 }
 
@@ -30,13 +30,13 @@ func FromEnt(e *ent.TaxRate) *TaxRate {
 	return &TaxRate{
 		ID:            e.ID,
 		Name:          e.Name,
-		Description:   e.Description,
+		Description:   lo.FromPtr(e.Description),
 		Code:          e.Code,
-		Percentage:    e.Percentage,
-		FixedValue:    e.FixedValue,
+		Percentage:    lo.ToPtr(e.Percentage),
+		FixedValue:    lo.ToPtr(e.FixedValue),
 		IsCompound:    e.IsCompound,
-		ValidFrom:     lo.FromPtr(e.ValidFrom),
-		ValidTo:       lo.FromPtr(e.ValidTo),
+		ValidFrom:     e.ValidFrom,
+		ValidTo:       e.ValidTo,
 		EnvironmentID: e.EnvironmentID,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,

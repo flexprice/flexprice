@@ -38,7 +38,8 @@ func (TaxRate) Fields() []ent.Field {
 		field.String("name").
 			NotEmpty(),
 		field.String("description").
-			Optional(),
+			Optional().
+			Nillable(),
 		field.String("code").
 			NotEmpty().
 			Comment("e.g. CGST, SGST, etc."),

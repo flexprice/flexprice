@@ -34,7 +34,7 @@ type TaxRate struct {
 	// Name holds the value of the "name" field.
 	Name string `json:"name,omitempty"`
 	// Description holds the value of the "description" field.
-	Description string `json:"description,omitempty"`
+	Description *string `json:"description,omitempty"`
 	// e.g. CGST, SGST, etc.
 	Code string `json:"code,omitempty"`
 	// Percentage holds the value of the "percentage" field.
@@ -136,7 +136,8 @@ func (tr *TaxRate) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field description", values[i])
 			} else if value.Valid {
-				tr.Description = value.String
+				tr.Description = new(string)
+				*tr.Description = value.String
 			}
 		case taxrate.FieldCode:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -236,8 +237,10 @@ func (tr *TaxRate) String() string {
 	builder.WriteString("name=")
 	builder.WriteString(tr.Name)
 	builder.WriteString(", ")
-	builder.WriteString("description=")
-	builder.WriteString(tr.Description)
+	if v := tr.Description; v != nil {
+		builder.WriteString("description=")
+		builder.WriteString(*v)
+	}
 	builder.WriteString(", ")
 	builder.WriteString("code=")
 	builder.WriteString(tr.Code)

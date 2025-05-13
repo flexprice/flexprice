@@ -376,7 +376,7 @@ func (trc *TaxRateCreate) createSpec() (*TaxRate, *sqlgraph.CreateSpec) {
 	}
 	if value, ok := trc.mutation.Description(); ok {
 		_spec.SetField(taxrate.FieldDescription, field.TypeString, value)
-		_node.Description = value
+		_node.Description = &value
 	}
 	if value, ok := trc.mutation.Code(); ok {
 		_spec.SetField(taxrate.FieldCode, field.TypeString, value)

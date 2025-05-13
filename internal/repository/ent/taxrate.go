@@ -17,6 +17,7 @@ import (
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/lib/pq"
+	"github.com/samber/lo"
 )
 
 type taxrateRepository struct {
@@ -64,11 +65,11 @@ func (r *taxrateRepository) Create(ctx context.Context, t *domainTaxRate.TaxRate
 		SetName(t.Name).
 		SetCode(t.Code).
 		SetDescription(t.Description).
-		SetPercentage(t.Percentage).
-		SetFixedValue(t.FixedValue).
+		SetPercentage(lo.FromPtr(t.Percentage)).
+		SetFixedValue(lo.FromPtr(t.FixedValue)).
 		SetIsCompound(t.IsCompound).
-		SetValidFrom(t.ValidFrom).
-		SetValidTo(t.ValidTo).
+		SetValidFrom(lo.FromPtr(t.ValidFrom)).
+		SetValidTo(lo.FromPtr(t.ValidTo)).
 		SetStatus(string(t.Status)).
 		SetTenantID(t.TenantID).
 		SetEnvironmentID(t.EnvironmentID).
@@ -215,35 +216,94 @@ func (r *taxrateRepository) Count(ctx context.Context, filter *types.TaxRateFilt
 	return count, nil
 }
 
-func (r *taxrateRepository) Update(ctx context.Context, taxrate *domainTaxRate.TaxRate) error {
+func (r *taxrateRepository) Update(ctx context.Context, t *domainTaxRate.TaxRate) error {
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "taxrate", "update", map[string]interface{}{
-		"taxrate_id": taxrate.ID,
+		"taxrate_id": t.ID,
 	})
 	defer FinishSpan(span)
 
-	r.log.Debugw("updating taxrate", "taxrate", taxrate)
+	r.log.Debugw("updating taxrate", "taxrate", t)
 
+	client := r.client.Querier(ctx)
+
+	_, err := client.TaxRate.Update().
+		Where(
+			taxrate.ID(t.ID),
+			taxrate.TenantID(types.GetTenantID(ctx)),
+			taxrate.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
+		SetName(t.Name).
+		SetCode(t.Code).
+		SetDescription(t.Description).
+		SetPercentage(lo.FromPtr(t.Percentage)).
+		SetFixedValue(lo.FromPtr(t.FixedValue)).
+		SetIsCompound(t.IsCompound).
+		SetValidFrom(lo.FromPtr(t.ValidFrom)).
+		SetValidTo(lo.FromPtr(t.ValidTo)).
+		SetStatus(string(t.Status)).
+		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		Save(ctx)
+
+	if err != nil {
+		SetSpanError(span, err)
+		r.log.Errorw("error updating taxrate", "error", err)
+		if ent.IsNotFound(err) {
+			return ierr.WithError(err).
+				WithHintf("Taxrate with ID %s was not found", t.ID).
+				WithReportableDetails(map[string]any{
+					"taxrate_id": t.ID,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+
+		if ent.IsConstraintError(err) {
+			var pqErr *pq.Error
+			if errors.As(err, &pqErr) {
+				if pqErr.Constraint == schema.Idx_code_tenant_id_environment_id {
+					return ierr.WithError(err).
+						WithHint("A taxrate with this code already exists").
+						WithReportableDetails(map[string]any{
+							"taxrate_code": t.Code,
+							"taxrate_id":   t.ID,
+							"taxrate_name": t.Name,
+						}).
+						Mark(ierr.ErrAlreadyExists)
+				}
+			}
+		}
+
+		return ierr.WithError(err).
+			WithHint("Failed to update taxrate").
+			WithReportableDetails(map[string]any{
+				"taxrate_id": t.ID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	r.DeleteCache(ctx, t)
 	return nil
 }
 
-func (r *taxrateRepository) Delete(ctx context.Context, id string) error {
+func (r *taxrateRepository) Delete(ctx context.Context, t *domainTaxRate.TaxRate) error {
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "taxrate", "delete", map[string]interface{}{
-		"taxrate_id": id,
+		"taxrate_id": t.ID,
 	})
 	defer FinishSpan(span)
 
 	r.log.Debugw("deleting taxrate",
-		"taxrate_id", id,
+		"taxrate_id", t.ID,
 		"tenant_id", types.GetTenantID(ctx),
 		"environment_id", types.GetEnvironmentID(ctx),
 	)
 	client := r.client.Querier(ctx)
 	_, err := client.TaxRate.Update().
 		Where(
-			taxrate.ID(id),
+			taxrate.ID(t.ID),
 			taxrate.TenantID(types.GetTenantID(ctx)),
 			taxrate.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
@@ -260,6 +320,7 @@ func (r *taxrateRepository) Delete(ctx context.Context, id string) error {
 	}
 
 	SetSpanSuccess(span)
+	r.DeleteCache(ctx, t)
 	return nil
 }
 
@@ -297,7 +358,6 @@ func (r *taxrateRepository) GetByCode(ctx context.Context, code string) (*domain
 
 	taxrate := domainTaxRate.FromEnt(taxrateEnt)
 	r.SetCache(ctx, taxrate)
-
 	return taxrate, nil
 }
 

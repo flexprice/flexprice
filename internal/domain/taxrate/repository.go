@@ -1,4 +1,4 @@
-package taxrate		
+package taxrate
 
 import (
 	"context"
@@ -15,7 +15,7 @@ type Repository interface {
 	ListAll(ctx context.Context, filter *types.TaxRateFilter) ([]*TaxRate, error)
 	Count(ctx context.Context, filter *types.TaxRateFilter) (int, error)
 	Update(ctx context.Context, taxrate *TaxRate) error
-	Delete(ctx context.Context, id string) error
+	Delete(ctx context.Context, taxrate *TaxRate) error
 
 	// Lookup operations
 	GetByCode(ctx context.Context, code string) (*TaxRate, error)
