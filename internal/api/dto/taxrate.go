@@ -41,7 +41,6 @@ type CreateTaxRateRequest struct {
 	IsCompound  bool       `json:"is_compound"`
 	ValidFrom   *time.Time `json:"valid_from"`
 	ValidTo     *time.Time `json:"valid_to"`
-	Status      string     `json:"status,omitempty"`
 }
 
 // UpdateTaxRateRequest represents the request to update a tax rate
@@ -54,7 +53,6 @@ type UpdateTaxRateRequest struct {
 	IsCompound  *bool      `json:"is_compound,omitempty"`
 	ValidFrom   *time.Time `json:"valid_from,omitempty"`
 	ValidTo     *time.Time `json:"valid_to,omitempty"`
-	Status      string     `json:"status,omitempty"`
 }
 
 // Validate validates the CreateTaxRateRequest
@@ -90,12 +88,6 @@ func (r CreateTaxRateRequest) Validate() error {
 func (r CreateTaxRateRequest) ToTaxRate(ctx context.Context) (*taxrate.TaxRate, error) {
 	id := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TAX_RATE)
 
-	// Default values if not provided
-	status := types.StatusPublished
-	if r.Status != "" {
-		status = types.Status(r.Status)
-	}
-
 	now := time.Now().UTC()
 	var validFrom *time.Time
 	if r.ValidFrom != nil && !r.ValidFrom.IsZero() {
@@ -107,9 +99,6 @@ func (r CreateTaxRateRequest) ToTaxRate(ctx context.Context) (*taxrate.TaxRate, 
 	var validTo *time.Time
 	if r.ValidTo != nil && !r.ValidTo.IsZero() {
 		validTo = r.ValidTo
-	} else {
-		farFuture := now.AddDate(100, 0, 0)
-		validTo = lo.ToPtr(farFuture)
 	}
 
 	return &taxrate.TaxRate{
@@ -122,13 +111,6 @@ func (r CreateTaxRateRequest) ToTaxRate(ctx context.Context) (*taxrate.TaxRate, 
 		IsCompound:  r.IsCompound,
 		ValidFrom:   validFrom,
 		ValidTo:     validTo,
-		BaseModel: types.BaseModel{
-			TenantID:  types.GetTenantID(ctx),
-			Status:    status,
-			CreatedAt: now,
-			UpdatedAt: now,
-			CreatedBy: types.GetUserID(ctx),
-			UpdatedBy: types.GetUserID(ctx),
-		},
+		BaseModel:   types.GetDefaultBaseModel(ctx),
 	}, nil
 }
