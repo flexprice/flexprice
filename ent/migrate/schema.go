@@ -1319,11 +1319,12 @@ var (
 		{Name: "name", Type: field.TypeString},
 		{Name: "description", Type: field.TypeString, Nullable: true},
 		{Name: "code", Type: field.TypeString},
-		{Name: "percentage", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(9,6)"}},
-		{Name: "fixed_value", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(18,6)"}},
+		{Name: "percentage", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(9,6)"}},
+		{Name: "fixed_value", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(9,6)"}},
 		{Name: "is_compound", Type: field.TypeBool, Default: false},
-		{Name: "valid_from", Type: field.TypeTime},
-		{Name: "valid_to", Type: field.TypeTime},
+		{Name: "valid_from", Type: field.TypeTime, Nullable: true},
+		{Name: "valid_to", Type: field.TypeTime, Nullable: true},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 	}
 	// TaxRatesTable holds the schema information for the "tax_rates" table.
 	TaxRatesTable = &schema.Table{

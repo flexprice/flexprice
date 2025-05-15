@@ -7,6 +7,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
+	"github.com/shopspring/decimal"
 )
 
 const (
@@ -38,29 +39,33 @@ func (TaxRate) Fields() []ent.Field {
 		field.String("name").
 			NotEmpty(),
 		field.String("description").
-			Optional().
-			Nillable(),
+			Optional(),
 		field.String("code").
 			NotEmpty().
 			Comment("e.g. CGST, SGST, etc."),
-		field.Float("percentage").
+		field.Other("percentage", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(9,6)",
 			}).
-			Optional().
-			Positive(),
-		field.Float("fixed_value").
+			Default(decimal.Zero),
+		field.Other("fixed_value", decimal.Decimal{}).
 			SchemaType(map[string]string{
-				"postgres": "numeric(18,6)",
+				"postgres": "numeric(9,6)",
 			}).
-			Optional().
-			Positive(),
+			Default(decimal.Zero),
 		field.Bool("is_compound").
 			Default(false),
 		field.Time("valid_from").
+			Optional().
 			Nillable(),
 		field.Time("valid_to").
+			Optional().
 			Nillable(),
+		field.JSON("metadata", map[string]string{}).
+			Optional().
+			SchemaType(map[string]string{
+				"postgres": "jsonb",
+			}),
 	}
 }
 

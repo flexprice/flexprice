@@ -1345,12 +1345,12 @@ func init() {
 	taxrate.CodeValidator = taxrateDescCode.Validators[0].(func(string) error)
 	// taxrateDescPercentage is the schema descriptor for percentage field.
 	taxrateDescPercentage := taxrateFields[4].Descriptor()
-	// taxrate.PercentageValidator is a validator for the "percentage" field. It is called by the builders before save.
-	taxrate.PercentageValidator = taxrateDescPercentage.Validators[0].(func(float64) error)
+	// taxrate.DefaultPercentage holds the default value on creation for the percentage field.
+	taxrate.DefaultPercentage = taxrateDescPercentage.Default.(decimal.Decimal)
 	// taxrateDescFixedValue is the schema descriptor for fixed_value field.
 	taxrateDescFixedValue := taxrateFields[5].Descriptor()
-	// taxrate.FixedValueValidator is a validator for the "fixed_value" field. It is called by the builders before save.
-	taxrate.FixedValueValidator = taxrateDescFixedValue.Validators[0].(func(float64) error)
+	// taxrate.DefaultFixedValue holds the default value on creation for the fixed_value field.
+	taxrate.DefaultFixedValue = taxrateDescFixedValue.Default.(decimal.Decimal)
 	// taxrateDescIsCompound is the schema descriptor for is_compound field.
 	taxrateDescIsCompound := taxrateFields[6].Descriptor()
 	// taxrate.DefaultIsCompound holds the default value on creation for the is_compound field.
