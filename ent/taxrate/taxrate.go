@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"github.com/shopspring/decimal"
 )
 
 const (
@@ -43,6 +44,8 @@ const (
 	FieldValidFrom = "valid_from"
 	// FieldValidTo holds the string denoting the valid_to field in the database.
 	FieldValidTo = "valid_to"
+	// FieldMetadata holds the string denoting the metadata field in the database.
+	FieldMetadata = "metadata"
 	// Table holds the table name of the taxrate in the database.
 	Table = "tax_rates"
 )
@@ -65,6 +68,7 @@ var Columns = []string{
 	FieldIsCompound,
 	FieldValidFrom,
 	FieldValidTo,
+	FieldMetadata,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -94,10 +98,10 @@ var (
 	NameValidator func(string) error
 	// CodeValidator is a validator for the "code" field. It is called by the builders before save.
 	CodeValidator func(string) error
-	// PercentageValidator is a validator for the "percentage" field. It is called by the builders before save.
-	PercentageValidator func(float64) error
-	// FixedValueValidator is a validator for the "fixed_value" field. It is called by the builders before save.
-	FixedValueValidator func(float64) error
+	// DefaultPercentage holds the default value on creation for the "percentage" field.
+	DefaultPercentage decimal.Decimal
+	// DefaultFixedValue holds the default value on creation for the "fixed_value" field.
+	DefaultFixedValue decimal.Decimal
 	// DefaultIsCompound holds the default value on creation for the "is_compound" field.
 	DefaultIsCompound bool
 )
