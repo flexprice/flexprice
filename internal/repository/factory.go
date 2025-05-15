@@ -17,6 +17,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/task"
+	"github.com/flexprice/flexprice/internal/domain/taxrate"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
@@ -107,4 +108,8 @@ func NewTaskRepository(p RepositoryParams) task.Repository {
 
 func NewSecretRepository(p RepositoryParams) secret.Repository {
 	return entRepo.NewSecretRepository(p.EntClient, p.Logger, p.Cache)
+}
+
+func NewTaxRateRepository(p RepositoryParams) taxrate.Repository {
+	return entRepo.NewTaxRateRepository(p.EntClient, p.Logger, p.Cache)
 }

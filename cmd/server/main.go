@@ -127,6 +127,7 @@ func main() {
 			repository.NewPaymentRepository,
 			repository.NewTaskRepository,
 			repository.NewSecretRepository,
+			repository.NewTaxRateRepository,
 			// PubSub
 			pubsubRouter.NewRouter,
 
@@ -168,6 +169,7 @@ func main() {
 			service.NewSecretService,
 			service.NewOnboardingService,
 			service.NewBillingService,
+			service.NewTaxRateService,
 		),
 	)
 
@@ -213,6 +215,7 @@ func provideHandlers(
 	secretService service.SecretService,
 	onboardingService service.OnboardingService,
 	billingService service.BillingService,
+	taxRateService service.TaxRateService,
 ) api.Handlers {
 	return api.Handlers{
 		Events:            v1.NewEventsHandler(eventService, eventPostProcessingService, logger),
@@ -234,6 +237,7 @@ func provideHandlers(
 		Payment:           v1.NewPaymentHandler(paymentService, paymentProcessorService, logger),
 		Task:              v1.NewTaskHandler(taskService, logger),
 		Secret:            v1.NewSecretHandler(secretService, logger),
+		TaxRate:           v1.NewTaxRateHandler(taxRateService, logger),
 		Onboarding:        v1.NewOnboardingHandler(onboardingService, logger),
 		CronSubscription:  cron.NewSubscriptionHandler(subscriptionService, temporalService, logger),
 		CronWallet:        cron.NewWalletCronHandler(logger, temporalService, walletService, tenantService),

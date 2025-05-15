@@ -313,25 +313,16 @@ var (
 				Name:    "idx_tenant_subscription_status",
 				Unique:  false,
 				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[9], InvoicesColumns[11], InvoicesColumns[12], InvoicesColumns[2]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published'",
-				},
 			},
 			{
 				Name:    "idx_tenant_type_status",
 				Unique:  false,
 				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[10], InvoicesColumns[11], InvoicesColumns[12], InvoicesColumns[2]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published'",
-				},
 			},
 			{
 				Name:    "idx_tenant_due_date_status",
 				Unique:  false,
 				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[18], InvoicesColumns[11], InvoicesColumns[12], InvoicesColumns[2]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published'",
-				},
 			},
 			{
 				Name:    "idx_tenant_environment_invoice_number_unique",
@@ -967,6 +958,50 @@ var (
 			},
 		},
 	}
+	// TaxRatesColumns holds the columns for the "tax_rates" table.
+	TaxRatesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "name", Type: field.TypeString},
+		{Name: "description", Type: field.TypeString, Nullable: true},
+		{Name: "code", Type: field.TypeString},
+		{Name: "percentage", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(9,6)"}},
+		{Name: "fixed_value", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(9,6)"}},
+		{Name: "is_compound", Type: field.TypeBool, Default: false},
+		{Name: "valid_from", Type: field.TypeTime, Nullable: true},
+		{Name: "valid_to", Type: field.TypeTime, Nullable: true},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+	}
+	// TaxRatesTable holds the schema information for the "tax_rates" table.
+	TaxRatesTable = &schema.Table{
+		Name:       "tax_rates",
+		Columns:    TaxRatesColumns,
+		PrimaryKey: []*schema.Column{TaxRatesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "idx_code_tenant_id_environment_id",
+				Unique:  true,
+				Columns: []*schema.Column{TaxRatesColumns[10], TaxRatesColumns[1], TaxRatesColumns[7]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "(code IS NOT NULL AND code != '' and status = 'published')",
+				},
+			},
+			{
+				Name:    "taxrate_code",
+				Unique:  false,
+				Columns: []*schema.Column{TaxRatesColumns[10]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "(code IS NOT NULL AND code != '')",
+				},
+			},
+		},
+	}
 	// TenantsColumns holds the columns for the "tenants" table.
 	TenantsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -1155,6 +1190,7 @@ var (
 		SubscriptionLineItemsTable,
 		SubscriptionPausesTable,
 		TasksTable,
+		TaxRatesTable,
 		TenantsTable,
 		UsersTable,
 		WalletsTable,
@@ -1168,4 +1204,11 @@ func init() {
 	PaymentAttemptsTable.ForeignKeys[0].RefTable = PaymentsTable
 	SubscriptionLineItemsTable.ForeignKeys[0].RefTable = SubscriptionsTable
 	SubscriptionPausesTable.ForeignKeys[0].RefTable = SubscriptionsTable
+	TaxRatesTable.Annotation = &entsql.Annotation{
+		Table: "tax_rates",
+	}
+	TaxRatesTable.Annotation.Checks = map[string]string{
+		"percentage_check":             "(percentage IS NULL OR percentage <= 100)",
+		"percentage_fixed_value_check": "(percentage IS NOT NULL) <> (fixed_value IS NOT NULL)",
+	}
 }

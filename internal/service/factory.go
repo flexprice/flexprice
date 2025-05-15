@@ -16,6 +16,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/task"
+	"github.com/flexprice/flexprice/internal/domain/taxrate"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
@@ -56,6 +57,7 @@ type ServiceParams struct {
 	SecretRepo         secret.Repository
 	EnvironmentRepo    environment.Repository
 	TaskRepo           task.Repository
+	TaxRateRepo        taxrate.Repository
 
 	// Publishers
 	EventPublisher   publisher.EventPublisher
@@ -93,6 +95,7 @@ func NewServiceParams(
 	s3Service s3.Service,
 	client httpclient.Client,
 	taskRepo task.Repository,
+	taxRateRepo taxrate.Repository,
 ) ServiceParams {
 	return ServiceParams{
 		Logger:             logger,
@@ -121,5 +124,6 @@ func NewServiceParams(
 		S3:                 s3Service,
 		Client:             client,
 		TaskRepo:           taskRepo,
+		TaxRateRepo:        taxRateRepo,
 	}
 }
