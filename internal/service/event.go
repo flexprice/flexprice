@@ -147,6 +147,9 @@ func (s *eventService) GetUsageByMeter(ctx context.Context, req *dto.GetUsageByM
 			return nil, err
 		}
 
+		historicUsage.PriceID = req.PriceID
+		historicUsage.MeterID = req.MeterID
+
 		return s.combineResults(historicUsage, usage, m), nil
 	}
 	return usage, nil
@@ -369,6 +372,8 @@ func (s *eventService) combineResults(historicUsage, currentUsage *events.Aggreg
 	}
 
 	return &events.AggregationResult{
+		PriceID:   historicUsage.PriceID,
+		MeterID:   historicUsage.MeterID,
 		Value:     totalValue,
 		Results:   currentUsage.Results,
 		EventName: m.EventName,
