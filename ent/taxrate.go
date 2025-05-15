@@ -3,6 +3,7 @@
 package ent
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/taxrate"
+	"github.com/shopspring/decimal"
 )
 
 // TaxRate is the model entity for the TaxRate schema.
@@ -34,19 +36,21 @@ type TaxRate struct {
 	// Name holds the value of the "name" field.
 	Name string `json:"name,omitempty"`
 	// Description holds the value of the "description" field.
-	Description *string `json:"description,omitempty"`
+	Description string `json:"description,omitempty"`
 	// e.g. CGST, SGST, etc.
 	Code string `json:"code,omitempty"`
 	// Percentage holds the value of the "percentage" field.
-	Percentage float64 `json:"percentage,omitempty"`
+	Percentage decimal.Decimal `json:"percentage,omitempty"`
 	// FixedValue holds the value of the "fixed_value" field.
-	FixedValue float64 `json:"fixed_value,omitempty"`
+	FixedValue decimal.Decimal `json:"fixed_value,omitempty"`
 	// IsCompound holds the value of the "is_compound" field.
 	IsCompound bool `json:"is_compound,omitempty"`
 	// ValidFrom holds the value of the "valid_from" field.
 	ValidFrom *time.Time `json:"valid_from,omitempty"`
 	// ValidTo holds the value of the "valid_to" field.
-	ValidTo      *time.Time `json:"valid_to,omitempty"`
+	ValidTo *time.Time `json:"valid_to,omitempty"`
+	// Metadata holds the value of the "metadata" field.
+	Metadata     map[string]string `json:"metadata,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -55,10 +59,12 @@ func (*TaxRate) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case taxrate.FieldMetadata:
+			values[i] = new([]byte)
+		case taxrate.FieldPercentage, taxrate.FieldFixedValue:
+			values[i] = new(decimal.Decimal)
 		case taxrate.FieldIsCompound:
 			values[i] = new(sql.NullBool)
-		case taxrate.FieldPercentage, taxrate.FieldFixedValue:
-			values[i] = new(sql.NullFloat64)
 		case taxrate.FieldID, taxrate.FieldTenantID, taxrate.FieldStatus, taxrate.FieldCreatedBy, taxrate.FieldUpdatedBy, taxrate.FieldEnvironmentID, taxrate.FieldName, taxrate.FieldDescription, taxrate.FieldCode:
 			values[i] = new(sql.NullString)
 		case taxrate.FieldCreatedAt, taxrate.FieldUpdatedAt, taxrate.FieldValidFrom, taxrate.FieldValidTo:
@@ -136,8 +142,7 @@ func (tr *TaxRate) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field description", values[i])
 			} else if value.Valid {
-				tr.Description = new(string)
-				*tr.Description = value.String
+				tr.Description = value.String
 			}
 		case taxrate.FieldCode:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -146,16 +151,16 @@ func (tr *TaxRate) assignValues(columns []string, values []any) error {
 				tr.Code = value.String
 			}
 		case taxrate.FieldPercentage:
-			if value, ok := values[i].(*sql.NullFloat64); !ok {
+			if value, ok := values[i].(*decimal.Decimal); !ok {
 				return fmt.Errorf("unexpected type %T for field percentage", values[i])
-			} else if value.Valid {
-				tr.Percentage = value.Float64
+			} else if value != nil {
+				tr.Percentage = *value
 			}
 		case taxrate.FieldFixedValue:
-			if value, ok := values[i].(*sql.NullFloat64); !ok {
+			if value, ok := values[i].(*decimal.Decimal); !ok {
 				return fmt.Errorf("unexpected type %T for field fixed_value", values[i])
-			} else if value.Valid {
-				tr.FixedValue = value.Float64
+			} else if value != nil {
+				tr.FixedValue = *value
 			}
 		case taxrate.FieldIsCompound:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -176,6 +181,14 @@ func (tr *TaxRate) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				tr.ValidTo = new(time.Time)
 				*tr.ValidTo = value.Time
+			}
+		case taxrate.FieldMetadata:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field metadata", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &tr.Metadata); err != nil {
+					return fmt.Errorf("unmarshal field metadata: %w", err)
+				}
 			}
 		default:
 			tr.selectValues.Set(columns[i], values[i])
@@ -237,10 +250,8 @@ func (tr *TaxRate) String() string {
 	builder.WriteString("name=")
 	builder.WriteString(tr.Name)
 	builder.WriteString(", ")
-	if v := tr.Description; v != nil {
-		builder.WriteString("description=")
-		builder.WriteString(*v)
-	}
+	builder.WriteString("description=")
+	builder.WriteString(tr.Description)
 	builder.WriteString(", ")
 	builder.WriteString("code=")
 	builder.WriteString(tr.Code)
@@ -263,6 +274,9 @@ func (tr *TaxRate) String() string {
 		builder.WriteString("valid_to=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
+	builder.WriteString(", ")
+	builder.WriteString("metadata=")
+	builder.WriteString(fmt.Sprintf("%v", tr.Metadata))
 	builder.WriteByte(')')
 	return builder.String()
 }

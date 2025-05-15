@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/taxrate"
+	"github.com/shopspring/decimal"
 )
 
 // TaxRateUpdate is the builder for updating TaxRate entities.
@@ -117,56 +118,30 @@ func (tru *TaxRateUpdate) SetNillableCode(s *string) *TaxRateUpdate {
 }
 
 // SetPercentage sets the "percentage" field.
-func (tru *TaxRateUpdate) SetPercentage(f float64) *TaxRateUpdate {
-	tru.mutation.ResetPercentage()
-	tru.mutation.SetPercentage(f)
+func (tru *TaxRateUpdate) SetPercentage(d decimal.Decimal) *TaxRateUpdate {
+	tru.mutation.SetPercentage(d)
 	return tru
 }
 
 // SetNillablePercentage sets the "percentage" field if the given value is not nil.
-func (tru *TaxRateUpdate) SetNillablePercentage(f *float64) *TaxRateUpdate {
-	if f != nil {
-		tru.SetPercentage(*f)
+func (tru *TaxRateUpdate) SetNillablePercentage(d *decimal.Decimal) *TaxRateUpdate {
+	if d != nil {
+		tru.SetPercentage(*d)
 	}
-	return tru
-}
-
-// AddPercentage adds f to the "percentage" field.
-func (tru *TaxRateUpdate) AddPercentage(f float64) *TaxRateUpdate {
-	tru.mutation.AddPercentage(f)
-	return tru
-}
-
-// ClearPercentage clears the value of the "percentage" field.
-func (tru *TaxRateUpdate) ClearPercentage() *TaxRateUpdate {
-	tru.mutation.ClearPercentage()
 	return tru
 }
 
 // SetFixedValue sets the "fixed_value" field.
-func (tru *TaxRateUpdate) SetFixedValue(f float64) *TaxRateUpdate {
-	tru.mutation.ResetFixedValue()
-	tru.mutation.SetFixedValue(f)
+func (tru *TaxRateUpdate) SetFixedValue(d decimal.Decimal) *TaxRateUpdate {
+	tru.mutation.SetFixedValue(d)
 	return tru
 }
 
 // SetNillableFixedValue sets the "fixed_value" field if the given value is not nil.
-func (tru *TaxRateUpdate) SetNillableFixedValue(f *float64) *TaxRateUpdate {
-	if f != nil {
-		tru.SetFixedValue(*f)
+func (tru *TaxRateUpdate) SetNillableFixedValue(d *decimal.Decimal) *TaxRateUpdate {
+	if d != nil {
+		tru.SetFixedValue(*d)
 	}
-	return tru
-}
-
-// AddFixedValue adds f to the "fixed_value" field.
-func (tru *TaxRateUpdate) AddFixedValue(f float64) *TaxRateUpdate {
-	tru.mutation.AddFixedValue(f)
-	return tru
-}
-
-// ClearFixedValue clears the value of the "fixed_value" field.
-func (tru *TaxRateUpdate) ClearFixedValue() *TaxRateUpdate {
-	tru.mutation.ClearFixedValue()
 	return tru
 }
 
@@ -198,6 +173,12 @@ func (tru *TaxRateUpdate) SetNillableValidFrom(t *time.Time) *TaxRateUpdate {
 	return tru
 }
 
+// ClearValidFrom clears the value of the "valid_from" field.
+func (tru *TaxRateUpdate) ClearValidFrom() *TaxRateUpdate {
+	tru.mutation.ClearValidFrom()
+	return tru
+}
+
 // SetValidTo sets the "valid_to" field.
 func (tru *TaxRateUpdate) SetValidTo(t time.Time) *TaxRateUpdate {
 	tru.mutation.SetValidTo(t)
@@ -209,6 +190,24 @@ func (tru *TaxRateUpdate) SetNillableValidTo(t *time.Time) *TaxRateUpdate {
 	if t != nil {
 		tru.SetValidTo(*t)
 	}
+	return tru
+}
+
+// ClearValidTo clears the value of the "valid_to" field.
+func (tru *TaxRateUpdate) ClearValidTo() *TaxRateUpdate {
+	tru.mutation.ClearValidTo()
+	return tru
+}
+
+// SetMetadata sets the "metadata" field.
+func (tru *TaxRateUpdate) SetMetadata(m map[string]string) *TaxRateUpdate {
+	tru.mutation.SetMetadata(m)
+	return tru
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (tru *TaxRateUpdate) ClearMetadata() *TaxRateUpdate {
+	tru.mutation.ClearMetadata()
 	return tru
 }
 
@@ -265,16 +264,6 @@ func (tru *TaxRateUpdate) check() error {
 			return &ValidationError{Name: "code", err: fmt.Errorf(`ent: validator failed for field "TaxRate.code": %w`, err)}
 		}
 	}
-	if v, ok := tru.mutation.Percentage(); ok {
-		if err := taxrate.PercentageValidator(v); err != nil {
-			return &ValidationError{Name: "percentage", err: fmt.Errorf(`ent: validator failed for field "TaxRate.percentage": %w`, err)}
-		}
-	}
-	if v, ok := tru.mutation.FixedValue(); ok {
-		if err := taxrate.FixedValueValidator(v); err != nil {
-			return &ValidationError{Name: "fixed_value", err: fmt.Errorf(`ent: validator failed for field "TaxRate.fixed_value": %w`, err)}
-		}
-	}
 	return nil
 }
 
@@ -321,22 +310,10 @@ func (tru *TaxRateUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		_spec.SetField(taxrate.FieldCode, field.TypeString, value)
 	}
 	if value, ok := tru.mutation.Percentage(); ok {
-		_spec.SetField(taxrate.FieldPercentage, field.TypeFloat64, value)
-	}
-	if value, ok := tru.mutation.AddedPercentage(); ok {
-		_spec.AddField(taxrate.FieldPercentage, field.TypeFloat64, value)
-	}
-	if tru.mutation.PercentageCleared() {
-		_spec.ClearField(taxrate.FieldPercentage, field.TypeFloat64)
+		_spec.SetField(taxrate.FieldPercentage, field.TypeOther, value)
 	}
 	if value, ok := tru.mutation.FixedValue(); ok {
-		_spec.SetField(taxrate.FieldFixedValue, field.TypeFloat64, value)
-	}
-	if value, ok := tru.mutation.AddedFixedValue(); ok {
-		_spec.AddField(taxrate.FieldFixedValue, field.TypeFloat64, value)
-	}
-	if tru.mutation.FixedValueCleared() {
-		_spec.ClearField(taxrate.FieldFixedValue, field.TypeFloat64)
+		_spec.SetField(taxrate.FieldFixedValue, field.TypeOther, value)
 	}
 	if value, ok := tru.mutation.IsCompound(); ok {
 		_spec.SetField(taxrate.FieldIsCompound, field.TypeBool, value)
@@ -344,8 +321,20 @@ func (tru *TaxRateUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if value, ok := tru.mutation.ValidFrom(); ok {
 		_spec.SetField(taxrate.FieldValidFrom, field.TypeTime, value)
 	}
+	if tru.mutation.ValidFromCleared() {
+		_spec.ClearField(taxrate.FieldValidFrom, field.TypeTime)
+	}
 	if value, ok := tru.mutation.ValidTo(); ok {
 		_spec.SetField(taxrate.FieldValidTo, field.TypeTime, value)
+	}
+	if tru.mutation.ValidToCleared() {
+		_spec.ClearField(taxrate.FieldValidTo, field.TypeTime)
+	}
+	if value, ok := tru.mutation.Metadata(); ok {
+		_spec.SetField(taxrate.FieldMetadata, field.TypeJSON, value)
+	}
+	if tru.mutation.MetadataCleared() {
+		_spec.ClearField(taxrate.FieldMetadata, field.TypeJSON)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, tru.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -456,56 +445,30 @@ func (truo *TaxRateUpdateOne) SetNillableCode(s *string) *TaxRateUpdateOne {
 }
 
 // SetPercentage sets the "percentage" field.
-func (truo *TaxRateUpdateOne) SetPercentage(f float64) *TaxRateUpdateOne {
-	truo.mutation.ResetPercentage()
-	truo.mutation.SetPercentage(f)
+func (truo *TaxRateUpdateOne) SetPercentage(d decimal.Decimal) *TaxRateUpdateOne {
+	truo.mutation.SetPercentage(d)
 	return truo
 }
 
 // SetNillablePercentage sets the "percentage" field if the given value is not nil.
-func (truo *TaxRateUpdateOne) SetNillablePercentage(f *float64) *TaxRateUpdateOne {
-	if f != nil {
-		truo.SetPercentage(*f)
+func (truo *TaxRateUpdateOne) SetNillablePercentage(d *decimal.Decimal) *TaxRateUpdateOne {
+	if d != nil {
+		truo.SetPercentage(*d)
 	}
-	return truo
-}
-
-// AddPercentage adds f to the "percentage" field.
-func (truo *TaxRateUpdateOne) AddPercentage(f float64) *TaxRateUpdateOne {
-	truo.mutation.AddPercentage(f)
-	return truo
-}
-
-// ClearPercentage clears the value of the "percentage" field.
-func (truo *TaxRateUpdateOne) ClearPercentage() *TaxRateUpdateOne {
-	truo.mutation.ClearPercentage()
 	return truo
 }
 
 // SetFixedValue sets the "fixed_value" field.
-func (truo *TaxRateUpdateOne) SetFixedValue(f float64) *TaxRateUpdateOne {
-	truo.mutation.ResetFixedValue()
-	truo.mutation.SetFixedValue(f)
+func (truo *TaxRateUpdateOne) SetFixedValue(d decimal.Decimal) *TaxRateUpdateOne {
+	truo.mutation.SetFixedValue(d)
 	return truo
 }
 
 // SetNillableFixedValue sets the "fixed_value" field if the given value is not nil.
-func (truo *TaxRateUpdateOne) SetNillableFixedValue(f *float64) *TaxRateUpdateOne {
-	if f != nil {
-		truo.SetFixedValue(*f)
+func (truo *TaxRateUpdateOne) SetNillableFixedValue(d *decimal.Decimal) *TaxRateUpdateOne {
+	if d != nil {
+		truo.SetFixedValue(*d)
 	}
-	return truo
-}
-
-// AddFixedValue adds f to the "fixed_value" field.
-func (truo *TaxRateUpdateOne) AddFixedValue(f float64) *TaxRateUpdateOne {
-	truo.mutation.AddFixedValue(f)
-	return truo
-}
-
-// ClearFixedValue clears the value of the "fixed_value" field.
-func (truo *TaxRateUpdateOne) ClearFixedValue() *TaxRateUpdateOne {
-	truo.mutation.ClearFixedValue()
 	return truo
 }
 
@@ -537,6 +500,12 @@ func (truo *TaxRateUpdateOne) SetNillableValidFrom(t *time.Time) *TaxRateUpdateO
 	return truo
 }
 
+// ClearValidFrom clears the value of the "valid_from" field.
+func (truo *TaxRateUpdateOne) ClearValidFrom() *TaxRateUpdateOne {
+	truo.mutation.ClearValidFrom()
+	return truo
+}
+
 // SetValidTo sets the "valid_to" field.
 func (truo *TaxRateUpdateOne) SetValidTo(t time.Time) *TaxRateUpdateOne {
 	truo.mutation.SetValidTo(t)
@@ -548,6 +517,24 @@ func (truo *TaxRateUpdateOne) SetNillableValidTo(t *time.Time) *TaxRateUpdateOne
 	if t != nil {
 		truo.SetValidTo(*t)
 	}
+	return truo
+}
+
+// ClearValidTo clears the value of the "valid_to" field.
+func (truo *TaxRateUpdateOne) ClearValidTo() *TaxRateUpdateOne {
+	truo.mutation.ClearValidTo()
+	return truo
+}
+
+// SetMetadata sets the "metadata" field.
+func (truo *TaxRateUpdateOne) SetMetadata(m map[string]string) *TaxRateUpdateOne {
+	truo.mutation.SetMetadata(m)
+	return truo
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (truo *TaxRateUpdateOne) ClearMetadata() *TaxRateUpdateOne {
+	truo.mutation.ClearMetadata()
 	return truo
 }
 
@@ -617,16 +604,6 @@ func (truo *TaxRateUpdateOne) check() error {
 			return &ValidationError{Name: "code", err: fmt.Errorf(`ent: validator failed for field "TaxRate.code": %w`, err)}
 		}
 	}
-	if v, ok := truo.mutation.Percentage(); ok {
-		if err := taxrate.PercentageValidator(v); err != nil {
-			return &ValidationError{Name: "percentage", err: fmt.Errorf(`ent: validator failed for field "TaxRate.percentage": %w`, err)}
-		}
-	}
-	if v, ok := truo.mutation.FixedValue(); ok {
-		if err := taxrate.FixedValueValidator(v); err != nil {
-			return &ValidationError{Name: "fixed_value", err: fmt.Errorf(`ent: validator failed for field "TaxRate.fixed_value": %w`, err)}
-		}
-	}
 	return nil
 }
 
@@ -690,22 +667,10 @@ func (truo *TaxRateUpdateOne) sqlSave(ctx context.Context) (_node *TaxRate, err 
 		_spec.SetField(taxrate.FieldCode, field.TypeString, value)
 	}
 	if value, ok := truo.mutation.Percentage(); ok {
-		_spec.SetField(taxrate.FieldPercentage, field.TypeFloat64, value)
-	}
-	if value, ok := truo.mutation.AddedPercentage(); ok {
-		_spec.AddField(taxrate.FieldPercentage, field.TypeFloat64, value)
-	}
-	if truo.mutation.PercentageCleared() {
-		_spec.ClearField(taxrate.FieldPercentage, field.TypeFloat64)
+		_spec.SetField(taxrate.FieldPercentage, field.TypeOther, value)
 	}
 	if value, ok := truo.mutation.FixedValue(); ok {
-		_spec.SetField(taxrate.FieldFixedValue, field.TypeFloat64, value)
-	}
-	if value, ok := truo.mutation.AddedFixedValue(); ok {
-		_spec.AddField(taxrate.FieldFixedValue, field.TypeFloat64, value)
-	}
-	if truo.mutation.FixedValueCleared() {
-		_spec.ClearField(taxrate.FieldFixedValue, field.TypeFloat64)
+		_spec.SetField(taxrate.FieldFixedValue, field.TypeOther, value)
 	}
 	if value, ok := truo.mutation.IsCompound(); ok {
 		_spec.SetField(taxrate.FieldIsCompound, field.TypeBool, value)
@@ -713,8 +678,20 @@ func (truo *TaxRateUpdateOne) sqlSave(ctx context.Context) (_node *TaxRate, err 
 	if value, ok := truo.mutation.ValidFrom(); ok {
 		_spec.SetField(taxrate.FieldValidFrom, field.TypeTime, value)
 	}
+	if truo.mutation.ValidFromCleared() {
+		_spec.ClearField(taxrate.FieldValidFrom, field.TypeTime)
+	}
 	if value, ok := truo.mutation.ValidTo(); ok {
 		_spec.SetField(taxrate.FieldValidTo, field.TypeTime, value)
+	}
+	if truo.mutation.ValidToCleared() {
+		_spec.ClearField(taxrate.FieldValidTo, field.TypeTime)
+	}
+	if value, ok := truo.mutation.Metadata(); ok {
+		_spec.SetField(taxrate.FieldMetadata, field.TypeJSON, value)
+	}
+	if truo.mutation.MetadataCleared() {
+		_spec.ClearField(taxrate.FieldMetadata, field.TypeJSON)
 	}
 	_node = &TaxRate{config: truo.config}
 	_spec.Assign = _node.assignValues

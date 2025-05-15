@@ -6,19 +6,21 @@ import (
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 )
 
 type TaxRate struct {
-	ID            string     `db:"id" json:"id"`
-	Name          string     `db:"name" json:"name"`
-	Code          string     `db:"code" json:"code"`
-	Description   string     `db:"description" json:"description"`
-	EnvironmentID string     `db:"environment_id" json:"environment_id"`
-	Percentage    float64    `db:"percentage" json:"percentage"`
-	FixedValue    float64    `db:"fixed_value" json:"fixed_value"`
-	IsCompound    bool       `db:"is_compound" json:"is_compound"`
-	ValidFrom     *time.Time `db:"valid_from" json:"valid_from"`
-	ValidTo       *time.Time `db:"valid_to" json:"valid_to"`
+	ID            string            `db:"id" json:"id"`
+	Name          string            `db:"name" json:"name"`
+	Code          string            `db:"code" json:"code"`
+	Description   string            `db:"description" json:"description"`
+	EnvironmentID string            `db:"environment_id" json:"environment_id"`
+	Percentage    decimal.Decimal   `db:"percentage" json:"percentage"`
+	FixedValue    decimal.Decimal   `db:"fixed_value" json:"fixed_value"`
+	IsCompound    bool              `db:"is_compound" json:"is_compound"`
+	ValidFrom     *time.Time        `db:"valid_from" json:"valid_from"`
+	ValidTo       *time.Time        `db:"valid_to" json:"valid_to"`
+	Metadata      map[string]string `db:"metadata" json:"metadata"`
 	types.BaseModel
 }
 
@@ -30,7 +32,7 @@ func FromEnt(e *ent.TaxRate) *TaxRate {
 	return &TaxRate{
 		ID:            e.ID,
 		Name:          e.Name,
-		Description:   lo.FromPtr(e.Description),
+		Description:   e.Description,
 		Code:          e.Code,
 		Percentage:    e.Percentage,
 		FixedValue:    e.FixedValue,
@@ -38,6 +40,7 @@ func FromEnt(e *ent.TaxRate) *TaxRate {
 		ValidFrom:     e.ValidFrom,
 		ValidTo:       e.ValidTo,
 		EnvironmentID: e.EnvironmentID,
+		Metadata:      e.Metadata,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),
