@@ -7,6 +7,7 @@ import (
 
 	"github.com/flexprice/flexprice/ent/auth"
 	"github.com/flexprice/flexprice/ent/billingsequence"
+	"github.com/flexprice/flexprice/ent/connection"
 	"github.com/flexprice/flexprice/ent/customer"
 	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/ent/environment"
@@ -86,6 +87,47 @@ func init() {
 	billingsequence.DefaultUpdatedAt = billingsequenceDescUpdatedAt.Default.(func() time.Time)
 	// billingsequence.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	billingsequence.UpdateDefaultUpdatedAt = billingsequenceDescUpdatedAt.UpdateDefault.(func() time.Time)
+	connectionMixin := schema.Connection{}.Mixin()
+	connectionMixinFields0 := connectionMixin[0].Fields()
+	_ = connectionMixinFields0
+	connectionMixinFields1 := connectionMixin[1].Fields()
+	_ = connectionMixinFields1
+	connectionFields := schema.Connection{}.Fields()
+	_ = connectionFields
+	// connectionDescTenantID is the schema descriptor for tenant_id field.
+	connectionDescTenantID := connectionMixinFields0[0].Descriptor()
+	// connection.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	connection.TenantIDValidator = connectionDescTenantID.Validators[0].(func(string) error)
+	// connectionDescStatus is the schema descriptor for status field.
+	connectionDescStatus := connectionMixinFields0[1].Descriptor()
+	// connection.DefaultStatus holds the default value on creation for the status field.
+	connection.DefaultStatus = connectionDescStatus.Default.(string)
+	// connectionDescCreatedAt is the schema descriptor for created_at field.
+	connectionDescCreatedAt := connectionMixinFields0[2].Descriptor()
+	// connection.DefaultCreatedAt holds the default value on creation for the created_at field.
+	connection.DefaultCreatedAt = connectionDescCreatedAt.Default.(func() time.Time)
+	// connectionDescUpdatedAt is the schema descriptor for updated_at field.
+	connectionDescUpdatedAt := connectionMixinFields0[3].Descriptor()
+	// connection.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	connection.DefaultUpdatedAt = connectionDescUpdatedAt.Default.(func() time.Time)
+	// connection.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	connection.UpdateDefaultUpdatedAt = connectionDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// connectionDescEnvironmentID is the schema descriptor for environment_id field.
+	connectionDescEnvironmentID := connectionMixinFields1[0].Descriptor()
+	// connection.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	connection.DefaultEnvironmentID = connectionDescEnvironmentID.Default.(string)
+	// connectionDescConnectionCode is the schema descriptor for connection_code field.
+	connectionDescConnectionCode := connectionFields[3].Descriptor()
+	// connection.ConnectionCodeValidator is a validator for the "connection_code" field. It is called by the builders before save.
+	connection.ConnectionCodeValidator = connectionDescConnectionCode.Validators[0].(func(string) error)
+	// connectionDescProviderType is the schema descriptor for provider_type field.
+	connectionDescProviderType := connectionFields[5].Descriptor()
+	// connection.ProviderTypeValidator is a validator for the "provider_type" field. It is called by the builders before save.
+	connection.ProviderTypeValidator = connectionDescProviderType.Validators[0].(func(string) error)
+	// connectionDescSecretID is the schema descriptor for secret_id field.
+	connectionDescSecretID := connectionFields[6].Descriptor()
+	// connection.SecretIDValidator is a validator for the "secret_id" field. It is called by the builders before save.
+	connection.SecretIDValidator = connectionDescSecretID.Validators[0].(func(string) error)
 	customerMixin := schema.Customer{}.Mixin()
 	customerMixinFields0 := customerMixin[0].Fields()
 	_ = customerMixinFields0
