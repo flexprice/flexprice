@@ -46,4 +46,5 @@ const (
 	UUID_PREFIX_SECRET                 = "secret"
 	UUID_PREFIX_WEBHOOK_EVENT          = "webhook"
 	UUID_PREFIX_INTEGRATION            = "int"
+	UUID_PREFIX_CONNECTION             = "conn"
 )

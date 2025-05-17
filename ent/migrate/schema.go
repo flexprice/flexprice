@@ -85,7 +85,6 @@ var (
 		{Name: "name", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "description", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "connection_code", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
-		{Name: "credentials", Type: field.TypeJSON},
 		{Name: "provider_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "secret_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
@@ -99,7 +98,7 @@ var (
 			{
 				Name:    "connection_connection_code_provider_type_tenant_id_environment_id",
 				Unique:  true,
-				Columns: []*schema.Column{ConnectionsColumns[10], ConnectionsColumns[12], ConnectionsColumns[1], ConnectionsColumns[7]},
+				Columns: []*schema.Column{ConnectionsColumns[10], ConnectionsColumns[11], ConnectionsColumns[1], ConnectionsColumns[7]},
 			},
 		},
 	}
@@ -398,25 +397,16 @@ var (
 				Name:    "idx_tenant_subscription_status",
 				Unique:  false,
 				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[9], InvoicesColumns[11], InvoicesColumns[12], InvoicesColumns[2]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published'",
-				},
 			},
 			{
 				Name:    "idx_tenant_type_status",
 				Unique:  false,
 				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[10], InvoicesColumns[11], InvoicesColumns[12], InvoicesColumns[2]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published'",
-				},
 			},
 			{
 				Name:    "idx_tenant_due_date_status",
 				Unique:  false,
 				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[18], InvoicesColumns[11], InvoicesColumns[12], InvoicesColumns[2]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published'",
-				},
 			},
 			{
 				Name:    "idx_tenant_environment_invoice_number_unique",

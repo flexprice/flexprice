@@ -1268,7 +1268,6 @@ type ConnectionMutation struct {
 	name            *string
 	description     *string
 	connection_code *string
-	credentials     *map[string]interface{}
 	provider_type   *string
 	secret_id       *string
 	metadata        *map[string]interface{}
@@ -1807,42 +1806,6 @@ func (m *ConnectionMutation) ResetConnectionCode() {
 	m.connection_code = nil
 }
 
-// SetCredentials sets the "credentials" field.
-func (m *ConnectionMutation) SetCredentials(value map[string]interface{}) {
-	m.credentials = &value
-}
-
-// Credentials returns the value of the "credentials" field in the mutation.
-func (m *ConnectionMutation) Credentials() (r map[string]interface{}, exists bool) {
-	v := m.credentials
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldCredentials returns the old "credentials" field's value of the Connection entity.
-// If the Connection object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ConnectionMutation) OldCredentials(ctx context.Context) (v map[string]interface{}, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldCredentials is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldCredentials requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldCredentials: %w", err)
-	}
-	return oldValue.Credentials, nil
-}
-
-// ResetCredentials resets all changes to the "credentials" field.
-func (m *ConnectionMutation) ResetCredentials() {
-	m.credentials = nil
-}
-
 // SetProviderType sets the "provider_type" field.
 func (m *ConnectionMutation) SetProviderType(s string) {
 	m.provider_type = &s
@@ -1998,7 +1961,7 @@ func (m *ConnectionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ConnectionMutation) Fields() []string {
-	fields := make([]string, 0, 14)
+	fields := make([]string, 0, 13)
 	if m.tenant_id != nil {
 		fields = append(fields, connection.FieldTenantID)
 	}
@@ -2028,9 +1991,6 @@ func (m *ConnectionMutation) Fields() []string {
 	}
 	if m.connection_code != nil {
 		fields = append(fields, connection.FieldConnectionCode)
-	}
-	if m.credentials != nil {
-		fields = append(fields, connection.FieldCredentials)
 	}
 	if m.provider_type != nil {
 		fields = append(fields, connection.FieldProviderType)
@@ -2069,8 +2029,6 @@ func (m *ConnectionMutation) Field(name string) (ent.Value, bool) {
 		return m.Description()
 	case connection.FieldConnectionCode:
 		return m.ConnectionCode()
-	case connection.FieldCredentials:
-		return m.Credentials()
 	case connection.FieldProviderType:
 		return m.ProviderType()
 	case connection.FieldSecretID:
@@ -2106,8 +2064,6 @@ func (m *ConnectionMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldDescription(ctx)
 	case connection.FieldConnectionCode:
 		return m.OldConnectionCode(ctx)
-	case connection.FieldCredentials:
-		return m.OldCredentials(ctx)
 	case connection.FieldProviderType:
 		return m.OldProviderType(ctx)
 	case connection.FieldSecretID:
@@ -2192,13 +2148,6 @@ func (m *ConnectionMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetConnectionCode(v)
-		return nil
-	case connection.FieldCredentials:
-		v, ok := value.(map[string]interface{})
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetCredentials(v)
 		return nil
 	case connection.FieldProviderType:
 		v, ok := value.(string)
@@ -2338,9 +2287,6 @@ func (m *ConnectionMutation) ResetField(name string) error {
 		return nil
 	case connection.FieldConnectionCode:
 		m.ResetConnectionCode()
-		return nil
-	case connection.FieldCredentials:
-		m.ResetCredentials()
 		return nil
 	case connection.FieldProviderType:
 		m.ResetProviderType()

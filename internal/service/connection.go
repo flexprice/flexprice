@@ -7,7 +7,6 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainConnection "github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -23,21 +22,15 @@ type ConnectionService interface {
 }
 
 type connectionService struct {
-	repo          domainConnection.Repository
-	secretService SecretService
-	logger        *logger.Logger
+	ServiceParams
 }
 
 // NewConnectionService creates a new connection service
 func NewConnectionService(
-	repo domainConnection.Repository,
-	secretService SecretService,
-	logger *logger.Logger,
+	params ServiceParams,
 ) ConnectionService {
 	return &connectionService{
-		repo:          repo,
-		secretService: secretService,
-		logger:        logger,
+		ServiceParams: params,
 	}
 }
 
@@ -53,39 +46,22 @@ func (s *connectionService) Create(ctx context.Context, req *dto.CreateConnectio
 		Credentials: req.Credentials,
 	}
 
-	secret, err := s.secretService.CreateIntegration(ctx, integrationReq)
+	secretService := NewSecretService(s.SecretRepo, s.Config, s.Logger)
+	secret, err := secretService.CreateIntegration(ctx, integrationReq)
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Failed to create integration secret for connection").
 			Mark(ierr.ErrSystem)
 	}
 
-	now := time.Now().UTC()
-
 	// Create connection entity
-	connection := &domainConnection.Connection{
-		ID:             types.GenerateUUIDWithPrefix("conn"),
-		Name:           req.Name,
-		ProviderType:   req.ProviderType,
-		ConnectionCode: req.ConnectionCode,
-		Metadata:       req.Metadata,
-		SecretID:       secret.ID,
-		BaseModel: types.BaseModel{
-			Status:        types.StatusPublished,
-			EnvironmentID: types.GetEnvironmentID(ctx),
-			TenantID:      types.GetTenantID(ctx),
-			CreatedAt:     now,
-			UpdatedAt:     now,
-			CreatedBy:     types.GetUserID(ctx),
-			UpdatedBy:     types.GetUserID(ctx),
-		},
-	}
+	connection := req.ToConnection(ctx, secret.ID)
 
 	// Create connection in repository
-	if err := s.repo.Create(ctx, connection); err != nil {
+	if err := s.ConnectionRepo.Create(ctx, connection); err != nil {
 		// If connection creation fails, attempt to delete the created secret
 		// to prevent orphaned secrets
-		_ = s.secretService.Delete(ctx, secret.ID)
+		_ = s.SecretRepo.Delete(ctx, secret.ID)
 		return nil, err
 	}
 
@@ -93,7 +69,7 @@ func (s *connectionService) Create(ctx context.Context, req *dto.CreateConnectio
 }
 
 func (s *connectionService) Get(ctx context.Context, id string) (*domainConnection.Connection, error) {
-	connection, err := s.repo.Get(ctx, id)
+	connection, err := s.ConnectionRepo.Get(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +77,7 @@ func (s *connectionService) Get(ctx context.Context, id string) (*domainConnecti
 }
 
 func (s *connectionService) GetByConnectionCode(ctx context.Context, connectionCode string) (*domainConnection.Connection, error) {
-	connection, err := s.repo.GetByConnectionCode(ctx, connectionCode)
+	connection, err := s.ConnectionRepo.GetByConnectionCode(ctx, connectionCode)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +85,7 @@ func (s *connectionService) GetByConnectionCode(ctx context.Context, connectionC
 }
 
 func (s *connectionService) GetByProviderType(ctx context.Context, providerType types.SecretProvider) (*domainConnection.Connection, error) {
-	connection, err := s.repo.GetByProviderType(ctx, providerType)
+	connection, err := s.ConnectionRepo.GetByProviderType(ctx, providerType)
 	if err != nil {
 		return nil, err
 	}
@@ -123,12 +99,12 @@ func (s *connectionService) List(ctx context.Context, filter *types.ConnectionFi
 		}
 	}
 
-	connections, err := s.repo.List(ctx, filter)
+	connections, err := s.ConnectionRepo.List(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
 
-	count, err := s.repo.Count(ctx, filter)
+	count, err := s.ConnectionRepo.Count(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +123,7 @@ func (s *connectionService) Update(ctx context.Context, id string, req *dto.Upda
 	}
 
 	// Get the existing connection
-	connection, err := s.repo.Get(ctx, id)
+	connection, err := s.ConnectionRepo.Get(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +144,7 @@ func (s *connectionService) Update(ctx context.Context, id string, req *dto.Upda
 	connection.UpdatedBy = types.GetUserID(ctx)
 
 	// Update in repository
-	if err := s.repo.Update(ctx, connection); err != nil {
+	if err := s.ConnectionRepo.Update(ctx, connection); err != nil {
 		return nil, err
 	}
 
@@ -177,20 +153,20 @@ func (s *connectionService) Update(ctx context.Context, id string, req *dto.Upda
 
 func (s *connectionService) Delete(ctx context.Context, id string) error {
 	// First get the connection to retrieve the secret ID
-	connection, err := s.repo.Get(ctx, id)
+	connection, err := s.ConnectionRepo.Get(ctx, id)
 	if err != nil {
 		return err
 	}
 
 	// Delete the connection
-	if err := s.repo.Delete(ctx, id); err != nil {
+	if err := s.ConnectionRepo.Delete(ctx, id); err != nil {
 		return err
 	}
 
 	// Delete the associated secret
 	if connection.SecretID != "" {
-		if err := s.secretService.Delete(ctx, connection.SecretID); err != nil {
-			s.logger.Warnw("failed to delete secret associated with connection",
+		if err := s.SecretRepo.Delete(ctx, connection.SecretID); err != nil {
+			s.Logger.Warnw("failed to delete secret associated with connection",
 				"connection_id", id,
 				"secret_id", connection.SecretID,
 				"error", err)

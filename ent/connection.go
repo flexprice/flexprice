@@ -38,8 +38,6 @@ type Connection struct {
 	Description string `json:"description,omitempty"`
 	// ConnectionCode holds the value of the "connection_code" field.
 	ConnectionCode string `json:"connection_code,omitempty"`
-	// Credentials holds the value of the "credentials" field.
-	Credentials map[string]interface{} `json:"-"`
 	// ProviderType holds the value of the "provider_type" field.
 	ProviderType string `json:"provider_type,omitempty"`
 	// SecretID holds the value of the "secret_id" field.
@@ -54,7 +52,7 @@ func (*Connection) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case connection.FieldCredentials, connection.FieldMetadata:
+		case connection.FieldMetadata:
 			values[i] = new([]byte)
 		case connection.FieldID, connection.FieldTenantID, connection.FieldStatus, connection.FieldCreatedBy, connection.FieldUpdatedBy, connection.FieldEnvironmentID, connection.FieldName, connection.FieldDescription, connection.FieldConnectionCode, connection.FieldProviderType, connection.FieldSecretID:
 			values[i] = new(sql.NullString)
@@ -141,14 +139,6 @@ func (c *Connection) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				c.ConnectionCode = value.String
 			}
-		case connection.FieldCredentials:
-			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field credentials", values[i])
-			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &c.Credentials); err != nil {
-					return fmt.Errorf("unmarshal field credentials: %w", err)
-				}
-			}
 		case connection.FieldProviderType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field provider_type", values[i])
@@ -234,8 +224,6 @@ func (c *Connection) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("connection_code=")
 	builder.WriteString(c.ConnectionCode)
-	builder.WriteString(", ")
-	builder.WriteString("credentials=<sensitive>")
 	builder.WriteString(", ")
 	builder.WriteString("provider_type=")
 	builder.WriteString(c.ProviderType)

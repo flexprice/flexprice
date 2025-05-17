@@ -7,9 +7,8 @@ type Connection struct {
 type ConnectionFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
-	ConnectionCode string         `json:"connection_code,omitempty" form:"connection_code"`
-	ProviderType   SecretProvider `json:"provider_type,omitempty" form:"provider_type"`
-	Status         []Status       `json:"status,omitempty" form:"status"`
+	ProviderType SecretProvider `json:"provider_type,omitempty" form:"provider_type"`
+	Status       []Status       `json:"status,omitempty" form:"status"`
 }
 
 func NewConnectionFilter() *ConnectionFilter {

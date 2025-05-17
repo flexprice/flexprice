@@ -144,12 +144,6 @@ func (cc *ConnectionCreate) SetConnectionCode(s string) *ConnectionCreate {
 	return cc
 }
 
-// SetCredentials sets the "credentials" field.
-func (cc *ConnectionCreate) SetCredentials(m map[string]interface{}) *ConnectionCreate {
-	cc.mutation.SetCredentials(m)
-	return cc
-}
-
 // SetProviderType sets the "provider_type" field.
 func (cc *ConnectionCreate) SetProviderType(s string) *ConnectionCreate {
 	cc.mutation.SetProviderType(s)
@@ -254,9 +248,6 @@ func (cc *ConnectionCreate) check() error {
 			return &ValidationError{Name: "connection_code", err: fmt.Errorf(`ent: validator failed for field "Connection.connection_code": %w`, err)}
 		}
 	}
-	if _, ok := cc.mutation.Credentials(); !ok {
-		return &ValidationError{Name: "credentials", err: errors.New(`ent: missing required field "Connection.credentials"`)}
-	}
 	if _, ok := cc.mutation.ProviderType(); !ok {
 		return &ValidationError{Name: "provider_type", err: errors.New(`ent: missing required field "Connection.provider_type"`)}
 	}
@@ -347,10 +338,6 @@ func (cc *ConnectionCreate) createSpec() (*Connection, *sqlgraph.CreateSpec) {
 	if value, ok := cc.mutation.ConnectionCode(); ok {
 		_spec.SetField(connection.FieldConnectionCode, field.TypeString, value)
 		_node.ConnectionCode = value
-	}
-	if value, ok := cc.mutation.Credentials(); ok {
-		_spec.SetField(connection.FieldCredentials, field.TypeJSON, value)
-		_node.Credentials = value
 	}
 	if value, ok := cc.mutation.ProviderType(); ok {
 		_spec.SetField(connection.FieldProviderType, field.TypeString, value)

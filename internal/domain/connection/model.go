@@ -11,7 +11,6 @@ type Connection struct {
 	Description    string                 `json:"description"`
 	ConnectionCode string                 `json:"connection_code"`
 	ProviderType   types.SecretProvider   `json:"provider_type"`
-	Credentials    map[string]interface{} `json:"credentials"`
 	Metadata       map[string]interface{} `json:"metadata"`
 	SecretID       string                 `json:"secret_id"`
 	types.BaseModel
@@ -24,7 +23,6 @@ func FromEnt(conn *ent.Connection) *Connection {
 		Description:    conn.Description,
 		ConnectionCode: conn.ConnectionCode,
 		ProviderType:   types.SecretProvider(conn.ProviderType),
-		Credentials:    conn.Credentials,
 		Metadata:       conn.Metadata,
 		SecretID:       conn.SecretID,
 		BaseModel: types.BaseModel{

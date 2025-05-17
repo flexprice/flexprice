@@ -2,6 +2,7 @@ package ent
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/connection"
@@ -45,6 +46,7 @@ func (r *connectionRepository) Create(ctx context.Context, c *domainConnection.C
 	client := r.client.Querier(ctx)
 
 	_, err := client.Connection.Create().
+		SetID(c.ID).
 		SetName(c.Name).
 		SetProviderType(string(c.ProviderType)).
 		SetConnectionCode(c.ConnectionCode).
@@ -56,6 +58,7 @@ func (r *connectionRepository) Create(ctx context.Context, c *domainConnection.C
 		SetUpdatedBy(c.UpdatedBy).
 		SetTenantID(c.TenantID).
 		SetSecretID(c.SecretID).
+		SetEnvironmentID(c.EnvironmentID).
 		Save(ctx)
 
 	if err != nil {
@@ -150,27 +153,8 @@ func (r *connectionRepository) List(ctx context.Context, filter *types.Connectio
 
 	query := client.Connection.Query()
 
+	query = ApplyQueryOptions(ctx, query, filter, r.queryOpts)
 	query = r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
-
-	// Apply sorting
-	if filter != nil {
-		order := filter.GetOrder()
-		sortField := filter.GetSort()
-
-		if order == "desc" {
-			query = query.Order(ent.Desc(sortField))
-		} else {
-			query = query.Order(ent.Asc(sortField))
-		}
-	}
-
-	// Apply pagination
-	if filter != nil && !filter.IsUnlimited() {
-		limit := filter.GetLimit()
-		offset := filter.GetOffset()
-
-		query = query.Limit(limit).Offset(offset)
-	}
 
 	connections, err := query.All(ctx)
 	if err != nil {
@@ -186,8 +170,9 @@ func (r *connectionRepository) Count(ctx context.Context, filter *types.Connecti
 	client := r.client.Querier(ctx)
 
 	query := client.Connection.Query()
+	r.log.Debugf("query", "query", query)
 
-	query = ApplyBaseFilters(ctx, query, filter, r.queryOpts)
+	query = ApplyQueryOptions(ctx, query, filter, r.queryOpts)
 	query = r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
 
 	count, err := query.Count(ctx)
@@ -196,12 +181,17 @@ func (r *connectionRepository) Count(ctx context.Context, filter *types.Connecti
 			WithHint("Failed to count connections").
 			Mark(ierr.ErrDatabase)
 	}
+	fmt.Println("count_connections", count)
 
 	return count, nil
 }
 
 func (r *connectionRepository) Update(ctx context.Context, c *domainConnection.Connection) error {
 	client := r.client.Querier(ctx)
+
+	if c.EnvironmentID == "" {
+		c.EnvironmentID = types.GetEnvironmentID(ctx)
+	}
 
 	_, err := client.Connection.UpdateOneID(c.ID).
 		Where(
@@ -314,10 +304,6 @@ func (o ConnectionQueryOptions) GetFieldName(field string) string {
 func (o ConnectionQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.ConnectionFilter, query *ent.ConnectionQuery) *ent.ConnectionQuery {
 	if f == nil {
 		return query
-	}
-
-	if f.ConnectionCode != "" {
-		query = query.Where(connection.ConnectionCode(f.ConnectionCode))
 	}
 
 	if f.ProviderType != "" {

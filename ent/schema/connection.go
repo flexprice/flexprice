@@ -45,9 +45,6 @@ func (Connection) Fields() []ent.Field {
 				"postgres": "varchar(255)",
 			}).
 			NotEmpty(),
-		field.JSON("credentials", map[string]interface{}{}).
-			Sensitive().
-			Immutable(),
 		field.String("provider_type").
 			SchemaType(map[string]string{
 				"postgres": "varchar(255)",

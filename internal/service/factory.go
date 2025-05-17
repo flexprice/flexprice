@@ -3,6 +3,7 @@ package service
 import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/auth"
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/environment"
@@ -56,6 +57,7 @@ type ServiceParams struct {
 	EnvironmentRepo environment.Repository
 	TaskRepo        task.Repository
 	IntegrationRepo integration.Repository
+	ConnectionRepo  connection.Repository
 
 	// Publishers
 	EventPublisher   publisher.EventPublisher
@@ -80,6 +82,7 @@ func NewServiceParams(
 	customerRepo customer.Repository,
 	planRepo plan.Repository,
 	subRepo subscription.Repository,
+	connectionRepo connection.Repository,
 	walletRepo wallet.Repository,
 	tenantRepo tenant.Repository,
 	invoiceRepo invoice.Repository,
@@ -114,6 +117,7 @@ func NewServiceParams(
 		EnvironmentRepo:  environmentRepo,
 		TaskRepo:         taskRepo,
 		IntegrationRepo:  integrationRepo,
+		ConnectionRepo:   connectionRepo,
 		EventPublisher:   eventPublisher,
 		WebhookPublisher: webhookPublisher,
 	}

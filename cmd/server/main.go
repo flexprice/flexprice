@@ -128,6 +128,7 @@ func main() {
 			repository.NewTaskRepository,
 			repository.NewSecretRepository,
 			repository.NewIntegrationRepository,
+			repository.NewConnectionRepository,
 
 			// PubSub
 			pubsubRouter.NewRouter,
@@ -172,6 +173,7 @@ func main() {
 			service.NewBillingService,
 			service.NewEntitySyncService,
 			service.NewGatewayService,
+			service.NewConnectionService,
 		),
 	)
 
@@ -217,6 +219,9 @@ func provideHandlers(
 	secretService service.SecretService,
 	onboardingService service.OnboardingService,
 	billingService service.BillingService,
+	connectionService service.ConnectionService,
+	gatewayService service.GatewayService,
+	entitySyncService service.EntitySyncService,
 ) api.Handlers {
 	return api.Handlers{
 		Events:            v1.NewEventsHandler(eventService, eventPostProcessingService, logger),
@@ -241,6 +246,7 @@ func provideHandlers(
 		Onboarding:        v1.NewOnboardingHandler(onboardingService, logger),
 		CronSubscription:  cron.NewSubscriptionHandler(subscriptionService, temporalService, logger),
 		CronWallet:        cron.NewWalletCronHandler(logger, temporalService, walletService, tenantService),
+		Connection:        v1.NewConnectionHandler(connectionService, gatewayService, entitySyncService, logger),
 	}
 }
 

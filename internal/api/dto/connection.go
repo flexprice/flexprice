@@ -1,6 +1,7 @@
 package dto
 
 import (
+	"context"
 	"time"
 
 	domainConnection "github.com/flexprice/flexprice/internal/domain/connection"
@@ -15,6 +16,18 @@ type CreateConnectionRequest struct {
 	ConnectionCode string                 `json:"connection_code" validate:"required"`
 	Metadata       map[string]interface{} `json:"metadata,omitempty"`
 	Credentials    map[string]string      `json:"credentials" validate:"required"`
+}
+
+func (r *CreateConnectionRequest) ToConnection(ctx context.Context, secretID string) *domainConnection.Connection {
+	return &domainConnection.Connection{
+		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CONNECTION),
+		Name:           r.Name,
+		ProviderType:   r.ProviderType,
+		ConnectionCode: r.ConnectionCode,
+		Metadata:       r.Metadata,
+		SecretID:       secretID,
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
 }
 
 // Validate validates the create connection request

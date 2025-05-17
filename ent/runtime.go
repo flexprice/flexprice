@@ -121,11 +121,11 @@ func init() {
 	// connection.ConnectionCodeValidator is a validator for the "connection_code" field. It is called by the builders before save.
 	connection.ConnectionCodeValidator = connectionDescConnectionCode.Validators[0].(func(string) error)
 	// connectionDescProviderType is the schema descriptor for provider_type field.
-	connectionDescProviderType := connectionFields[5].Descriptor()
+	connectionDescProviderType := connectionFields[4].Descriptor()
 	// connection.ProviderTypeValidator is a validator for the "provider_type" field. It is called by the builders before save.
 	connection.ProviderTypeValidator = connectionDescProviderType.Validators[0].(func(string) error)
 	// connectionDescSecretID is the schema descriptor for secret_id field.
-	connectionDescSecretID := connectionFields[6].Descriptor()
+	connectionDescSecretID := connectionFields[5].Descriptor()
 	// connection.SecretIDValidator is a validator for the "secret_id" field. It is called by the builders before save.
 	connection.SecretIDValidator = connectionDescSecretID.Validators[0].(func(string) error)
 	customerMixin := schema.Customer{}.Mixin()

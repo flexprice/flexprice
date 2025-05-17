@@ -33,8 +33,6 @@ const (
 	FieldDescription = "description"
 	// FieldConnectionCode holds the string denoting the connection_code field in the database.
 	FieldConnectionCode = "connection_code"
-	// FieldCredentials holds the string denoting the credentials field in the database.
-	FieldCredentials = "credentials"
 	// FieldProviderType holds the string denoting the provider_type field in the database.
 	FieldProviderType = "provider_type"
 	// FieldSecretID holds the string denoting the secret_id field in the database.
@@ -58,7 +56,6 @@ var Columns = []string{
 	FieldName,
 	FieldDescription,
 	FieldConnectionCode,
-	FieldCredentials,
 	FieldProviderType,
 	FieldSecretID,
 	FieldMetadata,
