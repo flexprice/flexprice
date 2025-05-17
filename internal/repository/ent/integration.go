@@ -219,7 +219,7 @@ func (r *integrationRepository) Count(ctx context.Context, filter *domainIntegra
 	count, err := query.Count(ctx)
 	if err != nil {
 		return 0, errors.WithError(err).
-			WithHint("Failed to count entity connections").
+			WithHint("Failed to count entity integrations").
 			Mark(errors.ErrDatabase)
 	}
 
