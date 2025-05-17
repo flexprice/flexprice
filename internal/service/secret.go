@@ -25,12 +25,13 @@ type SecretService interface {
 	// Integration operations
 	CreateIntegration(ctx context.Context, req *dto.CreateIntegrationRequest) (*secret.Secret, error)
 	ListIntegrations(ctx context.Context, filter *types.SecretFilter) (*dto.ListSecretsResponse, error)
+	GetIntegrationCredentials(ctx context.Context, provider types.SecretProvider) (map[string]string, error)
+	getIntegrationCredentials(ctx context.Context, provider types.SecretProvider) ([]map[string]string, error)
 
 	// Verification operations
 	VerifyAPIKey(ctx context.Context, apiKey string) (*secret.Secret, error)
-	getIntegrationCredentials(ctx context.Context, provider string) ([]map[string]string, error)
 
-	ListLinkedIntegrations(ctx context.Context) ([]string, error)
+	ListLinkedIntegrations(ctx context.Context) ([]types.SecretProvider, error)
 }
 
 type secretService struct {
@@ -293,12 +294,13 @@ func (s *secretService) VerifyAPIKey(ctx context.Context, apiKey string) (*secre
 }
 
 // getIntegrationCredentials returns all integration credentials for a provider
-func (s *secretService) getIntegrationCredentials(ctx context.Context, provider string) ([]map[string]string, error) {
+func (s *secretService) getIntegrationCredentials(ctx context.Context, provider types.SecretProvider) ([]map[string]string, error) {
 	filter := &types.SecretFilter{
 		QueryFilter: types.NewNoLimitPublishedQueryFilter(),
 		Type:        lo.ToPtr(types.SecretTypeIntegration),
-		Provider:    lo.ToPtr(types.SecretProvider(provider)),
+		Provider:    lo.ToPtr(provider),
 	}
+	filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
 
 	secrets, err := s.repo.List(ctx, filter)
 	if err != nil {
@@ -328,7 +330,7 @@ func (s *secretService) getIntegrationCredentials(ctx context.Context, provider 
 }
 
 // ListLinkedIntegrations returns a list of unique providers which have a valid linked integration secret
-func (s *secretService) ListLinkedIntegrations(ctx context.Context) ([]string, error) {
+func (s *secretService) ListLinkedIntegrations(ctx context.Context) ([]types.SecretProvider, error) {
 	filter := &types.SecretFilter{
 		QueryFilter: types.NewNoLimitPublishedQueryFilter(),
 		Type:        lo.ToPtr(types.SecretTypeIntegration),
@@ -346,10 +348,36 @@ func (s *secretService) ListLinkedIntegrations(ctx context.Context) ([]string, e
 	}
 
 	// Convert map keys to slice
-	providers := make([]string, 0, len(providerMap))
+	providers := make([]types.SecretProvider, 0, len(providerMap))
 	for provider := range providerMap {
-		providers = append(providers, provider)
+		providers = append(providers, types.SecretProvider(provider))
 	}
 
 	return providers, nil
+}
+
+// GetIntegrationCredentials returns the credentials for a specific provider
+// It will return the first integration's credentials if multiple are configured
+func (s *secretService) GetIntegrationCredentials(ctx context.Context, provider types.SecretProvider) (map[string]string, error) {
+	// Get credentials for the provider
+	creds, err := s.getIntegrationCredentials(ctx, provider)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(creds) == 0 {
+		return nil, ierr.NewError(fmt.Sprintf("no credentials found for provider: %s", provider)).
+			WithHint(fmt.Sprintf("Please configure the %s integration", provider)).
+			Mark(ierr.ErrNotFound)
+	}
+
+	if len(creds) > 1 {
+		return nil, ierr.NewError(fmt.Sprintf("multiple credentials found for provider: %s", provider)).
+			WithHint(fmt.Sprintf("Please configure only one %s integration", provider)).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Return the first set of credentials
+	// In the future, we might want to be more sophisticated about which credentials to use
+	return creds[0], nil
 }

@@ -4,11 +4,13 @@ import (
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/domain/auth"
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
+	"github.com/flexprice/flexprice/internal/domain/integration"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/payment"
@@ -107,4 +109,12 @@ func NewTaskRepository(p RepositoryParams) task.Repository {
 
 func NewSecretRepository(p RepositoryParams) secret.Repository {
 	return entRepo.NewSecretRepository(p.EntClient, p.Logger, p.Cache)
+}
+
+func NewIntegrationRepository(p RepositoryParams) integration.Repository {
+	return entRepo.NewIntegrationRepository(p.EntClient, p.Logger)
+}
+
+func NewConnectionRepository(p RepositoryParams) connection.Repository {
+	return entRepo.NewConnectionRepository(p.EntClient, p.Logger)
 }
