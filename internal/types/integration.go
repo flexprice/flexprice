@@ -15,9 +15,11 @@ const (
 type SyncStatus string
 
 const (
-	SyncStatusPending SyncStatus = "pending"
-	SyncStatusSuccess SyncStatus = "success"
-	SyncStatusFailed  SyncStatus = "failed"
+	SyncStatusPending  SyncStatus = "pending"
+	SyncStatusSuccess  SyncStatus = "success"
+	SyncStatusFailed   SyncStatus = "failed"
+	SyncStatusSkipped  SyncStatus = "skipped"
+	SyncStatusDisabled SyncStatus = "disabled"
 )
 
 type SyncEventAction string

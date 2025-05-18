@@ -16,10 +16,10 @@ import (
 // EntitySyncService handles entity synchronization with external systems
 type EntitySyncService interface {
 	// Sync an entity immediately (synchronous)
-	SyncEntity(ctx context.Context, entityType types.EntityType, entityID string, provider types.SecretProvider) error
+	SyncEntity(ctx context.Context, entityType types.EntityType, entityID string, connectionCode string) error
 
 	// Queue an entity for synchronization (asynchronous)
-	QueueEntitySync(ctx context.Context, entityType types.EntityType, entityID string, provider types.SecretProvider) error
+	QueueEntitySync(ctx context.Context, entityType types.EntityType, entityID string, connectionCode string) error
 
 	// Process sync queue (for background workers)
 	ProcessSyncQueue(ctx context.Context) error
@@ -41,36 +41,48 @@ func NewEntitySyncService(params ServiceParams) EntitySyncService {
 }
 
 // SyncEntity synchronizes an entity with an external system
-func (s *entitySyncService) SyncEntity(ctx context.Context, entityType types.EntityType, entityID string, provider types.SecretProvider) error {
+func (s *entitySyncService) SyncEntity(ctx context.Context, entityType types.EntityType, entityID string, connectionCode string) error {
 	// Get the entity
 	entity, err := s.getEntityByType(ctx, entityType, entityID)
 	if err != nil {
 		return err
 	}
 
-	// Get the integration gateway
-	gatewayService := NewGatewayService(s.ServiceParams)
-	gateway, err := gatewayService.GetGateway(ctx, provider)
+	// Get the integration gateway using connection code
+	gateway, err := s.GatewayManager.GetGatewayByConnectionCode(ctx, connectionCode)
 	if err != nil {
 		return err
 	}
 
+	// Get the connection to get provider type
+	connection, err := s.ConnectionRepo.GetByConnectionCode(ctx, connectionCode)
+	if err != nil {
+		return err
+	}
+
+	provider := connection.ProviderType
+
 	// Check capability support
-	capability := types.IntegrationCapability(entityType)
+	capability, err := s.getCapabilityByEntityType(ctx, entityType)
+	if err != nil {
+		return err
+	}
+
 	if !gateway.SupportsCapability(capability) {
 		return ierr.NewError(fmt.Sprintf("%s does not support %s synchronization", provider, entityType)).
 			WithHint(fmt.Sprintf("The %s provider does not support %s synchronization", provider, entityType)).
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	// Get existing connection or create new one
-	connection, err := s.IntegrationRepo.GetByEntityAndProvider(ctx, entityType, entityID, provider)
+	// Get existing integration or create new one
+	integrationEntity, err := s.IntegrationRepo.GetByEntityAndProvider(ctx, entityType, entityID, provider)
 	isNew := err != nil && ierr.IsNotFound(err)
 	if isNew {
-		connection = &integration.IntegrationEntity{
+		integrationEntity = &integration.IntegrationEntity{
 			ID:           types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INTEGRATION),
 			EntityType:   entityType,
 			EntityID:     entityID,
+			ConnectionID: connection.ID,
 			ProviderType: provider,
 			SyncStatus:   types.SyncStatusPending,
 			SyncHistory:  []integration.SyncEvent{},
@@ -86,25 +98,25 @@ func (s *entitySyncService) SyncEntity(ctx context.Context, entityType types.Ent
 	syncErr := error(nil)
 	action := types.SyncEventActionCreate
 
-	if !isNew && connection.ProviderID != "" {
+	if !isNew && integrationEntity.ProviderID != "" {
 		action = types.SyncEventActionUpdate
 	}
 
 	// Perform the appropriate action based on entity type
 	switch entityType {
-	case "customer":
-		if isNew || connection.ProviderID == "" {
+	case types.EntityTypeCustomers:
+		if isNew || integrationEntity.ProviderID == "" {
 			providerID, syncErr = gateway.CreateCustomer(ctx, entity.(*customer.Customer))
 		} else {
-			syncErr = gateway.UpdateCustomer(ctx, entity.(*customer.Customer), connection.ProviderID)
-			providerID = connection.ProviderID
+			syncErr = gateway.UpdateCustomer(ctx, entity.(*customer.Customer), integrationEntity.ProviderID)
+			providerID = integrationEntity.ProviderID
 		}
-	case "payment":
-		if isNew || connection.ProviderID == "" {
+	case types.EntityTypePayments:
+		if isNew || integrationEntity.ProviderID == "" {
 			providerID, syncErr = gateway.CreatePayment(ctx, entity.(*payment.Payment), nil)
 		} else {
 			// Currently only read-only after creation
-			providerID = connection.ProviderID
+			providerID = integrationEntity.ProviderID
 		}
 	default:
 		return ierr.NewError(fmt.Sprintf("unsupported entity type: %s", entityType)).
@@ -117,30 +129,30 @@ func (s *entitySyncService) SyncEntity(ctx context.Context, entityType types.Ent
 	timestamp := now.Unix()
 	syncEvent := integration.SyncEvent{
 		Action:    types.SyncEventAction(action),
-		Status:    "success",
+		Status:    types.SyncStatusSuccess,
 		Timestamp: timestamp,
 		ErrorMsg:  nil,
 	}
 
 	if syncErr != nil {
 		errorMsg := syncErr.Error()
-		syncEvent.Status = "failed"
+		syncEvent.Status = types.SyncStatusFailed
 		syncEvent.ErrorMsg = &errorMsg
-		connection.SyncStatus = "failed"
-		connection.LastErrorMsg = &errorMsg
+		integrationEntity.SyncStatus = types.SyncStatusFailed
+		integrationEntity.LastErrorMsg = &errorMsg
 	} else {
-		connection.SyncStatus = "synced"
-		connection.ProviderID = providerID
-		connection.LastSyncedAt = &now
+		integrationEntity.SyncStatus = types.SyncStatusSuccess
+		integrationEntity.ProviderID = providerID
+		integrationEntity.LastSyncedAt = &now
 	}
 
-	connection.SyncHistory = append(connection.SyncHistory, syncEvent)
+	integrationEntity.SyncHistory = append(integrationEntity.SyncHistory, syncEvent)
 
 	// Save or update the connection
 	if isNew {
-		err = s.IntegrationRepo.Create(ctx, connection)
+		err = s.IntegrationRepo.Create(ctx, integrationEntity)
 	} else {
-		err = s.IntegrationRepo.Update(ctx, connection)
+		err = s.IntegrationRepo.Update(ctx, integrationEntity)
 	}
 
 	if err != nil {
@@ -152,10 +164,10 @@ func (s *entitySyncService) SyncEntity(ctx context.Context, entityType types.Ent
 }
 
 // QueueEntitySync queues an entity for asynchronous synchronization
-func (s *entitySyncService) QueueEntitySync(ctx context.Context, entityType types.EntityType, entityID string, provider types.SecretProvider) error {
+func (s *entitySyncService) QueueEntitySync(ctx context.Context, entityType types.EntityType, entityID string, connectionCode string) error {
 	// For now, we'll just do synchronous processing
 	// In the future, this will queue a task in a background worker system
-	return s.SyncEntity(ctx, entityType, entityID, provider)
+	return s.SyncEntity(ctx, entityType, entityID, connectionCode)
 }
 
 // ProcessSyncQueue processes the queue of entities to be synchronized
@@ -188,7 +200,20 @@ func (s *entitySyncService) RetryFailedSyncs(ctx context.Context, limit int) err
 			"entity_id", integration.EntityID,
 			"provider", integration.ProviderType)
 
-		err := s.SyncEntity(ctx, integration.EntityType, integration.EntityID, integration.ProviderType)
+		// Get the connection using the stored ConnectionID
+		connection, err := s.ConnectionRepo.Get(ctx, integration.ConnectionID)
+		if err != nil {
+			s.Logger.Errorw("failed to get connection for retry",
+				"error", err,
+				"entity_type", integration.EntityType,
+				"entity_id", integration.EntityID,
+				"connection_id", integration.ConnectionID)
+			continue
+		}
+
+		connectionCode := connection.ConnectionCode
+
+		err = s.SyncEntity(ctx, integration.EntityType, integration.EntityID, connectionCode)
 		if err != nil {
 			s.Logger.Errorw("retry failed",
 				"error", err,
@@ -209,6 +234,19 @@ func (s *entitySyncService) getEntityByType(ctx context.Context, entityType type
 		return s.PaymentRepo.Get(ctx, entityID)
 	default:
 		return nil, ierr.NewError(fmt.Sprintf("unsupported entity type: %s", entityType)).
+			WithHint(fmt.Sprintf("Entity type %s is not supported for synchronization", entityType)).
+			Mark(ierr.ErrInvalidOperation)
+	}
+}
+
+func (s *entitySyncService) getCapabilityByEntityType(_ context.Context, entityType types.EntityType) (types.IntegrationCapability, error) {
+	switch entityType {
+	case types.EntityTypeCustomers:
+		return types.CapabilityCustomer, nil
+	case types.EntityTypePayments:
+		return types.CapabilityPayment, nil
+	default:
+		return "", ierr.NewError(fmt.Sprintf("unsupported entity type: %s", entityType)).
 			WithHint(fmt.Sprintf("Entity type %s is not supported for synchronization", entityType)).
 			Mark(ierr.ErrInvalidOperation)
 	}

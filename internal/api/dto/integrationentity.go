@@ -40,7 +40,7 @@ func (r *CreateIntegrationEntityRequest) Validate() error {
 
 func (r *CreateIntegrationEntityRequest) ToIntegrationEntity(ctx context.Context) *integration.IntegrationEntity {
 	return &integration.IntegrationEntity{
-		ID:           types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INTEGRATION_ENTITY),
+		ID:           types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INTEGRATION),
 		ConnectionID: r.ConnectionID,
 		EntityType:   r.EntityType,
 		EntityID:     r.EntityID,

@@ -269,56 +269,16 @@ func (s *customerService) GetCustomerByLookupKey(ctx context.Context, lookupKey 
 }
 
 func (s *customerService) handleCustomerBillingIntegration(ctx context.Context, cust *customer.Customer, billingConfig dto.BillingConfiguration) error {
-	// If no integration needed, return early
-	if !billingConfig.SyncWithProvider && billingConfig.ProviderCustomerID == "" {
-		return nil
+	if err := billingConfig.Validate(); err != nil {
+		return err
 	}
 
-	// Common validation
-	if billingConfig.ConnectionCode == "" || billingConfig.PaymentProviderType == "" {
-		return ierr.NewError("connection code and payment provider type are required").
-			Mark(ierr.ErrValidation)
+	entitySyncService := NewEntitySyncService(s.ServiceParams)
+	if err := entitySyncService.SyncEntity(ctx, types.EntityTypeCustomers, cust.ID, billingConfig.ConnectionCode); err != nil {
+		return err
 	}
 
-	var providerID string
-
-	// Case 1: Sync with provider - create customer in external system
-	if billingConfig.SyncWithProvider {
-		if err := billingConfig.Validate(); err != nil {
-			return err
-		}
-
-		gateway, err := s.GatewayManager.GetGatewayByConnectionCode(ctx, billingConfig.ConnectionCode)
-		if err != nil {
-			return err
-		}
-
-		if !gateway.SupportsCapability(types.CapabilityCustomer) {
-			return ierr.NewError("gateway does not support customer capability").
-				Mark(ierr.ErrInvalidOperation)
-		}
-
-		// Create customer in external system
-		providerID, err = gateway.CreateCustomer(ctx, cust)
-		if err != nil {
-			return err
-		}
-	} else {
-		// Case 2: Use provided external ID
-		providerID = billingConfig.ProviderCustomerID
-	}
-
-	// Create integration entity
-	integrationRequest := &dto.CreateIntegrationEntityRequest{
-		ConnectionID: billingConfig.ConnectionCode,
-		EntityType:   types.EntityTypeCustomers,
-		EntityID:     cust.ID,
-		ProviderType: billingConfig.PaymentProviderType,
-		ProviderID:   providerID,
-	}
-
-	_, err := s.IntegrationEntityService.CreateIntegrationEntity(ctx, integrationRequest)
-	return err
+	return nil
 }
 
 func (s *customerService) publishWebhookEvent(ctx context.Context, eventName string, customerID string) {

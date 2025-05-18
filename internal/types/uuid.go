@@ -47,5 +47,4 @@ const (
 	UUID_PREFIX_WEBHOOK_EVENT          = "webhook"
 	UUID_PREFIX_INTEGRATION            = "int"
 	UUID_PREFIX_CONNECTION             = "conn"
-	UUID_PREFIX_INTEGRATION_ENTITY     = "ient"
 )
