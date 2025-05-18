@@ -33,6 +33,7 @@ type Handlers struct {
 	Payment           *v1.PaymentHandler
 	Task              *v1.TaskHandler
 	Secret            *v1.SecretHandler
+	Connection        *v1.ConnectionHandler
 	// Portal handlers
 	Onboarding *v1.OnboardingHandler
 	// Cron jobs : TODO: move crons out of API based architecture
@@ -256,14 +257,17 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 				apiKeys.DELETE("/:id", handlers.Secret.DeleteAPIKey)
 			}
 
-			// Integration routes
-			integrations := secrets.Group("/integrations")
-			{
-				integrations.GET("/linked", handlers.Secret.ListLinkedIntegrations)
-				integrations.POST("/:provider", handlers.Secret.CreateIntegration)
-				integrations.GET("/:provider", handlers.Secret.GetIntegration)
-				integrations.DELETE("/:id", handlers.Secret.DeleteIntegration)
-			}
+		}
+
+		// Connection routes
+		integrations := v1Private.Group("/integrations")
+		{
+			integrations.GET("/", handlers.Connection.ListConnections)
+			integrations.POST("", handlers.Connection.CreateConnection)
+			integrations.GET("/:id", handlers.Connection.GetConnection)
+			integrations.DELETE("/:id", handlers.Connection.DeleteConnection)
+			integrations.PUT("/:id", handlers.Connection.UpdateConnection)
+			integrations.GET("/code/:code", handlers.Connection.GetConnectionByCode)
 		}
 
 		// Admin routes (API Key only)
