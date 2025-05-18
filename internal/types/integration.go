@@ -20,6 +20,14 @@ const (
 	SyncStatusFailed  SyncStatus = "failed"
 )
 
+type SyncEventAction string
+
+const (
+	SyncEventActionCreate SyncEventAction = "create"
+	SyncEventActionUpdate SyncEventAction = "update"
+	SyncEventActionDelete SyncEventAction = "delete"
+)
+
 func (c IntegrationCapability) Validate() error {
 
 	switch c {

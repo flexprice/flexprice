@@ -133,6 +133,26 @@ func (ieu *IntegrationEntityUpdate) ClearProviderID() *IntegrationEntityUpdate {
 	return ieu
 }
 
+// SetConnectionID sets the "connection_id" field.
+func (ieu *IntegrationEntityUpdate) SetConnectionID(s string) *IntegrationEntityUpdate {
+	ieu.mutation.SetConnectionID(s)
+	return ieu
+}
+
+// SetNillableConnectionID sets the "connection_id" field if the given value is not nil.
+func (ieu *IntegrationEntityUpdate) SetNillableConnectionID(s *string) *IntegrationEntityUpdate {
+	if s != nil {
+		ieu.SetConnectionID(*s)
+	}
+	return ieu
+}
+
+// ClearConnectionID clears the value of the "connection_id" field.
+func (ieu *IntegrationEntityUpdate) ClearConnectionID() *IntegrationEntityUpdate {
+	ieu.mutation.ClearConnectionID()
+	return ieu
+}
+
 // SetSyncStatus sets the "sync_status" field.
 func (ieu *IntegrationEntityUpdate) SetSyncStatus(ts types.SyncStatus) *IntegrationEntityUpdate {
 	ieu.mutation.SetSyncStatus(ts)
@@ -288,6 +308,12 @@ func (ieu *IntegrationEntityUpdate) sqlSave(ctx context.Context) (n int, err err
 	if ieu.mutation.ProviderIDCleared() {
 		_spec.ClearField(integrationentity.FieldProviderID, field.TypeString)
 	}
+	if value, ok := ieu.mutation.ConnectionID(); ok {
+		_spec.SetField(integrationentity.FieldConnectionID, field.TypeString, value)
+	}
+	if ieu.mutation.ConnectionIDCleared() {
+		_spec.ClearField(integrationentity.FieldConnectionID, field.TypeString)
+	}
 	if value, ok := ieu.mutation.SyncStatus(); ok {
 		_spec.SetField(integrationentity.FieldSyncStatus, field.TypeString, value)
 	}
@@ -433,6 +459,26 @@ func (ieuo *IntegrationEntityUpdateOne) SetNillableProviderID(s *string) *Integr
 // ClearProviderID clears the value of the "provider_id" field.
 func (ieuo *IntegrationEntityUpdateOne) ClearProviderID() *IntegrationEntityUpdateOne {
 	ieuo.mutation.ClearProviderID()
+	return ieuo
+}
+
+// SetConnectionID sets the "connection_id" field.
+func (ieuo *IntegrationEntityUpdateOne) SetConnectionID(s string) *IntegrationEntityUpdateOne {
+	ieuo.mutation.SetConnectionID(s)
+	return ieuo
+}
+
+// SetNillableConnectionID sets the "connection_id" field if the given value is not nil.
+func (ieuo *IntegrationEntityUpdateOne) SetNillableConnectionID(s *string) *IntegrationEntityUpdateOne {
+	if s != nil {
+		ieuo.SetConnectionID(*s)
+	}
+	return ieuo
+}
+
+// ClearConnectionID clears the value of the "connection_id" field.
+func (ieuo *IntegrationEntityUpdateOne) ClearConnectionID() *IntegrationEntityUpdateOne {
+	ieuo.mutation.ClearConnectionID()
 	return ieuo
 }
 
@@ -620,6 +666,12 @@ func (ieuo *IntegrationEntityUpdateOne) sqlSave(ctx context.Context) (_node *Int
 	}
 	if ieuo.mutation.ProviderIDCleared() {
 		_spec.ClearField(integrationentity.FieldProviderID, field.TypeString)
+	}
+	if value, ok := ieuo.mutation.ConnectionID(); ok {
+		_spec.SetField(integrationentity.FieldConnectionID, field.TypeString, value)
+	}
+	if ieuo.mutation.ConnectionIDCleared() {
+		_spec.ClearField(integrationentity.FieldConnectionID, field.TypeString)
 	}
 	if value, ok := ieuo.mutation.SyncStatus(); ok {
 		_spec.SetField(integrationentity.FieldSyncStatus, field.TypeString, value)

@@ -316,15 +316,15 @@ func init() {
 	// integrationentity.DefaultEnvironmentID holds the default value on creation for the environment_id field.
 	integrationentity.DefaultEnvironmentID = integrationentityDescEnvironmentID.Default.(string)
 	// integrationentityDescSyncStatus is the schema descriptor for sync_status field.
-	integrationentityDescSyncStatus := integrationentityFields[5].Descriptor()
+	integrationentityDescSyncStatus := integrationentityFields[6].Descriptor()
 	// integrationentity.DefaultSyncStatus holds the default value on creation for the sync_status field.
 	integrationentity.DefaultSyncStatus = types.SyncStatus(integrationentityDescSyncStatus.Default.(string))
 	// integrationentityDescSyncHistory is the schema descriptor for sync_history field.
-	integrationentityDescSyncHistory := integrationentityFields[8].Descriptor()
+	integrationentityDescSyncHistory := integrationentityFields[9].Descriptor()
 	// integrationentity.DefaultSyncHistory holds the default value on creation for the sync_history field.
 	integrationentity.DefaultSyncHistory = integrationentityDescSyncHistory.Default.([]schema.SyncEvent)
 	// integrationentityDescMetadata is the schema descriptor for metadata field.
-	integrationentityDescMetadata := integrationentityFields[9].Descriptor()
+	integrationentityDescMetadata := integrationentityFields[10].Descriptor()
 	// integrationentity.DefaultMetadata holds the default value on creation for the metadata field.
 	integrationentity.DefaultMetadata = integrationentityDescMetadata.Default.(map[string]string)
 	invoiceMixin := schema.Invoice{}.Mixin()

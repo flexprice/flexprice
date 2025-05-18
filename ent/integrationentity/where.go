@@ -122,6 +122,11 @@ func ProviderID(v string) predicate.IntegrationEntity {
 	return predicate.IntegrationEntity(sql.FieldEQ(FieldProviderID, v))
 }
 
+// ConnectionID applies equality check predicate on the "connection_id" field. It's identical to ConnectionIDEQ.
+func ConnectionID(v string) predicate.IntegrationEntity {
+	return predicate.IntegrationEntity(sql.FieldEQ(FieldConnectionID, v))
+}
+
 // SyncStatus applies equality check predicate on the "sync_status" field. It's identical to SyncStatusEQ.
 func SyncStatus(v types.SyncStatus) predicate.IntegrationEntity {
 	vc := string(v)
@@ -879,6 +884,81 @@ func ProviderIDEqualFold(v string) predicate.IntegrationEntity {
 // ProviderIDContainsFold applies the ContainsFold predicate on the "provider_id" field.
 func ProviderIDContainsFold(v string) predicate.IntegrationEntity {
 	return predicate.IntegrationEntity(sql.FieldContainsFold(FieldProviderID, v))
+}
+
+// ConnectionIDEQ applies the EQ predicate on the "connection_id" field.
+func ConnectionIDEQ(v string) predicate.IntegrationEntity {
+	return predicate.IntegrationEntity(sql.FieldEQ(FieldConnectionID, v))
+}
+
+// ConnectionIDNEQ applies the NEQ predicate on the "connection_id" field.
+func ConnectionIDNEQ(v string) predicate.IntegrationEntity {
+	return predicate.IntegrationEntity(sql.FieldNEQ(FieldConnectionID, v))
+}
+
+// ConnectionIDIn applies the In predicate on the "connection_id" field.
+func ConnectionIDIn(vs ...string) predicate.IntegrationEntity {
+	return predicate.IntegrationEntity(sql.FieldIn(FieldConnectionID, vs...))
+}
+
+// ConnectionIDNotIn applies the NotIn predicate on the "connection_id" field.
+func ConnectionIDNotIn(vs ...string) predicate.IntegrationEntity {
+	return predicate.IntegrationEntity(sql.FieldNotIn(FieldConnectionID, vs...))
+}
+
+// ConnectionIDGT applies the GT predicate on the "connection_id" field.
+func ConnectionIDGT(v string) predicate.IntegrationEntity {
+	return predicate.IntegrationEntity(sql.FieldGT(FieldConnectionID, v))
+}
+
+// ConnectionIDGTE applies the GTE predicate on the "connection_id" field.
+func ConnectionIDGTE(v string) predicate.IntegrationEntity {
+	return predicate.IntegrationEntity(sql.FieldGTE(FieldConnectionID, v))
+}
+
+// ConnectionIDLT applies the LT predicate on the "connection_id" field.
+func ConnectionIDLT(v string) predicate.IntegrationEntity {
+	return predicate.IntegrationEntity(sql.FieldLT(FieldConnectionID, v))
+}
+
+// ConnectionIDLTE applies the LTE predicate on the "connection_id" field.
+func ConnectionIDLTE(v string) predicate.IntegrationEntity {
+	return predicate.IntegrationEntity(sql.FieldLTE(FieldConnectionID, v))
+}
+
+// ConnectionIDContains applies the Contains predicate on the "connection_id" field.
+func ConnectionIDContains(v string) predicate.IntegrationEntity {
+	return predicate.IntegrationEntity(sql.FieldContains(FieldConnectionID, v))
+}
+
+// ConnectionIDHasPrefix applies the HasPrefix predicate on the "connection_id" field.
+func ConnectionIDHasPrefix(v string) predicate.IntegrationEntity {
+	return predicate.IntegrationEntity(sql.FieldHasPrefix(FieldConnectionID, v))
+}
+
+// ConnectionIDHasSuffix applies the HasSuffix predicate on the "connection_id" field.
+func ConnectionIDHasSuffix(v string) predicate.IntegrationEntity {
+	return predicate.IntegrationEntity(sql.FieldHasSuffix(FieldConnectionID, v))
+}
+
+// ConnectionIDIsNil applies the IsNil predicate on the "connection_id" field.
+func ConnectionIDIsNil() predicate.IntegrationEntity {
+	return predicate.IntegrationEntity(sql.FieldIsNull(FieldConnectionID))
+}
+
+// ConnectionIDNotNil applies the NotNil predicate on the "connection_id" field.
+func ConnectionIDNotNil() predicate.IntegrationEntity {
+	return predicate.IntegrationEntity(sql.FieldNotNull(FieldConnectionID))
+}
+
+// ConnectionIDEqualFold applies the EqualFold predicate on the "connection_id" field.
+func ConnectionIDEqualFold(v string) predicate.IntegrationEntity {
+	return predicate.IntegrationEntity(sql.FieldEqualFold(FieldConnectionID, v))
+}
+
+// ConnectionIDContainsFold applies the ContainsFold predicate on the "connection_id" field.
+func ConnectionIDContainsFold(v string) predicate.IntegrationEntity {
+	return predicate.IntegrationEntity(sql.FieldContainsFold(FieldConnectionID, v))
 }
 
 // SyncStatusEQ applies the EQ predicate on the "sync_status" field.

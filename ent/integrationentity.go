@@ -42,6 +42,8 @@ type IntegrationEntity struct {
 	ProviderType types.SecretProvider `json:"provider_type,omitempty"`
 	// ID of the entity in the external system
 	ProviderID string `json:"provider_id,omitempty"`
+	// ID of the connection in the flexprice system
+	ConnectionID string `json:"connection_id,omitempty"`
 	// Synchronization status (pending, synced, failed)
 	SyncStatus types.SyncStatus `json:"sync_status,omitempty"`
 	// Timestamp of the last successful sync
@@ -62,7 +64,7 @@ func (*IntegrationEntity) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case integrationentity.FieldSyncHistory, integrationentity.FieldMetadata:
 			values[i] = new([]byte)
-		case integrationentity.FieldID, integrationentity.FieldTenantID, integrationentity.FieldStatus, integrationentity.FieldCreatedBy, integrationentity.FieldUpdatedBy, integrationentity.FieldEnvironmentID, integrationentity.FieldEntityType, integrationentity.FieldEntityID, integrationentity.FieldProviderType, integrationentity.FieldProviderID, integrationentity.FieldSyncStatus, integrationentity.FieldLastErrorMsg:
+		case integrationentity.FieldID, integrationentity.FieldTenantID, integrationentity.FieldStatus, integrationentity.FieldCreatedBy, integrationentity.FieldUpdatedBy, integrationentity.FieldEnvironmentID, integrationentity.FieldEntityType, integrationentity.FieldEntityID, integrationentity.FieldProviderType, integrationentity.FieldProviderID, integrationentity.FieldConnectionID, integrationentity.FieldSyncStatus, integrationentity.FieldLastErrorMsg:
 			values[i] = new(sql.NullString)
 		case integrationentity.FieldCreatedAt, integrationentity.FieldUpdatedAt, integrationentity.FieldLastSyncedAt:
 			values[i] = new(sql.NullTime)
@@ -152,6 +154,12 @@ func (ie *IntegrationEntity) assignValues(columns []string, values []any) error 
 				return fmt.Errorf("unexpected type %T for field provider_id", values[i])
 			} else if value.Valid {
 				ie.ProviderID = value.String
+			}
+		case integrationentity.FieldConnectionID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field connection_id", values[i])
+			} else if value.Valid {
+				ie.ConnectionID = value.String
 			}
 		case integrationentity.FieldSyncStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -255,6 +263,9 @@ func (ie *IntegrationEntity) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("provider_id=")
 	builder.WriteString(ie.ProviderID)
+	builder.WriteString(", ")
+	builder.WriteString("connection_id=")
+	builder.WriteString(ie.ConnectionID)
 	builder.WriteString(", ")
 	builder.WriteString("sync_status=")
 	builder.WriteString(fmt.Sprintf("%v", ie.SyncStatus))

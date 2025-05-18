@@ -29,15 +29,12 @@ func NewIntegrationRepository(client postgres.IClient, logger *logger.Logger) do
 
 // Create creates a new IntegrationEntity.
 func (r *integrationRepository) Create(ctx context.Context, ie *domainIntegration.IntegrationEntity) error {
-	// Set tenant ID from context if not already set
-	if ie.TenantID == "" {
-		ie.TenantID = types.GetTenantID(ctx)
-	}
 
 	querier := r.client.Querier(ctx)
 
 	builder := querier.IntegrationEntity.Create().
 		SetID(ie.ID).
+		SetConnectionID(ie.ConnectionID).
 		SetTenantID(ie.TenantID).
 		SetStatus(string(ie.Status)).
 		SetEntityType(ie.EntityType).
@@ -46,6 +43,15 @@ func (r *integrationRepository) Create(ctx context.Context, ie *domainIntegratio
 		SetSyncStatus(ie.SyncStatus).
 		SetEnvironmentID(ie.EnvironmentID).
 		SetMetadata(ie.Metadata)
+
+	// Set tenant ID from context if not already set
+	if ie.TenantID == "" {
+		ie.TenantID = types.GetTenantID(ctx)
+	}
+
+	if ie.EnvironmentID == "" {
+		ie.EnvironmentID = types.GetEnvironmentID(ctx)
+	}
 
 	if ie.CreatedBy != "" {
 		builder.SetCreatedBy(ie.CreatedBy)
@@ -122,7 +128,7 @@ func (r *integrationRepository) GetByEntityAndProvider(ctx context.Context, enti
 			integrationentity.EntityType(entityType),
 			integrationentity.EntityID(entityID),
 			integrationentity.ProviderType(providerType),
-			integrationentity.StatusNEQ("deleted"),
+			integrationentity.StatusNEQ(string(types.StatusDeleted)),
 		).
 		Only(ctx)
 

@@ -144,6 +144,20 @@ func (iec *IntegrationEntityCreate) SetNillableProviderID(s *string) *Integratio
 	return iec
 }
 
+// SetConnectionID sets the "connection_id" field.
+func (iec *IntegrationEntityCreate) SetConnectionID(s string) *IntegrationEntityCreate {
+	iec.mutation.SetConnectionID(s)
+	return iec
+}
+
+// SetNillableConnectionID sets the "connection_id" field if the given value is not nil.
+func (iec *IntegrationEntityCreate) SetNillableConnectionID(s *string) *IntegrationEntityCreate {
+	if s != nil {
+		iec.SetConnectionID(*s)
+	}
+	return iec
+}
+
 // SetSyncStatus sets the "sync_status" field.
 func (iec *IntegrationEntityCreate) SetSyncStatus(ts types.SyncStatus) *IntegrationEntityCreate {
 	iec.mutation.SetSyncStatus(ts)
@@ -394,6 +408,10 @@ func (iec *IntegrationEntityCreate) createSpec() (*IntegrationEntity, *sqlgraph.
 	if value, ok := iec.mutation.ProviderID(); ok {
 		_spec.SetField(integrationentity.FieldProviderID, field.TypeString, value)
 		_node.ProviderID = value
+	}
+	if value, ok := iec.mutation.ConnectionID(); ok {
+		_spec.SetField(integrationentity.FieldConnectionID, field.TypeString, value)
+		_node.ConnectionID = value
 	}
 	if value, ok := iec.mutation.SyncStatus(); ok {
 		_spec.SetField(integrationentity.FieldSyncStatus, field.TypeString, value)

@@ -26,6 +26,7 @@ type SecretService interface {
 	CreateIntegration(ctx context.Context, req *dto.CreateIntegrationRequest) (*secret.Secret, error)
 	ListIntegrations(ctx context.Context, filter *types.SecretFilter) (*dto.ListSecretsResponse, error)
 	GetIntegrationCredentials(ctx context.Context, provider types.SecretProvider) (map[string]string, error)
+	GetIntegrationCredentialsByID(ctx context.Context, id string) (map[string]string, error)
 	getIntegrationCredentials(ctx context.Context, provider types.SecretProvider) ([]map[string]string, error)
 
 	// Verification operations
@@ -380,4 +381,38 @@ func (s *secretService) GetIntegrationCredentials(ctx context.Context, provider 
 	// Return the first set of credentials
 	// In the future, we might want to be more sophisticated about which credentials to use
 	return creds[0], nil
+}
+
+func (s *secretService) GetIntegrationCredentialsByID(ctx context.Context, id string) (map[string]string, error) {
+	secretEntity, err := s.repo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if secretEntity.Type != types.SecretTypeIntegration {
+		return nil, ierr.NewError("invalid secret type").
+			WithHint("Invalid secret type").
+			Mark(ierr.ErrValidation)
+	}
+
+	// check if the provider data is set
+	if secretEntity.ProviderData == nil {
+		return nil, ierr.NewError("provider data is not set").
+			WithHint("Provider data is not set").
+			Mark(ierr.ErrValidation)
+	}
+
+	// decrypt the provider data
+	decryptedCreds := make(map[string]string)
+	for key, encryptedValue := range secretEntity.ProviderData {
+		decrypted, err := s.encryptionService.Decrypt(encryptedValue)
+		if err != nil {
+			return nil, ierr.NewError("failed to decrypt provider data").
+				WithHint("Failed to decrypt provider data").
+				Mark(ierr.ErrValidation)
+		}
+		decryptedCreds[key] = decrypted
+	}
+
+	return decryptedCreds, nil
 }

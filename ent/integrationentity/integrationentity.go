@@ -37,6 +37,8 @@ const (
 	FieldProviderType = "provider_type"
 	// FieldProviderID holds the string denoting the provider_id field in the database.
 	FieldProviderID = "provider_id"
+	// FieldConnectionID holds the string denoting the connection_id field in the database.
+	FieldConnectionID = "connection_id"
 	// FieldSyncStatus holds the string denoting the sync_status field in the database.
 	FieldSyncStatus = "sync_status"
 	// FieldLastSyncedAt holds the string denoting the last_synced_at field in the database.
@@ -65,6 +67,7 @@ var Columns = []string{
 	FieldEntityID,
 	FieldProviderType,
 	FieldProviderID,
+	FieldConnectionID,
 	FieldSyncStatus,
 	FieldLastSyncedAt,
 	FieldLastErrorMsg,
@@ -164,6 +167,11 @@ func ByProviderType(opts ...sql.OrderTermOption) OrderOption {
 // ByProviderID orders the results by the provider_id field.
 func ByProviderID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldProviderID, opts...).ToFunc()
+}
+
+// ByConnectionID orders the results by the connection_id field.
+func ByConnectionID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldConnectionID, opts...).ToFunc()
 }
 
 // BySyncStatus orders the results by the sync_status field.

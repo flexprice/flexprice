@@ -11,23 +11,33 @@ import (
 
 // IntegrationEntity represents a connection between a FlexPrice entity and an external system.
 type IntegrationEntity struct {
-	ID            string               `json:"id"`
-	EntityType    types.EntityType     `json:"entity_type"`
-	EntityID      string               `json:"entity_id"`
-	ProviderType  types.SecretProvider `json:"provider_type"`
-	ProviderID    string               `json:"provider_id"`
-	SyncStatus    types.SyncStatus     `json:"sync_status"`
-	LastSyncedAt  *time.Time           `json:"last_synced_at"`
-	LastErrorMsg  *string              `json:"last_error_msg"`
-	SyncHistory   []SyncEvent          `json:"sync_history"`
-	Metadata      types.Metadata       `json:"metadata"`
-	EnvironmentID string               `json:"environment_id"`
+	ID string `json:"id"`
+	// ConnectionID is the ID of the connection in the flexprice system
+	ConnectionID string `json:"connection_id"`
+	// EntityType is the type of entity being connected (e.g., customer, payment)
+	EntityType types.EntityType `json:"entity_type"`
+	// EntityID is the ID of the FlexPrice entity
+	EntityID string `json:"entity_id"`
+	// ProviderType is the type of external provider (e.g., stripe, razorpay)
+	ProviderType types.SecretProvider `json:"provider_type"`
+	// ProviderID is the ID of the entity in the external system
+	ProviderID string `json:"provider_id"`
+	// SyncStatus is the status of the synchronization
+	SyncStatus   types.SyncStatus `json:"sync_status"`
+	LastSyncedAt *time.Time       `json:"last_synced_at"`
+	LastErrorMsg *string          `json:"last_error_msg"`
+	// SyncHistory is the history of the synchronization
+	SyncHistory []SyncEvent `json:"sync_history"`
+	// Metadata is the metadata of the integration
+	Metadata types.Metadata `json:"metadata"`
+	// EnvironmentID is the ID of the environment
+	EnvironmentID string `json:"environment_id"`
 	types.BaseModel
 }
 
 // SyncEvent represents a single synchronization event.
 type SyncEvent struct {
-	Action    string
+	Action    types.SyncEventAction
 	Status    types.SyncStatus
 	Timestamp int64
 	ErrorMsg  *string
@@ -129,7 +139,7 @@ func FromEnt(e *ent.IntegrationEntity) *IntegrationEntity {
 	syncHistory := make([]SyncEvent, 0, len(e.SyncHistory))
 	for _, event := range e.SyncHistory {
 		syncEvent := SyncEvent{
-			Action:    event.Action,
+			Action:    types.SyncEventAction(event.Action),
 			Status:    event.Status,
 			Timestamp: event.Timestamp,
 			ErrorMsg:  event.ErrorMsg,
@@ -139,6 +149,7 @@ func FromEnt(e *ent.IntegrationEntity) *IntegrationEntity {
 
 	return &IntegrationEntity{
 		ID:            e.ID,
+		ConnectionID:  e.ConnectionID,
 		EntityType:    e.EntityType,
 		EntityID:      e.EntityID,
 		ProviderType:  e.ProviderType,
@@ -172,7 +183,7 @@ func ToEntSyncHistory(events []SyncEvent) []schema.SyncEvent {
 	result := make([]schema.SyncEvent, 0, len(events))
 	for _, event := range events {
 		schemaEvent := schema.SyncEvent{
-			Action:    event.Action,
+			Action:    string(event.Action),
 			Status:    event.Status,
 			Timestamp: event.Timestamp,
 			ErrorMsg:  event.ErrorMsg,

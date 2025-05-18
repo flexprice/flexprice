@@ -304,6 +304,7 @@ var (
 		{Name: "entity_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "provider_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "provider_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(100)"}},
+		{Name: "connection_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(100)"}},
 		{Name: "sync_status", Type: field.TypeString, Default: "pending", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "last_synced_at", Type: field.TypeTime, Nullable: true},
 		{Name: "last_error_msg", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
@@ -340,7 +341,7 @@ var (
 			{
 				Name:    "integrationentity_tenant_id_sync_status",
 				Unique:  false,
-				Columns: []*schema.Column{IntegrationEntitiesColumns[1], IntegrationEntitiesColumns[12]},
+				Columns: []*schema.Column{IntegrationEntitiesColumns[1], IntegrationEntitiesColumns[13]},
 			},
 		},
 	}

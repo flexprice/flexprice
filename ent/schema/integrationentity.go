@@ -55,6 +55,12 @@ func (IntegrationEntity) Fields() []ent.Field {
 			}).
 			Optional().
 			Comment("ID of the entity in the external system"),
+		field.String("connection_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(100)",
+			}).
+			Optional().
+			Comment("ID of the connection in the flexprice system"),
 		field.String("sync_status").
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",

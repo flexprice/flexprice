@@ -84,10 +84,10 @@ func (s *entitySyncService) SyncEntity(ctx context.Context, entityType types.Ent
 	// Perform sync based on entity type
 	var providerID string
 	syncErr := error(nil)
-	action := "create"
+	action := types.SyncEventActionCreate
 
 	if !isNew && connection.ProviderID != "" {
-		action = "update"
+		action = types.SyncEventActionUpdate
 	}
 
 	// Perform the appropriate action based on entity type
@@ -116,7 +116,7 @@ func (s *entitySyncService) SyncEntity(ctx context.Context, entityType types.Ent
 	now := time.Now().UTC()
 	timestamp := now.Unix()
 	syncEvent := integration.SyncEvent{
-		Action:    action,
+		Action:    types.SyncEventAction(action),
 		Status:    "success",
 		Timestamp: timestamp,
 		ErrorMsg:  nil,

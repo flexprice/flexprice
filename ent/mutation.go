@@ -7064,6 +7064,7 @@ type IntegrationEntityMutation struct {
 	entity_id          *string
 	provider_type      *types.SecretProvider
 	provider_id        *string
+	connection_id      *string
 	sync_status        *types.SyncStatus
 	last_synced_at     *time.Time
 	last_error_msg     *string
@@ -7628,6 +7629,55 @@ func (m *IntegrationEntityMutation) ResetProviderID() {
 	delete(m.clearedFields, integrationentity.FieldProviderID)
 }
 
+// SetConnectionID sets the "connection_id" field.
+func (m *IntegrationEntityMutation) SetConnectionID(s string) {
+	m.connection_id = &s
+}
+
+// ConnectionID returns the value of the "connection_id" field in the mutation.
+func (m *IntegrationEntityMutation) ConnectionID() (r string, exists bool) {
+	v := m.connection_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldConnectionID returns the old "connection_id" field's value of the IntegrationEntity entity.
+// If the IntegrationEntity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IntegrationEntityMutation) OldConnectionID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldConnectionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldConnectionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldConnectionID: %w", err)
+	}
+	return oldValue.ConnectionID, nil
+}
+
+// ClearConnectionID clears the value of the "connection_id" field.
+func (m *IntegrationEntityMutation) ClearConnectionID() {
+	m.connection_id = nil
+	m.clearedFields[integrationentity.FieldConnectionID] = struct{}{}
+}
+
+// ConnectionIDCleared returns if the "connection_id" field was cleared in this mutation.
+func (m *IntegrationEntityMutation) ConnectionIDCleared() bool {
+	_, ok := m.clearedFields[integrationentity.FieldConnectionID]
+	return ok
+}
+
+// ResetConnectionID resets all changes to the "connection_id" field.
+func (m *IntegrationEntityMutation) ResetConnectionID() {
+	m.connection_id = nil
+	delete(m.clearedFields, integrationentity.FieldConnectionID)
+}
+
 // SetSyncStatus sets the "sync_status" field.
 func (m *IntegrationEntityMutation) SetSyncStatus(ts types.SyncStatus) {
 	m.sync_status = &ts
@@ -7883,7 +7933,7 @@ func (m *IntegrationEntityMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *IntegrationEntityMutation) Fields() []string {
-	fields := make([]string, 0, 16)
+	fields := make([]string, 0, 17)
 	if m.tenant_id != nil {
 		fields = append(fields, integrationentity.FieldTenantID)
 	}
@@ -7916,6 +7966,9 @@ func (m *IntegrationEntityMutation) Fields() []string {
 	}
 	if m.provider_id != nil {
 		fields = append(fields, integrationentity.FieldProviderID)
+	}
+	if m.connection_id != nil {
+		fields = append(fields, integrationentity.FieldConnectionID)
 	}
 	if m.sync_status != nil {
 		fields = append(fields, integrationentity.FieldSyncStatus)
@@ -7962,6 +8015,8 @@ func (m *IntegrationEntityMutation) Field(name string) (ent.Value, bool) {
 		return m.ProviderType()
 	case integrationentity.FieldProviderID:
 		return m.ProviderID()
+	case integrationentity.FieldConnectionID:
+		return m.ConnectionID()
 	case integrationentity.FieldSyncStatus:
 		return m.SyncStatus()
 	case integrationentity.FieldLastSyncedAt:
@@ -8003,6 +8058,8 @@ func (m *IntegrationEntityMutation) OldField(ctx context.Context, name string) (
 		return m.OldProviderType(ctx)
 	case integrationentity.FieldProviderID:
 		return m.OldProviderID(ctx)
+	case integrationentity.FieldConnectionID:
+		return m.OldConnectionID(ctx)
 	case integrationentity.FieldSyncStatus:
 		return m.OldSyncStatus(ctx)
 	case integrationentity.FieldLastSyncedAt:
@@ -8099,6 +8156,13 @@ func (m *IntegrationEntityMutation) SetField(name string, value ent.Value) error
 		}
 		m.SetProviderID(v)
 		return nil
+	case integrationentity.FieldConnectionID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetConnectionID(v)
+		return nil
 	case integrationentity.FieldSyncStatus:
 		v, ok := value.(types.SyncStatus)
 		if !ok {
@@ -8176,6 +8240,9 @@ func (m *IntegrationEntityMutation) ClearedFields() []string {
 	if m.FieldCleared(integrationentity.FieldProviderID) {
 		fields = append(fields, integrationentity.FieldProviderID)
 	}
+	if m.FieldCleared(integrationentity.FieldConnectionID) {
+		fields = append(fields, integrationentity.FieldConnectionID)
+	}
 	if m.FieldCleared(integrationentity.FieldLastSyncedAt) {
 		fields = append(fields, integrationentity.FieldLastSyncedAt)
 	}
@@ -8207,6 +8274,9 @@ func (m *IntegrationEntityMutation) ClearField(name string) error {
 		return nil
 	case integrationentity.FieldProviderID:
 		m.ClearProviderID()
+		return nil
+	case integrationentity.FieldConnectionID:
+		m.ClearConnectionID()
 		return nil
 	case integrationentity.FieldLastSyncedAt:
 		m.ClearLastSyncedAt()
@@ -8254,6 +8324,9 @@ func (m *IntegrationEntityMutation) ResetField(name string) error {
 		return nil
 	case integrationentity.FieldProviderID:
 		m.ResetProviderID()
+		return nil
+	case integrationentity.FieldConnectionID:
+		m.ResetConnectionID()
 		return nil
 	case integrationentity.FieldSyncStatus:
 		m.ResetSyncStatus()
