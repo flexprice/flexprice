@@ -94,7 +94,9 @@ func (m *gatewayManager) GetGatewaysByProvider(ctx context.Context, providerType
 
 func (m *gatewayManager) HasProviderConfiguration(ctx context.Context, providerType string) (bool, error) {
 	filter := &types.ConnectionFilter{
-		ProviderType: types.SecretProvider(providerType),
+		ProviderType: []types.SecretProvider{
+			types.SecretProvider(providerType),
+		},
 		QueryFilter: &types.QueryFilter{
 			Limit: lo.ToPtr(1),
 		},

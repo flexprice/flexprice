@@ -2,11 +2,14 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainConnection "github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/integrations"
+	"github.com/flexprice/flexprice/internal/integrations/stripe"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -19,6 +22,7 @@ type ConnectionService interface {
 	List(ctx context.Context, filter *types.ConnectionFilter) (*dto.ListConnectionsResponse, error)
 	Update(ctx context.Context, id string, req *dto.UpdateConnectionRequest) (*domainConnection.Connection, error)
 	Delete(ctx context.Context, id string) error
+	Test(ctx context.Context, req *dto.TestConnectionRequest) error
 }
 
 type connectionService struct {
@@ -36,6 +40,14 @@ func NewConnectionService(
 
 func (s *connectionService) Create(ctx context.Context, req *dto.CreateConnectionRequest) (*domainConnection.Connection, error) {
 	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	// test the credentials
+	if err := s.Test(ctx, &dto.TestConnectionRequest{
+		ProviderType: req.ProviderType,
+		Credentials:  req.Credentials,
+	}); err != nil {
 		return nil, err
 	}
 
@@ -172,6 +184,40 @@ func (s *connectionService) Delete(ctx context.Context, id string) error {
 				"error", err)
 			// We don't return an error here as the connection was successfully deleted
 		}
+	}
+
+	return nil
+}
+
+func (s *connectionService) Test(ctx context.Context, req *dto.TestConnectionRequest) error {
+	// Validate credentials and provider type
+	if err := req.Validate(); err != nil {
+		return err
+	}
+
+	// Get the appropriate gateway factory based on provider type
+	var factory integrations.GatewayFactory
+	switch req.ProviderType {
+	case types.SecretProviderStripe:
+		factory = stripe.NewStripeGatewayFactory()
+	case types.SecretProviderRazorpay:
+		// Add other supported provider types here
+		// TODO: Add testing for razorpay integration
+		return ierr.NewError(fmt.Sprintf("testing for %s not implemented", req.ProviderType)).
+			WithHint(fmt.Sprintf("Testing for %s is not yet supported", req.ProviderType)).
+			Mark(ierr.ErrInvalidOperation)
+	default:
+		return ierr.NewError(fmt.Sprintf("unsupported provider type: %s", req.ProviderType)).
+			WithHint("Please select a supported provider type").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Create a gateway instance with the provided credentials to test them
+	_, err := factory(req.Credentials, s.Logger)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to connect to provider with the given credentials").
+			Mark(ierr.ErrValidation)
 	}
 
 	return nil

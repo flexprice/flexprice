@@ -301,13 +301,31 @@ func (o ConnectionQueryOptions) GetFieldName(field string) string {
 	}
 }
 
-func (o ConnectionQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.ConnectionFilter, query *ent.ConnectionQuery) *ent.ConnectionQuery {
+func (o ConnectionQueryOptions) applyEntityQueryOptions(ctx context.Context, f *types.ConnectionFilter, query *ent.ConnectionQuery) *ent.ConnectionQuery {
 	if f == nil {
 		return query
 	}
 
-	if f.ProviderType != "" {
-		query = query.Where(connection.ProviderType(string(f.ProviderType)))
+	if len(f.ProviderType) > 0 {
+		query = query.Where(
+			connection.ProviderTypeIn(lo.Map(f.ProviderType, func(providerType types.SecretProvider, _ int) string {
+				return string(providerType)
+			})...),
+		)
+	}
+
+	// match capabilities to provider type
+	if len(f.Capabilities) > 0 {
+		providers, err := GetProvidersByCapabilities(ctx, f.Capabilities)
+		if err != nil {
+			return query
+		}
+
+		query = query.Where(
+			connection.ProviderTypeIn(lo.Map(providers, func(provider types.SecretProvider, _ int) string {
+				return string(provider)
+			})...),
+		)
 	}
 
 	if f.Status != nil {
@@ -317,4 +335,52 @@ func (o ConnectionQueryOptions) applyEntityQueryOptions(_ context.Context, f *ty
 	}
 
 	return query
+}
+
+func GetProvidersByCapabilities(ctx context.Context, capabilities []types.IntegrationCapability) ([]types.SecretProvider, error) {
+	// Map of capabilities to provider types that support them
+	capabilityToProviders := map[types.IntegrationCapability][]types.SecretProvider{}
+
+	// Define which providers support which capabilities
+	// This mapping should be maintained as new providers are added
+	capabilityToProviders[types.CapabilityCustomer] = []types.SecretProvider{
+		types.SecretProviderStripe,
+		types.SecretProviderRazorpay,
+	}
+
+	capabilityToProviders[types.CapabilityPaymentMethod] = []types.SecretProvider{
+		types.SecretProviderStripe,
+		types.SecretProviderRazorpay,
+	}
+
+	capabilityToProviders[types.CapabilityPayment] = []types.SecretProvider{
+		types.SecretProviderStripe,
+		types.SecretProviderRazorpay,
+	}
+
+	capabilityToProviders[types.CapabilityInvoice] = []types.SecretProvider{
+		types.SecretProviderStripe,
+	}
+
+	// Collect all providers that support any of the requested capabilities
+	uniqueProviders := make(map[types.SecretProvider]bool)
+	for _, capability := range capabilities {
+		providers, ok := capabilityToProviders[capability]
+		if !ok {
+			logger.GetLogger().Warnw("unknown capability", "capability", capability)
+			continue
+		}
+
+		for _, provider := range providers {
+			uniqueProviders[provider] = true
+		}
+	}
+
+	// Convert map keys to slice
+	result := make([]types.SecretProvider, 0, len(uniqueProviders))
+	for provider := range uniqueProviders {
+		result = append(result, provider)
+	}
+
+	return result, nil
 }

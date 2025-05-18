@@ -116,3 +116,24 @@ type ListConnectionsResponse struct {
 	Items      []*ConnectionResponse     `json:"items"`
 	Pagination *types.PaginationResponse `json:"pagination"`
 }
+
+// TestConnectionRequest represents a request to test connection credentials
+type TestConnectionRequest struct {
+	ProviderType types.SecretProvider `json:"provider_type" validate:"required"`
+	Credentials  map[string]string    `json:"credentials" validate:"required"`
+}
+
+// Validate validates the test connection request
+func (r *TestConnectionRequest) Validate() error {
+	if r.ProviderType == "" {
+		return ierr.NewError("provider_type is required").
+			WithHint("Provider type is required").
+			Mark(ierr.ErrValidation)
+	}
+	if len(r.Credentials) == 0 {
+		return ierr.NewError("credentials are required").
+			WithHint("Credentials are required").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}

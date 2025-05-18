@@ -8,6 +8,22 @@ import (
 	"github.com/flexprice/flexprice/internal/validator"
 )
 
+type BillingConfiguration struct {
+	// This is the unique identifier you've assigned to your integration.
+	ConnectionCode string `json:"connection_code" validate:"omitempty"`
+
+	// The type of payment provider to use for the customer.
+	PaymentProviderType types.SecretProvider `json:"payment_provider_type" validate:"omitempty"`
+
+	// If you already have a customer in your billing provider, you can use this field to link your Flexprice customer to that existing customer.
+	// This is useful if you want to use your existing customer's billing information without creating a new one in your billing system.
+	ProviderCustomerID string `json:"provider_customer_id" validate:"omitempty"`
+
+	// If you want to create a new customer in your billing provider, you can set this to true.
+	// This will create a new customer in your billing provider and link it to your Flexprice customer.
+	SyncWithProvider bool `json:"sync_with_provider" validate:"omitempty"`
+}
+
 type CreateCustomerRequest struct {
 	ExternalID        string            `json:"external_id" validate:"required"`
 	Name              string            `json:"name"`
@@ -19,6 +35,9 @@ type CreateCustomerRequest struct {
 	AddressPostalCode string            `json:"address_postal_code" validate:"omitempty,max=20"`
 	AddressCountry    string            `json:"address_country" validate:"omitempty,len=2,iso3166_1_alpha2"`
 	Metadata          map[string]string `json:"metadata,omitempty"`
+
+	// Billing configuration for the customer
+	BillingConfiguration *BillingConfiguration `json:"billing_configuration,omitempty"`
 }
 
 type UpdateCustomerRequest struct {

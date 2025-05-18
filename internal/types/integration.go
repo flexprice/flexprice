@@ -1,5 +1,7 @@
 package types
 
+import ierr "github.com/flexprice/flexprice/internal/errors"
+
 // IntegrationCapability represents features an integration can support
 type IntegrationCapability string
 
@@ -17,3 +19,15 @@ const (
 	SyncStatusSuccess SyncStatus = "success"
 	SyncStatusFailed  SyncStatus = "failed"
 )
+
+func (c IntegrationCapability) Validate() error {
+
+	switch c {
+	case CapabilityCustomer, CapabilityPaymentMethod, CapabilityPayment, CapabilityInvoice:
+		return nil
+	default:
+		return ierr.NewError("invalid capability").
+			WithHint("Please specify a valid capability").
+			Mark(ierr.ErrValidation)
+	}
+}

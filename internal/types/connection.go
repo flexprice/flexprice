@@ -1,14 +1,15 @@
 package types
 
-type Connection struct {
-	ID string `json:"id"`
-}
+import (
+	ierr "github.com/flexprice/flexprice/internal/errors"
+)
 
 type ConnectionFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
-	ProviderType SecretProvider `json:"provider_type,omitempty" form:"provider_type"`
-	Status       []Status       `json:"status,omitempty" form:"status"`
+	ProviderType []SecretProvider        `json:"provider_type,omitempty" form:"provider_type"`
+	Status       []Status                `json:"status,omitempty" form:"status"`
+	Capabilities []IntegrationCapability `json:"capabilities,omitempty" form:"capabilities"`
 }
 
 func NewConnectionFilter() *ConnectionFilter {
@@ -41,8 +42,22 @@ func (f *ConnectionFilter) Validate() error {
 		}
 	}
 
-	if f.ProviderType != "" {
-		if err := f.ProviderType.Validate(); err != nil {
+	// Enforce constraint: can't use both ProviderType and Capabilities filters simultaneously
+	if len(f.ProviderType) > 0 && len(f.Capabilities) > 0 {
+		return ierr.NewError("cannot specify both provider_type and capabilities at the same time").
+			WithHint("Please specify either provider_type or capabilities, not both").
+			Mark(ierr.ErrValidation)
+	}
+
+	// validate capabilities
+	for _, capability := range f.Capabilities {
+		if err := capability.Validate(); err != nil {
+			return err
+		}
+	}
+
+	for _, providerType := range f.ProviderType {
+		if err := providerType.Validate(); err != nil {
 			return err
 		}
 	}
