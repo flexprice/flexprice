@@ -179,6 +179,7 @@ func main() {
 			service.NewEntitySyncService,
 			service.NewGatewayService,
 			service.NewConnectionService,
+			service.NewIntegrationEntityService,
 		),
 	)
 

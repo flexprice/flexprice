@@ -30,8 +30,6 @@ type IntegrationEntity struct {
 	SyncHistory []SyncEvent `json:"sync_history"`
 	// Metadata is the metadata of the integration
 	Metadata types.Metadata `json:"metadata"`
-	// EnvironmentID is the ID of the environment
-	EnvironmentID string `json:"environment_id"`
 	types.BaseModel
 }
 
@@ -148,25 +146,25 @@ func FromEnt(e *ent.IntegrationEntity) *IntegrationEntity {
 	}
 
 	return &IntegrationEntity{
-		ID:            e.ID,
-		ConnectionID:  e.ConnectionID,
-		EntityType:    e.EntityType,
-		EntityID:      e.EntityID,
-		ProviderType:  e.ProviderType,
-		ProviderID:    e.ProviderID,
-		SyncStatus:    e.SyncStatus,
-		LastSyncedAt:  lo.ToPtr(e.LastSyncedAt),
-		LastErrorMsg:  lo.ToPtr(e.LastErrorMsg),
-		SyncHistory:   syncHistory,
-		Metadata:      e.Metadata,
-		EnvironmentID: e.EnvironmentID,
+		ID:           e.ID,
+		ConnectionID: e.ConnectionID,
+		EntityType:   e.EntityType,
+		EntityID:     e.EntityID,
+		ProviderType: e.ProviderType,
+		ProviderID:   e.ProviderID,
+		SyncStatus:   e.SyncStatus,
+		LastSyncedAt: lo.ToPtr(e.LastSyncedAt),
+		LastErrorMsg: lo.ToPtr(e.LastErrorMsg),
+		SyncHistory:  syncHistory,
+		Metadata:     e.Metadata,
 		BaseModel: types.BaseModel{
-			TenantID:  e.TenantID,
-			Status:    types.Status(e.Status),
-			CreatedBy: e.CreatedBy,
-			UpdatedBy: e.UpdatedBy,
-			CreatedAt: e.CreatedAt,
-			UpdatedAt: e.UpdatedAt,
+			TenantID:      e.TenantID,
+			EnvironmentID: e.EnvironmentID,
+			Status:        types.Status(e.Status),
+			CreatedBy:     e.CreatedBy,
+			UpdatedBy:     e.UpdatedBy,
+			CreatedAt:     e.CreatedAt,
+			UpdatedAt:     e.UpdatedAt,
 		},
 	}
 }

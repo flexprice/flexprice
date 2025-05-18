@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/flexprice/flexprice/internal/config"
 	domainConnection "github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/secret"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integrations"
 	"github.com/flexprice/flexprice/internal/integrations/stripe"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 )
@@ -19,6 +21,7 @@ type gatewayManager struct {
 	connectionRepo domainConnection.Repository
 	secretRepo     secret.Repository
 	logger         *logger.Logger
+	config         *config.Configuration
 
 	// Map of provider types to factory functions
 	factories map[string]integrations.GatewayFactory
@@ -28,11 +31,13 @@ type gatewayManager struct {
 func NewGatewayManager(
 	connectionRepo domainConnection.Repository,
 	secretRepo secret.Repository,
+	config *config.Configuration,
 	logger *logger.Logger,
 ) GatewayManager {
 	manager := &gatewayManager{
 		connectionRepo: connectionRepo,
 		secretRepo:     secretRepo,
+		config:         config,
 		logger:         logger,
 		factories:      make(map[string]integrations.GatewayFactory),
 	}
@@ -63,8 +68,25 @@ func (m *gatewayManager) GetGatewayByConnectionCode(ctx context.Context, connect
 		return nil, err
 	}
 
+	encryptionService, err := security.NewEncryptionService(m.config, m.logger)
+	if err != nil {
+		return nil, err
+	}
+
+	// decrypt the provider data
+	decryptedCreds := make(map[string]string)
+	for key, encryptedValue := range secret.ProviderData {
+		decrypted, err := encryptionService.Decrypt(encryptedValue)
+		if err != nil {
+			return nil, ierr.NewError("failed to decrypt provider data").
+				WithHint("Failed to decrypt provider data").
+				Mark(ierr.ErrValidation)
+		}
+		decryptedCreds[key] = decrypted
+	}
+
 	// Create gateway instance
-	gateway, err := factory(secret.ProviderData, m.logger)
+	gateway, err := factory(decryptedCreds, m.logger)
 	if err != nil {
 		return nil, err
 	}

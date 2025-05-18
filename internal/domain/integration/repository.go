@@ -16,4 +16,5 @@ type Repository interface {
 	Count(ctx context.Context, filter *IntegrationEntityFilter) (int, error)
 	Update(ctx context.Context, connection *IntegrationEntity) error
 	Delete(ctx context.Context, id string) error
+	DeleteByConnectionID(ctx context.Context, connectionID string) error
 }

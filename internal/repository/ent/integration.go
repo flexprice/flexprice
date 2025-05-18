@@ -99,7 +99,6 @@ func (r *integrationRepository) Get(ctx context.Context, id string) (*domainInte
 	ec, err := querier.IntegrationEntity.Query().
 		Where(
 			integrationentity.ID(id),
-			integrationentity.Status(string(types.StatusPublished)),
 			integrationentity.TenantID(types.GetTenantID(ctx)),
 			integrationentity.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
@@ -128,7 +127,8 @@ func (r *integrationRepository) GetByEntityAndProvider(ctx context.Context, enti
 			integrationentity.EntityType(entityType),
 			integrationentity.EntityID(entityID),
 			integrationentity.ProviderType(providerType),
-			integrationentity.StatusNEQ(string(types.StatusDeleted)),
+			integrationentity.TenantID(types.GetTenantID(ctx)),
+			integrationentity.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		Only(ctx)
 
@@ -154,7 +154,8 @@ func (r *integrationRepository) GetByProviderID(ctx context.Context, entityType 
 		Where(
 			integrationentity.ProviderID(providerID),
 			integrationentity.ProviderType(providerType),
-			integrationentity.StatusNEQ("deleted"),
+			integrationentity.TenantID(types.GetTenantID(ctx)),
+			integrationentity.EnvironmentID(types.GetEnvironmentID(ctx)),
 		)
 
 	if entityType != "" {
@@ -183,12 +184,10 @@ func (r *integrationRepository) List(ctx context.Context, filter *domainIntegrat
 
 	query := querier.IntegrationEntity.Query()
 	query = applyIntegrationEntityFilter(query, filter)
-
-	// Apply tenant filter from context
-	tenantID := types.GetTenantID(ctx)
-	if tenantID != "" {
-		query = query.Where(integrationentity.TenantID(tenantID))
-	}
+	query = query.Where(
+		integrationentity.TenantID(types.GetTenantID(ctx)),
+		integrationentity.EnvironmentID(types.GetEnvironmentID(ctx)),
+	)
 
 	// Apply pagination if limit is specified
 	if filter != nil && filter.GetLimit() > 0 {
@@ -215,12 +214,10 @@ func (r *integrationRepository) Count(ctx context.Context, filter *domainIntegra
 
 	query := querier.IntegrationEntity.Query()
 	query = applyIntegrationEntityFilter(query, filter)
-
-	// Apply tenant filter from context
-	tenantID := types.GetTenantID(ctx)
-	if tenantID != "" {
-		query = query.Where(integrationentity.TenantID(tenantID))
-	}
+	query = query.Where(
+		integrationentity.TenantID(types.GetTenantID(ctx)),
+		integrationentity.EnvironmentID(types.GetEnvironmentID(ctx)),
+	)
 
 	count, err := query.Count(ctx)
 	if err != nil {
@@ -237,6 +234,10 @@ func (r *integrationRepository) Update(ctx context.Context, ie *domainIntegratio
 	querier := r.client.Querier(ctx)
 
 	builder := querier.IntegrationEntity.UpdateOneID(ie.ID).
+		Where(
+			integrationentity.TenantID(types.GetTenantID(ctx)),
+			integrationentity.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
 		SetStatus(string(ie.Status)).
 		SetUpdatedAt(time.Now().UTC()).
 		SetSyncStatus(ie.SyncStatus).
@@ -279,7 +280,11 @@ func (r *integrationRepository) Delete(ctx context.Context, id string) error {
 	querier := r.client.Querier(ctx)
 
 	err := querier.IntegrationEntity.UpdateOneID(id).
-		SetStatus("deleted").
+		Where(
+			integrationentity.TenantID(types.GetTenantID(ctx)),
+			integrationentity.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
+		SetStatus(string(types.StatusDeleted)).
 		SetUpdatedAt(time.Now().UTC()).
 		Exec(ctx)
 
@@ -297,14 +302,36 @@ func (r *integrationRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
+func (r *integrationRepository) DeleteByConnectionID(ctx context.Context, connectionID string) error {
+	querier := r.client.Querier(ctx)
+
+	err := querier.IntegrationEntity.Update().
+		Where(
+			integrationentity.ConnectionID(connectionID),
+			integrationentity.TenantID(types.GetTenantID(ctx)),
+			integrationentity.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
+		SetStatus(string(types.StatusDeleted)).
+		SetUpdatedAt(time.Now().UTC()).
+		Exec(ctx)
+
+	if err != nil {
+		return errors.WithError(err).
+			WithHintf("Failed to delete integration entities by connection ID %s", connectionID).
+			Mark(errors.ErrDatabase)
+	}
+
+	return nil
+}
+
 // applyIntegrationEntityFilter applies filter criteria to the query.
 func applyIntegrationEntityFilter(query *ent.IntegrationEntityQuery, filter *domainIntegration.IntegrationEntityFilter) *ent.IntegrationEntityQuery {
 	if filter == nil {
-		return query.Where(integrationentity.StatusNEQ("deleted"))
+		return query.Where(integrationentity.StatusNEQ(string(types.StatusDeleted)))
 	}
 
 	// Always exclude deleted integration entities
-	query = query.Where(integrationentity.StatusNEQ("deleted"))
+	query = query.Where(integrationentity.StatusNEQ(string(types.StatusDeleted)))
 
 	// Apply status filter if specified
 	if filter.GetStatus() != "" {

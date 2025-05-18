@@ -4,16 +4,17 @@ import (
 	"context"
 
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
 )
 
 type BillingConfiguration struct {
 	// This is the unique identifier you've assigned to your integration.
-	ConnectionCode string `json:"connection_code" validate:"omitempty"`
+	ConnectionCode string `json:"connection_code" validate:"required"`
 
 	// The type of payment provider to use for the customer.
-	PaymentProviderType types.SecretProvider `json:"payment_provider_type" validate:"omitempty"`
+	PaymentProviderType types.SecretProvider `json:"payment_provider_type" validate:"required"`
 
 	// If you already have a customer in your billing provider, you can use this field to link your Flexprice customer to that existing customer.
 	// This is useful if you want to use your existing customer's billing information without creating a new one in your billing system.
@@ -21,7 +22,26 @@ type BillingConfiguration struct {
 
 	// If you want to create a new customer in your billing provider, you can set this to true.
 	// This will create a new customer in your billing provider and link it to your Flexprice customer.
-	SyncWithProvider bool `json:"sync_with_provider" validate:"omitempty"`
+	SyncWithProvider bool `json:"sync_with_provider" validate:"required" default:"false"`
+}
+
+func (b *BillingConfiguration) Validate() error {
+	err := validator.ValidateRequest(b)
+	if err != nil {
+		return err
+	}
+
+	if err := b.PaymentProviderType.Validate(); err != nil {
+		return err
+	}
+
+	if !b.SyncWithProvider && b.ProviderCustomerID == "" {
+		return ierr.NewError("provider customer id is required when sync_with_provider is false").
+			WithHint("Please provide a provider customer id").
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
 }
 
 type CreateCustomerRequest struct {
