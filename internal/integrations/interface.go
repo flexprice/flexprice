@@ -23,6 +23,8 @@ type IntegrationGateway interface {
 	// Customer operations
 	CreateCustomer(ctx context.Context, customer *customer.Customer) (string, error)
 	UpdateCustomer(ctx context.Context, customer *customer.Customer, providerID string) error
+	GetCustomer(ctx context.Context, customerProviderID string) (*customer.Customer, error)
+	DeleteCustomer(ctx context.Context, customerProviderID string) error
 
 	// Payment method operations
 	ListPaymentMethods(ctx context.Context, customerProviderID string) ([]PaymentMethodInfo, error)

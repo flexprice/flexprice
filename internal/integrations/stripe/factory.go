@@ -10,10 +10,12 @@ import (
 func NewStripeGatewayFactory() integrations.GatewayFactory {
 	return func(credentials map[string]string, logger *logger.Logger) (integrations.IntegrationGateway, error) {
 		// Extract API key from credentials
+		// currently structure of storing key in credentials is:
+		// {
+		// 	"api_key": "sk_test_1234567890"
+		// }
 		apiKey := ""
-
-		// the key is the default name for the API key when installing the Stripe integration
-		if value, exists := credentials["key"]; exists && value != "" {
+		if value, exists := credentials["api_key"]; exists && value != "" {
 			apiKey = value
 		}
 

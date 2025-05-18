@@ -16,6 +16,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/dynamodb"
 	"github.com/flexprice/flexprice/internal/httpclient"
+	integrations "github.com/flexprice/flexprice/internal/integrations/manager"
 	"github.com/flexprice/flexprice/internal/kafka"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/pdf"
@@ -136,6 +137,10 @@ func main() {
 			// Temporal
 			provideTemporalClient,
 			provideTemporalService,
+
+			// Integration manager
+			// Must be provided before services to pass it to ServiceParams
+			integrations.NewGatewayManager,
 		),
 	)
 

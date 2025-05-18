@@ -15,7 +15,7 @@ type ConnectionService interface {
 	Create(ctx context.Context, req *dto.CreateConnectionRequest) (*domainConnection.Connection, error)
 	Get(ctx context.Context, id string) (*domainConnection.Connection, error)
 	GetByConnectionCode(ctx context.Context, connectionCode string) (*domainConnection.Connection, error)
-	GetByProviderType(ctx context.Context, providerType types.SecretProvider) (*domainConnection.Connection, error)
+	GetByProviderType(ctx context.Context, providerType types.SecretProvider) ([]*domainConnection.Connection, error)
 	List(ctx context.Context, filter *types.ConnectionFilter) (*dto.ListConnectionsResponse, error)
 	Update(ctx context.Context, id string, req *dto.UpdateConnectionRequest) (*domainConnection.Connection, error)
 	Delete(ctx context.Context, id string) error
@@ -84,12 +84,12 @@ func (s *connectionService) GetByConnectionCode(ctx context.Context, connectionC
 	return connection, nil
 }
 
-func (s *connectionService) GetByProviderType(ctx context.Context, providerType types.SecretProvider) (*domainConnection.Connection, error) {
-	connection, err := s.ConnectionRepo.GetByProviderType(ctx, providerType)
+func (s *connectionService) GetByProviderType(ctx context.Context, providerType types.SecretProvider) ([]*domainConnection.Connection, error) {
+	connections, err := s.ConnectionRepo.GetByProviderType(ctx, providerType)
 	if err != nil {
 		return nil, err
 	}
-	return connection, nil
+	return connections, nil
 }
 
 func (s *connectionService) List(ctx context.Context, filter *types.ConnectionFilter) (*dto.ListConnectionsResponse, error) {

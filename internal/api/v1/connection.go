@@ -112,7 +112,7 @@ func (h *ConnectionHandler) GetConnectionByCode(c *gin.Context) {
 	if code == "" {
 		c.Error(ierr.NewError("connection code is required").
 			WithHint("Connection code is required").
-			Mark(ierr.ErrValidation)) 
+			Mark(ierr.ErrValidation))
 		return
 	}
 
@@ -147,13 +147,18 @@ func (h *ConnectionHandler) GetConnectionByProviderType(c *gin.Context) {
 		return
 	}
 
-	connection, err := h.connectionService.GetByProviderType(c.Request.Context(), provider)
+	connections, err := h.connectionService.GetByProviderType(c.Request.Context(), provider)
 	if err != nil {
 		c.Error(err)
 		return
 	}
 
-	c.JSON(http.StatusOK, dto.ToConnectionResponse(connection))
+	responses := make([]*dto.ConnectionResponse, 0)
+	for _, connection := range connections {
+		responses = append(responses, dto.ToConnectionResponse(connection))
+	}
+
+	c.JSON(http.StatusOK, responses)
 }
 
 // ListConnections godoc

@@ -123,16 +123,16 @@ func (r *connectionRepository) GetByConnectionCode(ctx context.Context, connecti
 	return domainConnection.FromEnt(conn), nil
 }
 
-func (r *connectionRepository) GetByProviderType(ctx context.Context, providerType types.SecretProvider) (*domainConnection.Connection, error) {
+func (r *connectionRepository) GetByProviderType(ctx context.Context, providerType types.SecretProvider) ([]*domainConnection.Connection, error) {
 	client := r.client.Querier(ctx)
 
-	conn, err := client.Connection.Query().
+	connections, err := client.Connection.Query().
 		Where(
 			connection.TenantID(types.GetTenantID(ctx)),
 			connection.ProviderType(string(providerType)),
 			connection.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
-		First(ctx)
+		All(ctx)
 
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -145,7 +145,7 @@ func (r *connectionRepository) GetByProviderType(ctx context.Context, providerTy
 			Mark(ierr.ErrDatabase)
 	}
 
-	return domainConnection.FromEnt(conn), nil
+	return domainConnection.FromEntList(connections), nil
 }
 
 func (r *connectionRepository) List(ctx context.Context, filter *types.ConnectionFilter) ([]*domainConnection.Connection, error) {

@@ -22,6 +22,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/httpclient"
+	integrations "github.com/flexprice/flexprice/internal/integrations/manager"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/pdf"
 	"github.com/flexprice/flexprice/internal/postgres"
@@ -63,6 +64,9 @@ type ServiceParams struct {
 	EventPublisher   publisher.EventPublisher
 	WebhookPublisher webhookPublisher.WebhookPublisher
 
+	// Integration manager
+	GatewayManager integrations.GatewayManager
+
 	// http client
 	Client httpclient.Client
 }
@@ -95,6 +99,7 @@ func NewServiceParams(
 	webhookPublisher webhookPublisher.WebhookPublisher,
 	taskRepo task.Repository,
 	integrationRepo integration.Repository,
+	gatewayManager integrations.GatewayManager,
 ) ServiceParams {
 	return ServiceParams{
 		Logger:           logger,
@@ -120,5 +125,6 @@ func NewServiceParams(
 		ConnectionRepo:   connectionRepo,
 		EventPublisher:   eventPublisher,
 		WebhookPublisher: webhookPublisher,
+		GatewayManager:   gatewayManager,
 	}
 }

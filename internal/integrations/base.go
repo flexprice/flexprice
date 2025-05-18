@@ -50,6 +50,16 @@ func (g *BaseIntegrationGateway) UpdateCustomer(ctx context.Context, cust *custo
 	return newUnsupportedError("UpdateCustomer", g.ProviderName)
 }
 
+// GetCustomer gets a customer from the external system
+func (g *BaseIntegrationGateway) GetCustomer(ctx context.Context, customerProviderID string) (*customer.Customer, error) {
+	return nil, newUnsupportedError("GetCustomer", g.ProviderName)
+}
+
+// DeleteCustomer deletes a customer from the external system
+func (g *BaseIntegrationGateway) DeleteCustomer(ctx context.Context, customerProviderID string) error {
+	return newUnsupportedError("DeleteCustomer", g.ProviderName)
+}
+
 // ListPaymentMethods lists payment methods for a customer in the external system
 func (g *BaseIntegrationGateway) ListPaymentMethods(ctx context.Context, customerProviderID string) ([]PaymentMethodInfo, error) {
 	return nil, newUnsupportedError("ListPaymentMethods", g.ProviderName)

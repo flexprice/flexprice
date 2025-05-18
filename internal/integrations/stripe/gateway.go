@@ -32,11 +32,21 @@ func NewStripeGateway(apiKey string, logger *logger.Logger) (integrations.Integr
 	sc := &client.API{}
 	sc.Init(apiKey, nil)
 
-	return &StripeGateway{
+	gateway := &StripeGateway{
 		logger: logger,
 		client: sc,
 		apiKey: apiKey,
-	}, nil
+	}
+
+	// testing the connection to Stripe
+	_, err := gateway.client.Balance.Get(nil)
+	if err != nil {
+		return nil, ierr.NewError("Failed to connect to Stripe").
+			WithHint("Please check your Stripe API key and try again").
+			Mark(ierr.ErrHTTPClient)
+	}
+
+	return gateway, nil
 }
 
 // GetProviderName returns the name of the provider
@@ -135,6 +145,42 @@ func (g *StripeGateway) UpdateCustomer(ctx context.Context, cust *customer.Custo
 	g.logger.Infow("customer updated in Stripe",
 		"customer_id", cust.ID,
 		"stripe_customer_id", providerID)
+
+	return nil
+}
+
+// GetCustomer gets a customer from the external system
+func (g *StripeGateway) GetCustomer(ctx context.Context, customerProviderID string) (*customer.Customer, error) {
+	g.logger.Infow("getting customer in Stripe", "stripe_customer_id", customerProviderID)
+
+	// Get the customer from Stripe
+	c, err := g.client.Customers.Get(customerProviderID, nil)
+
+	if err != nil {
+		return nil, g.convertStripeError(err)
+	}
+
+	return &customer.Customer{
+		ID:                c.ID,
+		Name:              c.Name,
+		Email:             c.Email,
+		AddressLine1:      c.Address.Line1,
+		AddressLine2:      c.Address.Line2,
+		AddressCity:       c.Address.City,
+		AddressState:      c.Address.State,
+		AddressPostalCode: c.Address.PostalCode,
+		AddressCountry:    c.Address.Country,
+	}, nil
+}
+
+// DeleteCustomer deletes a customer from the external system
+func (g *StripeGateway) DeleteCustomer(ctx context.Context, customerProviderID string) error {
+	g.logger.Infow("deleting customer in Stripe", "stripe_customer_id", customerProviderID)
+
+	_, err := g.client.Customers.Del(customerProviderID, nil)
+	if err != nil {
+		return g.convertStripeError(err)
+	}
 
 	return nil
 }
@@ -319,6 +365,9 @@ func (g *StripeGateway) convertStripeError(err error) error {
 		case stripe.ErrorTypeAPI:
 			// Stripe API errors - network communication, rate limits, etc.
 			return internalErr.Mark(ierr.ErrHTTPClient)
+		case stripe.ErrorType(stripe.ErrorCodeNoAccount), stripe.ErrorType(stripe.ErrorCodeResourceMissing):
+			// No account or resource missing errors
+			return internalErr.Mark(ierr.ErrNotFound)
 		default:
 			// Unknown error type
 			return internalErr.Mark(ierr.ErrSystem)
