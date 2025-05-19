@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 const (
@@ -65,6 +66,12 @@ const (
 	FieldDescription = "description"
 	// FieldMetadata holds the string denoting the metadata field in the database.
 	FieldMetadata = "metadata"
+	// FieldScope holds the string denoting the scope field in the database.
+	FieldScope = "scope"
+	// FieldParentPriceID holds the string denoting the parent_price_id field in the database.
+	FieldParentPriceID = "parent_price_id"
+	// FieldSubscriptionID holds the string denoting the subscription_id field in the database.
+	FieldSubscriptionID = "subscription_id"
 	// Table holds the table name of the price in the database.
 	Table = "prices"
 )
@@ -98,6 +105,9 @@ var Columns = []string{
 	FieldLookupKey,
 	FieldDescription,
 	FieldMetadata,
+	FieldScope,
+	FieldParentPriceID,
+	FieldSubscriptionID,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -141,6 +151,8 @@ var (
 	BillingCadenceValidator func(string) error
 	// DefaultTrialPeriod holds the default value on creation for the "trial_period" field.
 	DefaultTrialPeriod int
+	// DefaultScope holds the default value on creation for the "scope" field.
+	DefaultScope types.PriceScope
 )
 
 // OrderOption defines the ordering options for the Price queries.
@@ -259,4 +271,19 @@ func ByLookupKey(opts ...sql.OrderTermOption) OrderOption {
 // ByDescription orders the results by the description field.
 func ByDescription(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDescription, opts...).ToFunc()
+}
+
+// ByScope orders the results by the scope field.
+func ByScope(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldScope, opts...).ToFunc()
+}
+
+// ByParentPriceID orders the results by the parent_price_id field.
+func ByParentPriceID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldParentPriceID, opts...).ToFunc()
+}
+
+// BySubscriptionID orders the results by the subscription_id field.
+func BySubscriptionID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSubscriptionID, opts...).ToFunc()
 }

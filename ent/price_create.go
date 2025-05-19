@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/schema"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // PriceCreate is the builder for creating a Price entity.
@@ -281,6 +282,48 @@ func (pc *PriceCreate) SetMetadata(m map[string]string) *PriceCreate {
 	return pc
 }
 
+// SetScope sets the "scope" field.
+func (pc *PriceCreate) SetScope(ts types.PriceScope) *PriceCreate {
+	pc.mutation.SetScope(ts)
+	return pc
+}
+
+// SetNillableScope sets the "scope" field if the given value is not nil.
+func (pc *PriceCreate) SetNillableScope(ts *types.PriceScope) *PriceCreate {
+	if ts != nil {
+		pc.SetScope(*ts)
+	}
+	return pc
+}
+
+// SetParentPriceID sets the "parent_price_id" field.
+func (pc *PriceCreate) SetParentPriceID(s string) *PriceCreate {
+	pc.mutation.SetParentPriceID(s)
+	return pc
+}
+
+// SetNillableParentPriceID sets the "parent_price_id" field if the given value is not nil.
+func (pc *PriceCreate) SetNillableParentPriceID(s *string) *PriceCreate {
+	if s != nil {
+		pc.SetParentPriceID(*s)
+	}
+	return pc
+}
+
+// SetSubscriptionID sets the "subscription_id" field.
+func (pc *PriceCreate) SetSubscriptionID(s string) *PriceCreate {
+	pc.mutation.SetSubscriptionID(s)
+	return pc
+}
+
+// SetNillableSubscriptionID sets the "subscription_id" field if the given value is not nil.
+func (pc *PriceCreate) SetNillableSubscriptionID(s *string) *PriceCreate {
+	if s != nil {
+		pc.SetSubscriptionID(*s)
+	}
+	return pc
+}
+
 // SetID sets the "id" field.
 func (pc *PriceCreate) SetID(s string) *PriceCreate {
 	pc.mutation.SetID(s)
@@ -341,6 +384,10 @@ func (pc *PriceCreate) defaults() {
 	if _, ok := pc.mutation.TrialPeriod(); !ok {
 		v := price.DefaultTrialPeriod
 		pc.mutation.SetTrialPeriod(v)
+	}
+	if _, ok := pc.mutation.Scope(); !ok {
+		v := price.DefaultScope
+		pc.mutation.SetScope(v)
 	}
 }
 
@@ -432,6 +479,9 @@ func (pc *PriceCreate) check() error {
 	}
 	if _, ok := pc.mutation.TrialPeriod(); !ok {
 		return &ValidationError{Name: "trial_period", err: errors.New(`ent: missing required field "Price.trial_period"`)}
+	}
+	if _, ok := pc.mutation.Scope(); !ok {
+		return &ValidationError{Name: "scope", err: errors.New(`ent: missing required field "Price.scope"`)}
 	}
 	return nil
 }
@@ -571,6 +621,18 @@ func (pc *PriceCreate) createSpec() (*Price, *sqlgraph.CreateSpec) {
 	if value, ok := pc.mutation.Metadata(); ok {
 		_spec.SetField(price.FieldMetadata, field.TypeJSON, value)
 		_node.Metadata = value
+	}
+	if value, ok := pc.mutation.Scope(); ok {
+		_spec.SetField(price.FieldScope, field.TypeString, value)
+		_node.Scope = value
+	}
+	if value, ok := pc.mutation.ParentPriceID(); ok {
+		_spec.SetField(price.FieldParentPriceID, field.TypeString, value)
+		_node.ParentPriceID = &value
+	}
+	if value, ok := pc.mutation.SubscriptionID(); ok {
+		_spec.SetField(price.FieldSubscriptionID, field.TypeString, value)
+		_node.SubscriptionID = &value
 	}
 	return _node, _spec
 }

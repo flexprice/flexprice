@@ -63,25 +63,30 @@ type Price struct {
 	// Note: This is only applicable for recurring prices (BILLING_CADENCE_RECURRING)
 	TrialPeriod int `db:"trial_period" json:"trial_period"`
 
-	TierMode types.BillingTier `db:"tier_mode" json:"tier_mode"`
+	TierMode types.BillingTier `db:"tier_mode" json:"tier_mode,omitempty"`
 
-	Tiers JSONBTiers `db:"tiers,jsonb" json:"tiers"`
+	Tiers JSONBTiers `db:"tiers" json:"tiers,omitempty"`
 
 	// MeterID is the id of the meter for usage based pricing
-	MeterID string `db:"meter_id" json:"meter_id"`
+	MeterID string `db:"meter_id" json:"meter_id,omitempty"`
 
 	// LookupKey used for looking up the price in the database
-	LookupKey string `db:"lookup_key" json:"lookup_key"`
+	LookupKey string `db:"lookup_key" json:"lookup_key,omitempty"`
 
 	// Description of the price
-	Description string `db:"description" json:"description"`
+	Description string `db:"description" json:"description,omitempty"`
 
-	TransformQuantity JSONBTransformQuantity `db:"transform_quantity,jsonb" json:"transform_quantity"`
+	TransformQuantity JSONBTransformQuantity `db:"transform_quantity" json:"transform_quantity,omitempty"`
 
-	Metadata JSONBMetadata `db:"metadata,jsonb" json:"metadata"`
+	Metadata JSONBMetadata `db:"metadata" json:"metadata,omitempty"`
 
 	// EnvironmentID is the environment identifier for the price
 	EnvironmentID string `db:"environment_id" json:"environment_id"`
+
+	// New fields for subscription price overrides
+	Scope          types.PriceScope `db:"scope" json:"scope"`
+	ParentPriceID  string           `db:"parent_price_id" json:"parent_price_id,omitempty"`
+	SubscriptionID string           `db:"subscription_id" json:"subscription_id,omitempty"`
 
 	types.BaseModel
 }
@@ -333,6 +338,9 @@ func FromEnt(e *ent.Price) *Price {
 		TransformQuantity:  JSONBTransformQuantity(e.TransformQuantity),
 		Metadata:           JSONBMetadata(e.Metadata),
 		EnvironmentID:      e.EnvironmentID,
+		Scope:              e.Scope,
+		ParentPriceID:      lo.FromPtr(e.ParentPriceID),
+		SubscriptionID:     lo.FromPtr(e.SubscriptionID),
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

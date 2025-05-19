@@ -30,6 +30,7 @@ import (
 	"github.com/flexprice/flexprice/ent/user"
 	"github.com/flexprice/flexprice/ent/wallet"
 	"github.com/flexprice/flexprice/ent/wallettransaction"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -681,6 +682,10 @@ func init() {
 	priceDescTrialPeriod := priceFields[11].Descriptor()
 	// price.DefaultTrialPeriod holds the default value on creation for the trial_period field.
 	price.DefaultTrialPeriod = priceDescTrialPeriod.Default.(int)
+	// priceDescScope is the schema descriptor for scope field.
+	priceDescScope := priceFields[20].Descriptor()
+	// price.DefaultScope holds the default value on creation for the scope field.
+	price.DefaultScope = types.PriceScope(priceDescScope.Default.(string))
 	secretMixin := schema.Secret{}.Mixin()
 	secretMixinFields0 := secretMixin[0].Fields()
 	_ = secretMixinFields0
