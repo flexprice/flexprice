@@ -6,6 +6,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -108,6 +109,25 @@ func (Price) Fields() []ent.Field {
 			Optional(),
 		field.JSON("metadata", map[string]string{}).
 			Optional(),
+		// New fields for subscription price overrides
+		field.String("scope").
+			GoType(types.PriceScope(types.PriceScopePlan)).
+			SchemaType(map[string]string{
+				"postgres": "varchar(20)",
+			}).
+			Default(string(types.PriceScopePlan)), // Default to PLAN scope for all prices
+		field.String("parent_price_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable(), // Will be NULL for PLAN scoped prices
+		field.String("subscription_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable(), // Will be NULL for PLAN scoped prices
 	}
 }
 
@@ -123,6 +143,9 @@ func (Price) Indexes() []ent.Index {
 			Unique().
 			Annotations(entsql.IndexWhere("status = 'published' AND lookup_key IS NOT NULL AND lookup_key != ''")),
 		index.Fields("tenant_id", "environment_id"),
+		// New indexes for subscription price overrides
+		index.Fields("tenant_id", "environment_id", "scope", "subscription_id"),
+		index.Fields("tenant_id", "environment_id", "scope", "plan_id"),
 	}
 }
 

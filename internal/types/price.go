@@ -21,6 +21,9 @@ type BillingTier string
 // PriceType is the type of the price ex USAGE, FIXED
 type PriceType string
 
+// PriceScope represents the scope of a price (plan or subscription specific)
+type PriceScope string
+
 const (
 	PRICE_TYPE_USAGE PriceType = "USAGE"
 	PRICE_TYPE_FIXED PriceType = "FIXED"
@@ -64,6 +67,12 @@ const (
 
 	// DEFAULT_FLOATING_PRECISION is the default floating point precision
 	DEFAULT_FLOATING_PRECISION = 2
+
+	// PriceScopePlan indicates the price is associated with a plan
+	PriceScopePlan PriceScope = "PLAN"
+
+	// PriceScopeSubscription indicates the price is a subscription-specific override
+	PriceScopeSubscription PriceScope = "SUBSCRIPTION"
 )
 
 func (b BillingCadence) Validate() error {
@@ -163,8 +172,10 @@ func (p PriceType) Validate() error {
 type PriceFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
-	PlanIDs  []string `json:"plan_ids,omitempty" form:"plan_ids"`
-	PriceIDs []string `json:"price_ids,omitempty" form:"price_ids"`
+	PlanIDs        []string `json:"plan_ids,omitempty" form:"plan_ids"`
+	PriceIDs       []string `json:"price_ids,omitempty" form:"price_ids"`
+	Scope          *string  `json:"scope,omitempty" form:"scope"`
+	SubscriptionID *string  `json:"subscription_id,omitempty" form:"subscription_id"`
 }
 
 // NewPriceFilter creates a new PriceFilter with default values
@@ -222,6 +233,18 @@ func (f *PriceFilter) WithPlanIDs(planIDs []string) *PriceFilter {
 // WithPriceIDs adds price IDs to the filter
 func (f *PriceFilter) WithPriceIDs(priceIDs []string) *PriceFilter {
 	f.PriceIDs = priceIDs
+	return f
+}
+
+// WithScope sets the scope for the filter
+func (f *PriceFilter) WithScope(scope string) *PriceFilter {
+	f.Scope = lo.ToPtr(scope)
+	return f
+}
+
+// WithSubscriptionID sets the subscription ID for the filter
+func (f *PriceFilter) WithSubscriptionID(subscriptionID string) *PriceFilter {
+	f.SubscriptionID = lo.ToPtr(subscriptionID)
 	return f
 }
 

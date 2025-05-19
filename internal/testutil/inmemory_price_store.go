@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/price"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -57,6 +58,17 @@ func priceFilterFn(ctx context.Context, p *price.Price, filter interface{}) bool
 		}
 	}
 
+	// filter by scope
+	if f.Scope != nil {
+		if p.Scope != types.PriceScope(*f.Scope) {
+			return false
+		}
+	} else if len(f.PriceIDs) == 0 {
+		if p.Scope != types.PriceScopePlan {
+			return false
+		}
+	}
+
 	// Filter by status
 	if f.Status != nil && p.Status != *f.Status {
 		return false
@@ -93,6 +105,11 @@ func (s *InMemoryPriceStore) Create(ctx context.Context, p *price.Price) error {
 	// Set environment ID from context if not already set
 	if p.EnvironmentID == "" {
 		p.EnvironmentID = types.GetEnvironmentID(ctx)
+	}
+
+	// set scope to plan if not set
+	if p.Scope == "" {
+		p.Scope = types.PriceScopePlan
 	}
 
 	err := s.InMemoryStore.Create(ctx, p.ID, p)
@@ -226,6 +243,41 @@ func (s *InMemoryPriceStore) DeleteBulk(ctx context.Context, ids []string) error
 		}
 	}
 	return nil
+}
+
+func (s *InMemoryPriceStore) CreateSubscriptionPriceOverride(ctx context.Context, override price.SubscriptionPriceOverride) (*price.Price, error) {
+	originalPrice, err := s.Get(ctx, override.OriginalPriceID)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get original price").
+			Mark(ierr.ErrDatabase)
+	}
+
+	// Create a new price based on the original but with subscription scope
+	newPrice := *originalPrice
+	newPrice.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE)
+	newPrice.Scope = types.PriceScopeSubscription
+	newPrice.ParentPriceID = originalPrice.ID
+	newPrice.SubscriptionID = override.SubscriptionID
+	newPrice.Amount = override.NewAmount
+
+	// Format the display amount to match the new amount
+	newPrice.DisplayAmount = price.GetDisplayAmountWithPrecision(override.NewAmount, originalPrice.Currency)
+
+	// Set creation time and user
+	newPrice.CreatedAt = time.Now().UTC()
+	newPrice.UpdatedAt = newPrice.CreatedAt
+	newPrice.CreatedBy = types.GetUserID(ctx)
+	newPrice.UpdatedBy = newPrice.CreatedBy
+
+	err = s.Create(ctx, &newPrice)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to create subscription price override").
+			Mark(ierr.ErrDatabase)
+	}
+
+	return &newPrice, nil
 }
 
 // Clear clears the price store

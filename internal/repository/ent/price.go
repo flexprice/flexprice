@@ -56,6 +56,11 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 		p.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
 
+	// set scope to plan if not set
+	if p.Scope == "" {
+		p.Scope = types.PriceScopePlan
+	}
+
 	// Create the price using the standard Ent API
 	price, err := client.Price.Create().
 		SetID(p.ID).
@@ -77,6 +82,9 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 		SetTransformQuantity(schema.TransformQuantity(p.TransformQuantity)).
 		SetLookupKey(p.LookupKey).
 		SetDescription(p.Description).
+		SetScope(p.Scope).
+		SetNillableParentPriceID(lo.ToPtr(p.ParentPriceID)).
+		SetNillableSubscriptionID(lo.ToPtr(p.SubscriptionID)).
 		SetMetadata(map[string]string(p.Metadata)).
 		SetStatus(string(p.Status)).
 		SetCreatedAt(p.CreatedAt).
@@ -527,6 +535,22 @@ func (o PriceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.P
 		}
 	}
 
+	// Apply subscription price override filters if specified
+	if f.Scope != nil {
+		query = query.Where(price.Scope(types.PriceScope(*f.Scope)))
+	} else if len(f.PriceIDs) == 0 {
+		// Default behavior: if no scope is specified, only return PLAN prices
+		// NOTE: not adding this default behaviour when priceIDs are specified because
+		// that might get called from subscription by line item level so we want to
+		// return the price overrides if they exist
+		query = query.Where(price.Scope(types.PriceScopePlan))
+	}
+
+	// Apply subscription ID filter if specified
+	if f.SubscriptionID != nil {
+		query = query.Where(price.SubscriptionID(*f.SubscriptionID))
+	}
+
 	return query
 }
 
@@ -567,4 +591,59 @@ func (r *priceRepository) DeleteCache(ctx context.Context, priceID string) {
 	environmentID := types.GetEnvironmentID(ctx)
 	cacheKey := cache.GenerateKey(cache.PrefixPrice, tenantID, environmentID, priceID)
 	r.cache.Delete(ctx, cacheKey)
+}
+
+// CreateSubscriptionPriceOverride creates a new subscription-scoped price that overrides a plan price
+func (r *priceRepository) CreateSubscriptionPriceOverride(ctx context.Context, override domainPrice.SubscriptionPriceOverride) (*domainPrice.Price, error) {
+	// Start a span for this repository operation
+	span := StartRepositorySpan(ctx, "price", "create_subscription_override", map[string]interface{}{
+		"original_price_id": override.OriginalPriceID,
+		"subscription_id":   override.SubscriptionID,
+	})
+	defer FinishSpan(span)
+
+	// First, get the original price
+	originalPrice, err := r.Get(ctx, override.OriginalPriceID)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get original price for override").
+			WithReportableDetails(map[string]interface{}{
+				"original_price_id": override.OriginalPriceID,
+				"subscription_id":   override.SubscriptionID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	// Create a new price based on the original but with subscription scope
+	newPrice := *originalPrice
+	newPrice.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE)
+	newPrice.Scope = types.PriceScopeSubscription
+	newPrice.ParentPriceID = originalPrice.ID
+	newPrice.SubscriptionID = override.SubscriptionID
+	newPrice.Amount = override.NewAmount
+
+	// Format the display amount to match the new amount
+	newPrice.DisplayAmount = domainPrice.GetDisplayAmountWithPrecision(override.NewAmount, originalPrice.Currency)
+
+	// Set creation time and user
+	newPrice.CreatedAt = time.Now().UTC()
+	newPrice.UpdatedAt = newPrice.CreatedAt
+	newPrice.CreatedBy = types.GetUserID(ctx)
+	newPrice.UpdatedBy = newPrice.CreatedBy
+
+	// Create the new price
+	err = r.Create(ctx, &newPrice)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to create subscription price override").
+			WithReportableDetails(map[string]interface{}{
+				"original_price_id": override.OriginalPriceID,
+				"subscription_id":   override.SubscriptionID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	return &newPrice, nil
 }

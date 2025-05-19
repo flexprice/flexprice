@@ -14,6 +14,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// CreateSubscriptionRequest defines the request payload for creating a subscription.
 type CreateSubscriptionRequest struct {
 	CustomerID         string               `json:"customer_id" validate:"required"`
 	PlanID             string               `json:"plan_id" validate:"required"`
@@ -37,6 +38,15 @@ type CreateSubscriptionRequest struct {
 	BillingCycle types.BillingCycle `json:"billing_cycle"`
 	// Credit grants to be applied when subscription is created
 	CreditGrants []CreateCreditGrantRequest `json:"credit_grants,omitempty"`
+	// New field for subscription price overrides
+	OverrideLineItems []SubscriptionOverrideLineItem `json:"override_line_items,omitempty"`
+}
+
+// SubscriptionOverrideLineItem represents a line item with a price override for a subscription
+type SubscriptionOverrideLineItem struct {
+	PriceID  string          `json:"price_id" validate:"required"`
+	Quantity decimal.Decimal `json:"quantity,omitempty"`
+	Amount   decimal.Decimal `json:"amount,omitempty"`
 }
 
 type UpdateSubscriptionRequest struct {

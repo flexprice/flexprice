@@ -15,6 +15,7 @@ import (
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/schema"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // PriceUpdate is the builder for updating Price entities.
@@ -352,6 +353,60 @@ func (pu *PriceUpdate) ClearMetadata() *PriceUpdate {
 	return pu
 }
 
+// SetScope sets the "scope" field.
+func (pu *PriceUpdate) SetScope(ts types.PriceScope) *PriceUpdate {
+	pu.mutation.SetScope(ts)
+	return pu
+}
+
+// SetNillableScope sets the "scope" field if the given value is not nil.
+func (pu *PriceUpdate) SetNillableScope(ts *types.PriceScope) *PriceUpdate {
+	if ts != nil {
+		pu.SetScope(*ts)
+	}
+	return pu
+}
+
+// SetParentPriceID sets the "parent_price_id" field.
+func (pu *PriceUpdate) SetParentPriceID(s string) *PriceUpdate {
+	pu.mutation.SetParentPriceID(s)
+	return pu
+}
+
+// SetNillableParentPriceID sets the "parent_price_id" field if the given value is not nil.
+func (pu *PriceUpdate) SetNillableParentPriceID(s *string) *PriceUpdate {
+	if s != nil {
+		pu.SetParentPriceID(*s)
+	}
+	return pu
+}
+
+// ClearParentPriceID clears the value of the "parent_price_id" field.
+func (pu *PriceUpdate) ClearParentPriceID() *PriceUpdate {
+	pu.mutation.ClearParentPriceID()
+	return pu
+}
+
+// SetSubscriptionID sets the "subscription_id" field.
+func (pu *PriceUpdate) SetSubscriptionID(s string) *PriceUpdate {
+	pu.mutation.SetSubscriptionID(s)
+	return pu
+}
+
+// SetNillableSubscriptionID sets the "subscription_id" field if the given value is not nil.
+func (pu *PriceUpdate) SetNillableSubscriptionID(s *string) *PriceUpdate {
+	if s != nil {
+		pu.SetSubscriptionID(*s)
+	}
+	return pu
+}
+
+// ClearSubscriptionID clears the value of the "subscription_id" field.
+func (pu *PriceUpdate) ClearSubscriptionID() *PriceUpdate {
+	pu.mutation.ClearSubscriptionID()
+	return pu
+}
+
 // Mutation returns the PriceMutation object of the builder.
 func (pu *PriceUpdate) Mutation() *PriceMutation {
 	return pu.mutation
@@ -556,6 +611,21 @@ func (pu *PriceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if pu.mutation.MetadataCleared() {
 		_spec.ClearField(price.FieldMetadata, field.TypeJSON)
+	}
+	if value, ok := pu.mutation.Scope(); ok {
+		_spec.SetField(price.FieldScope, field.TypeString, value)
+	}
+	if value, ok := pu.mutation.ParentPriceID(); ok {
+		_spec.SetField(price.FieldParentPriceID, field.TypeString, value)
+	}
+	if pu.mutation.ParentPriceIDCleared() {
+		_spec.ClearField(price.FieldParentPriceID, field.TypeString)
+	}
+	if value, ok := pu.mutation.SubscriptionID(); ok {
+		_spec.SetField(price.FieldSubscriptionID, field.TypeString, value)
+	}
+	if pu.mutation.SubscriptionIDCleared() {
+		_spec.ClearField(price.FieldSubscriptionID, field.TypeString)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, pu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -899,6 +969,60 @@ func (puo *PriceUpdateOne) ClearMetadata() *PriceUpdateOne {
 	return puo
 }
 
+// SetScope sets the "scope" field.
+func (puo *PriceUpdateOne) SetScope(ts types.PriceScope) *PriceUpdateOne {
+	puo.mutation.SetScope(ts)
+	return puo
+}
+
+// SetNillableScope sets the "scope" field if the given value is not nil.
+func (puo *PriceUpdateOne) SetNillableScope(ts *types.PriceScope) *PriceUpdateOne {
+	if ts != nil {
+		puo.SetScope(*ts)
+	}
+	return puo
+}
+
+// SetParentPriceID sets the "parent_price_id" field.
+func (puo *PriceUpdateOne) SetParentPriceID(s string) *PriceUpdateOne {
+	puo.mutation.SetParentPriceID(s)
+	return puo
+}
+
+// SetNillableParentPriceID sets the "parent_price_id" field if the given value is not nil.
+func (puo *PriceUpdateOne) SetNillableParentPriceID(s *string) *PriceUpdateOne {
+	if s != nil {
+		puo.SetParentPriceID(*s)
+	}
+	return puo
+}
+
+// ClearParentPriceID clears the value of the "parent_price_id" field.
+func (puo *PriceUpdateOne) ClearParentPriceID() *PriceUpdateOne {
+	puo.mutation.ClearParentPriceID()
+	return puo
+}
+
+// SetSubscriptionID sets the "subscription_id" field.
+func (puo *PriceUpdateOne) SetSubscriptionID(s string) *PriceUpdateOne {
+	puo.mutation.SetSubscriptionID(s)
+	return puo
+}
+
+// SetNillableSubscriptionID sets the "subscription_id" field if the given value is not nil.
+func (puo *PriceUpdateOne) SetNillableSubscriptionID(s *string) *PriceUpdateOne {
+	if s != nil {
+		puo.SetSubscriptionID(*s)
+	}
+	return puo
+}
+
+// ClearSubscriptionID clears the value of the "subscription_id" field.
+func (puo *PriceUpdateOne) ClearSubscriptionID() *PriceUpdateOne {
+	puo.mutation.ClearSubscriptionID()
+	return puo
+}
+
 // Mutation returns the PriceMutation object of the builder.
 func (puo *PriceUpdateOne) Mutation() *PriceMutation {
 	return puo.mutation
@@ -1133,6 +1257,21 @@ func (puo *PriceUpdateOne) sqlSave(ctx context.Context) (_node *Price, err error
 	}
 	if puo.mutation.MetadataCleared() {
 		_spec.ClearField(price.FieldMetadata, field.TypeJSON)
+	}
+	if value, ok := puo.mutation.Scope(); ok {
+		_spec.SetField(price.FieldScope, field.TypeString, value)
+	}
+	if value, ok := puo.mutation.ParentPriceID(); ok {
+		_spec.SetField(price.FieldParentPriceID, field.TypeString, value)
+	}
+	if puo.mutation.ParentPriceIDCleared() {
+		_spec.ClearField(price.FieldParentPriceID, field.TypeString)
+	}
+	if value, ok := puo.mutation.SubscriptionID(); ok {
+		_spec.SetField(price.FieldSubscriptionID, field.TypeString, value)
+	}
+	if puo.mutation.SubscriptionIDCleared() {
+		_spec.ClearField(price.FieldSubscriptionID, field.TypeString)
 	}
 	_node = &Price{config: puo.config}
 	_spec.Assign = _node.assignValues

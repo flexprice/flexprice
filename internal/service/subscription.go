@@ -31,6 +31,9 @@ type SubscriptionService interface {
 	ListPauses(ctx context.Context, subscriptionID string) (*dto.ListSubscriptionPausesResponse, error)
 	CalculatePauseImpact(ctx context.Context, subscriptionID string, req *dto.PauseSubscriptionRequest) (*types.BillingImpactDetails, error)
 	CalculateResumeImpact(ctx context.Context, subscriptionID string, req *dto.ResumeSubscriptionRequest) (*types.BillingImpactDetails, error)
+
+	// Helpers
+	GetSubscriptionPrices(ctx context.Context, lineItems []*subscription.SubscriptionLineItem) (*dto.ListPricesResponse, error)
 }
 
 type subscriptionService struct {
@@ -88,13 +91,15 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.Logger)
 	priceFilter := types.NewNoLimitPriceFilter().
 		WithPlanIDs([]string{plan.ID}).
-		WithExpand(string(types.ExpandMeters))
-	pricesResponse, err := priceService.GetPrices(ctx, priceFilter)
+		WithExpand(string(types.ExpandMeters)).
+		WithScope(string(types.PriceScopePlan)) // Only fetch PLAN scoped prices
+
+	planPricesResponse, err := priceService.GetPrices(ctx, priceFilter)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(pricesResponse.Items) == 0 {
+	if len(planPricesResponse.Items) == 0 {
 		return nil, ierr.NewError("no prices found for plan").
 			WithHint("The plan must have at least one price to create a subscription").
 			WithReportableDetails(map[string]interface{}{
@@ -103,20 +108,80 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			Mark(ierr.ErrValidation)
 	}
 
-	prices := make([]price.Price, len(pricesResponse.Items))
-	for i, p := range pricesResponse.Items {
-		prices[i] = *p.Price
+	planPrices := make([]price.Price, len(planPricesResponse.Items))
+	for i, p := range planPricesResponse.Items {
+		planPrices[i] = *p.Price
 	}
 
-	priceMap := make(map[string]*dto.PriceResponse, len(prices))
-	for _, p := range pricesResponse.Items {
+	priceMap := make(map[string]*dto.PriceResponse, len(planPricesResponse.Items))
+	for _, p := range planPricesResponse.Items {
 		priceMap[p.Price.ID] = p
 	}
 
+	// Create the subscription domain object
 	sub := req.ToSubscription(ctx)
 
+	// Process any price overrides that were specified
+	overriddenPriceIDs := make(map[string]string) // Map from original price ID to overridden price ID
+
+	// Create subscription-scoped price overrides for any overridden prices
+	if len(req.OverrideLineItems) > 0 {
+		s.Logger.Infow("processing price overrides for subscription",
+			"subscription_id", sub.ID,
+			"override_count", len(req.OverrideLineItems))
+
+		for _, overrideItem := range req.OverrideLineItems {
+			originalPrice := priceMap[overrideItem.PriceID]
+			if originalPrice == nil {
+				return nil, ierr.NewError("price not found").
+					WithHint("The price must exist to create a subscription").
+					WithReportableDetails(map[string]interface{}{
+						"price_id": overrideItem.PriceID,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+
+			if originalPrice.BillingModel != types.BILLING_MODEL_FLAT_FEE {
+				return nil, ierr.NewError("price billing model mismatch").
+					WithHint("The price billing model must be flat fee to override a subscription price").
+					WithReportableDetails(map[string]interface{}{
+						"price_id": overrideItem.PriceID,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+
+			// Create a subscription price override
+			override := price.SubscriptionPriceOverride{
+				OriginalPriceID: overrideItem.PriceID,
+				SubscriptionID:  sub.ID,
+				NewAmount:       overrideItem.Amount,
+			}
+
+			// Create the overridden price
+			overriddenPrice, err := s.PriceRepo.CreateSubscriptionPriceOverride(ctx, override)
+			if err != nil {
+				return nil, err
+			}
+
+			// Map the original price ID to the new overridden price ID
+			overriddenPriceIDs[overrideItem.PriceID] = overriddenPrice.ID
+
+			// remove the original price from the price map and replace it with the overridden price
+			delete(priceMap, overrideItem.PriceID)
+			priceMap[overriddenPrice.ID] = &dto.PriceResponse{
+				Price: overriddenPrice,
+				Meter: originalPrice.Meter,
+			}
+		}
+	}
+
+	finalPrices := make([]*dto.PriceResponse, 0, len(priceMap))
+	for _, p := range priceMap {
+		finalPrices = append(finalPrices, p)
+	}
+
 	// Filter prices for subscription that are valid for the plan
-	validPrices := filterValidPricesForSubscription(pricesResponse.Items, sub)
+	validPrices := filterValidPricesForSubscription(finalPrices, sub)
 	if len(validPrices) == 0 {
 		return nil, ierr.NewError("no valid prices found for subscription").
 			WithHint("No prices match the subscription criteria").
@@ -192,6 +257,15 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			item.DisplayName = plan.Name
 			if item.Quantity.IsZero() {
 				item.Quantity = decimal.NewFromInt(1)
+			}
+
+			// handle quantity overrides for fixed prices on subscription
+			for _, overrideItem := range req.OverrideLineItems {
+				if overrideItem.PriceID == item.PriceID {
+					if !overrideItem.Quantity.IsZero() {
+						item.Quantity = overrideItem.Quantity
+					}
+				}
 			}
 		}
 
@@ -517,6 +591,9 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config)
 	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.Logger)
 
+	// filter usage line items
+	usageLineItems := make([]*subscription.SubscriptionLineItem, 0)
+
 	// Get subscription with line items
 	subscription, lineItems, err := s.SubRepo.GetWithLineItems(ctx, req.SubscriptionID)
 	if err != nil {
@@ -545,8 +622,6 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 		usageEndTime = time.Now().UTC()
 	}
 
-	// Collect all price IDs
-	priceIDs := make([]string, 0, len(lineItems))
 	for _, item := range lineItems {
 		if item.PriceType != types.PRICE_TYPE_USAGE {
 			continue
@@ -554,14 +629,10 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 		if item.MeterID == "" {
 			continue
 		}
-		priceIDs = append(priceIDs, item.PriceID)
+		usageLineItems = append(usageLineItems, item)
 	}
 
-	// Fetch all prices in one call
-	priceFilter := types.NewNoLimitPriceFilter()
-	priceFilter.PriceIDs = priceIDs
-	priceFilter.Expand = lo.ToPtr(string(types.ExpandMeters))
-	pricesList, err := priceService.GetPrices(ctx, priceFilter)
+	pricesList, err := s.GetSubscriptionPrices(ctx, usageLineItems)
 	if err != nil {
 		return nil, err
 	}
@@ -586,10 +657,10 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 		"subscription_id", req.SubscriptionID,
 		"start_time", usageStartTime,
 		"end_time", usageEndTime,
-		"metered_line_items", len(priceIDs))
+		"metered_line_items", len(usageLineItems))
 
-	meterUsageRequests := make([]*dto.GetUsageByMeterRequest, 0, len(lineItems))
-	for _, lineItem := range lineItems {
+	meterUsageRequests := make([]*dto.GetUsageByMeterRequest, 0, len(usageLineItems))
+	for _, lineItem := range usageLineItems {
 		if lineItem.PriceType != types.PRICE_TYPE_USAGE {
 			continue
 		}
@@ -695,6 +766,21 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 	response.DisplayAmount = price.GetDisplayAmountWithPrecision(totalCost, subscription.Currency)
 
 	return response, nil
+}
+
+func (s *subscriptionService) GetSubscriptionPrices(ctx context.Context, lineItems []*subscription.SubscriptionLineItem) (*dto.ListPricesResponse, error) {
+	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.Logger)
+	priceFilter := types.NewNoLimitPriceFilter()
+	priceFilter.PriceIDs = lo.Map(lineItems, func(item *subscription.SubscriptionLineItem, _ int) string {
+		return item.PriceID
+	})
+
+	prices, err := priceService.GetPrices(ctx, priceFilter)
+	if err != nil {
+		return nil, err
+	}
+
+	return prices, nil
 }
 
 // UpdateBillingPeriods updates the current billing periods for all active subscriptions

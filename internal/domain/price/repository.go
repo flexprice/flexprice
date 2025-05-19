@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // Repository defines the interface for price persistence operations
@@ -20,4 +21,14 @@ type Repository interface {
 	// Bulk operations
 	CreateBulk(ctx context.Context, prices []*Price) error
 	DeleteBulk(ctx context.Context, ids []string) error
+
+	// Subscription price override operations
+	CreateSubscriptionPriceOverride(ctx context.Context, override SubscriptionPriceOverride) (*Price, error)
+}
+
+// SubscriptionPriceOverride contains the necessary information to create a subscription-scoped price
+type SubscriptionPriceOverride struct {
+	OriginalPriceID string          // The ID of the original price to override
+	SubscriptionID  string          // The ID of the subscription
+	NewAmount       decimal.Decimal // The new amount for the override
 }
