@@ -44,6 +44,15 @@ type CreateSubscriptionRequest struct {
 	OverageFactor *decimal.Decimal `json:"overage_factor,omitempty"`
 	// Phases represents an optional timeline of subscription phases
 	Phases []SubscriptionSchedulePhaseInput `json:"phases,omitempty" validate:"omitempty,dive"`
+	// ProrationMode is the mode for proration.
+	// If not set, the default value is none. Possible values are active and none.
+	// Active proration means the proration will be calculated based on the usage.
+	// None proration means the proration will not be calculated.
+	// This is IGNORED when the billing cycle is anniversary.
+	ProrationMode types.ProrationMode `json:"proration_mode"`
+	// Timezone of the customer.
+	// If not set, the default value is UTC.
+	CustomerTimezone string `json:"customer_timezone" validate:"timezone"`
 }
 
 type UpdateSubscriptionRequest struct {
@@ -83,6 +92,15 @@ func (r *CreateSubscriptionRequest) Validate() error {
 	}
 
 	if err := r.BillingCycle.Validate(); err != nil {
+		return err
+	}
+
+	// If proration mode is not set, set it to none
+	if r.ProrationMode == "" {
+		r.ProrationMode = types.ProrationModeNone
+	}
+
+	if err := r.ProrationMode.Validate(); err != nil {
 		return err
 	}
 
@@ -261,6 +279,10 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		r.StartDate = now
 	}
 
+	if r.CustomerTimezone == "" {
+		r.CustomerTimezone = "UTC"
+	}
+
 	sub := &subscription.Subscription{
 		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
 		CustomerID:         r.CustomerID,
@@ -280,6 +302,8 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		EnvironmentID:      types.GetEnvironmentID(ctx),
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 		BillingCycle:       r.BillingCycle,
+		CustomerTimezone:   r.CustomerTimezone,
+		ProrationMode:      r.ProrationMode,
 	}
 
 	// Set commitment amount and overage factor if provided

@@ -8,6 +8,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -111,12 +112,8 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			Mark(ierr.ErrValidation)
 	}
 
-	prices := make([]price.Price, len(pricesResponse.Items))
-	for i, p := range pricesResponse.Items {
-		prices[i] = *p.Price
-	}
-
-	priceMap := make(map[string]*dto.PriceResponse, len(prices))
+	// Build price map for quick lookup
+	priceMap := make(map[string]*dto.PriceResponse)
 	for _, p := range pricesResponse.Items {
 		priceMap[p.Price.ID] = p
 	}
@@ -148,6 +145,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		sub.StartDate = sub.StartDate.UTC()
 	}
 
+	// TODO: handle customer timezone here
 	if sub.BillingCycle == types.BillingCycleCalendar {
 		sub.BillingAnchor = types.CalculateCalendarBillingAnchor(sub.StartDate, sub.BillingPeriod)
 	} else {
@@ -173,7 +171,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	lineItems := make([]*subscription.SubscriptionLineItem, 0, len(validPrices))
 	for _, price := range validPrices {
 		lineItems = append(lineItems, &subscription.SubscriptionLineItem{
-			PriceID:       price.ID,
+			PriceID:       price.Price.ID,
 			EnvironmentID: types.GetEnvironmentID(ctx),
 			BaseModel:     types.GetDefaultBaseModel(ctx),
 		})
@@ -191,7 +189,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 				Mark(ierr.ErrDatabase)
 		}
 
-		if price.Type == types.PRICE_TYPE_USAGE && price.Meter != nil {
+		if price.Price.Type == types.PRICE_TYPE_USAGE && price.Meter != nil {
 			item.MeterID = price.Meter.ID
 			item.MeterDisplayName = price.Meter.Name
 			item.DisplayName = price.Meter.Name
@@ -222,6 +220,50 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		}
 	}
 	sub.LineItems = lineItems
+
+	// Handle proration for calendar billing at the start of the subscription
+	if req.BillingCycle == types.BillingCycleCalendar &&
+		req.ProrationMode == types.ProrationModeActive {
+		prorationService := NewProrationService(s.ServiceParams)
+
+		// Convert price map to domain type
+		domainPriceMap := make(map[string]*price.Price)
+		for id, p := range priceMap {
+			domainPriceMap[id] = &price.Price{
+				ID:             p.ID,
+				Amount:         p.Amount,
+				Currency:       p.Currency,
+				BillingPeriod:  p.BillingPeriod,
+				InvoiceCadence: p.InvoiceCadence,
+				Type:           p.Type,
+				MeterID:        p.MeterID,
+				TrialPeriod:    p.TrialPeriod,
+				EnvironmentID:  p.EnvironmentID,
+				BaseModel:      p.BaseModel,
+			}
+		}
+
+		// Calculate and apply proration for the entire subscription at once
+		prorationParams := proration.SubscriptionProrationParams{
+			Subscription:  sub,
+			Prices:        domainPriceMap,
+			ProrationMode: req.ProrationMode,
+			BillingCycle:  req.BillingCycle,
+		}
+
+		prorationResult, err := prorationService.CalculateAndApplySubscriptionProration(ctx, prorationParams)
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithHintf("failed to calculate and apply proration for new subscription: %v", err).
+				Mark(ierr.ErrSystem)
+		}
+
+		s.Logger.Infow("applied subscription proration",
+			"subscription_id", sub.ID,
+			"total_proration_amount", prorationResult.TotalProrationAmount.String(),
+			"num_line_items", len(prorationResult.LineItemResults),
+		)
+	}
 
 	s.Logger.Infow("creating subscription",
 		"customer_id", sub.CustomerID,

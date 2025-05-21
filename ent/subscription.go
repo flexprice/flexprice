@@ -84,6 +84,10 @@ type Subscription struct {
 	CommitmentAmount *decimal.Decimal `json:"commitment_amount,omitempty"`
 	// OverageFactor holds the value of the "overage_factor" field.
 	OverageFactor *decimal.Decimal `json:"overage_factor,omitempty"`
+	// CustomerTimezone holds the value of the "customer_timezone" field.
+	CustomerTimezone string `json:"customer_timezone,omitempty"`
+	// ProrationMode holds the value of the "proration_mode" field.
+	ProrationMode string `json:"proration_mode,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the SubscriptionQuery when eager-loading is set.
 	Edges        SubscriptionEdges `json:"edges"`
@@ -156,7 +160,7 @@ func (*Subscription) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case subscription.FieldBillingPeriodCount, subscription.FieldVersion:
 			values[i] = new(sql.NullInt64)
-		case subscription.FieldID, subscription.FieldTenantID, subscription.FieldStatus, subscription.FieldCreatedBy, subscription.FieldUpdatedBy, subscription.FieldEnvironmentID, subscription.FieldLookupKey, subscription.FieldCustomerID, subscription.FieldPlanID, subscription.FieldSubscriptionStatus, subscription.FieldCurrency, subscription.FieldBillingCadence, subscription.FieldBillingPeriod, subscription.FieldPauseStatus, subscription.FieldActivePauseID, subscription.FieldBillingCycle:
+		case subscription.FieldID, subscription.FieldTenantID, subscription.FieldStatus, subscription.FieldCreatedBy, subscription.FieldUpdatedBy, subscription.FieldEnvironmentID, subscription.FieldLookupKey, subscription.FieldCustomerID, subscription.FieldPlanID, subscription.FieldSubscriptionStatus, subscription.FieldCurrency, subscription.FieldBillingCadence, subscription.FieldBillingPeriod, subscription.FieldPauseStatus, subscription.FieldActivePauseID, subscription.FieldBillingCycle, subscription.FieldCustomerTimezone, subscription.FieldProrationMode:
 			values[i] = new(sql.NullString)
 		case subscription.FieldCreatedAt, subscription.FieldUpdatedAt, subscription.FieldBillingAnchor, subscription.FieldStartDate, subscription.FieldEndDate, subscription.FieldCurrentPeriodStart, subscription.FieldCurrentPeriodEnd, subscription.FieldCancelledAt, subscription.FieldCancelAt, subscription.FieldTrialStart, subscription.FieldTrialEnd:
 			values[i] = new(sql.NullTime)
@@ -383,6 +387,18 @@ func (s *Subscription) assignValues(columns []string, values []any) error {
 				s.OverageFactor = new(decimal.Decimal)
 				*s.OverageFactor = *value.S.(*decimal.Decimal)
 			}
+		case subscription.FieldCustomerTimezone:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field customer_timezone", values[i])
+			} else if value.Valid {
+				s.CustomerTimezone = value.String
+			}
+		case subscription.FieldProrationMode:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field proration_mode", values[i])
+			} else if value.Valid {
+				s.ProrationMode = value.String
+			}
 		default:
 			s.selectValues.Set(columns[i], values[i])
 		}
@@ -550,6 +566,12 @@ func (s *Subscription) String() string {
 		builder.WriteString("overage_factor=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
+	builder.WriteString(", ")
+	builder.WriteString("customer_timezone=")
+	builder.WriteString(s.CustomerTimezone)
+	builder.WriteString(", ")
+	builder.WriteString("proration_mode=")
+	builder.WriteString(s.ProrationMode)
 	builder.WriteByte(')')
 	return builder.String()
 }
