@@ -188,3 +188,4 @@ Flexprice is a commercial open source company, which means some parts of this op
 
 > [!TIP]
 > We work closely with the community and always invite feedback about what should be open and what is fine to be commercial. This list is not set and stone and we have moved things from commercial to open in the past. Please open a [discussion](https://github.com/flexprice/flexprice/discussions) if you feel like something is wrong.
+
