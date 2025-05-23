@@ -514,9 +514,10 @@ func (r *ProcessedEventRepository) GetUsageAnalytics(ctx context.Context, tenant
 // GetDetailedUsageAnalytics provides comprehensive usage analytics with filtering, grouping, and time-series data
 func (r *ProcessedEventRepository) GetDetailedUsageAnalytics(ctx context.Context, params *events.UsageAnalyticsParams) ([]*events.DetailedUsageAnalytic, error) {
 	span := StartRepositorySpan(ctx, "processed_event", "get_detailed_usage_analytics", map[string]interface{}{
-		"external_customer_id": params.ExternalCustomerID,
-		"feature_ids_count":    len(params.FeatureIDs),
-		"sources_count":        len(params.Sources),
+		"external_customer_id":   params.ExternalCustomerID,
+		"feature_ids_count":      len(params.FeatureIDs),
+		"sources_count":          len(params.Sources),
+		"property_filters_count": len(params.PropertyFilters),
 	})
 	defer FinishSpan(span)
 
@@ -607,6 +608,29 @@ func (r *ProcessedEventRepository) GetDetailedUsageAnalytics(ctx context.Context
 		aggregateQuery += " AND source IN (" + strings.Join(placeholders, ", ") + ")"
 	}
 
+	// add properties filters
+	if len(params.PropertyFilters) > 0 {
+		for property, values := range params.PropertyFilters {
+			if len(values) > 0 {
+				if len(values) == 1 {
+					aggregateQuery += " AND JSONExtractString(properties, ?) = ?"
+					filterParams = append(filterParams, property, values[0])
+				} else {
+					placeholders := make([]string, len(values))
+					for i := range values {
+						placeholders[i] = "?"
+					}
+					aggregateQuery += " AND JSONExtractString(properties, ?) IN (" + strings.Join(placeholders, ",") + ")"
+					filterParams = append(filterParams, property)
+					// Now append all values after the property
+					for _, v := range values {
+						filterParams = append(filterParams, v)
+					}
+				}
+			}
+		}
+	}
+
 	// Add all filter parameters after the standard parameters
 	queryParams = append(queryParams, filterParams...)
 
@@ -617,6 +641,7 @@ func (r *ProcessedEventRepository) GetDetailedUsageAnalytics(ctx context.Context
 		"query", aggregateQuery,
 		"params", queryParams,
 		"group_by", params.GroupBy,
+		"property_filters", params.PropertyFilters,
 	)
 
 	// Execute the query
@@ -762,8 +787,41 @@ func (r *ProcessedEventRepository) getAnalyticsPoints(
 		queryParams = append(queryParams, analytics.Source)
 	}
 
+	// Add property filters
+	filterParamsForTimeSeries := []interface{}{}
+	if len(params.PropertyFilters) > 0 {
+		for property, values := range params.PropertyFilters {
+			if len(values) > 0 {
+				if len(values) == 1 {
+					query += " AND JSONExtractString(properties, ?) = ?"
+					filterParamsForTimeSeries = append(filterParamsForTimeSeries, property, values[0])
+				} else {
+					placeholders := make([]string, len(values))
+					for i := range values {
+						placeholders[i] = "?"
+					}
+					query += " AND JSONExtractString(properties, ?) IN (" + strings.Join(placeholders, ",") + ")"
+					filterParamsForTimeSeries = append(filterParamsForTimeSeries, property)
+					// Now append all values after the property
+					for _, v := range values {
+						filterParamsForTimeSeries = append(filterParamsForTimeSeries, v)
+					}
+				}
+			}
+		}
+	}
+	queryParams = append(queryParams, filterParamsForTimeSeries...)
+
 	// Group by the time window and order by time
 	query += fmt.Sprintf(" GROUP BY %s ORDER BY window_time", timeWindowExpr)
+
+	r.logger.Debugw("executing time-series query",
+		"query", query,
+		"params", queryParams,
+		"feature_id", analytics.FeatureID,
+		"source", analytics.Source,
+		"property_filters", params.PropertyFilters,
+	)
 
 	// Execute the query
 	rows, err := r.store.GetConn().Query(ctx, query, queryParams...)

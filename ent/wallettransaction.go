@@ -63,7 +63,9 @@ type WalletTransaction struct {
 	IdempotencyKey *string `json:"idempotency_key,omitempty"`
 	// TransactionReason holds the value of the "transaction_reason" field.
 	TransactionReason string `json:"transaction_reason,omitempty"`
-	selectValues      sql.SelectValues
+	// Lower number indicates higher priority. Nil values are treated as lowest priority.
+	Priority     *int `json:"priority,omitempty"`
+	selectValues sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -75,6 +77,8 @@ func (*WalletTransaction) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case wallettransaction.FieldAmount, wallettransaction.FieldCreditAmount, wallettransaction.FieldCreditBalanceBefore, wallettransaction.FieldCreditBalanceAfter, wallettransaction.FieldCreditsAvailable:
 			values[i] = new(decimal.Decimal)
+		case wallettransaction.FieldPriority:
+			values[i] = new(sql.NullInt64)
 		case wallettransaction.FieldID, wallettransaction.FieldTenantID, wallettransaction.FieldStatus, wallettransaction.FieldCreatedBy, wallettransaction.FieldUpdatedBy, wallettransaction.FieldEnvironmentID, wallettransaction.FieldWalletID, wallettransaction.FieldType, wallettransaction.FieldReferenceType, wallettransaction.FieldReferenceID, wallettransaction.FieldDescription, wallettransaction.FieldTransactionStatus, wallettransaction.FieldIdempotencyKey, wallettransaction.FieldTransactionReason:
 			values[i] = new(sql.NullString)
 		case wallettransaction.FieldCreatedAt, wallettransaction.FieldUpdatedAt, wallettransaction.FieldExpiryDate:
@@ -236,6 +240,13 @@ func (wt *WalletTransaction) assignValues(columns []string, values []any) error 
 			} else if value.Valid {
 				wt.TransactionReason = value.String
 			}
+		case wallettransaction.FieldPriority:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field priority", values[i])
+			} else if value.Valid {
+				wt.Priority = new(int)
+				*wt.Priority = int(value.Int64)
+			}
 		default:
 			wt.selectValues.Set(columns[i], values[i])
 		}
@@ -341,6 +352,11 @@ func (wt *WalletTransaction) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("transaction_reason=")
 	builder.WriteString(wt.TransactionReason)
+	builder.WriteString(", ")
+	if v := wt.Priority; v != nil {
+		builder.WriteString("priority=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }

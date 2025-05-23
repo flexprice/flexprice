@@ -109,6 +109,10 @@ func (WalletTransaction) Fields() []ent.Field {
 			}).
 			Immutable().
 			Default(string(types.TransactionReasonFreeCredit)),
+		field.Int("priority").
+			Optional().
+			Nillable().
+			Comment("Lower number indicates higher priority. Nil values are treated as lowest priority."),
 	}
 }
 

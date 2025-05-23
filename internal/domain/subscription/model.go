@@ -5,6 +5,7 @@ import (
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 type Subscription struct {
@@ -89,6 +90,12 @@ type Subscription struct {
 	// This will be null if no pause is active or scheduled
 	ActivePauseID *string `db:"active_pause_id" json:"active_pause_id,omitempty"`
 
+	// CommitmentAmount is the minimum amount a customer commits to paying for a billing period
+	CommitmentAmount *decimal.Decimal `db:"commitment_amount" json:"commitment_amount,omitempty"`
+
+	// OverageFactor is a multiplier applied to usage beyond the commitment amount
+	OverageFactor *decimal.Decimal `db:"overage_factor" json:"overage_factor,omitempty"`
+
 	LineItems []*SubscriptionLineItem `json:"line_items,omitempty"`
 
 	Pauses []*SubscriptionPause `json:"pauses,omitempty"`
@@ -136,6 +143,8 @@ func GetSubscriptionFromEnt(sub *ent.Subscription) *Subscription {
 		EnvironmentID:      sub.EnvironmentID,
 		PauseStatus:        types.PauseStatus(sub.PauseStatus),
 		ActivePauseID:      sub.ActivePauseID,
+		CommitmentAmount:   sub.CommitmentAmount,
+		OverageFactor:      sub.OverageFactor,
 		LineItems:          lineItems,
 		Pauses:             pauses,
 		BaseModel: types.BaseModel{

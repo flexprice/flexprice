@@ -14,6 +14,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/flexprice/flexprice/ent/auth"
 	"github.com/flexprice/flexprice/ent/billingsequence"
+	"github.com/flexprice/flexprice/ent/creditgrant"
 	"github.com/flexprice/flexprice/ent/customer"
 	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/ent/environment"
@@ -30,6 +31,8 @@ import (
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
+	"github.com/flexprice/flexprice/ent/subscriptionschedule"
+	"github.com/flexprice/flexprice/ent/subscriptionschedulephase"
 	"github.com/flexprice/flexprice/ent/task"
 	"github.com/flexprice/flexprice/ent/tenant"
 	"github.com/flexprice/flexprice/ent/user"
@@ -95,29 +98,32 @@ var (
 func checkColumn(table, column string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
-			auth.Table:                 auth.ValidColumn,
-			billingsequence.Table:      billingsequence.ValidColumn,
-			customer.Table:             customer.ValidColumn,
-			entitlement.Table:          entitlement.ValidColumn,
-			environment.Table:          environment.ValidColumn,
-			feature.Table:              feature.ValidColumn,
-			invoice.Table:              invoice.ValidColumn,
-			invoicelineitem.Table:      invoicelineitem.ValidColumn,
-			invoicesequence.Table:      invoicesequence.ValidColumn,
-			meter.Table:                meter.ValidColumn,
-			payment.Table:              payment.ValidColumn,
-			paymentattempt.Table:       paymentattempt.ValidColumn,
-			plan.Table:                 plan.ValidColumn,
-			price.Table:                price.ValidColumn,
-			secret.Table:               secret.ValidColumn,
-			subscription.Table:         subscription.ValidColumn,
-			subscriptionlineitem.Table: subscriptionlineitem.ValidColumn,
-			subscriptionpause.Table:    subscriptionpause.ValidColumn,
-			task.Table:                 task.ValidColumn,
-			tenant.Table:               tenant.ValidColumn,
-			user.Table:                 user.ValidColumn,
-			wallet.Table:               wallet.ValidColumn,
-			wallettransaction.Table:    wallettransaction.ValidColumn,
+			auth.Table:                      auth.ValidColumn,
+			billingsequence.Table:           billingsequence.ValidColumn,
+			creditgrant.Table:               creditgrant.ValidColumn,
+			customer.Table:                  customer.ValidColumn,
+			entitlement.Table:               entitlement.ValidColumn,
+			environment.Table:               environment.ValidColumn,
+			feature.Table:                   feature.ValidColumn,
+			invoice.Table:                   invoice.ValidColumn,
+			invoicelineitem.Table:           invoicelineitem.ValidColumn,
+			invoicesequence.Table:           invoicesequence.ValidColumn,
+			meter.Table:                     meter.ValidColumn,
+			payment.Table:                   payment.ValidColumn,
+			paymentattempt.Table:            paymentattempt.ValidColumn,
+			plan.Table:                      plan.ValidColumn,
+			price.Table:                     price.ValidColumn,
+			secret.Table:                    secret.ValidColumn,
+			subscription.Table:              subscription.ValidColumn,
+			subscriptionlineitem.Table:      subscriptionlineitem.ValidColumn,
+			subscriptionpause.Table:         subscriptionpause.ValidColumn,
+			subscriptionschedule.Table:      subscriptionschedule.ValidColumn,
+			subscriptionschedulephase.Table: subscriptionschedulephase.ValidColumn,
+			task.Table:                      task.ValidColumn,
+			tenant.Table:                    tenant.ValidColumn,
+			user.Table:                      user.ValidColumn,
+			wallet.Table:                    wallet.ValidColumn,
+			wallettransaction.Table:         wallettransaction.ValidColumn,
 		})
 	})
 	return columnCheck(table, column)

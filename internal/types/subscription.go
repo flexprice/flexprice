@@ -5,6 +5,7 @@ import (
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 )
 
 // SubscriptionStatus is the status of a subscription
@@ -225,4 +226,46 @@ func (f *SubscriptionFilter) IsUnlimited() bool {
 		return NewDefaultQueryFilter().IsUnlimited()
 	}
 	return f.QueryFilter.IsUnlimited()
+}
+
+// Subscription schedules
+
+// SubscriptionScheduleStatus represents the status of a schedule
+type SubscriptionScheduleStatus string
+
+const (
+	ScheduleStatusActive   SubscriptionScheduleStatus = "ACTIVE"
+	ScheduleStatusReleased SubscriptionScheduleStatus = "RELEASED"
+	ScheduleStatusCanceled SubscriptionScheduleStatus = "CANCELED"
+)
+
+// ScheduleEndBehavior defines what happens when the final phase ends
+type ScheduleEndBehavior string
+
+const (
+	EndBehaviorRelease ScheduleEndBehavior = "RELEASE"
+	EndBehaviorCancel  ScheduleEndBehavior = "CANCEL"
+)
+
+// SchedulePhaseLineItem represents a line item in a schedule phase
+type SchedulePhaseLineItem struct {
+	PriceID     string            `json:"price_id" validate:"required"`
+	Quantity    decimal.Decimal   `json:"quantity" validate:"required"`
+	DisplayName string            `json:"display_name,omitempty"`
+	Metadata    map[string]string `json:"metadata,omitempty"`
+}
+
+// SchedulePhaseCreditGrant represents a credit grant in a schedule phase
+type SchedulePhaseCreditGrant struct {
+	Name         string             `json:"name" binding:"required"`
+	Scope        CreditGrantScope   `json:"scope" binding:"required"`
+	PlanID       *string            `json:"plan_id,omitempty"`
+	Amount       decimal.Decimal    `json:"amount" binding:"required"`
+	Currency     string             `json:"currency" binding:"required"`
+	Cadence      CreditGrantCadence `json:"cadence" binding:"required"`
+	Period       *CreditGrantPeriod `json:"period,omitempty"`
+	PeriodCount  *int               `json:"period_count,omitempty"`
+	ExpireInDays *int               `json:"expire_in_days,omitempty"`
+	Priority     *int               `json:"priority,omitempty"`
+	Metadata     Metadata           `json:"metadata,omitempty"`
 }

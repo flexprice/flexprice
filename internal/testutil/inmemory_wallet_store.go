@@ -260,9 +260,20 @@ func (s *InMemoryWalletStore) FindEligibleCredits(ctx context.Context, walletID 
 			Mark(ierr.ErrDatabase)
 	}
 
-	// Sort credits by expiry date (ascending) and credit amount (descending)
+	// Sort credits by priority (ascending), expiry date (ascending), and credit amount (descending)
 	sort.Slice(credits, func(i, j int) bool {
-		// Sort by expiry date (nil dates come last)
+		// First, sort by priority (nil values come last)
+		if credits[i].Priority == nil && credits[j].Priority != nil {
+			return false
+		}
+		if credits[i].Priority != nil && credits[j].Priority == nil {
+			return true
+		}
+		if credits[i].Priority != nil && credits[j].Priority != nil && *credits[i].Priority != *credits[j].Priority {
+			return *credits[i].Priority < *credits[j].Priority
+		}
+
+		// Then sort by expiry date (nil dates come last)
 		if credits[i].ExpiryDate == nil && credits[j].ExpiryDate != nil {
 			return false
 		}
@@ -273,7 +284,7 @@ func (s *InMemoryWalletStore) FindEligibleCredits(ctx context.Context, walletID 
 			return credits[i].ExpiryDate.Before(*credits[j].ExpiryDate)
 		}
 
-		// If expiry dates are equal or both nil, sort by credit amount (descending)
+		// Finally, sort by credit amount (descending)
 		return credits[i].CreditsAvailable.GreaterThan(credits[j].CreditsAvailable)
 	})
 

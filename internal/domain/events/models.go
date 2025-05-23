@@ -19,6 +19,7 @@ type UsageAnalyticsParams struct {
 	EndTime            time.Time
 	GroupBy            []string // Allowed values: "source", "feature_id"
 	WindowSize         types.WindowSize
+	PropertyFilters    map[string][]string
 }
 
 // DetailedUsageAnalytic represents detailed usage and cost data for analytics

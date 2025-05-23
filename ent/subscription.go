@@ -11,6 +11,8 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/subscription"
+	"github.com/flexprice/flexprice/ent/subscriptionschedule"
+	"github.com/shopspring/decimal"
 )
 
 // Subscription is the model entity for the Subscription schema.
@@ -78,6 +80,10 @@ type Subscription struct {
 	ActivePauseID *string `json:"active_pause_id,omitempty"`
 	// BillingCycle holds the value of the "billing_cycle" field.
 	BillingCycle string `json:"billing_cycle,omitempty"`
+	// CommitmentAmount holds the value of the "commitment_amount" field.
+	CommitmentAmount *decimal.Decimal `json:"commitment_amount,omitempty"`
+	// OverageFactor holds the value of the "overage_factor" field.
+	OverageFactor *decimal.Decimal `json:"overage_factor,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the SubscriptionQuery when eager-loading is set.
 	Edges        SubscriptionEdges `json:"edges"`
@@ -90,9 +96,13 @@ type SubscriptionEdges struct {
 	LineItems []*SubscriptionLineItem `json:"line_items,omitempty"`
 	// Pauses holds the value of the pauses edge.
 	Pauses []*SubscriptionPause `json:"pauses,omitempty"`
+	// CreditGrants holds the value of the credit_grants edge.
+	CreditGrants []*CreditGrant `json:"credit_grants,omitempty"`
+	// Schedule holds the value of the schedule edge.
+	Schedule *SubscriptionSchedule `json:"schedule,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
+	loadedTypes [4]bool
 }
 
 // LineItemsOrErr returns the LineItems value or an error if the edge
@@ -113,11 +123,33 @@ func (e SubscriptionEdges) PausesOrErr() ([]*SubscriptionPause, error) {
 	return nil, &NotLoadedError{edge: "pauses"}
 }
 
+// CreditGrantsOrErr returns the CreditGrants value or an error if the edge
+// was not loaded in eager-loading.
+func (e SubscriptionEdges) CreditGrantsOrErr() ([]*CreditGrant, error) {
+	if e.loadedTypes[2] {
+		return e.CreditGrants, nil
+	}
+	return nil, &NotLoadedError{edge: "credit_grants"}
+}
+
+// ScheduleOrErr returns the Schedule value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e SubscriptionEdges) ScheduleOrErr() (*SubscriptionSchedule, error) {
+	if e.Schedule != nil {
+		return e.Schedule, nil
+	} else if e.loadedTypes[3] {
+		return nil, &NotFoundError{label: subscriptionschedule.Label}
+	}
+	return nil, &NotLoadedError{edge: "schedule"}
+}
+
 // scanValues returns the types for scanning values from sql.Rows.
 func (*Subscription) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case subscription.FieldCommitmentAmount, subscription.FieldOverageFactor:
+			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case subscription.FieldMetadata:
 			values[i] = new([]byte)
 		case subscription.FieldCancelAtPeriodEnd:
@@ -337,6 +369,20 @@ func (s *Subscription) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				s.BillingCycle = value.String
 			}
+		case subscription.FieldCommitmentAmount:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field commitment_amount", values[i])
+			} else if value.Valid {
+				s.CommitmentAmount = new(decimal.Decimal)
+				*s.CommitmentAmount = *value.S.(*decimal.Decimal)
+			}
+		case subscription.FieldOverageFactor:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field overage_factor", values[i])
+			} else if value.Valid {
+				s.OverageFactor = new(decimal.Decimal)
+				*s.OverageFactor = *value.S.(*decimal.Decimal)
+			}
 		default:
 			s.selectValues.Set(columns[i], values[i])
 		}
@@ -358,6 +404,16 @@ func (s *Subscription) QueryLineItems() *SubscriptionLineItemQuery {
 // QueryPauses queries the "pauses" edge of the Subscription entity.
 func (s *Subscription) QueryPauses() *SubscriptionPauseQuery {
 	return NewSubscriptionClient(s.config).QueryPauses(s)
+}
+
+// QueryCreditGrants queries the "credit_grants" edge of the Subscription entity.
+func (s *Subscription) QueryCreditGrants() *CreditGrantQuery {
+	return NewSubscriptionClient(s.config).QueryCreditGrants(s)
+}
+
+// QuerySchedule queries the "schedule" edge of the Subscription entity.
+func (s *Subscription) QuerySchedule() *SubscriptionScheduleQuery {
+	return NewSubscriptionClient(s.config).QuerySchedule(s)
 }
 
 // Update returns a builder for updating this Subscription.
@@ -484,6 +540,16 @@ func (s *Subscription) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("billing_cycle=")
 	builder.WriteString(s.BillingCycle)
+	builder.WriteString(", ")
+	if v := s.CommitmentAmount; v != nil {
+		builder.WriteString("commitment_amount=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := s.OverageFactor; v != nil {
+		builder.WriteString("overage_factor=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }

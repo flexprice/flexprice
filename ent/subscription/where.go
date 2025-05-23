@@ -8,6 +8,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/shopspring/decimal"
 )
 
 // ID filters vertices based on their ID field.
@@ -208,6 +209,16 @@ func ActivePauseID(v string) predicate.Subscription {
 // BillingCycle applies equality check predicate on the "billing_cycle" field. It's identical to BillingCycleEQ.
 func BillingCycle(v string) predicate.Subscription {
 	return predicate.Subscription(sql.FieldEQ(FieldBillingCycle, v))
+}
+
+// CommitmentAmount applies equality check predicate on the "commitment_amount" field. It's identical to CommitmentAmountEQ.
+func CommitmentAmount(v decimal.Decimal) predicate.Subscription {
+	return predicate.Subscription(sql.FieldEQ(FieldCommitmentAmount, v))
+}
+
+// OverageFactor applies equality check predicate on the "overage_factor" field. It's identical to OverageFactorEQ.
+func OverageFactor(v decimal.Decimal) predicate.Subscription {
+	return predicate.Subscription(sql.FieldEQ(FieldOverageFactor, v))
 }
 
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
@@ -1825,6 +1836,106 @@ func BillingCycleContainsFold(v string) predicate.Subscription {
 	return predicate.Subscription(sql.FieldContainsFold(FieldBillingCycle, v))
 }
 
+// CommitmentAmountEQ applies the EQ predicate on the "commitment_amount" field.
+func CommitmentAmountEQ(v decimal.Decimal) predicate.Subscription {
+	return predicate.Subscription(sql.FieldEQ(FieldCommitmentAmount, v))
+}
+
+// CommitmentAmountNEQ applies the NEQ predicate on the "commitment_amount" field.
+func CommitmentAmountNEQ(v decimal.Decimal) predicate.Subscription {
+	return predicate.Subscription(sql.FieldNEQ(FieldCommitmentAmount, v))
+}
+
+// CommitmentAmountIn applies the In predicate on the "commitment_amount" field.
+func CommitmentAmountIn(vs ...decimal.Decimal) predicate.Subscription {
+	return predicate.Subscription(sql.FieldIn(FieldCommitmentAmount, vs...))
+}
+
+// CommitmentAmountNotIn applies the NotIn predicate on the "commitment_amount" field.
+func CommitmentAmountNotIn(vs ...decimal.Decimal) predicate.Subscription {
+	return predicate.Subscription(sql.FieldNotIn(FieldCommitmentAmount, vs...))
+}
+
+// CommitmentAmountGT applies the GT predicate on the "commitment_amount" field.
+func CommitmentAmountGT(v decimal.Decimal) predicate.Subscription {
+	return predicate.Subscription(sql.FieldGT(FieldCommitmentAmount, v))
+}
+
+// CommitmentAmountGTE applies the GTE predicate on the "commitment_amount" field.
+func CommitmentAmountGTE(v decimal.Decimal) predicate.Subscription {
+	return predicate.Subscription(sql.FieldGTE(FieldCommitmentAmount, v))
+}
+
+// CommitmentAmountLT applies the LT predicate on the "commitment_amount" field.
+func CommitmentAmountLT(v decimal.Decimal) predicate.Subscription {
+	return predicate.Subscription(sql.FieldLT(FieldCommitmentAmount, v))
+}
+
+// CommitmentAmountLTE applies the LTE predicate on the "commitment_amount" field.
+func CommitmentAmountLTE(v decimal.Decimal) predicate.Subscription {
+	return predicate.Subscription(sql.FieldLTE(FieldCommitmentAmount, v))
+}
+
+// CommitmentAmountIsNil applies the IsNil predicate on the "commitment_amount" field.
+func CommitmentAmountIsNil() predicate.Subscription {
+	return predicate.Subscription(sql.FieldIsNull(FieldCommitmentAmount))
+}
+
+// CommitmentAmountNotNil applies the NotNil predicate on the "commitment_amount" field.
+func CommitmentAmountNotNil() predicate.Subscription {
+	return predicate.Subscription(sql.FieldNotNull(FieldCommitmentAmount))
+}
+
+// OverageFactorEQ applies the EQ predicate on the "overage_factor" field.
+func OverageFactorEQ(v decimal.Decimal) predicate.Subscription {
+	return predicate.Subscription(sql.FieldEQ(FieldOverageFactor, v))
+}
+
+// OverageFactorNEQ applies the NEQ predicate on the "overage_factor" field.
+func OverageFactorNEQ(v decimal.Decimal) predicate.Subscription {
+	return predicate.Subscription(sql.FieldNEQ(FieldOverageFactor, v))
+}
+
+// OverageFactorIn applies the In predicate on the "overage_factor" field.
+func OverageFactorIn(vs ...decimal.Decimal) predicate.Subscription {
+	return predicate.Subscription(sql.FieldIn(FieldOverageFactor, vs...))
+}
+
+// OverageFactorNotIn applies the NotIn predicate on the "overage_factor" field.
+func OverageFactorNotIn(vs ...decimal.Decimal) predicate.Subscription {
+	return predicate.Subscription(sql.FieldNotIn(FieldOverageFactor, vs...))
+}
+
+// OverageFactorGT applies the GT predicate on the "overage_factor" field.
+func OverageFactorGT(v decimal.Decimal) predicate.Subscription {
+	return predicate.Subscription(sql.FieldGT(FieldOverageFactor, v))
+}
+
+// OverageFactorGTE applies the GTE predicate on the "overage_factor" field.
+func OverageFactorGTE(v decimal.Decimal) predicate.Subscription {
+	return predicate.Subscription(sql.FieldGTE(FieldOverageFactor, v))
+}
+
+// OverageFactorLT applies the LT predicate on the "overage_factor" field.
+func OverageFactorLT(v decimal.Decimal) predicate.Subscription {
+	return predicate.Subscription(sql.FieldLT(FieldOverageFactor, v))
+}
+
+// OverageFactorLTE applies the LTE predicate on the "overage_factor" field.
+func OverageFactorLTE(v decimal.Decimal) predicate.Subscription {
+	return predicate.Subscription(sql.FieldLTE(FieldOverageFactor, v))
+}
+
+// OverageFactorIsNil applies the IsNil predicate on the "overage_factor" field.
+func OverageFactorIsNil() predicate.Subscription {
+	return predicate.Subscription(sql.FieldIsNull(FieldOverageFactor))
+}
+
+// OverageFactorNotNil applies the NotNil predicate on the "overage_factor" field.
+func OverageFactorNotNil() predicate.Subscription {
+	return predicate.Subscription(sql.FieldNotNull(FieldOverageFactor))
+}
+
 // HasLineItems applies the HasEdge predicate on the "line_items" edge.
 func HasLineItems() predicate.Subscription {
 	return predicate.Subscription(func(s *sql.Selector) {
@@ -1863,6 +1974,52 @@ func HasPauses() predicate.Subscription {
 func HasPausesWith(preds ...predicate.SubscriptionPause) predicate.Subscription {
 	return predicate.Subscription(func(s *sql.Selector) {
 		step := newPausesStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasCreditGrants applies the HasEdge predicate on the "credit_grants" edge.
+func HasCreditGrants() predicate.Subscription {
+	return predicate.Subscription(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, CreditGrantsTable, CreditGrantsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasCreditGrantsWith applies the HasEdge predicate on the "credit_grants" edge with a given conditions (other predicates).
+func HasCreditGrantsWith(preds ...predicate.CreditGrant) predicate.Subscription {
+	return predicate.Subscription(func(s *sql.Selector) {
+		step := newCreditGrantsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasSchedule applies the HasEdge predicate on the "schedule" edge.
+func HasSchedule() predicate.Subscription {
+	return predicate.Subscription(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, ScheduleTable, ScheduleColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasScheduleWith applies the HasEdge predicate on the "schedule" edge with a given conditions (other predicates).
+func HasScheduleWith(preds ...predicate.SubscriptionSchedule) predicate.Subscription {
+	return predicate.Subscription(func(s *sql.Selector) {
+		step := newScheduleStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

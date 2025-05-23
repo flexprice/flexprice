@@ -2,7 +2,6 @@ package v1
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -232,20 +231,6 @@ func (h *WalletHandler) TopUpWallet(c *gin.Context) {
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
 		return
-	}
-
-	// If ExpiryDateUTC is provided, convert it to YYYYMMDD format
-	if req.ExpiryDateUTC != nil {
-		expiryDate := req.ExpiryDateUTC.UTC()
-		parsedDate, err := strconv.Atoi(expiryDate.Format("20060102"))
-		if err != nil {
-			h.logger.Error("Failed to convert date to integer", "error", err)
-			c.Error(ierr.WithError(err).
-				WithHint("Invalid expiry date").
-				Mark(ierr.ErrValidation))
-			return
-		}
-		req.ExpiryDate = &parsedDate
 	}
 
 	wallet, err := h.walletService.TopUpWallet(c.Request.Context(), walletID, &req)

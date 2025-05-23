@@ -265,6 +265,20 @@ func (wtc *WalletTransactionCreate) SetNillableTransactionReason(s *string) *Wal
 	return wtc
 }
 
+// SetPriority sets the "priority" field.
+func (wtc *WalletTransactionCreate) SetPriority(i int) *WalletTransactionCreate {
+	wtc.mutation.SetPriority(i)
+	return wtc
+}
+
+// SetNillablePriority sets the "priority" field if the given value is not nil.
+func (wtc *WalletTransactionCreate) SetNillablePriority(i *int) *WalletTransactionCreate {
+	if i != nil {
+		wtc.SetPriority(*i)
+	}
+	return wtc
+}
+
 // SetID sets the "id" field.
 func (wtc *WalletTransactionCreate) SetID(s string) *WalletTransactionCreate {
 	wtc.mutation.SetID(s)
@@ -514,6 +528,10 @@ func (wtc *WalletTransactionCreate) createSpec() (*WalletTransaction, *sqlgraph.
 	if value, ok := wtc.mutation.TransactionReason(); ok {
 		_spec.SetField(wallettransaction.FieldTransactionReason, field.TypeString, value)
 		_node.TransactionReason = value
+	}
+	if value, ok := wtc.mutation.Priority(); ok {
+		_spec.SetField(wallettransaction.FieldPriority, field.TypeInt, value)
+		_node.Priority = &value
 	}
 	return _node, _spec
 }

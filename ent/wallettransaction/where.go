@@ -170,6 +170,11 @@ func TransactionReason(v string) predicate.WalletTransaction {
 	return predicate.WalletTransaction(sql.FieldEQ(FieldTransactionReason, v))
 }
 
+// Priority applies equality check predicate on the "priority" field. It's identical to PriorityEQ.
+func Priority(v int) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldEQ(FieldPriority, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.WalletTransaction {
 	return predicate.WalletTransaction(sql.FieldEQ(FieldTenantID, v))
@@ -1423,6 +1428,56 @@ func TransactionReasonEqualFold(v string) predicate.WalletTransaction {
 // TransactionReasonContainsFold applies the ContainsFold predicate on the "transaction_reason" field.
 func TransactionReasonContainsFold(v string) predicate.WalletTransaction {
 	return predicate.WalletTransaction(sql.FieldContainsFold(FieldTransactionReason, v))
+}
+
+// PriorityEQ applies the EQ predicate on the "priority" field.
+func PriorityEQ(v int) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldEQ(FieldPriority, v))
+}
+
+// PriorityNEQ applies the NEQ predicate on the "priority" field.
+func PriorityNEQ(v int) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldNEQ(FieldPriority, v))
+}
+
+// PriorityIn applies the In predicate on the "priority" field.
+func PriorityIn(vs ...int) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldIn(FieldPriority, vs...))
+}
+
+// PriorityNotIn applies the NotIn predicate on the "priority" field.
+func PriorityNotIn(vs ...int) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldNotIn(FieldPriority, vs...))
+}
+
+// PriorityGT applies the GT predicate on the "priority" field.
+func PriorityGT(v int) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldGT(FieldPriority, v))
+}
+
+// PriorityGTE applies the GTE predicate on the "priority" field.
+func PriorityGTE(v int) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldGTE(FieldPriority, v))
+}
+
+// PriorityLT applies the LT predicate on the "priority" field.
+func PriorityLT(v int) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldLT(FieldPriority, v))
+}
+
+// PriorityLTE applies the LTE predicate on the "priority" field.
+func PriorityLTE(v int) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldLTE(FieldPriority, v))
+}
+
+// PriorityIsNil applies the IsNil predicate on the "priority" field.
+func PriorityIsNil() predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldIsNull(FieldPriority))
+}
+
+// PriorityNotNil applies the NotNil predicate on the "priority" field.
+func PriorityNotNil() predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldNotNull(FieldPriority))
 }
 
 // And groups predicates with the AND operator between them.

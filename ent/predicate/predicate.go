@@ -12,6 +12,9 @@ type Auth func(*sql.Selector)
 // BillingSequence is the predicate function for billingsequence builders.
 type BillingSequence func(*sql.Selector)
 
+// CreditGrant is the predicate function for creditgrant builders.
+type CreditGrant func(*sql.Selector)
+
 // Customer is the predicate function for customer builders.
 type Customer func(*sql.Selector)
 
@@ -59,6 +62,12 @@ type SubscriptionLineItem func(*sql.Selector)
 
 // SubscriptionPause is the predicate function for subscriptionpause builders.
 type SubscriptionPause func(*sql.Selector)
+
+// SubscriptionSchedule is the predicate function for subscriptionschedule builders.
+type SubscriptionSchedule func(*sql.Selector)
+
+// SubscriptionSchedulePhase is the predicate function for subscriptionschedulephase builders.
+type SubscriptionSchedulePhase func(*sql.Selector)
 
 // Task is the predicate function for task builders.
 type Task func(*sql.Selector)

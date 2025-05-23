@@ -30,6 +30,7 @@ type Handlers struct {
 	Invoice           *v1.InvoiceHandler
 	Feature           *v1.FeatureHandler
 	Entitlement       *v1.EntitlementHandler
+	CreditGrant       *v1.CreditGrantHandler
 	Payment           *v1.PaymentHandler
 	Task              *v1.TaskHandler
 	Secret            *v1.SecretHandler
@@ -159,6 +160,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 
 			// entitlement routes
 			plan.GET("/:id/entitlements", handlers.Plan.GetPlanEntitlements)
+			plan.GET("/:id/creditgrants", handlers.Plan.GetPlanCreditGrants)
 		}
 
 		subscription := v1Private.Group("/subscriptions")
@@ -172,6 +174,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			subscription.POST("/:id/pause", handlers.SubscriptionPause.PauseSubscription)
 			subscription.POST("/:id/resume", handlers.SubscriptionPause.ResumeSubscription)
 			subscription.GET("/:id/pauses", handlers.SubscriptionPause.ListPauses)
+			subscription.POST("/:id/phases", handlers.Subscription.AddSubscriptionPhase)
 		}
 
 		wallet := v1Private.Group("/wallets")
@@ -224,6 +227,15 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			entitlement.GET("/:id", handlers.Entitlement.GetEntitlement)
 			entitlement.PUT("/:id", handlers.Entitlement.UpdateEntitlement)
 			entitlement.DELETE("/:id", handlers.Entitlement.DeleteEntitlement)
+		}
+
+		creditGrant := v1Private.Group("/creditgrants")
+		{
+			creditGrant.POST("", handlers.CreditGrant.CreateCreditGrant)
+			creditGrant.GET("", handlers.CreditGrant.ListCreditGrants)
+			creditGrant.GET("/:id", handlers.CreditGrant.GetCreditGrant)
+			creditGrant.PUT("/:id", handlers.CreditGrant.UpdateCreditGrant)
+			creditGrant.DELETE("/:id", handlers.CreditGrant.DeleteCreditGrant)
 		}
 
 		payments := v1Private.Group("/payments")

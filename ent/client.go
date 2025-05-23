@@ -17,6 +17,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/flexprice/flexprice/ent/auth"
 	"github.com/flexprice/flexprice/ent/billingsequence"
+	"github.com/flexprice/flexprice/ent/creditgrant"
 	"github.com/flexprice/flexprice/ent/customer"
 	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/ent/environment"
@@ -33,6 +34,8 @@ import (
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
+	"github.com/flexprice/flexprice/ent/subscriptionschedule"
+	"github.com/flexprice/flexprice/ent/subscriptionschedulephase"
 	"github.com/flexprice/flexprice/ent/task"
 	"github.com/flexprice/flexprice/ent/tenant"
 	"github.com/flexprice/flexprice/ent/user"
@@ -51,6 +54,8 @@ type Client struct {
 	Auth *AuthClient
 	// BillingSequence is the client for interacting with the BillingSequence builders.
 	BillingSequence *BillingSequenceClient
+	// CreditGrant is the client for interacting with the CreditGrant builders.
+	CreditGrant *CreditGrantClient
 	// Customer is the client for interacting with the Customer builders.
 	Customer *CustomerClient
 	// Entitlement is the client for interacting with the Entitlement builders.
@@ -83,6 +88,10 @@ type Client struct {
 	SubscriptionLineItem *SubscriptionLineItemClient
 	// SubscriptionPause is the client for interacting with the SubscriptionPause builders.
 	SubscriptionPause *SubscriptionPauseClient
+	// SubscriptionSchedule is the client for interacting with the SubscriptionSchedule builders.
+	SubscriptionSchedule *SubscriptionScheduleClient
+	// SubscriptionSchedulePhase is the client for interacting with the SubscriptionSchedulePhase builders.
+	SubscriptionSchedulePhase *SubscriptionSchedulePhaseClient
 	// Task is the client for interacting with the Task builders.
 	Task *TaskClient
 	// Tenant is the client for interacting with the Tenant builders.
@@ -106,6 +115,7 @@ func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
 	c.Auth = NewAuthClient(c.config)
 	c.BillingSequence = NewBillingSequenceClient(c.config)
+	c.CreditGrant = NewCreditGrantClient(c.config)
 	c.Customer = NewCustomerClient(c.config)
 	c.Entitlement = NewEntitlementClient(c.config)
 	c.Environment = NewEnvironmentClient(c.config)
@@ -122,6 +132,8 @@ func (c *Client) init() {
 	c.Subscription = NewSubscriptionClient(c.config)
 	c.SubscriptionLineItem = NewSubscriptionLineItemClient(c.config)
 	c.SubscriptionPause = NewSubscriptionPauseClient(c.config)
+	c.SubscriptionSchedule = NewSubscriptionScheduleClient(c.config)
+	c.SubscriptionSchedulePhase = NewSubscriptionSchedulePhaseClient(c.config)
 	c.Task = NewTaskClient(c.config)
 	c.Tenant = NewTenantClient(c.config)
 	c.User = NewUserClient(c.config)
@@ -217,31 +229,34 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:                  ctx,
-		config:               cfg,
-		Auth:                 NewAuthClient(cfg),
-		BillingSequence:      NewBillingSequenceClient(cfg),
-		Customer:             NewCustomerClient(cfg),
-		Entitlement:          NewEntitlementClient(cfg),
-		Environment:          NewEnvironmentClient(cfg),
-		Feature:              NewFeatureClient(cfg),
-		Invoice:              NewInvoiceClient(cfg),
-		InvoiceLineItem:      NewInvoiceLineItemClient(cfg),
-		InvoiceSequence:      NewInvoiceSequenceClient(cfg),
-		Meter:                NewMeterClient(cfg),
-		Payment:              NewPaymentClient(cfg),
-		PaymentAttempt:       NewPaymentAttemptClient(cfg),
-		Plan:                 NewPlanClient(cfg),
-		Price:                NewPriceClient(cfg),
-		Secret:               NewSecretClient(cfg),
-		Subscription:         NewSubscriptionClient(cfg),
-		SubscriptionLineItem: NewSubscriptionLineItemClient(cfg),
-		SubscriptionPause:    NewSubscriptionPauseClient(cfg),
-		Task:                 NewTaskClient(cfg),
-		Tenant:               NewTenantClient(cfg),
-		User:                 NewUserClient(cfg),
-		Wallet:               NewWalletClient(cfg),
-		WalletTransaction:    NewWalletTransactionClient(cfg),
+		ctx:                       ctx,
+		config:                    cfg,
+		Auth:                      NewAuthClient(cfg),
+		BillingSequence:           NewBillingSequenceClient(cfg),
+		CreditGrant:               NewCreditGrantClient(cfg),
+		Customer:                  NewCustomerClient(cfg),
+		Entitlement:               NewEntitlementClient(cfg),
+		Environment:               NewEnvironmentClient(cfg),
+		Feature:                   NewFeatureClient(cfg),
+		Invoice:                   NewInvoiceClient(cfg),
+		InvoiceLineItem:           NewInvoiceLineItemClient(cfg),
+		InvoiceSequence:           NewInvoiceSequenceClient(cfg),
+		Meter:                     NewMeterClient(cfg),
+		Payment:                   NewPaymentClient(cfg),
+		PaymentAttempt:            NewPaymentAttemptClient(cfg),
+		Plan:                      NewPlanClient(cfg),
+		Price:                     NewPriceClient(cfg),
+		Secret:                    NewSecretClient(cfg),
+		Subscription:              NewSubscriptionClient(cfg),
+		SubscriptionLineItem:      NewSubscriptionLineItemClient(cfg),
+		SubscriptionPause:         NewSubscriptionPauseClient(cfg),
+		SubscriptionSchedule:      NewSubscriptionScheduleClient(cfg),
+		SubscriptionSchedulePhase: NewSubscriptionSchedulePhaseClient(cfg),
+		Task:                      NewTaskClient(cfg),
+		Tenant:                    NewTenantClient(cfg),
+		User:                      NewUserClient(cfg),
+		Wallet:                    NewWalletClient(cfg),
+		WalletTransaction:         NewWalletTransactionClient(cfg),
 	}, nil
 }
 
@@ -259,31 +274,34 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:                  ctx,
-		config:               cfg,
-		Auth:                 NewAuthClient(cfg),
-		BillingSequence:      NewBillingSequenceClient(cfg),
-		Customer:             NewCustomerClient(cfg),
-		Entitlement:          NewEntitlementClient(cfg),
-		Environment:          NewEnvironmentClient(cfg),
-		Feature:              NewFeatureClient(cfg),
-		Invoice:              NewInvoiceClient(cfg),
-		InvoiceLineItem:      NewInvoiceLineItemClient(cfg),
-		InvoiceSequence:      NewInvoiceSequenceClient(cfg),
-		Meter:                NewMeterClient(cfg),
-		Payment:              NewPaymentClient(cfg),
-		PaymentAttempt:       NewPaymentAttemptClient(cfg),
-		Plan:                 NewPlanClient(cfg),
-		Price:                NewPriceClient(cfg),
-		Secret:               NewSecretClient(cfg),
-		Subscription:         NewSubscriptionClient(cfg),
-		SubscriptionLineItem: NewSubscriptionLineItemClient(cfg),
-		SubscriptionPause:    NewSubscriptionPauseClient(cfg),
-		Task:                 NewTaskClient(cfg),
-		Tenant:               NewTenantClient(cfg),
-		User:                 NewUserClient(cfg),
-		Wallet:               NewWalletClient(cfg),
-		WalletTransaction:    NewWalletTransactionClient(cfg),
+		ctx:                       ctx,
+		config:                    cfg,
+		Auth:                      NewAuthClient(cfg),
+		BillingSequence:           NewBillingSequenceClient(cfg),
+		CreditGrant:               NewCreditGrantClient(cfg),
+		Customer:                  NewCustomerClient(cfg),
+		Entitlement:               NewEntitlementClient(cfg),
+		Environment:               NewEnvironmentClient(cfg),
+		Feature:                   NewFeatureClient(cfg),
+		Invoice:                   NewInvoiceClient(cfg),
+		InvoiceLineItem:           NewInvoiceLineItemClient(cfg),
+		InvoiceSequence:           NewInvoiceSequenceClient(cfg),
+		Meter:                     NewMeterClient(cfg),
+		Payment:                   NewPaymentClient(cfg),
+		PaymentAttempt:            NewPaymentAttemptClient(cfg),
+		Plan:                      NewPlanClient(cfg),
+		Price:                     NewPriceClient(cfg),
+		Secret:                    NewSecretClient(cfg),
+		Subscription:              NewSubscriptionClient(cfg),
+		SubscriptionLineItem:      NewSubscriptionLineItemClient(cfg),
+		SubscriptionPause:         NewSubscriptionPauseClient(cfg),
+		SubscriptionSchedule:      NewSubscriptionScheduleClient(cfg),
+		SubscriptionSchedulePhase: NewSubscriptionSchedulePhaseClient(cfg),
+		Task:                      NewTaskClient(cfg),
+		Tenant:                    NewTenantClient(cfg),
+		User:                      NewUserClient(cfg),
+		Wallet:                    NewWalletClient(cfg),
+		WalletTransaction:         NewWalletTransactionClient(cfg),
 	}, nil
 }
 
@@ -313,10 +331,11 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.Auth, c.BillingSequence, c.Customer, c.Entitlement, c.Environment, c.Feature,
-		c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Payment,
-		c.PaymentAttempt, c.Plan, c.Price, c.Secret, c.Subscription,
-		c.SubscriptionLineItem, c.SubscriptionPause, c.Task, c.Tenant, c.User,
+		c.Auth, c.BillingSequence, c.CreditGrant, c.Customer, c.Entitlement,
+		c.Environment, c.Feature, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence,
+		c.Meter, c.Payment, c.PaymentAttempt, c.Plan, c.Price, c.Secret,
+		c.Subscription, c.SubscriptionLineItem, c.SubscriptionPause,
+		c.SubscriptionSchedule, c.SubscriptionSchedulePhase, c.Task, c.Tenant, c.User,
 		c.Wallet, c.WalletTransaction,
 	} {
 		n.Use(hooks...)
@@ -327,10 +346,11 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.Auth, c.BillingSequence, c.Customer, c.Entitlement, c.Environment, c.Feature,
-		c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Payment,
-		c.PaymentAttempt, c.Plan, c.Price, c.Secret, c.Subscription,
-		c.SubscriptionLineItem, c.SubscriptionPause, c.Task, c.Tenant, c.User,
+		c.Auth, c.BillingSequence, c.CreditGrant, c.Customer, c.Entitlement,
+		c.Environment, c.Feature, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence,
+		c.Meter, c.Payment, c.PaymentAttempt, c.Plan, c.Price, c.Secret,
+		c.Subscription, c.SubscriptionLineItem, c.SubscriptionPause,
+		c.SubscriptionSchedule, c.SubscriptionSchedulePhase, c.Task, c.Tenant, c.User,
 		c.Wallet, c.WalletTransaction,
 	} {
 		n.Intercept(interceptors...)
@@ -344,6 +364,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Auth.mutate(ctx, m)
 	case *BillingSequenceMutation:
 		return c.BillingSequence.mutate(ctx, m)
+	case *CreditGrantMutation:
+		return c.CreditGrant.mutate(ctx, m)
 	case *CustomerMutation:
 		return c.Customer.mutate(ctx, m)
 	case *EntitlementMutation:
@@ -376,6 +398,10 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.SubscriptionLineItem.mutate(ctx, m)
 	case *SubscriptionPauseMutation:
 		return c.SubscriptionPause.mutate(ctx, m)
+	case *SubscriptionScheduleMutation:
+		return c.SubscriptionSchedule.mutate(ctx, m)
+	case *SubscriptionSchedulePhaseMutation:
+		return c.SubscriptionSchedulePhase.mutate(ctx, m)
 	case *TaskMutation:
 		return c.Task.mutate(ctx, m)
 	case *TenantMutation:
@@ -654,6 +680,171 @@ func (c *BillingSequenceClient) mutate(ctx context.Context, m *BillingSequenceMu
 		return (&BillingSequenceDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown BillingSequence mutation op: %q", m.Op())
+	}
+}
+
+// CreditGrantClient is a client for the CreditGrant schema.
+type CreditGrantClient struct {
+	config
+}
+
+// NewCreditGrantClient returns a client for the CreditGrant from the given config.
+func NewCreditGrantClient(c config) *CreditGrantClient {
+	return &CreditGrantClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `creditgrant.Hooks(f(g(h())))`.
+func (c *CreditGrantClient) Use(hooks ...Hook) {
+	c.hooks.CreditGrant = append(c.hooks.CreditGrant, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `creditgrant.Intercept(f(g(h())))`.
+func (c *CreditGrantClient) Intercept(interceptors ...Interceptor) {
+	c.inters.CreditGrant = append(c.inters.CreditGrant, interceptors...)
+}
+
+// Create returns a builder for creating a CreditGrant entity.
+func (c *CreditGrantClient) Create() *CreditGrantCreate {
+	mutation := newCreditGrantMutation(c.config, OpCreate)
+	return &CreditGrantCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of CreditGrant entities.
+func (c *CreditGrantClient) CreateBulk(builders ...*CreditGrantCreate) *CreditGrantCreateBulk {
+	return &CreditGrantCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *CreditGrantClient) MapCreateBulk(slice any, setFunc func(*CreditGrantCreate, int)) *CreditGrantCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &CreditGrantCreateBulk{err: fmt.Errorf("calling to CreditGrantClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*CreditGrantCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &CreditGrantCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for CreditGrant.
+func (c *CreditGrantClient) Update() *CreditGrantUpdate {
+	mutation := newCreditGrantMutation(c.config, OpUpdate)
+	return &CreditGrantUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *CreditGrantClient) UpdateOne(cg *CreditGrant) *CreditGrantUpdateOne {
+	mutation := newCreditGrantMutation(c.config, OpUpdateOne, withCreditGrant(cg))
+	return &CreditGrantUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *CreditGrantClient) UpdateOneID(id string) *CreditGrantUpdateOne {
+	mutation := newCreditGrantMutation(c.config, OpUpdateOne, withCreditGrantID(id))
+	return &CreditGrantUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for CreditGrant.
+func (c *CreditGrantClient) Delete() *CreditGrantDelete {
+	mutation := newCreditGrantMutation(c.config, OpDelete)
+	return &CreditGrantDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *CreditGrantClient) DeleteOne(cg *CreditGrant) *CreditGrantDeleteOne {
+	return c.DeleteOneID(cg.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *CreditGrantClient) DeleteOneID(id string) *CreditGrantDeleteOne {
+	builder := c.Delete().Where(creditgrant.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &CreditGrantDeleteOne{builder}
+}
+
+// Query returns a query builder for CreditGrant.
+func (c *CreditGrantClient) Query() *CreditGrantQuery {
+	return &CreditGrantQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeCreditGrant},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a CreditGrant entity by its id.
+func (c *CreditGrantClient) Get(ctx context.Context, id string) (*CreditGrant, error) {
+	return c.Query().Where(creditgrant.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *CreditGrantClient) GetX(ctx context.Context, id string) *CreditGrant {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryPlan queries the plan edge of a CreditGrant.
+func (c *CreditGrantClient) QueryPlan(cg *CreditGrant) *PlanQuery {
+	query := (&PlanClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := cg.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(creditgrant.Table, creditgrant.FieldID, id),
+			sqlgraph.To(plan.Table, plan.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, creditgrant.PlanTable, creditgrant.PlanColumn),
+		)
+		fromV = sqlgraph.Neighbors(cg.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QuerySubscription queries the subscription edge of a CreditGrant.
+func (c *CreditGrantClient) QuerySubscription(cg *CreditGrant) *SubscriptionQuery {
+	query := (&SubscriptionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := cg.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(creditgrant.Table, creditgrant.FieldID, id),
+			sqlgraph.To(subscription.Table, subscription.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, creditgrant.SubscriptionTable, creditgrant.SubscriptionColumn),
+		)
+		fromV = sqlgraph.Neighbors(cg.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *CreditGrantClient) Hooks() []Hook {
+	return c.hooks.CreditGrant
+}
+
+// Interceptors returns the client interceptors.
+func (c *CreditGrantClient) Interceptors() []Interceptor {
+	return c.inters.CreditGrant
+}
+
+func (c *CreditGrantClient) mutate(ctx context.Context, m *CreditGrantMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&CreditGrantCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&CreditGrantUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&CreditGrantUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&CreditGrantDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown CreditGrant mutation op: %q", m.Op())
 	}
 }
 
@@ -2191,6 +2382,22 @@ func (c *PlanClient) QueryEntitlements(pl *Plan) *EntitlementQuery {
 	return query
 }
 
+// QueryCreditGrants queries the credit_grants edge of a Plan.
+func (c *PlanClient) QueryCreditGrants(pl *Plan) *CreditGrantQuery {
+	query := (&CreditGrantClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := pl.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(plan.Table, plan.FieldID, id),
+			sqlgraph.To(creditgrant.Table, creditgrant.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, plan.CreditGrantsTable, plan.CreditGrantsColumn),
+		)
+		fromV = sqlgraph.Neighbors(pl.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *PlanClient) Hooks() []Hook {
 	return c.hooks.Plan
@@ -2622,6 +2829,38 @@ func (c *SubscriptionClient) QueryPauses(s *Subscription) *SubscriptionPauseQuer
 	return query
 }
 
+// QueryCreditGrants queries the credit_grants edge of a Subscription.
+func (c *SubscriptionClient) QueryCreditGrants(s *Subscription) *CreditGrantQuery {
+	query := (&CreditGrantClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := s.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(subscription.Table, subscription.FieldID, id),
+			sqlgraph.To(creditgrant.Table, creditgrant.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, subscription.CreditGrantsTable, subscription.CreditGrantsColumn),
+		)
+		fromV = sqlgraph.Neighbors(s.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QuerySchedule queries the schedule edge of a Subscription.
+func (c *SubscriptionClient) QuerySchedule(s *Subscription) *SubscriptionScheduleQuery {
+	query := (&SubscriptionScheduleClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := s.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(subscription.Table, subscription.FieldID, id),
+			sqlgraph.To(subscriptionschedule.Table, subscriptionschedule.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, subscription.ScheduleTable, subscription.ScheduleColumn),
+		)
+		fromV = sqlgraph.Neighbors(s.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *SubscriptionClient) Hooks() []Hook {
 	return c.hooks.Subscription
@@ -2942,6 +3181,320 @@ func (c *SubscriptionPauseClient) mutate(ctx context.Context, m *SubscriptionPau
 		return (&SubscriptionPauseDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown SubscriptionPause mutation op: %q", m.Op())
+	}
+}
+
+// SubscriptionScheduleClient is a client for the SubscriptionSchedule schema.
+type SubscriptionScheduleClient struct {
+	config
+}
+
+// NewSubscriptionScheduleClient returns a client for the SubscriptionSchedule from the given config.
+func NewSubscriptionScheduleClient(c config) *SubscriptionScheduleClient {
+	return &SubscriptionScheduleClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `subscriptionschedule.Hooks(f(g(h())))`.
+func (c *SubscriptionScheduleClient) Use(hooks ...Hook) {
+	c.hooks.SubscriptionSchedule = append(c.hooks.SubscriptionSchedule, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `subscriptionschedule.Intercept(f(g(h())))`.
+func (c *SubscriptionScheduleClient) Intercept(interceptors ...Interceptor) {
+	c.inters.SubscriptionSchedule = append(c.inters.SubscriptionSchedule, interceptors...)
+}
+
+// Create returns a builder for creating a SubscriptionSchedule entity.
+func (c *SubscriptionScheduleClient) Create() *SubscriptionScheduleCreate {
+	mutation := newSubscriptionScheduleMutation(c.config, OpCreate)
+	return &SubscriptionScheduleCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of SubscriptionSchedule entities.
+func (c *SubscriptionScheduleClient) CreateBulk(builders ...*SubscriptionScheduleCreate) *SubscriptionScheduleCreateBulk {
+	return &SubscriptionScheduleCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *SubscriptionScheduleClient) MapCreateBulk(slice any, setFunc func(*SubscriptionScheduleCreate, int)) *SubscriptionScheduleCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &SubscriptionScheduleCreateBulk{err: fmt.Errorf("calling to SubscriptionScheduleClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*SubscriptionScheduleCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &SubscriptionScheduleCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for SubscriptionSchedule.
+func (c *SubscriptionScheduleClient) Update() *SubscriptionScheduleUpdate {
+	mutation := newSubscriptionScheduleMutation(c.config, OpUpdate)
+	return &SubscriptionScheduleUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *SubscriptionScheduleClient) UpdateOne(ss *SubscriptionSchedule) *SubscriptionScheduleUpdateOne {
+	mutation := newSubscriptionScheduleMutation(c.config, OpUpdateOne, withSubscriptionSchedule(ss))
+	return &SubscriptionScheduleUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *SubscriptionScheduleClient) UpdateOneID(id string) *SubscriptionScheduleUpdateOne {
+	mutation := newSubscriptionScheduleMutation(c.config, OpUpdateOne, withSubscriptionScheduleID(id))
+	return &SubscriptionScheduleUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for SubscriptionSchedule.
+func (c *SubscriptionScheduleClient) Delete() *SubscriptionScheduleDelete {
+	mutation := newSubscriptionScheduleMutation(c.config, OpDelete)
+	return &SubscriptionScheduleDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *SubscriptionScheduleClient) DeleteOne(ss *SubscriptionSchedule) *SubscriptionScheduleDeleteOne {
+	return c.DeleteOneID(ss.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *SubscriptionScheduleClient) DeleteOneID(id string) *SubscriptionScheduleDeleteOne {
+	builder := c.Delete().Where(subscriptionschedule.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &SubscriptionScheduleDeleteOne{builder}
+}
+
+// Query returns a query builder for SubscriptionSchedule.
+func (c *SubscriptionScheduleClient) Query() *SubscriptionScheduleQuery {
+	return &SubscriptionScheduleQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeSubscriptionSchedule},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a SubscriptionSchedule entity by its id.
+func (c *SubscriptionScheduleClient) Get(ctx context.Context, id string) (*SubscriptionSchedule, error) {
+	return c.Query().Where(subscriptionschedule.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *SubscriptionScheduleClient) GetX(ctx context.Context, id string) *SubscriptionSchedule {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryPhases queries the phases edge of a SubscriptionSchedule.
+func (c *SubscriptionScheduleClient) QueryPhases(ss *SubscriptionSchedule) *SubscriptionSchedulePhaseQuery {
+	query := (&SubscriptionSchedulePhaseClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := ss.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(subscriptionschedule.Table, subscriptionschedule.FieldID, id),
+			sqlgraph.To(subscriptionschedulephase.Table, subscriptionschedulephase.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, subscriptionschedule.PhasesTable, subscriptionschedule.PhasesColumn),
+		)
+		fromV = sqlgraph.Neighbors(ss.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QuerySubscription queries the subscription edge of a SubscriptionSchedule.
+func (c *SubscriptionScheduleClient) QuerySubscription(ss *SubscriptionSchedule) *SubscriptionQuery {
+	query := (&SubscriptionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := ss.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(subscriptionschedule.Table, subscriptionschedule.FieldID, id),
+			sqlgraph.To(subscription.Table, subscription.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, true, subscriptionschedule.SubscriptionTable, subscriptionschedule.SubscriptionColumn),
+		)
+		fromV = sqlgraph.Neighbors(ss.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *SubscriptionScheduleClient) Hooks() []Hook {
+	return c.hooks.SubscriptionSchedule
+}
+
+// Interceptors returns the client interceptors.
+func (c *SubscriptionScheduleClient) Interceptors() []Interceptor {
+	return c.inters.SubscriptionSchedule
+}
+
+func (c *SubscriptionScheduleClient) mutate(ctx context.Context, m *SubscriptionScheduleMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&SubscriptionScheduleCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&SubscriptionScheduleUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&SubscriptionScheduleUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&SubscriptionScheduleDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown SubscriptionSchedule mutation op: %q", m.Op())
+	}
+}
+
+// SubscriptionSchedulePhaseClient is a client for the SubscriptionSchedulePhase schema.
+type SubscriptionSchedulePhaseClient struct {
+	config
+}
+
+// NewSubscriptionSchedulePhaseClient returns a client for the SubscriptionSchedulePhase from the given config.
+func NewSubscriptionSchedulePhaseClient(c config) *SubscriptionSchedulePhaseClient {
+	return &SubscriptionSchedulePhaseClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `subscriptionschedulephase.Hooks(f(g(h())))`.
+func (c *SubscriptionSchedulePhaseClient) Use(hooks ...Hook) {
+	c.hooks.SubscriptionSchedulePhase = append(c.hooks.SubscriptionSchedulePhase, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `subscriptionschedulephase.Intercept(f(g(h())))`.
+func (c *SubscriptionSchedulePhaseClient) Intercept(interceptors ...Interceptor) {
+	c.inters.SubscriptionSchedulePhase = append(c.inters.SubscriptionSchedulePhase, interceptors...)
+}
+
+// Create returns a builder for creating a SubscriptionSchedulePhase entity.
+func (c *SubscriptionSchedulePhaseClient) Create() *SubscriptionSchedulePhaseCreate {
+	mutation := newSubscriptionSchedulePhaseMutation(c.config, OpCreate)
+	return &SubscriptionSchedulePhaseCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of SubscriptionSchedulePhase entities.
+func (c *SubscriptionSchedulePhaseClient) CreateBulk(builders ...*SubscriptionSchedulePhaseCreate) *SubscriptionSchedulePhaseCreateBulk {
+	return &SubscriptionSchedulePhaseCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *SubscriptionSchedulePhaseClient) MapCreateBulk(slice any, setFunc func(*SubscriptionSchedulePhaseCreate, int)) *SubscriptionSchedulePhaseCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &SubscriptionSchedulePhaseCreateBulk{err: fmt.Errorf("calling to SubscriptionSchedulePhaseClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*SubscriptionSchedulePhaseCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &SubscriptionSchedulePhaseCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for SubscriptionSchedulePhase.
+func (c *SubscriptionSchedulePhaseClient) Update() *SubscriptionSchedulePhaseUpdate {
+	mutation := newSubscriptionSchedulePhaseMutation(c.config, OpUpdate)
+	return &SubscriptionSchedulePhaseUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *SubscriptionSchedulePhaseClient) UpdateOne(ssp *SubscriptionSchedulePhase) *SubscriptionSchedulePhaseUpdateOne {
+	mutation := newSubscriptionSchedulePhaseMutation(c.config, OpUpdateOne, withSubscriptionSchedulePhase(ssp))
+	return &SubscriptionSchedulePhaseUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *SubscriptionSchedulePhaseClient) UpdateOneID(id string) *SubscriptionSchedulePhaseUpdateOne {
+	mutation := newSubscriptionSchedulePhaseMutation(c.config, OpUpdateOne, withSubscriptionSchedulePhaseID(id))
+	return &SubscriptionSchedulePhaseUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for SubscriptionSchedulePhase.
+func (c *SubscriptionSchedulePhaseClient) Delete() *SubscriptionSchedulePhaseDelete {
+	mutation := newSubscriptionSchedulePhaseMutation(c.config, OpDelete)
+	return &SubscriptionSchedulePhaseDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *SubscriptionSchedulePhaseClient) DeleteOne(ssp *SubscriptionSchedulePhase) *SubscriptionSchedulePhaseDeleteOne {
+	return c.DeleteOneID(ssp.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *SubscriptionSchedulePhaseClient) DeleteOneID(id string) *SubscriptionSchedulePhaseDeleteOne {
+	builder := c.Delete().Where(subscriptionschedulephase.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &SubscriptionSchedulePhaseDeleteOne{builder}
+}
+
+// Query returns a query builder for SubscriptionSchedulePhase.
+func (c *SubscriptionSchedulePhaseClient) Query() *SubscriptionSchedulePhaseQuery {
+	return &SubscriptionSchedulePhaseQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeSubscriptionSchedulePhase},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a SubscriptionSchedulePhase entity by its id.
+func (c *SubscriptionSchedulePhaseClient) Get(ctx context.Context, id string) (*SubscriptionSchedulePhase, error) {
+	return c.Query().Where(subscriptionschedulephase.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *SubscriptionSchedulePhaseClient) GetX(ctx context.Context, id string) *SubscriptionSchedulePhase {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QuerySchedule queries the schedule edge of a SubscriptionSchedulePhase.
+func (c *SubscriptionSchedulePhaseClient) QuerySchedule(ssp *SubscriptionSchedulePhase) *SubscriptionScheduleQuery {
+	query := (&SubscriptionScheduleClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := ssp.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(subscriptionschedulephase.Table, subscriptionschedulephase.FieldID, id),
+			sqlgraph.To(subscriptionschedule.Table, subscriptionschedule.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, subscriptionschedulephase.ScheduleTable, subscriptionschedulephase.ScheduleColumn),
+		)
+		fromV = sqlgraph.Neighbors(ssp.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *SubscriptionSchedulePhaseClient) Hooks() []Hook {
+	return c.hooks.SubscriptionSchedulePhase
+}
+
+// Interceptors returns the client interceptors.
+func (c *SubscriptionSchedulePhaseClient) Interceptors() []Interceptor {
+	return c.inters.SubscriptionSchedulePhase
+}
+
+func (c *SubscriptionSchedulePhaseClient) mutate(ctx context.Context, m *SubscriptionSchedulePhaseMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&SubscriptionSchedulePhaseCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&SubscriptionSchedulePhaseUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&SubscriptionSchedulePhaseUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&SubscriptionSchedulePhaseDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown SubscriptionSchedulePhase mutation op: %q", m.Op())
 	}
 }
 
@@ -3613,16 +4166,18 @@ func (c *WalletTransactionClient) mutate(ctx context.Context, m *WalletTransacti
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		Auth, BillingSequence, Customer, Entitlement, Environment, Feature, Invoice,
-		InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt, Plan, Price,
-		Secret, Subscription, SubscriptionLineItem, SubscriptionPause, Task, Tenant,
-		User, Wallet, WalletTransaction []ent.Hook
+		Auth, BillingSequence, CreditGrant, Customer, Entitlement, Environment, Feature,
+		Invoice, InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt,
+		Plan, Price, Secret, Subscription, SubscriptionLineItem, SubscriptionPause,
+		SubscriptionSchedule, SubscriptionSchedulePhase, Task, Tenant, User, Wallet,
+		WalletTransaction []ent.Hook
 	}
 	inters struct {
-		Auth, BillingSequence, Customer, Entitlement, Environment, Feature, Invoice,
-		InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt, Plan, Price,
-		Secret, Subscription, SubscriptionLineItem, SubscriptionPause, Task, Tenant,
-		User, Wallet, WalletTransaction []ent.Interceptor
+		Auth, BillingSequence, CreditGrant, Customer, Entitlement, Environment, Feature,
+		Invoice, InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt,
+		Plan, Price, Secret, Subscription, SubscriptionLineItem, SubscriptionPause,
+		SubscriptionSchedule, SubscriptionSchedulePhase, Task, Tenant, User, Wallet,
+		WalletTransaction []ent.Interceptor
 	}
 )
 

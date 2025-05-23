@@ -166,6 +166,7 @@ type WalletTransactionFilter struct {
 	ExpiryDateAfter    *time.Time         `json:"expiry_date_after,omitempty" form:"expiry_date_after"`
 	CreditsAvailableGT *decimal.Decimal   `json:"credits_available_gt,omitempty" form:"credits_available_gt"`
 	TransactionReason  *TransactionReason `json:"transaction_reason,omitempty" form:"transaction_reason"`
+	Priority           *int               `json:"priority,omitempty" form:"priority"`
 }
 
 func NewWalletTransactionFilter() *WalletTransactionFilter {

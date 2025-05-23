@@ -7,6 +7,7 @@ import (
 
 	"github.com/flexprice/flexprice/ent/auth"
 	"github.com/flexprice/flexprice/ent/billingsequence"
+	"github.com/flexprice/flexprice/ent/creditgrant"
 	"github.com/flexprice/flexprice/ent/customer"
 	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/ent/environment"
@@ -24,11 +25,14 @@ import (
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
+	"github.com/flexprice/flexprice/ent/subscriptionschedule"
+	"github.com/flexprice/flexprice/ent/subscriptionschedulephase"
 	"github.com/flexprice/flexprice/ent/task"
 	"github.com/flexprice/flexprice/ent/tenant"
 	"github.com/flexprice/flexprice/ent/user"
 	"github.com/flexprice/flexprice/ent/wallet"
 	"github.com/flexprice/flexprice/ent/wallettransaction"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -84,6 +88,59 @@ func init() {
 	billingsequence.DefaultUpdatedAt = billingsequenceDescUpdatedAt.Default.(func() time.Time)
 	// billingsequence.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	billingsequence.UpdateDefaultUpdatedAt = billingsequenceDescUpdatedAt.UpdateDefault.(func() time.Time)
+	creditgrantMixin := schema.CreditGrant{}.Mixin()
+	creditgrantMixinFields0 := creditgrantMixin[0].Fields()
+	_ = creditgrantMixinFields0
+	creditgrantMixinFields1 := creditgrantMixin[1].Fields()
+	_ = creditgrantMixinFields1
+	creditgrantFields := schema.CreditGrant{}.Fields()
+	_ = creditgrantFields
+	// creditgrantDescTenantID is the schema descriptor for tenant_id field.
+	creditgrantDescTenantID := creditgrantMixinFields0[0].Descriptor()
+	// creditgrant.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	creditgrant.TenantIDValidator = creditgrantDescTenantID.Validators[0].(func(string) error)
+	// creditgrantDescStatus is the schema descriptor for status field.
+	creditgrantDescStatus := creditgrantMixinFields0[1].Descriptor()
+	// creditgrant.DefaultStatus holds the default value on creation for the status field.
+	creditgrant.DefaultStatus = creditgrantDescStatus.Default.(string)
+	// creditgrantDescCreatedAt is the schema descriptor for created_at field.
+	creditgrantDescCreatedAt := creditgrantMixinFields0[2].Descriptor()
+	// creditgrant.DefaultCreatedAt holds the default value on creation for the created_at field.
+	creditgrant.DefaultCreatedAt = creditgrantDescCreatedAt.Default.(func() time.Time)
+	// creditgrantDescUpdatedAt is the schema descriptor for updated_at field.
+	creditgrantDescUpdatedAt := creditgrantMixinFields0[3].Descriptor()
+	// creditgrant.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	creditgrant.DefaultUpdatedAt = creditgrantDescUpdatedAt.Default.(func() time.Time)
+	// creditgrant.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	creditgrant.UpdateDefaultUpdatedAt = creditgrantDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// creditgrantDescEnvironmentID is the schema descriptor for environment_id field.
+	creditgrantDescEnvironmentID := creditgrantMixinFields1[0].Descriptor()
+	// creditgrant.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	creditgrant.DefaultEnvironmentID = creditgrantDescEnvironmentID.Default.(string)
+	// creditgrantDescName is the schema descriptor for name field.
+	creditgrantDescName := creditgrantFields[1].Descriptor()
+	// creditgrant.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	creditgrant.NameValidator = creditgrantDescName.Validators[0].(func(string) error)
+	// creditgrantDescScope is the schema descriptor for scope field.
+	creditgrantDescScope := creditgrantFields[2].Descriptor()
+	// creditgrant.ScopeValidator is a validator for the "scope" field. It is called by the builders before save.
+	creditgrant.ScopeValidator = creditgrantDescScope.Validators[0].(func(string) error)
+	// creditgrantDescAmount is the schema descriptor for amount field.
+	creditgrantDescAmount := creditgrantFields[5].Descriptor()
+	// creditgrant.DefaultAmount holds the default value on creation for the amount field.
+	creditgrant.DefaultAmount = creditgrantDescAmount.Default.(decimal.Decimal)
+	// creditgrantDescCurrency is the schema descriptor for currency field.
+	creditgrantDescCurrency := creditgrantFields[6].Descriptor()
+	// creditgrant.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
+	creditgrant.CurrencyValidator = creditgrantDescCurrency.Validators[0].(func(string) error)
+	// creditgrantDescCadence is the schema descriptor for cadence field.
+	creditgrantDescCadence := creditgrantFields[7].Descriptor()
+	// creditgrant.CadenceValidator is a validator for the "cadence" field. It is called by the builders before save.
+	creditgrant.CadenceValidator = creditgrantDescCadence.Validators[0].(func(string) error)
+	// creditgrantDescMetadata is the schema descriptor for metadata field.
+	creditgrantDescMetadata := creditgrantFields[12].Descriptor()
+	// creditgrant.DefaultMetadata holds the default value on creation for the metadata field.
+	creditgrant.DefaultMetadata = creditgrantDescMetadata.Default.(map[string]string)
 	customerMixin := schema.Customer{}.Mixin()
 	customerMixinFields0 := customerMixin[0].Fields()
 	_ = customerMixinFields0
@@ -763,6 +820,10 @@ func init() {
 	subscription.DefaultBillingCycle = subscriptionDescBillingCycle.Default.(string)
 	// subscription.BillingCycleValidator is a validator for the "billing_cycle" field. It is called by the builders before save.
 	subscription.BillingCycleValidator = subscriptionDescBillingCycle.Validators[0].(func(string) error)
+	// subscriptionDescOverageFactor is the schema descriptor for overage_factor field.
+	subscriptionDescOverageFactor := subscriptionFields[25].Descriptor()
+	// subscription.DefaultOverageFactor holds the default value on creation for the overage_factor field.
+	subscription.DefaultOverageFactor = subscriptionDescOverageFactor.Default.(decimal.Decimal)
 	subscriptionlineitemMixin := schema.SubscriptionLineItem{}.Mixin()
 	subscriptionlineitemMixinFields0 := subscriptionlineitemMixin[0].Fields()
 	_ = subscriptionlineitemMixinFields0
@@ -875,6 +936,96 @@ func init() {
 	subscriptionpauseDescOriginalPeriodEnd := subscriptionpauseFields[9].Descriptor()
 	// subscriptionpause.DefaultOriginalPeriodEnd holds the default value on creation for the original_period_end field.
 	subscriptionpause.DefaultOriginalPeriodEnd = subscriptionpauseDescOriginalPeriodEnd.Default.(func() time.Time)
+	subscriptionscheduleMixin := schema.SubscriptionSchedule{}.Mixin()
+	subscriptionscheduleMixinFields0 := subscriptionscheduleMixin[0].Fields()
+	_ = subscriptionscheduleMixinFields0
+	subscriptionscheduleMixinFields1 := subscriptionscheduleMixin[1].Fields()
+	_ = subscriptionscheduleMixinFields1
+	subscriptionscheduleFields := schema.SubscriptionSchedule{}.Fields()
+	_ = subscriptionscheduleFields
+	// subscriptionscheduleDescTenantID is the schema descriptor for tenant_id field.
+	subscriptionscheduleDescTenantID := subscriptionscheduleMixinFields0[0].Descriptor()
+	// subscriptionschedule.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	subscriptionschedule.TenantIDValidator = subscriptionscheduleDescTenantID.Validators[0].(func(string) error)
+	// subscriptionscheduleDescStatus is the schema descriptor for status field.
+	subscriptionscheduleDescStatus := subscriptionscheduleMixinFields0[1].Descriptor()
+	// subscriptionschedule.DefaultStatus holds the default value on creation for the status field.
+	subscriptionschedule.DefaultStatus = subscriptionscheduleDescStatus.Default.(string)
+	// subscriptionscheduleDescCreatedAt is the schema descriptor for created_at field.
+	subscriptionscheduleDescCreatedAt := subscriptionscheduleMixinFields0[2].Descriptor()
+	// subscriptionschedule.DefaultCreatedAt holds the default value on creation for the created_at field.
+	subscriptionschedule.DefaultCreatedAt = subscriptionscheduleDescCreatedAt.Default.(func() time.Time)
+	// subscriptionscheduleDescUpdatedAt is the schema descriptor for updated_at field.
+	subscriptionscheduleDescUpdatedAt := subscriptionscheduleMixinFields0[3].Descriptor()
+	// subscriptionschedule.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	subscriptionschedule.DefaultUpdatedAt = subscriptionscheduleDescUpdatedAt.Default.(func() time.Time)
+	// subscriptionschedule.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	subscriptionschedule.UpdateDefaultUpdatedAt = subscriptionscheduleDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// subscriptionscheduleDescEnvironmentID is the schema descriptor for environment_id field.
+	subscriptionscheduleDescEnvironmentID := subscriptionscheduleMixinFields1[0].Descriptor()
+	// subscriptionschedule.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	subscriptionschedule.DefaultEnvironmentID = subscriptionscheduleDescEnvironmentID.Default.(string)
+	// subscriptionscheduleDescSubscriptionID is the schema descriptor for subscription_id field.
+	subscriptionscheduleDescSubscriptionID := subscriptionscheduleFields[1].Descriptor()
+	// subscriptionschedule.SubscriptionIDValidator is a validator for the "subscription_id" field. It is called by the builders before save.
+	subscriptionschedule.SubscriptionIDValidator = subscriptionscheduleDescSubscriptionID.Validators[0].(func(string) error)
+	// subscriptionscheduleDescScheduleStatus is the schema descriptor for schedule_status field.
+	subscriptionscheduleDescScheduleStatus := subscriptionscheduleFields[2].Descriptor()
+	// subscriptionschedule.DefaultScheduleStatus holds the default value on creation for the schedule_status field.
+	subscriptionschedule.DefaultScheduleStatus = types.SubscriptionScheduleStatus(subscriptionscheduleDescScheduleStatus.Default.(string))
+	// subscriptionscheduleDescCurrentPhaseIndex is the schema descriptor for current_phase_index field.
+	subscriptionscheduleDescCurrentPhaseIndex := subscriptionscheduleFields[3].Descriptor()
+	// subscriptionschedule.DefaultCurrentPhaseIndex holds the default value on creation for the current_phase_index field.
+	subscriptionschedule.DefaultCurrentPhaseIndex = subscriptionscheduleDescCurrentPhaseIndex.Default.(int)
+	// subscriptionscheduleDescEndBehavior is the schema descriptor for end_behavior field.
+	subscriptionscheduleDescEndBehavior := subscriptionscheduleFields[4].Descriptor()
+	// subscriptionschedule.DefaultEndBehavior holds the default value on creation for the end_behavior field.
+	subscriptionschedule.DefaultEndBehavior = types.ScheduleEndBehavior(subscriptionscheduleDescEndBehavior.Default.(string))
+	// subscriptionscheduleDescID is the schema descriptor for id field.
+	subscriptionscheduleDescID := subscriptionscheduleFields[0].Descriptor()
+	// subscriptionschedule.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	subscriptionschedule.IDValidator = subscriptionscheduleDescID.Validators[0].(func(string) error)
+	subscriptionschedulephaseMixin := schema.SubscriptionSchedulePhase{}.Mixin()
+	subscriptionschedulephaseMixinFields0 := subscriptionschedulephaseMixin[0].Fields()
+	_ = subscriptionschedulephaseMixinFields0
+	subscriptionschedulephaseMixinFields1 := subscriptionschedulephaseMixin[1].Fields()
+	_ = subscriptionschedulephaseMixinFields1
+	subscriptionschedulephaseFields := schema.SubscriptionSchedulePhase{}.Fields()
+	_ = subscriptionschedulephaseFields
+	// subscriptionschedulephaseDescTenantID is the schema descriptor for tenant_id field.
+	subscriptionschedulephaseDescTenantID := subscriptionschedulephaseMixinFields0[0].Descriptor()
+	// subscriptionschedulephase.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	subscriptionschedulephase.TenantIDValidator = subscriptionschedulephaseDescTenantID.Validators[0].(func(string) error)
+	// subscriptionschedulephaseDescStatus is the schema descriptor for status field.
+	subscriptionschedulephaseDescStatus := subscriptionschedulephaseMixinFields0[1].Descriptor()
+	// subscriptionschedulephase.DefaultStatus holds the default value on creation for the status field.
+	subscriptionschedulephase.DefaultStatus = subscriptionschedulephaseDescStatus.Default.(string)
+	// subscriptionschedulephaseDescCreatedAt is the schema descriptor for created_at field.
+	subscriptionschedulephaseDescCreatedAt := subscriptionschedulephaseMixinFields0[2].Descriptor()
+	// subscriptionschedulephase.DefaultCreatedAt holds the default value on creation for the created_at field.
+	subscriptionschedulephase.DefaultCreatedAt = subscriptionschedulephaseDescCreatedAt.Default.(func() time.Time)
+	// subscriptionschedulephaseDescUpdatedAt is the schema descriptor for updated_at field.
+	subscriptionschedulephaseDescUpdatedAt := subscriptionschedulephaseMixinFields0[3].Descriptor()
+	// subscriptionschedulephase.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	subscriptionschedulephase.DefaultUpdatedAt = subscriptionschedulephaseDescUpdatedAt.Default.(func() time.Time)
+	// subscriptionschedulephase.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	subscriptionschedulephase.UpdateDefaultUpdatedAt = subscriptionschedulephaseDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// subscriptionschedulephaseDescEnvironmentID is the schema descriptor for environment_id field.
+	subscriptionschedulephaseDescEnvironmentID := subscriptionschedulephaseMixinFields1[0].Descriptor()
+	// subscriptionschedulephase.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	subscriptionschedulephase.DefaultEnvironmentID = subscriptionschedulephaseDescEnvironmentID.Default.(string)
+	// subscriptionschedulephaseDescScheduleID is the schema descriptor for schedule_id field.
+	subscriptionschedulephaseDescScheduleID := subscriptionschedulephaseFields[1].Descriptor()
+	// subscriptionschedulephase.ScheduleIDValidator is a validator for the "schedule_id" field. It is called by the builders before save.
+	subscriptionschedulephase.ScheduleIDValidator = subscriptionschedulephaseDescScheduleID.Validators[0].(func(string) error)
+	// subscriptionschedulephaseDescPhaseIndex is the schema descriptor for phase_index field.
+	subscriptionschedulephaseDescPhaseIndex := subscriptionschedulephaseFields[2].Descriptor()
+	// subscriptionschedulephase.PhaseIndexValidator is a validator for the "phase_index" field. It is called by the builders before save.
+	subscriptionschedulephase.PhaseIndexValidator = subscriptionschedulephaseDescPhaseIndex.Validators[0].(func(int) error)
+	// subscriptionschedulephaseDescID is the schema descriptor for id field.
+	subscriptionschedulephaseDescID := subscriptionschedulephaseFields[0].Descriptor()
+	// subscriptionschedulephase.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	subscriptionschedulephase.IDValidator = subscriptionschedulephaseDescID.Validators[0].(func(string) error)
 	taskMixin := schema.Task{}.Mixin()
 	taskMixinFields0 := taskMixin[0].Fields()
 	_ = taskMixinFields0

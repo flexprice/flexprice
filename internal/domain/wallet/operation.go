@@ -23,6 +23,7 @@ type WalletOperation struct {
 	Metadata          types.Metadata              `json:"metadata,omitempty"`
 	IdempotencyKey    string                      `json:"idempotency_key,omitempty"`
 	ExpiryDate        *int                        `json:"expiry_date,omitempty"` // YYYYMMDD format
+	Priority          *int                        `json:"priority,omitempty"`    // lower number means higher priority
 	TransactionReason types.TransactionReason     `json:"transaction_reason,omitempty"`
 }
 

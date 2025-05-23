@@ -18,6 +18,8 @@ type Tx struct {
 	Auth *AuthClient
 	// BillingSequence is the client for interacting with the BillingSequence builders.
 	BillingSequence *BillingSequenceClient
+	// CreditGrant is the client for interacting with the CreditGrant builders.
+	CreditGrant *CreditGrantClient
 	// Customer is the client for interacting with the Customer builders.
 	Customer *CustomerClient
 	// Entitlement is the client for interacting with the Entitlement builders.
@@ -50,6 +52,10 @@ type Tx struct {
 	SubscriptionLineItem *SubscriptionLineItemClient
 	// SubscriptionPause is the client for interacting with the SubscriptionPause builders.
 	SubscriptionPause *SubscriptionPauseClient
+	// SubscriptionSchedule is the client for interacting with the SubscriptionSchedule builders.
+	SubscriptionSchedule *SubscriptionScheduleClient
+	// SubscriptionSchedulePhase is the client for interacting with the SubscriptionSchedulePhase builders.
+	SubscriptionSchedulePhase *SubscriptionSchedulePhaseClient
 	// Task is the client for interacting with the Task builders.
 	Task *TaskClient
 	// Tenant is the client for interacting with the Tenant builders.
@@ -193,6 +199,7 @@ func (tx *Tx) Client() *Client {
 func (tx *Tx) init() {
 	tx.Auth = NewAuthClient(tx.config)
 	tx.BillingSequence = NewBillingSequenceClient(tx.config)
+	tx.CreditGrant = NewCreditGrantClient(tx.config)
 	tx.Customer = NewCustomerClient(tx.config)
 	tx.Entitlement = NewEntitlementClient(tx.config)
 	tx.Environment = NewEnvironmentClient(tx.config)
@@ -209,6 +216,8 @@ func (tx *Tx) init() {
 	tx.Subscription = NewSubscriptionClient(tx.config)
 	tx.SubscriptionLineItem = NewSubscriptionLineItemClient(tx.config)
 	tx.SubscriptionPause = NewSubscriptionPauseClient(tx.config)
+	tx.SubscriptionSchedule = NewSubscriptionScheduleClient(tx.config)
+	tx.SubscriptionSchedulePhase = NewSubscriptionSchedulePhaseClient(tx.config)
 	tx.Task = NewTaskClient(tx.config)
 	tx.Tenant = NewTenantClient(tx.config)
 	tx.User = NewUserClient(tx.config)

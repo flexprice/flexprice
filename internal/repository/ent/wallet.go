@@ -226,9 +226,10 @@ func (r *walletRepository) UpdateWalletStatus(ctx context.Context, id string, st
 }
 
 // FindEligibleCredits retrieves valid credits for debit operation with pagination
-// the credits are sorted by expiry date and then by credit amount
-// this is to ensure that the oldest credits are used first and if there are
-// multiple credits with the same expiry date, the credits with the highest credit amount are used first
+// the credits are sorted by priority (lower number first), expiry date, and then by credit amount
+// this is to ensure that the highest priority credits are used first, then the oldest credits,
+// and if there are multiple credits with the same priority and expiry date,
+// the credits with the highest credit amount are used first
 func (r *walletRepository) FindEligibleCredits(ctx context.Context, walletID string, requiredAmount decimal.Decimal, pageSize int) ([]*walletdomain.Transaction, error) {
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "wallet", "find_eligible_credits", map[string]interface{}{
@@ -254,8 +255,11 @@ func (r *walletRepository) FindEligibleCredits(ctx context.Context, walletID str
 				),
 				wallettransaction.StatusEQ(string(types.StatusPublished)),
 			).
-			Order(ent.Asc(wallettransaction.FieldExpiryDate)).
-			Order(ent.Desc(wallettransaction.FieldCreditAmount)).
+			Order(
+				ent.Asc(wallettransaction.FieldPriority), // Sort by priority first (nil values come last)
+				ent.Asc(wallettransaction.FieldExpiryDate),
+				ent.Desc(wallettransaction.FieldCreditAmount),
+			).
 			Offset(offset).
 			Limit(pageSize).
 			All(ctx)
@@ -382,6 +386,7 @@ func (r *walletRepository) CreateTransaction(ctx context.Context, tx *walletdoma
 		SetUpdatedBy(tx.UpdatedBy).
 		SetEnvironmentID(tx.EnvironmentID).
 		SetIdempotencyKey(tx.IdempotencyKey).
+		SetNillablePriority(tx.Priority).
 		Save(ctx)
 
 	if err != nil {
@@ -704,6 +709,10 @@ func (o WalletTransactionQueryOptions) applyEntityQueryOptions(_ context.Context
 
 	if f.TransactionReason != nil {
 		query = query.Where(wallettransaction.TransactionReason(string(*f.TransactionReason)))
+	}
+
+	if f.Priority != nil {
+		query = query.Where(wallettransaction.Priority(*f.Priority))
 	}
 
 	return query

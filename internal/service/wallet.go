@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -248,6 +249,18 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 		req.CreditsToAdd = s.GetCreditsFromCurrencyAmount(req.Amount, w.ConversionRate)
 	}
 
+	// If ExpiryDateUTC is provided, convert it to YYYYMMDD format
+	if req.ExpiryDateUTC != nil && req.ExpiryDate == nil {
+		expiryDate := req.ExpiryDateUTC.UTC()
+		parsedDate, err := strconv.Atoi(expiryDate.Format("20060102"))
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Invalid expiry date").
+				Mark(ierr.ErrValidation)
+		}
+		req.ExpiryDate = &parsedDate
+	}
+
 	// Create a credit operation
 	if err := req.Validate(); err != nil {
 		return nil, ierr.WithError(err).
@@ -294,6 +307,7 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 		ReferenceID:       referenceID,
 		ExpiryDate:        req.ExpiryDate,
 		IdempotencyKey:    idempotencyKey,
+		Priority:          req.Priority,
 	}
 
 	// Process wallet credit
@@ -702,6 +716,7 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 			TxStatus:            types.TransactionStatusCompleted,
 			TransactionReason:   req.TransactionReason,
 			ExpiryDate:          types.ParseYYYYMMDDToDate(req.ExpiryDate),
+			Priority:            req.Priority,
 			CreditBalanceBefore: w.CreditBalance,
 			CreditBalanceAfter:  newCreditBalance,
 			EnvironmentID:       types.GetEnvironmentID(ctx),

@@ -7,6 +7,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"github.com/shopspring/decimal"
 )
 
 const (
@@ -74,10 +75,18 @@ const (
 	FieldActivePauseID = "active_pause_id"
 	// FieldBillingCycle holds the string denoting the billing_cycle field in the database.
 	FieldBillingCycle = "billing_cycle"
+	// FieldCommitmentAmount holds the string denoting the commitment_amount field in the database.
+	FieldCommitmentAmount = "commitment_amount"
+	// FieldOverageFactor holds the string denoting the overage_factor field in the database.
+	FieldOverageFactor = "overage_factor"
 	// EdgeLineItems holds the string denoting the line_items edge name in mutations.
 	EdgeLineItems = "line_items"
 	// EdgePauses holds the string denoting the pauses edge name in mutations.
 	EdgePauses = "pauses"
+	// EdgeCreditGrants holds the string denoting the credit_grants edge name in mutations.
+	EdgeCreditGrants = "credit_grants"
+	// EdgeSchedule holds the string denoting the schedule edge name in mutations.
+	EdgeSchedule = "schedule"
 	// Table holds the table name of the subscription in the database.
 	Table = "subscriptions"
 	// LineItemsTable is the table that holds the line_items relation/edge.
@@ -94,6 +103,20 @@ const (
 	PausesInverseTable = "subscription_pauses"
 	// PausesColumn is the table column denoting the pauses relation/edge.
 	PausesColumn = "subscription_id"
+	// CreditGrantsTable is the table that holds the credit_grants relation/edge.
+	CreditGrantsTable = "credit_grants"
+	// CreditGrantsInverseTable is the table name for the CreditGrant entity.
+	// It exists in this package in order to avoid circular dependency with the "creditgrant" package.
+	CreditGrantsInverseTable = "credit_grants"
+	// CreditGrantsColumn is the table column denoting the credit_grants relation/edge.
+	CreditGrantsColumn = "subscription_id"
+	// ScheduleTable is the table that holds the schedule relation/edge.
+	ScheduleTable = "subscription_schedules"
+	// ScheduleInverseTable is the table name for the SubscriptionSchedule entity.
+	// It exists in this package in order to avoid circular dependency with the "subscriptionschedule" package.
+	ScheduleInverseTable = "subscription_schedules"
+	// ScheduleColumn is the table column denoting the schedule relation/edge.
+	ScheduleColumn = "subscription_id"
 )
 
 // Columns holds all SQL columns for subscription fields.
@@ -129,6 +152,8 @@ var Columns = []string{
 	FieldPauseStatus,
 	FieldActivePauseID,
 	FieldBillingCycle,
+	FieldCommitmentAmount,
+	FieldOverageFactor,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -186,6 +211,8 @@ var (
 	DefaultBillingCycle string
 	// BillingCycleValidator is a validator for the "billing_cycle" field. It is called by the builders before save.
 	BillingCycleValidator func(string) error
+	// DefaultOverageFactor holds the default value on creation for the "overage_factor" field.
+	DefaultOverageFactor decimal.Decimal
 )
 
 // OrderOption defines the ordering options for the Subscription queries.
@@ -341,6 +368,16 @@ func ByBillingCycle(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldBillingCycle, opts...).ToFunc()
 }
 
+// ByCommitmentAmount orders the results by the commitment_amount field.
+func ByCommitmentAmount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCommitmentAmount, opts...).ToFunc()
+}
+
+// ByOverageFactor orders the results by the overage_factor field.
+func ByOverageFactor(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOverageFactor, opts...).ToFunc()
+}
+
 // ByLineItemsCount orders the results by line_items count.
 func ByLineItemsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -368,6 +405,27 @@ func ByPauses(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newPausesStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
+
+// ByCreditGrantsCount orders the results by credit_grants count.
+func ByCreditGrantsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newCreditGrantsStep(), opts...)
+	}
+}
+
+// ByCreditGrants orders the results by credit_grants terms.
+func ByCreditGrants(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newCreditGrantsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByScheduleField orders the results by schedule field.
+func ByScheduleField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newScheduleStep(), sql.OrderByField(field, opts...))
+	}
+}
 func newLineItemsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -380,5 +438,19 @@ func newPausesStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(PausesInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, PausesTable, PausesColumn),
+	)
+}
+func newCreditGrantsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(CreditGrantsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, CreditGrantsTable, CreditGrantsColumn),
+	)
+}
+func newScheduleStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(ScheduleInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2O, false, ScheduleTable, ScheduleColumn),
 	)
 }

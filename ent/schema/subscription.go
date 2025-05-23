@@ -10,6 +10,7 @@ import (
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // Subscription holds the schema definition for the Subscription entity.
@@ -117,6 +118,19 @@ func (Subscription) Fields() []ent.Field {
 			NotEmpty().
 			Immutable().
 			Default(string(types.BillingCycleAnniversary)),
+		field.Other("commitment_amount", decimal.Decimal{}).
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{
+				"postgres": "decimal(20,6)",
+			}),
+		field.Other("overage_factor", decimal.Decimal{}).
+			Optional().
+			Nillable().
+			Default(decimal.NewFromInt(1)).
+			SchemaType(map[string]string{
+				"postgres": "decimal(10,6)",
+			}),
 	}
 }
 
@@ -125,6 +139,9 @@ func (Subscription) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.To("line_items", SubscriptionLineItem.Type),
 		edge.To("pauses", SubscriptionPause.Type),
+		edge.To("credit_grants", CreditGrant.Type),
+		edge.To("schedule", SubscriptionSchedule.Type).
+			Unique(),
 	}
 }
 

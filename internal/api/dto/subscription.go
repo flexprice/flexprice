@@ -2,6 +2,7 @@ package dto
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -34,6 +36,14 @@ type CreateSubscriptionRequest struct {
 	// For example, if the billing period is month and the start date is 2025-04-15 then in case of
 	// calendar billing the billing anchor will be 2025-05-01 vs 2025-04-15 for anniversary billing.
 	BillingCycle types.BillingCycle `json:"billing_cycle"`
+	// Credit grants to be applied when subscription is created
+	CreditGrants []CreateCreditGrantRequest `json:"credit_grants,omitempty"`
+	// CommitmentAmount is the minimum amount a customer commits to paying for a billing period
+	CommitmentAmount *decimal.Decimal `json:"commitment_amount,omitempty"`
+	// OverageFactor is a multiplier applied to usage beyond the commitment amount
+	OverageFactor *decimal.Decimal `json:"overage_factor,omitempty"`
+	// Phases represents an optional timeline of subscription phases
+	Phases []SubscriptionSchedulePhaseInput `json:"phases,omitempty" validate:"omitempty,dive"`
 }
 
 type UpdateSubscriptionRequest struct {
@@ -46,6 +56,8 @@ type SubscriptionResponse struct {
 	*subscription.Subscription
 	Plan     *PlanResponse     `json:"plan"`
 	Customer *CustomerResponse `json:"customer"`
+	// Schedule is included when the subscription has a schedule
+	Schedule *SubscriptionScheduleResponse `json:"schedule,omitempty"`
 }
 
 // ListSubscriptionsResponse represents the response for listing subscriptions
@@ -128,6 +140,118 @@ func (r *CreateSubscriptionRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
+	// Validate commitment amount and overage factor
+	if r.CommitmentAmount != nil && r.CommitmentAmount.LessThan(decimal.Zero) {
+		return ierr.NewError("commitment_amount must be non-negative").
+			WithHint("Commitment amount must be greater than or equal to 0").
+			WithReportableDetails(map[string]interface{}{
+				"commitment_amount": *r.CommitmentAmount,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.OverageFactor != nil && r.OverageFactor.LessThan(decimal.NewFromInt(1)) {
+		return ierr.NewError("overage_factor must be at least 1.0").
+			WithHint("Overage factor must be greater than or equal to 1.0").
+			WithReportableDetails(map[string]interface{}{
+				"overage_factor": *r.OverageFactor,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Validate credit grants if provided
+	if len(r.CreditGrants) > 0 {
+		for i, grant := range r.CreditGrants {
+			// Ensure currency matches subscription currency
+			if grant.Currency != r.Currency {
+				return ierr.NewError("credit grant currency mismatch").
+					WithHintf("Credit grant currency '%s' must match subscription currency '%s'",
+						grant.Currency, r.Currency).
+					WithReportableDetails(map[string]interface{}{
+						"grant_currency":        grant.Currency,
+						"subscription_currency": r.Currency,
+						"grant_index":           i,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+
+			// Force scope to SUBSCRIPTION for all grants added this way
+			if grant.Scope != types.CreditGrantScopeSubscription {
+				return ierr.NewError("invalid credit grant scope").
+					WithHint("Credit grants created with a subscription must have SUBSCRIPTION scope").
+					WithReportableDetails(map[string]interface{}{
+						"grant_scope": grant.Scope,
+						"grant_index": i,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+		}
+	}
+
+	// Validate phases if provided
+	if len(r.Phases) > 0 {
+		// First phase must start on or after subscription start date
+		if r.Phases[0].StartDate.Before(r.StartDate) {
+			return ierr.NewError("first phase start date cannot be before subscription start date").
+				WithHint("The first phase must start on or after the subscription start date").
+				WithReportableDetails(map[string]interface{}{
+					"subscription_start_date": r.StartDate,
+					"first_phase_start_date":  r.Phases[0].StartDate,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
+		// Validate each phase
+		for i, phase := range r.Phases {
+			// Validate the phase itself
+			if err := phase.Validate(); err != nil {
+				return ierr.NewError(fmt.Sprintf("invalid phase at index %d", i)).
+					WithHint("Phase validation failed").
+					WithReportableDetails(map[string]interface{}{
+						"index": i,
+						"error": err.Error(),
+					}).
+					Mark(ierr.ErrValidation)
+			}
+
+			// Validate currency consistency
+			for j, grant := range phase.CreditGrants {
+				if grant.Currency != r.Currency {
+					return ierr.NewError("credit grant currency mismatch in phase").
+						WithHint(fmt.Sprintf("Credit grant currency '%s' must match subscription currency '%s'",
+							grant.Currency, r.Currency)).
+						WithReportableDetails(map[string]interface{}{
+							"phase_index":           i,
+							"grant_index":           j,
+							"grant_currency":        grant.Currency,
+							"subscription_currency": r.Currency,
+						}).
+						Mark(ierr.ErrValidation)
+				}
+			}
+
+			// Validate phase continuity
+			if i > 0 {
+				prevPhase := r.Phases[i-1]
+				if prevPhase.EndDate == nil {
+					return ierr.NewError(fmt.Sprintf("phase at index %d must have an end date", i-1)).
+						WithHint("All phases except the last one must have an end date").
+						Mark(ierr.ErrValidation)
+				}
+
+				if !prevPhase.EndDate.Equal(phase.StartDate) {
+					return ierr.NewError(fmt.Sprintf("phase at index %d does not start immediately after previous phase", i)).
+						WithHint("Phases must be contiguous").
+						WithReportableDetails(map[string]interface{}{
+							"previous_phase_end":  prevPhase.EndDate,
+							"current_phase_start": phase.StartDate,
+						}).
+						Mark(ierr.ErrValidation)
+				}
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -137,7 +261,7 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		r.StartDate = now
 	}
 
-	return &subscription.Subscription{
+	sub := &subscription.Subscription{
 		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
 		CustomerID:         r.CustomerID,
 		PlanID:             r.PlanID,
@@ -157,6 +281,19 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 		BillingCycle:       r.BillingCycle,
 	}
+
+	// Set commitment amount and overage factor if provided
+	if r.CommitmentAmount != nil {
+		sub.CommitmentAmount = r.CommitmentAmount
+	}
+
+	if r.OverageFactor != nil {
+		sub.OverageFactor = r.OverageFactor
+	} else {
+		sub.OverageFactor = lo.ToPtr(decimal.NewFromInt(1)) // Default value
+	}
+
+	return sub
 }
 
 // SubscriptionLineItemRequest represents the request to create a subscription line item
@@ -193,12 +330,17 @@ type GetUsageBySubscriptionRequest struct {
 }
 
 type GetUsageBySubscriptionResponse struct {
-	Amount        float64                              `json:"amount"`
-	Currency      string                               `json:"currency"`
-	DisplayAmount string                               `json:"display_amount"`
-	StartTime     time.Time                            `json:"start_time"`
-	EndTime       time.Time                            `json:"end_time"`
-	Charges       []*SubscriptionUsageByMetersResponse `json:"charges"`
+	Amount             float64                              `json:"amount"`
+	Currency           string                               `json:"currency"`
+	DisplayAmount      string                               `json:"display_amount"`
+	StartTime          time.Time                            `json:"start_time"`
+	EndTime            time.Time                            `json:"end_time"`
+	Charges            []*SubscriptionUsageByMetersResponse `json:"charges"`
+	CommitmentAmount   float64                              `json:"commitment_amount,omitempty"`
+	OverageFactor      float64                              `json:"overage_factor,omitempty"`
+	CommitmentUtilized float64                              `json:"commitment_utilized,omitempty"` // Amount of commitment used
+	OverageAmount      float64                              `json:"overage_amount,omitempty"`      // Amount charged at overage rate
+	HasOverage         bool                                 `json:"has_overage"`                   // Whether any usage exceeded commitment
 }
 
 type SubscriptionUsageByMetersResponse struct {
@@ -210,6 +352,8 @@ type SubscriptionUsageByMetersResponse struct {
 	MeterID          string             `json:"meter_id"`
 	MeterDisplayName string             `json:"meter_display_name"`
 	Price            *price.Price       `json:"price"`
+	IsOverage        bool               `json:"is_overage"`               // Whether this charge is at overage rate
+	OverageFactor    float64            `json:"overage_factor,omitempty"` // Factor applied to this charge if in overage
 }
 
 type SubscriptionUpdatePeriodResponse struct {
