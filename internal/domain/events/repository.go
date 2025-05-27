@@ -114,6 +114,8 @@ type GetEventsParams struct {
 	PropertyFilters    map[string][]string `json:"property_filters,omitempty"`
 	Offset             int                 `json:"offset"`
 	Source             string              `json:"source"`
+	Sort               *string             `json:"sort"`
+	Order              *string             `json:"order"`
 	CountTotal         bool                `json:"count_total"`
 }
 

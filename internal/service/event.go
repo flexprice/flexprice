@@ -377,6 +377,10 @@ func (s *eventService) combineResults(historicUsage, currentUsage *events.Aggreg
 }
 
 func (s *eventService) GetEvents(ctx context.Context, req *dto.GetEventsRequest) (*dto.GetEventsResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
 	// Set up pagination params
 	var useOffsetPagination bool
 
@@ -416,6 +420,8 @@ func (s *eventService) GetEvents(ctx context.Context, req *dto.GetEventsRequest)
 		EndTime:            req.EndTime,
 		PropertyFilters:    req.PropertyFilters,
 		Source:             req.Source,
+		Sort:               req.Sort,
+		Order:              req.Order,
 		CountTotal:         true,
 	}
 

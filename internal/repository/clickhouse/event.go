@@ -534,8 +534,15 @@ func (r *EventRepository) GetEvents(ctx context.Context, params *events.GetEvent
 		}
 	}
 
-	// Order by timestamp and ID
-	baseQuery += " ORDER BY timestamp DESC, id DESC"
+	// Order by timestamp and ID by default
+	if params.Sort == nil {
+		params.Sort = lo.ToPtr("timestamp")
+	}
+	if params.Order == nil {
+		params.Order = lo.ToPtr("DESC")
+	}
+
+	baseQuery += " ORDER BY " + strings.ToLower(*params.Sort) + " " + strings.ToUpper(*params.Order) + ", id DESC"
 
 	// Apply limit and offset for pagination if using offset-based pagination
 	if params.PageSize > 0 {

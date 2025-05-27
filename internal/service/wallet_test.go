@@ -439,20 +439,79 @@ func (s *WalletServiceSuite) setupWallet() {
 	}
 	s.NoError(s.GetStores().WalletRepo.CreateWallet(s.GetContext(), s.testData.wallet))
 }
-
 func (s *WalletServiceSuite) TestCreateWallet() {
+	// Test successful wallet creation with CustomerID
 	req := &dto.CreateWalletRequest{
 		CustomerID: "customer-2",
 		Currency:   "usd",
 		Metadata:   types.Metadata{"key": "value"},
 	}
-
 	resp, err := s.service.CreateWallet(s.GetContext(), req)
 	s.NoError(err)
 	s.NotNil(resp)
 	s.Equal(req.CustomerID, resp.CustomerID)
 	s.Equal(req.Currency, resp.Currency)
 	s.Equal(decimal.Zero, resp.Balance)
+
+	// Test successful wallet creation with ExternalCustomerID
+	newCustomer := &customer.Customer{
+		ID:         "cust_external_test",
+		ExternalID: "ext_cust_test_123",
+		Name:       "Test External Customer",
+		Email:      "external@test.com",
+		BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(s.GetContext(), newCustomer))
+
+	req = &dto.CreateWalletRequest{
+		ExternalCustomerID: newCustomer.ExternalID, // Use the external ID just created
+		Currency:           "usd",
+	}
+	resp, err = s.service.CreateWallet(s.GetContext(), req)
+	s.NoError(err)
+	s.NotNil(resp)
+	s.Equal(newCustomer.ID, resp.CustomerID) // Should map to internal ID
+	s.Equal(req.Currency, resp.Currency)
+
+	// Test validation errors
+	testCases := []struct {
+		name   string
+		req    *dto.CreateWalletRequest
+		errMsg string
+	}{
+		{
+			name: "missing both IDs",
+			req: &dto.CreateWalletRequest{
+				Currency: "usd",
+			},
+			errMsg: "customer_id or external_customer_id is required",
+		},
+		{
+			name: "invalid customer ID",
+			req: &dto.CreateWalletRequest{
+				CustomerID: "_customer2",
+				Currency:   "usd",
+			},
+			errMsg: "invalid customer id",
+		},
+		{
+			name: "invalid external customer ID",
+			req: &dto.CreateWalletRequest{
+				ExternalCustomerID: "customer%2",
+				Currency:           "usd",
+			},
+			errMsg: "invalid external customer id",
+		},
+		// Add more validation test cases
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			_, err := s.service.CreateWallet(s.GetContext(), tc.req)
+			s.Error(err)
+			s.Contains(err.Error(), tc.errMsg)
+		})
+	}
 }
 
 func (s *WalletServiceSuite) TestGetWalletByID() {

@@ -1,6 +1,11 @@
 package types
 
-import ierr "github.com/flexprice/flexprice/internal/errors"
+import (
+	"fmt"
+	"strings"
+
+	ierr "github.com/flexprice/flexprice/internal/errors"
+)
 
 // CustomerFilter represents filters for customer queries
 type CustomerFilter struct {
@@ -104,4 +109,39 @@ func (f *CustomerFilter) IsUnlimited() bool {
 		return NewDefaultQueryFilter().IsUnlimited()
 	}
 	return f.QueryFilter.IsUnlimited()
+}
+
+// Common validation rules for IDs
+func validateID(id string, idType string) error {
+
+	// Sample Constraints for customer id and external customer id
+	// 1. Cannot contain invalid characters % and space
+
+	invalidChars := []string{"%", " "}
+	for _, char := range invalidChars {
+		if strings.Contains(id, char) {
+			return ierr.NewError(fmt.Sprintf("invalid %s", idType)).
+				WithHint(fmt.Sprintf("Please provide a valid %s - cannot contain: %s", idType, char)).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	return nil
+}
+
+// ValidateCustomerID validates the customer id
+func ValidateCustomerID(id string) error {
+
+	if strings.HasPrefix(id, "_") || strings.HasSuffix(id, "_") {
+		return ierr.NewError("invalid customer id").
+			WithHint("Please provide a valid customer id").
+			Mark(ierr.ErrValidation)
+	}
+
+	return validateID(id, "customer id")
+}
+
+// ValidateExternalCustomerID validates the external customer id
+func ValidateExternalCustomerID(id string) error {
+	return validateID(id, "external customer id")
 }

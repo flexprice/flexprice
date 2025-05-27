@@ -82,6 +82,14 @@ func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletR
 			Mark(ierr.ErrValidation)
 	}
 
+	if req.CustomerID == "" {
+		customer, err := s.CustomerRepo.GetByLookupKey(ctx, req.ExternalCustomerID)
+		if err != nil {
+			return nil, err
+		}
+		req.CustomerID = customer.ID
+	}
+
 	// Check if customer already has an active wallet
 	existingWallets, err := s.WalletRepo.GetWalletsByCustomerID(ctx, req.CustomerID)
 	if err != nil {
@@ -107,6 +115,7 @@ func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletR
 		}
 	}
 
+	// Convert to domain wallet model
 	w := req.ToWallet(ctx)
 
 	// create a DB transaction

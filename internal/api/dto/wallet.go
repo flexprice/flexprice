@@ -16,7 +16,8 @@ import (
 
 // CreateWalletRequest represents the request to create a wallet
 type CreateWalletRequest struct {
-	CustomerID          string                 `json:"customer_id" binding:"required"`
+	CustomerID          string                 `json:"customer_id,omitempty"`
+	ExternalCustomerID  string                 `json:"external_customer_id,omitempty"`
 	Name                string                 `json:"name,omitempty"`
 	Currency            string                 `json:"currency" binding:"required"`
 	Description         string                 `json:"description,omitempty"`
@@ -168,6 +169,25 @@ func (r *CreateWalletRequest) Validate() error {
 			}).
 			Mark(ierr.ErrValidation)
 	}
+
+	if r.CustomerID == "" && r.ExternalCustomerID == "" {
+		return ierr.NewError("customer_id or external_customer_id is required").
+			WithHint("Please provide either customer_id or external_customer_id").
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.ExternalCustomerID != "" {
+		if err := types.ValidateExternalCustomerID(r.ExternalCustomerID); err != nil {
+			return err
+		}
+	}
+
+	if r.CustomerID != "" {
+		if err := types.ValidateCustomerID(r.CustomerID); err != nil {
+			return err
+		}
+	}
+
 	return validator.ValidateRequest(r)
 }
 

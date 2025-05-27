@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	clickhouse_go "github.com/ClickHouse/clickhouse-go/v2"
+	"github.com/ClickHouse/clickhouse-go/v2/lib/column"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/sentry"
@@ -123,9 +124,9 @@ func (tc *tracedConn) QueryRow(ctx context.Context, query string, args ...any) d
 }
 
 // PrepareBatch adds tracing and delegates to the underlying connection
-func (tc *tracedConn) PrepareBatch(ctx context.Context, query string) (driver.Batch, error) {
+func (tc *tracedConn) PrepareBatch(ctx context.Context, query string, options ...driver.PrepareBatchOption) (driver.Batch, error) {
 	if tc.sentry == nil {
-		return tc.conn.PrepareBatch(ctx, query)
+		return tc.conn.PrepareBatch(ctx, query, options...)
 	}
 
 	span, ctx := tc.sentry.StartClickHouseSpan(ctx, "clickhouse.prepare_batch", map[string]interface{}{
@@ -135,7 +136,7 @@ func (tc *tracedConn) PrepareBatch(ctx context.Context, query string) (driver.Ba
 		defer span.Finish()
 	}
 
-	batch, err := tc.conn.PrepareBatch(ctx, query)
+	batch, err := tc.conn.PrepareBatch(ctx, query, options...)
 	if err != nil {
 		return nil, err
 	}
@@ -164,9 +165,9 @@ func (tc *tracedConn) Exec(ctx context.Context, query string, args ...any) error
 }
 
 // AsyncInsert adds tracing and delegates to the underlying connection
-func (tc *tracedConn) AsyncInsert(ctx context.Context, query string, wait bool) error {
+func (tc *tracedConn) AsyncInsert(ctx context.Context, query string, wait bool, args ...any) error {
 	if tc.sentry == nil {
-		return tc.conn.AsyncInsert(ctx, query, wait)
+		return tc.conn.AsyncInsert(ctx, query, wait, args...)
 	}
 
 	span, ctx := tc.sentry.StartClickHouseSpan(ctx, "clickhouse.async_insert", map[string]interface{}{
@@ -177,7 +178,7 @@ func (tc *tracedConn) AsyncInsert(ctx context.Context, query string, wait bool) 
 		defer span.Finish()
 	}
 
-	return tc.conn.AsyncInsert(ctx, query, wait)
+	return tc.conn.AsyncInsert(ctx, query, wait, args...)
 }
 
 // Ping adds tracing and delegates to the underlying connection
@@ -265,6 +266,16 @@ func (tb *tracedBatch) Send() error {
 // IsSent delegates to the underlying batch
 func (tb *tracedBatch) IsSent() bool {
 	return tb.batch.IsSent()
+}
+
+// Columns delegates to the underlying batch
+func (tb *tracedBatch) Columns() []column.Interface {
+	return tb.batch.Columns()
+}
+
+// Rows delegates to the underlying batch
+func (tb *tracedBatch) Rows() int {
+	return tb.batch.Rows()
 }
 
 // Truncate query to avoid sending too much data to Sentry

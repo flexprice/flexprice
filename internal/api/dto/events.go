@@ -2,11 +2,13 @@ package dto
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
 	"github.com/shopspring/decimal"
@@ -97,8 +99,13 @@ type GetEventsRequest struct {
 	// Offset to fetch the events and is set to 0 by default
 	Offset int `json:"offset"`
 	// Source to filter the events by the source
-	Source     string `json:"source"`
-	CountTotal bool   `json:"-"`
+	Source string `json:"source"`
+	// Sort by the field. Allowed values (case sensitive): timestamp, event_name (default: timestamp)
+	Sort *string `json:"sort,omitempty" form:"sort" example:"timestamp"`
+	// Order by condition. Allowed values (case sensitive): asc, desc (default: desc)
+	Order *string `json:"order,omitempty" form:"order" example:"desc"`
+	// Count of total number of events
+	CountTotal bool `json:"-"`
 }
 
 type GetEventsResponse struct {
@@ -193,7 +200,34 @@ func (r *GetUsageByMeterRequest) Validate() error {
 }
 
 func (r *GetEventsRequest) Validate() error {
-	return validator.ValidateRequest(r)
+	err := validator.ValidateRequest(r)
+	if err != nil {
+		return err
+	}
+
+	allowedSortFields := []string{"timestamp", "event_name"}
+	if r.Sort != nil && !slices.Contains(allowedSortFields, *r.Sort) {
+		return ierr.NewErrorf("invalid sort field: %s", *r.Sort).
+			WithHint("Request validation failed due to invalid sort field").
+			WithReportableDetails(map[string]any{
+				"sort":           *r.Sort,
+				"allowed_values": allowedSortFields,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	allowedOrderValues := []string{types.OrderAsc, types.OrderDesc}
+	if r.Order != nil && !slices.Contains(allowedOrderValues, *r.Order) {
+		return ierr.NewErrorf("invalid order: %s", *r.Order).
+			WithHint("Request validation failed due to invalid order by value").
+			WithReportableDetails(map[string]any{
+				"order":          *r.Order,
+				"allowed_values": allowedOrderValues,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
 }
 
 type GetUsageAnalyticsRequest struct {
