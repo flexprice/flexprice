@@ -119,6 +119,96 @@ func NextBillingDate(currentPeriodStart, billingAnchor time.Time, unit int, peri
 	return time.Date(targetY, targetM, targetD, h, min, sec, 0, currentPeriodStart.Location()), nil
 }
 
+// PreviousBillingDate calculates the previous billing date by going backwards from the billing anchor
+// by the specified period duration. This is useful for proration calculations where we need to determine
+// the start of a full billing period that ends at the billing anchor.
+func PreviousBillingDate(billingAnchor time.Time, unit int, period BillingPeriod) (time.Time, error) {
+	if unit <= 0 {
+		return billingAnchor, ierr.NewError("billing period unit must be a positive integer").
+			WithHint("Billing period unit must be a positive integer").
+			WithReportableDetails(
+				map[string]any{
+					"unit": unit,
+				},
+			).
+			Mark(ierr.ErrValidation)
+	}
+
+	// For daily and weekly periods, we can use simple subtraction
+	switch period {
+	case BILLING_PERIOD_DAILY:
+		return billingAnchor.AddDate(0, 0, -unit), nil
+	case BILLING_PERIOD_WEEKLY:
+		return billingAnchor.AddDate(0, 0, -unit*7), nil
+	}
+
+	// For monthly and annual periods, calculate the target year and month
+	var years, months int
+	switch period {
+	case BILLING_PERIOD_MONTHLY:
+		months = -unit
+	case BILLING_PERIOD_ANNUAL:
+		years = -unit
+	case BILLING_PERIOD_QUARTER:
+		months = -unit * 3
+	case BILLING_PERIOD_HALF_YEAR:
+		months = -unit * 6
+	default:
+		return billingAnchor, ierr.NewError("invalid billing period type").
+			WithHint("Invalid billing period type").
+			WithReportableDetails(
+				map[string]any{
+					"period": period,
+				},
+			).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Get the anchor year, month, and time components
+	y, m, d := billingAnchor.Date()
+	h, min, sec := billingAnchor.Clock()
+
+	// Calculate the target year and month
+	targetY := y + years
+	targetM := time.Month(int(m) + months)
+
+	// Adjust for month overflow/underflow
+	for targetM > 12 {
+		targetM -= 12
+		targetY++
+	}
+	for targetM < 1 {
+		targetM += 12
+		targetY--
+	}
+
+	// For annual billing, preserve the billing anchor month and day
+	if period == BILLING_PERIOD_ANNUAL {
+		targetM = billingAnchor.Month()
+	}
+
+	// Get the target day from the billing anchor
+	targetD := d
+
+	// Find the last day of the target month
+	lastDayOfMonth := time.Date(targetY, targetM+1, 0, 0, 0, 0, 0, billingAnchor.Location()).Day()
+
+	// Special handling for month-end dates and February
+	if targetD > lastDayOfMonth {
+		targetD = lastDayOfMonth
+	}
+
+	// Special case for February 29th in leap years
+	if period == BILLING_PERIOD_ANNUAL &&
+		billingAnchor.Month() == time.February &&
+		billingAnchor.Day() == 29 &&
+		!isLeapYear(targetY) {
+		targetD = 28
+	}
+
+	return time.Date(targetY, targetM, targetD, h, min, sec, 0, billingAnchor.Location()), nil
+}
+
 // isLeapYear returns true if the given year is a leap year
 func isLeapYear(year int) bool {
 	return year%4 == 0 && (year%100 != 0 || year%400 == 0)

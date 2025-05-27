@@ -36,6 +36,7 @@ type InvoiceService interface {
 	AttemptPayment(ctx context.Context, id string) error
 	GetInvoicePDF(ctx context.Context, id string) ([]byte, error)
 	GetInvoicePDFUrl(ctx context.Context, id string) (string, error)
+	AddInvoiceLineItems(ctx context.Context, invoiceID string, lineItems []dto.CreateInvoiceLineItemRequest) error
 }
 
 type invoiceService struct {
@@ -1037,4 +1038,52 @@ func (s *invoiceService) publishInternalWebhookEvent(ctx context.Context, eventN
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
 		s.Logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
 	}
+}
+
+func (s *invoiceService) AddInvoiceLineItems(ctx context.Context, invoiceID string, lineItems []dto.CreateInvoiceLineItemRequest) error {
+	// Get the invoice first to ensure it exists and get its details
+	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
+	if err != nil {
+		return ierr.NewErrorf("failed to get invoice: %v", err).
+			WithHint("Check if the invoice ID is valid").
+			Mark(ierr.ErrNotFound)
+	}
+
+	// Convert DTO line items to domain line items
+	domainLineItems := make([]*invoice.InvoiceLineItem, len(lineItems))
+	for i, item := range lineItems {
+		domainLineItems[i] = &invoice.InvoiceLineItem{
+			ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
+			InvoiceID:        invoiceID,
+			CustomerID:       inv.CustomerID,
+			SubscriptionID:   inv.SubscriptionID,
+			PriceID:          item.PriceID,
+			PlanID:           item.PlanID,
+			PlanDisplayName:  item.PlanDisplayName,
+			PriceType:        item.PriceType,
+			MeterID:          item.MeterID,
+			MeterDisplayName: item.MeterDisplayName,
+			DisplayName:      item.DisplayName,
+			Amount:           item.Amount,
+			Quantity:         item.Quantity,
+			Currency:         inv.Currency,
+			PeriodStart:      item.PeriodStart,
+			PeriodEnd:        item.PeriodEnd,
+			Metadata:         item.Metadata,
+			EnvironmentID:    inv.EnvironmentID,
+			BaseModel: types.BaseModel{
+				TenantID: inv.TenantID,
+				Status:   types.StatusPublished,
+			},
+		}
+	}
+
+	// Add line items to invoice
+	if err := s.InvoiceRepo.AddLineItems(ctx, invoiceID, domainLineItems); err != nil {
+		return ierr.NewErrorf("failed to add line items to invoice: %v", err).
+			WithHint("Check if all line item details are valid").
+			Mark(ierr.ErrDatabase)
+	}
+
+	return nil
 }

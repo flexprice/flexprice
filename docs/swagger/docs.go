@@ -6973,6 +6973,10 @@ const docTemplate = `{
                 "customer_id": {
                     "type": "string"
                 },
+                "customer_timezone": {
+                    "description": "Timezone of the customer.\nIf not set, the default value is UTC.",
+                    "type": "string"
+                },
                 "end_date": {
                     "type": "string"
                 },
@@ -6998,6 +7002,14 @@ const docTemplate = `{
                 },
                 "plan_id": {
                     "type": "string"
+                },
+                "proration_mode": {
+                    "description": "ProrationMode is the mode for proration.\nIf not set, the default value is none. Possible values are active and none.\nActive proration means the proration will be calculated based on the usage.\nNone proration means the proration will not be calculated.\nThis is IGNORED when the billing cycle is anniversary.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ProrationMode"
+                        }
+                    ]
                 },
                 "start_date": {
                     "type": "string"
@@ -9026,6 +9038,9 @@ const docTemplate = `{
                     "description": "CustomerID is the identifier for the customer in our system",
                     "type": "string"
                 },
+                "customer_timezone": {
+                    "type": "string"
+                },
                 "end_date": {
                     "description": "EndDate is the end date of the subscription",
                     "type": "string"
@@ -9070,6 +9085,9 @@ const docTemplate = `{
                 "plan_id": {
                     "description": "PlanID is the identifier for the plan in our system",
                     "type": "string"
+                },
+                "proration_mode": {
+                    "$ref": "#/definitions/types.ProrationMode"
                 },
                 "schedule": {
                     "description": "Schedule is included when the subscription has a schedule",
@@ -10960,6 +10978,17 @@ const docTemplate = `{
             "x-enum-varnames": [
                 "PRICE_TYPE_USAGE",
                 "PRICE_TYPE_FIXED"
+            ]
+        },
+        "types.ProrationMode": {
+            "type": "string",
+            "enum": [
+                "none",
+                "active"
+            ],
+            "x-enum-varnames": [
+                "ProrationModeNone",
+                "ProrationModeActive"
             ]
         },
         "types.ResetUsage": {

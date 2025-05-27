@@ -79,6 +79,10 @@ const (
 	FieldCommitmentAmount = "commitment_amount"
 	// FieldOverageFactor holds the string denoting the overage_factor field in the database.
 	FieldOverageFactor = "overage_factor"
+	// FieldCustomerTimezone holds the string denoting the customer_timezone field in the database.
+	FieldCustomerTimezone = "customer_timezone"
+	// FieldProrationMode holds the string denoting the proration_mode field in the database.
+	FieldProrationMode = "proration_mode"
 	// EdgeLineItems holds the string denoting the line_items edge name in mutations.
 	EdgeLineItems = "line_items"
 	// EdgePauses holds the string denoting the pauses edge name in mutations.
@@ -154,6 +158,8 @@ var Columns = []string{
 	FieldBillingCycle,
 	FieldCommitmentAmount,
 	FieldOverageFactor,
+	FieldCustomerTimezone,
+	FieldProrationMode,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -213,6 +219,12 @@ var (
 	BillingCycleValidator func(string) error
 	// DefaultOverageFactor holds the default value on creation for the "overage_factor" field.
 	DefaultOverageFactor decimal.Decimal
+	// DefaultCustomerTimezone holds the default value on creation for the "customer_timezone" field.
+	DefaultCustomerTimezone string
+	// DefaultProrationMode holds the default value on creation for the "proration_mode" field.
+	DefaultProrationMode string
+	// ProrationModeValidator is a validator for the "proration_mode" field. It is called by the builders before save.
+	ProrationModeValidator func(string) error
 )
 
 // OrderOption defines the ordering options for the Subscription queries.
@@ -376,6 +388,16 @@ func ByCommitmentAmount(opts ...sql.OrderTermOption) OrderOption {
 // ByOverageFactor orders the results by the overage_factor field.
 func ByOverageFactor(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldOverageFactor, opts...).ToFunc()
+}
+
+// ByCustomerTimezone orders the results by the customer_timezone field.
+func ByCustomerTimezone(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCustomerTimezone, opts...).ToFunc()
+}
+
+// ByProrationMode orders the results by the proration_mode field.
+func ByProrationMode(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldProrationMode, opts...).ToFunc()
 }
 
 // ByLineItemsCount orders the results by line_items count.

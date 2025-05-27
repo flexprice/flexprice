@@ -298,12 +298,16 @@ func invoiceFilterFn(ctx context.Context, inv *invoice.Invoice, filter interface
 	}
 
 	// Filter by time range
-	if f.TimeRangeFilter != nil {
-		if f.StartTime != nil && inv.CreatedAt.Before(*f.StartTime) {
-			return false
+	if f.TimeRangeFilter != nil && (f.TimeRangeFilter.StartTime != nil || f.TimeRangeFilter.EndTime != nil) {
+		if f.TimeRangeFilter.StartTime != nil {
+			if inv.PeriodStart == nil || inv.PeriodStart.After(*f.TimeRangeFilter.StartTime) {
+				return false
+			}
 		}
-		if f.EndTime != nil && inv.CreatedAt.After(*f.EndTime) {
-			return false
+		if f.TimeRangeFilter.EndTime != nil {
+			if inv.PeriodEnd == nil || inv.PeriodEnd.Before(*f.TimeRangeFilter.EndTime) {
+				return false
+			}
 		}
 	}
 
@@ -316,4 +320,9 @@ func invoiceSortFn(i, j *invoice.Invoice) bool {
 		return false
 	}
 	return i.CreatedAt.After(j.CreatedAt)
+}
+
+// Clear removes all invoices from the store
+func (s *InMemoryInvoiceStore) Clear() {
+	s.InMemoryStore.Clear()
 }

@@ -567,6 +567,11 @@ definitions:
         type: string
       customer_id:
         type: string
+      customer_timezone:
+        description: |-
+          Timezone of the customer.
+          If not set, the default value is UTC.
+        type: string
       end_date:
         type: string
       lookup_key:
@@ -586,6 +591,15 @@ definitions:
         type: array
       plan_id:
         type: string
+      proration_mode:
+        allOf:
+        - $ref: '#/definitions/types.ProrationMode'
+        description: |-
+          ProrationMode is the mode for proration.
+          If not set, the default value is none. Possible values are active and none.
+          Active proration means the proration will be calculated based on the usage.
+          None proration means the proration will not be calculated.
+          This is IGNORED when the billing cycle is anniversary.
       start_date:
         type: string
       trial_end:
@@ -2008,6 +2022,8 @@ definitions:
       customer_id:
         description: CustomerID is the identifier for the customer in our system
         type: string
+      customer_timezone:
+        type: string
       end_date:
         description: EndDate is the end date of the subscription
         type: string
@@ -2041,6 +2057,8 @@ definitions:
       plan_id:
         description: PlanID is the identifier for the plan in our system
         type: string
+      proration_mode:
+        $ref: '#/definitions/types.ProrationMode'
       schedule:
         allOf:
         - $ref: '#/definitions/dto.SubscriptionScheduleResponse'
@@ -3380,6 +3398,14 @@ definitions:
     x-enum-varnames:
     - PRICE_TYPE_USAGE
     - PRICE_TYPE_FIXED
+  types.ProrationMode:
+    enum:
+    - none
+    - active
+    type: string
+    x-enum-varnames:
+    - ProrationModeNone
+    - ProrationModeActive
   types.ResetUsage:
     enum:
     - BILLING_PERIOD

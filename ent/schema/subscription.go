@@ -131,6 +131,12 @@ func (Subscription) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "decimal(10,6)",
 			}),
+		field.String("customer_timezone").
+			Default("UTC"),
+		field.String("proration_mode").
+			NotEmpty().
+			Immutable().
+			Default(string(types.ProrationModeNone)),
 	}
 }
 

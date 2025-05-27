@@ -14,6 +14,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/task"
@@ -66,6 +67,9 @@ type ServiceParams struct {
 
 	// http client
 	Client httpclient.Client
+
+	// Proration
+	ProrationCalculator proration.Calculator
 }
 
 // Common service params
@@ -98,6 +102,7 @@ func NewServiceParams(
 	s3Service s3.Service,
 	client httpclient.Client,
 	taskRepo task.Repository,
+	prorationCalculator proration.Calculator,
 ) ServiceParams {
 	return ServiceParams{
 		Logger:                   logger,
@@ -128,5 +133,6 @@ func NewServiceParams(
 		S3:                       s3Service,
 		Client:                   client,
 		TaskRepo:                 taskRepo,
+		ProrationCalculator:      prorationCalculator,
 	}
 }
