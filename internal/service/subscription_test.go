@@ -552,13 +552,29 @@ func (s *SubscriptionServiceSuite) TestGetUsageBySubscription() {
 
 func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 	testCases := []struct {
-		name    string
-		input   dto.CreateSubscriptionRequest
-		want    *dto.SubscriptionResponse
-		wantErr bool
+		name          string
+		input         dto.CreateSubscriptionRequest
+		want          *dto.SubscriptionResponse
+		wantErr       bool
+		errorContains string
 	}{
 		{
-			name: "successful_subscription_creation",
+			name: "both_customer_id_and_external_id_absent",
+			input: dto.CreateSubscriptionRequest{
+				PlanID:             s.testData.plan.ID,
+				StartDate:          s.testData.now,
+				EndDate:            lo.ToPtr(s.testData.now.Add(30 * 24 * time.Hour)),
+				Currency:           "usd",
+				BillingCadence:     types.BILLING_CADENCE_RECURRING,
+				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+				BillingPeriodCount: 1,
+				BillingCycle:       types.BillingCycleAnniversary,
+			},
+			wantErr:       true,
+			errorContains: "either customer_id or external_customer_id is required",
+		},
+		{
+			name: "only_customer_id_present",
 			input: dto.CreateSubscriptionRequest{
 				CustomerID:         s.testData.customer.ID,
 				PlanID:             s.testData.plan.ID,
@@ -573,6 +589,53 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 			wantErr: false,
 		},
 		{
+			name: "only_external_customer_id_present",
+			input: dto.CreateSubscriptionRequest{
+				ExternalCustomerID: s.testData.customer.ExternalID,
+				PlanID:             s.testData.plan.ID,
+				StartDate:          s.testData.now,
+				EndDate:            lo.ToPtr(s.testData.now.Add(30 * 24 * time.Hour)),
+				Currency:           "usd",
+				BillingCadence:     types.BILLING_CADENCE_RECURRING,
+				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+				BillingPeriodCount: 1,
+				BillingCycle:       types.BillingCycleAnniversary,
+			},
+			wantErr: false,
+		},
+		{
+			name: "both_customer_id_and_external_id_present",
+			input: dto.CreateSubscriptionRequest{
+				CustomerID:         s.testData.customer.ID,
+				ExternalCustomerID: "some_other_external_id",
+				PlanID:             s.testData.plan.ID,
+				StartDate:          s.testData.now,
+				EndDate:            lo.ToPtr(s.testData.now.Add(30 * 24 * time.Hour)),
+				Currency:           "usd",
+				BillingCadence:     types.BILLING_CADENCE_RECURRING,
+				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+				BillingPeriodCount: 1,
+				BillingCycle:       types.BillingCycleAnniversary,
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid_external_customer_id",
+			input: dto.CreateSubscriptionRequest{
+				ExternalCustomerID: "non_existent_external_id",
+				PlanID:             s.testData.plan.ID,
+				StartDate:          s.testData.now,
+				EndDate:            lo.ToPtr(s.testData.now.Add(30 * 24 * time.Hour)),
+				Currency:           "usd",
+				BillingCadence:     types.BILLING_CADENCE_RECURRING,
+				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+				BillingPeriodCount: 1,
+				BillingCycle:       types.BillingCycleAnniversary,
+			},
+			wantErr:       true,
+			errorContains: "customer not found",
+		},
+		{
 			name: "invalid_customer_id",
 			input: dto.CreateSubscriptionRequest{
 				CustomerID:         "invalid_customer",
@@ -585,7 +648,8 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 				BillingPeriodCount: 1,
 				BillingCycle:       types.BillingCycleAnniversary,
 			},
-			wantErr: true,
+			wantErr:       true,
+			errorContains: "customer not found",
 		},
 		{
 			name: "invalid_plan_id",
@@ -600,7 +664,8 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 				BillingPeriodCount: 1,
 				BillingCycle:       types.BillingCycleAnniversary,
 			},
-			wantErr: true,
+			wantErr:       true,
+			errorContains: "plan not found",
 		},
 		{
 			name: "end_date_before_start_date",
@@ -615,7 +680,8 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 				BillingPeriodCount: 1,
 				BillingCycle:       types.BillingCycleAnniversary,
 			},
-			wantErr: true,
+			wantErr:       true,
+			errorContains: "end date must be after start date",
 		},
 	}
 
@@ -624,13 +690,20 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 			resp, err := s.service.CreateSubscription(s.GetContext(), tc.input)
 			if tc.wantErr {
 				s.Error(err)
+				if tc.errorContains != "" {
+					s.Contains(err.Error(), tc.errorContains)
+				}
 				return
 			}
 
 			s.NoError(err)
 			s.NotNil(resp)
 			s.NotEmpty(resp.ID)
-			s.Equal(tc.input.CustomerID, resp.CustomerID)
+			if tc.input.CustomerID != "" {
+				s.Equal(tc.input.CustomerID, resp.CustomerID)
+			} else {
+				s.Equal(s.testData.customer.ID, resp.CustomerID)
+			}
 			s.Equal(tc.input.PlanID, resp.PlanID)
 			s.Equal(types.SubscriptionStatusActive, resp.SubscriptionStatus)
 			s.Equal(tc.input.StartDate.Unix(), resp.StartDate.Unix())

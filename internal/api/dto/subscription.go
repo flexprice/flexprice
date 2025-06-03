@@ -16,7 +16,8 @@ import (
 )
 
 type CreateSubscriptionRequest struct {
-	CustomerID         string               `json:"customer_id" validate:"required"`
+	CustomerID         string               `json:"customer_id"`
+	ExternalCustomerID string               `json:"external_customer_id"`
 	PlanID             string               `json:"plan_id" validate:"required"`
 	Currency           string               `json:"currency" validate:"required,len=3"`
 	LookupKey          string               `json:"lookup_key"`
@@ -64,9 +65,23 @@ type SubscriptionResponse struct {
 type ListSubscriptionsResponse = types.ListResponse[*SubscriptionResponse]
 
 func (r *CreateSubscriptionRequest) Validate() error {
+	// Case- Both are absent
+	if r.CustomerID == "" && r.ExternalCustomerID == "" {
+		return ierr.NewError("either customer_id or external_customer_id is required").
+			WithHint("Please provide either customer_id or external_customer_id").
+			Mark(ierr.ErrValidation)
+	}
+
 	err := validator.ValidateRequest(r)
 	if err != nil {
 		return err
+	}
+
+	// Validate end date is after start date if provided
+	if r.EndDate != nil && !r.EndDate.After(r.StartDate) {
+		return ierr.NewError("end date must be after start date").
+			WithHint("Please provide an end date that is after the start date").
+			Mark(ierr.ErrValidation)
 	}
 
 	// Validate currency
@@ -106,16 +121,6 @@ func (r *CreateSubscriptionRequest) Validate() error {
 			WithHint("Start date must be in the past or present").
 			WithReportableDetails(map[string]interface{}{
 				"start_date": r.StartDate,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	if r.EndDate != nil && r.EndDate.Before(r.StartDate) {
-		return ierr.NewError("end_date cannot be before start_date").
-			WithHint("End date must be after start date").
-			WithReportableDetails(map[string]interface{}{
-				"start_date": r.StartDate,
-				"end_date":   *r.EndDate,
 			}).
 			Mark(ierr.ErrValidation)
 	}
