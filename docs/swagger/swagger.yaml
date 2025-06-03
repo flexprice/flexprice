@@ -569,6 +569,8 @@ definitions:
         type: string
       end_date:
         type: string
+      external_customer_id:
+        type: string
       lookup_key:
         type: string
       metadata:
@@ -597,7 +599,6 @@ definitions:
     - billing_period
     - billing_period_count
     - currency
-    - customer_id
     - plan_id
     - start_date
     type: object

@@ -6933,7 +6933,6 @@ const docTemplate = `{
                 "billing_period",
                 "billing_period_count",
                 "currency",
-                "customer_id",
                 "plan_id",
                 "start_date"
             ],
@@ -6974,6 +6973,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "end_date": {
+                    "type": "string"
+                },
+                "external_customer_id": {
                     "type": "string"
                 },
                 "lookup_key": {
