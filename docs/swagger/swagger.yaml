@@ -566,10 +566,15 @@ definitions:
       currency:
         type: string
       customer_id:
+        description: |-
+          CustomerID is the flexprice customer id
+          CustomerID is prioritized over ExternalCustomerID(if present)
         type: string
       end_date:
         type: string
       external_customer_id:
+        description: ExternalCustomerID is the external customer id provided by the
+          developer
         type: string
       lookup_key:
         type: string
