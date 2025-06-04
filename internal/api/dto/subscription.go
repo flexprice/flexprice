@@ -16,7 +16,11 @@ import (
 )
 
 type CreateSubscriptionRequest struct {
-	CustomerID         string               `json:"customer_id"`
+
+	//CustomerID is the flexprice customer id
+	//CustomerID is prioritized over ExternalCustomerID(if present)
+	CustomerID string `json:"customer_id"`
+	//ExternalCustomerID is the external customer id provided by the developer
 	ExternalCustomerID string               `json:"external_customer_id"`
 	PlanID             string               `json:"plan_id" validate:"required"`
 	Currency           string               `json:"currency" validate:"required,len=3"`
@@ -77,13 +81,6 @@ func (r *CreateSubscriptionRequest) Validate() error {
 		return err
 	}
 
-	// Validate end date is after start date if provided
-	if r.EndDate != nil && !r.EndDate.After(r.StartDate) {
-		return ierr.NewError("end date must be after start date").
-			WithHint("Please provide an end date that is after the start date").
-			Mark(ierr.ErrValidation)
-	}
-
 	// Validate currency
 	if err := types.ValidateCurrencyCode(r.Currency); err != nil {
 		return err
@@ -99,6 +96,16 @@ func (r *CreateSubscriptionRequest) Validate() error {
 
 	if err := r.BillingCycle.Validate(); err != nil {
 		return err
+	}
+
+	if r.EndDate != nil && r.EndDate.Before(r.StartDate) {
+		return ierr.NewError("end_date cannot be before start_date").
+			WithHint("End date must be after start date").
+			WithReportableDetails(map[string]interface{}{
+				"start_date": r.StartDate,
+				"end_date":   *r.EndDate,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	if r.BillingPeriodCount < 1 {
