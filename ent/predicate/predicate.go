@@ -12,6 +12,9 @@ type Auth func(*sql.Selector)
 // BillingSequence is the predicate function for billingsequence builders.
 type BillingSequence func(*sql.Selector)
 
+// Connection is the predicate function for connection builders.
+type Connection func(*sql.Selector)
+
 // Customer is the predicate function for customer builders.
 type Customer func(*sql.Selector)
 
@@ -23,6 +26,9 @@ type Environment func(*sql.Selector)
 
 // Feature is the predicate function for feature builders.
 type Feature func(*sql.Selector)
+
+// IntegrationEntity is the predicate function for integrationentity builders.
+type IntegrationEntity func(*sql.Selector)
 
 // Invoice is the predicate function for invoice builders.
 type Invoice func(*sql.Selector)

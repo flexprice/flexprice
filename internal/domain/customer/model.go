@@ -43,7 +43,7 @@ type Customer struct {
 
 	// EnvironmentID is the environment identifier for the customer
 	EnvironmentID string `db:"environment_id" json:"environment_id"`
-
+	
 	types.BaseModel
 }
 
