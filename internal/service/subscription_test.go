@@ -681,7 +681,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 				BillingCycle:       types.BillingCycleAnniversary,
 			},
 			wantErr:       true,
-			errorContains: "end date must be after start date",
+			errorContains: "end_date cannot be before start_date",
 		},
 	}
 
