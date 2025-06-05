@@ -6963,14 +6963,14 @@
                     "type": "string"
                 },
                 "customer_id": {
-                    "description": "CustomerID is the flexprice customer id\nCustomerID is prioritized over ExternalCustomerID(if present)",
+                    "description": "customer_id is the flexprice customer id\nand it is prioritized over external_customer_id in case both are provided.",
                     "type": "string"
                 },
                 "end_date": {
                     "type": "string"
                 },
                 "external_customer_id": {
-                    "description": "ExternalCustomerID is the external customer id provided by the developer",
+                    "description": "external_customer_id is the customer id in your DB\nand must be same as what you provided as external_id while creating the customer in flexprice.",
                     "type": "string"
                 },
                 "lookup_key": {
