@@ -17,10 +17,11 @@ import (
 
 type CreateSubscriptionRequest struct {
 
-	//CustomerID is the flexprice customer id
-	//CustomerID is prioritized over ExternalCustomerID(if present)
+	// customer_id is the flexprice customer id
+	// and it is prioritized over external_customer_id in case both are provided.
 	CustomerID string `json:"customer_id"`
-	//ExternalCustomerID is the external customer id provided by the developer
+	// external_customer_id is the customer id in your DB
+	// and must be same as what you provided as external_id while creating the customer in flexprice.
 	ExternalCustomerID string               `json:"external_customer_id"`
 	PlanID             string               `json:"plan_id" validate:"required"`
 	Currency           string               `json:"currency" validate:"required,len=3"`
