@@ -89,7 +89,9 @@ var (
 		{Name: "cadence", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "period", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "period_count", Type: field.TypeInt, Nullable: true},
-		{Name: "expire_in_days", Type: field.TypeInt, Nullable: true},
+		{Name: "expiry_duration", Type: field.TypeInt, Nullable: true},
+		{Name: "expiry_duration_unit", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "expiration_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "priority", Type: field.TypeInt, Nullable: true},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
 		{Name: "plan_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -103,13 +105,13 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "credit_grants_plans_credit_grants",
-				Columns:    []*schema.Column{CreditGrantsColumns[18]},
+				Columns:    []*schema.Column{CreditGrantsColumns[20]},
 				RefColumns: []*schema.Column{PlansColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "credit_grants_subscriptions_credit_grants",
-				Columns:    []*schema.Column{CreditGrantsColumns[19]},
+				Columns:    []*schema.Column{CreditGrantsColumns[21]},
 				RefColumns: []*schema.Column{SubscriptionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -123,14 +125,48 @@ var (
 			{
 				Name:    "creditgrant_tenant_id_environment_id_scope_plan_id",
 				Unique:  false,
-				Columns: []*schema.Column{CreditGrantsColumns[1], CreditGrantsColumns[7], CreditGrantsColumns[9], CreditGrantsColumns[18]},
+				Columns: []*schema.Column{CreditGrantsColumns[1], CreditGrantsColumns[7], CreditGrantsColumns[9], CreditGrantsColumns[20]},
 			},
 			{
 				Name:    "creditgrant_tenant_id_environment_id_scope_subscription_id",
 				Unique:  false,
-				Columns: []*schema.Column{CreditGrantsColumns[1], CreditGrantsColumns[7], CreditGrantsColumns[9], CreditGrantsColumns[19]},
+				Columns: []*schema.Column{CreditGrantsColumns[1], CreditGrantsColumns[7], CreditGrantsColumns[9], CreditGrantsColumns[21]},
 			},
 		},
+	}
+	// CreditGrantApplicationsColumns holds the columns for the "credit_grant_applications" table.
+	CreditGrantApplicationsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "credit_grant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "subscription_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "scheduled_for", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamp"}},
+		{Name: "applied_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamp"}},
+		{Name: "billing_period_start", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamp"}},
+		{Name: "billing_period_end", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamp"}},
+		{Name: "amount_applied", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "currency", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(3)"}},
+		{Name: "application_reason", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "subscription_status_at_application", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "is_prorated", Type: field.TypeBool},
+		{Name: "proration_factor", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "full_period_amount", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "retry_count", Type: field.TypeInt},
+		{Name: "failure_reason", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "next_retry_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamp"}},
+		{Name: "metadata", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "jsonb"}},
+	}
+	// CreditGrantApplicationsTable holds the schema information for the "credit_grant_applications" table.
+	CreditGrantApplicationsTable = &schema.Table{
+		Name:       "credit_grant_applications",
+		Columns:    CreditGrantApplicationsColumns,
+		PrimaryKey: []*schema.Column{CreditGrantApplicationsColumns[0]},
 	}
 	// CustomersColumns holds the columns for the "customers" table.
 	CustomersColumns = []*schema.Column{
@@ -1282,6 +1318,7 @@ var (
 		AuthsTable,
 		BillingSequencesTable,
 		CreditGrantsTable,
+		CreditGrantApplicationsTable,
 		CustomersTable,
 		EntitlementsTable,
 		EnvironmentsTable,

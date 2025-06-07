@@ -369,11 +369,35 @@ func (s *subscriptionService) handleCreditGrants(
 
 	// Now create wallet top-ups for each credit grant
 	for _, grant := range creditGrants {
+		// TODO: handle this to honour line item level end time
 		// Calculate expiry date if needed
 		var expiryDate *time.Time
-		if grant.ExpireInDays != nil && *grant.ExpireInDays > 0 {
-			expiry := subscription.StartDate.AddDate(0, 0, *grant.ExpireInDays)
-			expiryDate = &expiry
+
+		if grant.ExpirationType == types.CreditGrantExpiryTypeNever {
+			expiryDate = nil
+		}
+
+		if grant.ExpirationType == types.CreditGrantExpiryTypeDuration {
+			if grant.ExpiryDurationUnit != nil && grant.ExpiryDuration != nil && *grant.ExpiryDuration > 0 {
+				switch *grant.ExpiryDurationUnit {
+				case types.CreditGrantExpiryDurationUnitDays:
+					expiry := subscription.StartDate.AddDate(0, 0, *grant.ExpiryDuration)
+					expiryDate = &expiry
+				case types.CreditGrantExpiryDurationUnitWeeks:
+					expiry := subscription.StartDate.AddDate(0, 0, *grant.ExpiryDuration*7)
+					expiryDate = &expiry
+				case types.CreditGrantExpiryDurationUnitMonths:
+					expiry := subscription.StartDate.AddDate(0, *grant.ExpiryDuration, 0)
+					expiryDate = &expiry
+				case types.CreditGrantExpiryDurationUnitYears:
+					expiry := subscription.StartDate.AddDate(*grant.ExpiryDuration, 0, 0)
+					expiryDate = &expiry
+				}
+			}
+		}
+
+		if grant.ExpirationType == types.CreditGrantExpiryTypeBillingCycle {
+			expiryDate = &subscription.CurrentPeriodEnd
 		}
 
 		// Create a wallet top-up
@@ -1893,17 +1917,19 @@ func (s *subscriptionService) CreateSubscriptionSchedule(ctx context.Context, re
 		creditGrants := make([]types.SchedulePhaseCreditGrant, 0, len(phaseInput.CreditGrants))
 		for _, grant := range phaseInput.CreditGrants {
 			creditGrants = append(creditGrants, types.SchedulePhaseCreditGrant{
-				Name:         grant.Name,
-				Scope:        grant.Scope,
-				PlanID:       grant.PlanID,
-				Amount:       grant.Amount,
-				Currency:     grant.Currency,
-				Cadence:      grant.Cadence,
-				Period:       grant.Period,
-				PeriodCount:  grant.PeriodCount,
-				ExpireInDays: grant.ExpireInDays,
-				Priority:     grant.Priority,
-				Metadata:     grant.Metadata,
+				Name:               grant.Name,
+				Scope:              grant.Scope,
+				PlanID:             grant.PlanID,
+				Amount:             grant.Amount,
+				Currency:           grant.Currency,
+				Cadence:            grant.Cadence,
+				Period:             grant.Period,
+				PeriodCount:        grant.PeriodCount,
+				ExpirationType:     grant.ExpirationType,
+				ExpiryDuration:     grant.ExpiryDuration,
+				ExpiryDurationUnit: grant.ExpiryDurationUnit,
+				Priority:           grant.Priority,
+				Metadata:           grant.Metadata,
 			})
 		}
 
@@ -2053,17 +2079,19 @@ func (s *subscriptionService) createScheduleFromPhases(ctx context.Context, sub 
 		creditGrants := make([]types.SchedulePhaseCreditGrant, 0, len(phaseInput.CreditGrants))
 		for _, grant := range phaseInput.CreditGrants {
 			creditGrants = append(creditGrants, types.SchedulePhaseCreditGrant{
-				Name:         grant.Name,
-				Scope:        grant.Scope,
-				PlanID:       grant.PlanID,
-				Amount:       grant.Amount,
-				Currency:     grant.Currency,
-				Cadence:      grant.Cadence,
-				Period:       grant.Period,
-				PeriodCount:  grant.PeriodCount,
-				ExpireInDays: grant.ExpireInDays,
-				Priority:     grant.Priority,
-				Metadata:     grant.Metadata,
+				Name:               grant.Name,
+				Scope:              grant.Scope,
+				PlanID:             grant.PlanID,
+				Amount:             grant.Amount,
+				Currency:           grant.Currency,
+				Cadence:            grant.Cadence,
+				Period:             grant.Period,
+				PeriodCount:        grant.PeriodCount,
+				ExpirationType:     grant.ExpirationType,
+				ExpiryDuration:     grant.ExpiryDuration,
+				ExpiryDurationUnit: grant.ExpiryDurationUnit,
+				Priority:           grant.Priority,
+				Metadata:           grant.Metadata,
 			})
 		}
 
@@ -2216,17 +2244,18 @@ func (s *subscriptionService) AddSchedulePhase(ctx context.Context, scheduleID s
 		creditGrants := make([]types.SchedulePhaseCreditGrant, 0, len(req.Phase.CreditGrants))
 		for _, grant := range req.Phase.CreditGrants {
 			creditGrants = append(creditGrants, types.SchedulePhaseCreditGrant{
-				Name:         grant.Name,
-				Scope:        grant.Scope,
-				PlanID:       grant.PlanID,
-				Amount:       grant.Amount,
-				Currency:     grant.Currency,
-				Cadence:      grant.Cadence,
-				Period:       grant.Period,
-				PeriodCount:  grant.PeriodCount,
-				ExpireInDays: grant.ExpireInDays,
-				Priority:     grant.Priority,
-				Metadata:     grant.Metadata,
+				Name:               grant.Name,
+				Scope:              grant.Scope,
+				PlanID:             grant.PlanID,
+				Amount:             grant.Amount,
+				Currency:           grant.Currency,
+				Cadence:            grant.Cadence,
+				Period:             grant.Period,
+				ExpirationType:     grant.ExpirationType,
+				ExpiryDuration:     grant.ExpiryDuration,
+				ExpiryDurationUnit: grant.ExpiryDurationUnit,
+				Priority:           grant.Priority,
+				Metadata:           grant.Metadata,
 			})
 		}
 		newPhase.CreditGrants = creditGrants

@@ -20,6 +20,8 @@ type Tx struct {
 	BillingSequence *BillingSequenceClient
 	// CreditGrant is the client for interacting with the CreditGrant builders.
 	CreditGrant *CreditGrantClient
+	// CreditGrantApplication is the client for interacting with the CreditGrantApplication builders.
+	CreditGrantApplication *CreditGrantApplicationClient
 	// Customer is the client for interacting with the Customer builders.
 	Customer *CustomerClient
 	// Entitlement is the client for interacting with the Entitlement builders.
@@ -200,6 +202,7 @@ func (tx *Tx) init() {
 	tx.Auth = NewAuthClient(tx.config)
 	tx.BillingSequence = NewBillingSequenceClient(tx.config)
 	tx.CreditGrant = NewCreditGrantClient(tx.config)
+	tx.CreditGrantApplication = NewCreditGrantApplicationClient(tx.config)
 	tx.Customer = NewCustomerClient(tx.config)
 	tx.Entitlement = NewEntitlementClient(tx.config)
 	tx.Environment = NewEnvironmentClient(tx.config)

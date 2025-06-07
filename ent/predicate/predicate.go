@@ -15,6 +15,9 @@ type BillingSequence func(*sql.Selector)
 // CreditGrant is the predicate function for creditgrant builders.
 type CreditGrant func(*sql.Selector)
 
+// CreditGrantApplication is the predicate function for creditgrantapplication builders.
+type CreditGrantApplication func(*sql.Selector)
+
 // Customer is the predicate function for customer builders.
 type Customer func(*sql.Selector)
 

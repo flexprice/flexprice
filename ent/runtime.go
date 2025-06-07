@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/ent/auth"
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/creditgrant"
+	"github.com/flexprice/flexprice/ent/creditgrantapplication"
 	"github.com/flexprice/flexprice/ent/customer"
 	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/ent/environment"
@@ -137,10 +138,43 @@ func init() {
 	creditgrantDescCadence := creditgrantFields[7].Descriptor()
 	// creditgrant.CadenceValidator is a validator for the "cadence" field. It is called by the builders before save.
 	creditgrant.CadenceValidator = creditgrantDescCadence.Validators[0].(func(string) error)
+	// creditgrantDescExpirationType is the schema descriptor for expiration_type field.
+	creditgrantDescExpirationType := creditgrantFields[12].Descriptor()
+	// creditgrant.ExpirationTypeValidator is a validator for the "expiration_type" field. It is called by the builders before save.
+	creditgrant.ExpirationTypeValidator = creditgrantDescExpirationType.Validators[0].(func(string) error)
 	// creditgrantDescMetadata is the schema descriptor for metadata field.
-	creditgrantDescMetadata := creditgrantFields[12].Descriptor()
+	creditgrantDescMetadata := creditgrantFields[14].Descriptor()
 	// creditgrant.DefaultMetadata holds the default value on creation for the metadata field.
 	creditgrant.DefaultMetadata = creditgrantDescMetadata.Default.(map[string]string)
+	creditgrantapplicationMixin := schema.CreditGrantApplication{}.Mixin()
+	creditgrantapplicationMixinFields0 := creditgrantapplicationMixin[0].Fields()
+	_ = creditgrantapplicationMixinFields0
+	creditgrantapplicationMixinFields1 := creditgrantapplicationMixin[1].Fields()
+	_ = creditgrantapplicationMixinFields1
+	creditgrantapplicationFields := schema.CreditGrantApplication{}.Fields()
+	_ = creditgrantapplicationFields
+	// creditgrantapplicationDescTenantID is the schema descriptor for tenant_id field.
+	creditgrantapplicationDescTenantID := creditgrantapplicationMixinFields0[0].Descriptor()
+	// creditgrantapplication.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	creditgrantapplication.TenantIDValidator = creditgrantapplicationDescTenantID.Validators[0].(func(string) error)
+	// creditgrantapplicationDescStatus is the schema descriptor for status field.
+	creditgrantapplicationDescStatus := creditgrantapplicationMixinFields0[1].Descriptor()
+	// creditgrantapplication.DefaultStatus holds the default value on creation for the status field.
+	creditgrantapplication.DefaultStatus = creditgrantapplicationDescStatus.Default.(string)
+	// creditgrantapplicationDescCreatedAt is the schema descriptor for created_at field.
+	creditgrantapplicationDescCreatedAt := creditgrantapplicationMixinFields0[2].Descriptor()
+	// creditgrantapplication.DefaultCreatedAt holds the default value on creation for the created_at field.
+	creditgrantapplication.DefaultCreatedAt = creditgrantapplicationDescCreatedAt.Default.(func() time.Time)
+	// creditgrantapplicationDescUpdatedAt is the schema descriptor for updated_at field.
+	creditgrantapplicationDescUpdatedAt := creditgrantapplicationMixinFields0[3].Descriptor()
+	// creditgrantapplication.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	creditgrantapplication.DefaultUpdatedAt = creditgrantapplicationDescUpdatedAt.Default.(func() time.Time)
+	// creditgrantapplication.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	creditgrantapplication.UpdateDefaultUpdatedAt = creditgrantapplicationDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// creditgrantapplicationDescEnvironmentID is the schema descriptor for environment_id field.
+	creditgrantapplicationDescEnvironmentID := creditgrantapplicationMixinFields1[0].Descriptor()
+	// creditgrantapplication.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	creditgrantapplication.DefaultEnvironmentID = creditgrantapplicationDescEnvironmentID.Default.(string)
 	customerMixin := schema.Customer{}.Mixin()
 	customerMixinFields0 := customerMixin[0].Fields()
 	_ = customerMixinFields0

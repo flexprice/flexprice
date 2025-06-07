@@ -54,8 +54,12 @@ type CreditGrant struct {
 	Period *types.CreditGrantPeriod `json:"period,omitempty"`
 	// PeriodCount holds the value of the "period_count" field.
 	PeriodCount *int `json:"period_count,omitempty"`
-	// ExpireInDays holds the value of the "expire_in_days" field.
-	ExpireInDays *int `json:"expire_in_days,omitempty"`
+	// ExpiryDuration holds the value of the "expiry_duration" field.
+	ExpiryDuration *int `json:"expiry_duration,omitempty"`
+	// ExpiryDurationUnit holds the value of the "expiry_duration_unit" field.
+	ExpiryDurationUnit *types.CreditGrantExpiryDurationUnit `json:"expiry_duration_unit,omitempty"`
+	// ExpirationType holds the value of the "expiration_type" field.
+	ExpirationType types.CreditGrantExpiryType `json:"expiration_type,omitempty"`
 	// Priority holds the value of the "priority" field.
 	Priority *int `json:"priority,omitempty"`
 	// Metadata holds the value of the "metadata" field.
@@ -108,9 +112,9 @@ func (*CreditGrant) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case creditgrant.FieldAmount:
 			values[i] = new(decimal.Decimal)
-		case creditgrant.FieldPeriodCount, creditgrant.FieldExpireInDays, creditgrant.FieldPriority:
+		case creditgrant.FieldPeriodCount, creditgrant.FieldExpiryDuration, creditgrant.FieldPriority:
 			values[i] = new(sql.NullInt64)
-		case creditgrant.FieldID, creditgrant.FieldTenantID, creditgrant.FieldStatus, creditgrant.FieldCreatedBy, creditgrant.FieldUpdatedBy, creditgrant.FieldEnvironmentID, creditgrant.FieldName, creditgrant.FieldScope, creditgrant.FieldPlanID, creditgrant.FieldSubscriptionID, creditgrant.FieldCurrency, creditgrant.FieldCadence, creditgrant.FieldPeriod:
+		case creditgrant.FieldID, creditgrant.FieldTenantID, creditgrant.FieldStatus, creditgrant.FieldCreatedBy, creditgrant.FieldUpdatedBy, creditgrant.FieldEnvironmentID, creditgrant.FieldName, creditgrant.FieldScope, creditgrant.FieldPlanID, creditgrant.FieldSubscriptionID, creditgrant.FieldCurrency, creditgrant.FieldCadence, creditgrant.FieldPeriod, creditgrant.FieldExpiryDurationUnit, creditgrant.FieldExpirationType:
 			values[i] = new(sql.NullString)
 		case creditgrant.FieldCreatedAt, creditgrant.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -235,12 +239,25 @@ func (cg *CreditGrant) assignValues(columns []string, values []any) error {
 				cg.PeriodCount = new(int)
 				*cg.PeriodCount = int(value.Int64)
 			}
-		case creditgrant.FieldExpireInDays:
+		case creditgrant.FieldExpiryDuration:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field expire_in_days", values[i])
+				return fmt.Errorf("unexpected type %T for field expiry_duration", values[i])
 			} else if value.Valid {
-				cg.ExpireInDays = new(int)
-				*cg.ExpireInDays = int(value.Int64)
+				cg.ExpiryDuration = new(int)
+				*cg.ExpiryDuration = int(value.Int64)
+			}
+		case creditgrant.FieldExpiryDurationUnit:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field expiry_duration_unit", values[i])
+			} else if value.Valid {
+				cg.ExpiryDurationUnit = new(types.CreditGrantExpiryDurationUnit)
+				*cg.ExpiryDurationUnit = types.CreditGrantExpiryDurationUnit(value.String)
+			}
+		case creditgrant.FieldExpirationType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field expiration_type", values[i])
+			} else if value.Valid {
+				cg.ExpirationType = types.CreditGrantExpiryType(value.String)
 			}
 		case creditgrant.FieldPriority:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -359,10 +376,18 @@ func (cg *CreditGrant) String() string {
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
-	if v := cg.ExpireInDays; v != nil {
-		builder.WriteString("expire_in_days=")
+	if v := cg.ExpiryDuration; v != nil {
+		builder.WriteString("expiry_duration=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
+	builder.WriteString(", ")
+	if v := cg.ExpiryDurationUnit; v != nil {
+		builder.WriteString("expiry_duration_unit=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("expiration_type=")
+	builder.WriteString(fmt.Sprintf("%v", cg.ExpirationType))
 	builder.WriteString(", ")
 	if v := cg.Priority; v != nil {
 		builder.WriteString("priority=")

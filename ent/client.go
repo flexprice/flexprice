@@ -18,6 +18,7 @@ import (
 	"github.com/flexprice/flexprice/ent/auth"
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/creditgrant"
+	"github.com/flexprice/flexprice/ent/creditgrantapplication"
 	"github.com/flexprice/flexprice/ent/customer"
 	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/ent/environment"
@@ -56,6 +57,8 @@ type Client struct {
 	BillingSequence *BillingSequenceClient
 	// CreditGrant is the client for interacting with the CreditGrant builders.
 	CreditGrant *CreditGrantClient
+	// CreditGrantApplication is the client for interacting with the CreditGrantApplication builders.
+	CreditGrantApplication *CreditGrantApplicationClient
 	// Customer is the client for interacting with the Customer builders.
 	Customer *CustomerClient
 	// Entitlement is the client for interacting with the Entitlement builders.
@@ -116,6 +119,7 @@ func (c *Client) init() {
 	c.Auth = NewAuthClient(c.config)
 	c.BillingSequence = NewBillingSequenceClient(c.config)
 	c.CreditGrant = NewCreditGrantClient(c.config)
+	c.CreditGrantApplication = NewCreditGrantApplicationClient(c.config)
 	c.Customer = NewCustomerClient(c.config)
 	c.Entitlement = NewEntitlementClient(c.config)
 	c.Environment = NewEnvironmentClient(c.config)
@@ -234,6 +238,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Auth:                      NewAuthClient(cfg),
 		BillingSequence:           NewBillingSequenceClient(cfg),
 		CreditGrant:               NewCreditGrantClient(cfg),
+		CreditGrantApplication:    NewCreditGrantApplicationClient(cfg),
 		Customer:                  NewCustomerClient(cfg),
 		Entitlement:               NewEntitlementClient(cfg),
 		Environment:               NewEnvironmentClient(cfg),
@@ -279,6 +284,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Auth:                      NewAuthClient(cfg),
 		BillingSequence:           NewBillingSequenceClient(cfg),
 		CreditGrant:               NewCreditGrantClient(cfg),
+		CreditGrantApplication:    NewCreditGrantApplicationClient(cfg),
 		Customer:                  NewCustomerClient(cfg),
 		Entitlement:               NewEntitlementClient(cfg),
 		Environment:               NewEnvironmentClient(cfg),
@@ -331,10 +337,10 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.Auth, c.BillingSequence, c.CreditGrant, c.Customer, c.Entitlement,
-		c.Environment, c.Feature, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence,
-		c.Meter, c.Payment, c.PaymentAttempt, c.Plan, c.Price, c.Secret,
-		c.Subscription, c.SubscriptionLineItem, c.SubscriptionPause,
+		c.Auth, c.BillingSequence, c.CreditGrant, c.CreditGrantApplication, c.Customer,
+		c.Entitlement, c.Environment, c.Feature, c.Invoice, c.InvoiceLineItem,
+		c.InvoiceSequence, c.Meter, c.Payment, c.PaymentAttempt, c.Plan, c.Price,
+		c.Secret, c.Subscription, c.SubscriptionLineItem, c.SubscriptionPause,
 		c.SubscriptionSchedule, c.SubscriptionSchedulePhase, c.Task, c.Tenant, c.User,
 		c.Wallet, c.WalletTransaction,
 	} {
@@ -346,10 +352,10 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.Auth, c.BillingSequence, c.CreditGrant, c.Customer, c.Entitlement,
-		c.Environment, c.Feature, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence,
-		c.Meter, c.Payment, c.PaymentAttempt, c.Plan, c.Price, c.Secret,
-		c.Subscription, c.SubscriptionLineItem, c.SubscriptionPause,
+		c.Auth, c.BillingSequence, c.CreditGrant, c.CreditGrantApplication, c.Customer,
+		c.Entitlement, c.Environment, c.Feature, c.Invoice, c.InvoiceLineItem,
+		c.InvoiceSequence, c.Meter, c.Payment, c.PaymentAttempt, c.Plan, c.Price,
+		c.Secret, c.Subscription, c.SubscriptionLineItem, c.SubscriptionPause,
 		c.SubscriptionSchedule, c.SubscriptionSchedulePhase, c.Task, c.Tenant, c.User,
 		c.Wallet, c.WalletTransaction,
 	} {
@@ -366,6 +372,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.BillingSequence.mutate(ctx, m)
 	case *CreditGrantMutation:
 		return c.CreditGrant.mutate(ctx, m)
+	case *CreditGrantApplicationMutation:
+		return c.CreditGrantApplication.mutate(ctx, m)
 	case *CustomerMutation:
 		return c.Customer.mutate(ctx, m)
 	case *EntitlementMutation:
@@ -845,6 +853,139 @@ func (c *CreditGrantClient) mutate(ctx context.Context, m *CreditGrantMutation) 
 		return (&CreditGrantDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown CreditGrant mutation op: %q", m.Op())
+	}
+}
+
+// CreditGrantApplicationClient is a client for the CreditGrantApplication schema.
+type CreditGrantApplicationClient struct {
+	config
+}
+
+// NewCreditGrantApplicationClient returns a client for the CreditGrantApplication from the given config.
+func NewCreditGrantApplicationClient(c config) *CreditGrantApplicationClient {
+	return &CreditGrantApplicationClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `creditgrantapplication.Hooks(f(g(h())))`.
+func (c *CreditGrantApplicationClient) Use(hooks ...Hook) {
+	c.hooks.CreditGrantApplication = append(c.hooks.CreditGrantApplication, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `creditgrantapplication.Intercept(f(g(h())))`.
+func (c *CreditGrantApplicationClient) Intercept(interceptors ...Interceptor) {
+	c.inters.CreditGrantApplication = append(c.inters.CreditGrantApplication, interceptors...)
+}
+
+// Create returns a builder for creating a CreditGrantApplication entity.
+func (c *CreditGrantApplicationClient) Create() *CreditGrantApplicationCreate {
+	mutation := newCreditGrantApplicationMutation(c.config, OpCreate)
+	return &CreditGrantApplicationCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of CreditGrantApplication entities.
+func (c *CreditGrantApplicationClient) CreateBulk(builders ...*CreditGrantApplicationCreate) *CreditGrantApplicationCreateBulk {
+	return &CreditGrantApplicationCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *CreditGrantApplicationClient) MapCreateBulk(slice any, setFunc func(*CreditGrantApplicationCreate, int)) *CreditGrantApplicationCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &CreditGrantApplicationCreateBulk{err: fmt.Errorf("calling to CreditGrantApplicationClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*CreditGrantApplicationCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &CreditGrantApplicationCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for CreditGrantApplication.
+func (c *CreditGrantApplicationClient) Update() *CreditGrantApplicationUpdate {
+	mutation := newCreditGrantApplicationMutation(c.config, OpUpdate)
+	return &CreditGrantApplicationUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *CreditGrantApplicationClient) UpdateOne(cga *CreditGrantApplication) *CreditGrantApplicationUpdateOne {
+	mutation := newCreditGrantApplicationMutation(c.config, OpUpdateOne, withCreditGrantApplication(cga))
+	return &CreditGrantApplicationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *CreditGrantApplicationClient) UpdateOneID(id string) *CreditGrantApplicationUpdateOne {
+	mutation := newCreditGrantApplicationMutation(c.config, OpUpdateOne, withCreditGrantApplicationID(id))
+	return &CreditGrantApplicationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for CreditGrantApplication.
+func (c *CreditGrantApplicationClient) Delete() *CreditGrantApplicationDelete {
+	mutation := newCreditGrantApplicationMutation(c.config, OpDelete)
+	return &CreditGrantApplicationDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *CreditGrantApplicationClient) DeleteOne(cga *CreditGrantApplication) *CreditGrantApplicationDeleteOne {
+	return c.DeleteOneID(cga.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *CreditGrantApplicationClient) DeleteOneID(id string) *CreditGrantApplicationDeleteOne {
+	builder := c.Delete().Where(creditgrantapplication.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &CreditGrantApplicationDeleteOne{builder}
+}
+
+// Query returns a query builder for CreditGrantApplication.
+func (c *CreditGrantApplicationClient) Query() *CreditGrantApplicationQuery {
+	return &CreditGrantApplicationQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeCreditGrantApplication},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a CreditGrantApplication entity by its id.
+func (c *CreditGrantApplicationClient) Get(ctx context.Context, id string) (*CreditGrantApplication, error) {
+	return c.Query().Where(creditgrantapplication.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *CreditGrantApplicationClient) GetX(ctx context.Context, id string) *CreditGrantApplication {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *CreditGrantApplicationClient) Hooks() []Hook {
+	return c.hooks.CreditGrantApplication
+}
+
+// Interceptors returns the client interceptors.
+func (c *CreditGrantApplicationClient) Interceptors() []Interceptor {
+	return c.inters.CreditGrantApplication
+}
+
+func (c *CreditGrantApplicationClient) mutate(ctx context.Context, m *CreditGrantApplicationMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&CreditGrantApplicationCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&CreditGrantApplicationUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&CreditGrantApplicationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&CreditGrantApplicationDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown CreditGrantApplication mutation op: %q", m.Op())
 	}
 }
 
@@ -4166,17 +4307,19 @@ func (c *WalletTransactionClient) mutate(ctx context.Context, m *WalletTransacti
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		Auth, BillingSequence, CreditGrant, Customer, Entitlement, Environment, Feature,
-		Invoice, InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt,
-		Plan, Price, Secret, Subscription, SubscriptionLineItem, SubscriptionPause,
-		SubscriptionSchedule, SubscriptionSchedulePhase, Task, Tenant, User, Wallet,
+		Auth, BillingSequence, CreditGrant, CreditGrantApplication, Customer,
+		Entitlement, Environment, Feature, Invoice, InvoiceLineItem, InvoiceSequence,
+		Meter, Payment, PaymentAttempt, Plan, Price, Secret, Subscription,
+		SubscriptionLineItem, SubscriptionPause, SubscriptionSchedule,
+		SubscriptionSchedulePhase, Task, Tenant, User, Wallet,
 		WalletTransaction []ent.Hook
 	}
 	inters struct {
-		Auth, BillingSequence, CreditGrant, Customer, Entitlement, Environment, Feature,
-		Invoice, InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt,
-		Plan, Price, Secret, Subscription, SubscriptionLineItem, SubscriptionPause,
-		SubscriptionSchedule, SubscriptionSchedulePhase, Task, Tenant, User, Wallet,
+		Auth, BillingSequence, CreditGrant, CreditGrantApplication, Customer,
+		Entitlement, Environment, Feature, Invoice, InvoiceLineItem, InvoiceSequence,
+		Meter, Payment, PaymentAttempt, Plan, Price, Secret, Subscription,
+		SubscriptionLineItem, SubscriptionPause, SubscriptionSchedule,
+		SubscriptionSchedulePhase, Task, Tenant, User, Wallet,
 		WalletTransaction []ent.Interceptor
 	}
 )

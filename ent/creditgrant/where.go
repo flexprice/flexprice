@@ -150,9 +150,21 @@ func PeriodCount(v int) predicate.CreditGrant {
 	return predicate.CreditGrant(sql.FieldEQ(FieldPeriodCount, v))
 }
 
-// ExpireInDays applies equality check predicate on the "expire_in_days" field. It's identical to ExpireInDaysEQ.
-func ExpireInDays(v int) predicate.CreditGrant {
-	return predicate.CreditGrant(sql.FieldEQ(FieldExpireInDays, v))
+// ExpiryDuration applies equality check predicate on the "expiry_duration" field. It's identical to ExpiryDurationEQ.
+func ExpiryDuration(v int) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldEQ(FieldExpiryDuration, v))
+}
+
+// ExpiryDurationUnit applies equality check predicate on the "expiry_duration_unit" field. It's identical to ExpiryDurationUnitEQ.
+func ExpiryDurationUnit(v types.CreditGrantExpiryDurationUnit) predicate.CreditGrant {
+	vc := string(v)
+	return predicate.CreditGrant(sql.FieldEQ(FieldExpiryDurationUnit, vc))
+}
+
+// ExpirationType applies equality check predicate on the "expiration_type" field. It's identical to ExpirationTypeEQ.
+func ExpirationType(v types.CreditGrantExpiryType) predicate.CreditGrant {
+	vc := string(v)
+	return predicate.CreditGrant(sql.FieldEQ(FieldExpirationType, vc))
 }
 
 // Priority applies equality check predicate on the "priority" field. It's identical to PriorityEQ.
@@ -1227,54 +1239,232 @@ func PeriodCountNotNil() predicate.CreditGrant {
 	return predicate.CreditGrant(sql.FieldNotNull(FieldPeriodCount))
 }
 
-// ExpireInDaysEQ applies the EQ predicate on the "expire_in_days" field.
-func ExpireInDaysEQ(v int) predicate.CreditGrant {
-	return predicate.CreditGrant(sql.FieldEQ(FieldExpireInDays, v))
+// ExpiryDurationEQ applies the EQ predicate on the "expiry_duration" field.
+func ExpiryDurationEQ(v int) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldEQ(FieldExpiryDuration, v))
 }
 
-// ExpireInDaysNEQ applies the NEQ predicate on the "expire_in_days" field.
-func ExpireInDaysNEQ(v int) predicate.CreditGrant {
-	return predicate.CreditGrant(sql.FieldNEQ(FieldExpireInDays, v))
+// ExpiryDurationNEQ applies the NEQ predicate on the "expiry_duration" field.
+func ExpiryDurationNEQ(v int) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldNEQ(FieldExpiryDuration, v))
 }
 
-// ExpireInDaysIn applies the In predicate on the "expire_in_days" field.
-func ExpireInDaysIn(vs ...int) predicate.CreditGrant {
-	return predicate.CreditGrant(sql.FieldIn(FieldExpireInDays, vs...))
+// ExpiryDurationIn applies the In predicate on the "expiry_duration" field.
+func ExpiryDurationIn(vs ...int) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldIn(FieldExpiryDuration, vs...))
 }
 
-// ExpireInDaysNotIn applies the NotIn predicate on the "expire_in_days" field.
-func ExpireInDaysNotIn(vs ...int) predicate.CreditGrant {
-	return predicate.CreditGrant(sql.FieldNotIn(FieldExpireInDays, vs...))
+// ExpiryDurationNotIn applies the NotIn predicate on the "expiry_duration" field.
+func ExpiryDurationNotIn(vs ...int) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldNotIn(FieldExpiryDuration, vs...))
 }
 
-// ExpireInDaysGT applies the GT predicate on the "expire_in_days" field.
-func ExpireInDaysGT(v int) predicate.CreditGrant {
-	return predicate.CreditGrant(sql.FieldGT(FieldExpireInDays, v))
+// ExpiryDurationGT applies the GT predicate on the "expiry_duration" field.
+func ExpiryDurationGT(v int) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldGT(FieldExpiryDuration, v))
 }
 
-// ExpireInDaysGTE applies the GTE predicate on the "expire_in_days" field.
-func ExpireInDaysGTE(v int) predicate.CreditGrant {
-	return predicate.CreditGrant(sql.FieldGTE(FieldExpireInDays, v))
+// ExpiryDurationGTE applies the GTE predicate on the "expiry_duration" field.
+func ExpiryDurationGTE(v int) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldGTE(FieldExpiryDuration, v))
 }
 
-// ExpireInDaysLT applies the LT predicate on the "expire_in_days" field.
-func ExpireInDaysLT(v int) predicate.CreditGrant {
-	return predicate.CreditGrant(sql.FieldLT(FieldExpireInDays, v))
+// ExpiryDurationLT applies the LT predicate on the "expiry_duration" field.
+func ExpiryDurationLT(v int) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldLT(FieldExpiryDuration, v))
 }
 
-// ExpireInDaysLTE applies the LTE predicate on the "expire_in_days" field.
-func ExpireInDaysLTE(v int) predicate.CreditGrant {
-	return predicate.CreditGrant(sql.FieldLTE(FieldExpireInDays, v))
+// ExpiryDurationLTE applies the LTE predicate on the "expiry_duration" field.
+func ExpiryDurationLTE(v int) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldLTE(FieldExpiryDuration, v))
 }
 
-// ExpireInDaysIsNil applies the IsNil predicate on the "expire_in_days" field.
-func ExpireInDaysIsNil() predicate.CreditGrant {
-	return predicate.CreditGrant(sql.FieldIsNull(FieldExpireInDays))
+// ExpiryDurationIsNil applies the IsNil predicate on the "expiry_duration" field.
+func ExpiryDurationIsNil() predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldIsNull(FieldExpiryDuration))
 }
 
-// ExpireInDaysNotNil applies the NotNil predicate on the "expire_in_days" field.
-func ExpireInDaysNotNil() predicate.CreditGrant {
-	return predicate.CreditGrant(sql.FieldNotNull(FieldExpireInDays))
+// ExpiryDurationNotNil applies the NotNil predicate on the "expiry_duration" field.
+func ExpiryDurationNotNil() predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldNotNull(FieldExpiryDuration))
+}
+
+// ExpiryDurationUnitEQ applies the EQ predicate on the "expiry_duration_unit" field.
+func ExpiryDurationUnitEQ(v types.CreditGrantExpiryDurationUnit) predicate.CreditGrant {
+	vc := string(v)
+	return predicate.CreditGrant(sql.FieldEQ(FieldExpiryDurationUnit, vc))
+}
+
+// ExpiryDurationUnitNEQ applies the NEQ predicate on the "expiry_duration_unit" field.
+func ExpiryDurationUnitNEQ(v types.CreditGrantExpiryDurationUnit) predicate.CreditGrant {
+	vc := string(v)
+	return predicate.CreditGrant(sql.FieldNEQ(FieldExpiryDurationUnit, vc))
+}
+
+// ExpiryDurationUnitIn applies the In predicate on the "expiry_duration_unit" field.
+func ExpiryDurationUnitIn(vs ...types.CreditGrantExpiryDurationUnit) predicate.CreditGrant {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.CreditGrant(sql.FieldIn(FieldExpiryDurationUnit, v...))
+}
+
+// ExpiryDurationUnitNotIn applies the NotIn predicate on the "expiry_duration_unit" field.
+func ExpiryDurationUnitNotIn(vs ...types.CreditGrantExpiryDurationUnit) predicate.CreditGrant {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.CreditGrant(sql.FieldNotIn(FieldExpiryDurationUnit, v...))
+}
+
+// ExpiryDurationUnitGT applies the GT predicate on the "expiry_duration_unit" field.
+func ExpiryDurationUnitGT(v types.CreditGrantExpiryDurationUnit) predicate.CreditGrant {
+	vc := string(v)
+	return predicate.CreditGrant(sql.FieldGT(FieldExpiryDurationUnit, vc))
+}
+
+// ExpiryDurationUnitGTE applies the GTE predicate on the "expiry_duration_unit" field.
+func ExpiryDurationUnitGTE(v types.CreditGrantExpiryDurationUnit) predicate.CreditGrant {
+	vc := string(v)
+	return predicate.CreditGrant(sql.FieldGTE(FieldExpiryDurationUnit, vc))
+}
+
+// ExpiryDurationUnitLT applies the LT predicate on the "expiry_duration_unit" field.
+func ExpiryDurationUnitLT(v types.CreditGrantExpiryDurationUnit) predicate.CreditGrant {
+	vc := string(v)
+	return predicate.CreditGrant(sql.FieldLT(FieldExpiryDurationUnit, vc))
+}
+
+// ExpiryDurationUnitLTE applies the LTE predicate on the "expiry_duration_unit" field.
+func ExpiryDurationUnitLTE(v types.CreditGrantExpiryDurationUnit) predicate.CreditGrant {
+	vc := string(v)
+	return predicate.CreditGrant(sql.FieldLTE(FieldExpiryDurationUnit, vc))
+}
+
+// ExpiryDurationUnitContains applies the Contains predicate on the "expiry_duration_unit" field.
+func ExpiryDurationUnitContains(v types.CreditGrantExpiryDurationUnit) predicate.CreditGrant {
+	vc := string(v)
+	return predicate.CreditGrant(sql.FieldContains(FieldExpiryDurationUnit, vc))
+}
+
+// ExpiryDurationUnitHasPrefix applies the HasPrefix predicate on the "expiry_duration_unit" field.
+func ExpiryDurationUnitHasPrefix(v types.CreditGrantExpiryDurationUnit) predicate.CreditGrant {
+	vc := string(v)
+	return predicate.CreditGrant(sql.FieldHasPrefix(FieldExpiryDurationUnit, vc))
+}
+
+// ExpiryDurationUnitHasSuffix applies the HasSuffix predicate on the "expiry_duration_unit" field.
+func ExpiryDurationUnitHasSuffix(v types.CreditGrantExpiryDurationUnit) predicate.CreditGrant {
+	vc := string(v)
+	return predicate.CreditGrant(sql.FieldHasSuffix(FieldExpiryDurationUnit, vc))
+}
+
+// ExpiryDurationUnitIsNil applies the IsNil predicate on the "expiry_duration_unit" field.
+func ExpiryDurationUnitIsNil() predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldIsNull(FieldExpiryDurationUnit))
+}
+
+// ExpiryDurationUnitNotNil applies the NotNil predicate on the "expiry_duration_unit" field.
+func ExpiryDurationUnitNotNil() predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldNotNull(FieldExpiryDurationUnit))
+}
+
+// ExpiryDurationUnitEqualFold applies the EqualFold predicate on the "expiry_duration_unit" field.
+func ExpiryDurationUnitEqualFold(v types.CreditGrantExpiryDurationUnit) predicate.CreditGrant {
+	vc := string(v)
+	return predicate.CreditGrant(sql.FieldEqualFold(FieldExpiryDurationUnit, vc))
+}
+
+// ExpiryDurationUnitContainsFold applies the ContainsFold predicate on the "expiry_duration_unit" field.
+func ExpiryDurationUnitContainsFold(v types.CreditGrantExpiryDurationUnit) predicate.CreditGrant {
+	vc := string(v)
+	return predicate.CreditGrant(sql.FieldContainsFold(FieldExpiryDurationUnit, vc))
+}
+
+// ExpirationTypeEQ applies the EQ predicate on the "expiration_type" field.
+func ExpirationTypeEQ(v types.CreditGrantExpiryType) predicate.CreditGrant {
+	vc := string(v)
+	return predicate.CreditGrant(sql.FieldEQ(FieldExpirationType, vc))
+}
+
+// ExpirationTypeNEQ applies the NEQ predicate on the "expiration_type" field.
+func ExpirationTypeNEQ(v types.CreditGrantExpiryType) predicate.CreditGrant {
+	vc := string(v)
+	return predicate.CreditGrant(sql.FieldNEQ(FieldExpirationType, vc))
+}
+
+// ExpirationTypeIn applies the In predicate on the "expiration_type" field.
+func ExpirationTypeIn(vs ...types.CreditGrantExpiryType) predicate.CreditGrant {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.CreditGrant(sql.FieldIn(FieldExpirationType, v...))
+}
+
+// ExpirationTypeNotIn applies the NotIn predicate on the "expiration_type" field.
+func ExpirationTypeNotIn(vs ...types.CreditGrantExpiryType) predicate.CreditGrant {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.CreditGrant(sql.FieldNotIn(FieldExpirationType, v...))
+}
+
+// ExpirationTypeGT applies the GT predicate on the "expiration_type" field.
+func ExpirationTypeGT(v types.CreditGrantExpiryType) predicate.CreditGrant {
+	vc := string(v)
+	return predicate.CreditGrant(sql.FieldGT(FieldExpirationType, vc))
+}
+
+// ExpirationTypeGTE applies the GTE predicate on the "expiration_type" field.
+func ExpirationTypeGTE(v types.CreditGrantExpiryType) predicate.CreditGrant {
+	vc := string(v)
+	return predicate.CreditGrant(sql.FieldGTE(FieldExpirationType, vc))
+}
+
+// ExpirationTypeLT applies the LT predicate on the "expiration_type" field.
+func ExpirationTypeLT(v types.CreditGrantExpiryType) predicate.CreditGrant {
+	vc := string(v)
+	return predicate.CreditGrant(sql.FieldLT(FieldExpirationType, vc))
+}
+
+// ExpirationTypeLTE applies the LTE predicate on the "expiration_type" field.
+func ExpirationTypeLTE(v types.CreditGrantExpiryType) predicate.CreditGrant {
+	vc := string(v)
+	return predicate.CreditGrant(sql.FieldLTE(FieldExpirationType, vc))
+}
+
+// ExpirationTypeContains applies the Contains predicate on the "expiration_type" field.
+func ExpirationTypeContains(v types.CreditGrantExpiryType) predicate.CreditGrant {
+	vc := string(v)
+	return predicate.CreditGrant(sql.FieldContains(FieldExpirationType, vc))
+}
+
+// ExpirationTypeHasPrefix applies the HasPrefix predicate on the "expiration_type" field.
+func ExpirationTypeHasPrefix(v types.CreditGrantExpiryType) predicate.CreditGrant {
+	vc := string(v)
+	return predicate.CreditGrant(sql.FieldHasPrefix(FieldExpirationType, vc))
+}
+
+// ExpirationTypeHasSuffix applies the HasSuffix predicate on the "expiration_type" field.
+func ExpirationTypeHasSuffix(v types.CreditGrantExpiryType) predicate.CreditGrant {
+	vc := string(v)
+	return predicate.CreditGrant(sql.FieldHasSuffix(FieldExpirationType, vc))
+}
+
+// ExpirationTypeEqualFold applies the EqualFold predicate on the "expiration_type" field.
+func ExpirationTypeEqualFold(v types.CreditGrantExpiryType) predicate.CreditGrant {
+	vc := string(v)
+	return predicate.CreditGrant(sql.FieldEqualFold(FieldExpirationType, vc))
+}
+
+// ExpirationTypeContainsFold applies the ContainsFold predicate on the "expiration_type" field.
+func ExpirationTypeContainsFold(v types.CreditGrantExpiryType) predicate.CreditGrant {
+	vc := string(v)
+	return predicate.CreditGrant(sql.FieldContainsFold(FieldExpirationType, vc))
 }
 
 // PriorityEQ applies the EQ predicate on the "priority" field.

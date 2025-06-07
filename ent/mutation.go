@@ -14,6 +14,7 @@ import (
 	"github.com/flexprice/flexprice/ent/auth"
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/creditgrant"
+	"github.com/flexprice/flexprice/ent/creditgrantapplication"
 	"github.com/flexprice/flexprice/ent/customer"
 	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/ent/environment"
@@ -55,6 +56,7 @@ const (
 	TypeAuth                      = "Auth"
 	TypeBillingSequence           = "BillingSequence"
 	TypeCreditGrant               = "CreditGrant"
+	TypeCreditGrantApplication    = "CreditGrantApplication"
 	TypeCustomer                  = "Customer"
 	TypeEntitlement               = "Entitlement"
 	TypeEnvironment               = "Environment"
@@ -1257,37 +1259,39 @@ func (m *BillingSequenceMutation) ResetEdge(name string) error {
 // CreditGrantMutation represents an operation that mutates the CreditGrant nodes in the graph.
 type CreditGrantMutation struct {
 	config
-	op                  Op
-	typ                 string
-	id                  *string
-	tenant_id           *string
-	status              *string
-	created_at          *time.Time
-	updated_at          *time.Time
-	created_by          *string
-	updated_by          *string
-	environment_id      *string
-	name                *string
-	scope               *types.CreditGrantScope
-	amount              *decimal.Decimal
-	currency            *string
-	cadence             *types.CreditGrantCadence
-	period              *types.CreditGrantPeriod
-	period_count        *int
-	addperiod_count     *int
-	expire_in_days      *int
-	addexpire_in_days   *int
-	priority            *int
-	addpriority         *int
-	metadata            *map[string]string
-	clearedFields       map[string]struct{}
-	plan                *string
-	clearedplan         bool
-	subscription        *string
-	clearedsubscription bool
-	done                bool
-	oldValue            func(context.Context) (*CreditGrant, error)
-	predicates          []predicate.CreditGrant
+	op                   Op
+	typ                  string
+	id                   *string
+	tenant_id            *string
+	status               *string
+	created_at           *time.Time
+	updated_at           *time.Time
+	created_by           *string
+	updated_by           *string
+	environment_id       *string
+	name                 *string
+	scope                *types.CreditGrantScope
+	amount               *decimal.Decimal
+	currency             *string
+	cadence              *types.CreditGrantCadence
+	period               *types.CreditGrantPeriod
+	period_count         *int
+	addperiod_count      *int
+	expiry_duration      *int
+	addexpiry_duration   *int
+	expiry_duration_unit *types.CreditGrantExpiryDurationUnit
+	expiration_type      *types.CreditGrantExpiryType
+	priority             *int
+	addpriority          *int
+	metadata             *map[string]string
+	clearedFields        map[string]struct{}
+	plan                 *string
+	clearedplan          bool
+	subscription         *string
+	clearedsubscription  bool
+	done                 bool
+	oldValue             func(context.Context) (*CreditGrant, error)
+	predicates           []predicate.CreditGrant
 }
 
 var _ ent.Mutation = (*CreditGrantMutation)(nil)
@@ -2082,74 +2086,159 @@ func (m *CreditGrantMutation) ResetPeriodCount() {
 	delete(m.clearedFields, creditgrant.FieldPeriodCount)
 }
 
-// SetExpireInDays sets the "expire_in_days" field.
-func (m *CreditGrantMutation) SetExpireInDays(i int) {
-	m.expire_in_days = &i
-	m.addexpire_in_days = nil
+// SetExpiryDuration sets the "expiry_duration" field.
+func (m *CreditGrantMutation) SetExpiryDuration(i int) {
+	m.expiry_duration = &i
+	m.addexpiry_duration = nil
 }
 
-// ExpireInDays returns the value of the "expire_in_days" field in the mutation.
-func (m *CreditGrantMutation) ExpireInDays() (r int, exists bool) {
-	v := m.expire_in_days
+// ExpiryDuration returns the value of the "expiry_duration" field in the mutation.
+func (m *CreditGrantMutation) ExpiryDuration() (r int, exists bool) {
+	v := m.expiry_duration
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldExpireInDays returns the old "expire_in_days" field's value of the CreditGrant entity.
+// OldExpiryDuration returns the old "expiry_duration" field's value of the CreditGrant entity.
 // If the CreditGrant object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *CreditGrantMutation) OldExpireInDays(ctx context.Context) (v *int, err error) {
+func (m *CreditGrantMutation) OldExpiryDuration(ctx context.Context) (v *int, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldExpireInDays is only allowed on UpdateOne operations")
+		return v, errors.New("OldExpiryDuration is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldExpireInDays requires an ID field in the mutation")
+		return v, errors.New("OldExpiryDuration requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldExpireInDays: %w", err)
+		return v, fmt.Errorf("querying old value for OldExpiryDuration: %w", err)
 	}
-	return oldValue.ExpireInDays, nil
+	return oldValue.ExpiryDuration, nil
 }
 
-// AddExpireInDays adds i to the "expire_in_days" field.
-func (m *CreditGrantMutation) AddExpireInDays(i int) {
-	if m.addexpire_in_days != nil {
-		*m.addexpire_in_days += i
+// AddExpiryDuration adds i to the "expiry_duration" field.
+func (m *CreditGrantMutation) AddExpiryDuration(i int) {
+	if m.addexpiry_duration != nil {
+		*m.addexpiry_duration += i
 	} else {
-		m.addexpire_in_days = &i
+		m.addexpiry_duration = &i
 	}
 }
 
-// AddedExpireInDays returns the value that was added to the "expire_in_days" field in this mutation.
-func (m *CreditGrantMutation) AddedExpireInDays() (r int, exists bool) {
-	v := m.addexpire_in_days
+// AddedExpiryDuration returns the value that was added to the "expiry_duration" field in this mutation.
+func (m *CreditGrantMutation) AddedExpiryDuration() (r int, exists bool) {
+	v := m.addexpiry_duration
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// ClearExpireInDays clears the value of the "expire_in_days" field.
-func (m *CreditGrantMutation) ClearExpireInDays() {
-	m.expire_in_days = nil
-	m.addexpire_in_days = nil
-	m.clearedFields[creditgrant.FieldExpireInDays] = struct{}{}
+// ClearExpiryDuration clears the value of the "expiry_duration" field.
+func (m *CreditGrantMutation) ClearExpiryDuration() {
+	m.expiry_duration = nil
+	m.addexpiry_duration = nil
+	m.clearedFields[creditgrant.FieldExpiryDuration] = struct{}{}
 }
 
-// ExpireInDaysCleared returns if the "expire_in_days" field was cleared in this mutation.
-func (m *CreditGrantMutation) ExpireInDaysCleared() bool {
-	_, ok := m.clearedFields[creditgrant.FieldExpireInDays]
+// ExpiryDurationCleared returns if the "expiry_duration" field was cleared in this mutation.
+func (m *CreditGrantMutation) ExpiryDurationCleared() bool {
+	_, ok := m.clearedFields[creditgrant.FieldExpiryDuration]
 	return ok
 }
 
-// ResetExpireInDays resets all changes to the "expire_in_days" field.
-func (m *CreditGrantMutation) ResetExpireInDays() {
-	m.expire_in_days = nil
-	m.addexpire_in_days = nil
-	delete(m.clearedFields, creditgrant.FieldExpireInDays)
+// ResetExpiryDuration resets all changes to the "expiry_duration" field.
+func (m *CreditGrantMutation) ResetExpiryDuration() {
+	m.expiry_duration = nil
+	m.addexpiry_duration = nil
+	delete(m.clearedFields, creditgrant.FieldExpiryDuration)
+}
+
+// SetExpiryDurationUnit sets the "expiry_duration_unit" field.
+func (m *CreditGrantMutation) SetExpiryDurationUnit(tgedu types.CreditGrantExpiryDurationUnit) {
+	m.expiry_duration_unit = &tgedu
+}
+
+// ExpiryDurationUnit returns the value of the "expiry_duration_unit" field in the mutation.
+func (m *CreditGrantMutation) ExpiryDurationUnit() (r types.CreditGrantExpiryDurationUnit, exists bool) {
+	v := m.expiry_duration_unit
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExpiryDurationUnit returns the old "expiry_duration_unit" field's value of the CreditGrant entity.
+// If the CreditGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CreditGrantMutation) OldExpiryDurationUnit(ctx context.Context) (v *types.CreditGrantExpiryDurationUnit, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExpiryDurationUnit is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExpiryDurationUnit requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExpiryDurationUnit: %w", err)
+	}
+	return oldValue.ExpiryDurationUnit, nil
+}
+
+// ClearExpiryDurationUnit clears the value of the "expiry_duration_unit" field.
+func (m *CreditGrantMutation) ClearExpiryDurationUnit() {
+	m.expiry_duration_unit = nil
+	m.clearedFields[creditgrant.FieldExpiryDurationUnit] = struct{}{}
+}
+
+// ExpiryDurationUnitCleared returns if the "expiry_duration_unit" field was cleared in this mutation.
+func (m *CreditGrantMutation) ExpiryDurationUnitCleared() bool {
+	_, ok := m.clearedFields[creditgrant.FieldExpiryDurationUnit]
+	return ok
+}
+
+// ResetExpiryDurationUnit resets all changes to the "expiry_duration_unit" field.
+func (m *CreditGrantMutation) ResetExpiryDurationUnit() {
+	m.expiry_duration_unit = nil
+	delete(m.clearedFields, creditgrant.FieldExpiryDurationUnit)
+}
+
+// SetExpirationType sets the "expiration_type" field.
+func (m *CreditGrantMutation) SetExpirationType(tget types.CreditGrantExpiryType) {
+	m.expiration_type = &tget
+}
+
+// ExpirationType returns the value of the "expiration_type" field in the mutation.
+func (m *CreditGrantMutation) ExpirationType() (r types.CreditGrantExpiryType, exists bool) {
+	v := m.expiration_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExpirationType returns the old "expiration_type" field's value of the CreditGrant entity.
+// If the CreditGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CreditGrantMutation) OldExpirationType(ctx context.Context) (v types.CreditGrantExpiryType, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExpirationType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExpirationType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExpirationType: %w", err)
+	}
+	return oldValue.ExpirationType, nil
+}
+
+// ResetExpirationType resets all changes to the "expiration_type" field.
+func (m *CreditGrantMutation) ResetExpirationType() {
+	m.expiration_type = nil
 }
 
 // SetPriority sets the "priority" field.
@@ -2359,7 +2448,7 @@ func (m *CreditGrantMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CreditGrantMutation) Fields() []string {
-	fields := make([]string, 0, 19)
+	fields := make([]string, 0, 21)
 	if m.tenant_id != nil {
 		fields = append(fields, creditgrant.FieldTenantID)
 	}
@@ -2408,8 +2497,14 @@ func (m *CreditGrantMutation) Fields() []string {
 	if m.period_count != nil {
 		fields = append(fields, creditgrant.FieldPeriodCount)
 	}
-	if m.expire_in_days != nil {
-		fields = append(fields, creditgrant.FieldExpireInDays)
+	if m.expiry_duration != nil {
+		fields = append(fields, creditgrant.FieldExpiryDuration)
+	}
+	if m.expiry_duration_unit != nil {
+		fields = append(fields, creditgrant.FieldExpiryDurationUnit)
+	}
+	if m.expiration_type != nil {
+		fields = append(fields, creditgrant.FieldExpirationType)
 	}
 	if m.priority != nil {
 		fields = append(fields, creditgrant.FieldPriority)
@@ -2457,8 +2552,12 @@ func (m *CreditGrantMutation) Field(name string) (ent.Value, bool) {
 		return m.Period()
 	case creditgrant.FieldPeriodCount:
 		return m.PeriodCount()
-	case creditgrant.FieldExpireInDays:
-		return m.ExpireInDays()
+	case creditgrant.FieldExpiryDuration:
+		return m.ExpiryDuration()
+	case creditgrant.FieldExpiryDurationUnit:
+		return m.ExpiryDurationUnit()
+	case creditgrant.FieldExpirationType:
+		return m.ExpirationType()
 	case creditgrant.FieldPriority:
 		return m.Priority()
 	case creditgrant.FieldMetadata:
@@ -2504,8 +2603,12 @@ func (m *CreditGrantMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldPeriod(ctx)
 	case creditgrant.FieldPeriodCount:
 		return m.OldPeriodCount(ctx)
-	case creditgrant.FieldExpireInDays:
-		return m.OldExpireInDays(ctx)
+	case creditgrant.FieldExpiryDuration:
+		return m.OldExpiryDuration(ctx)
+	case creditgrant.FieldExpiryDurationUnit:
+		return m.OldExpiryDurationUnit(ctx)
+	case creditgrant.FieldExpirationType:
+		return m.OldExpirationType(ctx)
 	case creditgrant.FieldPriority:
 		return m.OldPriority(ctx)
 	case creditgrant.FieldMetadata:
@@ -2631,12 +2734,26 @@ func (m *CreditGrantMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetPeriodCount(v)
 		return nil
-	case creditgrant.FieldExpireInDays:
+	case creditgrant.FieldExpiryDuration:
 		v, ok := value.(int)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetExpireInDays(v)
+		m.SetExpiryDuration(v)
+		return nil
+	case creditgrant.FieldExpiryDurationUnit:
+		v, ok := value.(types.CreditGrantExpiryDurationUnit)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExpiryDurationUnit(v)
+		return nil
+	case creditgrant.FieldExpirationType:
+		v, ok := value.(types.CreditGrantExpiryType)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExpirationType(v)
 		return nil
 	case creditgrant.FieldPriority:
 		v, ok := value.(int)
@@ -2663,8 +2780,8 @@ func (m *CreditGrantMutation) AddedFields() []string {
 	if m.addperiod_count != nil {
 		fields = append(fields, creditgrant.FieldPeriodCount)
 	}
-	if m.addexpire_in_days != nil {
-		fields = append(fields, creditgrant.FieldExpireInDays)
+	if m.addexpiry_duration != nil {
+		fields = append(fields, creditgrant.FieldExpiryDuration)
 	}
 	if m.addpriority != nil {
 		fields = append(fields, creditgrant.FieldPriority)
@@ -2679,8 +2796,8 @@ func (m *CreditGrantMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
 	case creditgrant.FieldPeriodCount:
 		return m.AddedPeriodCount()
-	case creditgrant.FieldExpireInDays:
-		return m.AddedExpireInDays()
+	case creditgrant.FieldExpiryDuration:
+		return m.AddedExpiryDuration()
 	case creditgrant.FieldPriority:
 		return m.AddedPriority()
 	}
@@ -2699,12 +2816,12 @@ func (m *CreditGrantMutation) AddField(name string, value ent.Value) error {
 		}
 		m.AddPeriodCount(v)
 		return nil
-	case creditgrant.FieldExpireInDays:
+	case creditgrant.FieldExpiryDuration:
 		v, ok := value.(int)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.AddExpireInDays(v)
+		m.AddExpiryDuration(v)
 		return nil
 	case creditgrant.FieldPriority:
 		v, ok := value.(int)
@@ -2742,8 +2859,11 @@ func (m *CreditGrantMutation) ClearedFields() []string {
 	if m.FieldCleared(creditgrant.FieldPeriodCount) {
 		fields = append(fields, creditgrant.FieldPeriodCount)
 	}
-	if m.FieldCleared(creditgrant.FieldExpireInDays) {
-		fields = append(fields, creditgrant.FieldExpireInDays)
+	if m.FieldCleared(creditgrant.FieldExpiryDuration) {
+		fields = append(fields, creditgrant.FieldExpiryDuration)
+	}
+	if m.FieldCleared(creditgrant.FieldExpiryDurationUnit) {
+		fields = append(fields, creditgrant.FieldExpiryDurationUnit)
 	}
 	if m.FieldCleared(creditgrant.FieldPriority) {
 		fields = append(fields, creditgrant.FieldPriority)
@@ -2786,8 +2906,11 @@ func (m *CreditGrantMutation) ClearField(name string) error {
 	case creditgrant.FieldPeriodCount:
 		m.ClearPeriodCount()
 		return nil
-	case creditgrant.FieldExpireInDays:
-		m.ClearExpireInDays()
+	case creditgrant.FieldExpiryDuration:
+		m.ClearExpiryDuration()
+		return nil
+	case creditgrant.FieldExpiryDurationUnit:
+		m.ClearExpiryDurationUnit()
 		return nil
 	case creditgrant.FieldPriority:
 		m.ClearPriority()
@@ -2851,8 +2974,14 @@ func (m *CreditGrantMutation) ResetField(name string) error {
 	case creditgrant.FieldPeriodCount:
 		m.ResetPeriodCount()
 		return nil
-	case creditgrant.FieldExpireInDays:
-		m.ResetExpireInDays()
+	case creditgrant.FieldExpiryDuration:
+		m.ResetExpiryDuration()
+		return nil
+	case creditgrant.FieldExpiryDurationUnit:
+		m.ResetExpiryDurationUnit()
+		return nil
+	case creditgrant.FieldExpirationType:
+		m.ResetExpirationType()
 		return nil
 	case creditgrant.FieldPriority:
 		m.ResetPriority()
@@ -2954,6 +3083,1676 @@ func (m *CreditGrantMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown CreditGrant edge %s", name)
+}
+
+// CreditGrantApplicationMutation represents an operation that mutates the CreditGrantApplication nodes in the graph.
+type CreditGrantApplicationMutation struct {
+	config
+	op                                 Op
+	typ                                string
+	id                                 *string
+	tenant_id                          *string
+	status                             *string
+	created_at                         *time.Time
+	updated_at                         *time.Time
+	created_by                         *string
+	updated_by                         *string
+	environment_id                     *string
+	credit_grant_id                    *string
+	subscription_id                    *string
+	scheduled_for                      *time.Time
+	applied_at                         *time.Time
+	billing_period_start               *time.Time
+	billing_period_end                 *time.Time
+	amount_applied                     *decimal.Decimal
+	currency                           *string
+	application_reason                 *string
+	subscription_status_at_application *string
+	is_prorated                        *bool
+	proration_factor                   *decimal.Decimal
+	full_period_amount                 *decimal.Decimal
+	retry_count                        *int
+	addretry_count                     *int
+	failure_reason                     *string
+	next_retry_at                      *time.Time
+	metadata                           *types.Metadata
+	clearedFields                      map[string]struct{}
+	done                               bool
+	oldValue                           func(context.Context) (*CreditGrantApplication, error)
+	predicates                         []predicate.CreditGrantApplication
+}
+
+var _ ent.Mutation = (*CreditGrantApplicationMutation)(nil)
+
+// creditgrantapplicationOption allows management of the mutation configuration using functional options.
+type creditgrantapplicationOption func(*CreditGrantApplicationMutation)
+
+// newCreditGrantApplicationMutation creates new mutation for the CreditGrantApplication entity.
+func newCreditGrantApplicationMutation(c config, op Op, opts ...creditgrantapplicationOption) *CreditGrantApplicationMutation {
+	m := &CreditGrantApplicationMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeCreditGrantApplication,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withCreditGrantApplicationID sets the ID field of the mutation.
+func withCreditGrantApplicationID(id string) creditgrantapplicationOption {
+	return func(m *CreditGrantApplicationMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *CreditGrantApplication
+		)
+		m.oldValue = func(ctx context.Context) (*CreditGrantApplication, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().CreditGrantApplication.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withCreditGrantApplication sets the old CreditGrantApplication of the mutation.
+func withCreditGrantApplication(node *CreditGrantApplication) creditgrantapplicationOption {
+	return func(m *CreditGrantApplicationMutation) {
+		m.oldValue = func(context.Context) (*CreditGrantApplication, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m CreditGrantApplicationMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m CreditGrantApplicationMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of CreditGrantApplication entities.
+func (m *CreditGrantApplicationMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *CreditGrantApplicationMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *CreditGrantApplicationMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().CreditGrantApplication.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (m *CreditGrantApplicationMutation) SetTenantID(s string) {
+	m.tenant_id = &s
+}
+
+// TenantID returns the value of the "tenant_id" field in the mutation.
+func (m *CreditGrantApplicationMutation) TenantID() (r string, exists bool) {
+	v := m.tenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTenantID returns the old "tenant_id" field's value of the CreditGrantApplication entity.
+// If the CreditGrantApplication object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CreditGrantApplicationMutation) OldTenantID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTenantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
+	}
+	return oldValue.TenantID, nil
+}
+
+// ResetTenantID resets all changes to the "tenant_id" field.
+func (m *CreditGrantApplicationMutation) ResetTenantID() {
+	m.tenant_id = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *CreditGrantApplicationMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *CreditGrantApplicationMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the CreditGrantApplication entity.
+// If the CreditGrantApplication object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CreditGrantApplicationMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *CreditGrantApplicationMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *CreditGrantApplicationMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *CreditGrantApplicationMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the CreditGrantApplication entity.
+// If the CreditGrantApplication object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CreditGrantApplicationMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *CreditGrantApplicationMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *CreditGrantApplicationMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *CreditGrantApplicationMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the CreditGrantApplication entity.
+// If the CreditGrantApplication object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CreditGrantApplicationMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *CreditGrantApplicationMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *CreditGrantApplicationMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *CreditGrantApplicationMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the CreditGrantApplication entity.
+// If the CreditGrantApplication object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CreditGrantApplicationMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (m *CreditGrantApplicationMutation) ClearCreatedBy() {
+	m.created_by = nil
+	m.clearedFields[creditgrantapplication.FieldCreatedBy] = struct{}{}
+}
+
+// CreatedByCleared returns if the "created_by" field was cleared in this mutation.
+func (m *CreditGrantApplicationMutation) CreatedByCleared() bool {
+	_, ok := m.clearedFields[creditgrantapplication.FieldCreatedBy]
+	return ok
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *CreditGrantApplicationMutation) ResetCreatedBy() {
+	m.created_by = nil
+	delete(m.clearedFields, creditgrantapplication.FieldCreatedBy)
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (m *CreditGrantApplicationMutation) SetUpdatedBy(s string) {
+	m.updated_by = &s
+}
+
+// UpdatedBy returns the value of the "updated_by" field in the mutation.
+func (m *CreditGrantApplicationMutation) UpdatedBy() (r string, exists bool) {
+	v := m.updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedBy returns the old "updated_by" field's value of the CreditGrantApplication entity.
+// If the CreditGrantApplication object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CreditGrantApplicationMutation) OldUpdatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
+	}
+	return oldValue.UpdatedBy, nil
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (m *CreditGrantApplicationMutation) ClearUpdatedBy() {
+	m.updated_by = nil
+	m.clearedFields[creditgrantapplication.FieldUpdatedBy] = struct{}{}
+}
+
+// UpdatedByCleared returns if the "updated_by" field was cleared in this mutation.
+func (m *CreditGrantApplicationMutation) UpdatedByCleared() bool {
+	_, ok := m.clearedFields[creditgrantapplication.FieldUpdatedBy]
+	return ok
+}
+
+// ResetUpdatedBy resets all changes to the "updated_by" field.
+func (m *CreditGrantApplicationMutation) ResetUpdatedBy() {
+	m.updated_by = nil
+	delete(m.clearedFields, creditgrantapplication.FieldUpdatedBy)
+}
+
+// SetEnvironmentID sets the "environment_id" field.
+func (m *CreditGrantApplicationMutation) SetEnvironmentID(s string) {
+	m.environment_id = &s
+}
+
+// EnvironmentID returns the value of the "environment_id" field in the mutation.
+func (m *CreditGrantApplicationMutation) EnvironmentID() (r string, exists bool) {
+	v := m.environment_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnvironmentID returns the old "environment_id" field's value of the CreditGrantApplication entity.
+// If the CreditGrantApplication object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CreditGrantApplicationMutation) OldEnvironmentID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnvironmentID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnvironmentID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnvironmentID: %w", err)
+	}
+	return oldValue.EnvironmentID, nil
+}
+
+// ClearEnvironmentID clears the value of the "environment_id" field.
+func (m *CreditGrantApplicationMutation) ClearEnvironmentID() {
+	m.environment_id = nil
+	m.clearedFields[creditgrantapplication.FieldEnvironmentID] = struct{}{}
+}
+
+// EnvironmentIDCleared returns if the "environment_id" field was cleared in this mutation.
+func (m *CreditGrantApplicationMutation) EnvironmentIDCleared() bool {
+	_, ok := m.clearedFields[creditgrantapplication.FieldEnvironmentID]
+	return ok
+}
+
+// ResetEnvironmentID resets all changes to the "environment_id" field.
+func (m *CreditGrantApplicationMutation) ResetEnvironmentID() {
+	m.environment_id = nil
+	delete(m.clearedFields, creditgrantapplication.FieldEnvironmentID)
+}
+
+// SetCreditGrantID sets the "credit_grant_id" field.
+func (m *CreditGrantApplicationMutation) SetCreditGrantID(s string) {
+	m.credit_grant_id = &s
+}
+
+// CreditGrantID returns the value of the "credit_grant_id" field in the mutation.
+func (m *CreditGrantApplicationMutation) CreditGrantID() (r string, exists bool) {
+	v := m.credit_grant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreditGrantID returns the old "credit_grant_id" field's value of the CreditGrantApplication entity.
+// If the CreditGrantApplication object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CreditGrantApplicationMutation) OldCreditGrantID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreditGrantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreditGrantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreditGrantID: %w", err)
+	}
+	return oldValue.CreditGrantID, nil
+}
+
+// ResetCreditGrantID resets all changes to the "credit_grant_id" field.
+func (m *CreditGrantApplicationMutation) ResetCreditGrantID() {
+	m.credit_grant_id = nil
+}
+
+// SetSubscriptionID sets the "subscription_id" field.
+func (m *CreditGrantApplicationMutation) SetSubscriptionID(s string) {
+	m.subscription_id = &s
+}
+
+// SubscriptionID returns the value of the "subscription_id" field in the mutation.
+func (m *CreditGrantApplicationMutation) SubscriptionID() (r string, exists bool) {
+	v := m.subscription_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubscriptionID returns the old "subscription_id" field's value of the CreditGrantApplication entity.
+// If the CreditGrantApplication object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CreditGrantApplicationMutation) OldSubscriptionID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubscriptionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubscriptionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubscriptionID: %w", err)
+	}
+	return oldValue.SubscriptionID, nil
+}
+
+// ResetSubscriptionID resets all changes to the "subscription_id" field.
+func (m *CreditGrantApplicationMutation) ResetSubscriptionID() {
+	m.subscription_id = nil
+}
+
+// SetScheduledFor sets the "scheduled_for" field.
+func (m *CreditGrantApplicationMutation) SetScheduledFor(t time.Time) {
+	m.scheduled_for = &t
+}
+
+// ScheduledFor returns the value of the "scheduled_for" field in the mutation.
+func (m *CreditGrantApplicationMutation) ScheduledFor() (r time.Time, exists bool) {
+	v := m.scheduled_for
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldScheduledFor returns the old "scheduled_for" field's value of the CreditGrantApplication entity.
+// If the CreditGrantApplication object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CreditGrantApplicationMutation) OldScheduledFor(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldScheduledFor is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldScheduledFor requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldScheduledFor: %w", err)
+	}
+	return oldValue.ScheduledFor, nil
+}
+
+// ResetScheduledFor resets all changes to the "scheduled_for" field.
+func (m *CreditGrantApplicationMutation) ResetScheduledFor() {
+	m.scheduled_for = nil
+}
+
+// SetAppliedAt sets the "applied_at" field.
+func (m *CreditGrantApplicationMutation) SetAppliedAt(t time.Time) {
+	m.applied_at = &t
+}
+
+// AppliedAt returns the value of the "applied_at" field in the mutation.
+func (m *CreditGrantApplicationMutation) AppliedAt() (r time.Time, exists bool) {
+	v := m.applied_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAppliedAt returns the old "applied_at" field's value of the CreditGrantApplication entity.
+// If the CreditGrantApplication object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CreditGrantApplicationMutation) OldAppliedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAppliedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAppliedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAppliedAt: %w", err)
+	}
+	return oldValue.AppliedAt, nil
+}
+
+// ResetAppliedAt resets all changes to the "applied_at" field.
+func (m *CreditGrantApplicationMutation) ResetAppliedAt() {
+	m.applied_at = nil
+}
+
+// SetBillingPeriodStart sets the "billing_period_start" field.
+func (m *CreditGrantApplicationMutation) SetBillingPeriodStart(t time.Time) {
+	m.billing_period_start = &t
+}
+
+// BillingPeriodStart returns the value of the "billing_period_start" field in the mutation.
+func (m *CreditGrantApplicationMutation) BillingPeriodStart() (r time.Time, exists bool) {
+	v := m.billing_period_start
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBillingPeriodStart returns the old "billing_period_start" field's value of the CreditGrantApplication entity.
+// If the CreditGrantApplication object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CreditGrantApplicationMutation) OldBillingPeriodStart(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBillingPeriodStart is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBillingPeriodStart requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBillingPeriodStart: %w", err)
+	}
+	return oldValue.BillingPeriodStart, nil
+}
+
+// ResetBillingPeriodStart resets all changes to the "billing_period_start" field.
+func (m *CreditGrantApplicationMutation) ResetBillingPeriodStart() {
+	m.billing_period_start = nil
+}
+
+// SetBillingPeriodEnd sets the "billing_period_end" field.
+func (m *CreditGrantApplicationMutation) SetBillingPeriodEnd(t time.Time) {
+	m.billing_period_end = &t
+}
+
+// BillingPeriodEnd returns the value of the "billing_period_end" field in the mutation.
+func (m *CreditGrantApplicationMutation) BillingPeriodEnd() (r time.Time, exists bool) {
+	v := m.billing_period_end
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBillingPeriodEnd returns the old "billing_period_end" field's value of the CreditGrantApplication entity.
+// If the CreditGrantApplication object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CreditGrantApplicationMutation) OldBillingPeriodEnd(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBillingPeriodEnd is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBillingPeriodEnd requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBillingPeriodEnd: %w", err)
+	}
+	return oldValue.BillingPeriodEnd, nil
+}
+
+// ResetBillingPeriodEnd resets all changes to the "billing_period_end" field.
+func (m *CreditGrantApplicationMutation) ResetBillingPeriodEnd() {
+	m.billing_period_end = nil
+}
+
+// SetAmountApplied sets the "amount_applied" field.
+func (m *CreditGrantApplicationMutation) SetAmountApplied(d decimal.Decimal) {
+	m.amount_applied = &d
+}
+
+// AmountApplied returns the value of the "amount_applied" field in the mutation.
+func (m *CreditGrantApplicationMutation) AmountApplied() (r decimal.Decimal, exists bool) {
+	v := m.amount_applied
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAmountApplied returns the old "amount_applied" field's value of the CreditGrantApplication entity.
+// If the CreditGrantApplication object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CreditGrantApplicationMutation) OldAmountApplied(ctx context.Context) (v decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAmountApplied is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAmountApplied requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAmountApplied: %w", err)
+	}
+	return oldValue.AmountApplied, nil
+}
+
+// ResetAmountApplied resets all changes to the "amount_applied" field.
+func (m *CreditGrantApplicationMutation) ResetAmountApplied() {
+	m.amount_applied = nil
+}
+
+// SetCurrency sets the "currency" field.
+func (m *CreditGrantApplicationMutation) SetCurrency(s string) {
+	m.currency = &s
+}
+
+// Currency returns the value of the "currency" field in the mutation.
+func (m *CreditGrantApplicationMutation) Currency() (r string, exists bool) {
+	v := m.currency
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCurrency returns the old "currency" field's value of the CreditGrantApplication entity.
+// If the CreditGrantApplication object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CreditGrantApplicationMutation) OldCurrency(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCurrency is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCurrency requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCurrency: %w", err)
+	}
+	return oldValue.Currency, nil
+}
+
+// ResetCurrency resets all changes to the "currency" field.
+func (m *CreditGrantApplicationMutation) ResetCurrency() {
+	m.currency = nil
+}
+
+// SetApplicationReason sets the "application_reason" field.
+func (m *CreditGrantApplicationMutation) SetApplicationReason(s string) {
+	m.application_reason = &s
+}
+
+// ApplicationReason returns the value of the "application_reason" field in the mutation.
+func (m *CreditGrantApplicationMutation) ApplicationReason() (r string, exists bool) {
+	v := m.application_reason
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldApplicationReason returns the old "application_reason" field's value of the CreditGrantApplication entity.
+// If the CreditGrantApplication object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CreditGrantApplicationMutation) OldApplicationReason(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldApplicationReason is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldApplicationReason requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldApplicationReason: %w", err)
+	}
+	return oldValue.ApplicationReason, nil
+}
+
+// ResetApplicationReason resets all changes to the "application_reason" field.
+func (m *CreditGrantApplicationMutation) ResetApplicationReason() {
+	m.application_reason = nil
+}
+
+// SetSubscriptionStatusAtApplication sets the "subscription_status_at_application" field.
+func (m *CreditGrantApplicationMutation) SetSubscriptionStatusAtApplication(s string) {
+	m.subscription_status_at_application = &s
+}
+
+// SubscriptionStatusAtApplication returns the value of the "subscription_status_at_application" field in the mutation.
+func (m *CreditGrantApplicationMutation) SubscriptionStatusAtApplication() (r string, exists bool) {
+	v := m.subscription_status_at_application
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubscriptionStatusAtApplication returns the old "subscription_status_at_application" field's value of the CreditGrantApplication entity.
+// If the CreditGrantApplication object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CreditGrantApplicationMutation) OldSubscriptionStatusAtApplication(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubscriptionStatusAtApplication is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubscriptionStatusAtApplication requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubscriptionStatusAtApplication: %w", err)
+	}
+	return oldValue.SubscriptionStatusAtApplication, nil
+}
+
+// ResetSubscriptionStatusAtApplication resets all changes to the "subscription_status_at_application" field.
+func (m *CreditGrantApplicationMutation) ResetSubscriptionStatusAtApplication() {
+	m.subscription_status_at_application = nil
+}
+
+// SetIsProrated sets the "is_prorated" field.
+func (m *CreditGrantApplicationMutation) SetIsProrated(b bool) {
+	m.is_prorated = &b
+}
+
+// IsProrated returns the value of the "is_prorated" field in the mutation.
+func (m *CreditGrantApplicationMutation) IsProrated() (r bool, exists bool) {
+	v := m.is_prorated
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIsProrated returns the old "is_prorated" field's value of the CreditGrantApplication entity.
+// If the CreditGrantApplication object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CreditGrantApplicationMutation) OldIsProrated(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIsProrated is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIsProrated requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIsProrated: %w", err)
+	}
+	return oldValue.IsProrated, nil
+}
+
+// ResetIsProrated resets all changes to the "is_prorated" field.
+func (m *CreditGrantApplicationMutation) ResetIsProrated() {
+	m.is_prorated = nil
+}
+
+// SetProrationFactor sets the "proration_factor" field.
+func (m *CreditGrantApplicationMutation) SetProrationFactor(d decimal.Decimal) {
+	m.proration_factor = &d
+}
+
+// ProrationFactor returns the value of the "proration_factor" field in the mutation.
+func (m *CreditGrantApplicationMutation) ProrationFactor() (r decimal.Decimal, exists bool) {
+	v := m.proration_factor
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProrationFactor returns the old "proration_factor" field's value of the CreditGrantApplication entity.
+// If the CreditGrantApplication object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CreditGrantApplicationMutation) OldProrationFactor(ctx context.Context) (v decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProrationFactor is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProrationFactor requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProrationFactor: %w", err)
+	}
+	return oldValue.ProrationFactor, nil
+}
+
+// ResetProrationFactor resets all changes to the "proration_factor" field.
+func (m *CreditGrantApplicationMutation) ResetProrationFactor() {
+	m.proration_factor = nil
+}
+
+// SetFullPeriodAmount sets the "full_period_amount" field.
+func (m *CreditGrantApplicationMutation) SetFullPeriodAmount(d decimal.Decimal) {
+	m.full_period_amount = &d
+}
+
+// FullPeriodAmount returns the value of the "full_period_amount" field in the mutation.
+func (m *CreditGrantApplicationMutation) FullPeriodAmount() (r decimal.Decimal, exists bool) {
+	v := m.full_period_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFullPeriodAmount returns the old "full_period_amount" field's value of the CreditGrantApplication entity.
+// If the CreditGrantApplication object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CreditGrantApplicationMutation) OldFullPeriodAmount(ctx context.Context) (v decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFullPeriodAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFullPeriodAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFullPeriodAmount: %w", err)
+	}
+	return oldValue.FullPeriodAmount, nil
+}
+
+// ResetFullPeriodAmount resets all changes to the "full_period_amount" field.
+func (m *CreditGrantApplicationMutation) ResetFullPeriodAmount() {
+	m.full_period_amount = nil
+}
+
+// SetRetryCount sets the "retry_count" field.
+func (m *CreditGrantApplicationMutation) SetRetryCount(i int) {
+	m.retry_count = &i
+	m.addretry_count = nil
+}
+
+// RetryCount returns the value of the "retry_count" field in the mutation.
+func (m *CreditGrantApplicationMutation) RetryCount() (r int, exists bool) {
+	v := m.retry_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRetryCount returns the old "retry_count" field's value of the CreditGrantApplication entity.
+// If the CreditGrantApplication object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CreditGrantApplicationMutation) OldRetryCount(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRetryCount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRetryCount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRetryCount: %w", err)
+	}
+	return oldValue.RetryCount, nil
+}
+
+// AddRetryCount adds i to the "retry_count" field.
+func (m *CreditGrantApplicationMutation) AddRetryCount(i int) {
+	if m.addretry_count != nil {
+		*m.addretry_count += i
+	} else {
+		m.addretry_count = &i
+	}
+}
+
+// AddedRetryCount returns the value that was added to the "retry_count" field in this mutation.
+func (m *CreditGrantApplicationMutation) AddedRetryCount() (r int, exists bool) {
+	v := m.addretry_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetRetryCount resets all changes to the "retry_count" field.
+func (m *CreditGrantApplicationMutation) ResetRetryCount() {
+	m.retry_count = nil
+	m.addretry_count = nil
+}
+
+// SetFailureReason sets the "failure_reason" field.
+func (m *CreditGrantApplicationMutation) SetFailureReason(s string) {
+	m.failure_reason = &s
+}
+
+// FailureReason returns the value of the "failure_reason" field in the mutation.
+func (m *CreditGrantApplicationMutation) FailureReason() (r string, exists bool) {
+	v := m.failure_reason
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFailureReason returns the old "failure_reason" field's value of the CreditGrantApplication entity.
+// If the CreditGrantApplication object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CreditGrantApplicationMutation) OldFailureReason(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFailureReason is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFailureReason requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFailureReason: %w", err)
+	}
+	return oldValue.FailureReason, nil
+}
+
+// ResetFailureReason resets all changes to the "failure_reason" field.
+func (m *CreditGrantApplicationMutation) ResetFailureReason() {
+	m.failure_reason = nil
+}
+
+// SetNextRetryAt sets the "next_retry_at" field.
+func (m *CreditGrantApplicationMutation) SetNextRetryAt(t time.Time) {
+	m.next_retry_at = &t
+}
+
+// NextRetryAt returns the value of the "next_retry_at" field in the mutation.
+func (m *CreditGrantApplicationMutation) NextRetryAt() (r time.Time, exists bool) {
+	v := m.next_retry_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNextRetryAt returns the old "next_retry_at" field's value of the CreditGrantApplication entity.
+// If the CreditGrantApplication object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CreditGrantApplicationMutation) OldNextRetryAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNextRetryAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNextRetryAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNextRetryAt: %w", err)
+	}
+	return oldValue.NextRetryAt, nil
+}
+
+// ResetNextRetryAt resets all changes to the "next_retry_at" field.
+func (m *CreditGrantApplicationMutation) ResetNextRetryAt() {
+	m.next_retry_at = nil
+}
+
+// SetMetadata sets the "metadata" field.
+func (m *CreditGrantApplicationMutation) SetMetadata(t types.Metadata) {
+	m.metadata = &t
+}
+
+// Metadata returns the value of the "metadata" field in the mutation.
+func (m *CreditGrantApplicationMutation) Metadata() (r types.Metadata, exists bool) {
+	v := m.metadata
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMetadata returns the old "metadata" field's value of the CreditGrantApplication entity.
+// If the CreditGrantApplication object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CreditGrantApplicationMutation) OldMetadata(ctx context.Context) (v types.Metadata, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMetadata is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMetadata requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMetadata: %w", err)
+	}
+	return oldValue.Metadata, nil
+}
+
+// ResetMetadata resets all changes to the "metadata" field.
+func (m *CreditGrantApplicationMutation) ResetMetadata() {
+	m.metadata = nil
+}
+
+// Where appends a list predicates to the CreditGrantApplicationMutation builder.
+func (m *CreditGrantApplicationMutation) Where(ps ...predicate.CreditGrantApplication) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the CreditGrantApplicationMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *CreditGrantApplicationMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.CreditGrantApplication, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *CreditGrantApplicationMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *CreditGrantApplicationMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (CreditGrantApplication).
+func (m *CreditGrantApplicationMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *CreditGrantApplicationMutation) Fields() []string {
+	fields := make([]string, 0, 24)
+	if m.tenant_id != nil {
+		fields = append(fields, creditgrantapplication.FieldTenantID)
+	}
+	if m.status != nil {
+		fields = append(fields, creditgrantapplication.FieldStatus)
+	}
+	if m.created_at != nil {
+		fields = append(fields, creditgrantapplication.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, creditgrantapplication.FieldUpdatedAt)
+	}
+	if m.created_by != nil {
+		fields = append(fields, creditgrantapplication.FieldCreatedBy)
+	}
+	if m.updated_by != nil {
+		fields = append(fields, creditgrantapplication.FieldUpdatedBy)
+	}
+	if m.environment_id != nil {
+		fields = append(fields, creditgrantapplication.FieldEnvironmentID)
+	}
+	if m.credit_grant_id != nil {
+		fields = append(fields, creditgrantapplication.FieldCreditGrantID)
+	}
+	if m.subscription_id != nil {
+		fields = append(fields, creditgrantapplication.FieldSubscriptionID)
+	}
+	if m.scheduled_for != nil {
+		fields = append(fields, creditgrantapplication.FieldScheduledFor)
+	}
+	if m.applied_at != nil {
+		fields = append(fields, creditgrantapplication.FieldAppliedAt)
+	}
+	if m.billing_period_start != nil {
+		fields = append(fields, creditgrantapplication.FieldBillingPeriodStart)
+	}
+	if m.billing_period_end != nil {
+		fields = append(fields, creditgrantapplication.FieldBillingPeriodEnd)
+	}
+	if m.amount_applied != nil {
+		fields = append(fields, creditgrantapplication.FieldAmountApplied)
+	}
+	if m.currency != nil {
+		fields = append(fields, creditgrantapplication.FieldCurrency)
+	}
+	if m.application_reason != nil {
+		fields = append(fields, creditgrantapplication.FieldApplicationReason)
+	}
+	if m.subscription_status_at_application != nil {
+		fields = append(fields, creditgrantapplication.FieldSubscriptionStatusAtApplication)
+	}
+	if m.is_prorated != nil {
+		fields = append(fields, creditgrantapplication.FieldIsProrated)
+	}
+	if m.proration_factor != nil {
+		fields = append(fields, creditgrantapplication.FieldProrationFactor)
+	}
+	if m.full_period_amount != nil {
+		fields = append(fields, creditgrantapplication.FieldFullPeriodAmount)
+	}
+	if m.retry_count != nil {
+		fields = append(fields, creditgrantapplication.FieldRetryCount)
+	}
+	if m.failure_reason != nil {
+		fields = append(fields, creditgrantapplication.FieldFailureReason)
+	}
+	if m.next_retry_at != nil {
+		fields = append(fields, creditgrantapplication.FieldNextRetryAt)
+	}
+	if m.metadata != nil {
+		fields = append(fields, creditgrantapplication.FieldMetadata)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *CreditGrantApplicationMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case creditgrantapplication.FieldTenantID:
+		return m.TenantID()
+	case creditgrantapplication.FieldStatus:
+		return m.Status()
+	case creditgrantapplication.FieldCreatedAt:
+		return m.CreatedAt()
+	case creditgrantapplication.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case creditgrantapplication.FieldCreatedBy:
+		return m.CreatedBy()
+	case creditgrantapplication.FieldUpdatedBy:
+		return m.UpdatedBy()
+	case creditgrantapplication.FieldEnvironmentID:
+		return m.EnvironmentID()
+	case creditgrantapplication.FieldCreditGrantID:
+		return m.CreditGrantID()
+	case creditgrantapplication.FieldSubscriptionID:
+		return m.SubscriptionID()
+	case creditgrantapplication.FieldScheduledFor:
+		return m.ScheduledFor()
+	case creditgrantapplication.FieldAppliedAt:
+		return m.AppliedAt()
+	case creditgrantapplication.FieldBillingPeriodStart:
+		return m.BillingPeriodStart()
+	case creditgrantapplication.FieldBillingPeriodEnd:
+		return m.BillingPeriodEnd()
+	case creditgrantapplication.FieldAmountApplied:
+		return m.AmountApplied()
+	case creditgrantapplication.FieldCurrency:
+		return m.Currency()
+	case creditgrantapplication.FieldApplicationReason:
+		return m.ApplicationReason()
+	case creditgrantapplication.FieldSubscriptionStatusAtApplication:
+		return m.SubscriptionStatusAtApplication()
+	case creditgrantapplication.FieldIsProrated:
+		return m.IsProrated()
+	case creditgrantapplication.FieldProrationFactor:
+		return m.ProrationFactor()
+	case creditgrantapplication.FieldFullPeriodAmount:
+		return m.FullPeriodAmount()
+	case creditgrantapplication.FieldRetryCount:
+		return m.RetryCount()
+	case creditgrantapplication.FieldFailureReason:
+		return m.FailureReason()
+	case creditgrantapplication.FieldNextRetryAt:
+		return m.NextRetryAt()
+	case creditgrantapplication.FieldMetadata:
+		return m.Metadata()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *CreditGrantApplicationMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case creditgrantapplication.FieldTenantID:
+		return m.OldTenantID(ctx)
+	case creditgrantapplication.FieldStatus:
+		return m.OldStatus(ctx)
+	case creditgrantapplication.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case creditgrantapplication.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case creditgrantapplication.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case creditgrantapplication.FieldUpdatedBy:
+		return m.OldUpdatedBy(ctx)
+	case creditgrantapplication.FieldEnvironmentID:
+		return m.OldEnvironmentID(ctx)
+	case creditgrantapplication.FieldCreditGrantID:
+		return m.OldCreditGrantID(ctx)
+	case creditgrantapplication.FieldSubscriptionID:
+		return m.OldSubscriptionID(ctx)
+	case creditgrantapplication.FieldScheduledFor:
+		return m.OldScheduledFor(ctx)
+	case creditgrantapplication.FieldAppliedAt:
+		return m.OldAppliedAt(ctx)
+	case creditgrantapplication.FieldBillingPeriodStart:
+		return m.OldBillingPeriodStart(ctx)
+	case creditgrantapplication.FieldBillingPeriodEnd:
+		return m.OldBillingPeriodEnd(ctx)
+	case creditgrantapplication.FieldAmountApplied:
+		return m.OldAmountApplied(ctx)
+	case creditgrantapplication.FieldCurrency:
+		return m.OldCurrency(ctx)
+	case creditgrantapplication.FieldApplicationReason:
+		return m.OldApplicationReason(ctx)
+	case creditgrantapplication.FieldSubscriptionStatusAtApplication:
+		return m.OldSubscriptionStatusAtApplication(ctx)
+	case creditgrantapplication.FieldIsProrated:
+		return m.OldIsProrated(ctx)
+	case creditgrantapplication.FieldProrationFactor:
+		return m.OldProrationFactor(ctx)
+	case creditgrantapplication.FieldFullPeriodAmount:
+		return m.OldFullPeriodAmount(ctx)
+	case creditgrantapplication.FieldRetryCount:
+		return m.OldRetryCount(ctx)
+	case creditgrantapplication.FieldFailureReason:
+		return m.OldFailureReason(ctx)
+	case creditgrantapplication.FieldNextRetryAt:
+		return m.OldNextRetryAt(ctx)
+	case creditgrantapplication.FieldMetadata:
+		return m.OldMetadata(ctx)
+	}
+	return nil, fmt.Errorf("unknown CreditGrantApplication field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CreditGrantApplicationMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case creditgrantapplication.FieldTenantID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTenantID(v)
+		return nil
+	case creditgrantapplication.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case creditgrantapplication.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case creditgrantapplication.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case creditgrantapplication.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case creditgrantapplication.FieldUpdatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedBy(v)
+		return nil
+	case creditgrantapplication.FieldEnvironmentID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnvironmentID(v)
+		return nil
+	case creditgrantapplication.FieldCreditGrantID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreditGrantID(v)
+		return nil
+	case creditgrantapplication.FieldSubscriptionID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubscriptionID(v)
+		return nil
+	case creditgrantapplication.FieldScheduledFor:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetScheduledFor(v)
+		return nil
+	case creditgrantapplication.FieldAppliedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAppliedAt(v)
+		return nil
+	case creditgrantapplication.FieldBillingPeriodStart:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBillingPeriodStart(v)
+		return nil
+	case creditgrantapplication.FieldBillingPeriodEnd:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBillingPeriodEnd(v)
+		return nil
+	case creditgrantapplication.FieldAmountApplied:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAmountApplied(v)
+		return nil
+	case creditgrantapplication.FieldCurrency:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCurrency(v)
+		return nil
+	case creditgrantapplication.FieldApplicationReason:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetApplicationReason(v)
+		return nil
+	case creditgrantapplication.FieldSubscriptionStatusAtApplication:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubscriptionStatusAtApplication(v)
+		return nil
+	case creditgrantapplication.FieldIsProrated:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIsProrated(v)
+		return nil
+	case creditgrantapplication.FieldProrationFactor:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProrationFactor(v)
+		return nil
+	case creditgrantapplication.FieldFullPeriodAmount:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFullPeriodAmount(v)
+		return nil
+	case creditgrantapplication.FieldRetryCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRetryCount(v)
+		return nil
+	case creditgrantapplication.FieldFailureReason:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFailureReason(v)
+		return nil
+	case creditgrantapplication.FieldNextRetryAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNextRetryAt(v)
+		return nil
+	case creditgrantapplication.FieldMetadata:
+		v, ok := value.(types.Metadata)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMetadata(v)
+		return nil
+	}
+	return fmt.Errorf("unknown CreditGrantApplication field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *CreditGrantApplicationMutation) AddedFields() []string {
+	var fields []string
+	if m.addretry_count != nil {
+		fields = append(fields, creditgrantapplication.FieldRetryCount)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *CreditGrantApplicationMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case creditgrantapplication.FieldRetryCount:
+		return m.AddedRetryCount()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CreditGrantApplicationMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case creditgrantapplication.FieldRetryCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRetryCount(v)
+		return nil
+	}
+	return fmt.Errorf("unknown CreditGrantApplication numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *CreditGrantApplicationMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(creditgrantapplication.FieldCreatedBy) {
+		fields = append(fields, creditgrantapplication.FieldCreatedBy)
+	}
+	if m.FieldCleared(creditgrantapplication.FieldUpdatedBy) {
+		fields = append(fields, creditgrantapplication.FieldUpdatedBy)
+	}
+	if m.FieldCleared(creditgrantapplication.FieldEnvironmentID) {
+		fields = append(fields, creditgrantapplication.FieldEnvironmentID)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *CreditGrantApplicationMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *CreditGrantApplicationMutation) ClearField(name string) error {
+	switch name {
+	case creditgrantapplication.FieldCreatedBy:
+		m.ClearCreatedBy()
+		return nil
+	case creditgrantapplication.FieldUpdatedBy:
+		m.ClearUpdatedBy()
+		return nil
+	case creditgrantapplication.FieldEnvironmentID:
+		m.ClearEnvironmentID()
+		return nil
+	}
+	return fmt.Errorf("unknown CreditGrantApplication nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *CreditGrantApplicationMutation) ResetField(name string) error {
+	switch name {
+	case creditgrantapplication.FieldTenantID:
+		m.ResetTenantID()
+		return nil
+	case creditgrantapplication.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case creditgrantapplication.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case creditgrantapplication.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case creditgrantapplication.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case creditgrantapplication.FieldUpdatedBy:
+		m.ResetUpdatedBy()
+		return nil
+	case creditgrantapplication.FieldEnvironmentID:
+		m.ResetEnvironmentID()
+		return nil
+	case creditgrantapplication.FieldCreditGrantID:
+		m.ResetCreditGrantID()
+		return nil
+	case creditgrantapplication.FieldSubscriptionID:
+		m.ResetSubscriptionID()
+		return nil
+	case creditgrantapplication.FieldScheduledFor:
+		m.ResetScheduledFor()
+		return nil
+	case creditgrantapplication.FieldAppliedAt:
+		m.ResetAppliedAt()
+		return nil
+	case creditgrantapplication.FieldBillingPeriodStart:
+		m.ResetBillingPeriodStart()
+		return nil
+	case creditgrantapplication.FieldBillingPeriodEnd:
+		m.ResetBillingPeriodEnd()
+		return nil
+	case creditgrantapplication.FieldAmountApplied:
+		m.ResetAmountApplied()
+		return nil
+	case creditgrantapplication.FieldCurrency:
+		m.ResetCurrency()
+		return nil
+	case creditgrantapplication.FieldApplicationReason:
+		m.ResetApplicationReason()
+		return nil
+	case creditgrantapplication.FieldSubscriptionStatusAtApplication:
+		m.ResetSubscriptionStatusAtApplication()
+		return nil
+	case creditgrantapplication.FieldIsProrated:
+		m.ResetIsProrated()
+		return nil
+	case creditgrantapplication.FieldProrationFactor:
+		m.ResetProrationFactor()
+		return nil
+	case creditgrantapplication.FieldFullPeriodAmount:
+		m.ResetFullPeriodAmount()
+		return nil
+	case creditgrantapplication.FieldRetryCount:
+		m.ResetRetryCount()
+		return nil
+	case creditgrantapplication.FieldFailureReason:
+		m.ResetFailureReason()
+		return nil
+	case creditgrantapplication.FieldNextRetryAt:
+		m.ResetNextRetryAt()
+		return nil
+	case creditgrantapplication.FieldMetadata:
+		m.ResetMetadata()
+		return nil
+	}
+	return fmt.Errorf("unknown CreditGrantApplication field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *CreditGrantApplicationMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *CreditGrantApplicationMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *CreditGrantApplicationMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *CreditGrantApplicationMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *CreditGrantApplicationMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *CreditGrantApplicationMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *CreditGrantApplicationMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown CreditGrantApplication unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *CreditGrantApplicationMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown CreditGrantApplication edge %s", name)
 }
 
 // CustomerMutation represents an operation that mutates the Customer nodes in the graph.

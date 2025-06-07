@@ -47,8 +47,12 @@ const (
 	FieldPeriod = "period"
 	// FieldPeriodCount holds the string denoting the period_count field in the database.
 	FieldPeriodCount = "period_count"
-	// FieldExpireInDays holds the string denoting the expire_in_days field in the database.
-	FieldExpireInDays = "expire_in_days"
+	// FieldExpiryDuration holds the string denoting the expiry_duration field in the database.
+	FieldExpiryDuration = "expiry_duration"
+	// FieldExpiryDurationUnit holds the string denoting the expiry_duration_unit field in the database.
+	FieldExpiryDurationUnit = "expiry_duration_unit"
+	// FieldExpirationType holds the string denoting the expiration_type field in the database.
+	FieldExpirationType = "expiration_type"
 	// FieldPriority holds the string denoting the priority field in the database.
 	FieldPriority = "priority"
 	// FieldMetadata holds the string denoting the metadata field in the database.
@@ -94,7 +98,9 @@ var Columns = []string{
 	FieldCadence,
 	FieldPeriod,
 	FieldPeriodCount,
-	FieldExpireInDays,
+	FieldExpiryDuration,
+	FieldExpiryDurationUnit,
+	FieldExpirationType,
 	FieldPriority,
 	FieldMetadata,
 }
@@ -132,6 +138,8 @@ var (
 	CurrencyValidator func(string) error
 	// CadenceValidator is a validator for the "cadence" field. It is called by the builders before save.
 	CadenceValidator func(string) error
+	// ExpirationTypeValidator is a validator for the "expiration_type" field. It is called by the builders before save.
+	ExpirationTypeValidator func(string) error
 	// DefaultMetadata holds the default value on creation for the "metadata" field.
 	DefaultMetadata map[string]string
 )
@@ -224,9 +232,19 @@ func ByPeriodCount(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPeriodCount, opts...).ToFunc()
 }
 
-// ByExpireInDays orders the results by the expire_in_days field.
-func ByExpireInDays(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldExpireInDays, opts...).ToFunc()
+// ByExpiryDuration orders the results by the expiry_duration field.
+func ByExpiryDuration(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldExpiryDuration, opts...).ToFunc()
+}
+
+// ByExpiryDurationUnit orders the results by the expiry_duration_unit field.
+func ByExpiryDurationUnit(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldExpiryDurationUnit, opts...).ToFunc()
+}
+
+// ByExpirationType orders the results by the expiration_type field.
+func ByExpirationType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldExpirationType, opts...).ToFunc()
 }
 
 // ByPriority orders the results by the priority field.

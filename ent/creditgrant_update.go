@@ -271,8 +271,11 @@ func (cgu *CreditGrantUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if cgu.mutation.PeriodCountCleared() {
 		_spec.ClearField(creditgrant.FieldPeriodCount, field.TypeInt)
 	}
-	if cgu.mutation.ExpireInDaysCleared() {
-		_spec.ClearField(creditgrant.FieldExpireInDays, field.TypeInt)
+	if cgu.mutation.ExpiryDurationCleared() {
+		_spec.ClearField(creditgrant.FieldExpiryDuration, field.TypeInt)
+	}
+	if cgu.mutation.ExpiryDurationUnitCleared() {
+		_spec.ClearField(creditgrant.FieldExpiryDurationUnit, field.TypeString)
 	}
 	if cgu.mutation.PriorityCleared() {
 		_spec.ClearField(creditgrant.FieldPriority, field.TypeInt)
@@ -631,8 +634,11 @@ func (cguo *CreditGrantUpdateOne) sqlSave(ctx context.Context) (_node *CreditGra
 	if cguo.mutation.PeriodCountCleared() {
 		_spec.ClearField(creditgrant.FieldPeriodCount, field.TypeInt)
 	}
-	if cguo.mutation.ExpireInDaysCleared() {
-		_spec.ClearField(creditgrant.FieldExpireInDays, field.TypeInt)
+	if cguo.mutation.ExpiryDurationCleared() {
+		_spec.ClearField(creditgrant.FieldExpiryDuration, field.TypeInt)
+	}
+	if cguo.mutation.ExpiryDurationUnitCleared() {
+		_spec.ClearField(creditgrant.FieldExpiryDurationUnit, field.TypeString)
 	}
 	if cguo.mutation.PriorityCleared() {
 		_spec.ClearField(creditgrant.FieldPriority, field.TypeInt)

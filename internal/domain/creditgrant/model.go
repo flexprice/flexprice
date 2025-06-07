@@ -9,20 +9,22 @@ import (
 
 // CreditGrant represents a credit allocation for a customer
 type CreditGrant struct {
-	ID             string                   `json:"id"`
-	Name           string                   `json:"name"`
-	Scope          types.CreditGrantScope   `json:"scope"`
-	PlanID         *string                  `json:"plan_id,omitempty"`
-	SubscriptionID *string                  `json:"subscription_id,omitempty"`
-	Amount         decimal.Decimal          `json:"amount"`
-	Currency       string                   `json:"currency"`
-	Cadence        types.CreditGrantCadence `json:"cadence"`
-	Period         *types.CreditGrantPeriod `json:"period,omitempty"`
-	PeriodCount    *int                     `json:"period_count,omitempty"`
-	ExpireInDays   *int                     `json:"expire_in_days,omitempty"`
-	Priority       *int                     `json:"priority,omitempty"`
-	Metadata       types.Metadata           `json:"metadata,omitempty"`
-	EnvironmentID  string                   `json:"environment_id"`
+	ID                 string                               `json:"id"`
+	Name               string                               `json:"name"`
+	Scope              types.CreditGrantScope               `json:"scope"`
+	PlanID             *string                              `json:"plan_id,omitempty"`
+	SubscriptionID     *string                              `json:"subscription_id,omitempty"`
+	Amount             decimal.Decimal                      `json:"amount"`
+	Currency           string                               `json:"currency"`
+	Cadence            types.CreditGrantCadence             `json:"cadence"`
+	Period             *types.CreditGrantPeriod             `json:"period,omitempty"`
+	PeriodCount        *int                                 `json:"period_count,omitempty"`
+	ExpirationType     types.CreditGrantExpiryType          `json:"expiration_type,omitempty"`
+	ExpiryDurationUnit *types.CreditGrantExpiryDurationUnit `json:"expiry_duration_unit,omitempty"`
+	ExpiryDuration     *int                                 `json:"expiry_duration,omitempty"`
+	Priority           *int                                 `json:"priority,omitempty"`
+	Metadata           types.Metadata                       `json:"metadata,omitempty"`
+	EnvironmentID      string                               `json:"environment_id"`
 	types.BaseModel
 }
 
@@ -110,6 +112,28 @@ func (c *CreditGrant) Validate() error {
 		}
 	}
 
+	if c.ExpirationType == types.CreditGrantExpiryTypeDuration {
+		if c.ExpiryDuration == nil || *c.ExpiryDuration <= 0 {
+			return ierr.NewError("expiry_duration is required for DURATION expiration type").
+				WithHint("Please provide a valid expiry_duration").
+				Mark(ierr.ErrValidation)
+		}
+
+		if c.ExpiryDurationUnit == nil || *c.ExpiryDurationUnit == "" {
+			return ierr.NewError("expiry_duration_unit is required for DURATION expiration type").
+				WithHint("Please provide a valid expiry_duration_unit").
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	if c.ExpirationType == types.CreditGrantExpiryTypeBillingCycle {
+		if c.Period == nil || *c.Period == "" {
+			return ierr.NewError("period is required for BILLING_CYCLE expiration type").
+				WithHint("Please provide a valid period").
+				Mark(ierr.ErrValidation)
+		}
+	}
+
 	return nil
 }
 
@@ -126,20 +150,22 @@ func FromEnt(c *ent.CreditGrant) *CreditGrant {
 	}
 
 	return &CreditGrant{
-		ID:             c.ID,
-		Name:           c.Name,
-		Scope:          types.CreditGrantScope(c.Scope),
-		PlanID:         c.PlanID,
-		SubscriptionID: c.SubscriptionID,
-		Amount:         c.Amount,
-		Currency:       c.Currency,
-		Cadence:        types.CreditGrantCadence(c.Cadence),
-		Period:         period,
-		PeriodCount:    c.PeriodCount,
-		ExpireInDays:   c.ExpireInDays,
-		Priority:       c.Priority,
-		Metadata:       c.Metadata,
-		EnvironmentID:  c.EnvironmentID,
+		ID:                 c.ID,
+		Name:               c.Name,
+		Scope:              types.CreditGrantScope(c.Scope),
+		PlanID:             c.PlanID,
+		SubscriptionID:     c.SubscriptionID,
+		Amount:             c.Amount,
+		Currency:           c.Currency,
+		Cadence:            types.CreditGrantCadence(c.Cadence),
+		Period:             period,
+		PeriodCount:        c.PeriodCount,
+		Priority:           c.Priority,
+		ExpiryDurationUnit: c.ExpiryDurationUnit,
+		ExpiryDuration:     c.ExpiryDuration,
+		Metadata:           c.Metadata,
+		EnvironmentID:      c.EnvironmentID,
+		ExpirationType:     types.CreditGrantExpiryType(c.ExpirationType),
 		BaseModel: types.BaseModel{
 			TenantID:  c.TenantID,
 			Status:    types.Status(c.Status),
