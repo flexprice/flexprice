@@ -71,23 +71,13 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	if req.CustomerID != "" {
 		customer, err = s.CustomerRepo.Get(ctx, req.CustomerID)
 		if err != nil {
-			return nil, ierr.NewError("customer not found").
-				WithHint("Failed to get customer by ID").
-				WithReportableDetails(map[string]interface{}{
-					"customer_id": req.CustomerID,
-				}).
-				Mark(ierr.ErrNotFound)
+			return nil, err
 		}
 	} else {
 		// Case- Only ExternalCustomerID is present
 		customer, err = s.CustomerRepo.GetByLookupKey(ctx, req.ExternalCustomerID)
 		if err != nil {
-			return nil, ierr.NewError("customer not found").
-				WithHint("Failed to get customer by external ID").
-				WithReportableDetails(map[string]interface{}{
-					"external_customer_id": req.ExternalCustomerID,
-				}).
-				Mark(ierr.ErrNotFound)
+			return nil, err
 		}
 		// Set the CustomerID from the found customer
 		req.CustomerID = customer.ID
@@ -105,12 +95,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 
 	plan, err := s.PlanRepo.Get(ctx, req.PlanID)
 	if err != nil {
-		return nil, ierr.NewError("plan not found").
-			WithHint("Failed to get plan by ID").
-			WithReportableDetails(map[string]interface{}{
-				"plan_id": req.PlanID,
-			}).
-			Mark(ierr.ErrNotFound)
+		return nil, err
 	}
 
 	if plan.Status != types.StatusPublished {
