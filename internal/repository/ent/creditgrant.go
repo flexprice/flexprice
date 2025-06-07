@@ -61,10 +61,10 @@ func (r *creditGrantRepository) Create(ctx context.Context, cg *domainCreditGran
 		SetNillablePlanID(cg.PlanID).
 		SetNillableSubscriptionID(cg.SubscriptionID).
 		SetNillablePeriod(cg.Period).
-		SetNillablePeriodCount(cg.PeriodCount).	
-		SetNillableExpiryDuration(cg.ExpiryDuration).
-		SetNillableExpiryDurationUnit(cg.ExpiryDurationUnit).
+		SetNillablePeriodCount(cg.PeriodCount).
 		SetExpirationType(cg.ExpirationType).
+		SetNillableExpirationDuration(cg.ExpirationDuration).
+		SetNillableExpirationDurationUnit(cg.ExpirationDurationUnit).
 		SetNillablePriority(cg.Priority).
 		SetTenantID(cg.TenantID).
 		SetStatus(string(cg.Status)).

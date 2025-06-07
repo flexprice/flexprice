@@ -208,30 +208,30 @@ func (cgc *CreditGrantCreate) SetNillablePeriodCount(i *int) *CreditGrantCreate 
 	return cgc
 }
 
-// SetExpiryDuration sets the "expiry_duration" field.
-func (cgc *CreditGrantCreate) SetExpiryDuration(i int) *CreditGrantCreate {
-	cgc.mutation.SetExpiryDuration(i)
+// SetExpirationDuration sets the "expiration_duration" field.
+func (cgc *CreditGrantCreate) SetExpirationDuration(i int) *CreditGrantCreate {
+	cgc.mutation.SetExpirationDuration(i)
 	return cgc
 }
 
-// SetNillableExpiryDuration sets the "expiry_duration" field if the given value is not nil.
-func (cgc *CreditGrantCreate) SetNillableExpiryDuration(i *int) *CreditGrantCreate {
+// SetNillableExpirationDuration sets the "expiration_duration" field if the given value is not nil.
+func (cgc *CreditGrantCreate) SetNillableExpirationDuration(i *int) *CreditGrantCreate {
 	if i != nil {
-		cgc.SetExpiryDuration(*i)
+		cgc.SetExpirationDuration(*i)
 	}
 	return cgc
 }
 
-// SetExpiryDurationUnit sets the "expiry_duration_unit" field.
-func (cgc *CreditGrantCreate) SetExpiryDurationUnit(tgedu types.CreditGrantExpiryDurationUnit) *CreditGrantCreate {
-	cgc.mutation.SetExpiryDurationUnit(tgedu)
+// SetExpirationDurationUnit sets the "expiration_duration_unit" field.
+func (cgc *CreditGrantCreate) SetExpirationDurationUnit(tgedu types.CreditGrantExpiryDurationUnit) *CreditGrantCreate {
+	cgc.mutation.SetExpirationDurationUnit(tgedu)
 	return cgc
 }
 
-// SetNillableExpiryDurationUnit sets the "expiry_duration_unit" field if the given value is not nil.
-func (cgc *CreditGrantCreate) SetNillableExpiryDurationUnit(tgedu *types.CreditGrantExpiryDurationUnit) *CreditGrantCreate {
+// SetNillableExpirationDurationUnit sets the "expiration_duration_unit" field if the given value is not nil.
+func (cgc *CreditGrantCreate) SetNillableExpirationDurationUnit(tgedu *types.CreditGrantExpiryDurationUnit) *CreditGrantCreate {
 	if tgedu != nil {
-		cgc.SetExpiryDurationUnit(*tgedu)
+		cgc.SetExpirationDurationUnit(*tgedu)
 	}
 	return cgc
 }
@@ -239,6 +239,14 @@ func (cgc *CreditGrantCreate) SetNillableExpiryDurationUnit(tgedu *types.CreditG
 // SetExpirationType sets the "expiration_type" field.
 func (cgc *CreditGrantCreate) SetExpirationType(tget types.CreditGrantExpiryType) *CreditGrantCreate {
 	cgc.mutation.SetExpirationType(tget)
+	return cgc
+}
+
+// SetNillableExpirationType sets the "expiration_type" field if the given value is not nil.
+func (cgc *CreditGrantCreate) SetNillableExpirationType(tget *types.CreditGrantExpiryType) *CreditGrantCreate {
+	if tget != nil {
+		cgc.SetExpirationType(*tget)
+	}
 	return cgc
 }
 
@@ -398,14 +406,6 @@ func (cgc *CreditGrantCreate) check() error {
 			return &ValidationError{Name: "period", err: fmt.Errorf(`ent: validator failed for field "CreditGrant.period": %w`, err)}
 		}
 	}
-	if _, ok := cgc.mutation.ExpirationType(); !ok {
-		return &ValidationError{Name: "expiration_type", err: errors.New(`ent: missing required field "CreditGrant.expiration_type"`)}
-	}
-	if v, ok := cgc.mutation.ExpirationType(); ok {
-		if err := creditgrant.ExpirationTypeValidator(string(v)); err != nil {
-			return &ValidationError{Name: "expiration_type", err: fmt.Errorf(`ent: validator failed for field "CreditGrant.expiration_type": %w`, err)}
-		}
-	}
 	return nil
 }
 
@@ -497,17 +497,17 @@ func (cgc *CreditGrantCreate) createSpec() (*CreditGrant, *sqlgraph.CreateSpec) 
 		_spec.SetField(creditgrant.FieldPeriodCount, field.TypeInt, value)
 		_node.PeriodCount = &value
 	}
-	if value, ok := cgc.mutation.ExpiryDuration(); ok {
-		_spec.SetField(creditgrant.FieldExpiryDuration, field.TypeInt, value)
-		_node.ExpiryDuration = &value
+	if value, ok := cgc.mutation.ExpirationDuration(); ok {
+		_spec.SetField(creditgrant.FieldExpirationDuration, field.TypeInt, value)
+		_node.ExpirationDuration = &value
 	}
-	if value, ok := cgc.mutation.ExpiryDurationUnit(); ok {
-		_spec.SetField(creditgrant.FieldExpiryDurationUnit, field.TypeString, value)
-		_node.ExpiryDurationUnit = &value
+	if value, ok := cgc.mutation.ExpirationDurationUnit(); ok {
+		_spec.SetField(creditgrant.FieldExpirationDurationUnit, field.TypeString, value)
+		_node.ExpirationDurationUnit = &value
 	}
 	if value, ok := cgc.mutation.ExpirationType(); ok {
 		_spec.SetField(creditgrant.FieldExpirationType, field.TypeString, value)
-		_node.ExpirationType = value
+		_node.ExpirationType = &value
 	}
 	if value, ok := cgc.mutation.Priority(); ok {
 		_spec.SetField(creditgrant.FieldPriority, field.TypeInt, value)
