@@ -1257,37 +1257,39 @@ func (m *BillingSequenceMutation) ResetEdge(name string) error {
 // CreditGrantMutation represents an operation that mutates the CreditGrant nodes in the graph.
 type CreditGrantMutation struct {
 	config
-	op                  Op
-	typ                 string
-	id                  *string
-	tenant_id           *string
-	status              *string
-	created_at          *time.Time
-	updated_at          *time.Time
-	created_by          *string
-	updated_by          *string
-	environment_id      *string
-	name                *string
-	scope               *types.CreditGrantScope
-	amount              *decimal.Decimal
-	currency            *string
-	cadence             *types.CreditGrantCadence
-	period              *types.CreditGrantPeriod
-	period_count        *int
-	addperiod_count     *int
-	expire_in_days      *int
-	addexpire_in_days   *int
-	priority            *int
-	addpriority         *int
-	metadata            *map[string]string
-	clearedFields       map[string]struct{}
-	plan                *string
-	clearedplan         bool
-	subscription        *string
-	clearedsubscription bool
-	done                bool
-	oldValue            func(context.Context) (*CreditGrant, error)
-	predicates          []predicate.CreditGrant
+	op                       Op
+	typ                      string
+	id                       *string
+	tenant_id                *string
+	status                   *string
+	created_at               *time.Time
+	updated_at               *time.Time
+	created_by               *string
+	updated_by               *string
+	environment_id           *string
+	name                     *string
+	scope                    *types.CreditGrantScope
+	amount                   *decimal.Decimal
+	currency                 *string
+	cadence                  *types.CreditGrantCadence
+	period                   *types.CreditGrantPeriod
+	period_count             *int
+	addperiod_count          *int
+	expiration_type          *types.CreditGrantExpiryType
+	expiration_duration      *int
+	addexpiration_duration   *int
+	expiration_duration_unit *types.CreditGrantExpiryDurationUnit
+	priority                 *int
+	addpriority              *int
+	metadata                 *map[string]string
+	clearedFields            map[string]struct{}
+	plan                     *string
+	clearedplan              bool
+	subscription             *string
+	clearedsubscription      bool
+	done                     bool
+	oldValue                 func(context.Context) (*CreditGrant, error)
+	predicates               []predicate.CreditGrant
 }
 
 var _ ent.Mutation = (*CreditGrantMutation)(nil)
@@ -2082,74 +2084,159 @@ func (m *CreditGrantMutation) ResetPeriodCount() {
 	delete(m.clearedFields, creditgrant.FieldPeriodCount)
 }
 
-// SetExpireInDays sets the "expire_in_days" field.
-func (m *CreditGrantMutation) SetExpireInDays(i int) {
-	m.expire_in_days = &i
-	m.addexpire_in_days = nil
+// SetExpirationType sets the "expiration_type" field.
+func (m *CreditGrantMutation) SetExpirationType(tget types.CreditGrantExpiryType) {
+	m.expiration_type = &tget
 }
 
-// ExpireInDays returns the value of the "expire_in_days" field in the mutation.
-func (m *CreditGrantMutation) ExpireInDays() (r int, exists bool) {
-	v := m.expire_in_days
+// ExpirationType returns the value of the "expiration_type" field in the mutation.
+func (m *CreditGrantMutation) ExpirationType() (r types.CreditGrantExpiryType, exists bool) {
+	v := m.expiration_type
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldExpireInDays returns the old "expire_in_days" field's value of the CreditGrant entity.
+// OldExpirationType returns the old "expiration_type" field's value of the CreditGrant entity.
 // If the CreditGrant object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *CreditGrantMutation) OldExpireInDays(ctx context.Context) (v *int, err error) {
+func (m *CreditGrantMutation) OldExpirationType(ctx context.Context) (v types.CreditGrantExpiryType, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldExpireInDays is only allowed on UpdateOne operations")
+		return v, errors.New("OldExpirationType is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldExpireInDays requires an ID field in the mutation")
+		return v, errors.New("OldExpirationType requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldExpireInDays: %w", err)
+		return v, fmt.Errorf("querying old value for OldExpirationType: %w", err)
 	}
-	return oldValue.ExpireInDays, nil
+	return oldValue.ExpirationType, nil
 }
 
-// AddExpireInDays adds i to the "expire_in_days" field.
-func (m *CreditGrantMutation) AddExpireInDays(i int) {
-	if m.addexpire_in_days != nil {
-		*m.addexpire_in_days += i
-	} else {
-		m.addexpire_in_days = &i
-	}
+// ResetExpirationType resets all changes to the "expiration_type" field.
+func (m *CreditGrantMutation) ResetExpirationType() {
+	m.expiration_type = nil
 }
 
-// AddedExpireInDays returns the value that was added to the "expire_in_days" field in this mutation.
-func (m *CreditGrantMutation) AddedExpireInDays() (r int, exists bool) {
-	v := m.addexpire_in_days
+// SetExpirationDuration sets the "expiration_duration" field.
+func (m *CreditGrantMutation) SetExpirationDuration(i int) {
+	m.expiration_duration = &i
+	m.addexpiration_duration = nil
+}
+
+// ExpirationDuration returns the value of the "expiration_duration" field in the mutation.
+func (m *CreditGrantMutation) ExpirationDuration() (r int, exists bool) {
+	v := m.expiration_duration
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// ClearExpireInDays clears the value of the "expire_in_days" field.
-func (m *CreditGrantMutation) ClearExpireInDays() {
-	m.expire_in_days = nil
-	m.addexpire_in_days = nil
-	m.clearedFields[creditgrant.FieldExpireInDays] = struct{}{}
+// OldExpirationDuration returns the old "expiration_duration" field's value of the CreditGrant entity.
+// If the CreditGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CreditGrantMutation) OldExpirationDuration(ctx context.Context) (v *int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExpirationDuration is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExpirationDuration requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExpirationDuration: %w", err)
+	}
+	return oldValue.ExpirationDuration, nil
 }
 
-// ExpireInDaysCleared returns if the "expire_in_days" field was cleared in this mutation.
-func (m *CreditGrantMutation) ExpireInDaysCleared() bool {
-	_, ok := m.clearedFields[creditgrant.FieldExpireInDays]
+// AddExpirationDuration adds i to the "expiration_duration" field.
+func (m *CreditGrantMutation) AddExpirationDuration(i int) {
+	if m.addexpiration_duration != nil {
+		*m.addexpiration_duration += i
+	} else {
+		m.addexpiration_duration = &i
+	}
+}
+
+// AddedExpirationDuration returns the value that was added to the "expiration_duration" field in this mutation.
+func (m *CreditGrantMutation) AddedExpirationDuration() (r int, exists bool) {
+	v := m.addexpiration_duration
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearExpirationDuration clears the value of the "expiration_duration" field.
+func (m *CreditGrantMutation) ClearExpirationDuration() {
+	m.expiration_duration = nil
+	m.addexpiration_duration = nil
+	m.clearedFields[creditgrant.FieldExpirationDuration] = struct{}{}
+}
+
+// ExpirationDurationCleared returns if the "expiration_duration" field was cleared in this mutation.
+func (m *CreditGrantMutation) ExpirationDurationCleared() bool {
+	_, ok := m.clearedFields[creditgrant.FieldExpirationDuration]
 	return ok
 }
 
-// ResetExpireInDays resets all changes to the "expire_in_days" field.
-func (m *CreditGrantMutation) ResetExpireInDays() {
-	m.expire_in_days = nil
-	m.addexpire_in_days = nil
-	delete(m.clearedFields, creditgrant.FieldExpireInDays)
+// ResetExpirationDuration resets all changes to the "expiration_duration" field.
+func (m *CreditGrantMutation) ResetExpirationDuration() {
+	m.expiration_duration = nil
+	m.addexpiration_duration = nil
+	delete(m.clearedFields, creditgrant.FieldExpirationDuration)
+}
+
+// SetExpirationDurationUnit sets the "expiration_duration_unit" field.
+func (m *CreditGrantMutation) SetExpirationDurationUnit(tgedu types.CreditGrantExpiryDurationUnit) {
+	m.expiration_duration_unit = &tgedu
+}
+
+// ExpirationDurationUnit returns the value of the "expiration_duration_unit" field in the mutation.
+func (m *CreditGrantMutation) ExpirationDurationUnit() (r types.CreditGrantExpiryDurationUnit, exists bool) {
+	v := m.expiration_duration_unit
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExpirationDurationUnit returns the old "expiration_duration_unit" field's value of the CreditGrant entity.
+// If the CreditGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CreditGrantMutation) OldExpirationDurationUnit(ctx context.Context) (v *types.CreditGrantExpiryDurationUnit, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExpirationDurationUnit is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExpirationDurationUnit requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExpirationDurationUnit: %w", err)
+	}
+	return oldValue.ExpirationDurationUnit, nil
+}
+
+// ClearExpirationDurationUnit clears the value of the "expiration_duration_unit" field.
+func (m *CreditGrantMutation) ClearExpirationDurationUnit() {
+	m.expiration_duration_unit = nil
+	m.clearedFields[creditgrant.FieldExpirationDurationUnit] = struct{}{}
+}
+
+// ExpirationDurationUnitCleared returns if the "expiration_duration_unit" field was cleared in this mutation.
+func (m *CreditGrantMutation) ExpirationDurationUnitCleared() bool {
+	_, ok := m.clearedFields[creditgrant.FieldExpirationDurationUnit]
+	return ok
+}
+
+// ResetExpirationDurationUnit resets all changes to the "expiration_duration_unit" field.
+func (m *CreditGrantMutation) ResetExpirationDurationUnit() {
+	m.expiration_duration_unit = nil
+	delete(m.clearedFields, creditgrant.FieldExpirationDurationUnit)
 }
 
 // SetPriority sets the "priority" field.
@@ -2359,7 +2446,7 @@ func (m *CreditGrantMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CreditGrantMutation) Fields() []string {
-	fields := make([]string, 0, 19)
+	fields := make([]string, 0, 21)
 	if m.tenant_id != nil {
 		fields = append(fields, creditgrant.FieldTenantID)
 	}
@@ -2408,8 +2495,14 @@ func (m *CreditGrantMutation) Fields() []string {
 	if m.period_count != nil {
 		fields = append(fields, creditgrant.FieldPeriodCount)
 	}
-	if m.expire_in_days != nil {
-		fields = append(fields, creditgrant.FieldExpireInDays)
+	if m.expiration_type != nil {
+		fields = append(fields, creditgrant.FieldExpirationType)
+	}
+	if m.expiration_duration != nil {
+		fields = append(fields, creditgrant.FieldExpirationDuration)
+	}
+	if m.expiration_duration_unit != nil {
+		fields = append(fields, creditgrant.FieldExpirationDurationUnit)
 	}
 	if m.priority != nil {
 		fields = append(fields, creditgrant.FieldPriority)
@@ -2457,8 +2550,12 @@ func (m *CreditGrantMutation) Field(name string) (ent.Value, bool) {
 		return m.Period()
 	case creditgrant.FieldPeriodCount:
 		return m.PeriodCount()
-	case creditgrant.FieldExpireInDays:
-		return m.ExpireInDays()
+	case creditgrant.FieldExpirationType:
+		return m.ExpirationType()
+	case creditgrant.FieldExpirationDuration:
+		return m.ExpirationDuration()
+	case creditgrant.FieldExpirationDurationUnit:
+		return m.ExpirationDurationUnit()
 	case creditgrant.FieldPriority:
 		return m.Priority()
 	case creditgrant.FieldMetadata:
@@ -2504,8 +2601,12 @@ func (m *CreditGrantMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldPeriod(ctx)
 	case creditgrant.FieldPeriodCount:
 		return m.OldPeriodCount(ctx)
-	case creditgrant.FieldExpireInDays:
-		return m.OldExpireInDays(ctx)
+	case creditgrant.FieldExpirationType:
+		return m.OldExpirationType(ctx)
+	case creditgrant.FieldExpirationDuration:
+		return m.OldExpirationDuration(ctx)
+	case creditgrant.FieldExpirationDurationUnit:
+		return m.OldExpirationDurationUnit(ctx)
 	case creditgrant.FieldPriority:
 		return m.OldPriority(ctx)
 	case creditgrant.FieldMetadata:
@@ -2631,12 +2732,26 @@ func (m *CreditGrantMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetPeriodCount(v)
 		return nil
-	case creditgrant.FieldExpireInDays:
+	case creditgrant.FieldExpirationType:
+		v, ok := value.(types.CreditGrantExpiryType)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExpirationType(v)
+		return nil
+	case creditgrant.FieldExpirationDuration:
 		v, ok := value.(int)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetExpireInDays(v)
+		m.SetExpirationDuration(v)
+		return nil
+	case creditgrant.FieldExpirationDurationUnit:
+		v, ok := value.(types.CreditGrantExpiryDurationUnit)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExpirationDurationUnit(v)
 		return nil
 	case creditgrant.FieldPriority:
 		v, ok := value.(int)
@@ -2663,8 +2778,8 @@ func (m *CreditGrantMutation) AddedFields() []string {
 	if m.addperiod_count != nil {
 		fields = append(fields, creditgrant.FieldPeriodCount)
 	}
-	if m.addexpire_in_days != nil {
-		fields = append(fields, creditgrant.FieldExpireInDays)
+	if m.addexpiration_duration != nil {
+		fields = append(fields, creditgrant.FieldExpirationDuration)
 	}
 	if m.addpriority != nil {
 		fields = append(fields, creditgrant.FieldPriority)
@@ -2679,8 +2794,8 @@ func (m *CreditGrantMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
 	case creditgrant.FieldPeriodCount:
 		return m.AddedPeriodCount()
-	case creditgrant.FieldExpireInDays:
-		return m.AddedExpireInDays()
+	case creditgrant.FieldExpirationDuration:
+		return m.AddedExpirationDuration()
 	case creditgrant.FieldPriority:
 		return m.AddedPriority()
 	}
@@ -2699,12 +2814,12 @@ func (m *CreditGrantMutation) AddField(name string, value ent.Value) error {
 		}
 		m.AddPeriodCount(v)
 		return nil
-	case creditgrant.FieldExpireInDays:
+	case creditgrant.FieldExpirationDuration:
 		v, ok := value.(int)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.AddExpireInDays(v)
+		m.AddExpirationDuration(v)
 		return nil
 	case creditgrant.FieldPriority:
 		v, ok := value.(int)
@@ -2742,8 +2857,11 @@ func (m *CreditGrantMutation) ClearedFields() []string {
 	if m.FieldCleared(creditgrant.FieldPeriodCount) {
 		fields = append(fields, creditgrant.FieldPeriodCount)
 	}
-	if m.FieldCleared(creditgrant.FieldExpireInDays) {
-		fields = append(fields, creditgrant.FieldExpireInDays)
+	if m.FieldCleared(creditgrant.FieldExpirationDuration) {
+		fields = append(fields, creditgrant.FieldExpirationDuration)
+	}
+	if m.FieldCleared(creditgrant.FieldExpirationDurationUnit) {
+		fields = append(fields, creditgrant.FieldExpirationDurationUnit)
 	}
 	if m.FieldCleared(creditgrant.FieldPriority) {
 		fields = append(fields, creditgrant.FieldPriority)
@@ -2786,8 +2904,11 @@ func (m *CreditGrantMutation) ClearField(name string) error {
 	case creditgrant.FieldPeriodCount:
 		m.ClearPeriodCount()
 		return nil
-	case creditgrant.FieldExpireInDays:
-		m.ClearExpireInDays()
+	case creditgrant.FieldExpirationDuration:
+		m.ClearExpirationDuration()
+		return nil
+	case creditgrant.FieldExpirationDurationUnit:
+		m.ClearExpirationDurationUnit()
 		return nil
 	case creditgrant.FieldPriority:
 		m.ClearPriority()
@@ -2851,8 +2972,14 @@ func (m *CreditGrantMutation) ResetField(name string) error {
 	case creditgrant.FieldPeriodCount:
 		m.ResetPeriodCount()
 		return nil
-	case creditgrant.FieldExpireInDays:
-		m.ResetExpireInDays()
+	case creditgrant.FieldExpirationType:
+		m.ResetExpirationType()
+		return nil
+	case creditgrant.FieldExpirationDuration:
+		m.ResetExpirationDuration()
+		return nil
+	case creditgrant.FieldExpirationDurationUnit:
+		m.ResetExpirationDurationUnit()
 		return nil
 	case creditgrant.FieldPriority:
 		m.ResetPriority()

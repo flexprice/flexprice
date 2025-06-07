@@ -35,6 +35,29 @@ const (
 	CreditGrantPeriodHalfYear CreditGrantPeriod = "HALFYEARLY"
 )
 
+// CreditGrantExpiryType defines the type of expiry configuration
+type CreditGrantExpiryType string
+
+const (
+	// Credits stay available until they’re completely used—no time limit.
+	CreditGrantExpiryTypeNever CreditGrantExpiryType = "NEVER"
+	// Any unused credits disappear X days after they’re granted.
+	CreditGrantExpiryTypeDuration CreditGrantExpiryType = "DURATION"
+	// Unused credits reset at the end of each subscription period (matches the customer’s billing schedule).
+	CreditGrantExpiryTypeBillingCycle CreditGrantExpiryType = "BILLING_CYCLE"
+)
+
+// CreditGrantExpiryDurationUnit defines time units for duration-based expiry
+type CreditGrantExpiryDurationUnit string
+
+const (
+	// Any unused credits disappear X days after they’re granted.
+	CreditGrantExpiryDurationUnitDays   CreditGrantExpiryDurationUnit = "DAY"
+	CreditGrantExpiryDurationUnitWeeks  CreditGrantExpiryDurationUnit = "WEEK"
+	CreditGrantExpiryDurationUnitMonths CreditGrantExpiryDurationUnit = "MONTH"
+	CreditGrantExpiryDurationUnitYears  CreditGrantExpiryDurationUnit = "YEAR"
+)
+
 // Validate validates the credit grant scope
 func (s CreditGrantScope) Validate() error {
 	allowedValues := []CreditGrantScope{

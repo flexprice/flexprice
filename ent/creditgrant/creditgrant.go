@@ -7,6 +7,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -47,8 +48,12 @@ const (
 	FieldPeriod = "period"
 	// FieldPeriodCount holds the string denoting the period_count field in the database.
 	FieldPeriodCount = "period_count"
-	// FieldExpireInDays holds the string denoting the expire_in_days field in the database.
-	FieldExpireInDays = "expire_in_days"
+	// FieldExpirationType holds the string denoting the expiration_type field in the database.
+	FieldExpirationType = "expiration_type"
+	// FieldExpirationDuration holds the string denoting the expiration_duration field in the database.
+	FieldExpirationDuration = "expiration_duration"
+	// FieldExpirationDurationUnit holds the string denoting the expiration_duration_unit field in the database.
+	FieldExpirationDurationUnit = "expiration_duration_unit"
 	// FieldPriority holds the string denoting the priority field in the database.
 	FieldPriority = "priority"
 	// FieldMetadata holds the string denoting the metadata field in the database.
@@ -94,7 +99,9 @@ var Columns = []string{
 	FieldCadence,
 	FieldPeriod,
 	FieldPeriodCount,
-	FieldExpireInDays,
+	FieldExpirationType,
+	FieldExpirationDuration,
+	FieldExpirationDurationUnit,
 	FieldPriority,
 	FieldMetadata,
 }
@@ -132,6 +139,10 @@ var (
 	CurrencyValidator func(string) error
 	// CadenceValidator is a validator for the "cadence" field. It is called by the builders before save.
 	CadenceValidator func(string) error
+	// DefaultExpirationType holds the default value on creation for the "expiration_type" field.
+	DefaultExpirationType types.CreditGrantExpiryType
+	// ExpirationTypeValidator is a validator for the "expiration_type" field. It is called by the builders before save.
+	ExpirationTypeValidator func(string) error
 	// DefaultMetadata holds the default value on creation for the "metadata" field.
 	DefaultMetadata map[string]string
 )
@@ -224,9 +235,19 @@ func ByPeriodCount(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPeriodCount, opts...).ToFunc()
 }
 
-// ByExpireInDays orders the results by the expire_in_days field.
-func ByExpireInDays(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldExpireInDays, opts...).ToFunc()
+// ByExpirationType orders the results by the expiration_type field.
+func ByExpirationType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldExpirationType, opts...).ToFunc()
+}
+
+// ByExpirationDuration orders the results by the expiration_duration field.
+func ByExpirationDuration(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldExpirationDuration, opts...).ToFunc()
+}
+
+// ByExpirationDurationUnit orders the results by the expiration_duration_unit field.
+func ByExpirationDurationUnit(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldExpirationDurationUnit, opts...).ToFunc()
 }
 
 // ByPriority orders the results by the priority field.

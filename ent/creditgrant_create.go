@@ -208,16 +208,44 @@ func (cgc *CreditGrantCreate) SetNillablePeriodCount(i *int) *CreditGrantCreate 
 	return cgc
 }
 
-// SetExpireInDays sets the "expire_in_days" field.
-func (cgc *CreditGrantCreate) SetExpireInDays(i int) *CreditGrantCreate {
-	cgc.mutation.SetExpireInDays(i)
+// SetExpirationType sets the "expiration_type" field.
+func (cgc *CreditGrantCreate) SetExpirationType(tget types.CreditGrantExpiryType) *CreditGrantCreate {
+	cgc.mutation.SetExpirationType(tget)
 	return cgc
 }
 
-// SetNillableExpireInDays sets the "expire_in_days" field if the given value is not nil.
-func (cgc *CreditGrantCreate) SetNillableExpireInDays(i *int) *CreditGrantCreate {
+// SetNillableExpirationType sets the "expiration_type" field if the given value is not nil.
+func (cgc *CreditGrantCreate) SetNillableExpirationType(tget *types.CreditGrantExpiryType) *CreditGrantCreate {
+	if tget != nil {
+		cgc.SetExpirationType(*tget)
+	}
+	return cgc
+}
+
+// SetExpirationDuration sets the "expiration_duration" field.
+func (cgc *CreditGrantCreate) SetExpirationDuration(i int) *CreditGrantCreate {
+	cgc.mutation.SetExpirationDuration(i)
+	return cgc
+}
+
+// SetNillableExpirationDuration sets the "expiration_duration" field if the given value is not nil.
+func (cgc *CreditGrantCreate) SetNillableExpirationDuration(i *int) *CreditGrantCreate {
 	if i != nil {
-		cgc.SetExpireInDays(*i)
+		cgc.SetExpirationDuration(*i)
+	}
+	return cgc
+}
+
+// SetExpirationDurationUnit sets the "expiration_duration_unit" field.
+func (cgc *CreditGrantCreate) SetExpirationDurationUnit(tgedu types.CreditGrantExpiryDurationUnit) *CreditGrantCreate {
+	cgc.mutation.SetExpirationDurationUnit(tgedu)
+	return cgc
+}
+
+// SetNillableExpirationDurationUnit sets the "expiration_duration_unit" field if the given value is not nil.
+func (cgc *CreditGrantCreate) SetNillableExpirationDurationUnit(tgedu *types.CreditGrantExpiryDurationUnit) *CreditGrantCreate {
+	if tgedu != nil {
+		cgc.SetExpirationDurationUnit(*tgedu)
 	}
 	return cgc
 }
@@ -313,6 +341,10 @@ func (cgc *CreditGrantCreate) defaults() {
 		v := creditgrant.DefaultAmount
 		cgc.mutation.SetAmount(v)
 	}
+	if _, ok := cgc.mutation.ExpirationType(); !ok {
+		v := creditgrant.DefaultExpirationType
+		cgc.mutation.SetExpirationType(v)
+	}
 	if _, ok := cgc.mutation.Metadata(); !ok {
 		v := creditgrant.DefaultMetadata
 		cgc.mutation.SetMetadata(v)
@@ -376,6 +408,14 @@ func (cgc *CreditGrantCreate) check() error {
 	if v, ok := cgc.mutation.Period(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "period", err: fmt.Errorf(`ent: validator failed for field "CreditGrant.period": %w`, err)}
+		}
+	}
+	if _, ok := cgc.mutation.ExpirationType(); !ok {
+		return &ValidationError{Name: "expiration_type", err: errors.New(`ent: missing required field "CreditGrant.expiration_type"`)}
+	}
+	if v, ok := cgc.mutation.ExpirationType(); ok {
+		if err := creditgrant.ExpirationTypeValidator(string(v)); err != nil {
+			return &ValidationError{Name: "expiration_type", err: fmt.Errorf(`ent: validator failed for field "CreditGrant.expiration_type": %w`, err)}
 		}
 	}
 	return nil
@@ -469,9 +509,17 @@ func (cgc *CreditGrantCreate) createSpec() (*CreditGrant, *sqlgraph.CreateSpec) 
 		_spec.SetField(creditgrant.FieldPeriodCount, field.TypeInt, value)
 		_node.PeriodCount = &value
 	}
-	if value, ok := cgc.mutation.ExpireInDays(); ok {
-		_spec.SetField(creditgrant.FieldExpireInDays, field.TypeInt, value)
-		_node.ExpireInDays = &value
+	if value, ok := cgc.mutation.ExpirationType(); ok {
+		_spec.SetField(creditgrant.FieldExpirationType, field.TypeString, value)
+		_node.ExpirationType = value
+	}
+	if value, ok := cgc.mutation.ExpirationDuration(); ok {
+		_spec.SetField(creditgrant.FieldExpirationDuration, field.TypeInt, value)
+		_node.ExpirationDuration = &value
+	}
+	if value, ok := cgc.mutation.ExpirationDurationUnit(); ok {
+		_spec.SetField(creditgrant.FieldExpirationDurationUnit, field.TypeString, value)
+		_node.ExpirationDurationUnit = &value
 	}
 	if value, ok := cgc.mutation.Priority(); ok {
 		_spec.SetField(creditgrant.FieldPriority, field.TypeInt, value)

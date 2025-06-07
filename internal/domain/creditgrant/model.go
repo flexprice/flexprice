@@ -9,20 +9,22 @@ import (
 
 // CreditGrant represents a credit allocation for a customer
 type CreditGrant struct {
-	ID             string                   `json:"id"`
-	Name           string                   `json:"name"`
-	Scope          types.CreditGrantScope   `json:"scope"`
-	PlanID         *string                  `json:"plan_id,omitempty"`
-	SubscriptionID *string                  `json:"subscription_id,omitempty"`
-	Amount         decimal.Decimal          `json:"amount"`
-	Currency       string                   `json:"currency"`
-	Cadence        types.CreditGrantCadence `json:"cadence"`
-	Period         *types.CreditGrantPeriod `json:"period,omitempty"`
-	PeriodCount    *int                     `json:"period_count,omitempty"`
-	ExpireInDays   *int                     `json:"expire_in_days,omitempty"`
-	Priority       *int                     `json:"priority,omitempty"`
-	Metadata       types.Metadata           `json:"metadata,omitempty"`
-	EnvironmentID  string                   `json:"environment_id"`
+	ID                     string                               `json:"id"`
+	Name                   string                               `json:"name"`
+	Scope                  types.CreditGrantScope               `json:"scope"`
+	PlanID                 *string                              `json:"plan_id,omitempty"`
+	SubscriptionID         *string                              `json:"subscription_id,omitempty"`
+	Amount                 decimal.Decimal                      `json:"amount"`
+	Currency               string                               `json:"currency"`
+	Cadence                types.CreditGrantCadence             `json:"cadence"`
+	Period                 *types.CreditGrantPeriod             `json:"period,omitempty"`
+	PeriodCount            *int                                 `json:"period_count,omitempty"`
+	ExpirationType         types.CreditGrantExpiryType          `json:"expiration_type,omitempty"`
+	ExpirationDuration     *int                                 `json:"expiration_duration,omitempty"`
+	ExpirationDurationUnit *types.CreditGrantExpiryDurationUnit `json:"expiration_duration_unit,omitempty"`
+	Priority               *int                                 `json:"priority,omitempty"`
+	Metadata               types.Metadata                       `json:"metadata,omitempty"`
+	EnvironmentID          string                               `json:"environment_id"`
 	types.BaseModel
 }
 
@@ -126,20 +128,22 @@ func FromEnt(c *ent.CreditGrant) *CreditGrant {
 	}
 
 	return &CreditGrant{
-		ID:             c.ID,
-		Name:           c.Name,
-		Scope:          types.CreditGrantScope(c.Scope),
-		PlanID:         c.PlanID,
-		SubscriptionID: c.SubscriptionID,
-		Amount:         c.Amount,
-		Currency:       c.Currency,
-		Cadence:        types.CreditGrantCadence(c.Cadence),
-		Period:         period,
-		PeriodCount:    c.PeriodCount,
-		ExpireInDays:   c.ExpireInDays,
-		Priority:       c.Priority,
-		Metadata:       c.Metadata,
-		EnvironmentID:  c.EnvironmentID,
+		ID:                     c.ID,
+		Name:                   c.Name,
+		Scope:                  types.CreditGrantScope(c.Scope),
+		PlanID:                 c.PlanID,
+		SubscriptionID:         c.SubscriptionID,
+		Amount:                 c.Amount,
+		Currency:               c.Currency,
+		Cadence:                types.CreditGrantCadence(c.Cadence),
+		Period:                 period,
+		PeriodCount:            c.PeriodCount,
+		Priority:               c.Priority,
+		ExpirationType:         types.CreditGrantExpiryType(c.ExpirationType),
+		ExpirationDuration:     c.ExpirationDuration,
+		ExpirationDurationUnit: c.ExpirationDurationUnit,
+		Metadata:               c.Metadata,
+		EnvironmentID:          c.EnvironmentID,
 		BaseModel: types.BaseModel{
 			TenantID:  c.TenantID,
 			Status:    types.Status(c.Status),
