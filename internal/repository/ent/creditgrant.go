@@ -55,7 +55,7 @@ func (r *creditGrantRepository) Create(ctx context.Context, cg *domainCreditGran
 		SetID(cg.ID).
 		SetName(cg.Name).
 		SetScope(cg.Scope).
-		SetAmount(cg.Amount).
+		SetCredits(cg.Credits).
 		SetCurrency(cg.Currency).
 		SetCadence(cg.Cadence).
 		SetNillablePlanID(cg.PlanID).

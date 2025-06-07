@@ -30,9 +30,9 @@ const (
 	CreditGrantPeriodDaily    CreditGrantPeriod = "DAILY"
 	CreditGrantPeriodWeekly   CreditGrantPeriod = "WEEKLY"
 	CreditGrantPeriodMonthly  CreditGrantPeriod = "MONTHLY"
-	CreditGrantPeriodYearly   CreditGrantPeriod = "YEARLY"
+	CreditGrantPeriodAnnual   CreditGrantPeriod = "ANNUAL"
 	CreditGrantPeriodQuarter  CreditGrantPeriod = "QUARTERLY"
-	CreditGrantPeriodHalfYear CreditGrantPeriod = "HALFYEARLY"
+	CreditGrantPeriodHalfYear CreditGrantPeriod = "HALF_YEARLY"
 )
 
 // CreditGrantExpiryType defines the type of expiry configuration
@@ -47,6 +47,23 @@ const (
 	CreditGrantExpiryTypeBillingCycle CreditGrantExpiryType = "BILLING_CYCLE"
 )
 
+// Validate validates the credit grant expiry type
+func (t CreditGrantExpiryType) Validate() error {
+	allowedValues := []CreditGrantExpiryType{
+		CreditGrantExpiryTypeNever,
+		CreditGrantExpiryTypeDuration,
+		CreditGrantExpiryTypeBillingCycle,
+	}
+
+	if !lo.Contains(allowedValues, t) {
+		return errors.NewError("invalid credit grant expiry type").
+			WithHint(fmt.Sprintf("Credit grant expiry type must be one of: %v", allowedValues)).
+			Mark(errors.ErrValidation)
+	}
+
+	return nil
+}
+
 // CreditGrantExpiryDurationUnit defines time units for duration-based expiry
 type CreditGrantExpiryDurationUnit string
 
@@ -57,6 +74,24 @@ const (
 	CreditGrantExpiryDurationUnitMonths CreditGrantExpiryDurationUnit = "MONTH"
 	CreditGrantExpiryDurationUnitYears  CreditGrantExpiryDurationUnit = "YEAR"
 )
+
+// Validate validates the credit grant expiry duration unit
+func (u CreditGrantExpiryDurationUnit) Validate() error {
+	allowedValues := []CreditGrantExpiryDurationUnit{
+		CreditGrantExpiryDurationUnitDays,
+		CreditGrantExpiryDurationUnitWeeks,
+		CreditGrantExpiryDurationUnitMonths,
+		CreditGrantExpiryDurationUnitYears,
+	}
+
+	if !lo.Contains(allowedValues, u) {
+		return errors.NewError("invalid credit grant expiry duration unit").
+			WithHint(fmt.Sprintf("Credit grant expiry duration unit must be one of: %v", allowedValues)).
+			Mark(errors.ErrValidation)
+	}
+
+	return nil
+}
 
 // Validate validates the credit grant scope
 func (s CreditGrantScope) Validate() error {
@@ -96,7 +131,7 @@ func (p CreditGrantPeriod) Validate() error {
 		CreditGrantPeriodDaily,
 		CreditGrantPeriodWeekly,
 		CreditGrantPeriodMonthly,
-		CreditGrantPeriodYearly,
+		CreditGrantPeriodAnnual,
 		CreditGrantPeriodQuarter,
 		CreditGrantPeriodHalfYear,
 	}

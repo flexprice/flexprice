@@ -44,8 +44,8 @@ type CreditGrant struct {
 	PlanID *string `json:"plan_id,omitempty"`
 	// SubscriptionID holds the value of the "subscription_id" field.
 	SubscriptionID *string `json:"subscription_id,omitempty"`
-	// Amount holds the value of the "amount" field.
-	Amount decimal.Decimal `json:"amount,omitempty"`
+	// Credits holds the value of the "credits" field.
+	Credits decimal.Decimal `json:"credits,omitempty"`
 	// Currency holds the value of the "currency" field.
 	Currency string `json:"currency,omitempty"`
 	// Cadence holds the value of the "cadence" field.
@@ -110,7 +110,7 @@ func (*CreditGrant) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case creditgrant.FieldMetadata:
 			values[i] = new([]byte)
-		case creditgrant.FieldAmount:
+		case creditgrant.FieldCredits:
 			values[i] = new(decimal.Decimal)
 		case creditgrant.FieldPeriodCount, creditgrant.FieldExpirationDuration, creditgrant.FieldPriority:
 			values[i] = new(sql.NullInt64)
@@ -207,11 +207,11 @@ func (cg *CreditGrant) assignValues(columns []string, values []any) error {
 				cg.SubscriptionID = new(string)
 				*cg.SubscriptionID = value.String
 			}
-		case creditgrant.FieldAmount:
+		case creditgrant.FieldCredits:
 			if value, ok := values[i].(*decimal.Decimal); !ok {
-				return fmt.Errorf("unexpected type %T for field amount", values[i])
+				return fmt.Errorf("unexpected type %T for field credits", values[i])
 			} else if value != nil {
-				cg.Amount = *value
+				cg.Credits = *value
 			}
 		case creditgrant.FieldCurrency:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -357,8 +357,8 @@ func (cg *CreditGrant) String() string {
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	builder.WriteString("amount=")
-	builder.WriteString(fmt.Sprintf("%v", cg.Amount))
+	builder.WriteString("credits=")
+	builder.WriteString(fmt.Sprintf("%v", cg.Credits))
 	builder.WriteString(", ")
 	builder.WriteString("currency=")
 	builder.WriteString(cg.Currency)

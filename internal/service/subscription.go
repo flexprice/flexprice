@@ -401,7 +401,7 @@ func (s *subscriptionService) handleCreditGrants(
 
 		// Create a wallet top-up
 		topupReq := &dto.TopUpWalletRequest{
-			Amount:            grant.Amount,
+			CreditsToAdd:      grant.Credits,
 			TransactionReason: types.TransactionReasonSubscriptionCredit,
 			ExpiryDateUTC:     expiryDate,
 			Priority:          grant.Priority,
@@ -1919,7 +1919,7 @@ func (s *subscriptionService) CreateSubscriptionSchedule(ctx context.Context, re
 				Name:                   grant.Name,
 				Scope:                  grant.Scope,
 				PlanID:                 grant.PlanID,
-				Amount:                 grant.Amount,
+				Credits:                grant.Credits,
 				Currency:               grant.Currency,
 				Cadence:                grant.Cadence,
 				Period:                 grant.Period,
@@ -2081,7 +2081,7 @@ func (s *subscriptionService) createScheduleFromPhases(ctx context.Context, sub 
 				Name:                   grant.Name,
 				Scope:                  grant.Scope,
 				PlanID:                 grant.PlanID,
-				Amount:                 grant.Amount,
+				Credits:                grant.Credits,
 				Currency:               grant.Currency,
 				Cadence:                grant.Cadence,
 				Period:                 grant.Period,
@@ -2246,7 +2246,7 @@ func (s *subscriptionService) AddSchedulePhase(ctx context.Context, scheduleID s
 				Name:                   grant.Name,
 				Scope:                  grant.Scope,
 				PlanID:                 grant.PlanID,
-				Amount:                 grant.Amount,
+				Credits:                grant.Credits,
 				Currency:               grant.Currency,
 				Cadence:                grant.Cadence,
 				Period:                 grant.Period,

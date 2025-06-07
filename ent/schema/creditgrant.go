@@ -55,7 +55,7 @@ func (CreditGrant) Fields() []ent.Field {
 			}).
 			Optional().
 			Nillable(),
-		field.Other("amount", decimal.Decimal{}).
+		field.Other("credits", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(20,8)",
 			}).

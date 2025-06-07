@@ -1269,7 +1269,7 @@ type CreditGrantMutation struct {
 	environment_id           *string
 	name                     *string
 	scope                    *types.CreditGrantScope
-	amount                   *decimal.Decimal
+	credits                  *decimal.Decimal
 	currency                 *string
 	cadence                  *types.CreditGrantCadence
 	period                   *types.CreditGrantPeriod
@@ -1857,40 +1857,40 @@ func (m *CreditGrantMutation) ResetSubscriptionID() {
 	delete(m.clearedFields, creditgrant.FieldSubscriptionID)
 }
 
-// SetAmount sets the "amount" field.
-func (m *CreditGrantMutation) SetAmount(d decimal.Decimal) {
-	m.amount = &d
+// SetCredits sets the "credits" field.
+func (m *CreditGrantMutation) SetCredits(d decimal.Decimal) {
+	m.credits = &d
 }
 
-// Amount returns the value of the "amount" field in the mutation.
-func (m *CreditGrantMutation) Amount() (r decimal.Decimal, exists bool) {
-	v := m.amount
+// Credits returns the value of the "credits" field in the mutation.
+func (m *CreditGrantMutation) Credits() (r decimal.Decimal, exists bool) {
+	v := m.credits
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldAmount returns the old "amount" field's value of the CreditGrant entity.
+// OldCredits returns the old "credits" field's value of the CreditGrant entity.
 // If the CreditGrant object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *CreditGrantMutation) OldAmount(ctx context.Context) (v decimal.Decimal, err error) {
+func (m *CreditGrantMutation) OldCredits(ctx context.Context) (v decimal.Decimal, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldAmount is only allowed on UpdateOne operations")
+		return v, errors.New("OldCredits is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldAmount requires an ID field in the mutation")
+		return v, errors.New("OldCredits requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldAmount: %w", err)
+		return v, fmt.Errorf("querying old value for OldCredits: %w", err)
 	}
-	return oldValue.Amount, nil
+	return oldValue.Credits, nil
 }
 
-// ResetAmount resets all changes to the "amount" field.
-func (m *CreditGrantMutation) ResetAmount() {
-	m.amount = nil
+// ResetCredits resets all changes to the "credits" field.
+func (m *CreditGrantMutation) ResetCredits() {
+	m.credits = nil
 }
 
 // SetCurrency sets the "currency" field.
@@ -2480,8 +2480,8 @@ func (m *CreditGrantMutation) Fields() []string {
 	if m.subscription != nil {
 		fields = append(fields, creditgrant.FieldSubscriptionID)
 	}
-	if m.amount != nil {
-		fields = append(fields, creditgrant.FieldAmount)
+	if m.credits != nil {
+		fields = append(fields, creditgrant.FieldCredits)
 	}
 	if m.currency != nil {
 		fields = append(fields, creditgrant.FieldCurrency)
@@ -2540,8 +2540,8 @@ func (m *CreditGrantMutation) Field(name string) (ent.Value, bool) {
 		return m.PlanID()
 	case creditgrant.FieldSubscriptionID:
 		return m.SubscriptionID()
-	case creditgrant.FieldAmount:
-		return m.Amount()
+	case creditgrant.FieldCredits:
+		return m.Credits()
 	case creditgrant.FieldCurrency:
 		return m.Currency()
 	case creditgrant.FieldCadence:
@@ -2591,8 +2591,8 @@ func (m *CreditGrantMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldPlanID(ctx)
 	case creditgrant.FieldSubscriptionID:
 		return m.OldSubscriptionID(ctx)
-	case creditgrant.FieldAmount:
-		return m.OldAmount(ctx)
+	case creditgrant.FieldCredits:
+		return m.OldCredits(ctx)
 	case creditgrant.FieldCurrency:
 		return m.OldCurrency(ctx)
 	case creditgrant.FieldCadence:
@@ -2697,12 +2697,12 @@ func (m *CreditGrantMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetSubscriptionID(v)
 		return nil
-	case creditgrant.FieldAmount:
+	case creditgrant.FieldCredits:
 		v, ok := value.(decimal.Decimal)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetAmount(v)
+		m.SetCredits(v)
 		return nil
 	case creditgrant.FieldCurrency:
 		v, ok := value.(string)
@@ -2957,8 +2957,8 @@ func (m *CreditGrantMutation) ResetField(name string) error {
 	case creditgrant.FieldSubscriptionID:
 		m.ResetSubscriptionID()
 		return nil
-	case creditgrant.FieldAmount:
-		m.ResetAmount()
+	case creditgrant.FieldCredits:
+		m.ResetCredits()
 		return nil
 	case creditgrant.FieldCurrency:
 		m.ResetCurrency()

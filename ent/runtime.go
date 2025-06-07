@@ -125,10 +125,10 @@ func init() {
 	creditgrantDescScope := creditgrantFields[2].Descriptor()
 	// creditgrant.ScopeValidator is a validator for the "scope" field. It is called by the builders before save.
 	creditgrant.ScopeValidator = creditgrantDescScope.Validators[0].(func(string) error)
-	// creditgrantDescAmount is the schema descriptor for amount field.
-	creditgrantDescAmount := creditgrantFields[5].Descriptor()
-	// creditgrant.DefaultAmount holds the default value on creation for the amount field.
-	creditgrant.DefaultAmount = creditgrantDescAmount.Default.(decimal.Decimal)
+	// creditgrantDescCredits is the schema descriptor for credits field.
+	creditgrantDescCredits := creditgrantFields[5].Descriptor()
+	// creditgrant.DefaultCredits holds the default value on creation for the credits field.
+	creditgrant.DefaultCredits = creditgrantDescCredits.Default.(decimal.Decimal)
 	// creditgrantDescCurrency is the schema descriptor for currency field.
 	creditgrantDescCurrency := creditgrantFields[6].Descriptor()
 	// creditgrant.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.

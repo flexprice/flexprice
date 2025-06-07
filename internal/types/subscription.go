@@ -260,7 +260,7 @@ type SchedulePhaseCreditGrant struct {
 	Name                   string                         `json:"name" binding:"required"`
 	Scope                  CreditGrantScope               `json:"scope" binding:"required"`
 	PlanID                 *string                        `json:"plan_id,omitempty"`
-	Amount                 decimal.Decimal                `json:"amount" binding:"required"`
+	Credits                decimal.Decimal                `json:"credits" binding:"required"`
 	Currency               string                         `json:"currency" binding:"required"`
 	Cadence                CreditGrantCadence             `json:"cadence" binding:"required"`
 	Period                 *CreditGrantPeriod             `json:"period,omitempty"`

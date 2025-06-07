@@ -154,16 +154,16 @@ func (cgc *CreditGrantCreate) SetNillableSubscriptionID(s *string) *CreditGrantC
 	return cgc
 }
 
-// SetAmount sets the "amount" field.
-func (cgc *CreditGrantCreate) SetAmount(d decimal.Decimal) *CreditGrantCreate {
-	cgc.mutation.SetAmount(d)
+// SetCredits sets the "credits" field.
+func (cgc *CreditGrantCreate) SetCredits(d decimal.Decimal) *CreditGrantCreate {
+	cgc.mutation.SetCredits(d)
 	return cgc
 }
 
-// SetNillableAmount sets the "amount" field if the given value is not nil.
-func (cgc *CreditGrantCreate) SetNillableAmount(d *decimal.Decimal) *CreditGrantCreate {
+// SetNillableCredits sets the "credits" field if the given value is not nil.
+func (cgc *CreditGrantCreate) SetNillableCredits(d *decimal.Decimal) *CreditGrantCreate {
 	if d != nil {
-		cgc.SetAmount(*d)
+		cgc.SetCredits(*d)
 	}
 	return cgc
 }
@@ -337,9 +337,9 @@ func (cgc *CreditGrantCreate) defaults() {
 		v := creditgrant.DefaultEnvironmentID
 		cgc.mutation.SetEnvironmentID(v)
 	}
-	if _, ok := cgc.mutation.Amount(); !ok {
-		v := creditgrant.DefaultAmount
-		cgc.mutation.SetAmount(v)
+	if _, ok := cgc.mutation.Credits(); !ok {
+		v := creditgrant.DefaultCredits
+		cgc.mutation.SetCredits(v)
 	}
 	if _, ok := cgc.mutation.ExpirationType(); !ok {
 		v := creditgrant.DefaultExpirationType
@@ -386,8 +386,8 @@ func (cgc *CreditGrantCreate) check() error {
 			return &ValidationError{Name: "scope", err: fmt.Errorf(`ent: validator failed for field "CreditGrant.scope": %w`, err)}
 		}
 	}
-	if _, ok := cgc.mutation.Amount(); !ok {
-		return &ValidationError{Name: "amount", err: errors.New(`ent: missing required field "CreditGrant.amount"`)}
+	if _, ok := cgc.mutation.Credits(); !ok {
+		return &ValidationError{Name: "credits", err: errors.New(`ent: missing required field "CreditGrant.credits"`)}
 	}
 	if _, ok := cgc.mutation.Currency(); !ok {
 		return &ValidationError{Name: "currency", err: errors.New(`ent: missing required field "CreditGrant.currency"`)}
@@ -489,9 +489,9 @@ func (cgc *CreditGrantCreate) createSpec() (*CreditGrant, *sqlgraph.CreateSpec) 
 		_spec.SetField(creditgrant.FieldScope, field.TypeString, value)
 		_node.Scope = value
 	}
-	if value, ok := cgc.mutation.Amount(); ok {
-		_spec.SetField(creditgrant.FieldAmount, field.TypeOther, value)
-		_node.Amount = value
+	if value, ok := cgc.mutation.Credits(); ok {
+		_spec.SetField(creditgrant.FieldCredits, field.TypeOther, value)
+		_node.Credits = value
 	}
 	if value, ok := cgc.mutation.Currency(); ok {
 		_spec.SetField(creditgrant.FieldCurrency, field.TypeString, value)

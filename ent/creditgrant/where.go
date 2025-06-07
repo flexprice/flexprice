@@ -123,9 +123,9 @@ func SubscriptionID(v string) predicate.CreditGrant {
 	return predicate.CreditGrant(sql.FieldEQ(FieldSubscriptionID, v))
 }
 
-// Amount applies equality check predicate on the "amount" field. It's identical to AmountEQ.
-func Amount(v decimal.Decimal) predicate.CreditGrant {
-	return predicate.CreditGrant(sql.FieldEQ(FieldAmount, v))
+// Credits applies equality check predicate on the "credits" field. It's identical to CreditsEQ.
+func Credits(v decimal.Decimal) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldEQ(FieldCredits, v))
 }
 
 // Currency applies equality check predicate on the "currency" field. It's identical to CurrencyEQ.
@@ -906,44 +906,44 @@ func SubscriptionIDContainsFold(v string) predicate.CreditGrant {
 	return predicate.CreditGrant(sql.FieldContainsFold(FieldSubscriptionID, v))
 }
 
-// AmountEQ applies the EQ predicate on the "amount" field.
-func AmountEQ(v decimal.Decimal) predicate.CreditGrant {
-	return predicate.CreditGrant(sql.FieldEQ(FieldAmount, v))
+// CreditsEQ applies the EQ predicate on the "credits" field.
+func CreditsEQ(v decimal.Decimal) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldEQ(FieldCredits, v))
 }
 
-// AmountNEQ applies the NEQ predicate on the "amount" field.
-func AmountNEQ(v decimal.Decimal) predicate.CreditGrant {
-	return predicate.CreditGrant(sql.FieldNEQ(FieldAmount, v))
+// CreditsNEQ applies the NEQ predicate on the "credits" field.
+func CreditsNEQ(v decimal.Decimal) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldNEQ(FieldCredits, v))
 }
 
-// AmountIn applies the In predicate on the "amount" field.
-func AmountIn(vs ...decimal.Decimal) predicate.CreditGrant {
-	return predicate.CreditGrant(sql.FieldIn(FieldAmount, vs...))
+// CreditsIn applies the In predicate on the "credits" field.
+func CreditsIn(vs ...decimal.Decimal) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldIn(FieldCredits, vs...))
 }
 
-// AmountNotIn applies the NotIn predicate on the "amount" field.
-func AmountNotIn(vs ...decimal.Decimal) predicate.CreditGrant {
-	return predicate.CreditGrant(sql.FieldNotIn(FieldAmount, vs...))
+// CreditsNotIn applies the NotIn predicate on the "credits" field.
+func CreditsNotIn(vs ...decimal.Decimal) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldNotIn(FieldCredits, vs...))
 }
 
-// AmountGT applies the GT predicate on the "amount" field.
-func AmountGT(v decimal.Decimal) predicate.CreditGrant {
-	return predicate.CreditGrant(sql.FieldGT(FieldAmount, v))
+// CreditsGT applies the GT predicate on the "credits" field.
+func CreditsGT(v decimal.Decimal) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldGT(FieldCredits, v))
 }
 
-// AmountGTE applies the GTE predicate on the "amount" field.
-func AmountGTE(v decimal.Decimal) predicate.CreditGrant {
-	return predicate.CreditGrant(sql.FieldGTE(FieldAmount, v))
+// CreditsGTE applies the GTE predicate on the "credits" field.
+func CreditsGTE(v decimal.Decimal) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldGTE(FieldCredits, v))
 }
 
-// AmountLT applies the LT predicate on the "amount" field.
-func AmountLT(v decimal.Decimal) predicate.CreditGrant {
-	return predicate.CreditGrant(sql.FieldLT(FieldAmount, v))
+// CreditsLT applies the LT predicate on the "credits" field.
+func CreditsLT(v decimal.Decimal) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldLT(FieldCredits, v))
 }
 
-// AmountLTE applies the LTE predicate on the "amount" field.
-func AmountLTE(v decimal.Decimal) predicate.CreditGrant {
-	return predicate.CreditGrant(sql.FieldLTE(FieldAmount, v))
+// CreditsLTE applies the LTE predicate on the "credits" field.
+func CreditsLTE(v decimal.Decimal) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldLTE(FieldCredits, v))
 }
 
 // CurrencyEQ applies the EQ predicate on the "currency" field.

@@ -16,7 +16,7 @@ type CreateCreditGrantRequest struct {
 	Scope                  types.CreditGrantScope               `json:"scope" binding:"required"`
 	PlanID                 *string                              `json:"plan_id,omitempty"`
 	SubscriptionID         *string                              `json:"subscription_id,omitempty"`
-	Amount                 decimal.Decimal                      `json:"amount" binding:"required"`
+	Credits                decimal.Decimal                      `json:"credits" binding:"required"`
 	Currency               string                               `json:"currency" binding:"required"`
 	Cadence                types.CreditGrantCadence             `json:"cadence" binding:"required"`
 	Period                 *types.CreditGrantPeriod             `json:"period,omitempty"`
@@ -97,11 +97,11 @@ func (r *CreateCreditGrantRequest) Validate() error {
 			Mark(errors.ErrValidation)
 	}
 
-	if r.Amount.LessThanOrEqual(decimal.Zero) {
-		return errors.NewError("amount must be greater than zero").
-			WithHint("Please provide a positive amount").
+	if r.Credits.LessThanOrEqual(decimal.Zero) {
+		return errors.NewError("credits must be greater than zero").
+			WithHint("Please provide a positive credits").
 			WithReportableDetails(map[string]interface{}{
-				"amount": r.Amount,
+				"credits": r.Credits,
 			}).
 			Mark(errors.ErrValidation)
 	}
@@ -118,6 +118,10 @@ func (r *CreateCreditGrantRequest) Validate() error {
 			Mark(errors.ErrValidation)
 	}
 
+	if err := r.ExpirationType.Validate(); err != nil {
+		return err
+	}
+
 	// Validate based on cadence
 	if r.Cadence == types.CreditGrantCadenceRecurring {
 		if r.Period == nil || *r.Period == "" {
@@ -128,6 +132,20 @@ func (r *CreateCreditGrantRequest) Validate() error {
 				}).
 				Mark(errors.ErrValidation)
 		}
+	}
+
+	if r.ExpirationType == types.CreditGrantExpiryTypeDuration {
+
+		if err := r.ExpirationDurationUnit.Validate(); err != nil {
+			return err
+		}
+
+		if r.ExpirationDuration == nil || *r.ExpirationDuration <= 0 {
+			return errors.NewError("expiration_duration is required for DURATION expiration type").
+				WithHint("Please provide a valid expiration duration").
+				Mark(errors.ErrValidation)
+		}
+
 	}
 
 	return nil
@@ -141,7 +159,7 @@ func (r *CreateCreditGrantRequest) ToCreditGrant(ctx context.Context) *creditgra
 		Scope:                  r.Scope,
 		PlanID:                 r.PlanID,
 		SubscriptionID:         r.SubscriptionID,
-		Amount:                 r.Amount,
+		Credits:                r.Credits,
 		Currency:               r.Currency,
 		Cadence:                r.Cadence,
 		Period:                 r.Period,

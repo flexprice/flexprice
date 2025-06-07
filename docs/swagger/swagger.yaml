@@ -109,10 +109,10 @@ definitions:
     type: object
   dto.CreateCreditGrantRequest:
     properties:
-      amount:
-        type: number
       cadence:
         $ref: '#/definitions/types.CreditGrantCadence'
+      credits:
+        type: number
       currency:
         type: string
       expiration_duration:
@@ -138,8 +138,8 @@ definitions:
       subscription_id:
         type: string
     required:
-    - amount
     - cadence
+    - credits
     - currency
     - name
     - scope
@@ -685,14 +685,14 @@ definitions:
     type: object
   dto.CreditGrantResponse:
     properties:
-      amount:
-        type: number
       cadence:
         $ref: '#/definitions/types.CreditGrantCadence'
       created_at:
         type: string
       created_by:
         type: string
+      credits:
+        type: number
       currency:
         type: string
       environment_id:
@@ -3127,15 +3127,15 @@ definitions:
     - DAILY
     - WEEKLY
     - MONTHLY
-    - YEARLY
+    - ANNUAL
     - QUARTERLY
-    - HALFYEARLY
+    - HALF_YEARLY
     type: string
     x-enum-varnames:
     - CreditGrantPeriodDaily
     - CreditGrantPeriodWeekly
     - CreditGrantPeriodMonthly
-    - CreditGrantPeriodYearly
+    - CreditGrantPeriodAnnual
     - CreditGrantPeriodQuarter
     - CreditGrantPeriodHalfYear
   types.CreditGrantScope:

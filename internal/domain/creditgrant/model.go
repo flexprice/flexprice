@@ -14,7 +14,7 @@ type CreditGrant struct {
 	Scope                  types.CreditGrantScope               `json:"scope"`
 	PlanID                 *string                              `json:"plan_id,omitempty"`
 	SubscriptionID         *string                              `json:"subscription_id,omitempty"`
-	Amount                 decimal.Decimal                      `json:"amount"`
+	Credits                decimal.Decimal                      `json:"credits"`
 	Currency               string                               `json:"currency"`
 	Cadence                types.CreditGrantCadence             `json:"cadence"`
 	Period                 *types.CreditGrantPeriod             `json:"period,omitempty"`
@@ -79,11 +79,11 @@ func (c *CreditGrant) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	if c.Amount.LessThanOrEqual(decimal.Zero) {
-		return ierr.NewError("amount must be greater than zero").
-			WithHint("Please provide a positive amount").
+	if c.Credits.LessThanOrEqual(decimal.Zero) {
+		return ierr.NewError("credits must be greater than zero").
+			WithHint("Please provide a positive credits").
 			WithReportableDetails(map[string]interface{}{
-				"amount": c.Amount,
+					"credits": c.Credits,
 			}).
 			Mark(ierr.ErrValidation)
 	}
@@ -133,7 +133,7 @@ func FromEnt(c *ent.CreditGrant) *CreditGrant {
 		Scope:                  types.CreditGrantScope(c.Scope),
 		PlanID:                 c.PlanID,
 		SubscriptionID:         c.SubscriptionID,
-		Amount:                 c.Amount,
+		Credits:                c.Credits,
 		Currency:               c.Currency,
 		Cadence:                types.CreditGrantCadence(c.Cadence),
 		Period:                 period,
