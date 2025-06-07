@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -62,10 +63,24 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	}
 	invoiceService := NewInvoiceService(s.ServiceParams)
 
-	// Check if customer exists
-	customer, err := s.CustomerRepo.Get(ctx, req.CustomerID)
-	if err != nil {
-		return nil, err
+	// Get customer based on the provided IDs
+	var customer *customer.Customer
+	var err error
+
+	// Case- CustomerID is present - use it directly (ignore ExternalCustomerID if present)
+	if req.CustomerID != "" {
+		customer, err = s.CustomerRepo.Get(ctx, req.CustomerID)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// Case- Only ExternalCustomerID is present
+		customer, err = s.CustomerRepo.GetByLookupKey(ctx, req.ExternalCustomerID)
+		if err != nil {
+			return nil, err
+		}
+		// Set the CustomerID from the found customer
+		req.CustomerID = customer.ID
 	}
 
 	if customer.Status != types.StatusPublished {
