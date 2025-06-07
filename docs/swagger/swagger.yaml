@@ -109,14 +109,18 @@ definitions:
     type: object
   dto.CreateCreditGrantRequest:
     properties:
-      amount:
-        type: number
       cadence:
         $ref: '#/definitions/types.CreditGrantCadence'
+      credits:
+        type: number
       currency:
         type: string
-      expire_in_days:
+      expiration_duration:
         type: integer
+      expiration_duration_unit:
+        $ref: '#/definitions/types.CreditGrantExpiryDurationUnit'
+      expiration_type:
+        $ref: '#/definitions/types.CreditGrantExpiryType'
       metadata:
         $ref: '#/definitions/types.Metadata'
       name:
@@ -134,8 +138,8 @@ definitions:
       subscription_id:
         type: string
     required:
-    - amount
     - cadence
+    - credits
     - currency
     - name
     - scope
@@ -681,20 +685,24 @@ definitions:
     type: object
   dto.CreditGrantResponse:
     properties:
-      amount:
-        type: number
       cadence:
         $ref: '#/definitions/types.CreditGrantCadence'
       created_at:
         type: string
       created_by:
         type: string
+      credits:
+        type: number
       currency:
         type: string
       environment_id:
         type: string
-      expire_in_days:
+      expiration_duration:
         type: integer
+      expiration_duration_unit:
+        $ref: '#/definitions/types.CreditGrantExpiryDurationUnit'
+      expiration_type:
+        $ref: '#/definitions/types.CreditGrantExpiryType'
       id:
         type: string
       metadata:
@@ -3092,20 +3100,42 @@ definitions:
     x-enum-varnames:
     - CreditGrantCadenceOneTime
     - CreditGrantCadenceRecurring
+  types.CreditGrantExpiryDurationUnit:
+    enum:
+    - DAY
+    - WEEK
+    - MONTH
+    - YEAR
+    type: string
+    x-enum-varnames:
+    - CreditGrantExpiryDurationUnitDays
+    - CreditGrantExpiryDurationUnitWeeks
+    - CreditGrantExpiryDurationUnitMonths
+    - CreditGrantExpiryDurationUnitYears
+  types.CreditGrantExpiryType:
+    enum:
+    - NEVER
+    - DURATION
+    - BILLING_CYCLE
+    type: string
+    x-enum-varnames:
+    - CreditGrantExpiryTypeNever
+    - CreditGrantExpiryTypeDuration
+    - CreditGrantExpiryTypeBillingCycle
   types.CreditGrantPeriod:
     enum:
     - DAILY
     - WEEKLY
     - MONTHLY
-    - YEARLY
+    - ANNUAL
     - QUARTERLY
-    - HALFYEARLY
+    - HALF_YEARLY
     type: string
     x-enum-varnames:
     - CreditGrantPeriodDaily
     - CreditGrantPeriodWeekly
     - CreditGrantPeriodMonthly
-    - CreditGrantPeriodYearly
+    - CreditGrantPeriodAnnual
     - CreditGrantPeriodQuarter
     - CreditGrantPeriodHalfYear
   types.CreditGrantScope:

@@ -6302,24 +6302,30 @@ const docTemplate = `{
         "dto.CreateCreditGrantRequest": {
             "type": "object",
             "required": [
-                "amount",
                 "cadence",
+                "credits",
                 "currency",
                 "name",
                 "scope"
             ],
             "properties": {
-                "amount": {
-                    "type": "number"
-                },
                 "cadence": {
                     "$ref": "#/definitions/types.CreditGrantCadence"
+                },
+                "credits": {
+                    "type": "number"
                 },
                 "currency": {
                     "type": "string"
                 },
-                "expire_in_days": {
+                "expiration_duration": {
                     "type": "integer"
+                },
+                "expiration_duration_unit": {
+                    "$ref": "#/definitions/types.CreditGrantExpiryDurationUnit"
+                },
+                "expiration_type": {
+                    "$ref": "#/definitions/types.CreditGrantExpiryType"
                 },
                 "metadata": {
                     "$ref": "#/definitions/types.Metadata"
@@ -7112,9 +7118,6 @@ const docTemplate = `{
         "dto.CreditGrantResponse": {
             "type": "object",
             "properties": {
-                "amount": {
-                    "type": "number"
-                },
                 "cadence": {
                     "$ref": "#/definitions/types.CreditGrantCadence"
                 },
@@ -7124,14 +7127,23 @@ const docTemplate = `{
                 "created_by": {
                     "type": "string"
                 },
+                "credits": {
+                    "type": "number"
+                },
                 "currency": {
                     "type": "string"
                 },
                 "environment_id": {
                     "type": "string"
                 },
-                "expire_in_days": {
+                "expiration_duration": {
                     "type": "integer"
+                },
+                "expiration_duration_unit": {
+                    "$ref": "#/definitions/types.CreditGrantExpiryDurationUnit"
+                },
+                "expiration_type": {
+                    "$ref": "#/definitions/types.CreditGrantExpiryType"
                 },
                 "id": {
                     "type": "string"
@@ -10573,21 +10585,49 @@ const docTemplate = `{
                 "CreditGrantCadenceRecurring"
             ]
         },
+        "types.CreditGrantExpiryDurationUnit": {
+            "type": "string",
+            "enum": [
+                "DAY",
+                "WEEK",
+                "MONTH",
+                "YEAR"
+            ],
+            "x-enum-varnames": [
+                "CreditGrantExpiryDurationUnitDays",
+                "CreditGrantExpiryDurationUnitWeeks",
+                "CreditGrantExpiryDurationUnitMonths",
+                "CreditGrantExpiryDurationUnitYears"
+            ]
+        },
+        "types.CreditGrantExpiryType": {
+            "type": "string",
+            "enum": [
+                "NEVER",
+                "DURATION",
+                "BILLING_CYCLE"
+            ],
+            "x-enum-varnames": [
+                "CreditGrantExpiryTypeNever",
+                "CreditGrantExpiryTypeDuration",
+                "CreditGrantExpiryTypeBillingCycle"
+            ]
+        },
         "types.CreditGrantPeriod": {
             "type": "string",
             "enum": [
                 "DAILY",
                 "WEEKLY",
                 "MONTHLY",
-                "YEARLY",
+                "ANNUAL",
                 "QUARTERLY",
-                "HALFYEARLY"
+                "HALF_YEARLY"
             ],
             "x-enum-varnames": [
                 "CreditGrantPeriodDaily",
                 "CreditGrantPeriodWeekly",
                 "CreditGrantPeriodMonthly",
-                "CreditGrantPeriodYearly",
+                "CreditGrantPeriodAnnual",
                 "CreditGrantPeriodQuarter",
                 "CreditGrantPeriodHalfYear"
             ]

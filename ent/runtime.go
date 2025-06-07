@@ -125,10 +125,10 @@ func init() {
 	creditgrantDescScope := creditgrantFields[2].Descriptor()
 	// creditgrant.ScopeValidator is a validator for the "scope" field. It is called by the builders before save.
 	creditgrant.ScopeValidator = creditgrantDescScope.Validators[0].(func(string) error)
-	// creditgrantDescAmount is the schema descriptor for amount field.
-	creditgrantDescAmount := creditgrantFields[5].Descriptor()
-	// creditgrant.DefaultAmount holds the default value on creation for the amount field.
-	creditgrant.DefaultAmount = creditgrantDescAmount.Default.(decimal.Decimal)
+	// creditgrantDescCredits is the schema descriptor for credits field.
+	creditgrantDescCredits := creditgrantFields[5].Descriptor()
+	// creditgrant.DefaultCredits holds the default value on creation for the credits field.
+	creditgrant.DefaultCredits = creditgrantDescCredits.Default.(decimal.Decimal)
 	// creditgrantDescCurrency is the schema descriptor for currency field.
 	creditgrantDescCurrency := creditgrantFields[6].Descriptor()
 	// creditgrant.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
@@ -137,8 +137,14 @@ func init() {
 	creditgrantDescCadence := creditgrantFields[7].Descriptor()
 	// creditgrant.CadenceValidator is a validator for the "cadence" field. It is called by the builders before save.
 	creditgrant.CadenceValidator = creditgrantDescCadence.Validators[0].(func(string) error)
+	// creditgrantDescExpirationType is the schema descriptor for expiration_type field.
+	creditgrantDescExpirationType := creditgrantFields[10].Descriptor()
+	// creditgrant.DefaultExpirationType holds the default value on creation for the expiration_type field.
+	creditgrant.DefaultExpirationType = types.CreditGrantExpiryType(creditgrantDescExpirationType.Default.(string))
+	// creditgrant.ExpirationTypeValidator is a validator for the "expiration_type" field. It is called by the builders before save.
+	creditgrant.ExpirationTypeValidator = creditgrantDescExpirationType.Validators[0].(func(string) error)
 	// creditgrantDescMetadata is the schema descriptor for metadata field.
-	creditgrantDescMetadata := creditgrantFields[12].Descriptor()
+	creditgrantDescMetadata := creditgrantFields[14].Descriptor()
 	// creditgrant.DefaultMetadata holds the default value on creation for the metadata field.
 	creditgrant.DefaultMetadata = creditgrantDescMetadata.Default.(map[string]string)
 	customerMixin := schema.Customer{}.Mixin()

@@ -44,8 +44,8 @@ type CreditGrant struct {
 	PlanID *string `json:"plan_id,omitempty"`
 	// SubscriptionID holds the value of the "subscription_id" field.
 	SubscriptionID *string `json:"subscription_id,omitempty"`
-	// Amount holds the value of the "amount" field.
-	Amount decimal.Decimal `json:"amount,omitempty"`
+	// Credits holds the value of the "credits" field.
+	Credits decimal.Decimal `json:"credits,omitempty"`
 	// Currency holds the value of the "currency" field.
 	Currency string `json:"currency,omitempty"`
 	// Cadence holds the value of the "cadence" field.
@@ -54,8 +54,12 @@ type CreditGrant struct {
 	Period *types.CreditGrantPeriod `json:"period,omitempty"`
 	// PeriodCount holds the value of the "period_count" field.
 	PeriodCount *int `json:"period_count,omitempty"`
-	// ExpireInDays holds the value of the "expire_in_days" field.
-	ExpireInDays *int `json:"expire_in_days,omitempty"`
+	// ExpirationType holds the value of the "expiration_type" field.
+	ExpirationType types.CreditGrantExpiryType `json:"expiration_type,omitempty"`
+	// ExpirationDuration holds the value of the "expiration_duration" field.
+	ExpirationDuration *int `json:"expiration_duration,omitempty"`
+	// ExpirationDurationUnit holds the value of the "expiration_duration_unit" field.
+	ExpirationDurationUnit *types.CreditGrantExpiryDurationUnit `json:"expiration_duration_unit,omitempty"`
 	// Priority holds the value of the "priority" field.
 	Priority *int `json:"priority,omitempty"`
 	// Metadata holds the value of the "metadata" field.
@@ -106,11 +110,11 @@ func (*CreditGrant) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case creditgrant.FieldMetadata:
 			values[i] = new([]byte)
-		case creditgrant.FieldAmount:
+		case creditgrant.FieldCredits:
 			values[i] = new(decimal.Decimal)
-		case creditgrant.FieldPeriodCount, creditgrant.FieldExpireInDays, creditgrant.FieldPriority:
+		case creditgrant.FieldPeriodCount, creditgrant.FieldExpirationDuration, creditgrant.FieldPriority:
 			values[i] = new(sql.NullInt64)
-		case creditgrant.FieldID, creditgrant.FieldTenantID, creditgrant.FieldStatus, creditgrant.FieldCreatedBy, creditgrant.FieldUpdatedBy, creditgrant.FieldEnvironmentID, creditgrant.FieldName, creditgrant.FieldScope, creditgrant.FieldPlanID, creditgrant.FieldSubscriptionID, creditgrant.FieldCurrency, creditgrant.FieldCadence, creditgrant.FieldPeriod:
+		case creditgrant.FieldID, creditgrant.FieldTenantID, creditgrant.FieldStatus, creditgrant.FieldCreatedBy, creditgrant.FieldUpdatedBy, creditgrant.FieldEnvironmentID, creditgrant.FieldName, creditgrant.FieldScope, creditgrant.FieldPlanID, creditgrant.FieldSubscriptionID, creditgrant.FieldCurrency, creditgrant.FieldCadence, creditgrant.FieldPeriod, creditgrant.FieldExpirationType, creditgrant.FieldExpirationDurationUnit:
 			values[i] = new(sql.NullString)
 		case creditgrant.FieldCreatedAt, creditgrant.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -203,11 +207,11 @@ func (cg *CreditGrant) assignValues(columns []string, values []any) error {
 				cg.SubscriptionID = new(string)
 				*cg.SubscriptionID = value.String
 			}
-		case creditgrant.FieldAmount:
+		case creditgrant.FieldCredits:
 			if value, ok := values[i].(*decimal.Decimal); !ok {
-				return fmt.Errorf("unexpected type %T for field amount", values[i])
+				return fmt.Errorf("unexpected type %T for field credits", values[i])
 			} else if value != nil {
-				cg.Amount = *value
+				cg.Credits = *value
 			}
 		case creditgrant.FieldCurrency:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -235,12 +239,25 @@ func (cg *CreditGrant) assignValues(columns []string, values []any) error {
 				cg.PeriodCount = new(int)
 				*cg.PeriodCount = int(value.Int64)
 			}
-		case creditgrant.FieldExpireInDays:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field expire_in_days", values[i])
+		case creditgrant.FieldExpirationType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field expiration_type", values[i])
 			} else if value.Valid {
-				cg.ExpireInDays = new(int)
-				*cg.ExpireInDays = int(value.Int64)
+				cg.ExpirationType = types.CreditGrantExpiryType(value.String)
+			}
+		case creditgrant.FieldExpirationDuration:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field expiration_duration", values[i])
+			} else if value.Valid {
+				cg.ExpirationDuration = new(int)
+				*cg.ExpirationDuration = int(value.Int64)
+			}
+		case creditgrant.FieldExpirationDurationUnit:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field expiration_duration_unit", values[i])
+			} else if value.Valid {
+				cg.ExpirationDurationUnit = new(types.CreditGrantExpiryDurationUnit)
+				*cg.ExpirationDurationUnit = types.CreditGrantExpiryDurationUnit(value.String)
 			}
 		case creditgrant.FieldPriority:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -340,8 +357,8 @@ func (cg *CreditGrant) String() string {
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	builder.WriteString("amount=")
-	builder.WriteString(fmt.Sprintf("%v", cg.Amount))
+	builder.WriteString("credits=")
+	builder.WriteString(fmt.Sprintf("%v", cg.Credits))
 	builder.WriteString(", ")
 	builder.WriteString("currency=")
 	builder.WriteString(cg.Currency)
@@ -359,8 +376,16 @@ func (cg *CreditGrant) String() string {
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
-	if v := cg.ExpireInDays; v != nil {
-		builder.WriteString("expire_in_days=")
+	builder.WriteString("expiration_type=")
+	builder.WriteString(fmt.Sprintf("%v", cg.ExpirationType))
+	builder.WriteString(", ")
+	if v := cg.ExpirationDuration; v != nil {
+		builder.WriteString("expiration_duration=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := cg.ExpirationDurationUnit; v != nil {
+		builder.WriteString("expiration_duration_unit=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")

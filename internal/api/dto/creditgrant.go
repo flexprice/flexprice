@@ -12,18 +12,20 @@ import (
 
 // CreateCreditGrantRequest represents the request to create a new credit grant
 type CreateCreditGrantRequest struct {
-	Name           string                   `json:"name" binding:"required"`
-	Scope          types.CreditGrantScope   `json:"scope" binding:"required"`
-	PlanID         *string                  `json:"plan_id,omitempty"`
-	SubscriptionID *string                  `json:"subscription_id,omitempty"`
-	Amount         decimal.Decimal          `json:"amount" binding:"required"`
-	Currency       string                   `json:"currency" binding:"required"`
-	Cadence        types.CreditGrantCadence `json:"cadence" binding:"required"`
-	Period         *types.CreditGrantPeriod `json:"period,omitempty"`
-	PeriodCount    *int                     `json:"period_count,omitempty"`
-	ExpireInDays   *int                     `json:"expire_in_days,omitempty"`
-	Priority       *int                     `json:"priority,omitempty"`
-	Metadata       types.Metadata           `json:"metadata,omitempty"`
+	Name                   string                               `json:"name" binding:"required"`
+	Scope                  types.CreditGrantScope               `json:"scope" binding:"required"`
+	PlanID                 *string                              `json:"plan_id,omitempty"`
+	SubscriptionID         *string                              `json:"subscription_id,omitempty"`
+	Credits                decimal.Decimal                      `json:"credits" binding:"required"`
+	Currency               string                               `json:"currency" binding:"required"`
+	Cadence                types.CreditGrantCadence             `json:"cadence" binding:"required"`
+	Period                 *types.CreditGrantPeriod             `json:"period,omitempty"`
+	PeriodCount            *int                                 `json:"period_count,omitempty"`
+	ExpirationType         types.CreditGrantExpiryType          `json:"expiration_type,omitempty"`
+	ExpirationDuration     *int                                 `json:"expiration_duration,omitempty"`
+	ExpirationDurationUnit *types.CreditGrantExpiryDurationUnit `json:"expiration_duration_unit,omitempty"`
+	Priority               *int                                 `json:"priority,omitempty"`
+	Metadata               types.Metadata                       `json:"metadata,omitempty"`
 }
 
 // UpdateCreditGrantRequest represents the request to update an existing credit grant
@@ -95,11 +97,11 @@ func (r *CreateCreditGrantRequest) Validate() error {
 			Mark(errors.ErrValidation)
 	}
 
-	if r.Amount.LessThanOrEqual(decimal.Zero) {
-		return errors.NewError("amount must be greater than zero").
-			WithHint("Please provide a positive amount").
+	if r.Credits.LessThanOrEqual(decimal.Zero) {
+		return errors.NewError("credits must be greater than zero").
+			WithHint("Please provide a positive credits").
 			WithReportableDetails(map[string]interface{}{
-				"amount": r.Amount,
+				"credits": r.Credits,
 			}).
 			Mark(errors.ErrValidation)
 	}
@@ -116,6 +118,10 @@ func (r *CreateCreditGrantRequest) Validate() error {
 			Mark(errors.ErrValidation)
 	}
 
+	if err := r.ExpirationType.Validate(); err != nil {
+		return err
+	}
+
 	// Validate based on cadence
 	if r.Cadence == types.CreditGrantCadenceRecurring {
 		if r.Period == nil || *r.Period == "" {
@@ -128,27 +134,43 @@ func (r *CreateCreditGrantRequest) Validate() error {
 		}
 	}
 
+	if r.ExpirationType == types.CreditGrantExpiryTypeDuration {
+
+		if err := r.ExpirationDurationUnit.Validate(); err != nil {
+			return err
+		}
+
+		if r.ExpirationDuration == nil || *r.ExpirationDuration <= 0 {
+			return errors.NewError("expiration_duration is required for DURATION expiration type").
+				WithHint("Please provide a valid expiration duration").
+				Mark(errors.ErrValidation)
+		}
+
+	}
+
 	return nil
 }
 
 // ToCreditGrant converts CreateCreditGrantRequest to domain CreditGrant
 func (r *CreateCreditGrantRequest) ToCreditGrant(ctx context.Context) *creditgrant.CreditGrant {
 	return &creditgrant.CreditGrant{
-		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CREDIT_GRANT),
-		Name:           r.Name,
-		Scope:          r.Scope,
-		PlanID:         r.PlanID,
-		SubscriptionID: r.SubscriptionID,
-		Amount:         r.Amount,
-		Currency:       r.Currency,
-		Cadence:        r.Cadence,
-		Period:         r.Period,
-		PeriodCount:    r.PeriodCount,
-		ExpireInDays:   r.ExpireInDays,
-		Priority:       r.Priority,
-		Metadata:       r.Metadata,
-		EnvironmentID:  types.GetEnvironmentID(ctx),
-		BaseModel:      types.GetDefaultBaseModel(ctx),
+		ID:                     types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CREDIT_GRANT),
+		Name:                   r.Name,
+		Scope:                  r.Scope,
+		PlanID:                 r.PlanID,
+		SubscriptionID:         r.SubscriptionID,
+		Credits:                r.Credits,
+		Currency:               r.Currency,
+		Cadence:                r.Cadence,
+		Period:                 r.Period,
+		PeriodCount:            r.PeriodCount,
+		ExpirationType:         r.ExpirationType,
+		ExpirationDuration:     r.ExpirationDuration,
+		ExpirationDurationUnit: r.ExpirationDurationUnit,
+		Priority:               r.Priority,
+		Metadata:               r.Metadata,
+		EnvironmentID:          types.GetEnvironmentID(ctx),
+		BaseModel:              types.GetDefaultBaseModel(ctx),
 	}
 }
 

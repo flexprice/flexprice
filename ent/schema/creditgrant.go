@@ -55,7 +55,7 @@ func (CreditGrant) Fields() []ent.Field {
 			}).
 			Optional().
 			Nillable(),
-		field.Other("amount", decimal.Decimal{}).
+		field.Other("credits", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(20,8)",
 			}).
@@ -86,7 +86,23 @@ func (CreditGrant) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Immutable(),
-		field.Int("expire_in_days").
+		field.String("expiration_type").
+			GoType(types.CreditGrantExpiryType(types.CreditGrantExpiryTypeNever)).
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Default(string(types.CreditGrantExpiryTypeNever)).
+			NotEmpty().
+			Immutable(),
+		field.Int("expiration_duration").
+			Optional().
+			Nillable().
+			Immutable(),
+		field.String("expiration_duration_unit").
+			GoType(types.CreditGrantExpiryDurationUnit(types.CreditGrantExpiryDurationUnitDays)).
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
 			Optional().
 			Nillable().
 			Immutable(),

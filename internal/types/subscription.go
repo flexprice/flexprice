@@ -257,15 +257,17 @@ type SchedulePhaseLineItem struct {
 
 // SchedulePhaseCreditGrant represents a credit grant in a schedule phase
 type SchedulePhaseCreditGrant struct {
-	Name         string             `json:"name" binding:"required"`
-	Scope        CreditGrantScope   `json:"scope" binding:"required"`
-	PlanID       *string            `json:"plan_id,omitempty"`
-	Amount       decimal.Decimal    `json:"amount" binding:"required"`
-	Currency     string             `json:"currency" binding:"required"`
-	Cadence      CreditGrantCadence `json:"cadence" binding:"required"`
-	Period       *CreditGrantPeriod `json:"period,omitempty"`
-	PeriodCount  *int               `json:"period_count,omitempty"`
-	ExpireInDays *int               `json:"expire_in_days,omitempty"`
-	Priority     *int               `json:"priority,omitempty"`
-	Metadata     Metadata           `json:"metadata,omitempty"`
+	Name                   string                         `json:"name" binding:"required"`
+	Scope                  CreditGrantScope               `json:"scope" binding:"required"`
+	PlanID                 *string                        `json:"plan_id,omitempty"`
+	Credits                decimal.Decimal                `json:"credits" binding:"required"`
+	Currency               string                         `json:"currency" binding:"required"`
+	Cadence                CreditGrantCadence             `json:"cadence" binding:"required"`
+	Period                 *CreditGrantPeriod             `json:"period,omitempty"`
+	PeriodCount            *int                           `json:"period_count,omitempty"`
+	ExpirationType         CreditGrantExpiryType          `json:"expiration_type,omitempty"`
+	ExpirationDuration     *int                           `json:"expiration_duration,omitempty"`
+	ExpirationDurationUnit *CreditGrantExpiryDurationUnit `json:"expiration_duration_unit,omitempty"`
+	Priority               *int                           `json:"priority,omitempty"`
+	Metadata               Metadata                       `json:"metadata,omitempty"`
 }
