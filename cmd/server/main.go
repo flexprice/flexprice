@@ -118,6 +118,7 @@ func main() {
 			repository.NewCustomerRepository,
 			repository.NewPlanRepository,
 			repository.NewSubscriptionRepository,
+			repository.NewSubscriptionScheduleRepository,
 			repository.NewWalletRepository,
 			repository.NewTenantRepository,
 			repository.NewEnvironmentRepository,
@@ -127,6 +128,7 @@ func main() {
 			repository.NewPaymentRepository,
 			repository.NewTaskRepository,
 			repository.NewSecretRepository,
+			repository.NewCreditGrantRepository,
 			// PubSub
 			pubsubRouter.NewRouter,
 
@@ -169,6 +171,7 @@ func main() {
 			service.NewSecretService,
 			service.NewOnboardingService,
 			service.NewBillingService,
+			service.NewCreditGrantService,
 		),
 	)
 
@@ -214,6 +217,7 @@ func provideHandlers(
 	secretService service.SecretService,
 	onboardingService service.OnboardingService,
 	billingService service.BillingService,
+	creditGrantService service.CreditGrantService,
 ) api.Handlers {
 	return api.Handlers{
 		Events:            v1.NewEventsHandler(eventService, eventPostProcessingService, logger),
@@ -224,7 +228,7 @@ func provideHandlers(
 		Health:            v1.NewHealthHandler(logger),
 		Price:             v1.NewPriceHandler(priceService, logger),
 		Customer:          v1.NewCustomerHandler(customerService, billingService, logger),
-		Plan:              v1.NewPlanHandler(planService, entitlementService, logger),
+		Plan:              v1.NewPlanHandler(planService, entitlementService, creditGrantService, logger),
 		Subscription:      v1.NewSubscriptionHandler(subscriptionService, logger),
 		SubscriptionPause: v1.NewSubscriptionPauseHandler(subscriptionService, logger),
 		Wallet:            v1.NewWalletHandler(walletService, logger),
@@ -238,6 +242,7 @@ func provideHandlers(
 		Onboarding:        v1.NewOnboardingHandler(onboardingService, logger),
 		CronSubscription:  cron.NewSubscriptionHandler(subscriptionService, temporalService, logger),
 		CronWallet:        cron.NewWalletCronHandler(logger, temporalService, walletService, tenantService),
+		CreditGrant:       v1.NewCreditGrantHandler(creditGrantService, logger),
 	}
 }
 

@@ -439,20 +439,79 @@ func (s *WalletServiceSuite) setupWallet() {
 	}
 	s.NoError(s.GetStores().WalletRepo.CreateWallet(s.GetContext(), s.testData.wallet))
 }
-
 func (s *WalletServiceSuite) TestCreateWallet() {
+	// Test successful wallet creation with CustomerID
 	req := &dto.CreateWalletRequest{
 		CustomerID: "customer-2",
 		Currency:   "usd",
 		Metadata:   types.Metadata{"key": "value"},
 	}
-
 	resp, err := s.service.CreateWallet(s.GetContext(), req)
 	s.NoError(err)
 	s.NotNil(resp)
 	s.Equal(req.CustomerID, resp.CustomerID)
 	s.Equal(req.Currency, resp.Currency)
 	s.Equal(decimal.Zero, resp.Balance)
+
+	// Test successful wallet creation with ExternalCustomerID
+	newCustomer := &customer.Customer{
+		ID:         "cust_external_test",
+		ExternalID: "ext_cust_test_123",
+		Name:       "Test External Customer",
+		Email:      "external@test.com",
+		BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(s.GetContext(), newCustomer))
+
+	req = &dto.CreateWalletRequest{
+		ExternalCustomerID: newCustomer.ExternalID, // Use the external ID just created
+		Currency:           "usd",
+	}
+	resp, err = s.service.CreateWallet(s.GetContext(), req)
+	s.NoError(err)
+	s.NotNil(resp)
+	s.Equal(newCustomer.ID, resp.CustomerID) // Should map to internal ID
+	s.Equal(req.Currency, resp.Currency)
+
+	// Test validation errors
+	testCases := []struct {
+		name   string
+		req    *dto.CreateWalletRequest
+		errMsg string
+	}{
+		{
+			name: "missing both IDs",
+			req: &dto.CreateWalletRequest{
+				Currency: "usd",
+			},
+			errMsg: "customer_id or external_customer_id is required",
+		},
+		{
+			name: "invalid customer ID",
+			req: &dto.CreateWalletRequest{
+				CustomerID: "_customer2",
+				Currency:   "usd",
+			},
+			errMsg: "invalid customer id",
+		},
+		{
+			name: "invalid external customer ID",
+			req: &dto.CreateWalletRequest{
+				ExternalCustomerID: "customer%2",
+				Currency:           "usd",
+			},
+			errMsg: "invalid external customer id",
+		},
+		// Add more validation test cases
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			_, err := s.service.CreateWallet(s.GetContext(), tc.req)
+			s.Error(err)
+			s.Contains(err.Error(), tc.errMsg)
+		})
+	}
 }
 
 func (s *WalletServiceSuite) TestGetWalletByID() {
@@ -488,6 +547,7 @@ func (s *WalletServiceSuite) TestTopUpWallet() {
 		CreditsToAdd:      decimal.NewFromInt(500),
 		IdempotencyKey:    lo.ToPtr("test_topup_1"),
 		TransactionReason: types.TransactionReasonFreeCredit,
+		Priority:          lo.ToPtr(2), // Test with a priority value
 	}
 	resp, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, topUpReq)
 	s.NoError(err)
@@ -495,6 +555,27 @@ func (s *WalletServiceSuite) TestTopUpWallet() {
 	s.True(decimal.NewFromInt(1500).Equal(resp.Balance),
 		"Balance mismatch: expected %s, got %s",
 		decimal.NewFromInt(1500), resp.Balance)
+
+	// Verify the transaction has the correct priority
+	filter := types.NewWalletTransactionFilter()
+	filter.WalletID = &s.testData.wallet.ID
+	filter.Type = lo.ToPtr(types.TransactionTypeCredit)
+	transactions, err := s.GetStores().WalletRepo.ListWalletTransactions(s.GetContext(), filter)
+	s.NoError(err)
+	s.NotEmpty(transactions)
+
+	// Find the transaction with the matching idempotency key
+	var foundTx *wallet.Transaction
+	for _, tx := range transactions {
+		if tx.IdempotencyKey == "test_topup_1" {
+			foundTx = tx
+			break
+		}
+	}
+
+	s.NotNil(foundTx, "Transaction with matching idempotency key not found")
+	s.NotNil(foundTx.Priority, "Transaction priority should not be nil")
+	s.Equal(2, *foundTx.Priority, "Transaction priority mismatch")
 }
 
 func (s *WalletServiceSuite) TestTerminateWallet() {
@@ -1130,6 +1211,126 @@ func (s *WalletServiceSuite) TestDebitWithMultipleCredits() {
 		totalRemaining = totalRemaining.Add(c.CreditsAvailable)
 	}
 	s.True(expectedBalance.Equal(totalRemaining))
+}
+
+func (s *WalletServiceSuite) TestDebitWithPrioritizedCredits() {
+	s.setupWallet()
+	// Reset the wallet's initial state
+	s.testData.wallet.Balance = decimal.Zero
+	s.testData.wallet.CreditBalance = decimal.Zero
+	err := s.GetStores().WalletRepo.UpdateWalletBalance(s.GetContext(), s.testData.wallet.ID, decimal.Zero, decimal.Zero)
+	s.NoError(err)
+
+	// Create credits with different priorities, amounts, and expiry dates
+	credits := []struct {
+		amount   decimal.Decimal
+		priority *int
+		expiry   *int
+	}{
+		{decimal.NewFromInt(50), nil, nil},                        // No priority, no expiry
+		{decimal.NewFromInt(30), lo.ToPtr(3), nil},                // Priority 3, no expiry
+		{decimal.NewFromInt(40), lo.ToPtr(1), nil},                // Priority 1 (highest), no expiry
+		{decimal.NewFromInt(20), lo.ToPtr(2), nil},                // Priority 2, no expiry
+		{decimal.NewFromInt(60), lo.ToPtr(1), lo.ToPtr(20360301)}, // Priority 1, with expiry
+	}
+
+	// Add all credits
+	for i, credit := range credits {
+		op := &dto.TopUpWalletRequest{
+			CreditsToAdd:      credit.amount,
+			Description:       "Test credit with priority",
+			ExpiryDate:        credit.expiry,
+			Priority:          credit.priority,
+			IdempotencyKey:    lo.ToPtr(fmt.Sprintf("test_topup_priority_%d", i)),
+			TransactionReason: types.TransactionReasonFreeCredit,
+		}
+		_, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, op)
+		s.NoError(err)
+	}
+
+	// Verify initial state
+	walletObj, err := s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), s.testData.wallet.ID)
+	s.NoError(err)
+
+	// Calculate total credits
+	totalCredits := decimal.NewFromInt(200) // 50 + 30 + 40 + 20 + 60
+	s.True(totalCredits.Equal(walletObj.CreditBalance), "Expected %s, got %s", totalCredits, walletObj.CreditBalance)
+
+	// Find eligible credits to verify they're sorted by priority
+	eligibleCredits, err := s.GetStores().WalletRepo.FindEligibleCredits(
+		s.GetContext(),
+		s.testData.wallet.ID,
+		decimal.NewFromInt(200),
+		100,
+	)
+	s.NoError(err)
+	s.Len(eligibleCredits, 5)
+
+	// Verify eligible credits are sorted correctly by priority first
+	// Priority order should be: 1, 1, 2, 3, nil
+	s.NotNil(eligibleCredits[0].Priority)
+	s.Equal(1, *eligibleCredits[0].Priority)
+	s.NotNil(eligibleCredits[1].Priority)
+	s.Equal(1, *eligibleCredits[1].Priority)
+	s.NotNil(eligibleCredits[2].Priority)
+	s.Equal(2, *eligibleCredits[2].Priority)
+	s.NotNil(eligibleCredits[3].Priority)
+	s.Equal(3, *eligibleCredits[3].Priority)
+	s.Nil(eligibleCredits[4].Priority)
+
+	// Debit an amount that will consume some but not all credits
+	debitOp := &wallet.WalletOperation{
+		WalletID:          s.testData.wallet.ID,
+		Type:              types.TransactionTypeDebit,
+		CreditAmount:      decimal.NewFromInt(90),
+		Description:       "Priority-based debit",
+		TransactionReason: types.TransactionReasonInvoicePayment,
+	}
+	err = s.service.DebitWallet(s.GetContext(), debitOp)
+	s.NoError(err)
+
+	// Verify remaining credits - should have consumed from priority 1 credits first
+	remainingCredits, err := s.GetStores().WalletRepo.FindEligibleCredits(
+		s.GetContext(),
+		s.testData.wallet.ID,
+		decimal.NewFromInt(200),
+		100,
+	)
+	s.NoError(err)
+
+	// Calculate which credits should be left:
+	// Original: [40(p1), 60(p1), 20(p2), 30(p3), 50(nil)] = 200
+	// After debit of 90, should have used 40 and part of 60 from p1
+	// So remaining should have 10 in one p1 credit, then 20(p2), 30(p3), 50(nil) = 110
+
+	// Verify total remaining balance
+	expectedBalance := totalCredits.Sub(decimal.NewFromInt(90)) // 200 - 90 = 110
+	var totalRemaining decimal.Decimal
+	for _, c := range remainingCredits {
+		totalRemaining = totalRemaining.Add(c.CreditsAvailable)
+	}
+	s.True(expectedBalance.Equal(totalRemaining),
+		"Expected remaining balance %s, got %s", expectedBalance, totalRemaining)
+
+	// Verify wallet balance matches
+	walletObj, err = s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), s.testData.wallet.ID)
+	s.NoError(err)
+	s.True(expectedBalance.Equal(walletObj.CreditBalance),
+		"Expected wallet balance %s, got %s", expectedBalance, walletObj.CreditBalance)
+
+	// Since priority 1 credits are consumed first, we should see remaining credits
+	// still sorted by priority, but with reduced amounts for priority 1
+	// Find the priority 1 credit and verify it was partially consumed
+	foundPartialPriority1 := false
+	for _, c := range remainingCredits {
+		if c.Priority != nil && *c.Priority == 1 && c.CreditsAvailable.LessThan(decimal.NewFromInt(60)) {
+			foundPartialPriority1 = true
+			s.True(decimal.NewFromInt(10).Equal(c.CreditsAvailable),
+				"Expected 10 credits remaining for partially consumed priority 1 credit, got %s", c.CreditsAvailable)
+			break
+		}
+	}
+	s.True(foundPartialPriority1, "Should have found a partially consumed priority 1 credit")
 }
 
 func (s *WalletServiceSuite) TestGetCustomerWallets() {

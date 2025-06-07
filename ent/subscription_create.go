@@ -10,9 +10,12 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/flexprice/flexprice/ent/creditgrant"
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
+	"github.com/flexprice/flexprice/ent/subscriptionschedule"
+	"github.com/shopspring/decimal"
 )
 
 // SubscriptionCreate is the builder for creating a Subscription entity.
@@ -386,6 +389,34 @@ func (sc *SubscriptionCreate) SetNillableBillingCycle(s *string) *SubscriptionCr
 	return sc
 }
 
+// SetCommitmentAmount sets the "commitment_amount" field.
+func (sc *SubscriptionCreate) SetCommitmentAmount(d decimal.Decimal) *SubscriptionCreate {
+	sc.mutation.SetCommitmentAmount(d)
+	return sc
+}
+
+// SetNillableCommitmentAmount sets the "commitment_amount" field if the given value is not nil.
+func (sc *SubscriptionCreate) SetNillableCommitmentAmount(d *decimal.Decimal) *SubscriptionCreate {
+	if d != nil {
+		sc.SetCommitmentAmount(*d)
+	}
+	return sc
+}
+
+// SetOverageFactor sets the "overage_factor" field.
+func (sc *SubscriptionCreate) SetOverageFactor(d decimal.Decimal) *SubscriptionCreate {
+	sc.mutation.SetOverageFactor(d)
+	return sc
+}
+
+// SetNillableOverageFactor sets the "overage_factor" field if the given value is not nil.
+func (sc *SubscriptionCreate) SetNillableOverageFactor(d *decimal.Decimal) *SubscriptionCreate {
+	if d != nil {
+		sc.SetOverageFactor(*d)
+	}
+	return sc
+}
+
 // SetID sets the "id" field.
 func (sc *SubscriptionCreate) SetID(s string) *SubscriptionCreate {
 	sc.mutation.SetID(s)
@@ -420,6 +451,40 @@ func (sc *SubscriptionCreate) AddPauses(s ...*SubscriptionPause) *SubscriptionCr
 		ids[i] = s[i].ID
 	}
 	return sc.AddPauseIDs(ids...)
+}
+
+// AddCreditGrantIDs adds the "credit_grants" edge to the CreditGrant entity by IDs.
+func (sc *SubscriptionCreate) AddCreditGrantIDs(ids ...string) *SubscriptionCreate {
+	sc.mutation.AddCreditGrantIDs(ids...)
+	return sc
+}
+
+// AddCreditGrants adds the "credit_grants" edges to the CreditGrant entity.
+func (sc *SubscriptionCreate) AddCreditGrants(c ...*CreditGrant) *SubscriptionCreate {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return sc.AddCreditGrantIDs(ids...)
+}
+
+// SetScheduleID sets the "schedule" edge to the SubscriptionSchedule entity by ID.
+func (sc *SubscriptionCreate) SetScheduleID(id string) *SubscriptionCreate {
+	sc.mutation.SetScheduleID(id)
+	return sc
+}
+
+// SetNillableScheduleID sets the "schedule" edge to the SubscriptionSchedule entity by ID if the given value is not nil.
+func (sc *SubscriptionCreate) SetNillableScheduleID(id *string) *SubscriptionCreate {
+	if id != nil {
+		sc = sc.SetScheduleID(*id)
+	}
+	return sc
+}
+
+// SetSchedule sets the "schedule" edge to the SubscriptionSchedule entity.
+func (sc *SubscriptionCreate) SetSchedule(s *SubscriptionSchedule) *SubscriptionCreate {
+	return sc.SetScheduleID(s.ID)
 }
 
 // Mutation returns the SubscriptionMutation object of the builder.
@@ -512,6 +577,10 @@ func (sc *SubscriptionCreate) defaults() {
 	if _, ok := sc.mutation.BillingCycle(); !ok {
 		v := subscription.DefaultBillingCycle
 		sc.mutation.SetBillingCycle(v)
+	}
+	if _, ok := sc.mutation.OverageFactor(); !ok {
+		v := subscription.DefaultOverageFactor
+		sc.mutation.SetOverageFactor(v)
 	}
 }
 
@@ -764,6 +833,14 @@ func (sc *SubscriptionCreate) createSpec() (*Subscription, *sqlgraph.CreateSpec)
 		_spec.SetField(subscription.FieldBillingCycle, field.TypeString, value)
 		_node.BillingCycle = value
 	}
+	if value, ok := sc.mutation.CommitmentAmount(); ok {
+		_spec.SetField(subscription.FieldCommitmentAmount, field.TypeOther, value)
+		_node.CommitmentAmount = &value
+	}
+	if value, ok := sc.mutation.OverageFactor(); ok {
+		_spec.SetField(subscription.FieldOverageFactor, field.TypeOther, value)
+		_node.OverageFactor = &value
+	}
 	if nodes := sc.mutation.LineItemsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
@@ -789,6 +866,38 @@ func (sc *SubscriptionCreate) createSpec() (*Subscription, *sqlgraph.CreateSpec)
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(subscriptionpause.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := sc.mutation.CreditGrantsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.CreditGrantsTable,
+			Columns: []string{subscription.CreditGrantsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(creditgrant.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := sc.mutation.ScheduleIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   subscription.ScheduleTable,
+			Columns: []string{subscription.ScheduleColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionschedule.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

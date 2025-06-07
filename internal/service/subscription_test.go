@@ -1013,3 +1013,147 @@ func (s *SubscriptionServiceSuite) TestSubscriptionAnchor_CalendarAndAnniversary
 		})
 	}
 }
+
+func (s *SubscriptionServiceSuite) TestGetUsageBySubscriptionWithCommitment() {
+	// Create a subscription with commitment amount and overage factor
+	commitmentSub := &subscription.Subscription{
+		ID:                 "sub_commitment",
+		PlanID:             s.testData.plan.ID,
+		CustomerID:         s.testData.customer.ID,
+		StartDate:          s.testData.now.Add(-30 * 24 * time.Hour),
+		CurrentPeriodStart: s.testData.now.Add(-24 * time.Hour),
+		CurrentPeriodEnd:   s.testData.now.Add(6 * 24 * time.Hour),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		CommitmentAmount:   lo.ToPtr(decimal.NewFromFloat(50)),
+		OverageFactor:      lo.ToPtr(decimal.NewFromFloat(1.5)),
+		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
+	}
+
+	// Create line items for the subscription (just using API calls for simplicity)
+	lineItems := []*subscription.SubscriptionLineItem{
+		{
+			ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+			SubscriptionID:   commitmentSub.ID,
+			CustomerID:       commitmentSub.CustomerID,
+			PlanID:           s.testData.plan.ID,
+			PlanDisplayName:  s.testData.plan.Name,
+			PriceID:          s.testData.prices.apiCalls.ID,
+			PriceType:        s.testData.prices.apiCalls.Type,
+			MeterID:          s.testData.meters.apiCalls.ID,
+			MeterDisplayName: s.testData.meters.apiCalls.Name,
+			DisplayName:      s.testData.meters.apiCalls.Name,
+			Quantity:         decimal.Zero,
+			Currency:         commitmentSub.Currency,
+			BillingPeriod:    commitmentSub.BillingPeriod,
+			BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+		},
+	}
+
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(s.GetContext(), commitmentSub, lineItems))
+
+	// Create test events - just API calls for simplicity
+	for i := 0; i < 1000; i++ {
+		event := &events.Event{
+			ID:                 s.GetUUID(),
+			TenantID:           commitmentSub.TenantID,
+			EventName:          s.testData.meters.apiCalls.EventName,
+			ExternalCustomerID: s.testData.customer.ExternalID,
+			Timestamp:          s.testData.now.Add(-1 * time.Hour),
+			Properties:         map[string]interface{}{},
+		}
+		s.NoError(s.GetStores().EventRepo.InsertEvent(s.GetContext(), event))
+	}
+
+	// Test case 1: Usage below commitment amount
+	s.Run("usage_below_commitment", func() {
+		// Set commitment to a high value to ensure usage is below it
+		commitmentSub.CommitmentAmount = lo.ToPtr(decimal.NewFromFloat(100))
+		commitmentSub.OverageFactor = lo.ToPtr(decimal.NewFromFloat(1.5))
+		s.NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), commitmentSub))
+
+		req := &dto.GetUsageBySubscriptionRequest{
+			SubscriptionID: commitmentSub.ID,
+			StartTime:      s.testData.now.Add(-48 * time.Hour),
+			EndTime:        s.testData.now,
+		}
+
+		resp, err := s.service.GetUsageBySubscription(s.GetContext(), req)
+		s.NoError(err)
+		s.NotNil(resp)
+
+		// Log the response for debugging
+		s.T().Logf("Case 1 - Total amount: %v, Commitment: %v, HasOverage: %v, Overage: %v",
+			resp.Amount, resp.CommitmentAmount, resp.HasOverage, resp.OverageAmount)
+
+		// Check that commitment amount is correct and no overage
+		s.Equal(100.0, resp.CommitmentAmount)
+		s.False(resp.HasOverage)
+		s.Equal(0.0, resp.OverageAmount)
+	})
+
+	// Test case 2: Usage exceeds commitment amount
+	s.Run("usage_exceeds_commitment", func() {
+		// Set commitment to a low value to ensure usage exceeds it
+		commitmentSub.CommitmentAmount = lo.ToPtr(decimal.NewFromFloat(10))
+		commitmentSub.OverageFactor = lo.ToPtr(decimal.NewFromFloat(1.5))
+		s.NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), commitmentSub))
+
+		req := &dto.GetUsageBySubscriptionRequest{
+			SubscriptionID: commitmentSub.ID,
+			StartTime:      s.testData.now.Add(-48 * time.Hour),
+			EndTime:        s.testData.now,
+		}
+
+		resp, err := s.service.GetUsageBySubscription(s.GetContext(), req)
+		s.NoError(err)
+		s.NotNil(resp)
+
+		// Log the response for debugging
+		s.T().Logf("Case 2 - Total amount: %v, Commitment: %v, HasOverage: %v, Overage: %v",
+			resp.Amount, resp.CommitmentAmount, resp.HasOverage, resp.OverageAmount)
+
+		// Get base amount without commitment
+		baseReq := &dto.GetUsageBySubscriptionRequest{
+			SubscriptionID: commitmentSub.ID,
+			StartTime:      s.testData.now.Add(-48 * time.Hour),
+			EndTime:        s.testData.now,
+		}
+
+		// Temporarily remove commitment to get base amount
+		origCommitment := commitmentSub.CommitmentAmount
+		origFactor := commitmentSub.OverageFactor
+		commitmentSub.CommitmentAmount = lo.ToPtr(decimal.Zero)
+		commitmentSub.OverageFactor = lo.ToPtr(decimal.NewFromInt(1))
+		s.NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), commitmentSub))
+
+		baseResp, err := s.service.GetUsageBySubscription(s.GetContext(), baseReq)
+		s.NoError(err)
+
+		// Restore commitment
+		commitmentSub.CommitmentAmount = origCommitment
+		commitmentSub.OverageFactor = origFactor
+		s.NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), commitmentSub))
+
+		s.T().Logf("Base amount without commitment: %v", baseResp.Amount)
+
+		// Check that commitment amount is correct
+		s.Equal(10.0, resp.CommitmentAmount)
+		s.True(resp.HasOverage)
+
+		// Check that at least one charge is marked as overage
+		hasOverageCharge := false
+		for _, charge := range resp.Charges {
+			if charge.IsOverage {
+				hasOverageCharge = true
+				break
+			}
+		}
+		s.True(hasOverageCharge, "Should have at least one charge marked as overage")
+
+		// Check total amount logic - should be higher with overage than base amount
+		s.Greater(resp.Amount, baseResp.Amount, "Amount with overage should be greater than base amount")
+	})
+}

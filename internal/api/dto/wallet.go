@@ -16,7 +16,8 @@ import (
 
 // CreateWalletRequest represents the request to create a wallet
 type CreateWalletRequest struct {
-	CustomerID          string                 `json:"customer_id" binding:"required"`
+	CustomerID          string                 `json:"customer_id,omitempty"`
+	ExternalCustomerID  string                 `json:"external_customer_id,omitempty"`
 	Name                string                 `json:"name,omitempty"`
 	Currency            string                 `json:"currency" binding:"required"`
 	Description         string                 `json:"description,omitempty"`
@@ -168,6 +169,25 @@ func (r *CreateWalletRequest) Validate() error {
 			}).
 			Mark(ierr.ErrValidation)
 	}
+
+	if r.CustomerID == "" && r.ExternalCustomerID == "" {
+		return ierr.NewError("customer_id or external_customer_id is required").
+			WithHint("Please provide either customer_id or external_customer_id").
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.ExternalCustomerID != "" {
+		if err := types.ValidateExternalCustomerID(r.ExternalCustomerID); err != nil {
+			return err
+		}
+	}
+
+	if r.CustomerID != "" {
+		if err := types.ValidateCustomerID(r.CustomerID); err != nil {
+			return err
+		}
+	}
+
 	return validator.ValidateRequest(r)
 }
 
@@ -235,6 +255,7 @@ type WalletTransactionResponse struct {
 	CreditBalanceAfter  decimal.Decimal             `json:"credit_balance_after"`
 	TransactionStatus   types.TransactionStatus     `json:"transaction_status"`
 	ExpiryDate          *time.Time                  `json:"expiry_date,omitempty"`
+	Priority            *int                        `json:"priority,omitempty"`
 	CreditsAvailable    decimal.Decimal             `json:"credits_available,omitempty"`
 	TransactionReason   types.TransactionReason     `json:"transaction_reason,omitempty"`
 	ReferenceType       types.WalletTxReferenceType `json:"reference_type,omitempty"`
@@ -242,6 +263,7 @@ type WalletTransactionResponse struct {
 	Description         string                      `json:"description,omitempty"`
 	Metadata            types.Metadata              `json:"metadata,omitempty"`
 	CreatedAt           time.Time                   `json:"created_at"`
+	UpdatedAt           time.Time                   `json:"updated_at"`
 }
 
 // FromWalletTransaction converts a wallet transaction to a WalletTransactionResponse
@@ -256,6 +278,7 @@ func FromWalletTransaction(t *wallet.Transaction) *WalletTransactionResponse {
 		CreditBalanceAfter:  t.CreditBalanceAfter,
 		TransactionStatus:   t.TxStatus,
 		ExpiryDate:          t.ExpiryDate,
+		Priority:            t.Priority,
 		CreditsAvailable:    t.CreditsAvailable,
 		TransactionReason:   t.TransactionReason,
 		ReferenceType:       t.ReferenceType,
@@ -288,6 +311,10 @@ type TopUpWalletRequest struct {
 	// expiry_date_utc is the expiry date in UTC timezone
 	// ex 2025-01-01 00:00:00 UTC
 	ExpiryDateUTC *time.Time `json:"expiry_date_utc,omitempty"`
+	// priority is the priority of the transaction
+	// lower number means higher priority
+	// default is nil which means no priority at all
+	Priority *int `json:"priority,omitempty"`
 	// idempotency_key is a unique key for the transaction
 	IdempotencyKey *string `json:"idempotency_key" binding:"required"`
 	// description to add any specific details about the transaction
@@ -310,6 +337,7 @@ func (r *TopUpWalletRequest) Validate() error {
 		types.TransactionReasonFreeCredit,
 		types.TransactionReasonPurchasedCreditInvoiced,
 		types.TransactionReasonPurchasedCreditDirect,
+		types.TransactionReasonSubscriptionCredit,
 	}
 
 	if !lo.Contains(allowedTransactionReasons, r.TransactionReason) {
@@ -329,6 +357,12 @@ func (r *TopUpWalletRequest) Validate() error {
 				WithHint("Expiry date must be in the future").
 				Mark(ierr.ErrValidation)
 		}
+	}
+
+	if r.Priority != nil && *r.Priority < 0 {
+		return ierr.NewError("priority must be greater than or equal to 0").
+			WithHint("Priority must be a non-negative integer").
+			Mark(ierr.ErrValidation)
 	}
 
 	return nil

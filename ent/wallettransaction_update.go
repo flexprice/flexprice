@@ -239,6 +239,33 @@ func (wtu *WalletTransactionUpdate) SetNillableCreditsAvailable(d *decimal.Decim
 	return wtu
 }
 
+// SetPriority sets the "priority" field.
+func (wtu *WalletTransactionUpdate) SetPriority(i int) *WalletTransactionUpdate {
+	wtu.mutation.ResetPriority()
+	wtu.mutation.SetPriority(i)
+	return wtu
+}
+
+// SetNillablePriority sets the "priority" field if the given value is not nil.
+func (wtu *WalletTransactionUpdate) SetNillablePriority(i *int) *WalletTransactionUpdate {
+	if i != nil {
+		wtu.SetPriority(*i)
+	}
+	return wtu
+}
+
+// AddPriority adds i to the "priority" field.
+func (wtu *WalletTransactionUpdate) AddPriority(i int) *WalletTransactionUpdate {
+	wtu.mutation.AddPriority(i)
+	return wtu
+}
+
+// ClearPriority clears the value of the "priority" field.
+func (wtu *WalletTransactionUpdate) ClearPriority() *WalletTransactionUpdate {
+	wtu.mutation.ClearPriority()
+	return wtu
+}
+
 // Mutation returns the WalletTransactionMutation object of the builder.
 func (wtu *WalletTransactionUpdate) Mutation() *WalletTransactionMutation {
 	return wtu.mutation
@@ -370,6 +397,15 @@ func (wtu *WalletTransactionUpdate) sqlSave(ctx context.Context) (n int, err err
 	}
 	if wtu.mutation.IdempotencyKeyCleared() {
 		_spec.ClearField(wallettransaction.FieldIdempotencyKey, field.TypeString)
+	}
+	if value, ok := wtu.mutation.Priority(); ok {
+		_spec.SetField(wallettransaction.FieldPriority, field.TypeInt, value)
+	}
+	if value, ok := wtu.mutation.AddedPriority(); ok {
+		_spec.AddField(wallettransaction.FieldPriority, field.TypeInt, value)
+	}
+	if wtu.mutation.PriorityCleared() {
+		_spec.ClearField(wallettransaction.FieldPriority, field.TypeInt)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, wtu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -601,6 +637,33 @@ func (wtuo *WalletTransactionUpdateOne) SetNillableCreditsAvailable(d *decimal.D
 	return wtuo
 }
 
+// SetPriority sets the "priority" field.
+func (wtuo *WalletTransactionUpdateOne) SetPriority(i int) *WalletTransactionUpdateOne {
+	wtuo.mutation.ResetPriority()
+	wtuo.mutation.SetPriority(i)
+	return wtuo
+}
+
+// SetNillablePriority sets the "priority" field if the given value is not nil.
+func (wtuo *WalletTransactionUpdateOne) SetNillablePriority(i *int) *WalletTransactionUpdateOne {
+	if i != nil {
+		wtuo.SetPriority(*i)
+	}
+	return wtuo
+}
+
+// AddPriority adds i to the "priority" field.
+func (wtuo *WalletTransactionUpdateOne) AddPriority(i int) *WalletTransactionUpdateOne {
+	wtuo.mutation.AddPriority(i)
+	return wtuo
+}
+
+// ClearPriority clears the value of the "priority" field.
+func (wtuo *WalletTransactionUpdateOne) ClearPriority() *WalletTransactionUpdateOne {
+	wtuo.mutation.ClearPriority()
+	return wtuo
+}
+
 // Mutation returns the WalletTransactionMutation object of the builder.
 func (wtuo *WalletTransactionUpdateOne) Mutation() *WalletTransactionMutation {
 	return wtuo.mutation
@@ -762,6 +825,15 @@ func (wtuo *WalletTransactionUpdateOne) sqlSave(ctx context.Context) (_node *Wal
 	}
 	if wtuo.mutation.IdempotencyKeyCleared() {
 		_spec.ClearField(wallettransaction.FieldIdempotencyKey, field.TypeString)
+	}
+	if value, ok := wtuo.mutation.Priority(); ok {
+		_spec.SetField(wallettransaction.FieldPriority, field.TypeInt, value)
+	}
+	if value, ok := wtuo.mutation.AddedPriority(); ok {
+		_spec.AddField(wallettransaction.FieldPriority, field.TypeInt, value)
+	}
+	if wtuo.mutation.PriorityCleared() {
+		_spec.ClearField(wallettransaction.FieldPriority, field.TypeInt)
 	}
 	_node = &WalletTransaction{config: wtuo.config}
 	_spec.Assign = _node.assignValues

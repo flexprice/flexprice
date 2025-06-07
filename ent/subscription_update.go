@@ -11,10 +11,13 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/flexprice/flexprice/ent/creditgrant"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
+	"github.com/flexprice/flexprice/ent/subscriptionschedule"
+	"github.com/shopspring/decimal"
 )
 
 // SubscriptionUpdate is the builder for updating Subscription entities.
@@ -313,6 +316,46 @@ func (su *SubscriptionUpdate) ClearActivePauseID() *SubscriptionUpdate {
 	return su
 }
 
+// SetCommitmentAmount sets the "commitment_amount" field.
+func (su *SubscriptionUpdate) SetCommitmentAmount(d decimal.Decimal) *SubscriptionUpdate {
+	su.mutation.SetCommitmentAmount(d)
+	return su
+}
+
+// SetNillableCommitmentAmount sets the "commitment_amount" field if the given value is not nil.
+func (su *SubscriptionUpdate) SetNillableCommitmentAmount(d *decimal.Decimal) *SubscriptionUpdate {
+	if d != nil {
+		su.SetCommitmentAmount(*d)
+	}
+	return su
+}
+
+// ClearCommitmentAmount clears the value of the "commitment_amount" field.
+func (su *SubscriptionUpdate) ClearCommitmentAmount() *SubscriptionUpdate {
+	su.mutation.ClearCommitmentAmount()
+	return su
+}
+
+// SetOverageFactor sets the "overage_factor" field.
+func (su *SubscriptionUpdate) SetOverageFactor(d decimal.Decimal) *SubscriptionUpdate {
+	su.mutation.SetOverageFactor(d)
+	return su
+}
+
+// SetNillableOverageFactor sets the "overage_factor" field if the given value is not nil.
+func (su *SubscriptionUpdate) SetNillableOverageFactor(d *decimal.Decimal) *SubscriptionUpdate {
+	if d != nil {
+		su.SetOverageFactor(*d)
+	}
+	return su
+}
+
+// ClearOverageFactor clears the value of the "overage_factor" field.
+func (su *SubscriptionUpdate) ClearOverageFactor() *SubscriptionUpdate {
+	su.mutation.ClearOverageFactor()
+	return su
+}
+
 // AddLineItemIDs adds the "line_items" edge to the SubscriptionLineItem entity by IDs.
 func (su *SubscriptionUpdate) AddLineItemIDs(ids ...string) *SubscriptionUpdate {
 	su.mutation.AddLineItemIDs(ids...)
@@ -341,6 +384,40 @@ func (su *SubscriptionUpdate) AddPauses(s ...*SubscriptionPause) *SubscriptionUp
 		ids[i] = s[i].ID
 	}
 	return su.AddPauseIDs(ids...)
+}
+
+// AddCreditGrantIDs adds the "credit_grants" edge to the CreditGrant entity by IDs.
+func (su *SubscriptionUpdate) AddCreditGrantIDs(ids ...string) *SubscriptionUpdate {
+	su.mutation.AddCreditGrantIDs(ids...)
+	return su
+}
+
+// AddCreditGrants adds the "credit_grants" edges to the CreditGrant entity.
+func (su *SubscriptionUpdate) AddCreditGrants(c ...*CreditGrant) *SubscriptionUpdate {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return su.AddCreditGrantIDs(ids...)
+}
+
+// SetScheduleID sets the "schedule" edge to the SubscriptionSchedule entity by ID.
+func (su *SubscriptionUpdate) SetScheduleID(id string) *SubscriptionUpdate {
+	su.mutation.SetScheduleID(id)
+	return su
+}
+
+// SetNillableScheduleID sets the "schedule" edge to the SubscriptionSchedule entity by ID if the given value is not nil.
+func (su *SubscriptionUpdate) SetNillableScheduleID(id *string) *SubscriptionUpdate {
+	if id != nil {
+		su = su.SetScheduleID(*id)
+	}
+	return su
+}
+
+// SetSchedule sets the "schedule" edge to the SubscriptionSchedule entity.
+func (su *SubscriptionUpdate) SetSchedule(s *SubscriptionSchedule) *SubscriptionUpdate {
+	return su.SetScheduleID(s.ID)
 }
 
 // Mutation returns the SubscriptionMutation object of the builder.
@@ -388,6 +465,33 @@ func (su *SubscriptionUpdate) RemovePauses(s ...*SubscriptionPause) *Subscriptio
 		ids[i] = s[i].ID
 	}
 	return su.RemovePauseIDs(ids...)
+}
+
+// ClearCreditGrants clears all "credit_grants" edges to the CreditGrant entity.
+func (su *SubscriptionUpdate) ClearCreditGrants() *SubscriptionUpdate {
+	su.mutation.ClearCreditGrants()
+	return su
+}
+
+// RemoveCreditGrantIDs removes the "credit_grants" edge to CreditGrant entities by IDs.
+func (su *SubscriptionUpdate) RemoveCreditGrantIDs(ids ...string) *SubscriptionUpdate {
+	su.mutation.RemoveCreditGrantIDs(ids...)
+	return su
+}
+
+// RemoveCreditGrants removes "credit_grants" edges to CreditGrant entities.
+func (su *SubscriptionUpdate) RemoveCreditGrants(c ...*CreditGrant) *SubscriptionUpdate {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return su.RemoveCreditGrantIDs(ids...)
+}
+
+// ClearSchedule clears the "schedule" edge to the SubscriptionSchedule entity.
+func (su *SubscriptionUpdate) ClearSchedule() *SubscriptionUpdate {
+	su.mutation.ClearSchedule()
+	return su
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -522,6 +626,18 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if su.mutation.ActivePauseIDCleared() {
 		_spec.ClearField(subscription.FieldActivePauseID, field.TypeString)
 	}
+	if value, ok := su.mutation.CommitmentAmount(); ok {
+		_spec.SetField(subscription.FieldCommitmentAmount, field.TypeOther, value)
+	}
+	if su.mutation.CommitmentAmountCleared() {
+		_spec.ClearField(subscription.FieldCommitmentAmount, field.TypeOther)
+	}
+	if value, ok := su.mutation.OverageFactor(); ok {
+		_spec.SetField(subscription.FieldOverageFactor, field.TypeOther, value)
+	}
+	if su.mutation.OverageFactorCleared() {
+		_spec.ClearField(subscription.FieldOverageFactor, field.TypeOther)
+	}
 	if su.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
@@ -605,6 +721,80 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(subscriptionpause.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if su.mutation.CreditGrantsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.CreditGrantsTable,
+			Columns: []string{subscription.CreditGrantsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(creditgrant.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := su.mutation.RemovedCreditGrantsIDs(); len(nodes) > 0 && !su.mutation.CreditGrantsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.CreditGrantsTable,
+			Columns: []string{subscription.CreditGrantsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(creditgrant.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := su.mutation.CreditGrantsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.CreditGrantsTable,
+			Columns: []string{subscription.CreditGrantsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(creditgrant.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if su.mutation.ScheduleCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   subscription.ScheduleTable,
+			Columns: []string{subscription.ScheduleColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionschedule.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := su.mutation.ScheduleIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   subscription.ScheduleTable,
+			Columns: []string{subscription.ScheduleColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionschedule.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {
@@ -915,6 +1105,46 @@ func (suo *SubscriptionUpdateOne) ClearActivePauseID() *SubscriptionUpdateOne {
 	return suo
 }
 
+// SetCommitmentAmount sets the "commitment_amount" field.
+func (suo *SubscriptionUpdateOne) SetCommitmentAmount(d decimal.Decimal) *SubscriptionUpdateOne {
+	suo.mutation.SetCommitmentAmount(d)
+	return suo
+}
+
+// SetNillableCommitmentAmount sets the "commitment_amount" field if the given value is not nil.
+func (suo *SubscriptionUpdateOne) SetNillableCommitmentAmount(d *decimal.Decimal) *SubscriptionUpdateOne {
+	if d != nil {
+		suo.SetCommitmentAmount(*d)
+	}
+	return suo
+}
+
+// ClearCommitmentAmount clears the value of the "commitment_amount" field.
+func (suo *SubscriptionUpdateOne) ClearCommitmentAmount() *SubscriptionUpdateOne {
+	suo.mutation.ClearCommitmentAmount()
+	return suo
+}
+
+// SetOverageFactor sets the "overage_factor" field.
+func (suo *SubscriptionUpdateOne) SetOverageFactor(d decimal.Decimal) *SubscriptionUpdateOne {
+	suo.mutation.SetOverageFactor(d)
+	return suo
+}
+
+// SetNillableOverageFactor sets the "overage_factor" field if the given value is not nil.
+func (suo *SubscriptionUpdateOne) SetNillableOverageFactor(d *decimal.Decimal) *SubscriptionUpdateOne {
+	if d != nil {
+		suo.SetOverageFactor(*d)
+	}
+	return suo
+}
+
+// ClearOverageFactor clears the value of the "overage_factor" field.
+func (suo *SubscriptionUpdateOne) ClearOverageFactor() *SubscriptionUpdateOne {
+	suo.mutation.ClearOverageFactor()
+	return suo
+}
+
 // AddLineItemIDs adds the "line_items" edge to the SubscriptionLineItem entity by IDs.
 func (suo *SubscriptionUpdateOne) AddLineItemIDs(ids ...string) *SubscriptionUpdateOne {
 	suo.mutation.AddLineItemIDs(ids...)
@@ -943,6 +1173,40 @@ func (suo *SubscriptionUpdateOne) AddPauses(s ...*SubscriptionPause) *Subscripti
 		ids[i] = s[i].ID
 	}
 	return suo.AddPauseIDs(ids...)
+}
+
+// AddCreditGrantIDs adds the "credit_grants" edge to the CreditGrant entity by IDs.
+func (suo *SubscriptionUpdateOne) AddCreditGrantIDs(ids ...string) *SubscriptionUpdateOne {
+	suo.mutation.AddCreditGrantIDs(ids...)
+	return suo
+}
+
+// AddCreditGrants adds the "credit_grants" edges to the CreditGrant entity.
+func (suo *SubscriptionUpdateOne) AddCreditGrants(c ...*CreditGrant) *SubscriptionUpdateOne {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return suo.AddCreditGrantIDs(ids...)
+}
+
+// SetScheduleID sets the "schedule" edge to the SubscriptionSchedule entity by ID.
+func (suo *SubscriptionUpdateOne) SetScheduleID(id string) *SubscriptionUpdateOne {
+	suo.mutation.SetScheduleID(id)
+	return suo
+}
+
+// SetNillableScheduleID sets the "schedule" edge to the SubscriptionSchedule entity by ID if the given value is not nil.
+func (suo *SubscriptionUpdateOne) SetNillableScheduleID(id *string) *SubscriptionUpdateOne {
+	if id != nil {
+		suo = suo.SetScheduleID(*id)
+	}
+	return suo
+}
+
+// SetSchedule sets the "schedule" edge to the SubscriptionSchedule entity.
+func (suo *SubscriptionUpdateOne) SetSchedule(s *SubscriptionSchedule) *SubscriptionUpdateOne {
+	return suo.SetScheduleID(s.ID)
 }
 
 // Mutation returns the SubscriptionMutation object of the builder.
@@ -990,6 +1254,33 @@ func (suo *SubscriptionUpdateOne) RemovePauses(s ...*SubscriptionPause) *Subscri
 		ids[i] = s[i].ID
 	}
 	return suo.RemovePauseIDs(ids...)
+}
+
+// ClearCreditGrants clears all "credit_grants" edges to the CreditGrant entity.
+func (suo *SubscriptionUpdateOne) ClearCreditGrants() *SubscriptionUpdateOne {
+	suo.mutation.ClearCreditGrants()
+	return suo
+}
+
+// RemoveCreditGrantIDs removes the "credit_grants" edge to CreditGrant entities by IDs.
+func (suo *SubscriptionUpdateOne) RemoveCreditGrantIDs(ids ...string) *SubscriptionUpdateOne {
+	suo.mutation.RemoveCreditGrantIDs(ids...)
+	return suo
+}
+
+// RemoveCreditGrants removes "credit_grants" edges to CreditGrant entities.
+func (suo *SubscriptionUpdateOne) RemoveCreditGrants(c ...*CreditGrant) *SubscriptionUpdateOne {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return suo.RemoveCreditGrantIDs(ids...)
+}
+
+// ClearSchedule clears the "schedule" edge to the SubscriptionSchedule entity.
+func (suo *SubscriptionUpdateOne) ClearSchedule() *SubscriptionUpdateOne {
+	suo.mutation.ClearSchedule()
+	return suo
 }
 
 // Where appends a list predicates to the SubscriptionUpdate builder.
@@ -1154,6 +1445,18 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 	if suo.mutation.ActivePauseIDCleared() {
 		_spec.ClearField(subscription.FieldActivePauseID, field.TypeString)
 	}
+	if value, ok := suo.mutation.CommitmentAmount(); ok {
+		_spec.SetField(subscription.FieldCommitmentAmount, field.TypeOther, value)
+	}
+	if suo.mutation.CommitmentAmountCleared() {
+		_spec.ClearField(subscription.FieldCommitmentAmount, field.TypeOther)
+	}
+	if value, ok := suo.mutation.OverageFactor(); ok {
+		_spec.SetField(subscription.FieldOverageFactor, field.TypeOther, value)
+	}
+	if suo.mutation.OverageFactorCleared() {
+		_spec.ClearField(subscription.FieldOverageFactor, field.TypeOther)
+	}
 	if suo.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
@@ -1237,6 +1540,80 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(subscriptionpause.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if suo.mutation.CreditGrantsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.CreditGrantsTable,
+			Columns: []string{subscription.CreditGrantsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(creditgrant.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := suo.mutation.RemovedCreditGrantsIDs(); len(nodes) > 0 && !suo.mutation.CreditGrantsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.CreditGrantsTable,
+			Columns: []string{subscription.CreditGrantsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(creditgrant.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := suo.mutation.CreditGrantsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.CreditGrantsTable,
+			Columns: []string{subscription.CreditGrantsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(creditgrant.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if suo.mutation.ScheduleCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   subscription.ScheduleTable,
+			Columns: []string{subscription.ScheduleColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionschedule.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := suo.mutation.ScheduleIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   subscription.ScheduleTable,
+			Columns: []string{subscription.ScheduleColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionschedule.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

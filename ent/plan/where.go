@@ -788,6 +788,29 @@ func HasEntitlementsWith(preds ...predicate.Entitlement) predicate.Plan {
 	})
 }
 
+// HasCreditGrants applies the HasEdge predicate on the "credit_grants" edge.
+func HasCreditGrants() predicate.Plan {
+	return predicate.Plan(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, CreditGrantsTable, CreditGrantsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasCreditGrantsWith applies the HasEdge predicate on the "credit_grants" edge with a given conditions (other predicates).
+func HasCreditGrantsWith(preds ...predicate.CreditGrant) predicate.Plan {
+	return predicate.Plan(func(s *sql.Selector) {
+		step := newCreditGrantsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.Plan) predicate.Plan {
 	return predicate.Plan(sql.AndPredicates(predicates...))

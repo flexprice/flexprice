@@ -971,6 +971,7 @@ func (s *eventPostProcessingService) GetDetailedUsageAnalytics(ctx context.Conte
 		EndTime:            req.EndTime,
 		GroupBy:            req.GroupBy,
 		WindowSize:         windowSize,
+		PropertyFilters:    req.PropertyFilters,
 	}
 
 	// Step 5: Call the repository to get base analytics data

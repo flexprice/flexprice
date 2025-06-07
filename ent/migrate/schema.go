@@ -72,6 +72,66 @@ var (
 			},
 		},
 	}
+	// CreditGrantsColumns holds the columns for the "credit_grants" table.
+	CreditGrantsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "name", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "scope", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "amount", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "currency", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(3)"}},
+		{Name: "cadence", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "period", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "period_count", Type: field.TypeInt, Nullable: true},
+		{Name: "expire_in_days", Type: field.TypeInt, Nullable: true},
+		{Name: "priority", Type: field.TypeInt, Nullable: true},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
+		{Name: "plan_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "subscription_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+	}
+	// CreditGrantsTable holds the schema information for the "credit_grants" table.
+	CreditGrantsTable = &schema.Table{
+		Name:       "credit_grants",
+		Columns:    CreditGrantsColumns,
+		PrimaryKey: []*schema.Column{CreditGrantsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "credit_grants_plans_credit_grants",
+				Columns:    []*schema.Column{CreditGrantsColumns[18]},
+				RefColumns: []*schema.Column{PlansColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "credit_grants_subscriptions_credit_grants",
+				Columns:    []*schema.Column{CreditGrantsColumns[19]},
+				RefColumns: []*schema.Column{SubscriptionsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "creditgrant_tenant_id_environment_id_status",
+				Unique:  false,
+				Columns: []*schema.Column{CreditGrantsColumns[1], CreditGrantsColumns[7], CreditGrantsColumns[2]},
+			},
+			{
+				Name:    "creditgrant_tenant_id_environment_id_scope_plan_id",
+				Unique:  false,
+				Columns: []*schema.Column{CreditGrantsColumns[1], CreditGrantsColumns[7], CreditGrantsColumns[9], CreditGrantsColumns[18]},
+			},
+			{
+				Name:    "creditgrant_tenant_id_environment_id_scope_subscription_id",
+				Unique:  false,
+				Columns: []*schema.Column{CreditGrantsColumns[1], CreditGrantsColumns[7], CreditGrantsColumns[9], CreditGrantsColumns[19]},
+			},
+		},
+	}
 	// CustomersColumns holds the columns for the "customers" table.
 	CustomersColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -313,25 +373,16 @@ var (
 				Name:    "idx_tenant_subscription_status",
 				Unique:  false,
 				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[9], InvoicesColumns[11], InvoicesColumns[12], InvoicesColumns[2]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published'",
-				},
 			},
 			{
 				Name:    "idx_tenant_type_status",
 				Unique:  false,
 				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[10], InvoicesColumns[11], InvoicesColumns[12], InvoicesColumns[2]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published'",
-				},
 			},
 			{
 				Name:    "idx_tenant_due_date_status",
 				Unique:  false,
 				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[18], InvoicesColumns[11], InvoicesColumns[12], InvoicesColumns[2]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published'",
-				},
 			},
 			{
 				Name:    "idx_tenant_environment_invoice_number_unique",
@@ -749,6 +800,8 @@ var (
 		{Name: "pause_status", Type: field.TypeString, Default: "none", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "active_pause_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "billing_cycle", Type: field.TypeString, Default: "anniversary"},
+		{Name: "commitment_amount", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,6)"}},
+		{Name: "overage_factor", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(10,6)"}},
 	}
 	// SubscriptionsTable holds the schema information for the "subscriptions" table.
 	SubscriptionsTable = &schema.Table{
@@ -915,6 +968,95 @@ var (
 				Name:    "subscriptionpause_tenant_id_environment_id_pause_end_status",
 				Unique:  false,
 				Columns: []*schema.Column{SubscriptionPausesColumns[1], SubscriptionPausesColumns[7], SubscriptionPausesColumns[12], SubscriptionPausesColumns[2]},
+			},
+		},
+	}
+	// SubscriptionSchedulesColumns holds the columns for the "subscription_schedules" table.
+	SubscriptionSchedulesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "schedule_status", Type: field.TypeString, Default: "ACTIVE"},
+		{Name: "current_phase_index", Type: field.TypeInt, Default: 0},
+		{Name: "end_behavior", Type: field.TypeString, Default: "RELEASE"},
+		{Name: "start_date", Type: field.TypeTime},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
+		{Name: "subscription_id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+	}
+	// SubscriptionSchedulesTable holds the schema information for the "subscription_schedules" table.
+	SubscriptionSchedulesTable = &schema.Table{
+		Name:       "subscription_schedules",
+		Columns:    SubscriptionSchedulesColumns,
+		PrimaryKey: []*schema.Column{SubscriptionSchedulesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "subscription_schedules_subscriptions_schedule",
+				Columns:    []*schema.Column{SubscriptionSchedulesColumns[13]},
+				RefColumns: []*schema.Column{SubscriptionsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "subscriptionschedule_tenant_id_environment_id_subscription_id",
+				Unique:  false,
+				Columns: []*schema.Column{SubscriptionSchedulesColumns[1], SubscriptionSchedulesColumns[7], SubscriptionSchedulesColumns[13]},
+			},
+			{
+				Name:    "subscriptionschedule_tenant_id_environment_id_subscription_id_schedule_status",
+				Unique:  false,
+				Columns: []*schema.Column{SubscriptionSchedulesColumns[1], SubscriptionSchedulesColumns[7], SubscriptionSchedulesColumns[13], SubscriptionSchedulesColumns[8]},
+			},
+		},
+	}
+	// SubscriptionSchedulePhasesColumns holds the columns for the "subscription_schedule_phases" table.
+	SubscriptionSchedulePhasesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "phase_index", Type: field.TypeInt},
+		{Name: "start_date", Type: field.TypeTime},
+		{Name: "end_date", Type: field.TypeTime, Nullable: true},
+		{Name: "commitment_amount", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,6)"}},
+		{Name: "overage_factor", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,6)"}},
+		{Name: "line_items", Type: field.TypeJSON, Nullable: true},
+		{Name: "credit_grants", Type: field.TypeJSON, Nullable: true},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
+		{Name: "schedule_id", Type: field.TypeString},
+	}
+	// SubscriptionSchedulePhasesTable holds the schema information for the "subscription_schedule_phases" table.
+	SubscriptionSchedulePhasesTable = &schema.Table{
+		Name:       "subscription_schedule_phases",
+		Columns:    SubscriptionSchedulePhasesColumns,
+		PrimaryKey: []*schema.Column{SubscriptionSchedulePhasesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "subscription_schedule_phases_subscription_schedules_phases",
+				Columns:    []*schema.Column{SubscriptionSchedulePhasesColumns[16]},
+				RefColumns: []*schema.Column{SubscriptionSchedulesColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "subscriptionschedulephase_tenant_id_environment_id_schedule_id_phase_index",
+				Unique:  true,
+				Columns: []*schema.Column{SubscriptionSchedulePhasesColumns[1], SubscriptionSchedulePhasesColumns[7], SubscriptionSchedulePhasesColumns[16], SubscriptionSchedulePhasesColumns[8]},
+			},
+			{
+				Name:    "subscriptionschedulephase_tenant_id_environment_id_start_date",
+				Unique:  false,
+				Columns: []*schema.Column{SubscriptionSchedulePhasesColumns[1], SubscriptionSchedulePhasesColumns[7], SubscriptionSchedulePhasesColumns[9]},
 			},
 		},
 	}
@@ -1094,6 +1236,7 @@ var (
 		{Name: "credits_available", Type: field.TypeOther, Default: "0", SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 		{Name: "idempotency_key", Type: field.TypeString, Nullable: true},
 		{Name: "transaction_reason", Type: field.TypeString, Default: "FREE_CREDIT_GRANT", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "priority", Type: field.TypeInt, Nullable: true},
 	}
 	// WalletTransactionsTable holds the schema information for the "wallet_transactions" table.
 	WalletTransactionsTable = &schema.Table{
@@ -1138,6 +1281,7 @@ var (
 	Tables = []*schema.Table{
 		AuthsTable,
 		BillingSequencesTable,
+		CreditGrantsTable,
 		CustomersTable,
 		EntitlementsTable,
 		EnvironmentsTable,
@@ -1154,6 +1298,8 @@ var (
 		SubscriptionsTable,
 		SubscriptionLineItemsTable,
 		SubscriptionPausesTable,
+		SubscriptionSchedulesTable,
+		SubscriptionSchedulePhasesTable,
 		TasksTable,
 		TenantsTable,
 		UsersTable,
@@ -1163,9 +1309,13 @@ var (
 )
 
 func init() {
+	CreditGrantsTable.ForeignKeys[0].RefTable = PlansTable
+	CreditGrantsTable.ForeignKeys[1].RefTable = SubscriptionsTable
 	EntitlementsTable.ForeignKeys[0].RefTable = PlansTable
 	InvoiceLineItemsTable.ForeignKeys[0].RefTable = InvoicesTable
 	PaymentAttemptsTable.ForeignKeys[0].RefTable = PaymentsTable
 	SubscriptionLineItemsTable.ForeignKeys[0].RefTable = SubscriptionsTable
 	SubscriptionPausesTable.ForeignKeys[0].RefTable = SubscriptionsTable
+	SubscriptionSchedulesTable.ForeignKeys[0].RefTable = SubscriptionsTable
+	SubscriptionSchedulePhasesTable.ForeignKeys[0].RefTable = SubscriptionSchedulesTable
 }

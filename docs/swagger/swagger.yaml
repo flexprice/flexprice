@@ -1,5 +1,12 @@
 basePath: /v1
 definitions:
+  dto.AddSchedulePhaseRequest:
+    properties:
+      phase:
+        $ref: '#/definitions/dto.SubscriptionSchedulePhaseInput'
+    required:
+    - phase
+    type: object
   dto.Address:
     properties:
       address_city:
@@ -99,6 +106,39 @@ definitions:
         type: string
       secret:
         $ref: '#/definitions/dto.SecretResponse'
+    type: object
+  dto.CreateCreditGrantRequest:
+    properties:
+      amount:
+        type: number
+      cadence:
+        $ref: '#/definitions/types.CreditGrantCadence'
+      currency:
+        type: string
+      expire_in_days:
+        type: integer
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      name:
+        type: string
+      period:
+        $ref: '#/definitions/types.CreditGrantPeriod'
+      period_count:
+        type: integer
+      plan_id:
+        type: string
+      priority:
+        type: integer
+      scope:
+        $ref: '#/definitions/types.CreditGrantScope'
+      subscription_id:
+        type: string
+    required:
+    - amount
+    - cadence
+    - currency
+    - name
+    - scope
     type: object
   dto.CreateCustomerRequest:
     properties:
@@ -514,6 +554,15 @@ definitions:
       billing_period_count:
         minimum: 1
         type: integer
+      commitment_amount:
+        description: CommitmentAmount is the minimum amount a customer commits to
+          paying for a billing period
+        type: number
+      credit_grants:
+        description: Credit grants to be applied when subscription is created
+        items:
+          $ref: '#/definitions/dto.CreateCreditGrantRequest'
+        type: array
       currency:
         type: string
       customer_id:
@@ -526,6 +575,15 @@ definitions:
         additionalProperties:
           type: string
         type: object
+      overage_factor:
+        description: OverageFactor is a multiplier applied to usage beyond the commitment
+          amount
+        type: number
+      phases:
+        description: Phases represents an optional timeline of subscription phases
+        items:
+          $ref: '#/definitions/dto.SubscriptionSchedulePhaseInput'
+        type: array
       plan_id:
         type: string
       start_date:
@@ -597,6 +655,8 @@ definitions:
         type: string
       description:
         type: string
+      external_customer_id:
+        type: string
       initial_credits_to_load:
         default: 0
         description: |-
@@ -618,7 +678,49 @@ definitions:
         $ref: '#/definitions/types.WalletType'
     required:
     - currency
-    - customer_id
+    type: object
+  dto.CreditGrantResponse:
+    properties:
+      amount:
+        type: number
+      cadence:
+        $ref: '#/definitions/types.CreditGrantCadence'
+      created_at:
+        type: string
+      created_by:
+        type: string
+      currency:
+        type: string
+      environment_id:
+        type: string
+      expire_in_days:
+        type: integer
+      id:
+        type: string
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      name:
+        type: string
+      period:
+        $ref: '#/definitions/types.CreditGrantPeriod'
+      period_count:
+        type: integer
+      plan_id:
+        type: string
+      priority:
+        type: integer
+      scope:
+        $ref: '#/definitions/types.CreditGrantScope'
+      status:
+        $ref: '#/definitions/types.Status'
+      subscription_id:
+        type: string
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+      updated_by:
+        type: string
     type: object
   dto.CustomerEntitlementsResponse:
     properties:
@@ -977,6 +1079,14 @@ definitions:
         items:
           type: string
         type: array
+      property_filters:
+        additionalProperties:
+          items:
+            type: string
+          type: array
+        description: Property filters to filter the events by the keys in `properties`
+          field of the event
+        type: object
       sources:
         items:
           type: string
@@ -1052,12 +1162,25 @@ definitions:
         items:
           $ref: '#/definitions/dto.SubscriptionUsageByMetersResponse'
         type: array
+      commitment_amount:
+        type: number
+      commitment_utilized:
+        description: Amount of commitment used
+        type: number
       currency:
         type: string
       display_amount:
         type: string
       end_time:
         type: string
+      has_overage:
+        description: Whether any usage exceeded commitment
+        type: boolean
+      overage_amount:
+        description: Amount charged at overage rate
+        type: number
+      overage_factor:
+        type: number
       start_time:
         type: string
     type: object
@@ -1270,6 +1393,15 @@ definitions:
         items:
           type: string
         type: array
+    type: object
+  dto.ListCreditGrantsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/dto.CreditGrantResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
     type: object
   dto.ListCustomersResponse:
     properties:
@@ -1696,6 +1828,77 @@ definitions:
     required:
     - email
     type: object
+  dto.SubscriptionLineItemRequest:
+    properties:
+      display_name:
+        type: string
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+      price_id:
+        type: string
+      quantity:
+        type: number
+    required:
+    - price_id
+    - quantity
+    type: object
+  dto.SubscriptionLineItemResponse:
+    properties:
+      billing_period:
+        $ref: '#/definitions/types.BillingPeriod'
+      created_at:
+        type: string
+      created_by:
+        type: string
+      currency:
+        type: string
+      customer_id:
+        type: string
+      display_name:
+        type: string
+      end_date:
+        type: string
+      environment_id:
+        type: string
+      id:
+        type: string
+      invoice_cadence:
+        $ref: '#/definitions/types.InvoiceCadence'
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+      meter_display_name:
+        type: string
+      meter_id:
+        type: string
+      plan_display_name:
+        type: string
+      plan_id:
+        type: string
+      price_id:
+        type: string
+      price_type:
+        $ref: '#/definitions/types.PriceType'
+      quantity:
+        type: number
+      start_date:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      subscription_id:
+        type: string
+      tenant_id:
+        type: string
+      trial_period:
+        type: integer
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+    type: object
   dto.SubscriptionPauseResponse:
     properties:
       created_at:
@@ -1789,6 +1992,10 @@ definitions:
       cancelled_at:
         description: CanceledAt is the date the subscription was canceled
         type: string
+      commitment_amount:
+        description: CommitmentAmount is the minimum amount a customer commits to
+          paying for a billing period
+        type: number
       created_at:
         type: string
       created_by:
@@ -1830,6 +2037,10 @@ definitions:
         type: string
       metadata:
         $ref: '#/definitions/types.Metadata'
+      overage_factor:
+        description: OverageFactor is a multiplier applied to usage beyond the commitment
+          amount
+        type: number
       pause_status:
         $ref: '#/definitions/types.PauseStatus'
       pauses:
@@ -1841,6 +2052,10 @@ definitions:
       plan_id:
         description: PlanID is the identifier for the plan in our system
         type: string
+      schedule:
+        allOf:
+        - $ref: '#/definitions/dto.SubscriptionScheduleResponse'
+        description: Schedule is included when the subscription has a schedule
       start_date:
         description: StartDate is the start date of the subscription
         type: string
@@ -1864,6 +2079,85 @@ definitions:
         description: Version is used for optimistic locking
         type: integer
     type: object
+  dto.SubscriptionSchedulePhaseInput:
+    properties:
+      billing_cycle:
+        $ref: '#/definitions/types.BillingCycle'
+      commitment_amount:
+        type: number
+      credit_grants:
+        items:
+          $ref: '#/definitions/dto.CreateCreditGrantRequest'
+        type: array
+      end_date:
+        type: string
+      line_items:
+        items:
+          $ref: '#/definitions/dto.SubscriptionLineItemRequest'
+        type: array
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+      overage_factor:
+        type: number
+      start_date:
+        type: string
+    required:
+    - start_date
+    type: object
+  dto.SubscriptionSchedulePhaseResponse:
+    properties:
+      commitment_amount:
+        type: number
+      created_at:
+        type: string
+      credit_grants:
+        items:
+          $ref: '#/definitions/dto.CreditGrantResponse'
+        type: array
+      end_date:
+        type: string
+      id:
+        type: string
+      line_items:
+        items:
+          $ref: '#/definitions/dto.SubscriptionLineItemResponse'
+        type: array
+      overage_factor:
+        type: number
+      phase_index:
+        type: integer
+      schedule_id:
+        type: string
+      start_date:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  dto.SubscriptionScheduleResponse:
+    properties:
+      created_at:
+        type: string
+      current_phase_index:
+        type: integer
+      end_behavior:
+        $ref: '#/definitions/types.ScheduleEndBehavior'
+      id:
+        type: string
+      phases:
+        items:
+          $ref: '#/definitions/dto.SubscriptionSchedulePhaseResponse'
+        type: array
+      start_date:
+        type: string
+      status:
+        $ref: '#/definitions/types.SubscriptionScheduleStatus'
+      subscription_id:
+        type: string
+      updated_at:
+        type: string
+    type: object
   dto.SubscriptionUsageByMetersResponse:
     properties:
       amount:
@@ -1874,10 +2168,16 @@ definitions:
         type: string
       filter_values:
         $ref: '#/definitions/price.JSONBFilters'
+      is_overage:
+        description: Whether this charge is at overage rate
+        type: boolean
       meter_display_name:
         type: string
       meter_id:
         type: string
+      overage_factor:
+        description: Factor applied to this charge if in overage
+        type: number
       price:
         $ref: '#/definitions/price.Price'
       quantity:
@@ -1996,11 +2296,24 @@ definitions:
         - $ref: '#/definitions/types.Metadata'
         description: metadata is a map of key-value pairs to store any additional
           information about the transaction
+      priority:
+        description: |-
+          priority is the priority of the transaction
+          lower number means higher priority
+          default is nil which means no priority at all
+        type: integer
       transaction_reason:
         $ref: '#/definitions/types.TransactionReason'
     required:
     - idempotency_key
     - transaction_reason
+    type: object
+  dto.UpdateCreditGrantRequest:
+    properties:
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      name:
+        type: string
     type: object
   dto.UpdateCustomerRequest:
     properties:
@@ -2398,6 +2711,8 @@ definitions:
         type: string
       metadata:
         $ref: '#/definitions/types.Metadata'
+      priority:
+        type: integer
       reference_id:
         type: string
       reference_type:
@@ -2407,6 +2722,8 @@ definitions:
       transaction_status:
         $ref: '#/definitions/types.TransactionStatus'
       type:
+        type: string
+      updated_at:
         type: string
       wallet_id:
         type: string
@@ -2767,6 +3084,38 @@ definitions:
     x-enum-varnames:
     - BILLING_TIER_VOLUME
     - BILLING_TIER_SLAB
+  types.CreditGrantCadence:
+    enum:
+    - ONETIME
+    - RECURRING
+    type: string
+    x-enum-varnames:
+    - CreditGrantCadenceOneTime
+    - CreditGrantCadenceRecurring
+  types.CreditGrantPeriod:
+    enum:
+    - DAILY
+    - WEEKLY
+    - MONTHLY
+    - YEARLY
+    - QUARTERLY
+    - HALFYEARLY
+    type: string
+    x-enum-varnames:
+    - CreditGrantPeriodDaily
+    - CreditGrantPeriodWeekly
+    - CreditGrantPeriodMonthly
+    - CreditGrantPeriodYearly
+    - CreditGrantPeriodQuarter
+    - CreditGrantPeriodHalfYear
+  types.CreditGrantScope:
+    enum:
+    - PLAN
+    - SUBSCRIPTION
+    type: string
+    x-enum-varnames:
+    - CreditGrantScopePlan
+    - CreditGrantScopeSubscription
   types.CustomerFilter:
     properties:
       customer_ids:
@@ -3060,6 +3409,14 @@ definitions:
     - ResumeModeImmediate
     - ResumeModeScheduled
     - ResumeModeAuto
+  types.ScheduleEndBehavior:
+    enum:
+    - RELEASE
+    - CANCEL
+    type: string
+    x-enum-varnames:
+    - EndBehaviorRelease
+    - EndBehaviorCancel
   types.SecretProvider:
     enum:
     - flexprice
@@ -3105,6 +3462,16 @@ definitions:
     - StatusPublished
     - StatusDeleted
     - StatusArchived
+  types.SubscriptionScheduleStatus:
+    enum:
+    - ACTIVE
+    - RELEASED
+    - CANCELED
+    type: string
+    x-enum-varnames:
+    - ScheduleStatusActive
+    - ScheduleStatusReleased
+    - ScheduleStatusCanceled
   types.SubscriptionStatus:
     enum:
     - active
@@ -3311,6 +3678,211 @@ paths:
       summary: Sign up
       tags:
       - Auth
+  /creditgrants:
+    get:
+      consumes:
+      - application/json
+      description: Get credit grants with the specified filter
+      parameters:
+      - in: query
+        name: end_time
+        type: string
+      - in: query
+        name: expand
+        type: string
+      - in: query
+        maximum: 1000
+        minimum: 1
+        name: limit
+        type: integer
+      - in: query
+        minimum: 0
+        name: offset
+        type: integer
+      - enum:
+        - asc
+        - desc
+        in: query
+        name: order
+        type: string
+      - collectionFormat: csv
+        description: Specific filters for credit grants
+        in: query
+        items:
+          type: string
+        name: plan_ids
+        type: array
+      - in: query
+        name: sort
+        type: string
+      - in: query
+        name: start_time
+        type: string
+      - enum:
+        - published
+        - deleted
+        - archived
+        in: query
+        name: status
+        type: string
+        x-enum-varnames:
+        - StatusPublished
+        - StatusDeleted
+        - StatusArchived
+      - collectionFormat: csv
+        in: query
+        items:
+          type: string
+        name: subscription_ids
+        type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ListCreditGrantsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get credit grants
+      tags:
+      - CreditGrants
+    post:
+      consumes:
+      - application/json
+      description: Create a new credit grant with the specified configuration
+      parameters:
+      - description: Credit Grant configuration
+        in: body
+        name: credit_grant
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateCreditGrantRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.CreditGrantResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create a new credit grant
+      tags:
+      - CreditGrants
+  /creditgrants/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a credit grant
+      parameters:
+      - description: Credit Grant ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/gin.H'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Delete a credit grant
+      tags:
+      - CreditGrants
+    get:
+      consumes:
+      - application/json
+      description: Get a credit grant by ID
+      parameters:
+      - description: Credit Grant ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.CreditGrantResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get a credit grant by ID
+      tags:
+      - CreditGrants
+    put:
+      consumes:
+      - application/json
+      description: Update a credit grant with the specified configuration
+      parameters:
+      - description: Credit Grant ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Credit Grant configuration
+        in: body
+        name: credit_grant
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateCreditGrantRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.CreditGrantResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update a credit grant
+      tags:
+      - CreditGrants
   /customers:
     get:
       consumes:
@@ -5415,6 +5987,41 @@ paths:
       summary: Update a plan
       tags:
       - Plans
+  /plans/{id}/creditgrants:
+    get:
+      consumes:
+      - application/json
+      description: Get all credit grants for a plan
+      parameters:
+      - description: Plan ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ListCreditGrantsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get plan credit grants
+      tags:
+      - CreditGrants
   /plans/{id}/entitlements:
     get:
       consumes:
@@ -6141,6 +6748,43 @@ paths:
       summary: List all pauses for a subscription
       tags:
       - Subscriptions
+  /subscriptions/{id}/phases:
+    post:
+      consumes:
+      - application/json
+      description: Add a new phase to a subscription schedule
+      parameters:
+      - description: Subscription ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Add schedule phase request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.AddSchedulePhaseRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.SubscriptionScheduleResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Add new phase to subscription schedule
+      tags:
+      - Subscriptions
   /subscriptions/{id}/resume:
     post:
       consumes:
@@ -6851,6 +7495,9 @@ paths:
         in: query
         name: order
         type: string
+      - in: query
+        name: priority
+        type: integer
       - in: query
         name: reference_id
         type: string

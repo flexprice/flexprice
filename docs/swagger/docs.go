@@ -95,6 +95,325 @@ const docTemplate = `{
                 }
             }
         },
+        "/creditgrants": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get credit grants with the specified filter",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "CreditGrants"
+                ],
+                "summary": "Get credit grants",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "name": "end_time",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "expand",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 1000,
+                        "minimum": 1,
+                        "type": "integer",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "name": "order",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "Specific filters for credit grants",
+                        "name": "plan_ids",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "sort",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "start_time",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "published",
+                            "deleted",
+                            "archived"
+                        ],
+                        "type": "string",
+                        "x-enum-varnames": [
+                            "StatusPublished",
+                            "StatusDeleted",
+                            "StatusArchived"
+                        ],
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "name": "subscription_ids",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ListCreditGrantsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Create a new credit grant with the specified configuration",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "CreditGrants"
+                ],
+                "summary": "Create a new credit grant",
+                "parameters": [
+                    {
+                        "description": "Credit Grant configuration",
+                        "name": "credit_grant",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CreateCreditGrantRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/dto.CreditGrantResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/creditgrants/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get a credit grant by ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "CreditGrants"
+                ],
+                "summary": "Get a credit grant by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Credit Grant ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.CreditGrantResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update a credit grant with the specified configuration",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "CreditGrants"
+                ],
+                "summary": "Update a credit grant",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Credit Grant ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Credit Grant configuration",
+                        "name": "credit_grant",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.UpdateCreditGrantRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.CreditGrantResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Delete a credit grant",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "CreditGrants"
+                ],
+                "summary": "Delete a credit grant",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Credit Grant ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/gin.H"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/customers": {
             "get": {
                 "security": [
@@ -3370,6 +3689,61 @@ const docTemplate = `{
                 }
             }
         },
+        "/plans/{id}/creditgrants": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get all credit grants for a plan",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "CreditGrants"
+                ],
+                "summary": "Get plan credit grants",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Plan ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ListCreditGrantsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/plans/{id}/entitlements": {
             "get": {
                 "security": [
@@ -4530,6 +4904,64 @@ const docTemplate = `{
                 }
             }
         },
+        "/subscriptions/{id}/phases": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Add a new phase to a subscription schedule",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Subscriptions"
+                ],
+                "summary": "Add new phase to subscription schedule",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Subscription ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Add schedule phase request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.AddSchedulePhaseRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.SubscriptionScheduleResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/subscriptions/{id}/resume": {
             "post": {
                 "description": "Resume a paused subscription with the specified parameters",
@@ -5584,6 +6016,11 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "type": "integer",
+                        "name": "priority",
+                        "in": "query"
+                    },
+                    {
                         "type": "string",
                         "name": "reference_id",
                         "in": "query"
@@ -5702,6 +6139,17 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "dto.AddSchedulePhaseRequest": {
+            "type": "object",
+            "required": [
+                "phase"
+            ],
+            "properties": {
+                "phase": {
+                    "$ref": "#/definitions/dto.SubscriptionSchedulePhaseInput"
+                }
+            }
+        },
         "dto.Address": {
             "type": "object",
             "properties": {
@@ -5848,6 +6296,54 @@ const docTemplate = `{
                 },
                 "secret": {
                     "$ref": "#/definitions/dto.SecretResponse"
+                }
+            }
+        },
+        "dto.CreateCreditGrantRequest": {
+            "type": "object",
+            "required": [
+                "amount",
+                "cadence",
+                "currency",
+                "name",
+                "scope"
+            ],
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "cadence": {
+                    "$ref": "#/definitions/types.CreditGrantCadence"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "expire_in_days": {
+                    "type": "integer"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "period": {
+                    "$ref": "#/definitions/types.CreditGrantPeriod"
+                },
+                "period_count": {
+                    "type": "integer"
+                },
+                "plan_id": {
+                    "type": "string"
+                },
+                "priority": {
+                    "type": "integer"
+                },
+                "scope": {
+                    "$ref": "#/definitions/types.CreditGrantScope"
+                },
+                "subscription_id": {
+                    "type": "string"
                 }
             }
         },
@@ -6460,6 +6956,17 @@ const docTemplate = `{
                     "type": "integer",
                     "minimum": 1
                 },
+                "commitment_amount": {
+                    "description": "CommitmentAmount is the minimum amount a customer commits to paying for a billing period",
+                    "type": "number"
+                },
+                "credit_grants": {
+                    "description": "Credit grants to be applied when subscription is created",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.CreateCreditGrantRequest"
+                    }
+                },
                 "currency": {
                     "type": "string"
                 },
@@ -6476,6 +6983,17 @@ const docTemplate = `{
                     "type": "object",
                     "additionalProperties": {
                         "type": "string"
+                    }
+                },
+                "overage_factor": {
+                    "description": "OverageFactor is a multiplier applied to usage beyond the commitment amount",
+                    "type": "number"
+                },
+                "phases": {
+                    "description": "Phases represents an optional timeline of subscription phases",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.SubscriptionSchedulePhaseInput"
                     }
                 },
                 "plan_id": {
@@ -6539,8 +7057,7 @@ const docTemplate = `{
         "dto.CreateWalletRequest": {
             "type": "object",
             "required": [
-                "currency",
-                "customer_id"
+                "currency"
             ],
             "properties": {
                 "auto_topup_amount": {
@@ -6569,6 +7086,9 @@ const docTemplate = `{
                 "description": {
                     "type": "string"
                 },
+                "external_customer_id": {
+                    "type": "string"
+                },
                 "initial_credits_to_load": {
                     "description": "initial_credits_to_load is the number of credits to load to the wallet\nif not provided, the wallet will be created with 0 balance\nNOTE: this is not the amount in the currency, but the number of credits",
                     "type": "number",
@@ -6586,6 +7106,71 @@ const docTemplate = `{
                 },
                 "wallet_type": {
                     "$ref": "#/definitions/types.WalletType"
+                }
+            }
+        },
+        "dto.CreditGrantResponse": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "cadence": {
+                    "$ref": "#/definitions/types.CreditGrantCadence"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "environment_id": {
+                    "type": "string"
+                },
+                "expire_in_days": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "period": {
+                    "$ref": "#/definitions/types.CreditGrantPeriod"
+                },
+                "period_count": {
+                    "type": "integer"
+                },
+                "plan_id": {
+                    "type": "string"
+                },
+                "priority": {
+                    "type": "integer"
+                },
+                "scope": {
+                    "$ref": "#/definitions/types.CreditGrantScope"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "subscription_id": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
                 }
             }
         },
@@ -7107,6 +7692,16 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
+                "property_filters": {
+                    "description": "Property filters to filter the events by the keys in ` + "`" + `properties` + "`" + ` field of the event",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
                 "sources": {
                     "type": "array",
                     "items": {
@@ -7214,6 +7809,13 @@ const docTemplate = `{
                         "$ref": "#/definitions/dto.SubscriptionUsageByMetersResponse"
                     }
                 },
+                "commitment_amount": {
+                    "type": "number"
+                },
+                "commitment_utilized": {
+                    "description": "Amount of commitment used",
+                    "type": "number"
+                },
                 "currency": {
                     "type": "string"
                 },
@@ -7222,6 +7824,17 @@ const docTemplate = `{
                 },
                 "end_time": {
                     "type": "string"
+                },
+                "has_overage": {
+                    "description": "Whether any usage exceeded commitment",
+                    "type": "boolean"
+                },
+                "overage_amount": {
+                    "description": "Amount charged at overage rate",
+                    "type": "number"
+                },
+                "overage_factor": {
+                    "type": "number"
                 },
                 "start_time": {
                     "type": "string"
@@ -7534,6 +8147,20 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "dto.ListCreditGrantsResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.CreditGrantResponse"
+                    }
+                },
+                "pagination": {
+                    "$ref": "#/definitions/types.PaginationResponse"
                 }
             }
         },
@@ -8163,6 +8790,113 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.SubscriptionLineItemRequest": {
+            "type": "object",
+            "required": [
+                "price_id",
+                "quantity"
+            ],
+            "properties": {
+                "display_name": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "price_id": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "number"
+                }
+            }
+        },
+        "dto.SubscriptionLineItemResponse": {
+            "type": "object",
+            "properties": {
+                "billing_period": {
+                    "$ref": "#/definitions/types.BillingPeriod"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "environment_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "invoice_cadence": {
+                    "$ref": "#/definitions/types.InvoiceCadence"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "meter_display_name": {
+                    "type": "string"
+                },
+                "meter_id": {
+                    "type": "string"
+                },
+                "plan_display_name": {
+                    "type": "string"
+                },
+                "plan_id": {
+                    "type": "string"
+                },
+                "price_id": {
+                    "type": "string"
+                },
+                "price_type": {
+                    "$ref": "#/definitions/types.PriceType"
+                },
+                "quantity": {
+                    "type": "number"
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "subscription_id": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "trial_period": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.SubscriptionPauseResponse": {
             "type": "object",
             "properties": {
@@ -8275,6 +9009,10 @@ const docTemplate = `{
                     "description": "CanceledAt is the date the subscription was canceled",
                     "type": "string"
                 },
+                "commitment_amount": {
+                    "description": "CommitmentAmount is the minimum amount a customer commits to paying for a billing period",
+                    "type": "number"
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -8325,6 +9063,10 @@ const docTemplate = `{
                 "metadata": {
                     "$ref": "#/definitions/types.Metadata"
                 },
+                "overage_factor": {
+                    "description": "OverageFactor is a multiplier applied to usage beyond the commitment amount",
+                    "type": "number"
+                },
                 "pause_status": {
                     "$ref": "#/definitions/types.PauseStatus"
                 },
@@ -8340,6 +9082,14 @@ const docTemplate = `{
                 "plan_id": {
                     "description": "PlanID is the identifier for the plan in our system",
                     "type": "string"
+                },
+                "schedule": {
+                    "description": "Schedule is included when the subscription has a schedule",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.SubscriptionScheduleResponse"
+                        }
+                    ]
                 },
                 "start_date": {
                     "description": "StartDate is the start date of the subscription",
@@ -8374,6 +9124,126 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.SubscriptionSchedulePhaseInput": {
+            "type": "object",
+            "required": [
+                "start_date"
+            ],
+            "properties": {
+                "billing_cycle": {
+                    "$ref": "#/definitions/types.BillingCycle"
+                },
+                "commitment_amount": {
+                    "type": "number"
+                },
+                "credit_grants": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.CreateCreditGrantRequest"
+                    }
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "line_items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.SubscriptionLineItemRequest"
+                    }
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "overage_factor": {
+                    "type": "number"
+                },
+                "start_date": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.SubscriptionSchedulePhaseResponse": {
+            "type": "object",
+            "properties": {
+                "commitment_amount": {
+                    "type": "number"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "credit_grants": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.CreditGrantResponse"
+                    }
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "line_items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.SubscriptionLineItemResponse"
+                    }
+                },
+                "overage_factor": {
+                    "type": "number"
+                },
+                "phase_index": {
+                    "type": "integer"
+                },
+                "schedule_id": {
+                    "type": "string"
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.SubscriptionScheduleResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "current_phase_index": {
+                    "type": "integer"
+                },
+                "end_behavior": {
+                    "$ref": "#/definitions/types.ScheduleEndBehavior"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "phases": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.SubscriptionSchedulePhaseResponse"
+                    }
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.SubscriptionScheduleStatus"
+                },
+                "subscription_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.SubscriptionUsageByMetersResponse": {
             "type": "object",
             "properties": {
@@ -8389,11 +9259,19 @@ const docTemplate = `{
                 "filter_values": {
                     "$ref": "#/definitions/price.JSONBFilters"
                 },
+                "is_overage": {
+                    "description": "Whether this charge is at overage rate",
+                    "type": "boolean"
+                },
                 "meter_display_name": {
                     "type": "string"
                 },
                 "meter_id": {
                     "type": "string"
+                },
+                "overage_factor": {
+                    "description": "Factor applied to this charge if in overage",
+                    "type": "number"
                 },
                 "price": {
                     "$ref": "#/definitions/price.Price"
@@ -8564,8 +9442,23 @@ const docTemplate = `{
                         }
                     ]
                 },
+                "priority": {
+                    "description": "priority is the priority of the transaction\nlower number means higher priority\ndefault is nil which means no priority at all",
+                    "type": "integer"
+                },
                 "transaction_reason": {
                     "$ref": "#/definitions/types.TransactionReason"
+                }
+            }
+        },
+        "dto.UpdateCreditGrantRequest": {
+            "type": "object",
+            "properties": {
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
+                "name": {
+                    "type": "string"
                 }
             }
         },
@@ -9162,6 +10055,9 @@ const docTemplate = `{
                 "metadata": {
                     "$ref": "#/definitions/types.Metadata"
                 },
+                "priority": {
+                    "type": "integer"
+                },
                 "reference_id": {
                     "type": "string"
                 },
@@ -9175,6 +10071,9 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.TransactionStatus"
                 },
                 "type": {
+                    "type": "string"
+                },
+                "updated_at": {
                     "type": "string"
                 },
                 "wallet_id": {
@@ -9663,6 +10562,47 @@ const docTemplate = `{
                 "BILLING_TIER_SLAB"
             ]
         },
+        "types.CreditGrantCadence": {
+            "type": "string",
+            "enum": [
+                "ONETIME",
+                "RECURRING"
+            ],
+            "x-enum-varnames": [
+                "CreditGrantCadenceOneTime",
+                "CreditGrantCadenceRecurring"
+            ]
+        },
+        "types.CreditGrantPeriod": {
+            "type": "string",
+            "enum": [
+                "DAILY",
+                "WEEKLY",
+                "MONTHLY",
+                "YEARLY",
+                "QUARTERLY",
+                "HALFYEARLY"
+            ],
+            "x-enum-varnames": [
+                "CreditGrantPeriodDaily",
+                "CreditGrantPeriodWeekly",
+                "CreditGrantPeriodMonthly",
+                "CreditGrantPeriodYearly",
+                "CreditGrantPeriodQuarter",
+                "CreditGrantPeriodHalfYear"
+            ]
+        },
+        "types.CreditGrantScope": {
+            "type": "string",
+            "enum": [
+                "PLAN",
+                "SUBSCRIPTION"
+            ],
+            "x-enum-varnames": [
+                "CreditGrantScopePlan",
+                "CreditGrantScopeSubscription"
+            ]
+        },
         "types.CustomerFilter": {
             "type": "object",
             "properties": {
@@ -10058,6 +10998,17 @@ const docTemplate = `{
                 "ResumeModeAuto"
             ]
         },
+        "types.ScheduleEndBehavior": {
+            "type": "string",
+            "enum": [
+                "RELEASE",
+                "CANCEL"
+            ],
+            "x-enum-varnames": [
+                "EndBehaviorRelease",
+                "EndBehaviorCancel"
+            ]
+        },
         "types.SecretProvider": {
             "type": "string",
             "enum": [
@@ -10117,6 +11068,19 @@ const docTemplate = `{
                 "StatusPublished",
                 "StatusDeleted",
                 "StatusArchived"
+            ]
+        },
+        "types.SubscriptionScheduleStatus": {
+            "type": "string",
+            "enum": [
+                "ACTIVE",
+                "RELEASED",
+                "CANCELED"
+            ],
+            "x-enum-varnames": [
+                "ScheduleStatusActive",
+                "ScheduleStatusReleased",
+                "ScheduleStatusCanceled"
             ]
         },
         "types.SubscriptionStatus": {

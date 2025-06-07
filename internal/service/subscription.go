@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"sort"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -30,6 +31,14 @@ type SubscriptionService interface {
 	ListPauses(ctx context.Context, subscriptionID string) (*dto.ListSubscriptionPausesResponse, error)
 	CalculatePauseImpact(ctx context.Context, subscriptionID string, req *dto.PauseSubscriptionRequest) (*types.BillingImpactDetails, error)
 	CalculateResumeImpact(ctx context.Context, subscriptionID string, req *dto.ResumeSubscriptionRequest) (*types.BillingImpactDetails, error)
+
+	// Schedule-related methods
+	CreateSubscriptionSchedule(ctx context.Context, req *dto.CreateSubscriptionScheduleRequest) (*dto.SubscriptionScheduleResponse, error)
+	GetSubscriptionSchedule(ctx context.Context, id string) (*dto.SubscriptionScheduleResponse, error)
+	GetScheduleBySubscriptionID(ctx context.Context, subscriptionID string) (*dto.SubscriptionScheduleResponse, error)
+	UpdateSubscriptionSchedule(ctx context.Context, id string, req *dto.UpdateSubscriptionScheduleRequest) (*dto.SubscriptionScheduleResponse, error)
+	AddSchedulePhase(ctx context.Context, scheduleID string, req *dto.AddSchedulePhaseRequest) (*dto.SubscriptionScheduleResponse, error)
+	AddSubscriptionPhase(ctx context.Context, subscriptionID string, req *dto.AddSchedulePhaseRequest) (*dto.SubscriptionScheduleResponse, error)
 }
 
 type subscriptionService struct {
@@ -41,6 +50,7 @@ func NewSubscriptionService(params ServiceParams) SubscriptionService {
 		ServiceParams: params,
 	}
 }
+
 func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.CreateSubscriptionRequest) (*dto.SubscriptionResponse, error) {
 	// Handle default values
 	if req.BillingCycle == "" {
@@ -221,13 +231,36 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		"current_period_start", sub.CurrentPeriodStart,
 		"current_period_end", sub.CurrentPeriodEnd,
 		"valid_prices", len(validPrices),
-		"num_line_items", len(sub.LineItems))
+		"num_line_items", len(sub.LineItems),
+		"has_phases", len(req.Phases) > 0)
+
+	// Create response object
+	response := &dto.SubscriptionResponse{Subscription: sub}
 
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
 		// Create subscription with line items
 		err = s.SubRepo.CreateWithLineItems(ctx, sub, sub.LineItems)
 		if err != nil {
 			return err
+		}
+
+		// Create credit grants
+		err = s.handleCreditGrants(ctx, sub, req.CreditGrants)
+		if err != nil {
+			return err
+		}
+
+		// Create subscription schedule if phases are provided
+		if len(req.Phases) > 0 {
+			schedule, err := s.createScheduleFromPhases(ctx, sub, req.Phases)
+			if err != nil {
+				return err
+			}
+
+			// Include the schedule in the response
+			if schedule != nil {
+				response.Schedule = dto.SubscriptionScheduleResponseFromDomain(schedule)
+			}
 		}
 
 		// Create invoice for the subscription (in case it has advance charges)
@@ -243,9 +276,130 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		return nil, err
 	}
 
-	response := &dto.SubscriptionResponse{Subscription: sub}
 	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionCreated, sub.ID)
 	return response, nil
+}
+
+// handleCreditGrants processes credit grants for a subscription and creates wallet top-ups
+func (s *subscriptionService) handleCreditGrants(
+	ctx context.Context,
+	subscription *subscription.Subscription,
+	creditGrantRequests []dto.CreateCreditGrantRequest,
+) error {
+	if len(creditGrantRequests) == 0 {
+		return nil
+	}
+
+	creditGrantService := NewCreditGrantService(s.CreditGrantRepo, s.PlanRepo, s.SubRepo, s.Logger)
+
+	s.Logger.Infow("processing credit grants for subscription",
+		"subscription_id", subscription.ID,
+		"credit_grants_count", len(creditGrantRequests))
+
+	// Create credit grants
+	creditGrants := make([]*dto.CreditGrantResponse, 0, len(creditGrantRequests))
+	for _, grantReq := range creditGrantRequests {
+		// Ensure subscription ID is set and scope is SUBSCRIPTION
+		grantReq.SubscriptionID = &subscription.ID
+		grantReq.Scope = types.CreditGrantScopeSubscription
+
+		// Use same plan ID as subscription
+		grantReq.PlanID = &subscription.PlanID
+
+		// Save credit grant in DB
+		createdGrant, err := creditGrantService.CreateCreditGrant(ctx, grantReq)
+		if err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to create credit grant for subscription").
+				WithReportableDetails(map[string]interface{}{
+					"subscription_id": subscription.ID,
+					"grant_name":      createdGrant.Name,
+				}).
+				Mark(ierr.ErrDatabase)
+		}
+
+		creditGrants = append(creditGrants, createdGrant)
+	}
+
+	if len(creditGrants) == 0 {
+		return nil
+	}
+
+	walletService := NewWalletService(s.ServiceParams)
+	// find the matching wallet for top up
+	wallets, err := walletService.GetWalletsByCustomerID(ctx, subscription.CustomerID)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to get wallet for top up").
+			Mark(ierr.ErrDatabase)
+	}
+
+	sort.Slice(wallets, func(i, j int) bool {
+		return wallets[i].CreatedAt.After(wallets[j].CreatedAt)
+	})
+
+	var selectedWallet *dto.WalletResponse
+	for _, w := range wallets {
+		if types.IsMatchingCurrency(w.Currency, subscription.Currency) {
+			selectedWallet = w
+			break
+		}
+	}
+
+	if selectedWallet == nil {
+		// create a new wallet
+		walletReq := &dto.CreateWalletRequest{
+			Name:       "Subscription Wallet",
+			CustomerID: subscription.CustomerID,
+			Currency:   subscription.Currency,
+		}
+		selectedWallet, err = walletService.CreateWallet(ctx, walletReq)
+		if err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to create wallet for top up").
+				Mark(ierr.ErrDatabase)
+		}
+	}
+
+	if selectedWallet == nil {
+		return ierr.NewError("no wallet found for top up").
+			WithHint("No wallet found for the subscription currency").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Now create wallet top-ups for each credit grant
+	for _, grant := range creditGrants {
+		// Calculate expiry date if needed
+		var expiryDate *time.Time
+		if grant.ExpireInDays != nil && *grant.ExpireInDays > 0 {
+			expiry := subscription.StartDate.AddDate(0, 0, *grant.ExpireInDays)
+			expiryDate = &expiry
+		}
+
+		// Create a wallet top-up
+		topupReq := &dto.TopUpWalletRequest{
+			Amount:            grant.Amount,
+			TransactionReason: types.TransactionReasonSubscriptionCredit,
+			ExpiryDateUTC:     expiryDate,
+			Priority:          grant.Priority,
+			IdempotencyKey:    lo.ToPtr(grant.ID),
+		}
+
+		// Create the wallet top-up
+		_, err := walletService.TopUpWallet(ctx, selectedWallet.ID, topupReq)
+		if err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to create wallet top-up for credit grant").
+				WithReportableDetails(map[string]interface{}{
+					"subscription_id": subscription.ID,
+					"grant_id":        grant.ID,
+					"grant_name":      grant.Name,
+				}).
+				Mark(ierr.ErrDatabase)
+		}
+	}
+
+	return nil
 }
 
 func (s *subscriptionService) GetSubscription(ctx context.Context, id string) (*dto.SubscriptionResponse, error) {
@@ -282,6 +436,13 @@ func (s *subscriptionService) GetSubscription(ctx context.Context, id string) (*
 		return nil, err
 	}
 	response.Customer = customer
+
+	// Try to get schedule if exists
+	schedule, err := s.GetScheduleBySubscriptionID(ctx, id)
+	if err == nil && schedule != nil {
+		response.Schedule = schedule
+	}
+
 	return response, nil
 }
 
@@ -378,7 +539,45 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 		}
 	}
 
+	// Include schedules if requested in expand
+	if filter.Expand != nil && filter.GetExpand().Has(types.ExpandSchedule) {
+		s.addSchedulesToSubscriptionResponses(ctx, response.Items)
+	}
+
 	return response, nil
+}
+
+// addSchedulesToSubscriptionResponses adds schedule information to subscription responses if available
+func (s *subscriptionService) addSchedulesToSubscriptionResponses(ctx context.Context, items []*dto.SubscriptionResponse) {
+	// If repository doesn't support schedules, return early
+	if s.SubscriptionScheduleRepo == nil {
+		s.Logger.Debugw("subscription schedule repository is not configured, skipping schedule expansion")
+		return
+	}
+
+	// Group subscriptions by ID for faster lookup
+	subMap := make(map[string]*dto.SubscriptionResponse, len(items))
+	for _, sub := range items {
+		subMap[sub.ID] = sub
+	}
+
+	// Collect all subscription IDs
+	subscriptionIDs := lo.Keys(subMap)
+
+	// In a real implementation, we would get schedules in a single query
+	// For now, we'll do individual lookups
+	for _, subscriptionID := range subscriptionIDs {
+		sub := subMap[subscriptionID]
+
+		// Try to get schedule if exists
+		schedule, err := s.SubscriptionScheduleRepo.GetBySubscriptionID(ctx, subscriptionID)
+		if err != nil || schedule == nil {
+			continue
+		}
+
+		// Add schedule to subscription response
+		sub.Schedule = dto.SubscriptionScheduleResponseFromDomain(schedule)
+	}
 }
 
 func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error) {
@@ -500,6 +699,10 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 		"total_usage_count", len(usageMap),
 		"subscription_id", req.SubscriptionID)
 
+	// Store usage charges for later sorting and processing
+	var usageCharges []*dto.SubscriptionUsageByMetersResponse
+
+	// First pass: calculate normal costs and build initial charge objects
 	// Note: we are iterating over the meterUsageRequests and not the usageMap
 	// This is because the usageMap is a map of meterID to usage and we want to iterate over the meterUsageRequests
 	// as there can be multiple requests for the same meterID with different priceIDs
@@ -513,8 +716,8 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 		}
 
 		// Get price by price ID and check if it exists
-		price, priceExists := priceMap[usage.PriceID]
-		if !priceExists || price == nil {
+		priceObj, priceExists := priceMap[usage.PriceID]
+		if !priceExists || priceObj == nil {
 			return nil, ierr.NewError("price not found").
 				WithHint("The price for the meter was not found").
 				WithReportableDetails(map[string]interface{}{
@@ -531,31 +734,169 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 		}
 
 		quantity := usage.Value
-		cost := priceService.CalculateCost(ctx, price, quantity)
-		totalCost = totalCost.Add(cost)
+		cost := priceService.CalculateCost(ctx, priceObj, quantity)
 
 		s.Logger.Debugw("calculated usage for meter",
 			"meter_id", meterID,
 			"quantity", quantity,
 			"cost", cost,
-			"total_cost", totalCost,
 			"meter_display_name", meterDisplayName,
 			"subscription_id", req.SubscriptionID,
 			"usage", usage,
-			"price", price,
+			"price", priceObj,
 		)
 
-		filteredUsageCharge := createChargeResponse(
-			price,
+		charge := createChargeResponse(
+			priceObj,
 			quantity,
 			cost,
 			meterDisplayName,
 		)
 
-		if filteredUsageCharge == nil {
+		if charge == nil {
 			continue
 		}
-		response.Charges = append(response.Charges, filteredUsageCharge)
+
+		usageCharges = append(usageCharges, charge)
+		totalCost = totalCost.Add(cost)
+	}
+
+	// Apply commitment logic if set on the subscription
+	hasCommitment := false
+
+	commitmentAmount := lo.FromPtr(subscription.CommitmentAmount)
+	overageFactor := lo.FromPtr(subscription.OverageFactor)
+
+	// Check if commitment amount is greater than zero
+	if commitmentAmount.GreaterThan(decimal.Zero) {
+		// Check if overage factor is greater than 1.0
+		oneDecimal := decimal.NewFromInt(1)
+		hasCommitment = overageFactor.GreaterThan(oneDecimal)
+	}
+
+	// Default values assuming no commitment/overage
+	commitmentFloat, _ := commitmentAmount.Float64()
+	overageFactorFloat, _ := overageFactor.Float64()
+	response.CommitmentAmount = commitmentFloat
+	response.OverageFactor = overageFactorFloat
+	response.HasOverage = false
+
+	// Initialize charges list with enough capacity
+	response.Charges = make([]*dto.SubscriptionUsageByMetersResponse, 0, len(usageCharges)*2)
+
+	// If using commitment-based pricing, process charges with overage logic
+	if hasCommitment {
+		// First, filter charges to only include usage-based charges for commitment calculations
+		// Fixed charges are not subject to commitment/overage
+		var usageOnlyCharges []*dto.SubscriptionUsageByMetersResponse
+		var fixedCharges []*dto.SubscriptionUsageByMetersResponse
+
+		for _, charge := range usageCharges {
+			if charge.Price != nil && charge.Price.Type == types.PRICE_TYPE_USAGE {
+				usageOnlyCharges = append(usageOnlyCharges, charge)
+			} else {
+				// Add fixed charges directly to the response without overage calculation
+				fixedCharges = append(fixedCharges, charge)
+			}
+		}
+
+		// Add all fixed charges directly to the response
+		response.Charges = append(response.Charges, fixedCharges...)
+
+		// Track remaining commitment and process each usage charge
+		remainingCommitment := commitmentAmount
+		totalOverageAmount := decimal.Zero
+
+		for _, charge := range usageOnlyCharges {
+			// Get charge amount as decimal for precise calculations
+			chargeAmount := decimal.NewFromFloat(charge.Amount)
+			pricePerUnit := decimal.Zero
+			if charge.Price != nil && charge.Price.BillingModel == types.BILLING_MODEL_FLAT_FEE {
+				pricePerUnit = charge.Price.Amount
+			} else if charge.Quantity > 0 {
+				pricePerUnit = chargeAmount.Div(decimal.NewFromFloat(charge.Quantity))
+			}
+
+			// Normal price covers all of this charge
+			if remainingCommitment.GreaterThanOrEqual(chargeAmount) {
+				charge.IsOverage = false
+				remainingCommitment = remainingCommitment.Sub(chargeAmount)
+				response.Charges = append(response.Charges, charge)
+				continue
+			}
+
+			// Charge needs to be split between normal and overage
+			if remainingCommitment.GreaterThan(decimal.Zero) {
+				// Calculate exact quantity that can be covered by remaining commitment
+				var normalQuantityDecimal decimal.Decimal
+
+				if !pricePerUnit.IsZero() {
+					normalQuantityDecimal = remainingCommitment.Div(pricePerUnit)
+
+					// Round down to ensure we don't exceed commitment
+					normalQuantityDecimal = normalQuantityDecimal.Floor()
+				}
+
+				// Calculate the normal amount based on the normal quantity
+				normalAmountDecimal := normalQuantityDecimal.Mul(pricePerUnit)
+
+				// Create the normal charge
+				if normalQuantityDecimal.GreaterThan(decimal.Zero) {
+					normalCharge := *charge // Create a copy
+					normalCharge.Quantity = normalQuantityDecimal.InexactFloat64()
+					normalCharge.Amount = price.FormatAmountToFloat64WithPrecision(normalAmountDecimal, subscription.Currency)
+					normalCharge.DisplayAmount = price.FormatAmountToStringWithPrecision(normalAmountDecimal, subscription.Currency)
+					normalCharge.IsOverage = false
+					response.Charges = append(response.Charges, &normalCharge)
+				}
+
+				// Calculate overage quantity and amount
+				overageQuantityDecimal := decimal.NewFromFloat(charge.Quantity).Sub(normalQuantityDecimal)
+
+				// Create the overage charge only if there's actual overage
+				if overageQuantityDecimal.GreaterThan(decimal.Zero) {
+					overageAmountDecimal := overageQuantityDecimal.Mul(pricePerUnit).Mul(overageFactor)
+					totalOverageAmount = totalOverageAmount.Add(overageAmountDecimal)
+
+					overageCharge := *charge // Create a copy
+					overageCharge.Quantity = overageQuantityDecimal.InexactFloat64()
+					overageCharge.Amount = price.FormatAmountToFloat64WithPrecision(overageAmountDecimal, subscription.Currency)
+					overageCharge.DisplayAmount = price.FormatAmountToStringWithPrecision(overageAmountDecimal, subscription.Currency)
+					overageCharge.IsOverage = true
+					overageCharge.OverageFactor = overageFactorFloat
+					response.Charges = append(response.Charges, &overageCharge)
+					response.HasOverage = true
+				}
+
+				// Update remaining commitment (should be zero or very close to it due to rounding)
+				remainingCommitment = remainingCommitment.Sub(normalAmountDecimal)
+				continue
+			}
+
+			// Charge is entirely in overage
+			overageAmountDecimal := chargeAmount.Mul(overageFactor)
+			totalOverageAmount = totalOverageAmount.Add(overageAmountDecimal)
+
+			charge.Amount = price.FormatAmountToFloat64WithPrecision(overageAmountDecimal, subscription.Currency)
+			charge.DisplayAmount = overageAmountDecimal.StringFixed(6)
+			charge.IsOverage = true
+			charge.OverageFactor = overageFactorFloat
+			response.Charges = append(response.Charges, charge)
+			response.HasOverage = true
+		}
+
+		// Calculate final amounts for response
+		commitmentUtilized := commitmentAmount.Sub(remainingCommitment)
+		commitmentUtilizedFloat, _ := commitmentUtilized.Float64()
+		overageAmountFloat, _ := totalOverageAmount.Float64()
+		response.CommitmentUtilized = commitmentUtilizedFloat
+		response.OverageAmount = overageAmountFloat
+
+		// Update total cost with commitment + overage calculation
+		totalCost = commitmentUtilized.Add(totalOverageAmount)
+	} else {
+		// Without commitment, just use the original charges
+		response.Charges = usageCharges
 	}
 
 	response.StartTime = usageStartTime
@@ -563,7 +904,6 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 	response.Amount = price.FormatAmountToFloat64WithPrecision(totalCost, subscription.Currency)
 	response.Currency = subscription.Currency
 	response.DisplayAmount = price.GetDisplayAmountWithPrecision(totalCost, subscription.Currency)
-
 	return response, nil
 }
 
@@ -1489,4 +1829,553 @@ func (s *subscriptionService) publishInternalWebhookEvent(ctx context.Context, e
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
 		s.Logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
 	}
+}
+
+// CreateSubscriptionSchedule creates a subscription schedule
+func (s *subscriptionService) CreateSubscriptionSchedule(ctx context.Context, req *dto.CreateSubscriptionScheduleRequest) (*dto.SubscriptionScheduleResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Verify subscription exists
+	sub, _, err := s.SubRepo.GetWithLineItems(ctx, req.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if a schedule already exists for the subscription
+	if s.SubscriptionScheduleRepo == nil {
+		return nil, ierr.NewError("subscription repository does not support schedules").
+			WithHint("Schedule functionality is not supported").
+			Mark(ierr.ErrInternal)
+	}
+
+	// Check if a schedule already exists
+	existingSchedule, err := s.SubscriptionScheduleRepo.GetBySubscriptionID(ctx, req.SubscriptionID)
+	if err == nil && existingSchedule != nil {
+		return nil, ierr.NewError("subscription already has a schedule").
+			WithHint("A subscription can only have one schedule").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_id": req.SubscriptionID,
+				"schedule_id":     existingSchedule.ID,
+			}).
+			Mark(ierr.ErrAlreadyExists)
+	}
+
+	// Create the schedule
+	schedule := &subscription.SubscriptionSchedule{
+		ID:                types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_SCHEDULE),
+		SubscriptionID:    req.SubscriptionID,
+		ScheduleStatus:    types.ScheduleStatusActive,
+		CurrentPhaseIndex: 0,
+		EndBehavior:       req.EndBehavior,
+		StartDate:         sub.StartDate,
+		Metadata:          types.Metadata{},
+		EnvironmentID:     types.GetEnvironmentID(ctx),
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+
+	// Create phases
+	phases := make([]*subscription.SchedulePhase, 0, len(req.Phases))
+	for i, phaseInput := range req.Phases {
+		// Convert line items to the domain model type
+		lineItems := make([]types.SchedulePhaseLineItem, 0, len(phaseInput.LineItems))
+		for _, item := range phaseInput.LineItems {
+			lineItems = append(lineItems, types.SchedulePhaseLineItem{
+				PriceID:     item.PriceID,
+				Quantity:    item.Quantity,
+				DisplayName: item.DisplayName,
+				Metadata:    types.Metadata(item.Metadata),
+			})
+		}
+
+		// Convert credit grants to the domain model type
+		creditGrants := make([]types.SchedulePhaseCreditGrant, 0, len(phaseInput.CreditGrants))
+		for _, grant := range phaseInput.CreditGrants {
+			creditGrants = append(creditGrants, types.SchedulePhaseCreditGrant{
+				Name:         grant.Name,
+				Scope:        grant.Scope,
+				PlanID:       grant.PlanID,
+				Amount:       grant.Amount,
+				Currency:     grant.Currency,
+				Cadence:      grant.Cadence,
+				Period:       grant.Period,
+				PeriodCount:  grant.PeriodCount,
+				ExpireInDays: grant.ExpireInDays,
+				Priority:     grant.Priority,
+				Metadata:     grant.Metadata,
+			})
+		}
+
+		phase := &subscription.SchedulePhase{
+			ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_SCHEDULE_PHASE),
+			ScheduleID:       schedule.ID,
+			PhaseIndex:       i,
+			StartDate:        phaseInput.StartDate,
+			EndDate:          phaseInput.EndDate,
+			CommitmentAmount: &phaseInput.CommitmentAmount,
+			OverageFactor:    &phaseInput.OverageFactor,
+			LineItems:        lineItems,
+			CreditGrants:     creditGrants,
+			Metadata:         phaseInput.Metadata,
+			EnvironmentID:    types.GetEnvironmentID(ctx),
+			BaseModel:        types.GetDefaultBaseModel(ctx),
+		}
+		phases = append(phases, phase)
+	}
+
+	// Create the schedule with phases
+	err = s.SubscriptionScheduleRepo.CreateWithPhases(ctx, schedule, phases)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to create subscription schedule").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_id": req.SubscriptionID,
+				"phase_count":     len(phases),
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	// Set the phases to the schedule before returning
+	schedule.Phases = phases
+	return dto.SubscriptionScheduleResponseFromDomain(schedule), nil
+}
+
+// GetSubscriptionSchedule gets a subscription schedule by ID
+func (s *subscriptionService) GetSubscriptionSchedule(ctx context.Context, id string) (*dto.SubscriptionScheduleResponse, error) {
+	if s.SubscriptionScheduleRepo == nil {
+		return nil, ierr.NewError("subscription repository does not support schedules").
+			WithHint("Schedule functionality is not supported").
+			Mark(ierr.ErrInternal)
+	}
+
+	schedule, err := s.SubscriptionScheduleRepo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	return dto.SubscriptionScheduleResponseFromDomain(schedule), nil
+}
+
+// GetScheduleBySubscriptionID gets a subscription schedule by subscription ID
+func (s *subscriptionService) GetScheduleBySubscriptionID(ctx context.Context, subscriptionID string) (*dto.SubscriptionScheduleResponse, error) {
+	// If repository doesn't support schedules, return nil instead of error
+	// This allows graceful fallback for backward compatibility
+	if s.SubscriptionScheduleRepo == nil {
+		s.Logger.Warnw("subscription schedule repository is not configured",
+			"subscription_id", subscriptionID)
+		return nil, nil
+	}
+
+	schedule, err := s.SubscriptionScheduleRepo.GetBySubscriptionID(ctx, subscriptionID)
+	if err != nil {
+		// Not found is a valid response - the subscription may not have a schedule
+		if ierr.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	if schedule == nil {
+		return nil, nil
+	}
+
+	return dto.SubscriptionScheduleResponseFromDomain(schedule), nil
+}
+
+// UpdateSubscriptionSchedule updates a subscription schedule
+func (s *subscriptionService) UpdateSubscriptionSchedule(ctx context.Context, id string, req *dto.UpdateSubscriptionScheduleRequest) (*dto.SubscriptionScheduleResponse, error) {
+	if s.SubscriptionScheduleRepo == nil {
+		return nil, ierr.NewError("subscription repository does not support schedules").
+			WithHint("Schedule functionality is not supported").
+			Mark(ierr.ErrInternal)
+	}
+
+	// Get the current schedule
+	schedule, err := s.SubscriptionScheduleRepo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Update the fields
+	if req.Status != "" {
+		schedule.ScheduleStatus = req.Status
+	}
+
+	if req.EndBehavior != "" {
+		schedule.EndBehavior = req.EndBehavior
+	}
+
+	// Update in the database
+	if err := s.SubscriptionScheduleRepo.Update(ctx, schedule); err != nil {
+		return nil, err
+	}
+
+	// Get fresh data
+	updatedSchedule, err := s.SubscriptionScheduleRepo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	return dto.SubscriptionScheduleResponseFromDomain(updatedSchedule), nil
+}
+
+// createScheduleFromPhases creates a schedule and its phases for a subscription
+func (s *subscriptionService) createScheduleFromPhases(ctx context.Context, sub *subscription.Subscription, phaseInputs []dto.SubscriptionSchedulePhaseInput) (*subscription.SubscriptionSchedule, error) {
+	// Create the schedule
+	schedule := &subscription.SubscriptionSchedule{
+		ID:                types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_SCHEDULE),
+		SubscriptionID:    sub.ID,
+		ScheduleStatus:    types.ScheduleStatusActive,
+		CurrentPhaseIndex: 0,
+		EndBehavior:       types.EndBehaviorRelease,
+		StartDate:         sub.StartDate,
+		Metadata:          types.Metadata{},
+		EnvironmentID:     types.GetEnvironmentID(ctx),
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+
+	// Create phases
+	phases := make([]*subscription.SchedulePhase, 0, len(phaseInputs))
+	for i, phaseInput := range phaseInputs {
+		// Convert line items to the domain model type
+		lineItems := make([]types.SchedulePhaseLineItem, 0, len(phaseInput.LineItems))
+		for _, item := range phaseInput.LineItems {
+			lineItems = append(lineItems, types.SchedulePhaseLineItem{
+				PriceID:     item.PriceID,
+				Quantity:    item.Quantity,
+				DisplayName: item.DisplayName,
+				Metadata:    item.Metadata,
+			})
+		}
+
+		// Convert credit grants to the domain model type
+		creditGrants := make([]types.SchedulePhaseCreditGrant, 0, len(phaseInput.CreditGrants))
+		for _, grant := range phaseInput.CreditGrants {
+			creditGrants = append(creditGrants, types.SchedulePhaseCreditGrant{
+				Name:         grant.Name,
+				Scope:        grant.Scope,
+				PlanID:       grant.PlanID,
+				Amount:       grant.Amount,
+				Currency:     grant.Currency,
+				Cadence:      grant.Cadence,
+				Period:       grant.Period,
+				PeriodCount:  grant.PeriodCount,
+				ExpireInDays: grant.ExpireInDays,
+				Priority:     grant.Priority,
+				Metadata:     grant.Metadata,
+			})
+		}
+
+		phase := &subscription.SchedulePhase{
+			ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_SCHEDULE_PHASE),
+			ScheduleID:       schedule.ID,
+			PhaseIndex:       i,
+			StartDate:        phaseInput.StartDate,
+			EndDate:          phaseInput.EndDate,
+			CommitmentAmount: &phaseInput.CommitmentAmount,
+			OverageFactor:    &phaseInput.OverageFactor,
+			LineItems:        lineItems,
+			CreditGrants:     creditGrants,
+			Metadata:         phaseInput.Metadata,
+			EnvironmentID:    types.GetEnvironmentID(ctx),
+			BaseModel:        types.GetDefaultBaseModel(ctx),
+		}
+		phases = append(phases, phase)
+	}
+
+	// Create the schedule with phases
+	err := s.SubscriptionScheduleRepo.CreateWithPhases(ctx, schedule, phases)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to create subscription schedule").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_id": sub.ID,
+				"phase_count":     len(phases),
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	// Set the phases to the schedule before returning
+	schedule.Phases = phases
+	return schedule, nil
+}
+
+// AddSchedulePhase adds a new phase to an existing subscription schedule
+func (s *subscriptionService) AddSchedulePhase(ctx context.Context, scheduleID string, req *dto.AddSchedulePhaseRequest) (*dto.SubscriptionScheduleResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	if s.SubscriptionScheduleRepo == nil {
+		return nil, ierr.NewError("subscription repository does not support schedules").
+			WithHint("Schedule functionality is not supported").
+			Mark(ierr.ErrInternal)
+	}
+
+	// Get the existing schedule with its phases
+	schedule, err := s.SubscriptionScheduleRepo.Get(ctx, scheduleID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get the subscription to validate against its dates
+	existingSubscription, _, err := s.SubRepo.GetWithLineItems(ctx, schedule.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Load existing phases
+	existingPhases, err := s.SubscriptionScheduleRepo.ListPhases(ctx, scheduleID)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list existing phases").
+			Mark(ierr.ErrDatabase)
+	}
+
+	// Validate that the new phase's start date is not before subscription start date
+	if req.Phase.StartDate.Before(existingSubscription.StartDate) {
+		return nil, ierr.NewError("phase start date cannot be before subscription start date").
+			WithHint("The phase must start on or after the subscription start date").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_start_date": existingSubscription.StartDate,
+				"phase_start_date":        req.Phase.StartDate,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// If subscription has an end date, validate the phase doesn't extend beyond it
+	if existingSubscription.EndDate != nil && req.Phase.EndDate != nil && req.Phase.EndDate.After(*existingSubscription.EndDate) {
+		return nil, ierr.NewError("phase end date cannot be after subscription end date").
+			WithHint("The phase must end on or before the subscription end date").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_end_date": existingSubscription.EndDate,
+				"phase_end_date":        req.Phase.EndDate,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Sort phases by start date
+	sort.Slice(existingPhases, func(i, j int) bool {
+		return existingPhases[i].StartDate.Before(existingPhases[j].StartDate)
+	})
+
+	// SIMPLIFIED APPROACH: Only allow adding phases at the end of existing phases
+	if len(existingPhases) > 0 {
+		lastPhase := existingPhases[len(existingPhases)-1]
+
+		// Check if the last phase has an end date
+		if lastPhase.EndDate == nil {
+			return nil, ierr.NewError("cannot add phase after an open-ended phase").
+				WithHint("The last phase must have an end date to add a new phase").
+				Mark(ierr.ErrValidation)
+		}
+
+		// Verify the new phase starts after the last existing phase ends
+		if !req.Phase.StartDate.After(*lastPhase.EndDate) {
+			return nil, ierr.NewError("new phase must start after the end of the last phase").
+				WithHint("Phase cannot overlap with existing phases. Add phases only at the end of the schedule").
+				WithReportableDetails(map[string]interface{}{
+					"last_phase_end_date":  lastPhase.EndDate,
+					"new_phase_start_date": req.Phase.StartDate,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	// Create the new phase
+	newPhase := &subscription.SchedulePhase{
+		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_SCHEDULE_PHASE),
+		ScheduleID:       scheduleID,
+		PhaseIndex:       len(existingPhases), // Add as the next phase
+		StartDate:        req.Phase.StartDate,
+		EndDate:          req.Phase.EndDate,
+		CommitmentAmount: &req.Phase.CommitmentAmount,
+		OverageFactor:    &req.Phase.OverageFactor,
+		Metadata:         req.Phase.Metadata,
+		EnvironmentID:    types.GetEnvironmentID(ctx),
+		BaseModel:        types.GetDefaultBaseModel(ctx),
+	}
+
+	// Convert line items
+	if len(req.Phase.LineItems) > 0 {
+		lineItems := make([]types.SchedulePhaseLineItem, 0, len(req.Phase.LineItems))
+		for _, item := range req.Phase.LineItems {
+			lineItems = append(lineItems, types.SchedulePhaseLineItem{
+				PriceID:     item.PriceID,
+				Quantity:    item.Quantity,
+				DisplayName: item.DisplayName,
+				Metadata:    types.Metadata(item.Metadata),
+			})
+		}
+		newPhase.LineItems = lineItems
+	}
+
+	// Convert credit grants
+	if len(req.Phase.CreditGrants) > 0 {
+		creditGrants := make([]types.SchedulePhaseCreditGrant, 0, len(req.Phase.CreditGrants))
+		for _, grant := range req.Phase.CreditGrants {
+			creditGrants = append(creditGrants, types.SchedulePhaseCreditGrant{
+				Name:         grant.Name,
+				Scope:        grant.Scope,
+				PlanID:       grant.PlanID,
+				Amount:       grant.Amount,
+				Currency:     grant.Currency,
+				Cadence:      grant.Cadence,
+				Period:       grant.Period,
+				PeriodCount:  grant.PeriodCount,
+				ExpireInDays: grant.ExpireInDays,
+				Priority:     grant.Priority,
+				Metadata:     grant.Metadata,
+			})
+		}
+		newPhase.CreditGrants = creditGrants
+	}
+
+	// Create the new phase
+	err = s.SubscriptionScheduleRepo.CreatePhase(ctx, newPhase)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to add phase to subscription schedule").
+			WithReportableDetails(map[string]interface{}{
+				"schedule_id": scheduleID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	// Update the schedule with the latest phase count
+	schedule.UpdatedAt = time.Now()
+	schedule.UpdatedBy = types.GetUserID(ctx)
+	err = s.SubscriptionScheduleRepo.Update(ctx, schedule)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to update subscription schedule").
+			WithReportableDetails(map[string]interface{}{
+				"schedule_id": scheduleID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	// Get the updated schedule to return in the response
+	updatedSchedule, err := s.SubscriptionScheduleRepo.Get(ctx, scheduleID)
+	if err != nil {
+		return nil, err
+	}
+
+	return dto.SubscriptionScheduleResponseFromDomain(updatedSchedule), nil
+}
+
+// AddSubscriptionPhase adds a new phase to a subscription, creating a schedule if needed
+// This is more user-friendly than AddSchedulePhase as it works directly with subscription IDs
+func (s *subscriptionService) AddSubscriptionPhase(ctx context.Context, subscriptionID string, req *dto.AddSchedulePhaseRequest) (*dto.SubscriptionScheduleResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	if s.SubscriptionScheduleRepo == nil {
+		return nil, ierr.NewError("subscription repository does not support schedules").
+			WithHint("Schedule functionality is not supported").
+			Mark(ierr.ErrInternal)
+	}
+
+	// Get the subscription
+	existingSubscription, lineItems, err := s.SubRepo.GetWithLineItems(ctx, subscriptionID)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get subscription").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_id": subscriptionID,
+			}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	// Validate that the new phase's start date is not before subscription start date
+	if req.Phase.StartDate.Before(existingSubscription.StartDate) {
+		return nil, ierr.NewError("phase start date cannot be before subscription start date").
+			WithHint("The phase must start on or after the subscription start date").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_start_date": existingSubscription.StartDate,
+				"phase_start_date":        req.Phase.StartDate,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if req.Phase.EndDate != nil && existingSubscription.EndDate != nil && req.Phase.StartDate.After(*existingSubscription.EndDate) {
+		return nil, ierr.NewError("phase start date cannot be after subscription end date").
+			WithHint("The phase must start before the subscription end date").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_end_date": existingSubscription.EndDate,
+				"phase_start_date":      req.Phase.StartDate,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if existingSubscription.EndDate != nil && req.Phase.EndDate != nil && req.Phase.EndDate.After(*existingSubscription.EndDate) {
+		return nil, ierr.NewError("phase end date cannot be after subscription end date").
+			WithHint("The phase must end on or before the subscription end date").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_end_date": existingSubscription.EndDate,
+				"phase_end_date":        req.Phase.EndDate,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Check for existing schedule
+	schedule, err := s.SubscriptionScheduleRepo.GetBySubscriptionID(ctx, subscriptionID)
+	if err != nil && !ierr.IsNotFound(err) {
+		// Error other than "not found"
+		return nil, ierr.WithError(err).
+			WithHint("Failed to check for existing schedule").
+			Mark(ierr.ErrDatabase)
+	}
+
+	// No schedule exists, we need to create one
+	if schedule == nil || err != nil {
+		s.Logger.Infow("creating new schedule for subscription",
+			"subscription_id", subscriptionID)
+
+		// Create a schedule with initial phase from subscription start to new phase start
+		initialPhases := []dto.SubscriptionSchedulePhaseInput{}
+
+		// Only add initial phase if new phase doesn't start exactly at subscription start
+		if !req.Phase.StartDate.Equal(existingSubscription.StartDate) {
+			// Build a default initial phase based on subscription's current values
+			initialPhase := dto.SubscriptionSchedulePhaseInput{
+				BillingCycle:     existingSubscription.BillingCycle,
+				StartDate:        existingSubscription.StartDate,
+				EndDate:          &req.Phase.StartDate,
+				CommitmentAmount: lo.FromPtr(existingSubscription.CommitmentAmount),
+				OverageFactor:    lo.FromPtr(existingSubscription.OverageFactor),
+				Metadata:         map[string]string{"created_by": "system", "reason": "auto-created-initial-phase"},
+			}
+
+			// Add line items from subscription
+			for _, item := range lineItems {
+				initialPhase.LineItems = append(initialPhase.LineItems, dto.SubscriptionLineItemRequest{
+					PriceID:     item.PriceID,
+					Quantity:    item.Quantity,
+					DisplayName: item.DisplayName,
+					Metadata:    item.Metadata,
+				})
+			}
+
+			initialPhases = append(initialPhases, initialPhase)
+		}
+
+		// Add the new phase
+		initialPhases = append(initialPhases, req.Phase)
+
+		// Create the schedule with both phases
+		createReq := &dto.CreateSubscriptionScheduleRequest{
+			SubscriptionID: subscriptionID,
+			EndBehavior:    types.EndBehaviorRelease,
+			Phases:         initialPhases,
+		}
+
+		// Create the schedule
+		return s.CreateSubscriptionSchedule(ctx, createReq)
+	}
+
+	// Schedule exists, add the phase to it
+	return s.AddSchedulePhase(ctx, schedule.ID, req)
 }

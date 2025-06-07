@@ -36,6 +36,8 @@ const (
 	FieldDescription = "description"
 	// EdgeEntitlements holds the string denoting the entitlements edge name in mutations.
 	EdgeEntitlements = "entitlements"
+	// EdgeCreditGrants holds the string denoting the credit_grants edge name in mutations.
+	EdgeCreditGrants = "credit_grants"
 	// Table holds the table name of the plan in the database.
 	Table = "plans"
 	// EntitlementsTable is the table that holds the entitlements relation/edge.
@@ -45,6 +47,13 @@ const (
 	EntitlementsInverseTable = "entitlements"
 	// EntitlementsColumn is the table column denoting the entitlements relation/edge.
 	EntitlementsColumn = "plan_id"
+	// CreditGrantsTable is the table that holds the credit_grants relation/edge.
+	CreditGrantsTable = "credit_grants"
+	// CreditGrantsInverseTable is the table name for the CreditGrant entity.
+	// It exists in this package in order to avoid circular dependency with the "creditgrant" package.
+	CreditGrantsInverseTable = "credit_grants"
+	// CreditGrantsColumn is the table column denoting the credit_grants relation/edge.
+	CreditGrantsColumn = "plan_id"
 )
 
 // Columns holds all SQL columns for plan fields.
@@ -160,10 +169,31 @@ func ByEntitlements(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newEntitlementsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
+
+// ByCreditGrantsCount orders the results by credit_grants count.
+func ByCreditGrantsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newCreditGrantsStep(), opts...)
+	}
+}
+
+// ByCreditGrants orders the results by credit_grants terms.
+func ByCreditGrants(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newCreditGrantsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
 func newEntitlementsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(EntitlementsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, EntitlementsTable, EntitlementsColumn),
+	)
+}
+func newCreditGrantsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(CreditGrantsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, CreditGrantsTable, CreditGrantsColumn),
 	)
 }

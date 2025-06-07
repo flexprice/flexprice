@@ -15,17 +15,20 @@ import (
 type PlanHandler struct {
 	service            service.PlanService
 	entitlementService service.EntitlementService
+	creditGrantService service.CreditGrantService
 	log                *logger.Logger
 }
 
 func NewPlanHandler(
 	service service.PlanService,
 	entitlementService service.EntitlementService,
+	creditGrantService service.CreditGrantService,
 	log *logger.Logger,
 ) *PlanHandler {
 	return &PlanHandler{
 		service:            service,
 		entitlementService: entitlementService,
+		creditGrantService: creditGrantService,
 		log:                log,
 	}
 }
@@ -213,6 +216,36 @@ func (h *PlanHandler) GetPlanEntitlements(c *gin.Context) {
 	}
 
 	resp, err := h.entitlementService.GetPlanEntitlements(c.Request.Context(), id)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+// @Summary Get plan credit grants
+// @Description Get all credit grants for a plan
+// @Tags CreditGrants
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Plan ID"
+// @Success 200 {object} dto.ListCreditGrantsResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /plans/{id}/creditgrants [get]
+func (h *PlanHandler) GetPlanCreditGrants(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("plan ID is required").
+			WithHint("Plan ID is required").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.creditGrantService.GetCreditGrantsByPlan(c.Request.Context(), id)
 	if err != nil {
 		c.Error(err)
 		return

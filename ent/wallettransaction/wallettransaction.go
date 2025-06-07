@@ -57,6 +57,8 @@ const (
 	FieldIdempotencyKey = "idempotency_key"
 	// FieldTransactionReason holds the string denoting the transaction_reason field in the database.
 	FieldTransactionReason = "transaction_reason"
+	// FieldPriority holds the string denoting the priority field in the database.
+	FieldPriority = "priority"
 	// Table holds the table name of the wallettransaction in the database.
 	Table = "wallet_transactions"
 )
@@ -86,6 +88,7 @@ var Columns = []string{
 	FieldCreditsAvailable,
 	FieldIdempotencyKey,
 	FieldTransactionReason,
+	FieldPriority,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -234,4 +237,9 @@ func ByIdempotencyKey(opts ...sql.OrderTermOption) OrderOption {
 // ByTransactionReason orders the results by the transaction_reason field.
 func ByTransactionReason(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTransactionReason, opts...).ToFunc()
+}
+
+// ByPriority orders the results by the priority field.
+func ByPriority(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPriority, opts...).ToFunc()
 }
