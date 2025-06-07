@@ -6318,8 +6318,14 @@ const docTemplate = `{
                 "currency": {
                     "type": "string"
                 },
-                "expire_in_days": {
+                "expiration_duration": {
                     "type": "integer"
+                },
+                "expiration_duration_unit": {
+                    "$ref": "#/definitions/types.CreditGrantExpiryDurationUnit"
+                },
+                "expiration_type": {
+                    "$ref": "#/definitions/types.CreditGrantExpiryType"
                 },
                 "metadata": {
                     "$ref": "#/definitions/types.Metadata"
@@ -7130,8 +7136,14 @@ const docTemplate = `{
                 "environment_id": {
                     "type": "string"
                 },
-                "expire_in_days": {
+                "expiration_duration": {
                     "type": "integer"
+                },
+                "expiration_duration_unit": {
+                    "$ref": "#/definitions/types.CreditGrantExpiryDurationUnit"
+                },
+                "expiration_type": {
+                    "$ref": "#/definitions/types.CreditGrantExpiryType"
                 },
                 "id": {
                     "type": "string"
@@ -10571,6 +10583,34 @@ const docTemplate = `{
             "x-enum-varnames": [
                 "CreditGrantCadenceOneTime",
                 "CreditGrantCadenceRecurring"
+            ]
+        },
+        "types.CreditGrantExpiryDurationUnit": {
+            "type": "string",
+            "enum": [
+                "DAY",
+                "WEEK",
+                "MONTH",
+                "YEAR"
+            ],
+            "x-enum-varnames": [
+                "CreditGrantExpiryDurationUnitDays",
+                "CreditGrantExpiryDurationUnitWeeks",
+                "CreditGrantExpiryDurationUnitMonths",
+                "CreditGrantExpiryDurationUnitYears"
+            ]
+        },
+        "types.CreditGrantExpiryType": {
+            "type": "string",
+            "enum": [
+                "NEVER",
+                "DURATION",
+                "BILLING_CYCLE"
+            ],
+            "x-enum-varnames": [
+                "CreditGrantExpiryTypeNever",
+                "CreditGrantExpiryTypeDuration",
+                "CreditGrantExpiryTypeBillingCycle"
             ]
         },
         "types.CreditGrantPeriod": {
