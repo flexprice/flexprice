@@ -266,7 +266,7 @@ type SchedulePhaseCreditGrant struct {
 	Period             *CreditGrantPeriod             `json:"period,omitempty"`
 	PeriodCount        *int                           `json:"period_count,omitempty"`
 	ExpirationType     CreditGrantExpiryType          `json:"expiration_type" binding:"required"`
-	ExpireInDays       *int                           `json:"expire_in_days,omitempty"`
+	ExpireInDays       *int                           `json:"expire_in_days,omitempty"` // Deprecated: use ExpiryDuration and ExpiryDurationUnit instead
 	ExpiryDuration     *int                           `json:"expiry_duration,omitempty"`
 	ExpiryDurationUnit *CreditGrantExpiryDurationUnit `json:"expiry_duration_unit,omitempty"`
 	Priority           *int                           `json:"priority,omitempty"`
