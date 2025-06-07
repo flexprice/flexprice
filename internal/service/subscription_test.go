@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -556,7 +557,8 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 		input         dto.CreateSubscriptionRequest
 		want          *dto.SubscriptionResponse
 		wantErr       bool
-		errorContains string
+		expectedError string
+		errorType     string // "validation" or "not_found"
 	}{
 		{
 			name: "both_customer_id_and_external_id_absent",
@@ -571,7 +573,8 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 				BillingCycle:       types.BillingCycleAnniversary,
 			},
 			wantErr:       true,
-			errorContains: "either customer_id or external_customer_id is required",
+			expectedError: "either customer_id or external_customer_id is required",
+			errorType:     "validation",
 		},
 		{
 			name: "only_customer_id_present",
@@ -633,12 +636,13 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 				BillingCycle:       types.BillingCycleAnniversary,
 			},
 			wantErr:       true,
-			errorContains: "customer not found",
+			expectedError: "customer not found",
+			errorType:     "not_found",
 		},
 		{
 			name: "invalid_customer_id",
 			input: dto.CreateSubscriptionRequest{
-				CustomerID:         "invalid_customer",
+				CustomerID:         "invalid_id",
 				PlanID:             s.testData.plan.ID,
 				StartDate:          s.testData.now,
 				EndDate:            lo.ToPtr(s.testData.now.Add(30 * 24 * time.Hour)),
@@ -649,13 +653,14 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 				BillingCycle:       types.BillingCycleAnniversary,
 			},
 			wantErr:       true,
-			errorContains: "customer not found",
+			expectedError: "item not found",
+			errorType:     "not_found",
 		},
 		{
 			name: "invalid_plan_id",
 			input: dto.CreateSubscriptionRequest{
 				CustomerID:         s.testData.customer.ID,
-				PlanID:             "invalid_plan",
+				PlanID:             "invalid_id",
 				StartDate:          s.testData.now,
 				EndDate:            lo.ToPtr(s.testData.now.Add(30 * 24 * time.Hour)),
 				Currency:           "usd",
@@ -665,7 +670,8 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 				BillingCycle:       types.BillingCycleAnniversary,
 			},
 			wantErr:       true,
-			errorContains: "plan not found",
+			expectedError: "item not found",
+			errorType:     "not_found",
 		},
 		{
 			name: "end_date_before_start_date",
@@ -681,7 +687,8 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 				BillingCycle:       types.BillingCycleAnniversary,
 			},
 			wantErr:       true,
-			errorContains: "end_date cannot be before start_date",
+			expectedError: "end_date cannot be before start_date",
+			errorType:     "validation",
 		},
 	}
 
@@ -690,8 +697,13 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 			resp, err := s.service.CreateSubscription(s.GetContext(), tc.input)
 			if tc.wantErr {
 				s.Error(err)
-				if tc.errorContains != "" {
-					s.Contains(err.Error(), tc.errorContains)
+				if tc.expectedError != "" {
+					s.Contains(err.Error(), tc.expectedError)
+				}
+				if tc.errorType == "validation" {
+					s.True(ierr.IsValidation(err), "Expected validation error but got different error type")
+				} else if tc.errorType == "not_found" {
+					s.True(ierr.IsNotFound(err), "Expected not found error but got different error type")
 				}
 				return
 			}
