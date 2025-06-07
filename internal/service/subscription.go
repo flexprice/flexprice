@@ -313,7 +313,7 @@ func (s *subscriptionService) handleCreditGrants(
 				WithHint("Failed to create credit grant for subscription").
 				WithReportableDetails(map[string]interface{}{
 					"subscription_id": subscription.ID,
-					"grant_name":      createdGrant.Name,
+					"grant_name":      grantReq.Name,
 				}).
 				Mark(ierr.ErrDatabase)
 		}
