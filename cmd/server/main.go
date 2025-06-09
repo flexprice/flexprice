@@ -16,6 +16,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/dynamodb"
 	"github.com/flexprice/flexprice/internal/httpclient"
+	integrations "github.com/flexprice/flexprice/internal/integrations/manager"
 	"github.com/flexprice/flexprice/internal/kafka"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/pdf"
@@ -127,12 +128,19 @@ func main() {
 			repository.NewPaymentRepository,
 			repository.NewTaskRepository,
 			repository.NewSecretRepository,
+			repository.NewIntegrationRepository,
+			repository.NewConnectionRepository,
+
 			// PubSub
 			pubsubRouter.NewRouter,
 
 			// Temporal
 			provideTemporalClient,
 			provideTemporalService,
+
+			// Integration manager
+			// Must be provided before services to pass it to ServiceParams
+			integrations.NewGatewayManager,
 		),
 	)
 
@@ -169,6 +177,10 @@ func main() {
 			service.NewSecretService,
 			service.NewOnboardingService,
 			service.NewBillingService,
+			service.NewEntitySyncService,
+			service.NewGatewayService,
+			service.NewConnectionService,
+			service.NewIntegrationEntityService,
 		),
 	)
 
@@ -214,6 +226,9 @@ func provideHandlers(
 	secretService service.SecretService,
 	onboardingService service.OnboardingService,
 	billingService service.BillingService,
+	connectionService service.ConnectionService,
+	gatewayService service.GatewayService,
+	entitySyncService service.EntitySyncService,
 ) api.Handlers {
 	return api.Handlers{
 		Events:            v1.NewEventsHandler(eventService, eventPostProcessingService, logger),
@@ -238,6 +253,7 @@ func provideHandlers(
 		Onboarding:        v1.NewOnboardingHandler(onboardingService, logger),
 		CronSubscription:  cron.NewSubscriptionHandler(subscriptionService, temporalService, logger),
 		CronWallet:        cron.NewWalletCronHandler(logger, temporalService, walletService, tenantService),
+		Connection:        v1.NewConnectionHandler(connectionService, gatewayService, entitySyncService, logger),
 	}
 }
 

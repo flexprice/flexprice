@@ -14,10 +14,12 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/flexprice/flexprice/ent/auth"
 	"github.com/flexprice/flexprice/ent/billingsequence"
+	"github.com/flexprice/flexprice/ent/connection"
 	"github.com/flexprice/flexprice/ent/customer"
 	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/ent/environment"
 	"github.com/flexprice/flexprice/ent/feature"
+	"github.com/flexprice/flexprice/ent/integrationentity"
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/ent/invoicesequence"
@@ -97,10 +99,12 @@ func checkColumn(table, column string) error {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
 			auth.Table:                 auth.ValidColumn,
 			billingsequence.Table:      billingsequence.ValidColumn,
+			connection.Table:           connection.ValidColumn,
 			customer.Table:             customer.ValidColumn,
 			entitlement.Table:          entitlement.ValidColumn,
 			environment.Table:          environment.ValidColumn,
 			feature.Table:              feature.ValidColumn,
+			integrationentity.Table:    integrationentity.ValidColumn,
 			invoice.Table:              invoice.ValidColumn,
 			invoicelineitem.Table:      invoicelineitem.ValidColumn,
 			invoicesequence.Table:      invoicesequence.ValidColumn,

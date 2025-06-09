@@ -24,10 +24,15 @@ type CustomerService interface {
 
 type customerService struct {
 	ServiceParams
+	IntegrationEntityService IntegrationEntityService
 }
 
 func NewCustomerService(params ServiceParams) CustomerService {
-	return &customerService{ServiceParams: params}
+	integrationEntityService := NewIntegrationEntityService(params)
+	return &customerService{
+		ServiceParams:            params,
+		IntegrationEntityService: integrationEntityService,
+	}
 }
 
 func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCustomerRequest) (*dto.CustomerResponse, error) {
@@ -48,6 +53,16 @@ func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCust
 		// No need to wrap the error as the repository already returns properly formatted errors
 		return nil, err
 	}
+
+	// Handle integration with external billing system if billing configuration is provided
+	if req.BillingConfiguration != nil {
+		if err := s.handleCustomerBillingIntegration(ctx, cust, *req.BillingConfiguration); err != nil {
+			s.Logger.Errorw("Failed to integrate customer with billing provider", "error", err, "customer_id", cust.ID)
+			// We don't return the error here to avoid failing the entire customer creation
+			// The customer is created in our system, but integration failed
+		}
+	}
+
 	s.publishWebhookEvent(ctx, types.WebhookEventCustomerCreated, cust.ID)
 	return &dto.CustomerResponse{Customer: cust}, nil
 }
@@ -251,6 +266,19 @@ func (s *customerService) GetCustomerByLookupKey(ctx context.Context, lookupKey 
 	}
 
 	return &dto.CustomerResponse{Customer: customer}, nil
+}
+
+func (s *customerService) handleCustomerBillingIntegration(ctx context.Context, cust *customer.Customer, billingConfig dto.BillingConfiguration) error {
+	if err := billingConfig.Validate(); err != nil {
+		return err
+	}
+
+	entitySyncService := NewEntitySyncService(s.ServiceParams)
+	if err := entitySyncService.SyncEntity(ctx, types.EntityTypeCustomers, cust.ID, billingConfig.ConnectionCode); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (s *customerService) publishWebhookEvent(ctx context.Context, eventName string, customerID string) {

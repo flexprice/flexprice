@@ -20,6 +20,7 @@ var (
 	ErrDatabase         = new(ErrCodeDatabase, "database error")
 	ErrSystem           = new(ErrCodeSystemError, "system error")
 	ErrInternal         = new(ErrCodeInternalError, "internal error")
+	ErrIntegration      = new(ErrCodeIntegration, "integration error")
 	// maps errors to http status codes
 	statusCodeMap = map[error]int{
 		ErrHTTPClient:       http.StatusInternalServerError,
@@ -32,6 +33,7 @@ var (
 		ErrPermissionDenied: http.StatusForbidden,
 		ErrSystem:           http.StatusInternalServerError,
 		ErrInternal:         http.StatusInternalServerError,
+		ErrIntegration:      http.StatusBadGateway,
 	}
 )
 
@@ -46,6 +48,7 @@ const (
 	ErrCodeInvalidOperation = "invalid_operation"
 	ErrCodePermissionDenied = "permission_denied"
 	ErrCodeDatabase         = "database_error"
+	ErrCodeIntegration      = "integration_error"
 )
 
 // InternalError represents a domain error
@@ -142,6 +145,11 @@ func IsPermissionDenied(err error) bool {
 // IsHTTPClient checks if an error is an http client error
 func IsHTTPClient(err error) bool {
 	return errors.Is(err, ErrHTTPClient)
+}
+
+// IsIntegration checks if an error is an integration error
+func IsIntegration(err error) bool {
+	return errors.Is(err, ErrIntegration)
 }
 
 func HTTPStatusFromErr(err error) int {
