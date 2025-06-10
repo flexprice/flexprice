@@ -16,7 +16,13 @@ import (
 )
 
 type CreateSubscriptionRequest struct {
-	CustomerID         string               `json:"customer_id" validate:"required"`
+
+	// customer_id is the flexprice customer id
+	// and it is prioritized over external_customer_id in case both are provided.
+	CustomerID string `json:"customer_id"`
+	// external_customer_id is the customer id in your DB
+	// and must be same as what you provided as external_id while creating the customer in flexprice.
+	ExternalCustomerID string               `json:"external_customer_id"`
 	PlanID             string               `json:"plan_id" validate:"required"`
 	Currency           string               `json:"currency" validate:"required,len=3"`
 	LookupKey          string               `json:"lookup_key"`
@@ -64,6 +70,13 @@ type SubscriptionResponse struct {
 type ListSubscriptionsResponse = types.ListResponse[*SubscriptionResponse]
 
 func (r *CreateSubscriptionRequest) Validate() error {
+	// Case- Both are absent
+	if r.CustomerID == "" && r.ExternalCustomerID == "" {
+		return ierr.NewError("either customer_id or external_customer_id is required").
+			WithHint("Please provide either customer_id or external_customer_id").
+			Mark(ierr.ErrValidation)
+	}
+
 	err := validator.ValidateRequest(r)
 	if err != nil {
 		return err
@@ -86,6 +99,16 @@ func (r *CreateSubscriptionRequest) Validate() error {
 		return err
 	}
 
+	if r.EndDate != nil && r.EndDate.Before(r.StartDate) {
+		return ierr.NewError("end_date cannot be before start_date").
+			WithHint("End date must be after start date").
+			WithReportableDetails(map[string]interface{}{
+				"start_date": r.StartDate,
+				"end_date":   *r.EndDate,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
 	if r.BillingPeriodCount < 1 {
 		return ierr.NewError("billing_period_count must be greater than 0").
 			WithHint("Billing period count must be at least 1").
@@ -106,16 +129,6 @@ func (r *CreateSubscriptionRequest) Validate() error {
 			WithHint("Start date must be in the past or present").
 			WithReportableDetails(map[string]interface{}{
 				"start_date": r.StartDate,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	if r.EndDate != nil && r.EndDate.Before(r.StartDate) {
-		return ierr.NewError("end_date cannot be before start_date").
-			WithHint("End date must be after start date").
-			WithReportableDetails(map[string]interface{}{
-				"start_date": r.StartDate,
-				"end_date":   *r.EndDate,
 			}).
 			Mark(ierr.ErrValidation)
 	}

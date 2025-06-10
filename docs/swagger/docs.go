@@ -6939,7 +6939,6 @@ const docTemplate = `{
                 "billing_period",
                 "billing_period_count",
                 "currency",
-                "customer_id",
                 "plan_id",
                 "start_date"
             ],
@@ -6977,9 +6976,14 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "customer_id": {
+                    "description": "customer_id is the flexprice customer id\nand it is prioritized over external_customer_id in case both are provided.",
                     "type": "string"
                 },
                 "end_date": {
+                    "type": "string"
+                },
+                "external_customer_id": {
+                    "description": "external_customer_id is the customer id in your DB\nand must be same as what you provided as external_id while creating the customer in flexprice.",
                     "type": "string"
                 },
                 "lookup_key": {
