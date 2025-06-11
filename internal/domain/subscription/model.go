@@ -5,6 +5,7 @@ import (
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -101,6 +102,12 @@ type Subscription struct {
 	Pauses []*SubscriptionPause `json:"pauses,omitempty"`
 
 	types.BaseModel
+}
+
+func FromEntList(subs []*ent.Subscription) []*Subscription {
+	return lo.Map(subs, func(sub *ent.Subscription, _ int) *Subscription {
+		return GetSubscriptionFromEnt(sub)
+	})
 }
 
 func GetSubscriptionFromEnt(sub *ent.Subscription) *Subscription {

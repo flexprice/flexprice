@@ -530,6 +530,88 @@ func (o CreditGrantApplicationQueryOptions) applyEntityQueryOptions(_ context.Co
 	return query, nil
 }
 
+func (r *creditGrantApplicationRepository) ExistsForBillingPeriod(ctx context.Context, grantID, subscriptionID string, periodStart, periodEnd time.Time) (bool, error) {
+	client := r.client.Querier(ctx)
+
+	count, err := client.CreditGrantApplication.Query().
+		Where(
+			creditgrantapplication.CreditGrantID(grantID),
+			creditgrantapplication.SubscriptionID(subscriptionID),
+			creditgrantapplication.BillingPeriodStart(periodStart),
+			creditgrantapplication.BillingPeriodEnd(periodEnd),
+			creditgrantapplication.TenantID(types.GetTenantID(ctx)),
+			creditgrantapplication.ApplicationStatusNotIn(
+				string(types.ApplicationStatusCancelled),
+				string(types.ApplicationStatusFailed),
+			),
+		).
+		Count(ctx)
+
+	return count > 0, err
+}
+
+func (r *creditGrantApplicationRepository) FindDeferredApplications(ctx context.Context, subscriptionID string) ([]*domainCreditGrantApplication.CreditGrantApplication, error) {
+	client := r.client.Querier(ctx)
+
+	applications, err := client.CreditGrantApplication.Query().
+		Where(
+			creditgrantapplication.SubscriptionID(subscriptionID),
+			creditgrantapplication.ApplicationStatus(string(types.ApplicationStatusPending)),
+			creditgrantapplication.TenantID(types.GetTenantID(ctx)),
+		).
+		All(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return domainCreditGrantApplication.FromEntList(applications), nil
+}
+
+func (r *creditGrantApplicationRepository) FindFailedApplicationsForRetry(ctx context.Context, maxRetries int) ([]*domainCreditGrantApplication.CreditGrantApplication, error) {
+	client := r.client.Querier(ctx)
+	now := time.Now().UTC()
+
+	applications, err := client.CreditGrantApplication.Query().
+		Where(
+			creditgrantapplication.ApplicationStatus(string(types.ApplicationStatusFailed)),
+			creditgrantapplication.RetryCountLT(maxRetries),
+			creditgrantapplication.Or(
+				creditgrantapplication.NextRetryAtIsNil(),
+				creditgrantapplication.NextRetryAtLTE(now),
+			),
+			creditgrantapplication.TenantID(types.GetTenantID(ctx)),
+		).
+		Limit(100). // Process in batches
+		All(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return domainCreditGrantApplication.FromEntList(applications), nil
+}
+
+func (r *creditGrantApplicationRepository) CancelFutureApplications(ctx context.Context, subscriptionID string) error {
+	client := r.client.Querier(ctx)
+	now := time.Now().UTC()
+
+	_, err := client.CreditGrantApplication.Update().
+		Where(
+			creditgrantapplication.SubscriptionID(subscriptionID),
+			creditgrantapplication.ApplicationStatus(string(types.ApplicationStatusScheduled)),
+			creditgrantapplication.ScheduledForGT(now),
+			creditgrantapplication.TenantID(types.GetTenantID(ctx)),
+		).
+		SetApplicationStatus(string(types.ApplicationStatusCancelled)).
+		SetFailureReason("subscription_cancelled").
+		SetUpdatedAt(now).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		Save(ctx)
+
+	return err
+}
+
 func (r *creditGrantApplicationRepository) SetCache(ctx context.Context, application *domainCreditGrantApplication.CreditGrantApplication) {
 	span := cache.StartCacheSpan(ctx, "creditgrantapplication", "set", map[string]interface{}{
 		"application_id": application.ID,

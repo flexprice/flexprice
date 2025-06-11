@@ -3,6 +3,7 @@ package testutil
 import (
 	"context"
 
+	"github.com/flexprice/flexprice/internal/domain/creditgrant"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -399,4 +400,65 @@ func (s *InMemorySubscriptionStore) GetWithPauses(ctx context.Context, id string
 	pauses := s.pauses[id]
 	sub.Pauses = pauses
 	return sub, pauses, nil
+}
+
+// FindEligibleSubscriptionsForGrant finds subscriptions that are eligible for a credit grant
+func (s *InMemorySubscriptionStore) FindEligibleSubscriptionsForGrant(ctx context.Context, grant *creditgrant.CreditGrant) ([]*subscription.Subscription, error) {
+	var filter *types.SubscriptionFilter
+
+	switch grant.Scope {
+	case types.CreditGrantScopePlan:
+		if grant.PlanID == nil {
+			return nil, ierr.NewError("plan ID required for plan-scoped grants").
+				WithHint("plan ID required for plan-scoped grants").
+				Mark(ierr.ErrValidation)
+		}
+
+		filter = &types.SubscriptionFilter{
+			QueryFilter: types.NewNoLimitQueryFilter(),
+			PlanID:      *grant.PlanID,
+			SubscriptionStatus: []types.SubscriptionStatus{
+				types.SubscriptionStatusActive,
+				types.SubscriptionStatusTrialing,
+			},
+		}
+
+	case types.CreditGrantScopeSubscription:
+		if grant.SubscriptionID == nil {
+			return nil, ierr.NewError("subscription ID required for subscription-scoped grants").
+				WithHint("subscription ID required for subscription-scoped grants").
+				Mark(ierr.ErrValidation)
+		}
+
+		// Get the specific subscription
+		sub, err := s.Get(ctx, *grant.SubscriptionID)
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Failed to find subscription for grant").
+				Mark(ierr.ErrDatabase)
+		}
+
+		// Check if subscription is in eligible status
+		if sub.SubscriptionStatus != types.SubscriptionStatusActive &&
+			sub.SubscriptionStatus != types.SubscriptionStatusTrialing {
+			return []*subscription.Subscription{}, nil // Return empty slice if not eligible
+		}
+
+		return []*subscription.Subscription{sub}, nil
+
+	default:
+		return nil, ierr.NewError("invalid grant scope").
+			WithHint("invalid grant scope").
+			Mark(ierr.ErrValidation)
+	}
+
+	// For plan-scoped grants, list all matching subscriptions
+	subscriptions, err := s.List(ctx, filter)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to find eligible subscriptions").
+			Mark(ierr.ErrDatabase)
+	}
+
+	return subscriptions, nil
 }

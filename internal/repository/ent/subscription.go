@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
 	"github.com/flexprice/flexprice/internal/cache"
+	"github.com/flexprice/flexprice/internal/domain/creditgrant"
 	domainSub "github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -920,6 +921,74 @@ func (r *subscriptionRepository) ListByIDs(ctx context.Context, subscriptionIDs 
 
 	SetSpanSuccess(span)
 	return result, nil
+}
+
+func (r *subscriptionRepository) FindEligibleSubscriptionsForGrant(ctx context.Context, grant *creditgrant.CreditGrant) ([]*domainSub.Subscription, error) {
+	client := r.client.Querier(ctx)
+
+	span := StartRepositorySpan(ctx, "subscription", "find_eligible_for_grant", map[string]interface{}{
+		"grant_id": grant.ID,
+		"scope":    grant.Scope,
+	})
+	defer FinishSpan(span)
+
+	var query *ent.SubscriptionQuery
+
+	switch grant.Scope {
+	case types.CreditGrantScopePlan:
+		if grant.PlanID == nil {
+			return nil, ierr.NewError("plan ID required for plan-scoped grants").
+				WithHint("plan ID required for plan-scoped grants").
+				Mark(ierr.ErrValidation)
+		}
+
+		query = client.Subscription.Query().
+			Where(
+				subscription.TenantID(types.GetTenantID(ctx)),
+				subscription.EnvironmentID(types.GetEnvironmentID(ctx)),
+				subscription.Status(string(types.StatusPublished)),
+				subscription.PlanID(*grant.PlanID),
+				subscription.SubscriptionStatusIn(
+					string(types.SubscriptionStatusActive),
+					string(types.SubscriptionStatusTrialing), // May be configurable per grant
+				),
+			)
+
+	case types.CreditGrantScopeSubscription:
+		if grant.SubscriptionID == nil {
+			return nil, ierr.NewError("subscription ID required for subscription-scoped grants").
+				WithHint("subscription ID required for subscription-scoped grants").
+				Mark(ierr.ErrValidation)
+		}
+
+		query = client.Subscription.Query().
+			Where(
+				subscription.TenantID(types.GetTenantID(ctx)),
+				subscription.EnvironmentID(types.GetEnvironmentID(ctx)),
+				subscription.Status(string(types.StatusPublished)),
+				subscription.ID(*grant.SubscriptionID),
+				subscription.SubscriptionStatusIn(
+					string(types.SubscriptionStatusActive),
+					string(types.SubscriptionStatusTrialing),
+				),
+			)
+
+	default:
+		return nil, ierr.NewError("invalid grant scope").
+			WithHint("invalid grant scope").
+			Mark(ierr.ErrValidation)
+	}
+
+	subscriptions, err := query.All(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to find eligible subscriptions").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return domainSub.FromEntList(subscriptions), nil
 }
 
 func (r *subscriptionRepository) SetCache(ctx context.Context, sub *domainSub.Subscription) {

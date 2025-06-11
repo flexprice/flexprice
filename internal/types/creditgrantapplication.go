@@ -12,6 +12,7 @@ const (
 	ApplicationStatusFailed    ApplicationStatus = "failed"
 	ApplicationStatusSkipped   ApplicationStatus = "skipped"
 	ApplicationStatusCancelled ApplicationStatus = "cancelled"
+	ApplicationStatusPending   ApplicationStatus = "pending"
 )
 
 type CreditGrantApplicationFilter struct {

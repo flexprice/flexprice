@@ -6,6 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/creditgrant"
+	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/internal/cache"
 	domainCreditGrant "github.com/flexprice/flexprice/internal/domain/creditgrant"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -375,6 +376,92 @@ func (r *creditGrantRepository) GetBySubscription(ctx context.Context, subscript
 	filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
 
 	return r.List(ctx, filter)
+}
+
+// FindActiveRecurringGrants finds all active recurring credit grants
+func (r *creditGrantRepository) FindActiveRecurringGrants(ctx context.Context) ([]*domainCreditGrant.CreditGrant, error) {
+	client := r.client.Querier(ctx)
+
+	span := StartRepositorySpan(ctx, "creditgrant", "find_active_recurring", map[string]interface{}{
+		"tenant_id": types.GetTenantID(ctx),
+	})
+	defer FinishSpan(span)
+
+	grants, err := client.CreditGrant.Query().
+		Where(
+			creditgrant.TenantID(types.GetTenantID(ctx)),
+			creditgrant.EnvironmentID(types.GetEnvironmentID(ctx)),
+			creditgrant.Status(string(types.StatusPublished)),
+			creditgrant.Cadence(types.CreditGrantCadenceRecurring),
+		).
+		All(ctx)
+
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to find active recurring credit grants").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return domainCreditGrant.FromEntList(grants), nil
+}
+
+// FindActiveGrantsForSubscription finds active grants for a specific subscription
+func (r *creditGrantRepository) FindActiveGrantsForSubscription(ctx context.Context, subscriptionID string) ([]*domainCreditGrant.CreditGrant, error) {
+	client := r.client.Querier(ctx)
+
+	span := StartRepositorySpan(ctx, "creditgrant", "find_active_for_subscription", map[string]interface{}{
+		"subscription_id": subscriptionID,
+	})
+	defer FinishSpan(span)
+
+	// Get subscription to find plan ID
+	sub, err := client.Subscription.Query().
+		Where(
+			subscription.ID(subscriptionID),
+			subscription.TenantID(types.GetTenantID(ctx)),
+			subscription.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
+		Only(ctx)
+
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to find subscription").
+			Mark(ierr.ErrDatabase)
+	}
+
+	// Find grants scoped to this subscription OR to its plan
+	grants, err := client.CreditGrant.Query().
+		Where(
+			creditgrant.TenantID(types.GetTenantID(ctx)),
+			creditgrant.EnvironmentID(types.GetEnvironmentID(ctx)),
+			creditgrant.Status(string(types.StatusPublished)),
+			creditgrant.Or(
+				// Subscription-scoped grants for this subscription
+				creditgrant.And(
+					creditgrant.Scope(types.CreditGrantScopeSubscription),
+					creditgrant.SubscriptionID(subscriptionID),
+				),
+				// Plan-scoped grants for this subscription's plan
+				creditgrant.And(
+					creditgrant.Scope(types.CreditGrantScopePlan),
+					creditgrant.PlanID(sub.PlanID),
+				),
+			),
+		).
+		All(ctx)
+
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to find active grants for subscription").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return domainCreditGrant.FromEntList(grants), nil
 }
 
 // CreditGrantQuery type alias for better readability

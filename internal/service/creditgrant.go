@@ -3,13 +3,12 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/creditgrant"
-	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 )
@@ -36,26 +35,23 @@ type CreditGrantService interface {
 
 	// GetCreditGrantsBySubscription retrieves credit grants for a specific subscription
 	GetCreditGrantsBySubscription(ctx context.Context, subscriptionID string) (*dto.ListCreditGrantsResponse, error)
+
+	// ProcessRecurringGrants processes all recurring credit grants
+	ProcessRecurringGrants(ctx context.Context) error
+
+	// ProcessGrantForSubscription processes a credit grant for a specific subscription
+	ProcessGrantForSubscription(ctx context.Context, grant *creditgrant.CreditGrant, subscription *subscription.Subscription) error
 }
 
 type creditGrantService struct {
-	repo     creditgrant.Repository
-	planRepo plan.Repository
-	subRepo  subscription.Repository
-	log      *logger.Logger
+	ServiceParams
 }
 
 func NewCreditGrantService(
-	repo creditgrant.Repository,
-	planRepo plan.Repository,
-	subRepo subscription.Repository,
-	log *logger.Logger,
+	serviceParams ServiceParams,
 ) CreditGrantService {
 	return &creditGrantService{
-		repo:     repo,
-		planRepo: planRepo,
-		subRepo:  subRepo,
-		log:      log,
+		ServiceParams: serviceParams,
 	}
 }
 
@@ -66,7 +62,7 @@ func (s *creditGrantService) CreateCreditGrant(ctx context.Context, req dto.Crea
 
 	// Validate plan exists if plan_id is provided
 	if req.PlanID != nil && *req.PlanID != "" {
-		plan, err := s.planRepo.Get(ctx, *req.PlanID)
+		plan, err := s.PlanRepo.Get(ctx, *req.PlanID)
 		if err != nil {
 			return nil, err
 		}
@@ -82,7 +78,7 @@ func (s *creditGrantService) CreateCreditGrant(ctx context.Context, req dto.Crea
 
 	// Validate subscription exists if subscription_id is provided
 	if req.SubscriptionID != nil && *req.SubscriptionID != "" {
-		sub, err := s.subRepo.Get(ctx, *req.SubscriptionID)
+		sub, err := s.SubRepo.Get(ctx, *req.SubscriptionID)
 		if err != nil {
 			return nil, err
 		}
@@ -99,7 +95,7 @@ func (s *creditGrantService) CreateCreditGrant(ctx context.Context, req dto.Crea
 	// Create credit grant
 	cg := req.ToCreditGrant(ctx)
 
-	cg, err := s.repo.Create(ctx, cg)
+	cg, err := s.CreditGrantRepo.Create(ctx, cg)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +106,7 @@ func (s *creditGrantService) CreateCreditGrant(ctx context.Context, req dto.Crea
 }
 
 func (s *creditGrantService) GetCreditGrant(ctx context.Context, id string) (*dto.CreditGrantResponse, error) {
-	result, err := s.repo.Get(ctx, id)
+	result, err := s.CreditGrantRepo.Get(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -134,12 +130,12 @@ func (s *creditGrantService) ListCreditGrants(ctx context.Context, filter *types
 		filter.QueryFilter.Order = lo.ToPtr("desc")
 	}
 
-	creditGrants, err := s.repo.List(ctx, filter)
+	creditGrants, err := s.CreditGrantRepo.List(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
 
-	count, err := s.repo.Count(ctx, filter)
+	count, err := s.CreditGrantRepo.Count(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +158,7 @@ func (s *creditGrantService) ListCreditGrants(ctx context.Context, filter *types
 }
 
 func (s *creditGrantService) UpdateCreditGrant(ctx context.Context, id string, req dto.UpdateCreditGrantRequest) (*dto.CreditGrantResponse, error) {
-	existing, err := s.repo.Get(ctx, id)
+	existing, err := s.CreditGrantRepo.Get(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +178,7 @@ func (s *creditGrantService) UpdateCreditGrant(ctx context.Context, id string, r
 		return nil, err
 	}
 
-	updated, err := s.repo.Update(ctx, existing)
+	updated, err := s.CreditGrantRepo.Update(ctx, existing)
 	if err != nil {
 		return nil, err
 	}
@@ -192,7 +188,7 @@ func (s *creditGrantService) UpdateCreditGrant(ctx context.Context, id string, r
 }
 
 func (s *creditGrantService) DeleteCreditGrant(ctx context.Context, id string) error {
-	return s.repo.Delete(ctx, id)
+	return s.CreditGrantRepo.Delete(ctx, id)
 }
 
 func (s *creditGrantService) GetCreditGrantsByPlan(ctx context.Context, planID string) (*dto.ListCreditGrantsResponse, error) {
@@ -218,4 +214,155 @@ func (s *creditGrantService) GetCreditGrantsBySubscription(ctx context.Context, 
 	}
 
 	return resp, nil
+}
+
+// ProcessRecurringGrants processes all recurring credit grants
+func (s *creditGrantService) ProcessRecurringGrants(ctx context.Context) error {
+	s.Logger.Infow("starting recurring credit grant processing")
+
+	// 1. Find all active recurring grants
+	grants, err := s.CreditGrantRepo.FindActiveRecurringGrants(ctx)
+	if err != nil {
+		return err
+	}
+
+	s.Logger.Infow("found active recurring grants", "count", len(grants))
+
+	// 2. Process each grant
+	for _, grant := range grants {
+		if err := s.processRecurringGrant(ctx, grant); err != nil {
+			s.Logger.Errorw("failed to process recurring grant",
+				"grant_id", grant.ID,
+				"error", err)
+			// Continue processing other grants
+		}
+	}
+
+	return nil
+}
+
+func (s *creditGrantService) processRecurringGrant(ctx context.Context, grant *creditgrant.CreditGrant) error {
+	// Find eligible subscriptions for this grant
+	subscriptions, err := s.SubRepo.FindEligibleSubscriptionsForGrant(ctx, grant)
+	if err != nil {
+		return err
+	}
+
+	s.Logger.Debugw("found eligible subscriptions for grant",
+		"grant_id", grant.ID,
+		"subscription_count", len(subscriptions))
+
+	for _, subscription := range subscriptions {
+		if err := s.ProcessGrantForSubscription(ctx, grant, subscription); err != nil {
+			s.Logger.Errorw("failed to process grant for subscription",
+				"grant_id", grant.ID,
+				"subscription_id", subscription.ID,
+				"error", err)
+			// Continue with other subscriptions
+		}
+	}
+
+	return nil
+}
+
+func (s *creditGrantService) ProcessGrantForSubscription(ctx context.Context, grant *creditgrant.CreditGrant, subscription *subscription.Subscription) error {
+	// Determine if grant should be applied based on subscription state
+	stateHandler := NewSubscriptionStateHandler(subscription, grant)
+
+	action, reason := stateHandler.DetermineAction()
+
+	// Apply the determined action
+	switch action {
+	case StateActionApply:
+		return s.applyRecurringGrant(ctx, grant, subscription)
+	case StateActionSkip:
+		s.Logger.Debugw("skipping grant application", "reason", reason, "grant_id", grant.ID, "subscription_id", subscription.ID)
+		return nil
+	case StateActionDefer:
+		s.Logger.Debugw("deferring grant application", "reason", reason, "grant_id", grant.ID, "subscription_id", subscription.ID)
+		return nil
+	case StateActionCancel:
+		s.Logger.Debugw("cancelling grant application", "reason", reason, "grant_id", grant.ID, "subscription_id", subscription.ID)
+		return nil
+	default:
+		return ierr.NewError("unknown state action").Mark(ierr.ErrInternal)
+	}
+}
+
+func (s *creditGrantService) applyRecurringGrant(ctx context.Context, grant *creditgrant.CreditGrant, subscription *subscription.Subscription) error {
+	// Use wallet service from the service params
+	walletService := NewWalletService(s.ServiceParams)
+
+	// Find or create wallet (reuse logic from subscription service)
+	wallets, err := walletService.GetWalletsByCustomerID(ctx, subscription.CustomerID)
+	if err != nil {
+		return err
+	}
+
+	var selectedWallet *dto.WalletResponse
+	for _, w := range wallets {
+		if types.IsMatchingCurrency(w.Currency, subscription.Currency) {
+			selectedWallet = w
+			break
+		}
+	}
+
+	if selectedWallet == nil {
+		// Create new wallet
+		walletReq := &dto.CreateWalletRequest{
+			Name:       "Subscription Wallet",
+			CustomerID: subscription.CustomerID,
+			Currency:   subscription.Currency,
+		}
+		selectedWallet, err = walletService.CreateWallet(ctx, walletReq)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Calculate expiry date based on grant settings
+	var expiryDate *time.Time
+	if grant.ExpirationType == types.CreditGrantExpiryTypeBillingCycle {
+		expiryDate = &subscription.CurrentPeriodEnd
+	} else if grant.ExpirationType == types.CreditGrantExpiryTypeDuration && grant.ExpirationDuration != nil {
+		expiry := time.Now().AddDate(0, 0, *grant.ExpirationDuration)
+		expiryDate = &expiry
+	}
+
+	// Apply credit to wallet
+	topupReq := &dto.TopUpWalletRequest{
+		CreditsToAdd:      grant.Credits,
+		TransactionReason: types.TransactionReasonSubscriptionCredit,
+		ExpiryDateUTC:     expiryDate,
+		Priority:          grant.Priority,
+		IdempotencyKey:    lo.ToPtr(fmt.Sprintf("recurring_%s_%s_%d", grant.ID, subscription.ID, time.Now().Unix())),
+		Metadata: map[string]string{
+			"grant_id":        grant.ID,
+			"subscription_id": subscription.ID,
+			"reason":          "recurring_credit_grant",
+			"period_start":    subscription.CurrentPeriodStart.Format(time.RFC3339),
+			"period_end":      subscription.CurrentPeriodEnd.Format(time.RFC3339),
+		},
+	}
+
+	_, err = walletService.TopUpWallet(ctx, selectedWallet.ID, topupReq)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to apply recurring credit grant to wallet").
+			WithReportableDetails(map[string]interface{}{
+				"grant_id":        grant.ID,
+				"subscription_id": subscription.ID,
+				"wallet_id":       selectedWallet.ID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	s.Logger.Infow("successfully applied recurring credit grant",
+		"grant_id", grant.ID,
+		"subscription_id", subscription.ID,
+		"wallet_id", selectedWallet.ID,
+		"amount", grant.Credits,
+	)
+
+	return nil
 }

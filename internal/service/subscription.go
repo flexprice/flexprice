@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/creditgrant"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -40,6 +41,10 @@ type SubscriptionService interface {
 	UpdateSubscriptionSchedule(ctx context.Context, id string, req *dto.UpdateSubscriptionScheduleRequest) (*dto.SubscriptionScheduleResponse, error)
 	AddSchedulePhase(ctx context.Context, scheduleID string, req *dto.AddSchedulePhaseRequest) (*dto.SubscriptionScheduleResponse, error)
 	AddSubscriptionPhase(ctx context.Context, subscriptionID string, req *dto.AddSchedulePhaseRequest) (*dto.SubscriptionScheduleResponse, error)
+
+	// Credit grant related methods
+	ProcessRecurringCreditGrants(ctx context.Context) error
+	ProcessSubscriptionRecurringGrants(ctx context.Context, subscriptionID string) error
 }
 
 type subscriptionService struct {
@@ -305,7 +310,7 @@ func (s *subscriptionService) handleCreditGrants(
 		return nil
 	}
 
-	creditGrantService := NewCreditGrantService(s.CreditGrantRepo, s.PlanRepo, s.SubRepo, s.Logger)
+	creditGrantService := NewCreditGrantService(s.ServiceParams)
 
 	s.Logger.Infow("processing credit grants for subscription",
 		"subscription_id", subscription.ID,
@@ -2422,4 +2427,109 @@ func (s *subscriptionService) AddSubscriptionPhase(ctx context.Context, subscrip
 
 	// Schedule exists, add the phase to it
 	return s.AddSchedulePhase(ctx, schedule.ID, req)
+}
+
+// ProcessRecurringCreditGrants processes recurring credit grants for all subscriptions
+func (s *subscriptionService) ProcessRecurringCreditGrants(ctx context.Context) error {
+	s.Logger.Infow("starting recurring credit grant processing for all subscriptions")
+
+	creditGrantService := NewCreditGrantService(s.ServiceParams)
+	return creditGrantService.ProcessRecurringGrants(ctx)
+}
+
+// ProcessSubscriptionRecurringGrants processes recurring grants for a specific subscription
+func (s *subscriptionService) ProcessSubscriptionRecurringGrants(ctx context.Context, subscriptionID string) error {
+	s.Logger.Infow("processing recurring credit grants for subscription", "subscription_id", subscriptionID)
+
+	creditGrantService := NewCreditGrantService(s.ServiceParams)
+
+	// Get active grants for this subscription
+	grants, err := s.CreditGrantRepo.FindActiveGrantsForSubscription(ctx, subscriptionID)
+	if err != nil {
+		return err
+	}
+
+	// Filter for recurring grants only
+	recurringGrants := make([]*creditgrant.CreditGrant, 0)
+	for _, grant := range grants {
+		if grant.Cadence == types.CreditGrantCadenceRecurring {
+			recurringGrants = append(recurringGrants, grant)
+		}
+	}
+
+	if len(recurringGrants) == 0 {
+		s.Logger.Debugw("no recurring grants found for subscription", "subscription_id", subscriptionID)
+		return nil
+	}
+
+	// Get subscription
+	subscription, _, err := s.SubRepo.GetWithLineItems(ctx, subscriptionID)
+	if err != nil {
+		return err
+	}
+
+	// Process each recurring grant
+	for _, grant := range recurringGrants {
+		if err := creditGrantService.ProcessGrantForSubscription(ctx, grant, subscription); err != nil {
+			s.Logger.Errorw("failed to process recurring grant for subscription",
+				"grant_id", grant.ID,
+				"subscription_id", subscriptionID,
+				"error", err)
+			// Continue with other grants
+		}
+	}
+
+	return nil
+}
+
+// HandleSubscriptionStateChange handles subscription state changes for credit grants
+func (s *subscriptionService) HandleSubscriptionStateChange(ctx context.Context, subscriptionID string, oldStatus, newStatus types.SubscriptionStatus) error {
+	s.Logger.Infow("handling subscription state change for credit grants",
+		"subscription_id", subscriptionID,
+		"old_status", oldStatus,
+		"new_status", newStatus)
+
+	switch {
+	case newStatus == types.SubscriptionStatusActive && oldStatus != types.SubscriptionStatusActive:
+		return s.handleSubscriptionActivation(ctx, subscriptionID)
+
+	case newStatus == types.SubscriptionStatusCancelled:
+		return s.handleSubscriptionCancellation(ctx, subscriptionID)
+
+	case newStatus == types.SubscriptionStatusPaused:
+		return s.handleSubscriptionPause(ctx, subscriptionID)
+
+	case oldStatus == types.SubscriptionStatusPaused && newStatus == types.SubscriptionStatusActive:
+		return s.handleSubscriptionResume(ctx, subscriptionID)
+
+	default:
+		s.Logger.Debugw("no action required for subscription state change",
+			"subscription_id", subscriptionID,
+			"old_status", oldStatus,
+			"new_status", newStatus)
+	}
+
+	return nil
+}
+
+func (s *subscriptionService) handleSubscriptionActivation(ctx context.Context, subscriptionID string) error {
+	// Process any deferred credits and trigger immediate processing for newly active subscription
+	return s.ProcessSubscriptionRecurringGrants(ctx, subscriptionID)
+}
+
+func (s *subscriptionService) handleSubscriptionCancellation(ctx context.Context, subscriptionID string) error {
+	// Future: Cancel scheduled applications if we implement full application tracking
+	s.Logger.Infow("subscription cancelled, future recurring grants will not be processed", "subscription_id", subscriptionID)
+	return nil
+}
+
+func (s *subscriptionService) handleSubscriptionPause(ctx context.Context, subscriptionID string) error {
+	// Future: Defer scheduled applications if we implement full application tracking
+	s.Logger.Infow("subscription paused, recurring grants will be deferred", "subscription_id", subscriptionID)
+	return nil
+}
+
+func (s *subscriptionService) handleSubscriptionResume(ctx context.Context, subscriptionID string) error {
+	// Process any missed recurring grants
+	return s.ProcessSubscriptionRecurringGrants(ctx, subscriptionID)
 }
