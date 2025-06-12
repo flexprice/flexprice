@@ -221,7 +221,7 @@ func (s *creditGrantService) ProcessRecurringGrants(ctx context.Context) error {
 	s.Logger.Infow("starting recurring credit grant processing")
 
 	// 1. Find all active recurring grants
-	grants, err := s.CreditGrantRepo.FindActiveRecurringGrants(ctx)
+	grants, err := s.CreditGrantRepo.FindAllActiveRecurringGrants(ctx)
 	if err != nil {
 		return err
 	}
@@ -243,7 +243,7 @@ func (s *creditGrantService) ProcessRecurringGrants(ctx context.Context) error {
 
 func (s *creditGrantService) processRecurringGrant(ctx context.Context, grant *creditgrant.CreditGrant) error {
 	// Find eligible subscriptions for this grant
-	subscriptions, err := s.SubRepo.FindEligibleSubscriptionsForGrant(ctx, grant)
+	subscriptions, err := s.SubRepo.ListAll(ctx, &types.SubscriptionFilter{})
 	if err != nil {
 		return err
 	}
@@ -274,7 +274,7 @@ func (s *creditGrantService) ProcessGrantForSubscription(ctx context.Context, gr
 	// Apply the determined action
 	switch action {
 	case StateActionApply:
-		return s.applyRecurringGrant(ctx, grant, subscription)
+		return s.ApplyRecurringGrant(ctx, grant, subscription)
 	case StateActionSkip:
 		s.Logger.Debugw("skipping grant application", "reason", reason, "grant_id", grant.ID, "subscription_id", subscription.ID)
 		return nil
@@ -285,11 +285,17 @@ func (s *creditGrantService) ProcessGrantForSubscription(ctx context.Context, gr
 		s.Logger.Debugw("cancelling grant application", "reason", reason, "grant_id", grant.ID, "subscription_id", subscription.ID)
 		return nil
 	default:
-		return ierr.NewError("unknown state action").Mark(ierr.ErrInternal)
+		return ierr.NewError("unknown state action").
+			WithHint("Unknown state action").
+			WithReportableDetails(map[string]interface{}{
+				"action": action,
+				"reason": reason,
+			}).
+			Mark(ierr.ErrInternal)
 	}
 }
 
-func (s *creditGrantService) applyRecurringGrant(ctx context.Context, grant *creditgrant.CreditGrant, subscription *subscription.Subscription) error {
+func (s *creditGrantService) ApplyRecurringGrant(ctx context.Context, grant *creditgrant.CreditGrant, subscription *subscription.Subscription) error {
 	// Use wallet service from the service params
 	walletService := NewWalletService(s.ServiceParams)
 

@@ -3,7 +3,6 @@ package subscription
 import (
 	"context"
 
-	"github.com/flexprice/flexprice/internal/domain/creditgrant"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -27,9 +26,6 @@ type Repository interface {
 	UpdatePause(ctx context.Context, pause *SubscriptionPause) error
 	ListPauses(ctx context.Context, subscriptionID string) ([]*SubscriptionPause, error)
 	GetWithPauses(ctx context.Context, id string) (*Subscription, []*SubscriptionPause, error)
-
-	// Credit grant related methods
-	FindEligibleSubscriptionsForGrant(ctx context.Context, grant *creditgrant.CreditGrant) ([]*Subscription, error)
 }
 
 // SubscriptionScheduleRepository provides access to the subscription schedule store
