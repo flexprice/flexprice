@@ -314,5 +314,11 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		walletGroup.POST("/expire-credits", handlers.CronWallet.ExpireCredits)
 	}
 
+	// Credit grant related cron jobs
+	creditGrantGroup := cron.Group("/creditgrants")
+	{
+		creditGrantGroup.POST("/process-scheduled-applications", handlers.CronCreditGrant.ProcessScheduledCreditGrantApplications)
+	}
+
 	return router
 }
