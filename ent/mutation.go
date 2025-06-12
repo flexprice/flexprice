@@ -3109,9 +3109,6 @@ type CreditGrantApplicationMutation struct {
 	currency                           *string
 	application_reason                 *string
 	subscription_status_at_application *string
-	is_prorated                        *bool
-	proration_factor                   *decimal.Decimal
-	full_period_amount                 *decimal.Decimal
 	retry_count                        *int
 	addretry_count                     *int
 	failure_reason                     *string
@@ -3928,140 +3925,6 @@ func (m *CreditGrantApplicationMutation) ResetSubscriptionStatusAtApplication() 
 	m.subscription_status_at_application = nil
 }
 
-// SetIsProrated sets the "is_prorated" field.
-func (m *CreditGrantApplicationMutation) SetIsProrated(b bool) {
-	m.is_prorated = &b
-}
-
-// IsProrated returns the value of the "is_prorated" field in the mutation.
-func (m *CreditGrantApplicationMutation) IsProrated() (r bool, exists bool) {
-	v := m.is_prorated
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldIsProrated returns the old "is_prorated" field's value of the CreditGrantApplication entity.
-// If the CreditGrantApplication object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *CreditGrantApplicationMutation) OldIsProrated(ctx context.Context) (v bool, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldIsProrated is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldIsProrated requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldIsProrated: %w", err)
-	}
-	return oldValue.IsProrated, nil
-}
-
-// ResetIsProrated resets all changes to the "is_prorated" field.
-func (m *CreditGrantApplicationMutation) ResetIsProrated() {
-	m.is_prorated = nil
-}
-
-// SetProrationFactor sets the "proration_factor" field.
-func (m *CreditGrantApplicationMutation) SetProrationFactor(d decimal.Decimal) {
-	m.proration_factor = &d
-}
-
-// ProrationFactor returns the value of the "proration_factor" field in the mutation.
-func (m *CreditGrantApplicationMutation) ProrationFactor() (r decimal.Decimal, exists bool) {
-	v := m.proration_factor
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldProrationFactor returns the old "proration_factor" field's value of the CreditGrantApplication entity.
-// If the CreditGrantApplication object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *CreditGrantApplicationMutation) OldProrationFactor(ctx context.Context) (v decimal.Decimal, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldProrationFactor is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldProrationFactor requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldProrationFactor: %w", err)
-	}
-	return oldValue.ProrationFactor, nil
-}
-
-// ClearProrationFactor clears the value of the "proration_factor" field.
-func (m *CreditGrantApplicationMutation) ClearProrationFactor() {
-	m.proration_factor = nil
-	m.clearedFields[creditgrantapplication.FieldProrationFactor] = struct{}{}
-}
-
-// ProrationFactorCleared returns if the "proration_factor" field was cleared in this mutation.
-func (m *CreditGrantApplicationMutation) ProrationFactorCleared() bool {
-	_, ok := m.clearedFields[creditgrantapplication.FieldProrationFactor]
-	return ok
-}
-
-// ResetProrationFactor resets all changes to the "proration_factor" field.
-func (m *CreditGrantApplicationMutation) ResetProrationFactor() {
-	m.proration_factor = nil
-	delete(m.clearedFields, creditgrantapplication.FieldProrationFactor)
-}
-
-// SetFullPeriodAmount sets the "full_period_amount" field.
-func (m *CreditGrantApplicationMutation) SetFullPeriodAmount(d decimal.Decimal) {
-	m.full_period_amount = &d
-}
-
-// FullPeriodAmount returns the value of the "full_period_amount" field in the mutation.
-func (m *CreditGrantApplicationMutation) FullPeriodAmount() (r decimal.Decimal, exists bool) {
-	v := m.full_period_amount
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldFullPeriodAmount returns the old "full_period_amount" field's value of the CreditGrantApplication entity.
-// If the CreditGrantApplication object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *CreditGrantApplicationMutation) OldFullPeriodAmount(ctx context.Context) (v decimal.Decimal, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldFullPeriodAmount is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldFullPeriodAmount requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldFullPeriodAmount: %w", err)
-	}
-	return oldValue.FullPeriodAmount, nil
-}
-
-// ClearFullPeriodAmount clears the value of the "full_period_amount" field.
-func (m *CreditGrantApplicationMutation) ClearFullPeriodAmount() {
-	m.full_period_amount = nil
-	m.clearedFields[creditgrantapplication.FieldFullPeriodAmount] = struct{}{}
-}
-
-// FullPeriodAmountCleared returns if the "full_period_amount" field was cleared in this mutation.
-func (m *CreditGrantApplicationMutation) FullPeriodAmountCleared() bool {
-	_, ok := m.clearedFields[creditgrantapplication.FieldFullPeriodAmount]
-	return ok
-}
-
-// ResetFullPeriodAmount resets all changes to the "full_period_amount" field.
-func (m *CreditGrantApplicationMutation) ResetFullPeriodAmount() {
-	m.full_period_amount = nil
-	delete(m.clearedFields, creditgrantapplication.FieldFullPeriodAmount)
-}
-
 // SetRetryCount sets the "retry_count" field.
 func (m *CreditGrantApplicationMutation) SetRetryCount(i int) {
 	m.retry_count = &i
@@ -4335,7 +4198,7 @@ func (m *CreditGrantApplicationMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CreditGrantApplicationMutation) Fields() []string {
-	fields := make([]string, 0, 26)
+	fields := make([]string, 0, 23)
 	if m.tenant_id != nil {
 		fields = append(fields, creditgrantapplication.FieldTenantID)
 	}
@@ -4389,15 +4252,6 @@ func (m *CreditGrantApplicationMutation) Fields() []string {
 	}
 	if m.subscription_status_at_application != nil {
 		fields = append(fields, creditgrantapplication.FieldSubscriptionStatusAtApplication)
-	}
-	if m.is_prorated != nil {
-		fields = append(fields, creditgrantapplication.FieldIsProrated)
-	}
-	if m.proration_factor != nil {
-		fields = append(fields, creditgrantapplication.FieldProrationFactor)
-	}
-	if m.full_period_amount != nil {
-		fields = append(fields, creditgrantapplication.FieldFullPeriodAmount)
 	}
 	if m.retry_count != nil {
 		fields = append(fields, creditgrantapplication.FieldRetryCount)
@@ -4458,12 +4312,6 @@ func (m *CreditGrantApplicationMutation) Field(name string) (ent.Value, bool) {
 		return m.ApplicationReason()
 	case creditgrantapplication.FieldSubscriptionStatusAtApplication:
 		return m.SubscriptionStatusAtApplication()
-	case creditgrantapplication.FieldIsProrated:
-		return m.IsProrated()
-	case creditgrantapplication.FieldProrationFactor:
-		return m.ProrationFactor()
-	case creditgrantapplication.FieldFullPeriodAmount:
-		return m.FullPeriodAmount()
 	case creditgrantapplication.FieldRetryCount:
 		return m.RetryCount()
 	case creditgrantapplication.FieldFailureReason:
@@ -4519,12 +4367,6 @@ func (m *CreditGrantApplicationMutation) OldField(ctx context.Context, name stri
 		return m.OldApplicationReason(ctx)
 	case creditgrantapplication.FieldSubscriptionStatusAtApplication:
 		return m.OldSubscriptionStatusAtApplication(ctx)
-	case creditgrantapplication.FieldIsProrated:
-		return m.OldIsProrated(ctx)
-	case creditgrantapplication.FieldProrationFactor:
-		return m.OldProrationFactor(ctx)
-	case creditgrantapplication.FieldFullPeriodAmount:
-		return m.OldFullPeriodAmount(ctx)
 	case creditgrantapplication.FieldRetryCount:
 		return m.OldRetryCount(ctx)
 	case creditgrantapplication.FieldFailureReason:
@@ -4670,27 +4512,6 @@ func (m *CreditGrantApplicationMutation) SetField(name string, value ent.Value) 
 		}
 		m.SetSubscriptionStatusAtApplication(v)
 		return nil
-	case creditgrantapplication.FieldIsProrated:
-		v, ok := value.(bool)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetIsProrated(v)
-		return nil
-	case creditgrantapplication.FieldProrationFactor:
-		v, ok := value.(decimal.Decimal)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetProrationFactor(v)
-		return nil
-	case creditgrantapplication.FieldFullPeriodAmount:
-		v, ok := value.(decimal.Decimal)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetFullPeriodAmount(v)
-		return nil
 	case creditgrantapplication.FieldRetryCount:
 		v, ok := value.(int)
 		if !ok {
@@ -4783,12 +4604,6 @@ func (m *CreditGrantApplicationMutation) ClearedFields() []string {
 	if m.FieldCleared(creditgrantapplication.FieldAppliedAt) {
 		fields = append(fields, creditgrantapplication.FieldAppliedAt)
 	}
-	if m.FieldCleared(creditgrantapplication.FieldProrationFactor) {
-		fields = append(fields, creditgrantapplication.FieldProrationFactor)
-	}
-	if m.FieldCleared(creditgrantapplication.FieldFullPeriodAmount) {
-		fields = append(fields, creditgrantapplication.FieldFullPeriodAmount)
-	}
 	if m.FieldCleared(creditgrantapplication.FieldFailureReason) {
 		fields = append(fields, creditgrantapplication.FieldFailureReason)
 	}
@@ -4823,12 +4638,6 @@ func (m *CreditGrantApplicationMutation) ClearField(name string) error {
 		return nil
 	case creditgrantapplication.FieldAppliedAt:
 		m.ClearAppliedAt()
-		return nil
-	case creditgrantapplication.FieldProrationFactor:
-		m.ClearProrationFactor()
-		return nil
-	case creditgrantapplication.FieldFullPeriodAmount:
-		m.ClearFullPeriodAmount()
 		return nil
 	case creditgrantapplication.FieldFailureReason:
 		m.ClearFailureReason()
@@ -4900,15 +4709,6 @@ func (m *CreditGrantApplicationMutation) ResetField(name string) error {
 		return nil
 	case creditgrantapplication.FieldSubscriptionStatusAtApplication:
 		m.ResetSubscriptionStatusAtApplication()
-		return nil
-	case creditgrantapplication.FieldIsProrated:
-		m.ResetIsProrated()
-		return nil
-	case creditgrantapplication.FieldProrationFactor:
-		m.ResetProrationFactor()
-		return nil
-	case creditgrantapplication.FieldFullPeriodAmount:
-		m.ResetFullPeriodAmount()
 		return nil
 	case creditgrantapplication.FieldRetryCount:
 		m.ResetRetryCount()

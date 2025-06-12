@@ -50,12 +50,6 @@ const (
 	FieldApplicationReason = "application_reason"
 	// FieldSubscriptionStatusAtApplication holds the string denoting the subscription_status_at_application field in the database.
 	FieldSubscriptionStatusAtApplication = "subscription_status_at_application"
-	// FieldIsProrated holds the string denoting the is_prorated field in the database.
-	FieldIsProrated = "is_prorated"
-	// FieldProrationFactor holds the string denoting the proration_factor field in the database.
-	FieldProrationFactor = "proration_factor"
-	// FieldFullPeriodAmount holds the string denoting the full_period_amount field in the database.
-	FieldFullPeriodAmount = "full_period_amount"
 	// FieldRetryCount holds the string denoting the retry_count field in the database.
 	FieldRetryCount = "retry_count"
 	// FieldFailureReason holds the string denoting the failure_reason field in the database.
@@ -91,9 +85,6 @@ var Columns = []string{
 	FieldCurrency,
 	FieldApplicationReason,
 	FieldSubscriptionStatusAtApplication,
-	FieldIsProrated,
-	FieldProrationFactor,
-	FieldFullPeriodAmount,
 	FieldRetryCount,
 	FieldFailureReason,
 	FieldNextRetryAt,
@@ -232,21 +223,6 @@ func ByApplicationReason(opts ...sql.OrderTermOption) OrderOption {
 // BySubscriptionStatusAtApplication orders the results by the subscription_status_at_application field.
 func BySubscriptionStatusAtApplication(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSubscriptionStatusAtApplication, opts...).ToFunc()
-}
-
-// ByIsProrated orders the results by the is_prorated field.
-func ByIsProrated(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldIsProrated, opts...).ToFunc()
-}
-
-// ByProrationFactor orders the results by the proration_factor field.
-func ByProrationFactor(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldProrationFactor, opts...).ToFunc()
-}
-
-// ByFullPeriodAmount orders the results by the full_period_amount field.
-func ByFullPeriodAmount(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldFullPeriodAmount, opts...).ToFunc()
 }
 
 // ByRetryCount orders the results by the retry_count field.

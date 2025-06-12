@@ -32,8 +32,6 @@ type CreditGrantApplication struct {
 	SubscriptionStatusAtApplication string `db:"subscription_status_at_application" json:"subscription_status_at_application"`
 
 	// Prorating
-	IsProrated       bool             `db:"is_prorated" json:"is_prorated"`
-	ProrationFactor  *decimal.Decimal `db:"proration_factor" json:"proration_factor,omitempty"`
 	FullPeriodAmount *decimal.Decimal `db:"full_period_amount" json:"full_period_amount,omitempty"`
 
 	// Retry handling
@@ -65,9 +63,6 @@ func FromEnt(e *ent.CreditGrantApplication) *CreditGrantApplication {
 		Currency:                        e.Currency,
 		ApplicationReason:               e.ApplicationReason,
 		SubscriptionStatusAtApplication: e.SubscriptionStatusAtApplication,
-		IsProrated:                      e.IsProrated,
-		ProrationFactor:                 lo.ToPtr(e.ProrationFactor),
-		FullPeriodAmount:                lo.ToPtr(e.FullPeriodAmount),
 		RetryCount:                      e.RetryCount,
 		FailureReason:                   e.FailureReason,
 		NextRetryAt:                     e.NextRetryAt,

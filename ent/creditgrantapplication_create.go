@@ -202,40 +202,6 @@ func (cgac *CreditGrantApplicationCreate) SetSubscriptionStatusAtApplication(s s
 	return cgac
 }
 
-// SetIsProrated sets the "is_prorated" field.
-func (cgac *CreditGrantApplicationCreate) SetIsProrated(b bool) *CreditGrantApplicationCreate {
-	cgac.mutation.SetIsProrated(b)
-	return cgac
-}
-
-// SetProrationFactor sets the "proration_factor" field.
-func (cgac *CreditGrantApplicationCreate) SetProrationFactor(d decimal.Decimal) *CreditGrantApplicationCreate {
-	cgac.mutation.SetProrationFactor(d)
-	return cgac
-}
-
-// SetNillableProrationFactor sets the "proration_factor" field if the given value is not nil.
-func (cgac *CreditGrantApplicationCreate) SetNillableProrationFactor(d *decimal.Decimal) *CreditGrantApplicationCreate {
-	if d != nil {
-		cgac.SetProrationFactor(*d)
-	}
-	return cgac
-}
-
-// SetFullPeriodAmount sets the "full_period_amount" field.
-func (cgac *CreditGrantApplicationCreate) SetFullPeriodAmount(d decimal.Decimal) *CreditGrantApplicationCreate {
-	cgac.mutation.SetFullPeriodAmount(d)
-	return cgac
-}
-
-// SetNillableFullPeriodAmount sets the "full_period_amount" field if the given value is not nil.
-func (cgac *CreditGrantApplicationCreate) SetNillableFullPeriodAmount(d *decimal.Decimal) *CreditGrantApplicationCreate {
-	if d != nil {
-		cgac.SetFullPeriodAmount(*d)
-	}
-	return cgac
-}
-
 // SetRetryCount sets the "retry_count" field.
 func (cgac *CreditGrantApplicationCreate) SetRetryCount(i int) *CreditGrantApplicationCreate {
 	cgac.mutation.SetRetryCount(i)
@@ -420,9 +386,6 @@ func (cgac *CreditGrantApplicationCreate) check() error {
 	if _, ok := cgac.mutation.SubscriptionStatusAtApplication(); !ok {
 		return &ValidationError{Name: "subscription_status_at_application", err: errors.New(`ent: missing required field "CreditGrantApplication.subscription_status_at_application"`)}
 	}
-	if _, ok := cgac.mutation.IsProrated(); !ok {
-		return &ValidationError{Name: "is_prorated", err: errors.New(`ent: missing required field "CreditGrantApplication.is_prorated"`)}
-	}
 	if _, ok := cgac.mutation.RetryCount(); !ok {
 		return &ValidationError{Name: "retry_count", err: errors.New(`ent: missing required field "CreditGrantApplication.retry_count"`)}
 	}
@@ -535,18 +498,6 @@ func (cgac *CreditGrantApplicationCreate) createSpec() (*CreditGrantApplication,
 	if value, ok := cgac.mutation.SubscriptionStatusAtApplication(); ok {
 		_spec.SetField(creditgrantapplication.FieldSubscriptionStatusAtApplication, field.TypeString, value)
 		_node.SubscriptionStatusAtApplication = value
-	}
-	if value, ok := cgac.mutation.IsProrated(); ok {
-		_spec.SetField(creditgrantapplication.FieldIsProrated, field.TypeBool, value)
-		_node.IsProrated = value
-	}
-	if value, ok := cgac.mutation.ProrationFactor(); ok {
-		_spec.SetField(creditgrantapplication.FieldProrationFactor, field.TypeOther, value)
-		_node.ProrationFactor = value
-	}
-	if value, ok := cgac.mutation.FullPeriodAmount(); ok {
-		_spec.SetField(creditgrantapplication.FieldFullPeriodAmount, field.TypeOther, value)
-		_node.FullPeriodAmount = value
 	}
 	if value, ok := cgac.mutation.RetryCount(); ok {
 		_spec.SetField(creditgrantapplication.FieldRetryCount, field.TypeInt, value)

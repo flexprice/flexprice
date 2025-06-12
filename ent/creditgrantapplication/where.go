@@ -156,21 +156,6 @@ func SubscriptionStatusAtApplication(v string) predicate.CreditGrantApplication 
 	return predicate.CreditGrantApplication(sql.FieldEQ(FieldSubscriptionStatusAtApplication, v))
 }
 
-// IsProrated applies equality check predicate on the "is_prorated" field. It's identical to IsProratedEQ.
-func IsProrated(v bool) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldEQ(FieldIsProrated, v))
-}
-
-// ProrationFactor applies equality check predicate on the "proration_factor" field. It's identical to ProrationFactorEQ.
-func ProrationFactor(v decimal.Decimal) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldEQ(FieldProrationFactor, v))
-}
-
-// FullPeriodAmount applies equality check predicate on the "full_period_amount" field. It's identical to FullPeriodAmountEQ.
-func FullPeriodAmount(v decimal.Decimal) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldEQ(FieldFullPeriodAmount, v))
-}
-
 // RetryCount applies equality check predicate on the "retry_count" field. It's identical to RetryCountEQ.
 func RetryCount(v int) predicate.CreditGrantApplication {
 	return predicate.CreditGrantApplication(sql.FieldEQ(FieldRetryCount, v))
@@ -1229,116 +1214,6 @@ func SubscriptionStatusAtApplicationEqualFold(v string) predicate.CreditGrantApp
 // SubscriptionStatusAtApplicationContainsFold applies the ContainsFold predicate on the "subscription_status_at_application" field.
 func SubscriptionStatusAtApplicationContainsFold(v string) predicate.CreditGrantApplication {
 	return predicate.CreditGrantApplication(sql.FieldContainsFold(FieldSubscriptionStatusAtApplication, v))
-}
-
-// IsProratedEQ applies the EQ predicate on the "is_prorated" field.
-func IsProratedEQ(v bool) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldEQ(FieldIsProrated, v))
-}
-
-// IsProratedNEQ applies the NEQ predicate on the "is_prorated" field.
-func IsProratedNEQ(v bool) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldNEQ(FieldIsProrated, v))
-}
-
-// ProrationFactorEQ applies the EQ predicate on the "proration_factor" field.
-func ProrationFactorEQ(v decimal.Decimal) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldEQ(FieldProrationFactor, v))
-}
-
-// ProrationFactorNEQ applies the NEQ predicate on the "proration_factor" field.
-func ProrationFactorNEQ(v decimal.Decimal) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldNEQ(FieldProrationFactor, v))
-}
-
-// ProrationFactorIn applies the In predicate on the "proration_factor" field.
-func ProrationFactorIn(vs ...decimal.Decimal) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldIn(FieldProrationFactor, vs...))
-}
-
-// ProrationFactorNotIn applies the NotIn predicate on the "proration_factor" field.
-func ProrationFactorNotIn(vs ...decimal.Decimal) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldNotIn(FieldProrationFactor, vs...))
-}
-
-// ProrationFactorGT applies the GT predicate on the "proration_factor" field.
-func ProrationFactorGT(v decimal.Decimal) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldGT(FieldProrationFactor, v))
-}
-
-// ProrationFactorGTE applies the GTE predicate on the "proration_factor" field.
-func ProrationFactorGTE(v decimal.Decimal) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldGTE(FieldProrationFactor, v))
-}
-
-// ProrationFactorLT applies the LT predicate on the "proration_factor" field.
-func ProrationFactorLT(v decimal.Decimal) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldLT(FieldProrationFactor, v))
-}
-
-// ProrationFactorLTE applies the LTE predicate on the "proration_factor" field.
-func ProrationFactorLTE(v decimal.Decimal) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldLTE(FieldProrationFactor, v))
-}
-
-// ProrationFactorIsNil applies the IsNil predicate on the "proration_factor" field.
-func ProrationFactorIsNil() predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldIsNull(FieldProrationFactor))
-}
-
-// ProrationFactorNotNil applies the NotNil predicate on the "proration_factor" field.
-func ProrationFactorNotNil() predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldNotNull(FieldProrationFactor))
-}
-
-// FullPeriodAmountEQ applies the EQ predicate on the "full_period_amount" field.
-func FullPeriodAmountEQ(v decimal.Decimal) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldEQ(FieldFullPeriodAmount, v))
-}
-
-// FullPeriodAmountNEQ applies the NEQ predicate on the "full_period_amount" field.
-func FullPeriodAmountNEQ(v decimal.Decimal) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldNEQ(FieldFullPeriodAmount, v))
-}
-
-// FullPeriodAmountIn applies the In predicate on the "full_period_amount" field.
-func FullPeriodAmountIn(vs ...decimal.Decimal) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldIn(FieldFullPeriodAmount, vs...))
-}
-
-// FullPeriodAmountNotIn applies the NotIn predicate on the "full_period_amount" field.
-func FullPeriodAmountNotIn(vs ...decimal.Decimal) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldNotIn(FieldFullPeriodAmount, vs...))
-}
-
-// FullPeriodAmountGT applies the GT predicate on the "full_period_amount" field.
-func FullPeriodAmountGT(v decimal.Decimal) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldGT(FieldFullPeriodAmount, v))
-}
-
-// FullPeriodAmountGTE applies the GTE predicate on the "full_period_amount" field.
-func FullPeriodAmountGTE(v decimal.Decimal) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldGTE(FieldFullPeriodAmount, v))
-}
-
-// FullPeriodAmountLT applies the LT predicate on the "full_period_amount" field.
-func FullPeriodAmountLT(v decimal.Decimal) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldLT(FieldFullPeriodAmount, v))
-}
-
-// FullPeriodAmountLTE applies the LTE predicate on the "full_period_amount" field.
-func FullPeriodAmountLTE(v decimal.Decimal) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldLTE(FieldFullPeriodAmount, v))
-}
-
-// FullPeriodAmountIsNil applies the IsNil predicate on the "full_period_amount" field.
-func FullPeriodAmountIsNil() predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldIsNull(FieldFullPeriodAmount))
-}
-
-// FullPeriodAmountNotNil applies the NotNil predicate on the "full_period_amount" field.
-func FullPeriodAmountNotNil() predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldNotNull(FieldFullPeriodAmount))
 }
 
 // RetryCountEQ applies the EQ predicate on the "retry_count" field.

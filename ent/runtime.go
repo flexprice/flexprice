@@ -194,7 +194,7 @@ func init() {
 	// creditgrantapplication.DefaultCreditsApplied holds the default value on creation for the credits_applied field.
 	creditgrantapplication.DefaultCreditsApplied = creditgrantapplicationDescCreditsApplied.Default.(decimal.Decimal)
 	// creditgrantapplicationDescRetryCount is the schema descriptor for retry_count field.
-	creditgrantapplicationDescRetryCount := creditgrantapplicationFields[15].Descriptor()
+	creditgrantapplicationDescRetryCount := creditgrantapplicationFields[12].Descriptor()
 	// creditgrantapplication.DefaultRetryCount holds the default value on creation for the retry_count field.
 	creditgrantapplication.DefaultRetryCount = creditgrantapplicationDescRetryCount.Default.(int)
 	customerMixin := schema.Customer{}.Mixin()

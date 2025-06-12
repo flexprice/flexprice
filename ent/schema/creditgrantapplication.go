@@ -71,22 +71,6 @@ func (CreditGrantApplication) Fields() []ent.Field {
 		field.String("application_reason"),
 		field.String("subscription_status_at_application"),
 
-		// Prorating
-		field.Bool("is_prorated"),
-
-		field.Other("proration_factor", decimal.Decimal{}).
-			SchemaType(map[string]string{
-				"postgres": "numeric(20,8)",
-			}).
-			Optional(),
-
-		// Prorating
-		field.Other("full_period_amount", decimal.Decimal{}).
-			SchemaType(map[string]string{
-				"postgres": "numeric(20,8)",
-			}).
-			Optional(),
-
 		// Retry handling
 		field.Int("retry_count").
 			Default(0),

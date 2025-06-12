@@ -66,7 +66,6 @@ func (r *creditGrantApplicationRepository) Create(ctx context.Context, applicati
 		SetCurrency(application.Currency).
 		SetApplicationReason(application.ApplicationReason).
 		SetSubscriptionStatusAtApplication(application.SubscriptionStatusAtApplication).
-		SetIsProrated(application.IsProrated).
 		SetRetryCount(application.RetryCount).
 		SetMetadata(application.Metadata).
 		SetStatus(string(application.Status)).
@@ -80,12 +79,6 @@ func (r *creditGrantApplicationRepository) Create(ctx context.Context, applicati
 	// Set optional fields
 	if application.AppliedAt != nil {
 		createBuilder = createBuilder.SetAppliedAt(*application.AppliedAt)
-	}
-	if application.ProrationFactor != nil {
-		createBuilder = createBuilder.SetProrationFactor(*application.ProrationFactor)
-	}
-	if application.FullPeriodAmount != nil {
-		createBuilder = createBuilder.SetFullPeriodAmount(*application.FullPeriodAmount)
 	}
 	if application.FailureReason != nil {
 		createBuilder = createBuilder.SetFailureReason(*application.FailureReason)
@@ -299,7 +292,6 @@ func (r *creditGrantApplicationRepository) Update(ctx context.Context, applicati
 		SetCurrency(application.Currency).
 		SetApplicationReason(application.ApplicationReason).
 		SetSubscriptionStatusAtApplication(application.SubscriptionStatusAtApplication).
-		SetIsProrated(application.IsProrated).
 		SetRetryCount(application.RetryCount).
 		SetMetadata(application.Metadata).
 		SetUpdatedAt(time.Now().UTC()).

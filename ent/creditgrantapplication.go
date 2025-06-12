@@ -55,12 +55,6 @@ type CreditGrantApplication struct {
 	ApplicationReason string `json:"application_reason,omitempty"`
 	// SubscriptionStatusAtApplication holds the value of the "subscription_status_at_application" field.
 	SubscriptionStatusAtApplication string `json:"subscription_status_at_application,omitempty"`
-	// IsProrated holds the value of the "is_prorated" field.
-	IsProrated bool `json:"is_prorated,omitempty"`
-	// ProrationFactor holds the value of the "proration_factor" field.
-	ProrationFactor decimal.Decimal `json:"proration_factor,omitempty"`
-	// FullPeriodAmount holds the value of the "full_period_amount" field.
-	FullPeriodAmount decimal.Decimal `json:"full_period_amount,omitempty"`
 	// RetryCount holds the value of the "retry_count" field.
 	RetryCount int `json:"retry_count,omitempty"`
 	// FailureReason holds the value of the "failure_reason" field.
@@ -79,10 +73,8 @@ func (*CreditGrantApplication) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case creditgrantapplication.FieldCreditsApplied, creditgrantapplication.FieldProrationFactor, creditgrantapplication.FieldFullPeriodAmount:
+		case creditgrantapplication.FieldCreditsApplied:
 			values[i] = new(decimal.Decimal)
-		case creditgrantapplication.FieldIsProrated:
-			values[i] = new(sql.NullBool)
 		case creditgrantapplication.FieldRetryCount:
 			values[i] = new(sql.NullInt64)
 		case creditgrantapplication.FieldID, creditgrantapplication.FieldTenantID, creditgrantapplication.FieldStatus, creditgrantapplication.FieldCreatedBy, creditgrantapplication.FieldUpdatedBy, creditgrantapplication.FieldEnvironmentID, creditgrantapplication.FieldCreditGrantID, creditgrantapplication.FieldSubscriptionID, creditgrantapplication.FieldApplicationStatus, creditgrantapplication.FieldCurrency, creditgrantapplication.FieldApplicationReason, creditgrantapplication.FieldSubscriptionStatusAtApplication, creditgrantapplication.FieldFailureReason, creditgrantapplication.FieldIdempotencyKey:
@@ -221,24 +213,6 @@ func (cga *CreditGrantApplication) assignValues(columns []string, values []any) 
 			} else if value.Valid {
 				cga.SubscriptionStatusAtApplication = value.String
 			}
-		case creditgrantapplication.FieldIsProrated:
-			if value, ok := values[i].(*sql.NullBool); !ok {
-				return fmt.Errorf("unexpected type %T for field is_prorated", values[i])
-			} else if value.Valid {
-				cga.IsProrated = value.Bool
-			}
-		case creditgrantapplication.FieldProrationFactor:
-			if value, ok := values[i].(*decimal.Decimal); !ok {
-				return fmt.Errorf("unexpected type %T for field proration_factor", values[i])
-			} else if value != nil {
-				cga.ProrationFactor = *value
-			}
-		case creditgrantapplication.FieldFullPeriodAmount:
-			if value, ok := values[i].(*decimal.Decimal); !ok {
-				return fmt.Errorf("unexpected type %T for field full_period_amount", values[i])
-			} else if value != nil {
-				cga.FullPeriodAmount = *value
-			}
 		case creditgrantapplication.FieldRetryCount:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field retry_count", values[i])
@@ -362,15 +336,6 @@ func (cga *CreditGrantApplication) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("subscription_status_at_application=")
 	builder.WriteString(cga.SubscriptionStatusAtApplication)
-	builder.WriteString(", ")
-	builder.WriteString("is_prorated=")
-	builder.WriteString(fmt.Sprintf("%v", cga.IsProrated))
-	builder.WriteString(", ")
-	builder.WriteString("proration_factor=")
-	builder.WriteString(fmt.Sprintf("%v", cga.ProrationFactor))
-	builder.WriteString(", ")
-	builder.WriteString("full_period_amount=")
-	builder.WriteString(fmt.Sprintf("%v", cga.FullPeriodAmount))
 	builder.WriteString(", ")
 	builder.WriteString("retry_count=")
 	builder.WriteString(fmt.Sprintf("%v", cga.RetryCount))

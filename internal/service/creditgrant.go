@@ -222,6 +222,13 @@ func (s *creditGrantService) GetCreditGrantsBySubscription(ctx context.Context, 
 // ApplyCreditGrant applies a credit grant to a subscription and creates CGA tracking records
 // This method handles both one-time and recurring credit grants
 func (s *creditGrantService) ApplyCreditGrant(ctx context.Context, grant *creditgrant.CreditGrant, subscription *subscription.Subscription, reason string, metadata types.Metadata) (*domainCreditGrantApplication.CreditGrantApplication, error) {
+
+	// check if the credit grant is already applied for this period
+	_, periodEnd, err := s.calculateNextPeriod(grant, subscription, subscription.CurrentPeriodStart)
+	if err != nil {
+		return nil, err
+	}
+
 	// Create CGA record for tracking
 	cga := &domainCreditGrantApplication.CreditGrantApplication{
 		ID:                              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CREDIT_GRANT_APPLICATION),
@@ -229,12 +236,11 @@ func (s *creditGrantService) ApplyCreditGrant(ctx context.Context, grant *credit
 		SubscriptionID:                  subscription.ID,
 		ScheduledFor:                    time.Now().UTC(),
 		PeriodStart:                     subscription.CurrentPeriodStart,
-		PeriodEnd:                       subscription.CurrentPeriodEnd,
+		PeriodEnd:                       periodEnd,
 		ApplicationStatus:               types.ApplicationStatusPending,
 		Currency:                        subscription.Currency,
 		ApplicationReason:               reason,
 		SubscriptionStatusAtApplication: string(subscription.SubscriptionStatus),
-		IsProrated:                      false,
 		RetryCount:                      0,
 		CreditsApplied:                  decimal.Zero,
 		Metadata:                        metadata,
@@ -246,7 +252,7 @@ func (s *creditGrantService) ApplyCreditGrant(ctx context.Context, grant *credit
 	cga.IdempotencyKey = s.generateIdempotencyKey(grant, subscription, cga.PeriodStart, cga.PeriodEnd)
 
 	// Try to apply the credit grant
-	err := s.applyCreditToWallet(ctx, grant, subscription, cga.ID)
+	err = s.applyCreditToWallet(ctx, grant, subscription, cga.ID)
 	now := time.Now().UTC()
 
 	if err != nil {
@@ -354,7 +360,7 @@ func (s *creditGrantService) applyCreditToWallet(ctx context.Context, grant *cre
 		"grant_id", grant.ID,
 		"subscription_id", subscription.ID,
 		"wallet_id", selectedWallet.ID,
-		"amount", grant.Credits,
+		"credits_applied", grant.Credits,
 		"cga_id", cgaID,
 	)
 
@@ -369,6 +375,8 @@ func (s *creditGrantService) ProcessScheduledCreditGrantApplications(ctx context
 	if err != nil {
 		return err
 	}
+
+	s.Logger.Infow("found %d scheduled credit grant applications to process", "count", len(applications))
 
 	// Process each application
 	for _, cga := range applications {
@@ -567,7 +575,6 @@ func (s *creditGrantService) createNextPeriodApplication(ctx context.Context, gr
 		Currency:                        subscription.Currency,
 		ApplicationReason:               "recurring_credit_grant_next_period",
 		SubscriptionStatusAtApplication: string(subscription.SubscriptionStatus),
-		IsProrated:                      false,
 		RetryCount:                      0,
 		IdempotencyKey:                  s.generateIdempotencyKey(grant, subscription, nextPeriodStart, nextPeriodEnd),
 		EnvironmentID:                   types.GetEnvironmentID(ctx),
