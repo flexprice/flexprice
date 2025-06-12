@@ -34,7 +34,4 @@ type Repository interface {
 
 	// GetBySubscription retrieves credit grants for a specific subscription
 	GetBySubscription(ctx context.Context, subscriptionID string) ([]*CreditGrant, error)
-
-	// FindAllActiveRecurringGrants finds all active recurring credit grants
-	FindAllActiveRecurringGrants(ctx context.Context) ([]*CreditGrant, error)
 }

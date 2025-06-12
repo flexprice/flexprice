@@ -377,35 +377,6 @@ func (r *creditGrantRepository) GetBySubscription(ctx context.Context, subscript
 	return r.List(ctx, filter)
 }
 
-// FindActiveRecurringGrants finds all active recurring credit grants
-// NOTE: This will only be used for cron job no other workflow should use this
-func (r *creditGrantRepository) FindAllActiveRecurringGrants(ctx context.Context) ([]*domainCreditGrant.CreditGrant, error) {
-	client := r.client.Querier(ctx)
-
-	span := StartRepositorySpan(ctx, "creditgrant", "find_active_recurring", map[string]interface{}{
-		"tenant_id": types.GetTenantID(ctx),
-	})
-	defer FinishSpan(span)
-
-	grants, err := client.CreditGrant.Query().
-		Where(
-			creditgrant.Status(string(types.StatusPublished)),
-			creditgrant.Cadence(types.CreditGrantCadenceRecurring),
-			creditgrant.Scope(types.CreditGrantScopeSubscription),
-		).
-		All(ctx)
-
-	if err != nil {
-		SetSpanError(span, err)
-		return nil, ierr.WithError(err).
-			WithHint("Failed to find active recurring credit grants").
-			Mark(ierr.ErrDatabase)
-	}
-
-	SetSpanSuccess(span)
-	return domainCreditGrant.FromEntList(grants), nil
-}
-
 // CreditGrantQuery type alias for better readability
 type CreditGrantQuery = *ent.CreditGrantQuery
 
