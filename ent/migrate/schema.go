@@ -148,10 +148,10 @@ var (
 		{Name: "subscription_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "scheduled_for", Type: field.TypeTime},
 		{Name: "applied_at", Type: field.TypeTime, Nullable: true},
-		{Name: "billing_period_start", Type: field.TypeTime},
-		{Name: "billing_period_end", Type: field.TypeTime},
+		{Name: "period_start", Type: field.TypeTime},
+		{Name: "period_end", Type: field.TypeTime},
 		{Name: "application_status", Type: field.TypeString, Default: "scheduled"},
-		{Name: "amount_applied", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "credits_applied", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 		{Name: "currency", Type: field.TypeString},
 		{Name: "application_reason", Type: field.TypeString},
 		{Name: "subscription_status_at_application", Type: field.TypeString},
@@ -162,6 +162,7 @@ var (
 		{Name: "failure_reason", Type: field.TypeString, Nullable: true},
 		{Name: "next_retry_at", Type: field.TypeTime, Nullable: true},
 		{Name: "metadata", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "idempotency_key", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(100)"}},
 	}
 	// CreditGrantApplicationsTable holds the schema information for the "credit_grant_applications" table.
 	CreditGrantApplicationsTable = &schema.Table{

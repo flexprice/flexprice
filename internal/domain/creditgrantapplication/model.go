@@ -19,12 +19,12 @@ type CreditGrantApplication struct {
 	AppliedAt    *time.Time `db:"applied_at" json:"applied_at,omitempty"`
 
 	// Billing period context
-	BillingPeriodStart time.Time `db:"billing_period_start" json:"billing_period_start"`
-	BillingPeriodEnd   time.Time `db:"billing_period_end" json:"billing_period_end"`
+	PeriodStart time.Time `db:"period_start" json:"period_start"`
+	PeriodEnd   time.Time `db:"period_end" json:"period_end"`
 
 	// Application details
 	ApplicationStatus types.ApplicationStatus `db:"application_status" json:"application_status"`
-	AmountApplied     decimal.Decimal         `db:"amount_applied" json:"amount_applied"`
+	CreditsApplied    decimal.Decimal         `db:"credits_applied" json:"credits_applied"`
 	Currency          string                  `db:"currency" json:"currency"`
 
 	// Context
@@ -44,7 +44,8 @@ type CreditGrantApplication struct {
 	Metadata types.Metadata `db:"metadata" json:"metadata,omitempty"`
 
 	// EnvironmentID is the environment identifier for the credit grant application
-	EnvironmentID string `db:"environment_id" json:"environment_id"`
+	EnvironmentID  string `db:"environment_id" json:"environment_id"`
+	IdempotencyKey string `db:"idempotency_key" json:"idempotency_key"`
 
 	types.BaseModel
 }
@@ -57,10 +58,10 @@ func FromEnt(e *ent.CreditGrantApplication) *CreditGrantApplication {
 		SubscriptionID:                  e.SubscriptionID,
 		ScheduledFor:                    e.ScheduledFor,
 		AppliedAt:                       e.AppliedAt,
-		BillingPeriodStart:              e.BillingPeriodStart,
-		BillingPeriodEnd:                e.BillingPeriodEnd,
+		PeriodStart:                     e.PeriodStart,
+		PeriodEnd:                       e.PeriodEnd,
 		ApplicationStatus:               types.ApplicationStatus(e.ApplicationStatus),
-		AmountApplied:                   e.AmountApplied,
+		CreditsApplied:                  e.CreditsApplied,
 		Currency:                        e.Currency,
 		ApplicationReason:               e.ApplicationReason,
 		SubscriptionStatusAtApplication: e.SubscriptionStatusAtApplication,

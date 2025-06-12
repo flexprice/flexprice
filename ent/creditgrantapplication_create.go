@@ -144,15 +144,15 @@ func (cgac *CreditGrantApplicationCreate) SetNillableAppliedAt(t *time.Time) *Cr
 	return cgac
 }
 
-// SetBillingPeriodStart sets the "billing_period_start" field.
-func (cgac *CreditGrantApplicationCreate) SetBillingPeriodStart(t time.Time) *CreditGrantApplicationCreate {
-	cgac.mutation.SetBillingPeriodStart(t)
+// SetPeriodStart sets the "period_start" field.
+func (cgac *CreditGrantApplicationCreate) SetPeriodStart(t time.Time) *CreditGrantApplicationCreate {
+	cgac.mutation.SetPeriodStart(t)
 	return cgac
 }
 
-// SetBillingPeriodEnd sets the "billing_period_end" field.
-func (cgac *CreditGrantApplicationCreate) SetBillingPeriodEnd(t time.Time) *CreditGrantApplicationCreate {
-	cgac.mutation.SetBillingPeriodEnd(t)
+// SetPeriodEnd sets the "period_end" field.
+func (cgac *CreditGrantApplicationCreate) SetPeriodEnd(t time.Time) *CreditGrantApplicationCreate {
+	cgac.mutation.SetPeriodEnd(t)
 	return cgac
 }
 
@@ -170,16 +170,16 @@ func (cgac *CreditGrantApplicationCreate) SetNillableApplicationStatus(s *string
 	return cgac
 }
 
-// SetAmountApplied sets the "amount_applied" field.
-func (cgac *CreditGrantApplicationCreate) SetAmountApplied(d decimal.Decimal) *CreditGrantApplicationCreate {
-	cgac.mutation.SetAmountApplied(d)
+// SetCreditsApplied sets the "credits_applied" field.
+func (cgac *CreditGrantApplicationCreate) SetCreditsApplied(d decimal.Decimal) *CreditGrantApplicationCreate {
+	cgac.mutation.SetCreditsApplied(d)
 	return cgac
 }
 
-// SetNillableAmountApplied sets the "amount_applied" field if the given value is not nil.
-func (cgac *CreditGrantApplicationCreate) SetNillableAmountApplied(d *decimal.Decimal) *CreditGrantApplicationCreate {
+// SetNillableCreditsApplied sets the "credits_applied" field if the given value is not nil.
+func (cgac *CreditGrantApplicationCreate) SetNillableCreditsApplied(d *decimal.Decimal) *CreditGrantApplicationCreate {
 	if d != nil {
-		cgac.SetAmountApplied(*d)
+		cgac.SetCreditsApplied(*d)
 	}
 	return cgac
 }
@@ -284,6 +284,12 @@ func (cgac *CreditGrantApplicationCreate) SetMetadata(t types.Metadata) *CreditG
 	return cgac
 }
 
+// SetIdempotencyKey sets the "idempotency_key" field.
+func (cgac *CreditGrantApplicationCreate) SetIdempotencyKey(s string) *CreditGrantApplicationCreate {
+	cgac.mutation.SetIdempotencyKey(s)
+	return cgac
+}
+
 // SetID sets the "id" field.
 func (cgac *CreditGrantApplicationCreate) SetID(s string) *CreditGrantApplicationCreate {
 	cgac.mutation.SetID(s)
@@ -345,9 +351,9 @@ func (cgac *CreditGrantApplicationCreate) defaults() {
 		v := creditgrantapplication.DefaultApplicationStatus
 		cgac.mutation.SetApplicationStatus(v)
 	}
-	if _, ok := cgac.mutation.AmountApplied(); !ok {
-		v := creditgrantapplication.DefaultAmountApplied
-		cgac.mutation.SetAmountApplied(v)
+	if _, ok := cgac.mutation.CreditsApplied(); !ok {
+		v := creditgrantapplication.DefaultCreditsApplied
+		cgac.mutation.SetCreditsApplied(v)
 	}
 	if _, ok := cgac.mutation.RetryCount(); !ok {
 		v := creditgrantapplication.DefaultRetryCount
@@ -393,17 +399,17 @@ func (cgac *CreditGrantApplicationCreate) check() error {
 	if _, ok := cgac.mutation.ScheduledFor(); !ok {
 		return &ValidationError{Name: "scheduled_for", err: errors.New(`ent: missing required field "CreditGrantApplication.scheduled_for"`)}
 	}
-	if _, ok := cgac.mutation.BillingPeriodStart(); !ok {
-		return &ValidationError{Name: "billing_period_start", err: errors.New(`ent: missing required field "CreditGrantApplication.billing_period_start"`)}
+	if _, ok := cgac.mutation.PeriodStart(); !ok {
+		return &ValidationError{Name: "period_start", err: errors.New(`ent: missing required field "CreditGrantApplication.period_start"`)}
 	}
-	if _, ok := cgac.mutation.BillingPeriodEnd(); !ok {
-		return &ValidationError{Name: "billing_period_end", err: errors.New(`ent: missing required field "CreditGrantApplication.billing_period_end"`)}
+	if _, ok := cgac.mutation.PeriodEnd(); !ok {
+		return &ValidationError{Name: "period_end", err: errors.New(`ent: missing required field "CreditGrantApplication.period_end"`)}
 	}
 	if _, ok := cgac.mutation.ApplicationStatus(); !ok {
 		return &ValidationError{Name: "application_status", err: errors.New(`ent: missing required field "CreditGrantApplication.application_status"`)}
 	}
-	if _, ok := cgac.mutation.AmountApplied(); !ok {
-		return &ValidationError{Name: "amount_applied", err: errors.New(`ent: missing required field "CreditGrantApplication.amount_applied"`)}
+	if _, ok := cgac.mutation.CreditsApplied(); !ok {
+		return &ValidationError{Name: "credits_applied", err: errors.New(`ent: missing required field "CreditGrantApplication.credits_applied"`)}
 	}
 	if _, ok := cgac.mutation.Currency(); !ok {
 		return &ValidationError{Name: "currency", err: errors.New(`ent: missing required field "CreditGrantApplication.currency"`)}
@@ -419,6 +425,9 @@ func (cgac *CreditGrantApplicationCreate) check() error {
 	}
 	if _, ok := cgac.mutation.RetryCount(); !ok {
 		return &ValidationError{Name: "retry_count", err: errors.New(`ent: missing required field "CreditGrantApplication.retry_count"`)}
+	}
+	if _, ok := cgac.mutation.IdempotencyKey(); !ok {
+		return &ValidationError{Name: "idempotency_key", err: errors.New(`ent: missing required field "CreditGrantApplication.idempotency_key"`)}
 	}
 	return nil
 }
@@ -499,21 +508,21 @@ func (cgac *CreditGrantApplicationCreate) createSpec() (*CreditGrantApplication,
 		_spec.SetField(creditgrantapplication.FieldAppliedAt, field.TypeTime, value)
 		_node.AppliedAt = &value
 	}
-	if value, ok := cgac.mutation.BillingPeriodStart(); ok {
-		_spec.SetField(creditgrantapplication.FieldBillingPeriodStart, field.TypeTime, value)
-		_node.BillingPeriodStart = value
+	if value, ok := cgac.mutation.PeriodStart(); ok {
+		_spec.SetField(creditgrantapplication.FieldPeriodStart, field.TypeTime, value)
+		_node.PeriodStart = value
 	}
-	if value, ok := cgac.mutation.BillingPeriodEnd(); ok {
-		_spec.SetField(creditgrantapplication.FieldBillingPeriodEnd, field.TypeTime, value)
-		_node.BillingPeriodEnd = value
+	if value, ok := cgac.mutation.PeriodEnd(); ok {
+		_spec.SetField(creditgrantapplication.FieldPeriodEnd, field.TypeTime, value)
+		_node.PeriodEnd = value
 	}
 	if value, ok := cgac.mutation.ApplicationStatus(); ok {
 		_spec.SetField(creditgrantapplication.FieldApplicationStatus, field.TypeString, value)
 		_node.ApplicationStatus = value
 	}
-	if value, ok := cgac.mutation.AmountApplied(); ok {
-		_spec.SetField(creditgrantapplication.FieldAmountApplied, field.TypeOther, value)
-		_node.AmountApplied = value
+	if value, ok := cgac.mutation.CreditsApplied(); ok {
+		_spec.SetField(creditgrantapplication.FieldCreditsApplied, field.TypeOther, value)
+		_node.CreditsApplied = value
 	}
 	if value, ok := cgac.mutation.Currency(); ok {
 		_spec.SetField(creditgrantapplication.FieldCurrency, field.TypeString, value)
@@ -554,6 +563,10 @@ func (cgac *CreditGrantApplicationCreate) createSpec() (*CreditGrantApplication,
 	if value, ok := cgac.mutation.Metadata(); ok {
 		_spec.SetField(creditgrantapplication.FieldMetadata, field.TypeOther, value)
 		_node.Metadata = value
+	}
+	if value, ok := cgac.mutation.IdempotencyKey(); ok {
+		_spec.SetField(creditgrantapplication.FieldIdempotencyKey, field.TypeString, value)
+		_node.IdempotencyKey = value
 	}
 	return _node, _spec
 }

@@ -189,10 +189,10 @@ func init() {
 	creditgrantapplicationDescApplicationStatus := creditgrantapplicationFields[7].Descriptor()
 	// creditgrantapplication.DefaultApplicationStatus holds the default value on creation for the application_status field.
 	creditgrantapplication.DefaultApplicationStatus = creditgrantapplicationDescApplicationStatus.Default.(string)
-	// creditgrantapplicationDescAmountApplied is the schema descriptor for amount_applied field.
-	creditgrantapplicationDescAmountApplied := creditgrantapplicationFields[8].Descriptor()
-	// creditgrantapplication.DefaultAmountApplied holds the default value on creation for the amount_applied field.
-	creditgrantapplication.DefaultAmountApplied = creditgrantapplicationDescAmountApplied.Default.(decimal.Decimal)
+	// creditgrantapplicationDescCreditsApplied is the schema descriptor for credits_applied field.
+	creditgrantapplicationDescCreditsApplied := creditgrantapplicationFields[8].Descriptor()
+	// creditgrantapplication.DefaultCreditsApplied holds the default value on creation for the credits_applied field.
+	creditgrantapplication.DefaultCreditsApplied = creditgrantapplicationDescCreditsApplied.Default.(decimal.Decimal)
 	// creditgrantapplicationDescRetryCount is the schema descriptor for retry_count field.
 	creditgrantapplicationDescRetryCount := creditgrantapplicationFields[15].Descriptor()
 	// creditgrantapplication.DefaultRetryCount holds the default value on creation for the retry_count field.

@@ -121,14 +121,14 @@ func AppliedAt(v time.Time) predicate.CreditGrantApplication {
 	return predicate.CreditGrantApplication(sql.FieldEQ(FieldAppliedAt, v))
 }
 
-// BillingPeriodStart applies equality check predicate on the "billing_period_start" field. It's identical to BillingPeriodStartEQ.
-func BillingPeriodStart(v time.Time) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldEQ(FieldBillingPeriodStart, v))
+// PeriodStart applies equality check predicate on the "period_start" field. It's identical to PeriodStartEQ.
+func PeriodStart(v time.Time) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldEQ(FieldPeriodStart, v))
 }
 
-// BillingPeriodEnd applies equality check predicate on the "billing_period_end" field. It's identical to BillingPeriodEndEQ.
-func BillingPeriodEnd(v time.Time) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldEQ(FieldBillingPeriodEnd, v))
+// PeriodEnd applies equality check predicate on the "period_end" field. It's identical to PeriodEndEQ.
+func PeriodEnd(v time.Time) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldEQ(FieldPeriodEnd, v))
 }
 
 // ApplicationStatus applies equality check predicate on the "application_status" field. It's identical to ApplicationStatusEQ.
@@ -136,9 +136,9 @@ func ApplicationStatus(v string) predicate.CreditGrantApplication {
 	return predicate.CreditGrantApplication(sql.FieldEQ(FieldApplicationStatus, v))
 }
 
-// AmountApplied applies equality check predicate on the "amount_applied" field. It's identical to AmountAppliedEQ.
-func AmountApplied(v decimal.Decimal) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldEQ(FieldAmountApplied, v))
+// CreditsApplied applies equality check predicate on the "credits_applied" field. It's identical to CreditsAppliedEQ.
+func CreditsApplied(v decimal.Decimal) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldEQ(FieldCreditsApplied, v))
 }
 
 // Currency applies equality check predicate on the "currency" field. It's identical to CurrencyEQ.
@@ -189,6 +189,11 @@ func NextRetryAt(v time.Time) predicate.CreditGrantApplication {
 // Metadata applies equality check predicate on the "metadata" field. It's identical to MetadataEQ.
 func Metadata(v types.Metadata) predicate.CreditGrantApplication {
 	return predicate.CreditGrantApplication(sql.FieldEQ(FieldMetadata, v))
+}
+
+// IdempotencyKey applies equality check predicate on the "idempotency_key" field. It's identical to IdempotencyKeyEQ.
+func IdempotencyKey(v string) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldEQ(FieldIdempotencyKey, v))
 }
 
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
@@ -846,84 +851,84 @@ func AppliedAtNotNil() predicate.CreditGrantApplication {
 	return predicate.CreditGrantApplication(sql.FieldNotNull(FieldAppliedAt))
 }
 
-// BillingPeriodStartEQ applies the EQ predicate on the "billing_period_start" field.
-func BillingPeriodStartEQ(v time.Time) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldEQ(FieldBillingPeriodStart, v))
+// PeriodStartEQ applies the EQ predicate on the "period_start" field.
+func PeriodStartEQ(v time.Time) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldEQ(FieldPeriodStart, v))
 }
 
-// BillingPeriodStartNEQ applies the NEQ predicate on the "billing_period_start" field.
-func BillingPeriodStartNEQ(v time.Time) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldNEQ(FieldBillingPeriodStart, v))
+// PeriodStartNEQ applies the NEQ predicate on the "period_start" field.
+func PeriodStartNEQ(v time.Time) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldNEQ(FieldPeriodStart, v))
 }
 
-// BillingPeriodStartIn applies the In predicate on the "billing_period_start" field.
-func BillingPeriodStartIn(vs ...time.Time) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldIn(FieldBillingPeriodStart, vs...))
+// PeriodStartIn applies the In predicate on the "period_start" field.
+func PeriodStartIn(vs ...time.Time) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldIn(FieldPeriodStart, vs...))
 }
 
-// BillingPeriodStartNotIn applies the NotIn predicate on the "billing_period_start" field.
-func BillingPeriodStartNotIn(vs ...time.Time) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldNotIn(FieldBillingPeriodStart, vs...))
+// PeriodStartNotIn applies the NotIn predicate on the "period_start" field.
+func PeriodStartNotIn(vs ...time.Time) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldNotIn(FieldPeriodStart, vs...))
 }
 
-// BillingPeriodStartGT applies the GT predicate on the "billing_period_start" field.
-func BillingPeriodStartGT(v time.Time) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldGT(FieldBillingPeriodStart, v))
+// PeriodStartGT applies the GT predicate on the "period_start" field.
+func PeriodStartGT(v time.Time) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldGT(FieldPeriodStart, v))
 }
 
-// BillingPeriodStartGTE applies the GTE predicate on the "billing_period_start" field.
-func BillingPeriodStartGTE(v time.Time) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldGTE(FieldBillingPeriodStart, v))
+// PeriodStartGTE applies the GTE predicate on the "period_start" field.
+func PeriodStartGTE(v time.Time) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldGTE(FieldPeriodStart, v))
 }
 
-// BillingPeriodStartLT applies the LT predicate on the "billing_period_start" field.
-func BillingPeriodStartLT(v time.Time) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldLT(FieldBillingPeriodStart, v))
+// PeriodStartLT applies the LT predicate on the "period_start" field.
+func PeriodStartLT(v time.Time) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldLT(FieldPeriodStart, v))
 }
 
-// BillingPeriodStartLTE applies the LTE predicate on the "billing_period_start" field.
-func BillingPeriodStartLTE(v time.Time) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldLTE(FieldBillingPeriodStart, v))
+// PeriodStartLTE applies the LTE predicate on the "period_start" field.
+func PeriodStartLTE(v time.Time) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldLTE(FieldPeriodStart, v))
 }
 
-// BillingPeriodEndEQ applies the EQ predicate on the "billing_period_end" field.
-func BillingPeriodEndEQ(v time.Time) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldEQ(FieldBillingPeriodEnd, v))
+// PeriodEndEQ applies the EQ predicate on the "period_end" field.
+func PeriodEndEQ(v time.Time) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldEQ(FieldPeriodEnd, v))
 }
 
-// BillingPeriodEndNEQ applies the NEQ predicate on the "billing_period_end" field.
-func BillingPeriodEndNEQ(v time.Time) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldNEQ(FieldBillingPeriodEnd, v))
+// PeriodEndNEQ applies the NEQ predicate on the "period_end" field.
+func PeriodEndNEQ(v time.Time) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldNEQ(FieldPeriodEnd, v))
 }
 
-// BillingPeriodEndIn applies the In predicate on the "billing_period_end" field.
-func BillingPeriodEndIn(vs ...time.Time) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldIn(FieldBillingPeriodEnd, vs...))
+// PeriodEndIn applies the In predicate on the "period_end" field.
+func PeriodEndIn(vs ...time.Time) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldIn(FieldPeriodEnd, vs...))
 }
 
-// BillingPeriodEndNotIn applies the NotIn predicate on the "billing_period_end" field.
-func BillingPeriodEndNotIn(vs ...time.Time) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldNotIn(FieldBillingPeriodEnd, vs...))
+// PeriodEndNotIn applies the NotIn predicate on the "period_end" field.
+func PeriodEndNotIn(vs ...time.Time) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldNotIn(FieldPeriodEnd, vs...))
 }
 
-// BillingPeriodEndGT applies the GT predicate on the "billing_period_end" field.
-func BillingPeriodEndGT(v time.Time) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldGT(FieldBillingPeriodEnd, v))
+// PeriodEndGT applies the GT predicate on the "period_end" field.
+func PeriodEndGT(v time.Time) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldGT(FieldPeriodEnd, v))
 }
 
-// BillingPeriodEndGTE applies the GTE predicate on the "billing_period_end" field.
-func BillingPeriodEndGTE(v time.Time) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldGTE(FieldBillingPeriodEnd, v))
+// PeriodEndGTE applies the GTE predicate on the "period_end" field.
+func PeriodEndGTE(v time.Time) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldGTE(FieldPeriodEnd, v))
 }
 
-// BillingPeriodEndLT applies the LT predicate on the "billing_period_end" field.
-func BillingPeriodEndLT(v time.Time) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldLT(FieldBillingPeriodEnd, v))
+// PeriodEndLT applies the LT predicate on the "period_end" field.
+func PeriodEndLT(v time.Time) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldLT(FieldPeriodEnd, v))
 }
 
-// BillingPeriodEndLTE applies the LTE predicate on the "billing_period_end" field.
-func BillingPeriodEndLTE(v time.Time) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldLTE(FieldBillingPeriodEnd, v))
+// PeriodEndLTE applies the LTE predicate on the "period_end" field.
+func PeriodEndLTE(v time.Time) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldLTE(FieldPeriodEnd, v))
 }
 
 // ApplicationStatusEQ applies the EQ predicate on the "application_status" field.
@@ -991,44 +996,44 @@ func ApplicationStatusContainsFold(v string) predicate.CreditGrantApplication {
 	return predicate.CreditGrantApplication(sql.FieldContainsFold(FieldApplicationStatus, v))
 }
 
-// AmountAppliedEQ applies the EQ predicate on the "amount_applied" field.
-func AmountAppliedEQ(v decimal.Decimal) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldEQ(FieldAmountApplied, v))
+// CreditsAppliedEQ applies the EQ predicate on the "credits_applied" field.
+func CreditsAppliedEQ(v decimal.Decimal) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldEQ(FieldCreditsApplied, v))
 }
 
-// AmountAppliedNEQ applies the NEQ predicate on the "amount_applied" field.
-func AmountAppliedNEQ(v decimal.Decimal) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldNEQ(FieldAmountApplied, v))
+// CreditsAppliedNEQ applies the NEQ predicate on the "credits_applied" field.
+func CreditsAppliedNEQ(v decimal.Decimal) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldNEQ(FieldCreditsApplied, v))
 }
 
-// AmountAppliedIn applies the In predicate on the "amount_applied" field.
-func AmountAppliedIn(vs ...decimal.Decimal) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldIn(FieldAmountApplied, vs...))
+// CreditsAppliedIn applies the In predicate on the "credits_applied" field.
+func CreditsAppliedIn(vs ...decimal.Decimal) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldIn(FieldCreditsApplied, vs...))
 }
 
-// AmountAppliedNotIn applies the NotIn predicate on the "amount_applied" field.
-func AmountAppliedNotIn(vs ...decimal.Decimal) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldNotIn(FieldAmountApplied, vs...))
+// CreditsAppliedNotIn applies the NotIn predicate on the "credits_applied" field.
+func CreditsAppliedNotIn(vs ...decimal.Decimal) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldNotIn(FieldCreditsApplied, vs...))
 }
 
-// AmountAppliedGT applies the GT predicate on the "amount_applied" field.
-func AmountAppliedGT(v decimal.Decimal) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldGT(FieldAmountApplied, v))
+// CreditsAppliedGT applies the GT predicate on the "credits_applied" field.
+func CreditsAppliedGT(v decimal.Decimal) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldGT(FieldCreditsApplied, v))
 }
 
-// AmountAppliedGTE applies the GTE predicate on the "amount_applied" field.
-func AmountAppliedGTE(v decimal.Decimal) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldGTE(FieldAmountApplied, v))
+// CreditsAppliedGTE applies the GTE predicate on the "credits_applied" field.
+func CreditsAppliedGTE(v decimal.Decimal) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldGTE(FieldCreditsApplied, v))
 }
 
-// AmountAppliedLT applies the LT predicate on the "amount_applied" field.
-func AmountAppliedLT(v decimal.Decimal) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldLT(FieldAmountApplied, v))
+// CreditsAppliedLT applies the LT predicate on the "credits_applied" field.
+func CreditsAppliedLT(v decimal.Decimal) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldLT(FieldCreditsApplied, v))
 }
 
-// AmountAppliedLTE applies the LTE predicate on the "amount_applied" field.
-func AmountAppliedLTE(v decimal.Decimal) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldLTE(FieldAmountApplied, v))
+// CreditsAppliedLTE applies the LTE predicate on the "credits_applied" field.
+func CreditsAppliedLTE(v decimal.Decimal) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldLTE(FieldCreditsApplied, v))
 }
 
 // CurrencyEQ applies the EQ predicate on the "currency" field.
@@ -1549,6 +1554,71 @@ func MetadataIsNil() predicate.CreditGrantApplication {
 // MetadataNotNil applies the NotNil predicate on the "metadata" field.
 func MetadataNotNil() predicate.CreditGrantApplication {
 	return predicate.CreditGrantApplication(sql.FieldNotNull(FieldMetadata))
+}
+
+// IdempotencyKeyEQ applies the EQ predicate on the "idempotency_key" field.
+func IdempotencyKeyEQ(v string) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldEQ(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyNEQ applies the NEQ predicate on the "idempotency_key" field.
+func IdempotencyKeyNEQ(v string) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldNEQ(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyIn applies the In predicate on the "idempotency_key" field.
+func IdempotencyKeyIn(vs ...string) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldIn(FieldIdempotencyKey, vs...))
+}
+
+// IdempotencyKeyNotIn applies the NotIn predicate on the "idempotency_key" field.
+func IdempotencyKeyNotIn(vs ...string) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldNotIn(FieldIdempotencyKey, vs...))
+}
+
+// IdempotencyKeyGT applies the GT predicate on the "idempotency_key" field.
+func IdempotencyKeyGT(v string) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldGT(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyGTE applies the GTE predicate on the "idempotency_key" field.
+func IdempotencyKeyGTE(v string) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldGTE(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyLT applies the LT predicate on the "idempotency_key" field.
+func IdempotencyKeyLT(v string) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldLT(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyLTE applies the LTE predicate on the "idempotency_key" field.
+func IdempotencyKeyLTE(v string) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldLTE(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyContains applies the Contains predicate on the "idempotency_key" field.
+func IdempotencyKeyContains(v string) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldContains(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyHasPrefix applies the HasPrefix predicate on the "idempotency_key" field.
+func IdempotencyKeyHasPrefix(v string) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldHasPrefix(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyHasSuffix applies the HasSuffix predicate on the "idempotency_key" field.
+func IdempotencyKeyHasSuffix(v string) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldHasSuffix(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyEqualFold applies the EqualFold predicate on the "idempotency_key" field.
+func IdempotencyKeyEqualFold(v string) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldEqualFold(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyContainsFold applies the ContainsFold predicate on the "idempotency_key" field.
+func IdempotencyKeyContainsFold(v string) predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldContainsFold(FieldIdempotencyKey, v))
 }
 
 // And groups predicates with the AND operator between them.

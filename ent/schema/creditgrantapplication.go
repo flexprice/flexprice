@@ -51,15 +51,15 @@ func (CreditGrantApplication) Fields() []ent.Field {
 			Nillable(),
 
 		// Billing period context
-		field.Time("billing_period_start"),
+		field.Time("period_start"),
 
-		field.Time("billing_period_end"),
+		field.Time("period_end"),
 
 		// Application details
 		field.String("application_status").
 			Default(string(types.ApplicationStatusScheduled)),
 
-		field.Other("amount_applied", decimal.Decimal{}).
+		field.Other("credits_applied", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(20,8)",
 			}).
@@ -105,6 +105,13 @@ func (CreditGrantApplication) Fields() []ent.Field {
 				"postgres": "jsonb",
 			}).
 			Optional(),
+
+		field.String("idempotency_key").
+			SchemaType(map[string]string{
+				"postgres": "varchar(100)",
+			}).
+			Unique().
+			Immutable(),
 	}
 }
 

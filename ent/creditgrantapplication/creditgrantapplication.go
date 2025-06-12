@@ -36,14 +36,14 @@ const (
 	FieldScheduledFor = "scheduled_for"
 	// FieldAppliedAt holds the string denoting the applied_at field in the database.
 	FieldAppliedAt = "applied_at"
-	// FieldBillingPeriodStart holds the string denoting the billing_period_start field in the database.
-	FieldBillingPeriodStart = "billing_period_start"
-	// FieldBillingPeriodEnd holds the string denoting the billing_period_end field in the database.
-	FieldBillingPeriodEnd = "billing_period_end"
+	// FieldPeriodStart holds the string denoting the period_start field in the database.
+	FieldPeriodStart = "period_start"
+	// FieldPeriodEnd holds the string denoting the period_end field in the database.
+	FieldPeriodEnd = "period_end"
 	// FieldApplicationStatus holds the string denoting the application_status field in the database.
 	FieldApplicationStatus = "application_status"
-	// FieldAmountApplied holds the string denoting the amount_applied field in the database.
-	FieldAmountApplied = "amount_applied"
+	// FieldCreditsApplied holds the string denoting the credits_applied field in the database.
+	FieldCreditsApplied = "credits_applied"
 	// FieldCurrency holds the string denoting the currency field in the database.
 	FieldCurrency = "currency"
 	// FieldApplicationReason holds the string denoting the application_reason field in the database.
@@ -64,6 +64,8 @@ const (
 	FieldNextRetryAt = "next_retry_at"
 	// FieldMetadata holds the string denoting the metadata field in the database.
 	FieldMetadata = "metadata"
+	// FieldIdempotencyKey holds the string denoting the idempotency_key field in the database.
+	FieldIdempotencyKey = "idempotency_key"
 	// Table holds the table name of the creditgrantapplication in the database.
 	Table = "credit_grant_applications"
 )
@@ -82,10 +84,10 @@ var Columns = []string{
 	FieldSubscriptionID,
 	FieldScheduledFor,
 	FieldAppliedAt,
-	FieldBillingPeriodStart,
-	FieldBillingPeriodEnd,
+	FieldPeriodStart,
+	FieldPeriodEnd,
 	FieldApplicationStatus,
-	FieldAmountApplied,
+	FieldCreditsApplied,
 	FieldCurrency,
 	FieldApplicationReason,
 	FieldSubscriptionStatusAtApplication,
@@ -96,6 +98,7 @@ var Columns = []string{
 	FieldFailureReason,
 	FieldNextRetryAt,
 	FieldMetadata,
+	FieldIdempotencyKey,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -127,8 +130,8 @@ var (
 	SubscriptionIDValidator func(string) error
 	// DefaultApplicationStatus holds the default value on creation for the "application_status" field.
 	DefaultApplicationStatus string
-	// DefaultAmountApplied holds the default value on creation for the "amount_applied" field.
-	DefaultAmountApplied decimal.Decimal
+	// DefaultCreditsApplied holds the default value on creation for the "credits_applied" field.
+	DefaultCreditsApplied decimal.Decimal
 	// DefaultRetryCount holds the default value on creation for the "retry_count" field.
 	DefaultRetryCount int
 )
@@ -196,14 +199,14 @@ func ByAppliedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAppliedAt, opts...).ToFunc()
 }
 
-// ByBillingPeriodStart orders the results by the billing_period_start field.
-func ByBillingPeriodStart(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldBillingPeriodStart, opts...).ToFunc()
+// ByPeriodStart orders the results by the period_start field.
+func ByPeriodStart(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPeriodStart, opts...).ToFunc()
 }
 
-// ByBillingPeriodEnd orders the results by the billing_period_end field.
-func ByBillingPeriodEnd(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldBillingPeriodEnd, opts...).ToFunc()
+// ByPeriodEnd orders the results by the period_end field.
+func ByPeriodEnd(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPeriodEnd, opts...).ToFunc()
 }
 
 // ByApplicationStatus orders the results by the application_status field.
@@ -211,9 +214,9 @@ func ByApplicationStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldApplicationStatus, opts...).ToFunc()
 }
 
-// ByAmountApplied orders the results by the amount_applied field.
-func ByAmountApplied(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldAmountApplied, opts...).ToFunc()
+// ByCreditsApplied orders the results by the credits_applied field.
+func ByCreditsApplied(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCreditsApplied, opts...).ToFunc()
 }
 
 // ByCurrency orders the results by the currency field.
@@ -264,4 +267,9 @@ func ByNextRetryAt(opts ...sql.OrderTermOption) OrderOption {
 // ByMetadata orders the results by the metadata field.
 func ByMetadata(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldMetadata, opts...).ToFunc()
+}
+
+// ByIdempotencyKey orders the results by the idempotency_key field.
+func ByIdempotencyKey(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIdempotencyKey, opts...).ToFunc()
 }

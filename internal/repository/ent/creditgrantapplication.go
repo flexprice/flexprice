@@ -59,10 +59,10 @@ func (r *creditGrantApplicationRepository) Create(ctx context.Context, applicati
 		SetCreditGrantID(application.CreditGrantID).
 		SetSubscriptionID(application.SubscriptionID).
 		SetScheduledFor(application.ScheduledFor).
-		SetBillingPeriodStart(application.BillingPeriodStart).
-		SetBillingPeriodEnd(application.BillingPeriodEnd).
+		SetPeriodStart(application.PeriodStart).
+		SetPeriodEnd(application.PeriodEnd).
 		SetApplicationStatus(string(application.ApplicationStatus)).
-		SetAmountApplied(application.AmountApplied).
+		SetCreditsApplied(application.CreditsApplied).
 		SetCurrency(application.Currency).
 		SetApplicationReason(application.ApplicationReason).
 		SetSubscriptionStatusAtApplication(application.SubscriptionStatusAtApplication).
@@ -74,6 +74,7 @@ func (r *creditGrantApplicationRepository) Create(ctx context.Context, applicati
 		SetUpdatedAt(application.UpdatedAt).
 		SetCreatedBy(application.CreatedBy).
 		SetUpdatedBy(application.UpdatedBy).
+		SetIdempotencyKey(application.IdempotencyKey).
 		SetEnvironmentID(application.EnvironmentID)
 
 	// Set optional fields
@@ -283,7 +284,7 @@ func (r *creditGrantApplicationRepository) Update(ctx context.Context, applicati
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
 
-	updateBuilder := client.CreditGrantApplication.Update().
+	_, err := client.CreditGrantApplication.Update().
 		Where(
 			creditgrantapplication.ID(application.ID),
 			creditgrantapplication.TenantID(tenantID),
@@ -291,10 +292,10 @@ func (r *creditGrantApplicationRepository) Update(ctx context.Context, applicati
 		).
 		SetStatus(string(application.Status)).
 		SetScheduledFor(application.ScheduledFor).
-		SetBillingPeriodStart(application.BillingPeriodStart).
-		SetBillingPeriodEnd(application.BillingPeriodEnd).
+		SetPeriodStart(application.PeriodStart).
+		SetPeriodEnd(application.PeriodEnd).
 		SetApplicationStatus(string(application.ApplicationStatus)).
-		SetAmountApplied(application.AmountApplied).
+		SetCreditsApplied(application.CreditsApplied).
 		SetCurrency(application.Currency).
 		SetApplicationReason(application.ApplicationReason).
 		SetSubscriptionStatusAtApplication(application.SubscriptionStatusAtApplication).
@@ -302,36 +303,8 @@ func (r *creditGrantApplicationRepository) Update(ctx context.Context, applicati
 		SetRetryCount(application.RetryCount).
 		SetMetadata(application.Metadata).
 		SetUpdatedAt(time.Now().UTC()).
-		SetUpdatedBy(types.GetUserID(ctx))
-
-	// Set optional fields
-	if application.AppliedAt != nil {
-		updateBuilder = updateBuilder.SetAppliedAt(*application.AppliedAt)
-	} else {
-		updateBuilder = updateBuilder.ClearAppliedAt()
-	}
-	if application.ProrationFactor != nil {
-		updateBuilder = updateBuilder.SetProrationFactor(*application.ProrationFactor)
-	} else {
-		updateBuilder = updateBuilder.ClearProrationFactor()
-	}
-	if application.FullPeriodAmount != nil {
-		updateBuilder = updateBuilder.SetFullPeriodAmount(*application.FullPeriodAmount)
-	} else {
-		updateBuilder = updateBuilder.ClearFullPeriodAmount()
-	}
-	if application.FailureReason != nil {
-		updateBuilder = updateBuilder.SetFailureReason(*application.FailureReason)
-	} else {
-		updateBuilder = updateBuilder.ClearFailureReason()
-	}
-	if application.NextRetryAt != nil {
-		updateBuilder = updateBuilder.SetNextRetryAt(*application.NextRetryAt)
-	} else {
-		updateBuilder = updateBuilder.ClearNextRetryAt()
-	}
-
-	_, err := updateBuilder.Save(ctx)
+		SetUpdatedBy(types.GetUserID(ctx)).
+		Save(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
@@ -467,14 +440,14 @@ func (o CreditGrantApplicationQueryOptions) GetFieldName(field string) string {
 		return creditgrantapplication.FieldScheduledFor
 	case "applied_at":
 		return creditgrantapplication.FieldAppliedAt
-	case "billing_period_start":
-		return creditgrantapplication.FieldBillingPeriodStart
-	case "billing_period_end":
-		return creditgrantapplication.FieldBillingPeriodEnd
+	case "period_start":
+		return creditgrantapplication.FieldPeriodStart
+	case "period_end":
+		return creditgrantapplication.FieldPeriodEnd
 	case "application_status":
 		return creditgrantapplication.FieldApplicationStatus
-	case "amount_applied":
-		return creditgrantapplication.FieldAmountApplied
+	case "credits_applied":
+		return creditgrantapplication.FieldCreditsApplied
 	case "currency":
 		return creditgrantapplication.FieldCurrency
 	case "credit_grant_id":
@@ -537,8 +510,8 @@ func (r *creditGrantApplicationRepository) ExistsForBillingPeriod(ctx context.Co
 		Where(
 			creditgrantapplication.CreditGrantID(grantID),
 			creditgrantapplication.SubscriptionID(subscriptionID),
-			creditgrantapplication.BillingPeriodStart(periodStart),
-			creditgrantapplication.BillingPeriodEnd(periodEnd),
+			creditgrantapplication.PeriodStart(periodStart),
+			creditgrantapplication.PeriodEnd(periodEnd),
 			creditgrantapplication.TenantID(types.GetTenantID(ctx)),
 			creditgrantapplication.ApplicationStatusNotIn(
 				string(types.ApplicationStatusCancelled),
