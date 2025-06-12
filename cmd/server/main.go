@@ -129,6 +129,8 @@ func main() {
 			repository.NewTaskRepository,
 			repository.NewSecretRepository,
 			repository.NewCreditGrantRepository,
+			repository.NewCreditGrantApplicationRepository,
+
 			// PubSub
 			pubsubRouter.NewRouter,
 

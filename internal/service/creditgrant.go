@@ -7,6 +7,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/creditgrant"
+	"github.com/flexprice/flexprice/internal/domain/creditgrantapplication"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -36,11 +37,10 @@ type CreditGrantService interface {
 	// GetCreditGrantsBySubscription retrieves credit grants for a specific subscription
 	GetCreditGrantsBySubscription(ctx context.Context, subscriptionID string) (*dto.ListCreditGrantsResponse, error)
 
-	// ProcessRecurringGrants processes all recurring credit grants
-	ProcessRecurringGrants(ctx context.Context) error
+	ProcessScheduledCreditGrantApplications(ctx context.Context) error
 
-	// ProcessGrantForSubscription processes a credit grant for a specific subscription
-	ProcessGrantForSubscription(ctx context.Context, grant *creditgrant.CreditGrant, subscription *subscription.Subscription) error
+	// ApplyRecurringGrant applies a recurring credit grant to a subscription
+	ApplyRecurringGrant(ctx context.Context, grant *creditgrant.CreditGrant, subscription *subscription.Subscription) error
 }
 
 type creditGrantService struct {
@@ -216,56 +216,50 @@ func (s *creditGrantService) GetCreditGrantsBySubscription(ctx context.Context, 
 	return resp, nil
 }
 
-// ProcessRecurringGrants processes all recurring credit grants
-func (s *creditGrantService) ProcessRecurringGrants(ctx context.Context) error {
-	s.Logger.Infow("starting recurring credit grant processing")
-
-	// 1. Find all active recurring grants
-	grants, err := s.CreditGrantRepo.FindAllActiveRecurringGrants(ctx)
-	if err != nil {
-		return err
-	}
-
-	s.Logger.Infow("found active recurring grants", "count", len(grants))
-
-	// 2. Process each grant
-	for _, grant := range grants {
-		if err := s.processRecurringGrant(ctx, grant); err != nil {
-			s.Logger.Errorw("failed to process recurring grant",
-				"grant_id", grant.ID,
-				"error", err)
-			// Continue processing other grants
-		}
-	}
-
-	return nil
-}
-
-func (s *creditGrantService) processRecurringGrant(ctx context.Context, grant *creditgrant.CreditGrant) error {
+func (s *creditGrantService) ProcessScheduledCreditGrantApplications(ctx context.Context) error {
 	// Find eligible subscriptions for this grant
-	subscriptions, err := s.SubRepo.ListAll(ctx, &types.SubscriptionFilter{})
+	applications, err := s.CreditGrantApplicationRepo.FindAllScheduledApplications(ctx)
 	if err != nil {
 		return err
 	}
 
-	s.Logger.Debugw("found eligible subscriptions for grant",
-		"grant_id", grant.ID,
-		"subscription_count", len(subscriptions))
+	subscriptionService := NewSubscriptionService(s.ServiceParams)
+	creditGrantService := NewCreditGrantService(s.ServiceParams)
+	// add tenant_id and env_id in context for each application
+	for _, cga := range applications {
 
-	for _, subscription := range subscriptions {
-		if err := s.ProcessGrantForSubscription(ctx, grant, subscription); err != nil {
-			s.Logger.Errorw("failed to process grant for subscription",
-				"grant_id", grant.ID,
-				"subscription_id", subscription.ID,
-				"error", err)
-			// Continue with other subscriptions
+		// we check if the application is alre	ady applied
+		if cga.ApplicationStatus == types.ApplicationStatusApplied {
+			// we skip the application if it is already applied
+			continue
 		}
+
+		ctxWithTenant := context.WithValue(ctx, types.CtxTenantID, cga.TenantID)
+		ctxWithEnv := context.WithValue(ctxWithTenant, types.CtxEnvironmentID, cga.EnvironmentID)
+
+		// we validate subscription state
+		subscription, err := subscriptionService.GetSubscription(ctxWithEnv, cga.SubscriptionID)
+		if err != nil {
+			return err
+		}
+
+		// we check if the credit grant is active or not
+		creditGrant, err := creditGrantService.GetCreditGrant(ctxWithEnv, cga.CreditGrantID)
+		if err != nil {
+			return err
+		}
+
+		err = s.ProcessGrantForSubscription(ctxWithEnv, creditGrant.CreditGrant, subscription.Subscription, cga)
+		if err != nil {
+			return err
+		}
+
 	}
 
 	return nil
 }
 
-func (s *creditGrantService) ProcessGrantForSubscription(ctx context.Context, grant *creditgrant.CreditGrant, subscription *subscription.Subscription) error {
+func (s *creditGrantService) ProcessGrantForSubscription(ctx context.Context, grant *creditgrant.CreditGrant, subscription *subscription.Subscription, cga *creditgrantapplication.CreditGrantApplication) error {
 	// Determine if grant should be applied based on subscription state
 	stateHandler := NewSubscriptionStateHandler(subscription, grant)
 

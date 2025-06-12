@@ -523,6 +523,8 @@ func (r *creditGrantApplicationRepository) ExistsForPeriod(ctx context.Context, 
 	return count > 0, err
 }
 
+// This runs every 15 mins
+// NOTE: THIS IS ONLY FOR CRON JOB SHOULD NOT BE USED ELSEWHERE IN OTHER WORKFLOWS
 func (r *creditGrantApplicationRepository) FindAllScheduledApplications(ctx context.Context) ([]*domainCreditGrantApplication.CreditGrantApplication, error) {
 	span := cache.StartCacheSpan(ctx, "creditgrantapplication", "find_all_scheduled_applications", map[string]interface{}{})
 	defer cache.FinishSpan(span)
