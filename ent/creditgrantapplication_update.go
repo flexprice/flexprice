@@ -104,30 +104,30 @@ func (cgau *CreditGrantApplicationUpdate) ClearAppliedAt() *CreditGrantApplicati
 	return cgau
 }
 
-// SetBillingPeriodStart sets the "billing_period_start" field.
-func (cgau *CreditGrantApplicationUpdate) SetBillingPeriodStart(t time.Time) *CreditGrantApplicationUpdate {
-	cgau.mutation.SetBillingPeriodStart(t)
+// SetPeriodStart sets the "period_start" field.
+func (cgau *CreditGrantApplicationUpdate) SetPeriodStart(t time.Time) *CreditGrantApplicationUpdate {
+	cgau.mutation.SetPeriodStart(t)
 	return cgau
 }
 
-// SetNillableBillingPeriodStart sets the "billing_period_start" field if the given value is not nil.
-func (cgau *CreditGrantApplicationUpdate) SetNillableBillingPeriodStart(t *time.Time) *CreditGrantApplicationUpdate {
+// SetNillablePeriodStart sets the "period_start" field if the given value is not nil.
+func (cgau *CreditGrantApplicationUpdate) SetNillablePeriodStart(t *time.Time) *CreditGrantApplicationUpdate {
 	if t != nil {
-		cgau.SetBillingPeriodStart(*t)
+		cgau.SetPeriodStart(*t)
 	}
 	return cgau
 }
 
-// SetBillingPeriodEnd sets the "billing_period_end" field.
-func (cgau *CreditGrantApplicationUpdate) SetBillingPeriodEnd(t time.Time) *CreditGrantApplicationUpdate {
-	cgau.mutation.SetBillingPeriodEnd(t)
+// SetPeriodEnd sets the "period_end" field.
+func (cgau *CreditGrantApplicationUpdate) SetPeriodEnd(t time.Time) *CreditGrantApplicationUpdate {
+	cgau.mutation.SetPeriodEnd(t)
 	return cgau
 }
 
-// SetNillableBillingPeriodEnd sets the "billing_period_end" field if the given value is not nil.
-func (cgau *CreditGrantApplicationUpdate) SetNillableBillingPeriodEnd(t *time.Time) *CreditGrantApplicationUpdate {
+// SetNillablePeriodEnd sets the "period_end" field if the given value is not nil.
+func (cgau *CreditGrantApplicationUpdate) SetNillablePeriodEnd(t *time.Time) *CreditGrantApplicationUpdate {
 	if t != nil {
-		cgau.SetBillingPeriodEnd(*t)
+		cgau.SetPeriodEnd(*t)
 	}
 	return cgau
 }
@@ -146,16 +146,16 @@ func (cgau *CreditGrantApplicationUpdate) SetNillableApplicationStatus(s *string
 	return cgau
 }
 
-// SetAmountApplied sets the "amount_applied" field.
-func (cgau *CreditGrantApplicationUpdate) SetAmountApplied(d decimal.Decimal) *CreditGrantApplicationUpdate {
-	cgau.mutation.SetAmountApplied(d)
+// SetCreditsApplied sets the "credits_applied" field.
+func (cgau *CreditGrantApplicationUpdate) SetCreditsApplied(d decimal.Decimal) *CreditGrantApplicationUpdate {
+	cgau.mutation.SetCreditsApplied(d)
 	return cgau
 }
 
-// SetNillableAmountApplied sets the "amount_applied" field if the given value is not nil.
-func (cgau *CreditGrantApplicationUpdate) SetNillableAmountApplied(d *decimal.Decimal) *CreditGrantApplicationUpdate {
+// SetNillableCreditsApplied sets the "credits_applied" field if the given value is not nil.
+func (cgau *CreditGrantApplicationUpdate) SetNillableCreditsApplied(d *decimal.Decimal) *CreditGrantApplicationUpdate {
 	if d != nil {
-		cgau.SetAmountApplied(*d)
+		cgau.SetCreditsApplied(*d)
 	}
 	return cgau
 }
@@ -199,60 +199,6 @@ func (cgau *CreditGrantApplicationUpdate) SetNillableSubscriptionStatusAtApplica
 	if s != nil {
 		cgau.SetSubscriptionStatusAtApplication(*s)
 	}
-	return cgau
-}
-
-// SetIsProrated sets the "is_prorated" field.
-func (cgau *CreditGrantApplicationUpdate) SetIsProrated(b bool) *CreditGrantApplicationUpdate {
-	cgau.mutation.SetIsProrated(b)
-	return cgau
-}
-
-// SetNillableIsProrated sets the "is_prorated" field if the given value is not nil.
-func (cgau *CreditGrantApplicationUpdate) SetNillableIsProrated(b *bool) *CreditGrantApplicationUpdate {
-	if b != nil {
-		cgau.SetIsProrated(*b)
-	}
-	return cgau
-}
-
-// SetProrationFactor sets the "proration_factor" field.
-func (cgau *CreditGrantApplicationUpdate) SetProrationFactor(d decimal.Decimal) *CreditGrantApplicationUpdate {
-	cgau.mutation.SetProrationFactor(d)
-	return cgau
-}
-
-// SetNillableProrationFactor sets the "proration_factor" field if the given value is not nil.
-func (cgau *CreditGrantApplicationUpdate) SetNillableProrationFactor(d *decimal.Decimal) *CreditGrantApplicationUpdate {
-	if d != nil {
-		cgau.SetProrationFactor(*d)
-	}
-	return cgau
-}
-
-// ClearProrationFactor clears the value of the "proration_factor" field.
-func (cgau *CreditGrantApplicationUpdate) ClearProrationFactor() *CreditGrantApplicationUpdate {
-	cgau.mutation.ClearProrationFactor()
-	return cgau
-}
-
-// SetFullPeriodAmount sets the "full_period_amount" field.
-func (cgau *CreditGrantApplicationUpdate) SetFullPeriodAmount(d decimal.Decimal) *CreditGrantApplicationUpdate {
-	cgau.mutation.SetFullPeriodAmount(d)
-	return cgau
-}
-
-// SetNillableFullPeriodAmount sets the "full_period_amount" field if the given value is not nil.
-func (cgau *CreditGrantApplicationUpdate) SetNillableFullPeriodAmount(d *decimal.Decimal) *CreditGrantApplicationUpdate {
-	if d != nil {
-		cgau.SetFullPeriodAmount(*d)
-	}
-	return cgau
-}
-
-// ClearFullPeriodAmount clears the value of the "full_period_amount" field.
-func (cgau *CreditGrantApplicationUpdate) ClearFullPeriodAmount() *CreditGrantApplicationUpdate {
-	cgau.mutation.ClearFullPeriodAmount()
 	return cgau
 }
 
@@ -406,17 +352,17 @@ func (cgau *CreditGrantApplicationUpdate) sqlSave(ctx context.Context) (n int, e
 	if cgau.mutation.AppliedAtCleared() {
 		_spec.ClearField(creditgrantapplication.FieldAppliedAt, field.TypeTime)
 	}
-	if value, ok := cgau.mutation.BillingPeriodStart(); ok {
-		_spec.SetField(creditgrantapplication.FieldBillingPeriodStart, field.TypeTime, value)
+	if value, ok := cgau.mutation.PeriodStart(); ok {
+		_spec.SetField(creditgrantapplication.FieldPeriodStart, field.TypeTime, value)
 	}
-	if value, ok := cgau.mutation.BillingPeriodEnd(); ok {
-		_spec.SetField(creditgrantapplication.FieldBillingPeriodEnd, field.TypeTime, value)
+	if value, ok := cgau.mutation.PeriodEnd(); ok {
+		_spec.SetField(creditgrantapplication.FieldPeriodEnd, field.TypeTime, value)
 	}
 	if value, ok := cgau.mutation.ApplicationStatus(); ok {
 		_spec.SetField(creditgrantapplication.FieldApplicationStatus, field.TypeString, value)
 	}
-	if value, ok := cgau.mutation.AmountApplied(); ok {
-		_spec.SetField(creditgrantapplication.FieldAmountApplied, field.TypeOther, value)
+	if value, ok := cgau.mutation.CreditsApplied(); ok {
+		_spec.SetField(creditgrantapplication.FieldCreditsApplied, field.TypeOther, value)
 	}
 	if value, ok := cgau.mutation.Currency(); ok {
 		_spec.SetField(creditgrantapplication.FieldCurrency, field.TypeString, value)
@@ -426,21 +372,6 @@ func (cgau *CreditGrantApplicationUpdate) sqlSave(ctx context.Context) (n int, e
 	}
 	if value, ok := cgau.mutation.SubscriptionStatusAtApplication(); ok {
 		_spec.SetField(creditgrantapplication.FieldSubscriptionStatusAtApplication, field.TypeString, value)
-	}
-	if value, ok := cgau.mutation.IsProrated(); ok {
-		_spec.SetField(creditgrantapplication.FieldIsProrated, field.TypeBool, value)
-	}
-	if value, ok := cgau.mutation.ProrationFactor(); ok {
-		_spec.SetField(creditgrantapplication.FieldProrationFactor, field.TypeOther, value)
-	}
-	if cgau.mutation.ProrationFactorCleared() {
-		_spec.ClearField(creditgrantapplication.FieldProrationFactor, field.TypeOther)
-	}
-	if value, ok := cgau.mutation.FullPeriodAmount(); ok {
-		_spec.SetField(creditgrantapplication.FieldFullPeriodAmount, field.TypeOther, value)
-	}
-	if cgau.mutation.FullPeriodAmountCleared() {
-		_spec.ClearField(creditgrantapplication.FieldFullPeriodAmount, field.TypeOther)
 	}
 	if value, ok := cgau.mutation.RetryCount(); ok {
 		_spec.SetField(creditgrantapplication.FieldRetryCount, field.TypeInt, value)
@@ -560,30 +491,30 @@ func (cgauo *CreditGrantApplicationUpdateOne) ClearAppliedAt() *CreditGrantAppli
 	return cgauo
 }
 
-// SetBillingPeriodStart sets the "billing_period_start" field.
-func (cgauo *CreditGrantApplicationUpdateOne) SetBillingPeriodStart(t time.Time) *CreditGrantApplicationUpdateOne {
-	cgauo.mutation.SetBillingPeriodStart(t)
+// SetPeriodStart sets the "period_start" field.
+func (cgauo *CreditGrantApplicationUpdateOne) SetPeriodStart(t time.Time) *CreditGrantApplicationUpdateOne {
+	cgauo.mutation.SetPeriodStart(t)
 	return cgauo
 }
 
-// SetNillableBillingPeriodStart sets the "billing_period_start" field if the given value is not nil.
-func (cgauo *CreditGrantApplicationUpdateOne) SetNillableBillingPeriodStart(t *time.Time) *CreditGrantApplicationUpdateOne {
+// SetNillablePeriodStart sets the "period_start" field if the given value is not nil.
+func (cgauo *CreditGrantApplicationUpdateOne) SetNillablePeriodStart(t *time.Time) *CreditGrantApplicationUpdateOne {
 	if t != nil {
-		cgauo.SetBillingPeriodStart(*t)
+		cgauo.SetPeriodStart(*t)
 	}
 	return cgauo
 }
 
-// SetBillingPeriodEnd sets the "billing_period_end" field.
-func (cgauo *CreditGrantApplicationUpdateOne) SetBillingPeriodEnd(t time.Time) *CreditGrantApplicationUpdateOne {
-	cgauo.mutation.SetBillingPeriodEnd(t)
+// SetPeriodEnd sets the "period_end" field.
+func (cgauo *CreditGrantApplicationUpdateOne) SetPeriodEnd(t time.Time) *CreditGrantApplicationUpdateOne {
+	cgauo.mutation.SetPeriodEnd(t)
 	return cgauo
 }
 
-// SetNillableBillingPeriodEnd sets the "billing_period_end" field if the given value is not nil.
-func (cgauo *CreditGrantApplicationUpdateOne) SetNillableBillingPeriodEnd(t *time.Time) *CreditGrantApplicationUpdateOne {
+// SetNillablePeriodEnd sets the "period_end" field if the given value is not nil.
+func (cgauo *CreditGrantApplicationUpdateOne) SetNillablePeriodEnd(t *time.Time) *CreditGrantApplicationUpdateOne {
 	if t != nil {
-		cgauo.SetBillingPeriodEnd(*t)
+		cgauo.SetPeriodEnd(*t)
 	}
 	return cgauo
 }
@@ -602,16 +533,16 @@ func (cgauo *CreditGrantApplicationUpdateOne) SetNillableApplicationStatus(s *st
 	return cgauo
 }
 
-// SetAmountApplied sets the "amount_applied" field.
-func (cgauo *CreditGrantApplicationUpdateOne) SetAmountApplied(d decimal.Decimal) *CreditGrantApplicationUpdateOne {
-	cgauo.mutation.SetAmountApplied(d)
+// SetCreditsApplied sets the "credits_applied" field.
+func (cgauo *CreditGrantApplicationUpdateOne) SetCreditsApplied(d decimal.Decimal) *CreditGrantApplicationUpdateOne {
+	cgauo.mutation.SetCreditsApplied(d)
 	return cgauo
 }
 
-// SetNillableAmountApplied sets the "amount_applied" field if the given value is not nil.
-func (cgauo *CreditGrantApplicationUpdateOne) SetNillableAmountApplied(d *decimal.Decimal) *CreditGrantApplicationUpdateOne {
+// SetNillableCreditsApplied sets the "credits_applied" field if the given value is not nil.
+func (cgauo *CreditGrantApplicationUpdateOne) SetNillableCreditsApplied(d *decimal.Decimal) *CreditGrantApplicationUpdateOne {
 	if d != nil {
-		cgauo.SetAmountApplied(*d)
+		cgauo.SetCreditsApplied(*d)
 	}
 	return cgauo
 }
@@ -655,60 +586,6 @@ func (cgauo *CreditGrantApplicationUpdateOne) SetNillableSubscriptionStatusAtApp
 	if s != nil {
 		cgauo.SetSubscriptionStatusAtApplication(*s)
 	}
-	return cgauo
-}
-
-// SetIsProrated sets the "is_prorated" field.
-func (cgauo *CreditGrantApplicationUpdateOne) SetIsProrated(b bool) *CreditGrantApplicationUpdateOne {
-	cgauo.mutation.SetIsProrated(b)
-	return cgauo
-}
-
-// SetNillableIsProrated sets the "is_prorated" field if the given value is not nil.
-func (cgauo *CreditGrantApplicationUpdateOne) SetNillableIsProrated(b *bool) *CreditGrantApplicationUpdateOne {
-	if b != nil {
-		cgauo.SetIsProrated(*b)
-	}
-	return cgauo
-}
-
-// SetProrationFactor sets the "proration_factor" field.
-func (cgauo *CreditGrantApplicationUpdateOne) SetProrationFactor(d decimal.Decimal) *CreditGrantApplicationUpdateOne {
-	cgauo.mutation.SetProrationFactor(d)
-	return cgauo
-}
-
-// SetNillableProrationFactor sets the "proration_factor" field if the given value is not nil.
-func (cgauo *CreditGrantApplicationUpdateOne) SetNillableProrationFactor(d *decimal.Decimal) *CreditGrantApplicationUpdateOne {
-	if d != nil {
-		cgauo.SetProrationFactor(*d)
-	}
-	return cgauo
-}
-
-// ClearProrationFactor clears the value of the "proration_factor" field.
-func (cgauo *CreditGrantApplicationUpdateOne) ClearProrationFactor() *CreditGrantApplicationUpdateOne {
-	cgauo.mutation.ClearProrationFactor()
-	return cgauo
-}
-
-// SetFullPeriodAmount sets the "full_period_amount" field.
-func (cgauo *CreditGrantApplicationUpdateOne) SetFullPeriodAmount(d decimal.Decimal) *CreditGrantApplicationUpdateOne {
-	cgauo.mutation.SetFullPeriodAmount(d)
-	return cgauo
-}
-
-// SetNillableFullPeriodAmount sets the "full_period_amount" field if the given value is not nil.
-func (cgauo *CreditGrantApplicationUpdateOne) SetNillableFullPeriodAmount(d *decimal.Decimal) *CreditGrantApplicationUpdateOne {
-	if d != nil {
-		cgauo.SetFullPeriodAmount(*d)
-	}
-	return cgauo
-}
-
-// ClearFullPeriodAmount clears the value of the "full_period_amount" field.
-func (cgauo *CreditGrantApplicationUpdateOne) ClearFullPeriodAmount() *CreditGrantApplicationUpdateOne {
-	cgauo.mutation.ClearFullPeriodAmount()
 	return cgauo
 }
 
@@ -892,17 +769,17 @@ func (cgauo *CreditGrantApplicationUpdateOne) sqlSave(ctx context.Context) (_nod
 	if cgauo.mutation.AppliedAtCleared() {
 		_spec.ClearField(creditgrantapplication.FieldAppliedAt, field.TypeTime)
 	}
-	if value, ok := cgauo.mutation.BillingPeriodStart(); ok {
-		_spec.SetField(creditgrantapplication.FieldBillingPeriodStart, field.TypeTime, value)
+	if value, ok := cgauo.mutation.PeriodStart(); ok {
+		_spec.SetField(creditgrantapplication.FieldPeriodStart, field.TypeTime, value)
 	}
-	if value, ok := cgauo.mutation.BillingPeriodEnd(); ok {
-		_spec.SetField(creditgrantapplication.FieldBillingPeriodEnd, field.TypeTime, value)
+	if value, ok := cgauo.mutation.PeriodEnd(); ok {
+		_spec.SetField(creditgrantapplication.FieldPeriodEnd, field.TypeTime, value)
 	}
 	if value, ok := cgauo.mutation.ApplicationStatus(); ok {
 		_spec.SetField(creditgrantapplication.FieldApplicationStatus, field.TypeString, value)
 	}
-	if value, ok := cgauo.mutation.AmountApplied(); ok {
-		_spec.SetField(creditgrantapplication.FieldAmountApplied, field.TypeOther, value)
+	if value, ok := cgauo.mutation.CreditsApplied(); ok {
+		_spec.SetField(creditgrantapplication.FieldCreditsApplied, field.TypeOther, value)
 	}
 	if value, ok := cgauo.mutation.Currency(); ok {
 		_spec.SetField(creditgrantapplication.FieldCurrency, field.TypeString, value)
@@ -912,21 +789,6 @@ func (cgauo *CreditGrantApplicationUpdateOne) sqlSave(ctx context.Context) (_nod
 	}
 	if value, ok := cgauo.mutation.SubscriptionStatusAtApplication(); ok {
 		_spec.SetField(creditgrantapplication.FieldSubscriptionStatusAtApplication, field.TypeString, value)
-	}
-	if value, ok := cgauo.mutation.IsProrated(); ok {
-		_spec.SetField(creditgrantapplication.FieldIsProrated, field.TypeBool, value)
-	}
-	if value, ok := cgauo.mutation.ProrationFactor(); ok {
-		_spec.SetField(creditgrantapplication.FieldProrationFactor, field.TypeOther, value)
-	}
-	if cgauo.mutation.ProrationFactorCleared() {
-		_spec.ClearField(creditgrantapplication.FieldProrationFactor, field.TypeOther)
-	}
-	if value, ok := cgauo.mutation.FullPeriodAmount(); ok {
-		_spec.SetField(creditgrantapplication.FieldFullPeriodAmount, field.TypeOther, value)
-	}
-	if cgauo.mutation.FullPeriodAmountCleared() {
-		_spec.ClearField(creditgrantapplication.FieldFullPeriodAmount, field.TypeOther)
 	}
 	if value, ok := cgauo.mutation.RetryCount(); ok {
 		_spec.SetField(creditgrantapplication.FieldRetryCount, field.TypeInt, value)

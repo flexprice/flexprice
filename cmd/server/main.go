@@ -129,6 +129,8 @@ func main() {
 			repository.NewTaskRepository,
 			repository.NewSecretRepository,
 			repository.NewCreditGrantRepository,
+			repository.NewCreditGrantApplicationRepository,
+
 			// PubSub
 			pubsubRouter.NewRouter,
 
@@ -243,6 +245,7 @@ func provideHandlers(
 		CronSubscription:  cron.NewSubscriptionHandler(subscriptionService, temporalService, logger),
 		CronWallet:        cron.NewWalletCronHandler(logger, temporalService, walletService, tenantService),
 		CreditGrant:       v1.NewCreditGrantHandler(creditGrantService, logger),
+		CronCreditGrant:   cron.NewCreditGrantCronHandler(creditGrantService, logger),
 	}
 }
 

@@ -59,14 +59,13 @@ func (r *creditGrantApplicationRepository) Create(ctx context.Context, applicati
 		SetCreditGrantID(application.CreditGrantID).
 		SetSubscriptionID(application.SubscriptionID).
 		SetScheduledFor(application.ScheduledFor).
-		SetBillingPeriodStart(application.BillingPeriodStart).
-		SetBillingPeriodEnd(application.BillingPeriodEnd).
+		SetPeriodStart(application.PeriodStart).
+		SetPeriodEnd(application.PeriodEnd).
 		SetApplicationStatus(string(application.ApplicationStatus)).
-		SetAmountApplied(application.AmountApplied).
+		SetCreditsApplied(application.CreditsApplied).
 		SetCurrency(application.Currency).
 		SetApplicationReason(application.ApplicationReason).
 		SetSubscriptionStatusAtApplication(application.SubscriptionStatusAtApplication).
-		SetIsProrated(application.IsProrated).
 		SetRetryCount(application.RetryCount).
 		SetMetadata(application.Metadata).
 		SetStatus(string(application.Status)).
@@ -74,17 +73,12 @@ func (r *creditGrantApplicationRepository) Create(ctx context.Context, applicati
 		SetUpdatedAt(application.UpdatedAt).
 		SetCreatedBy(application.CreatedBy).
 		SetUpdatedBy(application.UpdatedBy).
+		SetIdempotencyKey(application.IdempotencyKey).
 		SetEnvironmentID(application.EnvironmentID)
 
 	// Set optional fields
 	if application.AppliedAt != nil {
 		createBuilder = createBuilder.SetAppliedAt(*application.AppliedAt)
-	}
-	if application.ProrationFactor != nil {
-		createBuilder = createBuilder.SetProrationFactor(*application.ProrationFactor)
-	}
-	if application.FullPeriodAmount != nil {
-		createBuilder = createBuilder.SetFullPeriodAmount(*application.FullPeriodAmount)
 	}
 	if application.FailureReason != nil {
 		createBuilder = createBuilder.SetFailureReason(*application.FailureReason)
@@ -283,7 +277,7 @@ func (r *creditGrantApplicationRepository) Update(ctx context.Context, applicati
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
 
-	updateBuilder := client.CreditGrantApplication.Update().
+	_, err := client.CreditGrantApplication.Update().
 		Where(
 			creditgrantapplication.ID(application.ID),
 			creditgrantapplication.TenantID(tenantID),
@@ -291,47 +285,18 @@ func (r *creditGrantApplicationRepository) Update(ctx context.Context, applicati
 		).
 		SetStatus(string(application.Status)).
 		SetScheduledFor(application.ScheduledFor).
-		SetBillingPeriodStart(application.BillingPeriodStart).
-		SetBillingPeriodEnd(application.BillingPeriodEnd).
+		SetPeriodStart(application.PeriodStart).
+		SetPeriodEnd(application.PeriodEnd).
 		SetApplicationStatus(string(application.ApplicationStatus)).
-		SetAmountApplied(application.AmountApplied).
+		SetCreditsApplied(application.CreditsApplied).
 		SetCurrency(application.Currency).
 		SetApplicationReason(application.ApplicationReason).
 		SetSubscriptionStatusAtApplication(application.SubscriptionStatusAtApplication).
-		SetIsProrated(application.IsProrated).
 		SetRetryCount(application.RetryCount).
 		SetMetadata(application.Metadata).
 		SetUpdatedAt(time.Now().UTC()).
-		SetUpdatedBy(types.GetUserID(ctx))
-
-	// Set optional fields
-	if application.AppliedAt != nil {
-		updateBuilder = updateBuilder.SetAppliedAt(*application.AppliedAt)
-	} else {
-		updateBuilder = updateBuilder.ClearAppliedAt()
-	}
-	if application.ProrationFactor != nil {
-		updateBuilder = updateBuilder.SetProrationFactor(*application.ProrationFactor)
-	} else {
-		updateBuilder = updateBuilder.ClearProrationFactor()
-	}
-	if application.FullPeriodAmount != nil {
-		updateBuilder = updateBuilder.SetFullPeriodAmount(*application.FullPeriodAmount)
-	} else {
-		updateBuilder = updateBuilder.ClearFullPeriodAmount()
-	}
-	if application.FailureReason != nil {
-		updateBuilder = updateBuilder.SetFailureReason(*application.FailureReason)
-	} else {
-		updateBuilder = updateBuilder.ClearFailureReason()
-	}
-	if application.NextRetryAt != nil {
-		updateBuilder = updateBuilder.SetNextRetryAt(*application.NextRetryAt)
-	} else {
-		updateBuilder = updateBuilder.ClearNextRetryAt()
-	}
-
-	_, err := updateBuilder.Save(ctx)
+		SetUpdatedBy(types.GetUserID(ctx)).
+		Save(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
@@ -467,14 +432,14 @@ func (o CreditGrantApplicationQueryOptions) GetFieldName(field string) string {
 		return creditgrantapplication.FieldScheduledFor
 	case "applied_at":
 		return creditgrantapplication.FieldAppliedAt
-	case "billing_period_start":
-		return creditgrantapplication.FieldBillingPeriodStart
-	case "billing_period_end":
-		return creditgrantapplication.FieldBillingPeriodEnd
+	case "period_start":
+		return creditgrantapplication.FieldPeriodStart
+	case "period_end":
+		return creditgrantapplication.FieldPeriodEnd
 	case "application_status":
 		return creditgrantapplication.FieldApplicationStatus
-	case "amount_applied":
-		return creditgrantapplication.FieldAmountApplied
+	case "credits_applied":
+		return creditgrantapplication.FieldCreditsApplied
 	case "currency":
 		return creditgrantapplication.FieldCurrency
 	case "credit_grant_id":
@@ -528,6 +493,84 @@ func (o CreditGrantApplicationQueryOptions) applyEntityQueryOptions(_ context.Co
 	}
 
 	return query, nil
+}
+
+func (r *creditGrantApplicationRepository) ExistsForPeriod(ctx context.Context, grantID, subscriptionID string, periodStart, periodEnd time.Time) (bool, error) {
+	client := r.client.Querier(ctx)
+
+	count, err := client.CreditGrantApplication.Query().
+		Where(
+			creditgrantapplication.CreditGrantID(grantID),
+			creditgrantapplication.SubscriptionID(subscriptionID),
+			creditgrantapplication.PeriodStart(periodStart),
+			creditgrantapplication.PeriodEnd(periodEnd),
+			creditgrantapplication.TenantID(types.GetTenantID(ctx)),
+			creditgrantapplication.ApplicationStatusNotIn(
+				string(types.ApplicationStatusCancelled),
+				string(types.ApplicationStatusFailed),
+			),
+		).
+		Count(ctx)
+
+	return count > 0, err
+}
+
+// This runs every 15 mins
+// NOTE: THIS IS ONLY FOR CRON JOB SHOULD NOT BE USED ELSEWHERE IN OTHER WORKFLOWS
+func (r *creditGrantApplicationRepository) FindAllScheduledApplications(ctx context.Context) ([]*domainCreditGrantApplication.CreditGrantApplication, error) {
+	span := cache.StartCacheSpan(ctx, "creditgrantapplication", "find_all_scheduled_applications", map[string]interface{}{})
+	defer cache.FinishSpan(span)
+
+	client := r.client.Querier(ctx)
+
+	applications, err := client.CreditGrantApplication.Query().
+		Where(
+			creditgrantapplication.ApplicationStatusIn(
+				string(types.ApplicationStatusScheduled),
+				string(types.ApplicationStatusPending),
+				string(types.ApplicationStatusFailed),
+			),
+			// TODO: Rethink this and have a better way to handle this
+			creditgrantapplication.ScheduledForLT(time.Now().UTC()),
+		).
+		All(ctx)
+
+	return domainCreditGrantApplication.FromEntList(applications), err
+}
+
+func (r *creditGrantApplicationRepository) FindByIdempotencyKey(ctx context.Context, idempotencyKey string) (*domainCreditGrantApplication.CreditGrantApplication, error) {
+	client := r.client.Querier(ctx)
+
+	// Start a span for this repository operation
+	span := StartRepositorySpan(ctx, "creditgrantapplication", "find_by_idempotency_key", map[string]interface{}{
+		"idempotency_key": idempotencyKey,
+	})
+	defer FinishSpan(span)
+
+	application, err := client.CreditGrantApplication.Query().
+		Where(
+			creditgrantapplication.IdempotencyKey(idempotencyKey),
+			creditgrantapplication.TenantID(types.GetTenantID(ctx)),
+			creditgrantapplication.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
+		First(ctx)
+
+	if err != nil {
+		SetSpanError(span, err)
+
+		if ent.IsNotFound(err) {
+			return nil, nil // Not found, return nil without error
+		}
+		return nil, ierr.WithError(err).
+			WithHint("Failed to find credit grant application by idempotency key").
+			WithReportableDetails(map[string]any{
+				"idempotency_key": idempotencyKey,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return domainCreditGrantApplication.FromEnt(application), nil
 }
 
 func (r *creditGrantApplicationRepository) SetCache(ctx context.Context, application *domainCreditGrantApplication.CreditGrantApplication) {

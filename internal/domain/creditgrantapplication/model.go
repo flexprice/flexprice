@@ -19,12 +19,12 @@ type CreditGrantApplication struct {
 	AppliedAt    *time.Time `db:"applied_at" json:"applied_at,omitempty"`
 
 	// Billing period context
-	BillingPeriodStart time.Time `db:"billing_period_start" json:"billing_period_start"`
-	BillingPeriodEnd   time.Time `db:"billing_period_end" json:"billing_period_end"`
+	PeriodStart time.Time `db:"period_start" json:"period_start"`
+	PeriodEnd   time.Time `db:"period_end" json:"period_end"`
 
 	// Application details
 	ApplicationStatus types.ApplicationStatus `db:"application_status" json:"application_status"`
-	AmountApplied     decimal.Decimal         `db:"amount_applied" json:"amount_applied"`
+	CreditsApplied    decimal.Decimal         `db:"credits_applied" json:"credits_applied"`
 	Currency          string                  `db:"currency" json:"currency"`
 
 	// Context
@@ -32,8 +32,6 @@ type CreditGrantApplication struct {
 	SubscriptionStatusAtApplication string `db:"subscription_status_at_application" json:"subscription_status_at_application"`
 
 	// Prorating
-	IsProrated       bool             `db:"is_prorated" json:"is_prorated"`
-	ProrationFactor  *decimal.Decimal `db:"proration_factor" json:"proration_factor,omitempty"`
 	FullPeriodAmount *decimal.Decimal `db:"full_period_amount" json:"full_period_amount,omitempty"`
 
 	// Retry handling
@@ -44,7 +42,8 @@ type CreditGrantApplication struct {
 	Metadata types.Metadata `db:"metadata" json:"metadata,omitempty"`
 
 	// EnvironmentID is the environment identifier for the credit grant application
-	EnvironmentID string `db:"environment_id" json:"environment_id"`
+	EnvironmentID  string `db:"environment_id" json:"environment_id"`
+	IdempotencyKey string `db:"idempotency_key" json:"idempotency_key"`
 
 	types.BaseModel
 }
@@ -57,16 +56,13 @@ func FromEnt(e *ent.CreditGrantApplication) *CreditGrantApplication {
 		SubscriptionID:                  e.SubscriptionID,
 		ScheduledFor:                    e.ScheduledFor,
 		AppliedAt:                       e.AppliedAt,
-		BillingPeriodStart:              e.BillingPeriodStart,
-		BillingPeriodEnd:                e.BillingPeriodEnd,
+		PeriodStart:                     e.PeriodStart,
+		PeriodEnd:                       e.PeriodEnd,
 		ApplicationStatus:               types.ApplicationStatus(e.ApplicationStatus),
-		AmountApplied:                   e.AmountApplied,
+		CreditsApplied:                  e.CreditsApplied,
 		Currency:                        e.Currency,
 		ApplicationReason:               e.ApplicationReason,
 		SubscriptionStatusAtApplication: e.SubscriptionStatusAtApplication,
-		IsProrated:                      e.IsProrated,
-		ProrationFactor:                 lo.ToPtr(e.ProrationFactor),
-		FullPeriodAmount:                lo.ToPtr(e.FullPeriodAmount),
 		RetryCount:                      e.RetryCount,
 		FailureReason:                   e.FailureReason,
 		NextRetryAt:                     e.NextRetryAt,
