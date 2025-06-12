@@ -3,6 +3,7 @@ package service
 import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/auth"
+	costsheet "github.com/flexprice/flexprice/internal/domain/costsheet"
 	"github.com/flexprice/flexprice/internal/domain/creditgrant"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
@@ -59,6 +60,7 @@ type ServiceParams struct {
 	EnvironmentRepo          environment.Repository
 	TaskRepo                 task.Repository
 	CreditGrantRepo          creditgrant.Repository
+	CostSheetRepo            costsheet.Repository
 
 	// Publishers
 	EventPublisher   publisher.EventPublisher
