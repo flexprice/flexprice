@@ -546,6 +546,41 @@ func (r *creditGrantApplicationRepository) FindAllScheduledApplications(ctx cont
 	return domainCreditGrantApplication.FromEntList(applications), err
 }
 
+func (r *creditGrantApplicationRepository) FindByIdempotencyKey(ctx context.Context, idempotencyKey string) (*domainCreditGrantApplication.CreditGrantApplication, error) {
+	client := r.client.Querier(ctx)
+
+	// Start a span for this repository operation
+	span := StartRepositorySpan(ctx, "creditgrantapplication", "find_by_idempotency_key", map[string]interface{}{
+		"idempotency_key": idempotencyKey,
+	})
+	defer FinishSpan(span)
+
+	application, err := client.CreditGrantApplication.Query().
+		Where(
+			creditgrantapplication.IdempotencyKey(idempotencyKey),
+			creditgrantapplication.TenantID(types.GetTenantID(ctx)),
+			creditgrantapplication.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
+		First(ctx)
+
+	if err != nil {
+		SetSpanError(span, err)
+
+		if ent.IsNotFound(err) {
+			return nil, nil // Not found, return nil without error
+		}
+		return nil, ierr.WithError(err).
+			WithHint("Failed to find credit grant application by idempotency key").
+			WithReportableDetails(map[string]any{
+				"idempotency_key": idempotencyKey,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return domainCreditGrantApplication.FromEnt(application), nil
+}
+
 func (r *creditGrantApplicationRepository) SetCache(ctx context.Context, application *domainCreditGrantApplication.CreditGrantApplication) {
 	span := cache.StartCacheSpan(ctx, "creditgrantapplication", "set", map[string]interface{}{
 		"application_id": application.ID,

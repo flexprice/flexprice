@@ -20,4 +20,7 @@ type Repository interface {
 
 	// Cronjobs (this runs every 15 mins)
 	FindAllScheduledApplications(ctx context.Context) ([]*CreditGrantApplication, error)
+
+	// FindByIdempotencyKey finds a credit grant application by idempotency key
+	FindByIdempotencyKey(ctx context.Context, idempotencyKey string) (*CreditGrantApplication, error)
 }
