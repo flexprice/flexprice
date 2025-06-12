@@ -503,7 +503,7 @@ func (o CreditGrantApplicationQueryOptions) applyEntityQueryOptions(_ context.Co
 	return query, nil
 }
 
-func (r *creditGrantApplicationRepository) ExistsForBillingPeriod(ctx context.Context, grantID, subscriptionID string, periodStart, periodEnd time.Time) (bool, error) {
+func (r *creditGrantApplicationRepository) ExistsForPeriod(ctx context.Context, grantID, subscriptionID string, periodStart, periodEnd time.Time) (bool, error) {
 	client := r.client.Querier(ctx)
 
 	count, err := client.CreditGrantApplication.Query().
@@ -523,66 +523,25 @@ func (r *creditGrantApplicationRepository) ExistsForBillingPeriod(ctx context.Co
 	return count > 0, err
 }
 
-func (r *creditGrantApplicationRepository) FindDeferredApplications(ctx context.Context, subscriptionID string) ([]*domainCreditGrantApplication.CreditGrantApplication, error) {
+func (r *creditGrantApplicationRepository) FindAllScheduledApplications(ctx context.Context) ([]*domainCreditGrantApplication.CreditGrantApplication, error) {
+	span := cache.StartCacheSpan(ctx, "creditgrantapplication", "find_all_scheduled_applications", map[string]interface{}{})
+	defer cache.FinishSpan(span)
+
 	client := r.client.Querier(ctx)
 
 	applications, err := client.CreditGrantApplication.Query().
 		Where(
-			creditgrantapplication.SubscriptionID(subscriptionID),
-			creditgrantapplication.ApplicationStatus(string(types.ApplicationStatusPending)),
-			creditgrantapplication.TenantID(types.GetTenantID(ctx)),
-		).
-		All(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return domainCreditGrantApplication.FromEntList(applications), nil
-}
-
-func (r *creditGrantApplicationRepository) FindFailedApplicationsForRetry(ctx context.Context, maxRetries int) ([]*domainCreditGrantApplication.CreditGrantApplication, error) {
-	client := r.client.Querier(ctx)
-	now := time.Now().UTC()
-
-	applications, err := client.CreditGrantApplication.Query().
-		Where(
-			creditgrantapplication.ApplicationStatus(string(types.ApplicationStatusFailed)),
-			creditgrantapplication.RetryCountLT(maxRetries),
-			creditgrantapplication.Or(
-				creditgrantapplication.NextRetryAtIsNil(),
-				creditgrantapplication.NextRetryAtLTE(now),
+			creditgrantapplication.ApplicationStatusIn(
+				string(types.ApplicationStatusScheduled),
+				string(types.ApplicationStatusPending),
+				string(types.ApplicationStatusFailed),
 			),
-			creditgrantapplication.TenantID(types.GetTenantID(ctx)),
+			// TODO: Rethink this and have a better way to handle this
+			creditgrantapplication.ScheduledForLT(time.Now().UTC()),
 		).
-		Limit(100). // Process in batches
 		All(ctx)
 
-	if err != nil {
-		return nil, err
-	}
-
-	return domainCreditGrantApplication.FromEntList(applications), nil
-}
-
-func (r *creditGrantApplicationRepository) CancelFutureApplications(ctx context.Context, subscriptionID string) error {
-	client := r.client.Querier(ctx)
-	now := time.Now().UTC()
-
-	_, err := client.CreditGrantApplication.Update().
-		Where(
-			creditgrantapplication.SubscriptionID(subscriptionID),
-			creditgrantapplication.ApplicationStatus(string(types.ApplicationStatusScheduled)),
-			creditgrantapplication.ScheduledForGT(now),
-			creditgrantapplication.TenantID(types.GetTenantID(ctx)),
-		).
-		SetApplicationStatus(string(types.ApplicationStatusCancelled)).
-		SetFailureReason("subscription_cancelled").
-		SetUpdatedAt(now).
-		SetUpdatedBy(types.GetUserID(ctx)).
-		Save(ctx)
-
-	return err
+	return domainCreditGrantApplication.FromEntList(applications), err
 }
 
 func (r *creditGrantApplicationRepository) SetCache(ctx context.Context, application *domainCreditGrantApplication.CreditGrantApplication) {
