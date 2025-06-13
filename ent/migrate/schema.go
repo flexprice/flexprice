@@ -264,6 +264,61 @@ var (
 			},
 		},
 	}
+	// EntityIntegrationMappingsColumns holds the columns for the "entity_integration_mappings" table.
+	EntityIntegrationMappingsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "entity_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "entity_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "provider_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "provider_entity_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+	}
+	// EntityIntegrationMappingsTable holds the schema information for the "entity_integration_mappings" table.
+	EntityIntegrationMappingsTable = &schema.Table{
+		Name:       "entity_integration_mappings",
+		Columns:    EntityIntegrationMappingsColumns,
+		PrimaryKey: []*schema.Column{EntityIntegrationMappingsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "entityintegrationmapping_tenant_id_environment_id_entity_id_entity_type_provider_type",
+				Unique:  true,
+				Columns: []*schema.Column{EntityIntegrationMappingsColumns[1], EntityIntegrationMappingsColumns[7], EntityIntegrationMappingsColumns[8], EntityIntegrationMappingsColumns[9], EntityIntegrationMappingsColumns[10]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published'",
+				},
+			},
+			{
+				Name:    "entityintegrationmapping_tenant_id_environment_id_provider_type_provider_entity_id",
+				Unique:  true,
+				Columns: []*schema.Column{EntityIntegrationMappingsColumns[1], EntityIntegrationMappingsColumns[7], EntityIntegrationMappingsColumns[10], EntityIntegrationMappingsColumns[11]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published'",
+				},
+			},
+			{
+				Name:    "entityintegrationmapping_tenant_id_environment_id_entity_type_status",
+				Unique:  false,
+				Columns: []*schema.Column{EntityIntegrationMappingsColumns[1], EntityIntegrationMappingsColumns[7], EntityIntegrationMappingsColumns[9], EntityIntegrationMappingsColumns[2]},
+			},
+			{
+				Name:    "entityintegrationmapping_tenant_id_environment_id_provider_type_status",
+				Unique:  false,
+				Columns: []*schema.Column{EntityIntegrationMappingsColumns[1], EntityIntegrationMappingsColumns[7], EntityIntegrationMappingsColumns[10], EntityIntegrationMappingsColumns[2]},
+			},
+			{
+				Name:    "entityintegrationmapping_tenant_id_environment_id_status",
+				Unique:  false,
+				Columns: []*schema.Column{EntityIntegrationMappingsColumns[1], EntityIntegrationMappingsColumns[7], EntityIntegrationMappingsColumns[2]},
+			},
+		},
+	}
 	// EnvironmentsColumns holds the columns for the "environments" table.
 	EnvironmentsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -571,6 +626,56 @@ var (
 			},
 		},
 	}
+	// MeterProviderMappingsColumns holds the columns for the "meter_provider_mappings" table.
+	MeterProviderMappingsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "meter_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "provider_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "provider_meter_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "sync_enabled", Type: field.TypeBool, Default: true},
+		{Name: "configuration", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+	}
+	// MeterProviderMappingsTable holds the schema information for the "meter_provider_mappings" table.
+	MeterProviderMappingsTable = &schema.Table{
+		Name:       "meter_provider_mappings",
+		Columns:    MeterProviderMappingsColumns,
+		PrimaryKey: []*schema.Column{MeterProviderMappingsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "meterprovidermapping_tenant_id_environment_id_meter_id_provider_type",
+				Unique:  true,
+				Columns: []*schema.Column{MeterProviderMappingsColumns[1], MeterProviderMappingsColumns[7], MeterProviderMappingsColumns[8], MeterProviderMappingsColumns[9]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published'",
+				},
+			},
+			{
+				Name:    "meterprovidermapping_tenant_id_environment_id_provider_type_provider_meter_id",
+				Unique:  true,
+				Columns: []*schema.Column{MeterProviderMappingsColumns[1], MeterProviderMappingsColumns[7], MeterProviderMappingsColumns[9], MeterProviderMappingsColumns[10]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published'",
+				},
+			},
+			{
+				Name:    "meterprovidermapping_tenant_id_environment_id_sync_enabled_status",
+				Unique:  false,
+				Columns: []*schema.Column{MeterProviderMappingsColumns[1], MeterProviderMappingsColumns[7], MeterProviderMappingsColumns[11], MeterProviderMappingsColumns[2]},
+			},
+			{
+				Name:    "meterprovidermapping_tenant_id_environment_id_status",
+				Unique:  false,
+				Columns: []*schema.Column{MeterProviderMappingsColumns[1], MeterProviderMappingsColumns[7], MeterProviderMappingsColumns[2]},
+			},
+		},
+	}
 	// PaymentsColumns holds the columns for the "payments" table.
 	PaymentsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -801,6 +906,110 @@ var (
 				Name:    "secret_tenant_id_environment_id_provider_status",
 				Unique:  false,
 				Columns: []*schema.Column{SecretsColumns[1], SecretsColumns[7], SecretsColumns[10], SecretsColumns[2]},
+			},
+		},
+	}
+	// StripeSyncBatchesColumns holds the columns for the "stripe_sync_batches" table.
+	StripeSyncBatchesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "entity_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "entity_type", Type: field.TypeString, Default: "customer", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "meter_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "event_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(100)"}},
+		{Name: "aggregated_quantity", Type: field.TypeFloat64, Default: 0},
+		{Name: "event_count", Type: field.TypeInt, Default: 0},
+		{Name: "stripe_event_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "sync_status", Type: field.TypeString, Default: "pending", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "retry_count", Type: field.TypeInt, Default: 0},
+		{Name: "error_message", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "window_start", Type: field.TypeTime},
+		{Name: "window_end", Type: field.TypeTime},
+		{Name: "synced_at", Type: field.TypeTime, Nullable: true},
+	}
+	// StripeSyncBatchesTable holds the schema information for the "stripe_sync_batches" table.
+	StripeSyncBatchesTable = &schema.Table{
+		Name:       "stripe_sync_batches",
+		Columns:    StripeSyncBatchesColumns,
+		PrimaryKey: []*schema.Column{StripeSyncBatchesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "stripesyncbatch_tenant_id_environment_id_entity_id_entity_type_meter_id_window_start_window_end",
+				Unique:  true,
+				Columns: []*schema.Column{StripeSyncBatchesColumns[1], StripeSyncBatchesColumns[7], StripeSyncBatchesColumns[8], StripeSyncBatchesColumns[9], StripeSyncBatchesColumns[10], StripeSyncBatchesColumns[18], StripeSyncBatchesColumns[19]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published'",
+				},
+			},
+			{
+				Name:    "stripesyncbatch_tenant_id_environment_id_sync_status_status",
+				Unique:  false,
+				Columns: []*schema.Column{StripeSyncBatchesColumns[1], StripeSyncBatchesColumns[7], StripeSyncBatchesColumns[15], StripeSyncBatchesColumns[2]},
+			},
+			{
+				Name:    "stripesyncbatch_tenant_id_environment_id_sync_status_retry_count_status",
+				Unique:  false,
+				Columns: []*schema.Column{StripeSyncBatchesColumns[1], StripeSyncBatchesColumns[7], StripeSyncBatchesColumns[15], StripeSyncBatchesColumns[16], StripeSyncBatchesColumns[2]},
+			},
+			{
+				Name:    "stripesyncbatch_tenant_id_environment_id_window_start",
+				Unique:  false,
+				Columns: []*schema.Column{StripeSyncBatchesColumns[1], StripeSyncBatchesColumns[7], StripeSyncBatchesColumns[18]},
+			},
+			{
+				Name:    "stripesyncbatch_tenant_id_environment_id_synced_at",
+				Unique:  false,
+				Columns: []*schema.Column{StripeSyncBatchesColumns[1], StripeSyncBatchesColumns[7], StripeSyncBatchesColumns[20]},
+			},
+			{
+				Name:    "stripesyncbatch_tenant_id_environment_id_stripe_event_id",
+				Unique:  false,
+				Columns: []*schema.Column{StripeSyncBatchesColumns[1], StripeSyncBatchesColumns[7], StripeSyncBatchesColumns[14]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "stripe_event_id IS NOT NULL AND status = 'published'",
+				},
+			},
+		},
+	}
+	// StripeTenantConfigsColumns holds the columns for the "stripe_tenant_configs" table.
+	StripeTenantConfigsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "api_key_encrypted", Type: field.TypeString, Size: 2147483647},
+		{Name: "sync_enabled", Type: field.TypeBool, Default: true},
+		{Name: "aggregation_window_minutes", Type: field.TypeInt, Default: 60},
+		{Name: "webhook_config", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+	}
+	// StripeTenantConfigsTable holds the schema information for the "stripe_tenant_configs" table.
+	StripeTenantConfigsTable = &schema.Table{
+		Name:       "stripe_tenant_configs",
+		Columns:    StripeTenantConfigsColumns,
+		PrimaryKey: []*schema.Column{StripeTenantConfigsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "stripetenantconfig_tenant_id_environment_id",
+				Unique:  true,
+				Columns: []*schema.Column{StripeTenantConfigsColumns[1], StripeTenantConfigsColumns[7]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published'",
+				},
+			},
+			{
+				Name:    "stripetenantconfig_tenant_id_environment_id_sync_enabled_status",
+				Unique:  false,
+				Columns: []*schema.Column{StripeTenantConfigsColumns[1], StripeTenantConfigsColumns[7], StripeTenantConfigsColumns[9], StripeTenantConfigsColumns[2]},
 			},
 		},
 	}
@@ -1322,17 +1531,21 @@ var (
 		CreditGrantApplicationsTable,
 		CustomersTable,
 		EntitlementsTable,
+		EntityIntegrationMappingsTable,
 		EnvironmentsTable,
 		FeaturesTable,
 		InvoicesTable,
 		InvoiceLineItemsTable,
 		InvoiceSequencesTable,
 		MetersTable,
+		MeterProviderMappingsTable,
 		PaymentsTable,
 		PaymentAttemptsTable,
 		PlansTable,
 		PricesTable,
 		SecretsTable,
+		StripeSyncBatchesTable,
+		StripeTenantConfigsTable,
 		SubscriptionsTable,
 		SubscriptionLineItemsTable,
 		SubscriptionPausesTable,

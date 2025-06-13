@@ -21,17 +21,21 @@ import (
 	"github.com/flexprice/flexprice/ent/creditgrantapplication"
 	"github.com/flexprice/flexprice/ent/customer"
 	"github.com/flexprice/flexprice/ent/entitlement"
+	"github.com/flexprice/flexprice/ent/entityintegrationmapping"
 	"github.com/flexprice/flexprice/ent/environment"
 	"github.com/flexprice/flexprice/ent/feature"
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/ent/invoicesequence"
 	"github.com/flexprice/flexprice/ent/meter"
+	"github.com/flexprice/flexprice/ent/meterprovidermapping"
 	"github.com/flexprice/flexprice/ent/payment"
 	"github.com/flexprice/flexprice/ent/paymentattempt"
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/secret"
+	"github.com/flexprice/flexprice/ent/stripesyncbatch"
+	"github.com/flexprice/flexprice/ent/stripetenantconfig"
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
@@ -63,6 +67,8 @@ type Client struct {
 	Customer *CustomerClient
 	// Entitlement is the client for interacting with the Entitlement builders.
 	Entitlement *EntitlementClient
+	// EntityIntegrationMapping is the client for interacting with the EntityIntegrationMapping builders.
+	EntityIntegrationMapping *EntityIntegrationMappingClient
 	// Environment is the client for interacting with the Environment builders.
 	Environment *EnvironmentClient
 	// Feature is the client for interacting with the Feature builders.
@@ -75,6 +81,8 @@ type Client struct {
 	InvoiceSequence *InvoiceSequenceClient
 	// Meter is the client for interacting with the Meter builders.
 	Meter *MeterClient
+	// MeterProviderMapping is the client for interacting with the MeterProviderMapping builders.
+	MeterProviderMapping *MeterProviderMappingClient
 	// Payment is the client for interacting with the Payment builders.
 	Payment *PaymentClient
 	// PaymentAttempt is the client for interacting with the PaymentAttempt builders.
@@ -85,6 +93,10 @@ type Client struct {
 	Price *PriceClient
 	// Secret is the client for interacting with the Secret builders.
 	Secret *SecretClient
+	// StripeSyncBatch is the client for interacting with the StripeSyncBatch builders.
+	StripeSyncBatch *StripeSyncBatchClient
+	// StripeTenantConfig is the client for interacting with the StripeTenantConfig builders.
+	StripeTenantConfig *StripeTenantConfigClient
 	// Subscription is the client for interacting with the Subscription builders.
 	Subscription *SubscriptionClient
 	// SubscriptionLineItem is the client for interacting with the SubscriptionLineItem builders.
@@ -122,17 +134,21 @@ func (c *Client) init() {
 	c.CreditGrantApplication = NewCreditGrantApplicationClient(c.config)
 	c.Customer = NewCustomerClient(c.config)
 	c.Entitlement = NewEntitlementClient(c.config)
+	c.EntityIntegrationMapping = NewEntityIntegrationMappingClient(c.config)
 	c.Environment = NewEnvironmentClient(c.config)
 	c.Feature = NewFeatureClient(c.config)
 	c.Invoice = NewInvoiceClient(c.config)
 	c.InvoiceLineItem = NewInvoiceLineItemClient(c.config)
 	c.InvoiceSequence = NewInvoiceSequenceClient(c.config)
 	c.Meter = NewMeterClient(c.config)
+	c.MeterProviderMapping = NewMeterProviderMappingClient(c.config)
 	c.Payment = NewPaymentClient(c.config)
 	c.PaymentAttempt = NewPaymentAttemptClient(c.config)
 	c.Plan = NewPlanClient(c.config)
 	c.Price = NewPriceClient(c.config)
 	c.Secret = NewSecretClient(c.config)
+	c.StripeSyncBatch = NewStripeSyncBatchClient(c.config)
+	c.StripeTenantConfig = NewStripeTenantConfigClient(c.config)
 	c.Subscription = NewSubscriptionClient(c.config)
 	c.SubscriptionLineItem = NewSubscriptionLineItemClient(c.config)
 	c.SubscriptionPause = NewSubscriptionPauseClient(c.config)
@@ -241,17 +257,21 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		CreditGrantApplication:    NewCreditGrantApplicationClient(cfg),
 		Customer:                  NewCustomerClient(cfg),
 		Entitlement:               NewEntitlementClient(cfg),
+		EntityIntegrationMapping:  NewEntityIntegrationMappingClient(cfg),
 		Environment:               NewEnvironmentClient(cfg),
 		Feature:                   NewFeatureClient(cfg),
 		Invoice:                   NewInvoiceClient(cfg),
 		InvoiceLineItem:           NewInvoiceLineItemClient(cfg),
 		InvoiceSequence:           NewInvoiceSequenceClient(cfg),
 		Meter:                     NewMeterClient(cfg),
+		MeterProviderMapping:      NewMeterProviderMappingClient(cfg),
 		Payment:                   NewPaymentClient(cfg),
 		PaymentAttempt:            NewPaymentAttemptClient(cfg),
 		Plan:                      NewPlanClient(cfg),
 		Price:                     NewPriceClient(cfg),
 		Secret:                    NewSecretClient(cfg),
+		StripeSyncBatch:           NewStripeSyncBatchClient(cfg),
+		StripeTenantConfig:        NewStripeTenantConfigClient(cfg),
 		Subscription:              NewSubscriptionClient(cfg),
 		SubscriptionLineItem:      NewSubscriptionLineItemClient(cfg),
 		SubscriptionPause:         NewSubscriptionPauseClient(cfg),
@@ -287,17 +307,21 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		CreditGrantApplication:    NewCreditGrantApplicationClient(cfg),
 		Customer:                  NewCustomerClient(cfg),
 		Entitlement:               NewEntitlementClient(cfg),
+		EntityIntegrationMapping:  NewEntityIntegrationMappingClient(cfg),
 		Environment:               NewEnvironmentClient(cfg),
 		Feature:                   NewFeatureClient(cfg),
 		Invoice:                   NewInvoiceClient(cfg),
 		InvoiceLineItem:           NewInvoiceLineItemClient(cfg),
 		InvoiceSequence:           NewInvoiceSequenceClient(cfg),
 		Meter:                     NewMeterClient(cfg),
+		MeterProviderMapping:      NewMeterProviderMappingClient(cfg),
 		Payment:                   NewPaymentClient(cfg),
 		PaymentAttempt:            NewPaymentAttemptClient(cfg),
 		Plan:                      NewPlanClient(cfg),
 		Price:                     NewPriceClient(cfg),
 		Secret:                    NewSecretClient(cfg),
+		StripeSyncBatch:           NewStripeSyncBatchClient(cfg),
+		StripeTenantConfig:        NewStripeTenantConfigClient(cfg),
 		Subscription:              NewSubscriptionClient(cfg),
 		SubscriptionLineItem:      NewSubscriptionLineItemClient(cfg),
 		SubscriptionPause:         NewSubscriptionPauseClient(cfg),
@@ -338,11 +362,12 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.Auth, c.BillingSequence, c.CreditGrant, c.CreditGrantApplication, c.Customer,
-		c.Entitlement, c.Environment, c.Feature, c.Invoice, c.InvoiceLineItem,
-		c.InvoiceSequence, c.Meter, c.Payment, c.PaymentAttempt, c.Plan, c.Price,
-		c.Secret, c.Subscription, c.SubscriptionLineItem, c.SubscriptionPause,
-		c.SubscriptionSchedule, c.SubscriptionSchedulePhase, c.Task, c.Tenant, c.User,
-		c.Wallet, c.WalletTransaction,
+		c.Entitlement, c.EntityIntegrationMapping, c.Environment, c.Feature, c.Invoice,
+		c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.MeterProviderMapping,
+		c.Payment, c.PaymentAttempt, c.Plan, c.Price, c.Secret, c.StripeSyncBatch,
+		c.StripeTenantConfig, c.Subscription, c.SubscriptionLineItem,
+		c.SubscriptionPause, c.SubscriptionSchedule, c.SubscriptionSchedulePhase,
+		c.Task, c.Tenant, c.User, c.Wallet, c.WalletTransaction,
 	} {
 		n.Use(hooks...)
 	}
@@ -353,11 +378,12 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.Auth, c.BillingSequence, c.CreditGrant, c.CreditGrantApplication, c.Customer,
-		c.Entitlement, c.Environment, c.Feature, c.Invoice, c.InvoiceLineItem,
-		c.InvoiceSequence, c.Meter, c.Payment, c.PaymentAttempt, c.Plan, c.Price,
-		c.Secret, c.Subscription, c.SubscriptionLineItem, c.SubscriptionPause,
-		c.SubscriptionSchedule, c.SubscriptionSchedulePhase, c.Task, c.Tenant, c.User,
-		c.Wallet, c.WalletTransaction,
+		c.Entitlement, c.EntityIntegrationMapping, c.Environment, c.Feature, c.Invoice,
+		c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.MeterProviderMapping,
+		c.Payment, c.PaymentAttempt, c.Plan, c.Price, c.Secret, c.StripeSyncBatch,
+		c.StripeTenantConfig, c.Subscription, c.SubscriptionLineItem,
+		c.SubscriptionPause, c.SubscriptionSchedule, c.SubscriptionSchedulePhase,
+		c.Task, c.Tenant, c.User, c.Wallet, c.WalletTransaction,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -378,6 +404,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Customer.mutate(ctx, m)
 	case *EntitlementMutation:
 		return c.Entitlement.mutate(ctx, m)
+	case *EntityIntegrationMappingMutation:
+		return c.EntityIntegrationMapping.mutate(ctx, m)
 	case *EnvironmentMutation:
 		return c.Environment.mutate(ctx, m)
 	case *FeatureMutation:
@@ -390,6 +418,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.InvoiceSequence.mutate(ctx, m)
 	case *MeterMutation:
 		return c.Meter.mutate(ctx, m)
+	case *MeterProviderMappingMutation:
+		return c.MeterProviderMapping.mutate(ctx, m)
 	case *PaymentMutation:
 		return c.Payment.mutate(ctx, m)
 	case *PaymentAttemptMutation:
@@ -400,6 +430,10 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Price.mutate(ctx, m)
 	case *SecretMutation:
 		return c.Secret.mutate(ctx, m)
+	case *StripeSyncBatchMutation:
+		return c.StripeSyncBatch.mutate(ctx, m)
+	case *StripeTenantConfigMutation:
+		return c.StripeTenantConfig.mutate(ctx, m)
 	case *SubscriptionMutation:
 		return c.Subscription.mutate(ctx, m)
 	case *SubscriptionLineItemMutation:
@@ -1271,6 +1305,139 @@ func (c *EntitlementClient) mutate(ctx context.Context, m *EntitlementMutation) 
 	}
 }
 
+// EntityIntegrationMappingClient is a client for the EntityIntegrationMapping schema.
+type EntityIntegrationMappingClient struct {
+	config
+}
+
+// NewEntityIntegrationMappingClient returns a client for the EntityIntegrationMapping from the given config.
+func NewEntityIntegrationMappingClient(c config) *EntityIntegrationMappingClient {
+	return &EntityIntegrationMappingClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `entityintegrationmapping.Hooks(f(g(h())))`.
+func (c *EntityIntegrationMappingClient) Use(hooks ...Hook) {
+	c.hooks.EntityIntegrationMapping = append(c.hooks.EntityIntegrationMapping, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `entityintegrationmapping.Intercept(f(g(h())))`.
+func (c *EntityIntegrationMappingClient) Intercept(interceptors ...Interceptor) {
+	c.inters.EntityIntegrationMapping = append(c.inters.EntityIntegrationMapping, interceptors...)
+}
+
+// Create returns a builder for creating a EntityIntegrationMapping entity.
+func (c *EntityIntegrationMappingClient) Create() *EntityIntegrationMappingCreate {
+	mutation := newEntityIntegrationMappingMutation(c.config, OpCreate)
+	return &EntityIntegrationMappingCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of EntityIntegrationMapping entities.
+func (c *EntityIntegrationMappingClient) CreateBulk(builders ...*EntityIntegrationMappingCreate) *EntityIntegrationMappingCreateBulk {
+	return &EntityIntegrationMappingCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *EntityIntegrationMappingClient) MapCreateBulk(slice any, setFunc func(*EntityIntegrationMappingCreate, int)) *EntityIntegrationMappingCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &EntityIntegrationMappingCreateBulk{err: fmt.Errorf("calling to EntityIntegrationMappingClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*EntityIntegrationMappingCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &EntityIntegrationMappingCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for EntityIntegrationMapping.
+func (c *EntityIntegrationMappingClient) Update() *EntityIntegrationMappingUpdate {
+	mutation := newEntityIntegrationMappingMutation(c.config, OpUpdate)
+	return &EntityIntegrationMappingUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *EntityIntegrationMappingClient) UpdateOne(eim *EntityIntegrationMapping) *EntityIntegrationMappingUpdateOne {
+	mutation := newEntityIntegrationMappingMutation(c.config, OpUpdateOne, withEntityIntegrationMapping(eim))
+	return &EntityIntegrationMappingUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *EntityIntegrationMappingClient) UpdateOneID(id string) *EntityIntegrationMappingUpdateOne {
+	mutation := newEntityIntegrationMappingMutation(c.config, OpUpdateOne, withEntityIntegrationMappingID(id))
+	return &EntityIntegrationMappingUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for EntityIntegrationMapping.
+func (c *EntityIntegrationMappingClient) Delete() *EntityIntegrationMappingDelete {
+	mutation := newEntityIntegrationMappingMutation(c.config, OpDelete)
+	return &EntityIntegrationMappingDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *EntityIntegrationMappingClient) DeleteOne(eim *EntityIntegrationMapping) *EntityIntegrationMappingDeleteOne {
+	return c.DeleteOneID(eim.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *EntityIntegrationMappingClient) DeleteOneID(id string) *EntityIntegrationMappingDeleteOne {
+	builder := c.Delete().Where(entityintegrationmapping.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &EntityIntegrationMappingDeleteOne{builder}
+}
+
+// Query returns a query builder for EntityIntegrationMapping.
+func (c *EntityIntegrationMappingClient) Query() *EntityIntegrationMappingQuery {
+	return &EntityIntegrationMappingQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeEntityIntegrationMapping},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a EntityIntegrationMapping entity by its id.
+func (c *EntityIntegrationMappingClient) Get(ctx context.Context, id string) (*EntityIntegrationMapping, error) {
+	return c.Query().Where(entityintegrationmapping.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *EntityIntegrationMappingClient) GetX(ctx context.Context, id string) *EntityIntegrationMapping {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *EntityIntegrationMappingClient) Hooks() []Hook {
+	return c.hooks.EntityIntegrationMapping
+}
+
+// Interceptors returns the client interceptors.
+func (c *EntityIntegrationMappingClient) Interceptors() []Interceptor {
+	return c.inters.EntityIntegrationMapping
+}
+
+func (c *EntityIntegrationMappingClient) mutate(ctx context.Context, m *EntityIntegrationMappingMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&EntityIntegrationMappingCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&EntityIntegrationMappingUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&EntityIntegrationMappingUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&EntityIntegrationMappingDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown EntityIntegrationMapping mutation op: %q", m.Op())
+	}
+}
+
 // EnvironmentClient is a client for the Environment schema.
 type EnvironmentClient struct {
 	config
@@ -2101,6 +2268,139 @@ func (c *MeterClient) mutate(ctx context.Context, m *MeterMutation) (Value, erro
 	}
 }
 
+// MeterProviderMappingClient is a client for the MeterProviderMapping schema.
+type MeterProviderMappingClient struct {
+	config
+}
+
+// NewMeterProviderMappingClient returns a client for the MeterProviderMapping from the given config.
+func NewMeterProviderMappingClient(c config) *MeterProviderMappingClient {
+	return &MeterProviderMappingClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `meterprovidermapping.Hooks(f(g(h())))`.
+func (c *MeterProviderMappingClient) Use(hooks ...Hook) {
+	c.hooks.MeterProviderMapping = append(c.hooks.MeterProviderMapping, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `meterprovidermapping.Intercept(f(g(h())))`.
+func (c *MeterProviderMappingClient) Intercept(interceptors ...Interceptor) {
+	c.inters.MeterProviderMapping = append(c.inters.MeterProviderMapping, interceptors...)
+}
+
+// Create returns a builder for creating a MeterProviderMapping entity.
+func (c *MeterProviderMappingClient) Create() *MeterProviderMappingCreate {
+	mutation := newMeterProviderMappingMutation(c.config, OpCreate)
+	return &MeterProviderMappingCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of MeterProviderMapping entities.
+func (c *MeterProviderMappingClient) CreateBulk(builders ...*MeterProviderMappingCreate) *MeterProviderMappingCreateBulk {
+	return &MeterProviderMappingCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *MeterProviderMappingClient) MapCreateBulk(slice any, setFunc func(*MeterProviderMappingCreate, int)) *MeterProviderMappingCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &MeterProviderMappingCreateBulk{err: fmt.Errorf("calling to MeterProviderMappingClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*MeterProviderMappingCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &MeterProviderMappingCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for MeterProviderMapping.
+func (c *MeterProviderMappingClient) Update() *MeterProviderMappingUpdate {
+	mutation := newMeterProviderMappingMutation(c.config, OpUpdate)
+	return &MeterProviderMappingUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *MeterProviderMappingClient) UpdateOne(mpm *MeterProviderMapping) *MeterProviderMappingUpdateOne {
+	mutation := newMeterProviderMappingMutation(c.config, OpUpdateOne, withMeterProviderMapping(mpm))
+	return &MeterProviderMappingUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *MeterProviderMappingClient) UpdateOneID(id string) *MeterProviderMappingUpdateOne {
+	mutation := newMeterProviderMappingMutation(c.config, OpUpdateOne, withMeterProviderMappingID(id))
+	return &MeterProviderMappingUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for MeterProviderMapping.
+func (c *MeterProviderMappingClient) Delete() *MeterProviderMappingDelete {
+	mutation := newMeterProviderMappingMutation(c.config, OpDelete)
+	return &MeterProviderMappingDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *MeterProviderMappingClient) DeleteOne(mpm *MeterProviderMapping) *MeterProviderMappingDeleteOne {
+	return c.DeleteOneID(mpm.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *MeterProviderMappingClient) DeleteOneID(id string) *MeterProviderMappingDeleteOne {
+	builder := c.Delete().Where(meterprovidermapping.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &MeterProviderMappingDeleteOne{builder}
+}
+
+// Query returns a query builder for MeterProviderMapping.
+func (c *MeterProviderMappingClient) Query() *MeterProviderMappingQuery {
+	return &MeterProviderMappingQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeMeterProviderMapping},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a MeterProviderMapping entity by its id.
+func (c *MeterProviderMappingClient) Get(ctx context.Context, id string) (*MeterProviderMapping, error) {
+	return c.Query().Where(meterprovidermapping.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *MeterProviderMappingClient) GetX(ctx context.Context, id string) *MeterProviderMapping {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *MeterProviderMappingClient) Hooks() []Hook {
+	return c.hooks.MeterProviderMapping
+}
+
+// Interceptors returns the client interceptors.
+func (c *MeterProviderMappingClient) Interceptors() []Interceptor {
+	return c.inters.MeterProviderMapping
+}
+
+func (c *MeterProviderMappingClient) mutate(ctx context.Context, m *MeterProviderMappingMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&MeterProviderMappingCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&MeterProviderMappingUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&MeterProviderMappingUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&MeterProviderMappingDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown MeterProviderMapping mutation op: %q", m.Op())
+	}
+}
+
 // PaymentClient is a client for the Payment schema.
 type PaymentClient struct {
 	config
@@ -2827,6 +3127,272 @@ func (c *SecretClient) mutate(ctx context.Context, m *SecretMutation) (Value, er
 		return (&SecretDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Secret mutation op: %q", m.Op())
+	}
+}
+
+// StripeSyncBatchClient is a client for the StripeSyncBatch schema.
+type StripeSyncBatchClient struct {
+	config
+}
+
+// NewStripeSyncBatchClient returns a client for the StripeSyncBatch from the given config.
+func NewStripeSyncBatchClient(c config) *StripeSyncBatchClient {
+	return &StripeSyncBatchClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `stripesyncbatch.Hooks(f(g(h())))`.
+func (c *StripeSyncBatchClient) Use(hooks ...Hook) {
+	c.hooks.StripeSyncBatch = append(c.hooks.StripeSyncBatch, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `stripesyncbatch.Intercept(f(g(h())))`.
+func (c *StripeSyncBatchClient) Intercept(interceptors ...Interceptor) {
+	c.inters.StripeSyncBatch = append(c.inters.StripeSyncBatch, interceptors...)
+}
+
+// Create returns a builder for creating a StripeSyncBatch entity.
+func (c *StripeSyncBatchClient) Create() *StripeSyncBatchCreate {
+	mutation := newStripeSyncBatchMutation(c.config, OpCreate)
+	return &StripeSyncBatchCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of StripeSyncBatch entities.
+func (c *StripeSyncBatchClient) CreateBulk(builders ...*StripeSyncBatchCreate) *StripeSyncBatchCreateBulk {
+	return &StripeSyncBatchCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *StripeSyncBatchClient) MapCreateBulk(slice any, setFunc func(*StripeSyncBatchCreate, int)) *StripeSyncBatchCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &StripeSyncBatchCreateBulk{err: fmt.Errorf("calling to StripeSyncBatchClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*StripeSyncBatchCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &StripeSyncBatchCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for StripeSyncBatch.
+func (c *StripeSyncBatchClient) Update() *StripeSyncBatchUpdate {
+	mutation := newStripeSyncBatchMutation(c.config, OpUpdate)
+	return &StripeSyncBatchUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *StripeSyncBatchClient) UpdateOne(ssb *StripeSyncBatch) *StripeSyncBatchUpdateOne {
+	mutation := newStripeSyncBatchMutation(c.config, OpUpdateOne, withStripeSyncBatch(ssb))
+	return &StripeSyncBatchUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *StripeSyncBatchClient) UpdateOneID(id string) *StripeSyncBatchUpdateOne {
+	mutation := newStripeSyncBatchMutation(c.config, OpUpdateOne, withStripeSyncBatchID(id))
+	return &StripeSyncBatchUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for StripeSyncBatch.
+func (c *StripeSyncBatchClient) Delete() *StripeSyncBatchDelete {
+	mutation := newStripeSyncBatchMutation(c.config, OpDelete)
+	return &StripeSyncBatchDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *StripeSyncBatchClient) DeleteOne(ssb *StripeSyncBatch) *StripeSyncBatchDeleteOne {
+	return c.DeleteOneID(ssb.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *StripeSyncBatchClient) DeleteOneID(id string) *StripeSyncBatchDeleteOne {
+	builder := c.Delete().Where(stripesyncbatch.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &StripeSyncBatchDeleteOne{builder}
+}
+
+// Query returns a query builder for StripeSyncBatch.
+func (c *StripeSyncBatchClient) Query() *StripeSyncBatchQuery {
+	return &StripeSyncBatchQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeStripeSyncBatch},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a StripeSyncBatch entity by its id.
+func (c *StripeSyncBatchClient) Get(ctx context.Context, id string) (*StripeSyncBatch, error) {
+	return c.Query().Where(stripesyncbatch.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *StripeSyncBatchClient) GetX(ctx context.Context, id string) *StripeSyncBatch {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *StripeSyncBatchClient) Hooks() []Hook {
+	return c.hooks.StripeSyncBatch
+}
+
+// Interceptors returns the client interceptors.
+func (c *StripeSyncBatchClient) Interceptors() []Interceptor {
+	return c.inters.StripeSyncBatch
+}
+
+func (c *StripeSyncBatchClient) mutate(ctx context.Context, m *StripeSyncBatchMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&StripeSyncBatchCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&StripeSyncBatchUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&StripeSyncBatchUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&StripeSyncBatchDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown StripeSyncBatch mutation op: %q", m.Op())
+	}
+}
+
+// StripeTenantConfigClient is a client for the StripeTenantConfig schema.
+type StripeTenantConfigClient struct {
+	config
+}
+
+// NewStripeTenantConfigClient returns a client for the StripeTenantConfig from the given config.
+func NewStripeTenantConfigClient(c config) *StripeTenantConfigClient {
+	return &StripeTenantConfigClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `stripetenantconfig.Hooks(f(g(h())))`.
+func (c *StripeTenantConfigClient) Use(hooks ...Hook) {
+	c.hooks.StripeTenantConfig = append(c.hooks.StripeTenantConfig, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `stripetenantconfig.Intercept(f(g(h())))`.
+func (c *StripeTenantConfigClient) Intercept(interceptors ...Interceptor) {
+	c.inters.StripeTenantConfig = append(c.inters.StripeTenantConfig, interceptors...)
+}
+
+// Create returns a builder for creating a StripeTenantConfig entity.
+func (c *StripeTenantConfigClient) Create() *StripeTenantConfigCreate {
+	mutation := newStripeTenantConfigMutation(c.config, OpCreate)
+	return &StripeTenantConfigCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of StripeTenantConfig entities.
+func (c *StripeTenantConfigClient) CreateBulk(builders ...*StripeTenantConfigCreate) *StripeTenantConfigCreateBulk {
+	return &StripeTenantConfigCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *StripeTenantConfigClient) MapCreateBulk(slice any, setFunc func(*StripeTenantConfigCreate, int)) *StripeTenantConfigCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &StripeTenantConfigCreateBulk{err: fmt.Errorf("calling to StripeTenantConfigClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*StripeTenantConfigCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &StripeTenantConfigCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for StripeTenantConfig.
+func (c *StripeTenantConfigClient) Update() *StripeTenantConfigUpdate {
+	mutation := newStripeTenantConfigMutation(c.config, OpUpdate)
+	return &StripeTenantConfigUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *StripeTenantConfigClient) UpdateOne(stc *StripeTenantConfig) *StripeTenantConfigUpdateOne {
+	mutation := newStripeTenantConfigMutation(c.config, OpUpdateOne, withStripeTenantConfig(stc))
+	return &StripeTenantConfigUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *StripeTenantConfigClient) UpdateOneID(id string) *StripeTenantConfigUpdateOne {
+	mutation := newStripeTenantConfigMutation(c.config, OpUpdateOne, withStripeTenantConfigID(id))
+	return &StripeTenantConfigUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for StripeTenantConfig.
+func (c *StripeTenantConfigClient) Delete() *StripeTenantConfigDelete {
+	mutation := newStripeTenantConfigMutation(c.config, OpDelete)
+	return &StripeTenantConfigDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *StripeTenantConfigClient) DeleteOne(stc *StripeTenantConfig) *StripeTenantConfigDeleteOne {
+	return c.DeleteOneID(stc.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *StripeTenantConfigClient) DeleteOneID(id string) *StripeTenantConfigDeleteOne {
+	builder := c.Delete().Where(stripetenantconfig.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &StripeTenantConfigDeleteOne{builder}
+}
+
+// Query returns a query builder for StripeTenantConfig.
+func (c *StripeTenantConfigClient) Query() *StripeTenantConfigQuery {
+	return &StripeTenantConfigQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeStripeTenantConfig},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a StripeTenantConfig entity by its id.
+func (c *StripeTenantConfigClient) Get(ctx context.Context, id string) (*StripeTenantConfig, error) {
+	return c.Query().Where(stripetenantconfig.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *StripeTenantConfigClient) GetX(ctx context.Context, id string) *StripeTenantConfig {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *StripeTenantConfigClient) Hooks() []Hook {
+	return c.hooks.StripeTenantConfig
+}
+
+// Interceptors returns the client interceptors.
+func (c *StripeTenantConfigClient) Interceptors() []Interceptor {
+	return c.inters.StripeTenantConfig
+}
+
+func (c *StripeTenantConfigClient) mutate(ctx context.Context, m *StripeTenantConfigMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&StripeTenantConfigCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&StripeTenantConfigUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&StripeTenantConfigUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&StripeTenantConfigDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown StripeTenantConfig mutation op: %q", m.Op())
 	}
 }
 
@@ -4308,17 +4874,19 @@ func (c *WalletTransactionClient) mutate(ctx context.Context, m *WalletTransacti
 type (
 	hooks struct {
 		Auth, BillingSequence, CreditGrant, CreditGrantApplication, Customer,
-		Entitlement, Environment, Feature, Invoice, InvoiceLineItem, InvoiceSequence,
-		Meter, Payment, PaymentAttempt, Plan, Price, Secret, Subscription,
-		SubscriptionLineItem, SubscriptionPause, SubscriptionSchedule,
+		Entitlement, EntityIntegrationMapping, Environment, Feature, Invoice,
+		InvoiceLineItem, InvoiceSequence, Meter, MeterProviderMapping, Payment,
+		PaymentAttempt, Plan, Price, Secret, StripeSyncBatch, StripeTenantConfig,
+		Subscription, SubscriptionLineItem, SubscriptionPause, SubscriptionSchedule,
 		SubscriptionSchedulePhase, Task, Tenant, User, Wallet,
 		WalletTransaction []ent.Hook
 	}
 	inters struct {
 		Auth, BillingSequence, CreditGrant, CreditGrantApplication, Customer,
-		Entitlement, Environment, Feature, Invoice, InvoiceLineItem, InvoiceSequence,
-		Meter, Payment, PaymentAttempt, Plan, Price, Secret, Subscription,
-		SubscriptionLineItem, SubscriptionPause, SubscriptionSchedule,
+		Entitlement, EntityIntegrationMapping, Environment, Feature, Invoice,
+		InvoiceLineItem, InvoiceSequence, Meter, MeterProviderMapping, Payment,
+		PaymentAttempt, Plan, Price, Secret, StripeSyncBatch, StripeTenantConfig,
+		Subscription, SubscriptionLineItem, SubscriptionPause, SubscriptionSchedule,
 		SubscriptionSchedulePhase, Task, Tenant, User, Wallet,
 		WalletTransaction []ent.Interceptor
 	}
