@@ -11,18 +11,22 @@ import (
 	"github.com/flexprice/flexprice/ent/creditgrantapplication"
 	"github.com/flexprice/flexprice/ent/customer"
 	"github.com/flexprice/flexprice/ent/entitlement"
+	"github.com/flexprice/flexprice/ent/entityintegrationmapping"
 	"github.com/flexprice/flexprice/ent/environment"
 	"github.com/flexprice/flexprice/ent/feature"
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/ent/invoicesequence"
 	"github.com/flexprice/flexprice/ent/meter"
+	"github.com/flexprice/flexprice/ent/meterprovidermapping"
 	"github.com/flexprice/flexprice/ent/payment"
 	"github.com/flexprice/flexprice/ent/paymentattempt"
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/schema"
 	"github.com/flexprice/flexprice/ent/secret"
+	"github.com/flexprice/flexprice/ent/stripesyncbatch"
+	"github.com/flexprice/flexprice/ent/stripetenantconfig"
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
@@ -287,6 +291,51 @@ func init() {
 	entitlementDescID := entitlementFields[0].Descriptor()
 	// entitlement.IDValidator is a validator for the "id" field. It is called by the builders before save.
 	entitlement.IDValidator = entitlementDescID.Validators[0].(func(string) error)
+	entityintegrationmappingMixin := schema.EntityIntegrationMapping{}.Mixin()
+	entityintegrationmappingMixinFields0 := entityintegrationmappingMixin[0].Fields()
+	_ = entityintegrationmappingMixinFields0
+	entityintegrationmappingMixinFields1 := entityintegrationmappingMixin[1].Fields()
+	_ = entityintegrationmappingMixinFields1
+	entityintegrationmappingFields := schema.EntityIntegrationMapping{}.Fields()
+	_ = entityintegrationmappingFields
+	// entityintegrationmappingDescTenantID is the schema descriptor for tenant_id field.
+	entityintegrationmappingDescTenantID := entityintegrationmappingMixinFields0[0].Descriptor()
+	// entityintegrationmapping.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	entityintegrationmapping.TenantIDValidator = entityintegrationmappingDescTenantID.Validators[0].(func(string) error)
+	// entityintegrationmappingDescStatus is the schema descriptor for status field.
+	entityintegrationmappingDescStatus := entityintegrationmappingMixinFields0[1].Descriptor()
+	// entityintegrationmapping.DefaultStatus holds the default value on creation for the status field.
+	entityintegrationmapping.DefaultStatus = entityintegrationmappingDescStatus.Default.(string)
+	// entityintegrationmappingDescCreatedAt is the schema descriptor for created_at field.
+	entityintegrationmappingDescCreatedAt := entityintegrationmappingMixinFields0[2].Descriptor()
+	// entityintegrationmapping.DefaultCreatedAt holds the default value on creation for the created_at field.
+	entityintegrationmapping.DefaultCreatedAt = entityintegrationmappingDescCreatedAt.Default.(func() time.Time)
+	// entityintegrationmappingDescUpdatedAt is the schema descriptor for updated_at field.
+	entityintegrationmappingDescUpdatedAt := entityintegrationmappingMixinFields0[3].Descriptor()
+	// entityintegrationmapping.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	entityintegrationmapping.DefaultUpdatedAt = entityintegrationmappingDescUpdatedAt.Default.(func() time.Time)
+	// entityintegrationmapping.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	entityintegrationmapping.UpdateDefaultUpdatedAt = entityintegrationmappingDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// entityintegrationmappingDescEnvironmentID is the schema descriptor for environment_id field.
+	entityintegrationmappingDescEnvironmentID := entityintegrationmappingMixinFields1[0].Descriptor()
+	// entityintegrationmapping.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	entityintegrationmapping.DefaultEnvironmentID = entityintegrationmappingDescEnvironmentID.Default.(string)
+	// entityintegrationmappingDescEntityID is the schema descriptor for entity_id field.
+	entityintegrationmappingDescEntityID := entityintegrationmappingFields[1].Descriptor()
+	// entityintegrationmapping.EntityIDValidator is a validator for the "entity_id" field. It is called by the builders before save.
+	entityintegrationmapping.EntityIDValidator = entityintegrationmappingDescEntityID.Validators[0].(func(string) error)
+	// entityintegrationmappingDescEntityType is the schema descriptor for entity_type field.
+	entityintegrationmappingDescEntityType := entityintegrationmappingFields[2].Descriptor()
+	// entityintegrationmapping.EntityTypeValidator is a validator for the "entity_type" field. It is called by the builders before save.
+	entityintegrationmapping.EntityTypeValidator = entityintegrationmappingDescEntityType.Validators[0].(func(string) error)
+	// entityintegrationmappingDescProviderType is the schema descriptor for provider_type field.
+	entityintegrationmappingDescProviderType := entityintegrationmappingFields[3].Descriptor()
+	// entityintegrationmapping.ProviderTypeValidator is a validator for the "provider_type" field. It is called by the builders before save.
+	entityintegrationmapping.ProviderTypeValidator = entityintegrationmappingDescProviderType.Validators[0].(func(string) error)
+	// entityintegrationmappingDescProviderEntityID is the schema descriptor for provider_entity_id field.
+	entityintegrationmappingDescProviderEntityID := entityintegrationmappingFields[4].Descriptor()
+	// entityintegrationmapping.ProviderEntityIDValidator is a validator for the "provider_entity_id" field. It is called by the builders before save.
+	entityintegrationmapping.ProviderEntityIDValidator = entityintegrationmappingDescProviderEntityID.Validators[0].(func(string) error)
 	environmentMixin := schema.Environment{}.Mixin()
 	environmentMixinFields0 := environmentMixin[0].Fields()
 	_ = environmentMixinFields0
@@ -542,6 +591,51 @@ func init() {
 	meterDescResetUsage := meterFields[5].Descriptor()
 	// meter.DefaultResetUsage holds the default value on creation for the reset_usage field.
 	meter.DefaultResetUsage = meterDescResetUsage.Default.(string)
+	meterprovidermappingMixin := schema.MeterProviderMapping{}.Mixin()
+	meterprovidermappingMixinFields0 := meterprovidermappingMixin[0].Fields()
+	_ = meterprovidermappingMixinFields0
+	meterprovidermappingMixinFields1 := meterprovidermappingMixin[1].Fields()
+	_ = meterprovidermappingMixinFields1
+	meterprovidermappingFields := schema.MeterProviderMapping{}.Fields()
+	_ = meterprovidermappingFields
+	// meterprovidermappingDescTenantID is the schema descriptor for tenant_id field.
+	meterprovidermappingDescTenantID := meterprovidermappingMixinFields0[0].Descriptor()
+	// meterprovidermapping.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	meterprovidermapping.TenantIDValidator = meterprovidermappingDescTenantID.Validators[0].(func(string) error)
+	// meterprovidermappingDescStatus is the schema descriptor for status field.
+	meterprovidermappingDescStatus := meterprovidermappingMixinFields0[1].Descriptor()
+	// meterprovidermapping.DefaultStatus holds the default value on creation for the status field.
+	meterprovidermapping.DefaultStatus = meterprovidermappingDescStatus.Default.(string)
+	// meterprovidermappingDescCreatedAt is the schema descriptor for created_at field.
+	meterprovidermappingDescCreatedAt := meterprovidermappingMixinFields0[2].Descriptor()
+	// meterprovidermapping.DefaultCreatedAt holds the default value on creation for the created_at field.
+	meterprovidermapping.DefaultCreatedAt = meterprovidermappingDescCreatedAt.Default.(func() time.Time)
+	// meterprovidermappingDescUpdatedAt is the schema descriptor for updated_at field.
+	meterprovidermappingDescUpdatedAt := meterprovidermappingMixinFields0[3].Descriptor()
+	// meterprovidermapping.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	meterprovidermapping.DefaultUpdatedAt = meterprovidermappingDescUpdatedAt.Default.(func() time.Time)
+	// meterprovidermapping.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	meterprovidermapping.UpdateDefaultUpdatedAt = meterprovidermappingDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// meterprovidermappingDescEnvironmentID is the schema descriptor for environment_id field.
+	meterprovidermappingDescEnvironmentID := meterprovidermappingMixinFields1[0].Descriptor()
+	// meterprovidermapping.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	meterprovidermapping.DefaultEnvironmentID = meterprovidermappingDescEnvironmentID.Default.(string)
+	// meterprovidermappingDescMeterID is the schema descriptor for meter_id field.
+	meterprovidermappingDescMeterID := meterprovidermappingFields[1].Descriptor()
+	// meterprovidermapping.MeterIDValidator is a validator for the "meter_id" field. It is called by the builders before save.
+	meterprovidermapping.MeterIDValidator = meterprovidermappingDescMeterID.Validators[0].(func(string) error)
+	// meterprovidermappingDescProviderType is the schema descriptor for provider_type field.
+	meterprovidermappingDescProviderType := meterprovidermappingFields[2].Descriptor()
+	// meterprovidermapping.ProviderTypeValidator is a validator for the "provider_type" field. It is called by the builders before save.
+	meterprovidermapping.ProviderTypeValidator = meterprovidermappingDescProviderType.Validators[0].(func(string) error)
+	// meterprovidermappingDescProviderMeterID is the schema descriptor for provider_meter_id field.
+	meterprovidermappingDescProviderMeterID := meterprovidermappingFields[3].Descriptor()
+	// meterprovidermapping.ProviderMeterIDValidator is a validator for the "provider_meter_id" field. It is called by the builders before save.
+	meterprovidermapping.ProviderMeterIDValidator = meterprovidermappingDescProviderMeterID.Validators[0].(func(string) error)
+	// meterprovidermappingDescSyncEnabled is the schema descriptor for sync_enabled field.
+	meterprovidermappingDescSyncEnabled := meterprovidermappingFields[4].Descriptor()
+	// meterprovidermapping.DefaultSyncEnabled holds the default value on creation for the sync_enabled field.
+	meterprovidermapping.DefaultSyncEnabled = meterprovidermappingDescSyncEnabled.Default.(bool)
 	paymentMixin := schema.Payment{}.Mixin()
 	paymentMixinFields0 := paymentMixin[0].Fields()
 	_ = paymentMixinFields0
@@ -785,6 +879,110 @@ func init() {
 	secretDescPermissions := secretFields[6].Descriptor()
 	// secret.DefaultPermissions holds the default value on creation for the permissions field.
 	secret.DefaultPermissions = secretDescPermissions.Default.([]string)
+	stripesyncbatchMixin := schema.StripeSyncBatch{}.Mixin()
+	stripesyncbatchMixinFields0 := stripesyncbatchMixin[0].Fields()
+	_ = stripesyncbatchMixinFields0
+	stripesyncbatchMixinFields1 := stripesyncbatchMixin[1].Fields()
+	_ = stripesyncbatchMixinFields1
+	stripesyncbatchFields := schema.StripeSyncBatch{}.Fields()
+	_ = stripesyncbatchFields
+	// stripesyncbatchDescTenantID is the schema descriptor for tenant_id field.
+	stripesyncbatchDescTenantID := stripesyncbatchMixinFields0[0].Descriptor()
+	// stripesyncbatch.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	stripesyncbatch.TenantIDValidator = stripesyncbatchDescTenantID.Validators[0].(func(string) error)
+	// stripesyncbatchDescStatus is the schema descriptor for status field.
+	stripesyncbatchDescStatus := stripesyncbatchMixinFields0[1].Descriptor()
+	// stripesyncbatch.DefaultStatus holds the default value on creation for the status field.
+	stripesyncbatch.DefaultStatus = stripesyncbatchDescStatus.Default.(string)
+	// stripesyncbatchDescCreatedAt is the schema descriptor for created_at field.
+	stripesyncbatchDescCreatedAt := stripesyncbatchMixinFields0[2].Descriptor()
+	// stripesyncbatch.DefaultCreatedAt holds the default value on creation for the created_at field.
+	stripesyncbatch.DefaultCreatedAt = stripesyncbatchDescCreatedAt.Default.(func() time.Time)
+	// stripesyncbatchDescUpdatedAt is the schema descriptor for updated_at field.
+	stripesyncbatchDescUpdatedAt := stripesyncbatchMixinFields0[3].Descriptor()
+	// stripesyncbatch.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	stripesyncbatch.DefaultUpdatedAt = stripesyncbatchDescUpdatedAt.Default.(func() time.Time)
+	// stripesyncbatch.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	stripesyncbatch.UpdateDefaultUpdatedAt = stripesyncbatchDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// stripesyncbatchDescEnvironmentID is the schema descriptor for environment_id field.
+	stripesyncbatchDescEnvironmentID := stripesyncbatchMixinFields1[0].Descriptor()
+	// stripesyncbatch.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	stripesyncbatch.DefaultEnvironmentID = stripesyncbatchDescEnvironmentID.Default.(string)
+	// stripesyncbatchDescEntityID is the schema descriptor for entity_id field.
+	stripesyncbatchDescEntityID := stripesyncbatchFields[1].Descriptor()
+	// stripesyncbatch.EntityIDValidator is a validator for the "entity_id" field. It is called by the builders before save.
+	stripesyncbatch.EntityIDValidator = stripesyncbatchDescEntityID.Validators[0].(func(string) error)
+	// stripesyncbatchDescEntityType is the schema descriptor for entity_type field.
+	stripesyncbatchDescEntityType := stripesyncbatchFields[2].Descriptor()
+	// stripesyncbatch.DefaultEntityType holds the default value on creation for the entity_type field.
+	stripesyncbatch.DefaultEntityType = stripesyncbatchDescEntityType.Default.(string)
+	// stripesyncbatch.EntityTypeValidator is a validator for the "entity_type" field. It is called by the builders before save.
+	stripesyncbatch.EntityTypeValidator = stripesyncbatchDescEntityType.Validators[0].(func(string) error)
+	// stripesyncbatchDescMeterID is the schema descriptor for meter_id field.
+	stripesyncbatchDescMeterID := stripesyncbatchFields[3].Descriptor()
+	// stripesyncbatch.MeterIDValidator is a validator for the "meter_id" field. It is called by the builders before save.
+	stripesyncbatch.MeterIDValidator = stripesyncbatchDescMeterID.Validators[0].(func(string) error)
+	// stripesyncbatchDescEventType is the schema descriptor for event_type field.
+	stripesyncbatchDescEventType := stripesyncbatchFields[4].Descriptor()
+	// stripesyncbatch.EventTypeValidator is a validator for the "event_type" field. It is called by the builders before save.
+	stripesyncbatch.EventTypeValidator = stripesyncbatchDescEventType.Validators[0].(func(string) error)
+	// stripesyncbatchDescAggregatedQuantity is the schema descriptor for aggregated_quantity field.
+	stripesyncbatchDescAggregatedQuantity := stripesyncbatchFields[5].Descriptor()
+	// stripesyncbatch.DefaultAggregatedQuantity holds the default value on creation for the aggregated_quantity field.
+	stripesyncbatch.DefaultAggregatedQuantity = stripesyncbatchDescAggregatedQuantity.Default.(float64)
+	// stripesyncbatchDescEventCount is the schema descriptor for event_count field.
+	stripesyncbatchDescEventCount := stripesyncbatchFields[6].Descriptor()
+	// stripesyncbatch.DefaultEventCount holds the default value on creation for the event_count field.
+	stripesyncbatch.DefaultEventCount = stripesyncbatchDescEventCount.Default.(int)
+	// stripesyncbatchDescSyncStatus is the schema descriptor for sync_status field.
+	stripesyncbatchDescSyncStatus := stripesyncbatchFields[8].Descriptor()
+	// stripesyncbatch.DefaultSyncStatus holds the default value on creation for the sync_status field.
+	stripesyncbatch.DefaultSyncStatus = stripesyncbatchDescSyncStatus.Default.(string)
+	// stripesyncbatchDescRetryCount is the schema descriptor for retry_count field.
+	stripesyncbatchDescRetryCount := stripesyncbatchFields[9].Descriptor()
+	// stripesyncbatch.DefaultRetryCount holds the default value on creation for the retry_count field.
+	stripesyncbatch.DefaultRetryCount = stripesyncbatchDescRetryCount.Default.(int)
+	stripetenantconfigMixin := schema.StripeTenantConfig{}.Mixin()
+	stripetenantconfigMixinFields0 := stripetenantconfigMixin[0].Fields()
+	_ = stripetenantconfigMixinFields0
+	stripetenantconfigMixinFields1 := stripetenantconfigMixin[1].Fields()
+	_ = stripetenantconfigMixinFields1
+	stripetenantconfigFields := schema.StripeTenantConfig{}.Fields()
+	_ = stripetenantconfigFields
+	// stripetenantconfigDescTenantID is the schema descriptor for tenant_id field.
+	stripetenantconfigDescTenantID := stripetenantconfigMixinFields0[0].Descriptor()
+	// stripetenantconfig.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	stripetenantconfig.TenantIDValidator = stripetenantconfigDescTenantID.Validators[0].(func(string) error)
+	// stripetenantconfigDescStatus is the schema descriptor for status field.
+	stripetenantconfigDescStatus := stripetenantconfigMixinFields0[1].Descriptor()
+	// stripetenantconfig.DefaultStatus holds the default value on creation for the status field.
+	stripetenantconfig.DefaultStatus = stripetenantconfigDescStatus.Default.(string)
+	// stripetenantconfigDescCreatedAt is the schema descriptor for created_at field.
+	stripetenantconfigDescCreatedAt := stripetenantconfigMixinFields0[2].Descriptor()
+	// stripetenantconfig.DefaultCreatedAt holds the default value on creation for the created_at field.
+	stripetenantconfig.DefaultCreatedAt = stripetenantconfigDescCreatedAt.Default.(func() time.Time)
+	// stripetenantconfigDescUpdatedAt is the schema descriptor for updated_at field.
+	stripetenantconfigDescUpdatedAt := stripetenantconfigMixinFields0[3].Descriptor()
+	// stripetenantconfig.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	stripetenantconfig.DefaultUpdatedAt = stripetenantconfigDescUpdatedAt.Default.(func() time.Time)
+	// stripetenantconfig.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	stripetenantconfig.UpdateDefaultUpdatedAt = stripetenantconfigDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// stripetenantconfigDescEnvironmentID is the schema descriptor for environment_id field.
+	stripetenantconfigDescEnvironmentID := stripetenantconfigMixinFields1[0].Descriptor()
+	// stripetenantconfig.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	stripetenantconfig.DefaultEnvironmentID = stripetenantconfigDescEnvironmentID.Default.(string)
+	// stripetenantconfigDescAPIKeyEncrypted is the schema descriptor for api_key_encrypted field.
+	stripetenantconfigDescAPIKeyEncrypted := stripetenantconfigFields[1].Descriptor()
+	// stripetenantconfig.APIKeyEncryptedValidator is a validator for the "api_key_encrypted" field. It is called by the builders before save.
+	stripetenantconfig.APIKeyEncryptedValidator = stripetenantconfigDescAPIKeyEncrypted.Validators[0].(func(string) error)
+	// stripetenantconfigDescSyncEnabled is the schema descriptor for sync_enabled field.
+	stripetenantconfigDescSyncEnabled := stripetenantconfigFields[2].Descriptor()
+	// stripetenantconfig.DefaultSyncEnabled holds the default value on creation for the sync_enabled field.
+	stripetenantconfig.DefaultSyncEnabled = stripetenantconfigDescSyncEnabled.Default.(bool)
+	// stripetenantconfigDescAggregationWindowMinutes is the schema descriptor for aggregation_window_minutes field.
+	stripetenantconfigDescAggregationWindowMinutes := stripetenantconfigFields[3].Descriptor()
+	// stripetenantconfig.DefaultAggregationWindowMinutes holds the default value on creation for the aggregation_window_minutes field.
+	stripetenantconfig.DefaultAggregationWindowMinutes = stripetenantconfigDescAggregationWindowMinutes.Default.(int)
 	subscriptionMixin := schema.Subscription{}.Mixin()
 	subscriptionMixinFields0 := subscriptionMixin[0].Fields()
 	_ = subscriptionMixinFields0

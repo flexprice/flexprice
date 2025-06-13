@@ -24,6 +24,9 @@ type Customer func(*sql.Selector)
 // Entitlement is the predicate function for entitlement builders.
 type Entitlement func(*sql.Selector)
 
+// EntityIntegrationMapping is the predicate function for entityintegrationmapping builders.
+type EntityIntegrationMapping func(*sql.Selector)
+
 // Environment is the predicate function for environment builders.
 type Environment func(*sql.Selector)
 
@@ -42,6 +45,9 @@ type InvoiceSequence func(*sql.Selector)
 // Meter is the predicate function for meter builders.
 type Meter func(*sql.Selector)
 
+// MeterProviderMapping is the predicate function for meterprovidermapping builders.
+type MeterProviderMapping func(*sql.Selector)
+
 // Payment is the predicate function for payment builders.
 type Payment func(*sql.Selector)
 
@@ -56,6 +62,12 @@ type Price func(*sql.Selector)
 
 // Secret is the predicate function for secret builders.
 type Secret func(*sql.Selector)
+
+// StripeSyncBatch is the predicate function for stripesyncbatch builders.
+type StripeSyncBatch func(*sql.Selector)
+
+// StripeTenantConfig is the predicate function for stripetenantconfig builders.
+type StripeTenantConfig func(*sql.Selector)
 
 // Subscription is the predicate function for subscription builders.
 type Subscription func(*sql.Selector)
