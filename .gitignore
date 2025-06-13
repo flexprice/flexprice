@@ -76,4 +76,5 @@ api/*/*
 !api/*/tsconfig.node.json
 !api/*/tsconfig.app.json
 
-CLAUDE.m
+CLAUDE.md
+.cursor/
