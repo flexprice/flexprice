@@ -55,6 +55,12 @@ type Filter struct {
 
 	// Status filters by costsheet status
 	Status types.CostsheetStatus
+
+	// TenantID filters by specific tenant ID
+	TenantID string
+
+	// EnvironmentID filters by specific environment ID
+	EnvironmentID string
 }
 
 // New creates a new Costsheet instance with the provided meter and price IDs.
@@ -81,4 +87,8 @@ func (c *Costsheet) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 	return nil
+}
+
+func GetTenantAndEnvFromContext(ctx context.Context) (string, string) {
+	return types.GetTenantID(ctx), types.GetEnvironmentID(ctx)
 }

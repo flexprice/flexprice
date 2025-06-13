@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
+	"github.com/flexprice/flexprice/ent/costsheet"
 	"github.com/flexprice/flexprice/ent/meter"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/schema"
@@ -138,9 +139,45 @@ func (mu *MeterUpdate) SetNillableResetUsage(s *string) *MeterUpdate {
 	return mu
 }
 
+// AddCostsheetIDs adds the "costsheet" edge to the Costsheet entity by IDs.
+func (mu *MeterUpdate) AddCostsheetIDs(ids ...string) *MeterUpdate {
+	mu.mutation.AddCostsheetIDs(ids...)
+	return mu
+}
+
+// AddCostsheet adds the "costsheet" edges to the Costsheet entity.
+func (mu *MeterUpdate) AddCostsheet(c ...*Costsheet) *MeterUpdate {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return mu.AddCostsheetIDs(ids...)
+}
+
 // Mutation returns the MeterMutation object of the builder.
 func (mu *MeterUpdate) Mutation() *MeterMutation {
 	return mu.mutation
+}
+
+// ClearCostsheet clears all "costsheet" edges to the Costsheet entity.
+func (mu *MeterUpdate) ClearCostsheet() *MeterUpdate {
+	mu.mutation.ClearCostsheet()
+	return mu
+}
+
+// RemoveCostsheetIDs removes the "costsheet" edge to Costsheet entities by IDs.
+func (mu *MeterUpdate) RemoveCostsheetIDs(ids ...string) *MeterUpdate {
+	mu.mutation.RemoveCostsheetIDs(ids...)
+	return mu
+}
+
+// RemoveCostsheet removes "costsheet" edges to Costsheet entities.
+func (mu *MeterUpdate) RemoveCostsheet(c ...*Costsheet) *MeterUpdate {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return mu.RemoveCostsheetIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -243,6 +280,51 @@ func (mu *MeterUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := mu.mutation.ResetUsage(); ok {
 		_spec.SetField(meter.FieldResetUsage, field.TypeString, value)
+	}
+	if mu.mutation.CostsheetCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   meter.CostsheetTable,
+			Columns: []string{meter.CostsheetColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(costsheet.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := mu.mutation.RemovedCostsheetIDs(); len(nodes) > 0 && !mu.mutation.CostsheetCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   meter.CostsheetTable,
+			Columns: []string{meter.CostsheetColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(costsheet.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := mu.mutation.CostsheetIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   meter.CostsheetTable,
+			Columns: []string{meter.CostsheetColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(costsheet.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, mu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -372,9 +454,45 @@ func (muo *MeterUpdateOne) SetNillableResetUsage(s *string) *MeterUpdateOne {
 	return muo
 }
 
+// AddCostsheetIDs adds the "costsheet" edge to the Costsheet entity by IDs.
+func (muo *MeterUpdateOne) AddCostsheetIDs(ids ...string) *MeterUpdateOne {
+	muo.mutation.AddCostsheetIDs(ids...)
+	return muo
+}
+
+// AddCostsheet adds the "costsheet" edges to the Costsheet entity.
+func (muo *MeterUpdateOne) AddCostsheet(c ...*Costsheet) *MeterUpdateOne {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return muo.AddCostsheetIDs(ids...)
+}
+
 // Mutation returns the MeterMutation object of the builder.
 func (muo *MeterUpdateOne) Mutation() *MeterMutation {
 	return muo.mutation
+}
+
+// ClearCostsheet clears all "costsheet" edges to the Costsheet entity.
+func (muo *MeterUpdateOne) ClearCostsheet() *MeterUpdateOne {
+	muo.mutation.ClearCostsheet()
+	return muo
+}
+
+// RemoveCostsheetIDs removes the "costsheet" edge to Costsheet entities by IDs.
+func (muo *MeterUpdateOne) RemoveCostsheetIDs(ids ...string) *MeterUpdateOne {
+	muo.mutation.RemoveCostsheetIDs(ids...)
+	return muo
+}
+
+// RemoveCostsheet removes "costsheet" edges to Costsheet entities.
+func (muo *MeterUpdateOne) RemoveCostsheet(c ...*Costsheet) *MeterUpdateOne {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return muo.RemoveCostsheetIDs(ids...)
 }
 
 // Where appends a list predicates to the MeterUpdate builder.
@@ -507,6 +625,51 @@ func (muo *MeterUpdateOne) sqlSave(ctx context.Context) (_node *Meter, err error
 	}
 	if value, ok := muo.mutation.ResetUsage(); ok {
 		_spec.SetField(meter.FieldResetUsage, field.TypeString, value)
+	}
+	if muo.mutation.CostsheetCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   meter.CostsheetTable,
+			Columns: []string{meter.CostsheetColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(costsheet.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := muo.mutation.RemovedCostsheetIDs(); len(nodes) > 0 && !muo.mutation.CostsheetCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   meter.CostsheetTable,
+			Columns: []string{meter.CostsheetColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(costsheet.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := muo.mutation.CostsheetIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   meter.CostsheetTable,
+			Columns: []string{meter.CostsheetColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(costsheet.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_node = &Meter{config: muo.config}
 	_spec.Assign = _node.assignValues

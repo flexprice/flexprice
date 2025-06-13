@@ -4,6 +4,7 @@ package ent
 
 import (
 	"context"
+	"database/sql/driver"
 	"fmt"
 	"math"
 
@@ -11,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/flexprice/flexprice/ent/costsheet"
 	"github.com/flexprice/flexprice/ent/meter"
 	"github.com/flexprice/flexprice/ent/predicate"
 )
@@ -18,10 +20,11 @@ import (
 // MeterQuery is the builder for querying Meter entities.
 type MeterQuery struct {
 	config
-	ctx        *QueryContext
-	order      []meter.OrderOption
-	inters     []Interceptor
-	predicates []predicate.Meter
+	ctx           *QueryContext
+	order         []meter.OrderOption
+	inters        []Interceptor
+	predicates    []predicate.Meter
+	withCostsheet *CostsheetQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -56,6 +59,28 @@ func (mq *MeterQuery) Unique(unique bool) *MeterQuery {
 func (mq *MeterQuery) Order(o ...meter.OrderOption) *MeterQuery {
 	mq.order = append(mq.order, o...)
 	return mq
+}
+
+// QueryCostsheet chains the current query on the "costsheet" edge.
+func (mq *MeterQuery) QueryCostsheet() *CostsheetQuery {
+	query := (&CostsheetClient{config: mq.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := mq.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := mq.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(meter.Table, meter.FieldID, selector),
+			sqlgraph.To(costsheet.Table, costsheet.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, meter.CostsheetTable, meter.CostsheetColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(mq.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
 }
 
 // First returns the first Meter entity from the query.
@@ -245,15 +270,27 @@ func (mq *MeterQuery) Clone() *MeterQuery {
 		return nil
 	}
 	return &MeterQuery{
-		config:     mq.config,
-		ctx:        mq.ctx.Clone(),
-		order:      append([]meter.OrderOption{}, mq.order...),
-		inters:     append([]Interceptor{}, mq.inters...),
-		predicates: append([]predicate.Meter{}, mq.predicates...),
+		config:        mq.config,
+		ctx:           mq.ctx.Clone(),
+		order:         append([]meter.OrderOption{}, mq.order...),
+		inters:        append([]Interceptor{}, mq.inters...),
+		predicates:    append([]predicate.Meter{}, mq.predicates...),
+		withCostsheet: mq.withCostsheet.Clone(),
 		// clone intermediate query.
 		sql:  mq.sql.Clone(),
 		path: mq.path,
 	}
+}
+
+// WithCostsheet tells the query-builder to eager-load the nodes that are connected to
+// the "costsheet" edge. The optional arguments are used to configure the query builder of the edge.
+func (mq *MeterQuery) WithCostsheet(opts ...func(*CostsheetQuery)) *MeterQuery {
+	query := (&CostsheetClient{config: mq.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	mq.withCostsheet = query
+	return mq
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -332,8 +369,11 @@ func (mq *MeterQuery) prepareQuery(ctx context.Context) error {
 
 func (mq *MeterQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Meter, error) {
 	var (
-		nodes = []*Meter{}
-		_spec = mq.querySpec()
+		nodes       = []*Meter{}
+		_spec       = mq.querySpec()
+		loadedTypes = [1]bool{
+			mq.withCostsheet != nil,
+		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*Meter).scanValues(nil, columns)
@@ -341,6 +381,7 @@ func (mq *MeterQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Meter,
 	_spec.Assign = func(columns []string, values []any) error {
 		node := &Meter{config: mq.config}
 		nodes = append(nodes, node)
+		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
@@ -352,7 +393,45 @@ func (mq *MeterQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Meter,
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
+	if query := mq.withCostsheet; query != nil {
+		if err := mq.loadCostsheet(ctx, query, nodes,
+			func(n *Meter) { n.Edges.Costsheet = []*Costsheet{} },
+			func(n *Meter, e *Costsheet) { n.Edges.Costsheet = append(n.Edges.Costsheet, e) }); err != nil {
+			return nil, err
+		}
+	}
 	return nodes, nil
+}
+
+func (mq *MeterQuery) loadCostsheet(ctx context.Context, query *CostsheetQuery, nodes []*Meter, init func(*Meter), assign func(*Meter, *Costsheet)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[string]*Meter)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(costsheet.FieldMeterID)
+	}
+	query.Where(predicate.Costsheet(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(meter.CostsheetColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.MeterID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "meter_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
 }
 
 func (mq *MeterQuery) sqlCount(ctx context.Context) (int, error) {

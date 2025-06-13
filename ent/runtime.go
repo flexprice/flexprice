@@ -7,6 +7,7 @@ import (
 
 	"github.com/flexprice/flexprice/ent/auth"
 	"github.com/flexprice/flexprice/ent/billingsequence"
+	"github.com/flexprice/flexprice/ent/costsheet"
 	"github.com/flexprice/flexprice/ent/creditgrant"
 	"github.com/flexprice/flexprice/ent/creditgrantapplication"
 	"github.com/flexprice/flexprice/ent/customer"
@@ -89,6 +90,43 @@ func init() {
 	billingsequence.DefaultUpdatedAt = billingsequenceDescUpdatedAt.Default.(func() time.Time)
 	// billingsequence.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	billingsequence.UpdateDefaultUpdatedAt = billingsequenceDescUpdatedAt.UpdateDefault.(func() time.Time)
+	costsheetMixin := schema.Costsheet{}.Mixin()
+	costsheetMixinFields0 := costsheetMixin[0].Fields()
+	_ = costsheetMixinFields0
+	costsheetMixinFields1 := costsheetMixin[1].Fields()
+	_ = costsheetMixinFields1
+	costsheetFields := schema.Costsheet{}.Fields()
+	_ = costsheetFields
+	// costsheetDescTenantID is the schema descriptor for tenant_id field.
+	costsheetDescTenantID := costsheetMixinFields0[0].Descriptor()
+	// costsheet.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	costsheet.TenantIDValidator = costsheetDescTenantID.Validators[0].(func(string) error)
+	// costsheetDescStatus is the schema descriptor for status field.
+	costsheetDescStatus := costsheetMixinFields0[1].Descriptor()
+	// costsheet.DefaultStatus holds the default value on creation for the status field.
+	costsheet.DefaultStatus = costsheetDescStatus.Default.(string)
+	// costsheetDescCreatedAt is the schema descriptor for created_at field.
+	costsheetDescCreatedAt := costsheetMixinFields0[2].Descriptor()
+	// costsheet.DefaultCreatedAt holds the default value on creation for the created_at field.
+	costsheet.DefaultCreatedAt = costsheetDescCreatedAt.Default.(func() time.Time)
+	// costsheetDescUpdatedAt is the schema descriptor for updated_at field.
+	costsheetDescUpdatedAt := costsheetMixinFields0[3].Descriptor()
+	// costsheet.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	costsheet.DefaultUpdatedAt = costsheetDescUpdatedAt.Default.(func() time.Time)
+	// costsheet.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	costsheet.UpdateDefaultUpdatedAt = costsheetDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// costsheetDescEnvironmentID is the schema descriptor for environment_id field.
+	costsheetDescEnvironmentID := costsheetMixinFields1[0].Descriptor()
+	// costsheet.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	costsheet.DefaultEnvironmentID = costsheetDescEnvironmentID.Default.(string)
+	// costsheetDescMeterID is the schema descriptor for meter_id field.
+	costsheetDescMeterID := costsheetFields[1].Descriptor()
+	// costsheet.MeterIDValidator is a validator for the "meter_id" field. It is called by the builders before save.
+	costsheet.MeterIDValidator = costsheetDescMeterID.Validators[0].(func(string) error)
+	// costsheetDescPriceID is the schema descriptor for price_id field.
+	costsheetDescPriceID := costsheetFields[2].Descriptor()
+	// costsheet.PriceIDValidator is a validator for the "price_id" field. It is called by the builders before save.
+	costsheet.PriceIDValidator = costsheetDescPriceID.Validators[0].(func(string) error)
 	creditgrantMixin := schema.CreditGrant{}.Mixin()
 	creditgrantMixinFields0 := creditgrantMixin[0].Fields()
 	_ = creditgrantMixinFields0

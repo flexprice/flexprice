@@ -4,8 +4,6 @@ package ent
 
 import (
 	"context"
-	stdsql "database/sql"
-	"fmt"
 	"sync"
 
 	"entgo.io/ent/dialect"
@@ -18,6 +16,8 @@ type Tx struct {
 	Auth *AuthClient
 	// BillingSequence is the client for interacting with the BillingSequence builders.
 	BillingSequence *BillingSequenceClient
+	// Costsheet is the client for interacting with the Costsheet builders.
+	Costsheet *CostsheetClient
 	// CreditGrant is the client for interacting with the CreditGrant builders.
 	CreditGrant *CreditGrantClient
 	// CreditGrantApplication is the client for interacting with the CreditGrantApplication builders.
@@ -201,6 +201,7 @@ func (tx *Tx) Client() *Client {
 func (tx *Tx) init() {
 	tx.Auth = NewAuthClient(tx.config)
 	tx.BillingSequence = NewBillingSequenceClient(tx.config)
+	tx.Costsheet = NewCostsheetClient(tx.config)
 	tx.CreditGrant = NewCreditGrantClient(tx.config)
 	tx.CreditGrantApplication = NewCreditGrantApplicationClient(tx.config)
 	tx.Customer = NewCustomerClient(tx.config)
@@ -288,27 +289,3 @@ func (tx *txDriver) Query(ctx context.Context, query string, args, v any) error 
 }
 
 var _ dialect.Driver = (*txDriver)(nil)
-
-// ExecContext allows calling the underlying ExecContext method of the transaction if it is supported by it.
-// See, database/sql#Tx.ExecContext for more information.
-func (tx *txDriver) ExecContext(ctx context.Context, query string, args ...any) (stdsql.Result, error) {
-	ex, ok := tx.tx.(interface {
-		ExecContext(context.Context, string, ...any) (stdsql.Result, error)
-	})
-	if !ok {
-		return nil, fmt.Errorf("Tx.ExecContext is not supported")
-	}
-	return ex.ExecContext(ctx, query, args...)
-}
-
-// QueryContext allows calling the underlying QueryContext method of the transaction if it is supported by it.
-// See, database/sql#Tx.QueryContext for more information.
-func (tx *txDriver) QueryContext(ctx context.Context, query string, args ...any) (*stdsql.Rows, error) {
-	q, ok := tx.tx.(interface {
-		QueryContext(context.Context, string, ...any) (*stdsql.Rows, error)
-	})
-	if !ok {
-		return nil, fmt.Errorf("Tx.QueryContext is not supported")
-	}
-	return q.QueryContext(ctx, query, args...)
-}

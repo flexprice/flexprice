@@ -2,6 +2,7 @@ package schema
 
 import (
 	"entgo.io/ent"
+	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
@@ -57,7 +58,9 @@ func (Meter) Fields() []ent.Field {
 
 // Edges of the Meter.
 func (Meter) Edges() []ent.Edge {
-	return nil
+	return []ent.Edge{
+		edge.To("costsheet", Costsheet.Type),
+	}
 }
 
 // Indexes of the Meter.

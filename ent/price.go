@@ -70,8 +70,29 @@ type Price struct {
 	// Description holds the value of the "description" field.
 	Description string `json:"description,omitempty"`
 	// Metadata holds the value of the "metadata" field.
-	Metadata     map[string]string `json:"metadata,omitempty"`
+	Metadata map[string]string `json:"metadata,omitempty"`
+	// Edges holds the relations/edges for other nodes in the graph.
+	// The values are being populated by the PriceQuery when eager-loading is set.
+	Edges        PriceEdges `json:"edges"`
 	selectValues sql.SelectValues
+}
+
+// PriceEdges holds the relations/edges for other nodes in the graph.
+type PriceEdges struct {
+	// Costsheet holds the value of the costsheet edge.
+	Costsheet []*Costsheet `json:"costsheet,omitempty"`
+	// loadedTypes holds the information for reporting if a
+	// type was loaded (or requested) in eager-loading or not.
+	loadedTypes [1]bool
+}
+
+// CostsheetOrErr returns the Costsheet value or an error if the edge
+// was not loaded in eager-loading.
+func (e PriceEdges) CostsheetOrErr() ([]*Costsheet, error) {
+	if e.loadedTypes[0] {
+		return e.Costsheet, nil
+	}
+	return nil, &NotLoadedError{edge: "costsheet"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -287,6 +308,11 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 // This includes values selected through modifiers, order, etc.
 func (pr *Price) Value(name string) (ent.Value, error) {
 	return pr.selectValues.Get(name)
+}
+
+// QueryCostsheet queries the "costsheet" edge of the Price entity.
+func (pr *Price) QueryCostsheet() *CostsheetQuery {
+	return NewPriceClient(pr.config).QueryCostsheet(pr)
 }
 
 // Update returns a builder for updating this Price.

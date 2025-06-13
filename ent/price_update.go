@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
+	"github.com/flexprice/flexprice/ent/costsheet"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/schema"
@@ -352,9 +353,45 @@ func (pu *PriceUpdate) ClearMetadata() *PriceUpdate {
 	return pu
 }
 
+// AddCostsheetIDs adds the "costsheet" edge to the Costsheet entity by IDs.
+func (pu *PriceUpdate) AddCostsheetIDs(ids ...string) *PriceUpdate {
+	pu.mutation.AddCostsheetIDs(ids...)
+	return pu
+}
+
+// AddCostsheet adds the "costsheet" edges to the Costsheet entity.
+func (pu *PriceUpdate) AddCostsheet(c ...*Costsheet) *PriceUpdate {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return pu.AddCostsheetIDs(ids...)
+}
+
 // Mutation returns the PriceMutation object of the builder.
 func (pu *PriceUpdate) Mutation() *PriceMutation {
 	return pu.mutation
+}
+
+// ClearCostsheet clears all "costsheet" edges to the Costsheet entity.
+func (pu *PriceUpdate) ClearCostsheet() *PriceUpdate {
+	pu.mutation.ClearCostsheet()
+	return pu
+}
+
+// RemoveCostsheetIDs removes the "costsheet" edge to Costsheet entities by IDs.
+func (pu *PriceUpdate) RemoveCostsheetIDs(ids ...string) *PriceUpdate {
+	pu.mutation.RemoveCostsheetIDs(ids...)
+	return pu
+}
+
+// RemoveCostsheet removes "costsheet" edges to Costsheet entities.
+func (pu *PriceUpdate) RemoveCostsheet(c ...*Costsheet) *PriceUpdate {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return pu.RemoveCostsheetIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -556,6 +593,51 @@ func (pu *PriceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if pu.mutation.MetadataCleared() {
 		_spec.ClearField(price.FieldMetadata, field.TypeJSON)
+	}
+	if pu.mutation.CostsheetCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   price.CostsheetTable,
+			Columns: []string{price.CostsheetColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(costsheet.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := pu.mutation.RemovedCostsheetIDs(); len(nodes) > 0 && !pu.mutation.CostsheetCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   price.CostsheetTable,
+			Columns: []string{price.CostsheetColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(costsheet.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := pu.mutation.CostsheetIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   price.CostsheetTable,
+			Columns: []string{price.CostsheetColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(costsheet.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, pu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -899,9 +981,45 @@ func (puo *PriceUpdateOne) ClearMetadata() *PriceUpdateOne {
 	return puo
 }
 
+// AddCostsheetIDs adds the "costsheet" edge to the Costsheet entity by IDs.
+func (puo *PriceUpdateOne) AddCostsheetIDs(ids ...string) *PriceUpdateOne {
+	puo.mutation.AddCostsheetIDs(ids...)
+	return puo
+}
+
+// AddCostsheet adds the "costsheet" edges to the Costsheet entity.
+func (puo *PriceUpdateOne) AddCostsheet(c ...*Costsheet) *PriceUpdateOne {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return puo.AddCostsheetIDs(ids...)
+}
+
 // Mutation returns the PriceMutation object of the builder.
 func (puo *PriceUpdateOne) Mutation() *PriceMutation {
 	return puo.mutation
+}
+
+// ClearCostsheet clears all "costsheet" edges to the Costsheet entity.
+func (puo *PriceUpdateOne) ClearCostsheet() *PriceUpdateOne {
+	puo.mutation.ClearCostsheet()
+	return puo
+}
+
+// RemoveCostsheetIDs removes the "costsheet" edge to Costsheet entities by IDs.
+func (puo *PriceUpdateOne) RemoveCostsheetIDs(ids ...string) *PriceUpdateOne {
+	puo.mutation.RemoveCostsheetIDs(ids...)
+	return puo
+}
+
+// RemoveCostsheet removes "costsheet" edges to Costsheet entities.
+func (puo *PriceUpdateOne) RemoveCostsheet(c ...*Costsheet) *PriceUpdateOne {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return puo.RemoveCostsheetIDs(ids...)
 }
 
 // Where appends a list predicates to the PriceUpdate builder.
@@ -1133,6 +1251,51 @@ func (puo *PriceUpdateOne) sqlSave(ctx context.Context) (_node *Price, err error
 	}
 	if puo.mutation.MetadataCleared() {
 		_spec.ClearField(price.FieldMetadata, field.TypeJSON)
+	}
+	if puo.mutation.CostsheetCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   price.CostsheetTable,
+			Columns: []string{price.CostsheetColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(costsheet.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := puo.mutation.RemovedCostsheetIDs(); len(nodes) > 0 && !puo.mutation.CostsheetCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   price.CostsheetTable,
+			Columns: []string{price.CostsheetColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(costsheet.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := puo.mutation.CostsheetIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   price.CostsheetTable,
+			Columns: []string{price.CostsheetColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(costsheet.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_node = &Price{config: puo.config}
 	_spec.Assign = _node.assignValues

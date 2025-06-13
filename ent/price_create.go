@@ -10,6 +10,7 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/flexprice/flexprice/ent/costsheet"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/schema"
 )
@@ -285,6 +286,21 @@ func (pc *PriceCreate) SetMetadata(m map[string]string) *PriceCreate {
 func (pc *PriceCreate) SetID(s string) *PriceCreate {
 	pc.mutation.SetID(s)
 	return pc
+}
+
+// AddCostsheetIDs adds the "costsheet" edge to the Costsheet entity by IDs.
+func (pc *PriceCreate) AddCostsheetIDs(ids ...string) *PriceCreate {
+	pc.mutation.AddCostsheetIDs(ids...)
+	return pc
+}
+
+// AddCostsheet adds the "costsheet" edges to the Costsheet entity.
+func (pc *PriceCreate) AddCostsheet(c ...*Costsheet) *PriceCreate {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return pc.AddCostsheetIDs(ids...)
 }
 
 // Mutation returns the PriceMutation object of the builder.
@@ -571,6 +587,22 @@ func (pc *PriceCreate) createSpec() (*Price, *sqlgraph.CreateSpec) {
 	if value, ok := pc.mutation.Metadata(); ok {
 		_spec.SetField(price.FieldMetadata, field.TypeJSON, value)
 		_node.Metadata = value
+	}
+	if nodes := pc.mutation.CostsheetIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   price.CostsheetTable,
+			Columns: []string{price.CostsheetColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(costsheet.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
 }

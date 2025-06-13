@@ -72,6 +72,54 @@ var (
 			},
 		},
 	}
+	// CostsheetColumns holds the columns for the "costsheet" table.
+	CostsheetColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "meter_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "price_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+	}
+	// CostsheetTable holds the schema information for the "costsheet" table.
+	CostsheetTable = &schema.Table{
+		Name:       "costsheet",
+		Columns:    CostsheetColumns,
+		PrimaryKey: []*schema.Column{CostsheetColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "costsheet_meters_costsheet",
+				Columns:    []*schema.Column{CostsheetColumns[8]},
+				RefColumns: []*schema.Column{MetersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "costsheet_prices_costsheet",
+				Columns:    []*schema.Column{CostsheetColumns[9]},
+				RefColumns: []*schema.Column{PricesColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "costsheet_tenant_id_environment_id",
+				Unique:  false,
+				Columns: []*schema.Column{CostsheetColumns[1], CostsheetColumns[7]},
+			},
+			{
+				Name:    "costsheet_meter_id_price_id",
+				Unique:  true,
+				Columns: []*schema.Column{CostsheetColumns[8], CostsheetColumns[9]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published'",
+				},
+			},
+		},
+	}
 	// CreditGrantsColumns holds the columns for the "credit_grants" table.
 	CreditGrantsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -1318,6 +1366,7 @@ var (
 	Tables = []*schema.Table{
 		AuthsTable,
 		BillingSequencesTable,
+		CostsheetTable,
 		CreditGrantsTable,
 		CreditGrantApplicationsTable,
 		CustomersTable,
@@ -1347,6 +1396,11 @@ var (
 )
 
 func init() {
+	CostsheetTable.ForeignKeys[0].RefTable = MetersTable
+	CostsheetTable.ForeignKeys[1].RefTable = PricesTable
+	CostsheetTable.Annotation = &entsql.Annotation{
+		Table: "costsheet",
+	}
 	CreditGrantsTable.ForeignKeys[0].RefTable = PlansTable
 	CreditGrantsTable.ForeignKeys[1].RefTable = SubscriptionsTable
 	EntitlementsTable.ForeignKeys[0].RefTable = PlansTable
