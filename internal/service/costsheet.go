@@ -19,16 +19,15 @@ import (
 // It provides functionality for calculating input costs and margins based on
 // cost sheet items, usage data, and pricing information.
 type CostSheetService interface {
-	// GetInputCostForMargin calculates input costs for margin calculation by:
-	// 1. Retrieving all published cost sheet items
-	// 2. Gathering usage data for each meter
-	// 3. Calculating costs based on pricing and usage
-	// Returns the total cost and individual item costs for the specified time period
-	GetInputCostForMargin(ctx context.Context, req *dto.CreateCostsheetRequest) (*dto.CostBreakdownResponse, error)
+	// CRUD Operations
+	CreateCostsheet(ctx context.Context, req *dto.CreateCostsheetRequest) (*dto.CostsheetResponse, error)
+	GetCostsheet(ctx context.Context, id string) (*dto.CostsheetResponse, error)
+	ListCostsheets(ctx context.Context, filter *domainCostSheet.Filter) (*dto.ListCostsheetsResponse, error)
+	UpdateCostsheet(ctx context.Context, req *dto.UpdateCostsheetRequest) (*dto.CostsheetResponse, error)
+	DeleteCostsheet(ctx context.Context, id string) error
 
-	// CalculateMargin calculates the profit margin as a decimal value using the formula:
-	// margin = (revenue - cost) / cost
-	// Returns zero if total cost is zero to avoid division by zero
+	// Calculation Operations
+	GetInputCostForMargin(ctx context.Context, req *dto.CreateCostsheetRequest) (*dto.CostBreakdownResponse, error)
 	CalculateMargin(totalCost, totalRevenue decimal.Decimal) decimal.Decimal
 }
 
@@ -190,3 +189,110 @@ func (s *costSheetService) CalculateMargin(totalCost, totalRevenue decimal.Decim
 // totalCost = 100
 // totalRevenue = -100
 // margin = 0   // Invalid business case
+
+// CreateCostsheet creates a new cost sheet record
+func (s *costSheetService) CreateCostsheet(ctx context.Context, req *dto.CreateCostsheetRequest) (*dto.CostsheetResponse, error) {
+	// Create domain model
+	costsheet := domainCostSheet.New(ctx, req.MeterID, req.PriceID)
+
+	// Validate the model
+	if err := costsheet.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Save to repository
+	if err := s.CostSheetRepo.Create(ctx, costsheet); err != nil {
+		return nil, err
+	}
+
+	// Return response
+	return &dto.CostsheetResponse{
+		ID:        costsheet.ID,
+		MeterID:   costsheet.MeterID,
+		PriceID:   costsheet.PriceID,
+		Status:    costsheet.Status,
+		CreatedAt: costsheet.CreatedAt,
+		UpdatedAt: costsheet.UpdatedAt,
+	}, nil
+}
+
+// GetCostsheet retrieves a cost sheet by ID
+func (s *costSheetService) GetCostsheet(ctx context.Context, id string) (*dto.CostsheetResponse, error) {
+	// Get from repository
+	costsheet, err := s.CostSheetRepo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Return response
+	return &dto.CostsheetResponse{
+		ID:        costsheet.ID,
+		MeterID:   costsheet.MeterID,
+		PriceID:   costsheet.PriceID,
+		Status:    costsheet.Status,
+		CreatedAt: costsheet.CreatedAt,
+		UpdatedAt: costsheet.UpdatedAt,
+	}, nil
+}
+
+// ListCostsheets retrieves a list of cost sheets based on filter criteria
+func (s *costSheetService) ListCostsheets(ctx context.Context, filter *domainCostSheet.Filter) (*dto.ListCostsheetsResponse, error) {
+	// Get from repository
+	items, err := s.CostSheetRepo.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert to response
+	response := &dto.ListCostsheetsResponse{
+		Items: make([]dto.CostsheetResponse, len(items)),
+		Total: len(items),
+	}
+
+	for i, item := range items {
+		response.Items[i] = dto.CostsheetResponse{
+			ID:        item.ID,
+			MeterID:   item.MeterID,
+			PriceID:   item.PriceID,
+			Status:    item.Status,
+			CreatedAt: item.CreatedAt,
+			UpdatedAt: item.UpdatedAt,
+		}
+	}
+
+	return response, nil
+}
+
+// UpdateCostsheet updates an existing cost sheet
+func (s *costSheetService) UpdateCostsheet(ctx context.Context, req *dto.UpdateCostsheetRequest) (*dto.CostsheetResponse, error) {
+	// Get existing cost sheet
+	costsheet, err := s.CostSheetRepo.Get(ctx, req.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Update fields
+	if req.Status != "" {
+		costsheet.Status = types.Status(req.Status)
+	}
+
+	// Save changes
+	if err := s.CostSheetRepo.Update(ctx, costsheet); err != nil {
+		return nil, err
+	}
+
+	// Return response
+	return &dto.CostsheetResponse{
+		ID:        costsheet.ID,
+		MeterID:   costsheet.MeterID,
+		PriceID:   costsheet.PriceID,
+		Status:    costsheet.Status,
+		CreatedAt: costsheet.CreatedAt,
+		UpdatedAt: costsheet.UpdatedAt,
+	}, nil
+}
+
+// DeleteCostsheet deletes a cost sheet by ID
+func (s *costSheetService) DeleteCostsheet(ctx context.Context, id string) error {
+	return s.CostSheetRepo.Delete(ctx, id)
+}

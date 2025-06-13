@@ -34,6 +34,7 @@ type Handlers struct {
 	Payment           *v1.PaymentHandler
 	Task              *v1.TaskHandler
 	Secret            *v1.SecretHandler
+	CostSheet         *v1.CostSheetHandler
 	// Portal handlers
 	Onboarding *v1.OnboardingHandler
 	// Cron jobs : TODO: move crons out of API based architecture
@@ -277,6 +278,17 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 				integrations.GET("/:provider", handlers.Secret.GetIntegration)
 				integrations.DELETE("/:id", handlers.Secret.DeleteIntegration)
 			}
+		}
+
+		// Cost sheet routes
+		costSheet := v1Private.Group("/cost_sheets")
+		{
+			costSheet.POST("", handlers.CostSheet.CreateCostsheet)
+			costSheet.GET("", handlers.CostSheet.ListCostsheets)
+			costSheet.GET("/:id", handlers.CostSheet.GetCostsheet)
+			costSheet.PUT("/:id", handlers.CostSheet.UpdateCostsheet)
+			costSheet.DELETE("/:id", handlers.CostSheet.DeleteCostsheet)
+			costSheet.POST("/calculate", handlers.CostSheet.CalculateCostSheet)
 		}
 
 		// Admin routes (API Key only)

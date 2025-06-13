@@ -3,6 +3,7 @@ package dto
 import (
 	"time"
 
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -55,4 +56,20 @@ type UpdateCostsheetRequest struct {
 
 	// Status updates the costsheet's status (optional)
 	Status string `json:"status,omitempty"`
+}
+
+// CostsheetResponse represents a cost sheet in API responses
+type CostsheetResponse struct {
+	ID        string       `json:"id"`
+	MeterID   string       `json:"meter_id"`
+	PriceID   string       `json:"price_id"`
+	Status    types.Status `json:"status"`
+	CreatedAt time.Time    `json:"created_at"`
+	UpdatedAt time.Time    `json:"updated_at"`
+}
+
+// ListCostsheetsResponse represents the response for listing cost sheets
+type ListCostsheetsResponse struct {
+	Items []CostsheetResponse `json:"items"`
+	Total int                 `json:"total"`
 }
