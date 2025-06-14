@@ -29,7 +29,7 @@ type CostSheetService interface {
 	// Calculation Operations
 	GetInputCostForMargin(ctx context.Context, req *dto.CreateCostSheetRequest) (*dto.CostBreakdownResponse, error)
 	CalculateMargin(totalCost, totalRevenue decimal.Decimal) decimal.Decimal
-	CalculateROI(ctx context.Context, req *dto.CalculateROIRequest) (decimal.Decimal, error)
+	CalculateROI(ctx context.Context, req *dto.CalculateROIRequest) (*dto.ROIResponse, error)
 }
 
 // costSheetService implements the CostSheetService interface.
@@ -284,8 +284,7 @@ func (s *costsheetService) DeleteCostSheet(ctx context.Context, id string) error
 }
 
 // CalculateROI calculates the ROI for a cost sheet
-func (s *costsheetService) CalculateROI(ctx context.Context, req *dto.CalculateROIRequest) (decimal.Decimal, error) {
-
+func (s *costsheetService) CalculateROI(ctx context.Context, req *dto.CalculateROIRequest) (*dto.ROIResponse, error) {
 	subscriptionService := NewSubscriptionService(s.ServiceParams)
 	billingService := NewBillingService(s.ServiceParams)
 
@@ -298,7 +297,7 @@ func (s *costsheetService) CalculateROI(ctx context.Context, req *dto.CalculateR
 	// Get cost breakdown
 	costBreakdown, err := s.GetInputCostForMargin(ctx, costSheetReq)
 	if err != nil {
-		return decimal.Zero, ierr.WithError(err).
+		return nil, ierr.WithError(err).
 			WithMessage("failed to get cost breakdown").
 			WithHint("failed to calculate costs").
 			Mark(ierr.ErrInternal)
@@ -307,7 +306,7 @@ func (s *costsheetService) CalculateROI(ctx context.Context, req *dto.CalculateR
 	// Get subscription details
 	sub, err := subscriptionService.GetSubscription(ctx, req.SubscriptionID)
 	if err != nil {
-		return decimal.Zero, ierr.WithError(err).
+		return nil, ierr.WithError(err).
 			WithMessage("failed to get subscription").
 			WithHint("failed to get subscription details").
 			Mark(ierr.ErrInternal)
@@ -322,7 +321,7 @@ func (s *costsheetService) CalculateROI(ctx context.Context, req *dto.CalculateR
 
 	usage, err := subscriptionService.GetUsageBySubscription(ctx, usageReq)
 	if err != nil {
-		return decimal.Zero, ierr.WithError(err).
+		return nil, ierr.WithError(err).
 			WithMessage("failed to get usage data").
 			WithHint("failed to get subscription usage").
 			Mark(ierr.ErrInternal)
@@ -330,14 +329,31 @@ func (s *costsheetService) CalculateROI(ctx context.Context, req *dto.CalculateR
 
 	// Calculate total revenue using billing service
 	billingResult, err := billingService.CalculateAllCharges(ctx, sub.Subscription, usage, req.PeriodStart, req.PeriodEnd)
-
 	if err != nil {
-		return decimal.Zero, ierr.WithError(err).
+		return nil, ierr.WithError(err).
 			WithMessage("failed to calculate charges").
 			WithHint("failed to calculate total revenue").
 			Mark(ierr.ErrInternal)
 	}
 
-	// Calculate ROI
-	return s.CalculateMargin(costBreakdown.TotalCost, billingResult.TotalAmount), nil
+	// Calculate metrics
+	revenue := billingResult.TotalAmount
+	totalCost := costBreakdown.TotalCost
+	netRevenue := revenue.Sub(totalCost)
+
+	response := &dto.ROIResponse{
+		Revenue: revenue,
+		Costs: struct {
+			Total decimal.Decimal         `json:"total"`
+			Items []dto.CostBreakdownItem `json:"items"`
+		}{
+			Total: totalCost,
+			Items: costBreakdown.Items,
+		},
+		NetRevenue: netRevenue,
+		ROI:        s.CalculateMargin(totalCost, revenue),
+		Margin:     netRevenue.Div(revenue), // (Revenue - Cost) / Revenue
+	}
+
+	return response, nil
 }

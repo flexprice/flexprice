@@ -89,3 +89,20 @@ type ListCostSheetsResponse struct {
 	Items []CostSheetResponse `json:"items"`
 	Total int                 `json:"total"`
 }
+
+// ROIResponse represents the detailed response for ROI calculations
+type ROIResponse struct {
+	// Total revenue generated from the subscription
+	Revenue decimal.Decimal `json:"revenue"`
+
+	// Total cost breakdown
+	Costs struct {
+		Total decimal.Decimal     `json:"total"`
+		Items []CostBreakdownItem `json:"items"`
+	} `json:"costs"`
+
+	// Calculated metrics
+	NetRevenue decimal.Decimal `json:"net_revenue"` // Revenue - Total Cost
+	ROI        decimal.Decimal `json:"roi"`         // (Revenue - Cost) / Cost
+	Margin     decimal.Decimal `json:"margin"`      // (Revenue - Cost) / Revenue
+}

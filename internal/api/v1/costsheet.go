@@ -295,7 +295,7 @@ func (h *CostSheetHandler) GetCostBreakDown(c *gin.Context) {
 // @Produce json
 // @Security ApiKeyAuth
 // @Param request body dto.CalculateROIRequest true "ROI calculation request"
-// @Success 200 {object} decimal.Decimal
+// @Success 200 {object} dto.ROIResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
 // @Router /cost/roi [post]
@@ -303,22 +303,20 @@ func (h *CostSheetHandler) CalculateROI(c *gin.Context) {
 	ctx := c.Request.Context()
 	var req dto.CalculateROIRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
+		h.log.Error("Failed to bind request body", "error", err)
 		c.Error(ierr.WithError(err).
-			WithHint("Invalid request format").
+			WithHint("Invalid request body. Required: subscription_id, meter_id, price_id, period_start, period_end").
 			Mark(ierr.ErrValidation))
 		return
 	}
 
 	// Calculate ROI using the service
-	roi, err := h.service.CalculateROI(ctx, &req)
+	response, err := h.service.CalculateROI(ctx, &req)
 	if err != nil {
 		h.log.Error("Failed to calculate ROI", "error", err)
 		c.Error(err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"roi": roi,
-	})
+	c.JSON(http.StatusOK, response)
 }
