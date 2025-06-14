@@ -50,9 +50,10 @@ func (h *CostSheetHandler) CreateCostSheet(c *gin.Context) {
 
 	// Check for existing published costsheet with same meter_id and price_id
 	filter := &domainCostsheet.Filter{
-		MeterIDs: []string{req.MeterID},
-		PriceIDs: []string{req.PriceID},
-		Status:   types.CostsheetStatusPublished,
+		QueryFilter: types.NewDefaultQueryFilter(),
+		MeterIDs:    []string{req.MeterID},
+		PriceIDs:    []string{req.PriceID},
+		Status:      types.CostsheetStatusPublished,
 	}
 
 	// Get tenant and environment from context

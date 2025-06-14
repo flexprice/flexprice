@@ -182,41 +182,6 @@ var (
 			},
 		},
 	}
-	// CreditGrantApplicationsColumns holds the columns for the "credit_grant_applications" table.
-	CreditGrantApplicationsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "updated_at", Type: field.TypeTime},
-		{Name: "created_by", Type: field.TypeString, Nullable: true},
-		{Name: "updated_by", Type: field.TypeString, Nullable: true},
-		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "credit_grant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "subscription_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "scheduled_for", Type: field.TypeTime},
-		{Name: "applied_at", Type: field.TypeTime, Nullable: true},
-		{Name: "billing_period_start", Type: field.TypeTime},
-		{Name: "billing_period_end", Type: field.TypeTime},
-		{Name: "application_status", Type: field.TypeString, Default: "scheduled"},
-		{Name: "amount_applied", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
-		{Name: "currency", Type: field.TypeString},
-		{Name: "application_reason", Type: field.TypeString},
-		{Name: "subscription_status_at_application", Type: field.TypeString},
-		{Name: "is_prorated", Type: field.TypeBool},
-		{Name: "proration_factor", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
-		{Name: "full_period_amount", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
-		{Name: "retry_count", Type: field.TypeInt, Default: 0},
-		{Name: "failure_reason", Type: field.TypeString, Nullable: true},
-		{Name: "next_retry_at", Type: field.TypeTime, Nullable: true},
-		{Name: "metadata", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
-	}
-	// CreditGrantApplicationsTable holds the schema information for the "credit_grant_applications" table.
-	CreditGrantApplicationsTable = &schema.Table{
-		Name:       "credit_grant_applications",
-		Columns:    CreditGrantApplicationsColumns,
-		PrimaryKey: []*schema.Column{CreditGrantApplicationsColumns[0]},
-	}
 	// CustomersColumns holds the columns for the "customers" table.
 	CustomersColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -1368,7 +1333,6 @@ var (
 		BillingSequencesTable,
 		CostsheetTable,
 		CreditGrantsTable,
-		CreditGrantApplicationsTable,
 		CustomersTable,
 		EntitlementsTable,
 		EnvironmentsTable,

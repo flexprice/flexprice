@@ -67,6 +67,7 @@ type Filter struct {
 // It automatically sets up the base model fields using context information.
 func New(ctx context.Context, meterID, priceID string) *Costsheet {
 	return &Costsheet{
+		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COSTSHEET),
 		MeterID:   meterID,
 		PriceID:   priceID,
 		BaseModel: types.GetDefaultBaseModel(ctx),

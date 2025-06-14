@@ -54,12 +54,23 @@ func NewCostSheetService(params ServiceParams) CostSheetService {
 func (s *costsheetService) GetInputCostForMargin(ctx context.Context, req *dto.CreateCostSheetRequest) (*dto.CostBreakdownResponse, error) {
 	tenantID, envID := domainCostSheet.GetTenantAndEnvFromContext(ctx)
 
+	// Get time range from context
+	startTime, ok := ctx.Value("start_time").(time.Time)
+	if !ok {
+		startTime = time.Now().AddDate(0, 0, -1) // Default to last 24 hours
+	}
+	endTime, ok := ctx.Value("end_time").(time.Time)
+	if !ok {
+		endTime = time.Now()
+	}
+
 	//Create service instance for costsheet in functions
 	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config)
 	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.Logger)
 
 	// Construct filter to get only published cost sheet items
 	filter := &domainCostSheet.Filter{
+		QueryFilter:   types.NewDefaultQueryFilter(),
 		TenantID:      tenantID,
 		EnvironmentID: envID,
 		Filters: []*types.FilterCondition{
@@ -88,8 +99,8 @@ func (s *costsheetService) GetInputCostForMargin(ctx context.Context, req *dto.C
 	for i, item := range items {
 		usageRequests[i] = &dto.GetUsageByMeterRequest{
 			MeterID:   item.MeterID,
-			StartTime: time.Now().AddDate(0, 0, -1),
-			EndTime:   time.Now(),
+			StartTime: startTime,
+			EndTime:   endTime,
 		}
 	}
 

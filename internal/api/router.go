@@ -281,7 +281,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		}
 
 		// Cost sheet routes
-		costSheet := v1Private.Group("/cost")
+		costSheet := v1Private.Group("/costs")
 		{
 			costSheet.POST("", handlers.CostSheet.CreateCostSheet)
 			costSheet.GET("", handlers.CostSheet.ListCostSheets)
