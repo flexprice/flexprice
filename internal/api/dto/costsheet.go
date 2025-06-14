@@ -24,7 +24,7 @@ type CalculateROIRequest struct {
 }
 
 // CreateCostsheetRequest represents the request to create a new costsheet.
-type CreateCostsheetRequest struct {
+type CreateCostSheetRequest struct {
 	// MeterID references the meter to track usage
 	MeterID string `json:"meter_id" validate:"required"`
 
@@ -65,8 +65,8 @@ type CostBreakdownItem struct {
 	Cost decimal.Decimal `json:"cost"`
 }
 
-// UpdateCostsheetRequest represents the request to update an existing costsheet.
-type UpdateCostsheetRequest struct {
+// UpdateCostSheetRequest represents the request to update an existing costsheet.
+type UpdateCostSheetRequest struct {
 	// ID of the costsheet to update
 	ID string `json:"id" validate:"required"`
 
@@ -75,7 +75,7 @@ type UpdateCostsheetRequest struct {
 }
 
 // CostsheetResponse represents a cost sheet in API responses
-type CostsheetResponse struct {
+type CostSheetResponse struct {
 	ID        string       `json:"id"`
 	MeterID   string       `json:"meter_id"`
 	PriceID   string       `json:"price_id"`
@@ -84,8 +84,8 @@ type CostsheetResponse struct {
 	UpdatedAt time.Time    `json:"updated_at"`
 }
 
-// ListCostsheetsResponse represents the response for listing cost sheets
-type ListCostsheetsResponse struct {
-	Items []CostsheetResponse `json:"items"`
+// ListCostSheetsResponse represents the response for listing cost sheets
+type ListCostSheetsResponse struct {
+	Items []CostSheetResponse `json:"items"`
 	Total int                 `json:"total"`
 }

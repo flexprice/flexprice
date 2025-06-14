@@ -20,14 +20,14 @@ import (
 // cost sheet items, usage data, and pricing information.
 type CostSheetService interface {
 	// CRUD Operations
-	CreateCostsheet(ctx context.Context, req *dto.CreateCostsheetRequest) (*dto.CostsheetResponse, error)
-	GetCostsheet(ctx context.Context, id string) (*dto.CostsheetResponse, error)
-	ListCostsheets(ctx context.Context, filter *domainCostSheet.Filter) (*dto.ListCostsheetsResponse, error)
-	UpdateCostsheet(ctx context.Context, req *dto.UpdateCostsheetRequest) (*dto.CostsheetResponse, error)
-	DeleteCostsheet(ctx context.Context, id string) error
+	CreateCostSheet(ctx context.Context, req *dto.CreateCostSheetRequest) (*dto.CostSheetResponse, error)
+	GetCostSheet(ctx context.Context, id string) (*dto.CostSheetResponse, error)
+	ListCostSheets(ctx context.Context, filter *domainCostSheet.Filter) (*dto.ListCostSheetsResponse, error)
+	UpdateCostSheet(ctx context.Context, req *dto.UpdateCostSheetRequest) (*dto.CostSheetResponse, error)
+	DeleteCostSheet(ctx context.Context, id string) error
 
 	// Calculation Operations
-	GetInputCostForMargin(ctx context.Context, req *dto.CreateCostsheetRequest) (*dto.CostBreakdownResponse, error)
+	GetInputCostForMargin(ctx context.Context, req *dto.CreateCostSheetRequest) (*dto.CostBreakdownResponse, error)
 	CalculateMargin(totalCost, totalRevenue decimal.Decimal) decimal.Decimal
 	CalculateROI(ctx context.Context, req *dto.CalculateROIRequest) (decimal.Decimal, error)
 }
@@ -51,7 +51,7 @@ func NewCostSheetService(params ServiceParams) CostSheetService {
 // 2. Gathering usage data for all relevant meters
 // 3. Calculating individual costs using pricing information
 // 4. Aggregating total cost and item-specific costs
-func (s *costsheetService) GetInputCostForMargin(ctx context.Context, req *dto.CreateCostsheetRequest) (*dto.CostBreakdownResponse, error) {
+func (s *costsheetService) GetInputCostForMargin(ctx context.Context, req *dto.CreateCostSheetRequest) (*dto.CostBreakdownResponse, error) {
 	tenantID, envID := domainCostSheet.GetTenantAndEnvFromContext(ctx)
 
 	//Create service instance for costsheet in functions
@@ -94,7 +94,6 @@ func (s *costsheetService) GetInputCostForMargin(ctx context.Context, req *dto.C
 	}
 
 	// Fetch usage data for all meters in bulk
-	// usageData, err := s.eventService.BulkGetUsageByMeter(ctx, usageRequests)
 	usageData, err := eventService.BulkGetUsageByMeter(ctx, usageRequests)
 
 	if err != nil {
@@ -127,7 +126,6 @@ func (s *costsheetService) GetInputCostForMargin(ctx context.Context, req *dto.C
 		}
 
 		// Calculate cost for this item using price and usage
-		// cost := s.priceService.CalculateCostSheetPrice(ctx, priceResp.Price, usage.Value)
 		cost := priceService.CalculateCostSheetPrice(ctx, priceResp.Price, usage.Value)
 
 		// Store item-specific cost details
@@ -165,28 +163,10 @@ func (s *costsheetService) CalculateMargin(totalCost, totalRevenue decimal.Decim
 
 }
 
-// Case 1: Zero Cost
-// totalCost = 0
-// totalRevenue = 100
-// margin = 0  // Can't divide by zero!
-
-// Case 2: Zero Revenue
-// totalCost = 100
-// totalRevenue = 0
-// margin = 0   // No revenue = no margin
-
-// Case 3: Negative Cost
-// totalCost = -100
-// totalRevenue = 100
-// margin = 0   // Invalid business case
-
-// Case 4: Negative Revenue
-// totalCost = 100
-// totalRevenue = -100
-// margin = 0   // Invalid business case
+// API Services
 
 // CreateCostsheet creates a new cost sheet record
-func (s *costsheetService) CreateCostsheet(ctx context.Context, req *dto.CreateCostsheetRequest) (*dto.CostsheetResponse, error) {
+func (s *costsheetService) CreateCostSheet(ctx context.Context, req *dto.CreateCostSheetRequest) (*dto.CostSheetResponse, error) {
 	// Create domain model
 	costsheet := domainCostSheet.New(ctx, req.MeterID, req.PriceID)
 
@@ -201,7 +181,7 @@ func (s *costsheetService) CreateCostsheet(ctx context.Context, req *dto.CreateC
 	}
 
 	// Return response
-	return &dto.CostsheetResponse{
+	return &dto.CostSheetResponse{
 		ID:        costsheet.ID,
 		MeterID:   costsheet.MeterID,
 		PriceID:   costsheet.PriceID,
@@ -212,7 +192,7 @@ func (s *costsheetService) CreateCostsheet(ctx context.Context, req *dto.CreateC
 }
 
 // GetCostsheet retrieves a cost sheet by ID
-func (s *costsheetService) GetCostsheet(ctx context.Context, id string) (*dto.CostsheetResponse, error) {
+func (s *costsheetService) GetCostSheet(ctx context.Context, id string) (*dto.CostSheetResponse, error) {
 	// Get from repository
 	costsheet, err := s.CostSheetRepo.Get(ctx, id)
 	if err != nil {
@@ -220,7 +200,7 @@ func (s *costsheetService) GetCostsheet(ctx context.Context, id string) (*dto.Co
 	}
 
 	// Return response
-	return &dto.CostsheetResponse{
+	return &dto.CostSheetResponse{
 		ID:        costsheet.ID,
 		MeterID:   costsheet.MeterID,
 		PriceID:   costsheet.PriceID,
@@ -231,7 +211,7 @@ func (s *costsheetService) GetCostsheet(ctx context.Context, id string) (*dto.Co
 }
 
 // ListCostsheets retrieves a list of cost sheets based on filter criteria
-func (s *costsheetService) ListCostsheets(ctx context.Context, filter *domainCostSheet.Filter) (*dto.ListCostsheetsResponse, error) {
+func (s *costsheetService) ListCostSheets(ctx context.Context, filter *domainCostSheet.Filter) (*dto.ListCostSheetsResponse, error) {
 	// Get from repository
 	items, err := s.CostSheetRepo.List(ctx, filter)
 	if err != nil {
@@ -239,13 +219,13 @@ func (s *costsheetService) ListCostsheets(ctx context.Context, filter *domainCos
 	}
 
 	// Convert to response
-	response := &dto.ListCostsheetsResponse{
-		Items: make([]dto.CostsheetResponse, len(items)),
+	response := &dto.ListCostSheetsResponse{
+		Items: make([]dto.CostSheetResponse, len(items)),
 		Total: len(items),
 	}
 
 	for i, item := range items {
-		response.Items[i] = dto.CostsheetResponse{
+		response.Items[i] = dto.CostSheetResponse{
 			ID:        item.ID,
 			MeterID:   item.MeterID,
 			PriceID:   item.PriceID,
@@ -259,7 +239,7 @@ func (s *costsheetService) ListCostsheets(ctx context.Context, filter *domainCos
 }
 
 // UpdateCostsheet updates an existing cost sheet
-func (s *costsheetService) UpdateCostsheet(ctx context.Context, req *dto.UpdateCostsheetRequest) (*dto.CostsheetResponse, error) {
+func (s *costsheetService) UpdateCostSheet(ctx context.Context, req *dto.UpdateCostSheetRequest) (*dto.CostSheetResponse, error) {
 	// Get existing cost sheet
 	costsheet, err := s.CostSheetRepo.Get(ctx, req.ID)
 	if err != nil {
@@ -277,7 +257,7 @@ func (s *costsheetService) UpdateCostsheet(ctx context.Context, req *dto.UpdateC
 	}
 
 	// Return response
-	return &dto.CostsheetResponse{
+	return &dto.CostSheetResponse{
 		ID:        costsheet.ID,
 		MeterID:   costsheet.MeterID,
 		PriceID:   costsheet.PriceID,
@@ -288,14 +268,18 @@ func (s *costsheetService) UpdateCostsheet(ctx context.Context, req *dto.UpdateC
 }
 
 // DeleteCostsheet deletes a cost sheet by ID
-func (s *costsheetService) DeleteCostsheet(ctx context.Context, id string) error {
+func (s *costsheetService) DeleteCostSheet(ctx context.Context, id string) error {
 	return s.CostSheetRepo.Delete(ctx, id)
 }
 
 // CalculateROI calculates the ROI for a cost sheet
 func (s *costsheetService) CalculateROI(ctx context.Context, req *dto.CalculateROIRequest) (decimal.Decimal, error) {
+
+	subscriptionService := NewSubscriptionService(s.ServiceParams)
+	billingService := NewBillingService(s.ServiceParams)
+
 	// Create a cost sheet request from ROI request
-	costSheetReq := &dto.CreateCostsheetRequest{
+	costSheetReq := &dto.CreateCostSheetRequest{
 		MeterID: req.MeterID,
 		PriceID: req.PriceID,
 	}
@@ -310,7 +294,6 @@ func (s *costsheetService) CalculateROI(ctx context.Context, req *dto.CalculateR
 	}
 
 	// Get subscription details
-	subscriptionService := NewSubscriptionService(s.ServiceParams)
 	sub, err := subscriptionService.GetSubscription(ctx, req.SubscriptionID)
 	if err != nil {
 		return decimal.Zero, ierr.WithError(err).
@@ -334,62 +317,8 @@ func (s *costsheetService) CalculateROI(ctx context.Context, req *dto.CalculateR
 			Mark(ierr.ErrInternal)
 	}
 
-	// tenantID, envID := domainCostSheet.GetTenantAndEnvFromContext(ctx)
-
-	// //Create service instance for costsheet in functions
-	// eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config)
-
-	// // Construct filter to get only published cost sheet items
-	// filter := &domainCostSheet.Filter{
-	// 	TenantID:      tenantID,
-	// 	EnvironmentID: envID,
-	// 	Filters: []*types.FilterCondition{
-	// 		{
-	// 			Field:    lo.ToPtr("status"),
-	// 			Operator: lo.ToPtr(types.EQUAL),
-	// 			DataType: lo.ToPtr(types.DataTypeString),
-	// 			Value: &types.Value{
-	// 				String: lo.ToPtr("published"),
-	// 			},
-	// 		},
-	// 	},
-	// }
-
-	// // Retrieve all published cost sheet items
-	// items, err := s.CostSheetRepo.List(ctx, filter)
-	// if err != nil {
-	// 	return decimal.Zero, ierr.WithError(err).
-	// 		WithMessage("failed to get cost sheet items").
-	// 		WithHint("failed to get cost sheet items").
-	// 		Mark(ierr.ErrInternal)
-	// }
-
-	// // Create usage requests for each meter to gather usage data
-	// usageRequests := make([]*dto.GetUsageByMeterRequest, len(items))
-	// for i, item := range items {
-	// 	usageRequests[i] = &dto.GetUsageByMeterRequest{
-	// 		MeterID:   item.MeterID,
-	// 		StartTime: time.Now().AddDate(0, 0, -1),
-	// 		EndTime:   time.Now(),
-	// 	}
-	// }
-
-	// // Fetch usage data for all meters in bulk
-	// // usageData, err := s.eventService.BulkGetUsageByMeter(ctx, usageRequests)
-	// usageData, err := eventService.BulkGetUsageByMeter(ctx, usageRequests)
-
-	// if err != nil {
-	// 	return decimal.Zero, ierr.WithError(err).
-	// 		WithMessage("failed to get usage data").
-	// 		WithHint("failed to get usage data").
-	// 		Mark(ierr.ErrInternal)
-	// }
-
 	// Calculate total revenue using billing service
-	billingService := NewBillingService(s.ServiceParams)
 	billingResult, err := billingService.CalculateAllCharges(ctx, sub.Subscription, usage, req.PeriodStart, req.PeriodEnd)
-
-	// billingResult, err := billingService.CalculateAllCharges(ctx, sub.Subscription, usageData, req.PeriodStart, req.PeriodEnd)
 
 	if err != nil {
 		return decimal.Zero, ierr.WithError(err).

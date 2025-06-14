@@ -283,13 +283,13 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		// Cost sheet routes
 		costSheet := v1Private.Group("/cost")
 		{
-			costSheet.POST("", handlers.CostSheet.CreateCostsheet)
-			costSheet.GET("", handlers.CostSheet.ListCostsheets)
-			costSheet.GET("/:id", handlers.CostSheet.GetCostsheet)
-			costSheet.PUT("/:id", handlers.CostSheet.UpdateCostsheet)
-			costSheet.DELETE("/:id", handlers.CostSheet.DeleteCostsheet)
-			costSheet.GET("/breakdown", handlers.CostSheet.GetCostBreakdown)
-			costSheet.POST("/roi", handlers.CostSheet.CalculateDevROI)
+			costSheet.POST("", handlers.CostSheet.CreateCostSheet)
+			costSheet.GET("", handlers.CostSheet.ListCostSheets)
+			costSheet.GET("/:id", handlers.CostSheet.GetCostSheet)
+			costSheet.PUT("/:id", handlers.CostSheet.UpdateCostSheet)
+			costSheet.DELETE("/:id", handlers.CostSheet.DeleteCostSheet)
+			costSheet.GET("/breakdown", handlers.CostSheet.GetCostBreakDown)
+			costSheet.POST("/roi", handlers.CostSheet.CalculateROI)
 		}
 
 		// Admin routes (API Key only)

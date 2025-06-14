@@ -32,14 +32,14 @@ func NewCostSheetHandler(service service.CostSheetService, log *logger.Logger) *
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Param costsheet body dto.CreateCostsheetRequest true "Cost sheet configuration"
-// @Success 201 {object} dto.CostsheetResponse
+// @Param costsheet body dto.CreateCostSheetRequest true "Cost sheet configuration"
+// @Success 201 {object} dto.CostSheetResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 409 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
-// @Router /cost_sheets [post]
-func (h *CostSheetHandler) CreateCostsheet(c *gin.Context) {
-	var req dto.CreateCostsheetRequest
+// @Router /cost [post]
+func (h *CostSheetHandler) CreateCostSheet(c *gin.Context) {
+	var req dto.CreateCostSheetRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.log.Error("Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
@@ -60,7 +60,7 @@ func (h *CostSheetHandler) CreateCostsheet(c *gin.Context) {
 	filter.TenantID = tenantID
 	filter.EnvironmentID = envID
 
-	existing, err := h.service.ListCostsheets(c.Request.Context(), filter)
+	existing, err := h.service.ListCostSheets(c.Request.Context(), filter)
 	if err != nil {
 		h.log.Error("Failed to check for existing costsheet", "error", err)
 		c.Error(err)
@@ -74,7 +74,7 @@ func (h *CostSheetHandler) CreateCostsheet(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.service.CreateCostsheet(c.Request.Context(), &req)
+	resp, err := h.service.CreateCostSheet(c.Request.Context(), &req)
 	if err != nil {
 		h.log.Error("Failed to create cost sheet", "error", err)
 		c.Error(err)
@@ -91,11 +91,11 @@ func (h *CostSheetHandler) CreateCostsheet(c *gin.Context) {
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Cost Sheet ID"
-// @Success 200 {object} dto.CostsheetResponse
+// @Success 200 {object} dto.CostSheetResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
-// @Router /cost_sheets/{id} [get]
-func (h *CostSheetHandler) GetCostsheet(c *gin.Context) {
+// @Router /cost/{id} [get]
+func (h *CostSheetHandler) GetCostSheet(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
 		c.Error(ierr.NewError("id is required").
@@ -104,7 +104,7 @@ func (h *CostSheetHandler) GetCostsheet(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.service.GetCostsheet(c.Request.Context(), id)
+	resp, err := h.service.GetCostSheet(c.Request.Context(), id)
 	if err != nil {
 		h.log.Error("Failed to get cost sheet", "error", err)
 		c.Error(err)
@@ -121,11 +121,11 @@ func (h *CostSheetHandler) GetCostsheet(c *gin.Context) {
 // @Produce json
 // @Security ApiKeyAuth
 // @Param filter query domainCostsheet.Filter false "Filter"
-// @Success 200 {object} dto.ListCostsheetsResponse
+// @Success 200 {object} dto.ListCostSheetsResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
-// @Router /cost_sheets [get]
-func (h *CostSheetHandler) ListCostsheets(c *gin.Context) {
+// @Router /cost [get]
+func (h *CostSheetHandler) ListCostSheets(c *gin.Context) {
 	var filter domainCostsheet.Filter
 	if err := c.ShouldBindQuery(&filter); err != nil {
 		h.log.Error("Failed to bind query parameters", "error", err)
@@ -145,7 +145,7 @@ func (h *CostSheetHandler) ListCostsheets(c *gin.Context) {
 	filter.TenantID = tenantID
 	filter.EnvironmentID = envID
 
-	resp, err := h.service.ListCostsheets(c.Request.Context(), &filter)
+	resp, err := h.service.ListCostSheets(c.Request.Context(), &filter)
 	if err != nil {
 		h.log.Error("Failed to list cost sheets", "error", err)
 		c.Error(err)
@@ -162,12 +162,12 @@ func (h *CostSheetHandler) ListCostsheets(c *gin.Context) {
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Cost Sheet ID"
-// @Param costsheet body dto.UpdateCostsheetRequest true "Cost sheet configuration"
-// @Success 200 {object} dto.CostsheetResponse
+// @Param costsheet body dto.UpdateCostSheetRequest true "Cost sheet configuration"
+// @Success 200 {object} dto.CostSheetResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
-// @Router /cost_sheets/{id} [put]
-func (h *CostSheetHandler) UpdateCostsheet(c *gin.Context) {
+// @Router /cost/{id} [put]
+func (h *CostSheetHandler) UpdateCostSheet(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
 		c.Error(ierr.NewError("id is required").
@@ -176,7 +176,7 @@ func (h *CostSheetHandler) UpdateCostsheet(c *gin.Context) {
 		return
 	}
 
-	var req dto.UpdateCostsheetRequest
+	var req dto.UpdateCostSheetRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.log.Error("Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
@@ -187,7 +187,7 @@ func (h *CostSheetHandler) UpdateCostsheet(c *gin.Context) {
 
 	req.ID = id // Set the ID from path parameter
 
-	resp, err := h.service.UpdateCostsheet(c.Request.Context(), &req)
+	resp, err := h.service.UpdateCostSheet(c.Request.Context(), &req)
 	if err != nil {
 		h.log.Error("Failed to update cost sheet", "error", err)
 		c.Error(err)
@@ -209,8 +209,8 @@ func (h *CostSheetHandler) UpdateCostsheet(c *gin.Context) {
 // @Failure 404 {object} ierr.ErrorResponse
 // @Failure 409 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
-// @Router /cost_sheets/{id} [delete]
-func (h *CostSheetHandler) DeleteCostsheet(c *gin.Context) {
+// @Router /cost/{id} [delete]
+func (h *CostSheetHandler) DeleteCostSheet(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
 		c.Error(ierr.NewError("id is required").
@@ -220,7 +220,7 @@ func (h *CostSheetHandler) DeleteCostsheet(c *gin.Context) {
 	}
 
 	// Get the costsheet first to check its status
-	costsheet, err := h.service.GetCostsheet(c.Request.Context(), id)
+	costsheet, err := h.service.GetCostSheet(c.Request.Context(), id)
 	if err != nil {
 		h.log.Error("Failed to get cost sheet", "error", err)
 		c.Error(err)
@@ -237,7 +237,7 @@ func (h *CostSheetHandler) DeleteCostsheet(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.DeleteCostsheet(c.Request.Context(), id); err != nil {
+	if err := h.service.DeleteCostSheet(c.Request.Context(), id); err != nil {
 		h.log.Error("Failed to delete cost sheet", "error", err)
 		c.Error(err)
 		return
@@ -257,8 +257,8 @@ func (h *CostSheetHandler) DeleteCostsheet(c *gin.Context) {
 // @Success 200 {object} dto.CostBreakdownResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
-// @Router /cost_sheets/cost_breakdown [get]
-func (h *CostSheetHandler) GetCostBreakdown(c *gin.Context) {
+// @Router /cost/breakdown [get]
+func (h *CostSheetHandler) GetCostBreakDown(c *gin.Context) {
 	var req dto.GetCostBreakdownRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
 		h.log.Error("Failed to bind query parameters", "error", err)
@@ -277,7 +277,7 @@ func (h *CostSheetHandler) GetCostBreakdown(c *gin.Context) {
 	}
 
 	// Get cost breakdown
-	resp, err := h.service.GetInputCostForMargin(c.Request.Context(), &dto.CreateCostsheetRequest{})
+	resp, err := h.service.GetInputCostForMargin(c.Request.Context(), &dto.CreateCostSheetRequest{})
 	if err != nil {
 		h.log.Error("Failed to get cost breakdown", "error", err)
 		c.Error(err)
@@ -297,8 +297,8 @@ func (h *CostSheetHandler) GetCostBreakdown(c *gin.Context) {
 // @Success 200 {object} decimal.Decimal
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
-// @Router /cost_sheets/dev_roi [post]
-func (h *CostSheetHandler) CalculateDevROI(c *gin.Context) {
+// @Router /cost/roi [post]
+func (h *CostSheetHandler) CalculateROI(c *gin.Context) {
 	ctx := c.Request.Context()
 	var req dto.CalculateROIRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
