@@ -144,28 +144,28 @@ const (
 ### 3.1 Cost Sheet Management
 
 ```http
-POST /api/v1/cost_sheets
+POST /api/v1/cost
 {
     "meter_id": "string",
     "price_id": "string"
 }
 
-GET /api/v1/cost_sheets?tenant_id=string&environment_id=string&status=published
+GET /api/v1/cost?tenant_id=string&environment_id=string&status=published
 
-GET /api/v1/cost_sheets/{id}
+GET /api/v1/cost/{id}
 
-PUT /api/v1/cost_sheets/{id}
+PUT /api/v1/cost/{id}
 {
     "status": "string"
 }
 
-DELETE /api/v1/cost_sheets/{id}
+DELETE /api/v1/cost/{id}
 ```
 
 ### 3.2 Cost Calculation
 
 ```http
-GET /api/v1/cost_breakdown
+GET /api/v1/cost/breakdown
 {
     "start_time": "timestamp",
     "end_time": "timestamp"
@@ -184,6 +184,19 @@ Response:
     ]
 }
 ```
+
+### 3.3 Dev ROI
+
+```http
+GET /api/v1/cost/roi
+{
+	"SubscriptionID": "string",
+	"PeriodStart": "timestamp",
+	"PeriodEnd": "timestamp",
+	"MeterID": "string",
+	"PriceID": "string"
+}
+
 
 ## 4. Implementation Details
 
