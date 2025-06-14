@@ -29,24 +29,19 @@ type CostSheetService interface {
 	// Calculation Operations
 	GetInputCostForMargin(ctx context.Context, req *dto.CreateCostsheetRequest) (*dto.CostBreakdownResponse, error)
 	CalculateMargin(totalCost, totalRevenue decimal.Decimal) decimal.Decimal
+	CalculateROI(ctx context.Context, req *dto.CalculateROIRequest) (decimal.Decimal, error)
 }
 
 // costSheetService implements the CostSheetService interface.
 // It coordinates between different components to calculate costs and margins.
-type costSheetService struct {
-	ServiceParams // Common service parameters
-
-	//TODO:Create service instance for costsheet in functions
-	// eventService EventService // Service for handling usage events
-	// priceService PriceService // Service for price calculations
+type costsheetService struct {
+	ServiceParams
 }
 
 // NewCostSheetService creates a new instance of the cost sheet service with the required dependencies.
-func NewCostSheetService(params ServiceParams, eventService EventService, priceService PriceService) CostSheetService {
-	return &costSheetService{
-		ServiceParams: params, // common service parameters// repository for cost sheet data access
-		// eventService:  eventService,
-		// priceService:  priceService,
+func NewCostSheetService(params ServiceParams) CostSheetService {
+	return &costsheetService{
+		ServiceParams: params,
 	}
 }
 
@@ -56,7 +51,7 @@ func NewCostSheetService(params ServiceParams, eventService EventService, priceS
 // 2. Gathering usage data for all relevant meters
 // 3. Calculating individual costs using pricing information
 // 4. Aggregating total cost and item-specific costs
-func (s *costSheetService) GetInputCostForMargin(ctx context.Context, req *dto.CreateCostsheetRequest) (*dto.CostBreakdownResponse, error) {
+func (s *costsheetService) GetInputCostForMargin(ctx context.Context, req *dto.CreateCostsheetRequest) (*dto.CostBreakdownResponse, error) {
 	tenantID, envID := domainCostSheet.GetTenantAndEnvFromContext(ctx)
 
 	//Create service instance for costsheet in functions
@@ -155,7 +150,7 @@ func (s *costSheetService) GetInputCostForMargin(ctx context.Context, req *dto.C
 // CalculateMargin calculates the profit margin as a ratio.
 // The formula used is: margin = (revenue - cost) / cost
 // Returns 0 if totalCost is zero to prevent division by zero errors.
-func (s *costSheetService) CalculateMargin(totalCost, totalRevenue decimal.Decimal) decimal.Decimal {
+func (s *costsheetService) CalculateMargin(totalCost, totalRevenue decimal.Decimal) decimal.Decimal {
 	// if totalCost is zero, return 0
 	if totalCost.IsZero() {
 		return decimal.Zero
@@ -191,7 +186,7 @@ func (s *costSheetService) CalculateMargin(totalCost, totalRevenue decimal.Decim
 // margin = 0   // Invalid business case
 
 // CreateCostsheet creates a new cost sheet record
-func (s *costSheetService) CreateCostsheet(ctx context.Context, req *dto.CreateCostsheetRequest) (*dto.CostsheetResponse, error) {
+func (s *costsheetService) CreateCostsheet(ctx context.Context, req *dto.CreateCostsheetRequest) (*dto.CostsheetResponse, error) {
 	// Create domain model
 	costsheet := domainCostSheet.New(ctx, req.MeterID, req.PriceID)
 
@@ -217,7 +212,7 @@ func (s *costSheetService) CreateCostsheet(ctx context.Context, req *dto.CreateC
 }
 
 // GetCostsheet retrieves a cost sheet by ID
-func (s *costSheetService) GetCostsheet(ctx context.Context, id string) (*dto.CostsheetResponse, error) {
+func (s *costsheetService) GetCostsheet(ctx context.Context, id string) (*dto.CostsheetResponse, error) {
 	// Get from repository
 	costsheet, err := s.CostSheetRepo.Get(ctx, id)
 	if err != nil {
@@ -236,7 +231,7 @@ func (s *costSheetService) GetCostsheet(ctx context.Context, id string) (*dto.Co
 }
 
 // ListCostsheets retrieves a list of cost sheets based on filter criteria
-func (s *costSheetService) ListCostsheets(ctx context.Context, filter *domainCostSheet.Filter) (*dto.ListCostsheetsResponse, error) {
+func (s *costsheetService) ListCostsheets(ctx context.Context, filter *domainCostSheet.Filter) (*dto.ListCostsheetsResponse, error) {
 	// Get from repository
 	items, err := s.CostSheetRepo.List(ctx, filter)
 	if err != nil {
@@ -264,7 +259,7 @@ func (s *costSheetService) ListCostsheets(ctx context.Context, filter *domainCos
 }
 
 // UpdateCostsheet updates an existing cost sheet
-func (s *costSheetService) UpdateCostsheet(ctx context.Context, req *dto.UpdateCostsheetRequest) (*dto.CostsheetResponse, error) {
+func (s *costsheetService) UpdateCostsheet(ctx context.Context, req *dto.UpdateCostsheetRequest) (*dto.CostsheetResponse, error) {
 	// Get existing cost sheet
 	costsheet, err := s.CostSheetRepo.Get(ctx, req.ID)
 	if err != nil {
@@ -293,6 +288,116 @@ func (s *costSheetService) UpdateCostsheet(ctx context.Context, req *dto.UpdateC
 }
 
 // DeleteCostsheet deletes a cost sheet by ID
-func (s *costSheetService) DeleteCostsheet(ctx context.Context, id string) error {
+func (s *costsheetService) DeleteCostsheet(ctx context.Context, id string) error {
 	return s.CostSheetRepo.Delete(ctx, id)
+}
+
+// CalculateROI calculates the ROI for a cost sheet
+func (s *costsheetService) CalculateROI(ctx context.Context, req *dto.CalculateROIRequest) (decimal.Decimal, error) {
+	// Create a cost sheet request from ROI request
+	costSheetReq := &dto.CreateCostsheetRequest{
+		MeterID: req.MeterID,
+		PriceID: req.PriceID,
+	}
+
+	// Get cost breakdown
+	costBreakdown, err := s.GetInputCostForMargin(ctx, costSheetReq)
+	if err != nil {
+		return decimal.Zero, ierr.WithError(err).
+			WithMessage("failed to get cost breakdown").
+			WithHint("failed to calculate costs").
+			Mark(ierr.ErrInternal)
+	}
+
+	// Get subscription details
+	subscriptionService := NewSubscriptionService(s.ServiceParams)
+	sub, err := subscriptionService.GetSubscription(ctx, req.SubscriptionID)
+	if err != nil {
+		return decimal.Zero, ierr.WithError(err).
+			WithMessage("failed to get subscription").
+			WithHint("failed to get subscription details").
+			Mark(ierr.ErrInternal)
+	}
+
+	// Get usage data for the subscription
+	usageReq := &dto.GetUsageBySubscriptionRequest{
+		SubscriptionID: req.SubscriptionID,
+		StartTime:      req.PeriodStart,
+		EndTime:        req.PeriodEnd,
+	}
+
+	usage, err := subscriptionService.GetUsageBySubscription(ctx, usageReq)
+	if err != nil {
+		return decimal.Zero, ierr.WithError(err).
+			WithMessage("failed to get usage data").
+			WithHint("failed to get subscription usage").
+			Mark(ierr.ErrInternal)
+	}
+
+	// tenantID, envID := domainCostSheet.GetTenantAndEnvFromContext(ctx)
+
+	// //Create service instance for costsheet in functions
+	// eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config)
+
+	// // Construct filter to get only published cost sheet items
+	// filter := &domainCostSheet.Filter{
+	// 	TenantID:      tenantID,
+	// 	EnvironmentID: envID,
+	// 	Filters: []*types.FilterCondition{
+	// 		{
+	// 			Field:    lo.ToPtr("status"),
+	// 			Operator: lo.ToPtr(types.EQUAL),
+	// 			DataType: lo.ToPtr(types.DataTypeString),
+	// 			Value: &types.Value{
+	// 				String: lo.ToPtr("published"),
+	// 			},
+	// 		},
+	// 	},
+	// }
+
+	// // Retrieve all published cost sheet items
+	// items, err := s.CostSheetRepo.List(ctx, filter)
+	// if err != nil {
+	// 	return decimal.Zero, ierr.WithError(err).
+	// 		WithMessage("failed to get cost sheet items").
+	// 		WithHint("failed to get cost sheet items").
+	// 		Mark(ierr.ErrInternal)
+	// }
+
+	// // Create usage requests for each meter to gather usage data
+	// usageRequests := make([]*dto.GetUsageByMeterRequest, len(items))
+	// for i, item := range items {
+	// 	usageRequests[i] = &dto.GetUsageByMeterRequest{
+	// 		MeterID:   item.MeterID,
+	// 		StartTime: time.Now().AddDate(0, 0, -1),
+	// 		EndTime:   time.Now(),
+	// 	}
+	// }
+
+	// // Fetch usage data for all meters in bulk
+	// // usageData, err := s.eventService.BulkGetUsageByMeter(ctx, usageRequests)
+	// usageData, err := eventService.BulkGetUsageByMeter(ctx, usageRequests)
+
+	// if err != nil {
+	// 	return decimal.Zero, ierr.WithError(err).
+	// 		WithMessage("failed to get usage data").
+	// 		WithHint("failed to get usage data").
+	// 		Mark(ierr.ErrInternal)
+	// }
+
+	// Calculate total revenue using billing service
+	billingService := NewBillingService(s.ServiceParams)
+	billingResult, err := billingService.CalculateAllCharges(ctx, sub.Subscription, usage, req.PeriodStart, req.PeriodEnd)
+
+	// billingResult, err := billingService.CalculateAllCharges(ctx, sub.Subscription, usageData, req.PeriodStart, req.PeriodEnd)
+
+	if err != nil {
+		return decimal.Zero, ierr.WithError(err).
+			WithMessage("failed to calculate charges").
+			WithHint("failed to calculate total revenue").
+			Mark(ierr.ErrInternal)
+	}
+
+	// Calculate ROI
+	return s.CalculateMargin(costBreakdown.TotalCost, billingResult.TotalAmount), nil
 }

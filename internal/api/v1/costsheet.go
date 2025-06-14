@@ -12,13 +12,18 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// CostSheetHandler handles HTTP requests for cost sheet operations.
 type CostSheetHandler struct {
 	service service.CostSheetService
 	log     *logger.Logger
 }
 
+// NewCostSheetHandler creates a new instance of CostSheetHandler.
 func NewCostSheetHandler(service service.CostSheetService, log *logger.Logger) *CostSheetHandler {
-	return &CostSheetHandler{service: service, log: log}
+	return &CostSheetHandler{
+		service: service,
+		log:     log,
+	}
 }
 
 // @Summary Create a new cost sheet
@@ -30,6 +35,7 @@ func NewCostSheetHandler(service service.CostSheetService, log *logger.Logger) *
 // @Param costsheet body dto.CreateCostsheetRequest true "Cost sheet configuration"
 // @Success 201 {object} dto.CostsheetResponse
 // @Failure 400 {object} ierr.ErrorResponse
+// @Failure 409 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
 // @Router /cost_sheets [post]
 func (h *CostSheetHandler) CreateCostsheet(c *gin.Context) {
@@ -39,6 +45,32 @@ func (h *CostSheetHandler) CreateCostsheet(c *gin.Context) {
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
+		return
+	}
+
+	// Check for existing published costsheet with same meter_id and price_id
+	filter := &domainCostsheet.Filter{
+		MeterIDs: []string{req.MeterID},
+		PriceIDs: []string{req.PriceID},
+		Status:   types.CostsheetStatusPublished,
+	}
+
+	// Get tenant and environment from context
+	tenantID, envID := domainCostsheet.GetTenantAndEnvFromContext(c.Request.Context())
+	filter.TenantID = tenantID
+	filter.EnvironmentID = envID
+
+	existing, err := h.service.ListCostsheets(c.Request.Context(), filter)
+	if err != nil {
+		h.log.Error("Failed to check for existing costsheet", "error", err)
+		c.Error(err)
+		return
+	}
+
+	if existing != nil && len(existing.Items) > 0 {
+		c.Error(ierr.NewError("costsheet already exists").
+			WithHint("A published costsheet with this meter and price combination already exists").
+			Mark(ierr.ErrAlreadyExists))
 		return
 	}
 
@@ -174,6 +206,8 @@ func (h *CostSheetHandler) UpdateCostsheet(c *gin.Context) {
 // @Param id path string true "Cost Sheet ID"
 // @Success 204 "No Content"
 // @Failure 400 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 409 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
 // @Router /cost_sheets/{id} [delete]
 func (h *CostSheetHandler) DeleteCostsheet(c *gin.Context) {
@@ -182,6 +216,24 @@ func (h *CostSheetHandler) DeleteCostsheet(c *gin.Context) {
 		c.Error(ierr.NewError("id is required").
 			WithHint("Cost Sheet ID is required").
 			Mark(ierr.ErrValidation))
+		return
+	}
+
+	// Get the costsheet first to check its status
+	costsheet, err := h.service.GetCostsheet(c.Request.Context(), id)
+	if err != nil {
+		h.log.Error("Failed to get cost sheet", "error", err)
+		c.Error(err)
+		return
+	}
+
+	// Check if the costsheet is published and has active references
+	if costsheet.Status == types.StatusPublished {
+		// TODO: Add check for active calculations or reports
+		// For now, we'll prevent deletion of published costsheets
+		c.Error(ierr.NewError("cannot delete published costsheet").
+			WithHint("Published costsheets cannot be deleted while they have active references").
+			Mark(ierr.ErrAlreadyExists))
 		return
 	}
 
@@ -194,20 +246,61 @@ func (h *CostSheetHandler) DeleteCostsheet(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-// @Summary Calculate cost sheet
-// @Description Calculate cost sheet for given meter and price
+// @Summary Get cost breakdown
+// @Description Get cost breakdown for a time period
 // @Tags CostSheets
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Param request body dto.CreateCostsheetRequest true "Calculate request"
+// @Param start_time query string true "Start time (RFC3339)"
+// @Param end_time query string true "End time (RFC3339)"
 // @Success 200 {object} dto.CostBreakdownResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
-// @Router /cost_sheets/calculate [post]
-func (h *CostSheetHandler) CalculateCostSheet(c *gin.Context) {
+// @Router /cost_sheets/cost_breakdown [get]
+func (h *CostSheetHandler) GetCostBreakdown(c *gin.Context) {
+	var req dto.GetCostBreakdownRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		h.log.Error("Failed to bind query parameters", "error", err)
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	// Validate time range
+	if req.EndTime.Before(req.StartTime) {
+		c.Error(ierr.NewError("end_time must be after start_time").
+			WithHint("Please provide a valid time range").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	// Get cost breakdown
+	resp, err := h.service.GetInputCostForMargin(c.Request.Context(), &dto.CreateCostsheetRequest{})
+	if err != nil {
+		h.log.Error("Failed to get cost breakdown", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+// @Summary Calculate ROI for cost sheet
+// @Description Calculate ROI (Return on Investment) for a given cost sheet
+// @Tags CostSheets
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param request body dto.CalculateROIRequest true "ROI calculation request"
+// @Success 200 {object} decimal.Decimal
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /cost_sheets/dev_roi [post]
+func (h *CostSheetHandler) CalculateDevROI(c *gin.Context) {
 	ctx := c.Request.Context()
-	var req dto.CreateCostsheetRequest
+	var req dto.CalculateROIRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.log.Error("Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
@@ -216,12 +309,15 @@ func (h *CostSheetHandler) CalculateCostSheet(c *gin.Context) {
 		return
 	}
 
-	costbreakdown, err := h.service.GetInputCostForMargin(ctx, &req)
+	// Calculate ROI using the service
+	roi, err := h.service.CalculateROI(ctx, &req)
 	if err != nil {
-		h.log.Error("Failed to calculate cost sheet", "error", err)
+		h.log.Error("Failed to calculate ROI", "error", err)
 		c.Error(err)
 		return
 	}
 
-	c.JSON(http.StatusOK, costbreakdown)
+	c.JSON(http.StatusOK, gin.H{
+		"roi": roi,
+	})
 }

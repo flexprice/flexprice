@@ -26,7 +26,7 @@ type costsheetRepository struct {
 
 // NewCostsheetRepository creates a new instance of the Ent-based costsheet repository.
 // It initializes the repository with the provided database client and logger.
-func NewCostsheetRepository(client postgres.IClient, logger *logger.Logger) domainCostsheet.Repository {
+func NewCostSheetRepository(client postgres.IClient, logger *logger.Logger) domainCostsheet.Repository {
 	return &costsheetRepository{
 		client:    client,
 		logger:    logger,

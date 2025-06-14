@@ -7,6 +7,22 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// CalculateROIRequest represents the request to calculate ROI for a cost sheet
+type CalculateROIRequest struct {
+	// SubscriptionID is required to get subscription details
+	SubscriptionID string `json:"subscription_id" validate:"required"`
+
+	// PeriodStart and PeriodEnd define the time range for ROI calculation
+	PeriodStart time.Time `json:"period_start" validate:"required"`
+	PeriodEnd   time.Time `json:"period_end" validate:"required"`
+
+	// MeterID references the meter to track usage
+	MeterID string `json:"meter_id" validate:"required"`
+
+	// PriceID references the price configuration
+	PriceID string `json:"price_id" validate:"required"`
+}
+
 // CreateCostsheetRequest represents the request to create a new costsheet.
 type CreateCostsheetRequest struct {
 	// MeterID references the meter to track usage
