@@ -59,13 +59,34 @@ func (s *costsheetService) GetInputCostForMargin(ctx context.Context, req *dto.C
 	tenantID, envID := domainCostSheet.GetTenantAndEnvFromContext(ctx)
 
 	// Get time range from context
-	startTime, ok := ctx.Value("start_time").(time.Time)
-	if !ok {
-		startTime = time.Now().AddDate(0, 0, -1) // Default to last 24 hours
-	}
-	endTime, ok := ctx.Value("end_time").(time.Time)
-	if !ok {
-		endTime = time.Now()
+	startTime, startOk := ctx.Value("start_time").(time.Time)
+	endTime, endOk := ctx.Value("end_time").(time.Time)
+
+	// If time range not provided in context and subscription ID is available, use subscription period
+	if (!startOk || !endOk) && req.SubscriptionID != "" {
+		subscriptionService := NewSubscriptionService(s.ServiceParams)
+		sub, err := subscriptionService.GetSubscription(ctx, req.SubscriptionID)
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithMessage("failed to get subscription").
+				WithHint("failed to get subscription details").
+				Mark(ierr.ErrInternal)
+		}
+
+		if !startOk {
+			startTime = sub.Subscription.CurrentPeriodStart
+		}
+		if !endOk {
+			endTime = sub.Subscription.CurrentPeriodEnd
+		}
+	} else if !startOk || !endOk {
+		// Fallback to last 24 hours if no subscription ID and no time range in context
+		if !startOk {
+			startTime = time.Now().AddDate(0, 0, -1)
+		}
+		if !endOk {
+			endTime = time.Now()
+		}
 	}
 
 	//Create service instance for costsheet in functions
@@ -312,8 +333,9 @@ func (s *costsheetService) CalculateROI(ctx context.Context, req *dto.CalculateR
 
 	// Create a cost sheet request from ROI request
 	costSheetReq := &dto.CreateCostSheetRequest{
-		MeterID: req.MeterID,
-		PriceID: req.PriceID,
+		MeterID:        req.MeterID,
+		PriceID:        req.PriceID,
+		SubscriptionID: req.SubscriptionID,
 	}
 
 	// Add time range to context for GetInputCostForMargin
@@ -357,19 +379,15 @@ func (s *costsheetService) CalculateROI(ctx context.Context, req *dto.CalculateR
 	revenue := billingResult.TotalAmount
 	totalCost := costBreakdown.TotalCost
 	netRevenue := revenue.Sub(totalCost)
+	netMargin := s.CalculateMargin(totalCost, revenue)
 
 	response := &dto.ROIResponse{
-		Revenue: revenue,
-		Costs: struct {
-			Total decimal.Decimal         `json:"total"`
-			Items []dto.CostBreakdownItem `json:"items"`
-		}{
-			Total: totalCost,
-			Items: costBreakdown.Items,
-		},
-		NetRevenue: netRevenue,
-		ROI:        s.CalculateMargin(totalCost, revenue),
-		Margin:     netRevenue.Div(revenue), // (Revenue - Cost) / Revenue
+		Cost:                totalCost,
+		Revenue:             revenue,
+		CostBreakdown:       costBreakdown.Items,
+		NetRevenue:          netRevenue,
+		NetMargin:           netMargin,
+		NetMarginPercentage: netMargin.Mul(decimal.NewFromInt(100)).Round(2),
 	}
 
 	return response, nil

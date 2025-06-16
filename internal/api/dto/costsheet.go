@@ -30,6 +30,9 @@ type CreateCostSheetRequest struct {
 
 	// PriceID references the price configuration
 	PriceID string `json:"price_id" validate:"required"`
+
+	// SubscriptionID to get the time period from if not provided in context
+	SubscriptionID string `json:"subscription_id"`
 }
 
 // GetCostBreakdownRequest represents the request to calculate costs for a time period.
@@ -93,17 +96,21 @@ type ListCostSheetsResponse struct {
 
 // ROIResponse represents the detailed response for ROI calculations
 type ROIResponse struct {
-	// Total revenue generated from the subscription
+	// Total cost
+	Cost decimal.Decimal `json:"cost"`
+
+	// Total revenue
 	Revenue decimal.Decimal `json:"revenue"`
 
-	// Total cost breakdown
-	Costs struct {
-		Total decimal.Decimal     `json:"total"`
-		Items []CostBreakdownItem `json:"items"`
-	} `json:"costs"`
+	// Cost breakdown by meter
+	CostBreakdown []CostBreakdownItem `json:"cost_breakdown"`
 
-	// Calculated metrics
-	NetRevenue decimal.Decimal `json:"net_revenue"` // Revenue - Total Cost
-	ROI        decimal.Decimal `json:"roi"`         // (Revenue - Cost) / Cost
-	Margin     decimal.Decimal `json:"margin"`      // (Revenue - Cost) / Revenue
+	// Net revenue (Revenue - Cost)
+	NetRevenue decimal.Decimal `json:"net_revenue"`
+
+	// Net margin (ROI)
+	NetMargin decimal.Decimal `json:"net_margin"`
+
+	// Net margin as a percentage
+	NetMarginPercentage decimal.Decimal `json:"net_margin_percentage"`
 }

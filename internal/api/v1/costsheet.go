@@ -326,8 +326,10 @@ func (h *CostSheetHandler) GetCostBreakDown(c *gin.Context) {
 	ctx := context.WithValue(c.Request.Context(), "start_time", periodStart)
 	ctx = context.WithValue(ctx, "end_time", periodEnd)
 
-	// Get cost breakdown
-	resp, err := h.service.GetInputCostForMargin(ctx, &dto.CreateCostSheetRequest{})
+	// Get cost breakdown with subscription ID
+	resp, err := h.service.GetInputCostForMargin(ctx, &dto.CreateCostSheetRequest{
+		SubscriptionID: subscriptionID,
+	})
 	if err != nil {
 		h.log.Error("Failed to get cost breakdown", "error", err)
 		c.Error(err)
