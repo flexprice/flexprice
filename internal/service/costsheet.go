@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 
 	domainCostSheet "github.com/flexprice/flexprice/internal/domain/costsheet"
+	domainSubscription "github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -30,6 +31,9 @@ type CostSheetService interface {
 	GetInputCostForMargin(ctx context.Context, req *dto.CreateCostSheetRequest) (*dto.CostBreakdownResponse, error)
 	CalculateMargin(totalCost, totalRevenue decimal.Decimal) decimal.Decimal
 	CalculateROI(ctx context.Context, req *dto.CalculateROIRequest) (*dto.ROIResponse, error)
+
+	// Helper Operations
+	GetSubscriptionDetails(ctx context.Context, subscriptionID string) (*domainSubscription.Subscription, error)
 }
 
 // costSheetService implements the CostSheetService interface.
@@ -288,11 +292,33 @@ func (s *costsheetService) CalculateROI(ctx context.Context, req *dto.CalculateR
 	subscriptionService := NewSubscriptionService(s.ServiceParams)
 	billingService := NewBillingService(s.ServiceParams)
 
+	// Get subscription details first to determine time period
+	sub, err := subscriptionService.GetSubscription(ctx, req.SubscriptionID)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithMessage("failed to get subscription").
+			WithHint("failed to get subscription details").
+			Mark(ierr.ErrInternal)
+	}
+
+	// Use subscription period if time range not provided
+	periodStart := sub.Subscription.CurrentPeriodStart
+	periodEnd := sub.Subscription.CurrentPeriodEnd
+
+	if req.PeriodStart != nil && req.PeriodEnd != nil {
+		periodStart = *req.PeriodStart
+		periodEnd = *req.PeriodEnd
+	}
+
 	// Create a cost sheet request from ROI request
 	costSheetReq := &dto.CreateCostSheetRequest{
 		MeterID: req.MeterID,
 		PriceID: req.PriceID,
 	}
+
+	// Add time range to context for GetInputCostForMargin
+	ctx = context.WithValue(ctx, "start_time", periodStart)
+	ctx = context.WithValue(ctx, "end_time", periodEnd)
 
 	// Get cost breakdown
 	costBreakdown, err := s.GetInputCostForMargin(ctx, costSheetReq)
@@ -303,20 +329,11 @@ func (s *costsheetService) CalculateROI(ctx context.Context, req *dto.CalculateR
 			Mark(ierr.ErrInternal)
 	}
 
-	// Get subscription details
-	sub, err := subscriptionService.GetSubscription(ctx, req.SubscriptionID)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithMessage("failed to get subscription").
-			WithHint("failed to get subscription details").
-			Mark(ierr.ErrInternal)
-	}
-
 	// Get usage data for the subscription
 	usageReq := &dto.GetUsageBySubscriptionRequest{
 		SubscriptionID: req.SubscriptionID,
-		StartTime:      req.PeriodStart,
-		EndTime:        req.PeriodEnd,
+		StartTime:      periodStart,
+		EndTime:        periodEnd,
 	}
 
 	usage, err := subscriptionService.GetUsageBySubscription(ctx, usageReq)
@@ -328,7 +345,7 @@ func (s *costsheetService) CalculateROI(ctx context.Context, req *dto.CalculateR
 	}
 
 	// Calculate total revenue using billing service
-	billingResult, err := billingService.CalculateAllCharges(ctx, sub.Subscription, usage, req.PeriodStart, req.PeriodEnd)
+	billingResult, err := billingService.CalculateAllCharges(ctx, sub.Subscription, usage, periodStart, periodEnd)
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithMessage("failed to calculate charges").
@@ -356,4 +373,14 @@ func (s *costsheetService) CalculateROI(ctx context.Context, req *dto.CalculateR
 	}
 
 	return response, nil
+}
+
+// GetSubscriptionDetails retrieves subscription details
+func (s *costsheetService) GetSubscriptionDetails(ctx context.Context, subscriptionID string) (*domainSubscription.Subscription, error) {
+	subscriptionService := NewSubscriptionService(s.ServiceParams)
+	sub, err := subscriptionService.GetSubscription(ctx, subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+	return sub.Subscription, nil
 }

@@ -288,7 +288,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			costSheet.GET("/:id", handlers.CostSheet.GetCostSheet)
 			costSheet.PUT("/:id", handlers.CostSheet.UpdateCostSheet)
 			costSheet.DELETE("/:id", handlers.CostSheet.DeleteCostSheet)
-			costSheet.GET("/breakdown", handlers.CostSheet.GetCostBreakDown)
+			costSheet.GET("/breakdown/:subscription_id", handlers.CostSheet.GetCostBreakDown)
 			costSheet.POST("/roi", handlers.CostSheet.CalculateROI)
 		}
 

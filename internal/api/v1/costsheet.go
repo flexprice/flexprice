@@ -1,7 +1,9 @@
 package v1
 
 import (
+	"context"
 	"net/http"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainCostsheet "github.com/flexprice/flexprice/internal/domain/costsheet"
@@ -253,32 +255,79 @@ func (h *CostSheetHandler) DeleteCostSheet(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Param start_time query string true "Start time (RFC3339)"
-// @Param end_time query string true "End time (RFC3339)"
+// @Param subscription_id path string true "Subscription ID"
+// @Param start_time query string false "Start time (RFC3339)"
+// @Param end_time query string false "End time (RFC3339)"
 // @Success 200 {object} dto.CostBreakdownResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
-// @Router /cost/breakdown [get]
+// @Router /cost/breakdown/{subscription_id} [get]
 func (h *CostSheetHandler) GetCostBreakDown(c *gin.Context) {
-	var req dto.GetCostBreakdownRequest
-	if err := c.ShouldBindQuery(&req); err != nil {
-		h.log.Error("Failed to bind query parameters", "error", err)
-		c.Error(ierr.WithError(err).
-			WithHint("Invalid request format").
+	// Get subscription_id from path
+	subscriptionID := c.Param("subscription_id")
+	if subscriptionID == "" {
+		c.Error(ierr.NewError("subscription_id is required").
+			WithHint("Please provide a subscription ID in the URL").
 			Mark(ierr.ErrValidation))
 		return
 	}
 
-	// Validate time range
-	if req.EndTime.Before(req.StartTime) {
-		c.Error(ierr.NewError("end_time must be after start_time").
-			WithHint("Please provide a valid time range").
-			Mark(ierr.ErrValidation))
+	// Optional query parameters for custom time range
+	var startTime, endTime *time.Time
+	if startStr := c.Query("start_time"); startStr != "" {
+		t, err := time.Parse(time.RFC3339, startStr)
+		if err != nil {
+			c.Error(ierr.WithError(err).
+				WithHint("Invalid start_time format. Use RFC3339 format").
+				Mark(ierr.ErrValidation))
+			return
+		}
+		startTime = &t
+	}
+	if endStr := c.Query("end_time"); endStr != "" {
+		t, err := time.Parse(time.RFC3339, endStr)
+		if err != nil {
+			c.Error(ierr.WithError(err).
+				WithHint("Invalid end_time format. Use RFC3339 format").
+				Mark(ierr.ErrValidation))
+			return
+		}
+		endTime = &t
+	}
+
+	// Get subscription details
+	sub, err := h.service.GetSubscriptionDetails(c.Request.Context(), subscriptionID)
+	if err != nil {
+		h.log.Error("Failed to get subscription", "error", err)
+		c.Error(ierr.WithError(err).
+			WithHint("Failed to get subscription details").
+			Mark(ierr.ErrInternal))
 		return
 	}
+
+	// Use subscription period if time range not provided
+	periodStart := sub.CurrentPeriodStart
+	periodEnd := sub.CurrentPeriodEnd
+
+	if startTime != nil && endTime != nil {
+		periodStart = *startTime
+		periodEnd = *endTime
+
+		// Validate time range if provided
+		if periodEnd.Before(periodStart) {
+			c.Error(ierr.NewError("end_time must be after start_time").
+				WithHint("Please provide a valid time range").
+				Mark(ierr.ErrValidation))
+			return
+		}
+	}
+
+	// Add time range to context
+	ctx := context.WithValue(c.Request.Context(), "start_time", periodStart)
+	ctx = context.WithValue(ctx, "end_time", periodEnd)
 
 	// Get cost breakdown
-	resp, err := h.service.GetInputCostForMargin(c.Request.Context(), &dto.CreateCostSheetRequest{})
+	resp, err := h.service.GetInputCostForMargin(ctx, &dto.CreateCostSheetRequest{})
 	if err != nil {
 		h.log.Error("Failed to get cost breakdown", "error", err)
 		c.Error(err)

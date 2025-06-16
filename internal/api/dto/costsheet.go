@@ -12,15 +12,15 @@ type CalculateROIRequest struct {
 	// SubscriptionID is required to get subscription details
 	SubscriptionID string `json:"subscription_id" validate:"required"`
 
-	// PeriodStart and PeriodEnd define the time range for ROI calculation
-	PeriodStart time.Time `json:"period_start" validate:"required"`
-	PeriodEnd   time.Time `json:"period_end" validate:"required"`
-
 	// MeterID references the meter to track usage
 	MeterID string `json:"meter_id" validate:"required"`
 
 	// PriceID references the price configuration
 	PriceID string `json:"price_id" validate:"required"`
+
+	// Optional time range. If not provided, uses entire subscription period
+	PeriodStart *time.Time `json:"period_start,omitempty"`
+	PeriodEnd   *time.Time `json:"period_end,omitempty"`
 }
 
 // CreateCostsheetRequest represents the request to create a new costsheet.
@@ -34,11 +34,12 @@ type CreateCostSheetRequest struct {
 
 // GetCostBreakdownRequest represents the request to calculate costs for a time period.
 type GetCostBreakdownRequest struct {
-	// StartTime defines the beginning of the period
-	StartTime time.Time `json:"start_time" validate:"required"`
+	// SubscriptionID to get the time period from if StartTime and EndTime are not provided
+	SubscriptionID string `json:"subscription_id" validate:"required"`
 
-	// EndTime defines the end of the period
-	EndTime time.Time `json:"end_time" validate:"required"`
+	// Optional time range. If not provided, uses subscription period
+	StartTime *time.Time `json:"start_time,omitempty"`
+	EndTime   *time.Time `json:"end_time,omitempty"`
 }
 
 // CostBreakdownResponse represents the calculated costs for a period.
