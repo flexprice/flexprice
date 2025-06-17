@@ -182,20 +182,20 @@ func (s *costsheetService) GetInputCostForMargin(ctx context.Context, req *dto.C
 }
 
 // CalculateMargin calculates the profit margin as a ratio.
-// The formula used is: margin = (revenue - cost) / cost
-// Returns 0 if totalCost is zero to prevent division by zero errors.
+// The formula used is: margin = (revenue - cost) / revenue
+// Returns 0 if totalRevenue is zero to prevent division by zero errors.
 func (s *costsheetService) CalculateMargin(totalCost, totalRevenue decimal.Decimal) decimal.Decimal {
-	// if totalCost is zero, return 0
-	if totalCost.IsZero() {
+	// if totalRevenue is zero, return 0
+	if totalRevenue.IsZero() {
 		return decimal.Zero
 	}
 
-	return totalRevenue.Sub(totalCost).Div(totalCost)
+	return totalRevenue.Sub(totalCost).Div(totalRevenue)
 
-	// Example: 50% Margin
-	// totalCost = 100
-	// totalRevenue = 150
-	// margin = (150 - 100) / 100 = 0.5 (50% margin)
+	// Example: 1% Margin
+	// totalCost = 1.00
+	// totalRevenue = 1.01
+	// margin = (1.01 - 1.00) / 1.01 = 0.0099 (0.99% margin)
 
 }
 

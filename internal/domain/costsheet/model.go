@@ -63,6 +63,79 @@ type Filter struct {
 	EnvironmentID string
 }
 
+// GetLimit implements BaseFilter interface
+func (f *Filter) GetLimit() int {
+	if f.QueryFilter == nil {
+		return types.NewDefaultQueryFilter().GetLimit()
+	}
+	return f.QueryFilter.GetLimit()
+}
+
+// GetOffset implements BaseFilter interface
+func (f *Filter) GetOffset() int {
+	if f.QueryFilter == nil {
+		return types.NewDefaultQueryFilter().GetOffset()
+	}
+	return f.QueryFilter.GetOffset()
+}
+
+// GetSort implements BaseFilter interface
+func (f *Filter) GetSort() string {
+	if f.QueryFilter == nil {
+		return types.NewDefaultQueryFilter().GetSort()
+	}
+	return f.QueryFilter.GetSort()
+}
+
+// GetOrder implements BaseFilter interface
+func (f *Filter) GetOrder() string {
+	if f.QueryFilter == nil {
+		return types.NewDefaultQueryFilter().GetOrder()
+	}
+	return f.QueryFilter.GetOrder()
+}
+
+// GetStatus implements BaseFilter interface
+func (f *Filter) GetStatus() string {
+	if f.QueryFilter == nil {
+		return types.NewDefaultQueryFilter().GetStatus()
+	}
+	return f.QueryFilter.GetStatus()
+}
+
+// GetExpand implements BaseFilter interface
+func (f *Filter) GetExpand() types.Expand {
+	if f.QueryFilter == nil {
+		return types.NewDefaultQueryFilter().GetExpand()
+	}
+	return f.QueryFilter.GetExpand()
+}
+
+// IsUnlimited returns true if this is an unlimited query
+func (f *Filter) IsUnlimited() bool {
+	if f.QueryFilter == nil {
+		return types.NewDefaultQueryFilter().IsUnlimited()
+	}
+	return f.QueryFilter.IsUnlimited()
+}
+
+// Validate validates the filter
+func (f *Filter) Validate() error {
+	if f.QueryFilter != nil {
+		if err := f.QueryFilter.Validate(); err != nil {
+			return err
+		}
+	}
+
+	if f.TimeRangeFilter != nil {
+		if err := f.TimeRangeFilter.Validate(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // New creates a new Costsheet instance with the provided meter and price IDs.
 // It automatically sets up the base model fields using context information.
 func New(ctx context.Context, meterID, priceID string) *Costsheet {
