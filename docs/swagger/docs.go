@@ -9280,7 +9280,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "cost": {
-                    "description": "Total cost",
+                    "description": "Cost and Revenue",
                     "type": "number"
                 },
                 "cost_breakdown": {
@@ -9290,20 +9290,25 @@ const docTemplate = `{
                         "$ref": "#/definitions/dto.CostBreakdownItem"
                     }
                 },
+                "markup": {
+                    "description": "Markup (Revenue - Cost / Cost)",
+                    "type": "number"
+                },
+                "markup_percentage": {
+                    "type": "number"
+                },
                 "net_margin": {
-                    "description": "Net margin (ROI)",
+                    "description": "Net Margin (ROI)",
                     "type": "number"
                 },
                 "net_margin_percentage": {
-                    "description": "Net margin as a percentage",
                     "type": "number"
                 },
                 "net_revenue": {
-                    "description": "Net revenue (Revenue - Cost)",
+                    "description": "Net Revenue (Revenue - Cost)",
                     "type": "number"
                 },
                 "revenue": {
-                    "description": "Total revenue",
                     "type": "number"
                 }
             }
