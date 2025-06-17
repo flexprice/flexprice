@@ -44,6 +44,9 @@ type CreditGrantService interface {
 	// ApplyCreditGrant applies a credit grant to a subscription and creates CGA tracking records
 	// This method handles both one-time and recurring credit grants
 	ApplyCreditGrant(ctx context.Context, grant *creditgrant.CreditGrant, subscription *subscription.Subscription, reason string, metadata types.Metadata) (*domainCreditGrantApplication.CreditGrantApplication, error)
+
+	// CheckDuplicateApplication checks if a credit grant application already exists for the given period
+	CheckDuplicateApplication(ctx context.Context, grant *creditgrant.CreditGrant, subscription *subscription.Subscription, periodStart, periodEnd time.Time) (*domainCreditGrantApplication.CreditGrantApplication, error)
 }
 
 type creditGrantService struct {
@@ -229,7 +232,21 @@ func (s *creditGrantService) ApplyCreditGrant(ctx context.Context, grant *credit
 		return nil, err
 	}
 
-	// Create CGA record for tracking
+	// Generate idempotency key first to check for duplicates
+	idempotencyKey := s.generateIdempotencyKey(grant, subscription, subscription.CurrentPeriodStart, periodEnd)
+
+	// Check if already exists for this period (idempotency protection)
+	existing, err := s.CreditGrantApplicationRepo.FindByIdempotencyKey(ctx, idempotencyKey)
+	if err == nil && existing != nil {
+		s.Logger.Debugw("credit grant application already exists for this period",
+			"grant_id", grant.ID,
+			"subscription_id", subscription.ID,
+			"application_id", existing.ID,
+			"status", existing.ApplicationStatus)
+		return existing, nil
+	}
+
+	// Create CGA record for tracking FIRST (in PENDING status)
 	cga := &domainCreditGrantApplication.CreditGrantApplication{
 		ID:                              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CREDIT_GRANT_APPLICATION),
 		CreditGrantID:                   grant.ID,
@@ -244,17 +261,23 @@ func (s *creditGrantService) ApplyCreditGrant(ctx context.Context, grant *credit
 		RetryCount:                      0,
 		CreditsApplied:                  decimal.Zero,
 		Metadata:                        metadata,
+		IdempotencyKey:                  idempotencyKey,
 		EnvironmentID:                   types.GetEnvironmentID(ctx),
 		BaseModel:                       types.GetDefaultBaseModel(ctx),
 	}
 
-	// Generate idempotency key based on grant, subscription, and period
-	cga.IdempotencyKey = s.generateIdempotencyKey(grant, subscription, cga.PeriodStart, cga.PeriodEnd)
+	// Create the CGA record FIRST to ensure tracking
+	createErr := s.CreditGrantApplicationRepo.Create(ctx, cga)
+	if createErr != nil {
+		s.Logger.Errorw("failed to create CGA record", "error", createErr)
+		return nil, createErr
+	}
 
-	// Try to apply the credit grant
+	// Now try to apply the credit grant with proper transaction tracking
 	err = s.applyCreditToWallet(ctx, grant, subscription, cga.ID)
 	now := time.Now().UTC()
 
+	// Update the CGA record with the result
 	if err != nil {
 		// Mark as failed
 		cga.ApplicationStatus = types.ApplicationStatusFailed
@@ -269,11 +292,11 @@ func (s *creditGrantService) ApplyCreditGrant(ctx context.Context, grant *credit
 		cga.CreditsApplied = grant.Credits
 	}
 
-	// Create the CGA record
-	createErr := s.CreditGrantApplicationRepo.Create(ctx, cga)
-	if createErr != nil {
-		s.Logger.Errorw("failed to create CGA record", "error", createErr)
-		return nil, createErr
+	// Update the CGA record with final status
+	updateErr := s.CreditGrantApplicationRepo.Update(ctx, cga)
+	if updateErr != nil {
+		s.Logger.Errorw("failed to update CGA record", "error", updateErr)
+		// Don't return error here as credit was already applied/failed
 	}
 
 	// If this is a recurring grant and successfully applied, create next period application
@@ -435,16 +458,23 @@ func (s *creditGrantService) processScheduledApplication(
 		s.Logger.Debugw("grant already applied successfully, skipping", "application_id", cga.ID)
 		return nil
 	}
+
 	// If exists and failed, retry
 	if cga.ApplicationStatus == types.ApplicationStatusFailed {
 		return s.retryFailedApplication(ctx, cga, creditGrant.CreditGrant, subscription.Subscription)
 	}
 
-	// check if the credit grant is already applied for this period
-	payment, _ := s.PaymentRepo.GetByIdempotencyKey(ctx, cga.IdempotencyKey)
+	// check if the credit grant is already applied for this period using proper CGA tracking
+	existingApp, err := s.CheckDuplicateApplication(ctx, creditGrant.CreditGrant, subscription.Subscription, cga.PeriodStart, cga.PeriodEnd)
+	if err != nil {
+		s.Logger.Errorw("failed to check for duplicate application", "error", err)
+		return err
+	}
 
-	if payment != nil {
-		s.Logger.Debugw("grant already applied for this period, skipping", "application_id", cga.ID)
+	if existingApp != nil && existingApp.ApplicationStatus == types.ApplicationStatusApplied {
+		s.Logger.Debugw("grant already applied for this period, skipping",
+			"application_id", cga.ID,
+			"existing_application_id", existingApp.ID)
 		return nil
 	}
 
@@ -482,10 +512,10 @@ func (s *creditGrantService) applyScheduledGrant(
 		failureReason := err.Error()
 		cga.FailureReason = &failureReason
 		nextRetry := now.Add(15 * time.Minute)
-		cga.NextRetryAt = &nextRetry
+		cga.NextRetryAt = lo.ToPtr(nextRetry)
 	} else {
 		cga.ApplicationStatus = types.ApplicationStatusApplied
-		cga.AppliedAt = &now
+		cga.AppliedAt = lo.ToPtr(now)
 		cga.CreditsApplied = grant.Credits
 	}
 
@@ -518,17 +548,36 @@ func (s *creditGrantService) retryFailedApplication(ctx context.Context, cga *do
 	now := time.Now().UTC()
 
 	if err != nil {
-		// Mark as failed and set next retry time
+		// Mark as failed and set next retry time with exponential backoff
 		cga.ApplicationStatus = types.ApplicationStatusFailed
 		failureReason := err.Error()
 		cga.FailureReason = &failureReason
-		nextRetry := now.Add(time.Duration(cga.RetryCount*15) * time.Minute) // Exponential backoff
+
+		// Improved exponential backoff: 15min, 30min, 1hr, 2hr, 4hr (max)
+		retryCount := cga.RetryCount
+		if retryCount > 4 {
+			retryCount = 4 // Cap at 4 retries = 4 hours max backoff
+		}
+		backoffMinutes := 15 * (1 << retryCount)
+		nextRetry := now.Add(time.Duration(backoffMinutes) * time.Minute)
 		cga.NextRetryAt = &nextRetry
+
+		s.Logger.Errorw("credit grant application failed, scheduling retry",
+			"application_id", cga.ID,
+			"retry_count", cga.RetryCount,
+			"next_retry_at", nextRetry,
+			"error", err)
 	} else {
 		// Mark as applied successfully
 		cga.ApplicationStatus = types.ApplicationStatusApplied
 		cga.AppliedAt = &now
 		cga.CreditsApplied = grant.Credits
+
+		s.Logger.Infow("credit grant application succeeded",
+			"application_id", cga.ID,
+			"grant_id", grant.ID,
+			"subscription_id", cga.SubscriptionID,
+			"credits_applied", grant.Credits)
 	}
 
 	// Update the application
@@ -604,17 +653,34 @@ func (s *creditGrantService) createNextPeriodApplication(ctx context.Context, gr
 func (s *creditGrantService) calculateNextPeriod(grant *creditgrant.CreditGrant, subscription *subscription.Subscription, currentPeriodEnd time.Time) (time.Time, time.Time, error) {
 	nextPeriodStart := currentPeriodEnd
 
+	creditGrantPeriodConfig := map[types.CreditGrantPeriod]types.BillingPeriod{
+		types.CREDIT_GRANT_PERIOD_ANNUAL:      types.BILLING_PERIOD_ANNUAL,
+		types.CREDIT_GRANT_PERIOD_HALF_YEARLY: types.BILLING_PERIOD_HALF_YEAR,
+		types.CREDIT_GRANT_PERIOD_QUARTER:     types.BILLING_PERIOD_QUARTER,
+		types.CREDIT_GRANT_PERIOD_MONTHLY:     types.BILLING_PERIOD_MONTHLY,
+		types.CREDIT_GRANT_PERIOD_WEEKLY:      types.BILLING_PERIOD_WEEKLY,
+		types.CREDIT_GRANT_PERIOD_DAILY:       types.BILLING_PERIOD_DAILY,
+	}
+
+	creditGrantPeriod := creditGrantPeriodConfig[lo.FromPtr(grant.Period)]
+
 	// Use credit grant-specific period if defined, otherwise use billing period
 	if grant.Period != nil && grant.PeriodCount != nil {
+		// get the anchor date
 		anchor := s.getAnchorDate(grant, subscription)
-		nextPeriodEnd, err := types.NextCreditGrantDate(nextPeriodStart, anchor, *grant.PeriodCount, *grant.Period)
+
+		// get the next period end
+		nextPeriodEnd, err := types.NextBillingDate(nextPeriodStart, anchor, *grant.PeriodCount, creditGrantPeriod)
 		if err != nil {
 			return time.Time{}, time.Time{}, err
 		}
+
+		// return the next period start and end
 		return nextPeriodStart, nextPeriodEnd, nil
 	}
 
 	// Fall back to billing alignment
+	// this is the case where the credit grant period is not defined
 	nextPeriodEnd, err := types.NextBillingDate(nextPeriodStart, subscription.BillingAnchor, subscription.BillingPeriodCount, subscription.BillingPeriod)
 	if err != nil {
 		return time.Time{}, time.Time{}, err
@@ -640,12 +706,12 @@ func (s *creditGrantService) isAlignedWithBilling(grant *creditgrant.CreditGrant
 
 	// Simple mapping between billing and credit grant periods
 	periodMap := map[types.BillingPeriod]types.CreditGrantPeriod{
-		types.BILLING_PERIOD_DAILY:     types.CreditGrantPeriodDaily,
-		types.BILLING_PERIOD_WEEKLY:    types.CreditGrantPeriodWeekly,
-		types.BILLING_PERIOD_MONTHLY:   types.CreditGrantPeriodMonthly,
-		types.BILLING_PERIOD_QUARTER:   types.CreditGrantPeriodQuarter,
-		types.BILLING_PERIOD_HALF_YEAR: types.CreditGrantPeriodHalfYear,
-		types.BILLING_PERIOD_ANNUAL:    types.CreditGrantPeriodAnnual,
+		types.BILLING_PERIOD_DAILY:     types.CREDIT_GRANT_PERIOD_DAILY,
+		types.BILLING_PERIOD_WEEKLY:    types.CREDIT_GRANT_PERIOD_WEEKLY,
+		types.BILLING_PERIOD_MONTHLY:   types.CREDIT_GRANT_PERIOD_MONTHLY,
+		types.BILLING_PERIOD_QUARTER:   types.CREDIT_GRANT_PERIOD_QUARTER,
+		types.BILLING_PERIOD_HALF_YEAR: types.CREDIT_GRANT_PERIOD_HALF_YEARLY,
+		types.BILLING_PERIOD_ANNUAL:    types.CREDIT_GRANT_PERIOD_ANNUAL,
 	}
 
 	expectedPeriod, exists := periodMap[subscription.BillingPeriod]
@@ -663,4 +729,38 @@ func (s *creditGrantService) generateIdempotencyKey(grant *creditgrant.CreditGra
 		"period_start":    periodStart.UTC(),
 		"period_end":      periodEnd.UTC(),
 	})
+}
+
+// CheckDuplicateApplication checks if a credit grant application already exists for the given period
+func (s *creditGrantService) CheckDuplicateApplication(ctx context.Context, grant *creditgrant.CreditGrant, subscription *subscription.Subscription, periodStart, periodEnd time.Time) (*domainCreditGrantApplication.CreditGrantApplication, error) {
+	// Generate idempotency key
+	idempotencyKey := s.generateIdempotencyKey(grant, subscription, periodStart, periodEnd)
+
+	// Check by idempotency key first
+	existing, err := s.CreditGrantApplicationRepo.FindByIdempotencyKey(ctx, idempotencyKey)
+	if err != nil {
+		s.Logger.Errorw("failed to check for existing application", "error", err)
+		return nil, err
+	}
+
+	if existing != nil {
+		return existing, nil
+	}
+
+	// Additional check using period overlap
+	exists, err := s.CreditGrantApplicationRepo.ExistsForPeriod(ctx, grant.ID, subscription.ID, periodStart, periodEnd)
+	if err != nil {
+		s.Logger.Errorw("failed to check period existence", "error", err)
+		return nil, err
+	}
+
+	if exists {
+		s.Logger.Warnw("duplicate application detected but idempotency key mismatch",
+			"grant_id", grant.ID,
+			"subscription_id", subscription.ID,
+			"period_start", periodStart,
+			"period_end", periodEnd)
+	}
+
+	return nil, nil
 }

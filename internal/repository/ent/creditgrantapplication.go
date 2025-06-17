@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 type creditGrantApplicationRepository struct {
@@ -295,6 +296,9 @@ func (r *creditGrantApplicationRepository) Update(ctx context.Context, applicati
 		SetRetryCount(application.RetryCount).
 		SetMetadata(application.Metadata).
 		SetUpdatedAt(time.Now().UTC()).
+		SetAppliedAt(lo.FromPtr(application.AppliedAt)).
+		SetFailureReason(lo.FromPtr(application.FailureReason)).
+		SetNextRetryAt(lo.FromPtr(application.NextRetryAt)).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 

@@ -27,12 +27,12 @@ const (
 type CreditGrantPeriod string
 
 const (
-	CreditGrantPeriodDaily    CreditGrantPeriod = "DAILY"
-	CreditGrantPeriodWeekly   CreditGrantPeriod = "WEEKLY"
-	CreditGrantPeriodMonthly  CreditGrantPeriod = "MONTHLY"
-	CreditGrantPeriodAnnual   CreditGrantPeriod = "ANNUAL"
-	CreditGrantPeriodQuarter  CreditGrantPeriod = "QUARTERLY"
-	CreditGrantPeriodHalfYear CreditGrantPeriod = "HALF_YEARLY"
+	CREDIT_GRANT_PERIOD_DAILY       CreditGrantPeriod = "DAILY"
+	CREDIT_GRANT_PERIOD_WEEKLY      CreditGrantPeriod = "WEEKLY"
+	CREDIT_GRANT_PERIOD_MONTHLY     CreditGrantPeriod = "MONTHLY"
+	CREDIT_GRANT_PERIOD_ANNUAL      CreditGrantPeriod = "ANNUAL"
+	CREDIT_GRANT_PERIOD_QUARTER     CreditGrantPeriod = "QUARTERLY"
+	CREDIT_GRANT_PERIOD_HALF_YEARLY CreditGrantPeriod = "HALF_YEARLY"
 )
 
 // CreditGrantExpiryType defines the type of expiry configuration
@@ -128,12 +128,12 @@ func (c CreditGrantCadence) Validate() error {
 // Validate validates the credit grant period
 func (p CreditGrantPeriod) Validate() error {
 	allowedValues := []CreditGrantPeriod{
-		CreditGrantPeriodDaily,
-		CreditGrantPeriodWeekly,
-		CreditGrantPeriodMonthly,
-		CreditGrantPeriodAnnual,
-		CreditGrantPeriodQuarter,
-		CreditGrantPeriodHalfYear,
+		CREDIT_GRANT_PERIOD_DAILY,
+		CREDIT_GRANT_PERIOD_WEEKLY,
+		CREDIT_GRANT_PERIOD_MONTHLY,
+		CREDIT_GRANT_PERIOD_ANNUAL,
+		CREDIT_GRANT_PERIOD_QUARTER,
+		CREDIT_GRANT_PERIOD_HALF_YEARLY,
 	}
 
 	if !lo.Contains(allowedValues, p) {
