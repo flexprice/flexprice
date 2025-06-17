@@ -30,6 +30,7 @@ type CostSheetService interface {
 	// Calculation Operations
 	GetInputCostForMargin(ctx context.Context, req *dto.CreateCostSheetRequest) (*dto.CostBreakdownResponse, error)
 	CalculateMargin(totalCost, totalRevenue decimal.Decimal) decimal.Decimal
+	CalculateMarkup(totalCost, totalRevenue decimal.Decimal) decimal.Decimal
 	CalculateROI(ctx context.Context, req *dto.CalculateROIRequest) (*dto.ROIResponse, error)
 
 	// Helper Operations
@@ -197,6 +198,16 @@ func (s *costsheetService) CalculateMargin(totalCost, totalRevenue decimal.Decim
 	// totalRevenue = 1.01
 	// margin = (1.01 - 1.00) / 1.01 = 0.0099 (0.99% margin)
 
+}
+
+func (s *costsheetService) CalculateMarkup(totalCost, totalRevenue decimal.Decimal) decimal.Decimal {
+
+	// if totalRevenue is zero, return 0
+	if totalRevenue.IsZero() {
+		return decimal.Zero
+	}
+
+	return totalRevenue.Sub(totalCost).Div(totalCost)
 }
 
 // API Services
@@ -380,14 +391,17 @@ func (s *costsheetService) CalculateROI(ctx context.Context, req *dto.CalculateR
 	totalCost := costBreakdown.TotalCost
 	netRevenue := revenue.Sub(totalCost)
 	netMargin := s.CalculateMargin(totalCost, revenue)
+	markup := s.CalculateMarkup(totalCost, revenue)
 
 	response := &dto.ROIResponse{
 		Cost:                totalCost,
 		Revenue:             revenue,
-		CostBreakdown:       costBreakdown.Items,
 		NetRevenue:          netRevenue,
 		NetMargin:           netMargin,
 		NetMarginPercentage: netMargin.Mul(decimal.NewFromInt(100)).Round(2),
+		Markup:              markup,
+		MarkupPercentage:    markup.Mul(decimal.NewFromInt(100)).Round(2),
+		CostBreakdown:       costBreakdown.Items,
 	}
 
 	return response, nil

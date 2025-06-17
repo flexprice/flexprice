@@ -121,6 +121,8 @@ func (s *CostSheetServiceSuite) TestROICalculationComponents() {
 		wantNetRevenue    decimal.Decimal
 		wantNetMargin     decimal.Decimal
 		wantMarginPercent decimal.Decimal
+		wantMarkup        decimal.Decimal
+		wantMarkupPercent decimal.Decimal
 	}{
 		{
 			name:              "Profitable ROI",
@@ -129,14 +131,18 @@ func (s *CostSheetServiceSuite) TestROICalculationComponents() {
 			wantNetRevenue:    decimal.NewFromInt(50),                   // 150 - 100
 			wantNetMargin:     decimal.NewFromFloat(0.3333333333333333), // (150-100)/150 = 0.3333...
 			wantMarginPercent: decimal.NewFromFloat(33.33),              // 0.3333... * 100 rounded to 2 decimals
+			wantMarkup:        decimal.NewFromFloat(0.5),                // (150-100)/100 = 0.5
+			wantMarkupPercent: decimal.NewFromFloat(50.00),              // 0.5 * 100 = 50%
 		},
 		{
 			name:              "Loss ROI",
 			cost:              decimal.NewFromInt(150),
 			revenue:           decimal.NewFromInt(100),
-			wantNetRevenue:    decimal.NewFromInt(-50),      // 100 - 150
-			wantNetMargin:     decimal.NewFromFloat(-0.5),   // (100-150)/100 = -0.5
-			wantMarginPercent: decimal.NewFromFloat(-50.00), // -0.5 * 100 = -50%
+			wantNetRevenue:    decimal.NewFromInt(-50),                   // 100 - 150
+			wantNetMargin:     decimal.NewFromFloat(-0.5),                // (100-150)/100 = -0.5
+			wantMarginPercent: decimal.NewFromFloat(-50.00),              // -0.5 * 100 = -50%
+			wantMarkup:        decimal.NewFromFloat(-0.3333333333333333), // (100-150)/150 = -0.3333...
+			wantMarkupPercent: decimal.NewFromFloat(-33.33),              // -0.3333... * 100 rounded to 2 decimals
 		},
 		{
 			name:              "Break-even ROI",
@@ -145,6 +151,8 @@ func (s *CostSheetServiceSuite) TestROICalculationComponents() {
 			wantNetRevenue:    decimal.Zero,
 			wantNetMargin:     decimal.Zero,
 			wantMarginPercent: decimal.Zero,
+			wantMarkup:        decimal.Zero,
+			wantMarkupPercent: decimal.Zero,
 		},
 	}
 
@@ -161,6 +169,14 @@ func (s *CostSheetServiceSuite) TestROICalculationComponents() {
 			// Calculate margin percentage
 			marginPercent := margin.Mul(decimal.NewFromInt(100)).Round(2)
 			s.Equal(tc.wantMarginPercent.String(), marginPercent.String(), "Margin percentage calculation")
+
+			// Calculate markup
+			markup := s.costSheetService.CalculateMarkup(tc.cost, tc.revenue)
+			s.Equal(tc.wantMarkup.String(), markup.String(), "Markup calculation")
+
+			// Calculate markup percentage
+			markupPercent := markup.Mul(decimal.NewFromInt(100)).Round(2)
+			s.Equal(tc.wantMarkupPercent.String(), markupPercent.String(), "Markup percentage calculation")
 		})
 	}
 }

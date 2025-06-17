@@ -96,21 +96,21 @@ type ListCostSheetsResponse struct {
 
 // ROIResponse represents the detailed response for ROI calculations
 type ROIResponse struct {
-	// Total cost
-	Cost decimal.Decimal `json:"cost"`
-
-	// Total revenue
+	// Cost and Revenue
+	Cost    decimal.Decimal `json:"cost"`
 	Revenue decimal.Decimal `json:"revenue"`
+
+	// Net Revenue (Revenue - Cost)
+	NetRevenue decimal.Decimal `json:"net_revenue"`
+
+	// Markup (Revenue - Cost / Cost)
+	Markup           decimal.Decimal `json:"markup"`
+	MarkupPercentage decimal.Decimal `json:"markup_percentage"`
+
+	// Net Margin (ROI)
+	NetMargin           decimal.Decimal `json:"net_margin"`
+	NetMarginPercentage decimal.Decimal `json:"net_margin_percentage"`
 
 	// Cost breakdown by meter
 	CostBreakdown []CostBreakdownItem `json:"cost_breakdown"`
-
-	// Net revenue (Revenue - Cost)
-	NetRevenue decimal.Decimal `json:"net_revenue"`
-
-	// Net margin (ROI)
-	NetMargin decimal.Decimal `json:"net_margin"`
-
-	// Net margin as a percentage
-	NetMarginPercentage decimal.Decimal `json:"net_margin_percentage"`
 }
