@@ -84,6 +84,69 @@ definitions:
     required:
     - events
     type: object
+  dto.CalculateROIRequest:
+    properties:
+      meter_id:
+        description: MeterID references the meter to track usage
+        type: string
+      period_end:
+        type: string
+      period_start:
+        description: Optional time range. If not provided, uses entire subscription
+          period
+        type: string
+      price_id:
+        description: PriceID references the price configuration
+        type: string
+      subscription_id:
+        description: SubscriptionID is required to get subscription details
+        type: string
+    required:
+    - meter_id
+    - price_id
+    - subscription_id
+    type: object
+  dto.CostBreakdownItem:
+    properties:
+      cost:
+        description: Cost is the calculated cost for this meter
+        type: number
+      meter_id:
+        description: MeterID identifies the usage meter
+        type: string
+      meter_name:
+        description: MeterName is the display name of the meter
+        type: string
+      usage:
+        description: Usage is the quantity consumed
+        type: number
+    type: object
+  dto.CostBreakdownResponse:
+    properties:
+      items:
+        description: Items contains the breakdown by meter
+        items:
+          $ref: '#/definitions/dto.CostBreakdownItem'
+        type: array
+      total_cost:
+        description: TotalCost is the sum of all meter costs
+        type: number
+    type: object
+  dto.CostSheetResponse:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: string
+      meter_id:
+        type: string
+      price_id:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      updated_at:
+        type: string
+    type: object
   dto.CreateAPIKeyRequest:
     properties:
       expires_at:
@@ -106,6 +169,22 @@ definitions:
         type: string
       secret:
         $ref: '#/definitions/dto.SecretResponse'
+    type: object
+  dto.CreateCostSheetRequest:
+    properties:
+      meter_id:
+        description: MeterID references the meter to track usage
+        type: string
+      price_id:
+        description: PriceID references the price configuration
+        type: string
+      subscription_id:
+        description: SubscriptionID to get the time period from if not provided in
+          context
+        type: string
+    required:
+    - meter_id
+    - price_id
     type: object
   dto.CreateCreditGrantRequest:
     properties:
@@ -1409,6 +1488,15 @@ definitions:
           type: string
         type: array
     type: object
+  dto.ListCostSheetsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/dto.CostSheetResponse'
+        type: array
+      total:
+        type: integer
+    type: object
   dto.ListCreditGrantsResponse:
     properties:
       items:
@@ -1788,6 +1876,29 @@ definitions:
         type: string
       updated_by:
         type: string
+    type: object
+  dto.ROIResponse:
+    properties:
+      cost:
+        description: Total cost
+        type: number
+      cost_breakdown:
+        description: Cost breakdown by meter
+        items:
+          $ref: '#/definitions/dto.CostBreakdownItem'
+        type: array
+      net_margin:
+        description: Net margin (ROI)
+        type: number
+      net_margin_percentage:
+        description: Net margin as a percentage
+        type: number
+      net_revenue:
+        description: Net revenue (Revenue - Cost)
+        type: number
+      revenue:
+        description: Total revenue
+        type: number
     type: object
   dto.ResumeSubscriptionRequest:
     properties:
@@ -2322,6 +2433,17 @@ definitions:
     required:
     - idempotency_key
     - transaction_reason
+    type: object
+  dto.UpdateCostSheetRequest:
+    properties:
+      id:
+        description: ID of the costsheet to update
+        type: string
+      status:
+        description: Status updates the costsheet's status (optional)
+        type: string
+    required:
+    - id
     type: object
   dto.UpdateCreditGrantRequest:
     properties:
@@ -3105,6 +3227,16 @@ definitions:
     x-enum-varnames:
     - BILLING_TIER_VOLUME
     - BILLING_TIER_SLAB
+  types.CostsheetStatus:
+    enum:
+    - published
+    - draft
+    - archived
+    type: string
+    x-enum-varnames:
+    - CostsheetStatusPublished
+    - CostsheetStatusDraft
+    - CostsheetStatusArchived
   types.CreditGrantCadence:
     enum:
     - ONETIME
@@ -3434,6 +3566,27 @@ definitions:
     x-enum-varnames:
     - PRICE_TYPE_USAGE
     - PRICE_TYPE_FIXED
+  types.QueryFilter:
+    properties:
+      expand:
+        type: string
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      sort:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+    type: object
   types.ResetUsage:
     enum:
     - BILLING_PERIOD
@@ -3555,6 +3708,13 @@ definitions:
     x-enum-varnames:
     - TaskTypeImport
     - TaskTypeExport
+  types.TimeRangeFilter:
+    properties:
+      end_time:
+        type: string
+      start_time:
+        type: string
+    type: object
   types.TransactionReason:
     enum:
     - INVOICE_PAYMENT
@@ -3721,6 +3881,282 @@ paths:
       summary: Sign up
       tags:
       - Auth
+  /cost:
+    get:
+      consumes:
+      - application/json
+      description: List cost sheets with optional filtering
+      parameters:
+      - collectionFormat: csv
+        description: CostsheetIDs allows filtering by specific costsheet IDs
+        in: query
+        items:
+          type: string
+        name: costsheetIDs
+        type: array
+      - description: EnvironmentID filters by specific environment ID
+        in: query
+        name: environmentID
+        type: string
+      - collectionFormat: csv
+        description: MeterIDs filters by specific meter IDs
+        in: query
+        items:
+          type: string
+        name: meterIDs
+        type: array
+      - collectionFormat: csv
+        description: PriceIDs filters by specific price IDs
+        in: query
+        items:
+          type: string
+        name: priceIDs
+        type: array
+      - description: Status filters by costsheet status
+        enum:
+        - published
+        - draft
+        - archived
+        in: query
+        name: status
+        type: string
+        x-enum-varnames:
+        - CostsheetStatusPublished
+        - CostsheetStatusDraft
+        - CostsheetStatusArchived
+      - description: TenantID filters by specific tenant ID
+        in: query
+        name: tenantID
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ListCostSheetsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List cost sheets
+      tags:
+      - CostSheets
+    post:
+      consumes:
+      - application/json
+      description: Create a new cost sheet with the specified configuration
+      parameters:
+      - description: Cost sheet configuration
+        in: body
+        name: costsheet
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateCostSheetRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.CostSheetResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create a new cost sheet
+      tags:
+      - CostSheets
+  /cost/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a cost sheet
+      parameters:
+      - description: Cost Sheet ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Delete a cost sheet
+      tags:
+      - CostSheets
+    get:
+      consumes:
+      - application/json
+      description: Get a cost sheet by ID
+      parameters:
+      - description: Cost Sheet ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.CostSheetResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get a cost sheet by ID
+      tags:
+      - CostSheets
+    put:
+      consumes:
+      - application/json
+      description: Update a cost sheet with the specified configuration
+      parameters:
+      - description: Cost Sheet ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Cost sheet configuration
+        in: body
+        name: costsheet
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateCostSheetRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.CostSheetResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update a cost sheet
+      tags:
+      - CostSheets
+  /cost/breakdown/{subscription_id}:
+    get:
+      consumes:
+      - application/json
+      description: Get cost breakdown for a time period
+      parameters:
+      - description: Subscription ID
+        in: path
+        name: subscription_id
+        required: true
+        type: string
+      - description: Start time (RFC3339)
+        in: query
+        name: start_time
+        type: string
+      - description: End time (RFC3339)
+        in: query
+        name: end_time
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.CostBreakdownResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get cost breakdown
+      tags:
+      - CostSheets
+  /cost/roi:
+    post:
+      consumes:
+      - application/json
+      description: Calculate ROI (Return on Investment) for a given cost sheet
+      parameters:
+      - description: ROI calculation request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CalculateROIRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ROIResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Calculate ROI for cost sheet
+      tags:
+      - CostSheets
   /creditgrants:
     get:
       consumes:

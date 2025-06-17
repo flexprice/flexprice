@@ -95,6 +95,434 @@ const docTemplate = `{
                 }
             }
         },
+        "/cost": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "List cost sheets with optional filtering",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "CostSheets"
+                ],
+                "summary": "List cost sheets",
+                "parameters": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "CostsheetIDs allows filtering by specific costsheet IDs",
+                        "name": "costsheetIDs",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "EnvironmentID filters by specific environment ID",
+                        "name": "environmentID",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "MeterIDs filters by specific meter IDs",
+                        "name": "meterIDs",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "PriceIDs filters by specific price IDs",
+                        "name": "priceIDs",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "published",
+                            "draft",
+                            "archived"
+                        ],
+                        "type": "string",
+                        "x-enum-varnames": [
+                            "CostsheetStatusPublished",
+                            "CostsheetStatusDraft",
+                            "CostsheetStatusArchived"
+                        ],
+                        "description": "Status filters by costsheet status",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "TenantID filters by specific tenant ID",
+                        "name": "tenantID",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ListCostSheetsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Create a new cost sheet with the specified configuration",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "CostSheets"
+                ],
+                "summary": "Create a new cost sheet",
+                "parameters": [
+                    {
+                        "description": "Cost sheet configuration",
+                        "name": "costsheet",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CreateCostSheetRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/dto.CostSheetResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/cost/breakdown/{subscription_id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get cost breakdown for a time period",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "CostSheets"
+                ],
+                "summary": "Get cost breakdown",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Subscription ID",
+                        "name": "subscription_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start time (RFC3339)",
+                        "name": "start_time",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End time (RFC3339)",
+                        "name": "end_time",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.CostBreakdownResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/cost/roi": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Calculate ROI (Return on Investment) for a given cost sheet",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "CostSheets"
+                ],
+                "summary": "Calculate ROI for cost sheet",
+                "parameters": [
+                    {
+                        "description": "ROI calculation request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CalculateROIRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ROIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/cost/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get a cost sheet by ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "CostSheets"
+                ],
+                "summary": "Get a cost sheet by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Cost Sheet ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.CostSheetResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update a cost sheet with the specified configuration",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "CostSheets"
+                ],
+                "summary": "Update a cost sheet",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Cost Sheet ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Cost sheet configuration",
+                        "name": "costsheet",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.UpdateCostSheetRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.CostSheetResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Delete a cost sheet",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "CostSheets"
+                ],
+                "summary": "Delete a cost sheet",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Cost Sheet ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/creditgrants": {
             "get": {
                 "security": [
@@ -6264,6 +6692,95 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.CalculateROIRequest": {
+            "type": "object",
+            "required": [
+                "meter_id",
+                "price_id",
+                "subscription_id"
+            ],
+            "properties": {
+                "meter_id": {
+                    "description": "MeterID references the meter to track usage",
+                    "type": "string"
+                },
+                "period_end": {
+                    "type": "string"
+                },
+                "period_start": {
+                    "description": "Optional time range. If not provided, uses entire subscription period",
+                    "type": "string"
+                },
+                "price_id": {
+                    "description": "PriceID references the price configuration",
+                    "type": "string"
+                },
+                "subscription_id": {
+                    "description": "SubscriptionID is required to get subscription details",
+                    "type": "string"
+                }
+            }
+        },
+        "dto.CostBreakdownItem": {
+            "type": "object",
+            "properties": {
+                "cost": {
+                    "description": "Cost is the calculated cost for this meter",
+                    "type": "number"
+                },
+                "meter_id": {
+                    "description": "MeterID identifies the usage meter",
+                    "type": "string"
+                },
+                "meter_name": {
+                    "description": "MeterName is the display name of the meter",
+                    "type": "string"
+                },
+                "usage": {
+                    "description": "Usage is the quantity consumed",
+                    "type": "number"
+                }
+            }
+        },
+        "dto.CostBreakdownResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "description": "Items contains the breakdown by meter",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.CostBreakdownItem"
+                    }
+                },
+                "total_cost": {
+                    "description": "TotalCost is the sum of all meter costs",
+                    "type": "number"
+                }
+            }
+        },
+        "dto.CostSheetResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "meter_id": {
+                    "type": "string"
+                },
+                "price_id": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.CreateAPIKeyRequest": {
             "type": "object",
             "required": [
@@ -6296,6 +6813,27 @@ const docTemplate = `{
                 },
                 "secret": {
                     "$ref": "#/definitions/dto.SecretResponse"
+                }
+            }
+        },
+        "dto.CreateCostSheetRequest": {
+            "type": "object",
+            "required": [
+                "meter_id",
+                "price_id"
+            ],
+            "properties": {
+                "meter_id": {
+                    "description": "MeterID references the meter to track usage",
+                    "type": "string"
+                },
+                "price_id": {
+                    "description": "PriceID references the price configuration",
+                    "type": "string"
+                },
+                "subscription_id": {
+                    "description": "SubscriptionID to get the time period from if not provided in context",
+                    "type": "string"
                 }
             }
         },
@@ -8166,6 +8704,20 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.ListCostSheetsResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.CostSheetResponse"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
         "dto.ListCreditGrantsResponse": {
             "type": "object",
             "properties": {
@@ -8721,6 +9273,38 @@ const docTemplate = `{
                 },
                 "updated_by": {
                     "type": "string"
+                }
+            }
+        },
+        "dto.ROIResponse": {
+            "type": "object",
+            "properties": {
+                "cost": {
+                    "description": "Total cost",
+                    "type": "number"
+                },
+                "cost_breakdown": {
+                    "description": "Cost breakdown by meter",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.CostBreakdownItem"
+                    }
+                },
+                "net_margin": {
+                    "description": "Net margin (ROI)",
+                    "type": "number"
+                },
+                "net_margin_percentage": {
+                    "description": "Net margin as a percentage",
+                    "type": "number"
+                },
+                "net_revenue": {
+                    "description": "Net revenue (Revenue - Cost)",
+                    "type": "number"
+                },
+                "revenue": {
+                    "description": "Total revenue",
+                    "type": "number"
                 }
             }
         },
@@ -9464,6 +10048,22 @@ const docTemplate = `{
                 },
                 "transaction_reason": {
                     "$ref": "#/definitions/types.TransactionReason"
+                }
+            }
+        },
+        "dto.UpdateCostSheetRequest": {
+            "type": "object",
+            "required": [
+                "id"
+            ],
+            "properties": {
+                "id": {
+                    "description": "ID of the costsheet to update",
+                    "type": "string"
+                },
+                "status": {
+                    "description": "Status updates the costsheet's status (optional)",
+                    "type": "string"
                 }
             }
         },
@@ -10586,6 +11186,19 @@ const docTemplate = `{
                 "BILLING_TIER_SLAB"
             ]
         },
+        "types.CostsheetStatus": {
+            "type": "string",
+            "enum": [
+                "published",
+                "draft",
+                "archived"
+            ],
+            "x-enum-varnames": [
+                "CostsheetStatusPublished",
+                "CostsheetStatusDraft",
+                "CostsheetStatusArchived"
+            ]
+        },
         "types.CreditGrantCadence": {
             "type": "string",
             "enum": [
@@ -11026,6 +11639,36 @@ const docTemplate = `{
                 "PRICE_TYPE_FIXED"
             ]
         },
+        "types.QueryFilter": {
+            "type": "object",
+            "properties": {
+                "expand": {
+                    "type": "string"
+                },
+                "limit": {
+                    "type": "integer",
+                    "maximum": 1000,
+                    "minimum": 1
+                },
+                "offset": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "order": {
+                    "type": "string",
+                    "enum": [
+                        "asc",
+                        "desc"
+                    ]
+                },
+                "sort": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                }
+            }
+        },
         "types.ResetUsage": {
             "type": "string",
             "enum": [
@@ -11183,6 +11826,17 @@ const docTemplate = `{
                 "TaskTypeImport",
                 "TaskTypeExport"
             ]
+        },
+        "types.TimeRangeFilter": {
+            "type": "object",
+            "properties": {
+                "end_time": {
+                    "type": "string"
+                },
+                "start_time": {
+                    "type": "string"
+                }
+            }
         },
         "types.TransactionReason": {
             "type": "string",
