@@ -34,6 +34,8 @@ type Handlers struct {
 	Payment           *v1.PaymentHandler
 	Task              *v1.TaskHandler
 	Secret            *v1.SecretHandler
+	// Webhook handlers
+	StripeWebhook *v1.StripeWebhookHandler
 	// Portal handlers
 	Onboarding *v1.OnboardingHandler
 	// Cron jobs : TODO: move crons out of API based architecture
@@ -75,6 +77,15 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		// Auth routes
 		v1Public.POST("/auth/signup", handlers.Auth.SignUp)
 		v1Public.POST("/auth/login", handlers.Auth.Login)
+	}
+
+	// Webhook routes (public, no authentication)
+	webhooks := router.Group("/webhooks")
+	webhooks.Use(middleware.ErrorHandler())
+	{
+		// Stripe webhook endpoints
+		webhooks.POST("/stripe", handlers.StripeWebhook.ReceiveWebhook)
+		webhooks.GET("/stripe/test", handlers.StripeWebhook.TestWebhook)
 	}
 
 	private := router.Group("/", middleware.AuthenticateMiddleware(cfg, secretService, logger))

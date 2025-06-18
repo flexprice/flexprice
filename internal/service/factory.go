@@ -9,12 +9,14 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
+	"github.com/flexprice/flexprice/internal/domain/integration"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/secret"
+	"github.com/flexprice/flexprice/internal/domain/stripe"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/task"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
@@ -60,6 +62,15 @@ type ServiceParams struct {
 	TaskRepo                 task.Repository
 	CreditGrantRepo          creditgrant.Repository
 
+	// Integration Repositories
+	EntityIntegrationMappingRepo integration.EntityIntegrationMappingRepository
+	StripeSyncBatchRepo          integration.StripeSyncBatchRepository
+	StripeTenantConfigRepo       integration.StripeTenantConfigRepository
+	MeterProviderMappingRepo     integration.MeterProviderMappingRepository
+
+	// External API Repositories
+	StripeClientRepo stripe.Client
+
 	// Publishers
 	EventPublisher   publisher.EventPublisher
 	WebhookPublisher webhookPublisher.WebhookPublisher
@@ -98,6 +109,11 @@ func NewServiceParams(
 	s3Service s3.Service,
 	client httpclient.Client,
 	taskRepo task.Repository,
+	entityIntegrationMappingRepo integration.EntityIntegrationMappingRepository,
+	stripeSyncBatchRepo integration.StripeSyncBatchRepository,
+	stripeTenantConfigRepo integration.StripeTenantConfigRepository,
+	meterProviderMappingRepo integration.MeterProviderMappingRepository,
+	stripeClientRepo stripe.Client,
 ) ServiceParams {
 	return ServiceParams{
 		Logger:                   logger,
@@ -128,5 +144,14 @@ func NewServiceParams(
 		S3:                       s3Service,
 		Client:                   client,
 		TaskRepo:                 taskRepo,
+
+		// Integration Repositories
+		EntityIntegrationMappingRepo: entityIntegrationMappingRepo,
+		StripeSyncBatchRepo:          stripeSyncBatchRepo,
+		StripeTenantConfigRepo:       stripeTenantConfigRepo,
+		MeterProviderMappingRepo:     meterProviderMappingRepo,
+
+		// External API Repositories
+		StripeClientRepo: stripeClientRepo,
 	}
 }
