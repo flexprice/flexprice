@@ -3663,6 +3663,13 @@ definitions:
     - WindowSize12Hour
     - WindowSizeDay
     - WindowSizeWeek
+  webhookDto.StripeWebhookResponse:
+    properties:
+      message:
+        type: string
+      received:
+        type: boolean
+    type: object
 info:
   contact: {}
   description: FlexPrice API Service
@@ -7629,6 +7636,66 @@ paths:
       summary: Get wallet transactions
       tags:
       - Wallets
+  /webhooks/stripe:
+    post:
+      consumes:
+      - application/json
+      description: Receives and processes Stripe webhook events, specifically customer.created
+        events
+      parameters:
+      - description: Stripe webhook signature for verification
+        in: header
+        name: Stripe-Signature
+        required: true
+        type: string
+      - description: Stripe webhook event payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook processed successfully
+          schema:
+            $ref: '#/definitions/webhookDto.StripeWebhookResponse'
+        "400":
+          description: Bad request - invalid payload or signature
+          schema:
+            $ref: '#/definitions/webhookDto.StripeWebhookResponse'
+        "401":
+          description: Unauthorized - invalid signature
+          schema:
+            $ref: '#/definitions/webhookDto.StripeWebhookResponse'
+        "403":
+          description: Forbidden - webhook not configured
+          schema:
+            $ref: '#/definitions/webhookDto.StripeWebhookResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/webhookDto.StripeWebhookResponse'
+      summary: Receive Stripe webhook
+      tags:
+      - webhooks
+  /webhooks/stripe/test:
+    get:
+      consumes:
+      - application/json
+      description: Test endpoint to validate webhook configuration and connectivity
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Test successful
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Test Stripe webhook endpoint
+      tags:
+      - webhooks
 schemes:
 - http
 - https
