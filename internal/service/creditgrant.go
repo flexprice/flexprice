@@ -576,6 +576,13 @@ func (s *creditGrantService) createNextPeriodApplication(ctx context.Context, gr
 		return err
 	}
 
+	// check if this cga is valid for the next period
+	// for this subscription, is the next period end after the subscription end?
+	if subscription.EndDate != nil && nextPeriodEnd.After(*subscription.EndDate) {
+		s.Logger.Infow("Next period end is after subscription end, skipping", "grant_id", grant.ID, "subscription_id", subscription.ID)
+		return nil
+	}
+
 	// Create next period CGA
 	nextPeriodCGA := &domainCreditGrantApplication.CreditGrantApplication{
 		ID:                              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CREDIT_GRANT_APPLICATION),
