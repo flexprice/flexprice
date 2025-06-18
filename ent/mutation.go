@@ -3104,15 +3104,14 @@ type CreditGrantApplicationMutation struct {
 	applied_at                         *time.Time
 	period_start                       *time.Time
 	period_end                         *time.Time
-	application_status                 *string
+	application_status                 *types.ApplicationStatus
 	credits_applied                    *decimal.Decimal
 	currency                           *string
-	application_reason                 *string
-	subscription_status_at_application *string
+	application_reason                 *types.CreditGrantApplicationReason
+	subscription_status_at_application *types.SubscriptionStatus
 	retry_count                        *int
 	addretry_count                     *int
 	failure_reason                     *string
-	next_retry_at                      *time.Time
 	metadata                           *types.Metadata
 	idempotency_key                    *string
 	clearedFields                      map[string]struct{}
@@ -3746,12 +3745,12 @@ func (m *CreditGrantApplicationMutation) ResetPeriodEnd() {
 }
 
 // SetApplicationStatus sets the "application_status" field.
-func (m *CreditGrantApplicationMutation) SetApplicationStatus(s string) {
-	m.application_status = &s
+func (m *CreditGrantApplicationMutation) SetApplicationStatus(ts types.ApplicationStatus) {
+	m.application_status = &ts
 }
 
 // ApplicationStatus returns the value of the "application_status" field in the mutation.
-func (m *CreditGrantApplicationMutation) ApplicationStatus() (r string, exists bool) {
+func (m *CreditGrantApplicationMutation) ApplicationStatus() (r types.ApplicationStatus, exists bool) {
 	v := m.application_status
 	if v == nil {
 		return
@@ -3762,7 +3761,7 @@ func (m *CreditGrantApplicationMutation) ApplicationStatus() (r string, exists b
 // OldApplicationStatus returns the old "application_status" field's value of the CreditGrantApplication entity.
 // If the CreditGrantApplication object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *CreditGrantApplicationMutation) OldApplicationStatus(ctx context.Context) (v string, err error) {
+func (m *CreditGrantApplicationMutation) OldApplicationStatus(ctx context.Context) (v types.ApplicationStatus, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldApplicationStatus is only allowed on UpdateOne operations")
 	}
@@ -3854,12 +3853,12 @@ func (m *CreditGrantApplicationMutation) ResetCurrency() {
 }
 
 // SetApplicationReason sets the "application_reason" field.
-func (m *CreditGrantApplicationMutation) SetApplicationReason(s string) {
-	m.application_reason = &s
+func (m *CreditGrantApplicationMutation) SetApplicationReason(tgar types.CreditGrantApplicationReason) {
+	m.application_reason = &tgar
 }
 
 // ApplicationReason returns the value of the "application_reason" field in the mutation.
-func (m *CreditGrantApplicationMutation) ApplicationReason() (r string, exists bool) {
+func (m *CreditGrantApplicationMutation) ApplicationReason() (r types.CreditGrantApplicationReason, exists bool) {
 	v := m.application_reason
 	if v == nil {
 		return
@@ -3870,7 +3869,7 @@ func (m *CreditGrantApplicationMutation) ApplicationReason() (r string, exists b
 // OldApplicationReason returns the old "application_reason" field's value of the CreditGrantApplication entity.
 // If the CreditGrantApplication object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *CreditGrantApplicationMutation) OldApplicationReason(ctx context.Context) (v string, err error) {
+func (m *CreditGrantApplicationMutation) OldApplicationReason(ctx context.Context) (v types.CreditGrantApplicationReason, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldApplicationReason is only allowed on UpdateOne operations")
 	}
@@ -3890,12 +3889,12 @@ func (m *CreditGrantApplicationMutation) ResetApplicationReason() {
 }
 
 // SetSubscriptionStatusAtApplication sets the "subscription_status_at_application" field.
-func (m *CreditGrantApplicationMutation) SetSubscriptionStatusAtApplication(s string) {
-	m.subscription_status_at_application = &s
+func (m *CreditGrantApplicationMutation) SetSubscriptionStatusAtApplication(ts types.SubscriptionStatus) {
+	m.subscription_status_at_application = &ts
 }
 
 // SubscriptionStatusAtApplication returns the value of the "subscription_status_at_application" field in the mutation.
-func (m *CreditGrantApplicationMutation) SubscriptionStatusAtApplication() (r string, exists bool) {
+func (m *CreditGrantApplicationMutation) SubscriptionStatusAtApplication() (r types.SubscriptionStatus, exists bool) {
 	v := m.subscription_status_at_application
 	if v == nil {
 		return
@@ -3906,7 +3905,7 @@ func (m *CreditGrantApplicationMutation) SubscriptionStatusAtApplication() (r st
 // OldSubscriptionStatusAtApplication returns the old "subscription_status_at_application" field's value of the CreditGrantApplication entity.
 // If the CreditGrantApplication object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *CreditGrantApplicationMutation) OldSubscriptionStatusAtApplication(ctx context.Context) (v string, err error) {
+func (m *CreditGrantApplicationMutation) OldSubscriptionStatusAtApplication(ctx context.Context) (v types.SubscriptionStatus, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldSubscriptionStatusAtApplication is only allowed on UpdateOne operations")
 	}
@@ -4030,55 +4029,6 @@ func (m *CreditGrantApplicationMutation) ResetFailureReason() {
 	delete(m.clearedFields, creditgrantapplication.FieldFailureReason)
 }
 
-// SetNextRetryAt sets the "next_retry_at" field.
-func (m *CreditGrantApplicationMutation) SetNextRetryAt(t time.Time) {
-	m.next_retry_at = &t
-}
-
-// NextRetryAt returns the value of the "next_retry_at" field in the mutation.
-func (m *CreditGrantApplicationMutation) NextRetryAt() (r time.Time, exists bool) {
-	v := m.next_retry_at
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldNextRetryAt returns the old "next_retry_at" field's value of the CreditGrantApplication entity.
-// If the CreditGrantApplication object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *CreditGrantApplicationMutation) OldNextRetryAt(ctx context.Context) (v *time.Time, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldNextRetryAt is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldNextRetryAt requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldNextRetryAt: %w", err)
-	}
-	return oldValue.NextRetryAt, nil
-}
-
-// ClearNextRetryAt clears the value of the "next_retry_at" field.
-func (m *CreditGrantApplicationMutation) ClearNextRetryAt() {
-	m.next_retry_at = nil
-	m.clearedFields[creditgrantapplication.FieldNextRetryAt] = struct{}{}
-}
-
-// NextRetryAtCleared returns if the "next_retry_at" field was cleared in this mutation.
-func (m *CreditGrantApplicationMutation) NextRetryAtCleared() bool {
-	_, ok := m.clearedFields[creditgrantapplication.FieldNextRetryAt]
-	return ok
-}
-
-// ResetNextRetryAt resets all changes to the "next_retry_at" field.
-func (m *CreditGrantApplicationMutation) ResetNextRetryAt() {
-	m.next_retry_at = nil
-	delete(m.clearedFields, creditgrantapplication.FieldNextRetryAt)
-}
-
 // SetMetadata sets the "metadata" field.
 func (m *CreditGrantApplicationMutation) SetMetadata(t types.Metadata) {
 	m.metadata = &t
@@ -4198,7 +4148,7 @@ func (m *CreditGrantApplicationMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CreditGrantApplicationMutation) Fields() []string {
-	fields := make([]string, 0, 23)
+	fields := make([]string, 0, 22)
 	if m.tenant_id != nil {
 		fields = append(fields, creditgrantapplication.FieldTenantID)
 	}
@@ -4259,9 +4209,6 @@ func (m *CreditGrantApplicationMutation) Fields() []string {
 	if m.failure_reason != nil {
 		fields = append(fields, creditgrantapplication.FieldFailureReason)
 	}
-	if m.next_retry_at != nil {
-		fields = append(fields, creditgrantapplication.FieldNextRetryAt)
-	}
 	if m.metadata != nil {
 		fields = append(fields, creditgrantapplication.FieldMetadata)
 	}
@@ -4316,8 +4263,6 @@ func (m *CreditGrantApplicationMutation) Field(name string) (ent.Value, bool) {
 		return m.RetryCount()
 	case creditgrantapplication.FieldFailureReason:
 		return m.FailureReason()
-	case creditgrantapplication.FieldNextRetryAt:
-		return m.NextRetryAt()
 	case creditgrantapplication.FieldMetadata:
 		return m.Metadata()
 	case creditgrantapplication.FieldIdempotencyKey:
@@ -4371,8 +4316,6 @@ func (m *CreditGrantApplicationMutation) OldField(ctx context.Context, name stri
 		return m.OldRetryCount(ctx)
 	case creditgrantapplication.FieldFailureReason:
 		return m.OldFailureReason(ctx)
-	case creditgrantapplication.FieldNextRetryAt:
-		return m.OldNextRetryAt(ctx)
 	case creditgrantapplication.FieldMetadata:
 		return m.OldMetadata(ctx)
 	case creditgrantapplication.FieldIdempotencyKey:
@@ -4478,7 +4421,7 @@ func (m *CreditGrantApplicationMutation) SetField(name string, value ent.Value) 
 		m.SetPeriodEnd(v)
 		return nil
 	case creditgrantapplication.FieldApplicationStatus:
-		v, ok := value.(string)
+		v, ok := value.(types.ApplicationStatus)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -4499,14 +4442,14 @@ func (m *CreditGrantApplicationMutation) SetField(name string, value ent.Value) 
 		m.SetCurrency(v)
 		return nil
 	case creditgrantapplication.FieldApplicationReason:
-		v, ok := value.(string)
+		v, ok := value.(types.CreditGrantApplicationReason)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetApplicationReason(v)
 		return nil
 	case creditgrantapplication.FieldSubscriptionStatusAtApplication:
-		v, ok := value.(string)
+		v, ok := value.(types.SubscriptionStatus)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -4525,13 +4468,6 @@ func (m *CreditGrantApplicationMutation) SetField(name string, value ent.Value) 
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetFailureReason(v)
-		return nil
-	case creditgrantapplication.FieldNextRetryAt:
-		v, ok := value.(time.Time)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetNextRetryAt(v)
 		return nil
 	case creditgrantapplication.FieldMetadata:
 		v, ok := value.(types.Metadata)
@@ -4607,9 +4543,6 @@ func (m *CreditGrantApplicationMutation) ClearedFields() []string {
 	if m.FieldCleared(creditgrantapplication.FieldFailureReason) {
 		fields = append(fields, creditgrantapplication.FieldFailureReason)
 	}
-	if m.FieldCleared(creditgrantapplication.FieldNextRetryAt) {
-		fields = append(fields, creditgrantapplication.FieldNextRetryAt)
-	}
 	if m.FieldCleared(creditgrantapplication.FieldMetadata) {
 		fields = append(fields, creditgrantapplication.FieldMetadata)
 	}
@@ -4641,9 +4574,6 @@ func (m *CreditGrantApplicationMutation) ClearField(name string) error {
 		return nil
 	case creditgrantapplication.FieldFailureReason:
 		m.ClearFailureReason()
-		return nil
-	case creditgrantapplication.FieldNextRetryAt:
-		m.ClearNextRetryAt()
 		return nil
 	case creditgrantapplication.FieldMetadata:
 		m.ClearMetadata()
@@ -4715,9 +4645,6 @@ func (m *CreditGrantApplicationMutation) ResetField(name string) error {
 		return nil
 	case creditgrantapplication.FieldFailureReason:
 		m.ResetFailureReason()
-		return nil
-	case creditgrantapplication.FieldNextRetryAt:
-		m.ResetNextRetryAt()
 		return nil
 	case creditgrantapplication.FieldMetadata:
 		m.ResetMetadata()

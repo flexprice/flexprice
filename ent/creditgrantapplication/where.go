@@ -132,8 +132,9 @@ func PeriodEnd(v time.Time) predicate.CreditGrantApplication {
 }
 
 // ApplicationStatus applies equality check predicate on the "application_status" field. It's identical to ApplicationStatusEQ.
-func ApplicationStatus(v string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldEQ(FieldApplicationStatus, v))
+func ApplicationStatus(v types.ApplicationStatus) predicate.CreditGrantApplication {
+	vc := string(v)
+	return predicate.CreditGrantApplication(sql.FieldEQ(FieldApplicationStatus, vc))
 }
 
 // CreditsApplied applies equality check predicate on the "credits_applied" field. It's identical to CreditsAppliedEQ.
@@ -147,13 +148,15 @@ func Currency(v string) predicate.CreditGrantApplication {
 }
 
 // ApplicationReason applies equality check predicate on the "application_reason" field. It's identical to ApplicationReasonEQ.
-func ApplicationReason(v string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldEQ(FieldApplicationReason, v))
+func ApplicationReason(v types.CreditGrantApplicationReason) predicate.CreditGrantApplication {
+	vc := string(v)
+	return predicate.CreditGrantApplication(sql.FieldEQ(FieldApplicationReason, vc))
 }
 
 // SubscriptionStatusAtApplication applies equality check predicate on the "subscription_status_at_application" field. It's identical to SubscriptionStatusAtApplicationEQ.
-func SubscriptionStatusAtApplication(v string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldEQ(FieldSubscriptionStatusAtApplication, v))
+func SubscriptionStatusAtApplication(v types.SubscriptionStatus) predicate.CreditGrantApplication {
+	vc := string(v)
+	return predicate.CreditGrantApplication(sql.FieldEQ(FieldSubscriptionStatusAtApplication, vc))
 }
 
 // RetryCount applies equality check predicate on the "retry_count" field. It's identical to RetryCountEQ.
@@ -164,11 +167,6 @@ func RetryCount(v int) predicate.CreditGrantApplication {
 // FailureReason applies equality check predicate on the "failure_reason" field. It's identical to FailureReasonEQ.
 func FailureReason(v string) predicate.CreditGrantApplication {
 	return predicate.CreditGrantApplication(sql.FieldEQ(FieldFailureReason, v))
-}
-
-// NextRetryAt applies equality check predicate on the "next_retry_at" field. It's identical to NextRetryAtEQ.
-func NextRetryAt(v time.Time) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldEQ(FieldNextRetryAt, v))
 }
 
 // Metadata applies equality check predicate on the "metadata" field. It's identical to MetadataEQ.
@@ -917,68 +915,87 @@ func PeriodEndLTE(v time.Time) predicate.CreditGrantApplication {
 }
 
 // ApplicationStatusEQ applies the EQ predicate on the "application_status" field.
-func ApplicationStatusEQ(v string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldEQ(FieldApplicationStatus, v))
+func ApplicationStatusEQ(v types.ApplicationStatus) predicate.CreditGrantApplication {
+	vc := string(v)
+	return predicate.CreditGrantApplication(sql.FieldEQ(FieldApplicationStatus, vc))
 }
 
 // ApplicationStatusNEQ applies the NEQ predicate on the "application_status" field.
-func ApplicationStatusNEQ(v string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldNEQ(FieldApplicationStatus, v))
+func ApplicationStatusNEQ(v types.ApplicationStatus) predicate.CreditGrantApplication {
+	vc := string(v)
+	return predicate.CreditGrantApplication(sql.FieldNEQ(FieldApplicationStatus, vc))
 }
 
 // ApplicationStatusIn applies the In predicate on the "application_status" field.
-func ApplicationStatusIn(vs ...string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldIn(FieldApplicationStatus, vs...))
+func ApplicationStatusIn(vs ...types.ApplicationStatus) predicate.CreditGrantApplication {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.CreditGrantApplication(sql.FieldIn(FieldApplicationStatus, v...))
 }
 
 // ApplicationStatusNotIn applies the NotIn predicate on the "application_status" field.
-func ApplicationStatusNotIn(vs ...string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldNotIn(FieldApplicationStatus, vs...))
+func ApplicationStatusNotIn(vs ...types.ApplicationStatus) predicate.CreditGrantApplication {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.CreditGrantApplication(sql.FieldNotIn(FieldApplicationStatus, v...))
 }
 
 // ApplicationStatusGT applies the GT predicate on the "application_status" field.
-func ApplicationStatusGT(v string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldGT(FieldApplicationStatus, v))
+func ApplicationStatusGT(v types.ApplicationStatus) predicate.CreditGrantApplication {
+	vc := string(v)
+	return predicate.CreditGrantApplication(sql.FieldGT(FieldApplicationStatus, vc))
 }
 
 // ApplicationStatusGTE applies the GTE predicate on the "application_status" field.
-func ApplicationStatusGTE(v string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldGTE(FieldApplicationStatus, v))
+func ApplicationStatusGTE(v types.ApplicationStatus) predicate.CreditGrantApplication {
+	vc := string(v)
+	return predicate.CreditGrantApplication(sql.FieldGTE(FieldApplicationStatus, vc))
 }
 
 // ApplicationStatusLT applies the LT predicate on the "application_status" field.
-func ApplicationStatusLT(v string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldLT(FieldApplicationStatus, v))
+func ApplicationStatusLT(v types.ApplicationStatus) predicate.CreditGrantApplication {
+	vc := string(v)
+	return predicate.CreditGrantApplication(sql.FieldLT(FieldApplicationStatus, vc))
 }
 
 // ApplicationStatusLTE applies the LTE predicate on the "application_status" field.
-func ApplicationStatusLTE(v string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldLTE(FieldApplicationStatus, v))
+func ApplicationStatusLTE(v types.ApplicationStatus) predicate.CreditGrantApplication {
+	vc := string(v)
+	return predicate.CreditGrantApplication(sql.FieldLTE(FieldApplicationStatus, vc))
 }
 
 // ApplicationStatusContains applies the Contains predicate on the "application_status" field.
-func ApplicationStatusContains(v string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldContains(FieldApplicationStatus, v))
+func ApplicationStatusContains(v types.ApplicationStatus) predicate.CreditGrantApplication {
+	vc := string(v)
+	return predicate.CreditGrantApplication(sql.FieldContains(FieldApplicationStatus, vc))
 }
 
 // ApplicationStatusHasPrefix applies the HasPrefix predicate on the "application_status" field.
-func ApplicationStatusHasPrefix(v string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldHasPrefix(FieldApplicationStatus, v))
+func ApplicationStatusHasPrefix(v types.ApplicationStatus) predicate.CreditGrantApplication {
+	vc := string(v)
+	return predicate.CreditGrantApplication(sql.FieldHasPrefix(FieldApplicationStatus, vc))
 }
 
 // ApplicationStatusHasSuffix applies the HasSuffix predicate on the "application_status" field.
-func ApplicationStatusHasSuffix(v string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldHasSuffix(FieldApplicationStatus, v))
+func ApplicationStatusHasSuffix(v types.ApplicationStatus) predicate.CreditGrantApplication {
+	vc := string(v)
+	return predicate.CreditGrantApplication(sql.FieldHasSuffix(FieldApplicationStatus, vc))
 }
 
 // ApplicationStatusEqualFold applies the EqualFold predicate on the "application_status" field.
-func ApplicationStatusEqualFold(v string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldEqualFold(FieldApplicationStatus, v))
+func ApplicationStatusEqualFold(v types.ApplicationStatus) predicate.CreditGrantApplication {
+	vc := string(v)
+	return predicate.CreditGrantApplication(sql.FieldEqualFold(FieldApplicationStatus, vc))
 }
 
 // ApplicationStatusContainsFold applies the ContainsFold predicate on the "application_status" field.
-func ApplicationStatusContainsFold(v string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldContainsFold(FieldApplicationStatus, v))
+func ApplicationStatusContainsFold(v types.ApplicationStatus) predicate.CreditGrantApplication {
+	vc := string(v)
+	return predicate.CreditGrantApplication(sql.FieldContainsFold(FieldApplicationStatus, vc))
 }
 
 // CreditsAppliedEQ applies the EQ predicate on the "credits_applied" field.
@@ -1087,133 +1104,171 @@ func CurrencyContainsFold(v string) predicate.CreditGrantApplication {
 }
 
 // ApplicationReasonEQ applies the EQ predicate on the "application_reason" field.
-func ApplicationReasonEQ(v string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldEQ(FieldApplicationReason, v))
+func ApplicationReasonEQ(v types.CreditGrantApplicationReason) predicate.CreditGrantApplication {
+	vc := string(v)
+	return predicate.CreditGrantApplication(sql.FieldEQ(FieldApplicationReason, vc))
 }
 
 // ApplicationReasonNEQ applies the NEQ predicate on the "application_reason" field.
-func ApplicationReasonNEQ(v string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldNEQ(FieldApplicationReason, v))
+func ApplicationReasonNEQ(v types.CreditGrantApplicationReason) predicate.CreditGrantApplication {
+	vc := string(v)
+	return predicate.CreditGrantApplication(sql.FieldNEQ(FieldApplicationReason, vc))
 }
 
 // ApplicationReasonIn applies the In predicate on the "application_reason" field.
-func ApplicationReasonIn(vs ...string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldIn(FieldApplicationReason, vs...))
+func ApplicationReasonIn(vs ...types.CreditGrantApplicationReason) predicate.CreditGrantApplication {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.CreditGrantApplication(sql.FieldIn(FieldApplicationReason, v...))
 }
 
 // ApplicationReasonNotIn applies the NotIn predicate on the "application_reason" field.
-func ApplicationReasonNotIn(vs ...string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldNotIn(FieldApplicationReason, vs...))
+func ApplicationReasonNotIn(vs ...types.CreditGrantApplicationReason) predicate.CreditGrantApplication {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.CreditGrantApplication(sql.FieldNotIn(FieldApplicationReason, v...))
 }
 
 // ApplicationReasonGT applies the GT predicate on the "application_reason" field.
-func ApplicationReasonGT(v string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldGT(FieldApplicationReason, v))
+func ApplicationReasonGT(v types.CreditGrantApplicationReason) predicate.CreditGrantApplication {
+	vc := string(v)
+	return predicate.CreditGrantApplication(sql.FieldGT(FieldApplicationReason, vc))
 }
 
 // ApplicationReasonGTE applies the GTE predicate on the "application_reason" field.
-func ApplicationReasonGTE(v string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldGTE(FieldApplicationReason, v))
+func ApplicationReasonGTE(v types.CreditGrantApplicationReason) predicate.CreditGrantApplication {
+	vc := string(v)
+	return predicate.CreditGrantApplication(sql.FieldGTE(FieldApplicationReason, vc))
 }
 
 // ApplicationReasonLT applies the LT predicate on the "application_reason" field.
-func ApplicationReasonLT(v string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldLT(FieldApplicationReason, v))
+func ApplicationReasonLT(v types.CreditGrantApplicationReason) predicate.CreditGrantApplication {
+	vc := string(v)
+	return predicate.CreditGrantApplication(sql.FieldLT(FieldApplicationReason, vc))
 }
 
 // ApplicationReasonLTE applies the LTE predicate on the "application_reason" field.
-func ApplicationReasonLTE(v string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldLTE(FieldApplicationReason, v))
+func ApplicationReasonLTE(v types.CreditGrantApplicationReason) predicate.CreditGrantApplication {
+	vc := string(v)
+	return predicate.CreditGrantApplication(sql.FieldLTE(FieldApplicationReason, vc))
 }
 
 // ApplicationReasonContains applies the Contains predicate on the "application_reason" field.
-func ApplicationReasonContains(v string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldContains(FieldApplicationReason, v))
+func ApplicationReasonContains(v types.CreditGrantApplicationReason) predicate.CreditGrantApplication {
+	vc := string(v)
+	return predicate.CreditGrantApplication(sql.FieldContains(FieldApplicationReason, vc))
 }
 
 // ApplicationReasonHasPrefix applies the HasPrefix predicate on the "application_reason" field.
-func ApplicationReasonHasPrefix(v string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldHasPrefix(FieldApplicationReason, v))
+func ApplicationReasonHasPrefix(v types.CreditGrantApplicationReason) predicate.CreditGrantApplication {
+	vc := string(v)
+	return predicate.CreditGrantApplication(sql.FieldHasPrefix(FieldApplicationReason, vc))
 }
 
 // ApplicationReasonHasSuffix applies the HasSuffix predicate on the "application_reason" field.
-func ApplicationReasonHasSuffix(v string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldHasSuffix(FieldApplicationReason, v))
+func ApplicationReasonHasSuffix(v types.CreditGrantApplicationReason) predicate.CreditGrantApplication {
+	vc := string(v)
+	return predicate.CreditGrantApplication(sql.FieldHasSuffix(FieldApplicationReason, vc))
 }
 
 // ApplicationReasonEqualFold applies the EqualFold predicate on the "application_reason" field.
-func ApplicationReasonEqualFold(v string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldEqualFold(FieldApplicationReason, v))
+func ApplicationReasonEqualFold(v types.CreditGrantApplicationReason) predicate.CreditGrantApplication {
+	vc := string(v)
+	return predicate.CreditGrantApplication(sql.FieldEqualFold(FieldApplicationReason, vc))
 }
 
 // ApplicationReasonContainsFold applies the ContainsFold predicate on the "application_reason" field.
-func ApplicationReasonContainsFold(v string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldContainsFold(FieldApplicationReason, v))
+func ApplicationReasonContainsFold(v types.CreditGrantApplicationReason) predicate.CreditGrantApplication {
+	vc := string(v)
+	return predicate.CreditGrantApplication(sql.FieldContainsFold(FieldApplicationReason, vc))
 }
 
 // SubscriptionStatusAtApplicationEQ applies the EQ predicate on the "subscription_status_at_application" field.
-func SubscriptionStatusAtApplicationEQ(v string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldEQ(FieldSubscriptionStatusAtApplication, v))
+func SubscriptionStatusAtApplicationEQ(v types.SubscriptionStatus) predicate.CreditGrantApplication {
+	vc := string(v)
+	return predicate.CreditGrantApplication(sql.FieldEQ(FieldSubscriptionStatusAtApplication, vc))
 }
 
 // SubscriptionStatusAtApplicationNEQ applies the NEQ predicate on the "subscription_status_at_application" field.
-func SubscriptionStatusAtApplicationNEQ(v string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldNEQ(FieldSubscriptionStatusAtApplication, v))
+func SubscriptionStatusAtApplicationNEQ(v types.SubscriptionStatus) predicate.CreditGrantApplication {
+	vc := string(v)
+	return predicate.CreditGrantApplication(sql.FieldNEQ(FieldSubscriptionStatusAtApplication, vc))
 }
 
 // SubscriptionStatusAtApplicationIn applies the In predicate on the "subscription_status_at_application" field.
-func SubscriptionStatusAtApplicationIn(vs ...string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldIn(FieldSubscriptionStatusAtApplication, vs...))
+func SubscriptionStatusAtApplicationIn(vs ...types.SubscriptionStatus) predicate.CreditGrantApplication {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.CreditGrantApplication(sql.FieldIn(FieldSubscriptionStatusAtApplication, v...))
 }
 
 // SubscriptionStatusAtApplicationNotIn applies the NotIn predicate on the "subscription_status_at_application" field.
-func SubscriptionStatusAtApplicationNotIn(vs ...string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldNotIn(FieldSubscriptionStatusAtApplication, vs...))
+func SubscriptionStatusAtApplicationNotIn(vs ...types.SubscriptionStatus) predicate.CreditGrantApplication {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.CreditGrantApplication(sql.FieldNotIn(FieldSubscriptionStatusAtApplication, v...))
 }
 
 // SubscriptionStatusAtApplicationGT applies the GT predicate on the "subscription_status_at_application" field.
-func SubscriptionStatusAtApplicationGT(v string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldGT(FieldSubscriptionStatusAtApplication, v))
+func SubscriptionStatusAtApplicationGT(v types.SubscriptionStatus) predicate.CreditGrantApplication {
+	vc := string(v)
+	return predicate.CreditGrantApplication(sql.FieldGT(FieldSubscriptionStatusAtApplication, vc))
 }
 
 // SubscriptionStatusAtApplicationGTE applies the GTE predicate on the "subscription_status_at_application" field.
-func SubscriptionStatusAtApplicationGTE(v string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldGTE(FieldSubscriptionStatusAtApplication, v))
+func SubscriptionStatusAtApplicationGTE(v types.SubscriptionStatus) predicate.CreditGrantApplication {
+	vc := string(v)
+	return predicate.CreditGrantApplication(sql.FieldGTE(FieldSubscriptionStatusAtApplication, vc))
 }
 
 // SubscriptionStatusAtApplicationLT applies the LT predicate on the "subscription_status_at_application" field.
-func SubscriptionStatusAtApplicationLT(v string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldLT(FieldSubscriptionStatusAtApplication, v))
+func SubscriptionStatusAtApplicationLT(v types.SubscriptionStatus) predicate.CreditGrantApplication {
+	vc := string(v)
+	return predicate.CreditGrantApplication(sql.FieldLT(FieldSubscriptionStatusAtApplication, vc))
 }
 
 // SubscriptionStatusAtApplicationLTE applies the LTE predicate on the "subscription_status_at_application" field.
-func SubscriptionStatusAtApplicationLTE(v string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldLTE(FieldSubscriptionStatusAtApplication, v))
+func SubscriptionStatusAtApplicationLTE(v types.SubscriptionStatus) predicate.CreditGrantApplication {
+	vc := string(v)
+	return predicate.CreditGrantApplication(sql.FieldLTE(FieldSubscriptionStatusAtApplication, vc))
 }
 
 // SubscriptionStatusAtApplicationContains applies the Contains predicate on the "subscription_status_at_application" field.
-func SubscriptionStatusAtApplicationContains(v string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldContains(FieldSubscriptionStatusAtApplication, v))
+func SubscriptionStatusAtApplicationContains(v types.SubscriptionStatus) predicate.CreditGrantApplication {
+	vc := string(v)
+	return predicate.CreditGrantApplication(sql.FieldContains(FieldSubscriptionStatusAtApplication, vc))
 }
 
 // SubscriptionStatusAtApplicationHasPrefix applies the HasPrefix predicate on the "subscription_status_at_application" field.
-func SubscriptionStatusAtApplicationHasPrefix(v string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldHasPrefix(FieldSubscriptionStatusAtApplication, v))
+func SubscriptionStatusAtApplicationHasPrefix(v types.SubscriptionStatus) predicate.CreditGrantApplication {
+	vc := string(v)
+	return predicate.CreditGrantApplication(sql.FieldHasPrefix(FieldSubscriptionStatusAtApplication, vc))
 }
 
 // SubscriptionStatusAtApplicationHasSuffix applies the HasSuffix predicate on the "subscription_status_at_application" field.
-func SubscriptionStatusAtApplicationHasSuffix(v string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldHasSuffix(FieldSubscriptionStatusAtApplication, v))
+func SubscriptionStatusAtApplicationHasSuffix(v types.SubscriptionStatus) predicate.CreditGrantApplication {
+	vc := string(v)
+	return predicate.CreditGrantApplication(sql.FieldHasSuffix(FieldSubscriptionStatusAtApplication, vc))
 }
 
 // SubscriptionStatusAtApplicationEqualFold applies the EqualFold predicate on the "subscription_status_at_application" field.
-func SubscriptionStatusAtApplicationEqualFold(v string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldEqualFold(FieldSubscriptionStatusAtApplication, v))
+func SubscriptionStatusAtApplicationEqualFold(v types.SubscriptionStatus) predicate.CreditGrantApplication {
+	vc := string(v)
+	return predicate.CreditGrantApplication(sql.FieldEqualFold(FieldSubscriptionStatusAtApplication, vc))
 }
 
 // SubscriptionStatusAtApplicationContainsFold applies the ContainsFold predicate on the "subscription_status_at_application" field.
-func SubscriptionStatusAtApplicationContainsFold(v string) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldContainsFold(FieldSubscriptionStatusAtApplication, v))
+func SubscriptionStatusAtApplicationContainsFold(v types.SubscriptionStatus) predicate.CreditGrantApplication {
+	vc := string(v)
+	return predicate.CreditGrantApplication(sql.FieldContainsFold(FieldSubscriptionStatusAtApplication, vc))
 }
 
 // RetryCountEQ applies the EQ predicate on the "retry_count" field.
@@ -1329,56 +1384,6 @@ func FailureReasonEqualFold(v string) predicate.CreditGrantApplication {
 // FailureReasonContainsFold applies the ContainsFold predicate on the "failure_reason" field.
 func FailureReasonContainsFold(v string) predicate.CreditGrantApplication {
 	return predicate.CreditGrantApplication(sql.FieldContainsFold(FieldFailureReason, v))
-}
-
-// NextRetryAtEQ applies the EQ predicate on the "next_retry_at" field.
-func NextRetryAtEQ(v time.Time) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldEQ(FieldNextRetryAt, v))
-}
-
-// NextRetryAtNEQ applies the NEQ predicate on the "next_retry_at" field.
-func NextRetryAtNEQ(v time.Time) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldNEQ(FieldNextRetryAt, v))
-}
-
-// NextRetryAtIn applies the In predicate on the "next_retry_at" field.
-func NextRetryAtIn(vs ...time.Time) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldIn(FieldNextRetryAt, vs...))
-}
-
-// NextRetryAtNotIn applies the NotIn predicate on the "next_retry_at" field.
-func NextRetryAtNotIn(vs ...time.Time) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldNotIn(FieldNextRetryAt, vs...))
-}
-
-// NextRetryAtGT applies the GT predicate on the "next_retry_at" field.
-func NextRetryAtGT(v time.Time) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldGT(FieldNextRetryAt, v))
-}
-
-// NextRetryAtGTE applies the GTE predicate on the "next_retry_at" field.
-func NextRetryAtGTE(v time.Time) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldGTE(FieldNextRetryAt, v))
-}
-
-// NextRetryAtLT applies the LT predicate on the "next_retry_at" field.
-func NextRetryAtLT(v time.Time) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldLT(FieldNextRetryAt, v))
-}
-
-// NextRetryAtLTE applies the LTE predicate on the "next_retry_at" field.
-func NextRetryAtLTE(v time.Time) predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldLTE(FieldNextRetryAt, v))
-}
-
-// NextRetryAtIsNil applies the IsNil predicate on the "next_retry_at" field.
-func NextRetryAtIsNil() predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldIsNull(FieldNextRetryAt))
-}
-
-// NextRetryAtNotNil applies the NotNil predicate on the "next_retry_at" field.
-func NextRetryAtNotNil() predicate.CreditGrantApplication {
-	return predicate.CreditGrantApplication(sql.FieldNotNull(FieldNextRetryAt))
 }
 
 // MetadataEQ applies the EQ predicate on the "metadata" field.

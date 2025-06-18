@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -54,8 +55,6 @@ const (
 	FieldRetryCount = "retry_count"
 	// FieldFailureReason holds the string denoting the failure_reason field in the database.
 	FieldFailureReason = "failure_reason"
-	// FieldNextRetryAt holds the string denoting the next_retry_at field in the database.
-	FieldNextRetryAt = "next_retry_at"
 	// FieldMetadata holds the string denoting the metadata field in the database.
 	FieldMetadata = "metadata"
 	// FieldIdempotencyKey holds the string denoting the idempotency_key field in the database.
@@ -87,7 +86,6 @@ var Columns = []string{
 	FieldSubscriptionStatusAtApplication,
 	FieldRetryCount,
 	FieldFailureReason,
-	FieldNextRetryAt,
 	FieldMetadata,
 	FieldIdempotencyKey,
 }
@@ -120,9 +118,13 @@ var (
 	// SubscriptionIDValidator is a validator for the "subscription_id" field. It is called by the builders before save.
 	SubscriptionIDValidator func(string) error
 	// DefaultApplicationStatus holds the default value on creation for the "application_status" field.
-	DefaultApplicationStatus string
+	DefaultApplicationStatus types.ApplicationStatus
 	// DefaultCreditsApplied holds the default value on creation for the "credits_applied" field.
 	DefaultCreditsApplied decimal.Decimal
+	// ApplicationReasonValidator is a validator for the "application_reason" field. It is called by the builders before save.
+	ApplicationReasonValidator func(string) error
+	// SubscriptionStatusAtApplicationValidator is a validator for the "subscription_status_at_application" field. It is called by the builders before save.
+	SubscriptionStatusAtApplicationValidator func(string) error
 	// DefaultRetryCount holds the default value on creation for the "retry_count" field.
 	DefaultRetryCount int
 )
@@ -233,11 +235,6 @@ func ByRetryCount(opts ...sql.OrderTermOption) OrderOption {
 // ByFailureReason orders the results by the failure_reason field.
 func ByFailureReason(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldFailureReason, opts...).ToFunc()
-}
-
-// ByNextRetryAt orders the results by the next_retry_at field.
-func ByNextRetryAt(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldNextRetryAt, opts...).ToFunc()
 }
 
 // ByMetadata orders the results by the metadata field.

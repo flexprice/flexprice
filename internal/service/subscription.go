@@ -336,13 +336,13 @@ func (s *subscriptionService) handleCreditGrants(
 			"grant_name":     createdGrant.Name,
 		}
 
-		_, err = creditGrantService.ApplyCreditGrant(
+		err = creditGrantService.ApplyCreditGrant(
 			ctx,
 			createdGrant.CreditGrant,
 			subscription,
-			"subscription_creation_credit_grant",
 			metadata,
 		)
+
 		if err != nil {
 			return ierr.WithError(err).
 				WithHint("Failed to apply credit grant for subscription").

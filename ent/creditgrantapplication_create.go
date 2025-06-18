@@ -157,15 +157,15 @@ func (cgac *CreditGrantApplicationCreate) SetPeriodEnd(t time.Time) *CreditGrant
 }
 
 // SetApplicationStatus sets the "application_status" field.
-func (cgac *CreditGrantApplicationCreate) SetApplicationStatus(s string) *CreditGrantApplicationCreate {
-	cgac.mutation.SetApplicationStatus(s)
+func (cgac *CreditGrantApplicationCreate) SetApplicationStatus(ts types.ApplicationStatus) *CreditGrantApplicationCreate {
+	cgac.mutation.SetApplicationStatus(ts)
 	return cgac
 }
 
 // SetNillableApplicationStatus sets the "application_status" field if the given value is not nil.
-func (cgac *CreditGrantApplicationCreate) SetNillableApplicationStatus(s *string) *CreditGrantApplicationCreate {
-	if s != nil {
-		cgac.SetApplicationStatus(*s)
+func (cgac *CreditGrantApplicationCreate) SetNillableApplicationStatus(ts *types.ApplicationStatus) *CreditGrantApplicationCreate {
+	if ts != nil {
+		cgac.SetApplicationStatus(*ts)
 	}
 	return cgac
 }
@@ -191,14 +191,14 @@ func (cgac *CreditGrantApplicationCreate) SetCurrency(s string) *CreditGrantAppl
 }
 
 // SetApplicationReason sets the "application_reason" field.
-func (cgac *CreditGrantApplicationCreate) SetApplicationReason(s string) *CreditGrantApplicationCreate {
-	cgac.mutation.SetApplicationReason(s)
+func (cgac *CreditGrantApplicationCreate) SetApplicationReason(tgar types.CreditGrantApplicationReason) *CreditGrantApplicationCreate {
+	cgac.mutation.SetApplicationReason(tgar)
 	return cgac
 }
 
 // SetSubscriptionStatusAtApplication sets the "subscription_status_at_application" field.
-func (cgac *CreditGrantApplicationCreate) SetSubscriptionStatusAtApplication(s string) *CreditGrantApplicationCreate {
-	cgac.mutation.SetSubscriptionStatusAtApplication(s)
+func (cgac *CreditGrantApplicationCreate) SetSubscriptionStatusAtApplication(ts types.SubscriptionStatus) *CreditGrantApplicationCreate {
+	cgac.mutation.SetSubscriptionStatusAtApplication(ts)
 	return cgac
 }
 
@@ -226,20 +226,6 @@ func (cgac *CreditGrantApplicationCreate) SetFailureReason(s string) *CreditGran
 func (cgac *CreditGrantApplicationCreate) SetNillableFailureReason(s *string) *CreditGrantApplicationCreate {
 	if s != nil {
 		cgac.SetFailureReason(*s)
-	}
-	return cgac
-}
-
-// SetNextRetryAt sets the "next_retry_at" field.
-func (cgac *CreditGrantApplicationCreate) SetNextRetryAt(t time.Time) *CreditGrantApplicationCreate {
-	cgac.mutation.SetNextRetryAt(t)
-	return cgac
-}
-
-// SetNillableNextRetryAt sets the "next_retry_at" field if the given value is not nil.
-func (cgac *CreditGrantApplicationCreate) SetNillableNextRetryAt(t *time.Time) *CreditGrantApplicationCreate {
-	if t != nil {
-		cgac.SetNextRetryAt(*t)
 	}
 	return cgac
 }
@@ -383,8 +369,18 @@ func (cgac *CreditGrantApplicationCreate) check() error {
 	if _, ok := cgac.mutation.ApplicationReason(); !ok {
 		return &ValidationError{Name: "application_reason", err: errors.New(`ent: missing required field "CreditGrantApplication.application_reason"`)}
 	}
+	if v, ok := cgac.mutation.ApplicationReason(); ok {
+		if err := creditgrantapplication.ApplicationReasonValidator(string(v)); err != nil {
+			return &ValidationError{Name: "application_reason", err: fmt.Errorf(`ent: validator failed for field "CreditGrantApplication.application_reason": %w`, err)}
+		}
+	}
 	if _, ok := cgac.mutation.SubscriptionStatusAtApplication(); !ok {
 		return &ValidationError{Name: "subscription_status_at_application", err: errors.New(`ent: missing required field "CreditGrantApplication.subscription_status_at_application"`)}
+	}
+	if v, ok := cgac.mutation.SubscriptionStatusAtApplication(); ok {
+		if err := creditgrantapplication.SubscriptionStatusAtApplicationValidator(string(v)); err != nil {
+			return &ValidationError{Name: "subscription_status_at_application", err: fmt.Errorf(`ent: validator failed for field "CreditGrantApplication.subscription_status_at_application": %w`, err)}
+		}
 	}
 	if _, ok := cgac.mutation.RetryCount(); !ok {
 		return &ValidationError{Name: "retry_count", err: errors.New(`ent: missing required field "CreditGrantApplication.retry_count"`)}
@@ -506,10 +502,6 @@ func (cgac *CreditGrantApplicationCreate) createSpec() (*CreditGrantApplication,
 	if value, ok := cgac.mutation.FailureReason(); ok {
 		_spec.SetField(creditgrantapplication.FieldFailureReason, field.TypeString, value)
 		_node.FailureReason = &value
-	}
-	if value, ok := cgac.mutation.NextRetryAt(); ok {
-		_spec.SetField(creditgrantapplication.FieldNextRetryAt, field.TypeTime, value)
-		_node.NextRetryAt = &value
 	}
 	if value, ok := cgac.mutation.Metadata(); ok {
 		_spec.SetField(creditgrantapplication.FieldMetadata, field.TypeOther, value)

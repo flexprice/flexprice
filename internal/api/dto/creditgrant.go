@@ -203,3 +203,9 @@ func FromCreditGrant(grant *creditgrant.CreditGrant) *CreditGrantResponse {
 		CreditGrant: grant,
 	}
 }
+
+type ProcessScheduledCreditGrantApplicationsResponse struct {
+	SuccessApplicationsCount int `json:"success_applications_count"`
+	FailedApplicationsCount  int `json:"failed_applications_count"`
+	TotalApplicationsCount   int `json:"total_applications_count"`
+}

@@ -57,7 +57,8 @@ func (CreditGrantApplication) Fields() []ent.Field {
 
 		// Application details
 		field.String("application_status").
-			Default(string(types.ApplicationStatusScheduled)),
+			GoType(types.ApplicationStatus("")).
+			Default(string(types.ApplicationStatusPending)),
 
 		field.Other("credits_applied", decimal.Decimal{}).
 			SchemaType(map[string]string{
@@ -68,18 +69,29 @@ func (CreditGrantApplication) Fields() []ent.Field {
 		field.String("currency"),
 
 		// Context
-		field.String("application_reason"),
-		field.String("subscription_status_at_application"),
+		field.String("application_reason").
+			GoType(types.CreditGrantApplicationReason("")).
+			SchemaType(map[string]string{
+				"postgres": "text",
+			}).
+			NotEmpty().
+			Immutable(),
+
+		field.String("subscription_status_at_application").
+			GoType(types.SubscriptionStatus("")).
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			NotEmpty(),
 
 		// Retry handling
 		field.Int("retry_count").
 			Default(0),
 
 		field.String("failure_reason").
-			Optional().
-			Nillable(),
-
-		field.Time("next_retry_at").
+			SchemaType(map[string]string{
+				"postgres": "text",
+			}).
 			Optional().
 			Nillable(),
 

@@ -7,13 +7,53 @@ import (
 type ApplicationStatus string
 
 const (
-	ApplicationStatusScheduled ApplicationStatus = "scheduled"
-	ApplicationStatusApplied   ApplicationStatus = "applied"
-	ApplicationStatusFailed    ApplicationStatus = "failed"
-	ApplicationStatusSkipped   ApplicationStatus = "skipped"
+	// application_status applied is the status of a credit grant application that has been applied
+	// This is the terminal state of a credit grant application
+	// This is set when application is applied by cron
+	ApplicationStatusApplied ApplicationStatus = "applied"
+
+	// application_status failed is the status of a credit grant application that has failed
+	// This is set when application fails to be applied by cron
+	ApplicationStatusFailed ApplicationStatus = "failed"
+
+	// application_status pending is the status of a credit grant application that is pending
+	// This is the initial state of a credit grant application
+	// This is set when application is created as well is ready to be applied by cron
+	ApplicationStatusPending ApplicationStatus = "pending"
+
+	// application_status skipped is the status of a credit grant application that has been skipped
+	// This is set when subscription has been paused so we skip giving credits for that period
+	ApplicationStatusSkipped ApplicationStatus = "skipped"
+
+	// application_status cancelled is the status of a credit grant application that has been cancelled
+	// This is set when subscription has been cancelled
+	// This is the terminal state of a credit grant application
 	ApplicationStatusCancelled ApplicationStatus = "cancelled"
-	ApplicationStatusPending   ApplicationStatus = "pending"
 )
+
+func (s ApplicationStatus) String() string {
+	return string(s)
+}
+
+// CreditGrantApplicationReason defines the reason why a credit grant application is being created.
+type CreditGrantApplicationReason string
+
+const (
+	// ApplicationReasonFirstTimeRecurringCreditGrant is used when a recurring credit is being granted
+	// for the first time for a subscription. Typically applied at the start of a recurring billing cycle.
+	ApplicationReasonFirstTimeRecurringCreditGrant CreditGrantApplicationReason = "first_time_recurring_credit_grant"
+
+	// ApplicationReasonRecurringCreditGrant is used for recurring credit grants that are applied
+	// on a regular interval (e.g. monthly, annually) after the initial credit grant has been processed.
+	ApplicationReasonRecurringCreditGrant CreditGrantApplicationReason = "recurring_credit_grant"
+
+	// ApplicationReasonOnetimeCreditGrant is used when a one-time credit is granted during subscription creation.
+	ApplicationReasonOnetimeCreditGrant CreditGrantApplicationReason = "onetime_credit_grant"
+)
+
+func (r CreditGrantApplicationReason) String() string {
+	return string(r)
+}
 
 type CreditGrantApplicationFilter struct {
 	*QueryFilter

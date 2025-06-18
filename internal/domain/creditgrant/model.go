@@ -83,7 +83,7 @@ func (c *CreditGrant) Validate() error {
 		return ierr.NewError("credits must be greater than zero").
 			WithHint("Please provide a positive credits").
 			WithReportableDetails(map[string]interface{}{
-					"credits": c.Credits,
+				"credits": c.Credits,
 			}).
 			Mark(ierr.ErrValidation)
 	}
@@ -121,12 +121,6 @@ func FromEnt(c *ent.CreditGrant) *CreditGrant {
 		return nil
 	}
 
-	var period *types.CreditGrantPeriod
-	if c.Period != nil {
-		p := types.CreditGrantPeriod(*c.Period)
-		period = &p
-	}
-
 	return &CreditGrant{
 		ID:                     c.ID,
 		Name:                   c.Name,
@@ -136,7 +130,7 @@ func FromEnt(c *ent.CreditGrant) *CreditGrant {
 		Credits:                c.Credits,
 		Currency:               c.Currency,
 		Cadence:                types.CreditGrantCadence(c.Cadence),
-		Period:                 period,
+		Period:                 c.Period,
 		PeriodCount:            c.PeriodCount,
 		Priority:               c.Priority,
 		ExpirationType:         types.CreditGrantExpiryType(c.ExpirationType),

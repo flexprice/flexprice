@@ -133,15 +133,15 @@ func (cgau *CreditGrantApplicationUpdate) SetNillablePeriodEnd(t *time.Time) *Cr
 }
 
 // SetApplicationStatus sets the "application_status" field.
-func (cgau *CreditGrantApplicationUpdate) SetApplicationStatus(s string) *CreditGrantApplicationUpdate {
-	cgau.mutation.SetApplicationStatus(s)
+func (cgau *CreditGrantApplicationUpdate) SetApplicationStatus(ts types.ApplicationStatus) *CreditGrantApplicationUpdate {
+	cgau.mutation.SetApplicationStatus(ts)
 	return cgau
 }
 
 // SetNillableApplicationStatus sets the "application_status" field if the given value is not nil.
-func (cgau *CreditGrantApplicationUpdate) SetNillableApplicationStatus(s *string) *CreditGrantApplicationUpdate {
-	if s != nil {
-		cgau.SetApplicationStatus(*s)
+func (cgau *CreditGrantApplicationUpdate) SetNillableApplicationStatus(ts *types.ApplicationStatus) *CreditGrantApplicationUpdate {
+	if ts != nil {
+		cgau.SetApplicationStatus(*ts)
 	}
 	return cgau
 }
@@ -174,30 +174,16 @@ func (cgau *CreditGrantApplicationUpdate) SetNillableCurrency(s *string) *Credit
 	return cgau
 }
 
-// SetApplicationReason sets the "application_reason" field.
-func (cgau *CreditGrantApplicationUpdate) SetApplicationReason(s string) *CreditGrantApplicationUpdate {
-	cgau.mutation.SetApplicationReason(s)
-	return cgau
-}
-
-// SetNillableApplicationReason sets the "application_reason" field if the given value is not nil.
-func (cgau *CreditGrantApplicationUpdate) SetNillableApplicationReason(s *string) *CreditGrantApplicationUpdate {
-	if s != nil {
-		cgau.SetApplicationReason(*s)
-	}
-	return cgau
-}
-
 // SetSubscriptionStatusAtApplication sets the "subscription_status_at_application" field.
-func (cgau *CreditGrantApplicationUpdate) SetSubscriptionStatusAtApplication(s string) *CreditGrantApplicationUpdate {
-	cgau.mutation.SetSubscriptionStatusAtApplication(s)
+func (cgau *CreditGrantApplicationUpdate) SetSubscriptionStatusAtApplication(ts types.SubscriptionStatus) *CreditGrantApplicationUpdate {
+	cgau.mutation.SetSubscriptionStatusAtApplication(ts)
 	return cgau
 }
 
 // SetNillableSubscriptionStatusAtApplication sets the "subscription_status_at_application" field if the given value is not nil.
-func (cgau *CreditGrantApplicationUpdate) SetNillableSubscriptionStatusAtApplication(s *string) *CreditGrantApplicationUpdate {
-	if s != nil {
-		cgau.SetSubscriptionStatusAtApplication(*s)
+func (cgau *CreditGrantApplicationUpdate) SetNillableSubscriptionStatusAtApplication(ts *types.SubscriptionStatus) *CreditGrantApplicationUpdate {
+	if ts != nil {
+		cgau.SetSubscriptionStatusAtApplication(*ts)
 	}
 	return cgau
 }
@@ -240,26 +226,6 @@ func (cgau *CreditGrantApplicationUpdate) SetNillableFailureReason(s *string) *C
 // ClearFailureReason clears the value of the "failure_reason" field.
 func (cgau *CreditGrantApplicationUpdate) ClearFailureReason() *CreditGrantApplicationUpdate {
 	cgau.mutation.ClearFailureReason()
-	return cgau
-}
-
-// SetNextRetryAt sets the "next_retry_at" field.
-func (cgau *CreditGrantApplicationUpdate) SetNextRetryAt(t time.Time) *CreditGrantApplicationUpdate {
-	cgau.mutation.SetNextRetryAt(t)
-	return cgau
-}
-
-// SetNillableNextRetryAt sets the "next_retry_at" field if the given value is not nil.
-func (cgau *CreditGrantApplicationUpdate) SetNillableNextRetryAt(t *time.Time) *CreditGrantApplicationUpdate {
-	if t != nil {
-		cgau.SetNextRetryAt(*t)
-	}
-	return cgau
-}
-
-// ClearNextRetryAt clears the value of the "next_retry_at" field.
-func (cgau *CreditGrantApplicationUpdate) ClearNextRetryAt() *CreditGrantApplicationUpdate {
-	cgau.mutation.ClearNextRetryAt()
 	return cgau
 }
 
@@ -316,7 +282,20 @@ func (cgau *CreditGrantApplicationUpdate) defaults() {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (cgau *CreditGrantApplicationUpdate) check() error {
+	if v, ok := cgau.mutation.SubscriptionStatusAtApplication(); ok {
+		if err := creditgrantapplication.SubscriptionStatusAtApplicationValidator(string(v)); err != nil {
+			return &ValidationError{Name: "subscription_status_at_application", err: fmt.Errorf(`ent: validator failed for field "CreditGrantApplication.subscription_status_at_application": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (cgau *CreditGrantApplicationUpdate) sqlSave(ctx context.Context) (n int, err error) {
+	if err := cgau.check(); err != nil {
+		return n, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(creditgrantapplication.Table, creditgrantapplication.Columns, sqlgraph.NewFieldSpec(creditgrantapplication.FieldID, field.TypeString))
 	if ps := cgau.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
@@ -367,9 +346,6 @@ func (cgau *CreditGrantApplicationUpdate) sqlSave(ctx context.Context) (n int, e
 	if value, ok := cgau.mutation.Currency(); ok {
 		_spec.SetField(creditgrantapplication.FieldCurrency, field.TypeString, value)
 	}
-	if value, ok := cgau.mutation.ApplicationReason(); ok {
-		_spec.SetField(creditgrantapplication.FieldApplicationReason, field.TypeString, value)
-	}
 	if value, ok := cgau.mutation.SubscriptionStatusAtApplication(); ok {
 		_spec.SetField(creditgrantapplication.FieldSubscriptionStatusAtApplication, field.TypeString, value)
 	}
@@ -384,12 +360,6 @@ func (cgau *CreditGrantApplicationUpdate) sqlSave(ctx context.Context) (n int, e
 	}
 	if cgau.mutation.FailureReasonCleared() {
 		_spec.ClearField(creditgrantapplication.FieldFailureReason, field.TypeString)
-	}
-	if value, ok := cgau.mutation.NextRetryAt(); ok {
-		_spec.SetField(creditgrantapplication.FieldNextRetryAt, field.TypeTime, value)
-	}
-	if cgau.mutation.NextRetryAtCleared() {
-		_spec.ClearField(creditgrantapplication.FieldNextRetryAt, field.TypeTime)
 	}
 	if value, ok := cgau.mutation.Metadata(); ok {
 		_spec.SetField(creditgrantapplication.FieldMetadata, field.TypeOther, value)
@@ -520,15 +490,15 @@ func (cgauo *CreditGrantApplicationUpdateOne) SetNillablePeriodEnd(t *time.Time)
 }
 
 // SetApplicationStatus sets the "application_status" field.
-func (cgauo *CreditGrantApplicationUpdateOne) SetApplicationStatus(s string) *CreditGrantApplicationUpdateOne {
-	cgauo.mutation.SetApplicationStatus(s)
+func (cgauo *CreditGrantApplicationUpdateOne) SetApplicationStatus(ts types.ApplicationStatus) *CreditGrantApplicationUpdateOne {
+	cgauo.mutation.SetApplicationStatus(ts)
 	return cgauo
 }
 
 // SetNillableApplicationStatus sets the "application_status" field if the given value is not nil.
-func (cgauo *CreditGrantApplicationUpdateOne) SetNillableApplicationStatus(s *string) *CreditGrantApplicationUpdateOne {
-	if s != nil {
-		cgauo.SetApplicationStatus(*s)
+func (cgauo *CreditGrantApplicationUpdateOne) SetNillableApplicationStatus(ts *types.ApplicationStatus) *CreditGrantApplicationUpdateOne {
+	if ts != nil {
+		cgauo.SetApplicationStatus(*ts)
 	}
 	return cgauo
 }
@@ -561,30 +531,16 @@ func (cgauo *CreditGrantApplicationUpdateOne) SetNillableCurrency(s *string) *Cr
 	return cgauo
 }
 
-// SetApplicationReason sets the "application_reason" field.
-func (cgauo *CreditGrantApplicationUpdateOne) SetApplicationReason(s string) *CreditGrantApplicationUpdateOne {
-	cgauo.mutation.SetApplicationReason(s)
-	return cgauo
-}
-
-// SetNillableApplicationReason sets the "application_reason" field if the given value is not nil.
-func (cgauo *CreditGrantApplicationUpdateOne) SetNillableApplicationReason(s *string) *CreditGrantApplicationUpdateOne {
-	if s != nil {
-		cgauo.SetApplicationReason(*s)
-	}
-	return cgauo
-}
-
 // SetSubscriptionStatusAtApplication sets the "subscription_status_at_application" field.
-func (cgauo *CreditGrantApplicationUpdateOne) SetSubscriptionStatusAtApplication(s string) *CreditGrantApplicationUpdateOne {
-	cgauo.mutation.SetSubscriptionStatusAtApplication(s)
+func (cgauo *CreditGrantApplicationUpdateOne) SetSubscriptionStatusAtApplication(ts types.SubscriptionStatus) *CreditGrantApplicationUpdateOne {
+	cgauo.mutation.SetSubscriptionStatusAtApplication(ts)
 	return cgauo
 }
 
 // SetNillableSubscriptionStatusAtApplication sets the "subscription_status_at_application" field if the given value is not nil.
-func (cgauo *CreditGrantApplicationUpdateOne) SetNillableSubscriptionStatusAtApplication(s *string) *CreditGrantApplicationUpdateOne {
-	if s != nil {
-		cgauo.SetSubscriptionStatusAtApplication(*s)
+func (cgauo *CreditGrantApplicationUpdateOne) SetNillableSubscriptionStatusAtApplication(ts *types.SubscriptionStatus) *CreditGrantApplicationUpdateOne {
+	if ts != nil {
+		cgauo.SetSubscriptionStatusAtApplication(*ts)
 	}
 	return cgauo
 }
@@ -627,26 +583,6 @@ func (cgauo *CreditGrantApplicationUpdateOne) SetNillableFailureReason(s *string
 // ClearFailureReason clears the value of the "failure_reason" field.
 func (cgauo *CreditGrantApplicationUpdateOne) ClearFailureReason() *CreditGrantApplicationUpdateOne {
 	cgauo.mutation.ClearFailureReason()
-	return cgauo
-}
-
-// SetNextRetryAt sets the "next_retry_at" field.
-func (cgauo *CreditGrantApplicationUpdateOne) SetNextRetryAt(t time.Time) *CreditGrantApplicationUpdateOne {
-	cgauo.mutation.SetNextRetryAt(t)
-	return cgauo
-}
-
-// SetNillableNextRetryAt sets the "next_retry_at" field if the given value is not nil.
-func (cgauo *CreditGrantApplicationUpdateOne) SetNillableNextRetryAt(t *time.Time) *CreditGrantApplicationUpdateOne {
-	if t != nil {
-		cgauo.SetNextRetryAt(*t)
-	}
-	return cgauo
-}
-
-// ClearNextRetryAt clears the value of the "next_retry_at" field.
-func (cgauo *CreditGrantApplicationUpdateOne) ClearNextRetryAt() *CreditGrantApplicationUpdateOne {
-	cgauo.mutation.ClearNextRetryAt()
 	return cgauo
 }
 
@@ -716,7 +652,20 @@ func (cgauo *CreditGrantApplicationUpdateOne) defaults() {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (cgauo *CreditGrantApplicationUpdateOne) check() error {
+	if v, ok := cgauo.mutation.SubscriptionStatusAtApplication(); ok {
+		if err := creditgrantapplication.SubscriptionStatusAtApplicationValidator(string(v)); err != nil {
+			return &ValidationError{Name: "subscription_status_at_application", err: fmt.Errorf(`ent: validator failed for field "CreditGrantApplication.subscription_status_at_application": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (cgauo *CreditGrantApplicationUpdateOne) sqlSave(ctx context.Context) (_node *CreditGrantApplication, err error) {
+	if err := cgauo.check(); err != nil {
+		return _node, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(creditgrantapplication.Table, creditgrantapplication.Columns, sqlgraph.NewFieldSpec(creditgrantapplication.FieldID, field.TypeString))
 	id, ok := cgauo.mutation.ID()
 	if !ok {
@@ -784,9 +733,6 @@ func (cgauo *CreditGrantApplicationUpdateOne) sqlSave(ctx context.Context) (_nod
 	if value, ok := cgauo.mutation.Currency(); ok {
 		_spec.SetField(creditgrantapplication.FieldCurrency, field.TypeString, value)
 	}
-	if value, ok := cgauo.mutation.ApplicationReason(); ok {
-		_spec.SetField(creditgrantapplication.FieldApplicationReason, field.TypeString, value)
-	}
 	if value, ok := cgauo.mutation.SubscriptionStatusAtApplication(); ok {
 		_spec.SetField(creditgrantapplication.FieldSubscriptionStatusAtApplication, field.TypeString, value)
 	}
@@ -801,12 +747,6 @@ func (cgauo *CreditGrantApplicationUpdateOne) sqlSave(ctx context.Context) (_nod
 	}
 	if cgauo.mutation.FailureReasonCleared() {
 		_spec.ClearField(creditgrantapplication.FieldFailureReason, field.TypeString)
-	}
-	if value, ok := cgauo.mutation.NextRetryAt(); ok {
-		_spec.SetField(creditgrantapplication.FieldNextRetryAt, field.TypeTime, value)
-	}
-	if cgauo.mutation.NextRetryAtCleared() {
-		_spec.ClearField(creditgrantapplication.FieldNextRetryAt, field.TypeTime)
 	}
 	if value, ok := cgauo.mutation.Metadata(); ok {
 		_spec.SetField(creditgrantapplication.FieldMetadata, field.TypeOther, value)

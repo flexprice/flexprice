@@ -10,40 +10,23 @@ import (
 )
 
 type CreditGrantApplication struct {
-	ID             string `db:"id" json:"id"`
-	CreditGrantID  string `db:"credit_grant_id" json:"credit_grant_id"`
-	SubscriptionID string `db:"subscription_id" json:"subscription_id"`
-
-	// Timing
-	ScheduledFor time.Time  `db:"scheduled_for" json:"scheduled_for"`
-	AppliedAt    *time.Time `db:"applied_at" json:"applied_at,omitempty"`
-
-	// Billing period context
-	PeriodStart time.Time `db:"period_start" json:"period_start"`
-	PeriodEnd   time.Time `db:"period_end" json:"period_end"`
-
-	// Application details
-	ApplicationStatus types.ApplicationStatus `db:"application_status" json:"application_status"`
-	CreditsApplied    decimal.Decimal         `db:"credits_applied" json:"credits_applied"`
-	Currency          string                  `db:"currency" json:"currency"`
-
-	// Context
-	ApplicationReason               string `db:"application_reason" json:"application_reason"`
-	SubscriptionStatusAtApplication string `db:"subscription_status_at_application" json:"subscription_status_at_application"`
-
-	// Prorating
-	FullPeriodAmount *decimal.Decimal `db:"full_period_amount" json:"full_period_amount,omitempty"`
-
-	// Retry handling
-	RetryCount    int        `db:"retry_count" json:"retry_count"`
-	FailureReason *string    `db:"failure_reason" json:"failure_reason,omitempty"`
-	NextRetryAt   *time.Time `db:"next_retry_at" json:"next_retry_at,omitempty"`
-
-	Metadata types.Metadata `db:"metadata" json:"metadata,omitempty"`
-
-	// EnvironmentID is the environment identifier for the credit grant application
-	EnvironmentID  string `db:"environment_id" json:"environment_id"`
-	IdempotencyKey string `db:"idempotency_key" json:"idempotency_key"`
+	ID                              string                             `json:"id,omitempty" db:"id"`
+	EnvironmentID                   string                             `json:"environment_id,omitempty" db:"environment_id"`
+	CreditGrantID                   string                             `json:"credit_grant_id,omitempty" db:"credit_grant_id"`
+	SubscriptionID                  string                             `json:"subscription_id,omitempty" db:"subscription_id"`
+	ScheduledFor                    time.Time                          `json:"scheduled_for,omitempty" db:"scheduled_for"`
+	AppliedAt                       *time.Time                         `json:"applied_at,omitempty" db:"applied_at"`
+	PeriodStart                     time.Time                          `json:"period_start,omitempty" db:"period_start"`
+	PeriodEnd                       time.Time                          `json:"period_end,omitempty" db:"period_end"`
+	ApplicationStatus               types.ApplicationStatus            `json:"application_status,omitempty" db:"application_status"`
+	CreditsApplied                  decimal.Decimal                    `json:"credits_applied,omitempty" db:"credits_applied"`
+	Currency                        string                             `json:"currency,omitempty" db:"currency"`
+	ApplicationReason               types.CreditGrantApplicationReason `json:"application_reason,omitempty" db:"application_reason"`
+	SubscriptionStatusAtApplication types.SubscriptionStatus           `json:"subscription_status_at_application,omitempty" db:"subscription_status_at_application"`
+	RetryCount                      int                                `json:"retry_count,omitempty" db:"retry_count"`
+	FailureReason                   *string                            `json:"failure_reason,omitempty" db:"failure_reason"`
+	Metadata                        types.Metadata                     `json:"metadata,omitempty" db:"metadata"`
+	IdempotencyKey                  string                             `json:"idempotency_key,omitempty" db:"idempotency_key"`
 
 	types.BaseModel
 }
@@ -58,14 +41,13 @@ func FromEnt(e *ent.CreditGrantApplication) *CreditGrantApplication {
 		AppliedAt:                       e.AppliedAt,
 		PeriodStart:                     e.PeriodStart,
 		PeriodEnd:                       e.PeriodEnd,
-		ApplicationStatus:               types.ApplicationStatus(e.ApplicationStatus),
+		ApplicationStatus:               e.ApplicationStatus,
 		CreditsApplied:                  e.CreditsApplied,
 		Currency:                        e.Currency,
 		ApplicationReason:               e.ApplicationReason,
 		SubscriptionStatusAtApplication: e.SubscriptionStatusAtApplication,
 		RetryCount:                      e.RetryCount,
 		FailureReason:                   e.FailureReason,
-		NextRetryAt:                     e.NextRetryAt,
 		Metadata:                        e.Metadata,
 		EnvironmentID:                   e.EnvironmentID,
 		BaseModel: types.BaseModel{
