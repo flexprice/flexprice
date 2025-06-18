@@ -4224,6 +4224,67 @@
                 }
             }
         },
+        "/plans/{id}/sync/subscriptions": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Synchronize current plan prices with all existing active subscriptions",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Plans"
+                ],
+                "summary": "Synchronize plan prices",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Plan ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/service.SyncPlanPricesResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/prices": {
             "get": {
                 "security": [
@@ -10924,6 +10985,37 @@
                 "round": {
                     "description": "up or down",
                     "type": "string"
+                }
+            }
+        },
+        "service.SyncPlanPricesResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "plan_id": {
+                    "type": "string"
+                },
+                "plan_name": {
+                    "type": "string"
+                },
+                "synchronization_summary": {
+                    "type": "object",
+                    "properties": {
+                        "prices_added": {
+                            "type": "integer"
+                        },
+                        "prices_removed": {
+                            "type": "integer"
+                        },
+                        "prices_skipped": {
+                            "type": "integer"
+                        },
+                        "subscriptions_processed": {
+                            "type": "integer"
+                        }
+                    }
                 }
             }
         },

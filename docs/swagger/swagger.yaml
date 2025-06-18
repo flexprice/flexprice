@@ -3053,6 +3053,26 @@ definitions:
         description: up or down
         type: string
     type: object
+  service.SyncPlanPricesResponse:
+    properties:
+      message:
+        type: string
+      plan_id:
+        type: string
+      plan_name:
+        type: string
+      synchronization_summary:
+        properties:
+          prices_added:
+            type: integer
+          prices_removed:
+            type: integer
+          prices_skipped:
+            type: integer
+          subscriptions_processed:
+            type: integer
+        type: object
+    type: object
   subscription.SubscriptionLineItem:
     properties:
       billing_period:
@@ -6539,6 +6559,45 @@ paths:
       summary: Get plan entitlements
       tags:
       - Entitlements
+  /plans/{id}/sync/subscriptions:
+    post:
+      consumes:
+      - application/json
+      description: Synchronize current plan prices with all existing active subscriptions
+      parameters:
+      - description: Plan ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/service.SyncPlanPricesResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Synchronize plan prices
+      tags:
+      - Plans
   /prices:
     get:
       consumes:
