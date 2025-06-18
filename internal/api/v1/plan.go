@@ -254,27 +254,36 @@ func (h *PlanHandler) GetPlanCreditGrants(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+// @Summary Synchronize plan prices
+// @Description Synchronize current plan prices with all existing active subscriptions
+// @Tags Plans
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Plan ID"
+// @Success 200 {object} service.SyncPlanPricesResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 422 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /plans/{id}/sync/subscriptions [post]
 func (h *PlanHandler) SyncPlanPrices(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		h.log.Error("plan ID is required")
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Plan ID is required",
-		})
+		c.Error(ierr.NewError("plan ID is required").
+			WithHint("Plan ID is required").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
 	ctx := c.Request.Context()
-	err := h.service.SyncPlanPrices(ctx, id)
+	resp, err := h.service.SyncPlanPrices(ctx, id)
 	if err != nil {
-		h.log.Error("failed to sync plan prices", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		c.Error(ierr.NewError("failed to sync plan prices").
+			WithHint("failed to sync plan prices").
+			Mark(ierr.ErrInternal))
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Successfully synced plan prices with subscriptions",
-	})
+	c.JSON(http.StatusOK, resp)
 }

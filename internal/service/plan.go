@@ -20,13 +20,25 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+type SyncPlanPricesResponse struct {
+	Message                string `json:"message"`
+	PlanID                 string `json:"plan_id"`
+	PlanName               string `json:"plan_name"`
+	SynchronizationSummary struct {
+		SubscriptionsProcessed int `json:"subscriptions_processed"`
+		PricesAdded            int `json:"prices_added"`
+		PricesRemoved          int `json:"prices_removed"`
+		PricesSkipped          int `json:"prices_skipped"`
+	} `json:"synchronization_summary"`
+}
+
 type PlanService interface {
 	CreatePlan(ctx context.Context, req dto.CreatePlanRequest) (*dto.CreatePlanResponse, error)
 	GetPlan(ctx context.Context, id string) (*dto.PlanResponse, error)
 	GetPlans(ctx context.Context, filter *types.PlanFilter) (*dto.ListPlansResponse, error)
 	UpdatePlan(ctx context.Context, id string, req dto.UpdatePlanRequest) (*dto.PlanResponse, error)
 	DeletePlan(ctx context.Context, id string) error
-	SyncPlanPrices(ctx context.Context, id string) error
+	SyncPlanPrices(ctx context.Context, id string) (*SyncPlanPricesResponse, error)
 }
 
 type planService struct {
@@ -474,9 +486,9 @@ func (s *planService) DeletePlan(ctx context.Context, id string) error {
 	return nil
 }
 
-func (s *planService) SyncPlanPrices(ctx context.Context, id string) error {
+func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*SyncPlanPricesResponse, error) {
 	if id == "" {
-		return ierr.NewError("plan ID is required").
+		return nil, ierr.NewError("plan ID is required").
 			WithHint("Plan ID is required").
 			Mark(ierr.ErrValidation)
 	}
@@ -487,13 +499,13 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) error {
 	// Get the plan to be synced
 	p, err := s.planRepo.Get(ctx, id)
 	if err != nil {
-		return ierr.WithError(err).
+		return nil, ierr.WithError(err).
 			WithHint("Failed to get plan").
 			Mark(ierr.ErrDatabase)
 	}
 
 	if p.TenantID != tenantID {
-		return ierr.NewError("plan does not belong to the specified tenant").
+		return nil, ierr.NewError("plan does not belong to the specified tenant").
 			WithHint("Plan does not belong to the specified tenant").
 			WithReportableDetails(map[string]interface{}{
 				"plan_id": id,
@@ -510,7 +522,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) error {
 
 	prices, err := s.priceRepo.List(ctx, priceFilter)
 	if err != nil {
-		return ierr.WithError(err).
+		return nil, ierr.WithError(err).
 			WithHint("Failed to list prices for plan").
 			Mark(ierr.ErrDatabase)
 	}
@@ -531,7 +543,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) error {
 	meterFilter.MeterIDs = lo.Keys(meterMap)
 	meters, err := s.meterRepo.List(ctx, meterFilter)
 	if err != nil {
-		return ierr.WithError(err).
+		return nil, ierr.WithError(err).
 			WithHint("Failed to list meters").
 			Mark(ierr.ErrDatabase)
 	}
@@ -541,7 +553,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) error {
 	}
 
 	if len(planPrices) == 0 {
-		return ierr.NewError("no active prices found for this plan").
+		return nil, ierr.NewError("no active prices found for this plan").
 			WithHint("No active prices found for this plan").
 			WithReportableDetails(map[string]interface{}{
 				"plan_id": id,
@@ -562,7 +574,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) error {
 	// Get all active subscriptions for this plan
 	subs, err := s.subscriptionRepo.ListAll(ctx, subscriptionFilter)
 	if err != nil {
-		return ierr.WithError(err).
+		return nil, ierr.WithError(err).
 			WithHint("Failed to list subscriptions").
 			Mark(ierr.ErrDatabase)
 	}
@@ -699,7 +711,25 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) error {
 		totalSkipped += skippedCount
 	}
 
+	// Update response with final statistics
+	response := &SyncPlanPricesResponse{
+		Message:  "Plan prices synchronized successfully",
+		PlanID:   id,
+		PlanName: p.Name,
+		SynchronizationSummary: struct {
+			SubscriptionsProcessed int `json:"subscriptions_processed"`
+			PricesAdded            int `json:"prices_added"`
+			PricesRemoved          int `json:"prices_removed"`
+			PricesSkipped          int `json:"prices_skipped"`
+		}{
+			SubscriptionsProcessed: len(subs),
+			PricesAdded:            totalAdded,
+			PricesRemoved:          totalRemoved,
+			PricesSkipped:          totalSkipped,
+		},
+	}
+
 	s.logger.Infow("Plan sync completed", "total_added", totalAdded, "total_removed", totalRemoved, "total_skipped", totalSkipped)
 
-	return nil
+	return response, nil
 }
