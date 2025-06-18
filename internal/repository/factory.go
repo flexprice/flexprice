@@ -10,21 +10,25 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
+	"github.com/flexprice/flexprice/internal/domain/integration"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/secret"
+	"github.com/flexprice/flexprice/internal/domain/stripe"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/task"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
+	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	clickhouseRepo "github.com/flexprice/flexprice/internal/repository/clickhouse"
 	entRepo "github.com/flexprice/flexprice/internal/repository/ent"
+	stripeRepo "github.com/flexprice/flexprice/internal/repository/stripe"
 	"go.uber.org/fx"
 )
 
@@ -36,6 +40,7 @@ type RepositoryParams struct {
 	EntClient    postgres.IClient
 	ClickHouseDB *clickhouse.ClickHouseStore
 	Cache        cache.Cache
+	HTTPClient   httpclient.Client `optional:"true"`
 }
 
 func NewEventRepository(p RepositoryParams) events.Repository {
@@ -116,4 +121,27 @@ func NewSecretRepository(p RepositoryParams) secret.Repository {
 
 func NewCreditGrantRepository(p RepositoryParams) creditgrant.Repository {
 	return entRepo.NewCreditGrantRepository(p.EntClient, p.Logger, p.Cache)
+}
+
+// Stripe Integration Repositories
+
+func NewCustomerIntegrationMappingRepository(p RepositoryParams) integration.EntityIntegrationMappingRepository {
+	return entRepo.NewCustomerIntegrationMappingRepository(p.EntClient, p.Logger, p.Cache)
+}
+
+func NewStripeSyncBatchRepository(p RepositoryParams) integration.StripeSyncBatchRepository {
+	return entRepo.NewStripeSyncBatchRepository(p.EntClient, p.Logger, p.Cache)
+}
+
+func NewStripeTenantConfigRepository(p RepositoryParams) integration.StripeTenantConfigRepository {
+	return entRepo.NewStripeTenantConfigRepository(p.EntClient, p.Logger, p.Cache)
+}
+
+func NewMeterProviderMappingRepository(p RepositoryParams) integration.MeterProviderMappingRepository {
+	return entRepo.NewMeterProviderMappingRepository(p.EntClient, p.Logger, p.Cache)
+}
+
+func NewStripeClientRepository(p RepositoryParams) stripe.Client {
+	// For now, using a placeholder API key - this will be dynamic per tenant
+	return stripeRepo.NewStripeAPIClient(p.HTTPClient, "sk_placeholder", p.Logger)
 }
