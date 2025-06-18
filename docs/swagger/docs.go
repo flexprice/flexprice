@@ -6136,6 +6136,95 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/webhooks/stripe": {
+            "post": {
+                "description": "Receives and processes Stripe webhook events, specifically customer.created events",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "webhooks"
+                ],
+                "summary": "Receive Stripe webhook",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Stripe webhook signature for verification",
+                        "name": "Stripe-Signature",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "Stripe webhook event payload",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Webhook processed successfully",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.StripeWebhookResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - invalid payload or signature",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.StripeWebhookResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized - invalid signature",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.StripeWebhookResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - webhook not configured",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.StripeWebhookResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.StripeWebhookResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhooks/stripe/test": {
+            "get": {
+                "description": "Test endpoint to validate webhook configuration and connectivity",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "webhooks"
+                ],
+                "summary": "Test Stripe webhook endpoint",
+                "responses": {
+                    "200": {
+                        "description": "Test successful",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -11317,6 +11406,17 @@ const docTemplate = `{
                 "WindowSizeDay",
                 "WindowSizeWeek"
             ]
+        },
+        "webhookDto.StripeWebhookResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "received": {
+                    "type": "boolean"
+                }
+            }
         }
     },
     "securityDefinitions": {
