@@ -253,3 +253,28 @@ func (h *PlanHandler) GetPlanCreditGrants(c *gin.Context) {
 
 	c.JSON(http.StatusOK, resp)
 }
+
+func (h *PlanHandler) SyncPlanPrices(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		h.log.Error("plan ID is required")
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Plan ID is required",
+		})
+		return
+	}
+
+	ctx := c.Request.Context()
+	err := h.service.SyncPlanPrices(ctx, id)
+	if err != nil {
+		h.log.Error("failed to sync plan prices", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Successfully synced plan prices with subscriptions",
+	})
+}
