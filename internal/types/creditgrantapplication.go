@@ -63,12 +63,12 @@ type CreditGrantApplicationFilter struct {
 	Sort    []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
 
 	// filters allows complex filtering based on multiple fields
-	ApplicationIDs    []string          `json:"application_ids,omitempty" form:"application_ids" validate:"omitempty"`
-	CreditGrantIDs    []string          `json:"credit_grant_ids,omitempty" form:"credit_grant_ids" validate:"omitempty"`
-	SubscriptionIDs   []string          `json:"subscription_ids,omitempty" form:"subscription_ids" validate:"omitempty"`
-	ScheduledFor      *time.Time        `json:"scheduled_for,omitempty" form:"scheduled_for" validate:"omitempty"`
-	AppliedAt         *time.Time        `json:"applied_at,omitempty" form:"applied_at" validate:"omitempty"`
-	ApplicationStatus ApplicationStatus `json:"application_status,omitempty" form:"application_status" validate:"omitempty"`
+	ApplicationIDs      []string            `json:"application_ids,omitempty" form:"application_ids" validate:"omitempty"`
+	CreditGrantIDs      []string            `json:"credit_grant_ids,omitempty" form:"credit_grant_ids" validate:"omitempty"`
+	SubscriptionIDs     []string            `json:"subscription_ids,omitempty" form:"subscription_ids" validate:"omitempty"`
+	ScheduledFor        *time.Time          `json:"scheduled_for,omitempty" form:"scheduled_for" validate:"omitempty"`
+	AppliedAt           *time.Time          `json:"applied_at,omitempty" form:"applied_at" validate:"omitempty"`
+	ApplicationStatuses []ApplicationStatus `json:"application_statuses,omitempty" form:"application_statuses" validate:"omitempty"`
 }
 
 // NewCreditGrantApplicationFilter creates a new CreditGrantApplicationFilter with default values

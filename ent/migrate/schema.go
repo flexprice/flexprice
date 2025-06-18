@@ -152,7 +152,6 @@ var (
 		{Name: "period_end", Type: field.TypeTime},
 		{Name: "application_status", Type: field.TypeString, Default: "pending"},
 		{Name: "credits_applied", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
-		{Name: "currency", Type: field.TypeString},
 		{Name: "application_reason", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
 		{Name: "subscription_status_at_application", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "retry_count", Type: field.TypeInt, Default: 0},

@@ -66,8 +66,6 @@ func (CreditGrantApplication) Fields() []ent.Field {
 			}).
 			Default(decimal.Zero),
 
-		field.String("currency"),
-
 		// Context
 		field.String("application_reason").
 			GoType(types.CreditGrantApplicationReason("")).

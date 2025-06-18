@@ -30,42 +30,42 @@ type SubscriptionStateHandler struct {
 func (h *SubscriptionStateHandler) DetermineAction() (StateAction, string) {
 	switch h.subscription.SubscriptionStatus {
 	case types.SubscriptionStatusActive:
-		return StateActionApply, "subscription_active"
+		return StateActionApply, "subscription is active"
 
 	case types.SubscriptionStatusTrialing:
 		// Check if grant should apply during trial period
 		if h.shouldApplyDuringTrial() {
-			return StateActionApply, "trial_active_apply_enabled"
+			return StateActionApply, "subscription is in trial and credits are enabled for trial period"
 		}
-		return StateActionDefer, "trial_active_apply_disabled"
+		return StateActionDefer, "subscription is in trial and credits are not enabled for trial period"
 
 	case types.SubscriptionStatusPastDue:
 		// For past due, we defer rather than skip to allow recovery
-		return StateActionDefer, "subscription_past_due"
+		return StateActionDefer, "subscription is past due, deferring until payment is resolved"
 
 	case types.SubscriptionStatusUnpaid:
 		// Similar to past due - defer for potential recovery
-		return StateActionDefer, "subscription_unpaid"
+		return StateActionDefer, "subscription is unpaid, deferring until payment is resolved"
 
 	case types.SubscriptionStatusCancelled:
 		// Cancelled subscriptions should not receive new credits
-		return StateActionCancel, "subscription_cancelled"
+		return StateActionCancel, "subscription is cancelled"
 
 	case types.SubscriptionStatusIncomplete:
 		// Defer incomplete subscriptions as they might become active
-		return StateActionDefer, "subscription_incomplete"
+		return StateActionDefer, "subscription is incomplete, deferring until completion"
 
 	case types.SubscriptionStatusIncompleteExpired:
 		// Expired incomplete subscriptions should be cancelled
-		return StateActionCancel, "subscription_incomplete_expired"
+		return StateActionCancel, "subscription is incomplete and expired"
 
 	case types.SubscriptionStatusPaused:
 		// Paused subscriptions should defer credits until resumed
-		return StateActionDefer, "subscription_paused"
+		return StateActionDefer, "subscription is paused, deferring until resumed"
 
 	default:
 		// Unknown status - skip for safety
-		return StateActionSkip, "unknown_subscription_status"
+		return StateActionSkip, "unknown subscription status: " + string(h.subscription.SubscriptionStatus)
 	}
 }
 

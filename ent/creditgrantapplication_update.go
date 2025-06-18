@@ -160,20 +160,6 @@ func (cgau *CreditGrantApplicationUpdate) SetNillableCreditsApplied(d *decimal.D
 	return cgau
 }
 
-// SetCurrency sets the "currency" field.
-func (cgau *CreditGrantApplicationUpdate) SetCurrency(s string) *CreditGrantApplicationUpdate {
-	cgau.mutation.SetCurrency(s)
-	return cgau
-}
-
-// SetNillableCurrency sets the "currency" field if the given value is not nil.
-func (cgau *CreditGrantApplicationUpdate) SetNillableCurrency(s *string) *CreditGrantApplicationUpdate {
-	if s != nil {
-		cgau.SetCurrency(*s)
-	}
-	return cgau
-}
-
 // SetSubscriptionStatusAtApplication sets the "subscription_status_at_application" field.
 func (cgau *CreditGrantApplicationUpdate) SetSubscriptionStatusAtApplication(ts types.SubscriptionStatus) *CreditGrantApplicationUpdate {
 	cgau.mutation.SetSubscriptionStatusAtApplication(ts)
@@ -343,9 +329,6 @@ func (cgau *CreditGrantApplicationUpdate) sqlSave(ctx context.Context) (n int, e
 	if value, ok := cgau.mutation.CreditsApplied(); ok {
 		_spec.SetField(creditgrantapplication.FieldCreditsApplied, field.TypeOther, value)
 	}
-	if value, ok := cgau.mutation.Currency(); ok {
-		_spec.SetField(creditgrantapplication.FieldCurrency, field.TypeString, value)
-	}
 	if value, ok := cgau.mutation.SubscriptionStatusAtApplication(); ok {
 		_spec.SetField(creditgrantapplication.FieldSubscriptionStatusAtApplication, field.TypeString, value)
 	}
@@ -513,20 +496,6 @@ func (cgauo *CreditGrantApplicationUpdateOne) SetCreditsApplied(d decimal.Decima
 func (cgauo *CreditGrantApplicationUpdateOne) SetNillableCreditsApplied(d *decimal.Decimal) *CreditGrantApplicationUpdateOne {
 	if d != nil {
 		cgauo.SetCreditsApplied(*d)
-	}
-	return cgauo
-}
-
-// SetCurrency sets the "currency" field.
-func (cgauo *CreditGrantApplicationUpdateOne) SetCurrency(s string) *CreditGrantApplicationUpdateOne {
-	cgauo.mutation.SetCurrency(s)
-	return cgauo
-}
-
-// SetNillableCurrency sets the "currency" field if the given value is not nil.
-func (cgauo *CreditGrantApplicationUpdateOne) SetNillableCurrency(s *string) *CreditGrantApplicationUpdateOne {
-	if s != nil {
-		cgauo.SetCurrency(*s)
 	}
 	return cgauo
 }
@@ -729,9 +698,6 @@ func (cgauo *CreditGrantApplicationUpdateOne) sqlSave(ctx context.Context) (_nod
 	}
 	if value, ok := cgauo.mutation.CreditsApplied(); ok {
 		_spec.SetField(creditgrantapplication.FieldCreditsApplied, field.TypeOther, value)
-	}
-	if value, ok := cgauo.mutation.Currency(); ok {
-		_spec.SetField(creditgrantapplication.FieldCurrency, field.TypeString, value)
 	}
 	if value, ok := cgauo.mutation.SubscriptionStatusAtApplication(); ok {
 		_spec.SetField(creditgrantapplication.FieldSubscriptionStatusAtApplication, field.TypeString, value)

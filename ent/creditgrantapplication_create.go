@@ -184,12 +184,6 @@ func (cgac *CreditGrantApplicationCreate) SetNillableCreditsApplied(d *decimal.D
 	return cgac
 }
 
-// SetCurrency sets the "currency" field.
-func (cgac *CreditGrantApplicationCreate) SetCurrency(s string) *CreditGrantApplicationCreate {
-	cgac.mutation.SetCurrency(s)
-	return cgac
-}
-
 // SetApplicationReason sets the "application_reason" field.
 func (cgac *CreditGrantApplicationCreate) SetApplicationReason(tgar types.CreditGrantApplicationReason) *CreditGrantApplicationCreate {
 	cgac.mutation.SetApplicationReason(tgar)
@@ -363,9 +357,6 @@ func (cgac *CreditGrantApplicationCreate) check() error {
 	if _, ok := cgac.mutation.CreditsApplied(); !ok {
 		return &ValidationError{Name: "credits_applied", err: errors.New(`ent: missing required field "CreditGrantApplication.credits_applied"`)}
 	}
-	if _, ok := cgac.mutation.Currency(); !ok {
-		return &ValidationError{Name: "currency", err: errors.New(`ent: missing required field "CreditGrantApplication.currency"`)}
-	}
 	if _, ok := cgac.mutation.ApplicationReason(); !ok {
 		return &ValidationError{Name: "application_reason", err: errors.New(`ent: missing required field "CreditGrantApplication.application_reason"`)}
 	}
@@ -482,10 +473,6 @@ func (cgac *CreditGrantApplicationCreate) createSpec() (*CreditGrantApplication,
 	if value, ok := cgac.mutation.CreditsApplied(); ok {
 		_spec.SetField(creditgrantapplication.FieldCreditsApplied, field.TypeOther, value)
 		_node.CreditsApplied = value
-	}
-	if value, ok := cgac.mutation.Currency(); ok {
-		_spec.SetField(creditgrantapplication.FieldCurrency, field.TypeString, value)
-		_node.Currency = value
 	}
 	if value, ok := cgac.mutation.ApplicationReason(); ok {
 		_spec.SetField(creditgrantapplication.FieldApplicationReason, field.TypeString, value)

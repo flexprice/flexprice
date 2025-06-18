@@ -24,11 +24,11 @@ func NewCreditGrantCronHandler(creditGrantService service.CreditGrantService, lo
 func (h *CreditGrantCronHandler) ProcessScheduledCreditGrantApplications(c *gin.Context) {
 	h.logger.Infow("starting credit grant scheduled applications cron job - %s", time.Now().UTC().Format(time.RFC3339))
 
-	err := h.creditGrantService.ProcessScheduledCreditGrantApplications(c.Request.Context())
+	resp, err := h.creditGrantService.ProcessScheduledCreditGrantApplications(c.Request.Context())
 	if err != nil {
-		h.logger.Errorw("failed to process scheduled credit grant applications", "error", err)
 		c.Error(err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "Credit grant scheduled applications processed successfully"})
+
+	c.JSON(http.StatusOK, resp)
 }

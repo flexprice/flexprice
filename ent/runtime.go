@@ -194,15 +194,15 @@ func init() {
 	// creditgrantapplication.DefaultCreditsApplied holds the default value on creation for the credits_applied field.
 	creditgrantapplication.DefaultCreditsApplied = creditgrantapplicationDescCreditsApplied.Default.(decimal.Decimal)
 	// creditgrantapplicationDescApplicationReason is the schema descriptor for application_reason field.
-	creditgrantapplicationDescApplicationReason := creditgrantapplicationFields[10].Descriptor()
+	creditgrantapplicationDescApplicationReason := creditgrantapplicationFields[9].Descriptor()
 	// creditgrantapplication.ApplicationReasonValidator is a validator for the "application_reason" field. It is called by the builders before save.
 	creditgrantapplication.ApplicationReasonValidator = creditgrantapplicationDescApplicationReason.Validators[0].(func(string) error)
 	// creditgrantapplicationDescSubscriptionStatusAtApplication is the schema descriptor for subscription_status_at_application field.
-	creditgrantapplicationDescSubscriptionStatusAtApplication := creditgrantapplicationFields[11].Descriptor()
+	creditgrantapplicationDescSubscriptionStatusAtApplication := creditgrantapplicationFields[10].Descriptor()
 	// creditgrantapplication.SubscriptionStatusAtApplicationValidator is a validator for the "subscription_status_at_application" field. It is called by the builders before save.
 	creditgrantapplication.SubscriptionStatusAtApplicationValidator = creditgrantapplicationDescSubscriptionStatusAtApplication.Validators[0].(func(string) error)
 	// creditgrantapplicationDescRetryCount is the schema descriptor for retry_count field.
-	creditgrantapplicationDescRetryCount := creditgrantapplicationFields[12].Descriptor()
+	creditgrantapplicationDescRetryCount := creditgrantapplicationFields[11].Descriptor()
 	// creditgrantapplication.DefaultRetryCount holds the default value on creation for the retry_count field.
 	creditgrantapplication.DefaultRetryCount = creditgrantapplicationDescRetryCount.Default.(int)
 	customerMixin := schema.Customer{}.Mixin()

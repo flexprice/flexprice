@@ -45,8 +45,6 @@ const (
 	FieldApplicationStatus = "application_status"
 	// FieldCreditsApplied holds the string denoting the credits_applied field in the database.
 	FieldCreditsApplied = "credits_applied"
-	// FieldCurrency holds the string denoting the currency field in the database.
-	FieldCurrency = "currency"
 	// FieldApplicationReason holds the string denoting the application_reason field in the database.
 	FieldApplicationReason = "application_reason"
 	// FieldSubscriptionStatusAtApplication holds the string denoting the subscription_status_at_application field in the database.
@@ -81,7 +79,6 @@ var Columns = []string{
 	FieldPeriodEnd,
 	FieldApplicationStatus,
 	FieldCreditsApplied,
-	FieldCurrency,
 	FieldApplicationReason,
 	FieldSubscriptionStatusAtApplication,
 	FieldRetryCount,
@@ -210,11 +207,6 @@ func ByApplicationStatus(opts ...sql.OrderTermOption) OrderOption {
 // ByCreditsApplied orders the results by the credits_applied field.
 func ByCreditsApplied(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCreditsApplied, opts...).ToFunc()
-}
-
-// ByCurrency orders the results by the currency field.
-func ByCurrency(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldCurrency, opts...).ToFunc()
 }
 
 // ByApplicationReason orders the results by the application_reason field.

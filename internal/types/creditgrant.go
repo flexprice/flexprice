@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/flexprice/flexprice/internal/errors"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/samber/lo"
 )
 
@@ -15,6 +16,22 @@ const (
 	CreditGrantScopeSubscription CreditGrantScope = "SUBSCRIPTION"
 )
 
+// Validate validates the credit grant scope
+func (s CreditGrantScope) Validate() error {
+	allowedValues := []CreditGrantScope{
+		CreditGrantScopePlan,
+		CreditGrantScopeSubscription,
+	}
+
+	if !lo.Contains(allowedValues, s) {
+		return errors.NewError("invalid credit grant scope").
+			WithHint(fmt.Sprintf("Credit grant scope must be one of: %v", allowedValues)).
+			Mark(errors.ErrValidation)
+	}
+
+	return nil
+}
+
 // CreditGrantCadence defines the cadence of a credit grant
 type CreditGrantCadence string
 
@@ -22,6 +39,22 @@ const (
 	CreditGrantCadenceOneTime   CreditGrantCadence = "ONETIME"
 	CreditGrantCadenceRecurring CreditGrantCadence = "RECURRING"
 )
+
+// Validate validates the credit grant cadence
+func (c CreditGrantCadence) Validate() error {
+	allowedValues := []CreditGrantCadence{
+		CreditGrantCadenceOneTime,
+		CreditGrantCadenceRecurring,
+	}
+
+	if !lo.Contains(allowedValues, c) {
+		return errors.NewError("invalid credit grant cadence").
+			WithHint(fmt.Sprintf("Credit grant cadence must be one of: %v", allowedValues)).
+			Mark(errors.ErrValidation)
+	}
+
+	return nil
+}
 
 // CreditGrantPeriod defines the period for recurring credit grants
 type CreditGrantPeriod string
@@ -93,38 +126,6 @@ func (u CreditGrantExpiryDurationUnit) Validate() error {
 	return nil
 }
 
-// Validate validates the credit grant scope
-func (s CreditGrantScope) Validate() error {
-	allowedValues := []CreditGrantScope{
-		CreditGrantScopePlan,
-		CreditGrantScopeSubscription,
-	}
-
-	if !lo.Contains(allowedValues, s) {
-		return errors.NewError("invalid credit grant scope").
-			WithHint(fmt.Sprintf("Credit grant scope must be one of: %v", allowedValues)).
-			Mark(errors.ErrValidation)
-	}
-
-	return nil
-}
-
-// Validate validates the credit grant cadence
-func (c CreditGrantCadence) Validate() error {
-	allowedValues := []CreditGrantCadence{
-		CreditGrantCadenceOneTime,
-		CreditGrantCadenceRecurring,
-	}
-
-	if !lo.Contains(allowedValues, c) {
-		return errors.NewError("invalid credit grant cadence").
-			WithHint(fmt.Sprintf("Credit grant cadence must be one of: %v", allowedValues)).
-			Mark(errors.ErrValidation)
-	}
-
-	return nil
-}
-
 // Validate validates the credit grant period
 func (p CreditGrantPeriod) Validate() error {
 	allowedValues := []CreditGrantPeriod{
@@ -143,6 +144,27 @@ func (p CreditGrantPeriod) Validate() error {
 	}
 
 	return nil
+}
+
+// CreditGrantPeriodToBillingPeriodMap maps credit grant period to billing period
+var CreditGrantPeriodToBillingPeriodConfig = map[CreditGrantPeriod]BillingPeriod{
+	CREDIT_GRANT_PERIOD_DAILY:       BILLING_PERIOD_DAILY,
+	CREDIT_GRANT_PERIOD_WEEKLY:      BILLING_PERIOD_WEEKLY,
+	CREDIT_GRANT_PERIOD_MONTHLY:     BILLING_PERIOD_MONTHLY,
+	CREDIT_GRANT_PERIOD_QUARTER:     BILLING_PERIOD_QUARTER,
+	CREDIT_GRANT_PERIOD_HALF_YEARLY: BILLING_PERIOD_HALF_YEAR,
+	CREDIT_GRANT_PERIOD_ANNUAL:      BILLING_PERIOD_ANNUAL,
+}
+
+// GetBillingPeriodFromCreditGrantPeriod maps credit grant period to billing period
+func GetBillingPeriodFromCreditGrantPeriod(period CreditGrantPeriod) (BillingPeriod, error) {
+	billingPeriod, exists := CreditGrantPeriodToBillingPeriodConfig[period]
+	if !exists {
+		return BillingPeriod(""), ierr.NewError("invalid credit grant period").
+			WithHint(fmt.Sprintf("Credit grant period must be one of: %v", CreditGrantPeriodToBillingPeriodConfig)).
+			Mark(ierr.ErrValidation)
+	}
+	return billingPeriod, nil
 }
 
 // CreditGrantFilter defines filters for querying credit grants

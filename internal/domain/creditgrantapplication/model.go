@@ -20,7 +20,6 @@ type CreditGrantApplication struct {
 	PeriodEnd                       time.Time                          `json:"period_end,omitempty" db:"period_end"`
 	ApplicationStatus               types.ApplicationStatus            `json:"application_status,omitempty" db:"application_status"`
 	CreditsApplied                  decimal.Decimal                    `json:"credits_applied,omitempty" db:"credits_applied"`
-	Currency                        string                             `json:"currency,omitempty" db:"currency"`
 	ApplicationReason               types.CreditGrantApplicationReason `json:"application_reason,omitempty" db:"application_reason"`
 	SubscriptionStatusAtApplication types.SubscriptionStatus           `json:"subscription_status_at_application,omitempty" db:"subscription_status_at_application"`
 	RetryCount                      int                                `json:"retry_count,omitempty" db:"retry_count"`
@@ -43,7 +42,6 @@ func FromEnt(e *ent.CreditGrantApplication) *CreditGrantApplication {
 		PeriodEnd:                       e.PeriodEnd,
 		ApplicationStatus:               e.ApplicationStatus,
 		CreditsApplied:                  e.CreditsApplied,
-		Currency:                        e.Currency,
 		ApplicationReason:               e.ApplicationReason,
 		SubscriptionStatusAtApplication: e.SubscriptionStatusAtApplication,
 		RetryCount:                      e.RetryCount,

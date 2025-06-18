@@ -64,7 +64,6 @@ func (r *creditGrantApplicationRepository) Create(ctx context.Context, a *domain
 		SetPeriodEnd(a.PeriodEnd).
 		SetApplicationStatus(a.ApplicationStatus).
 		SetCreditsApplied(a.CreditsApplied).
-		SetCurrency(a.Currency).
 		SetApplicationReason(a.ApplicationReason).
 		SetSubscriptionStatusAtApplication(a.SubscriptionStatusAtApplication).
 		SetRetryCount(a.RetryCount).
@@ -280,7 +279,6 @@ func (r *creditGrantApplicationRepository) Update(ctx context.Context, a *domain
 		SetPeriodEnd(a.PeriodEnd).
 		SetApplicationStatus(a.ApplicationStatus).
 		SetCreditsApplied(a.CreditsApplied).
-		SetCurrency(a.Currency).
 		SetSubscriptionStatusAtApplication(a.SubscriptionStatusAtApplication).
 		SetRetryCount(a.RetryCount).
 		SetMetadata(a.Metadata).
@@ -524,8 +522,6 @@ func (o CreditGrantApplicationQueryOptions) GetFieldName(field string) string {
 		return cga.FieldApplicationStatus
 	case "credits_applied":
 		return cga.FieldCreditsApplied
-	case "currency":
-		return cga.FieldCurrency
 	case "credit_grant_id":
 		return cga.FieldCreditGrantID
 	case "subscription_id":
@@ -572,8 +568,8 @@ func (o CreditGrantApplicationQueryOptions) applyEntityQueryOptions(_ context.Co
 		query = query.Where(cga.AppliedAt(*f.AppliedAt))
 	}
 
-	if f.ApplicationStatus != "" {
-		query = query.Where(cga.ApplicationStatus(f.ApplicationStatus))
+	if len(f.ApplicationStatuses) > 0 {
+		query = query.Where(cga.ApplicationStatusIn(f.ApplicationStatuses...))
 	}
 
 	return query, nil

@@ -49,8 +49,6 @@ type CreditGrantApplication struct {
 	ApplicationStatus types.ApplicationStatus `json:"application_status,omitempty"`
 	// CreditsApplied holds the value of the "credits_applied" field.
 	CreditsApplied decimal.Decimal `json:"credits_applied,omitempty"`
-	// Currency holds the value of the "currency" field.
-	Currency string `json:"currency,omitempty"`
 	// ApplicationReason holds the value of the "application_reason" field.
 	ApplicationReason types.CreditGrantApplicationReason `json:"application_reason,omitempty"`
 	// SubscriptionStatusAtApplication holds the value of the "subscription_status_at_application" field.
@@ -75,7 +73,7 @@ func (*CreditGrantApplication) scanValues(columns []string) ([]any, error) {
 			values[i] = new(decimal.Decimal)
 		case creditgrantapplication.FieldRetryCount:
 			values[i] = new(sql.NullInt64)
-		case creditgrantapplication.FieldID, creditgrantapplication.FieldTenantID, creditgrantapplication.FieldStatus, creditgrantapplication.FieldCreatedBy, creditgrantapplication.FieldUpdatedBy, creditgrantapplication.FieldEnvironmentID, creditgrantapplication.FieldCreditGrantID, creditgrantapplication.FieldSubscriptionID, creditgrantapplication.FieldApplicationStatus, creditgrantapplication.FieldCurrency, creditgrantapplication.FieldApplicationReason, creditgrantapplication.FieldSubscriptionStatusAtApplication, creditgrantapplication.FieldFailureReason, creditgrantapplication.FieldIdempotencyKey:
+		case creditgrantapplication.FieldID, creditgrantapplication.FieldTenantID, creditgrantapplication.FieldStatus, creditgrantapplication.FieldCreatedBy, creditgrantapplication.FieldUpdatedBy, creditgrantapplication.FieldEnvironmentID, creditgrantapplication.FieldCreditGrantID, creditgrantapplication.FieldSubscriptionID, creditgrantapplication.FieldApplicationStatus, creditgrantapplication.FieldApplicationReason, creditgrantapplication.FieldSubscriptionStatusAtApplication, creditgrantapplication.FieldFailureReason, creditgrantapplication.FieldIdempotencyKey:
 			values[i] = new(sql.NullString)
 		case creditgrantapplication.FieldCreatedAt, creditgrantapplication.FieldUpdatedAt, creditgrantapplication.FieldScheduledFor, creditgrantapplication.FieldAppliedAt, creditgrantapplication.FieldPeriodStart, creditgrantapplication.FieldPeriodEnd:
 			values[i] = new(sql.NullTime)
@@ -192,12 +190,6 @@ func (cga *CreditGrantApplication) assignValues(columns []string, values []any) 
 				return fmt.Errorf("unexpected type %T for field credits_applied", values[i])
 			} else if value != nil {
 				cga.CreditsApplied = *value
-			}
-		case creditgrantapplication.FieldCurrency:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field currency", values[i])
-			} else if value.Valid {
-				cga.Currency = value.String
 			}
 		case creditgrantapplication.FieldApplicationReason:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -318,9 +310,6 @@ func (cga *CreditGrantApplication) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("credits_applied=")
 	builder.WriteString(fmt.Sprintf("%v", cga.CreditsApplied))
-	builder.WriteString(", ")
-	builder.WriteString("currency=")
-	builder.WriteString(cga.Currency)
 	builder.WriteString(", ")
 	builder.WriteString("application_reason=")
 	builder.WriteString(fmt.Sprintf("%v", cga.ApplicationReason))
