@@ -1,6 +1,7 @@
 package cron
 
 import (
+	"net/http"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/logger"
@@ -29,4 +30,5 @@ func (h *CreditGrantCronHandler) ProcessScheduledCreditGrantApplications(c *gin.
 		c.Error(err)
 		return
 	}
+	c.JSON(http.StatusOK, gin.H{"message": "Credit grant scheduled applications processed successfully"})
 }
