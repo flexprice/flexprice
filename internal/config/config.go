@@ -34,6 +34,7 @@ type Configuration struct {
 	Cache               CacheConfig               `validate:"required"`
 	EventPostProcessing EventPostProcessingConfig `mapstructure:"event_post_processing" validate:"required"`
 	EnvAccess           EnvAccessConfig           `mapstructure:"env_access" json:"env_access" validate:"omitempty"`
+	Stripe              StripeConfig              `mapstructure:"stripe" validate:"omitempty"`
 }
 
 type CacheConfig struct {
@@ -220,7 +221,6 @@ func NewConfig() (*Configuration, error) {
 		}
 		cfg.EnvAccess.UserEnvMapping = userEnvMapping
 	}
-
 
 	return &cfg, nil
 }

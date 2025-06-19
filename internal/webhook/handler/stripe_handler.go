@@ -57,6 +57,15 @@ func NewStripeWebhookHandler(
 
 // ProcessWebhook processes incoming Stripe webhook events
 func (h *stripeWebhookHandler) ProcessWebhook(ctx context.Context, rawPayload []byte, signature string) (*webhookDto.StripeWebhookResponse, error) {
+	// Check if Stripe integration is enabled
+	if !h.config.Stripe.Enabled {
+		h.logger.Debugw("Stripe integration is disabled, ignoring webhook")
+		return webhookDto.NewStripeWebhookErrorResponse("Stripe integration is disabled"),
+			ierr.NewError("Stripe integration is disabled").
+				WithHint("Enable Stripe integration in configuration").
+				Mark(ierr.ErrValidation)
+	}
+
 	// Parse the webhook event
 	var event webhookDto.StripeWebhookEvent
 	if err := json.Unmarshal(rawPayload, &event); err != nil {

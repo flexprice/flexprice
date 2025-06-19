@@ -36,6 +36,8 @@ type Handlers struct {
 	Secret            *v1.SecretHandler
 	// Webhook handlers
 	StripeWebhook *v1.StripeWebhookHandler
+	// Integration handlers
+	StripeConfig *v1.StripeConfigHandler
 	// Portal handlers
 	Onboarding *v1.OnboardingHandler
 	// Cron jobs : TODO: move crons out of API based architecture
@@ -305,6 +307,18 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 				onboarding.POST("/events", handlers.Onboarding.GenerateEvents)
 				onboarding.POST("/setup", handlers.Onboarding.SetupDemo)
 			}
+		}
+
+		// Stripe integration configuration routes
+		stripe := v1Private.Group("/stripe")
+		{
+			// Configuration management
+			stripe.GET("/config", handlers.StripeConfig.GetStripeConfig)
+			stripe.PUT("/config", handlers.StripeConfig.CreateOrUpdateStripeConfig)
+			stripe.DELETE("/config", handlers.StripeConfig.DeleteStripeConfig)
+			stripe.POST("/config/test", handlers.StripeConfig.TestStripeConnection)
+			stripe.GET("/config/status", handlers.StripeConfig.GetStripeConfigStatus)
+			stripe.GET("/config/history", handlers.StripeConfig.ListStripeConfigHistory)
 		}
 	}
 

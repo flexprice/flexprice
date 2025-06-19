@@ -105,8 +105,9 @@ func (r *ProcessedEventRepository) BulkInsertProcessedEvents(ctx context.Context
 		return nil
 	}
 
-	// Split events in batches of 100
-	eventsBatches := lo.Chunk(events, 100)
+	// Split events in batches (use smaller chunks for bulk inserts to avoid memory issues)
+	chunkSize := 1000 // Reasonable chunk size for ClickHouse bulk inserts
+	eventsBatches := lo.Chunk(events, chunkSize)
 
 	for _, eventsBatch := range eventsBatches {
 		// Prepare batch statement

@@ -235,6 +235,13 @@ func NewStripeIntegrationService(params ServiceParams, temporalClient client.Cli
 // Configuration Management Implementation
 
 func (s *stripeIntegrationService) CreateTenantConfig(ctx context.Context, req CreateStripeTenantConfigRequest) (*StripeTenantConfigResponse, error) {
+	// Check if Stripe integration is enabled globally
+	if !s.Config.Stripe.Enabled {
+		return nil, ierr.NewError("Stripe integration is disabled").
+			WithHint("Enable Stripe integration in configuration").
+			Mark(ierr.ErrValidation)
+	}
+
 	if err := s.validateCreateTenantConfigRequest(req); err != nil {
 		return nil, err
 	}
@@ -442,19 +449,30 @@ func (s *stripeIntegrationService) GetSyncBatch(ctx context.Context, id string) 
 // Manual Sync Operations Implementation
 
 func (s *stripeIntegrationService) TriggerManualSync(ctx context.Context, req TriggerManualSyncRequest) (*ManualSyncResponse, error) {
+	// Check if Stripe integration is enabled globally
+	if !s.Config.Stripe.Enabled {
+		return nil, ierr.NewError("Stripe integration is disabled").
+			WithHint("Enable Stripe integration in configuration").
+			Mark(ierr.ErrValidation)
+	}
+
 	if err := s.validateTriggerManualSyncRequest(req); err != nil {
 		return nil, err
 	}
 
-	// Create workflow input
+	// Create workflow input with config values
 	workflowInput := map[string]interface{}{
-		"entity_id":      req.EntityID,
-		"entity_type":    req.EntityType,
-		"meter_id":       req.MeterID,
-		"time_from":      req.TimeFrom,
-		"time_to":        req.TimeTo,
-		"force_rerun":    req.ForceRerun,
-		"manual_trigger": true,
+		"entity_id":        req.EntityID,
+		"entity_type":      req.EntityType,
+		"meter_id":         req.MeterID,
+		"time_from":        req.TimeFrom,
+		"time_to":          req.TimeTo,
+		"force_rerun":      req.ForceRerun,
+		"manual_trigger":   true,
+		"batch_size_limit": s.Config.Stripe.BatchSizeLimit,
+		"grace_period":     s.Config.Stripe.GetSyncGracePeriod(),
+		"max_retries":      s.Config.Stripe.MaxRetries,
+		"api_timeout":      s.Config.Stripe.GetAPITimeout(),
 	}
 
 	// Start Temporal workflow

@@ -260,3 +260,109 @@ func (s *Service) StartRepositorySpan(ctx context.Context, repository, operation
 
 	return span, span.Context()
 }
+
+// StartStripeAPISpan starts a new Stripe API span in the current transaction
+func (s *Service) StartStripeAPISpan(ctx context.Context, operation, endpoint string, params map[string]interface{}) (*sentry.Span, context.Context) {
+	if !s.cfg.Sentry.Enabled {
+		return nil, ctx
+	}
+
+	span := sentry.StartSpan(ctx, "stripe.api."+operation)
+	if span != nil {
+		span.Description = fmt.Sprintf("Stripe API: %s %s", operation, endpoint)
+		span.Op = "stripe.api"
+		span.SetData("endpoint", endpoint)
+		span.SetData("operation", operation)
+
+		for k, v := range params {
+			span.SetData(k, v)
+		}
+	}
+
+	return span, span.Context()
+}
+
+// StartStripeWebhookSpan starts a new Stripe webhook span in the current transaction
+func (s *Service) StartStripeWebhookSpan(ctx context.Context, eventType string, params map[string]interface{}) (*sentry.Span, context.Context) {
+	if !s.cfg.Sentry.Enabled {
+		return nil, ctx
+	}
+
+	span := sentry.StartSpan(ctx, "stripe.webhook."+eventType)
+	if span != nil {
+		span.Description = "Processing Stripe webhook: " + eventType
+		span.Op = "stripe.webhook"
+		span.SetData("event_type", eventType)
+
+		for k, v := range params {
+			span.SetData(k, v)
+		}
+	}
+
+	return span, span.Context()
+}
+
+// StartStripeSyncSpan starts a new Stripe sync span in the current transaction
+func (s *Service) StartStripeSyncSpan(ctx context.Context, syncType string, params map[string]interface{}) (*sentry.Span, context.Context) {
+	if !s.cfg.Sentry.Enabled {
+		return nil, ctx
+	}
+
+	span := sentry.StartSpan(ctx, "stripe.sync."+syncType)
+	if span != nil {
+		span.Description = "Stripe sync: " + syncType
+		span.Op = "stripe.sync"
+		span.SetData("sync_type", syncType)
+
+		for k, v := range params {
+			span.SetData(k, v)
+		}
+	}
+
+	return span, span.Context()
+}
+
+// CaptureStripeError captures a Stripe-specific error with additional context
+func (s *Service) CaptureStripeError(err error, operation string, context map[string]interface{}) {
+	if !s.IsEnabled() {
+		return
+	}
+
+	sentry.WithScope(func(scope *sentry.Scope) {
+		scope.SetTag("component", "stripe_integration")
+		scope.SetTag("operation", operation)
+
+		for k, v := range context {
+			if contextMap, ok := v.(map[string]interface{}); ok {
+				scope.SetContext(k, contextMap)
+			} else {
+				// Convert single values to a context map
+				scope.SetContext(k, map[string]interface{}{"value": v})
+			}
+		}
+
+		sentry.CaptureException(err)
+	})
+}
+
+// AddStripeBreadcrumb adds a Stripe-specific breadcrumb
+func (s *Service) AddStripeBreadcrumb(operation, message string, data map[string]interface{}) {
+	if !s.IsEnabled() {
+		return
+	}
+
+	breadcrumbData := make(map[string]interface{})
+	breadcrumbData["component"] = "stripe_integration"
+	breadcrumbData["operation"] = operation
+
+	for k, v := range data {
+		breadcrumbData[k] = v
+	}
+
+	sentry.AddBreadcrumb(&sentry.Breadcrumb{
+		Category: "stripe",
+		Message:  message,
+		Level:    sentry.LevelInfo,
+		Data:     breadcrumbData,
+	})
+}
