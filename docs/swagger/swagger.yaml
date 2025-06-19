@@ -346,6 +346,24 @@ definitions:
     - name
     - reset_usage
     type: object
+  dto.CreateOrUpdateStripeConfigRequest:
+    properties:
+      aggregation_window_minutes:
+        maximum: 60
+        minimum: 5
+        type: integer
+      api_key:
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      sync_enabled:
+        type: boolean
+      webhook_config:
+        $ref: '#/definitions/dto.StripeWebhookConfigDTO'
+    required:
+    - api_key
+    type: object
   dto.CreatePaymentRequest:
     properties:
       amount:
@@ -1842,6 +1860,97 @@ definitions:
         type: string
     required:
     - email
+    type: object
+  dto.StripeConfigHistoryEntry:
+    properties:
+      change_type:
+        description: '"created", "updated", "deleted"'
+        type: string
+      changed_at:
+        type: string
+      changed_by:
+        type: string
+      changes:
+        additionalProperties: true
+        type: object
+      description:
+        type: string
+      id:
+        type: string
+    type: object
+  dto.StripeConfigHistoryResponse:
+    properties:
+      has_more:
+        type: boolean
+      items:
+        items:
+          $ref: '#/definitions/dto.StripeConfigHistoryEntry'
+        type: array
+      limit:
+        type: integer
+      offset:
+        type: integer
+      total:
+        type: integer
+    type: object
+  dto.StripeConfigResponse:
+    properties:
+      aggregation_window_minutes:
+        type: integer
+      created_at:
+        type: string
+      environment_id:
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      sync_enabled:
+        type: boolean
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+      webhook_config:
+        $ref: '#/definitions/dto.StripeWebhookConfigDTO'
+    type: object
+  dto.StripeConfigStatusResponse:
+    properties:
+      configuration_ok:
+        type: boolean
+      configured:
+        type: boolean
+      connection_status:
+        $ref: '#/definitions/dto.StripeConnectionTestResponse'
+      issues:
+        items:
+          type: string
+        type: array
+      last_tested_at:
+        type: string
+      sync_enabled:
+        type: boolean
+    type: object
+  dto.StripeConnectionTestResponse:
+    properties:
+      latency_ms:
+        type: integer
+      message:
+        type: string
+      success:
+        type: boolean
+      tested_at:
+        type: string
+    type: object
+  dto.StripeWebhookConfigDTO:
+    properties:
+      enabled:
+        type: boolean
+      endpoint_url:
+        type: string
+      secret:
+        type: string
+    required:
+    - endpoint_url
     type: object
   dto.SubscriptionLineItemRequest:
     properties:
@@ -6513,6 +6622,215 @@ paths:
       summary: List linked integrations
       tags:
       - Integrations
+  /stripe/config:
+    delete:
+      consumes:
+      - application/json
+      description: Delete the Stripe integration configuration for the current tenant
+        and environment
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Configuration deleted successfully
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Configuration not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Delete Stripe configuration
+      tags:
+      - stripe-config
+    get:
+      consumes:
+      - application/json
+      description: Get the Stripe integration configuration for the current tenant
+        and environment
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Stripe configuration retrieved successfully
+          schema:
+            $ref: '#/definitions/dto.StripeConfigResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Configuration not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get Stripe configuration
+      tags:
+      - stripe-config
+    put:
+      consumes:
+      - application/json
+      description: Create or update the Stripe integration configuration for the current
+        tenant and environment
+      parameters:
+      - description: Stripe configuration request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateOrUpdateStripeConfigRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Configuration updated successfully
+          schema:
+            $ref: '#/definitions/dto.StripeConfigResponse'
+        "201":
+          description: Configuration created successfully
+          schema:
+            $ref: '#/definitions/dto.StripeConfigResponse'
+        "400":
+          description: Bad request - invalid payload
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create or update Stripe configuration
+      tags:
+      - stripe-config
+  /stripe/config/history:
+    get:
+      consumes:
+      - application/json
+      description: Get the change history for Stripe configuration (for audit purposes)
+      parameters:
+      - default: 50
+        description: Number of records to return
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Number of records to skip
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Configuration history retrieved
+          schema:
+            $ref: '#/definitions/dto.StripeConfigHistoryResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List Stripe configuration history
+      tags:
+      - stripe-config
+  /stripe/config/status:
+    get:
+      consumes:
+      - application/json
+      description: Get a summary of the Stripe integration configuration status including
+        validation and health
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Configuration status retrieved
+          schema:
+            $ref: '#/definitions/dto.StripeConfigStatusResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get Stripe configuration status
+      tags:
+      - stripe-config
+  /stripe/config/test:
+    post:
+      consumes:
+      - application/json
+      description: Test the Stripe API connection for the current tenant and environment
+        configuration
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Connection test completed
+          schema:
+            $ref: '#/definitions/dto.StripeConnectionTestResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Configuration not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Test Stripe connection
+      tags:
+      - stripe-config
   /subscriptions:
     get:
       description: Get subscriptions with optional filtering
