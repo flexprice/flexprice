@@ -14,6 +14,8 @@ type StripeEventSyncWorkflowInput struct {
 	WindowEnd      time.Time     `json:"window_end"`
 	GracePeriod    time.Duration `json:"grace_period"`
 	BatchSizeLimit int           `json:"batch_size_limit"`
+	MaxRetries     int           `json:"max_retries"`
+	APITimeout     time.Duration `json:"api_timeout"`
 }
 
 // StripeEventSyncWorkflowResult represents the result of the Stripe event sync workflow

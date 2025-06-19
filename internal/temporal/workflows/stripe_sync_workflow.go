@@ -15,7 +15,9 @@ func StripeEventSyncWorkflow(ctx workflow.Context, input models.StripeEventSyncW
 		"tenant_id", input.TenantID,
 		"environment_id", input.EnvironmentID,
 		"window_start", input.WindowStart,
-		"window_end", input.WindowEnd)
+		"window_end", input.WindowEnd,
+		"batch_size_limit", input.BatchSizeLimit,
+		"grace_period", input.GracePeriod)
 
 	// Validate input
 	if err := input.Validate(); err != nil {
@@ -23,15 +25,26 @@ func StripeEventSyncWorkflow(ctx workflow.Context, input models.StripeEventSyncW
 		return nil, err
 	}
 
-	// Set up activity options with appropriate timeouts and retry policies
+	// Set up activity options with configurable timeouts and retry policies
+	// Use configurable values or sensible defaults
+	maxRetries := input.MaxRetries
+	if maxRetries == 0 {
+		maxRetries = 3 // Default from StripeConfig
+	}
+
+	apiTimeout := input.APITimeout
+	if apiTimeout == 0 {
+		apiTimeout = 30 * time.Second // Default from StripeConfig
+	}
+
 	activityOptions := workflow.ActivityOptions{
-		StartToCloseTimeout:    time.Minute * 10, // 10 minutes for each activity
-		ScheduleToCloseTimeout: time.Minute * 15, // Total timeout including retries
+		StartToCloseTimeout:    apiTimeout * 2, // Give activities 2x API timeout
+		ScheduleToCloseTimeout: apiTimeout * 3, // Total timeout including retries
 		RetryPolicy: &temporalsdk.RetryPolicy{
 			InitialInterval:    time.Second * 5,
 			BackoffCoefficient: 2.0,
 			MaximumInterval:    time.Minute * 2,
-			MaximumAttempts:    5,
+			MaximumAttempts:    int32(maxRetries),
 			NonRetryableErrorTypes: []string{
 				"ValidationError", // Don't retry validation errors
 			},
