@@ -201,7 +201,7 @@ func (h *CostSheetHandler) UpdateCostSheet(c *gin.Context) {
 }
 
 // @Summary Delete a cost sheet
-// @Description Delete a cost sheet
+// @Description Delete a cost sheet. If status is published/draft, it will be archived. If already archived, it will be deleted from database.
 // @Tags CostSheets
 // @Accept json
 // @Produce json
@@ -210,7 +210,6 @@ func (h *CostSheetHandler) UpdateCostSheet(c *gin.Context) {
 // @Success 204 "No Content"
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 404 {object} ierr.ErrorResponse
-// @Failure 409 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
 // @Router /cost/{id} [delete]
 func (h *CostSheetHandler) DeleteCostSheet(c *gin.Context) {
@@ -219,24 +218,6 @@ func (h *CostSheetHandler) DeleteCostSheet(c *gin.Context) {
 		c.Error(ierr.NewError("id is required").
 			WithHint("Cost Sheet ID is required").
 			Mark(ierr.ErrValidation))
-		return
-	}
-
-	// Get the costsheet first to check its status
-	costsheet, err := h.service.GetCostSheet(c.Request.Context(), id)
-	if err != nil {
-		h.log.Error("Failed to get cost sheet", "error", err)
-		c.Error(err)
-		return
-	}
-
-	// Check if the costsheet is published and has active references
-	if costsheet.Status == types.StatusPublished {
-		// TODO: Add check for active calculations or reports
-		// For now, we'll prevent deletion of published costsheets
-		c.Error(ierr.NewError("cannot delete published costsheet").
-			WithHint("Published costsheets cannot be deleted while they have active references").
-			Mark(ierr.ErrAlreadyExists))
 		return
 	}
 

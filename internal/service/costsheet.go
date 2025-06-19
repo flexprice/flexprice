@@ -93,87 +93,177 @@ func (s *costsheetService) GetInputCostForMargin(ctx context.Context, req *dto.C
 	//Create service instance for costsheet in functions
 	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config)
 	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.Logger)
+	subscriptionService := NewSubscriptionService(s.ServiceParams)
 
-	// Construct filter to get only published cost sheet items
-	filter := &domainCostSheet.Filter{
-		QueryFilter:   types.NewDefaultQueryFilter(),
-		TenantID:      tenantID,
-		EnvironmentID: envID,
-		Filters: []*types.FilterCondition{
-			{
-				Field:    lo.ToPtr("status"),
-				Operator: lo.ToPtr(types.EQUAL),
-				DataType: lo.ToPtr(types.DataTypeString),
-				Value: &types.Value{
-					String: lo.ToPtr("published"),
-				},
-			},
-		},
-	}
-
-	// Retrieve all published cost sheet items
-	items, err := s.CostSheetRepo.List(ctx, filter)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithMessage("failed to get cost sheet items").
-			WithHint("failed to get cost sheet items").
-			Mark(ierr.ErrInternal)
-	}
-
-	// Create usage requests for each meter to gather usage data
-	usageRequests := make([]*dto.GetUsageByMeterRequest, len(items))
-	for i, item := range items {
-		usageRequests[i] = &dto.GetUsageByMeterRequest{
-			MeterID:   item.MeterID,
-			StartTime: startTime,
-			EndTime:   endTime,
-		}
-	}
-
-	// Fetch usage data for all meters in bulk
-	usageData, err := eventService.BulkGetUsageByMeter(ctx, usageRequests)
-
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithMessage("failed to get usage data").
-			WithHint("failed to get usage data").
-			Mark(ierr.ErrInternal)
-	}
-
-	// Calculate individual and total costs based on usage and pricing
 	var totalCost decimal.Decimal
-	itemCosts := make([]dto.CostBreakdownItem, len(items))
+	itemCosts := make([]dto.CostBreakdownItem, 0)
 
-	for i, item := range items {
-		// Get pricing information for the item
-		// priceResp, err := s.priceService.GetPrice(ctx, item.PriceID)
-		priceResp, err := priceService.GetPrice(ctx, item.PriceID)
-
+	// If we have a subscription ID, get all line items to process both fixed and usage-based costs
+	if req.SubscriptionID != "" {
+		sub, err := subscriptionService.GetSubscription(ctx, req.SubscriptionID)
 		if err != nil {
 			return nil, ierr.WithError(err).
-				WithMessage("failed to get price").
-				WithHint("failed to get price").
+				WithMessage("failed to get subscription").
+				WithHint("failed to get subscription details").
 				Mark(ierr.ErrInternal)
 		}
 
-		// Get usage data for the specific meter
-		usage := usageData[item.MeterID]
-		if usage == nil {
-			continue // Skip if no usage data available
+		// Create a map to track unique meters for usage-based pricing
+		uniqueMeters := make(map[string]struct{})
+
+		// First pass: Process fixed costs and collect meters for usage-based costs
+		for _, item := range sub.LineItems {
+			if item.Status != types.StatusPublished {
+				continue
+			}
+
+			// Get price details
+			priceResp, err := priceService.GetPrice(ctx, item.PriceID)
+			if err != nil {
+				return nil, ierr.WithError(err).
+					WithMessage("failed to get price").
+					WithHint("failed to get price").
+					Mark(ierr.ErrInternal)
+			}
+
+			if priceResp.Price.Type == types.PRICE_TYPE_FIXED {
+				// For fixed prices, use the price amount directly
+				cost := priceResp.Price.Amount.Mul(item.Quantity)
+				itemCosts = append(itemCosts, dto.CostBreakdownItem{
+					Cost: cost,
+				})
+				totalCost = totalCost.Add(cost)
+			} else if priceResp.Price.Type == types.PRICE_TYPE_USAGE && item.MeterID != "" {
+				// For usage-based prices, collect the meter ID for later processing
+				uniqueMeters[item.MeterID] = struct{}{}
+			}
 		}
 
-		// Calculate cost for this item using price and usage
-		cost := priceService.CalculateCostSheetPrice(ctx, priceResp.Price, usage.Value)
+		// Second pass: Process usage-based costs
+		if len(uniqueMeters) > 0 {
+			// Create usage requests for unique meters
+			usageRequests := make([]*dto.GetUsageByMeterRequest, 0, len(uniqueMeters))
+			for meterID := range uniqueMeters {
+				usageRequests = append(usageRequests, &dto.GetUsageByMeterRequest{
+					MeterID:   meterID,
+					StartTime: startTime,
+					EndTime:   endTime,
+				})
+			}
 
-		// Store item-specific cost details
-		itemCosts[i] = dto.CostBreakdownItem{
-			MeterID: item.MeterID,
-			Usage:   usage.Value,
-			Cost:    cost,
+			// Fetch usage data for all meters in bulk
+			usageData, err := eventService.BulkGetUsageByMeter(ctx, usageRequests)
+			if err != nil {
+				return nil, ierr.WithError(err).
+					WithMessage("failed to get usage data").
+					WithHint("failed to get usage data").
+					Mark(ierr.ErrInternal)
+			}
+
+			// Process each meter's usage
+			for _, item := range sub.LineItems {
+				if item.Status != types.StatusPublished || item.MeterID == "" {
+					continue
+				}
+
+				usage := usageData[item.MeterID]
+				if usage == nil {
+					continue
+				}
+
+				// Get price details
+				priceResp, err := priceService.GetPrice(ctx, item.PriceID)
+				if err != nil {
+					return nil, ierr.WithError(err).
+						WithMessage("failed to get price").
+						WithHint("failed to get price").
+						Mark(ierr.ErrInternal)
+				}
+
+				// Calculate cost for this item using price and usage
+				cost := priceService.CalculateCostSheetPrice(ctx, priceResp.Price, usage.Value)
+
+				// Store item-specific cost details
+				itemCosts = append(itemCosts, dto.CostBreakdownItem{
+					MeterID: item.MeterID,
+					Usage:   usage.Value,
+					Cost:    cost,
+				})
+
+				// Add to total cost
+				totalCost = totalCost.Add(cost)
+			}
+		}
+	} else {
+		// If no subscription ID, fall back to original cost sheet behavior
+		filter := &domainCostSheet.Filter{
+			QueryFilter:   types.NewDefaultQueryFilter(),
+			TenantID:      tenantID,
+			EnvironmentID: envID,
+			Filters: []*types.FilterCondition{
+				{
+					Field:    lo.ToPtr("status"),
+					Operator: lo.ToPtr(types.EQUAL),
+					DataType: lo.ToPtr(types.DataTypeString),
+					Value: &types.Value{
+						String: lo.ToPtr("published"),
+					},
+				},
+			},
 		}
 
-		// Add to total cost
-		totalCost = totalCost.Add(cost)
+		items, err := s.CostSheetRepo.List(ctx, filter)
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithMessage("failed to get cost sheet items").
+				WithHint("failed to get cost sheet items").
+				Mark(ierr.ErrInternal)
+		}
+
+		// Create usage requests for meters
+		usageRequests := make([]*dto.GetUsageByMeterRequest, len(items))
+		for i, item := range items {
+			usageRequests[i] = &dto.GetUsageByMeterRequest{
+				MeterID:   item.MeterID,
+				StartTime: startTime,
+				EndTime:   endTime,
+			}
+		}
+
+		// Fetch usage data for all meters in bulk
+		usageData, err := eventService.BulkGetUsageByMeter(ctx, usageRequests)
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithMessage("failed to get usage data").
+				WithHint("failed to get usage data").
+				Mark(ierr.ErrInternal)
+		}
+
+		// Process each cost sheet item
+		for _, item := range items {
+			usage := usageData[item.MeterID]
+			if usage == nil {
+				continue
+			}
+
+			priceResp, err := priceService.GetPrice(ctx, item.PriceID)
+			if err != nil {
+				return nil, ierr.WithError(err).
+					WithMessage("failed to get price").
+					WithHint("failed to get price").
+					Mark(ierr.ErrInternal)
+			}
+
+			cost := priceService.CalculateCostSheetPrice(ctx, priceResp.Price, usage.Value)
+
+			itemCosts = append(itemCosts, dto.CostBreakdownItem{
+				MeterID: item.MeterID,
+				Usage:   usage.Value,
+				Cost:    cost,
+			})
+
+			totalCost = totalCost.Add(cost)
+		}
 	}
 
 	return &dto.CostBreakdownResponse{

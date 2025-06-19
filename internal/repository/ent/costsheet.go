@@ -205,8 +205,9 @@ func (r *costsheetRepository) Update(ctx context.Context, cs *domainCostsheet.Co
 	return nil
 }
 
-// Delete performs a soft delete of a costsheet by marking it as archived.
-// It maintains data history while preventing further use of the costsheet.
+// Delete performs either a soft delete or hard delete of a costsheet based on its current status.
+// - If the costsheet is in "published" or "draft" status, it will be soft deleted (status changed to "archived")
+// - If the costsheet is already in "archived" status, it will be hard deleted from the database
 func (r *costsheetRepository) Delete(ctx context.Context, id string) error {
 	client := r.client.Querier(ctx)
 
@@ -216,19 +217,15 @@ func (r *costsheetRepository) Delete(ctx context.Context, id string) error {
 	})
 	defer FinishSpan(span)
 
-	// Soft delete by updating status to archived
-	_, err := client.Costsheet.Update().
+	// First get the current costsheet to check its status
+	cs, err := client.Costsheet.Query().
 		Where(
 			costsheet.ID(id),
 			costsheet.TenantID(types.GetTenantID(ctx)),
 			costsheet.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
-		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(time.Now().UTC()).
-		SetUpdatedBy(types.GetUserID(ctx)).
-		Save(ctx)
+		Only(ctx)
 
-	// Handle potential errors
 	if err != nil {
 		SetSpanError(span, err)
 		if ent.IsNotFound(err) {
@@ -241,12 +238,50 @@ func (r *costsheetRepository) Delete(ctx context.Context, id string) error {
 				Mark(ierr.ErrNotFound)
 		}
 		return ierr.WithError(err).
-			WithMessage("failed to delete costsheet").
-			WithHint("Failed to delete costsheet").
+			WithMessage("failed to get costsheet").
+			WithHint("Failed to retrieve costsheet").
 			WithReportableDetails(map[string]any{
 				"costsheet_id": id,
 			}).
 			Mark(ierr.ErrDatabase)
+	}
+
+	// If status is already archived, perform hard delete
+	if types.Status(cs.Status) == types.StatusArchived {
+		err = client.Costsheet.DeleteOne(cs).Exec(ctx)
+		if err != nil {
+			SetSpanError(span, err)
+			return ierr.WithError(err).
+				WithMessage("failed to delete costsheet").
+				WithHint("Failed to delete costsheet from database").
+				WithReportableDetails(map[string]any{
+					"costsheet_id": id,
+				}).
+				Mark(ierr.ErrDatabase)
+		}
+	} else {
+		// Otherwise perform soft delete by updating status to archived
+		_, err = client.Costsheet.Update().
+			Where(
+				costsheet.ID(id),
+				costsheet.TenantID(types.GetTenantID(ctx)),
+				costsheet.EnvironmentID(types.GetEnvironmentID(ctx)),
+			).
+			SetStatus(string(types.StatusArchived)).
+			SetUpdatedAt(time.Now().UTC()).
+			SetUpdatedBy(types.GetUserID(ctx)).
+			Save(ctx)
+
+		if err != nil {
+			SetSpanError(span, err)
+			return ierr.WithError(err).
+				WithMessage("failed to archive costsheet").
+				WithHint("Failed to update costsheet status to archived").
+				WithReportableDetails(map[string]any{
+					"costsheet_id": id,
+				}).
+				Mark(ierr.ErrDatabase)
+		}
 	}
 
 	SetSpanSuccess(span)
