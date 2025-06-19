@@ -18,17 +18,21 @@ import (
 	"github.com/flexprice/flexprice/ent/creditgrantapplication"
 	"github.com/flexprice/flexprice/ent/customer"
 	"github.com/flexprice/flexprice/ent/entitlement"
+	"github.com/flexprice/flexprice/ent/entityintegrationmapping"
 	"github.com/flexprice/flexprice/ent/environment"
 	"github.com/flexprice/flexprice/ent/feature"
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/ent/invoicesequence"
 	"github.com/flexprice/flexprice/ent/meter"
+	"github.com/flexprice/flexprice/ent/meterprovidermapping"
 	"github.com/flexprice/flexprice/ent/payment"
 	"github.com/flexprice/flexprice/ent/paymentattempt"
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/secret"
+	"github.com/flexprice/flexprice/ent/stripesyncbatch"
+	"github.com/flexprice/flexprice/ent/stripetenantconfig"
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
@@ -105,17 +109,21 @@ func checkColumn(table, column string) error {
 			creditgrantapplication.Table:    creditgrantapplication.ValidColumn,
 			customer.Table:                  customer.ValidColumn,
 			entitlement.Table:               entitlement.ValidColumn,
+			entityintegrationmapping.Table:  entityintegrationmapping.ValidColumn,
 			environment.Table:               environment.ValidColumn,
 			feature.Table:                   feature.ValidColumn,
 			invoice.Table:                   invoice.ValidColumn,
 			invoicelineitem.Table:           invoicelineitem.ValidColumn,
 			invoicesequence.Table:           invoicesequence.ValidColumn,
 			meter.Table:                     meter.ValidColumn,
+			meterprovidermapping.Table:      meterprovidermapping.ValidColumn,
 			payment.Table:                   payment.ValidColumn,
 			paymentattempt.Table:            paymentattempt.ValidColumn,
 			plan.Table:                      plan.ValidColumn,
 			price.Table:                     price.ValidColumn,
 			secret.Table:                    secret.ValidColumn,
+			stripesyncbatch.Table:           stripesyncbatch.ValidColumn,
+			stripetenantconfig.Table:        stripetenantconfig.ValidColumn,
 			subscription.Table:              subscription.ValidColumn,
 			subscriptionlineitem.Table:      subscriptionlineitem.ValidColumn,
 			subscriptionpause.Table:         subscriptionpause.ValidColumn,

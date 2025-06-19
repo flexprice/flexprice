@@ -81,6 +81,18 @@ func (f EntitlementFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value,
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.EntitlementMutation", m)
 }
 
+// The EntityIntegrationMappingFunc type is an adapter to allow the use of ordinary
+// function as EntityIntegrationMapping mutator.
+type EntityIntegrationMappingFunc func(context.Context, *ent.EntityIntegrationMappingMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f EntityIntegrationMappingFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.EntityIntegrationMappingMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.EntityIntegrationMappingMutation", m)
+}
+
 // The EnvironmentFunc type is an adapter to allow the use of ordinary
 // function as Environment mutator.
 type EnvironmentFunc func(context.Context, *ent.EnvironmentMutation) (ent.Value, error)
@@ -153,6 +165,18 @@ func (f MeterFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.MeterMutation", m)
 }
 
+// The MeterProviderMappingFunc type is an adapter to allow the use of ordinary
+// function as MeterProviderMapping mutator.
+type MeterProviderMappingFunc func(context.Context, *ent.MeterProviderMappingMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f MeterProviderMappingFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.MeterProviderMappingMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.MeterProviderMappingMutation", m)
+}
+
 // The PaymentFunc type is an adapter to allow the use of ordinary
 // function as Payment mutator.
 type PaymentFunc func(context.Context, *ent.PaymentMutation) (ent.Value, error)
@@ -211,6 +235,30 @@ func (f SecretFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, erro
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SecretMutation", m)
+}
+
+// The StripeSyncBatchFunc type is an adapter to allow the use of ordinary
+// function as StripeSyncBatch mutator.
+type StripeSyncBatchFunc func(context.Context, *ent.StripeSyncBatchMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f StripeSyncBatchFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.StripeSyncBatchMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.StripeSyncBatchMutation", m)
+}
+
+// The StripeTenantConfigFunc type is an adapter to allow the use of ordinary
+// function as StripeTenantConfig mutator.
+type StripeTenantConfigFunc func(context.Context, *ent.StripeTenantConfigMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f StripeTenantConfigFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.StripeTenantConfigMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.StripeTenantConfigMutation", m)
 }
 
 // The SubscriptionFunc type is an adapter to allow the use of ordinary
