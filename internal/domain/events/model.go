@@ -151,3 +151,45 @@ func (e *Event) ToProcessedEvent() *ProcessedEvent {
 		Cost:           decimal.Zero,
 	}
 }
+
+// BillableEventSyncBatch represents aggregated billable events for external sync
+type BillableEventSyncBatch struct {
+	// Customer and meter identifiers
+	CustomerID         string `json:"customer_id"`
+	MeterID            string `json:"meter_id"`
+	EventName          string `json:"event_name"`
+	ProviderCustomerID string `json:"provider_customer_id"`
+	ProviderMeterID    string `json:"provider_meter_id"`
+
+	// Time window for aggregation
+	WindowStart time.Time `json:"window_start"`
+	WindowEnd   time.Time `json:"window_end"`
+
+	// Aggregated metrics
+	AggregatedQuantity decimal.Decimal `json:"aggregated_quantity"`
+	EventCount         uint64          `json:"event_count"`
+
+	// Context identifiers
+	TenantID      string `json:"tenant_id"`
+	EnvironmentID string `json:"environment_id"`
+}
+
+// BillableEventSyncParams contains parameters for querying billable events for sync
+type BillableEventSyncParams struct {
+	TenantID      string    `json:"tenant_id" validate:"required"`
+	EnvironmentID string    `json:"environment_id" validate:"required"`
+	WindowStart   time.Time `json:"window_start" validate:"required"`
+	WindowEnd     time.Time `json:"window_end" validate:"required"`
+	BatchSize     int       `json:"batch_size"`
+	ProviderType  string    `json:"provider_type"` // e.g., "stripe"
+}
+
+// QueryPerformanceMetrics contains performance metrics for query execution
+type QueryPerformanceMetrics struct {
+	QueryStartTime  time.Time `json:"query_start_time"`
+	QueryEndTime    time.Time `json:"query_end_time"`
+	ExecutionTimeMs int64     `json:"execution_time_ms"`
+	RowsProcessed   uint64    `json:"rows_processed"`
+	ResultSetSize   uint64    `json:"result_set_size"`
+	MemoryUsageMB   float64   `json:"memory_usage_mb"`
+}

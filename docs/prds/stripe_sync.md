@@ -179,9 +179,9 @@ The integration extends FlexPrice's existing clean architecture:
 4. **Optimize for high volume** - Use appropriate ClickHouse FINAL modifiers, proper indexing hints, and batch size limits for 25M+ events/month
 5. **Add query performance monitoring** - Include query execution time tracking and result set size monitoring
 
-### Task 8: Configuration Management
+### Task 8: Global Configuration and Tenant API Management
 
-**Objective**: Implement tenant-specific configuration management for Stripe integration.
+**Objective**: Implement global Stripe integration configuration and tenant-specific configuration API endpoints.
 
 **Files to Create:**
 
@@ -194,11 +194,13 @@ The integration extends FlexPrice's existing clean architecture:
 
 **Actions:**
 
-1. **Create Stripe configuration API endpoints** - Add CRUD endpoints for tenant Stripe configuration with API key encryption and meter mapping management
-2. **Implement configuration validation** - Add validation for Stripe API keys, meter mapping uniqueness, and configuration completeness
-3. **Add encryption/decryption for API keys** - Implement secure storage of Stripe API keys using existing FlexPrice encryption patterns
-4. **Create configuration DTOs** - Define request/response models for Stripe configuration API with proper field validation
-5. **Update global configuration** - Add Stripe integration feature flags and default settings to main configuration structure
+1. **Create tenant Stripe configuration API endpoints** - Add CRUD endpoints for tenant Stripe configuration with proper tenant/environment isolation and authentication
+2. **Implement configuration validation** - Add validation for Stripe API keys format, webhook URLs, and configuration completeness
+3. **Add global Stripe configuration** - Add application-level settings like feature flags, default timeouts, and global limits to main configuration structure
+4. **Create configuration DTOs** - Define request/response models for tenant Stripe configuration API with proper field validation and security
+5. **Implement configuration helpers** - Add utility functions for configuration retrieval, validation, and tenant-specific setting resolution
+
+**Note**: Tenant-specific API keys and configuration are stored in the database (via Tasks 1-3), not in application configuration files. This task focuses on global application settings and the API layer for tenant configuration management.
 
 ### Task 9: Error Handling and Monitoring
 
@@ -240,12 +242,24 @@ The integration extends FlexPrice's existing clean architecture:
 
 ## Configuration Requirements
 
-### Environment Variables
+### Global Application Configuration (Environment Variables)
 
-- `STRIPE_WEBHOOK_SECRET` - Global webhook signature validation secret
-- `STRIPE_SYNC_GRACE_PERIOD_MINUTES` - Configurable grace period (default: 5 minutes)
+- `STRIPE_WEBHOOK_SECRET` - Global webhook signature validation secret (shared across all tenants)
+- `STRIPE_SYNC_GRACE_PERIOD_MINUTES` - Default grace period for event aggregation (default: 5 minutes)
 - `STRIPE_BATCH_SIZE_LIMIT` - Maximum events per sync batch (default: 10000)
-- `STRIPE_API_TIMEOUT_SECONDS` - API call timeout (default: 30 seconds)
+- `STRIPE_API_TIMEOUT_SECONDS` - Default API call timeout (default: 30 seconds)
+- `STRIPE_INTEGRATION_ENABLED` - Global feature flag to enable/disable Stripe integration
+- `STRIPE_MAX_RETRIES` - Maximum retry attempts for API calls (default: 3)
+- `STRIPE_RATE_LIMIT_PER_TENANT` - Rate limit per tenant per minute (default: 100)
+
+### Tenant-Specific Configuration (Database Storage)
+
+- **API Keys**: Encrypted Stripe API keys per tenant/environment (stored in `stripe_tenant_configs` table)
+- **Sync Settings**: Per-tenant sync enablement and aggregation window overrides
+- **Webhook Configuration**: Tenant-specific webhook endpoints and processing settings
+- **Meter Mappings**: Tenant-specific FlexPrice meter to Stripe meter mappings
+
+**Architecture Note**: Global settings control application behavior, while tenant-specific settings control individual customer integrations and are managed via API endpoints with proper tenant isolation.
 
 ### Database Configuration
 
