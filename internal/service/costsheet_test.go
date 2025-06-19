@@ -311,15 +311,29 @@ func (s *CostSheetServiceSuite) TestDeleteCostSheet() {
 	s.Require().NoError(err)
 	s.Require().NotNil(created)
 
-	// Test case: Successfully delete costsheet
+	// Test case 1: Soft delete (published -> archived)
+	// Initially the costsheet should be published
+	s.Equal(types.StatusPublished, created.Status)
+
+	// First delete should change status to archived
 	err = s.costSheetService.DeleteCostSheet(s.ctx, created.ID)
 	s.NoError(err)
 
-	// Verify deletion
-	_, err = s.costSheetService.GetCostSheet(s.ctx, created.ID)
-	s.Error(err)
+	// Verify it's now archived
+	archivedSheet, err := s.costSheetService.GetCostSheet(s.ctx, created.ID)
+	s.NoError(err)
+	s.Equal(types.StatusArchived, archivedSheet.Status)
 
-	// Test case: Delete non-existent costsheet
+	// Test case 2: Hard delete (archived -> removed)
+	// Second delete should remove it completely
+	err = s.costSheetService.DeleteCostSheet(s.ctx, created.ID)
+	s.NoError(err)
+
+	// Verify it's completely gone
+	_, err = s.costSheetService.GetCostSheet(s.ctx, created.ID)
+	s.Error(err) // Should error because the record doesn't exist anymore
+
+	// Test case 3: Delete non-existent costsheet
 	err = s.costSheetService.DeleteCostSheet(s.ctx, "non-existent-id")
 	s.Error(err)
 }

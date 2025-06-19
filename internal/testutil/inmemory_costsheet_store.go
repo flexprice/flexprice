@@ -154,6 +154,19 @@ func (s *InMemoryCostSheetStore) Update(ctx context.Context, cs *costsheet.Costs
 }
 
 func (s *InMemoryCostSheetStore) Delete(ctx context.Context, id string) error {
+	// First get the current costsheet
+	cs, err := s.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	// If status is not archived, perform soft delete by changing status to archived
+	if cs.Status != types.StatusArchived {
+		cs.Status = types.StatusArchived
+		return s.Update(ctx, cs)
+	}
+
+	// If status is already archived, perform hard delete
 	return s.InMemoryStore.Delete(ctx, id)
 }
 
