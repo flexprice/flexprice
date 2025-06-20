@@ -150,9 +150,25 @@ func (cgac *CreditGrantApplicationCreate) SetPeriodStart(t time.Time) *CreditGra
 	return cgac
 }
 
+// SetNillablePeriodStart sets the "period_start" field if the given value is not nil.
+func (cgac *CreditGrantApplicationCreate) SetNillablePeriodStart(t *time.Time) *CreditGrantApplicationCreate {
+	if t != nil {
+		cgac.SetPeriodStart(*t)
+	}
+	return cgac
+}
+
 // SetPeriodEnd sets the "period_end" field.
 func (cgac *CreditGrantApplicationCreate) SetPeriodEnd(t time.Time) *CreditGrantApplicationCreate {
 	cgac.mutation.SetPeriodEnd(t)
+	return cgac
+}
+
+// SetNillablePeriodEnd sets the "period_end" field if the given value is not nil.
+func (cgac *CreditGrantApplicationCreate) SetNillablePeriodEnd(t *time.Time) *CreditGrantApplicationCreate {
+	if t != nil {
+		cgac.SetPeriodEnd(*t)
+	}
 	return cgac
 }
 
@@ -345,12 +361,6 @@ func (cgac *CreditGrantApplicationCreate) check() error {
 	if _, ok := cgac.mutation.ScheduledFor(); !ok {
 		return &ValidationError{Name: "scheduled_for", err: errors.New(`ent: missing required field "CreditGrantApplication.scheduled_for"`)}
 	}
-	if _, ok := cgac.mutation.PeriodStart(); !ok {
-		return &ValidationError{Name: "period_start", err: errors.New(`ent: missing required field "CreditGrantApplication.period_start"`)}
-	}
-	if _, ok := cgac.mutation.PeriodEnd(); !ok {
-		return &ValidationError{Name: "period_end", err: errors.New(`ent: missing required field "CreditGrantApplication.period_end"`)}
-	}
 	if _, ok := cgac.mutation.ApplicationStatus(); !ok {
 		return &ValidationError{Name: "application_status", err: errors.New(`ent: missing required field "CreditGrantApplication.application_status"`)}
 	}
@@ -460,11 +470,11 @@ func (cgac *CreditGrantApplicationCreate) createSpec() (*CreditGrantApplication,
 	}
 	if value, ok := cgac.mutation.PeriodStart(); ok {
 		_spec.SetField(creditgrantapplication.FieldPeriodStart, field.TypeTime, value)
-		_node.PeriodStart = value
+		_node.PeriodStart = &value
 	}
 	if value, ok := cgac.mutation.PeriodEnd(); ok {
 		_spec.SetField(creditgrantapplication.FieldPeriodEnd, field.TypeTime, value)
-		_node.PeriodEnd = value
+		_node.PeriodEnd = &value
 	}
 	if value, ok := cgac.mutation.ApplicationStatus(); ok {
 		_spec.SetField(creditgrantapplication.FieldApplicationStatus, field.TypeString, value)

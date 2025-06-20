@@ -869,6 +869,16 @@ func PeriodStartLTE(v time.Time) predicate.CreditGrantApplication {
 	return predicate.CreditGrantApplication(sql.FieldLTE(FieldPeriodStart, v))
 }
 
+// PeriodStartIsNil applies the IsNil predicate on the "period_start" field.
+func PeriodStartIsNil() predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldIsNull(FieldPeriodStart))
+}
+
+// PeriodStartNotNil applies the NotNil predicate on the "period_start" field.
+func PeriodStartNotNil() predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldNotNull(FieldPeriodStart))
+}
+
 // PeriodEndEQ applies the EQ predicate on the "period_end" field.
 func PeriodEndEQ(v time.Time) predicate.CreditGrantApplication {
 	return predicate.CreditGrantApplication(sql.FieldEQ(FieldPeriodEnd, v))
@@ -907,6 +917,16 @@ func PeriodEndLT(v time.Time) predicate.CreditGrantApplication {
 // PeriodEndLTE applies the LTE predicate on the "period_end" field.
 func PeriodEndLTE(v time.Time) predicate.CreditGrantApplication {
 	return predicate.CreditGrantApplication(sql.FieldLTE(FieldPeriodEnd, v))
+}
+
+// PeriodEndIsNil applies the IsNil predicate on the "period_end" field.
+func PeriodEndIsNil() predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldIsNull(FieldPeriodEnd))
+}
+
+// PeriodEndNotNil applies the NotNil predicate on the "period_end" field.
+func PeriodEndNotNil() predicate.CreditGrantApplication {
+	return predicate.CreditGrantApplication(sql.FieldNotNull(FieldPeriodEnd))
 }
 
 // ApplicationStatusEQ applies the EQ predicate on the "application_status" field.

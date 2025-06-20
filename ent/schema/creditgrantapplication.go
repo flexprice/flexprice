@@ -51,9 +51,13 @@ func (CreditGrantApplication) Fields() []ent.Field {
 			Nillable(),
 
 		// Billing period context
-		field.Time("period_start"),
+		field.Time("period_start").
+			Nillable().
+			Optional(),
 
-		field.Time("period_end"),
+		field.Time("period_end").
+			Nillable().
+			Optional(),
 
 		// Application details
 		field.String("application_status").

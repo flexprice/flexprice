@@ -60,8 +60,8 @@ func (r *creditGrantApplicationRepository) Create(ctx context.Context, a *domain
 		SetCreditGrantID(a.CreditGrantID).
 		SetSubscriptionID(a.SubscriptionID).
 		SetScheduledFor(a.ScheduledFor).
-		SetPeriodStart(a.PeriodStart).
-		SetPeriodEnd(a.PeriodEnd).
+		SetPeriodStart(lo.FromPtr(a.PeriodStart)).
+		SetPeriodEnd(lo.FromPtr(a.PeriodEnd)).
 		SetApplicationStatus(a.ApplicationStatus).
 		SetCreditsApplied(a.CreditsApplied).
 		SetApplicationReason(a.ApplicationReason).
@@ -275,8 +275,8 @@ func (r *creditGrantApplicationRepository) Update(ctx context.Context, a *domain
 		).
 		SetStatus(string(a.Status)).
 		SetScheduledFor(a.ScheduledFor).
-		SetPeriodStart(a.PeriodStart).
-		SetPeriodEnd(a.PeriodEnd).
+		SetPeriodStart(lo.FromPtr(a.PeriodStart)).
+		SetPeriodEnd(lo.FromPtr(a.PeriodEnd)).
 		SetApplicationStatus(a.ApplicationStatus).
 		SetCreditsApplied(a.CreditsApplied).
 		SetSubscriptionStatusAtApplication(a.SubscriptionStatusAtApplication).

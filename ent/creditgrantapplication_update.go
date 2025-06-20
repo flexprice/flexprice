@@ -118,6 +118,12 @@ func (cgau *CreditGrantApplicationUpdate) SetNillablePeriodStart(t *time.Time) *
 	return cgau
 }
 
+// ClearPeriodStart clears the value of the "period_start" field.
+func (cgau *CreditGrantApplicationUpdate) ClearPeriodStart() *CreditGrantApplicationUpdate {
+	cgau.mutation.ClearPeriodStart()
+	return cgau
+}
+
 // SetPeriodEnd sets the "period_end" field.
 func (cgau *CreditGrantApplicationUpdate) SetPeriodEnd(t time.Time) *CreditGrantApplicationUpdate {
 	cgau.mutation.SetPeriodEnd(t)
@@ -129,6 +135,12 @@ func (cgau *CreditGrantApplicationUpdate) SetNillablePeriodEnd(t *time.Time) *Cr
 	if t != nil {
 		cgau.SetPeriodEnd(*t)
 	}
+	return cgau
+}
+
+// ClearPeriodEnd clears the value of the "period_end" field.
+func (cgau *CreditGrantApplicationUpdate) ClearPeriodEnd() *CreditGrantApplicationUpdate {
+	cgau.mutation.ClearPeriodEnd()
 	return cgau
 }
 
@@ -320,8 +332,14 @@ func (cgau *CreditGrantApplicationUpdate) sqlSave(ctx context.Context) (n int, e
 	if value, ok := cgau.mutation.PeriodStart(); ok {
 		_spec.SetField(creditgrantapplication.FieldPeriodStart, field.TypeTime, value)
 	}
+	if cgau.mutation.PeriodStartCleared() {
+		_spec.ClearField(creditgrantapplication.FieldPeriodStart, field.TypeTime)
+	}
 	if value, ok := cgau.mutation.PeriodEnd(); ok {
 		_spec.SetField(creditgrantapplication.FieldPeriodEnd, field.TypeTime, value)
+	}
+	if cgau.mutation.PeriodEndCleared() {
+		_spec.ClearField(creditgrantapplication.FieldPeriodEnd, field.TypeTime)
 	}
 	if value, ok := cgau.mutation.ApplicationStatus(); ok {
 		_spec.SetField(creditgrantapplication.FieldApplicationStatus, field.TypeString, value)
@@ -458,6 +476,12 @@ func (cgauo *CreditGrantApplicationUpdateOne) SetNillablePeriodStart(t *time.Tim
 	return cgauo
 }
 
+// ClearPeriodStart clears the value of the "period_start" field.
+func (cgauo *CreditGrantApplicationUpdateOne) ClearPeriodStart() *CreditGrantApplicationUpdateOne {
+	cgauo.mutation.ClearPeriodStart()
+	return cgauo
+}
+
 // SetPeriodEnd sets the "period_end" field.
 func (cgauo *CreditGrantApplicationUpdateOne) SetPeriodEnd(t time.Time) *CreditGrantApplicationUpdateOne {
 	cgauo.mutation.SetPeriodEnd(t)
@@ -469,6 +493,12 @@ func (cgauo *CreditGrantApplicationUpdateOne) SetNillablePeriodEnd(t *time.Time)
 	if t != nil {
 		cgauo.SetPeriodEnd(*t)
 	}
+	return cgauo
+}
+
+// ClearPeriodEnd clears the value of the "period_end" field.
+func (cgauo *CreditGrantApplicationUpdateOne) ClearPeriodEnd() *CreditGrantApplicationUpdateOne {
+	cgauo.mutation.ClearPeriodEnd()
 	return cgauo
 }
 
@@ -690,8 +720,14 @@ func (cgauo *CreditGrantApplicationUpdateOne) sqlSave(ctx context.Context) (_nod
 	if value, ok := cgauo.mutation.PeriodStart(); ok {
 		_spec.SetField(creditgrantapplication.FieldPeriodStart, field.TypeTime, value)
 	}
+	if cgauo.mutation.PeriodStartCleared() {
+		_spec.ClearField(creditgrantapplication.FieldPeriodStart, field.TypeTime)
+	}
 	if value, ok := cgauo.mutation.PeriodEnd(); ok {
 		_spec.SetField(creditgrantapplication.FieldPeriodEnd, field.TypeTime, value)
+	}
+	if cgauo.mutation.PeriodEndCleared() {
+		_spec.ClearField(creditgrantapplication.FieldPeriodEnd, field.TypeTime)
 	}
 	if value, ok := cgauo.mutation.ApplicationStatus(); ok {
 		_spec.SetField(creditgrantapplication.FieldApplicationStatus, field.TypeString, value)

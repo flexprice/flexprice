@@ -3688,7 +3688,7 @@ func (m *CreditGrantApplicationMutation) PeriodStart() (r time.Time, exists bool
 // OldPeriodStart returns the old "period_start" field's value of the CreditGrantApplication entity.
 // If the CreditGrantApplication object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *CreditGrantApplicationMutation) OldPeriodStart(ctx context.Context) (v time.Time, err error) {
+func (m *CreditGrantApplicationMutation) OldPeriodStart(ctx context.Context) (v *time.Time, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldPeriodStart is only allowed on UpdateOne operations")
 	}
@@ -3702,9 +3702,22 @@ func (m *CreditGrantApplicationMutation) OldPeriodStart(ctx context.Context) (v 
 	return oldValue.PeriodStart, nil
 }
 
+// ClearPeriodStart clears the value of the "period_start" field.
+func (m *CreditGrantApplicationMutation) ClearPeriodStart() {
+	m.period_start = nil
+	m.clearedFields[creditgrantapplication.FieldPeriodStart] = struct{}{}
+}
+
+// PeriodStartCleared returns if the "period_start" field was cleared in this mutation.
+func (m *CreditGrantApplicationMutation) PeriodStartCleared() bool {
+	_, ok := m.clearedFields[creditgrantapplication.FieldPeriodStart]
+	return ok
+}
+
 // ResetPeriodStart resets all changes to the "period_start" field.
 func (m *CreditGrantApplicationMutation) ResetPeriodStart() {
 	m.period_start = nil
+	delete(m.clearedFields, creditgrantapplication.FieldPeriodStart)
 }
 
 // SetPeriodEnd sets the "period_end" field.
@@ -3724,7 +3737,7 @@ func (m *CreditGrantApplicationMutation) PeriodEnd() (r time.Time, exists bool) 
 // OldPeriodEnd returns the old "period_end" field's value of the CreditGrantApplication entity.
 // If the CreditGrantApplication object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *CreditGrantApplicationMutation) OldPeriodEnd(ctx context.Context) (v time.Time, err error) {
+func (m *CreditGrantApplicationMutation) OldPeriodEnd(ctx context.Context) (v *time.Time, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldPeriodEnd is only allowed on UpdateOne operations")
 	}
@@ -3738,9 +3751,22 @@ func (m *CreditGrantApplicationMutation) OldPeriodEnd(ctx context.Context) (v ti
 	return oldValue.PeriodEnd, nil
 }
 
+// ClearPeriodEnd clears the value of the "period_end" field.
+func (m *CreditGrantApplicationMutation) ClearPeriodEnd() {
+	m.period_end = nil
+	m.clearedFields[creditgrantapplication.FieldPeriodEnd] = struct{}{}
+}
+
+// PeriodEndCleared returns if the "period_end" field was cleared in this mutation.
+func (m *CreditGrantApplicationMutation) PeriodEndCleared() bool {
+	_, ok := m.clearedFields[creditgrantapplication.FieldPeriodEnd]
+	return ok
+}
+
 // ResetPeriodEnd resets all changes to the "period_end" field.
 func (m *CreditGrantApplicationMutation) ResetPeriodEnd() {
 	m.period_end = nil
+	delete(m.clearedFields, creditgrantapplication.FieldPeriodEnd)
 }
 
 // SetApplicationStatus sets the "application_status" field.
@@ -4489,6 +4515,12 @@ func (m *CreditGrantApplicationMutation) ClearedFields() []string {
 	if m.FieldCleared(creditgrantapplication.FieldAppliedAt) {
 		fields = append(fields, creditgrantapplication.FieldAppliedAt)
 	}
+	if m.FieldCleared(creditgrantapplication.FieldPeriodStart) {
+		fields = append(fields, creditgrantapplication.FieldPeriodStart)
+	}
+	if m.FieldCleared(creditgrantapplication.FieldPeriodEnd) {
+		fields = append(fields, creditgrantapplication.FieldPeriodEnd)
+	}
 	if m.FieldCleared(creditgrantapplication.FieldFailureReason) {
 		fields = append(fields, creditgrantapplication.FieldFailureReason)
 	}
@@ -4520,6 +4552,12 @@ func (m *CreditGrantApplicationMutation) ClearField(name string) error {
 		return nil
 	case creditgrantapplication.FieldAppliedAt:
 		m.ClearAppliedAt()
+		return nil
+	case creditgrantapplication.FieldPeriodStart:
+		m.ClearPeriodStart()
+		return nil
+	case creditgrantapplication.FieldPeriodEnd:
+		m.ClearPeriodEnd()
 		return nil
 	case creditgrantapplication.FieldFailureReason:
 		m.ClearFailureReason()
