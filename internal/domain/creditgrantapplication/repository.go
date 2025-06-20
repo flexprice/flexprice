@@ -18,7 +18,8 @@ type Repository interface {
 	Delete(ctx context.Context, application *CreditGrantApplication) error
 	ExistsForPeriod(ctx context.Context, grantID, subscriptionID string, periodStart, periodEnd time.Time) (bool, error)
 
-	// Cronjobs (this runs every 15 mins)
+	// This runs every 15 mins
+	// NOTE: THIS IS ONLY FOR CRON JOB SHOULD NOT BE USED ELSEWHERE IN OTHER WORKFLOWS
 	FindAllScheduledApplications(ctx context.Context) ([]*CreditGrantApplication, error)
 
 	// FindByIdempotencyKey finds a credit grant application by idempotency key

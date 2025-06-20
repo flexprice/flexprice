@@ -40,6 +40,8 @@ type CreditGrantService interface {
 	// GetCreditGrantsBySubscription retrieves credit grants for a specific subscription
 	GetCreditGrantsBySubscription(ctx context.Context, subscriptionID string) (*dto.ListCreditGrantsResponse, error)
 
+	// NOTE: THIS IS ONLY FOR CRON JOB SHOULD NOT BE USED ELSEWHERE IN OTHER WORKFLOWS
+	// This runs every 15 mins
 	// ProcessScheduledCreditGrantApplications processes scheduled credit grant applications
 	ProcessScheduledCreditGrantApplications(ctx context.Context) (*dto.ProcessScheduledCreditGrantApplicationsResponse, error)
 
