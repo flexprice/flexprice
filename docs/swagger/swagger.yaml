@@ -7954,7 +7954,7 @@ paths:
       summary: Get wallet transactions
       tags:
       - Wallets
-  /webhooks/stripe:
+  /webhooks/stripe/{tenant_id}/{environment_id}:
     post:
       consumes:
       - application/json

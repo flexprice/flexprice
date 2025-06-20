@@ -6454,7 +6454,31 @@
                 }
             }
         },
-        "/webhooks/stripe": {
+        "/webhooks/stripe/test": {
+            "get": {
+                "description": "Test endpoint to validate webhook configuration and connectivity",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "webhooks"
+                ],
+                "summary": "Test Stripe webhook endpoint",
+                "responses": {
+                    "200": {
+                        "description": "Test successful",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/webhooks/stripe/{tenant_id}/{environment_id}": {
             "post": {
                 "description": "Receives and processes Stripe webhook events, specifically customer.created events",
                 "consumes": [
@@ -6514,30 +6538,6 @@
                         "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/webhookDto.StripeWebhookResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/webhooks/stripe/test": {
-            "get": {
-                "description": "Test endpoint to validate webhook configuration and connectivity",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "webhooks"
-                ],
-                "summary": "Test Stripe webhook endpoint",
-                "responses": {
-                    "200": {
-                        "description": "Test successful",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
                         }
                     }
                 }
