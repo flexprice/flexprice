@@ -8,10 +8,6 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-const (
-	Idx_tenant_environment_credit_note_id_invoice_line_item_id_unique = "idx_tenant_environment_credit_note_id_invoice_line_item_id_unique"
-)
-
 // CreditNoteLineItem holds the schema definition for the CreditNoteLineItem entity.
 type CreditNoteLineItem struct {
 	ent.Schema
