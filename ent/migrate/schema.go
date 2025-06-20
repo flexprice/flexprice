@@ -169,6 +169,75 @@ var (
 		Columns:    CreditGrantApplicationsColumns,
 		PrimaryKey: []*schema.Column{CreditGrantApplicationsColumns[0]},
 	}
+	// CreditNotesColumns holds the columns for the "credit_notes" table.
+	CreditNotesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "invoice_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "credit_note_number", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "credit_note_status", Type: field.TypeString, Default: "DRAFT", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "credit_note_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "refund_status", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "reason", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "memo", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "currency", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "idempotency_key", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(100)"}},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
+	}
+	// CreditNotesTable holds the schema information for the "credit_notes" table.
+	CreditNotesTable = &schema.Table{
+		Name:       "credit_notes",
+		Columns:    CreditNotesColumns,
+		PrimaryKey: []*schema.Column{CreditNotesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "idx_tenant_environment_credit_note_number_unique",
+				Unique:  true,
+				Columns: []*schema.Column{CreditNotesColumns[1], CreditNotesColumns[7], CreditNotesColumns[9]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "credit_note_number IS NOT NULL AND credit_note_number != '' AND status = 'published'",
+				},
+			},
+		},
+	}
+	// CreditNoteLineItemsColumns holds the columns for the "credit_note_line_items" table.
+	CreditNoteLineItemsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "invoice_line_item_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "display_name", Type: field.TypeString},
+		{Name: "amount", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "quantity", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "currency", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(10)"}},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
+		{Name: "credit_note_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+	}
+	// CreditNoteLineItemsTable holds the schema information for the "credit_note_line_items" table.
+	CreditNoteLineItemsTable = &schema.Table{
+		Name:       "credit_note_line_items",
+		Columns:    CreditNoteLineItemsColumns,
+		PrimaryKey: []*schema.Column{CreditNoteLineItemsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "credit_note_line_items_credit_notes_line_items",
+				Columns:    []*schema.Column{CreditNoteLineItemsColumns[14]},
+				RefColumns: []*schema.Column{CreditNotesColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+	}
 	// CustomersColumns holds the columns for the "customers" table.
 	CustomersColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -1320,6 +1389,8 @@ var (
 		BillingSequencesTable,
 		CreditGrantsTable,
 		CreditGrantApplicationsTable,
+		CreditNotesTable,
+		CreditNoteLineItemsTable,
 		CustomersTable,
 		EntitlementsTable,
 		EnvironmentsTable,
@@ -1349,6 +1420,7 @@ var (
 func init() {
 	CreditGrantsTable.ForeignKeys[0].RefTable = PlansTable
 	CreditGrantsTable.ForeignKeys[1].RefTable = SubscriptionsTable
+	CreditNoteLineItemsTable.ForeignKeys[0].RefTable = CreditNotesTable
 	EntitlementsTable.ForeignKeys[0].RefTable = PlansTable
 	InvoiceLineItemsTable.ForeignKeys[0].RefTable = InvoicesTable
 	PaymentAttemptsTable.ForeignKeys[0].RefTable = PaymentsTable

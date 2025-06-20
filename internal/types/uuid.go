@@ -47,6 +47,8 @@ const (
 	UUID_PREFIX_TASK                        = "task"
 	UUID_PREFIX_SECRET                      = "secret"
 	UUID_PREFIX_CREDIT_GRANT                = "cg"
+	UUID_PREFIX_CREDIT_NOTE                 = "cn"
+	UUID_PREFIX_CREDIT_NOTE_LINE_ITEM       = "cn_line"
 
 	UUID_PREFIX_WEBHOOK_EVENT = "webhook"
 )

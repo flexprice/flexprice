@@ -18,6 +18,12 @@ type CreditGrant func(*sql.Selector)
 // CreditGrantApplication is the predicate function for creditgrantapplication builders.
 type CreditGrantApplication func(*sql.Selector)
 
+// CreditNote is the predicate function for creditnote builders.
+type CreditNote func(*sql.Selector)
+
+// CreditNoteLineItem is the predicate function for creditnotelineitem builders.
+type CreditNoteLineItem func(*sql.Selector)
+
 // Customer is the predicate function for customer builders.
 type Customer func(*sql.Selector)
 
