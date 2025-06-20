@@ -4,6 +4,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/pubsub"
+	"github.com/flexprice/flexprice/internal/pubsub/kafka"
 	"github.com/flexprice/flexprice/internal/pubsub/memory"
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/types"
@@ -69,7 +70,13 @@ func providePubSub(
 	case types.MemoryPubSub:
 		return memory.NewPubSub(cfg, logger)
 	case types.KafkaPubSub:
-		// TODO: implement
+		pubsub, err := kafka.NewPubSubFromConfig(cfg, logger, cfg.Webhook.ConsumerGroup)
+		if err != nil {
+			logger.Fatalw("failed to create kafka pubsub for webhooks", "error", err)
+		}
+		return pubsub
+	default:
+		logger.Fatalw("unsupported webhook pubsub type", "type", cfg.Webhook.PubSub)
 	}
-	panic("unsupported pubsub type")
+	return nil
 }

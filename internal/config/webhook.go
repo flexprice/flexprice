@@ -10,7 +10,8 @@ import (
 type Webhook struct {
 	Enabled         bool                           `mapstructure:"enabled"`
 	Topic           string                         `mapstructure:"topic" default:"webhooks"`
-	PubSub          types.PubSubType               `mapstructure:"pubsub" default:"memory"`
+	PubSub          types.PubSubType               `mapstructure:"pubsub" default:"kafka"`
+	ConsumerGroup   string                         `mapstructure:"consumer_group" default:"webhook-consumer"`
 	MaxRetries      int                            `mapstructure:"max_retries" default:"3"`
 	InitialInterval time.Duration                  `mapstructure:"initial_interval" default:"1s"`
 	MaxInterval     time.Duration                  `mapstructure:"max_interval" default:"10s"`

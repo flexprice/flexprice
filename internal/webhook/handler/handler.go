@@ -121,6 +121,8 @@ func (h *handler) processMessage(msg *message.Message) error {
 
 	// set tenant_id in context
 	ctx = context.WithValue(ctx, types.CtxTenantID, event.TenantID)
+	ctx = context.WithValue(ctx, types.CtxEnvironmentID, event.EnvironmentID)
+	ctx = context.WithValue(ctx, types.CtxUserID, event.UserID)
 	webHookPayload, err := builder.BuildPayload(ctx, event.EventName, event.Payload)
 	if err != nil {
 		return err

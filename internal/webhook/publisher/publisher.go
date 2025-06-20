@@ -51,6 +51,8 @@ func (p *webhookPublisher) PublishWebhook(ctx context.Context, event *types.Webh
 
 	msg := message.NewMessage(messageID, payload)
 	msg.Metadata.Set("tenant_id", event.TenantID)
+	msg.Metadata.Set("environment_id", event.EnvironmentID)
+	msg.Metadata.Set("user_id", event.UserID)
 
 	p.logger.Debugw("publishing webhook event",
 		"event_id", event.ID,

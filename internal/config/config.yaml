@@ -71,7 +71,8 @@ logging:
 webhook:
   enabled: true
   topic: "webhook_events"
-  pubsub: "memory"
+  pubsub: "kafka"
+  consumer_group: "webhook-consumer-local"
   max_retries: 3
   initial_interval: 1s
   max_interval: 10s

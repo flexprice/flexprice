@@ -1858,11 +1858,13 @@ func (s *subscriptionService) publishInternalWebhookEvent(ctx context.Context, e
 	}
 
 	webhookEvent := &types.WebhookEvent{
-		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WEBHOOK_EVENT),
-		EventName: eventName,
-		TenantID:  types.GetTenantID(ctx),
-		Timestamp: time.Now().UTC(),
-		Payload:   json.RawMessage(webhookPayload),
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WEBHOOK_EVENT),
+		EventName:     eventName,
+		TenantID:      types.GetTenantID(ctx),
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		UserID:        types.GetUserID(ctx),
+		Timestamp:     time.Now().UTC(),
+		Payload:       json.RawMessage(webhookPayload),
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
 		s.Logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
