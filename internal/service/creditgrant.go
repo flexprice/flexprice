@@ -224,6 +224,12 @@ func (s *creditGrantService) GetCreditGrantsBySubscription(ctx context.Context, 
 // ApplyCreditGrant applies a credit grant to a subscription and creates CGA tracking records
 // This method handles both one-time and recurring credit grants
 func (s *creditGrantService) ApplyCreditGrant(ctx context.Context, grant *creditgrant.CreditGrant, subscription *subscription.Subscription, metadata types.Metadata) error {
+
+	// Validate credit grant
+	if err := grant.Validate(); err != nil {
+		return err
+	}
+
 	// Calculate credit grant period based on cadence
 	var periodStart, periodEnd time.Time
 	var err error
