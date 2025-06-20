@@ -728,8 +728,9 @@ func (s *creditGrantService) deferCreditGrantApplication(
 	backoffMinutes := 30 * (1 << min(cga.RetryCount, 4))
 	nextRetry := time.Now().UTC().Add(time.Duration(backoffMinutes) * time.Minute)
 
-	// Update CGA with deferred status and next retry time
+	// Update CGA with deferred status and next retry time and increment retry count so that next time it will be deferred for longer
 	cga.ScheduledFor = nextRetry
+	cga.RetryCount++
 
 	err := s.CreditGrantApplicationRepo.Update(ctx, cga)
 	if err != nil {
