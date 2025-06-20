@@ -85,8 +85,8 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 	webhooks := router.Group("/webhooks")
 	webhooks.Use(middleware.ErrorHandler())
 	{
-		// Stripe webhook endpoints
-		webhooks.POST("/stripe", handlers.StripeWebhook.ReceiveWebhook)
+		// New dynamic endpoint supports tenant & environment path params
+		webhooks.POST("/stripe/:tenant_id/:environment_id", handlers.StripeWebhook.ReceiveWebhook)
 		webhooks.GET("/stripe/test", handlers.StripeWebhook.TestWebhook)
 	}
 

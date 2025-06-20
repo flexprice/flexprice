@@ -11,7 +11,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/temporal/models"
-	"github.com/google/uuid"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // StripeSyncActivities implements Stripe synchronization activities
@@ -230,7 +230,7 @@ func (a *StripeSyncActivities) SyncToStripeActivity(ctx context.Context, input m
 
 // syncSingleAggregation syncs a single aggregation to Stripe
 func (a *StripeSyncActivities) syncSingleAggregation(ctx context.Context, tenantID, environmentID string, agg models.EventAggregation, windowStart, windowEnd time.Time) models.SyncBatchResult {
-	batchID := uuid.New().String()
+	batchID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_STRIPE_BATCH)
 
 	result := models.SyncBatchResult{
 		BatchID:    batchID,

@@ -1,10 +1,12 @@
 package v1
 
 import (
+	"context"
 	"io"
 	"net/http"
 
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/flexprice/flexprice/internal/webhook/handler"
 	"github.com/gin-gonic/gin"
@@ -40,9 +42,19 @@ func NewStripeWebhookHandler(
 // @Failure 401 {object} webhookDto.StripeWebhookResponse "Unauthorized - invalid signature"
 // @Failure 403 {object} webhookDto.StripeWebhookResponse "Forbidden - webhook not configured"
 // @Failure 500 {object} webhookDto.StripeWebhookResponse "Internal server error"
-// @Router /webhooks/stripe [post]
+// @Router /webhooks/stripe/{tenant_id}/{environment_id} [post]
 func (h *StripeWebhookHandler) ReceiveWebhook(c *gin.Context) {
+	// Extract tenant & environment from path params if provided
+	tenantID := c.Param("tenant_id")
+	environmentID := c.Param("environment_id")
+
 	ctx := c.Request.Context()
+	if tenantID != "" {
+		ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
+	}
+	if environmentID != "" {
+		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
+	}
 
 	// Get the signature from headers
 	signature := c.GetHeader("Stripe-Signature")

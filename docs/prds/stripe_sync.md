@@ -112,8 +112,8 @@ The integration extends FlexPrice's existing clean architecture:
 
 **Actions:**
 
-1. **Create Stripe webhook endpoint** - Add POST `/webhooks/stripe` endpoint with signature validation, tenant identification, and error handling
-2. **Implement Stripe webhook handler** - Add handler for `customer.created` events with metadata parsing, customer lookup/creation, and integration mapping
+1. **Create Stripe webhook endpoint** - Add POST `/webhooks/stripe/{tenant_id}/{environment_id}` endpoint with signature validation, tenant identification through path params, and error handling
+2. **Implement Stripe webhook handler** - Add handler for `customer.created` events; tenant/environment derived from URL path (metadata fallback supported). Include customer lookup/creation and integration mapping
 3. **Create Stripe webhook DTOs** - Define request/response models for Stripe webhook payloads with proper validation
 4. **Register webhook routes** - Add Stripe webhook routes to API router with proper middleware
 5. **Update webhook module** - Register Stripe webhook handler in dependency injection system
@@ -277,7 +277,7 @@ The integration extends FlexPrice's existing clean architecture:
 
 ### Stripe Webhook Endpoint
 
-- `POST /webhooks/stripe` - Receive Stripe webhooks with signature validation
+- `POST /webhooks/stripe/{tenant_id}/{environment_id}` - Receive Stripe webhooks with signature validation and route to the correct tenant
 
 ### Configuration Management
 
@@ -300,7 +300,7 @@ The integration extends FlexPrice's existing clean architecture:
 
 ### Customer Onboarding Flow
 
-1. **Stripe Customer Creation** - Client creates customer in Stripe with metadata: `{external_id: "client_123"}`
+1. **Stripe Customer Creation** - Client creates customer in Stripe (optional metadata `{external_id: "client_123"}`)
 2. **Webhook Processing** - Stripe sends `customer.created` webhook to FlexPrice
 3. **Customer Mapping** - FlexPrice creates/updates customer and integration mapping
 4. **Ready for Events** - Customer is ready to receive usage events

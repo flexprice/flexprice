@@ -128,7 +128,19 @@ func (h *stripeWebhookHandler) handleCustomerCreated(ctx context.Context, event 
 	// Convert to processed customer
 	processedCustomer := customerData.ToProcessedCustomer()
 
-	// Validate processed customer data
+	// Fallback: obtain tenant & environment from context if missing
+	if processedCustomer.TenantID == "" {
+		if v, ok := ctx.Value(types.CtxTenantID).(string); ok {
+			processedCustomer.TenantID = v
+		}
+	}
+	if processedCustomer.EnvironmentID == "" {
+		if v, ok := ctx.Value(types.CtxEnvironmentID).(string); ok {
+			processedCustomer.EnvironmentID = v
+		}
+	}
+
+	// Validate processed customer data (after filling context values)
 	if err := processedCustomer.Validate(); err != nil {
 		h.logger.Errorw("invalid customer data from Stripe webhook",
 			"error", err,
@@ -138,17 +150,15 @@ func (h *stripeWebhookHandler) handleCustomerCreated(ctx context.Context, event 
 		return webhookDto.NewStripeWebhookErrorResponse("Invalid customer data"), err
 	}
 
-	// Validate that required tenant and environment metadata is present
+	// Ensure tenant and environment are present now
 	if processedCustomer.TenantID == "" || processedCustomer.EnvironmentID == "" {
-		h.logger.Errorw("missing required metadata in Stripe customer",
+		h.logger.Errorw("tenant or environment not specified via path or metadata",
 			"stripe_customer_id", customerData.ID,
-			"tenant_id", processedCustomer.TenantID,
-			"environment_id", processedCustomer.EnvironmentID,
 			"event_id", event.ID,
 		)
-		return webhookDto.NewStripeWebhookErrorResponse("Missing required tenant_id or environment_id in customer metadata"),
-			ierr.NewError("missing required metadata").
-				WithHint("Stripe customer must have tenant_id and environment_id in metadata").
+		return webhookDto.NewStripeWebhookErrorResponse("Missing tenant or environment identification"),
+			ierr.NewError("missing tenant/environment identification").
+				WithHint("Provide tenant_id and environment_id either via URL path or customer metadata").
 				Mark(ierr.ErrValidation)
 	}
 
@@ -171,7 +181,9 @@ func (h *stripeWebhookHandler) handleCustomerCreated(ctx context.Context, event 
 	// Extract webhook secret from config
 	webhookSecret := ""
 	if tenantConfig.WebhookConfig != nil {
-		if secret, ok := tenantConfig.WebhookConfig["webhook_secret"].(string); ok {
+		if secret, ok := tenantConfig.WebhookConfig["secret"].(string); ok {
+			webhookSecret = secret
+		} else if secret, ok := tenantConfig.WebhookConfig["webhook_secret"].(string); ok { // backward compatibility
 			webhookSecret = secret
 		}
 	}

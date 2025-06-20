@@ -129,6 +129,14 @@ func main() {
 			repository.NewTaskRepository,
 			repository.NewSecretRepository,
 			repository.NewCreditGrantRepository,
+
+			// Integration Repositories
+			repository.NewCustomerIntegrationMappingRepository,
+			repository.NewStripeSyncBatchRepository,
+			repository.NewStripeTenantConfigRepository,
+			repository.NewMeterProviderMappingRepository,
+			repository.NewStripeClientRepository,
+
 			// PubSub
 			pubsubRouter.NewRouter,
 

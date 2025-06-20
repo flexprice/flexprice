@@ -71,8 +71,8 @@ type ProcessedStripeCustomer struct {
 	Email            string            `json:"email"`
 	Name             string            `json:"name"`
 	Metadata         map[string]string `json:"metadata"`
-	TenantID         string            `json:"tenant_id" validate:"required"`
-	EnvironmentID    string            `json:"environment_id" validate:"required"`
+	TenantID         string            `json:"tenant_id" validate:"omitempty"`
+	EnvironmentID    string            `json:"environment_id" validate:"omitempty"`
 	CreatedAt        time.Time         `json:"created_at"`
 }
 
