@@ -31,6 +31,7 @@ import (
 	"github.com/flexprice/flexprice/internal/typst"
 	"github.com/flexprice/flexprice/internal/validator"
 	"github.com/flexprice/flexprice/internal/webhook"
+	whandler "github.com/flexprice/flexprice/internal/webhook/handler"
 	"go.uber.org/fx"
 
 	lambdaEvents "github.com/aws/aws-lambda-go/events"
@@ -226,6 +227,7 @@ func provideHandlers(
 	onboardingService service.OnboardingService,
 	billingService service.BillingService,
 	creditGrantService service.CreditGrantService,
+	stripeWebhookHandler whandler.StripeWebhookHandler,
 ) api.Handlers {
 	return api.Handlers{
 		Events:            v1.NewEventsHandler(eventService, eventPostProcessingService, logger),
@@ -251,6 +253,7 @@ func provideHandlers(
 		CronSubscription:  cron.NewSubscriptionHandler(subscriptionService, temporalService, logger),
 		CronWallet:        cron.NewWalletCronHandler(logger, temporalService, walletService, tenantService),
 		CreditGrant:       v1.NewCreditGrantHandler(creditGrantService, logger),
+		StripeWebhook:     v1.NewStripeWebhookHandler(stripeWebhookHandler, logger),
 	}
 }
 

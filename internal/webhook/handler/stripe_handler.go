@@ -98,10 +98,22 @@ func (h *stripeWebhookHandler) ProcessWebhook(ctx context.Context, rawPayload []
 	// Handle different event types
 	switch {
 	case event.IsCustomerCreated():
+		h.logger.Infow("processing customer.created webhook",
+			"event_id", event.ID,
+			"event_type", event.Type,
+		)
 		return h.handleCustomerCreated(ctx, &event, rawPayload, signature)
 	case event.IsCustomerUpdated():
+		h.logger.Infow("processing customer.updated webhook",
+			"event_id", event.ID,
+			"event_type", event.Type,
+		)
 		return h.handleCustomerUpdated(ctx, &event)
 	case event.IsCustomerDeleted():
+		h.logger.Infow("processing customer.deleted webhook",
+			"event_id", event.ID,
+			"event_type", event.Type,
+		)
 		return h.handleCustomerDeleted(ctx, &event)
 	default:
 		h.logger.Debugw("unsupported Stripe webhook event type",
@@ -125,8 +137,16 @@ func (h *stripeWebhookHandler) handleCustomerCreated(ctx context.Context, event 
 		return webhookDto.NewStripeWebhookErrorResponse("Failed to extract customer data"), err
 	}
 
+	h.logger.Infow("customer data",
+		"customer_data", customerData,
+	)	
+
 	// Convert to processed customer
 	processedCustomer := customerData.ToProcessedCustomer()
+
+	h.logger.Infow("processed customer",
+		"processed_customer", processedCustomer,
+	)
 
 	// Fallback: obtain tenant & environment from context if missing
 	if processedCustomer.TenantID == "" {
