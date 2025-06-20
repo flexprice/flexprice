@@ -121,6 +121,12 @@ func FromEnt(c *ent.CreditGrant) *CreditGrant {
 		return nil
 	}
 
+	var period *types.CreditGrantPeriod
+	if c.Period != nil {
+		p := types.CreditGrantPeriod(*c.Period)
+		period = &p
+	}
+
 	return &CreditGrant{
 		ID:                     c.ID,
 		Name:                   c.Name,
@@ -130,7 +136,7 @@ func FromEnt(c *ent.CreditGrant) *CreditGrant {
 		Credits:                c.Credits,
 		Currency:               c.Currency,
 		Cadence:                types.CreditGrantCadence(c.Cadence),
-		Period:                 c.Period,
+		Period:                 period,
 		PeriodCount:            c.PeriodCount,
 		Priority:               c.Priority,
 		ExpirationType:         types.CreditGrantExpiryType(c.ExpirationType),
