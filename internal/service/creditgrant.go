@@ -325,20 +325,27 @@ func (s *creditGrantService) applyCreditGrantToWallet(ctx context.Context, grant
 	}
 
 	if grant.ExpirationType == types.CreditGrantExpiryTypeDuration {
-		if grant.ExpirationDurationUnit != nil && grant.ExpirationDuration != nil && *grant.ExpirationDuration > 0 {
-			switch *grant.ExpirationDurationUnit {
+		if grant.ExpirationDurationUnit != nil && grant.ExpirationDuration != nil && lo.FromPtr(grant.ExpirationDuration) > 0 {
+			switch lo.FromPtr(grant.ExpirationDurationUnit) {
 			case types.CreditGrantExpiryDurationUnitDays:
-				expiry := subscription.StartDate.AddDate(0, 0, *grant.ExpirationDuration)
+				expiry := subscription.StartDate.AddDate(0, 0, lo.FromPtr(grant.ExpirationDuration))
 				expiryDate = &expiry
 			case types.CreditGrantExpiryDurationUnitWeeks:
-				expiry := subscription.StartDate.AddDate(0, 0, *grant.ExpirationDuration*7)
+				expiry := subscription.StartDate.AddDate(0, 0, lo.FromPtr(grant.ExpirationDuration)*7)
 				expiryDate = &expiry
 			case types.CreditGrantExpiryDurationUnitMonths:
-				expiry := subscription.StartDate.AddDate(0, *grant.ExpirationDuration, 0)
+				expiry := subscription.StartDate.AddDate(0, lo.FromPtr(grant.ExpirationDuration), 0)
 				expiryDate = &expiry
 			case types.CreditGrantExpiryDurationUnitYears:
-				expiry := subscription.StartDate.AddDate(*grant.ExpirationDuration, 0, 0)
+				expiry := subscription.StartDate.AddDate(lo.FromPtr(grant.ExpirationDuration), 0, 0)
 				expiryDate = &expiry
+			default:
+				return ierr.NewError("invalid expiration duration unit").
+					WithHint("Please provide a valid expiration duration unit").
+					WithReportableDetails(map[string]interface{}{
+						"expiration_duration_unit": grant.ExpirationDurationUnit,
+					}).
+					Mark(ierr.ErrValidation)
 			}
 		}
 	}
