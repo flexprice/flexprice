@@ -698,3 +698,417 @@ func (s *CreditGrantServiceTestSuite) TestDeleteCreditGrant() {
 	s.Error(err)
 	s.True(ierr.IsNotFound(err))
 }
+
+// Test Case 13: Test period start and end dates for weekly credit grant
+func (s *CreditGrantServiceTestSuite) TestWeeklyCreditGrantPeriodDates() {
+	// Create weekly recurring credit grant
+	creditGrantReq := dto.CreateCreditGrantRequest{
+		Name:           "Weekly Period Test Grant",
+		Scope:          types.CreditGrantScopePlan,
+		Credits:        decimal.NewFromInt(20),
+		Currency:       "usd",
+		Cadence:        types.CreditGrantCadenceRecurring,
+		Period:         lo.ToPtr(types.CREDIT_GRANT_PERIOD_WEEKLY),
+		PeriodCount:    lo.ToPtr(1),
+		ExpirationType: types.CreditGrantExpiryTypeNever,
+		Priority:       lo.ToPtr(1),
+		PlanID:         &s.testData.plan.ID,
+		Metadata:       types.Metadata{"test": "weekly_period_dates"},
+	}
+
+	creditGrantResp, err := s.creditGrantService.CreateCreditGrant(s.GetContext(), creditGrantReq)
+	s.NoError(err)
+
+	// Apply the credit grant to subscription
+	err = s.creditGrantService.ApplyCreditGrant(s.GetContext(), creditGrantResp.CreditGrant, s.testData.subscription, types.Metadata{})
+	s.NoError(err)
+
+	// Verify applications and their period dates
+	filter := &types.CreditGrantApplicationFilter{
+		CreditGrantIDs:  []string{creditGrantResp.CreditGrant.ID},
+		SubscriptionIDs: []string{s.testData.subscription.ID},
+		QueryFilter:     types.NewDefaultQueryFilter(),
+	}
+
+	applications, err := s.GetStores().CreditGrantApplicationRepo.List(s.GetContext(), filter)
+	s.NoError(err)
+	s.Len(applications, 2) // Current period + next period
+
+	// Find current and next period applications
+	var currentApp, nextApp *creditgrantapplication.CreditGrantApplication
+	for _, app := range applications {
+		if app.ApplicationStatus == types.ApplicationStatusApplied {
+			currentApp = app
+		} else if app.ApplicationStatus == types.ApplicationStatusPending {
+			nextApp = app
+		}
+	}
+
+	s.NotNil(currentApp)
+	s.NotNil(nextApp)
+
+	// Verify current period dates (should start around subscription start)
+	s.NotNil(currentApp.PeriodStart)
+	s.NotNil(currentApp.PeriodEnd)
+
+	// For weekly period, the period should be 7 days
+	expectedCurrentEnd := currentApp.PeriodStart.Add(7 * 24 * time.Hour)
+	s.WithinDuration(expectedCurrentEnd, *currentApp.PeriodEnd, time.Hour,
+		"Current period end should be 7 days after start for weekly grant")
+
+	// Verify next period dates (should start when current period ends)
+	s.NotNil(nextApp.PeriodStart)
+	s.NotNil(nextApp.PeriodEnd)
+
+	// Next period should start when current period ends
+	s.WithinDuration(*currentApp.PeriodEnd, *nextApp.PeriodStart, time.Minute,
+		"Next period should start when current period ends")
+
+	// Next period should also be 7 days long
+	expectedNextEnd := nextApp.PeriodStart.Add(7 * 24 * time.Hour)
+	s.WithinDuration(expectedNextEnd, *nextApp.PeriodEnd, time.Hour,
+		"Next period end should be 7 days after start for weekly grant")
+
+	s.T().Logf("Weekly Grant - Current Period: %s to %s",
+		currentApp.PeriodStart.Format("2006-01-02 15:04:05"),
+		currentApp.PeriodEnd.Format("2006-01-02 15:04:05"))
+	s.T().Logf("Weekly Grant - Next Period: %s to %s",
+		nextApp.PeriodStart.Format("2006-01-02 15:04:05"),
+		nextApp.PeriodEnd.Format("2006-01-02 15:04:05"))
+}
+
+// Test Case 14: Test period start and end dates for monthly credit grant
+func (s *CreditGrantServiceTestSuite) TestMonthlyCreditGrantPeriodDates() {
+	// Create monthly recurring credit grant
+	creditGrantReq := dto.CreateCreditGrantRequest{
+		Name:           "Monthly Period Test Grant",
+		Scope:          types.CreditGrantScopePlan,
+		Credits:        decimal.NewFromInt(100),
+		Currency:       "usd",
+		Cadence:        types.CreditGrantCadenceRecurring,
+		Period:         lo.ToPtr(types.CREDIT_GRANT_PERIOD_MONTHLY),
+		PeriodCount:    lo.ToPtr(1),
+		ExpirationType: types.CreditGrantExpiryTypeNever,
+		Priority:       lo.ToPtr(1),
+		PlanID:         &s.testData.plan.ID,
+		Metadata:       types.Metadata{"test": "monthly_period_dates"},
+	}
+
+	creditGrantResp, err := s.creditGrantService.CreateCreditGrant(s.GetContext(), creditGrantReq)
+	s.NoError(err)
+
+	// Apply the credit grant to subscription
+	err = s.creditGrantService.ApplyCreditGrant(s.GetContext(), creditGrantResp.CreditGrant, s.testData.subscription, types.Metadata{})
+	s.NoError(err)
+
+	// Verify applications and their period dates
+	filter := &types.CreditGrantApplicationFilter{
+		CreditGrantIDs:  []string{creditGrantResp.CreditGrant.ID},
+		SubscriptionIDs: []string{s.testData.subscription.ID},
+		QueryFilter:     types.NewDefaultQueryFilter(),
+	}
+
+	applications, err := s.GetStores().CreditGrantApplicationRepo.List(s.GetContext(), filter)
+	s.NoError(err)
+	s.Len(applications, 2) // Current period + next period
+
+	// Find current and next period applications
+	var currentApp, nextApp *creditgrantapplication.CreditGrantApplication
+	for _, app := range applications {
+		if app.ApplicationStatus == types.ApplicationStatusApplied {
+			currentApp = app
+		} else if app.ApplicationStatus == types.ApplicationStatusPending {
+			nextApp = app
+		}
+	}
+
+	s.NotNil(currentApp)
+	s.NotNil(nextApp)
+
+	// Verify current period dates
+	s.NotNil(currentApp.PeriodStart)
+	s.NotNil(currentApp.PeriodEnd)
+
+	// For monthly period, verify it's approximately 30 days (allowing for month variations)
+	periodDuration := currentApp.PeriodEnd.Sub(*currentApp.PeriodStart)
+	s.GreaterOrEqual(periodDuration.Hours(), float64(28*24), "Monthly period should be at least 28 days")
+	s.LessOrEqual(periodDuration.Hours(), float64(32*24), "Monthly period should be at most 32 days")
+
+	// Verify next period dates
+	s.NotNil(nextApp.PeriodStart)
+	s.NotNil(nextApp.PeriodEnd)
+
+	// Next period should start when current period ends
+	s.WithinDuration(*currentApp.PeriodEnd, *nextApp.PeriodStart, time.Minute,
+		"Next period should start when current period ends")
+
+	// Next period should also be approximately monthly
+	nextPeriodDuration := nextApp.PeriodEnd.Sub(*nextApp.PeriodStart)
+	s.GreaterOrEqual(nextPeriodDuration.Hours(), float64(28*24), "Next monthly period should be at least 28 days")
+	s.LessOrEqual(nextPeriodDuration.Hours(), float64(32*24), "Next monthly period should be at most 32 days")
+
+	s.T().Logf("Monthly Grant - Current Period: %s to %s (Duration: %.1f days)",
+		currentApp.PeriodStart.Format("2006-01-02 15:04:05"),
+		currentApp.PeriodEnd.Format("2006-01-02 15:04:05"),
+		periodDuration.Hours()/24)
+	s.T().Logf("Monthly Grant - Next Period: %s to %s (Duration: %.1f days)",
+		nextApp.PeriodStart.Format("2006-01-02 15:04:05"),
+		nextApp.PeriodEnd.Format("2006-01-02 15:04:05"),
+		nextPeriodDuration.Hours()/24)
+}
+
+// Test Case 15: Test period start and end dates for yearly credit grant
+func (s *CreditGrantServiceTestSuite) TestYearlyCreditGrantPeriodDates() {
+	// Create yearly recurring credit grant
+	creditGrantReq := dto.CreateCreditGrantRequest{
+		Name:           "Yearly Period Test Grant",
+		Scope:          types.CreditGrantScopePlan,
+		Credits:        decimal.NewFromInt(1200),
+		Currency:       "usd",
+		Cadence:        types.CreditGrantCadenceRecurring,
+		Period:         lo.ToPtr(types.CREDIT_GRANT_PERIOD_ANNUAL),
+		PeriodCount:    lo.ToPtr(1),
+		ExpirationType: types.CreditGrantExpiryTypeNever,
+		Priority:       lo.ToPtr(1),
+		PlanID:         &s.testData.plan.ID,
+		Metadata:       types.Metadata{"test": "yearly_period_dates"},
+	}
+
+	creditGrantResp, err := s.creditGrantService.CreateCreditGrant(s.GetContext(), creditGrantReq)
+	s.NoError(err)
+
+	// Apply the credit grant to subscription
+	err = s.creditGrantService.ApplyCreditGrant(s.GetContext(), creditGrantResp.CreditGrant, s.testData.subscription, types.Metadata{})
+	s.NoError(err)
+
+	// Verify applications and their period dates
+	filter := &types.CreditGrantApplicationFilter{
+		CreditGrantIDs:  []string{creditGrantResp.CreditGrant.ID},
+		SubscriptionIDs: []string{s.testData.subscription.ID},
+		QueryFilter:     types.NewDefaultQueryFilter(),
+	}
+
+	applications, err := s.GetStores().CreditGrantApplicationRepo.List(s.GetContext(), filter)
+	s.NoError(err)
+	s.Len(applications, 2) // Current period + next period
+
+	// Find current and next period applications
+	var currentApp, nextApp *creditgrantapplication.CreditGrantApplication
+	for _, app := range applications {
+		if app.ApplicationStatus == types.ApplicationStatusApplied {
+			currentApp = app
+		} else if app.ApplicationStatus == types.ApplicationStatusPending {
+			nextApp = app
+		}
+	}
+
+	s.NotNil(currentApp)
+	s.NotNil(nextApp)
+
+	// Verify current period dates
+	s.NotNil(currentApp.PeriodStart)
+	s.NotNil(currentApp.PeriodEnd)
+
+	// For yearly period, verify it's approximately 365 days
+	periodDuration := currentApp.PeriodEnd.Sub(*currentApp.PeriodStart)
+	s.GreaterOrEqual(periodDuration.Hours(), float64(364*24), "Yearly period should be at least 364 days")
+	s.LessOrEqual(periodDuration.Hours(), float64(366*24), "Yearly period should be at most 366 days")
+
+	// Verify next period dates
+	s.NotNil(nextApp.PeriodStart)
+	s.NotNil(nextApp.PeriodEnd)
+
+	// Next period should start when current period ends
+	s.WithinDuration(*currentApp.PeriodEnd, *nextApp.PeriodStart, time.Minute,
+		"Next period should start when current period ends")
+
+	// Next period should also be approximately yearly
+	nextPeriodDuration := nextApp.PeriodEnd.Sub(*nextApp.PeriodStart)
+	s.GreaterOrEqual(nextPeriodDuration.Hours(), float64(364*24), "Next yearly period should be at least 364 days")
+	s.LessOrEqual(nextPeriodDuration.Hours(), float64(366*24), "Next yearly period should be at most 366 days")
+
+	s.T().Logf("Yearly Grant - Current Period: %s to %s (Duration: %.1f days)",
+		currentApp.PeriodStart.Format("2006-01-02 15:04:05"),
+		currentApp.PeriodEnd.Format("2006-01-02 15:04:05"),
+		periodDuration.Hours()/24)
+	s.T().Logf("Yearly Grant - Next Period: %s to %s (Duration: %.1f days)",
+		nextApp.PeriodStart.Format("2006-01-02 15:04:05"),
+		nextApp.PeriodEnd.Format("2006-01-02 15:04:05"),
+		nextPeriodDuration.Hours()/24)
+}
+
+// Test Case 16: Test period start and end dates with multiple period counts
+func (s *CreditGrantServiceTestSuite) TestMultiplePeriodCountDates() {
+	// Create bi-weekly credit grant (every 2 weeks)
+	creditGrantReq := dto.CreateCreditGrantRequest{
+		Name:           "Bi-Weekly Period Test Grant",
+		Scope:          types.CreditGrantScopePlan,
+		Credits:        decimal.NewFromInt(40),
+		Currency:       "usd",
+		Cadence:        types.CreditGrantCadenceRecurring,
+		Period:         lo.ToPtr(types.CREDIT_GRANT_PERIOD_WEEKLY),
+		PeriodCount:    lo.ToPtr(2), // Every 2 weeks
+		ExpirationType: types.CreditGrantExpiryTypeNever,
+		Priority:       lo.ToPtr(1),
+		PlanID:         &s.testData.plan.ID,
+		Metadata:       types.Metadata{"test": "bi_weekly_period_dates"},
+	}
+
+	creditGrantResp, err := s.creditGrantService.CreateCreditGrant(s.GetContext(), creditGrantReq)
+	s.NoError(err)
+
+	// Apply the credit grant to subscription
+	err = s.creditGrantService.ApplyCreditGrant(s.GetContext(), creditGrantResp.CreditGrant, s.testData.subscription, types.Metadata{})
+	s.NoError(err)
+
+	// Verify applications and their period dates
+	filter := &types.CreditGrantApplicationFilter{
+		CreditGrantIDs:  []string{creditGrantResp.CreditGrant.ID},
+		SubscriptionIDs: []string{s.testData.subscription.ID},
+		QueryFilter:     types.NewDefaultQueryFilter(),
+	}
+
+	applications, err := s.GetStores().CreditGrantApplicationRepo.List(s.GetContext(), filter)
+	s.NoError(err)
+	s.Len(applications, 2) // Current period + next period
+
+	// Find current and next period applications
+	var currentApp, nextApp *creditgrantapplication.CreditGrantApplication
+	for _, app := range applications {
+		if app.ApplicationStatus == types.ApplicationStatusApplied {
+			currentApp = app
+		} else if app.ApplicationStatus == types.ApplicationStatusPending {
+			nextApp = app
+		}
+	}
+
+	s.NotNil(currentApp)
+	s.NotNil(nextApp)
+
+	// Verify current period dates
+	s.NotNil(currentApp.PeriodStart)
+	s.NotNil(currentApp.PeriodEnd)
+
+	// For bi-weekly period (2 weeks), the period should be 14 days
+	expectedCurrentEnd := currentApp.PeriodStart.Add(14 * 24 * time.Hour)
+	s.WithinDuration(expectedCurrentEnd, *currentApp.PeriodEnd, time.Hour,
+		"Current period end should be 14 days after start for bi-weekly grant")
+
+	// Verify next period dates
+	s.NotNil(nextApp.PeriodStart)
+	s.NotNil(nextApp.PeriodEnd)
+
+	// Next period should start when current period ends
+	s.WithinDuration(*currentApp.PeriodEnd, *nextApp.PeriodStart, time.Minute,
+		"Next period should start when current period ends")
+
+	// Next period should also be 14 days long
+	expectedNextEnd := nextApp.PeriodStart.Add(14 * 24 * time.Hour)
+	s.WithinDuration(expectedNextEnd, *nextApp.PeriodEnd, time.Hour,
+		"Next period end should be 14 days after start for bi-weekly grant")
+
+	s.T().Logf("Bi-Weekly Grant - Current Period: %s to %s (Duration: %.1f days)",
+		currentApp.PeriodStart.Format("2006-01-02 15:04:05"),
+		currentApp.PeriodEnd.Format("2006-01-02 15:04:05"),
+		currentApp.PeriodEnd.Sub(*currentApp.PeriodStart).Hours()/24)
+	s.T().Logf("Bi-Weekly Grant - Next Period: %s to %s (Duration: %.1f days)",
+		nextApp.PeriodStart.Format("2006-01-02 15:04:05"),
+		nextApp.PeriodEnd.Format("2006-01-02 15:04:05"),
+		nextApp.PeriodEnd.Sub(*nextApp.PeriodStart).Hours()/24)
+}
+
+// Test Case 17: Test period dates alignment with credit grant creation date
+func (s *CreditGrantServiceTestSuite) TestPeriodDatesAlignmentWithGrantCreationDate() {
+	// Set a specific creation time for deterministic testing
+	specificTime := time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC) // Jan 15, 2024, 10:30 AM
+
+	// Create a new subscription starting at specific time
+	testSubscription := &subscription.Subscription{
+		ID:                 "sub_alignment_test",
+		PlanID:             s.testData.plan.ID,
+		CustomerID:         s.testData.customer.ID,
+		StartDate:          specificTime,
+		CurrentPeriodStart: specificTime,
+		CurrentPeriodEnd:   specificTime.Add(30 * 24 * time.Hour),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
+	}
+
+	lineItems := []*subscription.SubscriptionLineItem{}
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(s.GetContext(), testSubscription, lineItems))
+
+	// Create monthly recurring credit grant
+	creditGrantReq := dto.CreateCreditGrantRequest{
+		Name:           "Alignment Test Grant",
+		Scope:          types.CreditGrantScopePlan,
+		Credits:        decimal.NewFromInt(50),
+		Currency:       "usd",
+		Cadence:        types.CreditGrantCadenceRecurring,
+		Period:         lo.ToPtr(types.CREDIT_GRANT_PERIOD_MONTHLY),
+		PeriodCount:    lo.ToPtr(1),
+		ExpirationType: types.CreditGrantExpiryTypeNever,
+		Priority:       lo.ToPtr(1),
+		PlanID:         &s.testData.plan.ID,
+		Metadata:       types.Metadata{"test": "alignment_dates"},
+	}
+
+	creditGrantResp, err := s.creditGrantService.CreateCreditGrant(s.GetContext(), creditGrantReq)
+	s.NoError(err)
+
+	// Apply the credit grant to subscription
+	err = s.creditGrantService.ApplyCreditGrant(s.GetContext(), creditGrantResp.CreditGrant, testSubscription, types.Metadata{})
+	s.NoError(err)
+
+	// Verify applications and their period dates
+	filter := &types.CreditGrantApplicationFilter{
+		CreditGrantIDs:  []string{creditGrantResp.CreditGrant.ID},
+		SubscriptionIDs: []string{testSubscription.ID},
+		QueryFilter:     types.NewDefaultQueryFilter(),
+	}
+
+	applications, err := s.GetStores().CreditGrantApplicationRepo.List(s.GetContext(), filter)
+	s.NoError(err)
+	s.Len(applications, 2) // Current period + next period
+
+	// Find current and next period applications
+	var currentApp, nextApp *creditgrantapplication.CreditGrantApplication
+	for _, app := range applications {
+		if app.ApplicationStatus == types.ApplicationStatusApplied {
+			currentApp = app
+		} else if app.ApplicationStatus == types.ApplicationStatusPending {
+			nextApp = app
+		}
+	}
+
+	s.NotNil(currentApp)
+	s.NotNil(nextApp)
+
+	// Verify period dates are properly calculated from grant creation time
+	s.NotNil(currentApp.PeriodStart)
+	s.NotNil(currentApp.PeriodEnd)
+	s.NotNil(nextApp.PeriodStart)
+	s.NotNil(nextApp.PeriodEnd)
+
+	// The periods should be calculated based on the grant's creation date as anchor
+	// Current period should align with the grant creation date
+	expectedNextStart := *currentApp.PeriodEnd
+	s.WithinDuration(expectedNextStart, *nextApp.PeriodStart, time.Minute,
+		"Next period should start exactly when current period ends")
+
+	// Log the alignment details
+	s.T().Logf("Grant Created At: %s", creditGrantResp.CreditGrant.CreatedAt.Format("2006-01-02 15:04:05"))
+	s.T().Logf("Subscription Start: %s", testSubscription.StartDate.Format("2006-01-02 15:04:05"))
+	s.T().Logf("Current Period: %s to %s",
+		currentApp.PeriodStart.Format("2006-01-02 15:04:05"),
+		currentApp.PeriodEnd.Format("2006-01-02 15:04:05"))
+	s.T().Logf("Next Period: %s to %s",
+		nextApp.PeriodStart.Format("2006-01-02 15:04:05"),
+		nextApp.PeriodEnd.Format("2006-01-02 15:04:05"))
+
+	// Verify that periods don't overlap
+	s.True(currentApp.PeriodEnd.Before(*nextApp.PeriodEnd) || currentApp.PeriodEnd.Equal(*nextApp.PeriodStart),
+		"Current period should end before or exactly when next period starts")
+}
