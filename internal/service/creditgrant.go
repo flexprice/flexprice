@@ -548,7 +548,12 @@ func (s *creditGrantService) processScheduledApplication(
 	// Apply the grant
 	// Check subscription state
 	stateHandler := NewSubscriptionStateHandler(subscription.Subscription, creditGrant.CreditGrant)
-	action, reason := stateHandler.DetermineAction()
+	action, err := stateHandler.DetermineAction()
+
+	if err != nil {
+		s.Logger.Errorw("Failed to determine action", "application_id", cga.ID, "error", err)
+		return err
+	}
 
 	switch action {
 	case StateActionApply:
@@ -577,7 +582,7 @@ func (s *creditGrantService) processScheduledApplication(
 
 	case StateActionCancel:
 		// Cancel all future applications for this grant and subscription
-		err := s.cancelFutureCreditGrantApplications(ctx, creditGrant.CreditGrant, subscription.Subscription, cga, reason)
+		err := s.cancelFutureCreditGrantApplications(ctx, creditGrant.CreditGrant, subscription.Subscription, cga)
 		if err != nil {
 			s.Logger.Errorw("Failed to cancel future credit grant applications", "application_id", cga.ID, "error", err)
 			return err
@@ -746,7 +751,6 @@ func (s *creditGrantService) cancelFutureCreditGrantApplications(
 	grant *creditgrant.CreditGrant,
 	subscription *subscription.Subscription,
 	cga *domainCreditGrantApplication.CreditGrantApplication,
-	reason string,
 ) error {
 	// Log cancellation reason
 	s.Logger.Infow("Cancelling future credit grant applications",
@@ -754,11 +758,10 @@ func (s *creditGrantService) cancelFutureCreditGrantApplications(
 		"grant_id", grant.ID,
 		"subscription_id", subscription.ID,
 		"subscription_status", subscription.SubscriptionStatus,
-		"reason", reason)
+		"reason", cga.FailureReason)
 
 	// Update current CGA status to cancelled
 	cga.ApplicationStatus = types.ApplicationStatusCancelled
-	cga.FailureReason = &reason
 
 	err := s.CreditGrantApplicationRepo.Update(ctx, cga)
 	if err != nil {
@@ -786,12 +789,12 @@ func (s *creditGrantService) cancelFutureCreditGrantApplications(
 	// Cancel each future application
 	for _, app := range applications {
 		app.ApplicationStatus = types.ApplicationStatusCancelled
-		app.FailureReason = &reason
 
 		err := s.CreditGrantApplicationRepo.Update(ctx, app)
 		if err != nil {
 			s.Logger.Errorw("Failed to cancel future application", "application_id", app.ID, "error", err)
 			// Continue with other applications even if one fails
+			// As even if one fails to update when it gets picked up by the scheduler it will be retried and cancelled
 			continue
 		}
 

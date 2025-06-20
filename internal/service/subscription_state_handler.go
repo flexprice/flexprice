@@ -3,6 +3,7 @@ package service
 import (
 	"github.com/flexprice/flexprice/internal/domain/creditgrant"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -27,45 +28,50 @@ type SubscriptionStateHandler struct {
 	grant        *creditgrant.CreditGrant
 }
 
-func (h *SubscriptionStateHandler) DetermineAction() (StateAction, string) {
+func (h *SubscriptionStateHandler) DetermineAction() (StateAction, error) {
 	switch h.subscription.SubscriptionStatus {
 	case types.SubscriptionStatusActive:
-		return StateActionApply, "subscription is active"
+		return StateActionApply, nil
 
 	case types.SubscriptionStatusTrialing:
 		// Check if grant should apply during trial period
 		if h.shouldApplyDuringTrial() {
-			return StateActionApply, "subscription is in trial and credits are enabled for trial period"
+			return StateActionApply, nil
 		}
-		return StateActionDefer, "subscription is in trial and credits are not enabled for trial period"
+		return StateActionDefer, nil
 
 	case types.SubscriptionStatusPastDue:
 		// For past due, we defer rather than skip to allow recovery
-		return StateActionDefer, "subscription is past due, deferring until payment is resolved"
+		return StateActionDefer, nil
 
 	case types.SubscriptionStatusUnpaid:
 		// Similar to past due - defer for potential recovery
-		return StateActionDefer, "subscription is unpaid, deferring until payment is resolved"
+		return StateActionDefer, nil
 
 	case types.SubscriptionStatusCancelled:
 		// Cancelled subscriptions should not receive new credits
-		return StateActionCancel, "subscription is cancelled"
+		return StateActionCancel, nil
 
 	case types.SubscriptionStatusIncomplete:
 		// Defer incomplete subscriptions as they might become active
-		return StateActionDefer, "subscription is incomplete, deferring until completion"
+		return StateActionDefer, nil
 
 	case types.SubscriptionStatusIncompleteExpired:
 		// Expired incomplete subscriptions should be cancelled
-		return StateActionCancel, "subscription is incomplete and expired"
+		return StateActionCancel, nil
 
 	case types.SubscriptionStatusPaused:
 		// Paused subscriptions should defer credits until resumed
-		return StateActionDefer, "subscription is paused, deferring until resumed"
+		return StateActionDefer, nil
 
 	default:
 		// Unknown status - skip for safety
-		return StateActionSkip, "unknown subscription status: " + string(h.subscription.SubscriptionStatus)
+		return StateActionSkip, ierr.NewError("unknown subscription status").
+			WithHint("Please provide a valid subscription status").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_status": h.subscription.SubscriptionStatus,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 }
 
