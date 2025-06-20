@@ -678,7 +678,6 @@ func (s *creditGrantService) skipCreditGrantApplication(
 
 	// Update current CGA status to skipped
 	cga.ApplicationStatus = types.ApplicationStatusSkipped
-	cga.FailureReason = cga.FailureReason
 
 	err := s.CreditGrantApplicationRepo.Update(ctx, cga)
 	if err != nil {
