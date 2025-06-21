@@ -37,8 +37,6 @@ const (
 	FieldDisplayName = "display_name"
 	// FieldAmount holds the string denoting the amount field in the database.
 	FieldAmount = "amount"
-	// FieldQuantity holds the string denoting the quantity field in the database.
-	FieldQuantity = "quantity"
 	// FieldCurrency holds the string denoting the currency field in the database.
 	FieldCurrency = "currency"
 	// FieldMetadata holds the string denoting the metadata field in the database.
@@ -70,7 +68,6 @@ var Columns = []string{
 	FieldInvoiceLineItemID,
 	FieldDisplayName,
 	FieldAmount,
-	FieldQuantity,
 	FieldCurrency,
 	FieldMetadata,
 }
@@ -106,8 +103,6 @@ var (
 	DisplayNameValidator func(string) error
 	// DefaultAmount holds the default value on creation for the "amount" field.
 	DefaultAmount decimal.Decimal
-	// DefaultQuantity holds the default value on creation for the "quantity" field.
-	DefaultQuantity decimal.Decimal
 	// CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
 	CurrencyValidator func(string) error
 )
@@ -173,11 +168,6 @@ func ByDisplayName(opts ...sql.OrderTermOption) OrderOption {
 // ByAmount orders the results by the amount field.
 func ByAmount(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAmount, opts...).ToFunc()
-}
-
-// ByQuantity orders the results by the quantity field.
-func ByQuantity(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldQuantity, opts...).ToFunc()
 }
 
 // ByCurrency orders the results by the currency field.

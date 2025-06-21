@@ -13,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/ent/creditnote"
 	"github.com/flexprice/flexprice/ent/creditnotelineitem"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // CreditNoteCreate is the builder for creating a CreditNote entity.
@@ -164,14 +165,6 @@ func (cnc *CreditNoteCreate) SetReason(tnr types.CreditNoteReason) *CreditNoteCr
 	return cnc
 }
 
-// SetNillableReason sets the "reason" field if the given value is not nil.
-func (cnc *CreditNoteCreate) SetNillableReason(tnr *types.CreditNoteReason) *CreditNoteCreate {
-	if tnr != nil {
-		cnc.SetReason(*tnr)
-	}
-	return cnc
-}
-
 // SetMemo sets the "memo" field.
 func (cnc *CreditNoteCreate) SetMemo(s string) *CreditNoteCreate {
 	cnc.mutation.SetMemo(s)
@@ -201,6 +194,20 @@ func (cnc *CreditNoteCreate) SetNillableIdempotencyKey(s *string) *CreditNoteCre
 // SetMetadata sets the "metadata" field.
 func (cnc *CreditNoteCreate) SetMetadata(m map[string]string) *CreditNoteCreate {
 	cnc.mutation.SetMetadata(m)
+	return cnc
+}
+
+// SetTotalAmount sets the "total_amount" field.
+func (cnc *CreditNoteCreate) SetTotalAmount(d decimal.Decimal) *CreditNoteCreate {
+	cnc.mutation.SetTotalAmount(d)
+	return cnc
+}
+
+// SetNillableTotalAmount sets the "total_amount" field if the given value is not nil.
+func (cnc *CreditNoteCreate) SetNillableTotalAmount(d *decimal.Decimal) *CreditNoteCreate {
+	if d != nil {
+		cnc.SetTotalAmount(*d)
+	}
 	return cnc
 }
 
@@ -280,6 +287,10 @@ func (cnc *CreditNoteCreate) defaults() {
 		v := creditnote.DefaultCreditNoteStatus
 		cnc.mutation.SetCreditNoteStatus(v)
 	}
+	if _, ok := cnc.mutation.TotalAmount(); !ok {
+		v := creditnote.DefaultTotalAmount
+		cnc.mutation.SetTotalAmount(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -333,8 +344,11 @@ func (cnc *CreditNoteCreate) check() error {
 			return &ValidationError{Name: "refund_status", err: fmt.Errorf(`ent: validator failed for field "CreditNote.refund_status": %w`, err)}
 		}
 	}
+	if _, ok := cnc.mutation.Reason(); !ok {
+		return &ValidationError{Name: "reason", err: errors.New(`ent: missing required field "CreditNote.reason"`)}
+	}
 	if v, ok := cnc.mutation.Reason(); ok {
-		if err := v.Validate(); err != nil {
+		if err := creditnote.ReasonValidator(string(v)); err != nil {
 			return &ValidationError{Name: "reason", err: fmt.Errorf(`ent: validator failed for field "CreditNote.reason": %w`, err)}
 		}
 	}
@@ -343,6 +357,9 @@ func (cnc *CreditNoteCreate) check() error {
 	}
 	if _, ok := cnc.mutation.Currency(); !ok {
 		return &ValidationError{Name: "currency", err: errors.New(`ent: missing required field "CreditNote.currency"`)}
+	}
+	if _, ok := cnc.mutation.TotalAmount(); !ok {
+		return &ValidationError{Name: "total_amount", err: errors.New(`ent: missing required field "CreditNote.total_amount"`)}
 	}
 	return nil
 }
@@ -429,7 +446,7 @@ func (cnc *CreditNoteCreate) createSpec() (*CreditNote, *sqlgraph.CreateSpec) {
 	}
 	if value, ok := cnc.mutation.Reason(); ok {
 		_spec.SetField(creditnote.FieldReason, field.TypeString, value)
-		_node.Reason = &value
+		_node.Reason = value
 	}
 	if value, ok := cnc.mutation.Memo(); ok {
 		_spec.SetField(creditnote.FieldMemo, field.TypeString, value)
@@ -446,6 +463,10 @@ func (cnc *CreditNoteCreate) createSpec() (*CreditNote, *sqlgraph.CreateSpec) {
 	if value, ok := cnc.mutation.Metadata(); ok {
 		_spec.SetField(creditnote.FieldMetadata, field.TypeJSON, value)
 		_node.Metadata = value
+	}
+	if value, ok := cnc.mutation.TotalAmount(); ok {
+		_spec.SetField(creditnote.FieldTotalAmount, field.TypeOther, value)
+		_node.TotalAmount = value
 	}
 	if nodes := cnc.mutation.LineItemsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

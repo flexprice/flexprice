@@ -129,6 +129,7 @@ func main() {
 			repository.NewTaskRepository,
 			repository.NewSecretRepository,
 			repository.NewCreditGrantRepository,
+			repository.NewCreditNoteRepository,
 			// PubSub
 			pubsubRouter.NewRouter,
 
@@ -172,6 +173,7 @@ func main() {
 			service.NewOnboardingService,
 			service.NewBillingService,
 			service.NewCreditGrantService,
+			service.NewCreditNoteService,
 		),
 	)
 
@@ -218,6 +220,7 @@ func provideHandlers(
 	onboardingService service.OnboardingService,
 	billingService service.BillingService,
 	creditGrantService service.CreditGrantService,
+	creditNoteService service.CreditNoteService,
 ) api.Handlers {
 	return api.Handlers{
 		Events:            v1.NewEventsHandler(eventService, eventPostProcessingService, logger),
@@ -243,6 +246,7 @@ func provideHandlers(
 		CronSubscription:  cron.NewSubscriptionHandler(subscriptionService, temporalService, logger),
 		CronWallet:        cron.NewWalletCronHandler(logger, temporalService, walletService, tenantService),
 		CreditGrant:       v1.NewCreditGrantHandler(creditGrantService, logger),
+		CreditNote:        v1.NewCreditNoteHandler(creditNoteService, logger),
 	}
 }
 

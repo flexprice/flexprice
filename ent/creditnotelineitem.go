@@ -42,8 +42,6 @@ type CreditNoteLineItem struct {
 	DisplayName string `json:"display_name,omitempty"`
 	// Amount holds the value of the "amount" field.
 	Amount decimal.Decimal `json:"amount,omitempty"`
-	// Quantity holds the value of the "quantity" field.
-	Quantity decimal.Decimal `json:"quantity,omitempty"`
 	// Currency holds the value of the "currency" field.
 	Currency string `json:"currency,omitempty"`
 	// Metadata holds the value of the "metadata" field.
@@ -81,7 +79,7 @@ func (*CreditNoteLineItem) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case creditnotelineitem.FieldMetadata:
 			values[i] = new([]byte)
-		case creditnotelineitem.FieldAmount, creditnotelineitem.FieldQuantity:
+		case creditnotelineitem.FieldAmount:
 			values[i] = new(decimal.Decimal)
 		case creditnotelineitem.FieldID, creditnotelineitem.FieldTenantID, creditnotelineitem.FieldStatus, creditnotelineitem.FieldCreatedBy, creditnotelineitem.FieldUpdatedBy, creditnotelineitem.FieldEnvironmentID, creditnotelineitem.FieldCreditNoteID, creditnotelineitem.FieldInvoiceLineItemID, creditnotelineitem.FieldDisplayName, creditnotelineitem.FieldCurrency:
 			values[i] = new(sql.NullString)
@@ -174,12 +172,6 @@ func (cnli *CreditNoteLineItem) assignValues(columns []string, values []any) err
 			} else if value != nil {
 				cnli.Amount = *value
 			}
-		case creditnotelineitem.FieldQuantity:
-			if value, ok := values[i].(*decimal.Decimal); !ok {
-				return fmt.Errorf("unexpected type %T for field quantity", values[i])
-			} else if value != nil {
-				cnli.Quantity = *value
-			}
 		case creditnotelineitem.FieldCurrency:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field currency", values[i])
@@ -267,9 +259,6 @@ func (cnli *CreditNoteLineItem) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("amount=")
 	builder.WriteString(fmt.Sprintf("%v", cnli.Amount))
-	builder.WriteString(", ")
-	builder.WriteString("quantity=")
-	builder.WriteString(fmt.Sprintf("%v", cnli.Quantity))
 	builder.WriteString(", ")
 	builder.WriteString("currency=")
 	builder.WriteString(cnli.Currency)

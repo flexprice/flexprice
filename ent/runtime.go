@@ -240,6 +240,14 @@ func init() {
 	creditnoteDescCreditNoteType := creditnoteFields[4].Descriptor()
 	// creditnote.CreditNoteTypeValidator is a validator for the "credit_note_type" field. It is called by the builders before save.
 	creditnote.CreditNoteTypeValidator = creditnoteDescCreditNoteType.Validators[0].(func(string) error)
+	// creditnoteDescReason is the schema descriptor for reason field.
+	creditnoteDescReason := creditnoteFields[6].Descriptor()
+	// creditnote.ReasonValidator is a validator for the "reason" field. It is called by the builders before save.
+	creditnote.ReasonValidator = creditnoteDescReason.Validators[0].(func(string) error)
+	// creditnoteDescTotalAmount is the schema descriptor for total_amount field.
+	creditnoteDescTotalAmount := creditnoteFields[11].Descriptor()
+	// creditnote.DefaultTotalAmount holds the default value on creation for the total_amount field.
+	creditnote.DefaultTotalAmount = creditnoteDescTotalAmount.Default.(decimal.Decimal)
 	creditnotelineitemMixin := schema.CreditNoteLineItem{}.Mixin()
 	creditnotelineitemMixinFields0 := creditnotelineitemMixin[0].Fields()
 	_ = creditnotelineitemMixinFields0
@@ -285,12 +293,8 @@ func init() {
 	creditnotelineitemDescAmount := creditnotelineitemFields[4].Descriptor()
 	// creditnotelineitem.DefaultAmount holds the default value on creation for the amount field.
 	creditnotelineitem.DefaultAmount = creditnotelineitemDescAmount.Default.(decimal.Decimal)
-	// creditnotelineitemDescQuantity is the schema descriptor for quantity field.
-	creditnotelineitemDescQuantity := creditnotelineitemFields[5].Descriptor()
-	// creditnotelineitem.DefaultQuantity holds the default value on creation for the quantity field.
-	creditnotelineitem.DefaultQuantity = creditnotelineitemDescQuantity.Default.(decimal.Decimal)
 	// creditnotelineitemDescCurrency is the schema descriptor for currency field.
-	creditnotelineitemDescCurrency := creditnotelineitemFields[6].Descriptor()
+	creditnotelineitemDescCurrency := creditnotelineitemFields[5].Descriptor()
 	// creditnotelineitem.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
 	creditnotelineitem.CurrencyValidator = creditnotelineitemDescCurrency.Validators[0].(func(string) error)
 	customerMixin := schema.Customer{}.Mixin()
@@ -512,8 +516,16 @@ func init() {
 	invoiceDescAmountRemaining := invoiceFields[9].Descriptor()
 	// invoice.DefaultAmountRemaining holds the default value on creation for the amount_remaining field.
 	invoice.DefaultAmountRemaining = invoiceDescAmountRemaining.Default.(decimal.Decimal)
+	// invoiceDescSubtotal is the schema descriptor for subtotal field.
+	invoiceDescSubtotal := invoiceFields[10].Descriptor()
+	// invoice.DefaultSubtotal holds the default value on creation for the subtotal field.
+	invoice.DefaultSubtotal = invoiceDescSubtotal.Default.(decimal.Decimal)
+	// invoiceDescTotal is the schema descriptor for total field.
+	invoiceDescTotal := invoiceFields[11].Descriptor()
+	// invoice.DefaultTotal holds the default value on creation for the total field.
+	invoice.DefaultTotal = invoiceDescTotal.Default.(decimal.Decimal)
 	// invoiceDescVersion is the schema descriptor for version field.
-	invoiceDescVersion := invoiceFields[21].Descriptor()
+	invoiceDescVersion := invoiceFields[23].Descriptor()
 	// invoice.DefaultVersion holds the default value on creation for the version field.
 	invoice.DefaultVersion = invoiceDescVersion.Default.(int)
 	invoicelineitemMixin := schema.InvoiceLineItem{}.Mixin()

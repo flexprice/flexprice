@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/creditnote"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // CreditNote is the model entity for the CreditNote schema.
@@ -44,7 +45,7 @@ type CreditNote struct {
 	// RefundStatus holds the value of the "refund_status" field.
 	RefundStatus *types.PaymentStatus `json:"refund_status,omitempty"`
 	// Reason holds the value of the "reason" field.
-	Reason *types.CreditNoteReason `json:"reason,omitempty"`
+	Reason types.CreditNoteReason `json:"reason,omitempty"`
 	// Memo holds the value of the "memo" field.
 	Memo string `json:"memo,omitempty"`
 	// Currency holds the value of the "currency" field.
@@ -53,6 +54,8 @@ type CreditNote struct {
 	IdempotencyKey *string `json:"idempotency_key,omitempty"`
 	// Metadata holds the value of the "metadata" field.
 	Metadata map[string]string `json:"metadata,omitempty"`
+	// TotalAmount holds the value of the "total_amount" field.
+	TotalAmount decimal.Decimal `json:"total_amount,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the CreditNoteQuery when eager-loading is set.
 	Edges        CreditNoteEdges `json:"edges"`
@@ -84,6 +87,8 @@ func (*CreditNote) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case creditnote.FieldMetadata:
 			values[i] = new([]byte)
+		case creditnote.FieldTotalAmount:
+			values[i] = new(decimal.Decimal)
 		case creditnote.FieldID, creditnote.FieldTenantID, creditnote.FieldStatus, creditnote.FieldCreatedBy, creditnote.FieldUpdatedBy, creditnote.FieldEnvironmentID, creditnote.FieldInvoiceID, creditnote.FieldCreditNoteNumber, creditnote.FieldCreditNoteStatus, creditnote.FieldCreditNoteType, creditnote.FieldRefundStatus, creditnote.FieldReason, creditnote.FieldMemo, creditnote.FieldCurrency, creditnote.FieldIdempotencyKey:
 			values[i] = new(sql.NullString)
 		case creditnote.FieldCreatedAt, creditnote.FieldUpdatedAt:
@@ -186,8 +191,7 @@ func (cn *CreditNote) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field reason", values[i])
 			} else if value.Valid {
-				cn.Reason = new(types.CreditNoteReason)
-				*cn.Reason = types.CreditNoteReason(value.String)
+				cn.Reason = types.CreditNoteReason(value.String)
 			}
 		case creditnote.FieldMemo:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -215,6 +219,12 @@ func (cn *CreditNote) assignValues(columns []string, values []any) error {
 				if err := json.Unmarshal(*value, &cn.Metadata); err != nil {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
+			}
+		case creditnote.FieldTotalAmount:
+			if value, ok := values[i].(*decimal.Decimal); !ok {
+				return fmt.Errorf("unexpected type %T for field total_amount", values[i])
+			} else if value != nil {
+				cn.TotalAmount = *value
 			}
 		default:
 			cn.selectValues.Set(columns[i], values[i])
@@ -295,10 +305,8 @@ func (cn *CreditNote) String() string {
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
-	if v := cn.Reason; v != nil {
-		builder.WriteString("reason=")
-		builder.WriteString(fmt.Sprintf("%v", *v))
-	}
+	builder.WriteString("reason=")
+	builder.WriteString(fmt.Sprintf("%v", cn.Reason))
 	builder.WriteString(", ")
 	builder.WriteString("memo=")
 	builder.WriteString(cn.Memo)
@@ -313,6 +321,9 @@ func (cn *CreditNote) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
 	builder.WriteString(fmt.Sprintf("%v", cn.Metadata))
+	builder.WriteString(", ")
+	builder.WriteString("total_amount=")
+	builder.WriteString(fmt.Sprintf("%v", cn.TotalAmount))
 	builder.WriteByte(')')
 	return builder.String()
 }

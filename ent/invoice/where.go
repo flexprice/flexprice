@@ -146,6 +146,16 @@ func AmountRemaining(v decimal.Decimal) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldAmountRemaining, v))
 }
 
+// Subtotal applies equality check predicate on the "subtotal" field. It's identical to SubtotalEQ.
+func Subtotal(v decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldSubtotal, v))
+}
+
+// Total applies equality check predicate on the "total" field. It's identical to TotalEQ.
+func Total(v decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldTotal, v))
+}
+
 // Description applies equality check predicate on the "description" field. It's identical to DescriptionEQ.
 func Description(v string) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldDescription, v))
@@ -1169,6 +1179,86 @@ func AmountRemainingLT(v decimal.Decimal) predicate.Invoice {
 // AmountRemainingLTE applies the LTE predicate on the "amount_remaining" field.
 func AmountRemainingLTE(v decimal.Decimal) predicate.Invoice {
 	return predicate.Invoice(sql.FieldLTE(FieldAmountRemaining, v))
+}
+
+// SubtotalEQ applies the EQ predicate on the "subtotal" field.
+func SubtotalEQ(v decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldSubtotal, v))
+}
+
+// SubtotalNEQ applies the NEQ predicate on the "subtotal" field.
+func SubtotalNEQ(v decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNEQ(FieldSubtotal, v))
+}
+
+// SubtotalIn applies the In predicate on the "subtotal" field.
+func SubtotalIn(vs ...decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldIn(FieldSubtotal, vs...))
+}
+
+// SubtotalNotIn applies the NotIn predicate on the "subtotal" field.
+func SubtotalNotIn(vs ...decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotIn(FieldSubtotal, vs...))
+}
+
+// SubtotalGT applies the GT predicate on the "subtotal" field.
+func SubtotalGT(v decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGT(FieldSubtotal, v))
+}
+
+// SubtotalGTE applies the GTE predicate on the "subtotal" field.
+func SubtotalGTE(v decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGTE(FieldSubtotal, v))
+}
+
+// SubtotalLT applies the LT predicate on the "subtotal" field.
+func SubtotalLT(v decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLT(FieldSubtotal, v))
+}
+
+// SubtotalLTE applies the LTE predicate on the "subtotal" field.
+func SubtotalLTE(v decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLTE(FieldSubtotal, v))
+}
+
+// TotalEQ applies the EQ predicate on the "total" field.
+func TotalEQ(v decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldTotal, v))
+}
+
+// TotalNEQ applies the NEQ predicate on the "total" field.
+func TotalNEQ(v decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNEQ(FieldTotal, v))
+}
+
+// TotalIn applies the In predicate on the "total" field.
+func TotalIn(vs ...decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldIn(FieldTotal, vs...))
+}
+
+// TotalNotIn applies the NotIn predicate on the "total" field.
+func TotalNotIn(vs ...decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotIn(FieldTotal, vs...))
+}
+
+// TotalGT applies the GT predicate on the "total" field.
+func TotalGT(v decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGT(FieldTotal, v))
+}
+
+// TotalGTE applies the GTE predicate on the "total" field.
+func TotalGTE(v decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGTE(FieldTotal, v))
+}
+
+// TotalLT applies the LT predicate on the "total" field.
+func TotalLT(v decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLT(FieldTotal, v))
+}
+
+// TotalLTE applies the LTE predicate on the "total" field.
+func TotalLTE(v decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLTE(FieldTotal, v))
 }
 
 // DescriptionEQ applies the EQ predicate on the "description" field.

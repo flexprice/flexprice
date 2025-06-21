@@ -144,20 +144,6 @@ func (cnlic *CreditNoteLineItemCreate) SetNillableAmount(d *decimal.Decimal) *Cr
 	return cnlic
 }
 
-// SetQuantity sets the "quantity" field.
-func (cnlic *CreditNoteLineItemCreate) SetQuantity(d decimal.Decimal) *CreditNoteLineItemCreate {
-	cnlic.mutation.SetQuantity(d)
-	return cnlic
-}
-
-// SetNillableQuantity sets the "quantity" field if the given value is not nil.
-func (cnlic *CreditNoteLineItemCreate) SetNillableQuantity(d *decimal.Decimal) *CreditNoteLineItemCreate {
-	if d != nil {
-		cnlic.SetQuantity(*d)
-	}
-	return cnlic
-}
-
 // SetCurrency sets the "currency" field.
 func (cnlic *CreditNoteLineItemCreate) SetCurrency(s string) *CreditNoteLineItemCreate {
 	cnlic.mutation.SetCurrency(s)
@@ -236,10 +222,6 @@ func (cnlic *CreditNoteLineItemCreate) defaults() {
 		v := creditnotelineitem.DefaultAmount
 		cnlic.mutation.SetAmount(v)
 	}
-	if _, ok := cnlic.mutation.Quantity(); !ok {
-		v := creditnotelineitem.DefaultQuantity
-		cnlic.mutation.SetQuantity(v)
-	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -287,9 +269,6 @@ func (cnlic *CreditNoteLineItemCreate) check() error {
 	}
 	if _, ok := cnlic.mutation.Amount(); !ok {
 		return &ValidationError{Name: "amount", err: errors.New(`ent: missing required field "CreditNoteLineItem.amount"`)}
-	}
-	if _, ok := cnlic.mutation.Quantity(); !ok {
-		return &ValidationError{Name: "quantity", err: errors.New(`ent: missing required field "CreditNoteLineItem.quantity"`)}
 	}
 	if _, ok := cnlic.mutation.Currency(); !ok {
 		return &ValidationError{Name: "currency", err: errors.New(`ent: missing required field "CreditNoteLineItem.currency"`)}
@@ -376,10 +355,6 @@ func (cnlic *CreditNoteLineItemCreate) createSpec() (*CreditNoteLineItem, *sqlgr
 	if value, ok := cnlic.mutation.Amount(); ok {
 		_spec.SetField(creditnotelineitem.FieldAmount, field.TypeOther, value)
 		_node.Amount = value
-	}
-	if value, ok := cnlic.mutation.Quantity(); ok {
-		_spec.SetField(creditnotelineitem.FieldQuantity, field.TypeOther, value)
-		_node.Quantity = value
 	}
 	if value, ok := cnlic.mutation.Currency(); ok {
 		_spec.SetField(creditnotelineitem.FieldCurrency, field.TypeString, value)

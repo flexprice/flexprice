@@ -9,6 +9,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // ID filters vertices based on their ID field.
@@ -148,6 +149,11 @@ func Currency(v string) predicate.CreditNote {
 // IdempotencyKey applies equality check predicate on the "idempotency_key" field. It's identical to IdempotencyKeyEQ.
 func IdempotencyKey(v string) predicate.CreditNote {
 	return predicate.CreditNote(sql.FieldEQ(FieldIdempotencyKey, v))
+}
+
+// TotalAmount applies equality check predicate on the "total_amount" field. It's identical to TotalAmountEQ.
+func TotalAmount(v decimal.Decimal) predicate.CreditNote {
+	return predicate.CreditNote(sql.FieldEQ(FieldTotalAmount, v))
 }
 
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
@@ -1049,16 +1055,6 @@ func ReasonHasSuffix(v types.CreditNoteReason) predicate.CreditNote {
 	return predicate.CreditNote(sql.FieldHasSuffix(FieldReason, vc))
 }
 
-// ReasonIsNil applies the IsNil predicate on the "reason" field.
-func ReasonIsNil() predicate.CreditNote {
-	return predicate.CreditNote(sql.FieldIsNull(FieldReason))
-}
-
-// ReasonNotNil applies the NotNil predicate on the "reason" field.
-func ReasonNotNil() predicate.CreditNote {
-	return predicate.CreditNote(sql.FieldNotNull(FieldReason))
-}
-
 // ReasonEqualFold applies the EqualFold predicate on the "reason" field.
 func ReasonEqualFold(v types.CreditNoteReason) predicate.CreditNote {
 	vc := string(v)
@@ -1284,6 +1280,46 @@ func MetadataIsNil() predicate.CreditNote {
 // MetadataNotNil applies the NotNil predicate on the "metadata" field.
 func MetadataNotNil() predicate.CreditNote {
 	return predicate.CreditNote(sql.FieldNotNull(FieldMetadata))
+}
+
+// TotalAmountEQ applies the EQ predicate on the "total_amount" field.
+func TotalAmountEQ(v decimal.Decimal) predicate.CreditNote {
+	return predicate.CreditNote(sql.FieldEQ(FieldTotalAmount, v))
+}
+
+// TotalAmountNEQ applies the NEQ predicate on the "total_amount" field.
+func TotalAmountNEQ(v decimal.Decimal) predicate.CreditNote {
+	return predicate.CreditNote(sql.FieldNEQ(FieldTotalAmount, v))
+}
+
+// TotalAmountIn applies the In predicate on the "total_amount" field.
+func TotalAmountIn(vs ...decimal.Decimal) predicate.CreditNote {
+	return predicate.CreditNote(sql.FieldIn(FieldTotalAmount, vs...))
+}
+
+// TotalAmountNotIn applies the NotIn predicate on the "total_amount" field.
+func TotalAmountNotIn(vs ...decimal.Decimal) predicate.CreditNote {
+	return predicate.CreditNote(sql.FieldNotIn(FieldTotalAmount, vs...))
+}
+
+// TotalAmountGT applies the GT predicate on the "total_amount" field.
+func TotalAmountGT(v decimal.Decimal) predicate.CreditNote {
+	return predicate.CreditNote(sql.FieldGT(FieldTotalAmount, v))
+}
+
+// TotalAmountGTE applies the GTE predicate on the "total_amount" field.
+func TotalAmountGTE(v decimal.Decimal) predicate.CreditNote {
+	return predicate.CreditNote(sql.FieldGTE(FieldTotalAmount, v))
+}
+
+// TotalAmountLT applies the LT predicate on the "total_amount" field.
+func TotalAmountLT(v decimal.Decimal) predicate.CreditNote {
+	return predicate.CreditNote(sql.FieldLT(FieldTotalAmount, v))
+}
+
+// TotalAmountLTE applies the LTE predicate on the "total_amount" field.
+func TotalAmountLTE(v decimal.Decimal) predicate.CreditNote {
+	return predicate.CreditNote(sql.FieldLTE(FieldTotalAmount, v))
 }
 
 // HasLineItems applies the HasEdge predicate on the "line_items" edge.

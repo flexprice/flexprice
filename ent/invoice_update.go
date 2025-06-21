@@ -160,6 +160,34 @@ func (iu *InvoiceUpdate) SetNillableAmountRemaining(d *decimal.Decimal) *Invoice
 	return iu
 }
 
+// SetSubtotal sets the "subtotal" field.
+func (iu *InvoiceUpdate) SetSubtotal(d decimal.Decimal) *InvoiceUpdate {
+	iu.mutation.SetSubtotal(d)
+	return iu
+}
+
+// SetNillableSubtotal sets the "subtotal" field if the given value is not nil.
+func (iu *InvoiceUpdate) SetNillableSubtotal(d *decimal.Decimal) *InvoiceUpdate {
+	if d != nil {
+		iu.SetSubtotal(*d)
+	}
+	return iu
+}
+
+// SetTotal sets the "total" field.
+func (iu *InvoiceUpdate) SetTotal(d decimal.Decimal) *InvoiceUpdate {
+	iu.mutation.SetTotal(d)
+	return iu
+}
+
+// SetNillableTotal sets the "total" field if the given value is not nil.
+func (iu *InvoiceUpdate) SetNillableTotal(d *decimal.Decimal) *InvoiceUpdate {
+	if d != nil {
+		iu.SetTotal(*d)
+	}
+	return iu
+}
+
 // SetDescription sets the "description" field.
 func (iu *InvoiceUpdate) SetDescription(s string) *InvoiceUpdate {
 	iu.mutation.SetDescription(s)
@@ -525,6 +553,12 @@ func (iu *InvoiceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if value, ok := iu.mutation.AmountRemaining(); ok {
 		_spec.SetField(invoice.FieldAmountRemaining, field.TypeOther, value)
 	}
+	if value, ok := iu.mutation.Subtotal(); ok {
+		_spec.SetField(invoice.FieldSubtotal, field.TypeOther, value)
+	}
+	if value, ok := iu.mutation.Total(); ok {
+		_spec.SetField(invoice.FieldTotal, field.TypeOther, value)
+	}
 	if value, ok := iu.mutation.Description(); ok {
 		_spec.SetField(invoice.FieldDescription, field.TypeString, value)
 	}
@@ -800,6 +834,34 @@ func (iuo *InvoiceUpdateOne) SetAmountRemaining(d decimal.Decimal) *InvoiceUpdat
 func (iuo *InvoiceUpdateOne) SetNillableAmountRemaining(d *decimal.Decimal) *InvoiceUpdateOne {
 	if d != nil {
 		iuo.SetAmountRemaining(*d)
+	}
+	return iuo
+}
+
+// SetSubtotal sets the "subtotal" field.
+func (iuo *InvoiceUpdateOne) SetSubtotal(d decimal.Decimal) *InvoiceUpdateOne {
+	iuo.mutation.SetSubtotal(d)
+	return iuo
+}
+
+// SetNillableSubtotal sets the "subtotal" field if the given value is not nil.
+func (iuo *InvoiceUpdateOne) SetNillableSubtotal(d *decimal.Decimal) *InvoiceUpdateOne {
+	if d != nil {
+		iuo.SetSubtotal(*d)
+	}
+	return iuo
+}
+
+// SetTotal sets the "total" field.
+func (iuo *InvoiceUpdateOne) SetTotal(d decimal.Decimal) *InvoiceUpdateOne {
+	iuo.mutation.SetTotal(d)
+	return iuo
+}
+
+// SetNillableTotal sets the "total" field if the given value is not nil.
+func (iuo *InvoiceUpdateOne) SetNillableTotal(d *decimal.Decimal) *InvoiceUpdateOne {
+	if d != nil {
+		iuo.SetTotal(*d)
 	}
 	return iuo
 }
@@ -1198,6 +1260,12 @@ func (iuo *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err e
 	}
 	if value, ok := iuo.mutation.AmountRemaining(); ok {
 		_spec.SetField(invoice.FieldAmountRemaining, field.TypeOther, value)
+	}
+	if value, ok := iuo.mutation.Subtotal(); ok {
+		_spec.SetField(invoice.FieldSubtotal, field.TypeOther, value)
+	}
+	if value, ok := iuo.mutation.Total(); ok {
+		_spec.SetField(invoice.FieldTotal, field.TypeOther, value)
 	}
 	if value, ok := iuo.mutation.Description(); ok {
 		_spec.SetField(invoice.FieldDescription, field.TypeString, value)

@@ -8,16 +8,14 @@ import (
 
 // CreditNoteLineItem is the model entity for the CreditNoteLineItem schema.
 type CreditNoteLineItem struct {
-	ID                string            `json:"id"`
-	TenantID          string            `json:"tenant_id"`
-	EnvironmentID     string            `json:"environment_id"`
-	CreditNoteID      string            `json:"credit_note_id"`
-	InvoiceLineItemID string            `json:"invoice_line_item_id"`
-	DisplayName       string            `json:"display_name"`
-	Amount            decimal.Decimal   `json:"amount"`
-	Quantity          decimal.Decimal   `json:"quantity"`
-	Currency          string            `json:"currency"`
-	Metadata          map[string]string `json:"metadata"`
+	ID                string          `json:"id"`
+	CreditNoteID      string          `json:"credit_note_id"`
+	InvoiceLineItemID string          `json:"invoice_line_item_id"`
+	DisplayName       string          `json:"display_name"`
+	Amount            decimal.Decimal `json:"amount"`
+	Currency          string          `json:"currency"`
+	Metadata          types.Metadata  `json:"metadata"`
+	EnvironmentID     string          `json:"environment_id"`
 	types.BaseModel
 }
 
@@ -25,17 +23,14 @@ type CreditNoteLineItem struct {
 func (c *CreditNoteLineItem) FromEnt(e *ent.CreditNoteLineItem) *CreditNoteLineItem {
 	return &CreditNoteLineItem{
 		ID:                e.ID,
-		TenantID:          e.TenantID,
-		EnvironmentID:     e.EnvironmentID,
 		CreditNoteID:      e.CreditNoteID,
 		InvoiceLineItemID: e.InvoiceLineItemID,
 		DisplayName:       e.DisplayName,
 		Amount:            e.Amount,
-		Quantity:          e.Quantity,
 		Currency:          e.Currency,
 		Metadata:          e.Metadata,
+		EnvironmentID:     e.EnvironmentID,
 		BaseModel: types.BaseModel{
-			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),
 			CreatedBy: e.CreatedBy,
 			UpdatedBy: e.UpdatedBy,

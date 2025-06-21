@@ -52,12 +52,6 @@ func (CreditNoteLineItem) Fields() []ent.Field {
 			}).
 			Default(decimal.Zero),
 
-		field.Other("quantity", decimal.Decimal{}).
-			SchemaType(map[string]string{
-				"postgres": "numeric(20,8)",
-			}).
-			Default(decimal.Zero),
-
 		field.String("currency").
 			SchemaType(map[string]string{
 				"postgres": "varchar(10)",

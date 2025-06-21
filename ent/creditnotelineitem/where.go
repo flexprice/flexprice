@@ -121,11 +121,6 @@ func Amount(v decimal.Decimal) predicate.CreditNoteLineItem {
 	return predicate.CreditNoteLineItem(sql.FieldEQ(FieldAmount, v))
 }
 
-// Quantity applies equality check predicate on the "quantity" field. It's identical to QuantityEQ.
-func Quantity(v decimal.Decimal) predicate.CreditNoteLineItem {
-	return predicate.CreditNoteLineItem(sql.FieldEQ(FieldQuantity, v))
-}
-
 // Currency applies equality check predicate on the "currency" field. It's identical to CurrencyEQ.
 func Currency(v string) predicate.CreditNoteLineItem {
 	return predicate.CreditNoteLineItem(sql.FieldEQ(FieldCurrency, v))
@@ -799,46 +794,6 @@ func AmountLT(v decimal.Decimal) predicate.CreditNoteLineItem {
 // AmountLTE applies the LTE predicate on the "amount" field.
 func AmountLTE(v decimal.Decimal) predicate.CreditNoteLineItem {
 	return predicate.CreditNoteLineItem(sql.FieldLTE(FieldAmount, v))
-}
-
-// QuantityEQ applies the EQ predicate on the "quantity" field.
-func QuantityEQ(v decimal.Decimal) predicate.CreditNoteLineItem {
-	return predicate.CreditNoteLineItem(sql.FieldEQ(FieldQuantity, v))
-}
-
-// QuantityNEQ applies the NEQ predicate on the "quantity" field.
-func QuantityNEQ(v decimal.Decimal) predicate.CreditNoteLineItem {
-	return predicate.CreditNoteLineItem(sql.FieldNEQ(FieldQuantity, v))
-}
-
-// QuantityIn applies the In predicate on the "quantity" field.
-func QuantityIn(vs ...decimal.Decimal) predicate.CreditNoteLineItem {
-	return predicate.CreditNoteLineItem(sql.FieldIn(FieldQuantity, vs...))
-}
-
-// QuantityNotIn applies the NotIn predicate on the "quantity" field.
-func QuantityNotIn(vs ...decimal.Decimal) predicate.CreditNoteLineItem {
-	return predicate.CreditNoteLineItem(sql.FieldNotIn(FieldQuantity, vs...))
-}
-
-// QuantityGT applies the GT predicate on the "quantity" field.
-func QuantityGT(v decimal.Decimal) predicate.CreditNoteLineItem {
-	return predicate.CreditNoteLineItem(sql.FieldGT(FieldQuantity, v))
-}
-
-// QuantityGTE applies the GTE predicate on the "quantity" field.
-func QuantityGTE(v decimal.Decimal) predicate.CreditNoteLineItem {
-	return predicate.CreditNoteLineItem(sql.FieldGTE(FieldQuantity, v))
-}
-
-// QuantityLT applies the LT predicate on the "quantity" field.
-func QuantityLT(v decimal.Decimal) predicate.CreditNoteLineItem {
-	return predicate.CreditNoteLineItem(sql.FieldLT(FieldQuantity, v))
-}
-
-// QuantityLTE applies the LTE predicate on the "quantity" field.
-func QuantityLTE(v decimal.Decimal) predicate.CreditNoteLineItem {
-	return predicate.CreditNoteLineItem(sql.FieldLTE(FieldQuantity, v))
 }
 
 // CurrencyEQ applies the EQ predicate on the "currency" field.

@@ -97,20 +97,6 @@ func (cnliu *CreditNoteLineItemUpdate) SetNillableAmount(d *decimal.Decimal) *Cr
 	return cnliu
 }
 
-// SetQuantity sets the "quantity" field.
-func (cnliu *CreditNoteLineItemUpdate) SetQuantity(d decimal.Decimal) *CreditNoteLineItemUpdate {
-	cnliu.mutation.SetQuantity(d)
-	return cnliu
-}
-
-// SetNillableQuantity sets the "quantity" field if the given value is not nil.
-func (cnliu *CreditNoteLineItemUpdate) SetNillableQuantity(d *decimal.Decimal) *CreditNoteLineItemUpdate {
-	if d != nil {
-		cnliu.SetQuantity(*d)
-	}
-	return cnliu
-}
-
 // SetCurrency sets the "currency" field.
 func (cnliu *CreditNoteLineItemUpdate) SetCurrency(s string) *CreditNoteLineItemUpdate {
 	cnliu.mutation.SetCurrency(s)
@@ -232,9 +218,6 @@ func (cnliu *CreditNoteLineItemUpdate) sqlSave(ctx context.Context) (n int, err 
 	if value, ok := cnliu.mutation.Amount(); ok {
 		_spec.SetField(creditnotelineitem.FieldAmount, field.TypeOther, value)
 	}
-	if value, ok := cnliu.mutation.Quantity(); ok {
-		_spec.SetField(creditnotelineitem.FieldQuantity, field.TypeOther, value)
-	}
 	if value, ok := cnliu.mutation.Currency(); ok {
 		_spec.SetField(creditnotelineitem.FieldCurrency, field.TypeString, value)
 	}
@@ -328,20 +311,6 @@ func (cnliuo *CreditNoteLineItemUpdateOne) SetAmount(d decimal.Decimal) *CreditN
 func (cnliuo *CreditNoteLineItemUpdateOne) SetNillableAmount(d *decimal.Decimal) *CreditNoteLineItemUpdateOne {
 	if d != nil {
 		cnliuo.SetAmount(*d)
-	}
-	return cnliuo
-}
-
-// SetQuantity sets the "quantity" field.
-func (cnliuo *CreditNoteLineItemUpdateOne) SetQuantity(d decimal.Decimal) *CreditNoteLineItemUpdateOne {
-	cnliuo.mutation.SetQuantity(d)
-	return cnliuo
-}
-
-// SetNillableQuantity sets the "quantity" field if the given value is not nil.
-func (cnliuo *CreditNoteLineItemUpdateOne) SetNillableQuantity(d *decimal.Decimal) *CreditNoteLineItemUpdateOne {
-	if d != nil {
-		cnliuo.SetQuantity(*d)
 	}
 	return cnliuo
 }
@@ -496,9 +465,6 @@ func (cnliuo *CreditNoteLineItemUpdateOne) sqlSave(ctx context.Context) (_node *
 	}
 	if value, ok := cnliuo.mutation.Amount(); ok {
 		_spec.SetField(creditnotelineitem.FieldAmount, field.TypeOther, value)
-	}
-	if value, ok := cnliuo.mutation.Quantity(); ok {
-		_spec.SetField(creditnotelineitem.FieldQuantity, field.TypeOther, value)
 	}
 	if value, ok := cnliuo.mutation.Currency(); ok {
 		_spec.SetField(creditnotelineitem.FieldCurrency, field.TypeString, value)

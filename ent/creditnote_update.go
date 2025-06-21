@@ -132,12 +132,6 @@ func (cnu *CreditNoteUpdate) SetNillableReason(tnr *types.CreditNoteReason) *Cre
 	return cnu
 }
 
-// ClearReason clears the value of the "reason" field.
-func (cnu *CreditNoteUpdate) ClearReason() *CreditNoteUpdate {
-	cnu.mutation.ClearReason()
-	return cnu
-}
-
 // SetMetadata sets the "metadata" field.
 func (cnu *CreditNoteUpdate) SetMetadata(m map[string]string) *CreditNoteUpdate {
 	cnu.mutation.SetMetadata(m)
@@ -245,7 +239,7 @@ func (cnu *CreditNoteUpdate) check() error {
 		}
 	}
 	if v, ok := cnu.mutation.Reason(); ok {
-		if err := v.Validate(); err != nil {
+		if err := creditnote.ReasonValidator(string(v)); err != nil {
 			return &ValidationError{Name: "reason", err: fmt.Errorf(`ent: validator failed for field "CreditNote.reason": %w`, err)}
 		}
 	}
@@ -296,9 +290,6 @@ func (cnu *CreditNoteUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := cnu.mutation.Reason(); ok {
 		_spec.SetField(creditnote.FieldReason, field.TypeString, value)
-	}
-	if cnu.mutation.ReasonCleared() {
-		_spec.ClearField(creditnote.FieldReason, field.TypeString)
 	}
 	if cnu.mutation.IdempotencyKeyCleared() {
 		_spec.ClearField(creditnote.FieldIdempotencyKey, field.TypeString)
@@ -476,12 +467,6 @@ func (cnuo *CreditNoteUpdateOne) SetNillableReason(tnr *types.CreditNoteReason) 
 	return cnuo
 }
 
-// ClearReason clears the value of the "reason" field.
-func (cnuo *CreditNoteUpdateOne) ClearReason() *CreditNoteUpdateOne {
-	cnuo.mutation.ClearReason()
-	return cnuo
-}
-
 // SetMetadata sets the "metadata" field.
 func (cnuo *CreditNoteUpdateOne) SetMetadata(m map[string]string) *CreditNoteUpdateOne {
 	cnuo.mutation.SetMetadata(m)
@@ -602,7 +587,7 @@ func (cnuo *CreditNoteUpdateOne) check() error {
 		}
 	}
 	if v, ok := cnuo.mutation.Reason(); ok {
-		if err := v.Validate(); err != nil {
+		if err := creditnote.ReasonValidator(string(v)); err != nil {
 			return &ValidationError{Name: "reason", err: fmt.Errorf(`ent: validator failed for field "CreditNote.reason": %w`, err)}
 		}
 	}
@@ -670,9 +655,6 @@ func (cnuo *CreditNoteUpdateOne) sqlSave(ctx context.Context) (_node *CreditNote
 	}
 	if value, ok := cnuo.mutation.Reason(); ok {
 		_spec.SetField(creditnote.FieldReason, field.TypeString, value)
-	}
-	if cnuo.mutation.ReasonCleared() {
-		_spec.ClearField(creditnote.FieldReason, field.TypeString)
 	}
 	if cnuo.mutation.IdempotencyKeyCleared() {
 		_spec.ClearField(creditnote.FieldIdempotencyKey, field.TypeString)

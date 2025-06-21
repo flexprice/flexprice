@@ -59,7 +59,7 @@ func (r *creditnoteRepository) Create(ctx context.Context, cn *domainCreditNote.
 		SetCreditNoteStatus(cn.CreditNoteStatus).
 		SetCreditNoteType(cn.CreditNoteType).
 		SetNillableRefundStatus(cn.RefundStatus).
-		SetNillableReason(cn.Reason).
+		SetReason(cn.Reason).
 		SetMemo(cn.Memo).
 		SetCurrency(cn.Currency).
 		SetMetadata(cn.Metadata).
@@ -69,6 +69,7 @@ func (r *creditnoteRepository) Create(ctx context.Context, cn *domainCreditNote.
 		SetCreatedBy(cn.CreatedBy).
 		SetUpdatedBy(cn.UpdatedBy).
 		SetEnvironmentID(cn.EnvironmentID).
+		SetTotalAmount(cn.TotalAmount).
 		Save(ctx)
 
 	if err != nil {
@@ -136,7 +137,7 @@ func (r *creditnoteRepository) CreateWithLineItems(ctx context.Context, cn *doma
 			SetCreditNoteStatus(cn.CreditNoteStatus).
 			SetCreditNoteType(cn.CreditNoteType).
 			SetNillableRefundStatus(cn.RefundStatus).
-			SetNillableReason(cn.Reason).
+			SetReason(cn.Reason).
 			SetMemo(cn.Memo).
 			SetCurrency(cn.Currency).
 			SetMetadata(cn.Metadata).
@@ -145,6 +146,7 @@ func (r *creditnoteRepository) CreateWithLineItems(ctx context.Context, cn *doma
 			SetUpdatedAt(cn.UpdatedAt).
 			SetCreatedBy(cn.CreatedBy).
 			SetUpdatedBy(cn.UpdatedBy).
+			SetTotalAmount(cn.TotalAmount).
 			SetEnvironmentID(cn.EnvironmentID).
 			Save(ctx)
 		if err != nil {
@@ -189,7 +191,6 @@ func (r *creditnoteRepository) CreateWithLineItems(ctx context.Context, cn *doma
 					SetInvoiceLineItemID(item.InvoiceLineItemID).
 					SetDisplayName(item.DisplayName).
 					SetAmount(item.Amount).
-					SetQuantity(item.Quantity).
 					SetCurrency(item.Currency).
 					SetMetadata(item.Metadata).
 					SetEnvironmentID(item.EnvironmentID).
@@ -245,7 +246,6 @@ func (r *creditnoteRepository) AddLineItems(ctx context.Context, creditNoteID st
 				SetInvoiceLineItemID(item.InvoiceLineItemID).
 				SetDisplayName(item.DisplayName).
 				SetAmount(item.Amount).
-				SetQuantity(item.Quantity).
 				SetCurrency(item.Currency).
 				SetMetadata(item.Metadata).
 				SetStatus(string(item.Status)).
@@ -356,13 +356,10 @@ func (r *creditnoteRepository) Update(ctx context.Context, cn *domainCreditNote.
 			creditnote.TenantID(types.GetTenantID(ctx)),
 			creditnote.Status(string(types.StatusPublished)),
 			creditnote.EnvironmentID(types.GetEnvironmentID(ctx)),
-		)
-
-	// Set all fields
-	query.
+		).
 		SetCreditNoteStatus(cn.CreditNoteStatus).
 		SetNillableRefundStatus(cn.RefundStatus).
-		SetNillableReason(cn.Reason).
+		SetReason(cn.Reason).
 		SetMetadata(cn.Metadata).
 		SetUpdatedAt(time.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
@@ -370,7 +367,12 @@ func (r *creditnoteRepository) Update(ctx context.Context, cn *domainCreditNote.
 	// Execute update
 	n, err := query.Save(ctx)
 	if err != nil {
-		return ierr.WithError(err).WithHint("credit note update failed").Mark(ierr.ErrDatabase)
+		return ierr.WithError(err).
+			WithHint("credit note update failed").
+			WithReportableDetails(map[string]any{
+				"creditnote_id": cn.ID,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 	if n == 0 {
 		// No rows were updated - either record doesn't exist
@@ -382,10 +384,20 @@ func (r *creditnoteRepository) Update(ctx context.Context, cn *domainCreditNote.
 			).
 			Exist(ctx)
 		if err != nil {
-			return ierr.WithError(err).WithHint("credit note existence check failed").Mark(ierr.ErrDatabase)
+			return ierr.WithError(err).
+				WithHint("credit note existence check failed").
+				WithReportableDetails(map[string]any{
+					"creditnote_id": cn.ID,
+				}).
+				Mark(ierr.ErrDatabase)
 		}
 		if !exists {
-			return ierr.NewError("credit note not found").WithHint("credit note not found").Mark(ierr.ErrNotFound)
+			return ierr.WithError(err).
+				WithHint("credit note not found").
+				WithReportableDetails(map[string]any{
+					"creditnote_id": cn.ID,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
 	}
 	r.DeleteCache(ctx, cn.ID)

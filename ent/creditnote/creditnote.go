@@ -8,6 +8,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 const (
@@ -49,6 +50,8 @@ const (
 	FieldIdempotencyKey = "idempotency_key"
 	// FieldMetadata holds the string denoting the metadata field in the database.
 	FieldMetadata = "metadata"
+	// FieldTotalAmount holds the string denoting the total_amount field in the database.
+	FieldTotalAmount = "total_amount"
 	// EdgeLineItems holds the string denoting the line_items edge name in mutations.
 	EdgeLineItems = "line_items"
 	// Table holds the table name of the creditnote in the database.
@@ -82,6 +85,7 @@ var Columns = []string{
 	FieldCurrency,
 	FieldIdempotencyKey,
 	FieldMetadata,
+	FieldTotalAmount,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -113,6 +117,10 @@ var (
 	DefaultCreditNoteStatus types.CreditNoteStatus
 	// CreditNoteTypeValidator is a validator for the "credit_note_type" field. It is called by the builders before save.
 	CreditNoteTypeValidator func(string) error
+	// ReasonValidator is a validator for the "reason" field. It is called by the builders before save.
+	ReasonValidator func(string) error
+	// DefaultTotalAmount holds the default value on creation for the "total_amount" field.
+	DefaultTotalAmount decimal.Decimal
 )
 
 // OrderOption defines the ordering options for the CreditNote queries.
@@ -201,6 +209,11 @@ func ByCurrency(opts ...sql.OrderTermOption) OrderOption {
 // ByIdempotencyKey orders the results by the idempotency_key field.
 func ByIdempotencyKey(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldIdempotencyKey, opts...).ToFunc()
+}
+
+// ByTotalAmount orders the results by the total_amount field.
+func ByTotalAmount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTotalAmount, opts...).ToFunc()
 }
 
 // ByLineItemsCount orders the results by line_items count.

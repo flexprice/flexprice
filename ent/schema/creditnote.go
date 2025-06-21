@@ -8,6 +8,7 @@ import (
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 const (
@@ -76,12 +77,11 @@ func (CreditNote) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
 			}).
-			Optional().
-			Nillable(),
+			NotEmpty(),
 
 		field.String("memo").
 			SchemaType(map[string]string{
-				"postgres": "varchar(50)",
+				"postgres": "text",
 			}).
 			Immutable(),
 		field.String("currency").
@@ -98,6 +98,12 @@ func (CreditNote) Fields() []ent.Field {
 			Nillable(),
 		field.JSON("metadata", map[string]string{}).
 			Optional(),
+		field.Other("total_amount", decimal.Decimal{}).
+			SchemaType(map[string]string{
+				"postgres": "numeric(20,8)",
+			}).
+			Default(decimal.Zero).
+			Immutable(),
 	}
 }
 
@@ -110,7 +116,7 @@ func (CreditNote) Indexes() []ent.Index {
 	}
 }
 
-// Edges of the Invoice.
+// Edges of the CreditNote.
 func (CreditNote) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.To("line_items", CreditNoteLineItem.Type),
