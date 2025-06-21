@@ -33,6 +33,7 @@ func (c *CreditNoteLineItem) FromEnt(e *ent.CreditNoteLineItem) *CreditNoteLineI
 		BaseModel: types.BaseModel{
 			Status:    types.Status(e.Status),
 			CreatedBy: e.CreatedBy,
+			TenantID:  e.TenantID,
 			UpdatedBy: e.UpdatedBy,
 			CreatedAt: e.CreatedAt,
 			UpdatedAt: e.UpdatedAt,
