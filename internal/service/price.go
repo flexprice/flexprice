@@ -197,15 +197,26 @@ func (s *priceService) CalculateCost(ctx context.Context, price *price.Price, qu
 			return decimal.Zero
 		}
 
-		transformedQuantity := quantity.Div(decimal.NewFromInt(int64(price.TransformQuantity.DivideBy)))
+		// Calculate how many complete packages are needed to cover the quantity
+		packagesNeeded := quantity.Div(decimal.NewFromInt(int64(price.TransformQuantity.DivideBy)))
 
-		if price.TransformQuantity.Round == types.ROUND_UP {
-			transformedQuantity = transformedQuantity.Ceil()
-		} else if price.TransformQuantity.Round == types.ROUND_DOWN {
-			transformedQuantity = transformedQuantity.Floor()
+		// Round up to the next package if there's any remainder
+		// This ensures we always charge for a full package
+		if price.TransformQuantity.Round == types.ROUND_DOWN {
+			packagesNeeded = packagesNeeded.Floor()
+		} else {
+			// Default to rounding up for packages to ensure minimum one package
+			packagesNeeded = packagesNeeded.Ceil()
 		}
 
-		cost = price.CalculateAmount(transformedQuantity)
+		// If quantity is greater than 0, ensure at least one package is charged
+		if !quantity.IsZero() && packagesNeeded.IsZero() {
+			packagesNeeded = decimal.NewFromInt(1)
+		}
+
+		// Calculate total cost by multiplying package price by number of packages
+		// cost = price.Amount.Mul(packagesNeeded)
+		cost = price.CalculateAmount(packagesNeeded)
 
 	case types.BILLING_MODEL_TIERED:
 		cost = s.calculateTieredCost(ctx, price, quantity)
@@ -303,7 +314,8 @@ func (s *priceService) CalculateCostWithBreakup(ctx context.Context, price *pric
 		FinalCost:         decimal.Zero,
 	}
 
-	if quantity.IsZero() {
+	// Return early for zero quantity, but keep the tier unit amount
+	if quantity.IsZero() && price.BillingModel != types.BILLING_MODEL_PACKAGE {
 		return result
 	}
 
@@ -318,17 +330,38 @@ func (s *priceService) CalculateCostWithBreakup(ctx context.Context, price *pric
 			return result
 		}
 
-		transformedQuantity := quantity.Div(decimal.NewFromInt(int64(price.TransformQuantity.DivideBy)))
+		// Calculate the tier unit amount (price per unit in a full package)
+		result.TierUnitAmount = price.Amount.Div(decimal.NewFromInt(int64(price.TransformQuantity.DivideBy)))
 
-		if price.TransformQuantity.Round == types.ROUND_UP {
-			transformedQuantity = transformedQuantity.Ceil()
-		} else if price.TransformQuantity.Round == types.ROUND_DOWN {
-			transformedQuantity = transformedQuantity.Floor()
+		// Return early for zero quantity, but keep the tier unit amount we just calculated
+		if quantity.IsZero() {
+			return result
 		}
 
-		result.FinalCost = price.CalculateAmount(transformedQuantity)
-		result.EffectiveUnitCost = price.Amount
-		result.TierUnitAmount = price.Amount
+		// Calculate how many complete packages are needed to cover the quantity
+		packagesNeeded := quantity.Div(decimal.NewFromInt(int64(price.TransformQuantity.DivideBy)))
+
+		// Round based on the specified mode
+		if price.TransformQuantity.Round == types.ROUND_DOWN {
+			packagesNeeded = packagesNeeded.Floor()
+		} else {
+			// Default to rounding up for packages
+			packagesNeeded = packagesNeeded.Ceil()
+			// Ensure at least one package when rounding up
+			if packagesNeeded.IsZero() {
+				packagesNeeded = decimal.NewFromInt(1)
+			}
+		}
+
+		// Calculate total cost by multiplying package price by number of packages
+		result.FinalCost = price.CalculateAmount(packagesNeeded)
+
+		// Calculate effective unit cost (cost per actual unit used)
+		if !quantity.IsZero() {
+			result.EffectiveUnitCost = result.FinalCost.Div(quantity)
+		}
+
+		return result
 
 	case types.BILLING_MODEL_TIERED:
 		result = s.calculateTieredCostWithBreakup(ctx, price, quantity)
