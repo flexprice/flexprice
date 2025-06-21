@@ -39,6 +39,8 @@ import (
 	ginadapter "github.com/awslabs/aws-lambda-go-api-proxy/gin"
 	_ "github.com/flexprice/flexprice/docs/swagger"
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/domain/integration"
+	"github.com/flexprice/flexprice/internal/domain/stripe"
 	"github.com/gin-gonic/gin"
 )
 
@@ -292,6 +294,12 @@ func startServer(
 	log *logger.Logger,
 	sentryService *sentry.Service,
 	eventPostProcessingSvc service.EventPostProcessingService,
+	processedEventRepo events.ProcessedEventRepository,
+	customerMappingRepo integration.EntityIntegrationMappingRepository,
+	stripeSyncBatchRepo integration.StripeSyncBatchRepository,
+	stripeTenantConfigRepo integration.StripeTenantConfigRepository,
+	meterProviderMappingRepo integration.MeterProviderMappingRepository,
+	stripeClient stripe.Client,
 ) {
 	mode := cfg.Deployment.Mode
 	if mode == "" {
@@ -307,13 +315,13 @@ func startServer(
 		startConsumer(lc, consumer, eventRepo, cfg, log, sentryService, eventPostProcessingSvc)
 		startMessageRouter(lc, router, webhookService, onboardingService, log)
 		startPostProcessingConsumer(lc, router, eventPostProcessingSvc, cfg, log)
-		startTemporalWorker(lc, temporalClient, &cfg.Temporal, log)
+		startTemporalWorker(lc, temporalClient, &cfg.Temporal, processedEventRepo, customerMappingRepo, stripeSyncBatchRepo, stripeTenantConfigRepo, meterProviderMappingRepo, stripeClient, log)
 	case types.ModeAPI:
 		startAPIServer(lc, r, cfg, log)
 		startMessageRouter(lc, router, webhookService, onboardingService, log)
 
 	case types.ModeTemporalWorker:
-		startTemporalWorker(lc, temporalClient, &cfg.Temporal, log)
+		startTemporalWorker(lc, temporalClient, &cfg.Temporal, processedEventRepo, customerMappingRepo, stripeSyncBatchRepo, stripeTenantConfigRepo, meterProviderMappingRepo, stripeClient, log)
 	case types.ModeConsumer:
 		if consumer == nil {
 			log.Fatal("Kafka consumer required for consumer mode")
@@ -334,10 +342,29 @@ func startTemporalWorker(
 	lc fx.Lifecycle,
 	temporalClient *temporal.TemporalClient,
 	cfg *config.TemporalConfig,
+	processedEventRepo events.ProcessedEventRepository,
+	customerMappingRepo integration.EntityIntegrationMappingRepository,
+	stripeSyncBatchRepo integration.StripeSyncBatchRepository,
+	stripeTenantConfigRepo integration.StripeTenantConfigRepository,
+	meterProviderMappingRepo integration.MeterProviderMappingRepository,
+	stripeClient stripe.Client,
 	log *logger.Logger,
 ) {
-	worker := temporal.NewWorker(temporalClient, *cfg, log)
-	worker.RegisterWithLifecycle(lc)
+	workerWrapper := temporal.NewWorker(temporalClient, *cfg, log)
+
+	// Register Stripe-sync activities so they're available to workflows
+	temporal.RegisterStripeSyncActivities(
+		workerWrapper.SDKWorker(),
+		processedEventRepo,
+		customerMappingRepo,
+		stripeSyncBatchRepo,
+		stripeTenantConfigRepo,
+		meterProviderMappingRepo,
+		stripeClient,
+		log,
+	)
+
+	workerWrapper.RegisterWithLifecycle(lc)
 }
 
 func startAPIServer(

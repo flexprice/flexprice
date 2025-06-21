@@ -4739,6 +4739,63 @@
                 }
             }
         },
+        "/stripe/meter-mappings": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Map a FlexPrice meter to a provider-specific meter (e.g. Stripe).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "stripe-meter-mapping"
+                ],
+                "summary": "Create Stripe meter mapping",
+                "parameters": [
+                    {
+                        "description": "Meter mapping request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CreateMeterMappingRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/dto.MeterMappingResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/subscriptions": {
             "get": {
                 "security": [
@@ -7026,6 +7083,33 @@
                 }
             }
         },
+        "dto.CreateMeterMappingRequest": {
+            "type": "object",
+            "required": [
+                "meter_id",
+                "provider_meter_id",
+                "provider_type"
+            ],
+            "properties": {
+                "configuration": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "meter_id": {
+                    "type": "string"
+                },
+                "provider_meter_id": {
+                    "type": "string"
+                },
+                "provider_type": {
+                    "description": "enum in service layer",
+                    "type": "string"
+                },
+                "sync_enabled": {
+                    "type": "boolean"
+                }
+            }
+        },
         "dto.CreateMeterRequest": {
             "type": "object",
             "required": [
@@ -8811,6 +8895,42 @@
                     "minLength": 8
                 },
                 "token": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.MeterMappingResponse": {
+            "type": "object",
+            "properties": {
+                "configuration": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "environment_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "meter_id": {
+                    "type": "string"
+                },
+                "provider_meter_id": {
+                    "type": "string"
+                },
+                "provider_type": {
+                    "type": "string"
+                },
+                "sync_enabled": {
+                    "type": "boolean"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
                     "type": "string"
                 }
             }

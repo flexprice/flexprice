@@ -324,6 +324,25 @@ definitions:
     - currency
     - customer_id
     type: object
+  dto.CreateMeterMappingRequest:
+    properties:
+      configuration:
+        additionalProperties: true
+        type: object
+      meter_id:
+        type: string
+      provider_meter_id:
+        type: string
+      provider_type:
+        description: enum in service layer
+        type: string
+      sync_enabled:
+        type: boolean
+    required:
+    - meter_id
+    - provider_meter_id
+    - provider_type
+    type: object
   dto.CreateMeterRequest:
     properties:
       aggregation:
@@ -1569,6 +1588,30 @@ definitions:
     required:
     - email
     - password
+    type: object
+  dto.MeterMappingResponse:
+    properties:
+      configuration:
+        additionalProperties: true
+        type: object
+      created_at:
+        type: string
+      environment_id:
+        type: string
+      id:
+        type: string
+      meter_id:
+        type: string
+      provider_meter_id:
+        type: string
+      provider_type:
+        type: string
+      sync_enabled:
+        type: boolean
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
     type: object
   dto.MeterResponse:
     properties:
@@ -6831,6 +6874,42 @@ paths:
       summary: Test Stripe connection
       tags:
       - stripe-config
+  /stripe/meter-mappings:
+    post:
+      consumes:
+      - application/json
+      description: Map a FlexPrice meter to a provider-specific meter (e.g. Stripe).
+      parameters:
+      - description: Meter mapping request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateMeterMappingRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.MeterMappingResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create Stripe meter mapping
+      tags:
+      - stripe-meter-mapping
   /subscriptions:
     get:
       description: Get subscriptions with optional filtering

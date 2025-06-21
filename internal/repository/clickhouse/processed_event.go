@@ -197,6 +197,7 @@ func (r *ProcessedEventRepository) BulkInsertProcessedEvents(ctx context.Context
 
 // GetProcessedEvents retrieves processed events based on the provided parameters
 func (r *ProcessedEventRepository) GetProcessedEvents(ctx context.Context, params *events.GetProcessedEventsParams) ([]*events.ProcessedEvent, uint64, error) {
+	// Build base queries with FINAL modifier positioned immediately after the table name.
 	query := `
 		SELECT 
 			id, tenant_id, external_customer_id, customer_id, event_name, source, 
@@ -204,7 +205,7 @@ func (r *ProcessedEventRepository) GetProcessedEvents(ctx context.Context, param
 			subscription_id, sub_line_item_id, price_id, meter_id, feature_id, period_id,
 			unique_hash, qty_total, qty_billable, qty_free_applied, tier_snapshot, 
 			unit_cost, cost, currency, version, sign, final_lag_ms
-		FROM events_processed
+		FROM events_processed FINAL
 		WHERE tenant_id = ?
 		AND environment_id = ?
 		AND timestamp >= ?
@@ -213,7 +214,7 @@ func (r *ProcessedEventRepository) GetProcessedEvents(ctx context.Context, param
 
 	countQuery := `
 		SELECT COUNT(*)
-		FROM events_processed
+		FROM events_processed FINAL
 		WHERE tenant_id = ?
 		AND environment_id = ?
 		AND timestamp >= ?
@@ -258,10 +259,6 @@ func (r *ProcessedEventRepository) GetProcessedEvents(ctx context.Context, param
 		args = append(args, params.PriceID)
 		countArgs = append(countArgs, params.PriceID)
 	}
-
-	// Add FINAL modifier to handle ReplacingMergeTree
-	query += " FINAL"
-	countQuery += " FINAL"
 
 	// Apply pagination
 	if params.Limit > 0 {
@@ -1078,7 +1075,7 @@ func (r *ProcessedEventRepository) GetBillableEventsForSyncWithProviderMapping(c
 			ep.meter_id,
 			ep.event_name,
 			-- Provider mappings from joined tables
-			COALESCE(cim.provider_customer_id, '') AS provider_customer_id,
+			COALESCE(cim.provider_entity_id, '') AS provider_customer_id,
 			COALESCE(mpm.provider_meter_id, ep.meter_id) AS provider_meter_id,
 			-- Aggregations with proper handling of signs for ReplacingMergeTree
 			sum(ep.qty_billable * ep.sign) AS aggregated_quantity,
@@ -1090,12 +1087,14 @@ func (r *ProcessedEventRepository) GetBillableEventsForSyncWithProviderMapping(c
 			ep.tenant_id,
 			ep.environment_id
 		FROM events_processed FINAL ep  -- Use FINAL for ReplacingMergeTree consistency
-		-- Left join with customer integration mappings to resolve provider customer IDs
-		LEFT JOIN customer_integration_mappings cim ON (
-			ep.customer_id = cim.customer_id 
+		-- Left join with entity integration mappings (customer entity_type) to resolve provider customer IDs
+		LEFT JOIN entity_integration_mappings cim ON (
+			ep.customer_id = cim.entity_id
+			AND cim.entity_type = 'customer'
 			AND cim.provider_type = ?
 			AND cim.tenant_id = ep.tenant_id
 			AND cim.environment_id = ep.environment_id
+			AND cim.status = 'published'
 		)
 		-- Left join with meter provider mappings to resolve provider meter IDs  
 		LEFT JOIN meter_provider_mappings mpm ON (
@@ -1113,12 +1112,12 @@ func (r *ProcessedEventRepository) GetBillableEventsForSyncWithProviderMapping(c
 			AND ep.qty_billable > 0  -- Only billable events
 			AND ep.sign != 0  -- Exclude logically deleted records
 			-- Only include events where we have either customer mapping or meter mapping
-			AND (cim.provider_customer_id IS NOT NULL OR mpm.provider_meter_id IS NOT NULL)
+			AND (cim.provider_entity_id IS NOT NULL OR mpm.provider_meter_id IS NOT NULL)
 		GROUP BY 
 			ep.customer_id,
 			ep.meter_id, 
 			ep.event_name,
-			cim.provider_customer_id,
+			cim.provider_entity_id,
 			mpm.provider_meter_id,
 			ep.tenant_id,
 			ep.environment_id

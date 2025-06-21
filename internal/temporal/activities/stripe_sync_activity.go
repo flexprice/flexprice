@@ -78,6 +78,10 @@ func (a *StripeSyncActivities) AggregateEventsActivity(ctx context.Context, inpu
 	}
 
 	// Get processed events for the time window
+	// Inject tenant and environment IDs into context so repository filters correctly
+	ctx = context.WithValue(ctx, types.CtxTenantID, input.TenantID)
+	ctx = context.WithValue(ctx, types.CtxEnvironmentID, input.EnvironmentID)
+
 	params := &events.GetProcessedEventsParams{
 		StartTime: input.WindowStart,
 		EndTime:   input.WindowEnd,
@@ -338,6 +342,12 @@ func (a *StripeSyncActivities) TrackSyncBatchActivity(ctx context.Context, input
 			status = integration.SyncStatusFailed
 		}
 
+		// Ensure context has tenant/environment for BaseModel defaults
+		batchCtx := context.WithValue(ctx, types.CtxTenantID, input.TenantID)
+		batchCtx = context.WithValue(batchCtx, types.CtxEnvironmentID, input.EnvironmentID)
+
+		base := types.GetDefaultBaseModel(batchCtx)
+
 		batch := &integration.StripeSyncBatch{
 			ID:                 result.BatchID,
 			EntityID:           result.CustomerID,
@@ -352,6 +362,8 @@ func (a *StripeSyncActivities) TrackSyncBatchActivity(ctx context.Context, input
 			ErrorMessage:       result.ErrorMessage,
 			WindowStart:        input.WindowStart,
 			WindowEnd:          input.WindowEnd,
+			EnvironmentID:      input.EnvironmentID,
+			BaseModel:          base,
 		}
 
 		batches = append(batches, batch)
