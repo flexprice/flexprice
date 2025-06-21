@@ -91,6 +91,7 @@ func (s *creditNoteService) CreateCreditNote(ctx context.Context, req *dto.Creat
 		)
 
 		// Convert to response
+
 		creditNote = cn
 		return nil
 	})
@@ -102,6 +103,11 @@ func (s *creditNoteService) CreateCreditNote(ctx context.Context, req *dto.Creat
 			"invoice_id", req.InvoiceID,
 			"reason", req.Reason,
 		)
+		return nil, err
+	}
+
+	// Process the credit note
+	if err := s.ProcessDraftCreditNote(ctx, creditNote.ID); err != nil {
 		return nil, err
 	}
 
@@ -184,12 +190,7 @@ func (s *creditNoteService) VoidCreditNote(ctx context.Context, id string) error
 	cn.CreditNoteStatus = types.CreditNoteStatusVoided
 
 	if err := s.CreditNoteRepo.Update(ctx, cn); err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to void credit note").
-			WithReportableDetails(map[string]any{
-				"credit_note_id": id,
-			}).
-			Mark(ierr.ErrDatabase)
+		return err
 	}
 
 	s.Logger.Infow("credit note voided successfully",
@@ -373,7 +374,7 @@ func (s *creditNoteService) validateCreditNoteAmounts(ctx context.Context, req *
 	// Validate line items and calculate total amount
 	totalCreditNoteAmount, err := s.validateLineItems(req, inv)
 	if err != nil {
-		return err
+		return err      
 	}
 
 	// Check if total amount exceeds max creditable amount

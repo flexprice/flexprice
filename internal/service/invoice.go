@@ -1049,7 +1049,6 @@ func (s *invoiceService) RecalculateInvoiceAmounts(ctx context.Context, invoiceI
 	inv.AmountRemaining = inv.AmountDue.Sub(inv.AmountPaid)
 
 	// Update the payment status if the invoice is fully paid
-	// TODO: Rethink on all the possible scenarios here if there are any
 	if inv.AmountRemaining.LessThanOrEqual(decimal.Zero) {
 		inv.PaymentStatus = types.PaymentStatusSucceeded
 	}

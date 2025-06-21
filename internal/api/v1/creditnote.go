@@ -4,10 +4,12 @@ import (
 	"net/http"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
+	"github.com/samber/lo"
 )
 
 type CreditNoteHandler struct {
@@ -25,18 +27,15 @@ func NewCreditNoteHandler(creditNoteService service.CreditNoteService, logger *l
 func (h *CreditNoteHandler) CreateCreditNote(c *gin.Context) {
 	var req dto.CreateCreditNoteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	if err := req.Validate(); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
 	response, err := h.creditNoteService.CreateCreditNote(c.Request.Context(), &req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.Error(err)
 		return
 	}
 
@@ -47,13 +46,15 @@ func (h *CreditNoteHandler) CreateCreditNote(c *gin.Context) {
 func (h *CreditNoteHandler) GetCreditNote(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "credit note ID is required"})
+		c.Error(ierr.NewError("credit note ID is required").
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
 	response, err := h.creditNoteService.GetCreditNote(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.Error(err)
 		return
 	}
 
@@ -64,18 +65,19 @@ func (h *CreditNoteHandler) GetCreditNote(c *gin.Context) {
 func (h *CreditNoteHandler) ListCreditNotes(c *gin.Context) {
 	var filter types.CreditNoteFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
-	if err := filter.Validate(); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+	if filter.GetLimit() == 0 {
+		filter.Limit = lo.ToPtr(types.GetDefaultFilter().Limit)
 	}
 
 	response, err := h.creditNoteService.ListCreditNotes(c.Request.Context(), &filter)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.Error(err)
 		return
 	}
 
@@ -86,13 +88,15 @@ func (h *CreditNoteHandler) ListCreditNotes(c *gin.Context) {
 func (h *CreditNoteHandler) VoidCreditNote(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "credit note ID is required"})
+		c.Error(ierr.NewError("credit note ID is required").
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
 	err := h.creditNoteService.VoidCreditNote(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.Error(err)
 		return
 	}
 
@@ -103,13 +107,15 @@ func (h *CreditNoteHandler) VoidCreditNote(c *gin.Context) {
 func (h *CreditNoteHandler) ProcessDraftCreditNote(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "credit note ID is required"})
+		c.Error(ierr.NewError("credit note ID is required").
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
 	err := h.creditNoteService.ProcessDraftCreditNote(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.Error(err)
 		return
 	}
 
