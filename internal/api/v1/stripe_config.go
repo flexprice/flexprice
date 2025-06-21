@@ -47,8 +47,8 @@ func (h *StripeConfigHandler) GetStripeConfig(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	// Extract tenant and environment from context
-	tenantID := c.Request.Context().Value(types.CtxTenantID).(string)
-	environmentID := c.Request.Context().Value(types.CtxEnvironmentID).(string)
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
 
 	h.logger.Infow("retrieving Stripe configuration",
 		"tenant_id", tenantID,
@@ -96,8 +96,8 @@ func (h *StripeConfigHandler) CreateOrUpdateStripeConfig(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	// Extract tenant and environment from context
-	tenantID := c.Request.Context().Value(types.CtxTenantID).(string)
-	environmentID := c.Request.Context().Value(types.CtxEnvironmentID).(string)
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
 
 	// Parse request body
 	var req dto.CreateOrUpdateStripeConfigRequest
@@ -198,8 +198,8 @@ func (h *StripeConfigHandler) DeleteStripeConfig(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	// Extract tenant and environment from context
-	tenantID := c.Request.Context().Value(types.CtxTenantID).(string)
-	environmentID := c.Request.Context().Value(types.CtxEnvironmentID).(string)
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
 
 	h.logger.Infow("deleting Stripe configuration",
 		"tenant_id", tenantID,
@@ -243,8 +243,8 @@ func (h *StripeConfigHandler) TestStripeConnection(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	// Extract tenant and environment from context
-	tenantID := c.Request.Context().Value(types.CtxTenantID).(string)
-	environmentID := c.Request.Context().Value(types.CtxEnvironmentID).(string)
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
 
 	h.logger.Infow("testing Stripe connection",
 		"tenant_id", tenantID,
@@ -292,8 +292,8 @@ func (h *StripeConfigHandler) GetStripeConfigStatus(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	// Extract tenant and environment from context
-	tenantID := c.Request.Context().Value(types.CtxTenantID).(string)
-	environmentID := c.Request.Context().Value(types.CtxEnvironmentID).(string)
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
 
 	h.logger.Infow("retrieving Stripe configuration status",
 		"tenant_id", tenantID,
@@ -339,8 +339,8 @@ func (h *StripeConfigHandler) GetStripeConfigStatus(c *gin.Context) {
 // @Router /stripe/config/history [get]
 func (h *StripeConfigHandler) ListStripeConfigHistory(c *gin.Context) {
 	// Extract tenant and environment from context
-	tenantID := c.Request.Context().Value(types.CtxTenantID).(string)
-	environmentID := c.Request.Context().Value(types.CtxEnvironmentID).(string)
+	tenantID := types.GetTenantID(c.Request.Context())
+	environmentID := types.GetEnvironmentID(c.Request.Context())
 
 	// Parse query parameters
 	limitStr := c.DefaultQuery("limit", "50")

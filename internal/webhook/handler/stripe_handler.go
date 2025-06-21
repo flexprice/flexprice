@@ -139,7 +139,7 @@ func (h *stripeWebhookHandler) handleCustomerCreated(ctx context.Context, event 
 
 	h.logger.Infow("customer data",
 		"customer_data", customerData,
-	)	
+	)
 
 	// Convert to processed customer
 	processedCustomer := customerData.ToProcessedCustomer()
@@ -291,6 +291,10 @@ func (h *stripeWebhookHandler) handleCustomerCreated(ctx context.Context, event 
 		processedCustomer.ExternalID,
 		processedCustomer.EnvironmentID,
 	)
+
+	// Set tenant and auditing information
+	mapping.TenantID = processedCustomer.TenantID
+	mapping.BaseModel = types.GetDefaultBaseModel(ctx)
 
 	// Add additional metadata
 	mapping.Metadata["stripe_created_at"] = strconv.FormatInt(customerData.Created, 10)

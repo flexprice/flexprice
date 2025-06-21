@@ -181,6 +181,7 @@ func main() {
 			service.NewOnboardingService,
 			service.NewBillingService,
 			service.NewCreditGrantService,
+			service.NewStripeIntegrationService,
 		),
 	)
 
@@ -228,6 +229,7 @@ func provideHandlers(
 	billingService service.BillingService,
 	creditGrantService service.CreditGrantService,
 	stripeWebhookHandler whandler.StripeWebhookHandler,
+	stripeIntegrationService service.StripeIntegrationService,
 ) api.Handlers {
 	return api.Handlers{
 		Events:            v1.NewEventsHandler(eventService, eventPostProcessingService, logger),
@@ -254,6 +256,7 @@ func provideHandlers(
 		CronWallet:        cron.NewWalletCronHandler(logger, temporalService, walletService, tenantService),
 		CreditGrant:       v1.NewCreditGrantHandler(creditGrantService, logger),
 		StripeWebhook:     v1.NewStripeWebhookHandler(stripeWebhookHandler, logger),
+		StripeConfig:      v1.NewStripeConfigHandler(stripeIntegrationService, logger),
 	}
 }
 

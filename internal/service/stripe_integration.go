@@ -6,8 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flexprice/flexprice/internal/domain/integration"
+	integration "github.com/flexprice/flexprice/internal/domain/integration"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/temporal"
 	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/sdk/client"
 )
@@ -221,14 +222,14 @@ type ListMeterMappingsResponse struct {
 
 type stripeIntegrationService struct {
 	ServiceParams
-	temporalClient client.Client
+	temporalService *temporal.Service
 }
 
 // NewStripeIntegrationService creates a new Stripe integration service
-func NewStripeIntegrationService(params ServiceParams, temporalClient client.Client) StripeIntegrationService {
+func NewStripeIntegrationService(params ServiceParams, temporalService *temporal.Service) StripeIntegrationService {
 	return &stripeIntegrationService{
-		ServiceParams:  params,
-		temporalClient: temporalClient,
+		ServiceParams:   params,
+		temporalService: temporalService,
 	}
 }
 
@@ -482,7 +483,7 @@ func (s *stripeIntegrationService) TriggerManualSync(ctx context.Context, req Tr
 		TaskQueue: "stripe-sync",
 	}
 
-	we, err := s.temporalClient.ExecuteWorkflow(ctx, workflowOptions, "StripeManualSyncWorkflow", workflowInput)
+	we, err := s.temporalService.ExecuteWorkflow(ctx, workflowOptions, "StripeManualSyncWorkflow", workflowInput)
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Failed to trigger manual sync workflow").
