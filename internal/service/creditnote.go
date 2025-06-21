@@ -234,32 +234,24 @@ func (s *creditNoteService) ProcessDraftCreditNote(ctx context.Context, id strin
 	invoiceService := NewInvoiceService(s.ServiceParams)
 	walletService := NewWalletService(s.ServiceParams)
 
-	// Recalculate invoice amounts
+	// Process the credit note in transaction
 	err = s.DB.WithTx(ctx, func(tx context.Context) error {
-		// Update credit note status
+		// Update credit note status first
 		cn.CreditNoteStatus = types.CreditNoteStatusFinalized
 		if err := s.CreditNoteRepo.Update(tx, cn); err != nil {
 			return err
 		}
 
-		// Recalculate invoice amounts for adjustment credit note
-		if cn.CreditNoteType == types.CreditNoteTypeAdjustment {
-			// Recalculate invoice amounts
-			err = invoiceService.RecalculateInvoiceAmounts(tx, cn.InvoiceID)
-			if err != nil {
-				return err
-			}
-		}
-
+		// Handle refund credit notes
 		if cn.CreditNoteType == types.CreditNoteTypeRefund {
-			// Get invoice
-			inv, err := invoiceService.GetInvoice(ctx, cn.InvoiceID)
+			// Get invoice using transaction context
+			inv, err := invoiceService.GetInvoice(tx, cn.InvoiceID)
 			if err != nil {
 				return err
 			}
 
-			// Find or create wallet outside of transaction for better error handling
-			wallets, err := walletService.GetWalletsByCustomerID(ctx, inv.CustomerID)
+			// Find or create wallet using transaction context
+			wallets, err := walletService.GetWalletsByCustomerID(tx, inv.CustomerID)
 			if err != nil {
 				return err
 			}
@@ -272,32 +264,30 @@ func (s *creditNoteService) ProcessDraftCreditNote(ctx context.Context, id strin
 				}
 			}
 			if selectedWallet == nil {
-				// Create new wallet
+				// Create new wallet using transaction context
 				walletReq := &dto.CreateWalletRequest{
 					Name:       "Subscription Wallet",
 					CustomerID: inv.CustomerID,
 					Currency:   inv.Currency,
 				}
 
-				selectedWallet, err = walletService.CreateWallet(ctx, walletReq)
+				selectedWallet, err = walletService.CreateWallet(tx, walletReq)
 				if err != nil {
 					return err
 				}
-
 			}
 
-			// Top up wallet
+			// Top up wallet using transaction context
 			walletTxnReq := &dto.TopUpWalletRequest{
 				Amount:            cn.TotalAmount.Neg(),
 				TransactionReason: types.TransactionReasonCreditNoteRefund,
 				Metadata:          types.Metadata{"credit_note_id": cn.ID},
 			}
 
-			_, err = walletService.TopUpWallet(ctx, inv.CustomerID, walletTxnReq)
+			_, err = walletService.TopUpWallet(tx, inv.CustomerID, walletTxnReq)
 			if err != nil {
 				return err
 			}
-
 		}
 
 		return nil
@@ -305,6 +295,19 @@ func (s *creditNoteService) ProcessDraftCreditNote(ctx context.Context, id strin
 
 	if err != nil {
 		return err
+	}
+
+	// Recalculate invoice amounts AFTER transaction is committed
+	// This ensures the finalized credit note is visible to the recalculation query
+	if cn.CreditNoteType == types.CreditNoteTypeAdjustment {
+		err = invoiceService.RecalculateInvoiceAmounts(ctx, cn.InvoiceID)
+		if err != nil {
+			s.Logger.Errorw("failed to recalculate invoice amounts after credit note processing",
+				"error", err,
+				"credit_note_id", id,
+				"invoice_id", cn.InvoiceID)
+			return err
+		}
 	}
 
 	s.Logger.Infow("credit note processed successfully",
