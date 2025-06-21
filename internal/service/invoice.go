@@ -237,6 +237,17 @@ func (s *invoiceService) GetInvoice(ctx context.Context, id string) (*dto.Invoic
 }
 
 func (s *invoiceService) ListInvoices(ctx context.Context, filter *types.InvoiceFilter) (*dto.ListInvoicesResponse, error) {
+
+	if filter.ExternalCustomerID != "" {
+		customer, err := s.CustomerRepo.GetByLookupKey(ctx, filter.ExternalCustomerID)
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("failed to get customer by external customer id").
+				Mark(ierr.ErrNotFound)
+		}
+		filter.CustomerID = customer.ID
+	}
+
 	invoices, err := s.InvoiceRepo.List(ctx, filter)
 	if err != nil {
 		return nil, err

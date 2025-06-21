@@ -253,3 +253,37 @@ func (h *PlanHandler) GetPlanCreditGrants(c *gin.Context) {
 
 	c.JSON(http.StatusOK, resp)
 }
+
+// @Summary Synchronize plan prices
+// @Description Synchronize current plan prices with all existing active subscriptions
+// @Tags Plans
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Plan ID"
+// @Success 200 {object} service.SyncPlanPricesResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 422 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /plans/{id}/sync/subscriptions [post]
+func (h *PlanHandler) SyncPlanPrices(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("plan ID is required").
+			WithHint("Plan ID is required").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	ctx := c.Request.Context()
+	resp, err := h.service.SyncPlanPrices(ctx, id)
+	if err != nil {
+		c.Error(ierr.NewError("failed to sync plan prices").
+			WithHint("failed to sync plan prices").
+			Mark(ierr.ErrInternal))
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}

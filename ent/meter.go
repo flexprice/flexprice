@@ -42,8 +42,29 @@ type Meter struct {
 	// Filters holds the value of the "filters" field.
 	Filters []schema.MeterFilter `json:"filters,omitempty"`
 	// ResetUsage holds the value of the "reset_usage" field.
-	ResetUsage   string `json:"reset_usage,omitempty"`
+	ResetUsage string `json:"reset_usage,omitempty"`
+	// Edges holds the relations/edges for other nodes in the graph.
+	// The values are being populated by the MeterQuery when eager-loading is set.
+	Edges        MeterEdges `json:"edges"`
 	selectValues sql.SelectValues
+}
+
+// MeterEdges holds the relations/edges for other nodes in the graph.
+type MeterEdges struct {
+	// Costsheet holds the value of the costsheet edge.
+	Costsheet []*Costsheet `json:"costsheet,omitempty"`
+	// loadedTypes holds the information for reporting if a
+	// type was loaded (or requested) in eager-loading or not.
+	loadedTypes [1]bool
+}
+
+// CostsheetOrErr returns the Costsheet value or an error if the edge
+// was not loaded in eager-loading.
+func (e MeterEdges) CostsheetOrErr() ([]*Costsheet, error) {
+	if e.loadedTypes[0] {
+		return e.Costsheet, nil
+	}
+	return nil, &NotLoadedError{edge: "costsheet"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -165,6 +186,11 @@ func (m *Meter) assignValues(columns []string, values []any) error {
 // This includes values selected through modifiers, order, etc.
 func (m *Meter) Value(name string) (ent.Value, error) {
 	return m.selectValues.Get(name)
+}
+
+// QueryCostsheet queries the "costsheet" edge of the Meter entity.
+func (m *Meter) QueryCostsheet() *CostsheetQuery {
+	return NewMeterClient(m.config).QueryCostsheet(m)
 }
 
 // Update returns a builder for updating this Meter.

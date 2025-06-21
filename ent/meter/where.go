@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/flexprice/flexprice/ent/predicate"
 )
 
@@ -742,6 +743,29 @@ func ResetUsageEqualFold(v string) predicate.Meter {
 // ResetUsageContainsFold applies the ContainsFold predicate on the "reset_usage" field.
 func ResetUsageContainsFold(v string) predicate.Meter {
 	return predicate.Meter(sql.FieldContainsFold(FieldResetUsage, v))
+}
+
+// HasCostsheet applies the HasEdge predicate on the "costsheet" edge.
+func HasCostsheet() predicate.Meter {
+	return predicate.Meter(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, CostsheetTable, CostsheetColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasCostsheetWith applies the HasEdge predicate on the "costsheet" edge with a given conditions (other predicates).
+func HasCostsheetWith(preds ...predicate.Costsheet) predicate.Meter {
+	return predicate.Meter(func(s *sql.Selector) {
+		step := newCostsheetStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
 }
 
 // And groups predicates with the AND operator between them.

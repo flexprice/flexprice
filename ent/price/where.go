@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/flexprice/flexprice/ent/predicate"
 )
 
@@ -1597,6 +1598,29 @@ func MetadataIsNil() predicate.Price {
 // MetadataNotNil applies the NotNil predicate on the "metadata" field.
 func MetadataNotNil() predicate.Price {
 	return predicate.Price(sql.FieldNotNull(FieldMetadata))
+}
+
+// HasCostsheet applies the HasEdge predicate on the "costsheet" edge.
+func HasCostsheet() predicate.Price {
+	return predicate.Price(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, CostsheetTable, CostsheetColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasCostsheetWith applies the HasEdge predicate on the "costsheet" edge with a given conditions (other predicates).
+func HasCostsheetWith(preds ...predicate.Costsheet) predicate.Price {
+	return predicate.Price(func(s *sql.Selector) {
+		step := newCostsheetStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
 }
 
 // And groups predicates with the AND operator between them.

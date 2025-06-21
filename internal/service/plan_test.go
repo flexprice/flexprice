@@ -26,19 +26,14 @@ func TestPlanService(t *testing.T) {
 
 func (s *PlanServiceSuite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
-	s.setupService()
-}
-
-func (s *PlanServiceSuite) setupService() {
-	stores := s.GetStores()
 	s.service = NewPlanService(
 		s.GetDB(),
-		stores.PlanRepo,
-		stores.PriceRepo,
-		stores.SubscriptionRepo,
-		stores.MeterRepo,
-		stores.EntitlementRepo,
-		stores.FeatureRepo,
+		s.GetStores().PlanRepo,
+		s.GetStores().PriceRepo,
+		s.GetStores().SubscriptionRepo,
+		s.GetStores().MeterRepo,
+		s.GetStores().EntitlementRepo,
+		s.GetStores().FeatureRepo,
 		s.GetLogger(),
 	)
 }

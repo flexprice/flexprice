@@ -34,6 +34,7 @@ type Handlers struct {
 	Payment           *v1.PaymentHandler
 	Task              *v1.TaskHandler
 	Secret            *v1.SecretHandler
+	CostSheet         *v1.CostSheetHandler
 	// Portal handlers
 	Onboarding *v1.OnboardingHandler
 	// Cron jobs : TODO: move crons out of API based architecture
@@ -158,6 +159,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			plan.GET("/:id", handlers.Plan.GetPlan)
 			plan.PUT("/:id", handlers.Plan.UpdatePlan)
 			plan.DELETE("/:id", handlers.Plan.DeletePlan)
+			plan.POST("/:id/sync/subscriptions", handlers.Plan.SyncPlanPrices)
 
 			// entitlement routes
 			plan.GET("/:id/entitlements", handlers.Plan.GetPlanEntitlements)
@@ -278,6 +280,18 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 				integrations.GET("/:provider", handlers.Secret.GetIntegration)
 				integrations.DELETE("/:id", handlers.Secret.DeleteIntegration)
 			}
+		}
+
+		// Cost sheet routes
+		costSheet := v1Private.Group("/costs")
+		{
+			costSheet.POST("", handlers.CostSheet.CreateCostSheet)
+			costSheet.GET("", handlers.CostSheet.ListCostSheets)
+			costSheet.GET("/:id", handlers.CostSheet.GetCostSheet)
+			costSheet.PUT("/:id", handlers.CostSheet.UpdateCostSheet)
+			costSheet.DELETE("/:id", handlers.CostSheet.DeleteCostSheet)
+			costSheet.GET("/breakdown/:subscription_id", handlers.CostSheet.GetCostBreakDown)
+			costSheet.POST("/roi", handlers.CostSheet.CalculateROI)
 		}
 
 		// Admin routes (API Key only)

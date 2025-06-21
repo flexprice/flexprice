@@ -25,6 +25,10 @@ type PriceService interface {
 	// CalculateCostWithBreakup calculates the cost for a given price and quantity
 	// and returns detailed information about the calculation
 	CalculateCostWithBreakup(ctx context.Context, price *price.Price, quantity decimal.Decimal, round bool) dto.CostBreakup
+
+	// CalculateCostSheetPrice calculates the cost for a given price and quantity
+	// specifically for costsheet calculations
+	CalculateCostSheetPrice(ctx context.Context, price *price.Price, quantity decimal.Decimal) decimal.Decimal
 }
 
 type priceService struct {
@@ -444,4 +448,13 @@ func (s *priceService) calculateTieredCostWithBreakup(ctx context.Context, price
 	}
 
 	return result
+}
+
+// CalculateCostSheetPrice calculates the cost for a given price and quantity
+// specifically for costsheet calculations. This is similar to CalculateCost
+// but may have specific rules for costsheet pricing.
+func (s *priceService) CalculateCostSheetPrice(ctx context.Context, price *price.Price, quantity decimal.Decimal) decimal.Decimal {
+	// For now, we'll use the same calculation as CalculateCost
+	// In the future, we can add costsheet-specific pricing rules here
+	return s.CalculateCost(ctx, price, quantity)
 }

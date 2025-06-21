@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/auth"
 	"github.com/flexprice/flexprice/ent/billingsequence"
+	"github.com/flexprice/flexprice/ent/costsheet"
 	"github.com/flexprice/flexprice/ent/creditgrant"
 	"github.com/flexprice/flexprice/ent/creditgrantapplication"
 	"github.com/flexprice/flexprice/ent/customer"
@@ -55,6 +56,7 @@ const (
 	// Node types.
 	TypeAuth                      = "Auth"
 	TypeBillingSequence           = "BillingSequence"
+	TypeCostsheet                 = "Costsheet"
 	TypeCreditGrant               = "CreditGrant"
 	TypeCreditGrantApplication    = "CreditGrantApplication"
 	TypeCustomer                  = "Customer"
@@ -1254,6 +1256,930 @@ func (m *BillingSequenceMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *BillingSequenceMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown BillingSequence edge %s", name)
+}
+
+// CostsheetMutation represents an operation that mutates the Costsheet nodes in the graph.
+type CostsheetMutation struct {
+	config
+	op             Op
+	typ            string
+	id             *string
+	tenant_id      *string
+	status         *string
+	created_at     *time.Time
+	updated_at     *time.Time
+	created_by     *string
+	updated_by     *string
+	environment_id *string
+	clearedFields  map[string]struct{}
+	meter          *string
+	clearedmeter   bool
+	price          *string
+	clearedprice   bool
+	done           bool
+	oldValue       func(context.Context) (*Costsheet, error)
+	predicates     []predicate.Costsheet
+}
+
+var _ ent.Mutation = (*CostsheetMutation)(nil)
+
+// costsheetOption allows management of the mutation configuration using functional options.
+type costsheetOption func(*CostsheetMutation)
+
+// newCostsheetMutation creates new mutation for the Costsheet entity.
+func newCostsheetMutation(c config, op Op, opts ...costsheetOption) *CostsheetMutation {
+	m := &CostsheetMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeCostsheet,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withCostsheetID sets the ID field of the mutation.
+func withCostsheetID(id string) costsheetOption {
+	return func(m *CostsheetMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *Costsheet
+		)
+		m.oldValue = func(ctx context.Context) (*Costsheet, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().Costsheet.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withCostsheet sets the old Costsheet of the mutation.
+func withCostsheet(node *Costsheet) costsheetOption {
+	return func(m *CostsheetMutation) {
+		m.oldValue = func(context.Context) (*Costsheet, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m CostsheetMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m CostsheetMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of Costsheet entities.
+func (m *CostsheetMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *CostsheetMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *CostsheetMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().Costsheet.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (m *CostsheetMutation) SetTenantID(s string) {
+	m.tenant_id = &s
+}
+
+// TenantID returns the value of the "tenant_id" field in the mutation.
+func (m *CostsheetMutation) TenantID() (r string, exists bool) {
+	v := m.tenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTenantID returns the old "tenant_id" field's value of the Costsheet entity.
+// If the Costsheet object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CostsheetMutation) OldTenantID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTenantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
+	}
+	return oldValue.TenantID, nil
+}
+
+// ResetTenantID resets all changes to the "tenant_id" field.
+func (m *CostsheetMutation) ResetTenantID() {
+	m.tenant_id = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *CostsheetMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *CostsheetMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the Costsheet entity.
+// If the Costsheet object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CostsheetMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *CostsheetMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *CostsheetMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *CostsheetMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the Costsheet entity.
+// If the Costsheet object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CostsheetMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *CostsheetMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *CostsheetMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *CostsheetMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the Costsheet entity.
+// If the Costsheet object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CostsheetMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *CostsheetMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *CostsheetMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *CostsheetMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the Costsheet entity.
+// If the Costsheet object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CostsheetMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (m *CostsheetMutation) ClearCreatedBy() {
+	m.created_by = nil
+	m.clearedFields[costsheet.FieldCreatedBy] = struct{}{}
+}
+
+// CreatedByCleared returns if the "created_by" field was cleared in this mutation.
+func (m *CostsheetMutation) CreatedByCleared() bool {
+	_, ok := m.clearedFields[costsheet.FieldCreatedBy]
+	return ok
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *CostsheetMutation) ResetCreatedBy() {
+	m.created_by = nil
+	delete(m.clearedFields, costsheet.FieldCreatedBy)
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (m *CostsheetMutation) SetUpdatedBy(s string) {
+	m.updated_by = &s
+}
+
+// UpdatedBy returns the value of the "updated_by" field in the mutation.
+func (m *CostsheetMutation) UpdatedBy() (r string, exists bool) {
+	v := m.updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedBy returns the old "updated_by" field's value of the Costsheet entity.
+// If the Costsheet object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CostsheetMutation) OldUpdatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
+	}
+	return oldValue.UpdatedBy, nil
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (m *CostsheetMutation) ClearUpdatedBy() {
+	m.updated_by = nil
+	m.clearedFields[costsheet.FieldUpdatedBy] = struct{}{}
+}
+
+// UpdatedByCleared returns if the "updated_by" field was cleared in this mutation.
+func (m *CostsheetMutation) UpdatedByCleared() bool {
+	_, ok := m.clearedFields[costsheet.FieldUpdatedBy]
+	return ok
+}
+
+// ResetUpdatedBy resets all changes to the "updated_by" field.
+func (m *CostsheetMutation) ResetUpdatedBy() {
+	m.updated_by = nil
+	delete(m.clearedFields, costsheet.FieldUpdatedBy)
+}
+
+// SetEnvironmentID sets the "environment_id" field.
+func (m *CostsheetMutation) SetEnvironmentID(s string) {
+	m.environment_id = &s
+}
+
+// EnvironmentID returns the value of the "environment_id" field in the mutation.
+func (m *CostsheetMutation) EnvironmentID() (r string, exists bool) {
+	v := m.environment_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnvironmentID returns the old "environment_id" field's value of the Costsheet entity.
+// If the Costsheet object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CostsheetMutation) OldEnvironmentID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnvironmentID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnvironmentID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnvironmentID: %w", err)
+	}
+	return oldValue.EnvironmentID, nil
+}
+
+// ClearEnvironmentID clears the value of the "environment_id" field.
+func (m *CostsheetMutation) ClearEnvironmentID() {
+	m.environment_id = nil
+	m.clearedFields[costsheet.FieldEnvironmentID] = struct{}{}
+}
+
+// EnvironmentIDCleared returns if the "environment_id" field was cleared in this mutation.
+func (m *CostsheetMutation) EnvironmentIDCleared() bool {
+	_, ok := m.clearedFields[costsheet.FieldEnvironmentID]
+	return ok
+}
+
+// ResetEnvironmentID resets all changes to the "environment_id" field.
+func (m *CostsheetMutation) ResetEnvironmentID() {
+	m.environment_id = nil
+	delete(m.clearedFields, costsheet.FieldEnvironmentID)
+}
+
+// SetMeterID sets the "meter_id" field.
+func (m *CostsheetMutation) SetMeterID(s string) {
+	m.meter = &s
+}
+
+// MeterID returns the value of the "meter_id" field in the mutation.
+func (m *CostsheetMutation) MeterID() (r string, exists bool) {
+	v := m.meter
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMeterID returns the old "meter_id" field's value of the Costsheet entity.
+// If the Costsheet object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CostsheetMutation) OldMeterID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMeterID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMeterID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMeterID: %w", err)
+	}
+	return oldValue.MeterID, nil
+}
+
+// ResetMeterID resets all changes to the "meter_id" field.
+func (m *CostsheetMutation) ResetMeterID() {
+	m.meter = nil
+}
+
+// SetPriceID sets the "price_id" field.
+func (m *CostsheetMutation) SetPriceID(s string) {
+	m.price = &s
+}
+
+// PriceID returns the value of the "price_id" field in the mutation.
+func (m *CostsheetMutation) PriceID() (r string, exists bool) {
+	v := m.price
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPriceID returns the old "price_id" field's value of the Costsheet entity.
+// If the Costsheet object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CostsheetMutation) OldPriceID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPriceID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPriceID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPriceID: %w", err)
+	}
+	return oldValue.PriceID, nil
+}
+
+// ResetPriceID resets all changes to the "price_id" field.
+func (m *CostsheetMutation) ResetPriceID() {
+	m.price = nil
+}
+
+// ClearMeter clears the "meter" edge to the Meter entity.
+func (m *CostsheetMutation) ClearMeter() {
+	m.clearedmeter = true
+	m.clearedFields[costsheet.FieldMeterID] = struct{}{}
+}
+
+// MeterCleared reports if the "meter" edge to the Meter entity was cleared.
+func (m *CostsheetMutation) MeterCleared() bool {
+	return m.clearedmeter
+}
+
+// MeterIDs returns the "meter" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// MeterID instead. It exists only for internal usage by the builders.
+func (m *CostsheetMutation) MeterIDs() (ids []string) {
+	if id := m.meter; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetMeter resets all changes to the "meter" edge.
+func (m *CostsheetMutation) ResetMeter() {
+	m.meter = nil
+	m.clearedmeter = false
+}
+
+// ClearPrice clears the "price" edge to the Price entity.
+func (m *CostsheetMutation) ClearPrice() {
+	m.clearedprice = true
+	m.clearedFields[costsheet.FieldPriceID] = struct{}{}
+}
+
+// PriceCleared reports if the "price" edge to the Price entity was cleared.
+func (m *CostsheetMutation) PriceCleared() bool {
+	return m.clearedprice
+}
+
+// PriceIDs returns the "price" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// PriceID instead. It exists only for internal usage by the builders.
+func (m *CostsheetMutation) PriceIDs() (ids []string) {
+	if id := m.price; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetPrice resets all changes to the "price" edge.
+func (m *CostsheetMutation) ResetPrice() {
+	m.price = nil
+	m.clearedprice = false
+}
+
+// Where appends a list predicates to the CostsheetMutation builder.
+func (m *CostsheetMutation) Where(ps ...predicate.Costsheet) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the CostsheetMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *CostsheetMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.Costsheet, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *CostsheetMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *CostsheetMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (Costsheet).
+func (m *CostsheetMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *CostsheetMutation) Fields() []string {
+	fields := make([]string, 0, 9)
+	if m.tenant_id != nil {
+		fields = append(fields, costsheet.FieldTenantID)
+	}
+	if m.status != nil {
+		fields = append(fields, costsheet.FieldStatus)
+	}
+	if m.created_at != nil {
+		fields = append(fields, costsheet.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, costsheet.FieldUpdatedAt)
+	}
+	if m.created_by != nil {
+		fields = append(fields, costsheet.FieldCreatedBy)
+	}
+	if m.updated_by != nil {
+		fields = append(fields, costsheet.FieldUpdatedBy)
+	}
+	if m.environment_id != nil {
+		fields = append(fields, costsheet.FieldEnvironmentID)
+	}
+	if m.meter != nil {
+		fields = append(fields, costsheet.FieldMeterID)
+	}
+	if m.price != nil {
+		fields = append(fields, costsheet.FieldPriceID)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *CostsheetMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case costsheet.FieldTenantID:
+		return m.TenantID()
+	case costsheet.FieldStatus:
+		return m.Status()
+	case costsheet.FieldCreatedAt:
+		return m.CreatedAt()
+	case costsheet.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case costsheet.FieldCreatedBy:
+		return m.CreatedBy()
+	case costsheet.FieldUpdatedBy:
+		return m.UpdatedBy()
+	case costsheet.FieldEnvironmentID:
+		return m.EnvironmentID()
+	case costsheet.FieldMeterID:
+		return m.MeterID()
+	case costsheet.FieldPriceID:
+		return m.PriceID()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *CostsheetMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case costsheet.FieldTenantID:
+		return m.OldTenantID(ctx)
+	case costsheet.FieldStatus:
+		return m.OldStatus(ctx)
+	case costsheet.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case costsheet.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case costsheet.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case costsheet.FieldUpdatedBy:
+		return m.OldUpdatedBy(ctx)
+	case costsheet.FieldEnvironmentID:
+		return m.OldEnvironmentID(ctx)
+	case costsheet.FieldMeterID:
+		return m.OldMeterID(ctx)
+	case costsheet.FieldPriceID:
+		return m.OldPriceID(ctx)
+	}
+	return nil, fmt.Errorf("unknown Costsheet field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CostsheetMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case costsheet.FieldTenantID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTenantID(v)
+		return nil
+	case costsheet.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case costsheet.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case costsheet.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case costsheet.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case costsheet.FieldUpdatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedBy(v)
+		return nil
+	case costsheet.FieldEnvironmentID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnvironmentID(v)
+		return nil
+	case costsheet.FieldMeterID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMeterID(v)
+		return nil
+	case costsheet.FieldPriceID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPriceID(v)
+		return nil
+	}
+	return fmt.Errorf("unknown Costsheet field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *CostsheetMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *CostsheetMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CostsheetMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown Costsheet numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *CostsheetMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(costsheet.FieldCreatedBy) {
+		fields = append(fields, costsheet.FieldCreatedBy)
+	}
+	if m.FieldCleared(costsheet.FieldUpdatedBy) {
+		fields = append(fields, costsheet.FieldUpdatedBy)
+	}
+	if m.FieldCleared(costsheet.FieldEnvironmentID) {
+		fields = append(fields, costsheet.FieldEnvironmentID)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *CostsheetMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *CostsheetMutation) ClearField(name string) error {
+	switch name {
+	case costsheet.FieldCreatedBy:
+		m.ClearCreatedBy()
+		return nil
+	case costsheet.FieldUpdatedBy:
+		m.ClearUpdatedBy()
+		return nil
+	case costsheet.FieldEnvironmentID:
+		m.ClearEnvironmentID()
+		return nil
+	}
+	return fmt.Errorf("unknown Costsheet nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *CostsheetMutation) ResetField(name string) error {
+	switch name {
+	case costsheet.FieldTenantID:
+		m.ResetTenantID()
+		return nil
+	case costsheet.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case costsheet.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case costsheet.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case costsheet.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case costsheet.FieldUpdatedBy:
+		m.ResetUpdatedBy()
+		return nil
+	case costsheet.FieldEnvironmentID:
+		m.ResetEnvironmentID()
+		return nil
+	case costsheet.FieldMeterID:
+		m.ResetMeterID()
+		return nil
+	case costsheet.FieldPriceID:
+		m.ResetPriceID()
+		return nil
+	}
+	return fmt.Errorf("unknown Costsheet field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *CostsheetMutation) AddedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.meter != nil {
+		edges = append(edges, costsheet.EdgeMeter)
+	}
+	if m.price != nil {
+		edges = append(edges, costsheet.EdgePrice)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *CostsheetMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case costsheet.EdgeMeter:
+		if id := m.meter; id != nil {
+			return []ent.Value{*id}
+		}
+	case costsheet.EdgePrice:
+		if id := m.price; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *CostsheetMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 2)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *CostsheetMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *CostsheetMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.clearedmeter {
+		edges = append(edges, costsheet.EdgeMeter)
+	}
+	if m.clearedprice {
+		edges = append(edges, costsheet.EdgePrice)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *CostsheetMutation) EdgeCleared(name string) bool {
+	switch name {
+	case costsheet.EdgeMeter:
+		return m.clearedmeter
+	case costsheet.EdgePrice:
+		return m.clearedprice
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *CostsheetMutation) ClearEdge(name string) error {
+	switch name {
+	case costsheet.EdgeMeter:
+		m.ClearMeter()
+		return nil
+	case costsheet.EdgePrice:
+		m.ClearPrice()
+		return nil
+	}
+	return fmt.Errorf("unknown Costsheet unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *CostsheetMutation) ResetEdge(name string) error {
+	switch name {
+	case costsheet.EdgeMeter:
+		m.ResetMeter()
+		return nil
+	case costsheet.EdgePrice:
+		m.ResetPrice()
+		return nil
+	}
+	return fmt.Errorf("unknown Costsheet edge %s", name)
 }
 
 // CreditGrantMutation represents an operation that mutates the CreditGrant nodes in the graph.
@@ -14505,26 +15431,29 @@ func (m *InvoiceSequenceMutation) ResetEdge(name string) error {
 // MeterMutation represents an operation that mutates the Meter nodes in the graph.
 type MeterMutation struct {
 	config
-	op             Op
-	typ            string
-	id             *string
-	tenant_id      *string
-	status         *string
-	created_at     *time.Time
-	updated_at     *time.Time
-	created_by     *string
-	updated_by     *string
-	environment_id *string
-	event_name     *string
-	name           *string
-	aggregation    *schema.MeterAggregation
-	filters        *[]schema.MeterFilter
-	appendfilters  []schema.MeterFilter
-	reset_usage    *string
-	clearedFields  map[string]struct{}
-	done           bool
-	oldValue       func(context.Context) (*Meter, error)
-	predicates     []predicate.Meter
+	op               Op
+	typ              string
+	id               *string
+	tenant_id        *string
+	status           *string
+	created_at       *time.Time
+	updated_at       *time.Time
+	created_by       *string
+	updated_by       *string
+	environment_id   *string
+	event_name       *string
+	name             *string
+	aggregation      *schema.MeterAggregation
+	filters          *[]schema.MeterFilter
+	appendfilters    []schema.MeterFilter
+	reset_usage      *string
+	clearedFields    map[string]struct{}
+	costsheet        map[string]struct{}
+	removedcostsheet map[string]struct{}
+	clearedcostsheet bool
+	done             bool
+	oldValue         func(context.Context) (*Meter, error)
+	predicates       []predicate.Meter
 }
 
 var _ ent.Mutation = (*MeterMutation)(nil)
@@ -15117,6 +16046,60 @@ func (m *MeterMutation) ResetResetUsage() {
 	m.reset_usage = nil
 }
 
+// AddCostsheetIDs adds the "costsheet" edge to the Costsheet entity by ids.
+func (m *MeterMutation) AddCostsheetIDs(ids ...string) {
+	if m.costsheet == nil {
+		m.costsheet = make(map[string]struct{})
+	}
+	for i := range ids {
+		m.costsheet[ids[i]] = struct{}{}
+	}
+}
+
+// ClearCostsheet clears the "costsheet" edge to the Costsheet entity.
+func (m *MeterMutation) ClearCostsheet() {
+	m.clearedcostsheet = true
+}
+
+// CostsheetCleared reports if the "costsheet" edge to the Costsheet entity was cleared.
+func (m *MeterMutation) CostsheetCleared() bool {
+	return m.clearedcostsheet
+}
+
+// RemoveCostsheetIDs removes the "costsheet" edge to the Costsheet entity by IDs.
+func (m *MeterMutation) RemoveCostsheetIDs(ids ...string) {
+	if m.removedcostsheet == nil {
+		m.removedcostsheet = make(map[string]struct{})
+	}
+	for i := range ids {
+		delete(m.costsheet, ids[i])
+		m.removedcostsheet[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedCostsheet returns the removed IDs of the "costsheet" edge to the Costsheet entity.
+func (m *MeterMutation) RemovedCostsheetIDs() (ids []string) {
+	for id := range m.removedcostsheet {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// CostsheetIDs returns the "costsheet" edge IDs in the mutation.
+func (m *MeterMutation) CostsheetIDs() (ids []string) {
+	for id := range m.costsheet {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetCostsheet resets all changes to the "costsheet" edge.
+func (m *MeterMutation) ResetCostsheet() {
+	m.costsheet = nil
+	m.clearedcostsheet = false
+	m.removedcostsheet = nil
+}
+
 // Where appends a list predicates to the MeterMutation builder.
 func (m *MeterMutation) Where(ps ...predicate.Meter) {
 	m.predicates = append(m.predicates, ps...)
@@ -15458,49 +16441,85 @@ func (m *MeterMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *MeterMutation) AddedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
+	if m.costsheet != nil {
+		edges = append(edges, meter.EdgeCostsheet)
+	}
 	return edges
 }
 
 // AddedIDs returns all IDs (to other nodes) that were added for the given edge
 // name in this mutation.
 func (m *MeterMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case meter.EdgeCostsheet:
+		ids := make([]ent.Value, 0, len(m.costsheet))
+		for id := range m.costsheet {
+			ids = append(ids, id)
+		}
+		return ids
+	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *MeterMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
+	if m.removedcostsheet != nil {
+		edges = append(edges, meter.EdgeCostsheet)
+	}
 	return edges
 }
 
 // RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
 // the given name in this mutation.
 func (m *MeterMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case meter.EdgeCostsheet:
+		ids := make([]ent.Value, 0, len(m.removedcostsheet))
+		for id := range m.removedcostsheet {
+			ids = append(ids, id)
+		}
+		return ids
+	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *MeterMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
+	if m.clearedcostsheet {
+		edges = append(edges, meter.EdgeCostsheet)
+	}
 	return edges
 }
 
 // EdgeCleared returns a boolean which indicates if the edge with the given name
 // was cleared in this mutation.
 func (m *MeterMutation) EdgeCleared(name string) bool {
+	switch name {
+	case meter.EdgeCostsheet:
+		return m.clearedcostsheet
+	}
 	return false
 }
 
 // ClearEdge clears the value of the edge with the given name. It returns an error
 // if that edge is not defined in the schema.
 func (m *MeterMutation) ClearEdge(name string) error {
+	switch name {
+	}
 	return fmt.Errorf("unknown Meter unique edge %s", name)
 }
 
 // ResetEdge resets all changes to the edge with the given name in this mutation.
 // It returns an error if the edge is not defined in the schema.
 func (m *MeterMutation) ResetEdge(name string) error {
+	switch name {
+	case meter.EdgeCostsheet:
+		m.ResetCostsheet()
+		return nil
+	}
 	return fmt.Errorf("unknown Meter edge %s", name)
 }
 
@@ -19645,6 +20664,9 @@ type PriceMutation struct {
 	description             *string
 	metadata                *map[string]string
 	clearedFields           map[string]struct{}
+	costsheet               map[string]struct{}
+	removedcostsheet        map[string]struct{}
+	clearedcostsheet        bool
 	done                    bool
 	oldValue                func(context.Context) (*Price, error)
 	predicates              []predicate.Price
@@ -20922,6 +21944,60 @@ func (m *PriceMutation) ResetMetadata() {
 	delete(m.clearedFields, price.FieldMetadata)
 }
 
+// AddCostsheetIDs adds the "costsheet" edge to the Costsheet entity by ids.
+func (m *PriceMutation) AddCostsheetIDs(ids ...string) {
+	if m.costsheet == nil {
+		m.costsheet = make(map[string]struct{})
+	}
+	for i := range ids {
+		m.costsheet[ids[i]] = struct{}{}
+	}
+}
+
+// ClearCostsheet clears the "costsheet" edge to the Costsheet entity.
+func (m *PriceMutation) ClearCostsheet() {
+	m.clearedcostsheet = true
+}
+
+// CostsheetCleared reports if the "costsheet" edge to the Costsheet entity was cleared.
+func (m *PriceMutation) CostsheetCleared() bool {
+	return m.clearedcostsheet
+}
+
+// RemoveCostsheetIDs removes the "costsheet" edge to the Costsheet entity by IDs.
+func (m *PriceMutation) RemoveCostsheetIDs(ids ...string) {
+	if m.removedcostsheet == nil {
+		m.removedcostsheet = make(map[string]struct{})
+	}
+	for i := range ids {
+		delete(m.costsheet, ids[i])
+		m.removedcostsheet[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedCostsheet returns the removed IDs of the "costsheet" edge to the Costsheet entity.
+func (m *PriceMutation) RemovedCostsheetIDs() (ids []string) {
+	for id := range m.removedcostsheet {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// CostsheetIDs returns the "costsheet" edge IDs in the mutation.
+func (m *PriceMutation) CostsheetIDs() (ids []string) {
+	for id := range m.costsheet {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetCostsheet resets all changes to the "costsheet" edge.
+func (m *PriceMutation) ResetCostsheet() {
+	m.costsheet = nil
+	m.clearedcostsheet = false
+	m.removedcostsheet = nil
+}
+
 // Where appends a list predicates to the PriceMutation builder.
 func (m *PriceMutation) Where(ps ...predicate.Price) {
 	m.predicates = append(m.predicates, ps...)
@@ -21594,49 +22670,85 @@ func (m *PriceMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *PriceMutation) AddedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
+	if m.costsheet != nil {
+		edges = append(edges, price.EdgeCostsheet)
+	}
 	return edges
 }
 
 // AddedIDs returns all IDs (to other nodes) that were added for the given edge
 // name in this mutation.
 func (m *PriceMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case price.EdgeCostsheet:
+		ids := make([]ent.Value, 0, len(m.costsheet))
+		for id := range m.costsheet {
+			ids = append(ids, id)
+		}
+		return ids
+	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *PriceMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
+	if m.removedcostsheet != nil {
+		edges = append(edges, price.EdgeCostsheet)
+	}
 	return edges
 }
 
 // RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
 // the given name in this mutation.
 func (m *PriceMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case price.EdgeCostsheet:
+		ids := make([]ent.Value, 0, len(m.removedcostsheet))
+		for id := range m.removedcostsheet {
+			ids = append(ids, id)
+		}
+		return ids
+	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *PriceMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
+	if m.clearedcostsheet {
+		edges = append(edges, price.EdgeCostsheet)
+	}
 	return edges
 }
 
 // EdgeCleared returns a boolean which indicates if the edge with the given name
 // was cleared in this mutation.
 func (m *PriceMutation) EdgeCleared(name string) bool {
+	switch name {
+	case price.EdgeCostsheet:
+		return m.clearedcostsheet
+	}
 	return false
 }
 
 // ClearEdge clears the value of the edge with the given name. It returns an error
 // if that edge is not defined in the schema.
 func (m *PriceMutation) ClearEdge(name string) error {
+	switch name {
+	}
 	return fmt.Errorf("unknown Price unique edge %s", name)
 }
 
 // ResetEdge resets all changes to the edge with the given name in this mutation.
 // It returns an error if the edge is not defined in the schema.
 func (m *PriceMutation) ResetEdge(name string) error {
+	switch name {
+	case price.EdgeCostsheet:
+		m.ResetCostsheet()
+		return nil
+	}
 	return fmt.Errorf("unknown Price edge %s", name)
 }
 

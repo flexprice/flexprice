@@ -143,14 +143,15 @@ const (
 type InvoiceFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
-	InvoiceIDs        []string         `json:"invoice_ids,omitempty" form:"invoice_ids"`
-	CustomerID        string           `json:"customer_id,omitempty" form:"customer_id"`
-	SubscriptionID    string           `json:"subscription_id,omitempty" form:"subscription_id"`
-	InvoiceType       InvoiceType      `json:"invoice_type,omitempty" form:"invoice_type"`
-	InvoiceStatus     []InvoiceStatus  `json:"invoice_status,omitempty" form:"invoice_status"`
-	PaymentStatus     []PaymentStatus  `json:"payment_status,omitempty" form:"payment_status"`
-	AmountDueGt       *decimal.Decimal `json:"amount_due_gt,omitempty" form:"amount_due_gt"`
-	AmountRemainingGt *decimal.Decimal `json:"amount_remaining_gt,omitempty" form:"amount_remaining_gt"`
+	InvoiceIDs         []string         `json:"invoice_ids,omitempty" form:"invoice_ids"`
+	CustomerID         string           `json:"customer_id,omitempty" form:"customer_id"`
+	ExternalCustomerID string           `json:"external_customer_id,omitempty" form:"external_customer_id"`
+	SubscriptionID     string           `json:"subscription_id,omitempty" form:"subscription_id"`
+	InvoiceType        InvoiceType      `json:"invoice_type,omitempty" form:"invoice_type"`
+	InvoiceStatus      []InvoiceStatus  `json:"invoice_status,omitempty" form:"invoice_status"`
+	PaymentStatus      []PaymentStatus  `json:"payment_status,omitempty" form:"payment_status"`
+	AmountDueGt        *decimal.Decimal `json:"amount_due_gt,omitempty" form:"amount_due_gt"`
+	AmountRemainingGt  *decimal.Decimal `json:"amount_remaining_gt,omitempty" form:"amount_remaining_gt"`
 }
 
 // NewInvoiceFilter creates a new invoice filter with default options

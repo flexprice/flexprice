@@ -1179,3 +1179,90 @@ func (s *InvoiceServiceSuite) TestAttemptPayment() {
 		})
 	}
 }
+
+func (s *InvoiceServiceSuite) TestListInvoicesWithExternalCustomerID() {
+	// Create test invoices for our test customer
+	invoices := []*invoice.Invoice{
+		{
+			ID:              "inv_1",
+			CustomerID:      s.testData.customer.ID,
+			Currency:        "usd",
+			InvoiceStatus:   types.InvoiceStatusFinalized,
+			PaymentStatus:   types.PaymentStatusPending,
+			AmountDue:       decimal.NewFromInt(100),
+			AmountRemaining: decimal.NewFromInt(100),
+			BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
+		},
+		{
+			ID:              "inv_2",
+			CustomerID:      s.testData.customer.ID,
+			Currency:        "usd",
+			InvoiceStatus:   types.InvoiceStatusFinalized,
+			PaymentStatus:   types.PaymentStatusSucceeded,
+			AmountDue:       decimal.NewFromInt(200),
+			AmountRemaining: decimal.Zero,
+			BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
+		},
+	}
+
+	// Store test invoices
+	for _, inv := range invoices {
+		err := s.invoiceRepo.Create(s.GetContext(), inv)
+		s.NoError(err)
+	}
+
+	testCases := []struct {
+		name               string
+		externalCustomerID string
+		expectedError      bool
+		expectedErrorType  string
+		expectedCount      int
+	}{
+		{
+			name:               "Success - Valid external customer ID",
+			externalCustomerID: s.testData.customer.ExternalID,
+			expectedError:      false,
+			expectedCount:      2,
+		},
+		{
+			name:               "Error - Non-existent external customer ID",
+			externalCustomerID: "non_existent_ext_id",
+			expectedError:      true,
+			expectedErrorType:  "customer not found",
+		},
+		{
+			name:               "Success - Empty external customer ID",
+			externalCustomerID: "",
+			expectedError:      false,
+			expectedCount:      2,
+		},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			filter := types.NewInvoiceFilter()
+			filter.ExternalCustomerID = tc.externalCustomerID
+
+			result, err := s.service.ListInvoices(s.GetContext(), filter)
+
+			if tc.expectedError {
+				s.Error(err)
+				if tc.expectedErrorType != "" {
+					s.Contains(err.Error(), tc.expectedErrorType)
+				}
+				return
+			}
+
+			s.NoError(err)
+			s.NotNil(result)
+			s.Equal(tc.expectedCount, len(result.Items))
+
+			if tc.expectedCount > 0 {
+				// Verify the invoices belong to the correct customer
+				for _, inv := range result.Items {
+					s.Equal(s.testData.customer.ID, inv.CustomerID)
+				}
+			}
+		})
+	}
+}
