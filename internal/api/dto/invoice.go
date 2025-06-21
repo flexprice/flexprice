@@ -335,6 +335,8 @@ type InvoiceResponse struct {
 	PaymentStatus   types.PaymentStatus        `json:"payment_status"`
 	Currency        string                     `json:"currency"`
 	AmountDue       decimal.Decimal            `json:"amount_due"`
+	Total           decimal.Decimal            `json:"total"`
+	Subtotal        decimal.Decimal            `json:"subtotal"`
 	AmountPaid      decimal.Decimal            `json:"amount_paid"`
 	AmountRemaining decimal.Decimal            `json:"amount_remaining"`
 	InvoiceNumber   *string                    `json:"invoice_number,omitempty"`
@@ -379,6 +381,8 @@ func NewInvoiceResponse(inv *invoice.Invoice) *InvoiceResponse {
 		PaymentStatus:   inv.PaymentStatus,
 		Currency:        inv.Currency,
 		AmountDue:       inv.AmountDue,
+		Total:           inv.Total,
+		Subtotal:        inv.Subtotal,
 		AmountPaid:      inv.AmountPaid,
 		AmountRemaining: inv.AmountRemaining,
 		InvoiceNumber:   inv.InvoiceNumber,

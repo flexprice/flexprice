@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/shopspring/decimal"
 
@@ -66,6 +67,12 @@ func (s *creditNoteService) CreateCreditNote(ctx context.Context, req *dto.Creat
 			return err
 		}
 
+		// Determine credit note type based on invoice payment status
+		creditNoteType, err := s.getCreditNoteType(inv)
+		if err != nil {
+			return err
+		}
+
 		// Generate credit note number if not provided
 		if req.CreditNoteNumber == "" {
 			req.CreditNoteNumber = s.generateCreditNoteNumber()
@@ -74,7 +81,8 @@ func (s *creditNoteService) CreateCreditNote(ctx context.Context, req *dto.Creat
 		// Convert request to domain model
 		cn := req.ToCreditNote(tx, inv)
 
-		// Set default status
+		// Set correct credit note type and status
+		cn.CreditNoteType = creditNoteType
 		cn.CreditNoteStatus = types.CreditNoteStatusDraft
 
 		// Create credit note with line items in a single transaction
@@ -111,8 +119,14 @@ func (s *creditNoteService) CreateCreditNote(ctx context.Context, req *dto.Creat
 		return nil, err
 	}
 
+	// Get the updated credit note after processing
+	updatedCreditNote, err := s.CreditNoteRepo.Get(ctx, creditNote.ID)
+	if err != nil {
+		return nil, err
+	}
+
 	return &dto.CreditNoteResponse{
-		CreditNote: creditNote,
+		CreditNote: updatedCreditNote,
 	}, nil
 }
 
@@ -178,11 +192,12 @@ func (s *creditNoteService) VoidCreditNote(ctx context.Context, id string) error
 	}
 
 	// Check if this is a refund type credit note that has already been processed
-	if cn.CreditNoteType == types.CreditNoteTypeRefund && cn.RefundStatus != nil {
+	if cn.CreditNoteType == types.CreditNoteTypeRefund && cn.CreditNoteStatus == types.CreditNoteStatusFinalized {
 		return ierr.NewError("refund credit note cannot be voided").
-			WithHint("Credit note with refund status cannot be voided").
+			WithHint("Finalized refund credit note cannot be voided").
 			WithReportableDetails(map[string]any{
-				"refund_status": *cn.RefundStatus,
+				"credit_note_status": cn.CreditNoteStatus,
+				"credit_note_type":   cn.CreditNoteType,
 			}).
 			Mark(ierr.ErrValidation)
 	}
@@ -246,7 +261,7 @@ func (s *creditNoteService) ProcessDraftCreditNote(ctx context.Context, id strin
 		// Handle refund credit notes
 		if cn.CreditNoteType == types.CreditNoteTypeRefund {
 			// Get invoice using transaction context
-			inv, err := invoiceService.GetInvoice(tx, cn.InvoiceID)
+			inv, err := s.InvoiceRepo.Get(tx, cn.InvoiceID)
 			if err != nil {
 				return err
 			}
@@ -267,9 +282,11 @@ func (s *creditNoteService) ProcessDraftCreditNote(ctx context.Context, id strin
 			if selectedWallet == nil {
 				// Create new wallet using transaction context
 				walletReq := &dto.CreateWalletRequest{
-					Name:       "Subscription Wallet",
-					CustomerID: inv.CustomerID,
-					Currency:   inv.Currency,
+					Name:           "Subscription Wallet",
+					CustomerID:     inv.CustomerID,
+					Currency:       inv.Currency,
+					ConversionRate: decimal.NewFromInt(1), // Set default conversion rate to avoid division by zero
+					WalletType:     types.WalletTypePrePaid,
 				}
 
 				selectedWallet, err = walletService.CreateWallet(tx, walletReq)
@@ -280,12 +297,14 @@ func (s *creditNoteService) ProcessDraftCreditNote(ctx context.Context, id strin
 
 			// Top up wallet using transaction context
 			walletTxnReq := &dto.TopUpWalletRequest{
-				Amount:            cn.TotalAmount.Neg(),
-				TransactionReason: types.TransactionReasonCreditNoteRefund,
+				CreditsToAdd:      cn.TotalAmount,                    // Use credits directly instead of amount
+				TransactionReason: types.TransactionReasonFreeCredit, // Use allowed transaction reason for credit note refunds
 				Metadata:          types.Metadata{"credit_note_id": cn.ID},
+				IdempotencyKey:    &cn.ID, // Use credit note ID as idempotency key
+				Description:       fmt.Sprintf("Credit note refund: %s", cn.CreditNoteNumber),
 			}
 
-			_, err = walletService.TopUpWallet(tx, inv.CustomerID, walletTxnReq)
+			_, err = walletService.TopUpWallet(tx, selectedWallet.ID, walletTxnReq)
 			if err != nil {
 				return err
 			}
@@ -374,7 +393,7 @@ func (s *creditNoteService) validateCreditNoteAmounts(ctx context.Context, req *
 	// Validate line items and calculate total amount
 	totalCreditNoteAmount, err := s.validateLineItems(req, inv)
 	if err != nil {
-		return err      
+		return err
 	}
 
 	// Check if total amount exceeds max creditable amount
