@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/creditnote"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -78,6 +80,28 @@ func (s *creditNoteService) CreateCreditNote(ctx context.Context, req *dto.Creat
 			req.CreditNoteNumber = s.generateCreditNoteNumber()
 		}
 
+		// Check if credit note number is unique
+		if req.IdempotencyKey == nil {
+			generator := idempotency.NewGenerator()
+			key := generator.GenerateKey(idempotency.ScopeCreditNote, map[string]any{
+				"invoice_id":         req.InvoiceID,
+				"credit_note_number": req.CreditNoteNumber,
+				"reason":             req.Reason,
+				"credit_note_type":   creditNoteType,
+			})
+			req.IdempotencyKey = lo.ToPtr(key)
+		}
+
+		// Check if idempotency key is already used
+		if existingCreditNote, err := s.CreditNoteRepo.GetByIdempotencyKey(tx, *req.IdempotencyKey); err == nil {
+			// Return existing credit note for idempotent behavior
+			s.Logger.Infow("returning existing credit note for idempotency key",
+				"idempotency_key", *req.IdempotencyKey,
+				"existing_credit_note_id", existingCreditNote.ID)
+			creditNote = existingCreditNote
+			return nil
+		}
+
 		// Convert request to domain model
 		cn := req.ToCreditNote(tx, inv)
 
@@ -99,7 +123,6 @@ func (s *creditNoteService) CreateCreditNote(ctx context.Context, req *dto.Creat
 		)
 
 		// Convert to response
-
 		creditNote = cn
 		return nil
 	})

@@ -17,6 +17,9 @@ const (
 
 	// Payment
 	ScopePayment Scope = "payment"
+
+	// Credit note
+	ScopeCreditNote Scope = "credit_note"
 )
 
 // Generator generates idempotency keys

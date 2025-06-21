@@ -16,6 +16,7 @@ import (
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/lib/pq"
+	"github.com/samber/lo"
 )
 
 type creditnoteRepository struct {
@@ -70,6 +71,7 @@ func (r *creditnoteRepository) Create(ctx context.Context, cn *domainCreditNote.
 		SetUpdatedBy(cn.UpdatedBy).
 		SetEnvironmentID(cn.EnvironmentID).
 		SetTotalAmount(cn.TotalAmount).
+		SetIdempotencyKey(lo.FromPtr(cn.IdempotencyKey)).
 		Save(ctx)
 
 	if err != nil {
@@ -148,6 +150,7 @@ func (r *creditnoteRepository) CreateWithLineItems(ctx context.Context, cn *doma
 			SetUpdatedBy(cn.UpdatedBy).
 			SetTotalAmount(cn.TotalAmount).
 			SetEnvironmentID(cn.EnvironmentID).
+			SetIdempotencyKey(lo.FromPtr(cn.IdempotencyKey)).
 			Save(ctx)
 		if err != nil {
 			if ent.IsConstraintError(err) {

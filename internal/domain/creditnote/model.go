@@ -21,6 +21,7 @@ type CreditNote struct {
 	LineItems        []*CreditNoteLineItem  `json:"line_items"`
 	EnvironmentID    string                 `json:"environment_id"`
 	TotalAmount      decimal.Decimal        `json:"total_amount"`
+	IdempotencyKey   *string                `json:"idempotency_key"`
 	types.BaseModel
 }
 
@@ -43,10 +44,12 @@ func FromEnt(e *ent.CreditNote) *CreditNote {
 		Metadata:         e.Metadata,
 		LineItems:        creditNoteLineItem.FromEntList(e.Edges.LineItems),
 		TotalAmount:      e.TotalAmount,
+		IdempotencyKey:   e.IdempotencyKey,
 		BaseModel: types.BaseModel{
 			Status:    types.Status(e.Status),
 			CreatedBy: e.CreatedBy,
 			UpdatedBy: e.UpdatedBy,
+			TenantID:  e.TenantID,
 			CreatedAt: e.CreatedAt,
 			UpdatedAt: e.UpdatedAt,
 		},

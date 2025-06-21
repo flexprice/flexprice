@@ -49,7 +49,6 @@ func (CreditNote) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
 			}).
-			Unique().
 			Immutable(),
 
 		field.String("credit_note_status").

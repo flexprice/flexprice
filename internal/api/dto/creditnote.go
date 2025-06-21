@@ -18,6 +18,7 @@ type CreateCreditNoteRequest struct {
 	Reason           types.CreditNoteReason            `json:"reason" validate:"required"`
 	Metadata         types.Metadata                    `json:"metadata" validate:"omitempty"`
 	LineItems        []CreateCreditNoteLineItemRequest `json:"line_items"`
+	IdempotencyKey   *string                           `json:"idempotency_key" validate:"omitempty"`
 }
 
 func (r *CreateCreditNoteRequest) Validate() error {
@@ -58,6 +59,7 @@ func (r *CreateCreditNoteRequest) ToCreditNote(ctx context.Context, inv *invoice
 		TotalAmount:      decimal.Zero,
 		Metadata:         r.Metadata,
 		LineItems:        make([]*creditnote.CreditNoteLineItem, 0),
+		IdempotencyKey:   r.IdempotencyKey,
 		BaseModel:        types.GetDefaultBaseModel(ctx),
 	}
 
@@ -94,8 +96,8 @@ func (r *CreateCreditNoteLineItemRequest) ToCreditNoteLineItem(ctx context.Conte
 		Metadata:          r.Metadata,
 		CreditNoteID:      cn.ID,
 		Currency:          cn.Currency,
-		EnvironmentID:     types.GetEnvironmentID(ctx),
 		BaseModel:         types.GetDefaultBaseModel(ctx),
+		EnvironmentID:     types.GetEnvironmentID(ctx),
 	}
 }
 
