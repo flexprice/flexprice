@@ -8,14 +8,15 @@ import (
 
 // StripeEventSyncWorkflowInput represents the input for the Stripe event sync workflow
 type StripeEventSyncWorkflowInput struct {
-	TenantID       string        `json:"tenant_id"`
-	EnvironmentID  string        `json:"environment_id"`
-	WindowStart    time.Time     `json:"window_start"`
-	WindowEnd      time.Time     `json:"window_end"`
-	GracePeriod    time.Duration `json:"grace_period"`
-	BatchSizeLimit int           `json:"batch_size_limit"`
-	MaxRetries     int           `json:"max_retries"`
-	APITimeout     time.Duration `json:"api_timeout"`
+	TenantID                 string        `json:"tenant_id"`
+	EnvironmentID            string        `json:"environment_id"`
+	WindowStart              time.Time     `json:"window_start"`
+	WindowEnd                time.Time     `json:"window_end"`
+	GracePeriod              time.Duration `json:"grace_period"`
+	BatchSizeLimit           int           `json:"batch_size_limit"`
+	MaxRetries               int           `json:"max_retries"`
+	APITimeout               time.Duration `json:"api_timeout"`
+	AggregationWindowMinutes int           `json:"aggregation_window_minutes"`
 }
 
 // StripeEventSyncWorkflowResult represents the result of the Stripe event sync workflow
@@ -150,6 +151,14 @@ func (input *StripeEventSyncWorkflowInput) Validate() error {
 		return ierr.NewError("batch_size_limit too large").
 			WithHint("Batch size limit must be <= 10000").
 			Mark(ierr.ErrValidation)
+	}
+
+	if input.AggregationWindowMinutes != 0 {
+		if input.AggregationWindowMinutes < 5 || input.AggregationWindowMinutes > 1440 {
+			return ierr.NewError("invalid aggregation_window_minutes").
+				WithHint("Aggregation window must be between 5 and 1440 minutes").
+				Mark(ierr.ErrValidation)
+		}
 	}
 
 	return nil

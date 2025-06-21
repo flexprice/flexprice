@@ -156,12 +156,24 @@ func CronStripeEventSyncWorkflow(ctx workflow.Context, input models.StripeEventS
 	logger := workflow.GetLogger(ctx)
 	logger.Info("Starting cron Stripe event sync workflow", "tenant_id", input.TenantID)
 
-	// Calculate the time window for the previous hour
 	now := workflow.Now(ctx)
 
-	// Apply grace period - sync events from (current_hour - 1 - grace_period) to (current_hour - 1)
-	endTime := now.Add(-time.Hour).Truncate(time.Hour)
-	startTime := endTime.Add(-time.Hour)
+	windowMinutes := input.AggregationWindowMinutes
+	if windowMinutes == 0 {
+		windowMinutes = 60 // default 1h
+	}
+
+	windowDur := time.Duration(windowMinutes) * time.Minute
+
+	// Align endTime to the window boundary in UTC
+	// Example: if window=5min and now=13:17, endTime becomes 13:15
+	endTime := now.Truncate(windowDur)
+	if endTime.Equal(now) {
+		// If we're exactly on boundary include previous window instead
+		endTime = endTime.Add(-windowDur)
+	}
+
+	startTime := endTime.Add(-windowDur)
 
 	// Apply grace period to start time to ensure we don't miss late-arriving events
 	if input.GracePeriod > 0 {

@@ -9,6 +9,7 @@ import (
 	integration "github.com/flexprice/flexprice/internal/domain/integration"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/temporal"
+	"github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/sdk/client"
 )
@@ -461,29 +462,43 @@ func (s *stripeIntegrationService) TriggerManualSync(ctx context.Context, req Tr
 		return nil, err
 	}
 
-	// Create workflow input with config values
-	workflowInput := map[string]interface{}{
-		"entity_id":        req.EntityID,
-		"entity_type":      req.EntityType,
-		"meter_id":         req.MeterID,
-		"time_from":        req.TimeFrom,
-		"time_to":          req.TimeTo,
-		"force_rerun":      req.ForceRerun,
-		"manual_trigger":   true,
-		"batch_size_limit": s.Config.Stripe.BatchSizeLimit,
-		"grace_period":     s.Config.Stripe.GetSyncGracePeriod(),
-		"max_retries":      s.Config.Stripe.MaxRetries,
-		"api_timeout":      s.Config.Stripe.GetAPITimeout(),
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
+	if tenantID == "" || environmentID == "" {
+		return nil, ierr.NewError("tenant_id and environment_id are required in context").
+			WithHint("Make sure the request carries X-Tenant-Id and X-Environment-Id headers or you are authenticated with a tenant level key").
+			Mark(ierr.ErrValidation)
+	}
+
+	workflowInput := models.StripeEventSyncWorkflowInput{
+		TenantID:                 tenantID,
+		EnvironmentID:            environmentID,
+		WindowStart:              req.TimeFrom,
+		WindowEnd:                req.TimeTo,
+		GracePeriod:              s.Config.Stripe.GetSyncGracePeriod(),
+		BatchSizeLimit:           s.Config.Stripe.BatchSizeLimit,
+		MaxRetries:               s.Config.Stripe.MaxRetries,
+		APITimeout:               s.Config.Stripe.GetAPITimeout(),
+		AggregationWindowMinutes: s.Config.Stripe.DefaultAggregationWindowMinutes,
 	}
 
 	// Start Temporal workflow
 	workflowID := fmt.Sprintf("manual-stripe-sync-%s-%d", req.EntityID, time.Now().Unix())
-	workflowOptions := client.StartWorkflowOptions{
-		ID:        workflowID,
-		TaskQueue: "stripe-sync",
+
+	// Use the same task queue the worker is polling (from config) so the workflow can actually be executed.
+	taskQueue := s.Config.Temporal.TaskQueue
+	if taskQueue == "" {
+		taskQueue = "billing-task-queue" // sane default to avoid empty queue
 	}
 
-	we, err := s.temporalService.ExecuteWorkflow(ctx, workflowOptions, "StripeManualSyncWorkflow", workflowInput)
+	workflowOptions := client.StartWorkflowOptions{
+		ID:        workflowID,
+		TaskQueue: taskQueue,
+	}
+
+	// The workflow is registered as ManualStripeEventSyncWorkflow; use that exact name.
+	we, err := s.temporalService.ExecuteWorkflow(ctx, workflowOptions, "ManualStripeEventSyncWorkflow", workflowInput)
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Failed to trigger manual sync workflow").

@@ -90,7 +90,7 @@ webhook:
 temporal:
   address: "127.0.0.1:7233" # For local mode
   # Will be overridden by TEMPORAL_ADDRESS env var in Docker
-  tls: true
+  tls: false
   namespace: "default"
   task_queue: "billing-task-queue"
   api_key: "strong api key"

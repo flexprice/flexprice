@@ -37,7 +37,9 @@ type Handlers struct {
 	// Webhook handlers
 	StripeWebhook *v1.StripeWebhookHandler
 	// Integration handlers
-	StripeConfig *v1.StripeConfigHandler
+	StripeConfig       *v1.StripeConfigHandler
+	StripeMeterMapping *v1.StripeMeterMappingHandler
+	StripeSync         *v1.StripeSyncHandler
 	// Portal handlers
 	Onboarding *v1.OnboardingHandler
 	// Cron jobs : TODO: move crons out of API based architecture
@@ -319,6 +321,16 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			stripe.POST("/config/test", handlers.StripeConfig.TestStripeConnection)
 			stripe.GET("/config/status", handlers.StripeConfig.GetStripeConfigStatus)
 			stripe.GET("/config/history", handlers.StripeConfig.ListStripeConfigHistory)
+
+			// Meter mappings
+			stripe.POST("/meter-mappings", handlers.StripeMeterMapping.CreateMeterMapping)
+
+			// Sync monitoring & manual
+			stripe.GET("/sync/status", handlers.StripeSync.GetSyncStatus)
+			stripe.GET("/sync/batches", handlers.StripeSync.ListBatches)
+			stripe.GET("/sync/batches/:id", handlers.StripeSync.GetBatch)
+			stripe.POST("/sync/manual", handlers.StripeSync.ManualSync)
+			stripe.POST("/batches/retry", handlers.StripeSync.RetryBatches)
 		}
 	}
 
