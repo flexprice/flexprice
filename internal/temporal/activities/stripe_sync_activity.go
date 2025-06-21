@@ -233,12 +233,14 @@ func (a *StripeSyncActivities) syncSingleAggregation(ctx context.Context, tenant
 	batchID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_STRIPE_BATCH)
 
 	result := models.SyncBatchResult{
-		BatchID:    batchID,
-		CustomerID: agg.CustomerID,
-		MeterID:    agg.MeterID,
-		EventType:  agg.EventType,
-		Success:    false,
-		RetryCount: 0,
+		BatchID:            batchID,
+		CustomerID:         agg.CustomerID,
+		MeterID:            agg.MeterID,
+		EventType:          agg.EventType,
+		AggregatedQuantity: agg.AggregatedQuantity,
+		EventCount:         agg.EventCount,
+		Success:            false,
+		RetryCount:         0,
 	}
 
 	// Get customer integration mapping to resolve Stripe customer ID
@@ -342,8 +344,8 @@ func (a *StripeSyncActivities) TrackSyncBatchActivity(ctx context.Context, input
 			EntityType:         integration.EntityTypeCustomer,
 			MeterID:            result.MeterID,
 			EventType:          result.EventType,
-			AggregatedQuantity: 0.0, // Will be updated with actual quantity data later
-			EventCount:         1,   // Track individual sync attempts
+			AggregatedQuantity: result.AggregatedQuantity,
+			EventCount:         result.EventCount,
 			StripeEventID:      result.StripeEventID,
 			SyncStatus:         status,
 			RetryCount:         result.RetryCount,

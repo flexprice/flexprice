@@ -72,14 +72,16 @@ type SyncToStripeActivityResult struct {
 
 // SyncBatchResult represents the result of syncing a single batch to Stripe
 type SyncBatchResult struct {
-	BatchID       string `json:"batch_id"`
-	CustomerID    string `json:"customer_id"`
-	MeterID       string `json:"meter_id"`
-	EventType     string `json:"event_type"`
-	StripeEventID string `json:"stripe_event_id,omitempty"`
-	Success       bool   `json:"success"`
-	ErrorMessage  string `json:"error_message,omitempty"`
-	RetryCount    int    `json:"retry_count"`
+	BatchID            string  `json:"batch_id"`
+	CustomerID         string  `json:"customer_id"`
+	MeterID            string  `json:"meter_id"`
+	EventType          string  `json:"event_type"`
+	StripeEventID      string  `json:"stripe_event_id,omitempty"`
+	Success            bool    `json:"success"`
+	ErrorMessage       string  `json:"error_message,omitempty"`
+	RetryCount         int     `json:"retry_count"`
+	AggregatedQuantity float64 `json:"aggregated_quantity"`
+	EventCount         int     `json:"event_count"`
 }
 
 // TrackSyncBatchActivityInput represents the input for batch tracking activity
