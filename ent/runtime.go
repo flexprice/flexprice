@@ -9,6 +9,8 @@ import (
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/creditgrant"
 	"github.com/flexprice/flexprice/ent/creditgrantapplication"
+	"github.com/flexprice/flexprice/ent/creditnote"
+	"github.com/flexprice/flexprice/ent/creditnotelineitem"
 	"github.com/flexprice/flexprice/ent/customer"
 	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/ent/environment"
@@ -197,6 +199,104 @@ func init() {
 	creditgrantapplicationDescRetryCount := creditgrantapplicationFields[15].Descriptor()
 	// creditgrantapplication.DefaultRetryCount holds the default value on creation for the retry_count field.
 	creditgrantapplication.DefaultRetryCount = creditgrantapplicationDescRetryCount.Default.(int)
+	creditnoteMixin := schema.CreditNote{}.Mixin()
+	creditnoteMixinFields0 := creditnoteMixin[0].Fields()
+	_ = creditnoteMixinFields0
+	creditnoteMixinFields1 := creditnoteMixin[1].Fields()
+	_ = creditnoteMixinFields1
+	creditnoteFields := schema.CreditNote{}.Fields()
+	_ = creditnoteFields
+	// creditnoteDescTenantID is the schema descriptor for tenant_id field.
+	creditnoteDescTenantID := creditnoteMixinFields0[0].Descriptor()
+	// creditnote.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	creditnote.TenantIDValidator = creditnoteDescTenantID.Validators[0].(func(string) error)
+	// creditnoteDescStatus is the schema descriptor for status field.
+	creditnoteDescStatus := creditnoteMixinFields0[1].Descriptor()
+	// creditnote.DefaultStatus holds the default value on creation for the status field.
+	creditnote.DefaultStatus = creditnoteDescStatus.Default.(string)
+	// creditnoteDescCreatedAt is the schema descriptor for created_at field.
+	creditnoteDescCreatedAt := creditnoteMixinFields0[2].Descriptor()
+	// creditnote.DefaultCreatedAt holds the default value on creation for the created_at field.
+	creditnote.DefaultCreatedAt = creditnoteDescCreatedAt.Default.(func() time.Time)
+	// creditnoteDescUpdatedAt is the schema descriptor for updated_at field.
+	creditnoteDescUpdatedAt := creditnoteMixinFields0[3].Descriptor()
+	// creditnote.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	creditnote.DefaultUpdatedAt = creditnoteDescUpdatedAt.Default.(func() time.Time)
+	// creditnote.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	creditnote.UpdateDefaultUpdatedAt = creditnoteDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// creditnoteDescEnvironmentID is the schema descriptor for environment_id field.
+	creditnoteDescEnvironmentID := creditnoteMixinFields1[0].Descriptor()
+	// creditnote.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	creditnote.DefaultEnvironmentID = creditnoteDescEnvironmentID.Default.(string)
+	// creditnoteDescInvoiceID is the schema descriptor for invoice_id field.
+	creditnoteDescInvoiceID := creditnoteFields[1].Descriptor()
+	// creditnote.InvoiceIDValidator is a validator for the "invoice_id" field. It is called by the builders before save.
+	creditnote.InvoiceIDValidator = creditnoteDescInvoiceID.Validators[0].(func(string) error)
+	// creditnoteDescCreditNoteStatus is the schema descriptor for credit_note_status field.
+	creditnoteDescCreditNoteStatus := creditnoteFields[3].Descriptor()
+	// creditnote.DefaultCreditNoteStatus holds the default value on creation for the credit_note_status field.
+	creditnote.DefaultCreditNoteStatus = types.CreditNoteStatus(creditnoteDescCreditNoteStatus.Default.(string))
+	// creditnoteDescCreditNoteType is the schema descriptor for credit_note_type field.
+	creditnoteDescCreditNoteType := creditnoteFields[4].Descriptor()
+	// creditnote.CreditNoteTypeValidator is a validator for the "credit_note_type" field. It is called by the builders before save.
+	creditnote.CreditNoteTypeValidator = creditnoteDescCreditNoteType.Validators[0].(func(string) error)
+	// creditnoteDescReason is the schema descriptor for reason field.
+	creditnoteDescReason := creditnoteFields[6].Descriptor()
+	// creditnote.ReasonValidator is a validator for the "reason" field. It is called by the builders before save.
+	creditnote.ReasonValidator = creditnoteDescReason.Validators[0].(func(string) error)
+	// creditnoteDescTotalAmount is the schema descriptor for total_amount field.
+	creditnoteDescTotalAmount := creditnoteFields[11].Descriptor()
+	// creditnote.DefaultTotalAmount holds the default value on creation for the total_amount field.
+	creditnote.DefaultTotalAmount = creditnoteDescTotalAmount.Default.(decimal.Decimal)
+	creditnotelineitemMixin := schema.CreditNoteLineItem{}.Mixin()
+	creditnotelineitemMixinFields0 := creditnotelineitemMixin[0].Fields()
+	_ = creditnotelineitemMixinFields0
+	creditnotelineitemMixinFields1 := creditnotelineitemMixin[1].Fields()
+	_ = creditnotelineitemMixinFields1
+	creditnotelineitemFields := schema.CreditNoteLineItem{}.Fields()
+	_ = creditnotelineitemFields
+	// creditnotelineitemDescTenantID is the schema descriptor for tenant_id field.
+	creditnotelineitemDescTenantID := creditnotelineitemMixinFields0[0].Descriptor()
+	// creditnotelineitem.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	creditnotelineitem.TenantIDValidator = creditnotelineitemDescTenantID.Validators[0].(func(string) error)
+	// creditnotelineitemDescStatus is the schema descriptor for status field.
+	creditnotelineitemDescStatus := creditnotelineitemMixinFields0[1].Descriptor()
+	// creditnotelineitem.DefaultStatus holds the default value on creation for the status field.
+	creditnotelineitem.DefaultStatus = creditnotelineitemDescStatus.Default.(string)
+	// creditnotelineitemDescCreatedAt is the schema descriptor for created_at field.
+	creditnotelineitemDescCreatedAt := creditnotelineitemMixinFields0[2].Descriptor()
+	// creditnotelineitem.DefaultCreatedAt holds the default value on creation for the created_at field.
+	creditnotelineitem.DefaultCreatedAt = creditnotelineitemDescCreatedAt.Default.(func() time.Time)
+	// creditnotelineitemDescUpdatedAt is the schema descriptor for updated_at field.
+	creditnotelineitemDescUpdatedAt := creditnotelineitemMixinFields0[3].Descriptor()
+	// creditnotelineitem.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	creditnotelineitem.DefaultUpdatedAt = creditnotelineitemDescUpdatedAt.Default.(func() time.Time)
+	// creditnotelineitem.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	creditnotelineitem.UpdateDefaultUpdatedAt = creditnotelineitemDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// creditnotelineitemDescEnvironmentID is the schema descriptor for environment_id field.
+	creditnotelineitemDescEnvironmentID := creditnotelineitemMixinFields1[0].Descriptor()
+	// creditnotelineitem.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	creditnotelineitem.DefaultEnvironmentID = creditnotelineitemDescEnvironmentID.Default.(string)
+	// creditnotelineitemDescCreditNoteID is the schema descriptor for credit_note_id field.
+	creditnotelineitemDescCreditNoteID := creditnotelineitemFields[1].Descriptor()
+	// creditnotelineitem.CreditNoteIDValidator is a validator for the "credit_note_id" field. It is called by the builders before save.
+	creditnotelineitem.CreditNoteIDValidator = creditnotelineitemDescCreditNoteID.Validators[0].(func(string) error)
+	// creditnotelineitemDescInvoiceLineItemID is the schema descriptor for invoice_line_item_id field.
+	creditnotelineitemDescInvoiceLineItemID := creditnotelineitemFields[2].Descriptor()
+	// creditnotelineitem.InvoiceLineItemIDValidator is a validator for the "invoice_line_item_id" field. It is called by the builders before save.
+	creditnotelineitem.InvoiceLineItemIDValidator = creditnotelineitemDescInvoiceLineItemID.Validators[0].(func(string) error)
+	// creditnotelineitemDescDisplayName is the schema descriptor for display_name field.
+	creditnotelineitemDescDisplayName := creditnotelineitemFields[3].Descriptor()
+	// creditnotelineitem.DisplayNameValidator is a validator for the "display_name" field. It is called by the builders before save.
+	creditnotelineitem.DisplayNameValidator = creditnotelineitemDescDisplayName.Validators[0].(func(string) error)
+	// creditnotelineitemDescAmount is the schema descriptor for amount field.
+	creditnotelineitemDescAmount := creditnotelineitemFields[4].Descriptor()
+	// creditnotelineitem.DefaultAmount holds the default value on creation for the amount field.
+	creditnotelineitem.DefaultAmount = creditnotelineitemDescAmount.Default.(decimal.Decimal)
+	// creditnotelineitemDescCurrency is the schema descriptor for currency field.
+	creditnotelineitemDescCurrency := creditnotelineitemFields[5].Descriptor()
+	// creditnotelineitem.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
+	creditnotelineitem.CurrencyValidator = creditnotelineitemDescCurrency.Validators[0].(func(string) error)
 	customerMixin := schema.Customer{}.Mixin()
 	customerMixinFields0 := customerMixin[0].Fields()
 	_ = customerMixinFields0
@@ -416,8 +516,16 @@ func init() {
 	invoiceDescAmountRemaining := invoiceFields[9].Descriptor()
 	// invoice.DefaultAmountRemaining holds the default value on creation for the amount_remaining field.
 	invoice.DefaultAmountRemaining = invoiceDescAmountRemaining.Default.(decimal.Decimal)
+	// invoiceDescSubtotal is the schema descriptor for subtotal field.
+	invoiceDescSubtotal := invoiceFields[10].Descriptor()
+	// invoice.DefaultSubtotal holds the default value on creation for the subtotal field.
+	invoice.DefaultSubtotal = invoiceDescSubtotal.Default.(decimal.Decimal)
+	// invoiceDescTotal is the schema descriptor for total field.
+	invoiceDescTotal := invoiceFields[11].Descriptor()
+	// invoice.DefaultTotal holds the default value on creation for the total field.
+	invoice.DefaultTotal = invoiceDescTotal.Default.(decimal.Decimal)
 	// invoiceDescVersion is the schema descriptor for version field.
-	invoiceDescVersion := invoiceFields[21].Descriptor()
+	invoiceDescVersion := invoiceFields[23].Descriptor()
 	// invoice.DefaultVersion holds the default value on creation for the version field.
 	invoice.DefaultVersion = invoiceDescVersion.Default.(int)
 	invoicelineitemMixin := schema.InvoiceLineItem{}.Mixin()

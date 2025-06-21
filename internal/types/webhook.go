@@ -16,10 +16,11 @@ type WebhookEvent struct {
 
 // Common webhook event names
 const (
-	WebhookEventInvoiceCreateDraft     = "invoice.create.drafted"
-	WebhookEventInvoiceUpdateFinalized = "invoice.update.finalized"
-	WebhookEventInvoiceUpdatePayment   = "invoice.updated.payment"
-	WebhookEventInvoiceUpdateVoided    = "invoice.update.voided"
+	WebhookEventInvoiceCreateDraft         = "invoice.create.drafted"
+	WebhookEventInvoiceUpdateFinalized     = "invoice.update.finalized"
+	WebhookEventInvoiceUpdatePayment       = "invoice.updated.payment"
+	WebhookEventInvoiceUpdateVoided        = "invoice.update.voided"
+	WebhookEventInvoiceAmountsRecalculated = "invoice.amounts.recalculated"
 )
 
 // subscription event names

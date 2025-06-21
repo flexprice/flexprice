@@ -20,6 +20,8 @@ type Invoice struct {
 	Currency        string              `json:"currency"`
 	AmountDue       decimal.Decimal     `json:"amount_due"`
 	AmountPaid      decimal.Decimal     `json:"amount_paid"`
+	Subtotal        decimal.Decimal     `json:"subtotal"`
+	Total           decimal.Decimal     `json:"total"`
 	AmountRemaining decimal.Decimal     `json:"amount_remaining"`
 	InvoiceNumber   *string             `json:"invoice_number"`
 	IdempotencyKey  *string             `json:"idempotency_key"`
@@ -66,6 +68,8 @@ func FromEnt(e *ent.Invoice) *Invoice {
 		Currency:        e.Currency,
 		AmountDue:       e.AmountDue,
 		AmountPaid:      e.AmountPaid,
+		Subtotal:        e.Subtotal,
+		Total:           e.Total,
 		AmountRemaining: e.AmountRemaining,
 		InvoiceNumber:   e.InvoiceNumber,
 		IdempotencyKey:  e.IdempotencyKey,

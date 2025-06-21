@@ -214,6 +214,34 @@ func (ic *InvoiceCreate) SetNillableAmountRemaining(d *decimal.Decimal) *Invoice
 	return ic
 }
 
+// SetSubtotal sets the "subtotal" field.
+func (ic *InvoiceCreate) SetSubtotal(d decimal.Decimal) *InvoiceCreate {
+	ic.mutation.SetSubtotal(d)
+	return ic
+}
+
+// SetNillableSubtotal sets the "subtotal" field if the given value is not nil.
+func (ic *InvoiceCreate) SetNillableSubtotal(d *decimal.Decimal) *InvoiceCreate {
+	if d != nil {
+		ic.SetSubtotal(*d)
+	}
+	return ic
+}
+
+// SetTotal sets the "total" field.
+func (ic *InvoiceCreate) SetTotal(d decimal.Decimal) *InvoiceCreate {
+	ic.mutation.SetTotal(d)
+	return ic
+}
+
+// SetNillableTotal sets the "total" field if the given value is not nil.
+func (ic *InvoiceCreate) SetNillableTotal(d *decimal.Decimal) *InvoiceCreate {
+	if d != nil {
+		ic.SetTotal(*d)
+	}
+	return ic
+}
+
 // SetDescription sets the "description" field.
 func (ic *InvoiceCreate) SetDescription(s string) *InvoiceCreate {
 	ic.mutation.SetDescription(s)
@@ -508,6 +536,14 @@ func (ic *InvoiceCreate) defaults() {
 		v := invoice.DefaultAmountRemaining
 		ic.mutation.SetAmountRemaining(v)
 	}
+	if _, ok := ic.mutation.Subtotal(); !ok {
+		v := invoice.DefaultSubtotal
+		ic.mutation.SetSubtotal(v)
+	}
+	if _, ok := ic.mutation.Total(); !ok {
+		v := invoice.DefaultTotal
+		ic.mutation.SetTotal(v)
+	}
 	if _, ok := ic.mutation.Version(); !ok {
 		v := invoice.DefaultVersion
 		ic.mutation.SetVersion(v)
@@ -571,6 +607,12 @@ func (ic *InvoiceCreate) check() error {
 	}
 	if _, ok := ic.mutation.AmountRemaining(); !ok {
 		return &ValidationError{Name: "amount_remaining", err: errors.New(`ent: missing required field "Invoice.amount_remaining"`)}
+	}
+	if _, ok := ic.mutation.Subtotal(); !ok {
+		return &ValidationError{Name: "subtotal", err: errors.New(`ent: missing required field "Invoice.subtotal"`)}
+	}
+	if _, ok := ic.mutation.Total(); !ok {
+		return &ValidationError{Name: "total", err: errors.New(`ent: missing required field "Invoice.total"`)}
 	}
 	if _, ok := ic.mutation.Version(); !ok {
 		return &ValidationError{Name: "version", err: errors.New(`ent: missing required field "Invoice.version"`)}
@@ -673,6 +715,14 @@ func (ic *InvoiceCreate) createSpec() (*Invoice, *sqlgraph.CreateSpec) {
 	if value, ok := ic.mutation.AmountRemaining(); ok {
 		_spec.SetField(invoice.FieldAmountRemaining, field.TypeOther, value)
 		_node.AmountRemaining = value
+	}
+	if value, ok := ic.mutation.Subtotal(); ok {
+		_spec.SetField(invoice.FieldSubtotal, field.TypeOther, value)
+		_node.Subtotal = value
+	}
+	if value, ok := ic.mutation.Total(); ok {
+		_spec.SetField(invoice.FieldTotal, field.TypeOther, value)
+		_node.Total = value
 	}
 	if value, ok := ic.mutation.Description(); ok {
 		_spec.SetField(invoice.FieldDescription, field.TypeString, value)

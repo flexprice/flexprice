@@ -37,6 +37,7 @@ type InvoiceService interface {
 	GetInvoicePDF(ctx context.Context, id string) ([]byte, error)
 	GetInvoicePDFUrl(ctx context.Context, id string) (string, error)
 	RecalculateInvoice(ctx context.Context, id string, finalize bool) (*dto.InvoiceResponse, error)
+	RecalculateInvoiceAmounts(ctx context.Context, invoiceID string) error
 }
 
 type invoiceService struct {
@@ -1012,6 +1013,54 @@ func (s *invoiceService) getBillerInfo(t *tenant.Tenant) *pdf.BillerInfo {
 	}
 
 	return &billerInfo
+}
+
+func (s *invoiceService) RecalculateInvoiceAmounts(ctx context.Context, invoiceID string) error {
+	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
+	if err != nil {
+		return err
+	}
+
+	// Validate invoice status
+	if inv.InvoiceStatus != types.InvoiceStatusFinalized {
+		s.Logger.Infow("invoice is not finalized, skipping recalculation", "invoice_id", invoiceID)
+		return nil
+	}
+
+	// Get all adjustment credit notes for the invoice
+	filter := &types.CreditNoteFilter{
+		InvoiceID:        inv.ID,
+		CreditNoteType:   types.CreditNoteTypeAdjustment,
+		CreditNoteStatus: []types.CreditNoteStatus{types.CreditNoteStatusFinalized},
+	}
+
+	creditNotes, err := s.CreditNoteRepo.List(ctx, filter)
+	if err != nil {
+		return err
+	}
+
+	// Calculate total adjustment credits
+	totalAdjustmentCredits := decimal.Zero
+	for _, creditNote := range creditNotes {
+		totalAdjustmentCredits = totalAdjustmentCredits.Add(creditNote.TotalAmount)
+	}
+
+	inv.AmountDue = inv.Total.Sub(totalAdjustmentCredits)
+	inv.AmountRemaining = inv.AmountDue.Sub(inv.AmountPaid)
+
+	// Update the payment status if the invoice is fully paid
+	if inv.AmountRemaining.LessThanOrEqual(decimal.Zero) {
+		inv.PaymentStatus = types.PaymentStatusSucceeded
+	}
+
+	// Publish webhook event
+	s.publishInternalWebhookEvent(ctx, types.WebhookEventInvoiceAmountsRecalculated, inv.ID)
+
+	if err := s.InvoiceRepo.Update(ctx, inv); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (s *invoiceService) publishInternalWebhookEvent(ctx context.Context, eventName string, invoiceID string) {

@@ -167,8 +167,6 @@ func (s *creditGrantService) UpdateCreditGrant(ctx context.Context, id string, r
 		return nil, err
 	}
 
-	// TODO: add checks for not updating
-
 	// Update fields if provided
 	if req.Name != nil {
 		existing.Name = *req.Name

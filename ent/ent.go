@@ -16,6 +16,8 @@ import (
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/creditgrant"
 	"github.com/flexprice/flexprice/ent/creditgrantapplication"
+	"github.com/flexprice/flexprice/ent/creditnote"
+	"github.com/flexprice/flexprice/ent/creditnotelineitem"
 	"github.com/flexprice/flexprice/ent/customer"
 	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/ent/environment"
@@ -103,6 +105,8 @@ func checkColumn(table, column string) error {
 			billingsequence.Table:           billingsequence.ValidColumn,
 			creditgrant.Table:               creditgrant.ValidColumn,
 			creditgrantapplication.Table:    creditgrantapplication.ValidColumn,
+			creditnote.Table:                creditnote.ValidColumn,
+			creditnotelineitem.Table:        creditnotelineitem.ValidColumn,
 			customer.Table:                  customer.ValidColumn,
 			entitlement.Table:               entitlement.ValidColumn,
 			environment.Table:               environment.ValidColumn,
