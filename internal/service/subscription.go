@@ -305,23 +305,20 @@ func (s *subscriptionService) handleCreditGrants(
 		return nil
 	}
 
-	creditGrantService := NewCreditGrantService(s.CreditGrantRepo, s.PlanRepo, s.SubRepo, s.Logger)
+	creditGrantService := NewCreditGrantService(s.ServiceParams)
 
 	s.Logger.Infow("processing credit grants for subscription",
 		"subscription_id", subscription.ID,
 		"credit_grants_count", len(creditGrantRequests))
 
-	// Create credit grants
-	creditGrants := make([]*dto.CreditGrantResponse, 0, len(creditGrantRequests))
+	// Create and apply credit grants
 	for _, grantReq := range creditGrantRequests {
 		// Ensure subscription ID is set and scope is SUBSCRIPTION
 		grantReq.SubscriptionID = &subscription.ID
 		grantReq.Scope = types.CreditGrantScopeSubscription
-
-		// Use same plan ID as subscription
 		grantReq.PlanID = &subscription.PlanID
 
-		// Save credit grant in DB
+		// Create credit grant in DB
 		createdGrant, err := creditGrantService.CreateCreditGrant(ctx, grantReq)
 		if err != nil {
 			return ierr.WithError(err).
@@ -333,108 +330,35 @@ func (s *subscriptionService) handleCreditGrants(
 				Mark(ierr.ErrDatabase)
 		}
 
-		creditGrants = append(creditGrants, createdGrant)
-	}
-
-	if len(creditGrants) == 0 {
-		return nil
-	}
-
-	walletService := NewWalletService(s.ServiceParams)
-	// find the matching wallet for top up
-	wallets, err := walletService.GetWalletsByCustomerID(ctx, subscription.CustomerID)
-	if err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to get wallet for top up").
-			Mark(ierr.ErrDatabase)
-	}
-
-	sort.Slice(wallets, func(i, j int) bool {
-		return wallets[i].CreatedAt.After(wallets[j].CreatedAt)
-	})
-
-	var selectedWallet *dto.WalletResponse
-	for _, w := range wallets {
-		if types.IsMatchingCurrency(w.Currency, subscription.Currency) {
-			selectedWallet = w
-			break
+		// Apply the credit grant using the new simplified method
+		metadata := types.Metadata{
+			"created_during": "subscription_creation",
+			"grant_name":     createdGrant.Name,
 		}
-	}
 
-	if selectedWallet == nil {
-		// create a new wallet
-		walletReq := &dto.CreateWalletRequest{
-			Name:       "Subscription Wallet",
-			CustomerID: subscription.CustomerID,
-			Currency:   subscription.Currency,
-		}
-		selectedWallet, err = walletService.CreateWallet(ctx, walletReq)
+		err = creditGrantService.ApplyCreditGrant(
+			ctx,
+			createdGrant.CreditGrant,
+			subscription,
+			metadata,
+		)
+
 		if err != nil {
 			return ierr.WithError(err).
-				WithHint("Failed to create wallet for top up").
-				Mark(ierr.ErrDatabase)
-		}
-	}
-
-	if selectedWallet == nil {
-		return ierr.NewError("no wallet found for top up").
-			WithHint("No wallet found for the subscription currency").
-			Mark(ierr.ErrValidation)
-	}
-
-	// Now create wallet top-ups for each credit grant
-	for _, grant := range creditGrants {
-		// Calculate expiry date if needed
-		var expiryDate *time.Time
-
-		if grant.ExpirationType == types.CreditGrantExpiryTypeNever {
-			expiryDate = nil
-		}
-
-		if grant.ExpirationType == types.CreditGrantExpiryTypeDuration {
-			if grant.ExpirationDurationUnit != nil && grant.ExpirationDuration != nil && *grant.ExpirationDuration > 0 {
-				switch *grant.ExpirationDurationUnit {
-				case types.CreditGrantExpiryDurationUnitDays:
-					expiry := subscription.StartDate.AddDate(0, 0, *grant.ExpirationDuration)
-					expiryDate = &expiry
-				case types.CreditGrantExpiryDurationUnitWeeks:
-					expiry := subscription.StartDate.AddDate(0, 0, *grant.ExpirationDuration*7)
-					expiryDate = &expiry
-				case types.CreditGrantExpiryDurationUnitMonths:
-					expiry := subscription.StartDate.AddDate(0, *grant.ExpirationDuration, 0)
-					expiryDate = &expiry
-				case types.CreditGrantExpiryDurationUnitYears:
-					expiry := subscription.StartDate.AddDate(*grant.ExpirationDuration, 0, 0)
-					expiryDate = &expiry
-				}
-			}
-		}
-
-		if grant.ExpirationType == types.CreditGrantExpiryTypeBillingCycle {
-			expiryDate = &subscription.CurrentPeriodEnd
-		}
-
-		// Create a wallet top-up
-		topupReq := &dto.TopUpWalletRequest{
-			CreditsToAdd:      grant.Credits,
-			TransactionReason: types.TransactionReasonSubscriptionCredit,
-			ExpiryDateUTC:     expiryDate,
-			Priority:          grant.Priority,
-			IdempotencyKey:    lo.ToPtr(grant.ID),
-		}
-
-		// Create the wallet top-up
-		_, err := walletService.TopUpWallet(ctx, selectedWallet.ID, topupReq)
-		if err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to create wallet top-up for credit grant").
+				WithHint("Failed to apply credit grant for subscription").
 				WithReportableDetails(map[string]interface{}{
 					"subscription_id": subscription.ID,
-					"grant_id":        grant.ID,
-					"grant_name":      grant.Name,
+					"grant_id":        createdGrant.ID,
+					"grant_name":      createdGrant.Name,
 				}).
 				Mark(ierr.ErrDatabase)
 		}
+
+		s.Logger.Infow("successfully processed credit grant for subscription",
+			"subscription_id", subscription.ID,
+			"grant_id", createdGrant.ID,
+			"grant_name", createdGrant.Name,
+			"amount", createdGrant.Credits)
 	}
 
 	return nil
@@ -2465,4 +2389,57 @@ func (s *subscriptionService) AddSubscriptionPhase(ctx context.Context, subscrip
 
 	// Schedule exists, add the phase to it
 	return s.AddSchedulePhase(ctx, schedule.ID, req)
+}
+
+// TODO: This is not used anywhere
+// HandleSubscriptionStateChange handles subscription state changes for credit grants
+func (s *subscriptionService) HandleSubscriptionStateChange(ctx context.Context, subscriptionID string, oldStatus, newStatus types.SubscriptionStatus) error {
+	s.Logger.Infow("handling subscription state change for credit grants",
+		"subscription_id", subscriptionID,
+		"old_status", oldStatus,
+		"new_status", newStatus)
+
+	switch {
+	case newStatus == types.SubscriptionStatusActive && oldStatus != types.SubscriptionStatusActive:
+		return s.handleSubscriptionActivation(ctx, subscriptionID)
+
+	case newStatus == types.SubscriptionStatusCancelled:
+		return s.handleSubscriptionCancellation(ctx, subscriptionID)
+
+	case newStatus == types.SubscriptionStatusPaused:
+		return s.handleSubscriptionPause(ctx, subscriptionID)
+
+	case oldStatus == types.SubscriptionStatusPaused && newStatus == types.SubscriptionStatusActive:
+		return s.handleSubscriptionResume(ctx, subscriptionID)
+
+	default:
+		s.Logger.Debugw("no action required for subscription state change",
+			"subscription_id", subscriptionID,
+			"old_status", oldStatus,
+			"new_status", newStatus)
+	}
+
+	return nil
+}
+
+func (s *subscriptionService) handleSubscriptionActivation(ctx context.Context, subscriptionID string) error {
+	// Process any deferred credits and trigger immediate processing for newly active subscription
+	return nil
+}
+
+func (s *subscriptionService) handleSubscriptionCancellation(ctx context.Context, subscriptionID string) error {
+	// Future: Cancel scheduled applications if we implement full application tracking
+	s.Logger.Infow("subscription cancelled, future recurring grants will not be processed", "subscription_id", subscriptionID)
+	return nil
+}
+
+func (s *subscriptionService) handleSubscriptionPause(ctx context.Context, subscriptionID string) error {
+	// Future: Defer scheduled applications if we implement full application tracking
+	s.Logger.Infow("subscription paused, recurring grants will be deferred", "subscription_id", subscriptionID)
+	return nil
+}
+
+func (s *subscriptionService) handleSubscriptionResume(ctx context.Context, subscriptionID string) error {
+	// Process any missed recurring grants
+	return nil
 }

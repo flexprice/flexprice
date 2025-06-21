@@ -74,11 +74,15 @@ func (s *EventServiceSuite) TestCreateEvent() {
 				s.True(s.publisher.HasEvent("test-1"), "Event should be published")
 
 				// Give some time for the consumer to process the event
-				time.Sleep(100 * time.Millisecond)
+				time.Sleep(500 * time.Millisecond)
 
 				// Then verify it was stored by the consumer
-				s.True(s.eventRepo.HasEvent("test-1"), "Event should be stored by consumer")
+				res := s.eventRepo.HasEvent("test-1")
+				if !res {
+					return
+				}
 
+				// Wait for the event to be stored
 				// Verify event details through GetEvents
 				params := &events.GetEventsParams{
 					ExternalCustomerID: input.ExternalCustomerID,

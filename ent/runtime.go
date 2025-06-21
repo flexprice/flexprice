@@ -188,13 +188,21 @@ func init() {
 	// creditgrantapplicationDescApplicationStatus is the schema descriptor for application_status field.
 	creditgrantapplicationDescApplicationStatus := creditgrantapplicationFields[7].Descriptor()
 	// creditgrantapplication.DefaultApplicationStatus holds the default value on creation for the application_status field.
-	creditgrantapplication.DefaultApplicationStatus = creditgrantapplicationDescApplicationStatus.Default.(string)
-	// creditgrantapplicationDescAmountApplied is the schema descriptor for amount_applied field.
-	creditgrantapplicationDescAmountApplied := creditgrantapplicationFields[8].Descriptor()
-	// creditgrantapplication.DefaultAmountApplied holds the default value on creation for the amount_applied field.
-	creditgrantapplication.DefaultAmountApplied = creditgrantapplicationDescAmountApplied.Default.(decimal.Decimal)
+	creditgrantapplication.DefaultApplicationStatus = types.ApplicationStatus(creditgrantapplicationDescApplicationStatus.Default.(string))
+	// creditgrantapplicationDescCreditsApplied is the schema descriptor for credits_applied field.
+	creditgrantapplicationDescCreditsApplied := creditgrantapplicationFields[8].Descriptor()
+	// creditgrantapplication.DefaultCreditsApplied holds the default value on creation for the credits_applied field.
+	creditgrantapplication.DefaultCreditsApplied = creditgrantapplicationDescCreditsApplied.Default.(decimal.Decimal)
+	// creditgrantapplicationDescApplicationReason is the schema descriptor for application_reason field.
+	creditgrantapplicationDescApplicationReason := creditgrantapplicationFields[9].Descriptor()
+	// creditgrantapplication.ApplicationReasonValidator is a validator for the "application_reason" field. It is called by the builders before save.
+	creditgrantapplication.ApplicationReasonValidator = creditgrantapplicationDescApplicationReason.Validators[0].(func(string) error)
+	// creditgrantapplicationDescSubscriptionStatusAtApplication is the schema descriptor for subscription_status_at_application field.
+	creditgrantapplicationDescSubscriptionStatusAtApplication := creditgrantapplicationFields[10].Descriptor()
+	// creditgrantapplication.SubscriptionStatusAtApplicationValidator is a validator for the "subscription_status_at_application" field. It is called by the builders before save.
+	creditgrantapplication.SubscriptionStatusAtApplicationValidator = creditgrantapplicationDescSubscriptionStatusAtApplication.Validators[0].(func(string) error)
 	// creditgrantapplicationDescRetryCount is the schema descriptor for retry_count field.
-	creditgrantapplicationDescRetryCount := creditgrantapplicationFields[15].Descriptor()
+	creditgrantapplicationDescRetryCount := creditgrantapplicationFields[11].Descriptor()
 	// creditgrantapplication.DefaultRetryCount holds the default value on creation for the retry_count field.
 	creditgrantapplication.DefaultRetryCount = creditgrantapplicationDescRetryCount.Default.(int)
 	customerMixin := schema.Customer{}.Mixin()

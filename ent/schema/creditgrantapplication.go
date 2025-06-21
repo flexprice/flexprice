@@ -51,51 +51,49 @@ func (CreditGrantApplication) Fields() []ent.Field {
 			Nillable(),
 
 		// Billing period context
-		field.Time("billing_period_start"),
+		field.Time("period_start").
+			Nillable().
+			Optional(),
 
-		field.Time("billing_period_end"),
+		field.Time("period_end").
+			Nillable().
+			Optional(),
 
 		// Application details
 		field.String("application_status").
-			Default(string(types.ApplicationStatusScheduled)),
+			GoType(types.ApplicationStatus("")).
+			Default(string(types.ApplicationStatusPending)),
 
-		field.Other("amount_applied", decimal.Decimal{}).
+		field.Other("credits_applied", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(20,8)",
 			}).
 			Default(decimal.Zero),
 
-		field.String("currency"),
-
 		// Context
-		field.String("application_reason"),
-		field.String("subscription_status_at_application"),
-
-		// Prorating
-		field.Bool("is_prorated"),
-
-		field.Other("proration_factor", decimal.Decimal{}).
+		field.String("application_reason").
+			GoType(types.CreditGrantApplicationReason("")).
 			SchemaType(map[string]string{
-				"postgres": "numeric(20,8)",
+				"postgres": "text",
 			}).
-			Optional(),
+			NotEmpty().
+			Immutable(),
 
-		// Prorating
-		field.Other("full_period_amount", decimal.Decimal{}).
+		field.String("subscription_status_at_application").
+			GoType(types.SubscriptionStatus("")).
 			SchemaType(map[string]string{
-				"postgres": "numeric(20,8)",
+				"postgres": "varchar(50)",
 			}).
-			Optional(),
+			NotEmpty(),
 
 		// Retry handling
 		field.Int("retry_count").
 			Default(0),
 
 		field.String("failure_reason").
-			Optional().
-			Nillable(),
-
-		field.Time("next_retry_at").
+			SchemaType(map[string]string{
+				"postgres": "text",
+			}).
 			Optional().
 			Nillable(),
 
@@ -105,6 +103,13 @@ func (CreditGrantApplication) Fields() []ent.Field {
 				"postgres": "jsonb",
 			}).
 			Optional(),
+
+		field.String("idempotency_key").
+			SchemaType(map[string]string{
+				"postgres": "varchar(100)",
+			}).
+			Unique().
+			Immutable(),
 	}
 }
 

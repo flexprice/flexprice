@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -36,34 +37,26 @@ const (
 	FieldScheduledFor = "scheduled_for"
 	// FieldAppliedAt holds the string denoting the applied_at field in the database.
 	FieldAppliedAt = "applied_at"
-	// FieldBillingPeriodStart holds the string denoting the billing_period_start field in the database.
-	FieldBillingPeriodStart = "billing_period_start"
-	// FieldBillingPeriodEnd holds the string denoting the billing_period_end field in the database.
-	FieldBillingPeriodEnd = "billing_period_end"
+	// FieldPeriodStart holds the string denoting the period_start field in the database.
+	FieldPeriodStart = "period_start"
+	// FieldPeriodEnd holds the string denoting the period_end field in the database.
+	FieldPeriodEnd = "period_end"
 	// FieldApplicationStatus holds the string denoting the application_status field in the database.
 	FieldApplicationStatus = "application_status"
-	// FieldAmountApplied holds the string denoting the amount_applied field in the database.
-	FieldAmountApplied = "amount_applied"
-	// FieldCurrency holds the string denoting the currency field in the database.
-	FieldCurrency = "currency"
+	// FieldCreditsApplied holds the string denoting the credits_applied field in the database.
+	FieldCreditsApplied = "credits_applied"
 	// FieldApplicationReason holds the string denoting the application_reason field in the database.
 	FieldApplicationReason = "application_reason"
 	// FieldSubscriptionStatusAtApplication holds the string denoting the subscription_status_at_application field in the database.
 	FieldSubscriptionStatusAtApplication = "subscription_status_at_application"
-	// FieldIsProrated holds the string denoting the is_prorated field in the database.
-	FieldIsProrated = "is_prorated"
-	// FieldProrationFactor holds the string denoting the proration_factor field in the database.
-	FieldProrationFactor = "proration_factor"
-	// FieldFullPeriodAmount holds the string denoting the full_period_amount field in the database.
-	FieldFullPeriodAmount = "full_period_amount"
 	// FieldRetryCount holds the string denoting the retry_count field in the database.
 	FieldRetryCount = "retry_count"
 	// FieldFailureReason holds the string denoting the failure_reason field in the database.
 	FieldFailureReason = "failure_reason"
-	// FieldNextRetryAt holds the string denoting the next_retry_at field in the database.
-	FieldNextRetryAt = "next_retry_at"
 	// FieldMetadata holds the string denoting the metadata field in the database.
 	FieldMetadata = "metadata"
+	// FieldIdempotencyKey holds the string denoting the idempotency_key field in the database.
+	FieldIdempotencyKey = "idempotency_key"
 	// Table holds the table name of the creditgrantapplication in the database.
 	Table = "credit_grant_applications"
 )
@@ -82,20 +75,16 @@ var Columns = []string{
 	FieldSubscriptionID,
 	FieldScheduledFor,
 	FieldAppliedAt,
-	FieldBillingPeriodStart,
-	FieldBillingPeriodEnd,
+	FieldPeriodStart,
+	FieldPeriodEnd,
 	FieldApplicationStatus,
-	FieldAmountApplied,
-	FieldCurrency,
+	FieldCreditsApplied,
 	FieldApplicationReason,
 	FieldSubscriptionStatusAtApplication,
-	FieldIsProrated,
-	FieldProrationFactor,
-	FieldFullPeriodAmount,
 	FieldRetryCount,
 	FieldFailureReason,
-	FieldNextRetryAt,
 	FieldMetadata,
+	FieldIdempotencyKey,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -126,9 +115,13 @@ var (
 	// SubscriptionIDValidator is a validator for the "subscription_id" field. It is called by the builders before save.
 	SubscriptionIDValidator func(string) error
 	// DefaultApplicationStatus holds the default value on creation for the "application_status" field.
-	DefaultApplicationStatus string
-	// DefaultAmountApplied holds the default value on creation for the "amount_applied" field.
-	DefaultAmountApplied decimal.Decimal
+	DefaultApplicationStatus types.ApplicationStatus
+	// DefaultCreditsApplied holds the default value on creation for the "credits_applied" field.
+	DefaultCreditsApplied decimal.Decimal
+	// ApplicationReasonValidator is a validator for the "application_reason" field. It is called by the builders before save.
+	ApplicationReasonValidator func(string) error
+	// SubscriptionStatusAtApplicationValidator is a validator for the "subscription_status_at_application" field. It is called by the builders before save.
+	SubscriptionStatusAtApplicationValidator func(string) error
 	// DefaultRetryCount holds the default value on creation for the "retry_count" field.
 	DefaultRetryCount int
 )
@@ -196,14 +189,14 @@ func ByAppliedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAppliedAt, opts...).ToFunc()
 }
 
-// ByBillingPeriodStart orders the results by the billing_period_start field.
-func ByBillingPeriodStart(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldBillingPeriodStart, opts...).ToFunc()
+// ByPeriodStart orders the results by the period_start field.
+func ByPeriodStart(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPeriodStart, opts...).ToFunc()
 }
 
-// ByBillingPeriodEnd orders the results by the billing_period_end field.
-func ByBillingPeriodEnd(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldBillingPeriodEnd, opts...).ToFunc()
+// ByPeriodEnd orders the results by the period_end field.
+func ByPeriodEnd(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPeriodEnd, opts...).ToFunc()
 }
 
 // ByApplicationStatus orders the results by the application_status field.
@@ -211,14 +204,9 @@ func ByApplicationStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldApplicationStatus, opts...).ToFunc()
 }
 
-// ByAmountApplied orders the results by the amount_applied field.
-func ByAmountApplied(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldAmountApplied, opts...).ToFunc()
-}
-
-// ByCurrency orders the results by the currency field.
-func ByCurrency(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldCurrency, opts...).ToFunc()
+// ByCreditsApplied orders the results by the credits_applied field.
+func ByCreditsApplied(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCreditsApplied, opts...).ToFunc()
 }
 
 // ByApplicationReason orders the results by the application_reason field.
@@ -231,21 +219,6 @@ func BySubscriptionStatusAtApplication(opts ...sql.OrderTermOption) OrderOption 
 	return sql.OrderByField(FieldSubscriptionStatusAtApplication, opts...).ToFunc()
 }
 
-// ByIsProrated orders the results by the is_prorated field.
-func ByIsProrated(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldIsProrated, opts...).ToFunc()
-}
-
-// ByProrationFactor orders the results by the proration_factor field.
-func ByProrationFactor(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldProrationFactor, opts...).ToFunc()
-}
-
-// ByFullPeriodAmount orders the results by the full_period_amount field.
-func ByFullPeriodAmount(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldFullPeriodAmount, opts...).ToFunc()
-}
-
 // ByRetryCount orders the results by the retry_count field.
 func ByRetryCount(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRetryCount, opts...).ToFunc()
@@ -256,12 +229,12 @@ func ByFailureReason(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldFailureReason, opts...).ToFunc()
 }
 
-// ByNextRetryAt orders the results by the next_retry_at field.
-func ByNextRetryAt(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldNextRetryAt, opts...).ToFunc()
-}
-
 // ByMetadata orders the results by the metadata field.
 func ByMetadata(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldMetadata, opts...).ToFunc()
+}
+
+// ByIdempotencyKey orders the results by the idempotency_key field.
+func ByIdempotencyKey(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIdempotencyKey, opts...).ToFunc()
 }
