@@ -23,7 +23,20 @@ func NewCreditNoteHandler(creditNoteService service.CreditNoteService, logger *l
 	}
 }
 
-// CreateCreditNote creates a new credit note
+// @Summary Create a new credit note
+// @Description Creates a new credit note
+// @Tags Credit Notes
+// @Accept json
+// @Produce json
+// @Param credit_note body dto.CreateCreditNoteRequest true "Credit note request"
+// @Success 201 {object} dto.CreditNoteResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 401 {object} ierr.ErrorResponse
+// @Failure 403 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /creditnotes [post]
+// @Security ApiKeyAuth
 func (h *CreditNoteHandler) CreateCreditNote(c *gin.Context) {
 	var req dto.CreateCreditNoteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -42,7 +55,20 @@ func (h *CreditNoteHandler) CreateCreditNote(c *gin.Context) {
 	c.JSON(http.StatusCreated, response)
 }
 
-// GetCreditNote retrieves a credit note by ID
+// @Summary Get a credit note by ID
+// @Description Retrieves a credit note by ID
+// @Tags Credit Notes
+// @Accept json
+// @Produce json
+// @Param id path string true "Credit note ID"
+// @Success 200 {object} dto.CreditNoteResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 401 {object} ierr.ErrorResponse
+// @Failure 403 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /creditnotes/{id} [get]
+// @Security ApiKeyAuth
 func (h *CreditNoteHandler) GetCreditNote(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -61,7 +87,20 @@ func (h *CreditNoteHandler) GetCreditNote(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// ListCreditNotes lists credit notes with filtering
+// @Summary List credit notes with filtering
+// @Description Lists credit notes with filtering
+// @Tags Credit Notes
+// @Accept json
+// @Produce json
+// @Param filter query types.CreditNoteFilter true "Filter options"
+// @Success 200 {object} dto.ListCreditNotesResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 401 {object} ierr.ErrorResponse
+// @Failure 403 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /creditnotes [get]
+// @Security ApiKeyAuth
 func (h *CreditNoteHandler) ListCreditNotes(c *gin.Context) {
 	var filter types.CreditNoteFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
@@ -84,7 +123,20 @@ func (h *CreditNoteHandler) ListCreditNotes(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// VoidCreditNote voids a credit note
+// @Summary Void a credit note
+// @Description Voids a credit note
+// @Tags Credit Notes
+// @Accept json
+// @Produce json
+// @Param id path string true "Credit note ID"
+// @Success 200 {object} dto.CreditNoteResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 401 {object} ierr.ErrorResponse
+// @Failure 403 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /creditnotes/{id}/void [post]
+// @Security ApiKeyAuth
 func (h *CreditNoteHandler) VoidCreditNote(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -103,7 +155,20 @@ func (h *CreditNoteHandler) VoidCreditNote(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Credit note voided successfully"})
 }
 
-// ProcessDraftCreditNote processes a draft credit note
+// @Summary Process a draft credit note
+// @Description Processes a draft credit note
+// @Tags Credit Notes
+// @Accept json
+// @Produce json
+// @Param id path string true "Credit note ID"
+// @Success 200 {object} dto.CreditNoteResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 401 {object} ierr.ErrorResponse
+// @Failure 403 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /creditnotes/{id}/process [post]
+// @Security ApiKeyAuth
 func (h *CreditNoteHandler) ProcessDraftCreditNote(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {

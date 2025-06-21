@@ -1,5 +1,36 @@
 basePath: /v1
 definitions:
+  creditnote.CreditNoteLineItem:
+    properties:
+      amount:
+        type: number
+      created_at:
+        type: string
+      created_by:
+        type: string
+      credit_note_id:
+        type: string
+      currency:
+        type: string
+      display_name:
+        type: string
+      environment_id:
+        type: string
+      id:
+        type: string
+      invoice_line_item_id:
+        type: string
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      status:
+        $ref: '#/definitions/types.Status'
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+    type: object
   dto.AddSchedulePhaseRequest:
     properties:
       phase:
@@ -143,6 +174,42 @@ definitions:
     - currency
     - name
     - scope
+    type: object
+  dto.CreateCreditNoteLineItemRequest:
+    properties:
+      amount:
+        type: number
+      display_name:
+        type: string
+      invoice_line_item_id:
+        type: string
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+    required:
+    - amount
+    - invoice_line_item_id
+    type: object
+  dto.CreateCreditNoteRequest:
+    properties:
+      credit_note_number:
+        type: string
+      idempotency_key:
+        type: string
+      invoice_id:
+        type: string
+      line_items:
+        items:
+          $ref: '#/definitions/dto.CreateCreditNoteLineItemRequest'
+        type: array
+      memo:
+        type: string
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      reason:
+        $ref: '#/definitions/types.CreditNoteReason'
+    required:
+    - invoice_id
+    - reason
     type: object
   dto.CreateCustomerRequest:
     properties:
@@ -732,6 +799,51 @@ definitions:
         type: string
       tenant_id:
         type: string
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+    type: object
+  dto.CreditNoteResponse:
+    properties:
+      created_at:
+        type: string
+      created_by:
+        type: string
+      credit_note_number:
+        type: string
+      credit_note_status:
+        $ref: '#/definitions/types.CreditNoteStatus'
+      credit_note_type:
+        $ref: '#/definitions/types.CreditNoteType'
+      currency:
+        type: string
+      environment_id:
+        type: string
+      id:
+        type: string
+      idempotency_key:
+        type: string
+      invoice_id:
+        type: string
+      line_items:
+        items:
+          $ref: '#/definitions/creditnote.CreditNoteLineItem'
+        type: array
+      memo:
+        type: string
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      reason:
+        $ref: '#/definitions/types.CreditNoteReason'
+      refund_status:
+        $ref: '#/definitions/types.PaymentStatus'
+      status:
+        $ref: '#/definitions/types.Status'
+      tenant_id:
+        type: string
+      total_amount:
+        type: number
       updated_at:
         type: string
       updated_by:
@@ -1391,8 +1503,12 @@ definitions:
         $ref: '#/definitions/dto.SubscriptionResponse'
       subscription_id:
         type: string
+      subtotal:
+        type: number
       tenant_id:
         type: string
+      total:
+        type: number
       updated_at:
         type: string
       updated_by:
@@ -1414,6 +1530,15 @@ definitions:
       items:
         items:
           $ref: '#/definitions/dto.CreditGrantResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
+  dto.ListCreditNotesResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/dto.CreditNoteResponse'
         type: array
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
@@ -3159,6 +3284,42 @@ definitions:
     x-enum-varnames:
     - CreditGrantScopePlan
     - CreditGrantScopeSubscription
+  types.CreditNoteReason:
+    enum:
+    - DUPLICATE
+    - FRAUDULENT
+    - ORDER_CHANGE
+    - UNSATISFACTORY
+    - SERVICE_ISSUE
+    - BILLING_ERROR
+    - SUBSCRIPTION_CANCELLATION
+    type: string
+    x-enum-varnames:
+    - CreditNoteReasonDuplicate
+    - CreditNoteReasonFraudulent
+    - CreditNoteReasonOrderChange
+    - CreditNoteReasonUnsatisfactory
+    - CreditNoteReasonService
+    - CreditNoteReasonBillingError
+    - CreditNoteReasonSubscriptionCancellation
+  types.CreditNoteStatus:
+    enum:
+    - DRAFT
+    - FINALIZED
+    - VOIDED
+    type: string
+    x-enum-varnames:
+    - CreditNoteStatusDraft
+    - CreditNoteStatusFinalized
+    - CreditNoteStatusVoided
+  types.CreditNoteType:
+    enum:
+    - ADJUSTMENT
+    - REFUND
+    type: string
+    x-enum-varnames:
+    - CreditNoteTypeAdjustment
+    - CreditNoteTypeRefund
   types.CustomerFilter:
     properties:
       customer_ids:
@@ -3173,6 +3334,10 @@ definitions:
         type: string
       external_id:
         type: string
+      external_ids:
+        items:
+          type: string
+        type: array
       filters:
         description: filters allows complex filtering based on multiple fields
         items:
@@ -3926,6 +4091,282 @@ paths:
       summary: Update a credit grant
       tags:
       - CreditGrants
+  /creditnotes:
+    get:
+      consumes:
+      - application/json
+      description: Lists credit notes with filtering
+      parameters:
+      - collectionFormat: csv
+        in: query
+        items:
+          type: string
+        name: credit_note_ids
+        type: array
+      - collectionFormat: csv
+        in: query
+        items:
+          enum:
+          - DRAFT
+          - FINALIZED
+          - VOIDED
+          type: string
+        name: credit_note_status
+        type: array
+      - enum:
+        - ADJUSTMENT
+        - REFUND
+        in: query
+        name: credit_note_type
+        type: string
+        x-enum-varnames:
+        - CreditNoteTypeAdjustment
+        - CreditNoteTypeRefund
+      - in: query
+        name: end_time
+        type: string
+      - in: query
+        name: expand
+        type: string
+      - in: query
+        name: invoice_id
+        type: string
+      - in: query
+        maximum: 1000
+        minimum: 1
+        name: limit
+        type: integer
+      - in: query
+        minimum: 0
+        name: offset
+        type: integer
+      - enum:
+        - asc
+        - desc
+        in: query
+        name: order
+        type: string
+      - in: query
+        name: sort
+        type: string
+      - in: query
+        name: start_time
+        type: string
+      - enum:
+        - published
+        - deleted
+        - archived
+        in: query
+        name: status
+        type: string
+        x-enum-varnames:
+        - StatusPublished
+        - StatusDeleted
+        - StatusArchived
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ListCreditNotesResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List credit notes with filtering
+      tags:
+      - Credit Notes
+    post:
+      consumes:
+      - application/json
+      description: Creates a new credit note
+      parameters:
+      - description: Credit note request
+        in: body
+        name: credit_note
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateCreditNoteRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.CreditNoteResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create a new credit note
+      tags:
+      - Credit Notes
+  /creditnotes/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves a credit note by ID
+      parameters:
+      - description: Credit note ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.CreditNoteResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get a credit note by ID
+      tags:
+      - Credit Notes
+  /creditnotes/{id}/process:
+    post:
+      consumes:
+      - application/json
+      description: Processes a draft credit note
+      parameters:
+      - description: Credit note ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.CreditNoteResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Process a draft credit note
+      tags:
+      - Credit Notes
+  /creditnotes/{id}/void:
+    post:
+      consumes:
+      - application/json
+      description: Voids a credit note
+      parameters:
+      - description: Credit note ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.CreditNoteResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Void a credit note
+      tags:
+      - Credit Notes
   /customers:
     get:
       consumes:
@@ -3950,6 +4391,12 @@ paths:
       - in: query
         name: external_id
         type: string
+      - collectionFormat: csv
+        in: query
+        items:
+          type: string
+        name: external_ids
+        type: array
       - in: query
         maximum: 1000
         minimum: 1
@@ -5512,6 +5959,45 @@ paths:
           schema:
             $ref: '#/definitions/errors.ErrorResponse'
       summary: Get PDF for an invoice
+      tags:
+      - Invoices
+  /invoices/{id}/recalculate:
+    post:
+      consumes:
+      - application/json
+      description: Recalculate totals and line items for a draft invoice, useful when
+        subscription line items or usage data has changed
+      parameters:
+      - description: Invoice ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: 'Whether to finalize the invoice after recalculation (default:
+          true)'
+        in: query
+        name: finalize
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.InvoiceResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      summary: Recalculate invoice totals and line items
       tags:
       - Invoices
   /invoices/{id}/void:
