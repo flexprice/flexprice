@@ -77,7 +77,7 @@ func (s *creditNoteService) CreateCreditNote(ctx context.Context, req *dto.Creat
 
 		// Generate credit note number if not provided
 		if req.CreditNoteNumber == "" {
-			req.CreditNoteNumber = s.generateCreditNoteNumber()
+			req.CreditNoteNumber = types.GenerateShortIDWithPrefix(types.SHORT_ID_PREFIX_CREDIT_NOTE)
 		}
 
 		// Check if credit note number is unique
@@ -533,11 +533,4 @@ func (s *creditNoteService) getCreditNoteType(inv *invoice.Invoice) (types.Credi
 			}).
 			Mark(ierr.ErrValidation)
 	}
-}
-
-// generateCreditNoteNumber generates a unique credit note number
-func (s *creditNoteService) generateCreditNoteNumber() string {
-	// In production, you'd want proper sequence generation with database sequences
-	// or a more sophisticated numbering scheme
-	return CreditNoteNumberPrefix + "-" + types.GenerateUUIDWithPrefix("")[0:CreditNoteNumberLength]
 }
