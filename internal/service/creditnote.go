@@ -231,15 +231,80 @@ func (s *creditNoteService) ProcessDraftCreditNote(ctx context.Context, id strin
 			Mark(ierr.ErrValidation)
 	}
 
-	cn.CreditNoteStatus = types.CreditNoteStatusFinalized
+	invoiceService := NewInvoiceService(s.ServiceParams)
+	walletService := NewWalletService(s.ServiceParams)
 
-	if err := s.CreditNoteRepo.Update(ctx, cn); err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to process credit note").
-			WithReportableDetails(map[string]any{
-				"credit_note_id": id,
-			}).
-			Mark(ierr.ErrDatabase)
+	// Recalculate invoice amounts
+	err = s.DB.WithTx(ctx, func(tx context.Context) error {
+		// Update credit note status
+		cn.CreditNoteStatus = types.CreditNoteStatusFinalized
+		if err := s.CreditNoteRepo.Update(tx, cn); err != nil {
+			return err
+		}
+
+		// Recalculate invoice amounts for adjustment credit note
+		if cn.CreditNoteType == types.CreditNoteTypeAdjustment {
+			// Recalculate invoice amounts
+			err = invoiceService.RecalculateInvoiceAmounts(tx, cn.InvoiceID)
+			if err != nil {
+				return err
+			}
+		}
+
+		if cn.CreditNoteType == types.CreditNoteTypeRefund {
+			// Get invoice
+			inv, err := invoiceService.GetInvoice(ctx, cn.InvoiceID)
+			if err != nil {
+				return err
+			}
+
+			// Find or create wallet outside of transaction for better error handling
+			wallets, err := walletService.GetWalletsByCustomerID(ctx, inv.CustomerID)
+			if err != nil {
+				return err
+			}
+
+			var selectedWallet *dto.WalletResponse
+			for _, w := range wallets {
+				if types.IsMatchingCurrency(w.Currency, inv.Currency) {
+					selectedWallet = w
+					break
+				}
+			}
+			if selectedWallet == nil {
+				// Create new wallet
+				walletReq := &dto.CreateWalletRequest{
+					Name:       "Subscription Wallet",
+					CustomerID: inv.CustomerID,
+					Currency:   inv.Currency,
+				}
+
+				selectedWallet, err = walletService.CreateWallet(ctx, walletReq)
+				if err != nil {
+					return err
+				}
+
+			}
+
+			// Top up wallet
+			walletTxnReq := &dto.TopUpWalletRequest{
+				Amount:            cn.TotalAmount.Neg(),
+				TransactionReason: types.TransactionReasonCreditNoteRefund,
+				Metadata:          types.Metadata{"credit_note_id": cn.ID},
+			}
+
+			_, err = walletService.TopUpWallet(ctx, inv.CustomerID, walletTxnReq)
+			if err != nil {
+				return err
+			}
+
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return err
 	}
 
 	s.Logger.Infow("credit note processed successfully",

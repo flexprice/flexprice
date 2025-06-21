@@ -58,6 +58,7 @@ const (
 	TransactionReasonInvoiceRefund           TransactionReason = "INVOICE_REFUND"
 	TransactionReasonCreditExpired           TransactionReason = "CREDIT_EXPIRED"
 	TransactionReasonWalletTermination       TransactionReason = "WALLET_TERMINATION"
+	TransactionReasonCreditNoteRefund        TransactionReason = "CREDIT_NOTE_REFUND"
 )
 
 func (t TransactionReason) Validate() error {
