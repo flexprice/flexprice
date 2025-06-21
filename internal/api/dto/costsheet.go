@@ -13,10 +13,10 @@ type CalculateROIRequest struct {
 	SubscriptionID string `json:"subscription_id" validate:"required"`
 
 	// MeterID references the meter to track usage
-	MeterID string `json:"meter_id" validate:"required"`
+	MeterID string `json:"meter_id,omitempty"`
 
 	// PriceID references the price configuration
-	PriceID string `json:"price_id" validate:"required"`
+	PriceID string `json:"price_id,omitempty"`
 
 	// Optional time range. If not provided, uses entire subscription period
 	PeriodStart *time.Time `json:"period_start,omitempty"`
@@ -30,9 +30,6 @@ type CreateCostSheetRequest struct {
 
 	// PriceID references the price configuration
 	PriceID string `json:"price_id" validate:"required"`
-
-	// SubscriptionID to get the time period from if not provided in context
-	SubscriptionID string `json:"subscription_id"`
 }
 
 // GetCostBreakdownRequest represents the request to calculate costs for a time period.

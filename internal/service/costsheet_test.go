@@ -283,7 +283,7 @@ func (s *CostSheetServiceSuite) TestUpdateCostSheet() {
 	s.Require().NoError(err)
 	s.Require().NotNil(created)
 
-	// Test case: Successfully update costsheet status
+	// Test case 1: Successfully update costsheet status to archived
 	updateReq := &dto.UpdateCostSheetRequest{
 		ID:     created.ID,
 		Status: string(types.StatusArchived),
@@ -294,7 +294,17 @@ func (s *CostSheetServiceSuite) TestUpdateCostSheet() {
 	s.Equal(created.ID, resp.ID)
 	s.Equal(types.StatusArchived, resp.Status)
 
-	// Test case: Update non-existent costsheet
+	// Test case 2: Try to update with invalid status
+	updateReq = &dto.UpdateCostSheetRequest{
+		ID:     created.ID,
+		Status: "publishedd", // Invalid status
+	}
+	resp, err = s.costSheetService.UpdateCostSheet(s.ctx, updateReq)
+	s.Error(err)
+	s.Nil(resp)
+	s.Contains(err.Error(), "invalid status")
+
+	// Test case 3: Update non-existent costsheet
 	updateReq.ID = "non-existent-id"
 	resp, err = s.costSheetService.UpdateCostSheet(s.ctx, updateReq)
 	s.Error(err)
@@ -315,7 +325,7 @@ func (s *CostSheetServiceSuite) TestDeleteCostSheet() {
 	// Initially the costsheet should be published
 	s.Equal(types.StatusPublished, created.Status)
 
-	// First delete should change status to archived
+	// Delete should change status to archived
 	err = s.costSheetService.DeleteCostSheet(s.ctx, created.ID)
 	s.NoError(err)
 
@@ -324,32 +334,11 @@ func (s *CostSheetServiceSuite) TestDeleteCostSheet() {
 	s.NoError(err)
 	s.Equal(types.StatusArchived, archivedSheet.Status)
 
-	// Test case 2: Hard delete (archived -> removed)
-	// Second delete should remove it completely
+	// Test case 2: Try to delete an archived cost sheet (should fail)
 	err = s.costSheetService.DeleteCostSheet(s.ctx, created.ID)
-	s.NoError(err)
-
-	// Verify it's completely gone
-	_, err = s.costSheetService.GetCostSheet(s.ctx, created.ID)
-	s.Error(err) // Should error because the record doesn't exist anymore
+	s.Error(err) // Should error because only published cost sheets can be archived
 
 	// Test case 3: Delete non-existent costsheet
 	err = s.costSheetService.DeleteCostSheet(s.ctx, "non-existent-id")
 	s.Error(err)
-}
-
-// Helper Operations
-// GetSubscriptionDetails(ctx context.Context, subscriptionID string) (*domainSubscription.Subscription, error)
-func (s *CostSheetServiceSuite) TestGetSubscriptionDetails() {
-	// This test verifies the service method exists and handles errors correctly
-	// We'll use a mock/simple approach since the service calls other complex services
-
-	// Test case: Get non-existent subscription (should return error)
-	sub, err := s.costSheetService.GetSubscriptionDetails(s.ctx, "nonexistent-id")
-	s.Error(err)
-	s.Nil(sub)
-
-	// Note: Testing successful case would require setting up plan service,
-	// customer service, etc. which is beyond the scope of this unit test.
-	// Integration tests would be more appropriate for testing the full flow.
 }

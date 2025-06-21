@@ -160,14 +160,20 @@ func (s *InMemoryCostSheetStore) Delete(ctx context.Context, id string) error {
 		return err
 	}
 
-	// If status is not archived, perform soft delete by changing status to archived
-	if cs.Status != types.StatusArchived {
-		cs.Status = types.StatusArchived
-		return s.Update(ctx, cs)
+	// Check if the costsheet is published
+	if cs.Status != types.StatusPublished {
+		return ierr.NewError("costsheet must be published to archive").
+			WithHint("Only published costsheets can be archived").
+			WithReportableDetails(map[string]any{
+				"costsheet_id": id,
+				"status":       cs.Status,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
-	// If status is already archived, perform hard delete
-	return s.InMemoryStore.Delete(ctx, id)
+	// Perform soft delete by updating status to archived
+	cs.Status = types.StatusArchived
+	return s.Update(ctx, cs)
 }
 
 func (s *InMemoryCostSheetStore) List(ctx context.Context, filter *costsheet.Filter) ([]*costsheet.Costsheet, error) {
@@ -182,7 +188,7 @@ func (s *InMemoryCostSheetStore) GetByMeterAndPrice(ctx context.Context, meterID
 	filter := &costsheet.Filter{
 		MeterIDs: []string{meterID},
 		PriceIDs: []string{priceID},
-		Status:   types.CostsheetStatusPublished,
+		Status:   types.StatusPublished,
 	}
 
 	costsheets, err := s.List(ctx, filter)

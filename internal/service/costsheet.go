@@ -8,9 +8,8 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 
 	domainCostSheet "github.com/flexprice/flexprice/internal/domain/costsheet"
-	domainSubscription "github.com/flexprice/flexprice/internal/domain/subscription"
+	// domainSubscription "github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -28,13 +27,13 @@ type CostSheetService interface {
 	DeleteCostSheet(ctx context.Context, id string) error
 
 	// Calculation Operations
-	GetInputCostForMargin(ctx context.Context, req *dto.CreateCostSheetRequest) (*dto.CostBreakdownResponse, error)
+	GetInputCostForMargin(ctx context.Context, req *dto.GetCostBreakdownRequest) (*dto.CostBreakdownResponse, error)
 	CalculateMargin(totalCost, totalRevenue decimal.Decimal) decimal.Decimal
 	CalculateMarkup(totalCost, totalRevenue decimal.Decimal) decimal.Decimal
 	CalculateROI(ctx context.Context, req *dto.CalculateROIRequest) (*dto.ROIResponse, error)
 
-	// Helper Operations
-	GetSubscriptionDetails(ctx context.Context, subscriptionID string) (*domainSubscription.Subscription, error)
+	// GetServiceParams retrieves the service parameters
+	GetServiceParams() ServiceParams
 }
 
 // costSheetService implements the CostSheetService interface.
@@ -52,68 +51,98 @@ func NewCostSheetService(params ServiceParams) CostSheetService {
 
 // GetInputCostForMargin implements the core business logic for calculating input costs.
 // The process involves:
-// 1. Retrieving published cost sheet items for the tenant and environment
-// 2. Gathering usage data for all relevant meters
-// 3. Calculating individual costs using pricing information
+// 1. Getting subscription details and time period
+// 2. Processing fixed costs from subscription line items
+// 3. Processing usage-based costs by gathering meter data
 // 4. Aggregating total cost and item-specific costs
-func (s *costsheetService) GetInputCostForMargin(ctx context.Context, req *dto.CreateCostSheetRequest) (*dto.CostBreakdownResponse, error) {
-	tenantID, envID := domainCostSheet.GetTenantAndEnvFromContext(ctx)
+func (s *costsheetService) GetInputCostForMargin(ctx context.Context, req *dto.GetCostBreakdownRequest) (*dto.CostBreakdownResponse, error) {
+	// service instances
+	subscriptionService := NewSubscriptionService(s.ServiceParams)
+	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.Logger)
+	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config)
 
-	// Get time range from context
-	startTime, startOk := ctx.Value("start_time").(time.Time)
-	endTime, endOk := ctx.Value("end_time").(time.Time)
-
-	// If time range not provided in context and subscription ID is available, use subscription period
-	if (!startOk || !endOk) && req.SubscriptionID != "" {
-		subscriptionService := NewSubscriptionService(s.ServiceParams)
-		sub, err := subscriptionService.GetSubscription(ctx, req.SubscriptionID)
-		if err != nil {
-			return nil, ierr.WithError(err).
-				WithMessage("failed to get subscription").
-				WithHint("failed to get subscription details").
-				Mark(ierr.ErrInternal)
-		}
-
-		if !startOk {
-			startTime = sub.Subscription.CurrentPeriodStart
-		}
-		if !endOk {
-			endTime = sub.Subscription.CurrentPeriodEnd
-		}
-	} else if !startOk || !endOk {
-		// Fallback to last 24 hours if no subscription ID and no time range in context
-		if !startOk {
-			startTime = time.Now().AddDate(0, 0, -1)
-		}
-		if !endOk {
-			endTime = time.Now()
-		}
+	// Get subscription details first
+	sub, err := subscriptionService.GetSubscription(ctx, req.SubscriptionID)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithMessage("failed to get subscription").
+			WithHint("failed to get subscription details").
+			Mark(ierr.ErrInternal)
 	}
 
-	//Create service instance for costsheet in functions
-	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config)
-	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.Logger)
-	subscriptionService := NewSubscriptionService(s.ServiceParams)
+	// Determine time period - use request time if provided, otherwise use subscription period
+	var startTime, endTime time.Time
+	if req.StartTime != nil && req.EndTime != nil {
+		startTime = *req.StartTime
+		endTime = *req.EndTime
+	} else {
+		startTime = sub.Subscription.CurrentPeriodStart
+		endTime = sub.Subscription.CurrentPeriodEnd
+	}
 
 	var totalCost decimal.Decimal
 	itemCosts := make([]dto.CostBreakdownItem, 0)
 
-	// If we have a subscription ID, get all line items to process both fixed and usage-based costs
-	if req.SubscriptionID != "" {
-		sub, err := subscriptionService.GetSubscription(ctx, req.SubscriptionID)
+	// Create a map to track unique meters for usage-based pricing
+	uniqueMeters := make(map[string]struct{})
+
+	// First pass: Process fixed costs and collect meters for usage-based costs
+	for _, item := range sub.LineItems {
+		if item.Status != types.StatusPublished {
+			continue
+		}
+
+		// Get price details
+		priceResp, err := priceService.GetPrice(ctx, item.PriceID)
 		if err != nil {
 			return nil, ierr.WithError(err).
-				WithMessage("failed to get subscription").
-				WithHint("failed to get subscription details").
+				WithMessage("failed to get price").
+				WithHint("failed to get price").
 				Mark(ierr.ErrInternal)
 		}
 
-		// Create a map to track unique meters for usage-based pricing
-		uniqueMeters := make(map[string]struct{})
+		if priceResp.Price.Type == types.PRICE_TYPE_FIXED {
+			// For fixed prices, use the price amount directly
+			cost := priceResp.Price.Amount.Mul(item.Quantity)
+			itemCosts = append(itemCosts, dto.CostBreakdownItem{
+				Cost: cost,
+			})
+			totalCost = totalCost.Add(cost)
+		} else if priceResp.Price.Type == types.PRICE_TYPE_USAGE && item.MeterID != "" {
+			// For usage-based prices, collect the meter ID for later processing
+			uniqueMeters[item.MeterID] = struct{}{}
+		}
+	}
 
-		// First pass: Process fixed costs and collect meters for usage-based costs
+	// Second pass: Process usage-based costs
+	if len(uniqueMeters) > 0 {
+		// Create usage requests for unique meters
+		usageRequests := make([]*dto.GetUsageByMeterRequest, 0, len(uniqueMeters))
+		for meterID := range uniqueMeters {
+			usageRequests = append(usageRequests, &dto.GetUsageByMeterRequest{
+				MeterID:   meterID,
+				StartTime: startTime,
+				EndTime:   endTime,
+			})
+		}
+
+		// Fetch usage data for all meters in bulk
+		usageData, err := eventService.BulkGetUsageByMeter(ctx, usageRequests)
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithMessage("failed to get usage data").
+				WithHint("failed to get usage data").
+				Mark(ierr.ErrInternal)
+		}
+
+		// Process each meter's usage
 		for _, item := range sub.LineItems {
-			if item.Status != types.StatusPublished {
+			if item.Status != types.StatusPublished || item.MeterID == "" {
+				continue
+			}
+
+			usage := usageData[item.MeterID]
+			if usage == nil {
 				continue
 			}
 
@@ -126,142 +155,17 @@ func (s *costsheetService) GetInputCostForMargin(ctx context.Context, req *dto.C
 					Mark(ierr.ErrInternal)
 			}
 
-			if priceResp.Price.Type == types.PRICE_TYPE_FIXED {
-				// For fixed prices, use the price amount directly
-				cost := priceResp.Price.Amount.Mul(item.Quantity)
-				itemCosts = append(itemCosts, dto.CostBreakdownItem{
-					Cost: cost,
-				})
-				totalCost = totalCost.Add(cost)
-			} else if priceResp.Price.Type == types.PRICE_TYPE_USAGE && item.MeterID != "" {
-				// For usage-based prices, collect the meter ID for later processing
-				uniqueMeters[item.MeterID] = struct{}{}
-			}
-		}
-
-		// Second pass: Process usage-based costs
-		if len(uniqueMeters) > 0 {
-			// Create usage requests for unique meters
-			usageRequests := make([]*dto.GetUsageByMeterRequest, 0, len(uniqueMeters))
-			for meterID := range uniqueMeters {
-				usageRequests = append(usageRequests, &dto.GetUsageByMeterRequest{
-					MeterID:   meterID,
-					StartTime: startTime,
-					EndTime:   endTime,
-				})
-			}
-
-			// Fetch usage data for all meters in bulk
-			usageData, err := eventService.BulkGetUsageByMeter(ctx, usageRequests)
-			if err != nil {
-				return nil, ierr.WithError(err).
-					WithMessage("failed to get usage data").
-					WithHint("failed to get usage data").
-					Mark(ierr.ErrInternal)
-			}
-
-			// Process each meter's usage
-			for _, item := range sub.LineItems {
-				if item.Status != types.StatusPublished || item.MeterID == "" {
-					continue
-				}
-
-				usage := usageData[item.MeterID]
-				if usage == nil {
-					continue
-				}
-
-				// Get price details
-				priceResp, err := priceService.GetPrice(ctx, item.PriceID)
-				if err != nil {
-					return nil, ierr.WithError(err).
-						WithMessage("failed to get price").
-						WithHint("failed to get price").
-						Mark(ierr.ErrInternal)
-				}
-
-				// Calculate cost for this item using price and usage
-				cost := priceService.CalculateCostSheetPrice(ctx, priceResp.Price, usage.Value)
-
-				// Store item-specific cost details
-				itemCosts = append(itemCosts, dto.CostBreakdownItem{
-					MeterID: item.MeterID,
-					Usage:   usage.Value,
-					Cost:    cost,
-				})
-
-				// Add to total cost
-				totalCost = totalCost.Add(cost)
-			}
-		}
-	} else {
-		// If no subscription ID, fall back to original cost sheet behavior
-		filter := &domainCostSheet.Filter{
-			QueryFilter:   types.NewDefaultQueryFilter(),
-			TenantID:      tenantID,
-			EnvironmentID: envID,
-			Filters: []*types.FilterCondition{
-				{
-					Field:    lo.ToPtr("status"),
-					Operator: lo.ToPtr(types.EQUAL),
-					DataType: lo.ToPtr(types.DataTypeString),
-					Value: &types.Value{
-						String: lo.ToPtr("published"),
-					},
-				},
-			},
-		}
-
-		items, err := s.CostSheetRepo.List(ctx, filter)
-		if err != nil {
-			return nil, ierr.WithError(err).
-				WithMessage("failed to get cost sheet items").
-				WithHint("failed to get cost sheet items").
-				Mark(ierr.ErrInternal)
-		}
-
-		// Create usage requests for meters
-		usageRequests := make([]*dto.GetUsageByMeterRequest, len(items))
-		for i, item := range items {
-			usageRequests[i] = &dto.GetUsageByMeterRequest{
-				MeterID:   item.MeterID,
-				StartTime: startTime,
-				EndTime:   endTime,
-			}
-		}
-
-		// Fetch usage data for all meters in bulk
-		usageData, err := eventService.BulkGetUsageByMeter(ctx, usageRequests)
-		if err != nil {
-			return nil, ierr.WithError(err).
-				WithMessage("failed to get usage data").
-				WithHint("failed to get usage data").
-				Mark(ierr.ErrInternal)
-		}
-
-		// Process each cost sheet item
-		for _, item := range items {
-			usage := usageData[item.MeterID]
-			if usage == nil {
-				continue
-			}
-
-			priceResp, err := priceService.GetPrice(ctx, item.PriceID)
-			if err != nil {
-				return nil, ierr.WithError(err).
-					WithMessage("failed to get price").
-					WithHint("failed to get price").
-					Mark(ierr.ErrInternal)
-			}
-
+			// Calculate cost for this item using price and usage
 			cost := priceService.CalculateCostSheetPrice(ctx, priceResp.Price, usage.Value)
 
+			// Store item-specific cost details
 			itemCosts = append(itemCosts, dto.CostBreakdownItem{
 				MeterID: item.MeterID,
 				Usage:   usage.Value,
 				Cost:    cost,
 			})
 
+			// Add to total cost
 			totalCost = totalCost.Add(cost)
 		}
 	}
@@ -283,17 +187,12 @@ func (s *costsheetService) CalculateMargin(totalCost, totalRevenue decimal.Decim
 
 	return totalRevenue.Sub(totalCost).Div(totalRevenue)
 
-	// Example: 1% Margin
-	// totalCost = 1.00
-	// totalRevenue = 1.01
-	// margin = (1.01 - 1.00) / 1.01 = 0.0099 (0.99% margin)
-
 }
 
 func (s *costsheetService) CalculateMarkup(totalCost, totalRevenue decimal.Decimal) decimal.Decimal {
 
 	// if totalRevenue is zero, return 0
-	if totalRevenue.IsZero() {
+	if totalCost.IsZero() {
 		return decimal.Zero
 	}
 
@@ -385,6 +284,31 @@ func (s *costsheetService) UpdateCostSheet(ctx context.Context, req *dto.UpdateC
 
 	// Update fields
 	if req.Status != "" {
+		// Create a temporary costsheet to validate the new status
+		bufferCostsheet := &domainCostSheet.Costsheet{
+			ID:      costsheet.ID,
+			MeterID: costsheet.MeterID,
+			PriceID: costsheet.PriceID,
+			BaseModel: types.BaseModel{
+				Status: types.Status(req.Status),
+			},
+		}
+
+		// Validate the status
+		if err := bufferCostsheet.Validate(); err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Invalid status provided").
+				WithReportableDetails(map[string]interface{}{
+					"status": req.Status,
+					"valid_statuses": []types.Status{
+						types.StatusPublished,
+						types.StatusArchived,
+						types.StatusDeleted,
+					},
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
 		costsheet.Status = types.Status(req.Status)
 	}
 
@@ -404,7 +328,8 @@ func (s *costsheetService) UpdateCostSheet(ctx context.Context, req *dto.UpdateC
 	}, nil
 }
 
-// DeleteCostsheet deletes a cost sheet by ID
+// DeleteCostSheet performs a soft delete by archiving a published cost sheet.
+// If the cost sheet is not in published status, it returns an error.
 func (s *costsheetService) DeleteCostSheet(ctx context.Context, id string) error {
 	return s.CostSheetRepo.Delete(ctx, id)
 }
@@ -433,18 +358,14 @@ func (s *costsheetService) CalculateROI(ctx context.Context, req *dto.CalculateR
 	}
 
 	// Create a cost sheet request from ROI request
-	costSheetReq := &dto.CreateCostSheetRequest{
-		MeterID:        req.MeterID,
-		PriceID:        req.PriceID,
+	costSheetBreakdownReq := &dto.GetCostBreakdownRequest{
 		SubscriptionID: req.SubscriptionID,
+		StartTime:      &periodStart,
+		EndTime:        &periodEnd,
 	}
 
-	// Add time range to context for GetInputCostForMargin
-	ctx = context.WithValue(ctx, "start_time", periodStart)
-	ctx = context.WithValue(ctx, "end_time", periodEnd)
-
 	// Get cost breakdown
-	costBreakdown, err := s.GetInputCostForMargin(ctx, costSheetReq)
+	costBreakdown, err := s.GetInputCostForMargin(ctx, costSheetBreakdownReq)
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithMessage("failed to get cost breakdown").
@@ -497,12 +418,7 @@ func (s *costsheetService) CalculateROI(ctx context.Context, req *dto.CalculateR
 	return response, nil
 }
 
-// GetSubscriptionDetails retrieves subscription details
-func (s *costsheetService) GetSubscriptionDetails(ctx context.Context, subscriptionID string) (*domainSubscription.Subscription, error) {
-	subscriptionService := NewSubscriptionService(s.ServiceParams)
-	sub, err := subscriptionService.GetSubscription(ctx, subscriptionID)
-	if err != nil {
-		return nil, err
-	}
-	return sub.Subscription, nil
+// GetServiceParams retrieves the service parameters
+func (s *costsheetService) GetServiceParams() ServiceParams {
+	return s.ServiceParams
 }

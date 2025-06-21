@@ -54,7 +54,8 @@ type Filter struct {
 	PriceIDs []string
 
 	// Status filters by costsheet status
-	Status types.CostsheetStatus
+	// Status types.CostsheetStatus
+	Status types.Status
 
 	// TenantID filters by specific tenant ID
 	TenantID string
@@ -160,9 +161,33 @@ func (c *Costsheet) Validate() error {
 			WithHint("Price ID is required").
 			Mark(ierr.ErrValidation)
 	}
+
+	// Validate status
+	validStatuses := []types.Status{
+		types.StatusPublished,
+		types.StatusArchived,
+		types.StatusDeleted,
+	}
+	isValidStatus := false
+	for _, status := range validStatuses {
+		if c.Status == status {
+			isValidStatus = true
+			break
+		}
+	}
+	if !isValidStatus {
+		return ierr.NewError("invalid status").
+			WithHint("Status must be one of: published, archived, deleted").
+			WithReportableDetails(map[string]any{
+				"status":         c.Status,
+				"valid_statuses": validStatuses,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
 	return nil
 }
 
-func GetTenantAndEnvFromContext(ctx context.Context) (string, string) {
-	return types.GetTenantID(ctx), types.GetEnvironmentID(ctx)
-}
+// func GetTenantAndEnvFromContext(ctx context.Context) (string, string) {
+// 	return types.GetTenantID(ctx), types.GetEnvironmentID(ctx)
+// }

@@ -1,7 +1,7 @@
 package v1
 
 import (
-	"context"
+	// "context"
 	"net/http"
 	"time"
 
@@ -55,13 +55,12 @@ func (h *CostSheetHandler) CreateCostSheet(c *gin.Context) {
 		QueryFilter: types.NewDefaultQueryFilter(),
 		MeterIDs:    []string{req.MeterID},
 		PriceIDs:    []string{req.PriceID},
-		Status:      types.CostsheetStatusPublished,
+		Status:      types.StatusPublished,
 	}
 
 	// Get tenant and environment from context
-	tenantID, envID := domainCostsheet.GetTenantAndEnvFromContext(c.Request.Context())
-	filter.TenantID = tenantID
-	filter.EnvironmentID = envID
+	filter.TenantID = types.GetTenantID(c.Request.Context())
+	filter.EnvironmentID = types.GetEnvironmentID(c.Request.Context())
 
 	existing, err := h.service.ListCostSheets(c.Request.Context(), filter)
 	if err != nil {
@@ -144,9 +143,8 @@ func (h *CostSheetHandler) ListCostSheets(c *gin.Context) {
 	}
 
 	// Get tenant and environment from context
-	tenantID, envID := domainCostsheet.GetTenantAndEnvFromContext(c.Request.Context())
-	filter.TenantID = tenantID
-	filter.EnvironmentID = envID
+	filter.TenantID = types.GetTenantID(c.Request.Context())
+	filter.EnvironmentID = types.GetEnvironmentID(c.Request.Context())
 
 	resp, err := h.service.ListCostSheets(c.Request.Context(), &filter)
 	if err != nil {
@@ -276,8 +274,10 @@ func (h *CostSheetHandler) GetCostBreakDown(c *gin.Context) {
 		endTime = &t
 	}
 
-	// Get subscription details
-	sub, err := h.service.GetSubscriptionDetails(c.Request.Context(), subscriptionID)
+	// Get subscription details using properly initialized subscription service
+	subscriptionService := service.NewSubscriptionService(h.service.GetServiceParams())
+
+	sub, err := subscriptionService.GetSubscription(c.Request.Context(), subscriptionID)
 	if err != nil {
 		h.log.Error("Failed to get subscription", "error", err)
 		c.Error(ierr.WithError(err).
@@ -287,8 +287,8 @@ func (h *CostSheetHandler) GetCostBreakDown(c *gin.Context) {
 	}
 
 	// Use subscription period if time range not provided
-	periodStart := sub.CurrentPeriodStart
-	periodEnd := sub.CurrentPeriodEnd
+	periodStart := sub.Subscription.CurrentPeriodStart
+	periodEnd := sub.Subscription.CurrentPeriodEnd
 
 	if startTime != nil && endTime != nil {
 		periodStart = *startTime
@@ -303,13 +303,11 @@ func (h *CostSheetHandler) GetCostBreakDown(c *gin.Context) {
 		}
 	}
 
-	// Add time range to context
-	ctx := context.WithValue(c.Request.Context(), "start_time", periodStart)
-	ctx = context.WithValue(ctx, "end_time", periodEnd)
-
 	// Get cost breakdown with subscription ID
-	resp, err := h.service.GetInputCostForMargin(ctx, &dto.CreateCostSheetRequest{
+	resp, err := h.service.GetInputCostForMargin(c.Request.Context(), &dto.GetCostBreakdownRequest{
 		SubscriptionID: subscriptionID,
+		StartTime:      &periodStart,
+		EndTime:        &periodEnd,
 	})
 	if err != nil {
 		h.log.Error("Failed to get cost breakdown", "error", err)
