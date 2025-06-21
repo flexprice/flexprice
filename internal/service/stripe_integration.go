@@ -481,6 +481,7 @@ func (s *stripeIntegrationService) TriggerManualSync(ctx context.Context, req Tr
 		MaxRetries:               s.Config.Stripe.MaxRetries,
 		APITimeout:               s.Config.Stripe.GetAPITimeout(),
 		AggregationWindowMinutes: s.Config.Stripe.DefaultAggregationWindowMinutes,
+		CustomerID:               req.EntityID,
 	}
 
 	// Start Temporal workflow

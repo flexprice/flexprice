@@ -17,6 +17,7 @@ type StripeEventSyncWorkflowInput struct {
 	MaxRetries               int           `json:"max_retries"`
 	APITimeout               time.Duration `json:"api_timeout"`
 	AggregationWindowMinutes int           `json:"aggregation_window_minutes"`
+	CustomerID               string        `json:"customer_id,omitempty"`
 }
 
 // StripeEventSyncWorkflowResult represents the result of the Stripe event sync workflow
@@ -37,6 +38,7 @@ type AggregateEventsActivityInput struct {
 	WindowStart   time.Time `json:"window_start"`
 	WindowEnd     time.Time `json:"window_end"`
 	BatchSize     int       `json:"batch_size"`
+	CustomerID    string    `json:"customer_id,omitempty"`
 }
 
 // AggregateEventsActivityResult represents the result of event aggregation activity

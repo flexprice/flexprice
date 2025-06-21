@@ -83,9 +83,10 @@ func (a *StripeSyncActivities) AggregateEventsActivity(ctx context.Context, inpu
 	ctx = context.WithValue(ctx, types.CtxEnvironmentID, input.EnvironmentID)
 
 	params := &events.GetProcessedEventsParams{
-		StartTime: input.WindowStart,
-		EndTime:   input.WindowEnd,
-		Limit:     input.BatchSize,
+		StartTime:  input.WindowStart,
+		EndTime:    input.WindowEnd,
+		Limit:      input.BatchSize,
+		CustomerID: input.CustomerID,
 	}
 
 	processedEvents, _, err := a.processedEventRepo.GetProcessedEvents(ctx, params)

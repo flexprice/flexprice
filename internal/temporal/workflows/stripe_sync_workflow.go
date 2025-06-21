@@ -69,6 +69,7 @@ func StripeEventSyncWorkflow(ctx workflow.Context, input models.StripeEventSyncW
 		WindowStart:   input.WindowStart,
 		WindowEnd:     input.WindowEnd,
 		BatchSize:     input.BatchSizeLimit,
+		CustomerID:    input.CustomerID,
 	}
 
 	var aggregateResult models.AggregateEventsActivityResult
