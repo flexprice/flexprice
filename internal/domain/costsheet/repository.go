@@ -21,7 +21,4 @@ type Repository interface {
 
 	// List retrieves costsheets based on the provided filter
 	List(ctx context.Context, filter *Filter) ([]*Costsheet, error)
-
-	// // GetByMeterAndPrice retrieves a costsheet by meter ID and price ID
-	// GetByMeterAndPrice(ctx context.Context, meterID, priceID string) (*Costsheet, error)
 }

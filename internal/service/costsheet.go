@@ -32,6 +32,7 @@ type CostSheetService interface {
 	CalculateMarkup(totalCost, totalRevenue decimal.Decimal) decimal.Decimal
 	CalculateROI(ctx context.Context, req *dto.CalculateROIRequest) (*dto.ROIResponse, error)
 
+	// TODO: handler business logic -> service methods
 	// GetServiceParams retrieves the service parameters
 	GetServiceParams() ServiceParams
 }
@@ -189,6 +190,9 @@ func (s *costsheetService) CalculateMargin(totalCost, totalRevenue decimal.Decim
 
 }
 
+// CalculateMarkup calculates the markup as a ratio.
+// The formula used is: markup = (revenue - cost) / cost
+// Returns 0 if totalCost is zero to prevent division by zero errors.
 func (s *costsheetService) CalculateMarkup(totalCost, totalRevenue decimal.Decimal) decimal.Decimal {
 
 	// if totalRevenue is zero, return 0

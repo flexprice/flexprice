@@ -54,7 +54,6 @@ type Filter struct {
 	PriceIDs []string
 
 	// Status filters by costsheet status
-	// Status types.CostsheetStatus
 	Status types.Status
 
 	// TenantID filters by specific tenant ID
@@ -187,7 +186,3 @@ func (c *Costsheet) Validate() error {
 
 	return nil
 }
-
-// func GetTenantAndEnvFromContext(ctx context.Context) (string, string) {
-// 	return types.GetTenantID(ctx), types.GetEnvironmentID(ctx)
-// }
