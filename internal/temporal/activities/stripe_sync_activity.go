@@ -2,6 +2,7 @@ package activities
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"time"
 
@@ -9,7 +10,9 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/integration"
 	"github.com/flexprice/flexprice/internal/domain/stripe"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/logger"
+	stripeRepo "github.com/flexprice/flexprice/internal/repository/stripe"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -184,12 +187,14 @@ func (a *StripeSyncActivities) SyncToStripeActivity(ctx context.Context, input m
 			Mark(ierr.ErrValidation)
 	}
 
+	// Ensure repository calls see the correct tenant & environment
+	ctx = context.WithValue(ctx, types.CtxTenantID, input.TenantID)
+	ctx = context.WithValue(ctx, types.CtxEnvironmentID, input.EnvironmentID)
+
 	if len(input.Aggregations) == 0 {
-		return &models.SyncToStripeActivityResult{
-			SyncedBatches:   []models.SyncBatchResult{},
-			SuccessfulSyncs: 0,
-			FailedSyncs:     0,
-		}, nil
+		return nil, ierr.NewError("no aggregations to sync").
+			WithHint("Stripe sync activity received zero aggregations, nothing to push").
+			Mark(ierr.ErrNotFound)
 	}
 
 	// Get Stripe configuration for the tenant
@@ -205,6 +210,17 @@ func (a *StripeSyncActivities) SyncToStripeActivity(ctx context.Context, input m
 			WithHint("Stripe configuration must be set up for tenant").
 			Mark(ierr.ErrNotFound)
 	}
+
+	// Decrypt API key (currently stored as plaintext)
+	apiKey := config.APIKeyEncrypted
+
+	// Create tenant-scoped Stripe client so we use the correct key instead of the placeholder
+	stripeHTTP := httpclient.NewDefaultClient()
+	tenantStripeClient := stripeRepo.NewStripeAPIClient(stripeHTTP, apiKey, a.logger)
+
+	// Replace activity-wide client for this run
+	// (thread-safe because activities are single-run instances)
+	a.stripeClient = tenantStripeClient
 
 	results := make([]models.SyncBatchResult, 0, len(input.Aggregations))
 	successfulSyncs := 0
@@ -272,17 +288,38 @@ func (a *StripeSyncActivities) syncSingleAggregation(ctx context.Context, tenant
 		return result
 	}
 
-	// Create idempotency key for Stripe API call
-	idempotencyKey := fmt.Sprintf("flexprice_%s_%s_%s_%d_%d",
-		tenantID, agg.CustomerID, agg.MeterID,
-		windowStart.Unix(), windowEnd.Unix())
+	// Create deterministic idempotency key for Stripe API call that respects Stripe's 100-character limit.
+	// The original key exceeded the 100-character constraint (tenantID + customerID + meterID + timestamps).
+	// We now hash the full input to keep the key short but still unique & deterministic.
+
+	// Build the raw identifier string (for hashing only)
+	rawIdentifier := fmt.Sprintf("%s_%s_%s_%d_%d", tenantID, agg.CustomerID, agg.MeterID, windowStart.Unix(), windowEnd.Unix())
+
+	// Use SHA-256 hash; hex-encoded string is 64 characters.
+	// Final identifier will be: "flexprice_" + 64-char hash = 74 characters (<100 Stripe limit).
+	hashBytes := sha256.Sum256([]byte(rawIdentifier))
+	idempotencyKey := fmt.Sprintf("flexprice_%x", hashBytes[:])
+
+	// Resolve the Stripe meter's event name (required by Stripe API)
+	meterEventName := meterMapping.ProviderMeterID // default fallback
+
+	// Attempt to retrieve meter details from Stripe to get the authoritative event_name.
+	if meter, err := a.stripeClient.GetMeter(ctx, meterMapping.ProviderMeterID); err == nil && meter != nil {
+		if meter.Status == "active" {
+			meterEventName = meter.EventName
+		} else {
+			a.logger.Warnw("Stripe meter is not active", "meter_id", meter.ID, "status", meter.Status)
+		}
+	} else if err != nil {
+		a.logger.Warnw("failed to fetch Stripe meter details; using provider_meter_id as event_name", "meter_id", meterMapping.ProviderMeterID, "error", err)
+	}
 
 	// Create Stripe meter event
 	stripeEvent := &stripe.StripeEvent{
-		EventName: meterMapping.ProviderMeterID, // Direct field access instead of method
+		EventName: meterEventName,
 		Payload: map[string]interface{}{
-			"customer_id": customerMapping.ProviderEntityID, // Direct field access instead of method
-			"value":       agg.AggregatedQuantity,
+			"stripe_customer_id": customerMapping.ProviderEntityID,
+			"value":              agg.AggregatedQuantity,
 		},
 		Timestamp:  windowEnd,
 		Identifier: idempotencyKey,

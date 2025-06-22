@@ -32,3 +32,14 @@ type MeterMappingResponse struct {
 	CreatedAt       time.Time              `json:"created_at"`
 	UpdatedAt       time.Time              `json:"updated_at"`
 }
+
+// UpdateMeterMappingRequest represents payload to update a meter mapping
+// swagger:model
+type UpdateMeterMappingRequest struct {
+	// New provider meter ID (optional)
+	ProviderMeterID *string `json:"provider_meter_id,omitempty"`
+	// Enable/disable sync (optional)
+	SyncEnabled *bool `json:"sync_enabled,omitempty"`
+	// Provider-specific configuration (optional)
+	Configuration map[string]interface{} `json:"configuration,omitempty"`
+}

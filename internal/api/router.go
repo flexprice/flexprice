@@ -324,6 +324,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 
 			// Meter mappings
 			stripe.POST("/meter-mappings", handlers.StripeMeterMapping.CreateMeterMapping)
+			stripe.PUT("/meter-mappings/:meter_id", handlers.StripeMeterMapping.UpdateMeterMapping)
 
 			// Sync monitoring & manual
 			stripe.GET("/sync/status", handlers.StripeSync.GetSyncStatus)

@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/flexprice/flexprice/internal/domain/stripe"
@@ -209,14 +211,23 @@ func (c *StripeAPIClient) GetMeter(ctx context.Context, meterID string) (*stripe
 		return nil, c.handleAPIError(err, "get meter")
 	}
 
-	var meter stripe.StripeMeter
-	if err := json.Unmarshal(resp.Body, &meter); err != nil {
+	// Stripe returns numeric timestamps; to avoid time.UnmarshalJSON issues, unmarshal only required fields.
+	var light struct {
+		ID        string `json:"id"`
+		EventName string `json:"event_name"`
+		Status    string `json:"status"`
+	}
+	if err := json.Unmarshal(resp.Body, &light); err != nil {
 		return nil, ierr.WithError(err).
-			WithHint("Failed to parse meter response").
+			WithHint("Failed to parse meter response (lightweight)").
 			Mark(ierr.ErrHTTPClient)
 	}
 
-	return &meter, nil
+	return &stripe.StripeMeter{
+		ID:        light.ID,
+		EventName: light.EventName,
+		Status:    light.Status,
+	}, nil
 }
 
 func (c *StripeAPIClient) UpdateMeter(ctx context.Context, meterID string, req *stripe.UpdateMeterRequest) (*stripe.StripeMeter, error) {
@@ -320,27 +331,59 @@ func (c *StripeAPIClient) CreateMeterEvent(ctx context.Context, req *stripe.Crea
 
 	c.log.Debugw("creating stripe meter event", "event_name", req.EventName, "identifier", req.Identifier)
 
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to marshal meter event request").
-			Mark(ierr.ErrValidation)
+	// Stripe expects application/x-www-form-urlencoded by default.
+	values := url.Values{}
+	values.Set("event_name", req.EventName)
+	values.Set("identifier", req.Identifier)
+	values.Set("timestamp", strconv.FormatInt(req.Timestamp.Unix(), 10))
+
+	// Encode payload as nested form fields e.g. payload[value]=10 & payload[stripe_customer_id]=cus_123
+	for k, v := range req.Payload {
+		var s string
+		switch vv := v.(type) {
+		case string:
+			s = vv
+		case fmt.Stringer:
+			s = vv.String()
+		case float64:
+			s = strconv.FormatFloat(vv, 'f', -1, 64)
+		case float32:
+			s = strconv.FormatFloat(float64(vv), 'f', -1, 32)
+		case int:
+			s = strconv.Itoa(vv)
+		case int64:
+			s = strconv.FormatInt(vv, 10)
+		case uint64:
+			s = strconv.FormatUint(vv, 10)
+		default:
+			// Fallback to JSON encoding
+			b, _ := json.Marshal(v)
+			s = string(b)
+		}
+		values.Set(fmt.Sprintf("payload[%s]", k), s)
 	}
 
 	httpReq := &httpclient.Request{
 		Method: http.MethodPost,
-		URL:    c.baseURL + "/v2/billing/meter_events",
+		URL:    c.baseURL + "/billing/meter_events",
 		Headers: map[string]string{
 			"Authorization": "Bearer " + c.apiKey,
-			"Content-Type":  "application/json",
+			"Content-Type":  "application/x-www-form-urlencoded",
 		},
-		Body: body,
+		Body: []byte(values.Encode()),
 	}
 
 	resp, err := c.httpClient.Send(ctx, httpReq)
 	if err != nil {
 		return nil, c.handleAPIError(err, "create meter event")
 	}
+
+	// Log raw response for easier debugging (truncated to avoid huge logs)
+	truncatedBody := string(resp.Body)
+	if len(truncatedBody) > 1000 {
+		truncatedBody = truncatedBody[:1000] + "..."
+	}
+	c.log.Debugw("stripe meter event response", "status_code", resp.StatusCode, "body", truncatedBody)
 
 	var apiResp stripe.StripeAPIResponse
 	if err := json.Unmarshal(resp.Body, &apiResp); err != nil {
@@ -368,7 +411,7 @@ func (c *StripeAPIClient) CreateMeterEventBatch(ctx context.Context, req *stripe
 
 	httpReq := &httpclient.Request{
 		Method: http.MethodPost,
-		URL:    c.baseURL + "/v2/billing/meter_events/batch",
+		URL:    c.baseURL + "/billing/meter_events/batch",
 		Headers: map[string]string{
 			"Authorization": "Bearer " + c.apiKey,
 			"Content-Type":  "application/json",
@@ -549,7 +592,16 @@ func (c *StripeAPIClient) ParseWebhookPayload(ctx context.Context, payload []byt
 
 // Helper method to handle API errors
 func (c *StripeAPIClient) handleAPIError(err error, operation string) error {
-	c.log.Errorw("stripe api error", "operation", operation, "error", err)
+	// If this is an HTTP error, extract more context for logs
+	if httpErr, ok := httpclient.IsHTTPError(err); ok {
+		respBody := string(httpErr.Response)
+		if len(respBody) > 1000 {
+			respBody = respBody[:1000] + "..."
+		}
+		c.log.Errorw("stripe api error", "operation", operation, "status_code", httpErr.StatusCode, "response", respBody)
+	} else {
+		c.log.Errorw("stripe api error", "operation", operation, "error", err)
+	}
 
 	return ierr.WithError(err).
 		WithHint("Stripe API operation failed").

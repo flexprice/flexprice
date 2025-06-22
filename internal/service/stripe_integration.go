@@ -730,18 +730,29 @@ func (s *stripeIntegrationService) validateUpdateTenantConfigRequest(req UpdateS
 }
 
 func (s *stripeIntegrationService) validateTriggerManualSyncRequest(req TriggerManualSyncRequest) error {
+	// Ensure entity ID is provided
 	if req.EntityID == "" {
 		return ierr.NewError("entity_id is required").
 			WithHint("Entity ID must not be empty").
 			Mark(ierr.ErrValidation)
 	}
 
+	// Validate time range ordering
 	if req.TimeFrom.After(req.TimeTo) {
 		return ierr.NewError("invalid time range").
 			WithHint("time_from must be before time_to").
 			Mark(ierr.ErrValidation)
 	}
 
+	// Disallow future end times (allow a small 5-minute tolerance)
+	now := time.Now().UTC()
+	if req.TimeTo.After(now.Add(5 * time.Minute)) {
+		return ierr.NewError("time_to cannot be in the future").
+			WithHint("Specify a time_to that is not more than 5 minutes ahead of the current time").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Limit maximum range to 7 days
 	maxRange := 7 * 24 * time.Hour // 7 days
 	if req.TimeTo.Sub(req.TimeFrom) > maxRange {
 		return ierr.NewError("time range too large").

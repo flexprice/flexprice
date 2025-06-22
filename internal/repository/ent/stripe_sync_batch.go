@@ -2,6 +2,7 @@ package ent
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
@@ -262,6 +263,11 @@ func (r *stripeSyncBatchRepository) BulkCreate(ctx context.Context, batches []*d
 			SetNillableSyncedAt(b.SyncedAt))
 	}
 	if err := c.StripeSyncBatch.CreateBulk(builders...).Exec(ctx); err != nil {
+		// Ignore duplicate key errors to make operation idempotent
+		if strings.Contains(err.Error(), "duplicate key value") {
+			r.log.Warnw("duplicate stripe_sync_batch record ignored", "error", err)
+			return nil
+		}
 		return ierr.WithError(err).Mark(ierr.ErrDatabase)
 	}
 	return nil
