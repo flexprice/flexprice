@@ -8,6 +8,7 @@ import (
 
 	integration "github.com/flexprice/flexprice/internal/domain/integration"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/temporal"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
@@ -799,15 +800,42 @@ func (s *stripeIntegrationService) testStripeAPIKey(ctx context.Context, apiKey 
 }
 
 func (s *stripeIntegrationService) encryptAPIKey(apiKey string) string {
-	// TODO: Implement proper encryption using FlexPrice's encryption service
-	// For now, return the key as-is (this should be replaced with actual encryption)
-	return apiKey
+	if apiKey == "" {
+		return ""
+	}
+
+	encSvc, err := security.NewEncryptionService(s.Config, s.Logger)
+	if err != nil {
+		s.Logger.Warnw("encryption not configured, storing API key in plaintext", "error", err)
+		return apiKey
+	}
+
+	enc, err := encSvc.Encrypt(apiKey)
+	if err != nil {
+		s.Logger.Warnw("failed to encrypt API key, storing in plaintext", "error", err)
+		return apiKey
+	}
+	return enc
 }
 
 func (s *stripeIntegrationService) decryptAPIKey(encryptedKey string) string {
-	// TODO: Implement proper decryption using FlexPrice's decryption service
-	// For now, return the key as-is (this should be replaced with actual decryption)
-	return encryptedKey
+	if encryptedKey == "" {
+		return ""
+	}
+
+	encSvc, err := security.NewEncryptionService(s.Config, s.Logger)
+	if err != nil {
+		s.Logger.Warnw("encryption not configured, returning key as-is", "error", err)
+		return encryptedKey
+	}
+
+	dec, err := encSvc.Decrypt(encryptedKey)
+	if err != nil {
+		// If decryption fails, assume it was stored plaintext
+		s.Logger.Warnw("failed to decrypt API key, returning stored value", "error", err)
+		return encryptedKey
+	}
+	return dec
 }
 
 func (s *stripeIntegrationService) mapWebhookConfig(config *StripeWebhookConfig) map[string]interface{} {
