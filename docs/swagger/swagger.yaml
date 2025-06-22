@@ -2549,6 +2549,19 @@ definitions:
       unit_singular:
         type: string
     type: object
+  dto.UpdateMeterMappingRequest:
+    properties:
+      configuration:
+        additionalProperties: true
+        description: Provider-specific configuration (optional)
+        type: object
+      provider_meter_id:
+        description: New provider meter ID (optional)
+        type: string
+      sync_enabled:
+        description: Enable/disable sync (optional)
+        type: boolean
+    type: object
   dto.UpdatePaymentRequest:
     properties:
       metadata:
@@ -6908,6 +6921,55 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Create Stripe meter mapping
+      tags:
+      - stripe-meter-mapping
+  /stripe/meter-mappings/{meter_id}:
+    put:
+      consumes:
+      - application/json
+      description: Update an existing meter mapping.
+      parameters:
+      - description: FlexPrice meter ID
+        in: path
+        name: meter_id
+        required: true
+        type: string
+      - description: 'Provider type (default: stripe)'
+        in: query
+        name: provider_type
+        type: string
+      - description: Update request payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateMeterMappingRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.MeterMappingResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update Stripe meter mapping
       tags:
       - stripe-meter-mapping
   /subscriptions:

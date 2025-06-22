@@ -4799,6 +4799,82 @@ const docTemplate = `{
                 }
             }
         },
+        "/stripe/meter-mappings/{meter_id}": {
+            "put": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update an existing meter mapping.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "stripe-meter-mapping"
+                ],
+                "summary": "Update Stripe meter mapping",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "FlexPrice meter ID",
+                        "name": "meter_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Provider type (default: stripe)",
+                        "name": "provider_type",
+                        "in": "query"
+                    },
+                    {
+                        "description": "Update request payload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.UpdateMeterMappingRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.MeterMappingResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/subscriptions": {
             "get": {
                 "security": [
@@ -10268,6 +10344,24 @@ const docTemplate = `{
                 },
                 "unit_singular": {
                     "type": "string"
+                }
+            }
+        },
+        "dto.UpdateMeterMappingRequest": {
+            "type": "object",
+            "properties": {
+                "configuration": {
+                    "description": "Provider-specific configuration (optional)",
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "provider_meter_id": {
+                    "description": "New provider meter ID (optional)",
+                    "type": "string"
+                },
+                "sync_enabled": {
+                    "description": "Enable/disable sync (optional)",
+                    "type": "boolean"
                 }
             }
         },
