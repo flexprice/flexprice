@@ -5,6 +5,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/integration"
 	"github.com/flexprice/flexprice/internal/domain/stripe"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/temporal/activities"
 	"github.com/flexprice/flexprice/internal/temporal/workflows"
 	"go.temporal.io/sdk/worker"
@@ -29,6 +30,7 @@ func RegisterStripeSyncActivities(
 	stripeTenantConfigRepo integration.StripeTenantConfigRepository,
 	meterProviderMappingRepo integration.MeterProviderMappingRepository,
 	stripeClient stripe.Client,
+	encryptionService security.EncryptionService,
 	logger *logger.Logger,
 ) {
 	stripeSyncActivities := activities.NewStripeSyncActivities(
@@ -38,6 +40,7 @@ func RegisterStripeSyncActivities(
 		stripeTenantConfigRepo,
 		meterProviderMappingRepo,
 		stripeClient,
+		encryptionService,
 		logger,
 	)
 	w.RegisterActivity(stripeSyncActivities)

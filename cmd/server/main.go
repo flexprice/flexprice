@@ -41,6 +41,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/integration"
 	"github.com/flexprice/flexprice/internal/domain/stripe"
+	"github.com/flexprice/flexprice/internal/security"
 	"github.com/gin-gonic/gin"
 )
 
@@ -315,13 +316,15 @@ func startServer(
 		startConsumer(lc, consumer, eventRepo, cfg, log, sentryService, eventPostProcessingSvc)
 		startMessageRouter(lc, router, webhookService, onboardingService, log)
 		startPostProcessingConsumer(lc, router, eventPostProcessingSvc, cfg, log)
-		startTemporalWorker(lc, temporalClient, &cfg.Temporal, processedEventRepo, customerMappingRepo, stripeSyncBatchRepo, stripeTenantConfigRepo, meterProviderMappingRepo, stripeClient, log)
+		encSvc, _ := security.NewEncryptionService(cfg, log)
+		startTemporalWorker(lc, temporalClient, &cfg.Temporal, processedEventRepo, customerMappingRepo, stripeSyncBatchRepo, stripeTenantConfigRepo, meterProviderMappingRepo, stripeClient, encSvc, log)
 	case types.ModeAPI:
 		startAPIServer(lc, r, cfg, log)
 		startMessageRouter(lc, router, webhookService, onboardingService, log)
 
 	case types.ModeTemporalWorker:
-		startTemporalWorker(lc, temporalClient, &cfg.Temporal, processedEventRepo, customerMappingRepo, stripeSyncBatchRepo, stripeTenantConfigRepo, meterProviderMappingRepo, stripeClient, log)
+		encSvc, _ := security.NewEncryptionService(cfg, log)
+		startTemporalWorker(lc, temporalClient, &cfg.Temporal, processedEventRepo, customerMappingRepo, stripeSyncBatchRepo, stripeTenantConfigRepo, meterProviderMappingRepo, stripeClient, encSvc, log)
 	case types.ModeConsumer:
 		if consumer == nil {
 			log.Fatal("Kafka consumer required for consumer mode")
@@ -348,6 +351,7 @@ func startTemporalWorker(
 	stripeTenantConfigRepo integration.StripeTenantConfigRepository,
 	meterProviderMappingRepo integration.MeterProviderMappingRepository,
 	stripeClient stripe.Client,
+	encryptionService security.EncryptionService,
 	log *logger.Logger,
 ) {
 	workerWrapper := temporal.NewWorker(temporalClient, *cfg, log)
@@ -361,6 +365,7 @@ func startTemporalWorker(
 		stripeTenantConfigRepo,
 		meterProviderMappingRepo,
 		stripeClient,
+		encryptionService,
 		log,
 	)
 

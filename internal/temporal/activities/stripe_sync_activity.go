@@ -13,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/logger"
 	stripeRepo "github.com/flexprice/flexprice/internal/repository/stripe"
+	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -25,6 +26,7 @@ type StripeSyncActivities struct {
 	stripeTenantConfigRepo   integration.StripeTenantConfigRepository
 	meterProviderMappingRepo integration.MeterProviderMappingRepository
 	stripeClient             stripe.Client
+	encryptionService        security.EncryptionService
 	logger                   *logger.Logger
 }
 
@@ -36,6 +38,7 @@ func NewStripeSyncActivities(
 	stripeTenantConfigRepo integration.StripeTenantConfigRepository,
 	meterProviderMappingRepo integration.MeterProviderMappingRepository,
 	stripeClient stripe.Client,
+	encryptionService security.EncryptionService,
 	logger *logger.Logger,
 ) *StripeSyncActivities {
 	return &StripeSyncActivities{
@@ -45,6 +48,7 @@ func NewStripeSyncActivities(
 		stripeTenantConfigRepo:   stripeTenantConfigRepo,
 		meterProviderMappingRepo: meterProviderMappingRepo,
 		stripeClient:             stripeClient,
+		encryptionService:        encryptionService,
 		logger:                   logger,
 	}
 }
@@ -211,8 +215,15 @@ func (a *StripeSyncActivities) SyncToStripeActivity(ctx context.Context, input m
 			Mark(ierr.ErrNotFound)
 	}
 
-	// Decrypt API key (currently stored as plaintext)
+	// Decrypt API key (if encryption is configured)
 	apiKey := config.APIKeyEncrypted
+	if a.encryptionService != nil {
+		if dec, derr := a.encryptionService.Decrypt(config.APIKeyEncrypted); derr == nil && dec != "" {
+			apiKey = dec
+		} else if derr != nil {
+			a.logger.Warnw("failed to decrypt API key; falling back to stored value", "error", derr)
+		}
+	}
 
 	// Create tenant-scoped Stripe client so we use the correct key instead of the placeholder
 	stripeHTTP := httpclient.NewDefaultClient()
