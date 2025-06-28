@@ -10,6 +10,7 @@ import (
 type Repository interface {
 	// Create creates a new credit grant
 	Create(ctx context.Context, creditGrant *CreditGrant) (*CreditGrant, error)
+	CreateBulk(ctx context.Context, creditGrants []*CreditGrant) ([]*CreditGrant, error)
 
 	// Get retrieves a credit grant by ID
 	Get(ctx context.Context, id string) (*CreditGrant, error)
@@ -28,6 +29,9 @@ type Repository interface {
 
 	// Delete deletes a credit grant by ID
 	Delete(ctx context.Context, id string) error
+
+	// DeleteBulk deletes multiple credit grants by IDs
+	DeleteBulk(ctx context.Context, ids []string) error
 
 	// GetByPlan retrieves credit grants for a specific plan
 	GetByPlan(ctx context.Context, planID string) ([]*CreditGrant, error)

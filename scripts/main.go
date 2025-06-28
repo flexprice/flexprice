@@ -71,31 +71,74 @@ var commands = []Command{
 	{
 		Name:        "reprocess-events",
 		Description: "Reprocess events",
-		Run:         internal.ReprocessEvents,
+		Run:         internal.ReprocessEventsFromEnv,
 	},
 	{
 		Name:        "assign-plan",
 		Description: "Assign a specific plan to customers who don't already have it",
 		Run:         internal.AssignPlanToCustomers,
 	},
+	{
+		Name:        "bulk-reprocess-events",
+		Description: "Bulk reprocess events for all customers in a tenant",
+		Run:         runBulkReprocessEventsCommand,
+	},
+	{
+		Name:        "add-new-user",
+		Description: "Add a new user to a tenant",
+		Run:         internal.AddNewUserToTenant,
+	},
+}
+
+// runBulkReprocessEventsCommand wraps the bulk reprocess events with command line parameters
+func runBulkReprocessEventsCommand() error {
+	tenantID := os.Getenv("TENANT_ID")
+	environmentID := os.Getenv("ENVIRONMENT_ID")
+	eventName := os.Getenv("EVENT_NAME")
+	batchSizeStr := os.Getenv("BATCH_SIZE")
+
+	if tenantID == "" || environmentID == "" {
+		return fmt.Errorf("TENANT_ID and ENVIRONMENT_ID are required")
+	}
+
+	batchSize := 100 // default
+	if batchSizeStr != "" {
+		if _, err := fmt.Sscanf(batchSizeStr, "%d", &batchSize); err != nil {
+			return fmt.Errorf("invalid BATCH_SIZE, must be an integer: %w", err)
+		}
+	}
+
+	params := internal.BulkReprocessEventsParams{
+		TenantID:      tenantID,
+		EnvironmentID: environmentID,
+		EventName:     eventName,
+		BatchSize:     batchSize,
+	}
+
+	return internal.BulkReprocessEvents(params)
 }
 
 func main() {
 	// Define command line flags
 	var (
-		listCommands  bool
-		cmdName       string
-		email         string
-		tenant        string
-		metersFile    string
-		plansFile     string
-		tenantID      string
-		userID        string
-		password      string
-		environmentID string
-		filePath      string
-		planID        string
-		apiKey        string
+		listCommands       bool
+		cmdName            string
+		email              string
+		tenant             string
+		metersFile         string
+		plansFile          string
+		tenantID           string
+		userID             string
+		password           string
+		environmentID      string
+		filePath           string
+		planID             string
+		apiKey             string
+		externalCustomerID string
+		eventName          string
+		startTime          string
+		endTime            string
+		batchSize          string
 	)
 
 	flag.BoolVar(&listCommands, "list", false, "List all available commands")
@@ -111,6 +154,11 @@ func main() {
 	flag.StringVar(&filePath, "file-path", "", "File path for operations")
 	flag.StringVar(&planID, "plan-id", "", "Plan ID for operations")
 	flag.StringVar(&apiKey, "api-key", "", "API key for operations")
+	flag.StringVar(&externalCustomerID, "external-customer-id", "", "External customer ID for reprocessing events")
+	flag.StringVar(&eventName, "event-name", "", "Event name filter for reprocessing")
+	flag.StringVar(&startTime, "start-time", "", "Start time for reprocessing (ISO-8601 format)")
+	flag.StringVar(&endTime, "end-time", "", "End time for reprocessing (ISO-8601 format)")
+	flag.StringVar(&batchSize, "batch-size", "100", "Batch size for reprocessing")
 	flag.Parse()
 
 	if listCommands {
@@ -159,6 +207,22 @@ func main() {
 	if apiKey != "" {
 		os.Setenv("SCRIPT_FLEXPRICE_API_KEY", apiKey)
 	}
+	if externalCustomerID != "" {
+		os.Setenv("EXTERNAL_CUSTOMER_ID", externalCustomerID)
+	}
+	if eventName != "" {
+		os.Setenv("EVENT_NAME", eventName)
+	}
+	if startTime != "" {
+		os.Setenv("START_TIME", startTime)
+	}
+	if endTime != "" {
+		os.Setenv("END_TIME", endTime)
+	}
+	if batchSize != "" {
+		os.Setenv("BATCH_SIZE", batchSize)
+	}
+
 	// Find and run the command
 	for _, cmd := range commands {
 		if cmd.Name == cmdName {

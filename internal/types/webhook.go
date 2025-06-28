@@ -7,19 +7,22 @@ import (
 
 // WebhookEvent represents a webhook event to be delivered
 type WebhookEvent struct {
-	ID        string          `json:"id"`
-	EventName string          `json:"event_name"`
-	TenantID  string          `json:"tenant_id"`
-	Timestamp time.Time       `json:"timestamp"`
-	Payload   json.RawMessage `json:"payload"`
+	ID            string          `json:"id"`
+	EventName     string          `json:"event_name"`
+	TenantID      string          `json:"tenant_id"`
+	EnvironmentID string          `json:"environment_id"`
+	UserID        string          `json:"user_id"`
+	Timestamp     time.Time       `json:"timestamp"`
+	Payload       json.RawMessage `json:"payload"`
 }
 
 // Common webhook event names
 const (
-	WebhookEventInvoiceCreateDraft     = "invoice.create.drafted"
-	WebhookEventInvoiceUpdateFinalized = "invoice.update.finalized"
-	WebhookEventInvoiceUpdatePayment   = "invoice.updated.payment"
-	WebhookEventInvoiceUpdateVoided    = "invoice.update.voided"
+	WebhookEventInvoiceCreateDraft         = "invoice.create.drafted"
+	WebhookEventInvoiceUpdateFinalized     = "invoice.update.finalized"
+	WebhookEventInvoiceUpdatePayment       = "invoice.updated.payment"
+	WebhookEventInvoiceUpdateVoided        = "invoice.update.voided"
+	WebhookEventInvoiceAmountsRecalculated = "invoice.amounts.recalculated"
 )
 
 // subscription event names

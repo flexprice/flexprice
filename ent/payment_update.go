@@ -286,6 +286,26 @@ func (pu *PaymentUpdate) ClearRefundedAt() *PaymentUpdate {
 	return pu
 }
 
+// SetRecordedAt sets the "recorded_at" field.
+func (pu *PaymentUpdate) SetRecordedAt(t time.Time) *PaymentUpdate {
+	pu.mutation.SetRecordedAt(t)
+	return pu
+}
+
+// SetNillableRecordedAt sets the "recorded_at" field if the given value is not nil.
+func (pu *PaymentUpdate) SetNillableRecordedAt(t *time.Time) *PaymentUpdate {
+	if t != nil {
+		pu.SetRecordedAt(*t)
+	}
+	return pu
+}
+
+// ClearRecordedAt clears the value of the "recorded_at" field.
+func (pu *PaymentUpdate) ClearRecordedAt() *PaymentUpdate {
+	pu.mutation.ClearRecordedAt()
+	return pu
+}
+
 // SetErrorMessage sets the "error_message" field.
 func (pu *PaymentUpdate) SetErrorMessage(s string) *PaymentUpdate {
 	pu.mutation.SetErrorMessage(s)
@@ -497,6 +517,12 @@ func (pu *PaymentUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if pu.mutation.RefundedAtCleared() {
 		_spec.ClearField(payment.FieldRefundedAt, field.TypeTime)
+	}
+	if value, ok := pu.mutation.RecordedAt(); ok {
+		_spec.SetField(payment.FieldRecordedAt, field.TypeTime, value)
+	}
+	if pu.mutation.RecordedAtCleared() {
+		_spec.ClearField(payment.FieldRecordedAt, field.TypeTime)
 	}
 	if value, ok := pu.mutation.ErrorMessage(); ok {
 		_spec.SetField(payment.FieldErrorMessage, field.TypeString, value)
@@ -825,6 +851,26 @@ func (puo *PaymentUpdateOne) ClearRefundedAt() *PaymentUpdateOne {
 	return puo
 }
 
+// SetRecordedAt sets the "recorded_at" field.
+func (puo *PaymentUpdateOne) SetRecordedAt(t time.Time) *PaymentUpdateOne {
+	puo.mutation.SetRecordedAt(t)
+	return puo
+}
+
+// SetNillableRecordedAt sets the "recorded_at" field if the given value is not nil.
+func (puo *PaymentUpdateOne) SetNillableRecordedAt(t *time.Time) *PaymentUpdateOne {
+	if t != nil {
+		puo.SetRecordedAt(*t)
+	}
+	return puo
+}
+
+// ClearRecordedAt clears the value of the "recorded_at" field.
+func (puo *PaymentUpdateOne) ClearRecordedAt() *PaymentUpdateOne {
+	puo.mutation.ClearRecordedAt()
+	return puo
+}
+
 // SetErrorMessage sets the "error_message" field.
 func (puo *PaymentUpdateOne) SetErrorMessage(s string) *PaymentUpdateOne {
 	puo.mutation.SetErrorMessage(s)
@@ -1066,6 +1112,12 @@ func (puo *PaymentUpdateOne) sqlSave(ctx context.Context) (_node *Payment, err e
 	}
 	if puo.mutation.RefundedAtCleared() {
 		_spec.ClearField(payment.FieldRefundedAt, field.TypeTime)
+	}
+	if value, ok := puo.mutation.RecordedAt(); ok {
+		_spec.SetField(payment.FieldRecordedAt, field.TypeTime, value)
+	}
+	if puo.mutation.RecordedAtCleared() {
+		_spec.ClearField(payment.FieldRecordedAt, field.TypeTime)
 	}
 	if value, ok := puo.mutation.ErrorMessage(); ok {
 		_spec.SetField(payment.FieldErrorMessage, field.TypeString, value)

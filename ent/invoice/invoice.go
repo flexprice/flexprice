@@ -47,6 +47,10 @@ const (
 	FieldAmountPaid = "amount_paid"
 	// FieldAmountRemaining holds the string denoting the amount_remaining field in the database.
 	FieldAmountRemaining = "amount_remaining"
+	// FieldSubtotal holds the string denoting the subtotal field in the database.
+	FieldSubtotal = "subtotal"
+	// FieldTotal holds the string denoting the total field in the database.
+	FieldTotal = "total"
 	// FieldDescription holds the string denoting the description field in the database.
 	FieldDescription = "description"
 	// FieldDueDate holds the string denoting the due_date field in the database.
@@ -109,6 +113,8 @@ var Columns = []string{
 	FieldAmountDue,
 	FieldAmountPaid,
 	FieldAmountRemaining,
+	FieldSubtotal,
+	FieldTotal,
 	FieldDescription,
 	FieldDueDate,
 	FieldPaidAt,
@@ -165,6 +171,10 @@ var (
 	DefaultAmountPaid decimal.Decimal
 	// DefaultAmountRemaining holds the default value on creation for the "amount_remaining" field.
 	DefaultAmountRemaining decimal.Decimal
+	// DefaultSubtotal holds the default value on creation for the "subtotal" field.
+	DefaultSubtotal decimal.Decimal
+	// DefaultTotal holds the default value on creation for the "total" field.
+	DefaultTotal decimal.Decimal
 	// DefaultVersion holds the default value on creation for the "version" field.
 	DefaultVersion int
 )
@@ -255,6 +265,16 @@ func ByAmountPaid(opts ...sql.OrderTermOption) OrderOption {
 // ByAmountRemaining orders the results by the amount_remaining field.
 func ByAmountRemaining(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAmountRemaining, opts...).ToFunc()
+}
+
+// BySubtotal orders the results by the subtotal field.
+func BySubtotal(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSubtotal, opts...).ToFunc()
+}
+
+// ByTotal orders the results by the total field.
+func ByTotal(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTotal, opts...).ToFunc()
 }
 
 // ByDescription orders the results by the description field.

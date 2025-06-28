@@ -102,6 +102,9 @@ func (Payment) Fields() []ent.Field {
 		field.Time("refunded_at").
 			Optional().
 			Nillable(),
+		field.Time("recorded_at").
+			Optional().
+			Nillable(),
 		field.String("error_message").
 			SchemaType(map[string]string{
 				"postgres": "text",

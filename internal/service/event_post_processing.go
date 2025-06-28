@@ -417,6 +417,24 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 		return results, nil
 	}
 
+	// Filter subscriptions to only include those that are active for the event timestamp
+	validSubscriptions := make([]*dto.SubscriptionResponse, 0)
+	for _, sub := range subscriptions {
+		if s.isSubscriptionValidForEvent(sub, event) {
+			validSubscriptions = append(validSubscriptions, sub)
+		}
+	}
+
+	subscriptions = validSubscriptions
+	if len(subscriptions) == 0 {
+		s.Logger.Debugw("no subscriptions valid for event timestamp, skipping",
+			"event_id", event.ID,
+			"customer_id", customer.ID,
+			"event_timestamp", event.Timestamp,
+		)
+		return results, nil
+	}
+
 	// Build efficient maps for lookups
 	meterMap := make(map[string]*meter.Meter)                             // Map meter_id -> meter
 	priceMap := make(map[string]*price.Price)                             // Map price_id -> price
@@ -431,7 +449,7 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 		}
 
 		for _, item := range sub.LineItems {
-			if !item.IsUsage() || !item.IsActive() {
+			if !item.IsUsage() || !item.IsActive(event.Timestamp) {
 				continue
 			}
 
@@ -498,7 +516,7 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 
 		// Get active usage-based line items
 		subscriptionLineItems := lo.Filter(sub.LineItems, func(item *subscription.SubscriptionLineItem, _ int) bool {
-			return item.IsUsage() && item.IsActive()
+			return item.IsUsage() && item.IsActive(event.Timestamp)
 		})
 
 		if len(subscriptionLineItems) == 0 {
@@ -1153,7 +1171,6 @@ func (s *eventPostProcessingService) ReprocessEvents(ctx context.Context, params
 		for _, event := range unprocessedEvents {
 			// hardcoded delay to avoid rate limiting
 			// TODO: remove this to make it configurable
-			time.Sleep(100 * time.Millisecond)
 			if err := s.PublishEvent(ctx, event, true); err != nil {
 				s.Logger.Errorw("failed to publish event for reprocessing",
 					"event_id", event.ID,
@@ -1193,6 +1210,50 @@ func (s *eventPostProcessingService) ReprocessEvents(ctx context.Context, params
 	)
 
 	return nil
+}
+
+// isSubscriptionValidForEvent checks if a subscription is valid for processing the given event
+// It ensures the event timestamp falls within the subscription's active period
+func (s *eventPostProcessingService) isSubscriptionValidForEvent(
+	sub *dto.SubscriptionResponse,
+	event *events.Event,
+) bool {
+	// Event must be after subscription start date
+	if event.Timestamp.Before(sub.StartDate) {
+		s.Logger.Debugw("event timestamp before subscription start date",
+			"event_id", event.ID,
+			"subscription_id", sub.ID,
+			"event_timestamp", event.Timestamp,
+			"subscription_start_date", sub.StartDate,
+		)
+		return false
+	}
+
+	// If subscription has an end date, event must be before or equal to it
+	if sub.EndDate != nil && event.Timestamp.After(*sub.EndDate) {
+		s.Logger.Debugw("event timestamp after subscription end date",
+			"event_id", event.ID,
+			"subscription_id", sub.ID,
+			"event_timestamp", event.Timestamp,
+			"subscription_end_date", *sub.EndDate,
+		)
+		return false
+	}
+
+	// Additional check: if subscription is cancelled, make sure event is before cancellation
+	if sub.SubscriptionStatus == types.SubscriptionStatusCancelled && sub.CancelledAt != nil {
+		if event.Timestamp.After(*sub.CancelledAt) {
+			s.Logger.Debugw("event timestamp after subscription cancellation date",
+				"event_id", event.ID,
+				"subscription_id", sub.ID,
+				"event_timestamp", event.Timestamp,
+				"subscription_cancelled_at", *sub.CancelledAt,
+			)
+			return false
+		}
+	}
+
+	return true
 }
 
 func (s *eventPostProcessingService) ToGetUsageAnalyticsResponseDTO(ctx context.Context, analytics []*events.DetailedUsageAnalytic) (*dto.GetUsageAnalyticsResponse, error) {

@@ -16,7 +16,9 @@ import (
 
 // CreateWalletRequest represents the request to create a wallet
 type CreateWalletRequest struct {
-	CustomerID          string                 `json:"customer_id,omitempty"`
+	CustomerID string `json:"customer_id,omitempty"`
+
+	// external_customer_id is the customer id in the external system
 	ExternalCustomerID  string                 `json:"external_customer_id,omitempty"`
 	Name                string                 `json:"name,omitempty"`
 	Currency            string                 `json:"currency" binding:"required"`
@@ -40,6 +42,10 @@ type CreateWalletRequest struct {
 	// for ex 20250101 means the credits will expire on 2025-01-01 00:00:00 UTC
 	// hence they will be available for use until 2024-12-31 23:59:59 UTC
 	InitialCreditsToLoadExpiryDate *int `json:"initial_credits_to_load_expiry_date,omitempty"`
+
+	// initial_credits_expiry_date_utc is the expiry date in UTC timezone (optional to set nil means no expiry)
+	// ex 2025-01-01 00:00:00 UTC
+	InitialCreditsExpiryDateUTC *time.Time `json:"initial_credits_expiry_date_utc,omitempty"`
 }
 
 // UpdateWalletRequest represents the request to update a wallet
@@ -188,6 +194,13 @@ func (r *CreateWalletRequest) Validate() error {
 		}
 	}
 
+	if r.InitialCreditsExpiryDateUTC != nil {
+		if r.InitialCreditsExpiryDateUTC.Before(time.Now().UTC()) {
+			return ierr.NewError("initial_credits_to_load_expiry_date_utc cannot be in the past").
+				WithHint("Expiry date must be in the future").
+				Mark(ierr.ErrValidation)
+		}
+	}
 	return validator.ValidateRequest(r)
 }
 
@@ -338,6 +351,7 @@ func (r *TopUpWalletRequest) Validate() error {
 		types.TransactionReasonPurchasedCreditInvoiced,
 		types.TransactionReasonPurchasedCreditDirect,
 		types.TransactionReasonSubscriptionCredit,
+		types.TransactionReasonCreditNote,
 	}
 
 	if !lo.Contains(allowedTransactionReasons, r.TransactionReason) {

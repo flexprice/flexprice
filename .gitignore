@@ -77,3 +77,6 @@ api/*/*
 !api/*/tsconfig.app.json
 
 CLAUDE.m
+
+# temp files and script logs
+temp/*

@@ -83,7 +83,7 @@ func (c *CreditGrant) Validate() error {
 		return ierr.NewError("credits must be greater than zero").
 			WithHint("Please provide a positive credits").
 			WithReportableDetails(map[string]interface{}{
-					"credits": c.Credits,
+				"credits": c.Credits,
 			}).
 			Mark(ierr.ErrValidation)
 	}

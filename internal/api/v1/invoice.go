@@ -380,3 +380,37 @@ func (h *InvoiceHandler) GetInvoicePDF(c *gin.Context) {
 
 	c.Data(http.StatusOK, "application/pdf", pdf)
 }
+
+// RecalculateInvoice godoc
+// @Summary Recalculate invoice totals and line items
+// @Description Recalculate totals and line items for a draft invoice, useful when subscription line items or usage data has changed
+// @Tags Invoices
+// @Accept json
+// @Produce json
+// @Param id path string true "Invoice ID"
+// @Param finalize query bool false "Whether to finalize the invoice after recalculation (default: true)"
+// @Success 200 {object} dto.InvoiceResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /invoices/{id}/recalculate [post]
+func (h *InvoiceHandler) RecalculateInvoice(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("invalid invoice id").Mark(ierr.ErrValidation))
+		return
+	}
+
+	// Parse finalize query parameter (default: true)
+	finalizeParam := c.DefaultQuery("finalize", "true")
+	finalize := finalizeParam == "true"
+
+	invoice, err := h.invoiceService.RecalculateInvoice(c.Request.Context(), id, finalize)
+	if err != nil {
+		h.logger.Errorw("failed to recalculate invoice", "error", err, "invoice_id", id)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, invoice)
+}

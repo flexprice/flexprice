@@ -132,6 +132,12 @@ func (s *eventService) GetUsageByMeter(ctx context.Context, req *dto.GetUsageByM
 		MeterID:            req.MeterID,
 	}
 
+	// Pass the multiplier from meter configuration if it's a SUM_WITH_MULTIPLIER aggregation
+	if m.Aggregation.Type == types.AggregationSumWithMultiplier {
+		multiplier := m.Aggregation.Multiplier
+		getUsageRequest.Multiplier = &multiplier
+	}
+
 	usage, err := s.GetUsage(ctx, &getUsageRequest)
 	if err != nil {
 		return nil, err
@@ -268,7 +274,7 @@ func (s *eventService) BulkGetUsageByMeter(ctx context.Context, req []*dto.GetUs
 
 			// Safely store result in map
 			resultsMu.Lock()
-			results[meterID] = result
+			results[r.PriceID] = result
 			resultsMu.Unlock()
 
 			countMu.Lock()

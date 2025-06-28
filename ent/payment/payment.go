@@ -59,6 +59,8 @@ const (
 	FieldFailedAt = "failed_at"
 	// FieldRefundedAt holds the string denoting the refunded_at field in the database.
 	FieldRefundedAt = "refunded_at"
+	// FieldRecordedAt holds the string denoting the recorded_at field in the database.
+	FieldRecordedAt = "recorded_at"
 	// FieldErrorMessage holds the string denoting the error_message field in the database.
 	FieldErrorMessage = "error_message"
 	// EdgeAttempts holds the string denoting the attempts edge name in mutations.
@@ -99,6 +101,7 @@ var Columns = []string{
 	FieldSucceededAt,
 	FieldFailedAt,
 	FieldRefundedAt,
+	FieldRecordedAt,
 	FieldErrorMessage,
 }
 
@@ -252,6 +255,11 @@ func ByFailedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByRefundedAt orders the results by the refunded_at field.
 func ByRefundedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRefundedAt, opts...).ToFunc()
+}
+
+// ByRecordedAt orders the results by the recorded_at field.
+func ByRecordedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRecordedAt, opts...).ToFunc()
 }
 
 // ByErrorMessage orders the results by the error_message field.

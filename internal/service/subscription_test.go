@@ -65,26 +65,28 @@ func (s *SubscriptionServiceSuite) TearDownTest() {
 
 func (s *SubscriptionServiceSuite) setupService() {
 	s.service = NewSubscriptionService(ServiceParams{
-		Logger:           s.GetLogger(),
-		Config:           s.GetConfig(),
-		DB:               s.GetDB(),
-		SubRepo:          s.GetStores().SubscriptionRepo,
-		PlanRepo:         s.GetStores().PlanRepo,
-		PriceRepo:        s.GetStores().PriceRepo,
-		EventRepo:        s.GetStores().EventRepo,
-		MeterRepo:        s.GetStores().MeterRepo,
-		CustomerRepo:     s.GetStores().CustomerRepo,
-		InvoiceRepo:      s.GetStores().InvoiceRepo,
-		EntitlementRepo:  s.GetStores().EntitlementRepo,
-		EnvironmentRepo:  s.GetStores().EnvironmentRepo,
-		FeatureRepo:      s.GetStores().FeatureRepo,
-		TenantRepo:       s.GetStores().TenantRepo,
-		UserRepo:         s.GetStores().UserRepo,
-		AuthRepo:         s.GetStores().AuthRepo,
-		WalletRepo:       s.GetStores().WalletRepo,
-		PaymentRepo:      s.GetStores().PaymentRepo,
-		EventPublisher:   s.GetPublisher(),
-		WebhookPublisher: s.GetWebhookPublisher(),
+		Logger:                     s.GetLogger(),
+		Config:                     s.GetConfig(),
+		DB:                         s.GetDB(),
+		SubRepo:                    s.GetStores().SubscriptionRepo,
+		PlanRepo:                   s.GetStores().PlanRepo,
+		PriceRepo:                  s.GetStores().PriceRepo,
+		EventRepo:                  s.GetStores().EventRepo,
+		MeterRepo:                  s.GetStores().MeterRepo,
+		CustomerRepo:               s.GetStores().CustomerRepo,
+		InvoiceRepo:                s.GetStores().InvoiceRepo,
+		EntitlementRepo:            s.GetStores().EntitlementRepo,
+		EnvironmentRepo:            s.GetStores().EnvironmentRepo,
+		FeatureRepo:                s.GetStores().FeatureRepo,
+		TenantRepo:                 s.GetStores().TenantRepo,
+		UserRepo:                   s.GetStores().UserRepo,
+		AuthRepo:                   s.GetStores().AuthRepo,
+		WalletRepo:                 s.GetStores().WalletRepo,
+		PaymentRepo:                s.GetStores().PaymentRepo,
+		CreditGrantRepo:            s.GetStores().CreditGrantRepo,
+		CreditGrantApplicationRepo: s.GetStores().CreditGrantApplicationRepo,
+		EventPublisher:             s.GetPublisher(),
+		WebhookPublisher:           s.GetWebhookPublisher(),
 	})
 }
 
@@ -1004,7 +1006,7 @@ func (s *SubscriptionServiceSuite) TestProcessSubscriptionPeriod() {
 	// But we can verify that the subscription period was updated correctly
 	// by manually updating it as we would in a real scenario
 	nextPeriodStart := periodEnd
-	nextPeriodEnd, err := types.NextBillingDate(nextPeriodStart, sub.BillingAnchor, sub.BillingPeriodCount, sub.BillingPeriod)
+	nextPeriodEnd, err := types.NextBillingDateLegacy(nextPeriodStart, sub.BillingAnchor, sub.BillingPeriodCount, sub.BillingPeriod)
 	s.NoError(err)
 
 	sub.CurrentPeriodStart = nextPeriodStart
@@ -1241,4 +1243,172 @@ func (s *SubscriptionServiceSuite) TestGetUsageBySubscriptionWithCommitment() {
 		// Check total amount logic - should be higher with overage than base amount
 		s.Greater(resp.Amount, baseResp.Amount, "Amount with overage should be greater than base amount")
 	})
+}
+
+func (s *SubscriptionServiceSuite) TestSubscriptionWithEndDate() {
+	tests := []struct {
+		name        string
+		startDate   time.Time
+		endDate     *time.Time
+		expectEndAt time.Time
+		description string
+	}{
+		{
+			name:        "subscription with end date creates correct periods",
+			startDate:   time.Date(2024, 1, 15, 12, 0, 0, 0, time.UTC),
+			endDate:     lo.ToPtr(time.Date(2024, 3, 10, 0, 0, 0, 0, time.UTC)),
+			expectEndAt: time.Date(2024, 3, 10, 0, 0, 0, 0, time.UTC),
+			description: "Should create subscription that ends at the specified end date",
+		},
+		{
+			name:        "subscription end date cliffs period end",
+			startDate:   time.Date(2024, 1, 15, 12, 0, 0, 0, time.UTC),
+			endDate:     lo.ToPtr(time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)),
+			expectEndAt: time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
+			description: "Should cliff current period end to subscription end date when end date is before next billing period",
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			// Create subscription with end date
+			input := dto.CreateSubscriptionRequest{
+				CustomerID:         s.testData.customer.ID,
+				PlanID:             s.testData.plan.ID,
+				StartDate:          tt.startDate,
+				EndDate:            tt.endDate,
+				Currency:           "usd",
+				BillingCadence:     types.BILLING_CADENCE_RECURRING,
+				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+				BillingPeriodCount: 1,
+				BillingCycle:       types.BillingCycleAnniversary,
+			}
+
+			resp, err := s.service.CreateSubscription(s.GetContext(), input)
+			s.NoError(err)
+			s.NotNil(resp)
+
+			// Verify the subscription was created with correct end date
+			if tt.endDate != nil {
+				s.Equal(tt.endDate.Unix(), resp.EndDate.Unix())
+			}
+
+			// Verify the current period end is cliffed correctly
+			s.True(resp.CurrentPeriodEnd.Equal(tt.expectEndAt) || resp.CurrentPeriodEnd.Before(tt.expectEndAt),
+				"Current period end should be cliffed to subscription end date. Expected: %v, Got: %v, Description: %s",
+				tt.expectEndAt, resp.CurrentPeriodEnd, tt.description)
+
+			s.T().Logf("Test %s: Start=%v, End=%v, CurrentPeriodEnd=%v, Expected=%v",
+				tt.name, tt.startDate, tt.endDate, resp.CurrentPeriodEnd, tt.expectEndAt)
+		})
+	}
+}
+
+func (s *SubscriptionServiceSuite) TestFilterLineItemsWithEndDate() {
+	// Create billing service
+	billingService := NewBillingService(ServiceParams{
+		Logger:           s.GetLogger(),
+		Config:           s.GetConfig(),
+		DB:               s.GetDB(),
+		SubRepo:          s.GetStores().SubscriptionRepo,
+		PlanRepo:         s.GetStores().PlanRepo,
+		PriceRepo:        s.GetStores().PriceRepo,
+		EventRepo:        s.GetStores().EventRepo,
+		MeterRepo:        s.GetStores().MeterRepo,
+		CustomerRepo:     s.GetStores().CustomerRepo,
+		InvoiceRepo:      s.GetStores().InvoiceRepo,
+		EntitlementRepo:  s.GetStores().EntitlementRepo,
+		EnvironmentRepo:  s.GetStores().EnvironmentRepo,
+		FeatureRepo:      s.GetStores().FeatureRepo,
+		TenantRepo:       s.GetStores().TenantRepo,
+		UserRepo:         s.GetStores().UserRepo,
+		AuthRepo:         s.GetStores().AuthRepo,
+		WalletRepo:       s.GetStores().WalletRepo,
+		PaymentRepo:      s.GetStores().PaymentRepo,
+		EventPublisher:   s.GetPublisher(),
+		WebhookPublisher: s.GetWebhookPublisher(),
+	})
+
+	// Create subscription with end date in the past
+	sub := &subscription.Subscription{
+		ID:                 "sub_end_date_test",
+		PlanID:             s.testData.plan.ID,
+		CustomerID:         s.testData.customer.ID,
+		StartDate:          time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+		EndDate:            lo.ToPtr(time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
+	}
+
+	// Create line items
+	lineItems := []*subscription.SubscriptionLineItem{
+		{
+			ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+			SubscriptionID: sub.ID,
+			CustomerID:     sub.CustomerID,
+			PlanID:         s.testData.plan.ID,
+			PriceID:        s.testData.prices.storage.ID,
+			PriceType:      s.testData.prices.storage.Type,
+			MeterID:        s.testData.meters.storage.ID,
+			DisplayName:    "Test Line Item",
+			Currency:       sub.Currency,
+			BillingPeriod:  sub.BillingPeriod,
+			BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
+		},
+	}
+
+	tests := []struct {
+		name        string
+		periodStart time.Time
+		periodEnd   time.Time
+		expectEmpty bool
+		description string
+	}{
+		{
+			name:        "period before end date should return line items",
+			periodStart: time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC),
+			periodEnd:   time.Date(2024, 1, 31, 0, 0, 0, 0, time.UTC),
+			expectEmpty: false,
+			description: "Should return line items when period is before subscription end date",
+		},
+		{
+			name:        "period after end date should return empty",
+			periodStart: time.Date(2024, 2, 15, 0, 0, 0, 0, time.UTC),
+			periodEnd:   time.Date(2024, 3, 1, 0, 0, 0, 0, time.UTC),
+			expectEmpty: true,
+			description: "Should return empty when period starts after subscription end date",
+		},
+		{
+			name:        "period at end date should return empty",
+			periodStart: time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
+			periodEnd:   time.Date(2024, 3, 1, 0, 0, 0, 0, time.UTC),
+			expectEmpty: true,
+			description: "Should return empty when period starts at subscription end date",
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			filtered, err := billingService.FilterLineItemsToBeInvoiced(
+				s.GetContext(),
+				sub,
+				tt.periodStart,
+				tt.periodEnd,
+				lineItems,
+			)
+			s.NoError(err)
+
+			if tt.expectEmpty {
+				s.Empty(filtered, "Expected empty line items for period after end date: %s", tt.description)
+			} else {
+				s.Len(filtered, len(lineItems), "Expected all line items for period before end date: %s", tt.description)
+			}
+
+			s.T().Logf("Test %s: PeriodStart=%v, PeriodEnd=%v, SubEndDate=%v, Filtered=%d, Expected empty=%v",
+				tt.name, tt.periodStart, tt.periodEnd, sub.EndDate, len(filtered), tt.expectEmpty)
+		})
+	}
 }

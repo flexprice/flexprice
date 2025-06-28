@@ -26,6 +26,7 @@ import (
 	s3 "github.com/flexprice/flexprice/internal/s3"
 	"github.com/flexprice/flexprice/internal/sentry"
 	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/svix"
 	"github.com/flexprice/flexprice/internal/temporal"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/typst"
@@ -108,6 +109,9 @@ func main() {
 			// HTTP Client
 			httpclient.NewDefaultClient,
 
+			// Svix
+			svix.NewClient,
+
 			// Repositories
 			repository.NewEventRepository,
 			repository.NewProcessedEventRepository,
@@ -129,6 +133,11 @@ func main() {
 			repository.NewTaskRepository,
 			repository.NewSecretRepository,
 			repository.NewCreditGrantRepository,
+			repository.NewCostSheetRepository,
+			repository.NewCreditGrantApplicationRepository,
+			repository.NewCreditNoteRepository,
+			repository.NewCreditNoteLineItemRepository,
+
 			// PubSub
 			pubsubRouter.NewRouter,
 
@@ -172,6 +181,8 @@ func main() {
 			service.NewOnboardingService,
 			service.NewBillingService,
 			service.NewCreditGrantService,
+			service.NewCostSheetService,
+			service.NewCreditNoteService,
 		),
 	)
 
@@ -218,6 +229,9 @@ func provideHandlers(
 	onboardingService service.OnboardingService,
 	billingService service.BillingService,
 	creditGrantService service.CreditGrantService,
+	costSheetService service.CostSheetService,
+	creditNoteService service.CreditNoteService,
+	svixClient *svix.Client,
 ) api.Handlers {
 	return api.Handlers{
 		Events:            v1.NewEventsHandler(eventService, eventPostProcessingService, logger),
@@ -243,6 +257,10 @@ func provideHandlers(
 		CronSubscription:  cron.NewSubscriptionHandler(subscriptionService, temporalService, logger),
 		CronWallet:        cron.NewWalletCronHandler(logger, temporalService, walletService, tenantService),
 		CreditGrant:       v1.NewCreditGrantHandler(creditGrantService, logger),
+		CostSheet:         v1.NewCostSheetHandler(costSheetService, logger),
+		CronCreditGrant:   cron.NewCreditGrantCronHandler(creditGrantService, logger),
+		CreditNote:        v1.NewCreditNoteHandler(creditNoteService, logger),
+		Webhook:           v1.NewWebhookHandler(cfg, svixClient, logger),
 	}
 }
 

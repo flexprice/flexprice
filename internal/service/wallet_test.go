@@ -295,7 +295,9 @@ func (s *WalletServiceSuite) setupTestData() {
 			CustomerID:         s.testData.customer.ID,
 			Currency:           "usd",
 			SubscriptionStatus: types.SubscriptionStatusActive,
+			StartDate:          s.testData.now.Add(-24 * time.Hour),
 			CurrentPeriodStart: s.testData.now.Add(-24 * time.Hour),
+			CurrentPeriodEnd:   s.testData.now.Add(6 * 24 * time.Hour),
 			BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
 		},
 		{
@@ -304,7 +306,9 @@ func (s *WalletServiceSuite) setupTestData() {
 			CustomerID:         s.testData.customer.ID,
 			Currency:           "INR", // Same currency, different case
 			SubscriptionStatus: types.SubscriptionStatusActive,
+			StartDate:          s.testData.now.Add(-24 * time.Hour),
 			CurrentPeriodStart: s.testData.now.Add(-24 * time.Hour),
+			CurrentPeriodEnd:   s.testData.now.Add(6 * 24 * time.Hour),
 			BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
 		},
 		{
@@ -313,7 +317,9 @@ func (s *WalletServiceSuite) setupTestData() {
 			CustomerID:         s.testData.customer.ID,
 			Currency:           "EUR", // Different currency
 			SubscriptionStatus: types.SubscriptionStatusActive,
+			StartDate:          s.testData.now.Add(-24 * time.Hour),
 			CurrentPeriodStart: s.testData.now.Add(-24 * time.Hour),
+			CurrentPeriodEnd:   s.testData.now.Add(6 * 24 * time.Hour),
 			BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
 		},
 	}

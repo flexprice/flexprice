@@ -81,10 +81,25 @@ func (Invoice) Fields() []ent.Field {
 				"postgres": "numeric(20,8)",
 			}).
 			Default(decimal.Zero),
+
 		field.Other("amount_remaining", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(20,8)",
 			}).
+			Default(decimal.Zero),
+
+		field.Other("subtotal", decimal.Decimal{}).
+			SchemaType(map[string]string{
+				"postgres": "numeric(20,8)",
+			}).
+			Optional().
+			Default(decimal.Zero),
+
+		field.Other("total", decimal.Decimal{}).
+			SchemaType(map[string]string{
+				"postgres": "numeric(20,8)",
+			}).
+			Optional().
 			Default(decimal.Zero),
 		field.String("description").
 			Optional(),

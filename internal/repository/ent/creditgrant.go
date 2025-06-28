@@ -67,6 +67,7 @@ func (r *creditGrantRepository) Create(ctx context.Context, cg *domainCreditGran
 		SetExpirationDurationUnit(lo.FromPtr(cg.ExpirationDurationUnit)).
 		SetNillablePriority(cg.Priority).
 		SetTenantID(cg.TenantID).
+		SetSubscriptionID(lo.FromPtr(cg.SubscriptionID)).
 		SetStatus(string(cg.Status)).
 		SetCreatedAt(cg.CreatedAt).
 		SetUpdatedAt(cg.UpdatedAt).
@@ -100,6 +101,85 @@ func (r *creditGrantRepository) Create(ctx context.Context, cg *domainCreditGran
 	}
 
 	return domainCreditGrant.FromEnt(result), nil
+}
+
+func (r *creditGrantRepository) CreateBulk(ctx context.Context, creditGrants []*domainCreditGrant.CreditGrant) ([]*domainCreditGrant.CreditGrant, error) {
+	// Start a span for this repository operation
+	span := StartRepositorySpan(ctx, "creditgrant", "create_bulk", map[string]interface{}{
+		"count":     len(creditGrants),
+		"tenant_id": types.GetTenantID(ctx),
+	})
+	defer FinishSpan(span)
+
+	if len(creditGrants) == 0 {
+		return []*domainCreditGrant.CreditGrant{}, nil
+	}
+
+	// Validate all credit grants first
+	for _, cg := range creditGrants {
+		if err := cg.Validate(); err != nil {
+			SetSpanError(span, err)
+			return nil, err
+		}
+	}
+
+	client := r.client.Querier(ctx)
+	builders := make([]*ent.CreditGrantCreate, len(creditGrants))
+
+	// Get environment ID from context
+	environmentID := types.GetEnvironmentID(ctx)
+
+	for i, cg := range creditGrants {
+		// Set environment ID from context if not already set
+		if cg.EnvironmentID == "" {
+			cg.EnvironmentID = environmentID
+		}
+
+		builders[i] = client.CreditGrant.Create().
+			SetID(cg.ID).
+			SetName(cg.Name).
+			SetScope(cg.Scope).
+			SetCredits(cg.Credits).
+			SetCurrency(cg.Currency).
+			SetCadence(cg.Cadence).
+			SetNillablePlanID(cg.PlanID).
+			SetNillableSubscriptionID(cg.SubscriptionID).
+			SetNillablePeriod(cg.Period).
+			SetNillablePeriodCount(cg.PeriodCount).
+			SetExpirationType(cg.ExpirationType).
+			SetNillableExpirationDuration(cg.ExpirationDuration).
+			SetExpirationDurationUnit(lo.FromPtr(cg.ExpirationDurationUnit)).
+			SetNillablePriority(cg.Priority).
+			SetTenantID(cg.TenantID).
+			SetStatus(string(cg.Status)).
+			SetCreatedAt(cg.CreatedAt).
+			SetUpdatedAt(cg.UpdatedAt).
+			SetCreatedBy(cg.CreatedBy).
+			SetUpdatedBy(cg.UpdatedBy).
+			SetEnvironmentID(cg.EnvironmentID).
+			SetMetadata(cg.Metadata)
+	}
+
+	results, err := client.CreditGrant.CreateBulk(builders...).Save(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		if ent.IsConstraintError(err) {
+			return nil, ierr.WithError(err).
+				WithHint("One or more credit grants with these parameters already exist").
+				WithReportableDetails(map[string]interface{}{
+					"count": len(creditGrants),
+				}).
+				Mark(ierr.ErrAlreadyExists)
+		}
+		return nil, ierr.WithError(err).
+			WithHint("Failed to create credit grants in bulk").
+			WithReportableDetails(map[string]interface{}{
+				"count": len(creditGrants),
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	return domainCreditGrant.FromEntList(results), nil
 }
 
 func (r *creditGrantRepository) Get(ctx context.Context, id string) (*domainCreditGrant.CreditGrant, error) {
@@ -326,6 +406,49 @@ func (r *creditGrantRepository) Delete(ctx context.Context, id string) error {
 	}
 
 	r.DeleteCache(ctx, id)
+	return nil
+}
+
+func (r *creditGrantRepository) DeleteBulk(ctx context.Context, ids []string) error {
+	// Start a span for this repository operation
+	span := StartRepositorySpan(ctx, "creditgrant", "delete_bulk", map[string]interface{}{
+		"count":     len(ids),
+		"tenant_id": types.GetTenantID(ctx),
+	})
+	defer FinishSpan(span)
+
+	if len(ids) == 0 {
+		return nil
+	}
+
+	r.log.Debugw("deleting credit grants in bulk", "count", len(ids))
+
+	_, err := r.client.Querier(ctx).CreditGrant.Update().
+		Where(
+			creditgrant.IDIn(ids...),
+			creditgrant.TenantID(types.GetTenantID(ctx)),
+			creditgrant.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
+		SetStatus(string(types.StatusArchived)).
+		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		Save(ctx)
+
+	if err != nil {
+		SetSpanError(span, err)
+		return ierr.WithError(err).
+			WithHint("Failed to delete credit grants in bulk").
+			WithReportableDetails(map[string]interface{}{
+				"count": len(ids),
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	// Clear cache for all deleted credit grants
+	for _, id := range ids {
+		r.DeleteCache(ctx, id)
+	}
+
 	return nil
 }
 

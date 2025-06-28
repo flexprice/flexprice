@@ -12,7 +12,8 @@ import (
 // - For MONTHLY periods, it sets the day of the month
 // - For ANNUAL periods, it sets the month and day of the year
 // - For WEEKLY/DAILY periods, it's used only for validation
-func NextBillingDate(currentPeriodStart, billingAnchor time.Time, unit int, period BillingPeriod) (time.Time, error) {
+// If subscriptionEndDate is provided, the result will be cliffed to not exceed it.
+func NextBillingDate(currentPeriodStart, billingAnchor time.Time, unit int, period BillingPeriod, subscriptionEndDate *time.Time) (time.Time, error) {
 	if unit <= 0 {
 		return currentPeriodStart, ierr.NewError("billing period unit must be a positive integer").
 			WithHint("Billing period unit must be a positive integer").
@@ -27,7 +28,11 @@ func NextBillingDate(currentPeriodStart, billingAnchor time.Time, unit int, peri
 	// For daily and weekly periods, we can use simple addition
 	switch period {
 	case BILLING_PERIOD_DAILY:
-		return currentPeriodStart.AddDate(0, 0, unit), nil
+		nextDate := currentPeriodStart.AddDate(0, 0, unit)
+		if subscriptionEndDate != nil && nextDate.After(*subscriptionEndDate) {
+			return *subscriptionEndDate, nil
+		}
+		return nextDate, nil
 	case BILLING_PERIOD_WEEKLY:
 		anchorWeekday := billingAnchor.Weekday()
 		currentWeekday := currentPeriodStart.Weekday()
@@ -44,9 +49,13 @@ func NextBillingDate(currentPeriodStart, billingAnchor time.Time, unit int, peri
 		// will be 00:00:00 for calendar-aligned billing
 		// otherwise it will be the start time of the first billing period
 		anchorHour, anchorMin, anchorSec := billingAnchor.Clock()
-		return time.Date(currentPeriodStart.Year(), currentPeriodStart.Month(),
+		nextDate := time.Date(currentPeriodStart.Year(), currentPeriodStart.Month(),
 			currentPeriodStart.Day()+daysToAdd,
-			anchorHour, anchorMin, anchorSec, 0, currentPeriodStart.Location()), nil
+			anchorHour, anchorMin, anchorSec, 0, currentPeriodStart.Location())
+		if subscriptionEndDate != nil && nextDate.After(*subscriptionEndDate) {
+			return *subscriptionEndDate, nil
+		}
+		return nextDate, nil
 	}
 
 	// For monthly and annual periods, calculate the target year and month
@@ -116,7 +125,14 @@ func NextBillingDate(currentPeriodStart, billingAnchor time.Time, unit int, peri
 		targetD = 28
 	}
 
-	return time.Date(targetY, targetM, targetD, h, min, sec, 0, currentPeriodStart.Location()), nil
+	nextDate := time.Date(targetY, targetM, targetD, h, min, sec, 0, currentPeriodStart.Location())
+
+	// Cliff to subscription end date if provided
+	if subscriptionEndDate != nil && nextDate.After(*subscriptionEndDate) {
+		return *subscriptionEndDate, nil
+	}
+
+	return nextDate, nil
 }
 
 // isLeapYear returns true if the given year is a leap year
@@ -128,10 +144,7 @@ func isLeapYear(year int) bool {
 // and returns it as a uint64 epoch millisecond timestamp (for ClickHouse period_id column)
 // It handles three cases:
 // 1. Event timestamp falls within current billing period -> return current period start
-// 2. Event timestamp is before current period start -> reject the event for now
-// TODO: we can return the previous period start if we want to but need to rethink as
-// if the current period is the switched to next period, then it means invoice is already created
-// so maybe we should not process the event at all
+// 2. Event timestamp is before current period start -> calculate periods from subscription start to find the appropriate period
 // 3. Event timestamp is after current period end -> find appropriate future period
 func CalculatePeriodID(
 	eventTimestamp time.Time,
@@ -142,12 +155,7 @@ func CalculatePeriodID(
 	periodUnit int,
 	periodType BillingPeriod,
 ) (uint64, error) {
-	// Case 1: Event falls within current billing period
-	if isBetween(eventTimestamp, currentPeriodStart, currentPeriodEnd) {
-		// Return the current period start as milliseconds since epoch
-		return calculatePeriodID(currentPeriodStart), nil
-	}
-
+	// Validate that event timestamp is not before subscription start
 	if eventTimestamp.Before(subStart) {
 		return 0, ierr.NewError("event timestamp is before subscription start date").
 			WithHint("Event timestamp is before subscription start date").
@@ -160,32 +168,39 @@ func CalculatePeriodID(
 			Mark(ierr.ErrValidation)
 	}
 
+	// Case 1: Event falls within current billing period
+	if isBetween(eventTimestamp, currentPeriodStart, currentPeriodEnd) {
+		// Return the current period start as milliseconds since epoch
+		return calculatePeriodID(currentPeriodStart), nil
+	}
+
 	// Case 2: Event timestamp is before current period start
+	// Calculate all periods from subscription start to find the appropriate period
 	if eventTimestamp.Before(currentPeriodStart) {
-		return 0, ierr.NewError("event timestamp is before current period start").
-			WithHint("Event timestamp is before current period start").
-			WithReportableDetails(
-				map[string]any{
-					"event_timestamp":      eventTimestamp,
-					"current_period_start": currentPeriodStart,
-				},
-			).
-			Mark(ierr.ErrValidation)
+		return findPeriodFromSubscriptionStart(
+			eventTimestamp,
+			subStart,
+			currentPeriodStart,
+			billingAnchor,
+			periodUnit,
+			periodType,
+		)
 	}
 
 	// Case 3: Event timestamp is after current period end
+	// Iterate forward from current period until we find the period containing the event
 	periodStart := currentPeriodStart
 	periodEnd := currentPeriodEnd
 
 	// Iterate forward until we find the period containing the event
 	for i := 0; i < 100; i++ { // Limit to 100 iterations to prevent infinite loops
-		nextPeriodStart, err := NextBillingDate(periodStart, billingAnchor, periodUnit, periodType)
+		nextPeriodStart, err := NextBillingDate(periodStart, billingAnchor, periodUnit, periodType, nil)
 		if err != nil {
 			return 0, err
 		}
 
 		// Calculate the next period end
-		nextPeriodEnd, err := NextBillingDate(nextPeriodStart, billingAnchor, periodUnit, periodType)
+		nextPeriodEnd, err := NextBillingDate(nextPeriodStart, billingAnchor, periodUnit, periodType, nil)
 		if err != nil {
 			return 0, err
 		}
@@ -216,6 +231,65 @@ func CalculatePeriodID(
 		Mark(ierr.ErrValidation)
 }
 
+// findPeriodFromSubscriptionStart calculates periods from subscription start date
+// to find the appropriate period for a past event timestamp
+func findPeriodFromSubscriptionStart(
+	eventTimestamp time.Time,
+	subStart time.Time,
+	currentPeriodStart time.Time,
+	billingAnchor time.Time,
+	periodUnit int,
+	periodType BillingPeriod,
+) (uint64, error) {
+	// Start from subscription start date
+	periodStart := subStart
+
+	// Calculate the first period end
+	periodEnd, err := NextBillingDate(periodStart, billingAnchor, periodUnit, periodType, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	// Iterate through periods from subscription start until we find the period containing the event
+	// or reach the current period (optimization to avoid infinite loops)
+	for i := 0; i < 100; i++ { // Limit to 100 iterations to prevent infinite loops
+		// Check if event falls within this period
+		if isBetween(eventTimestamp, periodStart, periodEnd) {
+			return calculatePeriodID(periodStart), nil
+		}
+
+		// If we've reached or passed the current period start, we can stop
+		// This is an optimization - if we haven't found the period by now, something is wrong
+		if !periodStart.Before(currentPeriodStart) {
+			break
+		}
+
+		// Move to the next period
+		nextPeriodStart := periodEnd
+		nextPeriodEnd, err := NextBillingDate(nextPeriodStart, billingAnchor, periodUnit, periodType, nil)
+		if err != nil {
+			return 0, err
+		}
+
+		periodStart = nextPeriodStart
+		periodEnd = nextPeriodEnd
+	}
+
+	return 0, ierr.NewError("failed to find appropriate period for past event timestamp").
+		WithHint("Failed to find appropriate period for past event timestamp").
+		WithReportableDetails(
+			map[string]any{
+				"event_timestamp":      eventTimestamp,
+				"sub_start":            subStart,
+				"current_period_start": currentPeriodStart,
+				"billing_anchor":       billingAnchor,
+				"period_unit":          periodUnit,
+				"period_type":          periodType,
+			},
+		).
+		Mark(ierr.ErrValidation)
+}
+
 func isBetween(eventTimestamp time.Time, periodStart time.Time, periodEnd time.Time) bool {
 	return (eventTimestamp.Equal(periodStart) || eventTimestamp.After(periodStart)) &&
 		eventTimestamp.Before(periodEnd)
@@ -223,4 +297,14 @@ func isBetween(eventTimestamp time.Time, periodStart time.Time, periodEnd time.T
 
 func calculatePeriodID(periodStart time.Time) uint64 {
 	return uint64(periodStart.Unix() * 1000)
+}
+
+// NextBillingDateWithEndDate is an alias for NextBillingDate with explicit subscription end date parameter
+func NextBillingDateWithEndDate(currentPeriodStart, billingAnchor time.Time, unit int, period BillingPeriod, subscriptionEndDate *time.Time) (time.Time, error) {
+	return NextBillingDate(currentPeriodStart, billingAnchor, unit, period, subscriptionEndDate)
+}
+
+// NextBillingDateLegacy maintains backward compatibility for the original NextBillingDate signature
+func NextBillingDateLegacy(currentPeriodStart, billingAnchor time.Time, unit int, period BillingPeriod) (time.Time, error) {
+	return NextBillingDate(currentPeriodStart, billingAnchor, unit, period, nil)
 }

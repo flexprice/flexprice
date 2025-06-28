@@ -74,6 +74,7 @@ func (r *paymentRepository) Create(ctx context.Context, p *domainPayment.Payment
 		SetNillableFailedAt(p.FailedAt).
 		SetNillableRefundedAt(p.RefundedAt).
 		SetNillableErrorMessage(p.ErrorMessage).
+		SetNillableRecordedAt(p.RecordedAt).
 		SetTenantID(p.TenantID).
 		SetCreatedAt(p.CreatedAt).
 		SetUpdatedAt(p.UpdatedAt).
@@ -244,6 +245,7 @@ func (r *paymentRepository) Update(ctx context.Context, p *domainPayment.Payment
 		SetTrackAttempts(p.TrackAttempts).
 		SetMetadata(p.Metadata).
 		SetUpdatedAt(time.Now().UTC()).
+		SetNillableRecordedAt(p.RecordedAt).
 		SetNillableSucceededAt(p.SucceededAt).
 		SetNillableFailedAt(p.FailedAt).
 		SetNillableRefundedAt(p.RefundedAt).

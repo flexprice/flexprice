@@ -266,6 +266,20 @@ func (pc *PaymentCreate) SetNillableRefundedAt(t *time.Time) *PaymentCreate {
 	return pc
 }
 
+// SetRecordedAt sets the "recorded_at" field.
+func (pc *PaymentCreate) SetRecordedAt(t time.Time) *PaymentCreate {
+	pc.mutation.SetRecordedAt(t)
+	return pc
+}
+
+// SetNillableRecordedAt sets the "recorded_at" field if the given value is not nil.
+func (pc *PaymentCreate) SetNillableRecordedAt(t *time.Time) *PaymentCreate {
+	if t != nil {
+		pc.SetRecordedAt(*t)
+	}
+	return pc
+}
+
 // SetErrorMessage sets the "error_message" field.
 func (pc *PaymentCreate) SetErrorMessage(s string) *PaymentCreate {
 	pc.mutation.SetErrorMessage(s)
@@ -552,6 +566,10 @@ func (pc *PaymentCreate) createSpec() (*Payment, *sqlgraph.CreateSpec) {
 	if value, ok := pc.mutation.RefundedAt(); ok {
 		_spec.SetField(payment.FieldRefundedAt, field.TypeTime, value)
 		_node.RefundedAt = &value
+	}
+	if value, ok := pc.mutation.RecordedAt(); ok {
+		_spec.SetField(payment.FieldRecordedAt, field.TypeTime, value)
+		_node.RecordedAt = &value
 	}
 	if value, ok := pc.mutation.ErrorMessage(); ok {
 		_spec.SetField(payment.FieldErrorMessage, field.TypeString, value)

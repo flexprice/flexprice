@@ -33,6 +33,18 @@ func (f BillingSequenceFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Va
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BillingSequenceMutation", m)
 }
 
+// The CostsheetFunc type is an adapter to allow the use of ordinary
+// function as Costsheet mutator.
+type CostsheetFunc func(context.Context, *ent.CostsheetMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f CostsheetFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.CostsheetMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CostsheetMutation", m)
+}
+
 // The CreditGrantFunc type is an adapter to allow the use of ordinary
 // function as CreditGrant mutator.
 type CreditGrantFunc func(context.Context, *ent.CreditGrantMutation) (ent.Value, error)
@@ -55,6 +67,30 @@ func (f CreditGrantApplicationFunc) Mutate(ctx context.Context, m ent.Mutation) 
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CreditGrantApplicationMutation", m)
+}
+
+// The CreditNoteFunc type is an adapter to allow the use of ordinary
+// function as CreditNote mutator.
+type CreditNoteFunc func(context.Context, *ent.CreditNoteMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f CreditNoteFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.CreditNoteMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CreditNoteMutation", m)
+}
+
+// The CreditNoteLineItemFunc type is an adapter to allow the use of ordinary
+// function as CreditNoteLineItem mutator.
+type CreditNoteLineItemFunc func(context.Context, *ent.CreditNoteLineItemMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f CreditNoteLineItemFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.CreditNoteLineItemMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CreditNoteLineItemMutation", m)
 }
 
 // The CustomerFunc type is an adapter to allow the use of ordinary

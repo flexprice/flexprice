@@ -25,6 +25,10 @@ type PriceService interface {
 	// CalculateCostWithBreakup calculates the cost for a given price and quantity
 	// and returns detailed information about the calculation
 	CalculateCostWithBreakup(ctx context.Context, price *price.Price, quantity decimal.Decimal, round bool) dto.CostBreakup
+
+	// CalculateCostSheetPrice calculates the cost for a given price and quantity
+	// specifically for costsheet calculations
+	CalculateCostSheetPrice(ctx context.Context, price *price.Price, quantity decimal.Decimal) decimal.Decimal
 }
 
 type priceService struct {
@@ -180,7 +184,7 @@ func (s *priceService) DeletePrice(ctx context.Context, id string) error {
 	return nil
 }
 
-// CalculateCost calculates the cost for a given price and usage
+// CalculateCost calculates the cost for a given price and quantity
 // returns the cost in main currency units (e.g., 1.00 = $1.00)
 func (s *priceService) CalculateCost(ctx context.Context, price *price.Price, quantity decimal.Decimal) decimal.Decimal {
 	cost := decimal.Zero
@@ -197,15 +201,19 @@ func (s *priceService) CalculateCost(ctx context.Context, price *price.Price, qu
 			return decimal.Zero
 		}
 
-		transformedQuantity := quantity.Div(decimal.NewFromInt(int64(price.TransformQuantity.DivideBy)))
+		// Calculate how many complete packages are needed to cover the quantity
+		packagesNeeded := quantity.Div(decimal.NewFromInt(int64(price.TransformQuantity.DivideBy)))
 
-		if price.TransformQuantity.Round == types.ROUND_UP {
-			transformedQuantity = transformedQuantity.Ceil()
-		} else if price.TransformQuantity.Round == types.ROUND_DOWN {
-			transformedQuantity = transformedQuantity.Floor()
+		// Round based on mode
+		if price.TransformQuantity.Round == types.ROUND_DOWN {
+			packagesNeeded = packagesNeeded.Floor()
+		} else {
+			// Default to rounding up for packages
+			packagesNeeded = packagesNeeded.Ceil()
 		}
 
-		cost = price.CalculateAmount(transformedQuantity)
+		// Calculate total cost by multiplying package price by number of packages
+		cost = price.CalculateAmount(packagesNeeded)
 
 	case types.BILLING_MODEL_TIERED:
 		cost = s.calculateTieredCost(ctx, price, quantity)
@@ -303,7 +311,8 @@ func (s *priceService) CalculateCostWithBreakup(ctx context.Context, price *pric
 		FinalCost:         decimal.Zero,
 	}
 
-	if quantity.IsZero() {
+	// Return early for zero quantity, but keep the tier unit amount
+	if quantity.IsZero() && price.BillingModel != types.BILLING_MODEL_PACKAGE {
 		return result
 	}
 
@@ -318,17 +327,32 @@ func (s *priceService) CalculateCostWithBreakup(ctx context.Context, price *pric
 			return result
 		}
 
-		transformedQuantity := quantity.Div(decimal.NewFromInt(int64(price.TransformQuantity.DivideBy)))
+		// Calculate the tier unit amount (price per unit in a full package)
+		result.TierUnitAmount = price.Amount.Div(decimal.NewFromInt(int64(price.TransformQuantity.DivideBy)))
 
-		if price.TransformQuantity.Round == types.ROUND_UP {
-			transformedQuantity = transformedQuantity.Ceil()
-		} else if price.TransformQuantity.Round == types.ROUND_DOWN {
-			transformedQuantity = transformedQuantity.Floor()
+		// Return early for zero quantity, but keep the tier unit amount we just calculated
+		if quantity.IsZero() {
+			return result
 		}
 
-		result.FinalCost = price.CalculateAmount(transformedQuantity)
-		result.EffectiveUnitCost = price.Amount
-		result.TierUnitAmount = price.Amount
+		// Calculate how many complete packages are needed to cover the quantity
+		packagesNeeded := quantity.Div(decimal.NewFromInt(int64(price.TransformQuantity.DivideBy)))
+
+		// Round based on the specified mode
+		if price.TransformQuantity.Round == types.ROUND_DOWN {
+			packagesNeeded = packagesNeeded.Floor()
+		} else {
+			// Default to rounding up for packages
+			packagesNeeded = packagesNeeded.Ceil()
+		}
+
+		// Calculate total cost by multiplying package price by number of packages
+		result.FinalCost = price.CalculateAmount(packagesNeeded)
+
+		// Calculate effective unit cost (cost per actual unit used)
+		result.EffectiveUnitCost = result.FinalCost.Div(quantity)
+
+		return result
 
 	case types.BILLING_MODEL_TIERED:
 		result = s.calculateTieredCostWithBreakup(ctx, price, quantity)
@@ -444,4 +468,13 @@ func (s *priceService) calculateTieredCostWithBreakup(ctx context.Context, price
 	}
 
 	return result
+}
+
+// CalculateCostSheetPrice calculates the cost for a given price and quantity
+// specifically for costsheet calculations. This is similar to CalculateCost
+// but may have specific rules for costsheet pricing.
+func (s *priceService) CalculateCostSheetPrice(ctx context.Context, price *price.Price, quantity decimal.Decimal) decimal.Decimal {
+	// For now, we'll use the same calculation as CalculateCost
+	// In the future, we can add costsheet-specific pricing rules here
+	return s.CalculateCost(ctx, price, quantity)
 }

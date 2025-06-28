@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
 const (
@@ -65,8 +66,17 @@ const (
 	FieldDescription = "description"
 	// FieldMetadata holds the string denoting the metadata field in the database.
 	FieldMetadata = "metadata"
+	// EdgeCostsheet holds the string denoting the costsheet edge name in mutations.
+	EdgeCostsheet = "costsheet"
 	// Table holds the table name of the price in the database.
 	Table = "prices"
+	// CostsheetTable is the table that holds the costsheet relation/edge.
+	CostsheetTable = "costsheet"
+	// CostsheetInverseTable is the table name for the Costsheet entity.
+	// It exists in this package in order to avoid circular dependency with the "costsheet" package.
+	CostsheetInverseTable = "costsheet"
+	// CostsheetColumn is the table column denoting the costsheet relation/edge.
+	CostsheetColumn = "price_id"
 )
 
 // Columns holds all SQL columns for price fields.
@@ -259,4 +269,25 @@ func ByLookupKey(opts ...sql.OrderTermOption) OrderOption {
 // ByDescription orders the results by the description field.
 func ByDescription(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDescription, opts...).ToFunc()
+}
+
+// ByCostsheetCount orders the results by costsheet count.
+func ByCostsheetCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newCostsheetStep(), opts...)
+	}
+}
+
+// ByCostsheet orders the results by costsheet terms.
+func ByCostsheet(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newCostsheetStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+func newCostsheetStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(CostsheetInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, CostsheetTable, CostsheetColumn),
+	)
 }

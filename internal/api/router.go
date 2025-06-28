@@ -34,11 +34,16 @@ type Handlers struct {
 	Payment           *v1.PaymentHandler
 	Task              *v1.TaskHandler
 	Secret            *v1.SecretHandler
+	CostSheet         *v1.CostSheetHandler
+	CreditNote        *v1.CreditNoteHandler
+
+	Webhook *v1.WebhookHandler
 	// Portal handlers
 	Onboarding *v1.OnboardingHandler
 	// Cron jobs : TODO: move crons out of API based architecture
 	CronSubscription *cron.SubscriptionHandler
 	CronWallet       *cron.WalletCronHandler
+	CronCreditGrant  *cron.CreditGrantCronHandler
 }
 
 func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logger, secretService service.SecretService, envAccessService service.EnvAccessService) *gin.Engine {
@@ -158,6 +163,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			plan.GET("/:id", handlers.Plan.GetPlan)
 			plan.PUT("/:id", handlers.Plan.UpdatePlan)
 			plan.DELETE("/:id", handlers.Plan.DeletePlan)
+			plan.POST("/:id/sync/subscriptions", handlers.Plan.SyncPlanPrices)
 
 			// entitlement routes
 			plan.GET("/:id/entitlements", handlers.Plan.GetPlanEntitlements)
@@ -208,6 +214,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			invoices.PUT("/:id/payment", handlers.Invoice.UpdatePaymentStatus)
 			invoices.POST("/:id/payment/attempt", handlers.Invoice.AttemptPayment)
 			invoices.GET("/:id/pdf", handlers.Invoice.GetInvoicePDF)
+			invoices.POST("/:id/recalculate", handlers.Invoice.RecalculateInvoice)
 		}
 
 		feature := v1Private.Group("/features")
@@ -279,6 +286,27 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			}
 		}
 
+		// Cost sheet routes
+		costSheet := v1Private.Group("/costs")
+		{
+			costSheet.POST("", handlers.CostSheet.CreateCostSheet)
+			costSheet.GET("", handlers.CostSheet.ListCostSheets)
+			costSheet.GET("/:id", handlers.CostSheet.GetCostSheet)
+			costSheet.PUT("/:id", handlers.CostSheet.UpdateCostSheet)
+			costSheet.DELETE("/:id", handlers.CostSheet.DeleteCostSheet)
+			costSheet.GET("/breakdown/:subscription_id", handlers.CostSheet.GetCostBreakDown)
+			costSheet.POST("/roi", handlers.CostSheet.CalculateROI)
+		}
+		// Credit note routes
+		creditNotes := v1Private.Group("/creditnotes")
+		{
+			creditNotes.POST("", handlers.CreditNote.CreateCreditNote)
+			creditNotes.GET("", handlers.CreditNote.ListCreditNotes)
+			creditNotes.GET("/:id", handlers.CreditNote.GetCreditNote)
+			creditNotes.POST("/:id/void", handlers.CreditNote.VoidCreditNote)
+			creditNotes.POST("/:id/finalize", handlers.CreditNote.FinalizeCreditNote)
+		}
+
 		// Admin routes (API Key only)
 		adminRoutes := v1Private.Group("/admin")
 		adminRoutes.Use(middleware.APIKeyAuthMiddleware(cfg, secretService, logger))
@@ -294,6 +322,12 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 				onboarding.POST("/events", handlers.Onboarding.GenerateEvents)
 				onboarding.POST("/setup", handlers.Onboarding.SetupDemo)
 			}
+		}
+
+		// Webhook routes
+		webhookGroup := v1Private.Group("/webhooks")
+		{
+			webhookGroup.GET("/dashboard", handlers.Webhook.GetDashboardURL)
 		}
 	}
 
@@ -312,5 +346,12 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 	{
 		walletGroup.POST("/expire-credits", handlers.CronWallet.ExpireCredits)
 	}
+
+	// Credit grant related cron jobs
+	creditGrantGroup := cron.Group("/creditgrants")
+	{
+		creditGrantGroup.POST("/process-scheduled-applications", handlers.CronCreditGrant.ProcessScheduledCreditGrantApplications)
+	}
+
 	return router
 }

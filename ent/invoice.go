@@ -51,6 +51,10 @@ type Invoice struct {
 	AmountPaid decimal.Decimal `json:"amount_paid,omitempty"`
 	// AmountRemaining holds the value of the "amount_remaining" field.
 	AmountRemaining decimal.Decimal `json:"amount_remaining,omitempty"`
+	// Subtotal holds the value of the "subtotal" field.
+	Subtotal decimal.Decimal `json:"subtotal,omitempty"`
+	// Total holds the value of the "total" field.
+	Total decimal.Decimal `json:"total,omitempty"`
 	// Description holds the value of the "description" field.
 	Description string `json:"description,omitempty"`
 	// DueDate holds the value of the "due_date" field.
@@ -112,7 +116,7 @@ func (*Invoice) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case invoice.FieldMetadata:
 			values[i] = new([]byte)
-		case invoice.FieldAmountDue, invoice.FieldAmountPaid, invoice.FieldAmountRemaining:
+		case invoice.FieldAmountDue, invoice.FieldAmountPaid, invoice.FieldAmountRemaining, invoice.FieldSubtotal, invoice.FieldTotal:
 			values[i] = new(decimal.Decimal)
 		case invoice.FieldVersion, invoice.FieldBillingSequence:
 			values[i] = new(sql.NullInt64)
@@ -237,6 +241,18 @@ func (i *Invoice) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field amount_remaining", values[j])
 			} else if value != nil {
 				i.AmountRemaining = *value
+			}
+		case invoice.FieldSubtotal:
+			if value, ok := values[j].(*decimal.Decimal); !ok {
+				return fmt.Errorf("unexpected type %T for field subtotal", values[j])
+			} else if value != nil {
+				i.Subtotal = *value
+			}
+		case invoice.FieldTotal:
+			if value, ok := values[j].(*decimal.Decimal); !ok {
+				return fmt.Errorf("unexpected type %T for field total", values[j])
+			} else if value != nil {
+				i.Total = *value
 			}
 		case invoice.FieldDescription:
 			if value, ok := values[j].(*sql.NullString); !ok {
@@ -431,6 +447,12 @@ func (i *Invoice) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("amount_remaining=")
 	builder.WriteString(fmt.Sprintf("%v", i.AmountRemaining))
+	builder.WriteString(", ")
+	builder.WriteString("subtotal=")
+	builder.WriteString(fmt.Sprintf("%v", i.Subtotal))
+	builder.WriteString(", ")
+	builder.WriteString("total=")
+	builder.WriteString(fmt.Sprintf("%v", i.Total))
 	builder.WriteString(", ")
 	builder.WriteString("description=")
 	builder.WriteString(i.Description)

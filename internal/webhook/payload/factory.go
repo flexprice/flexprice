@@ -36,6 +36,9 @@ func NewPayloadBuilderFactory(services *Services) PayloadBuilderFactory {
 	f.builders[types.WebhookEventInvoiceUpdatePayment] = func() PayloadBuilder {
 		return NewInvoicePayloadBuilder(f.services)
 	}
+	f.builders[types.WebhookEventInvoiceAmountsRecalculated] = func() PayloadBuilder {
+		return NewInvoicePayloadBuilder(f.services)
+	}
 
 	// Register subscription builders
 	f.builders[types.WebhookEventSubscriptionCreated] = func() PayloadBuilder {

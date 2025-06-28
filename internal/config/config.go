@@ -221,7 +221,6 @@ func NewConfig() (*Configuration, error) {
 		cfg.EnvAccess.UserEnvMapping = userEnvMapping
 	}
 
-
 	return &cfg, nil
 }
 

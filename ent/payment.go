@@ -63,6 +63,8 @@ type Payment struct {
 	FailedAt *time.Time `json:"failed_at,omitempty"`
 	// RefundedAt holds the value of the "refunded_at" field.
 	RefundedAt *time.Time `json:"refunded_at,omitempty"`
+	// RecordedAt holds the value of the "recorded_at" field.
+	RecordedAt *time.Time `json:"recorded_at,omitempty"`
 	// ErrorMessage holds the value of the "error_message" field.
 	ErrorMessage *string `json:"error_message,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -102,7 +104,7 @@ func (*Payment) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case payment.FieldID, payment.FieldTenantID, payment.FieldStatus, payment.FieldCreatedBy, payment.FieldUpdatedBy, payment.FieldEnvironmentID, payment.FieldIdempotencyKey, payment.FieldDestinationType, payment.FieldDestinationID, payment.FieldPaymentMethodType, payment.FieldPaymentMethodID, payment.FieldPaymentGateway, payment.FieldGatewayPaymentID, payment.FieldCurrency, payment.FieldPaymentStatus, payment.FieldErrorMessage:
 			values[i] = new(sql.NullString)
-		case payment.FieldCreatedAt, payment.FieldUpdatedAt, payment.FieldSucceededAt, payment.FieldFailedAt, payment.FieldRefundedAt:
+		case payment.FieldCreatedAt, payment.FieldUpdatedAt, payment.FieldSucceededAt, payment.FieldFailedAt, payment.FieldRefundedAt, payment.FieldRecordedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -264,6 +266,13 @@ func (pa *Payment) assignValues(columns []string, values []any) error {
 				pa.RefundedAt = new(time.Time)
 				*pa.RefundedAt = value.Time
 			}
+		case payment.FieldRecordedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field recorded_at", values[i])
+			} else if value.Valid {
+				pa.RecordedAt = new(time.Time)
+				*pa.RecordedAt = value.Time
+			}
 		case payment.FieldErrorMessage:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field error_message", values[i])
@@ -385,6 +394,11 @@ func (pa *Payment) String() string {
 	builder.WriteString(", ")
 	if v := pa.RefundedAt; v != nil {
 		builder.WriteString("refunded_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := pa.RecordedAt; v != nil {
+		builder.WriteString("recorded_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")

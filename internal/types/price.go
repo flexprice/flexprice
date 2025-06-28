@@ -59,8 +59,6 @@ const (
 	ROUND_UP = "up"
 	// ROUND_DOWN rounds to the floor value ex 1.99 -> 1.00
 	ROUND_DOWN = "down"
-	// ROUND_NEAREST rounds to the nearest value ex
-	ROUND_NEAREST = "nearest"
 
 	// DEFAULT_FLOATING_PRECISION is the default floating point precision
 	DEFAULT_FLOATING_PRECISION = 2

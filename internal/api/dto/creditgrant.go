@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -120,7 +121,7 @@ func (r *CreateCreditGrantRequest) Validate() error {
 
 	// Validate based on cadence
 	if r.Cadence == types.CreditGrantCadenceRecurring {
-		if r.Period == nil || *r.Period == "" {
+		if r.Period == nil || lo.FromPtr(r.Period) == "" {
 			return errors.NewError("period is required for RECURRING cadence").
 				WithHint("Please provide a valid period (e.g., MONTHLY, YEARLY)").
 				WithReportableDetails(map[string]interface{}{
@@ -132,17 +133,42 @@ func (r *CreateCreditGrantRequest) Validate() error {
 		if err := r.Period.Validate(); err != nil {
 			return err
 		}
+
+		if r.PeriodCount == nil || lo.FromPtr(r.PeriodCount) <= 0 {
+			return errors.NewError("period_count is required for RECURRING cadence").
+				WithHint("Please provide a valid period_count").
+				WithReportableDetails(map[string]interface{}{
+					"period_count": lo.FromPtr(r.PeriodCount),
+				}).
+				Mark(errors.ErrValidation)
+		}
+	}
+
+	if err := r.ExpirationType.Validate(); err != nil {
+		return err
 	}
 
 	if r.ExpirationType == types.CreditGrantExpiryTypeDuration {
+
+		if r.ExpirationDurationUnit == nil {
+			return errors.NewError("expiration_duration_unit is required for DURATION expiration type").
+				WithHint("Please provide a valid expiration duration unit").
+				WithReportableDetails(map[string]interface{}{
+					"expiration_type": r.ExpirationType,
+				}).
+				Mark(errors.ErrValidation)
+		}
 
 		if err := r.ExpirationDurationUnit.Validate(); err != nil {
 			return err
 		}
 
-		if r.ExpirationDuration == nil || *r.ExpirationDuration <= 0 {
+		if r.ExpirationDuration == nil || lo.FromPtr(r.ExpirationDuration) <= 0 {
 			return errors.NewError("expiration_duration is required for DURATION expiration type").
 				WithHint("Please provide a valid expiration duration").
+				WithReportableDetails(map[string]interface{}{
+					"expiration_type": r.ExpirationType,
+				}).
 				Mark(errors.ErrValidation)
 		}
 
@@ -202,4 +228,10 @@ func FromCreditGrant(grant *creditgrant.CreditGrant) *CreditGrantResponse {
 	return &CreditGrantResponse{
 		CreditGrant: grant,
 	}
+}
+
+type ProcessScheduledCreditGrantApplicationsResponse struct {
+	SuccessApplicationsCount int `json:"success_applications_count"`
+	FailedApplicationsCount  int `json:"failed_applications_count"`
+	TotalApplicationsCount   int `json:"total_applications_count"`
 }

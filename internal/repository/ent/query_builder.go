@@ -41,6 +41,7 @@ func ApplyQueryOptions[T any](ctx context.Context, query T, filter types.BaseFil
 	if filter == nil {
 		return query
 	}
+
 	query = ApplySorting(query, filter, opts)
 	return ApplyPagination(query, filter, opts)
 }

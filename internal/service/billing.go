@@ -292,6 +292,11 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		"period_end", periodEnd,
 		"reference_point", referencePoint)
 
+	// Validate that the billing period respects subscription end date
+	if err := s.validatePeriodAgainstSubscriptionEndDate(sub, periodStart, periodEnd); err != nil {
+		return nil, err
+	}
+
 	// nothing to invoice default response 0$ invoice
 	zeroAmountInvoice, err := s.CreateInvoiceRequestForCharges(ctx,
 		sub, nil, periodStart, periodEnd, "", types.Metadata{})
@@ -306,6 +311,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		sub.BillingAnchor,
 		sub.BillingPeriodCount,
 		sub.BillingPeriod,
+		sub.EndDate,
 	)
 	if err != nil {
 		return nil, ierr.WithError(err).
@@ -462,6 +468,42 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		metadata,
 	)
 }
+
+// validatePeriodAgainstSubscriptionEndDate ensures billing periods don't exceed subscription end date
+func (s *billingService) validatePeriodAgainstSubscriptionEndDate(
+	sub *subscription.Subscription,
+	periodStart,
+	periodEnd time.Time,
+) error {
+	// If no end date, no validation needed
+	if sub.EndDate == nil {
+		return nil
+	}
+
+	// Period start should not be after subscription end date
+	if periodStart.After(*sub.EndDate) {
+		return ierr.NewError("billing period starts after subscription end date").
+			WithHint("Cannot bill for periods that start after subscription has ended").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_id":       sub.ID,
+				"period_start":          periodStart,
+				"subscription_end_date": *sub.EndDate,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// If period end is after subscription end date, that's acceptable for final billing
+	// but we should log it for transparency
+	if periodEnd.After(*sub.EndDate) {
+		s.Logger.Infow("billing period extends beyond subscription end date - will be handled appropriately",
+			"subscription_id", sub.ID,
+			"period_start", periodStart,
+			"period_end", periodEnd,
+			"subscription_end_date", *sub.EndDate)
+	}
+
+	return nil
+}
 func (s *billingService) checkIfChargeInvoiced(
 	invoice *invoice.Invoice,
 	charge *subscription.SubscriptionLineItem,
@@ -532,6 +574,15 @@ func (s *billingService) FilterLineItemsToBeInvoiced(
 ) ([]*subscription.SubscriptionLineItem, error) {
 	// If no line items to process, return empty slice immediately
 	if len(lineItems) == 0 {
+		return []*subscription.SubscriptionLineItem{}, nil
+	}
+
+	// Validate period against subscription end date
+	if sub.EndDate != nil && !periodStart.Before(*sub.EndDate) {
+		s.Logger.Debugw("period starts at or after subscription end date, no line items to invoice",
+			"subscription_id", sub.ID,
+			"period_start", periodStart,
+			"subscription_end_date", *sub.EndDate)
 		return []*subscription.SubscriptionLineItem{}, nil
 	}
 
@@ -644,7 +695,6 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 			UsageCharges: make([]dto.CreateInvoiceLineItemRequest, 0),
 		}
 	}
-
 	// Create invoice request
 	req := &dto.CreateInvoiceRequest{
 		CustomerID:     sub.CustomerID,
@@ -654,6 +704,8 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 		PaymentStatus:  lo.ToPtr(types.PaymentStatusPending),
 		Currency:       sub.Currency,
 		AmountDue:      result.TotalAmount,
+		Total:          result.TotalAmount,
+		Subtotal:       result.TotalAmount,
 		Description:    description,
 		DueDate:        lo.ToPtr(invoiceDueDate),
 		BillingPeriod:  lo.ToPtr(string(sub.BillingPeriod)),
@@ -797,7 +849,7 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 	for _, sub := range subscriptions {
 		subscriptionMap[sub.ID] = sub
 		for _, li := range sub.LineItems {
-			if li.IsActive() {
+			if li.IsActive(time.Now()) {
 				planIDs = append(planIDs, li.PlanID)
 			}
 		}
@@ -882,7 +934,7 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 	for _, sub := range subscriptions {
 		// Process each line item in the subscription
 		for _, li := range sub.LineItems {
-			if !li.IsActive() {
+			if !li.IsActive(time.Now()) {
 				continue
 			}
 

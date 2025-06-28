@@ -95,6 +95,428 @@ const docTemplate = `{
                 }
             }
         },
+        "/cost": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "List cost sheets with optional filtering",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "CostSheets"
+                ],
+                "summary": "List cost sheets",
+                "parameters": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "CostsheetIDs allows filtering by specific costsheet IDs",
+                        "name": "costsheetIDs",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "EnvironmentID filters by specific environment ID",
+                        "name": "environmentID",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "MeterIDs filters by specific meter IDs",
+                        "name": "meterIDs",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "PriceIDs filters by specific price IDs",
+                        "name": "priceIDs",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "published",
+                            "deleted",
+                            "archived"
+                        ],
+                        "type": "string",
+                        "x-enum-varnames": [
+                            "StatusPublished",
+                            "StatusDeleted",
+                            "StatusArchived"
+                        ],
+                        "description": "Status filters by costsheet status",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "TenantID filters by specific tenant ID",
+                        "name": "tenantID",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ListCostSheetsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Create a new cost sheet with the specified configuration",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "CostSheets"
+                ],
+                "summary": "Create a new cost sheet",
+                "parameters": [
+                    {
+                        "description": "Cost sheet configuration",
+                        "name": "costsheet",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CreateCostSheetRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/dto.CostSheetResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/cost/breakdown/{subscription_id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get cost breakdown for a time period",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "CostSheets"
+                ],
+                "summary": "Get cost breakdown",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Subscription ID",
+                        "name": "subscription_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start time (RFC3339)",
+                        "name": "start_time",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End time (RFC3339)",
+                        "name": "end_time",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.CostBreakdownResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/cost/roi": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Calculate ROI (Return on Investment) for a given cost sheet",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "CostSheets"
+                ],
+                "summary": "Calculate ROI for cost sheet",
+                "parameters": [
+                    {
+                        "description": "ROI calculation request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CalculateROIRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ROIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/cost/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get a cost sheet by ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "CostSheets"
+                ],
+                "summary": "Get a cost sheet by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Cost Sheet ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.CostSheetResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update a cost sheet with the specified configuration",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "CostSheets"
+                ],
+                "summary": "Update a cost sheet",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Cost Sheet ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Cost sheet configuration",
+                        "name": "costsheet",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.UpdateCostSheetRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.CostSheetResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Delete a cost sheet. If status is published/draft, it will be archived. If already archived, it will be deleted from database.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "CostSheets"
+                ],
+                "summary": "Delete a cost sheet",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Cost Sheet ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/creditgrants": {
             "get": {
                 "security": [
@@ -414,6 +836,432 @@ const docTemplate = `{
                 }
             }
         },
+        "/creditnotes": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Lists credit notes with filtering",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Credit Notes"
+                ],
+                "summary": "List credit notes with filtering",
+                "parameters": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "name": "credit_note_ids",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "enum": [
+                                "DRAFT",
+                                "FINALIZED",
+                                "VOIDED"
+                            ],
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "name": "credit_note_status",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "ADJUSTMENT",
+                            "REFUND"
+                        ],
+                        "type": "string",
+                        "x-enum-varnames": [
+                            "CreditNoteTypeAdjustment",
+                            "CreditNoteTypeRefund"
+                        ],
+                        "name": "credit_note_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "end_time",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "expand",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "invoice_id",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 1000,
+                        "minimum": 1,
+                        "type": "integer",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "name": "order",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "sort",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "start_time",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "published",
+                            "deleted",
+                            "archived"
+                        ],
+                        "type": "string",
+                        "x-enum-varnames": [
+                            "StatusPublished",
+                            "StatusDeleted",
+                            "StatusArchived"
+                        ],
+                        "name": "status",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ListCreditNotesResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Creates a new credit note",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Credit Notes"
+                ],
+                "summary": "Create a new credit note",
+                "parameters": [
+                    {
+                        "description": "Credit note request",
+                        "name": "credit_note",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CreateCreditNoteRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/dto.CreditNoteResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/creditnotes/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Retrieves a credit note by ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Credit Notes"
+                ],
+                "summary": "Get a credit note by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Credit note ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.CreditNoteResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/creditnotes/{id}/finalize": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Processes a draft credit note",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Credit Notes"
+                ],
+                "summary": "Process a draft credit note",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Credit note ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.CreditNoteResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/creditnotes/{id}/void": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Voids a credit note",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Credit Notes"
+                ],
+                "summary": "Void a credit note",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Credit note ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.CreditNoteResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/customers": {
             "get": {
                 "security": [
@@ -460,6 +1308,15 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "name": "external_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "name": "external_ids",
                         "in": "query"
                     },
                     {
@@ -2435,16 +3292,19 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "number",
+                        "description": "amount_due_gt filters invoices with a total amount due greater than the specified value\nUseful for finding invoices above a certain threshold or identifying high-value invoices",
                         "name": "amount_due_gt",
                         "in": "query"
                     },
                     {
                         "type": "number",
+                        "description": "amount_remaining_gt filters invoices with an outstanding balance greater than the specified value\nUseful for finding invoices that still have significant unpaid amounts",
                         "name": "amount_remaining_gt",
                         "in": "query"
                     },
                     {
                         "type": "string",
+                        "description": "customer_id filters invoices for a specific customer using FlexPrice's internal customer ID\nThis is the ID returned by FlexPrice when creating or retrieving customers",
                         "name": "customer_id",
                         "in": "query"
                     },
@@ -2459,11 +3319,18 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "type": "string",
+                        "description": "external_customer_id filters invoices for a customer using your system's customer identifier\nThis is the ID you provided when creating the customer in FlexPrice",
+                        "name": "external_customer_id",
+                        "in": "query"
+                    },
+                    {
                         "type": "array",
                         "items": {
                             "type": "string"
                         },
                         "collectionFormat": "csv",
+                        "description": "invoice_ids restricts results to invoices with the specified IDs\nUse this to retrieve specific invoices when you know their exact identifiers",
                         "name": "invoice_ids",
                         "in": "query"
                     },
@@ -2478,6 +3345,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
+                        "description": "invoice_status filters by the current state of invoices in their lifecycle\nMultiple statuses can be specified to include invoices in any of the listed states",
                         "name": "invoice_status",
                         "in": "query"
                     },
@@ -2493,6 +3361,7 @@ const docTemplate = `{
                             "InvoiceTypeOneOff",
                             "InvoiceTypeCredit"
                         ],
+                        "description": "invoice_type filters by the nature of the invoice (SUBSCRIPTION, ONE_OFF, or CREDIT)\nUse this to separate recurring charges from one-time fees or credit adjustments",
                         "name": "invoice_type",
                         "in": "query"
                     },
@@ -2532,6 +3401,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
+                        "description": "payment_status filters by the payment state of invoices\nMultiple statuses can be specified to include invoices with any of the listed payment states",
                         "name": "payment_status",
                         "in": "query"
                     },
@@ -2562,6 +3432,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "description": "subscription_id filters invoices generated for a specific subscription\nOnly returns invoices that were created as part of the specified subscription's billing",
                         "name": "subscription_id",
                         "in": "query"
                     }
@@ -2907,6 +3778,62 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "type": "file"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/invoices/{id}/recalculate": {
+            "post": {
+                "description": "Recalculate totals and line items for a draft invoice, useful when subscription line items or usage data has changed",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Invoices"
+                ],
+                "summary": "Recalculate invoice totals and line items",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Invoice ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Whether to finalize the invoice after recalculation (default: true)",
+                        "name": "finalize",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.InvoiceResponse"
                         }
                     },
                     "400": {
@@ -3799,6 +4726,67 @@ const docTemplate = `{
                 }
             }
         },
+        "/plans/{id}/sync/subscriptions": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Synchronize current plan prices with all existing active subscriptions",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Plans"
+                ],
+                "summary": "Synchronize plan prices",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Plan ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/service.SyncPlanPricesResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/prices": {
             "get": {
                 "security": [
@@ -4543,6 +5531,15 @@ const docTemplate = `{
                             "StatusArchived"
                         ],
                         "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "name": "subscription_ids",
                         "in": "query"
                     },
                     {
@@ -6062,7 +7059,7 @@ const docTemplate = `{
                             "SUBSCRIPTION_CREDIT_GRANT",
                             "PURCHASED_CREDIT_INVOICED",
                             "PURCHASED_CREDIT_DIRECT",
-                            "INVOICE_REFUND",
+                            "CREDIT_NOTE",
                             "CREDIT_EXPIRED",
                             "WALLET_TERMINATION"
                         ],
@@ -6073,7 +7070,7 @@ const docTemplate = `{
                             "TransactionReasonSubscriptionCredit",
                             "TransactionReasonPurchasedCreditInvoiced",
                             "TransactionReasonPurchasedCreditDirect",
-                            "TransactionReasonInvoiceRefund",
+                            "TransactionReasonCreditNote",
                             "TransactionReasonCreditExpired",
                             "TransactionReasonWalletTermination"
                         ],
@@ -6139,6 +7136,127 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "creditnote.CreditNoteLineItem": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "credit_note_id": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "environment_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "invoice_line_item_id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
+                }
+            }
+        },
+        "customer.Customer": {
+            "type": "object",
+            "properties": {
+                "address_city": {
+                    "description": "AddressCity is the city of the customer's address",
+                    "type": "string"
+                },
+                "address_country": {
+                    "description": "AddressCountry is the country of the customer's address (ISO 3166-1 alpha-2)",
+                    "type": "string"
+                },
+                "address_line1": {
+                    "description": "AddressLine1 is the first line of the customer's address",
+                    "type": "string"
+                },
+                "address_line2": {
+                    "description": "AddressLine2 is the second line of the customer's address",
+                    "type": "string"
+                },
+                "address_postal_code": {
+                    "description": "AddressPostalCode is the postal code of the customer's address",
+                    "type": "string"
+                },
+                "address_state": {
+                    "description": "AddressState is the state of the customer's address",
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "email": {
+                    "description": "Email is the email of the customer",
+                    "type": "string"
+                },
+                "environment_id": {
+                    "description": "EnvironmentID is the environment identifier for the customer",
+                    "type": "string"
+                },
+                "external_id": {
+                    "description": "ExternalID is the external identifier for the customer",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "ID is the unique identifier for the customer",
+                    "type": "string"
+                },
+                "metadata": {
+                    "description": "Metadata",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "description": "Name is the name of the customer",
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.AddSchedulePhaseRequest": {
             "type": "object",
             "required": [
@@ -6264,6 +7382,93 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.CalculateROIRequest": {
+            "type": "object",
+            "required": [
+                "subscription_id"
+            ],
+            "properties": {
+                "meter_id": {
+                    "description": "MeterID references the meter to track usage",
+                    "type": "string"
+                },
+                "period_end": {
+                    "type": "string"
+                },
+                "period_start": {
+                    "description": "Optional time range. If not provided, uses entire subscription period",
+                    "type": "string"
+                },
+                "price_id": {
+                    "description": "PriceID references the price configuration",
+                    "type": "string"
+                },
+                "subscription_id": {
+                    "description": "SubscriptionID is required to get subscription details",
+                    "type": "string"
+                }
+            }
+        },
+        "dto.CostBreakdownItem": {
+            "type": "object",
+            "properties": {
+                "cost": {
+                    "description": "Cost is the calculated cost for this meter",
+                    "type": "number"
+                },
+                "meter_id": {
+                    "description": "MeterID identifies the usage meter",
+                    "type": "string"
+                },
+                "meter_name": {
+                    "description": "MeterName is the display name of the meter",
+                    "type": "string"
+                },
+                "usage": {
+                    "description": "Usage is the quantity consumed",
+                    "type": "number"
+                }
+            }
+        },
+        "dto.CostBreakdownResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "description": "Items contains the breakdown by meter",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.CostBreakdownItem"
+                    }
+                },
+                "total_cost": {
+                    "description": "TotalCost is the sum of all meter costs",
+                    "type": "number"
+                }
+            }
+        },
+        "dto.CostSheetResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "meter_id": {
+                    "type": "string"
+                },
+                "price_id": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.CreateAPIKeyRequest": {
             "type": "object",
             "required": [
@@ -6296,6 +7501,23 @@ const docTemplate = `{
                 },
                 "secret": {
                     "$ref": "#/definitions/dto.SecretResponse"
+                }
+            }
+        },
+        "dto.CreateCostSheetRequest": {
+            "type": "object",
+            "required": [
+                "meter_id",
+                "price_id"
+            ],
+            "properties": {
+                "meter_id": {
+                    "description": "MeterID references the meter to track usage",
+                    "type": "string"
+                },
+                "price_id": {
+                    "description": "PriceID references the price configuration",
+                    "type": "string"
                 }
             }
         },
@@ -6350,6 +7572,83 @@ const docTemplate = `{
                 },
                 "subscription_id": {
                     "type": "string"
+                }
+            }
+        },
+        "dto.CreateCreditNoteLineItemRequest": {
+            "type": "object",
+            "required": [
+                "amount",
+                "invoice_line_item_id"
+            ],
+            "properties": {
+                "amount": {
+                    "description": "amount is the monetary amount to be credited for this line item",
+                    "type": "number"
+                },
+                "display_name": {
+                    "description": "display_name is an optional human-readable name for this credit note line item",
+                    "type": "string"
+                },
+                "invoice_line_item_id": {
+                    "description": "invoice_line_item_id is the unique identifier of the invoice line item being credited",
+                    "type": "string"
+                },
+                "metadata": {
+                    "description": "metadata contains additional custom key-value pairs for storing extra information about this line item",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.Metadata"
+                        }
+                    ]
+                }
+            }
+        },
+        "dto.CreateCreditNoteRequest": {
+            "type": "object",
+            "required": [
+                "invoice_id",
+                "reason"
+            ],
+            "properties": {
+                "credit_note_number": {
+                    "description": "credit_note_number is an optional human-readable identifier for the credit note",
+                    "type": "string"
+                },
+                "idempotency_key": {
+                    "description": "idempotency_key is an optional key used to prevent duplicate credit note creation",
+                    "type": "string"
+                },
+                "invoice_id": {
+                    "description": "invoice_id is the unique identifier of the invoice this credit note is applied to",
+                    "type": "string"
+                },
+                "line_items": {
+                    "description": "line_items contains the individual line items that make up this credit note (minimum 1 required)",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.CreateCreditNoteLineItemRequest"
+                    }
+                },
+                "memo": {
+                    "description": "memo is an optional free-text field for additional notes about the credit note",
+                    "type": "string"
+                },
+                "metadata": {
+                    "description": "metadata contains additional custom key-value pairs for storing extra information",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.Metadata"
+                        }
+                    ]
+                },
+                "reason": {
+                    "description": "reason specifies the reason for creating this credit note (duplicate, fraudulent, order_change, product_unsatisfactory)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.CreditNoteReason"
+                        }
+                    ]
                 }
             }
         },
@@ -6513,39 +7812,55 @@ const docTemplate = `{
             ],
             "properties": {
                 "amount": {
+                    "description": "amount is the monetary amount for this line item",
                     "type": "number"
                 },
                 "display_name": {
+                    "description": "display_name is the optional human-readable name for this line item",
                     "type": "string"
                 },
                 "metadata": {
-                    "$ref": "#/definitions/types.Metadata"
+                    "description": "metadata contains additional custom key-value pairs for storing extra information about this line item",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.Metadata"
+                        }
+                    ]
                 },
                 "meter_display_name": {
+                    "description": "meter_display_name is the optional human-readable name of the meter",
                     "type": "string"
                 },
                 "meter_id": {
+                    "description": "meter_id is the optional unique identifier of the meter used for usage tracking",
                     "type": "string"
                 },
                 "period_end": {
+                    "description": "period_end is the optional end date of the period this line item covers",
                     "type": "string"
                 },
                 "period_start": {
+                    "description": "period_start is the optional start date of the period this line item covers",
                     "type": "string"
                 },
                 "plan_display_name": {
+                    "description": "plan_display_name is the optional human-readable name of the plan",
                     "type": "string"
                 },
                 "plan_id": {
+                    "description": "plan_id is the optional unique identifier of the plan associated with this line item",
                     "type": "string"
                 },
                 "price_id": {
+                    "description": "price_id is the optional unique identifier of the price associated with this line item",
                     "type": "string"
                 },
                 "price_type": {
+                    "description": "price_type indicates the type of pricing (fixed, usage, tiered, etc.)",
                     "type": "string"
                 },
                 "quantity": {
+                    "description": "quantity is the quantity of units for this line item",
                     "type": "number"
                 }
             }
@@ -6555,68 +7870,117 @@ const docTemplate = `{
             "required": [
                 "amount_due",
                 "currency",
-                "customer_id"
+                "customer_id",
+                "subtotal",
+                "total"
             ],
             "properties": {
                 "amount_due": {
+                    "description": "amount_due is the total amount that needs to be paid for this invoice",
                     "type": "number"
                 },
                 "amount_paid": {
+                    "description": "amount_paid is the amount that has been paid towards this invoice",
                     "type": "number"
                 },
                 "billing_period": {
+                    "description": "billing_period is the period this invoice covers (e.g., \"monthly\", \"yearly\")",
                     "type": "string"
                 },
                 "billing_reason": {
-                    "$ref": "#/definitions/types.InvoiceBillingReason"
+                    "description": "billing_reason indicates why this invoice was created (subscription_cycle, manual, etc.)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.InvoiceBillingReason"
+                        }
+                    ]
                 },
                 "currency": {
+                    "description": "currency is the three-letter ISO currency code (e.g., USD, EUR) for the invoice",
                     "type": "string"
                 },
                 "customer_id": {
+                    "description": "customer_id is the unique identifier of the customer this invoice belongs to",
                     "type": "string"
                 },
                 "description": {
+                    "description": "description is an optional text description of the invoice",
                     "type": "string"
                 },
                 "due_date": {
+                    "description": "due_date is the date by which payment is expected",
                     "type": "string"
                 },
                 "environment_id": {
+                    "description": "environment_id is the unique identifier of the environment this invoice belongs to",
                     "type": "string"
                 },
                 "idempotency_key": {
+                    "description": "idempotency_key is an optional key used to prevent duplicate invoice creation",
                     "type": "string"
                 },
                 "invoice_number": {
+                    "description": "invoice_number is an optional human-readable identifier for the invoice",
                     "type": "string"
                 },
                 "invoice_status": {
-                    "$ref": "#/definitions/types.InvoiceStatus"
+                    "description": "invoice_status represents the current status of the invoice (draft, finalized, etc.)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.InvoiceStatus"
+                        }
+                    ]
                 },
                 "invoice_type": {
-                    "$ref": "#/definitions/types.InvoiceType"
+                    "description": "invoice_type indicates the type of invoice (subscription, one_time, etc.)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.InvoiceType"
+                        }
+                    ]
                 },
                 "line_items": {
+                    "description": "line_items contains the individual items that make up this invoice",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/dto.CreateInvoiceLineItemRequest"
                     }
                 },
                 "metadata": {
-                    "$ref": "#/definitions/types.Metadata"
+                    "description": "metadata contains additional custom key-value pairs for storing extra information",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.Metadata"
+                        }
+                    ]
                 },
                 "payment_status": {
-                    "$ref": "#/definitions/types.PaymentStatus"
+                    "description": "payment_status represents the payment status of the invoice (unpaid, paid, etc.)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.PaymentStatus"
+                        }
+                    ]
                 },
                 "period_end": {
+                    "description": "period_end is the end date of the billing period",
                     "type": "string"
                 },
                 "period_start": {
+                    "description": "period_start is the start date of the billing period",
                     "type": "string"
                 },
                 "subscription_id": {
+                    "description": "subscription_id is the optional unique identifier of the subscription associated with this invoice",
                     "type": "string"
+                },
+                "subtotal": {
+                    "description": "subtotal is the amount before taxes and discounts are applied",
+                    "type": "number"
+                },
+                "total": {
+                    "description": "total is the total amount of the invoice including taxes and discounts",
+                    "type": "number"
                 }
             }
         },
@@ -6811,6 +8175,12 @@ const docTemplate = `{
                 "name"
             ],
             "properties": {
+                "credit_grants": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.CreateCreditGrantRequest"
+                    }
+                },
                 "description": {
                     "type": "string"
                 },
@@ -7097,6 +8467,11 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "external_customer_id": {
+                    "description": "external_customer_id is the customer id in the external system",
+                    "type": "string"
+                },
+                "initial_credits_expiry_date_utc": {
+                    "description": "initial_credits_expiry_date_utc is the expiry date in UTC timezone (optional to set nil means no expiry)\nex 2025-01-01 00:00:00 UTC",
                     "type": "string"
                 },
                 "initial_credits_to_load": {
@@ -7190,6 +8565,148 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.CreditNoteResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "credit_note_number": {
+                    "description": "credit_note_number is the unique identifier for credit notes",
+                    "type": "string"
+                },
+                "credit_note_status": {
+                    "description": "credit_note_status represents the current status of the credit note (e.g., draft, finalized, voided)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.CreditNoteStatus"
+                        }
+                    ]
+                },
+                "credit_note_type": {
+                    "description": "credit_note_type indicates the type of credit note (refund, adjustment)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.CreditNoteType"
+                        }
+                    ]
+                },
+                "currency": {
+                    "description": "currency is the three-letter ISO currency code (e.g., USD, EUR) for the credit note",
+                    "type": "string"
+                },
+                "customer": {
+                    "description": "customer contains the customer information associated with this credit note",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/customer.Customer"
+                        }
+                    ]
+                },
+                "customer_id": {
+                    "description": "customer_id is the unique identifier of the customer who owns this credit note",
+                    "type": "string"
+                },
+                "environment_id": {
+                    "description": "environment_id is the unique identifier of the environment this credit note belongs to",
+                    "type": "string"
+                },
+                "finalized_at": {
+                    "description": "finalized_at is the timestamp when the credit note was finalized",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "id is the unique identifier for the credit note",
+                    "type": "string"
+                },
+                "idempotency_key": {
+                    "description": "idempotency_key is an optional key used to prevent duplicate credit note creation",
+                    "type": "string"
+                },
+                "invoice": {
+                    "description": "invoice contains the associated invoice information if requested",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.InvoiceResponse"
+                        }
+                    ]
+                },
+                "invoice_id": {
+                    "description": "invoice_id is the id of the invoice resource that this credit note is applied to",
+                    "type": "string"
+                },
+                "line_items": {
+                    "description": "line_items contains all of the line items associated with this credit note",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/creditnote.CreditNoteLineItem"
+                    }
+                },
+                "memo": {
+                    "description": "memo is an optional memo supplied on the credit note",
+                    "type": "string"
+                },
+                "metadata": {
+                    "description": "metadata contains additional custom key-value pairs for storing extra information",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.Metadata"
+                        }
+                    ]
+                },
+                "reason": {
+                    "description": "reason specifies the reason for creating this credit note (duplicate, fraudulent, order_change, product_unsatisfactory)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.CreditNoteReason"
+                        }
+                    ]
+                },
+                "refund_status": {
+                    "description": "refund_status represents the status of any refund associated with this credit note",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.PaymentStatus"
+                        }
+                    ]
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "subscription": {
+                    "description": "subscription contains the associated subscription information if applicable",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.SubscriptionResponse"
+                        }
+                    ]
+                },
+                "subscription_id": {
+                    "description": "subscription_id is the optional unique identifier of the subscription related to this credit note",
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "total_amount": {
+                    "description": "total_amount is the total including creditable invoice-level discounts or minimums, and tax",
+                    "type": "number"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
+                },
+                "voided_at": {
+                    "description": "voided_at is the timestamp when the credit note was voided",
+                    "type": "string"
+                }
+            }
+        },
         "dto.CustomerEntitlementsResponse": {
             "type": "object",
             "properties": {
@@ -7208,33 +8725,43 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "currency": {
+                    "description": "currency is the three-letter ISO currency code for this summary",
                     "type": "string"
                 },
                 "customer_id": {
+                    "description": "customer_id is the unique identifier of the customer",
                     "type": "string"
                 },
                 "overdue_invoice_count": {
+                    "description": "overdue_invoice_count is the number of overdue invoices for this customer in this currency",
                     "type": "integer"
                 },
                 "total_invoice_count": {
+                    "description": "total_invoice_count is the total number of invoices for this customer in this currency",
                     "type": "integer"
                 },
                 "total_overdue_amount": {
+                    "description": "total_overdue_amount is the total amount of overdue invoices in this currency",
                     "type": "number"
                 },
                 "total_revenue_amount": {
+                    "description": "total_revenue_amount is the total revenue generated from this customer in this currency",
                     "type": "number"
                 },
                 "total_unpaid_amount": {
+                    "description": "total_unpaid_amount is the total amount of unpaid invoices in this currency",
                     "type": "number"
                 },
                 "unpaid_fixed_charges": {
+                    "description": "unpaid_fixed_charges is the total amount of unpaid fixed charges in this currency",
                     "type": "number"
                 },
                 "unpaid_invoice_count": {
+                    "description": "unpaid_invoice_count is the number of unpaid invoices for this customer in this currency",
                     "type": "integer"
                 },
                 "unpaid_usage_charges": {
+                    "description": "unpaid_usage_charges is the total amount of unpaid usage-based charges in this currency",
                     "type": "number"
                 }
             }
@@ -7243,12 +8770,15 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "customer_id": {
+                    "description": "customer_id is the unique identifier of the customer",
                     "type": "string"
                 },
                 "default_currency": {
+                    "description": "default_currency is the primary currency for this customer",
                     "type": "string"
                 },
                 "summaries": {
+                    "description": "summaries contains the invoice summaries for each currency",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/dto.CustomerInvoiceSummary"
@@ -7673,12 +9203,15 @@ const docTemplate = `{
             ],
             "properties": {
                 "period_end": {
+                    "description": "period_end is the optional end date of the period to preview",
                     "type": "string"
                 },
                 "period_start": {
+                    "description": "period_start is the optional start date of the period to preview",
                     "type": "string"
                 },
                 "subscription_id": {
+                    "description": "subscription_id is the unique identifier of the subscription to preview invoice for",
                     "type": "string"
                 }
             }
@@ -7892,6 +9425,9 @@ const docTemplate = `{
                         }
                     }
                 },
+                "multiplier": {
+                    "type": "integer"
+                },
                 "property_name": {
                     "description": "will be empty/ignored in case of COUNT",
                     "type": "string",
@@ -7975,72 +9511,99 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "amount": {
+                    "description": "amount is the monetary amount for this line item",
                     "type": "number"
                 },
                 "created_at": {
+                    "description": "created_at is the timestamp when this line item was created",
                     "type": "string"
                 },
                 "created_by": {
+                    "description": "created_by is the identifier of the user who created this line item",
                     "type": "string"
                 },
                 "currency": {
+                    "description": "currency is the three-letter ISO currency code for this line item",
                     "type": "string"
                 },
                 "customer_id": {
+                    "description": "customer_id is the unique identifier of the customer associated with this line item",
                     "type": "string"
                 },
                 "display_name": {
+                    "description": "display_name is the optional human-readable name for this line item",
                     "type": "string"
                 },
                 "id": {
+                    "description": "id is the unique identifier for this line item",
                     "type": "string"
                 },
                 "invoice_id": {
+                    "description": "invoice_id is the unique identifier of the invoice this line item belongs to",
                     "type": "string"
                 },
                 "metadata": {
-                    "$ref": "#/definitions/types.Metadata"
+                    "description": "metadata contains additional custom key-value pairs for storing extra information about this line item",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.Metadata"
+                        }
+                    ]
                 },
                 "meter_display_name": {
+                    "description": "meter_display_name is the optional human-readable name of the meter",
                     "type": "string"
                 },
                 "meter_id": {
+                    "description": "meter_id is the optional unique identifier of the meter used for usage tracking",
                     "type": "string"
                 },
                 "period_end": {
+                    "description": "period_end is the optional end date of the period this line item covers",
                     "type": "string"
                 },
                 "period_start": {
+                    "description": "period_start is the optional start date of the period this line item covers",
                     "type": "string"
                 },
                 "plan_display_name": {
+                    "description": "plan_display_name is the optional human-readable name of the plan",
                     "type": "string"
                 },
                 "plan_id": {
+                    "description": "plan_id is the optional unique identifier of the plan associated with this line item",
                     "type": "string"
                 },
                 "price_id": {
+                    "description": "price_id is the optional unique identifier of the price associated with this line item",
                     "type": "string"
                 },
                 "price_type": {
+                    "description": "price_type indicates the type of pricing (fixed, usage, tiered, etc.)",
                     "type": "string"
                 },
                 "quantity": {
+                    "description": "quantity is the quantity of units for this line item",
                     "type": "number"
                 },
                 "status": {
+                    "description": "status represents the current status of this line item",
                     "type": "string"
                 },
                 "subscription_id": {
+                    "description": "subscription_id is the optional unique identifier of the subscription associated with this line item",
                     "type": "string"
                 },
                 "tenant_id": {
+                    "description": "tenant_id is the unique identifier of the tenant this line item belongs to",
                     "type": "string"
                 },
                 "updated_at": {
+                    "description": "updated_at is the timestamp when this line item was last updated",
                     "type": "string"
                 },
                 "updated_by": {
+                    "description": "updated_by is the identifier of the user who last updated this line item",
                     "type": "string"
                 }
             }
@@ -8049,108 +9612,174 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "amount_due": {
+                    "description": "amount_due is the total amount that needs to be paid for this invoice",
                     "type": "number"
                 },
                 "amount_paid": {
+                    "description": "amount_paid is the amount that has been paid towards this invoice",
                     "type": "number"
                 },
                 "amount_remaining": {
+                    "description": "amount_remaining is the amount still outstanding on this invoice",
                     "type": "number"
                 },
                 "billing_period": {
+                    "description": "billing_period is the period this invoice covers (e.g., \"monthly\", \"yearly\")",
                     "type": "string"
                 },
                 "billing_reason": {
+                    "description": "billing_reason indicates why this invoice was created (subscription_cycle, manual, etc.)",
                     "type": "string"
                 },
                 "billing_sequence": {
+                    "description": "billing_sequence is the optional sequence number for billing cycles",
                     "type": "integer"
                 },
                 "created_at": {
+                    "description": "created_at is the timestamp when this invoice was created",
                     "type": "string"
                 },
                 "created_by": {
+                    "description": "created_by is the identifier of the user who created this invoice",
                     "type": "string"
                 },
                 "currency": {
+                    "description": "currency is the three-letter ISO currency code (e.g., USD, EUR) for the invoice",
                     "type": "string"
                 },
                 "customer": {
-                    "$ref": "#/definitions/dto.CustomerResponse"
+                    "description": "customer contains the customer information associated with this invoice",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.CustomerResponse"
+                        }
+                    ]
                 },
                 "customer_id": {
+                    "description": "customer_id is the unique identifier of the customer this invoice belongs to",
                     "type": "string"
                 },
                 "description": {
+                    "description": "description is the optional text description of the invoice",
                     "type": "string"
                 },
                 "due_date": {
+                    "description": "due_date is the date by which payment is expected",
                     "type": "string"
                 },
                 "finalized_at": {
+                    "description": "finalized_at is the timestamp when this invoice was finalized",
                     "type": "string"
                 },
                 "id": {
+                    "description": "id is the unique identifier for this invoice",
                     "type": "string"
                 },
                 "idempotency_key": {
+                    "description": "idempotency_key is the optional key used to prevent duplicate invoice creation",
                     "type": "string"
                 },
                 "invoice_number": {
+                    "description": "invoice_number is the optional human-readable identifier for the invoice",
                     "type": "string"
                 },
                 "invoice_pdf_url": {
+                    "description": "invoice_pdf_url is the optional URL to the PDF version of this invoice",
                     "type": "string"
                 },
                 "invoice_status": {
-                    "$ref": "#/definitions/types.InvoiceStatus"
+                    "description": "invoice_status represents the current status of the invoice (draft, finalized, etc.)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.InvoiceStatus"
+                        }
+                    ]
                 },
                 "invoice_type": {
-                    "$ref": "#/definitions/types.InvoiceType"
+                    "description": "invoice_type indicates the type of invoice (subscription, one_time, etc.)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.InvoiceType"
+                        }
+                    ]
                 },
                 "line_items": {
+                    "description": "line_items contains the individual items that make up this invoice",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/dto.InvoiceLineItemResponse"
                     }
                 },
                 "metadata": {
-                    "$ref": "#/definitions/types.Metadata"
+                    "description": "metadata contains additional custom key-value pairs for storing extra information",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.Metadata"
+                        }
+                    ]
                 },
                 "paid_at": {
+                    "description": "paid_at is the timestamp when this invoice was paid",
                     "type": "string"
                 },
                 "payment_status": {
-                    "$ref": "#/definitions/types.PaymentStatus"
+                    "description": "payment_status represents the payment status of the invoice (unpaid, paid, etc.)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.PaymentStatus"
+                        }
+                    ]
                 },
                 "period_end": {
+                    "description": "period_end is the end date of the billing period",
                     "type": "string"
                 },
                 "period_start": {
+                    "description": "period_start is the start date of the billing period",
                     "type": "string"
                 },
                 "status": {
+                    "description": "status represents the current status of this invoice",
                     "type": "string"
                 },
                 "subscription": {
-                    "$ref": "#/definitions/dto.SubscriptionResponse"
+                    "description": "subscription contains the associated subscription information if requested",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.SubscriptionResponse"
+                        }
+                    ]
                 },
                 "subscription_id": {
+                    "description": "subscription_id is the optional unique identifier of the subscription associated with this invoice",
                     "type": "string"
+                },
+                "subtotal": {
+                    "description": "subtotal is the amount before taxes and discounts are applied",
+                    "type": "number"
                 },
                 "tenant_id": {
+                    "description": "tenant_id is the unique identifier of the tenant this invoice belongs to",
                     "type": "string"
                 },
+                "total": {
+                    "description": "total is the total amount of the invoice including taxes and discounts",
+                    "type": "number"
+                },
                 "updated_at": {
+                    "description": "updated_at is the timestamp when this invoice was last updated",
                     "type": "string"
                 },
                 "updated_by": {
+                    "description": "updated_by is the identifier of the user who last updated this invoice",
                     "type": "string"
                 },
                 "version": {
+                    "description": "version is the version number of this invoice",
                     "type": "integer"
                 },
                 "voided_at": {
+                    "description": "voided_at is the timestamp when this invoice was voided",
                     "type": "string"
                 }
             }
@@ -8166,6 +9795,20 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.ListCostSheetsResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.CostSheetResponse"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
         "dto.ListCreditGrantsResponse": {
             "type": "object",
             "properties": {
@@ -8173,6 +9816,20 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/dto.CreditGrantResponse"
+                    }
+                },
+                "pagination": {
+                    "$ref": "#/definitions/types.PaginationResponse"
+                }
+            }
+        },
+        "dto.ListCreditNotesResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.CreditNoteResponse"
                     }
                 },
                 "pagination": {
@@ -8583,6 +10240,12 @@ const docTemplate = `{
                 "created_by": {
                     "type": "string"
                 },
+                "credit_grants": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.CreditGrantResponse"
+                    }
+                },
                 "description": {
                     "type": "string"
                 },
@@ -8721,6 +10384,43 @@ const docTemplate = `{
                 },
                 "updated_by": {
                     "type": "string"
+                }
+            }
+        },
+        "dto.ROIResponse": {
+            "type": "object",
+            "properties": {
+                "cost": {
+                    "description": "Cost and Revenue",
+                    "type": "number"
+                },
+                "cost_breakdown": {
+                    "description": "Cost breakdown by meter",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.CostBreakdownItem"
+                    }
+                },
+                "markup": {
+                    "description": "Markup (Revenue - Cost / Cost)",
+                    "type": "number"
+                },
+                "markup_percentage": {
+                    "type": "number"
+                },
+                "net_margin": {
+                    "description": "Net Margin (ROI)",
+                    "type": "number"
+                },
+                "net_margin_percentage": {
+                    "type": "number"
+                },
+                "net_revenue": {
+                    "description": "Net Revenue (Revenue - Cost)",
+                    "type": "number"
+                },
+                "revenue": {
+                    "type": "number"
                 }
             }
         },
@@ -9467,6 +11167,22 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.UpdateCostSheetRequest": {
+            "type": "object",
+            "required": [
+                "id"
+            ],
+            "properties": {
+                "id": {
+                    "description": "ID of the costsheet to update",
+                    "type": "string"
+                },
+                "status": {
+                    "description": "Status updates the costsheet's status (optional)",
+                    "type": "string"
+                }
+            }
+        },
         "dto.UpdateCreditGrantRequest": {
             "type": "object",
             "properties": {
@@ -9596,10 +11312,74 @@ const docTemplate = `{
             ],
             "properties": {
                 "amount": {
+                    "description": "amount is the optional payment amount to record",
                     "type": "number"
                 },
                 "payment_status": {
-                    "$ref": "#/definitions/types.PaymentStatus"
+                    "description": "payment_status is the new payment status to set for the invoice (paid, unpaid, etc.)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.PaymentStatus"
+                        }
+                    ]
+                }
+            }
+        },
+        "dto.UpdatePlanCreditGrantRequest": {
+            "type": "object",
+            "required": [
+                "cadence",
+                "credits",
+                "currency",
+                "name",
+                "scope"
+            ],
+            "properties": {
+                "cadence": {
+                    "$ref": "#/definitions/types.CreditGrantCadence"
+                },
+                "credits": {
+                    "type": "number"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "expiration_duration": {
+                    "type": "integer"
+                },
+                "expiration_duration_unit": {
+                    "$ref": "#/definitions/types.CreditGrantExpiryDurationUnit"
+                },
+                "expiration_type": {
+                    "$ref": "#/definitions/types.CreditGrantExpiryType"
+                },
+                "id": {
+                    "description": "The ID of the credit grant to update (present if the credit grant is being updated)",
+                    "type": "string"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "period": {
+                    "$ref": "#/definitions/types.CreditGrantPeriod"
+                },
+                "period_count": {
+                    "type": "integer"
+                },
+                "plan_id": {
+                    "type": "string"
+                },
+                "priority": {
+                    "type": "integer"
+                },
+                "scope": {
+                    "$ref": "#/definitions/types.CreditGrantScope"
+                },
+                "subscription_id": {
+                    "type": "string"
                 }
             }
         },
@@ -9728,6 +11508,12 @@ const docTemplate = `{
         "dto.UpdatePlanRequest": {
             "type": "object",
             "properties": {
+                "credit_grants": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.UpdatePlanCreditGrantRequest"
+                    }
+                },
                 "description": {
                     "type": "string"
                 },
@@ -10165,6 +11951,10 @@ const docTemplate = `{
                     "description": "Field is the key in $event.properties on which the aggregation is to be applied\nFor ex if the aggregation type is sum for API usage, the field could be \"duration_ms\"",
                     "type": "string"
                 },
+                "multiplier": {
+                    "description": "Multiplier is the multiplier for the aggregation\nFor ex if the aggregation type is sum_with_multiplier for API usage, the multiplier could be 1000\nto scale up by a factor of 1000",
+                    "type": "integer"
+                },
                 "type": {
                     "$ref": "#/definitions/types.AggregationType"
                 }
@@ -10341,6 +12131,37 @@ const docTemplate = `{
                 }
             }
         },
+        "service.SyncPlanPricesResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "plan_id": {
+                    "type": "string"
+                },
+                "plan_name": {
+                    "type": "string"
+                },
+                "synchronization_summary": {
+                    "type": "object",
+                    "properties": {
+                        "prices_added": {
+                            "type": "integer"
+                        },
+                        "prices_removed": {
+                            "type": "integer"
+                        },
+                        "prices_skipped": {
+                            "type": "integer"
+                        },
+                        "subscriptions_processed": {
+                            "type": "integer"
+                        }
+                    }
+                }
+            }
+        },
         "subscription.SubscriptionLineItem": {
             "type": "object",
             "properties": {
@@ -10501,13 +12322,20 @@ const docTemplate = `{
                 "COUNT",
                 "SUM",
                 "AVG",
-                "COUNT_UNIQUE"
+                "COUNT_UNIQUE",
+                "LATEST",
+                "SUM_WITH_MULTIPLIER"
             ],
+            "x-enum-comments": {
+                "AggregationSumWithMultiplier": "Sum with a multiplier - [sum(value) * multiplier]"
+            },
             "x-enum-varnames": [
                 "AggregationCount",
                 "AggregationSum",
                 "AggregationAvg",
-                "AggregationCountUnique"
+                "AggregationCountUnique",
+                "AggregationLatest",
+                "AggregationSumWithMultiplier"
             ]
         },
         "types.AutoTopupTrigger": {
@@ -10636,12 +12464,12 @@ const docTemplate = `{
                 "HALF_YEARLY"
             ],
             "x-enum-varnames": [
-                "CreditGrantPeriodDaily",
-                "CreditGrantPeriodWeekly",
-                "CreditGrantPeriodMonthly",
-                "CreditGrantPeriodAnnual",
-                "CreditGrantPeriodQuarter",
-                "CreditGrantPeriodHalfYear"
+                "CREDIT_GRANT_PERIOD_DAILY",
+                "CREDIT_GRANT_PERIOD_WEEKLY",
+                "CREDIT_GRANT_PERIOD_MONTHLY",
+                "CREDIT_GRANT_PERIOD_ANNUAL",
+                "CREDIT_GRANT_PERIOD_QUARTER",
+                "CREDIT_GRANT_PERIOD_HALF_YEARLY"
             ]
         },
         "types.CreditGrantScope": {
@@ -10653,6 +12481,51 @@ const docTemplate = `{
             "x-enum-varnames": [
                 "CreditGrantScopePlan",
                 "CreditGrantScopeSubscription"
+            ]
+        },
+        "types.CreditNoteReason": {
+            "type": "string",
+            "enum": [
+                "DUPLICATE",
+                "FRAUDULENT",
+                "ORDER_CHANGE",
+                "UNSATISFACTORY",
+                "SERVICE_ISSUE",
+                "BILLING_ERROR",
+                "SUBSCRIPTION_CANCELLATION"
+            ],
+            "x-enum-varnames": [
+                "CreditNoteReasonDuplicate",
+                "CreditNoteReasonFraudulent",
+                "CreditNoteReasonOrderChange",
+                "CreditNoteReasonUnsatisfactory",
+                "CreditNoteReasonService",
+                "CreditNoteReasonBillingError",
+                "CreditNoteReasonSubscriptionCancellation"
+            ]
+        },
+        "types.CreditNoteStatus": {
+            "type": "string",
+            "enum": [
+                "DRAFT",
+                "FINALIZED",
+                "VOIDED"
+            ],
+            "x-enum-varnames": [
+                "CreditNoteStatusDraft",
+                "CreditNoteStatusFinalized",
+                "CreditNoteStatusVoided"
+            ]
+        },
+        "types.CreditNoteType": {
+            "type": "string",
+            "enum": [
+                "ADJUSTMENT",
+                "REFUND"
+            ],
+            "x-enum-varnames": [
+                "CreditNoteTypeAdjustment",
+                "CreditNoteTypeRefund"
             ]
         },
         "types.CustomerFilter": {
@@ -10676,8 +12549,13 @@ const docTemplate = `{
                 "external_id": {
                     "type": "string"
                 },
+                "external_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "filters": {
-                    "description": "filters allows complex filtering based on multiple fields",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/types.FilterCondition"
@@ -11026,6 +12904,36 @@ const docTemplate = `{
                 "PRICE_TYPE_FIXED"
             ]
         },
+        "types.QueryFilter": {
+            "type": "object",
+            "properties": {
+                "expand": {
+                    "type": "string"
+                },
+                "limit": {
+                    "type": "integer",
+                    "maximum": 1000,
+                    "minimum": 1
+                },
+                "offset": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "order": {
+                    "type": "string",
+                    "enum": [
+                        "asc",
+                        "desc"
+                    ]
+                },
+                "sort": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                }
+            }
+        },
         "types.ResetUsage": {
             "type": "string",
             "enum": [
@@ -11184,6 +13092,17 @@ const docTemplate = `{
                 "TaskTypeExport"
             ]
         },
+        "types.TimeRangeFilter": {
+            "type": "object",
+            "properties": {
+                "end_time": {
+                    "type": "string"
+                },
+                "start_time": {
+                    "type": "string"
+                }
+            }
+        },
         "types.TransactionReason": {
             "type": "string",
             "enum": [
@@ -11192,7 +13111,7 @@ const docTemplate = `{
                 "SUBSCRIPTION_CREDIT_GRANT",
                 "PURCHASED_CREDIT_INVOICED",
                 "PURCHASED_CREDIT_DIRECT",
-                "INVOICE_REFUND",
+                "CREDIT_NOTE",
                 "CREDIT_EXPIRED",
                 "WALLET_TERMINATION"
             ],
@@ -11202,7 +13121,7 @@ const docTemplate = `{
                 "TransactionReasonSubscriptionCredit",
                 "TransactionReasonPurchasedCreditInvoiced",
                 "TransactionReasonPurchasedCreditDirect",
-                "TransactionReasonInvoiceRefund",
+                "TransactionReasonCreditNote",
                 "TransactionReasonCreditExpired",
                 "TransactionReasonWalletTermination"
             ]

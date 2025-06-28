@@ -80,6 +80,8 @@ func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoi
 		SetVersion(inv.Version).
 		SetStatus(string(inv.Status)).
 		SetCreatedAt(inv.CreatedAt).
+		SetTotal(inv.Total).
+		SetSubtotal(inv.Subtotal).
 		SetUpdatedAt(inv.UpdatedAt).
 		SetCreatedBy(inv.CreatedBy).
 		SetUpdatedBy(inv.UpdatedBy).
@@ -179,6 +181,8 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 			SetCreatedAt(inv.CreatedAt).
 			SetUpdatedAt(inv.UpdatedAt).
 			SetCreatedBy(inv.CreatedBy).
+			SetTotal(inv.Total).
+			SetSubtotal(inv.Subtotal).
 			SetUpdatedBy(inv.UpdatedBy).
 			SetNillablePeriodStart(inv.PeriodStart).
 			SetNillablePeriodEnd(inv.PeriodEnd).
@@ -377,7 +381,9 @@ func (r *invoiceRepository) Get(ctx context.Context, id string) (*domainInvoice.
 			invoice.TenantID(types.GetTenantID(ctx)),
 			invoice.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
-		WithLineItems().
+		WithLineItems(func(q *ent.InvoiceLineItemQuery) {
+			q.Where(invoicelineitem.Status(string(types.StatusPublished)))
+		}).
 		Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -519,7 +525,9 @@ func (r *invoiceRepository) List(ctx context.Context, filter *types.InvoiceFilte
 
 	client := r.client.Querier(ctx)
 	query := client.Invoice.Query().
-		WithLineItems()
+		WithLineItems(func(q *ent.InvoiceLineItemQuery) {
+			q.Where(invoicelineitem.Status(string(types.StatusPublished)))
+		})
 
 	// Apply common query options
 	query = ApplyQueryOptions(ctx, query, filter, r.queryOpts)

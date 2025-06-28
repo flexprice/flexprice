@@ -3,7 +3,6 @@ package clickhouse
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -187,6 +186,32 @@ func (r *EventRepository) GetUsage(ctx context.Context, params *events.UsagePara
 	})
 	defer FinishSpan(span)
 
+	// Validate multiplier if provided for aggregations that use it
+	if params.Multiplier != nil {
+		if *params.Multiplier <= 0 {
+			err := ierr.NewError("invalid multiplier value").
+				WithHint("Multiplier must be greater than zero").
+				WithReportableDetails(map[string]interface{}{
+					"multiplier": *params.Multiplier,
+				}).
+				Mark(ierr.ErrValidation)
+			SetSpanError(span, err)
+			return nil, err
+		}
+
+		// Only allow factor for supported aggregation types
+		if params.AggregationType != types.AggregationSumWithMultiplier {
+			err := ierr.NewError("multiplier not supported for this aggregation type").
+				WithHint("Multiplier can only be used with SUM_WITH_MULTIPLIER aggregations").
+				WithReportableDetails(map[string]interface{}{
+					"aggregation_type": params.AggregationType,
+				}).
+				Mark(ierr.ErrValidation)
+			SetSpanError(span, err)
+			return nil, err
+		}
+	}
+
 	aggregator := GetAggregator(params.AggregationType)
 	if aggregator == nil {
 		err := ierr.NewError("unsupported aggregation type").
@@ -239,7 +264,7 @@ func (r *EventRepository) GetUsage(ctx context.Context, params *events.UsagePara
 						Mark(ierr.ErrDatabase)
 				}
 				value = decimal.NewFromUint64(countValue)
-			case types.AggregationSum, types.AggregationAvg:
+			case types.AggregationSum, types.AggregationAvg, types.AggregationLatest, types.AggregationSumWithMultiplier:
 				var floatValue float64
 				if err := rows.Scan(&windowSize, &floatValue); err != nil {
 					SetSpanError(span, err)
@@ -283,7 +308,7 @@ func (r *EventRepository) GetUsage(ctx context.Context, params *events.UsagePara
 						Mark(ierr.ErrDatabase)
 				}
 				result.Value = decimal.NewFromUint64(value)
-			case types.AggregationSum, types.AggregationAvg:
+			case types.AggregationSum, types.AggregationAvg, types.AggregationLatest, types.AggregationSumWithMultiplier:
 				var value float64
 				if err := rows.Scan(&value); err != nil {
 					SetSpanError(span, err)
@@ -384,7 +409,7 @@ func (r *EventRepository) GetUsageWithFilters(ctx context.Context, params *event
 					Mark(ierr.ErrDatabase)
 			}
 			result.Value = decimal.NewFromUint64(value)
-		case types.AggregationSum, types.AggregationAvg:
+		case types.AggregationSum, types.AggregationAvg, types.AggregationLatest, types.AggregationSumWithMultiplier:
 			var value float64
 			if err := rows.Scan(&filterGroupID, &value); err != nil {
 				SetSpanError(span, err)
@@ -656,7 +681,7 @@ func (r *EventRepository) FindUnprocessedEvents(ctx context.Context, params *eve
 	// Add the last seen ID and timestamp for keyset pagination if provided
 	if params.LastID != "" && !params.LastTimestamp.IsZero() {
 		// Use keyset pagination for better performance
-		query += " AND (e.timestamp, e.id) > (?, ?)"
+		query += " AND (e.timestamp, e.id) < (?, ?)"
 		args = append(args, params.LastTimestamp, params.LastID)
 	}
 
@@ -681,18 +706,9 @@ func (r *EventRepository) FindUnprocessedEvents(ctx context.Context, params *eve
 		args = append(args, params.EndTime)
 	}
 
-	// Add partitioning hint for better performance with large datasets
-	// This helps ClickHouse optimize the query execution
-	if !params.StartTime.IsZero() && !params.EndTime.IsZero() {
-		// Add partition pruning hint - helps ClickHouse optimize the query
-		query += fmt.Sprintf(" /* partition_pruning: toYYYYMM(toDate('%s')), toYYYYMM(toDate('%s')) */",
-			params.StartTime.Format("2006-01-02"),
-			params.EndTime.Format("2006-01-02"))
-	}
-
 	// Add sorting for consistent keyset pagination
 	// Using the same fields we're filtering on for the keyset
-	query += " ORDER BY e.timestamp ASC, e.id ASC"
+	query += " ORDER BY e.timestamp DESC, e.id DESC"
 
 	// Add batch size limit
 	if params.BatchSize > 0 {

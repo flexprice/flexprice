@@ -10,6 +10,7 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/flexprice/flexprice/ent/costsheet"
 	"github.com/flexprice/flexprice/ent/meter"
 	"github.com/flexprice/flexprice/ent/schema"
 )
@@ -161,6 +162,21 @@ func (mc *MeterCreate) SetNillableResetUsage(s *string) *MeterCreate {
 func (mc *MeterCreate) SetID(s string) *MeterCreate {
 	mc.mutation.SetID(s)
 	return mc
+}
+
+// AddCostsheetIDs adds the "costsheet" edge to the Costsheet entity by IDs.
+func (mc *MeterCreate) AddCostsheetIDs(ids ...string) *MeterCreate {
+	mc.mutation.AddCostsheetIDs(ids...)
+	return mc
+}
+
+// AddCostsheet adds the "costsheet" edges to the Costsheet entity.
+func (mc *MeterCreate) AddCostsheet(c ...*Costsheet) *MeterCreate {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return mc.AddCostsheetIDs(ids...)
 }
 
 // Mutation returns the MeterMutation object of the builder.
@@ -354,6 +370,22 @@ func (mc *MeterCreate) createSpec() (*Meter, *sqlgraph.CreateSpec) {
 	if value, ok := mc.mutation.ResetUsage(); ok {
 		_spec.SetField(meter.FieldResetUsage, field.TypeString, value)
 		_node.ResetUsage = value
+	}
+	if nodes := mc.mutation.CostsheetIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   meter.CostsheetTable,
+			Columns: []string{meter.CostsheetColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(costsheet.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
 }

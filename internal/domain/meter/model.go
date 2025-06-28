@@ -57,6 +57,11 @@ type Aggregation struct {
 	// Field is the key in $event.properties on which the aggregation is to be applied
 	// For ex if the aggregation type is sum for API usage, the field could be "duration_ms"
 	Field string `json:"field,omitempty"`
+
+	// Multiplier is the multiplier for the aggregation
+	// For ex if the aggregation type is sum_with_multiplier for API usage, the multiplier could be 1000
+	// to scale up by a factor of 1000
+	Multiplier int64 `json:"multiplier,omitempty"`
 }
 
 // FromEnt converts an Ent Meter to a domain Meter
@@ -79,8 +84,9 @@ func FromEnt(e *ent.Meter) *Meter {
 		EventName: e.EventName,
 		Name:      e.Name,
 		Aggregation: Aggregation{
-			Type:  e.Aggregation.Type,
-			Field: e.Aggregation.Field,
+			Type:       e.Aggregation.Type,
+			Field:      e.Aggregation.Field,
+			Multiplier: e.Aggregation.Multiplier,
 		},
 		Filters:       filters,
 		ResetUsage:    types.ResetUsage(e.ResetUsage),
@@ -126,8 +132,9 @@ func (m *Meter) ToEntFilters() []schema.MeterFilter {
 // ToEntAggregation converts domain Aggregation to Ent Aggregation
 func (m *Meter) ToEntAggregation() schema.MeterAggregation {
 	return schema.MeterAggregation{
-		Type:  m.Aggregation.Type,
-		Field: m.Aggregation.Field,
+		Type:       m.Aggregation.Type,
+		Field:      m.Aggregation.Field,
+		Multiplier: m.Aggregation.Multiplier,
 	}
 }
 
@@ -161,6 +168,14 @@ func (m *Meter) Validate() error {
 			WithHint("Please specify a field for this aggregation type").
 			WithReportableDetails(map[string]interface{}{
 				"aggregation_type": m.Aggregation.Type,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	if m.Aggregation.Type == types.AggregationSumWithMultiplier && m.Aggregation.Multiplier <= 0 {
+		return ierr.NewError("invalid multiplier value").
+			WithHint("Multiplier must be greater than zero").
+			WithReportableDetails(map[string]interface{}{
+				"multiplier": m.Aggregation.Multiplier,
 			}).
 			Mark(ierr.ErrValidation)
 	}

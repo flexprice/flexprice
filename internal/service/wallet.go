@@ -139,6 +139,7 @@ func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletR
 				CreditsToAdd:      req.InitialCreditsToLoad,
 				TransactionReason: types.TransactionReasonFreeCredit,
 				ExpiryDate:        req.InitialCreditsToLoadExpiryDate,
+				ExpiryDateUTC:     req.InitialCreditsExpiryDateUTC,
 			})
 
 			if err != nil {
@@ -434,7 +435,7 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 		usageResp, err := subscriptionService.GetUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
 			SubscriptionID: sub.Subscription.ID,
 			StartTime:      sub.Subscription.CurrentPeriodStart,
-			EndTime:        time.Now().UTC(),
+			EndTime:        sub.Subscription.CurrentPeriodEnd,
 			LifetimeUsage:  false, // Only get current period usage
 		})
 		if err != nil {
@@ -854,11 +855,13 @@ func (s *walletService) publishInternalWalletWebhookEvent(ctx context.Context, e
 	}
 
 	webhookEvent := &types.WebhookEvent{
-		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WEBHOOK_EVENT),
-		EventName: eventName,
-		TenantID:  types.GetTenantID(ctx),
-		Timestamp: time.Now().UTC(),
-		Payload:   json.RawMessage(webhookPayload),
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WEBHOOK_EVENT),
+		EventName:     eventName,
+		TenantID:      types.GetTenantID(ctx),
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		UserID:        types.GetUserID(ctx),
+		Timestamp:     time.Now().UTC(),
+		Payload:       json.RawMessage(webhookPayload),
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
 		s.Logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
@@ -886,11 +889,13 @@ func (s *walletService) publishInternalTransactionWebhookEvent(ctx context.Conte
 	}
 
 	webhookEvent := &types.WebhookEvent{
-		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WEBHOOK_EVENT),
-		EventName: eventName,
-		TenantID:  types.GetTenantID(ctx),
-		Timestamp: time.Now().UTC(),
-		Payload:   json.RawMessage(webhookPayload),
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WEBHOOK_EVENT),
+		EventName:     eventName,
+		TenantID:      types.GetTenantID(ctx),
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		UserID:        types.GetUserID(ctx),
+		Timestamp:     time.Now().UTC(),
+		Payload:       json.RawMessage(webhookPayload),
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
 		s.Logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)

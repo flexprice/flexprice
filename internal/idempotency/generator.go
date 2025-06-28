@@ -15,8 +15,14 @@ const (
 	ScopeSubscriptionInvoice Scope = "subscription_invoice"
 	ScopeOneOffInvoice       Scope = "one_off_invoice"
 
+	// Credit Grant
+	ScopeCreditGrant Scope = "credit_grant"
+
 	// Payment
 	ScopePayment Scope = "payment"
+
+	// Credit note
+	ScopeCreditNote Scope = "credit_note"
 )
 
 // Generator generates idempotency keys

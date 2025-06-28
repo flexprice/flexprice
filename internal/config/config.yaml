@@ -70,8 +70,9 @@ logging:
 
 webhook:
   enabled: true
-  topic: "webhook_events"
+  topic: "system_events"
   pubsub: "memory"
+  consumer_group: "webhook-consumer-local"
   max_retries: 3
   initial_interval: 1s
   max_interval: 10s
@@ -86,6 +87,11 @@ webhook:
       excluded_events:
         - "tenant.created"
         - "tenant.updated"
+  svix_config:
+    enabled: false
+    auth_token: "svix_auth_token"
+    base_url: "https://api.svix.com"
+    
 
 temporal:
   address: "127.0.0.1:7233" # For local mode

@@ -508,6 +508,10 @@ func (o CustomerQueryOptions) applyEntityQueryOptions(_ context.Context, f *type
 		query = query.Where(customer.IDIn(f.CustomerIDs...))
 	}
 
+	if len(f.ExternalIDs) > 0 {
+		query = query.Where(customer.ExternalIDIn(f.ExternalIDs...))
+	}
+
 	if f.Filters != nil {
 		query, err = dsl.ApplyFilters[CustomerQuery, predicate.Customer](
 			query,

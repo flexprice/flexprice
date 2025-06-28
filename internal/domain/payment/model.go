@@ -12,39 +12,68 @@ import (
 
 // Payment represents a payment transaction
 type Payment struct {
-	ID                string                       `json:"id"`
-	IdempotencyKey    string                       `json:"idempotency_key"`
-	DestinationType   types.PaymentDestinationType `json:"destination_type"`
-	DestinationID     string                       `json:"destination_id"`
-	PaymentMethodType types.PaymentMethodType      `json:"payment_method_type"`
-	PaymentMethodID   string                       `json:"payment_method_id"`
-	PaymentGateway    *string                      `json:"payment_gateway,omitempty"`
-	GatewayPaymentID  *string                      `json:"gateway_payment_id,omitempty"`
-	Amount            decimal.Decimal              `json:"amount"`
-	Currency          string                       `json:"currency"`
-	PaymentStatus     types.PaymentStatus          `json:"payment_status"`
-	TrackAttempts     bool                         `json:"track_attempts"`
-	Metadata          types.Metadata               `json:"metadata,omitempty"`
-	SucceededAt       *time.Time                   `json:"succeeded_at,omitempty"`
-	FailedAt          *time.Time                   `json:"failed_at,omitempty"`
-	RefundedAt        *time.Time                   `json:"refunded_at,omitempty"`
-	ErrorMessage      *string                      `json:"error_message,omitempty"`
-	Attempts          []*PaymentAttempt            `json:"attempts,omitempty"`
-	EnvironmentID     string                       `json:"environment_id"`
+	// Unique identifier for this payment transaction
+	ID string `json:"id"`
+	// Unique key used in the idempotency_key field to prevent duplicate payment processing
+	IdempotencyKey string `json:"idempotency_key"`
+	// The destination_type indicates what entity this payment is being made to (invoice, subscription, etc.)
+	DestinationType types.PaymentDestinationType `json:"destination_type"`
+	// The destination_id specifies which specific entity is receiving this payment
+	DestinationID string `json:"destination_id"`
+	// The payment_method_type defines how the payment will be processed (credit_card, bank_transfer, offline, etc.)
+	PaymentMethodType types.PaymentMethodType `json:"payment_method_type"`
+	// The payment_method_id identifies which specific payment method to use for processing
+	PaymentMethodID string `json:"payment_method_id"`
+	// The payment_gateway field contains the name of the gateway used to process this transaction (optional)
+	PaymentGateway *string `json:"payment_gateway,omitempty"`
+	// The gateway_payment_id is the transaction identifier from the external payment gateway (optional)
+	GatewayPaymentID *string `json:"gateway_payment_id,omitempty"`
+	// The amount field specifies the payment value in the given currency
+	Amount decimal.Decimal `json:"amount"`
+	// The currency field uses a three-letter ISO code (USD, EUR, GBP, etc.)
+	Currency string `json:"currency"`
+	// The payment_status shows the current state of this payment (pending, succeeded, failed, etc.)
+	PaymentStatus types.PaymentStatus `json:"payment_status"`
+	// The track_attempts flag indicates whether payment processing attempts are being monitored
+	TrackAttempts bool `json:"track_attempts"`
+	// The metadata field contains additional custom key-value pairs for this payment (optional)
+	Metadata types.Metadata `json:"metadata,omitempty"`
+	// The succeeded_at timestamp shows when this payment was successfully completed (optional)
+	SucceededAt *time.Time `json:"succeeded_at,omitempty"`
+	// The failed_at timestamp indicates when this payment failed (optional)
+	FailedAt *time.Time `json:"failed_at,omitempty"`
+	// The refunded_at timestamp shows when this payment was refunded (optional)
+	RefundedAt *time.Time `json:"refunded_at,omitempty"`
+	// The recorded_at timestamp indicates when this payment was manually recorded (optional)
+	RecordedAt *time.Time `json:"recorded_at,omitempty"`
+	// The error_message field provides details about why the payment failed (optional)
+	ErrorMessage *string `json:"error_message,omitempty"`
+	// The attempts array contains all processing attempts made for this payment (optional)
+	Attempts []*PaymentAttempt `json:"attempts,omitempty"`
+	// The environment_id identifies which environment this payment belongs to
+	EnvironmentID string `json:"environment_id"`
 
 	types.BaseModel
 }
 
 // PaymentAttempt represents an attempt to process a payment
 type PaymentAttempt struct {
-	ID               string              `json:"id"`
-	PaymentID        string              `json:"payment_id"`
-	AttemptNumber    int                 `json:"attempt_number"`
-	PaymentStatus    types.PaymentStatus `json:"payment_status"`
-	GatewayAttemptID *string             `json:"gateway_attempt_id,omitempty"`
-	ErrorMessage     *string             `json:"error_message,omitempty"`
-	Metadata         types.Metadata      `json:"metadata,omitempty"`
-	EnvironmentID    string              `json:"environment_id"`
+	// Unique identifier for this specific payment attempt
+	ID string `json:"id"`
+	// The payment_id links this attempt to its parent payment transaction
+	PaymentID string `json:"payment_id"`
+	// The attempt_number shows the sequential order of this processing attempt
+	AttemptNumber int `json:"attempt_number"`
+	// The payment_status indicates the outcome of this specific attempt (pending, succeeded, failed, etc.)
+	PaymentStatus types.PaymentStatus `json:"payment_status"`
+	// The gateway_attempt_id is the identifier from the external payment gateway for this attempt (optional)
+	GatewayAttemptID *string `json:"gateway_attempt_id,omitempty"`
+	// The error_message field explains why this particular attempt failed (optional)
+	ErrorMessage *string `json:"error_message,omitempty"`
+	// The metadata field stores additional custom data for this attempt (optional)
+	Metadata types.Metadata `json:"metadata,omitempty"`
+	// The environment_id specifies which environment this attempt belongs to
+	EnvironmentID string `json:"environment_id"`
 
 	types.BaseModel
 }
@@ -141,6 +170,7 @@ func FromEnt(p *ent.Payment) *Payment {
 		SucceededAt:       p.SucceededAt,
 		FailedAt:          p.FailedAt,
 		RefundedAt:        p.RefundedAt,
+		RecordedAt:        p.RecordedAt,
 		ErrorMessage:      p.ErrorMessage,
 		EnvironmentID:     p.EnvironmentID,
 		BaseModel: types.BaseModel{

@@ -7,6 +7,7 @@ import (
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/subscription"
+	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
 	"github.com/flexprice/flexprice/internal/cache"
 	domainSub "github.com/flexprice/flexprice/internal/domain/subscription"
@@ -284,7 +285,9 @@ func (r *subscriptionRepository) List(ctx context.Context, filter *types.Subscri
 	client := r.client.Querier(ctx)
 	query := client.Subscription.Query()
 	if filter.WithLineItems {
-		query = query.WithLineItems()
+		query = query.WithLineItems(func(q *ent.SubscriptionLineItemQuery) {
+			q.Where(subscriptionlineitem.Status(string(types.StatusPublished)))
+		})
 	}
 
 	// Apply entity-specific filters
@@ -465,6 +468,11 @@ func (o *SubscriptionQueryOptions) applyEntityQueryOptions(_ context.Context, f 
 		return query
 	}
 
+	// Apply subscription IDs filter
+	if len(f.SubscriptionIDs) > 0 {
+		query = query.Where(subscription.IDIn(f.SubscriptionIDs...))
+	}
+
 	// Apply customer filter
 	if f.CustomerID != "" {
 		query = query.Where(subscription.CustomerID(f.CustomerID))
@@ -620,7 +628,9 @@ func (r *subscriptionRepository) GetWithLineItems(ctx context.Context, id string
 			subscription.TenantID(types.GetTenantID(ctx)),
 			subscription.Status(string(types.StatusPublished)),
 		).
-		WithLineItems().
+		WithLineItems(func(q *ent.SubscriptionLineItemQuery) {
+			q.Where(subscriptionlineitem.Status(string(types.StatusPublished)))
+		}).
 		Only(ctx)
 
 	if err != nil {
@@ -890,7 +900,9 @@ func (r *subscriptionRepository) ListByIDs(ctx context.Context, subscriptionIDs 
 	// we need to use a direct query instead of the List method
 	client := r.client.Querier(ctx)
 	query := client.Subscription.Query().
-		WithLineItems().
+		WithLineItems(func(q *ent.SubscriptionLineItemQuery) {
+			q.Where(subscriptionlineitem.Status(string(types.StatusPublished)))
+		}).
 		Where(
 			subscription.IDIn(subscriptionIDs...),
 			subscription.TenantID(types.GetTenantID(ctx)),

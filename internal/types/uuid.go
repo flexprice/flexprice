@@ -2,8 +2,11 @@ package types
 
 import (
 	"fmt"
+	"strings"
+	"sync"
 
 	"github.com/oklog/ulid/v2"
+	"github.com/teris-io/shortid"
 )
 
 // GenerateUUID returns a k-sortable unique identifier
@@ -18,6 +21,45 @@ func GenerateUUIDWithPrefix(prefix string) string {
 		return GenerateUUID()
 	}
 	return fmt.Sprintf("%s_%s", prefix, GenerateUUID())
+}
+
+var (
+	sidGenerator *shortid.Shortid
+	once         sync.Once
+)
+
+// initializeSID initializes the shortid generator once
+func initializeSID() {
+	var err error
+	sidGenerator, err = shortid.New(1, shortid.DefaultABC, 2342)
+	if err != nil {
+		panic("failed to initialize shortid generator: " + err.Error())
+	}
+}
+
+// GenerateShortIDWithPrefix returns a short ID with a prefix.
+// Total length is capped at 12 characters, e.g., `in_xYZ12A8Q`.
+func GenerateShortIDWithPrefix(prefix string) string {
+	once.Do(initializeSID)
+
+	id, err := sidGenerator.Generate()
+	if err != nil {
+		return ""
+	}
+	id = strings.ReplaceAll(id, "-", "")
+
+	availableLen := 12 - len(prefix)
+	if availableLen <= 0 {
+		return ""
+	}
+
+	if len(id) > availableLen {
+		id = id[:availableLen]
+	}
+
+	shortId := strings.ToUpper(fmt.Sprintf("%s%s", prefix, id))
+
+	return shortId
 }
 
 const (
@@ -47,6 +89,14 @@ const (
 	UUID_PREFIX_TASK                        = "task"
 	UUID_PREFIX_SECRET                      = "secret"
 	UUID_PREFIX_CREDIT_GRANT                = "cg"
+	UUID_PREFIX_COSTSHEET                   = "cost"
+	UUID_PREFIX_CREDIT_GRANT_APPLICATION    = "cga"
+	UUID_PREFIX_CREDIT_NOTE                 = "cn"
+	UUID_PREFIX_CREDIT_NOTE_LINE_ITEM       = "cn_line"
 
 	UUID_PREFIX_WEBHOOK_EVENT = "webhook"
+)
+
+const (
+	SHORT_ID_PREFIX_CREDIT_NOTE = "CN-"
 )

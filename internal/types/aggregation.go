@@ -5,15 +5,18 @@ package types
 type AggregationType string
 
 const (
-	AggregationCount       AggregationType = "COUNT"
-	AggregationSum         AggregationType = "SUM"
-	AggregationAvg         AggregationType = "AVG"
-	AggregationCountUnique AggregationType = "COUNT_UNIQUE"
+	AggregationCount             AggregationType = "COUNT"
+	AggregationSum               AggregationType = "SUM"
+	AggregationAvg               AggregationType = "AVG"
+	AggregationCountUnique       AggregationType = "COUNT_UNIQUE"
+	AggregationLatest            AggregationType = "LATEST"
+	AggregationSumWithMultiplier AggregationType = "SUM_WITH_MULTIPLIER" // Sum with a multiplier - [sum(value) * multiplier]
+
 )
 
 func (t AggregationType) Validate() bool {
 	switch t {
-	case AggregationCount, AggregationSum, AggregationAvg, AggregationCountUnique:
+	case AggregationCount, AggregationSum, AggregationAvg, AggregationCountUnique, AggregationLatest, AggregationSumWithMultiplier:
 		return true
 	default:
 		return false

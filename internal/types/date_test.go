@@ -114,7 +114,7 @@ func TestNextbillingDate_Monthly_Anniversary(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NextBillingDate(tt.currentPeriod, tt.billingAnchor, tt.unit, BILLING_PERIOD_MONTHLY)
+			got, err := NextBillingDateLegacy(tt.currentPeriod, tt.billingAnchor, tt.unit, BILLING_PERIOD_MONTHLY)
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("expected error containing %q, got nil", tt.errMsg)
@@ -209,7 +209,7 @@ func TestNextBillingDate_Monthly_Calendar(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Logf("currentPeriod: %v, billingAnchor: %v, unit: %d", tt.currentPeriod, tt.billingAnchor, tt.unit)
-			got, err := NextBillingDate(tt.currentPeriod, tt.billingAnchor, tt.unit, BILLING_PERIOD_MONTHLY)
+			got, err := NextBillingDateLegacy(tt.currentPeriod, tt.billingAnchor, tt.unit, BILLING_PERIOD_MONTHLY)
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("expected error containing %q, got nil", tt.errMsg)
@@ -349,7 +349,7 @@ func TestNextBillingDate_Annual_Anniversary(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NextBillingDate(tt.currentPeriod, tt.billingAnchor, tt.unit, BILLING_PERIOD_ANNUAL)
+			got, err := NextBillingDateLegacy(tt.currentPeriod, tt.billingAnchor, tt.unit, BILLING_PERIOD_ANNUAL)
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("expected error containing %q, got nil", tt.errMsg)
@@ -481,7 +481,7 @@ func TestNextBillingDate_Annual_Calendar(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Logf("currentPeriod: %v, billingAnchor: %v, unit: %d", tt.currentPeriod, tt.billingAnchor, tt.unit)
-			got, err := NextBillingDate(tt.currentPeriod, tt.billingAnchor, tt.unit, BILLING_PERIOD_ANNUAL)
+			got, err := NextBillingDateLegacy(tt.currentPeriod, tt.billingAnchor, tt.unit, BILLING_PERIOD_ANNUAL)
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("expected error containing %q, got nil", tt.errMsg)
@@ -557,7 +557,7 @@ func TestNextBillingDate_Weekly_Anniversary(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NextBillingDate(tt.currentPeriodStart, tt.billingAnchor, tt.unit, BILLING_PERIOD_WEEKLY)
+			got, err := NextBillingDateLegacy(tt.currentPeriodStart, tt.billingAnchor, tt.unit, BILLING_PERIOD_WEEKLY)
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("expected error containing %q, got nil", tt.errMsg)
@@ -647,7 +647,7 @@ func TestNextBillingDate_Weekly_CalendarBilling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NextBillingDate(tt.currentPeriodStart, tt.billingAnchor, tt.unit, BILLING_PERIOD_WEEKLY)
+			got, err := NextBillingDateLegacy(tt.currentPeriodStart, tt.billingAnchor, tt.unit, BILLING_PERIOD_WEEKLY)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -736,7 +736,7 @@ func TestNextBillingDate_Daily_Anniversary(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NextBillingDate(tt.currentPeriod, tt.billingAnchor, tt.unit, BILLING_PERIOD_DAILY)
+			got, err := NextBillingDateLegacy(tt.currentPeriod, tt.billingAnchor, tt.unit, BILLING_PERIOD_DAILY)
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("expected error containing %q, got nil", tt.errMsg)
@@ -802,7 +802,7 @@ func TestNextBillingDate_Daily_CalendarBilling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NextBillingDate(tt.currentPeriod, tt.billingAnchor, tt.unit, BILLING_PERIOD_DAILY)
+			got, err := NextBillingDateLegacy(tt.currentPeriod, tt.billingAnchor, tt.unit, BILLING_PERIOD_DAILY)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -903,9 +903,11 @@ func TestCalculatePeriodID(t *testing.T) {
 			anchor:         billingAnchor,
 			unit:           periodUnit,
 			period:         periodType,
-			want:           0,
-			wantErr:        true,
-			errContains:    "event timestamp is before current period start",
+			// The event is 1 hour before current period start, but since sub started 48h earlier,
+			// the first period runs from sub start (Jan 13) to the first billing date (Feb 15)
+			// So the event at Jan 14 23:00 falls in the first period starting Jan 13
+			want:    expectedPeriodID(subscriptionStart.Add(-48 * time.Hour)),
+			wantErr: false,
 		},
 		{
 			name:           "Event in next period",
@@ -966,6 +968,270 @@ func TestCalculatePeriodID(t *testing.T) {
 			period:         BILLING_PERIOD_MONTHLY,
 			want:           expectedPeriodID(time.Date(2024, time.January, 15, 5, 30, 0, 0, ist)),
 			wantErr:        false,
+		},
+		{
+			name:           "Past event processing - 3 months back from current period",
+			eventTimestamp: time.Date(2023, time.November, 20, 0, 0, 0, 0, time.UTC),
+			subStart:       time.Date(2023, time.October, 15, 0, 0, 0, 0, time.UTC), // Sub started even earlier
+			periodStart:    time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC), // Current period
+			periodEnd:      time.Date(2024, time.February, 15, 0, 0, 0, 0, time.UTC),
+			anchor:         time.Date(2023, time.October, 15, 0, 0, 0, 0, time.UTC),
+			unit:           1,
+			period:         BILLING_PERIOD_MONTHLY,
+			// Event should fall in Nov 15 - Dec 15 period
+			want:    expectedPeriodID(time.Date(2023, time.November, 15, 0, 0, 0, 0, time.UTC)),
+			wantErr: false,
+		},
+		{
+			name:           "Past event processing - weekly billing",
+			eventTimestamp: time.Date(2024, time.January, 10, 0, 0, 0, 0, time.UTC),
+			subStart:       time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC),
+			periodStart:    time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC), // Current period
+			periodEnd:      time.Date(2024, time.January, 22, 0, 0, 0, 0, time.UTC),
+			anchor:         time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC),
+			unit:           1,
+			period:         BILLING_PERIOD_WEEKLY,
+			// Event should fall in Jan 8 - Jan 15 period
+			want:    expectedPeriodID(time.Date(2024, time.January, 8, 0, 0, 0, 0, time.UTC)),
+			wantErr: false,
+		},
+		// ===== MONTHLY BILLING - COMPREHENSIVE PAST EVENT TESTS =====
+		{
+			name:           "Monthly - Event 1 month back",
+			eventTimestamp: time.Date(2024, time.February, 20, 0, 0, 0, 0, time.UTC),
+			subStart:       time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC),
+			periodStart:    time.Date(2024, time.March, 15, 0, 0, 0, 0, time.UTC), // Current period
+			periodEnd:      time.Date(2024, time.April, 15, 0, 0, 0, 0, time.UTC),
+			anchor:         time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC),
+			unit:           1,
+			period:         BILLING_PERIOD_MONTHLY,
+			want:           expectedPeriodID(time.Date(2024, time.February, 15, 0, 0, 0, 0, time.UTC)),
+			wantErr:        false,
+		},
+		{
+			name:           "Monthly - Event 2 months back",
+			eventTimestamp: time.Date(2024, time.January, 20, 0, 0, 0, 0, time.UTC),
+			subStart:       time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC),
+			periodStart:    time.Date(2024, time.March, 15, 0, 0, 0, 0, time.UTC), // Current period
+			periodEnd:      time.Date(2024, time.April, 15, 0, 0, 0, 0, time.UTC),
+			anchor:         time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC),
+			unit:           1,
+			period:         BILLING_PERIOD_MONTHLY,
+			want:           expectedPeriodID(time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC)),
+			wantErr:        false,
+		},
+		{
+			name:           "Monthly - Event at exact period boundary (start)",
+			eventTimestamp: time.Date(2024, time.February, 15, 0, 0, 0, 0, time.UTC),
+			subStart:       time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC),
+			periodStart:    time.Date(2024, time.March, 15, 0, 0, 0, 0, time.UTC), // Current period
+			periodEnd:      time.Date(2024, time.April, 15, 0, 0, 0, 0, time.UTC),
+			anchor:         time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC),
+			unit:           1,
+			period:         BILLING_PERIOD_MONTHLY,
+			want:           expectedPeriodID(time.Date(2024, time.February, 15, 0, 0, 0, 0, time.UTC)),
+			wantErr:        false,
+		},
+		{
+			name:           "Monthly - Event just before period boundary",
+			eventTimestamp: time.Date(2024, time.March, 14, 23, 59, 59, 0, time.UTC),
+			subStart:       time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC),
+			periodStart:    time.Date(2024, time.March, 15, 0, 0, 0, 0, time.UTC), // Current period
+			periodEnd:      time.Date(2024, time.April, 15, 0, 0, 0, 0, time.UTC),
+			anchor:         time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC),
+			unit:           1,
+			period:         BILLING_PERIOD_MONTHLY,
+			want:           expectedPeriodID(time.Date(2024, time.February, 15, 0, 0, 0, 0, time.UTC)),
+			wantErr:        false,
+		},
+		{
+			name:           "Monthly - Month-end billing anchor with February",
+			eventTimestamp: time.Date(2024, time.February, 20, 0, 0, 0, 0, time.UTC),
+			subStart:       time.Date(2024, time.January, 31, 0, 0, 0, 0, time.UTC),
+			periodStart:    time.Date(2024, time.March, 31, 0, 0, 0, 0, time.UTC), // Current period
+			periodEnd:      time.Date(2024, time.April, 30, 0, 0, 0, 0, time.UTC),
+			anchor:         time.Date(2024, time.January, 31, 0, 0, 0, 0, time.UTC),
+			unit:           1,
+			period:         BILLING_PERIOD_MONTHLY,
+			// Feb only has 29 days in 2024 (leap year), so period runs Jan 31 - Feb 29
+			want:    expectedPeriodID(time.Date(2024, time.January, 31, 0, 0, 0, 0, time.UTC)),
+			wantErr: false,
+		},
+		{
+			name:           "Monthly - Cross year boundary past event",
+			eventTimestamp: time.Date(2023, time.December, 20, 0, 0, 0, 0, time.UTC),
+			subStart:       time.Date(2023, time.November, 15, 0, 0, 0, 0, time.UTC),
+			periodStart:    time.Date(2024, time.February, 15, 0, 0, 0, 0, time.UTC), // Current period
+			periodEnd:      time.Date(2024, time.March, 15, 0, 0, 0, 0, time.UTC),
+			anchor:         time.Date(2023, time.November, 15, 0, 0, 0, 0, time.UTC),
+			unit:           1,
+			period:         BILLING_PERIOD_MONTHLY,
+			want:           expectedPeriodID(time.Date(2023, time.December, 15, 0, 0, 0, 0, time.UTC)),
+			wantErr:        false,
+		},
+		{
+			name:           "Monthly - Bi-monthly billing (2 month unit)",
+			eventTimestamp: time.Date(2024, time.February, 20, 0, 0, 0, 0, time.UTC),
+			subStart:       time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC),
+			periodStart:    time.Date(2024, time.May, 15, 0, 0, 0, 0, time.UTC), // Current period (every 2 months)
+			periodEnd:      time.Date(2024, time.July, 15, 0, 0, 0, 0, time.UTC),
+			anchor:         time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC),
+			unit:           2,
+			period:         BILLING_PERIOD_MONTHLY,
+			// Periods: Jan 15 - Mar 15, Mar 15 - May 15, May 15 - July 15
+			want:    expectedPeriodID(time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC)),
+			wantErr: false,
+		},
+		{
+			name:           "Monthly - Different timezone (PST)",
+			eventTimestamp: time.Date(2024, time.February, 20, 5, 30, 0, 0, pst),
+			subStart:       time.Date(2024, time.January, 15, 10, 0, 0, 0, pst),
+			periodStart:    time.Date(2024, time.March, 15, 10, 0, 0, 0, pst), // Current period
+			periodEnd:      time.Date(2024, time.April, 15, 10, 0, 0, 0, pst),
+			anchor:         time.Date(2024, time.January, 15, 10, 0, 0, 0, pst),
+			unit:           1,
+			period:         BILLING_PERIOD_MONTHLY,
+			want:           expectedPeriodID(time.Date(2024, time.February, 15, 10, 0, 0, 0, pst)),
+			wantErr:        false,
+		},
+		// ===== ANNUAL BILLING - COMPREHENSIVE PAST EVENT TESTS =====
+		{
+			name:           "Annual - Event 1 year back",
+			eventTimestamp: time.Date(2023, time.June, 15, 0, 0, 0, 0, time.UTC),
+			subStart:       time.Date(2023, time.January, 15, 0, 0, 0, 0, time.UTC),
+			periodStart:    time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC), // Current period
+			periodEnd:      time.Date(2025, time.January, 15, 0, 0, 0, 0, time.UTC),
+			anchor:         time.Date(2023, time.January, 15, 0, 0, 0, 0, time.UTC),
+			unit:           1,
+			period:         BILLING_PERIOD_ANNUAL,
+			want:           expectedPeriodID(time.Date(2023, time.January, 15, 0, 0, 0, 0, time.UTC)),
+			wantErr:        false,
+		},
+		{
+			name:           "Annual - Event 2 years back",
+			eventTimestamp: time.Date(2022, time.June, 15, 0, 0, 0, 0, time.UTC),
+			subStart:       time.Date(2022, time.January, 15, 0, 0, 0, 0, time.UTC),
+			periodStart:    time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC), // Current period
+			periodEnd:      time.Date(2025, time.January, 15, 0, 0, 0, 0, time.UTC),
+			anchor:         time.Date(2022, time.January, 15, 0, 0, 0, 0, time.UTC),
+			unit:           1,
+			period:         BILLING_PERIOD_ANNUAL,
+			want:           expectedPeriodID(time.Date(2022, time.January, 15, 0, 0, 0, 0, time.UTC)),
+			wantErr:        false,
+		},
+		{
+			name:           "Annual - Leap year anchor, non-leap year event",
+			eventTimestamp: time.Date(2023, time.February, 28, 0, 0, 0, 0, time.UTC),
+			subStart:       time.Date(2020, time.February, 29, 0, 0, 0, 0, time.UTC), // Leap year start
+			periodStart:    time.Date(2024, time.February, 29, 0, 0, 0, 0, time.UTC), // Current period (leap year)
+			periodEnd:      time.Date(2025, time.February, 28, 0, 0, 0, 0, time.UTC),
+			anchor:         time.Date(2020, time.February, 29, 0, 0, 0, 0, time.UTC),
+			unit:           1,
+			period:         BILLING_PERIOD_ANNUAL,
+			// 2023 is non-leap year, so period runs from 2023-02-28 to 2024-02-29
+			want:    expectedPeriodID(time.Date(2023, time.February, 28, 0, 0, 0, 0, time.UTC)),
+			wantErr: false,
+		},
+		{
+			name:           "Annual - Bi-annual billing (2 year unit)",
+			eventTimestamp: time.Date(2023, time.June, 15, 0, 0, 0, 0, time.UTC),
+			subStart:       time.Date(2022, time.January, 15, 0, 0, 0, 0, time.UTC),
+			periodStart:    time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC), // Current period (every 2 years)
+			periodEnd:      time.Date(2026, time.January, 15, 0, 0, 0, 0, time.UTC),
+			anchor:         time.Date(2022, time.January, 15, 0, 0, 0, 0, time.UTC),
+			unit:           2,
+			period:         BILLING_PERIOD_ANNUAL,
+			// Periods: 2022-01-15 to 2024-01-15, 2024-01-15 to 2026-01-15
+			want:    expectedPeriodID(time.Date(2022, time.January, 15, 0, 0, 0, 0, time.UTC)),
+			wantErr: false,
+		},
+		{
+			name:           "Annual - Different timezone (JST)",
+			eventTimestamp: time.Date(2023, time.June, 15, 12, 30, 0, 0, jst),
+			subStart:       time.Date(2023, time.January, 15, 9, 0, 0, 0, jst),
+			periodStart:    time.Date(2024, time.January, 15, 9, 0, 0, 0, jst), // Current period
+			periodEnd:      time.Date(2025, time.January, 15, 9, 0, 0, 0, jst),
+			anchor:         time.Date(2023, time.January, 15, 9, 0, 0, 0, jst),
+			unit:           1,
+			period:         BILLING_PERIOD_ANNUAL,
+			want:           expectedPeriodID(time.Date(2023, time.January, 15, 9, 0, 0, 0, jst)),
+			wantErr:        false,
+		},
+		// ===== QUARTERLY BILLING PAST EVENT TESTS =====
+		{
+			name:           "Quarterly - Event 1 quarter back",
+			eventTimestamp: time.Date(2024, time.February, 20, 0, 0, 0, 0, time.UTC),
+			subStart:       time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC),
+			periodStart:    time.Date(2024, time.April, 15, 0, 0, 0, 0, time.UTC), // Current period
+			periodEnd:      time.Date(2024, time.July, 15, 0, 0, 0, 0, time.UTC),
+			anchor:         time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC),
+			unit:           1,
+			period:         BILLING_PERIOD_QUARTER,
+			want:           expectedPeriodID(time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC)),
+			wantErr:        false,
+		},
+		{
+			name:           "Quarterly - Event 2 quarters back",
+			eventTimestamp: time.Date(2023, time.November, 20, 0, 0, 0, 0, time.UTC),
+			subStart:       time.Date(2023, time.October, 15, 0, 0, 0, 0, time.UTC),
+			periodStart:    time.Date(2024, time.April, 15, 0, 0, 0, 0, time.UTC), // Current period
+			periodEnd:      time.Date(2024, time.July, 15, 0, 0, 0, 0, time.UTC),
+			anchor:         time.Date(2023, time.October, 15, 0, 0, 0, 0, time.UTC),
+			unit:           1,
+			period:         BILLING_PERIOD_QUARTER,
+			// Periods: Oct 15 - Jan 15, Jan 15 - Apr 15, Apr 15 - Jul 15
+			want:    expectedPeriodID(time.Date(2023, time.October, 15, 0, 0, 0, 0, time.UTC)),
+			wantErr: false,
+		},
+		// ===== EDGE CASES =====
+		{
+			name:           "Edge case - Event at subscription start",
+			eventTimestamp: time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC),
+			subStart:       time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC),
+			periodStart:    time.Date(2024, time.February, 15, 0, 0, 0, 0, time.UTC), // Current period
+			periodEnd:      time.Date(2024, time.March, 15, 0, 0, 0, 0, time.UTC),
+			anchor:         time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC),
+			unit:           1,
+			period:         BILLING_PERIOD_MONTHLY,
+			want:           expectedPeriodID(time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC)),
+			wantErr:        false,
+		},
+		{
+			name:           "Edge case - Event 1 second after subscription start",
+			eventTimestamp: time.Date(2024, time.January, 15, 0, 0, 1, 0, time.UTC),
+			subStart:       time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC),
+			periodStart:    time.Date(2024, time.February, 15, 0, 0, 0, 0, time.UTC), // Current period
+			periodEnd:      time.Date(2024, time.March, 15, 0, 0, 0, 0, time.UTC),
+			anchor:         time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC),
+			unit:           1,
+			period:         BILLING_PERIOD_MONTHLY,
+			want:           expectedPeriodID(time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC)),
+			wantErr:        false,
+		},
+		{
+			name:           "Edge case - Event microseconds before period end",
+			eventTimestamp: time.Date(2024, time.February, 14, 23, 59, 59, 999999000, time.UTC),
+			subStart:       time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC),
+			periodStart:    time.Date(2024, time.February, 15, 0, 0, 0, 0, time.UTC), // Current period
+			periodEnd:      time.Date(2024, time.March, 15, 0, 0, 0, 0, time.UTC),
+			anchor:         time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC),
+			unit:           1,
+			period:         BILLING_PERIOD_MONTHLY,
+			want:           expectedPeriodID(time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC)),
+			wantErr:        false,
+		},
+		{
+			name:           "Edge case - Multiple period units with past event",
+			eventTimestamp: time.Date(2024, time.March, 20, 0, 0, 0, 0, time.UTC),
+			subStart:       time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC),
+			periodStart:    time.Date(2024, time.July, 15, 0, 0, 0, 0, time.UTC), // Current period (every 3 months)
+			periodEnd:      time.Date(2024, time.October, 15, 0, 0, 0, 0, time.UTC),
+			anchor:         time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC),
+			unit:           3,
+			period:         BILLING_PERIOD_MONTHLY,
+			// Periods: Jan 15 - Apr 15, Apr 15 - Jul 15, Jul 15 - Oct 15
+			want:    expectedPeriodID(time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC)),
+			wantErr: false,
 		},
 	}
 

@@ -6,7 +6,9 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// InvoiceCadence is the cadence of the invoice ex ARREAR, ADVANCE, etc
+// InvoiceCadence defines when an invoice is generated relative to the billing period
+// ARREAR: Invoice generated at the end of the billing period (after service delivery)
+// ADVANCE: Invoice generated at the beginning of the billing period (before service delivery)
 type InvoiceCadence string
 
 const (
@@ -36,14 +38,15 @@ func (c InvoiceCadence) Validate() error {
 	return nil
 }
 
+// InvoiceType categorizes the purpose and nature of the invoice
 type InvoiceType string
 
 const (
-	// InvoiceTypeSubscription indicates invoice is for subscription charges
+	// InvoiceTypeSubscription indicates invoice is for recurring subscription charges
 	InvoiceTypeSubscription InvoiceType = "SUBSCRIPTION"
-	// InvoiceTypeOneOff indicates invoice is for one-time charges
+	// InvoiceTypeOneOff indicates invoice is for one-time charges or usage-based billing
 	InvoiceTypeOneOff InvoiceType = "ONE_OFF"
-	// InvoiceTypeCredit indicates invoice is for credit adjustments
+	// InvoiceTypeCredit indicates invoice is for credit adjustments or refunds
 	InvoiceTypeCredit InvoiceType = "CREDIT"
 )
 
@@ -68,14 +71,15 @@ func (t InvoiceType) Validate() error {
 	return nil
 }
 
+// InvoiceStatus represents the current state of an invoice in its lifecycle
 type InvoiceStatus string
 
 const (
-	// InvoiceStatusDraft indicates invoice is in draft state and can be modified
+	// InvoiceStatusDraft indicates invoice is in draft state and can be modified or deleted
 	InvoiceStatusDraft InvoiceStatus = "DRAFT"
-	// InvoiceStatusFinalized indicates invoice is finalized and ready for payment
+	// InvoiceStatusFinalized indicates invoice is finalized, immutable, and ready for payment
 	InvoiceStatusFinalized InvoiceStatus = "FINALIZED"
-	// InvoiceStatusVoided indicates invoice has been voided
+	// InvoiceStatusVoided indicates invoice has been voided and is no longer valid for payment
 	InvoiceStatusVoided InvoiceStatus = "VOIDED"
 )
 
@@ -100,16 +104,17 @@ func (s InvoiceStatus) Validate() error {
 	return nil
 }
 
+// InvoiceBillingReason indicates why an invoice was generated
 type InvoiceBillingReason string
 
 const (
-	// InvoiceBillingReasonSubscriptionCreate indicates invoice is for subscription creation
+	// InvoiceBillingReasonSubscriptionCreate indicates invoice is for new subscription activation
 	InvoiceBillingReasonSubscriptionCreate InvoiceBillingReason = "SUBSCRIPTION_CREATE"
-	// InvoiceBillingReasonSubscriptionCycle indicates invoice is for subscription renewal
+	// InvoiceBillingReasonSubscriptionCycle indicates invoice is for regular subscription billing cycle
 	InvoiceBillingReasonSubscriptionCycle InvoiceBillingReason = "SUBSCRIPTION_CYCLE"
-	// InvoiceBillingReasonSubscriptionUpdate indicates invoice is for subscription update
+	// InvoiceBillingReasonSubscriptionUpdate indicates invoice is for subscription changes (upgrades, downgrades)
 	InvoiceBillingReasonSubscriptionUpdate InvoiceBillingReason = "SUBSCRIPTION_UPDATE"
-	// InvoiceBillingReasonManual indicates invoice is created manually
+	// InvoiceBillingReasonManual indicates invoice was created manually by an administrator
 	InvoiceBillingReasonManual InvoiceBillingReason = "MANUAL"
 )
 
@@ -136,6 +141,7 @@ func (r InvoiceBillingReason) Validate() error {
 }
 
 const (
+	// InvoiceDefaultDueDays is the default number of days after invoice creation when payment is due
 	InvoiceDefaultDueDays = 1
 )
 
@@ -143,13 +149,41 @@ const (
 type InvoiceFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
-	InvoiceIDs        []string         `json:"invoice_ids,omitempty" form:"invoice_ids"`
-	CustomerID        string           `json:"customer_id,omitempty" form:"customer_id"`
-	SubscriptionID    string           `json:"subscription_id,omitempty" form:"subscription_id"`
-	InvoiceType       InvoiceType      `json:"invoice_type,omitempty" form:"invoice_type"`
-	InvoiceStatus     []InvoiceStatus  `json:"invoice_status,omitempty" form:"invoice_status"`
-	PaymentStatus     []PaymentStatus  `json:"payment_status,omitempty" form:"payment_status"`
-	AmountDueGt       *decimal.Decimal `json:"amount_due_gt,omitempty" form:"amount_due_gt"`
+
+	// invoice_ids restricts results to invoices with the specified IDs
+	// Use this to retrieve specific invoices when you know their exact identifiers
+	InvoiceIDs []string `json:"invoice_ids,omitempty" form:"invoice_ids"`
+
+	// customer_id filters invoices for a specific customer using FlexPrice's internal customer ID
+	// This is the ID returned by FlexPrice when creating or retrieving customers
+	CustomerID string `json:"customer_id,omitempty" form:"customer_id"`
+
+	// external_customer_id filters invoices for a customer using your system's customer identifier
+	// This is the ID you provided when creating the customer in FlexPrice
+	ExternalCustomerID string `json:"external_customer_id,omitempty" form:"external_customer_id"`
+
+	// subscription_id filters invoices generated for a specific subscription
+	// Only returns invoices that were created as part of the specified subscription's billing
+	SubscriptionID string `json:"subscription_id,omitempty" form:"subscription_id"`
+
+	// invoice_type filters by the nature of the invoice (SUBSCRIPTION, ONE_OFF, or CREDIT)
+	// Use this to separate recurring charges from one-time fees or credit adjustments
+	InvoiceType InvoiceType `json:"invoice_type,omitempty" form:"invoice_type"`
+
+	// invoice_status filters by the current state of invoices in their lifecycle
+	// Multiple statuses can be specified to include invoices in any of the listed states
+	InvoiceStatus []InvoiceStatus `json:"invoice_status,omitempty" form:"invoice_status"`
+
+	// payment_status filters by the payment state of invoices
+	// Multiple statuses can be specified to include invoices with any of the listed payment states
+	PaymentStatus []PaymentStatus `json:"payment_status,omitempty" form:"payment_status"`
+
+	// amount_due_gt filters invoices with a total amount due greater than the specified value
+	// Useful for finding invoices above a certain threshold or identifying high-value invoices
+	AmountDueGt *decimal.Decimal `json:"amount_due_gt,omitempty" form:"amount_due_gt"`
+
+	// amount_remaining_gt filters invoices with an outstanding balance greater than the specified value
+	// Useful for finding invoices that still have significant unpaid amounts
 	AmountRemainingGt *decimal.Decimal `json:"amount_remaining_gt,omitempty" form:"amount_remaining_gt"`
 }
 
@@ -167,7 +201,6 @@ func NewNoLimitInvoiceFilter() *InvoiceFilter {
 	}
 }
 
-// Validate validates the invoice filter
 func (f *InvoiceFilter) Validate() error {
 	if f.QueryFilter != nil {
 		if err := f.QueryFilter.Validate(); err != nil {

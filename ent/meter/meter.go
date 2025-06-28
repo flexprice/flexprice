@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/flexprice/flexprice/ent/schema"
 )
 
@@ -38,8 +39,17 @@ const (
 	FieldFilters = "filters"
 	// FieldResetUsage holds the string denoting the reset_usage field in the database.
 	FieldResetUsage = "reset_usage"
+	// EdgeCostsheet holds the string denoting the costsheet edge name in mutations.
+	EdgeCostsheet = "costsheet"
 	// Table holds the table name of the meter in the database.
 	Table = "meters"
+	// CostsheetTable is the table that holds the costsheet relation/edge.
+	CostsheetTable = "costsheet"
+	// CostsheetInverseTable is the table name for the Costsheet entity.
+	// It exists in this package in order to avoid circular dependency with the "costsheet" package.
+	CostsheetInverseTable = "costsheet"
+	// CostsheetColumn is the table column denoting the costsheet relation/edge.
+	CostsheetColumn = "meter_id"
 )
 
 // Columns holds all SQL columns for meter fields.
@@ -150,4 +160,25 @@ func ByName(opts ...sql.OrderTermOption) OrderOption {
 // ByResetUsage orders the results by the reset_usage field.
 func ByResetUsage(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldResetUsage, opts...).ToFunc()
+}
+
+// ByCostsheetCount orders the results by costsheet count.
+func ByCostsheetCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newCostsheetStep(), opts...)
+	}
+}
+
+// ByCostsheet orders the results by costsheet terms.
+func ByCostsheet(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newCostsheetStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+func newCostsheetStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(CostsheetInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, CostsheetTable, CostsheetColumn),
+	)
 }

@@ -175,7 +175,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	}
 
 	// Calculate the first billing period end date
-	nextBillingDate, err := types.NextBillingDate(sub.StartDate, sub.BillingAnchor, sub.BillingPeriodCount, sub.BillingPeriod)
+	nextBillingDate, err := types.NextBillingDate(sub.StartDate, sub.BillingAnchor, sub.BillingPeriodCount, sub.BillingPeriod, sub.EndDate)
 	if err != nil {
 		return nil, err
 	}
@@ -259,8 +259,39 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			return err
 		}
 
-		// Create credit grants
-		err = s.handleCreditGrants(ctx, sub, req.CreditGrants)
+		// handle if plan has credit grants
+		planCreditGrants, err := s.CreditGrantRepo.GetByPlan(ctx, plan.ID)
+		if err != nil {
+			return err
+		}
+
+		// add credit grants from request to the list
+		creditGrantRequests := make([]dto.CreateCreditGrantRequest, 0)
+		creditGrantRequests = append(creditGrantRequests, req.CreditGrants...)
+
+		// if plan has credit grants, add them to the request
+		if len(planCreditGrants) > 0 {
+			for _, cg := range planCreditGrants {
+				creditGrantRequests = append(creditGrantRequests, dto.CreateCreditGrantRequest{
+					Name:                   cg.Name,
+					Scope:                  types.CreditGrantScopeSubscription,
+					Credits:                cg.Credits,
+					Currency:               cg.Currency,
+					Cadence:                cg.Cadence,
+					ExpirationType:         cg.ExpirationType,
+					Priority:               cg.Priority,
+					SubscriptionID:         lo.ToPtr(sub.ID),
+					Period:                 cg.Period,
+					ExpirationDuration:     cg.ExpirationDuration,
+					ExpirationDurationUnit: cg.ExpirationDurationUnit,
+					Metadata:               cg.Metadata,
+					PeriodCount:            cg.PeriodCount,
+				})
+			}
+		}
+
+		// handle credit grants
+		err = s.handleCreditGrants(ctx, sub, creditGrantRequests)
 		if err != nil {
 			return err
 		}
@@ -305,23 +336,20 @@ func (s *subscriptionService) handleCreditGrants(
 		return nil
 	}
 
-	creditGrantService := NewCreditGrantService(s.CreditGrantRepo, s.PlanRepo, s.SubRepo, s.Logger)
+	creditGrantService := NewCreditGrantService(s.ServiceParams)
 
 	s.Logger.Infow("processing credit grants for subscription",
 		"subscription_id", subscription.ID,
 		"credit_grants_count", len(creditGrantRequests))
 
-	// Create credit grants
-	creditGrants := make([]*dto.CreditGrantResponse, 0, len(creditGrantRequests))
+	// Create and apply credit grants
 	for _, grantReq := range creditGrantRequests {
 		// Ensure subscription ID is set and scope is SUBSCRIPTION
 		grantReq.SubscriptionID = &subscription.ID
 		grantReq.Scope = types.CreditGrantScopeSubscription
-
-		// Use same plan ID as subscription
 		grantReq.PlanID = &subscription.PlanID
 
-		// Save credit grant in DB
+		// Create credit grant in DB
 		createdGrant, err := creditGrantService.CreateCreditGrant(ctx, grantReq)
 		if err != nil {
 			return ierr.WithError(err).
@@ -333,108 +361,35 @@ func (s *subscriptionService) handleCreditGrants(
 				Mark(ierr.ErrDatabase)
 		}
 
-		creditGrants = append(creditGrants, createdGrant)
-	}
-
-	if len(creditGrants) == 0 {
-		return nil
-	}
-
-	walletService := NewWalletService(s.ServiceParams)
-	// find the matching wallet for top up
-	wallets, err := walletService.GetWalletsByCustomerID(ctx, subscription.CustomerID)
-	if err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to get wallet for top up").
-			Mark(ierr.ErrDatabase)
-	}
-
-	sort.Slice(wallets, func(i, j int) bool {
-		return wallets[i].CreatedAt.After(wallets[j].CreatedAt)
-	})
-
-	var selectedWallet *dto.WalletResponse
-	for _, w := range wallets {
-		if types.IsMatchingCurrency(w.Currency, subscription.Currency) {
-			selectedWallet = w
-			break
+		// Apply the credit grant using the new simplified method
+		metadata := types.Metadata{
+			"created_during": "subscription_creation",
+			"grant_name":     createdGrant.Name,
 		}
-	}
 
-	if selectedWallet == nil {
-		// create a new wallet
-		walletReq := &dto.CreateWalletRequest{
-			Name:       "Subscription Wallet",
-			CustomerID: subscription.CustomerID,
-			Currency:   subscription.Currency,
-		}
-		selectedWallet, err = walletService.CreateWallet(ctx, walletReq)
+		err = creditGrantService.ApplyCreditGrant(
+			ctx,
+			createdGrant.CreditGrant,
+			subscription,
+			metadata,
+		)
+
 		if err != nil {
 			return ierr.WithError(err).
-				WithHint("Failed to create wallet for top up").
-				Mark(ierr.ErrDatabase)
-		}
-	}
-
-	if selectedWallet == nil {
-		return ierr.NewError("no wallet found for top up").
-			WithHint("No wallet found for the subscription currency").
-			Mark(ierr.ErrValidation)
-	}
-
-	// Now create wallet top-ups for each credit grant
-	for _, grant := range creditGrants {
-		// Calculate expiry date if needed
-		var expiryDate *time.Time
-
-		if grant.ExpirationType == types.CreditGrantExpiryTypeNever {
-			expiryDate = nil
-		}
-
-		if grant.ExpirationType == types.CreditGrantExpiryTypeDuration {
-			if grant.ExpirationDurationUnit != nil && grant.ExpirationDuration != nil && *grant.ExpirationDuration > 0 {
-				switch *grant.ExpirationDurationUnit {
-				case types.CreditGrantExpiryDurationUnitDays:
-					expiry := subscription.StartDate.AddDate(0, 0, *grant.ExpirationDuration)
-					expiryDate = &expiry
-				case types.CreditGrantExpiryDurationUnitWeeks:
-					expiry := subscription.StartDate.AddDate(0, 0, *grant.ExpirationDuration*7)
-					expiryDate = &expiry
-				case types.CreditGrantExpiryDurationUnitMonths:
-					expiry := subscription.StartDate.AddDate(0, *grant.ExpirationDuration, 0)
-					expiryDate = &expiry
-				case types.CreditGrantExpiryDurationUnitYears:
-					expiry := subscription.StartDate.AddDate(*grant.ExpirationDuration, 0, 0)
-					expiryDate = &expiry
-				}
-			}
-		}
-
-		if grant.ExpirationType == types.CreditGrantExpiryTypeBillingCycle {
-			expiryDate = &subscription.CurrentPeriodEnd
-		}
-
-		// Create a wallet top-up
-		topupReq := &dto.TopUpWalletRequest{
-			CreditsToAdd:      grant.Credits,
-			TransactionReason: types.TransactionReasonSubscriptionCredit,
-			ExpiryDateUTC:     expiryDate,
-			Priority:          grant.Priority,
-			IdempotencyKey:    lo.ToPtr(grant.ID),
-		}
-
-		// Create the wallet top-up
-		_, err := walletService.TopUpWallet(ctx, selectedWallet.ID, topupReq)
-		if err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to create wallet top-up for credit grant").
+				WithHint("Failed to apply credit grant for subscription").
 				WithReportableDetails(map[string]interface{}{
 					"subscription_id": subscription.ID,
-					"grant_id":        grant.ID,
-					"grant_name":      grant.Name,
+					"grant_id":        createdGrant.ID,
+					"grant_name":      createdGrant.Name,
 				}).
 				Mark(ierr.ErrDatabase)
 		}
+
+		s.Logger.Infow("successfully processed credit grant for subscription",
+			"subscription_id", subscription.ID,
+			"grant_id", createdGrant.ID,
+			"grant_name", createdGrant.Name,
+			"amount", createdGrant.Credits)
 	}
 
 	return nil
@@ -459,7 +414,7 @@ func (s *subscriptionService) GetSubscription(ctx context.Context, id string) (*
 	}
 
 	// expand plan
-	planService := NewPlanService(s.DB, s.PlanRepo, s.PriceRepo, s.SubRepo, s.MeterRepo, s.EntitlementRepo, s.FeatureRepo, s.Logger)
+	planService := NewPlanService(s.ServiceParams)
 
 	plan, err := planService.GetPlan(ctx, subscription.PlanID)
 	if err != nil {
@@ -518,7 +473,7 @@ func (s *subscriptionService) CancelSubscription(ctx context.Context, id string,
 }
 
 func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *types.SubscriptionFilter) (*dto.ListSubscriptionsResponse, error) {
-	planService := NewPlanService(s.DB, s.PlanRepo, s.PriceRepo, s.SubRepo, s.MeterRepo, s.EntitlementRepo, s.FeatureRepo, s.Logger)
+	planService := NewPlanService(s.ServiceParams)
 
 	if filter == nil {
 		filter = types.NewSubscriptionFilter()
@@ -748,7 +703,9 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 	// TODO: should add validation to ensure that same subscription does not have multiple line items with the same meterID
 	for _, request := range meterUsageRequests {
 		meterID := request.MeterID
-		usage, ok := usageMap[meterID]
+		priceID := request.PriceID
+		usage, ok := usageMap[priceID]
+
 		if !ok {
 			continue
 		}
@@ -1028,6 +985,9 @@ func (s *subscriptionService) UpdateBillingPeriods(ctx context.Context) (*dto.Su
 
 /// Helpers
 
+// we get each subscription picked by the cron where the current period end is before now
+// and we process the subscription period to create invoices for the passed period
+// and decide next period start and end or cancel the subscription if it has ended
 func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub *subscription.Subscription, now time.Time) error {
 	// Skip processing for paused subscriptions
 	if sub.SubscriptionStatus == types.SubscriptionStatusPaused {
@@ -1135,6 +1095,8 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 		}
 	}
 
+	// TODO: Check if subscription has ended and should be cancelled
+
 	// Initialize services
 	invoiceService := NewInvoiceService(s.ServiceParams)
 
@@ -1154,9 +1116,15 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 		end:   currentEnd,
 	})
 
+	// isLastPeriod := false
+	// if sub.EndDate != nil && currentEnd.Equal(*sub.EndDate) {
+	// 	isLastPeriod = true
+	// }
+
+	// Generate periods but respect subscription end date
 	for currentEnd.Before(now) {
 		nextStart := currentEnd
-		nextEnd, err := types.NextBillingDate(nextStart, sub.BillingAnchor, sub.BillingPeriodCount, sub.BillingPeriod)
+		nextEnd, err := types.NextBillingDate(nextStart, sub.BillingAnchor, sub.BillingPeriodCount, sub.BillingPeriod, sub.EndDate)
 		if err != nil {
 			s.Logger.Errorw("failed to calculate next billing date",
 				"subscription_id", sub.ID,
@@ -1173,6 +1141,16 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 			start: nextStart,
 			end:   nextEnd,
 		})
+
+		// in case of end date reached or next end is equal to current end, we break the loop
+		// nextEnd will be equal to currentEnd in case of end date reached
+		if nextEnd.Equal(currentEnd) {
+			s.Logger.Infow("stopped period generation - reached subscription end date",
+				"subscription_id", sub.ID,
+				"end_date", sub.EndDate,
+				"final_period_end", currentEnd)
+			break
+		}
 
 		currentEnd = nextEnd
 	}
@@ -1216,6 +1194,17 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 				sub.CancelledAt = sub.CancelAt
 				break
 			}
+
+			// Check if this period end matches the subscription end date
+			if sub.EndDate != nil && period.end.Equal(*sub.EndDate) {
+				sub.SubscriptionStatus = types.SubscriptionStatusCancelled
+				sub.CancelledAt = sub.EndDate
+				s.Logger.Infow("will cancel subscription at end of this period",
+					"subscription_id", sub.ID,
+					"period_end", period.end,
+					"end_date", *sub.EndDate)
+				break
+			}
 		}
 
 		// Update to the new current period (last period)
@@ -1227,6 +1216,16 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 		if sub.CancelAtPeriodEnd && sub.CancelAt != nil && !sub.CancelAt.After(newPeriod.end) {
 			sub.SubscriptionStatus = types.SubscriptionStatusCancelled
 			sub.CancelledAt = sub.CancelAt
+		}
+
+		// Check if the new period end matches the subscription end date
+		if sub.EndDate != nil && newPeriod.end.Equal(*sub.EndDate) {
+			sub.SubscriptionStatus = types.SubscriptionStatusCancelled
+			sub.CancelledAt = sub.EndDate
+			s.Logger.Infow("subscription will be cancelled at new period end (end date reached)",
+				"subscription_id", sub.ID,
+				"new_period_end", newPeriod.end,
+				"end_date", *sub.EndDate)
 		}
 
 		// Update the subscription
@@ -1241,7 +1240,8 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 			"new_period_start", sub.CurrentPeriodStart,
 			"new_period_end", sub.CurrentPeriodEnd,
 			"process_up_to", now,
-			"periods_processed", len(periods)-1)
+			"periods_processed", len(periods)-1,
+			"has_end_date", sub.EndDate != nil)
 
 		return nil
 	})
@@ -1858,11 +1858,13 @@ func (s *subscriptionService) publishInternalWebhookEvent(ctx context.Context, e
 	}
 
 	webhookEvent := &types.WebhookEvent{
-		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WEBHOOK_EVENT),
-		EventName: eventName,
-		TenantID:  types.GetTenantID(ctx),
-		Timestamp: time.Now().UTC(),
-		Payload:   json.RawMessage(webhookPayload),
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WEBHOOK_EVENT),
+		EventName:     eventName,
+		TenantID:      types.GetTenantID(ctx),
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		UserID:        types.GetUserID(ctx),
+		Timestamp:     time.Now().UTC(),
+		Payload:       json.RawMessage(webhookPayload),
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
 		s.Logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
@@ -2422,4 +2424,57 @@ func (s *subscriptionService) AddSubscriptionPhase(ctx context.Context, subscrip
 
 	// Schedule exists, add the phase to it
 	return s.AddSchedulePhase(ctx, schedule.ID, req)
+}
+
+// TODO: This is not used anywhere
+// HandleSubscriptionStateChange handles subscription state changes for credit grants
+func (s *subscriptionService) HandleSubscriptionStateChange(ctx context.Context, subscriptionID string, oldStatus, newStatus types.SubscriptionStatus) error {
+	s.Logger.Infow("handling subscription state change for credit grants",
+		"subscription_id", subscriptionID,
+		"old_status", oldStatus,
+		"new_status", newStatus)
+
+	switch {
+	case newStatus == types.SubscriptionStatusActive && oldStatus != types.SubscriptionStatusActive:
+		return s.handleSubscriptionActivation(ctx, subscriptionID)
+
+	case newStatus == types.SubscriptionStatusCancelled:
+		return s.handleSubscriptionCancellation(ctx, subscriptionID)
+
+	case newStatus == types.SubscriptionStatusPaused:
+		return s.handleSubscriptionPause(ctx, subscriptionID)
+
+	case oldStatus == types.SubscriptionStatusPaused && newStatus == types.SubscriptionStatusActive:
+		return s.handleSubscriptionResume(ctx, subscriptionID)
+
+	default:
+		s.Logger.Debugw("no action required for subscription state change",
+			"subscription_id", subscriptionID,
+			"old_status", oldStatus,
+			"new_status", newStatus)
+	}
+
+	return nil
+}
+
+func (s *subscriptionService) handleSubscriptionActivation(ctx context.Context, subscriptionID string) error {
+	// Process any deferred credits and trigger immediate processing for newly active subscription
+	return nil
+}
+
+func (s *subscriptionService) handleSubscriptionCancellation(ctx context.Context, subscriptionID string) error {
+	// Future: Cancel scheduled applications if we implement full application tracking
+	s.Logger.Infow("subscription cancelled, future recurring grants will not be processed", "subscription_id", subscriptionID)
+	return nil
+}
+
+func (s *subscriptionService) handleSubscriptionPause(ctx context.Context, subscriptionID string) error {
+	// Future: Defer scheduled applications if we implement full application tracking
+	s.Logger.Infow("subscription paused, recurring grants will be deferred", "subscription_id", subscriptionID)
+	return nil
+}
+
+func (s *subscriptionService) handleSubscriptionResume(ctx context.Context, subscriptionID string) error {
+	// Process any missed recurring grants
+	return nil
 }

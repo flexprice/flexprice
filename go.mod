@@ -31,9 +31,11 @@ require (
 	github.com/sourcegraph/conc v0.3.0
 	github.com/spf13/viper v1.19.0
 	github.com/stretchr/testify v1.10.0
+	github.com/svix/svix-webhooks v1.68.0
 	github.com/swaggo/files v1.0.1
 	github.com/swaggo/gin-swagger v1.6.0
 	github.com/swaggo/swag v1.16.4
+	github.com/teris-io/shortid v0.0.0-20220617161101-71ec9f2aa569
 	go.temporal.io/sdk v1.32.1
 	go.uber.org/fx v1.23.0
 	go.uber.org/zap v1.27.0

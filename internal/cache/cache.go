@@ -44,6 +44,7 @@ const (
 	PrefixEntitlement            = "entitlement:v1:"
 	PrefixPayment                = "payment:v1:"
 	PrefixCreditGrantApplication = "creditgrantapplication:v1:"
+	PrefixCreditNote             = "creditnote:v1:"
 )
 
 // GenerateKey creates a cache key from a prefix and a set of parameters

@@ -648,16 +648,7 @@ func (s *onboardingService) createDefaultPlans(ctx context.Context, features []*
 	s.Logger.Infow("creating default plans for Cursor pricing model")
 
 	// Create a plan service instance with all required dependencies
-	planService := NewPlanService(
-		s.DB,
-		s.PlanRepo,
-		s.PriceRepo,
-		s.SubRepo,
-		s.MeterRepo,
-		s.EntitlementRepo,
-		s.FeatureRepo,
-		s.Logger,
-	)
+	planService := NewPlanService(s.ServiceParams)
 
 	// Define plans based on Cursor pricing
 	plans := []*dto.CreatePlanRequest{
