@@ -178,17 +178,17 @@ func (s *taxRateService) UpdateTaxRate(ctx context.Context, id string, req dto.U
 
 	// Handle percentage and fixedValue fields
 	if req.Percentage != nil {
-		newTaxRate.Percentage = *req.Percentage
-		newTaxRate.FixedValue = 0 // If percentage is set, zero out fixedValue
+		newTaxRate.Percentage = decimal.NewFromFloat(*req.Percentage)
+		newTaxRate.FixedValue = decimal.Zero // If percentage is set, zero out fixedValue
 	}
 
 	if req.FixedValue != nil {
-		newTaxRate.FixedValue = *req.FixedValue
-		newTaxRate.Percentage = 0 // If fixedValue is set, zero out percentage
+		newTaxRate.FixedValue = decimal.NewFromFloat(*req.FixedValue)
+		newTaxRate.Percentage = decimal.Zero // If fixedValue is set, zero out percentage
 	}
 
 	// Ensure at least one of percentage or fixedValue is non-zero
-	if newTaxRate.Percentage == 0 && newTaxRate.FixedValue == 0 {
+	if newTaxRate.Percentage.IsZero() && newTaxRate.FixedValue.IsZero() {
 		return nil, ierr.NewError("either percentage or fixed_value must be provided").
 			WithHint("Tax rate must have either a percentage or fixed value").
 			Mark(ierr.ErrValidation)
@@ -289,10 +289,10 @@ func (s *taxRateService) CalculateLineTaxes(ctx context.Context, netAmount decim
 		}
 
 		// Get percentage value, defaulting to 0 if not set
-		percentage := decimal.NewFromFloat(rate.Percentage)
+		percentage := rate.Percentage
 
 		// Get fixed value, defaulting to 0 if not set
-		fixedValue := decimal.NewFromFloat(rate.FixedValue)
+		fixedValue := rate.FixedValue
 
 		// Calculate tax amount (percentage-based + fixed)
 		percentageTax := taxBase.Mul(percentage.Div(decimal.NewFromInt(100))) // Convert to decimal
