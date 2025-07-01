@@ -281,7 +281,56 @@ func (s *WalletServiceSuite) setupTestData() {
 		BillingPeriodCount: 1,
 		SubscriptionStatus: types.SubscriptionStatusActive,
 		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
-		LineItems:          []*subscription.SubscriptionLineItem{},
+		LineItems: []*subscription.SubscriptionLineItem{
+			{
+				CustomerID:       s.testData.customer.ID,
+				PlanID:           s.testData.plan.ID,
+				PlanDisplayName:  s.testData.plan.Name,
+				PriceID:          s.testData.prices.storage.ID,
+				PriceType:        types.PRICE_TYPE_USAGE,
+				MeterID:          s.testData.meters.storage.ID,
+				MeterDisplayName: s.testData.meters.storage.Name,
+				DisplayName:      s.testData.meters.storage.Name,
+				Quantity:         decimal.NewFromInt(0),
+				BillingPeriod:    types.BILLING_PERIOD_MONTHLY,
+				StartDate:        s.testData.now.Add(-24 * time.Hour),
+				EndDate:          s.testData.now.Add(6 * 24 * time.Hour),
+				Metadata:         map[string]string{},
+				BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+			},
+			{
+				CustomerID:       s.testData.customer.ID,
+				PlanID:           s.testData.plan.ID,
+				PlanDisplayName:  s.testData.plan.Name,
+				PriceID:          s.testData.prices.storageArchive.ID,
+				PriceType:        types.PRICE_TYPE_USAGE,
+				MeterID:          s.testData.meters.storageArchive.ID,
+				MeterDisplayName: s.testData.meters.storageArchive.Name,
+				DisplayName:      s.testData.meters.storageArchive.Name,
+				Quantity:         decimal.NewFromInt(0),
+				BillingPeriod:    types.BILLING_PERIOD_MONTHLY,
+				StartDate:        s.testData.now.Add(-24 * time.Hour),
+				EndDate:          s.testData.now.Add(6 * 24 * time.Hour),
+				Metadata:         map[string]string{},
+				BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+			},
+			{
+				CustomerID:       s.testData.customer.ID,
+				PlanID:           s.testData.plan.ID,
+				PlanDisplayName:  s.testData.plan.Name,
+				PriceID:          s.testData.prices.apiCalls.ID,
+				PriceType:        types.PRICE_TYPE_USAGE,
+				MeterID:          s.testData.meters.apiCalls.ID,
+				MeterDisplayName: s.testData.meters.apiCalls.Name,
+				DisplayName:      s.testData.meters.apiCalls.Name,
+				Quantity:         decimal.NewFromInt(0),
+				BillingPeriod:    types.BILLING_PERIOD_MONTHLY,
+				StartDate:        s.testData.now.Add(-24 * time.Hour),
+				EndDate:          s.testData.now.Add(6 * 24 * time.Hour),
+				Metadata:         map[string]string{},
+				BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+			},
+		},
 	}
 	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(s.GetContext(), s.testData.subscription, s.testData.subscription.LineItems))
 
@@ -298,30 +347,35 @@ func (s *WalletServiceSuite) setupTestData() {
 		s.NoError(s.GetStores().EventRepo.InsertEvent(s.GetContext(), event))
 	}
 
-	storageEvents := []struct {
-		bytes float64
-		tier  string
-	}{
-		{bytes: 100, tier: "standard"},
-		{bytes: 200, tier: "standard"},
-		{bytes: 300, tier: "archive"},
+	// Create storage events
+	storageEvent := &events.Event{
+		ID:                 s.GetUUID(),
+		TenantID:           s.testData.subscription.TenantID,
+		EventName:          s.testData.meters.storage.EventName,
+		ExternalCustomerID: s.testData.customer.ExternalID,
+		Timestamp:          s.testData.now.Add(-1 * time.Hour),
+		Properties: map[string]interface{}{
+			"bytes_used": 315,
+			"region":     "us-east-1",
+			"tier":       "standard",
+		},
 	}
+	s.NoError(s.GetStores().EventRepo.InsertEvent(s.GetContext(), storageEvent))
 
-	for _, se := range storageEvents {
-		event := &events.Event{
-			ID:                 s.GetUUID(),
-			TenantID:           s.testData.subscription.TenantID,
-			EventName:          s.testData.meters.storage.EventName,
-			ExternalCustomerID: s.testData.customer.ExternalID,
-			Timestamp:          s.testData.now.Add(-30 * time.Minute),
-			Properties: map[string]interface{}{
-				"bytes_used": se.bytes,
-				"region":     "us-east-1",
-				"tier":       se.tier,
-			},
-		}
-		s.NoError(s.GetStores().EventRepo.InsertEvent(s.GetContext(), event))
+	// Create storage archive events
+	storageArchiveEvent := &events.Event{
+		ID:                 s.GetUUID(),
+		TenantID:           s.testData.subscription.TenantID,
+		EventName:          s.testData.meters.storageArchive.EventName,
+		ExternalCustomerID: s.testData.customer.ExternalID,
+		Timestamp:          s.testData.now.Add(-1 * time.Hour),
+		Properties: map[string]interface{}{
+			"bytes_used": 250,
+			"region":     "us-east-1",
+			"tier":       "archive",
+		},
 	}
+	s.NoError(s.GetStores().EventRepo.InsertEvent(s.GetContext(), storageArchiveEvent))
 
 	// Setup subscriptions with different currencies
 	subscriptions := []*subscription.Subscription{
@@ -717,9 +771,9 @@ func (s *WalletServiceSuite) TestGetWalletBalance() {
 		{
 			name:                    "Success - Active wallet with matching currency",
 			walletID:                s.testData.wallet.ID,
-			expectedRealTimeBalance: decimal.NewFromInt(711),  // 1000 - 250 - 39
-			expectedUnpaidAmount:    decimal.NewFromInt(250),  // 100 + 150 (USD invoices only)
-			expectedCurrentUsage:    decimal.NewFromFloat(39), // Total usage amount from billing service
+			expectedRealTimeBalance: decimal.NewFromInt(705), // 1000 - 250 - 45
+			expectedUnpaidAmount:    decimal.NewFromInt(250), // 100 + 150 (USD invoices only)
+			expectedCurrentUsage:    decimal.NewFromInt(45),  // Total usage amount from billing service
 		},
 		{
 			name:          "Error - Invalid wallet ID",
@@ -1494,9 +1548,9 @@ func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
 				_, err := s.GetStores().EntitlementRepo.Create(s.GetContext(), entitlement)
 				s.NoError(err)
 			},
-			expectedRealTimeBalance: decimal.NewFromInt(711), // 1000 - 250 - 39
+			expectedRealTimeBalance: decimal.NewFromInt(750), // 1000 - 250 - 0
 			expectedUnpaidAmount:    decimal.NewFromInt(250), // 100 + 150 (USD invoices)
-			expectedCurrentUsage:    decimal.NewFromInt(39),  // Actual usage amount from billing service
+			expectedCurrentUsage:    decimal.NewFromInt(0),   // No usage charges due to entitlement
 			wantErr:                 false,
 		},
 		{
@@ -1516,9 +1570,9 @@ func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
 				_, err := s.GetStores().EntitlementRepo.Create(s.GetContext(), entitlement)
 				s.NoError(err)
 			},
-			expectedRealTimeBalance: decimal.NewFromInt(711), // 1000 - 250 - 39
+			expectedRealTimeBalance: decimal.NewFromInt(750), // 1000 - 250 - 0
 			expectedUnpaidAmount:    decimal.NewFromInt(250), // 100 + 150 (USD invoices)
-			expectedCurrentUsage:    decimal.NewFromInt(39),  // Actual usage amount from billing service
+			expectedCurrentUsage:    decimal.NewFromInt(0),   // No usage charges due to entitlement
 			wantErr:                 false,
 		},
 		{
@@ -1538,9 +1592,9 @@ func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
 				_, err := s.GetStores().EntitlementRepo.Create(s.GetContext(), entitlement)
 				s.NoError(err)
 			},
-			expectedRealTimeBalance: decimal.NewFromInt(711), // 1000 - 250 - 39
+			expectedRealTimeBalance: decimal.NewFromInt(750), // 1000 - 250 - 0
 			expectedUnpaidAmount:    decimal.NewFromInt(250), // 100 + 150 (USD invoices)
-			expectedCurrentUsage:    decimal.NewFromInt(39),  // Actual usage amount from billing service
+			expectedCurrentUsage:    decimal.NewFromInt(0),   // No usage charges due to entitlement
 			wantErr:                 false,
 		},
 		{
@@ -1560,9 +1614,9 @@ func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
 				_, err := s.GetStores().EntitlementRepo.Create(s.GetContext(), entitlement)
 				s.NoError(err)
 			},
-			expectedRealTimeBalance: decimal.NewFromInt(711), // 1000 - 250 - 39
+			expectedRealTimeBalance: decimal.NewFromInt(750), // 1000 - 250 - 0
 			expectedUnpaidAmount:    decimal.NewFromInt(250), // 100 + 150 (USD invoices)
-			expectedCurrentUsage:    decimal.NewFromInt(39),  // Actual usage amount from billing service
+			expectedCurrentUsage:    decimal.NewFromInt(0),   // No usage charges due to entitlement
 			wantErr:                 false,
 		},
 	}
