@@ -193,19 +193,28 @@ func (s *billingService) CalculateUsageCharges(
 			matchingEntitlement, ok := entitlementsByPlanMeterID[item.PlanID][item.MeterID]
 
 			// Apply entitlement adjustments only for non-overage charges
-			if !matchingCharge.IsOverage && ok && matchingEntitlement != nil {
+			if !matchingCharge.IsOverage && ok {
 				if matchingEntitlement.UsageLimit != nil {
 					// usage limit is set, so we decrement the usage quantity by the already entitled usage
 					usageAllowed := decimal.NewFromFloat(float64(*matchingEntitlement.UsageLimit))
 					adjustedQuantity := decimal.NewFromFloat(matchingCharge.Quantity).Sub(usageAllowed)
 					quantityForCalculation = decimal.Max(adjustedQuantity, decimal.Zero)
+
+					// Recalculate the amount based on the adjusted quantity
+					if matchingCharge.Price != nil {
+						// For tiered pricing, we need to use the price service to calculate the cost
+						priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.Logger)
+						adjustedAmount := priceService.CalculateCost(ctx, matchingCharge.Price, quantityForCalculation)
+						matchingCharge.Amount = adjustedAmount.InexactFloat64()
+					}
 				} else {
 					// unlimited usage allowed, so we set the usage quantity for calculation to 0
 					quantityForCalculation = decimal.Zero
+					matchingCharge.Amount = 0
 				}
 			}
 
-			// Recompute the amount based on the quantity for calculation
+			// Add the amount to total usage cost
 			lineItemAmount := decimal.NewFromFloat(matchingCharge.Amount)
 			totalUsageCost = totalUsageCost.Add(lineItemAmount)
 
