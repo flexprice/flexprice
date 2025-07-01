@@ -447,9 +447,25 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 			continue
 		}
 
-		if usageResp.Amount > 0 {
-			currentPeriodUsage = currentPeriodUsage.Add(decimal.NewFromFloat(usageResp.Amount))
+		// Use billing service to calculate charges with entitlements
+		billingService := NewBillingService(s.ServiceParams)
+		_, totalUsageAmount, err := billingService.CalculateUsageCharges(
+			ctx,
+			sub.Subscription,
+			usageResp,
+			sub.Subscription.CurrentPeriodStart,
+			sub.Subscription.CurrentPeriodEnd,
+		)
+		if err != nil {
+			s.Logger.Errorw("failed to calculate adjusted usage charges",
+				"wallet_id", walletID,
+				"subscription_id", sub.ID,
+				"error", err,
+			)
+			continue
 		}
+
+		currentPeriodUsage = currentPeriodUsage.Add(totalUsageAmount)
 	}
 
 	// Calculate real-time balance:
