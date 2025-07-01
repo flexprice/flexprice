@@ -425,6 +425,10 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 	}
 
 	currentPeriodUsage := decimal.Zero
+
+	// Create billing service once before processing subscriptions
+	billingService := NewBillingService(s.ServiceParams)
+
 	for _, sub := range subscriptionsResp.Items {
 		// Skip subscriptions with different currency
 		if !types.IsMatchingCurrency(sub.Subscription.Currency, w.Currency) {
@@ -448,7 +452,6 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 		}
 
 		// Use billing service to calculate charges with entitlements
-		billingService := NewBillingService(s.ServiceParams)
 		_, totalUsageAmount, err := billingService.CalculateUsageCharges(
 			ctx,
 			sub.Subscription,

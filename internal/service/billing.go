@@ -165,6 +165,9 @@ func (s *billingService) CalculateUsageCharges(
 		}
 	}
 
+	// Create price service once before processing charges
+	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.Logger)
+
 	// Process usage charges from line items
 	for _, item := range sub.LineItems {
 		if item.PriceType != types.PRICE_TYPE_USAGE {
@@ -203,7 +206,6 @@ func (s *billingService) CalculateUsageCharges(
 					// Recalculate the amount based on the adjusted quantity
 					if matchingCharge.Price != nil {
 						// For tiered pricing, we need to use the price service to calculate the cost
-						priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.Logger)
 						adjustedAmount := priceService.CalculateCost(ctx, matchingCharge.Price, quantityForCalculation)
 						matchingCharge.Amount = adjustedAmount.InexactFloat64()
 					}
