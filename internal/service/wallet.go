@@ -384,16 +384,25 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 	return paymentID, err
 }
 
+// GetWalletBalance calculates the real-time available balance for a wallet
+// It considers:
+// 1. Current wallet balance
+// 2. Unpaid invoices
+// 3. Current period usage (including entitlements)
 func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (*dto.WalletBalanceResponse, error) {
+	// Initialize response with zero balance as default safe state
 	response := &dto.WalletBalanceResponse{
 		RealTimeBalance: lo.ToPtr(decimal.Zero),
 	}
 
+	// Fetch wallet details from repository
 	w, err := s.WalletRepo.GetWalletByID(ctx, walletID)
 	if err != nil {
 		return nil, err
 	}
 
+	// Safety check: Return zero balance for inactive wallets
+	// This prevents any calculations on invalid wallet states
 	if w.WalletStatus != types.WalletStatusActive {
 		response.Wallet = w
 		response.RealTimeBalance = lo.ToPtr(decimal.Zero)
@@ -402,33 +411,38 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 		return response, nil
 	}
 
-	// Get invoice summary for unpaid amounts
+	// STEP 1: Get all unpaid invoices for the customer
+	// This includes any previously generated invoices that haven't been paid
 	invoiceService := NewInvoiceService(s.ServiceParams)
-
 	invoiceSummary, err := invoiceService.GetCustomerInvoiceSummary(ctx, w.CustomerID, w.Currency)
 	if err != nil {
 		return nil, err
 	}
 
-	// Get current period usage for active subscriptions
+	// STEP 2: Get all active subscriptions to calculate current usage
 	subscriptionService := NewSubscriptionService(s.ServiceParams)
 
+	// Set up filter to only get active subscriptions
 	filter := types.NewSubscriptionFilter()
 	filter.CustomerID = w.CustomerID
 	filter.SubscriptionStatus = []types.SubscriptionStatus{
 		types.SubscriptionStatusActive,
 	}
 
+	// Fetch all active subscriptions
 	subscriptionsResp, err := subscriptionService.ListSubscriptions(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
 
+	// Initialize current period usage tracker
 	currentPeriodUsage := decimal.Zero
 
-	// Create billing service once before processing subscriptions
+	// Create billing service for usage calculations
+	// This is created once to be reused across all subscriptions
 	billingService := NewBillingService(s.ServiceParams)
 
+	// STEP 3: Process each subscription to calculate total usage
 	for _, sub := range subscriptionsResp.Items {
 		// Skip subscriptions with different currency
 		if !types.IsMatchingCurrency(sub.Subscription.Currency, w.Currency) {
@@ -451,8 +465,10 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 			continue
 		}
 
-		// Use billing service to calculate charges with entitlements
-		_, totalUsageAmount, err := billingService.CalculateUsageCharges(
+		// STEP 4: Get billable amount from billing service
+		// Note: This returns what will be invoiced, which might be different
+		// from what we need to deduct from wallet
+		_, billableAmount, err := billingService.CalculateUsageCharges(
 			ctx,
 			sub.Subscription,
 			usageResp,
@@ -460,34 +476,123 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 			sub.Subscription.CurrentPeriodEnd,
 		)
 		if err != nil {
-			s.Logger.Errorw("failed to calculate adjusted usage charges",
+			s.Logger.Errorw("failed to calculate billable charges",
 				"wallet_id", walletID,
 				"subscription_id", sub.ID,
+				"raw_usage_amount", usageResp.Amount,
 				"error", err,
 			)
 			continue
 		}
 
-		currentPeriodUsage = currentPeriodUsage.Add(totalUsageAmount)
+		s.Logger.Debugw("billing service calculation details",
+			"wallet_id", walletID,
+			"subscription_id", sub.ID,
+			"raw_usage_amount", usageResp.Amount,
+			"billable_amount", billableAmount,
+			"conversion_rate", w.ConversionRate,
+			"currency", w.Currency,
+		)
+
+		// STEP 5: Calculate what to deduct from wallet
+		// We need this because billableAmount might be zero for two reasons:
+		// 1. Usage is within entitlement (don't deduct)
+		// 2. Usage will be billed later (should deduct)
+		actualUsageAmount := billableAmount
+		if billableAmount.IsZero() && usageResp.Amount > 0 {
+			// Get entitlements to determine if this is free usage or will be billed
+			entitlementService := NewEntitlementService(s.EntitlementRepo, s.PlanRepo, s.FeatureRepo, s.MeterRepo, s.Logger)
+			entitlements, err := entitlementService.GetPlanEntitlements(ctx, sub.Subscription.PlanID)
+			if err != nil {
+				s.Logger.Errorw("failed to get entitlements",
+					"wallet_id", walletID,
+					"subscription_id", sub.ID,
+					"plan_id", sub.Subscription.PlanID,
+					"error", err,
+				)
+				continue
+			}
+
+			// Find matching entitlement for this meter
+			var entitlementLimit *int64
+			for _, ent := range entitlements.Items {
+				for _, charge := range usageResp.Charges {
+					if ent.Feature.MeterID == charge.MeterID {
+						entitlementLimit = ent.UsageLimit
+						break
+					}
+				}
+				if entitlementLimit != nil {
+					break
+				}
+			}
+
+			if entitlementLimit != nil {
+				// Calculate how much usage is above entitlement
+				// This is what we'll eventually bill for
+				overage := decimal.NewFromFloat(usageResp.Amount).Sub(decimal.NewFromInt(*entitlementLimit))
+				actualUsageAmount = decimal.Max(overage, decimal.Zero)
+				s.Logger.Debugw("calculated wallet deduction for usage above entitlement",
+					"wallet_id", walletID,
+					"subscription_id", sub.ID,
+					"raw_usage_amount", usageResp.Amount,
+					"entitlement_limit", *entitlementLimit,
+					"wallet_deduction", actualUsageAmount,
+					"currency", w.Currency,
+				)
+			} else {
+				// No entitlement means all usage should be deducted
+				actualUsageAmount = decimal.NewFromFloat(usageResp.Amount)
+				s.Logger.Debugw("no entitlement found, deducting full usage from wallet",
+					"wallet_id", walletID,
+					"subscription_id", sub.ID,
+					"raw_usage_amount", usageResp.Amount,
+					"wallet_deduction", actualUsageAmount,
+					"currency", w.Currency,
+				)
+			}
+		}
+
+		// Add to current period usage for wallet balance calculation
+		currentPeriodUsage = currentPeriodUsage.Add(actualUsageAmount)
+
+		s.Logger.Debugw("updated wallet usage tracking",
+			"wallet_id", walletID,
+			"subscription_id", sub.ID,
+			"raw_usage_amount", usageResp.Amount,
+			"wallet_deduction", actualUsageAmount,
+			"running_period_usage", currentPeriodUsage,
+			"currency", w.Currency,
+		)
 	}
 
-	// Calculate real-time balance:
-	// wallet_balance - (unpaid_invoices + current_period_usage)
-	// NOTE: in future, we can add a feature to allow customers to set a threshold for real-time balance
-	// NOTE: in future we can restrict a wallet balance to be adjusted only for usage or fixed amount
+	// STEP 6: Log detailed balance calculation components
+	s.Logger.Debugw("detailed balance calculation",
+		"wallet_id", walletID,
+		"starting_balance", w.Balance,
+		"unpaid_invoices", invoiceSummary.TotalUnpaidAmount,
+		"current_period_usage", currentPeriodUsage,
+		"conversion_rate", w.ConversionRate,
+		"currency", w.Currency,
+	)
+
+	// STEP 7: Calculate final real-time balance
+	// Formula: wallet_balance - (unpaid_invoices + current_period_usage)
+	// This gives us the actual available balance considering all obligations
 	realTimeBalance := w.Balance.
 		Sub(invoiceSummary.TotalUnpaidAmount).
 		Sub(currentPeriodUsage)
 
-	s.Logger.Debugw("calculated real-time balance",
+	// Log final calculation results
+	s.Logger.Debugw("final balance calculation",
 		"wallet_id", walletID,
-		"current_balance", w.Balance,
-		"unpaid_invoices", invoiceSummary.TotalUnpaidAmount,
-		"current_period_usage", currentPeriodUsage,
 		"real_time_balance", realTimeBalance,
+		"real_time_credit_balance", s.GetCreditsFromCurrencyAmount(realTimeBalance, w.ConversionRate),
 		"currency", w.Currency,
 	)
 
+	// STEP 8: Return complete wallet balance response
+	// This includes all components used in the calculation
 	return &dto.WalletBalanceResponse{
 		Wallet:                w,
 		RealTimeBalance:       lo.ToPtr(realTimeBalance),
