@@ -1224,6 +1224,26 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithEntitlements() {
 			expectedTotalAmount: decimal.NewFromFloat(10), // Should charge for all usage (500 units at $0.02/unit)
 			wantErr:             false,
 		},
+		{
+			name: "vanilla_no_entitlements",
+			setupFunc: func() {
+				// Create test events to simulate actual usage
+				for i := 0; i < 500; i++ { // 500 units of usage
+					event := &events.Event{
+						ID:                 s.GetUUID(),
+						TenantID:           s.testData.subscription.TenantID,
+						EventName:          s.testData.meters.apiCalls.EventName,
+						ExternalCustomerID: s.testData.customer.ExternalID,
+						Timestamp:          s.testData.now.Add(-1 * time.Hour),
+						Properties:         map[string]interface{}{},
+					}
+					s.NoError(s.GetStores().EventRepo.InsertEvent(s.GetContext(), event))
+				}
+			},
+			expectedLineItems:   1,
+			expectedTotalAmount: decimal.NewFromFloat(10), // Should charge for all usage (500 units at $0.02/unit)
+			wantErr:             false,
+		},
 	}
 
 	for _, tt := range tests {
