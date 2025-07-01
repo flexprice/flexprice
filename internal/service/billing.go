@@ -195,8 +195,11 @@ func (s *billingService) CalculateUsageCharges(
 			quantityForCalculation := decimal.NewFromFloat(matchingCharge.Quantity)
 			matchingEntitlement, ok := entitlementsByPlanMeterID[item.PlanID][item.MeterID]
 
-			// Apply entitlement adjustments only for non-overage charges
-			if !matchingCharge.IsOverage && ok {
+			// Only apply entitlement adjustments if:
+			// 1. This is not an overage charge
+			// 2. There is a matching entitlement
+			// 3. The entitlement is enabled
+			if !matchingCharge.IsOverage && ok && matchingEntitlement.IsEnabled {
 				if matchingEntitlement.UsageLimit != nil {
 					// usage limit is set, so we decrement the usage quantity by the already entitled usage
 					usageAllowed := decimal.NewFromFloat(float64(*matchingEntitlement.UsageLimit))
@@ -215,6 +218,8 @@ func (s *billingService) CalculateUsageCharges(
 					matchingCharge.Amount = 0
 				}
 			}
+			// For all other cases (no entitlement, disabled entitlement, or overage),
+			// use the full quantity and calculate the amount normally
 
 			// Add the amount to total usage cost
 			lineItemAmount := decimal.NewFromFloat(matchingCharge.Amount)

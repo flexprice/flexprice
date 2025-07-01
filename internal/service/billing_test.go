@@ -6,7 +6,9 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
@@ -970,4 +972,332 @@ func (s *BillingServiceSuite) TestClassifyLineItems() {
 
 	// Verify usage charges flag
 	s.True(classification.HasUsageCharges, "Should have usage charges")
+}
+
+func (s *BillingServiceSuite) TestCalculateUsageChargesWithEntitlements() {
+	// Initialize test data
+	s.setupTestData()
+
+	// Initialize billing service
+	s.service = NewBillingService(ServiceParams{
+		Logger:          s.GetLogger(),
+		Config:          s.GetConfig(),
+		DB:              s.GetDB(),
+		SubRepo:         s.GetStores().SubscriptionRepo,
+		PlanRepo:        s.GetStores().PlanRepo,
+		PriceRepo:       s.GetStores().PriceRepo,
+		EventRepo:       s.GetStores().EventRepo,
+		MeterRepo:       s.GetStores().MeterRepo,
+		CustomerRepo:    s.GetStores().CustomerRepo,
+		InvoiceRepo:     s.GetStores().InvoiceRepo,
+		EntitlementRepo: s.GetStores().EntitlementRepo,
+		EnvironmentRepo: s.GetStores().EnvironmentRepo,
+		FeatureRepo:     s.GetStores().FeatureRepo,
+		TenantRepo:      s.GetStores().TenantRepo,
+		UserRepo:        s.GetStores().UserRepo,
+		AuthRepo:        s.GetStores().AuthRepo,
+		WalletRepo:      s.GetStores().WalletRepo,
+		PaymentRepo:     s.GetStores().PaymentRepo,
+		EventPublisher:  s.GetPublisher(),
+	})
+
+	tests := []struct {
+		name                string
+		setupFunc           func()
+		expectedLineItems   int
+		expectedTotalAmount decimal.Decimal
+		wantErr             bool
+	}{
+		{
+			name: "usage_within_entitlement_limit",
+			setupFunc: func() {
+				// Create test feature
+				testFeature := &feature.Feature{
+					ID:          "feat_test_1",
+					Name:        "Test Feature",
+					Description: "Test Feature Description",
+					Type:        types.FeatureTypeMetered,
+					MeterID:     s.testData.meters.apiCalls.ID,
+					BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
+				}
+				err := s.GetStores().FeatureRepo.Create(s.GetContext(), testFeature)
+				s.NoError(err)
+
+				// Create entitlement with usage limit
+				entitlement := &entitlement.Entitlement{
+					ID:               "ent_test_1",
+					PlanID:           s.testData.plan.ID,
+					FeatureID:        testFeature.ID,
+					FeatureType:      types.FeatureTypeMetered,
+					IsEnabled:        true,
+					UsageLimit:       lo.ToPtr(int64(1000)), // Allow 1000 units
+					UsageResetPeriod: types.BILLING_PERIOD_MONTHLY,
+					IsSoftLimit:      false,
+					BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+				}
+				_, err = s.GetStores().EntitlementRepo.Create(s.GetContext(), entitlement)
+				s.NoError(err)
+			},
+			expectedLineItems:   1,
+			expectedTotalAmount: decimal.Zero, // No charge as usage is within limit
+			wantErr:             false,
+		},
+		{
+			name: "usage_exceeds_entitlement_limit",
+			setupFunc: func() {
+				// Create test feature
+				testFeature := &feature.Feature{
+					ID:          "feat_test_2",
+					Name:        "Test Feature 2",
+					Description: "Test Feature Description 2",
+					Type:        types.FeatureTypeMetered,
+					MeterID:     s.testData.meters.apiCalls.ID,
+					BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
+				}
+				err := s.GetStores().FeatureRepo.Create(s.GetContext(), testFeature)
+				s.NoError(err)
+
+				// Create entitlement with lower usage limit
+				entitlement := &entitlement.Entitlement{
+					ID:               "ent_test_2",
+					PlanID:           s.testData.plan.ID,
+					FeatureID:        testFeature.ID,
+					FeatureType:      types.FeatureTypeMetered,
+					IsEnabled:        true,
+					UsageLimit:       lo.ToPtr(int64(100)), // Only allow 100 units
+					UsageResetPeriod: types.BILLING_PERIOD_MONTHLY,
+					IsSoftLimit:      false,
+					BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+				}
+				_, err = s.GetStores().EntitlementRepo.Create(s.GetContext(), entitlement)
+				s.NoError(err)
+			},
+			expectedLineItems:   1,
+			expectedTotalAmount: decimal.NewFromFloat(8), // Should charge for 400 units (500-100) at $0.02/unit
+			wantErr:             false,
+		},
+		{
+			name: "unlimited_entitlement",
+			setupFunc: func() {
+				// Create test feature
+				testFeature := &feature.Feature{
+					ID:          "feat_test_3",
+					Name:        "Test Feature 3",
+					Description: "Test Feature Description 3",
+					Type:        types.FeatureTypeMetered,
+					MeterID:     s.testData.meters.apiCalls.ID,
+					BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
+				}
+				err := s.GetStores().FeatureRepo.Create(s.GetContext(), testFeature)
+				s.NoError(err)
+
+				// Create unlimited entitlement
+				entitlement := &entitlement.Entitlement{
+					ID:               "ent_test_3",
+					PlanID:           s.testData.plan.ID,
+					FeatureID:        testFeature.ID,
+					FeatureType:      types.FeatureTypeMetered,
+					IsEnabled:        true,
+					UsageLimit:       nil, // Unlimited usage
+					UsageResetPeriod: types.BILLING_PERIOD_MONTHLY,
+					IsSoftLimit:      false,
+					BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+				}
+				_, err = s.GetStores().EntitlementRepo.Create(s.GetContext(), entitlement)
+				s.NoError(err)
+			},
+			expectedLineItems:   1,
+			expectedTotalAmount: decimal.Zero, // No charge for unlimited entitlement
+			wantErr:             false,
+		},
+		{
+			name: "soft_limit_entitlement",
+			setupFunc: func() {
+				// Create test feature
+				testFeature := &feature.Feature{
+					ID:          "feat_test_4",
+					Name:        "Test Feature 4",
+					Description: "Test Feature Description 4",
+					Type:        types.FeatureTypeMetered,
+					MeterID:     s.testData.meters.apiCalls.ID,
+					BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
+				}
+				err := s.GetStores().FeatureRepo.Create(s.GetContext(), testFeature)
+				s.NoError(err)
+
+				// Create soft limit entitlement
+				entitlement := &entitlement.Entitlement{
+					ID:               "ent_test_4",
+					PlanID:           s.testData.plan.ID,
+					FeatureID:        testFeature.ID,
+					FeatureType:      types.FeatureTypeMetered,
+					IsEnabled:        true,
+					UsageLimit:       lo.ToPtr(int64(100)), // Soft limit of 100 units
+					UsageResetPeriod: types.BILLING_PERIOD_MONTHLY,
+					IsSoftLimit:      true,
+					BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+				}
+				_, err = s.GetStores().EntitlementRepo.Create(s.GetContext(), entitlement)
+				s.NoError(err)
+			},
+			expectedLineItems:   1,
+			expectedTotalAmount: decimal.NewFromFloat(8), // Should charge for overage despite soft limit
+			wantErr:             false,
+		},
+		{
+			name: "disabled_entitlement",
+			setupFunc: func() {
+				// Create test feature
+				testFeature := &feature.Feature{
+					ID:          "feat_test_5",
+					Name:        "Test Feature 5",
+					Description: "Test Feature Description 5",
+					Type:        types.FeatureTypeMetered,
+					MeterID:     s.testData.meters.apiCalls.ID,
+					BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
+				}
+				err := s.GetStores().FeatureRepo.Create(s.GetContext(), testFeature)
+				s.NoError(err)
+
+				// Create disabled entitlement
+				entitlement := &entitlement.Entitlement{
+					ID:               "ent_test_5",
+					PlanID:           s.testData.plan.ID,
+					FeatureID:        testFeature.ID,
+					FeatureType:      types.FeatureTypeMetered,
+					IsEnabled:        false, // Disabled entitlement
+					UsageLimit:       lo.ToPtr(int64(1000)),
+					UsageResetPeriod: types.BILLING_PERIOD_MONTHLY,
+					IsSoftLimit:      false,
+					BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+				}
+				_, err = s.GetStores().EntitlementRepo.Create(s.GetContext(), entitlement)
+				s.NoError(err)
+
+				// Create test events to simulate actual usage
+				for i := 0; i < 500; i++ { // 500 units of usage
+					event := &events.Event{
+						ID:                 s.GetUUID(),
+						TenantID:           s.testData.subscription.TenantID,
+						EventName:          s.testData.meters.apiCalls.EventName,
+						ExternalCustomerID: s.testData.customer.ExternalID,
+						Timestamp:          s.testData.now.Add(-1 * time.Hour),
+						Properties:         map[string]interface{}{},
+					}
+					s.NoError(s.GetStores().EventRepo.InsertEvent(s.GetContext(), event))
+				}
+
+				// Update subscription with line items
+				// First, remove any existing line items for the API calls price
+				var updatedLineItems []*subscription.SubscriptionLineItem
+				for _, item := range s.testData.subscription.LineItems {
+					if item.PriceID != s.testData.prices.apiCalls.ID {
+						updatedLineItems = append(updatedLineItems, item)
+					}
+				}
+
+				// Add the new line item
+				updatedLineItems = append(updatedLineItems,
+					&subscription.SubscriptionLineItem{
+						ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+						SubscriptionID:   s.testData.subscription.ID,
+						CustomerID:       s.testData.subscription.CustomerID,
+						PlanID:           s.testData.plan.ID,
+						PlanDisplayName:  s.testData.plan.Name,
+						PriceID:          s.testData.prices.apiCalls.ID,
+						PriceType:        s.testData.prices.apiCalls.Type,
+						MeterID:          s.testData.meters.apiCalls.ID,
+						MeterDisplayName: s.testData.meters.apiCalls.Name,
+						DisplayName:      "API Calls",
+						Currency:         s.testData.subscription.Currency,
+						BillingPeriod:    s.testData.subscription.BillingPeriod,
+						InvoiceCadence:   types.InvoiceCadenceArrear,
+						StartDate:        s.testData.subscription.StartDate,
+						BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+					},
+				)
+
+				s.testData.subscription.LineItems = updatedLineItems
+				s.NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), s.testData.subscription))
+			},
+			expectedLineItems:   1,
+			expectedTotalAmount: decimal.NewFromFloat(10), // Should charge for all usage (500 units at $0.02/unit)
+			wantErr:             false,
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			// Reset test data
+			s.SetupTest()
+			s.setupTestData() // Add this line to ensure test data is properly initialized
+
+			// Setup test case
+			if tt.setupFunc != nil {
+				tt.setupFunc()
+			}
+
+			// Verify the subscription is properly set up
+			s.NotNil(s.testData.subscription, "Subscription should not be nil")
+			s.Equal(s.testData.plan.ID, s.testData.subscription.PlanID, "Subscription should have correct plan ID")
+
+			// Get the line item for API calls
+			var apiCallsLineItem *subscription.SubscriptionLineItem
+			for _, item := range s.testData.subscription.LineItems {
+				if item.PriceID == s.testData.prices.apiCalls.ID {
+					apiCallsLineItem = item
+					break
+				}
+			}
+			s.NotNil(apiCallsLineItem, "Expected to find line item for API calls price")
+
+			// Create usage data with proper subscription line item reference
+			usage := &dto.GetUsageBySubscriptionResponse{
+				StartTime: s.testData.subscription.CurrentPeriodStart,
+				EndTime:   s.testData.subscription.CurrentPeriodEnd,
+				Currency:  s.testData.subscription.Currency,
+				Charges: []*dto.SubscriptionUsageByMetersResponse{
+					{
+						Price:     s.testData.prices.apiCalls,
+						Quantity:  500, // 500 units of usage
+						Amount:    10,  // $10 without entitlement adjustment (500 * 0.02)
+						IsOverage: false,
+						MeterID:   s.testData.meters.apiCalls.ID,
+					},
+				},
+			}
+
+			// Verify the usage data is properly set up
+			s.Equal(1, len(usage.Charges), "Should have exactly one charge")
+			s.Equal(s.testData.meters.apiCalls.ID, usage.Charges[0].MeterID, "Should be for API calls meter")
+			s.Equal(float64(500), usage.Charges[0].Quantity, "Should have 500 units of usage")
+			s.Equal(float64(10), usage.Charges[0].Amount, "Should have $10 of charges")
+
+			// Calculate charges
+			lineItems, totalAmount, err := s.service.CalculateUsageCharges(
+				s.GetContext(),
+				s.testData.subscription,
+				usage,
+				s.testData.subscription.CurrentPeriodStart,
+				s.testData.subscription.CurrentPeriodEnd,
+			)
+
+			if tt.wantErr {
+				s.Error(err)
+				return
+			}
+
+			s.NoError(err)
+			s.Len(lineItems, tt.expectedLineItems, "Expected %d line items, got %d", tt.expectedLineItems, len(lineItems))
+			s.True(tt.expectedTotalAmount.Equal(totalAmount),
+				"Expected total amount %s, got %s for test case %s", tt.expectedTotalAmount, totalAmount, tt.name)
+
+			// Print more details for debugging
+			if !tt.expectedTotalAmount.Equal(totalAmount) {
+				s.T().Logf("Test case: %s", tt.name)
+				s.T().Logf("Line items: %+v", lineItems)
+				s.T().Logf("Usage data: %+v", usage)
+			}
+		})
+	}
 }

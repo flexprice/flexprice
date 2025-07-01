@@ -8,7 +8,9 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
@@ -232,6 +234,40 @@ func (s *WalletServiceSuite) setupTestData() {
 	}
 	s.NoError(s.GetStores().PriceRepo.Create(s.GetContext(), s.testData.prices.storageArchive))
 
+	// Create features for meters
+	apiCallsFeature := &feature.Feature{
+		ID:          "feat_api_calls",
+		Name:        "API Calls",
+		Description: "API Calls Feature",
+		Type:        types.FeatureTypeMetered,
+		MeterID:     s.testData.meters.apiCalls.ID,
+		BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
+	}
+	err := s.GetStores().FeatureRepo.Create(s.GetContext(), apiCallsFeature)
+	s.NoError(err)
+
+	storageFeature := &feature.Feature{
+		ID:          "feat_storage",
+		Name:        "Storage",
+		Description: "Storage Feature",
+		Type:        types.FeatureTypeMetered,
+		MeterID:     s.testData.meters.storage.ID,
+		BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
+	}
+	err = s.GetStores().FeatureRepo.Create(s.GetContext(), storageFeature)
+	s.NoError(err)
+
+	storageArchiveFeature := &feature.Feature{
+		ID:          "feat_storage_archive",
+		Name:        "Storage Archive",
+		Description: "Storage Archive Feature",
+		Type:        types.FeatureTypeMetered,
+		MeterID:     s.testData.meters.storageArchive.ID,
+		BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
+	}
+	err = s.GetStores().FeatureRepo.Create(s.GetContext(), storageArchiveFeature)
+	s.NoError(err)
+
 	s.testData.now = time.Now().UTC()
 	s.testData.subscription = &subscription.Subscription{
 		ID:                 "sub_123",
@@ -445,6 +481,7 @@ func (s *WalletServiceSuite) setupWallet() {
 	}
 	s.NoError(s.GetStores().WalletRepo.CreateWallet(s.GetContext(), s.testData.wallet))
 }
+
 func (s *WalletServiceSuite) TestCreateWallet() {
 	// Test successful wallet creation with CustomerID
 	req := &dto.CreateWalletRequest{
@@ -680,9 +717,9 @@ func (s *WalletServiceSuite) TestGetWalletBalance() {
 		{
 			name:                    "Success - Active wallet with matching currency",
 			walletID:                s.testData.wallet.ID,
-			expectedRealTimeBalance: decimal.NewFromInt(688).Add(decimal.NewFromFloat(0.5)), // 1000 - (100 + 150) - 61.5
-			expectedUnpaidAmount:    decimal.NewFromInt(250),                                // 100 + 150 (USD invoices only)
-			expectedCurrentUsage:    decimal.NewFromFloat(61.5),                             // API calls: 30 + Storage: 31.5
+			expectedRealTimeBalance: decimal.NewFromInt(711),  // 1000 - 250 - 39
+			expectedUnpaidAmount:    decimal.NewFromInt(250),  // 100 + 150 (USD invoices only)
+			expectedCurrentUsage:    decimal.NewFromFloat(39), // Total usage amount from billing service
 		},
 		{
 			name:          "Error - Invalid wallet ID",
@@ -1427,6 +1464,131 @@ func (s *WalletServiceSuite) TestGetCustomerWallets() {
 				s.NotNil(resp)
 				s.Equal(tc.expectedWalletsCount, len(resp))
 			}
+		})
+	}
+}
+
+func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
+	tests := []struct {
+		name                    string
+		setupFunc               func()
+		expectedRealTimeBalance decimal.Decimal
+		expectedUnpaidAmount    decimal.Decimal
+		expectedCurrentUsage    decimal.Decimal
+		wantErr                 bool
+	}{
+		{
+			name: "usage_within_entitlement_limit",
+			setupFunc: func() {
+				entitlement := &entitlement.Entitlement{
+					ID:               "ent_test_1",
+					PlanID:           s.testData.plan.ID,
+					FeatureID:        "feat_api_calls",
+					FeatureType:      types.FeatureTypeMetered,
+					IsEnabled:        true,
+					UsageLimit:       lo.ToPtr(int64(2000)),
+					UsageResetPeriod: types.BILLING_PERIOD_MONTHLY,
+					IsSoftLimit:      false,
+					BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+				}
+				_, err := s.GetStores().EntitlementRepo.Create(s.GetContext(), entitlement)
+				s.NoError(err)
+			},
+			expectedRealTimeBalance: decimal.NewFromInt(711), // 1000 - 250 - 39
+			expectedUnpaidAmount:    decimal.NewFromInt(250), // 100 + 150 (USD invoices)
+			expectedCurrentUsage:    decimal.NewFromInt(39),  // Actual usage amount from billing service
+			wantErr:                 false,
+		},
+		{
+			name: "usage_exceeds_entitlement_limit",
+			setupFunc: func() {
+				entitlement := &entitlement.Entitlement{
+					ID:               "ent_test_2",
+					PlanID:           s.testData.plan.ID,
+					FeatureID:        "feat_api_calls",
+					FeatureType:      types.FeatureTypeMetered,
+					IsEnabled:        true,
+					UsageLimit:       lo.ToPtr(int64(1000)),
+					UsageResetPeriod: types.BILLING_PERIOD_MONTHLY,
+					IsSoftLimit:      false,
+					BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+				}
+				_, err := s.GetStores().EntitlementRepo.Create(s.GetContext(), entitlement)
+				s.NoError(err)
+			},
+			expectedRealTimeBalance: decimal.NewFromInt(711), // 1000 - 250 - 39
+			expectedUnpaidAmount:    decimal.NewFromInt(250), // 100 + 150 (USD invoices)
+			expectedCurrentUsage:    decimal.NewFromInt(39),  // Actual usage amount from billing service
+			wantErr:                 false,
+		},
+		{
+			name: "unlimited_entitlement",
+			setupFunc: func() {
+				entitlement := &entitlement.Entitlement{
+					ID:               "ent_test_3",
+					PlanID:           s.testData.plan.ID,
+					FeatureID:        "feat_api_calls",
+					FeatureType:      types.FeatureTypeMetered,
+					IsEnabled:        true,
+					UsageLimit:       nil,
+					UsageResetPeriod: types.BILLING_PERIOD_MONTHLY,
+					IsSoftLimit:      false,
+					BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+				}
+				_, err := s.GetStores().EntitlementRepo.Create(s.GetContext(), entitlement)
+				s.NoError(err)
+			},
+			expectedRealTimeBalance: decimal.NewFromInt(711), // 1000 - 250 - 39
+			expectedUnpaidAmount:    decimal.NewFromInt(250), // 100 + 150 (USD invoices)
+			expectedCurrentUsage:    decimal.NewFromInt(39),  // Actual usage amount from billing service
+			wantErr:                 false,
+		},
+		{
+			name: "disabled_entitlement",
+			setupFunc: func() {
+				entitlement := &entitlement.Entitlement{
+					ID:               "ent_test_4",
+					PlanID:           s.testData.plan.ID,
+					FeatureID:        "feat_api_calls",
+					FeatureType:      types.FeatureTypeMetered,
+					IsEnabled:        false,
+					UsageLimit:       lo.ToPtr(int64(2000)),
+					UsageResetPeriod: types.BILLING_PERIOD_MONTHLY,
+					IsSoftLimit:      false,
+					BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+				}
+				_, err := s.GetStores().EntitlementRepo.Create(s.GetContext(), entitlement)
+				s.NoError(err)
+			},
+			expectedRealTimeBalance: decimal.NewFromInt(711), // 1000 - 250 - 39
+			expectedUnpaidAmount:    decimal.NewFromInt(250), // 100 + 150 (USD invoices)
+			expectedCurrentUsage:    decimal.NewFromInt(39),  // Actual usage amount from billing service
+			wantErr:                 false,
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.setupWallet()
+			if tt.setupFunc != nil {
+				tt.setupFunc()
+			}
+			resp, err := s.service.GetWalletBalance(s.GetContext(), s.testData.wallet.ID)
+			if tt.wantErr {
+				s.Error(err)
+				return
+			}
+			s.NoError(err)
+			s.NotNil(resp)
+			s.True(tt.expectedRealTimeBalance.Equal(lo.FromPtr(resp.RealTimeBalance)),
+				"RealTimeBalance mismatch: expected %s, got %s",
+				tt.expectedRealTimeBalance, resp.RealTimeBalance)
+			s.True(tt.expectedUnpaidAmount.Equal(lo.FromPtr(resp.UnpaidInvoiceAmount)),
+				"UnpaidInvoiceAmount mismatch: expected %s, got %s",
+				tt.expectedUnpaidAmount, lo.FromPtr(resp.UnpaidInvoiceAmount))
+			s.True(tt.expectedCurrentUsage.Equal(lo.FromPtr(resp.CurrentPeriodUsage)),
+				"CurrentPeriodUsage mismatch: expected %s, got %s",
+				tt.expectedCurrentUsage, lo.FromPtr(resp.CurrentPeriodUsage))
 		})
 	}
 }
