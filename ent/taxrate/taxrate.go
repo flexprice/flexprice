@@ -104,8 +104,6 @@ var (
 	NameValidator func(string) error
 	// CodeValidator is a validator for the "code" field. It is called by the builders before save.
 	CodeValidator func(string) error
-	// DefaultTaxRateStatus holds the default value on creation for the "tax_rate_status" field.
-	DefaultTaxRateStatus string
 	// TaxRateStatusValidator is a validator for the "tax_rate_status" field. It is called by the builders before save.
 	TaxRateStatusValidator func(string) error
 	// DefaultTaxRateType holds the default value on creation for the "tax_rate_type" field.

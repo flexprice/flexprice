@@ -1345,8 +1345,6 @@ func init() {
 	taxrate.CodeValidator = taxrateDescCode.Validators[0].(func(string) error)
 	// taxrateDescTaxRateStatus is the schema descriptor for tax_rate_status field.
 	taxrateDescTaxRateStatus := taxrateFields[4].Descriptor()
-	// taxrate.DefaultTaxRateStatus holds the default value on creation for the tax_rate_status field.
-	taxrate.DefaultTaxRateStatus = taxrateDescTaxRateStatus.Default.(string)
 	// taxrate.TaxRateStatusValidator is a validator for the "tax_rate_status" field. It is called by the builders before save.
 	taxrate.TaxRateStatusValidator = taxrateDescTaxRateStatus.Validators[0].(func(string) error)
 	// taxrateDescTaxRateType is the schema descriptor for tax_rate_type field.
