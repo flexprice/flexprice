@@ -7,6 +7,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -36,31 +37,52 @@ func (TaxRate) Fields() []ent.Field {
 			}).
 			Unique().
 			Immutable(),
+
 		field.String("name").
 			NotEmpty(),
+
 		field.String("description").
 			Optional(),
+
 		field.String("code").
 			NotEmpty().
 			Comment("e.g. CGST, SGST, etc."),
-		field.Other("percentage", decimal.Decimal{}).
+
+		field.String("tax_rate_status").
+			NotEmpty(),
+
+		field.String("tax_rate_type").
+			NotEmpty().
+			Immutable().
+			Default(string(types.TaxRateTypePercentage)),
+
+		field.String("scope").
+			NotEmpty(),
+
+		field.Other("percentage_value", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(9,6)",
 			}).
+			Optional().
+			Nillable().
 			Default(decimal.Zero),
+
 		field.Other("fixed_value", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(9,6)",
 			}).
+			Optional().
+			Nillable().
 			Default(decimal.Zero),
-		field.Bool("is_compound").
-			Default(false),
+
 		field.Time("valid_from").
 			Optional().
 			Nillable(),
+
 		field.Time("valid_to").
 			Optional().
 			Nillable(),
+
 		field.JSON("metadata", map[string]string{}).
 			Optional().
 			SchemaType(map[string]string{
@@ -93,10 +115,10 @@ func (TaxRate) Annotations() []schema.Annotation {
 			Table: "tax_rates",
 			Checks: map[string]string{
 				// Exactly one of percentage or fixed_value must be present
-				"percentage_fixed_value_check": "(percentage IS NOT NULL) <> (fixed_value IS NOT NULL)",
+				"percentage_fixed_value_check": "(percentage_value IS NOT NULL) <> (fixed_value IS NOT NULL)",
 
 				// Percentage, if given, must not exceed 100 %
-				"percentage_check": "(percentage IS NULL OR percentage <= 100)",
+				"percentage_check": "(percentage_value IS NULL OR percentage_value <= 100)",
 			},
 		},
 	}

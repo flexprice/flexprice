@@ -10,17 +10,19 @@ import (
 )
 
 type TaxRate struct {
-	ID            string            `db:"id" json:"id"`
-	Name          string            `db:"name" json:"name"`
-	Code          string            `db:"code" json:"code"`
-	Description   string            `db:"description" json:"description"`
-	EnvironmentID string            `db:"environment_id" json:"environment_id"`
-	Percentage    decimal.Decimal   `db:"percentage" json:"percentage"`
-	FixedValue    decimal.Decimal   `db:"fixed_value" json:"fixed_value"`
-	IsCompound    bool              `db:"is_compound" json:"is_compound"`
-	ValidFrom     *time.Time        `db:"valid_from" json:"valid_from"`
-	ValidTo       *time.Time        `db:"valid_to" json:"valid_to"`
-	Metadata      map[string]string `db:"metadata" json:"metadata"`
+	ID              string              `json:"id,omitempty"`
+	EnvironmentID   string              `json:"environment_id,omitempty"`
+	Name            string              `json:"name,omitempty"`
+	Description     string              `json:"description,omitempty"`
+	Code            string              `json:"code,omitempty"`
+	TaxRateStatus   types.TaxRateStatus `json:"tax_rate_status,omitempty"`
+	TaxRateType     types.TaxRateType   `json:"tax_rate_type,omitempty"`
+	Scope           types.TaxRateScope  `json:"scope,omitempty"`
+	PercentageValue *decimal.Decimal    `json:"percentage_value,omitempty"`
+	FixedValue      *decimal.Decimal    `json:"fixed_value,omitempty"`
+	ValidFrom       *time.Time          `json:"valid_from,omitempty"`
+	ValidTo         *time.Time          `json:"valid_to,omitempty"`
+	Metadata        map[string]string   `json:"metadata,omitempty"`
 	types.BaseModel
 }
 
@@ -30,17 +32,19 @@ func FromEnt(e *ent.TaxRate) *TaxRate {
 		return nil
 	}
 	return &TaxRate{
-		ID:            e.ID,
-		Name:          e.Name,
-		Description:   e.Description,
-		Code:          e.Code,
-		Percentage:    e.Percentage,
-		FixedValue:    e.FixedValue,
-		IsCompound:    e.IsCompound,
-		ValidFrom:     e.ValidFrom,
-		ValidTo:       e.ValidTo,
-		EnvironmentID: e.EnvironmentID,
-		Metadata:      e.Metadata,
+		ID:              e.ID,
+		Name:            e.Name,
+		Description:     e.Description,
+		Code:            e.Code,
+		TaxRateStatus:   types.TaxRateStatus(e.TaxRateStatus),
+		TaxRateType:     types.TaxRateType(e.TaxRateType),
+		Scope:           types.TaxRateScope(e.Scope),
+		PercentageValue: e.PercentageValue,
+		FixedValue:      e.FixedValue,
+		ValidFrom:       e.ValidFrom,
+		ValidTo:         e.ValidTo,
+		EnvironmentID:   e.EnvironmentID,
+		Metadata:        e.Metadata,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

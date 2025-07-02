@@ -137,16 +137,50 @@ func (trc *TaxRateCreate) SetCode(s string) *TaxRateCreate {
 	return trc
 }
 
-// SetPercentage sets the "percentage" field.
-func (trc *TaxRateCreate) SetPercentage(d decimal.Decimal) *TaxRateCreate {
-	trc.mutation.SetPercentage(d)
+// SetTaxRateStatus sets the "tax_rate_status" field.
+func (trc *TaxRateCreate) SetTaxRateStatus(s string) *TaxRateCreate {
+	trc.mutation.SetTaxRateStatus(s)
 	return trc
 }
 
-// SetNillablePercentage sets the "percentage" field if the given value is not nil.
-func (trc *TaxRateCreate) SetNillablePercentage(d *decimal.Decimal) *TaxRateCreate {
+// SetNillableTaxRateStatus sets the "tax_rate_status" field if the given value is not nil.
+func (trc *TaxRateCreate) SetNillableTaxRateStatus(s *string) *TaxRateCreate {
+	if s != nil {
+		trc.SetTaxRateStatus(*s)
+	}
+	return trc
+}
+
+// SetTaxRateType sets the "tax_rate_type" field.
+func (trc *TaxRateCreate) SetTaxRateType(s string) *TaxRateCreate {
+	trc.mutation.SetTaxRateType(s)
+	return trc
+}
+
+// SetNillableTaxRateType sets the "tax_rate_type" field if the given value is not nil.
+func (trc *TaxRateCreate) SetNillableTaxRateType(s *string) *TaxRateCreate {
+	if s != nil {
+		trc.SetTaxRateType(*s)
+	}
+	return trc
+}
+
+// SetScope sets the "scope" field.
+func (trc *TaxRateCreate) SetScope(s string) *TaxRateCreate {
+	trc.mutation.SetScope(s)
+	return trc
+}
+
+// SetPercentageValue sets the "percentage_value" field.
+func (trc *TaxRateCreate) SetPercentageValue(d decimal.Decimal) *TaxRateCreate {
+	trc.mutation.SetPercentageValue(d)
+	return trc
+}
+
+// SetNillablePercentageValue sets the "percentage_value" field if the given value is not nil.
+func (trc *TaxRateCreate) SetNillablePercentageValue(d *decimal.Decimal) *TaxRateCreate {
 	if d != nil {
-		trc.SetPercentage(*d)
+		trc.SetPercentageValue(*d)
 	}
 	return trc
 }
@@ -161,20 +195,6 @@ func (trc *TaxRateCreate) SetFixedValue(d decimal.Decimal) *TaxRateCreate {
 func (trc *TaxRateCreate) SetNillableFixedValue(d *decimal.Decimal) *TaxRateCreate {
 	if d != nil {
 		trc.SetFixedValue(*d)
-	}
-	return trc
-}
-
-// SetIsCompound sets the "is_compound" field.
-func (trc *TaxRateCreate) SetIsCompound(b bool) *TaxRateCreate {
-	trc.mutation.SetIsCompound(b)
-	return trc
-}
-
-// SetNillableIsCompound sets the "is_compound" field if the given value is not nil.
-func (trc *TaxRateCreate) SetNillableIsCompound(b *bool) *TaxRateCreate {
-	if b != nil {
-		trc.SetIsCompound(*b)
 	}
 	return trc
 }
@@ -270,17 +290,21 @@ func (trc *TaxRateCreate) defaults() {
 		v := taxrate.DefaultEnvironmentID
 		trc.mutation.SetEnvironmentID(v)
 	}
-	if _, ok := trc.mutation.Percentage(); !ok {
-		v := taxrate.DefaultPercentage
-		trc.mutation.SetPercentage(v)
+	if _, ok := trc.mutation.TaxRateStatus(); !ok {
+		v := taxrate.DefaultTaxRateStatus
+		trc.mutation.SetTaxRateStatus(v)
+	}
+	if _, ok := trc.mutation.TaxRateType(); !ok {
+		v := taxrate.DefaultTaxRateType
+		trc.mutation.SetTaxRateType(v)
+	}
+	if _, ok := trc.mutation.PercentageValue(); !ok {
+		v := taxrate.DefaultPercentageValue
+		trc.mutation.SetPercentageValue(v)
 	}
 	if _, ok := trc.mutation.FixedValue(); !ok {
 		v := taxrate.DefaultFixedValue
 		trc.mutation.SetFixedValue(v)
-	}
-	if _, ok := trc.mutation.IsCompound(); !ok {
-		v := taxrate.DefaultIsCompound
-		trc.mutation.SetIsCompound(v)
 	}
 }
 
@@ -319,14 +343,29 @@ func (trc *TaxRateCreate) check() error {
 			return &ValidationError{Name: "code", err: fmt.Errorf(`ent: validator failed for field "TaxRate.code": %w`, err)}
 		}
 	}
-	if _, ok := trc.mutation.Percentage(); !ok {
-		return &ValidationError{Name: "percentage", err: errors.New(`ent: missing required field "TaxRate.percentage"`)}
+	if _, ok := trc.mutation.TaxRateStatus(); !ok {
+		return &ValidationError{Name: "tax_rate_status", err: errors.New(`ent: missing required field "TaxRate.tax_rate_status"`)}
 	}
-	if _, ok := trc.mutation.FixedValue(); !ok {
-		return &ValidationError{Name: "fixed_value", err: errors.New(`ent: missing required field "TaxRate.fixed_value"`)}
+	if v, ok := trc.mutation.TaxRateStatus(); ok {
+		if err := taxrate.TaxRateStatusValidator(v); err != nil {
+			return &ValidationError{Name: "tax_rate_status", err: fmt.Errorf(`ent: validator failed for field "TaxRate.tax_rate_status": %w`, err)}
+		}
 	}
-	if _, ok := trc.mutation.IsCompound(); !ok {
-		return &ValidationError{Name: "is_compound", err: errors.New(`ent: missing required field "TaxRate.is_compound"`)}
+	if _, ok := trc.mutation.TaxRateType(); !ok {
+		return &ValidationError{Name: "tax_rate_type", err: errors.New(`ent: missing required field "TaxRate.tax_rate_type"`)}
+	}
+	if v, ok := trc.mutation.TaxRateType(); ok {
+		if err := taxrate.TaxRateTypeValidator(v); err != nil {
+			return &ValidationError{Name: "tax_rate_type", err: fmt.Errorf(`ent: validator failed for field "TaxRate.tax_rate_type": %w`, err)}
+		}
+	}
+	if _, ok := trc.mutation.Scope(); !ok {
+		return &ValidationError{Name: "scope", err: errors.New(`ent: missing required field "TaxRate.scope"`)}
+	}
+	if v, ok := trc.mutation.Scope(); ok {
+		if err := taxrate.ScopeValidator(v); err != nil {
+			return &ValidationError{Name: "scope", err: fmt.Errorf(`ent: validator failed for field "TaxRate.scope": %w`, err)}
+		}
 	}
 	return nil
 }
@@ -403,17 +442,25 @@ func (trc *TaxRateCreate) createSpec() (*TaxRate, *sqlgraph.CreateSpec) {
 		_spec.SetField(taxrate.FieldCode, field.TypeString, value)
 		_node.Code = value
 	}
-	if value, ok := trc.mutation.Percentage(); ok {
-		_spec.SetField(taxrate.FieldPercentage, field.TypeOther, value)
-		_node.Percentage = value
+	if value, ok := trc.mutation.TaxRateStatus(); ok {
+		_spec.SetField(taxrate.FieldTaxRateStatus, field.TypeString, value)
+		_node.TaxRateStatus = value
+	}
+	if value, ok := trc.mutation.TaxRateType(); ok {
+		_spec.SetField(taxrate.FieldTaxRateType, field.TypeString, value)
+		_node.TaxRateType = value
+	}
+	if value, ok := trc.mutation.Scope(); ok {
+		_spec.SetField(taxrate.FieldScope, field.TypeString, value)
+		_node.Scope = value
+	}
+	if value, ok := trc.mutation.PercentageValue(); ok {
+		_spec.SetField(taxrate.FieldPercentageValue, field.TypeOther, value)
+		_node.PercentageValue = &value
 	}
 	if value, ok := trc.mutation.FixedValue(); ok {
 		_spec.SetField(taxrate.FieldFixedValue, field.TypeOther, value)
-		_node.FixedValue = value
-	}
-	if value, ok := trc.mutation.IsCompound(); ok {
-		_spec.SetField(taxrate.FieldIsCompound, field.TypeBool, value)
-		_node.IsCompound = value
+		_node.FixedValue = &value
 	}
 	if value, ok := trc.mutation.ValidFrom(); ok {
 		_spec.SetField(taxrate.FieldValidFrom, field.TypeTime, value)

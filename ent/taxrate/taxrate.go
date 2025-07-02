@@ -34,12 +34,16 @@ const (
 	FieldDescription = "description"
 	// FieldCode holds the string denoting the code field in the database.
 	FieldCode = "code"
-	// FieldPercentage holds the string denoting the percentage field in the database.
-	FieldPercentage = "percentage"
+	// FieldTaxRateStatus holds the string denoting the tax_rate_status field in the database.
+	FieldTaxRateStatus = "tax_rate_status"
+	// FieldTaxRateType holds the string denoting the tax_rate_type field in the database.
+	FieldTaxRateType = "tax_rate_type"
+	// FieldScope holds the string denoting the scope field in the database.
+	FieldScope = "scope"
+	// FieldPercentageValue holds the string denoting the percentage_value field in the database.
+	FieldPercentageValue = "percentage_value"
 	// FieldFixedValue holds the string denoting the fixed_value field in the database.
 	FieldFixedValue = "fixed_value"
-	// FieldIsCompound holds the string denoting the is_compound field in the database.
-	FieldIsCompound = "is_compound"
 	// FieldValidFrom holds the string denoting the valid_from field in the database.
 	FieldValidFrom = "valid_from"
 	// FieldValidTo holds the string denoting the valid_to field in the database.
@@ -63,9 +67,11 @@ var Columns = []string{
 	FieldName,
 	FieldDescription,
 	FieldCode,
-	FieldPercentage,
+	FieldTaxRateStatus,
+	FieldTaxRateType,
+	FieldScope,
+	FieldPercentageValue,
 	FieldFixedValue,
-	FieldIsCompound,
 	FieldValidFrom,
 	FieldValidTo,
 	FieldMetadata,
@@ -98,12 +104,20 @@ var (
 	NameValidator func(string) error
 	// CodeValidator is a validator for the "code" field. It is called by the builders before save.
 	CodeValidator func(string) error
-	// DefaultPercentage holds the default value on creation for the "percentage" field.
-	DefaultPercentage decimal.Decimal
+	// DefaultTaxRateStatus holds the default value on creation for the "tax_rate_status" field.
+	DefaultTaxRateStatus string
+	// TaxRateStatusValidator is a validator for the "tax_rate_status" field. It is called by the builders before save.
+	TaxRateStatusValidator func(string) error
+	// DefaultTaxRateType holds the default value on creation for the "tax_rate_type" field.
+	DefaultTaxRateType string
+	// TaxRateTypeValidator is a validator for the "tax_rate_type" field. It is called by the builders before save.
+	TaxRateTypeValidator func(string) error
+	// ScopeValidator is a validator for the "scope" field. It is called by the builders before save.
+	ScopeValidator func(string) error
+	// DefaultPercentageValue holds the default value on creation for the "percentage_value" field.
+	DefaultPercentageValue decimal.Decimal
 	// DefaultFixedValue holds the default value on creation for the "fixed_value" field.
 	DefaultFixedValue decimal.Decimal
-	// DefaultIsCompound holds the default value on creation for the "is_compound" field.
-	DefaultIsCompound bool
 )
 
 // OrderOption defines the ordering options for the TaxRate queries.
@@ -164,19 +178,29 @@ func ByCode(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCode, opts...).ToFunc()
 }
 
-// ByPercentage orders the results by the percentage field.
-func ByPercentage(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldPercentage, opts...).ToFunc()
+// ByTaxRateStatus orders the results by the tax_rate_status field.
+func ByTaxRateStatus(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTaxRateStatus, opts...).ToFunc()
+}
+
+// ByTaxRateType orders the results by the tax_rate_type field.
+func ByTaxRateType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTaxRateType, opts...).ToFunc()
+}
+
+// ByScope orders the results by the scope field.
+func ByScope(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldScope, opts...).ToFunc()
+}
+
+// ByPercentageValue orders the results by the percentage_value field.
+func ByPercentageValue(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPercentageValue, opts...).ToFunc()
 }
 
 // ByFixedValue orders the results by the fixed_value field.
 func ByFixedValue(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldFixedValue, opts...).ToFunc()
-}
-
-// ByIsCompound orders the results by the is_compound field.
-func ByIsCompound(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldIsCompound, opts...).ToFunc()
 }
 
 // ByValidFrom orders the results by the valid_from field.

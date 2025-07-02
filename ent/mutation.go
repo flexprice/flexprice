@@ -37501,29 +37501,31 @@ func (m *TaskMutation) ResetEdge(name string) error {
 // TaxRateMutation represents an operation that mutates the TaxRate nodes in the graph.
 type TaxRateMutation struct {
 	config
-	op             Op
-	typ            string
-	id             *string
-	tenant_id      *string
-	status         *string
-	created_at     *time.Time
-	updated_at     *time.Time
-	created_by     *string
-	updated_by     *string
-	environment_id *string
-	name           *string
-	description    *string
-	code           *string
-	percentage     *decimal.Decimal
-	fixed_value    *decimal.Decimal
-	is_compound    *bool
-	valid_from     *time.Time
-	valid_to       *time.Time
-	metadata       *map[string]string
-	clearedFields  map[string]struct{}
-	done           bool
-	oldValue       func(context.Context) (*TaxRate, error)
-	predicates     []predicate.TaxRate
+	op               Op
+	typ              string
+	id               *string
+	tenant_id        *string
+	status           *string
+	created_at       *time.Time
+	updated_at       *time.Time
+	created_by       *string
+	updated_by       *string
+	environment_id   *string
+	name             *string
+	description      *string
+	code             *string
+	tax_rate_status  *string
+	tax_rate_type    *string
+	scope            *string
+	percentage_value *decimal.Decimal
+	fixed_value      *decimal.Decimal
+	valid_from       *time.Time
+	valid_to         *time.Time
+	metadata         *map[string]string
+	clearedFields    map[string]struct{}
+	done             bool
+	oldValue         func(context.Context) (*TaxRate, error)
+	predicates       []predicate.TaxRate
 }
 
 var _ ent.Mutation = (*TaxRateMutation)(nil)
@@ -38042,40 +38044,161 @@ func (m *TaxRateMutation) ResetCode() {
 	m.code = nil
 }
 
-// SetPercentage sets the "percentage" field.
-func (m *TaxRateMutation) SetPercentage(d decimal.Decimal) {
-	m.percentage = &d
+// SetTaxRateStatus sets the "tax_rate_status" field.
+func (m *TaxRateMutation) SetTaxRateStatus(s string) {
+	m.tax_rate_status = &s
 }
 
-// Percentage returns the value of the "percentage" field in the mutation.
-func (m *TaxRateMutation) Percentage() (r decimal.Decimal, exists bool) {
-	v := m.percentage
+// TaxRateStatus returns the value of the "tax_rate_status" field in the mutation.
+func (m *TaxRateMutation) TaxRateStatus() (r string, exists bool) {
+	v := m.tax_rate_status
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldPercentage returns the old "percentage" field's value of the TaxRate entity.
+// OldTaxRateStatus returns the old "tax_rate_status" field's value of the TaxRate entity.
 // If the TaxRate object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *TaxRateMutation) OldPercentage(ctx context.Context) (v decimal.Decimal, err error) {
+func (m *TaxRateMutation) OldTaxRateStatus(ctx context.Context) (v string, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldPercentage is only allowed on UpdateOne operations")
+		return v, errors.New("OldTaxRateStatus is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldPercentage requires an ID field in the mutation")
+		return v, errors.New("OldTaxRateStatus requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldPercentage: %w", err)
+		return v, fmt.Errorf("querying old value for OldTaxRateStatus: %w", err)
 	}
-	return oldValue.Percentage, nil
+	return oldValue.TaxRateStatus, nil
 }
 
-// ResetPercentage resets all changes to the "percentage" field.
-func (m *TaxRateMutation) ResetPercentage() {
-	m.percentage = nil
+// ResetTaxRateStatus resets all changes to the "tax_rate_status" field.
+func (m *TaxRateMutation) ResetTaxRateStatus() {
+	m.tax_rate_status = nil
+}
+
+// SetTaxRateType sets the "tax_rate_type" field.
+func (m *TaxRateMutation) SetTaxRateType(s string) {
+	m.tax_rate_type = &s
+}
+
+// TaxRateType returns the value of the "tax_rate_type" field in the mutation.
+func (m *TaxRateMutation) TaxRateType() (r string, exists bool) {
+	v := m.tax_rate_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTaxRateType returns the old "tax_rate_type" field's value of the TaxRate entity.
+// If the TaxRate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxRateMutation) OldTaxRateType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTaxRateType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTaxRateType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTaxRateType: %w", err)
+	}
+	return oldValue.TaxRateType, nil
+}
+
+// ResetTaxRateType resets all changes to the "tax_rate_type" field.
+func (m *TaxRateMutation) ResetTaxRateType() {
+	m.tax_rate_type = nil
+}
+
+// SetScope sets the "scope" field.
+func (m *TaxRateMutation) SetScope(s string) {
+	m.scope = &s
+}
+
+// Scope returns the value of the "scope" field in the mutation.
+func (m *TaxRateMutation) Scope() (r string, exists bool) {
+	v := m.scope
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldScope returns the old "scope" field's value of the TaxRate entity.
+// If the TaxRate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxRateMutation) OldScope(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldScope is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldScope requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldScope: %w", err)
+	}
+	return oldValue.Scope, nil
+}
+
+// ResetScope resets all changes to the "scope" field.
+func (m *TaxRateMutation) ResetScope() {
+	m.scope = nil
+}
+
+// SetPercentageValue sets the "percentage_value" field.
+func (m *TaxRateMutation) SetPercentageValue(d decimal.Decimal) {
+	m.percentage_value = &d
+}
+
+// PercentageValue returns the value of the "percentage_value" field in the mutation.
+func (m *TaxRateMutation) PercentageValue() (r decimal.Decimal, exists bool) {
+	v := m.percentage_value
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPercentageValue returns the old "percentage_value" field's value of the TaxRate entity.
+// If the TaxRate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxRateMutation) OldPercentageValue(ctx context.Context) (v *decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPercentageValue is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPercentageValue requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPercentageValue: %w", err)
+	}
+	return oldValue.PercentageValue, nil
+}
+
+// ClearPercentageValue clears the value of the "percentage_value" field.
+func (m *TaxRateMutation) ClearPercentageValue() {
+	m.percentage_value = nil
+	m.clearedFields[taxrate.FieldPercentageValue] = struct{}{}
+}
+
+// PercentageValueCleared returns if the "percentage_value" field was cleared in this mutation.
+func (m *TaxRateMutation) PercentageValueCleared() bool {
+	_, ok := m.clearedFields[taxrate.FieldPercentageValue]
+	return ok
+}
+
+// ResetPercentageValue resets all changes to the "percentage_value" field.
+func (m *TaxRateMutation) ResetPercentageValue() {
+	m.percentage_value = nil
+	delete(m.clearedFields, taxrate.FieldPercentageValue)
 }
 
 // SetFixedValue sets the "fixed_value" field.
@@ -38095,7 +38218,7 @@ func (m *TaxRateMutation) FixedValue() (r decimal.Decimal, exists bool) {
 // OldFixedValue returns the old "fixed_value" field's value of the TaxRate entity.
 // If the TaxRate object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *TaxRateMutation) OldFixedValue(ctx context.Context) (v decimal.Decimal, err error) {
+func (m *TaxRateMutation) OldFixedValue(ctx context.Context) (v *decimal.Decimal, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldFixedValue is only allowed on UpdateOne operations")
 	}
@@ -38109,45 +38232,22 @@ func (m *TaxRateMutation) OldFixedValue(ctx context.Context) (v decimal.Decimal,
 	return oldValue.FixedValue, nil
 }
 
+// ClearFixedValue clears the value of the "fixed_value" field.
+func (m *TaxRateMutation) ClearFixedValue() {
+	m.fixed_value = nil
+	m.clearedFields[taxrate.FieldFixedValue] = struct{}{}
+}
+
+// FixedValueCleared returns if the "fixed_value" field was cleared in this mutation.
+func (m *TaxRateMutation) FixedValueCleared() bool {
+	_, ok := m.clearedFields[taxrate.FieldFixedValue]
+	return ok
+}
+
 // ResetFixedValue resets all changes to the "fixed_value" field.
 func (m *TaxRateMutation) ResetFixedValue() {
 	m.fixed_value = nil
-}
-
-// SetIsCompound sets the "is_compound" field.
-func (m *TaxRateMutation) SetIsCompound(b bool) {
-	m.is_compound = &b
-}
-
-// IsCompound returns the value of the "is_compound" field in the mutation.
-func (m *TaxRateMutation) IsCompound() (r bool, exists bool) {
-	v := m.is_compound
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldIsCompound returns the old "is_compound" field's value of the TaxRate entity.
-// If the TaxRate object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *TaxRateMutation) OldIsCompound(ctx context.Context) (v bool, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldIsCompound is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldIsCompound requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldIsCompound: %w", err)
-	}
-	return oldValue.IsCompound, nil
-}
-
-// ResetIsCompound resets all changes to the "is_compound" field.
-func (m *TaxRateMutation) ResetIsCompound() {
-	m.is_compound = nil
+	delete(m.clearedFields, taxrate.FieldFixedValue)
 }
 
 // SetValidFrom sets the "valid_from" field.
@@ -38331,7 +38431,7 @@ func (m *TaxRateMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TaxRateMutation) Fields() []string {
-	fields := make([]string, 0, 16)
+	fields := make([]string, 0, 18)
 	if m.tenant_id != nil {
 		fields = append(fields, taxrate.FieldTenantID)
 	}
@@ -38362,14 +38462,20 @@ func (m *TaxRateMutation) Fields() []string {
 	if m.code != nil {
 		fields = append(fields, taxrate.FieldCode)
 	}
-	if m.percentage != nil {
-		fields = append(fields, taxrate.FieldPercentage)
+	if m.tax_rate_status != nil {
+		fields = append(fields, taxrate.FieldTaxRateStatus)
+	}
+	if m.tax_rate_type != nil {
+		fields = append(fields, taxrate.FieldTaxRateType)
+	}
+	if m.scope != nil {
+		fields = append(fields, taxrate.FieldScope)
+	}
+	if m.percentage_value != nil {
+		fields = append(fields, taxrate.FieldPercentageValue)
 	}
 	if m.fixed_value != nil {
 		fields = append(fields, taxrate.FieldFixedValue)
-	}
-	if m.is_compound != nil {
-		fields = append(fields, taxrate.FieldIsCompound)
 	}
 	if m.valid_from != nil {
 		fields = append(fields, taxrate.FieldValidFrom)
@@ -38408,12 +38514,16 @@ func (m *TaxRateMutation) Field(name string) (ent.Value, bool) {
 		return m.Description()
 	case taxrate.FieldCode:
 		return m.Code()
-	case taxrate.FieldPercentage:
-		return m.Percentage()
+	case taxrate.FieldTaxRateStatus:
+		return m.TaxRateStatus()
+	case taxrate.FieldTaxRateType:
+		return m.TaxRateType()
+	case taxrate.FieldScope:
+		return m.Scope()
+	case taxrate.FieldPercentageValue:
+		return m.PercentageValue()
 	case taxrate.FieldFixedValue:
 		return m.FixedValue()
-	case taxrate.FieldIsCompound:
-		return m.IsCompound()
 	case taxrate.FieldValidFrom:
 		return m.ValidFrom()
 	case taxrate.FieldValidTo:
@@ -38449,12 +38559,16 @@ func (m *TaxRateMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldDescription(ctx)
 	case taxrate.FieldCode:
 		return m.OldCode(ctx)
-	case taxrate.FieldPercentage:
-		return m.OldPercentage(ctx)
+	case taxrate.FieldTaxRateStatus:
+		return m.OldTaxRateStatus(ctx)
+	case taxrate.FieldTaxRateType:
+		return m.OldTaxRateType(ctx)
+	case taxrate.FieldScope:
+		return m.OldScope(ctx)
+	case taxrate.FieldPercentageValue:
+		return m.OldPercentageValue(ctx)
 	case taxrate.FieldFixedValue:
 		return m.OldFixedValue(ctx)
-	case taxrate.FieldIsCompound:
-		return m.OldIsCompound(ctx)
 	case taxrate.FieldValidFrom:
 		return m.OldValidFrom(ctx)
 	case taxrate.FieldValidTo:
@@ -38540,12 +38654,33 @@ func (m *TaxRateMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetCode(v)
 		return nil
-	case taxrate.FieldPercentage:
+	case taxrate.FieldTaxRateStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTaxRateStatus(v)
+		return nil
+	case taxrate.FieldTaxRateType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTaxRateType(v)
+		return nil
+	case taxrate.FieldScope:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetScope(v)
+		return nil
+	case taxrate.FieldPercentageValue:
 		v, ok := value.(decimal.Decimal)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetPercentage(v)
+		m.SetPercentageValue(v)
 		return nil
 	case taxrate.FieldFixedValue:
 		v, ok := value.(decimal.Decimal)
@@ -38553,13 +38688,6 @@ func (m *TaxRateMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetFixedValue(v)
-		return nil
-	case taxrate.FieldIsCompound:
-		v, ok := value.(bool)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetIsCompound(v)
 		return nil
 	case taxrate.FieldValidFrom:
 		v, ok := value.(time.Time)
@@ -38624,6 +38752,12 @@ func (m *TaxRateMutation) ClearedFields() []string {
 	if m.FieldCleared(taxrate.FieldDescription) {
 		fields = append(fields, taxrate.FieldDescription)
 	}
+	if m.FieldCleared(taxrate.FieldPercentageValue) {
+		fields = append(fields, taxrate.FieldPercentageValue)
+	}
+	if m.FieldCleared(taxrate.FieldFixedValue) {
+		fields = append(fields, taxrate.FieldFixedValue)
+	}
 	if m.FieldCleared(taxrate.FieldValidFrom) {
 		fields = append(fields, taxrate.FieldValidFrom)
 	}
@@ -38658,6 +38792,12 @@ func (m *TaxRateMutation) ClearField(name string) error {
 		return nil
 	case taxrate.FieldDescription:
 		m.ClearDescription()
+		return nil
+	case taxrate.FieldPercentageValue:
+		m.ClearPercentageValue()
+		return nil
+	case taxrate.FieldFixedValue:
+		m.ClearFixedValue()
 		return nil
 	case taxrate.FieldValidFrom:
 		m.ClearValidFrom()
@@ -38706,14 +38846,20 @@ func (m *TaxRateMutation) ResetField(name string) error {
 	case taxrate.FieldCode:
 		m.ResetCode()
 		return nil
-	case taxrate.FieldPercentage:
-		m.ResetPercentage()
+	case taxrate.FieldTaxRateStatus:
+		m.ResetTaxRateStatus()
+		return nil
+	case taxrate.FieldTaxRateType:
+		m.ResetTaxRateType()
+		return nil
+	case taxrate.FieldScope:
+		m.ResetScope()
+		return nil
+	case taxrate.FieldPercentageValue:
+		m.ResetPercentageValue()
 		return nil
 	case taxrate.FieldFixedValue:
 		m.ResetFixedValue()
-		return nil
-	case taxrate.FieldIsCompound:
-		m.ResetIsCompound()
 		return nil
 	case taxrate.FieldValidFrom:
 		m.ResetValidFrom()

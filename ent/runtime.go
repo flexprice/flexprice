@@ -1343,18 +1343,30 @@ func init() {
 	taxrateDescCode := taxrateFields[3].Descriptor()
 	// taxrate.CodeValidator is a validator for the "code" field. It is called by the builders before save.
 	taxrate.CodeValidator = taxrateDescCode.Validators[0].(func(string) error)
-	// taxrateDescPercentage is the schema descriptor for percentage field.
-	taxrateDescPercentage := taxrateFields[4].Descriptor()
-	// taxrate.DefaultPercentage holds the default value on creation for the percentage field.
-	taxrate.DefaultPercentage = taxrateDescPercentage.Default.(decimal.Decimal)
+	// taxrateDescTaxRateStatus is the schema descriptor for tax_rate_status field.
+	taxrateDescTaxRateStatus := taxrateFields[4].Descriptor()
+	// taxrate.DefaultTaxRateStatus holds the default value on creation for the tax_rate_status field.
+	taxrate.DefaultTaxRateStatus = taxrateDescTaxRateStatus.Default.(string)
+	// taxrate.TaxRateStatusValidator is a validator for the "tax_rate_status" field. It is called by the builders before save.
+	taxrate.TaxRateStatusValidator = taxrateDescTaxRateStatus.Validators[0].(func(string) error)
+	// taxrateDescTaxRateType is the schema descriptor for tax_rate_type field.
+	taxrateDescTaxRateType := taxrateFields[5].Descriptor()
+	// taxrate.DefaultTaxRateType holds the default value on creation for the tax_rate_type field.
+	taxrate.DefaultTaxRateType = taxrateDescTaxRateType.Default.(string)
+	// taxrate.TaxRateTypeValidator is a validator for the "tax_rate_type" field. It is called by the builders before save.
+	taxrate.TaxRateTypeValidator = taxrateDescTaxRateType.Validators[0].(func(string) error)
+	// taxrateDescScope is the schema descriptor for scope field.
+	taxrateDescScope := taxrateFields[6].Descriptor()
+	// taxrate.ScopeValidator is a validator for the "scope" field. It is called by the builders before save.
+	taxrate.ScopeValidator = taxrateDescScope.Validators[0].(func(string) error)
+	// taxrateDescPercentageValue is the schema descriptor for percentage_value field.
+	taxrateDescPercentageValue := taxrateFields[7].Descriptor()
+	// taxrate.DefaultPercentageValue holds the default value on creation for the percentage_value field.
+	taxrate.DefaultPercentageValue = taxrateDescPercentageValue.Default.(decimal.Decimal)
 	// taxrateDescFixedValue is the schema descriptor for fixed_value field.
-	taxrateDescFixedValue := taxrateFields[5].Descriptor()
+	taxrateDescFixedValue := taxrateFields[8].Descriptor()
 	// taxrate.DefaultFixedValue holds the default value on creation for the fixed_value field.
 	taxrate.DefaultFixedValue = taxrateDescFixedValue.Default.(decimal.Decimal)
-	// taxrateDescIsCompound is the schema descriptor for is_compound field.
-	taxrateDescIsCompound := taxrateFields[6].Descriptor()
-	// taxrate.DefaultIsCompound holds the default value on creation for the is_compound field.
-	taxrate.DefaultIsCompound = taxrateDescIsCompound.Default.(bool)
 	tenantFields := schema.Tenant{}.Fields()
 	_ = tenantFields
 	// tenantDescName is the schema descriptor for name field.

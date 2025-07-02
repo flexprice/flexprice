@@ -1319,9 +1319,11 @@ var (
 		{Name: "name", Type: field.TypeString},
 		{Name: "description", Type: field.TypeString, Nullable: true},
 		{Name: "code", Type: field.TypeString},
-		{Name: "percentage", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(9,6)"}},
-		{Name: "fixed_value", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(9,6)"}},
-		{Name: "is_compound", Type: field.TypeBool, Default: false},
+		{Name: "tax_rate_status", Type: field.TypeString, Default: "ACTIVE"},
+		{Name: "tax_rate_type", Type: field.TypeString, Default: "percentage"},
+		{Name: "scope", Type: field.TypeString},
+		{Name: "percentage_value", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(9,6)"}},
+		{Name: "fixed_value", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(9,6)"}},
 		{Name: "valid_from", Type: field.TypeTime, Nullable: true},
 		{Name: "valid_to", Type: field.TypeTime, Nullable: true},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
@@ -1574,7 +1576,7 @@ func init() {
 		Table: "tax_rates",
 	}
 	TaxRatesTable.Annotation.Checks = map[string]string{
-		"percentage_check":             "(percentage IS NULL OR percentage <= 100)",
-		"percentage_fixed_value_check": "(percentage IS NOT NULL) <> (fixed_value IS NOT NULL)",
+		"percentage_check":             "(percentage_value IS NULL OR percentage_value <= 100)",
+		"percentage_fixed_value_check": "(percentage_value IS NOT NULL) <> (fixed_value IS NOT NULL)",
 	}
 }

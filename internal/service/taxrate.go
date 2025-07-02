@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"sort"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -10,7 +9,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/shopspring/decimal"
 )
 
 type TaxRateService interface {
@@ -21,10 +19,6 @@ type TaxRateService interface {
 	UpdateTaxRate(ctx context.Context, id string, req dto.UpdateTaxRateRequest) (*dto.TaxRateResponse, error)
 	GetTaxRateByCode(ctx context.Context, code string) (*dto.TaxRateResponse, error)
 	DeleteTaxRate(ctx context.Context, id string) error
-
-	// Tax resolution and calculation
-	ResolveTaxRates(ctx context.Context, tenantID, customerID, planID, invoiceID, lineItemID string) ([]*taxrate.TaxRate, error)
-	CalculateLineTaxes(ctx context.Context, netAmount decimal.Decimal, rates []*taxrate.TaxRate) ([]dto.AppliedTax, decimal.Decimal, error)
 }
 
 type taxRateService struct {
@@ -44,21 +38,52 @@ func NewTaxRateService(repo taxrate.Repository, logger *logger.Logger) TaxRateSe
 func (s *taxRateService) CreateTaxRate(ctx context.Context, req dto.CreateTaxRateRequest) (*dto.TaxRateResponse, error) {
 	// Validate the request
 	if err := req.Validate(); err != nil {
+		s.logger.Warnw("tax rate creation validation failed",
+			"error", err,
+			"name", req.Name,
+			"code", req.Code,
+		)
 		return nil, err
 	}
 
 	// Convert the request to a domain model
 	taxRate, err := req.ToTaxRate(ctx)
 	if err != nil {
+		s.logger.Errorw("failed to convert request to tax rate",
+			"error", err,
+			"name", req.Name,
+			"code", req.Code,
+		)
 		return nil, ierr.WithError(err).
-			WithHint("Failed to parse tax rate data").
+			WithHint("Invalid tax rate payload").
 			Mark(ierr.ErrValidation)
+	}
+
+	// Set tax rate status based on validity period
+	now := time.Now().UTC()
+	if req.ValidFrom != nil && req.ValidFrom.Before(now) {
+		taxRate.TaxRateStatus = types.TaxRateStatusActive
+	} else {
+		taxRate.TaxRateStatus = types.TaxRateStatusInactive
 	}
 
 	// Create the tax rate in the repository
 	if err := s.repo.Create(ctx, taxRate); err != nil {
+		s.logger.Errorw("failed to create tax rate",
+			"error", err,
+			"tax_rate_id", taxRate.ID,
+			"name", taxRate.Name,
+			"code", taxRate.Code,
+		)
 		return nil, err
 	}
+
+	s.logger.Infow("tax rate created successfully",
+		"tax_rate_id", taxRate.ID,
+		"name", taxRate.Name,
+		"code", taxRate.Code,
+		"status", taxRate.TaxRateStatus,
+	)
 
 	// Return the created tax rate
 	return &dto.TaxRateResponse{TaxRate: taxRate}, nil
@@ -75,6 +100,10 @@ func (s *taxRateService) GetTaxRate(ctx context.Context, id string) (*dto.TaxRat
 	// Get the tax rate from the repository
 	taxRate, err := s.repo.Get(ctx, id)
 	if err != nil {
+		s.logger.Warnw("failed to get tax rate",
+			"error", err,
+			"tax_rate_id", id,
+		)
 		return nil, err
 	}
 
@@ -84,15 +113,27 @@ func (s *taxRateService) GetTaxRate(ctx context.Context, id string) (*dto.TaxRat
 
 // ListTaxRates lists tax rates based on the provided filter
 func (s *taxRateService) ListTaxRates(ctx context.Context, filter *types.TaxRateFilter) (*dto.ListTaxRatesResponse, error) {
+	if filter == nil {
+		filter = types.NewTaxRateFilter()
+	}
+
 	// Get tax rates from the repository
 	taxRates, err := s.repo.List(ctx, filter)
 	if err != nil {
+		s.logger.Errorw("failed to list tax rates",
+			"error", err,
+			"filter", filter,
+		)
 		return nil, err
 	}
 
 	// Get the total count of tax rates
 	count, err := s.repo.Count(ctx, filter)
 	if err != nil {
+		s.logger.Errorw("failed to count tax rates",
+			"error", err,
+			"filter", filter,
+		)
 		return nil, err
 	}
 
@@ -116,8 +157,7 @@ func (s *taxRateService) ListTaxRates(ctx context.Context, filter *types.TaxRate
 	}, nil
 }
 
-// UpdateTaxRate creates a new version of a tax rate instead of modifying the existing one
-// This preserves historical data while allowing changes to tax rates
+// UpdateTaxRate updates an existing tax rate in place
 func (s *taxRateService) UpdateTaxRate(ctx context.Context, id string, req dto.UpdateTaxRateRequest) (*dto.TaxRateResponse, error) {
 	if id == "" {
 		return nil, ierr.NewError("tax_rate_id is required").
@@ -125,100 +165,73 @@ func (s *taxRateService) UpdateTaxRate(ctx context.Context, id string, req dto.U
 			Mark(ierr.ErrValidation)
 	}
 
+	// Validate the update request
+	if err := s.validateUpdateRequest(req); err != nil {
+		s.logger.Warnw("tax rate update validation failed",
+			"error", err,
+			"tax_rate_id", id,
+		)
+		return nil, err
+	}
+
 	// Get the existing tax rate
-	oldTaxRate, err := s.repo.Get(ctx, id)
+	taxRate, err := s.repo.Get(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
-	// Archive the old tax rate
-	if err := s.DeleteTaxRate(ctx, id); err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to delete the old tax rate version").
-			Mark(ierr.ErrDatabase)
-	}
-
-	// Create a new tax rate with updated values
-	newID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TAX_RATE)
-	now := time.Now().UTC()
-
-	newTaxRate := &taxrate.TaxRate{
-		ID:            newID,
-		Name:          oldTaxRate.Name,
-		Code:          oldTaxRate.Code,
-		Description:   oldTaxRate.Description,
-		Percentage:    oldTaxRate.Percentage,
-		FixedValue:    oldTaxRate.FixedValue,
-		IsCompound:    oldTaxRate.IsCompound,
-		ValidFrom:     oldTaxRate.ValidFrom,
-		ValidTo:       oldTaxRate.ValidTo,
-		EnvironmentID: oldTaxRate.EnvironmentID,
-		BaseModel: types.BaseModel{
-			TenantID:  oldTaxRate.TenantID,
-			Status:    oldTaxRate.Status,
-			CreatedAt: now,
-			UpdatedAt: now,
-			CreatedBy: types.GetUserID(ctx),
-			UpdatedBy: types.GetUserID(ctx),
-		},
-	}
-
-	// Update fields based on the request
+	// TODO: check if tax is being used in any tax assignments then dont allow update
+	// Apply updates only for non-empty fields
 	if req.Name != "" {
-		newTaxRate.Name = req.Name
+		taxRate.Name = req.Name
 	}
 
 	if req.Code != "" {
-		newTaxRate.Code = req.Code
+		taxRate.Code = req.Code
 	}
 
 	if req.Description != "" {
-		newTaxRate.Description = req.Description
-	}
-
-	// Handle percentage and fixedValue fields
-	if req.Percentage != nil {
-		newTaxRate.Percentage = decimal.NewFromFloat(*req.Percentage)
-		newTaxRate.FixedValue = decimal.Zero // If percentage is set, zero out fixedValue
-	}
-
-	if req.FixedValue != nil {
-		newTaxRate.FixedValue = decimal.NewFromFloat(*req.FixedValue)
-		newTaxRate.Percentage = decimal.Zero // If fixedValue is set, zero out percentage
-	}
-
-	// Ensure at least one of percentage or fixedValue is non-zero
-	if newTaxRate.Percentage.IsZero() && newTaxRate.FixedValue.IsZero() {
-		return nil, ierr.NewError("either percentage or fixed_value must be provided").
-			WithHint("Tax rate must have either a percentage or fixed value").
-			Mark(ierr.ErrValidation)
-	}
-
-	if req.IsCompound != nil {
-		newTaxRate.IsCompound = *req.IsCompound
+		taxRate.Description = req.Description
 	}
 
 	if req.ValidFrom != nil {
-		newTaxRate.ValidFrom = req.ValidFrom
+		taxRate.ValidFrom = req.ValidFrom
 	}
 
 	if req.ValidTo != nil {
-		newTaxRate.ValidTo = req.ValidTo
+		taxRate.ValidTo = req.ValidTo
 	}
 
-	// Create the new tax rate in the repository
-	if err := s.repo.Create(ctx, newTaxRate); err != nil {
+	if len(req.Metadata) > 0 {
+		taxRate.Metadata = req.Metadata
+	}
+
+	// Update status based on validity period if dates were updated
+	if req.ValidFrom != nil || req.ValidTo != nil {
+		taxRate.TaxRateStatus = s.calculateTaxRateStatus(taxRate, time.Now().UTC())
+	}
+
+	// Perform the update in the repository
+	if err := s.repo.Update(ctx, taxRate); err != nil {
+		s.logger.Errorw("failed to update tax rate",
+			"error", err,
+			"tax_rate_id", id,
+		)
 		return nil, err
 	}
 
-	// TODO: Update all active tax assignments to point to the new tax rate ID
-	// This will be implemented as part of the tax assignment service
+	s.logger.Infow("tax rate updated successfully",
+		"tax_rate_id", id,
+		"name", taxRate.Name,
+		"code", taxRate.Code,
+		"status", taxRate.TaxRateStatus,
+	)
 
 	// Return the updated tax rate
-	return &dto.TaxRateResponse{TaxRate: newTaxRate}, nil
+	return &dto.TaxRateResponse{TaxRate: taxRate}, nil
 }
 
-// DeleteTaxRate is maintained for backward compatibility but now calls ArchiveTaxRate
+// DeleteTaxRate archives a tax rate by setting its status to archived
 func (s *taxRateService) DeleteTaxRate(ctx context.Context, id string) error {
 	if id == "" {
 		return ierr.NewError("tax_rate_id is required").
@@ -229,11 +242,29 @@ func (s *taxRateService) DeleteTaxRate(ctx context.Context, id string) error {
 	// Get the tax rate to archive
 	taxRate, err := s.repo.Get(ctx, id)
 	if err != nil {
+		s.logger.Warnw("failed to get tax rate for deletion",
+			"error", err,
+			"tax_rate_id", id,
+		)
 		return err
 	}
 
 	// Call the repository's Delete method which handles archiving
-	return s.repo.Delete(ctx, taxRate)
+	if err := s.repo.Delete(ctx, taxRate); err != nil {
+		s.logger.Errorw("failed to delete tax rate",
+			"error", err,
+			"tax_rate_id", id,
+		)
+		return err
+	}
+
+	s.logger.Infow("tax rate deleted successfully",
+		"tax_rate_id", id,
+		"name", taxRate.Name,
+		"code", taxRate.Code,
+	)
+
+	return nil
 }
 
 // GetTaxRateByCode retrieves a tax rate by its code
@@ -247,6 +278,10 @@ func (s *taxRateService) GetTaxRateByCode(ctx context.Context, code string) (*dt
 	// Get the tax rate by code from the repository
 	taxRate, err := s.repo.GetByCode(ctx, code)
 	if err != nil {
+		s.logger.Warnw("failed to get tax rate by code",
+			"error", err,
+			"code", code,
+		)
 		return nil, err
 	}
 
@@ -254,67 +289,39 @@ func (s *taxRateService) GetTaxRateByCode(ctx context.Context, code string) (*dt
 	return &dto.TaxRateResponse{TaxRate: taxRate}, nil
 }
 
-// ResolveTaxRates implements the tax rate resolution algorithm based on the provided hierarchy
-// Precedence: Line-item > Invoice > Customer > Plan > Tenant
-func (s *taxRateService) ResolveTaxRates(ctx context.Context, tenantID, customerID, planID, invoiceID, lineItemID string) ([]*taxrate.TaxRate, error) {
-	// TODO: This will be implemented when tax assignment functionality is added
-	// The implementation will follow the resolution algorithm described in section 4.2 of the PRD
-
-	// For now, just return an empty array
-	return []*taxrate.TaxRate{}, nil
-}
-
-// CalculateLineTaxes calculates taxes for a line item
-// It handles both compound and non-compound taxes
-func (s *taxRateService) CalculateLineTaxes(ctx context.Context, netAmount decimal.Decimal, rates []*taxrate.TaxRate) ([]dto.AppliedTax, decimal.Decimal, error) {
-	taxBase := netAmount
-	totalTax := decimal.Zero
-	appliedTaxes := []dto.AppliedTax{}
-
-	// Sort rates by compound flag (non-compound first, then compound)
-	// This ensures that non-compound taxes are calculated on the base amount
-	// while compound taxes include previous taxes
-	sortedRates := make([]*taxrate.TaxRate, len(rates))
-	copy(sortedRates, rates)
-
-	sort.SliceStable(sortedRates, func(i, j int) bool {
-		return !sortedRates[i].IsCompound && sortedRates[j].IsCompound // non-compound taxes first
-	})
-
-	// Calculate each tax
-	for _, rate := range sortedRates {
-		// Skip archived or invalid tax rates
-		if rate.Status == types.StatusArchived {
-			continue
-		}
-
-		// Get percentage value, defaulting to 0 if not set
-		percentage := rate.Percentage
-
-		// Get fixed value, defaulting to 0 if not set
-		fixedValue := rate.FixedValue
-
-		// Calculate tax amount (percentage-based + fixed)
-		percentageTax := taxBase.Mul(percentage.Div(decimal.NewFromInt(100))) // Convert to decimal
-		taxAmount := percentageTax.Add(fixedValue)
-
-		// Create applied tax entry
-		appliedTaxes = append(appliedTaxes, dto.AppliedTax{
-			TaxRateID:  rate.ID,
-			Code:       rate.Code,
-			Percentage: percentage,
-			FixedValue: fixedValue,
-			Amount:     taxAmount,
-		})
-
-		// Add to total tax
-		totalTax = totalTax.Add(taxAmount)
-
-		// If compound, add to the base for next tax calculation
-		if rate.IsCompound {
-			taxBase = taxBase.Add(taxAmount)
-		}
+// validateUpdateRequest validates the update request
+func (s *taxRateService) validateUpdateRequest(req dto.UpdateTaxRateRequest) error {
+	// Validate that at least one field is being updated
+	if req.Name == "" && req.Code == "" && req.Description == "" &&
+		req.ValidFrom == nil && req.ValidTo == nil &&
+		len(req.Metadata) == 0 {
+		return ierr.NewError("at least one field must be provided for update").
+			WithHint("Please provide at least one field to update").
+			Mark(ierr.ErrValidation)
 	}
 
-	return appliedTaxes, totalTax, nil
+	// Validate date range if both dates are provided
+	if req.ValidFrom != nil && req.ValidTo != nil && req.ValidFrom.After(*req.ValidTo) {
+		return ierr.NewError("valid_from cannot be after valid_to").
+			WithHint("Valid from date cannot be after valid to date").
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}
+
+// calculateTaxRateStatus determines the appropriate status based on validity dates
+func (s *taxRateService) calculateTaxRateStatus(taxRate *taxrate.TaxRate, now time.Time) types.TaxRateStatus {
+	// If ValidFrom is in the future, tax rate should be inactive
+	if taxRate.ValidFrom != nil && taxRate.ValidFrom.After(now) {
+		return types.TaxRateStatusInactive
+	}
+
+	// If ValidTo is in the past, tax rate should be inactive
+	if taxRate.ValidTo != nil && taxRate.ValidTo.Before(now) {
+		return types.TaxRateStatusInactive
+	}
+
+	// Otherwise, tax rate should be active
+	return types.TaxRateStatusActive
 }

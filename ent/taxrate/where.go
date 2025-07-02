@@ -115,19 +115,29 @@ func Code(v string) predicate.TaxRate {
 	return predicate.TaxRate(sql.FieldEQ(FieldCode, v))
 }
 
-// Percentage applies equality check predicate on the "percentage" field. It's identical to PercentageEQ.
-func Percentage(v decimal.Decimal) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldEQ(FieldPercentage, v))
+// TaxRateStatus applies equality check predicate on the "tax_rate_status" field. It's identical to TaxRateStatusEQ.
+func TaxRateStatus(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldEQ(FieldTaxRateStatus, v))
+}
+
+// TaxRateType applies equality check predicate on the "tax_rate_type" field. It's identical to TaxRateTypeEQ.
+func TaxRateType(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldEQ(FieldTaxRateType, v))
+}
+
+// Scope applies equality check predicate on the "scope" field. It's identical to ScopeEQ.
+func Scope(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldEQ(FieldScope, v))
+}
+
+// PercentageValue applies equality check predicate on the "percentage_value" field. It's identical to PercentageValueEQ.
+func PercentageValue(v decimal.Decimal) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldEQ(FieldPercentageValue, v))
 }
 
 // FixedValue applies equality check predicate on the "fixed_value" field. It's identical to FixedValueEQ.
 func FixedValue(v decimal.Decimal) predicate.TaxRate {
 	return predicate.TaxRate(sql.FieldEQ(FieldFixedValue, v))
-}
-
-// IsCompound applies equality check predicate on the "is_compound" field. It's identical to IsCompoundEQ.
-func IsCompound(v bool) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldEQ(FieldIsCompound, v))
 }
 
 // ValidFrom applies equality check predicate on the "valid_from" field. It's identical to ValidFromEQ.
@@ -780,44 +790,249 @@ func CodeContainsFold(v string) predicate.TaxRate {
 	return predicate.TaxRate(sql.FieldContainsFold(FieldCode, v))
 }
 
-// PercentageEQ applies the EQ predicate on the "percentage" field.
-func PercentageEQ(v decimal.Decimal) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldEQ(FieldPercentage, v))
+// TaxRateStatusEQ applies the EQ predicate on the "tax_rate_status" field.
+func TaxRateStatusEQ(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldEQ(FieldTaxRateStatus, v))
 }
 
-// PercentageNEQ applies the NEQ predicate on the "percentage" field.
-func PercentageNEQ(v decimal.Decimal) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldNEQ(FieldPercentage, v))
+// TaxRateStatusNEQ applies the NEQ predicate on the "tax_rate_status" field.
+func TaxRateStatusNEQ(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldNEQ(FieldTaxRateStatus, v))
 }
 
-// PercentageIn applies the In predicate on the "percentage" field.
-func PercentageIn(vs ...decimal.Decimal) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldIn(FieldPercentage, vs...))
+// TaxRateStatusIn applies the In predicate on the "tax_rate_status" field.
+func TaxRateStatusIn(vs ...string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldIn(FieldTaxRateStatus, vs...))
 }
 
-// PercentageNotIn applies the NotIn predicate on the "percentage" field.
-func PercentageNotIn(vs ...decimal.Decimal) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldNotIn(FieldPercentage, vs...))
+// TaxRateStatusNotIn applies the NotIn predicate on the "tax_rate_status" field.
+func TaxRateStatusNotIn(vs ...string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldNotIn(FieldTaxRateStatus, vs...))
 }
 
-// PercentageGT applies the GT predicate on the "percentage" field.
-func PercentageGT(v decimal.Decimal) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldGT(FieldPercentage, v))
+// TaxRateStatusGT applies the GT predicate on the "tax_rate_status" field.
+func TaxRateStatusGT(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldGT(FieldTaxRateStatus, v))
 }
 
-// PercentageGTE applies the GTE predicate on the "percentage" field.
-func PercentageGTE(v decimal.Decimal) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldGTE(FieldPercentage, v))
+// TaxRateStatusGTE applies the GTE predicate on the "tax_rate_status" field.
+func TaxRateStatusGTE(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldGTE(FieldTaxRateStatus, v))
 }
 
-// PercentageLT applies the LT predicate on the "percentage" field.
-func PercentageLT(v decimal.Decimal) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldLT(FieldPercentage, v))
+// TaxRateStatusLT applies the LT predicate on the "tax_rate_status" field.
+func TaxRateStatusLT(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldLT(FieldTaxRateStatus, v))
 }
 
-// PercentageLTE applies the LTE predicate on the "percentage" field.
-func PercentageLTE(v decimal.Decimal) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldLTE(FieldPercentage, v))
+// TaxRateStatusLTE applies the LTE predicate on the "tax_rate_status" field.
+func TaxRateStatusLTE(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldLTE(FieldTaxRateStatus, v))
+}
+
+// TaxRateStatusContains applies the Contains predicate on the "tax_rate_status" field.
+func TaxRateStatusContains(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldContains(FieldTaxRateStatus, v))
+}
+
+// TaxRateStatusHasPrefix applies the HasPrefix predicate on the "tax_rate_status" field.
+func TaxRateStatusHasPrefix(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldHasPrefix(FieldTaxRateStatus, v))
+}
+
+// TaxRateStatusHasSuffix applies the HasSuffix predicate on the "tax_rate_status" field.
+func TaxRateStatusHasSuffix(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldHasSuffix(FieldTaxRateStatus, v))
+}
+
+// TaxRateStatusEqualFold applies the EqualFold predicate on the "tax_rate_status" field.
+func TaxRateStatusEqualFold(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldEqualFold(FieldTaxRateStatus, v))
+}
+
+// TaxRateStatusContainsFold applies the ContainsFold predicate on the "tax_rate_status" field.
+func TaxRateStatusContainsFold(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldContainsFold(FieldTaxRateStatus, v))
+}
+
+// TaxRateTypeEQ applies the EQ predicate on the "tax_rate_type" field.
+func TaxRateTypeEQ(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldEQ(FieldTaxRateType, v))
+}
+
+// TaxRateTypeNEQ applies the NEQ predicate on the "tax_rate_type" field.
+func TaxRateTypeNEQ(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldNEQ(FieldTaxRateType, v))
+}
+
+// TaxRateTypeIn applies the In predicate on the "tax_rate_type" field.
+func TaxRateTypeIn(vs ...string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldIn(FieldTaxRateType, vs...))
+}
+
+// TaxRateTypeNotIn applies the NotIn predicate on the "tax_rate_type" field.
+func TaxRateTypeNotIn(vs ...string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldNotIn(FieldTaxRateType, vs...))
+}
+
+// TaxRateTypeGT applies the GT predicate on the "tax_rate_type" field.
+func TaxRateTypeGT(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldGT(FieldTaxRateType, v))
+}
+
+// TaxRateTypeGTE applies the GTE predicate on the "tax_rate_type" field.
+func TaxRateTypeGTE(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldGTE(FieldTaxRateType, v))
+}
+
+// TaxRateTypeLT applies the LT predicate on the "tax_rate_type" field.
+func TaxRateTypeLT(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldLT(FieldTaxRateType, v))
+}
+
+// TaxRateTypeLTE applies the LTE predicate on the "tax_rate_type" field.
+func TaxRateTypeLTE(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldLTE(FieldTaxRateType, v))
+}
+
+// TaxRateTypeContains applies the Contains predicate on the "tax_rate_type" field.
+func TaxRateTypeContains(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldContains(FieldTaxRateType, v))
+}
+
+// TaxRateTypeHasPrefix applies the HasPrefix predicate on the "tax_rate_type" field.
+func TaxRateTypeHasPrefix(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldHasPrefix(FieldTaxRateType, v))
+}
+
+// TaxRateTypeHasSuffix applies the HasSuffix predicate on the "tax_rate_type" field.
+func TaxRateTypeHasSuffix(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldHasSuffix(FieldTaxRateType, v))
+}
+
+// TaxRateTypeEqualFold applies the EqualFold predicate on the "tax_rate_type" field.
+func TaxRateTypeEqualFold(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldEqualFold(FieldTaxRateType, v))
+}
+
+// TaxRateTypeContainsFold applies the ContainsFold predicate on the "tax_rate_type" field.
+func TaxRateTypeContainsFold(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldContainsFold(FieldTaxRateType, v))
+}
+
+// ScopeEQ applies the EQ predicate on the "scope" field.
+func ScopeEQ(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldEQ(FieldScope, v))
+}
+
+// ScopeNEQ applies the NEQ predicate on the "scope" field.
+func ScopeNEQ(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldNEQ(FieldScope, v))
+}
+
+// ScopeIn applies the In predicate on the "scope" field.
+func ScopeIn(vs ...string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldIn(FieldScope, vs...))
+}
+
+// ScopeNotIn applies the NotIn predicate on the "scope" field.
+func ScopeNotIn(vs ...string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldNotIn(FieldScope, vs...))
+}
+
+// ScopeGT applies the GT predicate on the "scope" field.
+func ScopeGT(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldGT(FieldScope, v))
+}
+
+// ScopeGTE applies the GTE predicate on the "scope" field.
+func ScopeGTE(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldGTE(FieldScope, v))
+}
+
+// ScopeLT applies the LT predicate on the "scope" field.
+func ScopeLT(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldLT(FieldScope, v))
+}
+
+// ScopeLTE applies the LTE predicate on the "scope" field.
+func ScopeLTE(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldLTE(FieldScope, v))
+}
+
+// ScopeContains applies the Contains predicate on the "scope" field.
+func ScopeContains(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldContains(FieldScope, v))
+}
+
+// ScopeHasPrefix applies the HasPrefix predicate on the "scope" field.
+func ScopeHasPrefix(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldHasPrefix(FieldScope, v))
+}
+
+// ScopeHasSuffix applies the HasSuffix predicate on the "scope" field.
+func ScopeHasSuffix(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldHasSuffix(FieldScope, v))
+}
+
+// ScopeEqualFold applies the EqualFold predicate on the "scope" field.
+func ScopeEqualFold(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldEqualFold(FieldScope, v))
+}
+
+// ScopeContainsFold applies the ContainsFold predicate on the "scope" field.
+func ScopeContainsFold(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldContainsFold(FieldScope, v))
+}
+
+// PercentageValueEQ applies the EQ predicate on the "percentage_value" field.
+func PercentageValueEQ(v decimal.Decimal) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldEQ(FieldPercentageValue, v))
+}
+
+// PercentageValueNEQ applies the NEQ predicate on the "percentage_value" field.
+func PercentageValueNEQ(v decimal.Decimal) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldNEQ(FieldPercentageValue, v))
+}
+
+// PercentageValueIn applies the In predicate on the "percentage_value" field.
+func PercentageValueIn(vs ...decimal.Decimal) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldIn(FieldPercentageValue, vs...))
+}
+
+// PercentageValueNotIn applies the NotIn predicate on the "percentage_value" field.
+func PercentageValueNotIn(vs ...decimal.Decimal) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldNotIn(FieldPercentageValue, vs...))
+}
+
+// PercentageValueGT applies the GT predicate on the "percentage_value" field.
+func PercentageValueGT(v decimal.Decimal) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldGT(FieldPercentageValue, v))
+}
+
+// PercentageValueGTE applies the GTE predicate on the "percentage_value" field.
+func PercentageValueGTE(v decimal.Decimal) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldGTE(FieldPercentageValue, v))
+}
+
+// PercentageValueLT applies the LT predicate on the "percentage_value" field.
+func PercentageValueLT(v decimal.Decimal) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldLT(FieldPercentageValue, v))
+}
+
+// PercentageValueLTE applies the LTE predicate on the "percentage_value" field.
+func PercentageValueLTE(v decimal.Decimal) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldLTE(FieldPercentageValue, v))
+}
+
+// PercentageValueIsNil applies the IsNil predicate on the "percentage_value" field.
+func PercentageValueIsNil() predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldIsNull(FieldPercentageValue))
+}
+
+// PercentageValueNotNil applies the NotNil predicate on the "percentage_value" field.
+func PercentageValueNotNil() predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldNotNull(FieldPercentageValue))
 }
 
 // FixedValueEQ applies the EQ predicate on the "fixed_value" field.
@@ -860,14 +1075,14 @@ func FixedValueLTE(v decimal.Decimal) predicate.TaxRate {
 	return predicate.TaxRate(sql.FieldLTE(FieldFixedValue, v))
 }
 
-// IsCompoundEQ applies the EQ predicate on the "is_compound" field.
-func IsCompoundEQ(v bool) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldEQ(FieldIsCompound, v))
+// FixedValueIsNil applies the IsNil predicate on the "fixed_value" field.
+func FixedValueIsNil() predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldIsNull(FieldFixedValue))
 }
 
-// IsCompoundNEQ applies the NEQ predicate on the "is_compound" field.
-func IsCompoundNEQ(v bool) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldNEQ(FieldIsCompound, v))
+// FixedValueNotNil applies the NotNil predicate on the "fixed_value" field.
+func FixedValueNotNil() predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldNotNull(FieldFixedValue))
 }
 
 // ValidFromEQ applies the EQ predicate on the "valid_from" field.
