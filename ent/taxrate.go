@@ -39,12 +39,16 @@ type TaxRate struct {
 	Description string `json:"description,omitempty"`
 	// e.g. CGST, SGST, etc.
 	Code string `json:"code,omitempty"`
-	// Percentage holds the value of the "percentage" field.
-	Percentage decimal.Decimal `json:"percentage,omitempty"`
+	// TaxRateStatus holds the value of the "tax_rate_status" field.
+	TaxRateStatus string `json:"tax_rate_status,omitempty"`
+	// TaxRateType holds the value of the "tax_rate_type" field.
+	TaxRateType string `json:"tax_rate_type,omitempty"`
+	// Scope holds the value of the "scope" field.
+	Scope string `json:"scope,omitempty"`
+	// PercentageValue holds the value of the "percentage_value" field.
+	PercentageValue *decimal.Decimal `json:"percentage_value,omitempty"`
 	// FixedValue holds the value of the "fixed_value" field.
-	FixedValue decimal.Decimal `json:"fixed_value,omitempty"`
-	// IsCompound holds the value of the "is_compound" field.
-	IsCompound bool `json:"is_compound,omitempty"`
+	FixedValue *decimal.Decimal `json:"fixed_value,omitempty"`
 	// ValidFrom holds the value of the "valid_from" field.
 	ValidFrom *time.Time `json:"valid_from,omitempty"`
 	// ValidTo holds the value of the "valid_to" field.
@@ -59,13 +63,11 @@ func (*TaxRate) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case taxrate.FieldPercentageValue, taxrate.FieldFixedValue:
+			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case taxrate.FieldMetadata:
 			values[i] = new([]byte)
-		case taxrate.FieldPercentage, taxrate.FieldFixedValue:
-			values[i] = new(decimal.Decimal)
-		case taxrate.FieldIsCompound:
-			values[i] = new(sql.NullBool)
-		case taxrate.FieldID, taxrate.FieldTenantID, taxrate.FieldStatus, taxrate.FieldCreatedBy, taxrate.FieldUpdatedBy, taxrate.FieldEnvironmentID, taxrate.FieldName, taxrate.FieldDescription, taxrate.FieldCode:
+		case taxrate.FieldID, taxrate.FieldTenantID, taxrate.FieldStatus, taxrate.FieldCreatedBy, taxrate.FieldUpdatedBy, taxrate.FieldEnvironmentID, taxrate.FieldName, taxrate.FieldDescription, taxrate.FieldCode, taxrate.FieldTaxRateStatus, taxrate.FieldTaxRateType, taxrate.FieldScope:
 			values[i] = new(sql.NullString)
 		case taxrate.FieldCreatedAt, taxrate.FieldUpdatedAt, taxrate.FieldValidFrom, taxrate.FieldValidTo:
 			values[i] = new(sql.NullTime)
@@ -150,23 +152,37 @@ func (tr *TaxRate) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				tr.Code = value.String
 			}
-		case taxrate.FieldPercentage:
-			if value, ok := values[i].(*decimal.Decimal); !ok {
-				return fmt.Errorf("unexpected type %T for field percentage", values[i])
-			} else if value != nil {
-				tr.Percentage = *value
+		case taxrate.FieldTaxRateStatus:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field tax_rate_status", values[i])
+			} else if value.Valid {
+				tr.TaxRateStatus = value.String
+			}
+		case taxrate.FieldTaxRateType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field tax_rate_type", values[i])
+			} else if value.Valid {
+				tr.TaxRateType = value.String
+			}
+		case taxrate.FieldScope:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field scope", values[i])
+			} else if value.Valid {
+				tr.Scope = value.String
+			}
+		case taxrate.FieldPercentageValue:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field percentage_value", values[i])
+			} else if value.Valid {
+				tr.PercentageValue = new(decimal.Decimal)
+				*tr.PercentageValue = *value.S.(*decimal.Decimal)
 			}
 		case taxrate.FieldFixedValue:
-			if value, ok := values[i].(*decimal.Decimal); !ok {
+			if value, ok := values[i].(*sql.NullScanner); !ok {
 				return fmt.Errorf("unexpected type %T for field fixed_value", values[i])
-			} else if value != nil {
-				tr.FixedValue = *value
-			}
-		case taxrate.FieldIsCompound:
-			if value, ok := values[i].(*sql.NullBool); !ok {
-				return fmt.Errorf("unexpected type %T for field is_compound", values[i])
 			} else if value.Valid {
-				tr.IsCompound = value.Bool
+				tr.FixedValue = new(decimal.Decimal)
+				*tr.FixedValue = *value.S.(*decimal.Decimal)
 			}
 		case taxrate.FieldValidFrom:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -256,14 +272,24 @@ func (tr *TaxRate) String() string {
 	builder.WriteString("code=")
 	builder.WriteString(tr.Code)
 	builder.WriteString(", ")
-	builder.WriteString("percentage=")
-	builder.WriteString(fmt.Sprintf("%v", tr.Percentage))
+	builder.WriteString("tax_rate_status=")
+	builder.WriteString(tr.TaxRateStatus)
 	builder.WriteString(", ")
-	builder.WriteString("fixed_value=")
-	builder.WriteString(fmt.Sprintf("%v", tr.FixedValue))
+	builder.WriteString("tax_rate_type=")
+	builder.WriteString(tr.TaxRateType)
 	builder.WriteString(", ")
-	builder.WriteString("is_compound=")
-	builder.WriteString(fmt.Sprintf("%v", tr.IsCompound))
+	builder.WriteString("scope=")
+	builder.WriteString(tr.Scope)
+	builder.WriteString(", ")
+	if v := tr.PercentageValue; v != nil {
+		builder.WriteString("percentage_value=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := tr.FixedValue; v != nil {
+		builder.WriteString("fixed_value=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteString(", ")
 	if v := tr.ValidFrom; v != nil {
 		builder.WriteString("valid_from=")
