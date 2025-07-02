@@ -143,14 +143,6 @@ func (trc *TaxRateCreate) SetTaxRateStatus(s string) *TaxRateCreate {
 	return trc
 }
 
-// SetNillableTaxRateStatus sets the "tax_rate_status" field if the given value is not nil.
-func (trc *TaxRateCreate) SetNillableTaxRateStatus(s *string) *TaxRateCreate {
-	if s != nil {
-		trc.SetTaxRateStatus(*s)
-	}
-	return trc
-}
-
 // SetTaxRateType sets the "tax_rate_type" field.
 func (trc *TaxRateCreate) SetTaxRateType(s string) *TaxRateCreate {
 	trc.mutation.SetTaxRateType(s)
@@ -289,10 +281,6 @@ func (trc *TaxRateCreate) defaults() {
 	if _, ok := trc.mutation.EnvironmentID(); !ok {
 		v := taxrate.DefaultEnvironmentID
 		trc.mutation.SetEnvironmentID(v)
-	}
-	if _, ok := trc.mutation.TaxRateStatus(); !ok {
-		v := taxrate.DefaultTaxRateStatus
-		trc.mutation.SetTaxRateStatus(v)
 	}
 	if _, ok := trc.mutation.TaxRateType(); !ok {
 		v := taxrate.DefaultTaxRateType
