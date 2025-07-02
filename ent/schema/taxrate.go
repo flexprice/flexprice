@@ -3,7 +3,6 @@ package schema
 import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/entsql"
-	"entgo.io/ent/schema"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
@@ -106,20 +105,5 @@ func (TaxRate) Indexes() []ent.Index {
 
 		index.Fields("code").
 			Annotations(entsql.IndexWhere("(code IS NOT NULL AND code != '')")),
-	}
-}
-
-func (TaxRate) Annotations() []schema.Annotation {
-	return []schema.Annotation{
-		entsql.Annotation{
-			Table: "tax_rates",
-			Checks: map[string]string{
-				// Exactly one of percentage or fixed_value must be present
-				"percentage_fixed_value_check": "(percentage_value IS NOT NULL) <> (fixed_value IS NOT NULL)",
-
-				// Percentage, if given, must not exceed 100 %
-				"percentage_check": "(percentage_value IS NULL OR percentage_value <= 100)",
-			},
-		},
 	}
 }
