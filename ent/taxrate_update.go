@@ -117,17 +117,51 @@ func (tru *TaxRateUpdate) SetNillableCode(s *string) *TaxRateUpdate {
 	return tru
 }
 
-// SetPercentage sets the "percentage" field.
-func (tru *TaxRateUpdate) SetPercentage(d decimal.Decimal) *TaxRateUpdate {
-	tru.mutation.SetPercentage(d)
+// SetTaxRateStatus sets the "tax_rate_status" field.
+func (tru *TaxRateUpdate) SetTaxRateStatus(s string) *TaxRateUpdate {
+	tru.mutation.SetTaxRateStatus(s)
 	return tru
 }
 
-// SetNillablePercentage sets the "percentage" field if the given value is not nil.
-func (tru *TaxRateUpdate) SetNillablePercentage(d *decimal.Decimal) *TaxRateUpdate {
-	if d != nil {
-		tru.SetPercentage(*d)
+// SetNillableTaxRateStatus sets the "tax_rate_status" field if the given value is not nil.
+func (tru *TaxRateUpdate) SetNillableTaxRateStatus(s *string) *TaxRateUpdate {
+	if s != nil {
+		tru.SetTaxRateStatus(*s)
 	}
+	return tru
+}
+
+// SetScope sets the "scope" field.
+func (tru *TaxRateUpdate) SetScope(s string) *TaxRateUpdate {
+	tru.mutation.SetScope(s)
+	return tru
+}
+
+// SetNillableScope sets the "scope" field if the given value is not nil.
+func (tru *TaxRateUpdate) SetNillableScope(s *string) *TaxRateUpdate {
+	if s != nil {
+		tru.SetScope(*s)
+	}
+	return tru
+}
+
+// SetPercentageValue sets the "percentage_value" field.
+func (tru *TaxRateUpdate) SetPercentageValue(d decimal.Decimal) *TaxRateUpdate {
+	tru.mutation.SetPercentageValue(d)
+	return tru
+}
+
+// SetNillablePercentageValue sets the "percentage_value" field if the given value is not nil.
+func (tru *TaxRateUpdate) SetNillablePercentageValue(d *decimal.Decimal) *TaxRateUpdate {
+	if d != nil {
+		tru.SetPercentageValue(*d)
+	}
+	return tru
+}
+
+// ClearPercentageValue clears the value of the "percentage_value" field.
+func (tru *TaxRateUpdate) ClearPercentageValue() *TaxRateUpdate {
+	tru.mutation.ClearPercentageValue()
 	return tru
 }
 
@@ -145,17 +179,9 @@ func (tru *TaxRateUpdate) SetNillableFixedValue(d *decimal.Decimal) *TaxRateUpda
 	return tru
 }
 
-// SetIsCompound sets the "is_compound" field.
-func (tru *TaxRateUpdate) SetIsCompound(b bool) *TaxRateUpdate {
-	tru.mutation.SetIsCompound(b)
-	return tru
-}
-
-// SetNillableIsCompound sets the "is_compound" field if the given value is not nil.
-func (tru *TaxRateUpdate) SetNillableIsCompound(b *bool) *TaxRateUpdate {
-	if b != nil {
-		tru.SetIsCompound(*b)
-	}
+// ClearFixedValue clears the value of the "fixed_value" field.
+func (tru *TaxRateUpdate) ClearFixedValue() *TaxRateUpdate {
+	tru.mutation.ClearFixedValue()
 	return tru
 }
 
@@ -264,6 +290,16 @@ func (tru *TaxRateUpdate) check() error {
 			return &ValidationError{Name: "code", err: fmt.Errorf(`ent: validator failed for field "TaxRate.code": %w`, err)}
 		}
 	}
+	if v, ok := tru.mutation.TaxRateStatus(); ok {
+		if err := taxrate.TaxRateStatusValidator(v); err != nil {
+			return &ValidationError{Name: "tax_rate_status", err: fmt.Errorf(`ent: validator failed for field "TaxRate.tax_rate_status": %w`, err)}
+		}
+	}
+	if v, ok := tru.mutation.Scope(); ok {
+		if err := taxrate.ScopeValidator(v); err != nil {
+			return &ValidationError{Name: "scope", err: fmt.Errorf(`ent: validator failed for field "TaxRate.scope": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -309,14 +345,23 @@ func (tru *TaxRateUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if value, ok := tru.mutation.Code(); ok {
 		_spec.SetField(taxrate.FieldCode, field.TypeString, value)
 	}
-	if value, ok := tru.mutation.Percentage(); ok {
-		_spec.SetField(taxrate.FieldPercentage, field.TypeOther, value)
+	if value, ok := tru.mutation.TaxRateStatus(); ok {
+		_spec.SetField(taxrate.FieldTaxRateStatus, field.TypeString, value)
+	}
+	if value, ok := tru.mutation.Scope(); ok {
+		_spec.SetField(taxrate.FieldScope, field.TypeString, value)
+	}
+	if value, ok := tru.mutation.PercentageValue(); ok {
+		_spec.SetField(taxrate.FieldPercentageValue, field.TypeOther, value)
+	}
+	if tru.mutation.PercentageValueCleared() {
+		_spec.ClearField(taxrate.FieldPercentageValue, field.TypeOther)
 	}
 	if value, ok := tru.mutation.FixedValue(); ok {
 		_spec.SetField(taxrate.FieldFixedValue, field.TypeOther, value)
 	}
-	if value, ok := tru.mutation.IsCompound(); ok {
-		_spec.SetField(taxrate.FieldIsCompound, field.TypeBool, value)
+	if tru.mutation.FixedValueCleared() {
+		_spec.ClearField(taxrate.FieldFixedValue, field.TypeOther)
 	}
 	if value, ok := tru.mutation.ValidFrom(); ok {
 		_spec.SetField(taxrate.FieldValidFrom, field.TypeTime, value)
@@ -444,17 +489,51 @@ func (truo *TaxRateUpdateOne) SetNillableCode(s *string) *TaxRateUpdateOne {
 	return truo
 }
 
-// SetPercentage sets the "percentage" field.
-func (truo *TaxRateUpdateOne) SetPercentage(d decimal.Decimal) *TaxRateUpdateOne {
-	truo.mutation.SetPercentage(d)
+// SetTaxRateStatus sets the "tax_rate_status" field.
+func (truo *TaxRateUpdateOne) SetTaxRateStatus(s string) *TaxRateUpdateOne {
+	truo.mutation.SetTaxRateStatus(s)
 	return truo
 }
 
-// SetNillablePercentage sets the "percentage" field if the given value is not nil.
-func (truo *TaxRateUpdateOne) SetNillablePercentage(d *decimal.Decimal) *TaxRateUpdateOne {
-	if d != nil {
-		truo.SetPercentage(*d)
+// SetNillableTaxRateStatus sets the "tax_rate_status" field if the given value is not nil.
+func (truo *TaxRateUpdateOne) SetNillableTaxRateStatus(s *string) *TaxRateUpdateOne {
+	if s != nil {
+		truo.SetTaxRateStatus(*s)
 	}
+	return truo
+}
+
+// SetScope sets the "scope" field.
+func (truo *TaxRateUpdateOne) SetScope(s string) *TaxRateUpdateOne {
+	truo.mutation.SetScope(s)
+	return truo
+}
+
+// SetNillableScope sets the "scope" field if the given value is not nil.
+func (truo *TaxRateUpdateOne) SetNillableScope(s *string) *TaxRateUpdateOne {
+	if s != nil {
+		truo.SetScope(*s)
+	}
+	return truo
+}
+
+// SetPercentageValue sets the "percentage_value" field.
+func (truo *TaxRateUpdateOne) SetPercentageValue(d decimal.Decimal) *TaxRateUpdateOne {
+	truo.mutation.SetPercentageValue(d)
+	return truo
+}
+
+// SetNillablePercentageValue sets the "percentage_value" field if the given value is not nil.
+func (truo *TaxRateUpdateOne) SetNillablePercentageValue(d *decimal.Decimal) *TaxRateUpdateOne {
+	if d != nil {
+		truo.SetPercentageValue(*d)
+	}
+	return truo
+}
+
+// ClearPercentageValue clears the value of the "percentage_value" field.
+func (truo *TaxRateUpdateOne) ClearPercentageValue() *TaxRateUpdateOne {
+	truo.mutation.ClearPercentageValue()
 	return truo
 }
 
@@ -472,17 +551,9 @@ func (truo *TaxRateUpdateOne) SetNillableFixedValue(d *decimal.Decimal) *TaxRate
 	return truo
 }
 
-// SetIsCompound sets the "is_compound" field.
-func (truo *TaxRateUpdateOne) SetIsCompound(b bool) *TaxRateUpdateOne {
-	truo.mutation.SetIsCompound(b)
-	return truo
-}
-
-// SetNillableIsCompound sets the "is_compound" field if the given value is not nil.
-func (truo *TaxRateUpdateOne) SetNillableIsCompound(b *bool) *TaxRateUpdateOne {
-	if b != nil {
-		truo.SetIsCompound(*b)
-	}
+// ClearFixedValue clears the value of the "fixed_value" field.
+func (truo *TaxRateUpdateOne) ClearFixedValue() *TaxRateUpdateOne {
+	truo.mutation.ClearFixedValue()
 	return truo
 }
 
@@ -604,6 +675,16 @@ func (truo *TaxRateUpdateOne) check() error {
 			return &ValidationError{Name: "code", err: fmt.Errorf(`ent: validator failed for field "TaxRate.code": %w`, err)}
 		}
 	}
+	if v, ok := truo.mutation.TaxRateStatus(); ok {
+		if err := taxrate.TaxRateStatusValidator(v); err != nil {
+			return &ValidationError{Name: "tax_rate_status", err: fmt.Errorf(`ent: validator failed for field "TaxRate.tax_rate_status": %w`, err)}
+		}
+	}
+	if v, ok := truo.mutation.Scope(); ok {
+		if err := taxrate.ScopeValidator(v); err != nil {
+			return &ValidationError{Name: "scope", err: fmt.Errorf(`ent: validator failed for field "TaxRate.scope": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -666,14 +747,23 @@ func (truo *TaxRateUpdateOne) sqlSave(ctx context.Context) (_node *TaxRate, err 
 	if value, ok := truo.mutation.Code(); ok {
 		_spec.SetField(taxrate.FieldCode, field.TypeString, value)
 	}
-	if value, ok := truo.mutation.Percentage(); ok {
-		_spec.SetField(taxrate.FieldPercentage, field.TypeOther, value)
+	if value, ok := truo.mutation.TaxRateStatus(); ok {
+		_spec.SetField(taxrate.FieldTaxRateStatus, field.TypeString, value)
+	}
+	if value, ok := truo.mutation.Scope(); ok {
+		_spec.SetField(taxrate.FieldScope, field.TypeString, value)
+	}
+	if value, ok := truo.mutation.PercentageValue(); ok {
+		_spec.SetField(taxrate.FieldPercentageValue, field.TypeOther, value)
+	}
+	if truo.mutation.PercentageValueCleared() {
+		_spec.ClearField(taxrate.FieldPercentageValue, field.TypeOther)
 	}
 	if value, ok := truo.mutation.FixedValue(); ok {
 		_spec.SetField(taxrate.FieldFixedValue, field.TypeOther, value)
 	}
-	if value, ok := truo.mutation.IsCompound(); ok {
-		_spec.SetField(taxrate.FieldIsCompound, field.TypeBool, value)
+	if truo.mutation.FixedValueCleared() {
+		_spec.ClearField(taxrate.FieldFixedValue, field.TypeOther)
 	}
 	if value, ok := truo.mutation.ValidFrom(); ok {
 		_spec.SetField(taxrate.FieldValidFrom, field.TypeTime, value)

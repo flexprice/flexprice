@@ -17,7 +17,6 @@ import (
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/lib/pq"
-	"github.com/samber/lo"
 )
 
 type taxrateRepository struct {
@@ -65,11 +64,13 @@ func (r *taxrateRepository) Create(ctx context.Context, t *domainTaxRate.TaxRate
 		SetName(t.Name).
 		SetCode(t.Code).
 		SetDescription(t.Description).
-		SetPercentage(t.Percentage).
-		SetFixedValue(t.FixedValue).
-		SetIsCompound(t.IsCompound).
-		SetValidFrom(lo.FromPtr(t.ValidFrom)).
-		SetValidTo(lo.FromPtr(t.ValidTo)).
+		SetMetadata(t.Metadata).
+		SetTaxRateType(string(t.TaxRateType)).
+		SetNillablePercentageValue(t.PercentageValue).
+		SetNillableFixedValue(t.FixedValue).
+		SetScope(string(t.Scope)).
+		SetNillableValidFrom(t.ValidFrom).
+		SetNillableValidTo(t.ValidTo).
 		SetStatus(string(t.Status)).
 		SetTenantID(t.TenantID).
 		SetEnvironmentID(t.EnvironmentID).
@@ -162,7 +163,17 @@ func (r *taxrateRepository) List(ctx context.Context, filter *types.TaxRateFilte
 	})
 	defer FinishSpan(span)
 
+	if err := filter.Validate(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Invalid filter").
+			Mark(ierr.ErrValidation)
+	}
+
 	query := r.client.Querier(ctx).TaxRate.Query()
+
+	query = ApplyQueryOptions(ctx, query, filter, r.queryOpts)
+
 	query, err := r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
 	if err != nil {
 		SetSpanError(span, err)
@@ -236,11 +247,12 @@ func (r *taxrateRepository) Update(ctx context.Context, t *domainTaxRate.TaxRate
 		SetName(t.Name).
 		SetCode(t.Code).
 		SetDescription(t.Description).
-		SetPercentage(t.Percentage).
-		SetFixedValue(t.FixedValue).
-		SetIsCompound(t.IsCompound).
-		SetValidFrom(lo.FromPtr(t.ValidFrom)).
-		SetValidTo(lo.FromPtr(t.ValidTo)).
+		SetMetadata(t.Metadata).
+		SetNillablePercentageValue(t.PercentageValue).
+		SetNillableFixedValue(t.FixedValue).
+		SetScope(string(t.Scope)).
+		SetNillableValidFrom(t.ValidFrom).
+		SetNillableValidTo(t.ValidTo).
 		SetStatus(string(t.Status)).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
@@ -369,6 +381,13 @@ func (r *taxrateRepository) ListAll(ctx context.Context, filter *types.TaxRateFi
 	})
 	defer FinishSpan(span)
 
+	if err := filter.Validate(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Invalid filter").
+			Mark(ierr.ErrValidation)
+	}
+
 	client := r.client.Querier(ctx)
 	taxrates, err := client.TaxRate.Query().
 		Where(
@@ -421,28 +440,42 @@ func (o TaxRateQueryOptions) ApplySortFilter(query TaxRateQuery, field string, o
 	return query.Order(ent.Asc(field))
 }
 
+func (o TaxRateQueryOptions) ApplyPaginationFilter(query TaxRateQuery, limit int, offset int) TaxRateQuery {
+	if limit > 0 {
+		query = query.Limit(limit)
+	}
+	if offset > 0 {
+		query = query.Offset(offset)
+	}
+	return query
+}
+
 // GetFieldName returns the field name for the given field
 // @Returns: the field name for the given field
 func (o TaxRateQueryOptions) GetFieldName(field string) string {
 	switch field {
 	case "created_at":
-		return "created_at"
+		return taxrate.FieldCreatedAt
 	case "updated_at":
-		return "updated_at"
+		return taxrate.FieldUpdatedAt
 	case "name":
-		return "name"
+		return taxrate.FieldName
 	case "code":
-		return "code"
-	case "percentage":
-		return "percentage"
+		return taxrate.FieldCode
+	case "percentage_value":
+		return taxrate.FieldPercentageValue
 	case "fixed_value":
-		return "fixed_value"
-	case "is_compound":
-		return "is_compound"
+		return taxrate.FieldFixedValue
+	case "scope":
+		return taxrate.FieldScope
 	case "valid_from":
-		return "valid_from"
+		return taxrate.FieldValidFrom
 	case "valid_to":
-		return "valid_to"
+		return taxrate.FieldValidTo
+	case "tax_rate_type":
+		return taxrate.FieldTaxRateType
+	case "status":
+		return taxrate.FieldStatus
 	default:
 		return ""
 	}
@@ -457,11 +490,11 @@ func (o TaxRateQueryOptions) GetFieldResolver(field string) (string, error) {
 	return fieldName, nil
 }
 
-func (o TaxRateQueryOptions) applyEntityQueryOptions(ctx context.Context, f *types.TaxRateFilter, query TaxRateQuery) (TaxRateQuery, error) {
+func (o TaxRateQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.TaxRateFilter, query TaxRateQuery) (TaxRateQuery, error) {
 	var err error
-
-	query = o.ApplyTenantFilter(ctx, query)
-	query = o.ApplyEnvironmentFilter(ctx, query)
+	if f == nil {
+		return query, nil
+	}
 
 	if f.Code != "" {
 		query = query.Where(taxrate.Code(f.Code))
