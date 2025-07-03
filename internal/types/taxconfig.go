@@ -4,33 +4,33 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 )
 
-// DefaultTaxRateConfigFilter represents the filter options for listing default tax rate configs
-type DefaultTaxRateConfigFilter struct {
+// TaxConfigFilter represents the filter options for listing tax configs
+type TaxConfigFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
-	DefaultTaxRateConfigIDs []string `json:"default_tax_rate_config_ids,omitempty" form:"default_tax_rate_config_ids"`
-	TaxRateIDs              []string `json:"tax_rate_ids,omitempty" form:"tax_rate_ids"`
-	EntityType              string   `json:"entity_type,omitempty" form:"entity_type"`
-	EntityID                string   `json:"entity_id,omitempty" form:"entity_id"`
-	Currency                string   `json:"currency,omitempty" form:"currency"`
+	TaxConfigIDs []string `json:"tax_config_ids,omitempty" form:"tax_config_ids"`
+	TaxRateIDs   []string `json:"tax_rate_ids,omitempty" form:"tax_rate_ids"`
+	EntityType   string   `json:"entity_type,omitempty" form:"entity_type"`
+	EntityID     string   `json:"entity_id,omitempty" form:"entity_id"`
+	Currency     string   `json:"currency,omitempty" form:"currency"`
 }
 
-// NewDefaultTaxRateConfigFilter creates a new default tax rate config filter with default options
-func NewDefaultTaxRateConfigFilter() *DefaultTaxRateConfigFilter {
-	return &DefaultTaxRateConfigFilter{
+// NewTaxConfigFilter creates a new tax config filter with default options
+func NewTaxConfigFilter() *TaxConfigFilter {
+	return &TaxConfigFilter{
 		QueryFilter: NewDefaultQueryFilter(),
 	}
 }
 
-// NewNoLimitDefaultTaxRateConfigFilter creates a new default tax rate config filter without pagination
-func NewNoLimitDefaultTaxRateConfigFilter() *DefaultTaxRateConfigFilter {
-	return &DefaultTaxRateConfigFilter{
+// NewNoLimitTaxConfigFilter creates a new tax config filter without pagination
+func NewNoLimitTaxConfigFilter() *TaxConfigFilter {
+	return &TaxConfigFilter{
 		QueryFilter: NewNoLimitQueryFilter(),
 	}
 }
 
-// Validate validates the default tax rate config filter
-func (f *DefaultTaxRateConfigFilter) Validate() error {
+// Validate validates the tax config filter
+func (f *TaxConfigFilter) Validate() error {
 	if f.QueryFilter != nil {
 		if err := f.QueryFilter.Validate(); err != nil {
 			return ierr.WithError(err).WithHint("invalid query filter").Mark(ierr.ErrValidation)
@@ -45,7 +45,7 @@ func (f *DefaultTaxRateConfigFilter) Validate() error {
 }
 
 // GetLimit implements BaseFilter interface
-func (f *DefaultTaxRateConfigFilter) GetLimit() int {
+func (f *TaxConfigFilter) GetLimit() int {
 	if f.QueryFilter == nil {
 		return NewDefaultQueryFilter().GetLimit()
 	}
@@ -53,7 +53,7 @@ func (f *DefaultTaxRateConfigFilter) GetLimit() int {
 }
 
 // GetOffset implements BaseFilter interface
-func (f *DefaultTaxRateConfigFilter) GetOffset() int {
+func (f *TaxConfigFilter) GetOffset() int {
 	if f.QueryFilter == nil {
 		return NewDefaultQueryFilter().GetOffset()
 	}
@@ -61,7 +61,7 @@ func (f *DefaultTaxRateConfigFilter) GetOffset() int {
 }
 
 // GetSort implements BaseFilter interface
-func (f *DefaultTaxRateConfigFilter) GetSort() string {
+func (f *TaxConfigFilter) GetSort() string {
 	if f.QueryFilter == nil {
 		return NewDefaultQueryFilter().GetSort()
 	}
@@ -69,7 +69,7 @@ func (f *DefaultTaxRateConfigFilter) GetSort() string {
 }
 
 // GetOrder implements BaseFilter interface
-func (f *DefaultTaxRateConfigFilter) GetOrder() string {
+func (f *TaxConfigFilter) GetOrder() string {
 	if f.QueryFilter == nil {
 		return NewDefaultQueryFilter().GetOrder()
 	}
@@ -77,7 +77,7 @@ func (f *DefaultTaxRateConfigFilter) GetOrder() string {
 }
 
 // GetStatus implements BaseFilter interface
-func (f *DefaultTaxRateConfigFilter) GetStatus() string {
+func (f *TaxConfigFilter) GetStatus() string {
 	if f.QueryFilter == nil {
 		return NewDefaultQueryFilter().GetStatus()
 	}
@@ -85,14 +85,14 @@ func (f *DefaultTaxRateConfigFilter) GetStatus() string {
 }
 
 // GetExpand implements BaseFilter interface
-func (f *DefaultTaxRateConfigFilter) GetExpand() Expand {
+func (f *TaxConfigFilter) GetExpand() Expand {
 	if f.QueryFilter == nil {
 		return NewDefaultQueryFilter().GetExpand()
 	}
 	return f.QueryFilter.GetExpand()
 }
 
-func (f *DefaultTaxRateConfigFilter) IsUnlimited() bool {
+func (f *TaxConfigFilter) IsUnlimited() bool {
 	if f.QueryFilter == nil {
 		return NewDefaultQueryFilter().IsUnlimited()
 	}
