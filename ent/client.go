@@ -23,6 +23,7 @@ import (
 	"github.com/flexprice/flexprice/ent/creditnote"
 	"github.com/flexprice/flexprice/ent/creditnotelineitem"
 	"github.com/flexprice/flexprice/ent/customer"
+	"github.com/flexprice/flexprice/ent/defaulttaxrateconfig"
 	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/ent/environment"
 	"github.com/flexprice/flexprice/ent/feature"
@@ -71,6 +72,8 @@ type Client struct {
 	CreditNoteLineItem *CreditNoteLineItemClient
 	// Customer is the client for interacting with the Customer builders.
 	Customer *CustomerClient
+	// DefaultTaxRateConfig is the client for interacting with the DefaultTaxRateConfig builders.
+	DefaultTaxRateConfig *DefaultTaxRateConfigClient
 	// Entitlement is the client for interacting with the Entitlement builders.
 	Entitlement *EntitlementClient
 	// Environment is the client for interacting with the Environment builders.
@@ -136,6 +139,7 @@ func (c *Client) init() {
 	c.CreditNote = NewCreditNoteClient(c.config)
 	c.CreditNoteLineItem = NewCreditNoteLineItemClient(c.config)
 	c.Customer = NewCustomerClient(c.config)
+	c.DefaultTaxRateConfig = NewDefaultTaxRateConfigClient(c.config)
 	c.Entitlement = NewEntitlementClient(c.config)
 	c.Environment = NewEnvironmentClient(c.config)
 	c.Feature = NewFeatureClient(c.config)
@@ -259,6 +263,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		CreditNote:                NewCreditNoteClient(cfg),
 		CreditNoteLineItem:        NewCreditNoteLineItemClient(cfg),
 		Customer:                  NewCustomerClient(cfg),
+		DefaultTaxRateConfig:      NewDefaultTaxRateConfigClient(cfg),
 		Entitlement:               NewEntitlementClient(cfg),
 		Environment:               NewEnvironmentClient(cfg),
 		Feature:                   NewFeatureClient(cfg),
@@ -309,6 +314,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		CreditNote:                NewCreditNoteClient(cfg),
 		CreditNoteLineItem:        NewCreditNoteLineItemClient(cfg),
 		Customer:                  NewCustomerClient(cfg),
+		DefaultTaxRateConfig:      NewDefaultTaxRateConfigClient(cfg),
 		Entitlement:               NewEntitlementClient(cfg),
 		Environment:               NewEnvironmentClient(cfg),
 		Feature:                   NewFeatureClient(cfg),
@@ -362,12 +368,12 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.Auth, c.BillingSequence, c.Costsheet, c.CreditGrant, c.CreditGrantApplication,
-		c.CreditNote, c.CreditNoteLineItem, c.Customer, c.Entitlement, c.Environment,
-		c.Feature, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Payment,
-		c.PaymentAttempt, c.Plan, c.Price, c.Secret, c.Subscription,
-		c.SubscriptionLineItem, c.SubscriptionPause, c.SubscriptionSchedule,
-		c.SubscriptionSchedulePhase, c.Task, c.TaxRate, c.Tenant, c.User, c.Wallet,
-		c.WalletTransaction,
+		c.CreditNote, c.CreditNoteLineItem, c.Customer, c.DefaultTaxRateConfig,
+		c.Entitlement, c.Environment, c.Feature, c.Invoice, c.InvoiceLineItem,
+		c.InvoiceSequence, c.Meter, c.Payment, c.PaymentAttempt, c.Plan, c.Price,
+		c.Secret, c.Subscription, c.SubscriptionLineItem, c.SubscriptionPause,
+		c.SubscriptionSchedule, c.SubscriptionSchedulePhase, c.Task, c.TaxRate,
+		c.Tenant, c.User, c.Wallet, c.WalletTransaction,
 	} {
 		n.Use(hooks...)
 	}
@@ -378,12 +384,12 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.Auth, c.BillingSequence, c.Costsheet, c.CreditGrant, c.CreditGrantApplication,
-		c.CreditNote, c.CreditNoteLineItem, c.Customer, c.Entitlement, c.Environment,
-		c.Feature, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Payment,
-		c.PaymentAttempt, c.Plan, c.Price, c.Secret, c.Subscription,
-		c.SubscriptionLineItem, c.SubscriptionPause, c.SubscriptionSchedule,
-		c.SubscriptionSchedulePhase, c.Task, c.TaxRate, c.Tenant, c.User, c.Wallet,
-		c.WalletTransaction,
+		c.CreditNote, c.CreditNoteLineItem, c.Customer, c.DefaultTaxRateConfig,
+		c.Entitlement, c.Environment, c.Feature, c.Invoice, c.InvoiceLineItem,
+		c.InvoiceSequence, c.Meter, c.Payment, c.PaymentAttempt, c.Plan, c.Price,
+		c.Secret, c.Subscription, c.SubscriptionLineItem, c.SubscriptionPause,
+		c.SubscriptionSchedule, c.SubscriptionSchedulePhase, c.Task, c.TaxRate,
+		c.Tenant, c.User, c.Wallet, c.WalletTransaction,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -408,6 +414,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.CreditNoteLineItem.mutate(ctx, m)
 	case *CustomerMutation:
 		return c.Customer.mutate(ctx, m)
+	case *DefaultTaxRateConfigMutation:
+		return c.DefaultTaxRateConfig.mutate(ctx, m)
 	case *EntitlementMutation:
 		return c.Entitlement.mutate(ctx, m)
 	case *EnvironmentMutation:
@@ -1616,6 +1624,139 @@ func (c *CustomerClient) mutate(ctx context.Context, m *CustomerMutation) (Value
 		return (&CustomerDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Customer mutation op: %q", m.Op())
+	}
+}
+
+// DefaultTaxRateConfigClient is a client for the DefaultTaxRateConfig schema.
+type DefaultTaxRateConfigClient struct {
+	config
+}
+
+// NewDefaultTaxRateConfigClient returns a client for the DefaultTaxRateConfig from the given config.
+func NewDefaultTaxRateConfigClient(c config) *DefaultTaxRateConfigClient {
+	return &DefaultTaxRateConfigClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `defaulttaxrateconfig.Hooks(f(g(h())))`.
+func (c *DefaultTaxRateConfigClient) Use(hooks ...Hook) {
+	c.hooks.DefaultTaxRateConfig = append(c.hooks.DefaultTaxRateConfig, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `defaulttaxrateconfig.Intercept(f(g(h())))`.
+func (c *DefaultTaxRateConfigClient) Intercept(interceptors ...Interceptor) {
+	c.inters.DefaultTaxRateConfig = append(c.inters.DefaultTaxRateConfig, interceptors...)
+}
+
+// Create returns a builder for creating a DefaultTaxRateConfig entity.
+func (c *DefaultTaxRateConfigClient) Create() *DefaultTaxRateConfigCreate {
+	mutation := newDefaultTaxRateConfigMutation(c.config, OpCreate)
+	return &DefaultTaxRateConfigCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of DefaultTaxRateConfig entities.
+func (c *DefaultTaxRateConfigClient) CreateBulk(builders ...*DefaultTaxRateConfigCreate) *DefaultTaxRateConfigCreateBulk {
+	return &DefaultTaxRateConfigCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *DefaultTaxRateConfigClient) MapCreateBulk(slice any, setFunc func(*DefaultTaxRateConfigCreate, int)) *DefaultTaxRateConfigCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &DefaultTaxRateConfigCreateBulk{err: fmt.Errorf("calling to DefaultTaxRateConfigClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*DefaultTaxRateConfigCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &DefaultTaxRateConfigCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for DefaultTaxRateConfig.
+func (c *DefaultTaxRateConfigClient) Update() *DefaultTaxRateConfigUpdate {
+	mutation := newDefaultTaxRateConfigMutation(c.config, OpUpdate)
+	return &DefaultTaxRateConfigUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *DefaultTaxRateConfigClient) UpdateOne(dtrc *DefaultTaxRateConfig) *DefaultTaxRateConfigUpdateOne {
+	mutation := newDefaultTaxRateConfigMutation(c.config, OpUpdateOne, withDefaultTaxRateConfig(dtrc))
+	return &DefaultTaxRateConfigUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *DefaultTaxRateConfigClient) UpdateOneID(id string) *DefaultTaxRateConfigUpdateOne {
+	mutation := newDefaultTaxRateConfigMutation(c.config, OpUpdateOne, withDefaultTaxRateConfigID(id))
+	return &DefaultTaxRateConfigUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for DefaultTaxRateConfig.
+func (c *DefaultTaxRateConfigClient) Delete() *DefaultTaxRateConfigDelete {
+	mutation := newDefaultTaxRateConfigMutation(c.config, OpDelete)
+	return &DefaultTaxRateConfigDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *DefaultTaxRateConfigClient) DeleteOne(dtrc *DefaultTaxRateConfig) *DefaultTaxRateConfigDeleteOne {
+	return c.DeleteOneID(dtrc.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *DefaultTaxRateConfigClient) DeleteOneID(id string) *DefaultTaxRateConfigDeleteOne {
+	builder := c.Delete().Where(defaulttaxrateconfig.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &DefaultTaxRateConfigDeleteOne{builder}
+}
+
+// Query returns a query builder for DefaultTaxRateConfig.
+func (c *DefaultTaxRateConfigClient) Query() *DefaultTaxRateConfigQuery {
+	return &DefaultTaxRateConfigQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeDefaultTaxRateConfig},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a DefaultTaxRateConfig entity by its id.
+func (c *DefaultTaxRateConfigClient) Get(ctx context.Context, id string) (*DefaultTaxRateConfig, error) {
+	return c.Query().Where(defaulttaxrateconfig.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *DefaultTaxRateConfigClient) GetX(ctx context.Context, id string) *DefaultTaxRateConfig {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *DefaultTaxRateConfigClient) Hooks() []Hook {
+	return c.hooks.DefaultTaxRateConfig
+}
+
+// Interceptors returns the client interceptors.
+func (c *DefaultTaxRateConfigClient) Interceptors() []Interceptor {
+	return c.inters.DefaultTaxRateConfig
+}
+
+func (c *DefaultTaxRateConfigClient) mutate(ctx context.Context, m *DefaultTaxRateConfigMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&DefaultTaxRateConfigCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&DefaultTaxRateConfigUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&DefaultTaxRateConfigUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&DefaultTaxRateConfigDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown DefaultTaxRateConfig mutation op: %q", m.Op())
 	}
 }
 
@@ -4970,19 +5111,21 @@ func (c *WalletTransactionClient) mutate(ctx context.Context, m *WalletTransacti
 type (
 	hooks struct {
 		Auth, BillingSequence, Costsheet, CreditGrant, CreditGrantApplication,
-		CreditNote, CreditNoteLineItem, Customer, Entitlement, Environment, Feature,
-		Invoice, InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt,
-		Plan, Price, Secret, Subscription, SubscriptionLineItem, SubscriptionPause,
-		SubscriptionSchedule, SubscriptionSchedulePhase, Task, TaxRate, Tenant, User,
-		Wallet, WalletTransaction []ent.Hook
+		CreditNote, CreditNoteLineItem, Customer, DefaultTaxRateConfig, Entitlement,
+		Environment, Feature, Invoice, InvoiceLineItem, InvoiceSequence, Meter,
+		Payment, PaymentAttempt, Plan, Price, Secret, Subscription,
+		SubscriptionLineItem, SubscriptionPause, SubscriptionSchedule,
+		SubscriptionSchedulePhase, Task, TaxRate, Tenant, User, Wallet,
+		WalletTransaction []ent.Hook
 	}
 	inters struct {
 		Auth, BillingSequence, Costsheet, CreditGrant, CreditGrantApplication,
-		CreditNote, CreditNoteLineItem, Customer, Entitlement, Environment, Feature,
-		Invoice, InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt,
-		Plan, Price, Secret, Subscription, SubscriptionLineItem, SubscriptionPause,
-		SubscriptionSchedule, SubscriptionSchedulePhase, Task, TaxRate, Tenant, User,
-		Wallet, WalletTransaction []ent.Interceptor
+		CreditNote, CreditNoteLineItem, Customer, DefaultTaxRateConfig, Entitlement,
+		Environment, Feature, Invoice, InvoiceLineItem, InvoiceSequence, Meter,
+		Payment, PaymentAttempt, Plan, Price, Secret, Subscription,
+		SubscriptionLineItem, SubscriptionPause, SubscriptionSchedule,
+		SubscriptionSchedulePhase, Task, TaxRate, Tenant, User, Wallet,
+		WalletTransaction []ent.Interceptor
 	}
 )
 

@@ -30,6 +30,9 @@ type CreditNoteLineItem func(*sql.Selector)
 // Customer is the predicate function for customer builders.
 type Customer func(*sql.Selector)
 
+// DefaultTaxRateConfig is the predicate function for defaulttaxrateconfig builders.
+type DefaultTaxRateConfig func(*sql.Selector)
+
 // Entitlement is the predicate function for entitlement builders.
 type Entitlement func(*sql.Selector)
 

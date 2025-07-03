@@ -184,7 +184,7 @@ func main() {
 			service.NewCreditGrantService,
 			service.NewCostSheetService,
 			service.NewCreditNoteService,
-			service.NewTaxRateService,
+			service.NewTaxService,
 		),
 	)
 
@@ -234,7 +234,7 @@ func provideHandlers(
 	costSheetService service.CostSheetService,
 	creditNoteService service.CreditNoteService,
 	svixClient *svix.Client,
-	taxRateService service.TaxRateService,
+	taxRateService service.TaxService,
 ) api.Handlers {
 	return api.Handlers{
 		Events:            v1.NewEventsHandler(eventService, eventPostProcessingService, logger),

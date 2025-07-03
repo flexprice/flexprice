@@ -110,7 +110,7 @@ func (c CreditNoteType) Validate() error {
 	return nil
 }
 
-// InvoiceFilter represents the filter options for listing invoices
+// CreditNoteFilter represents the filter options for listing credit notes
 type CreditNoteFilter struct {
 	*QueryFilter
 	*TimeRangeFilter

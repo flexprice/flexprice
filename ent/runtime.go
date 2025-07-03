@@ -13,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/ent/creditnote"
 	"github.com/flexprice/flexprice/ent/creditnotelineitem"
 	"github.com/flexprice/flexprice/ent/customer"
+	"github.com/flexprice/flexprice/ent/defaulttaxrateconfig"
 	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/ent/environment"
 	"github.com/flexprice/flexprice/ent/feature"
@@ -381,6 +382,59 @@ func init() {
 	customerDescName := customerFields[2].Descriptor()
 	// customer.NameValidator is a validator for the "name" field. It is called by the builders before save.
 	customer.NameValidator = customerDescName.Validators[0].(func(string) error)
+	defaulttaxrateconfigMixin := schema.DefaultTaxRateConfig{}.Mixin()
+	defaulttaxrateconfigMixinFields0 := defaulttaxrateconfigMixin[0].Fields()
+	_ = defaulttaxrateconfigMixinFields0
+	defaulttaxrateconfigMixinFields1 := defaulttaxrateconfigMixin[1].Fields()
+	_ = defaulttaxrateconfigMixinFields1
+	defaulttaxrateconfigFields := schema.DefaultTaxRateConfig{}.Fields()
+	_ = defaulttaxrateconfigFields
+	// defaulttaxrateconfigDescTenantID is the schema descriptor for tenant_id field.
+	defaulttaxrateconfigDescTenantID := defaulttaxrateconfigMixinFields0[0].Descriptor()
+	// defaulttaxrateconfig.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	defaulttaxrateconfig.TenantIDValidator = defaulttaxrateconfigDescTenantID.Validators[0].(func(string) error)
+	// defaulttaxrateconfigDescStatus is the schema descriptor for status field.
+	defaulttaxrateconfigDescStatus := defaulttaxrateconfigMixinFields0[1].Descriptor()
+	// defaulttaxrateconfig.DefaultStatus holds the default value on creation for the status field.
+	defaulttaxrateconfig.DefaultStatus = defaulttaxrateconfigDescStatus.Default.(string)
+	// defaulttaxrateconfigDescCreatedAt is the schema descriptor for created_at field.
+	defaulttaxrateconfigDescCreatedAt := defaulttaxrateconfigMixinFields0[2].Descriptor()
+	// defaulttaxrateconfig.DefaultCreatedAt holds the default value on creation for the created_at field.
+	defaulttaxrateconfig.DefaultCreatedAt = defaulttaxrateconfigDescCreatedAt.Default.(func() time.Time)
+	// defaulttaxrateconfigDescUpdatedAt is the schema descriptor for updated_at field.
+	defaulttaxrateconfigDescUpdatedAt := defaulttaxrateconfigMixinFields0[3].Descriptor()
+	// defaulttaxrateconfig.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	defaulttaxrateconfig.DefaultUpdatedAt = defaulttaxrateconfigDescUpdatedAt.Default.(func() time.Time)
+	// defaulttaxrateconfig.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	defaulttaxrateconfig.UpdateDefaultUpdatedAt = defaulttaxrateconfigDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// defaulttaxrateconfigDescEnvironmentID is the schema descriptor for environment_id field.
+	defaulttaxrateconfigDescEnvironmentID := defaulttaxrateconfigMixinFields1[0].Descriptor()
+	// defaulttaxrateconfig.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	defaulttaxrateconfig.DefaultEnvironmentID = defaulttaxrateconfigDescEnvironmentID.Default.(string)
+	// defaulttaxrateconfigDescTaxRateID is the schema descriptor for tax_rate_id field.
+	defaulttaxrateconfigDescTaxRateID := defaulttaxrateconfigFields[1].Descriptor()
+	// defaulttaxrateconfig.TaxRateIDValidator is a validator for the "tax_rate_id" field. It is called by the builders before save.
+	defaulttaxrateconfig.TaxRateIDValidator = defaulttaxrateconfigDescTaxRateID.Validators[0].(func(string) error)
+	// defaulttaxrateconfigDescEntityType is the schema descriptor for entity_type field.
+	defaulttaxrateconfigDescEntityType := defaulttaxrateconfigFields[2].Descriptor()
+	// defaulttaxrateconfig.EntityTypeValidator is a validator for the "entity_type" field. It is called by the builders before save.
+	defaulttaxrateconfig.EntityTypeValidator = defaulttaxrateconfigDescEntityType.Validators[0].(func(string) error)
+	// defaulttaxrateconfigDescEntityID is the schema descriptor for entity_id field.
+	defaulttaxrateconfigDescEntityID := defaulttaxrateconfigFields[3].Descriptor()
+	// defaulttaxrateconfig.EntityIDValidator is a validator for the "entity_id" field. It is called by the builders before save.
+	defaulttaxrateconfig.EntityIDValidator = defaulttaxrateconfigDescEntityID.Validators[0].(func(string) error)
+	// defaulttaxrateconfigDescPriority is the schema descriptor for priority field.
+	defaulttaxrateconfigDescPriority := defaulttaxrateconfigFields[4].Descriptor()
+	// defaulttaxrateconfig.DefaultPriority holds the default value on creation for the priority field.
+	defaulttaxrateconfig.DefaultPriority = defaulttaxrateconfigDescPriority.Default.(int)
+	// defaulttaxrateconfigDescAutoApply is the schema descriptor for auto_apply field.
+	defaulttaxrateconfigDescAutoApply := defaulttaxrateconfigFields[5].Descriptor()
+	// defaulttaxrateconfig.DefaultAutoApply holds the default value on creation for the auto_apply field.
+	defaulttaxrateconfig.DefaultAutoApply = defaulttaxrateconfigDescAutoApply.Default.(bool)
+	// defaulttaxrateconfigDescCurrency is the schema descriptor for currency field.
+	defaulttaxrateconfigDescCurrency := defaulttaxrateconfigFields[8].Descriptor()
+	// defaulttaxrateconfig.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
+	defaulttaxrateconfig.CurrencyValidator = defaulttaxrateconfigDescCurrency.Validators[0].(func(string) error)
 	entitlementMixin := schema.Entitlement{}.Mixin()
 	entitlementMixinFields0 := entitlementMixin[0].Fields()
 	_ = entitlementMixinFields0

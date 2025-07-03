@@ -30,6 +30,8 @@ type Tx struct {
 	CreditNoteLineItem *CreditNoteLineItemClient
 	// Customer is the client for interacting with the Customer builders.
 	Customer *CustomerClient
+	// DefaultTaxRateConfig is the client for interacting with the DefaultTaxRateConfig builders.
+	DefaultTaxRateConfig *DefaultTaxRateConfigClient
 	// Entitlement is the client for interacting with the Entitlement builders.
 	Entitlement *EntitlementClient
 	// Environment is the client for interacting with the Environment builders.
@@ -215,6 +217,7 @@ func (tx *Tx) init() {
 	tx.CreditNote = NewCreditNoteClient(tx.config)
 	tx.CreditNoteLineItem = NewCreditNoteLineItemClient(tx.config)
 	tx.Customer = NewCustomerClient(tx.config)
+	tx.DefaultTaxRateConfig = NewDefaultTaxRateConfigClient(tx.config)
 	tx.Entitlement = NewEntitlementClient(tx.config)
 	tx.Environment = NewEnvironmentClient(tx.config)
 	tx.Feature = NewFeatureClient(tx.config)
