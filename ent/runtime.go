@@ -1411,12 +1411,16 @@ func init() {
 	taxrateDescScope := taxrateFields[6].Descriptor()
 	// taxrate.ScopeValidator is a validator for the "scope" field. It is called by the builders before save.
 	taxrate.ScopeValidator = taxrateDescScope.Validators[0].(func(string) error)
+	// taxrateDescCurrency is the schema descriptor for currency field.
+	taxrateDescCurrency := taxrateFields[7].Descriptor()
+	// taxrate.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
+	taxrate.CurrencyValidator = taxrateDescCurrency.Validators[0].(func(string) error)
 	// taxrateDescPercentageValue is the schema descriptor for percentage_value field.
-	taxrateDescPercentageValue := taxrateFields[7].Descriptor()
+	taxrateDescPercentageValue := taxrateFields[8].Descriptor()
 	// taxrate.DefaultPercentageValue holds the default value on creation for the percentage_value field.
 	taxrate.DefaultPercentageValue = taxrateDescPercentageValue.Default.(decimal.Decimal)
 	// taxrateDescFixedValue is the schema descriptor for fixed_value field.
-	taxrateDescFixedValue := taxrateFields[8].Descriptor()
+	taxrateDescFixedValue := taxrateFields[9].Descriptor()
 	// taxrate.DefaultFixedValue holds the default value on creation for the fixed_value field.
 	taxrate.DefaultFixedValue = taxrateDescFixedValue.Default.(decimal.Decimal)
 	tenantFields := schema.Tenant{}.Fields()

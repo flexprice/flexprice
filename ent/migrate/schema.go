@@ -1375,6 +1375,7 @@ var (
 		{Name: "tax_rate_status", Type: field.TypeString},
 		{Name: "tax_rate_type", Type: field.TypeString, Default: "percentage"},
 		{Name: "scope", Type: field.TypeString},
+		{Name: "currency", Type: field.TypeString},
 		{Name: "percentage_value", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(9,6)"}},
 		{Name: "fixed_value", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(9,6)"}},
 		{Name: "valid_from", Type: field.TypeTime, Nullable: true},

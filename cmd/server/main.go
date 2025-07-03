@@ -138,6 +138,7 @@ func main() {
 			repository.NewCreditNoteRepository,
 			repository.NewCreditNoteLineItemRepository,
 			repository.NewTaxRateRepository,
+			repository.NewTaxConfigRepository,
 
 			// PubSub
 			pubsubRouter.NewRouter,
@@ -185,6 +186,7 @@ func main() {
 			service.NewCostSheetService,
 			service.NewCreditNoteService,
 			service.NewTaxService,
+			service.NewTaxConfigService,
 		),
 	)
 
@@ -234,6 +236,7 @@ func provideHandlers(
 	costSheetService service.CostSheetService,
 	creditNoteService service.CreditNoteService,
 	svixClient *svix.Client,
+	taxConfigService service.TaxConfigService,
 	taxRateService service.TaxService,
 ) api.Handlers {
 	return api.Handlers{
@@ -265,6 +268,7 @@ func provideHandlers(
 		CronCreditGrant:   cron.NewCreditGrantCronHandler(creditGrantService, logger),
 		CreditNote:        v1.NewCreditNoteHandler(creditNoteService, logger),
 		Webhook:           v1.NewWebhookHandler(cfg, svixClient, logger),
+		TaxConfig:         v1.NewTaxConfigHandler(taxConfigService, logger),
 	}
 }
 
@@ -318,7 +322,7 @@ func startServer(
 		startAPIServer(lc, r, cfg, log)
 		startMessageRouter(lc, router, webhookService, onboardingService, log)
 
-	case types.ModeTemporalWorker:
+	case types.ModeTemporalWorker: 
 		startTemporalWorker(lc, temporalClient, &cfg.Temporal, log)
 	case types.ModeConsumer:
 		if consumer == nil {

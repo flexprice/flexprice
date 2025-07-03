@@ -38833,6 +38833,7 @@ type TaxRateMutation struct {
 	tax_rate_status  *string
 	tax_rate_type    *string
 	scope            *string
+	currency         *string
 	percentage_value *decimal.Decimal
 	fixed_value      *decimal.Decimal
 	valid_from       *time.Time
@@ -39468,6 +39469,42 @@ func (m *TaxRateMutation) ResetScope() {
 	m.scope = nil
 }
 
+// SetCurrency sets the "currency" field.
+func (m *TaxRateMutation) SetCurrency(s string) {
+	m.currency = &s
+}
+
+// Currency returns the value of the "currency" field in the mutation.
+func (m *TaxRateMutation) Currency() (r string, exists bool) {
+	v := m.currency
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCurrency returns the old "currency" field's value of the TaxRate entity.
+// If the TaxRate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxRateMutation) OldCurrency(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCurrency is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCurrency requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCurrency: %w", err)
+	}
+	return oldValue.Currency, nil
+}
+
+// ResetCurrency resets all changes to the "currency" field.
+func (m *TaxRateMutation) ResetCurrency() {
+	m.currency = nil
+}
+
 // SetPercentageValue sets the "percentage_value" field.
 func (m *TaxRateMutation) SetPercentageValue(d decimal.Decimal) {
 	m.percentage_value = &d
@@ -39747,7 +39784,7 @@ func (m *TaxRateMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TaxRateMutation) Fields() []string {
-	fields := make([]string, 0, 18)
+	fields := make([]string, 0, 19)
 	if m.tenant_id != nil {
 		fields = append(fields, taxrate.FieldTenantID)
 	}
@@ -39786,6 +39823,9 @@ func (m *TaxRateMutation) Fields() []string {
 	}
 	if m.scope != nil {
 		fields = append(fields, taxrate.FieldScope)
+	}
+	if m.currency != nil {
+		fields = append(fields, taxrate.FieldCurrency)
 	}
 	if m.percentage_value != nil {
 		fields = append(fields, taxrate.FieldPercentageValue)
@@ -39836,6 +39876,8 @@ func (m *TaxRateMutation) Field(name string) (ent.Value, bool) {
 		return m.TaxRateType()
 	case taxrate.FieldScope:
 		return m.Scope()
+	case taxrate.FieldCurrency:
+		return m.Currency()
 	case taxrate.FieldPercentageValue:
 		return m.PercentageValue()
 	case taxrate.FieldFixedValue:
@@ -39881,6 +39923,8 @@ func (m *TaxRateMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldTaxRateType(ctx)
 	case taxrate.FieldScope:
 		return m.OldScope(ctx)
+	case taxrate.FieldCurrency:
+		return m.OldCurrency(ctx)
 	case taxrate.FieldPercentageValue:
 		return m.OldPercentageValue(ctx)
 	case taxrate.FieldFixedValue:
@@ -39990,6 +40034,13 @@ func (m *TaxRateMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetScope(v)
+		return nil
+	case taxrate.FieldCurrency:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCurrency(v)
 		return nil
 	case taxrate.FieldPercentageValue:
 		v, ok := value.(decimal.Decimal)
@@ -40170,6 +40221,9 @@ func (m *TaxRateMutation) ResetField(name string) error {
 		return nil
 	case taxrate.FieldScope:
 		m.ResetScope()
+		return nil
+	case taxrate.FieldCurrency:
+		m.ResetCurrency()
 		return nil
 	case taxrate.FieldPercentageValue:
 		m.ResetPercentageValue()

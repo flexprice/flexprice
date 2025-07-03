@@ -130,6 +130,11 @@ func Scope(v string) predicate.TaxRate {
 	return predicate.TaxRate(sql.FieldEQ(FieldScope, v))
 }
 
+// Currency applies equality check predicate on the "currency" field. It's identical to CurrencyEQ.
+func Currency(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldEQ(FieldCurrency, v))
+}
+
 // PercentageValue applies equality check predicate on the "percentage_value" field. It's identical to PercentageValueEQ.
 func PercentageValue(v decimal.Decimal) predicate.TaxRate {
 	return predicate.TaxRate(sql.FieldEQ(FieldPercentageValue, v))
@@ -983,6 +988,71 @@ func ScopeEqualFold(v string) predicate.TaxRate {
 // ScopeContainsFold applies the ContainsFold predicate on the "scope" field.
 func ScopeContainsFold(v string) predicate.TaxRate {
 	return predicate.TaxRate(sql.FieldContainsFold(FieldScope, v))
+}
+
+// CurrencyEQ applies the EQ predicate on the "currency" field.
+func CurrencyEQ(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldEQ(FieldCurrency, v))
+}
+
+// CurrencyNEQ applies the NEQ predicate on the "currency" field.
+func CurrencyNEQ(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldNEQ(FieldCurrency, v))
+}
+
+// CurrencyIn applies the In predicate on the "currency" field.
+func CurrencyIn(vs ...string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldIn(FieldCurrency, vs...))
+}
+
+// CurrencyNotIn applies the NotIn predicate on the "currency" field.
+func CurrencyNotIn(vs ...string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldNotIn(FieldCurrency, vs...))
+}
+
+// CurrencyGT applies the GT predicate on the "currency" field.
+func CurrencyGT(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldGT(FieldCurrency, v))
+}
+
+// CurrencyGTE applies the GTE predicate on the "currency" field.
+func CurrencyGTE(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldGTE(FieldCurrency, v))
+}
+
+// CurrencyLT applies the LT predicate on the "currency" field.
+func CurrencyLT(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldLT(FieldCurrency, v))
+}
+
+// CurrencyLTE applies the LTE predicate on the "currency" field.
+func CurrencyLTE(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldLTE(FieldCurrency, v))
+}
+
+// CurrencyContains applies the Contains predicate on the "currency" field.
+func CurrencyContains(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldContains(FieldCurrency, v))
+}
+
+// CurrencyHasPrefix applies the HasPrefix predicate on the "currency" field.
+func CurrencyHasPrefix(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldHasPrefix(FieldCurrency, v))
+}
+
+// CurrencyHasSuffix applies the HasSuffix predicate on the "currency" field.
+func CurrencyHasSuffix(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldHasSuffix(FieldCurrency, v))
+}
+
+// CurrencyEqualFold applies the EqualFold predicate on the "currency" field.
+func CurrencyEqualFold(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldEqualFold(FieldCurrency, v))
+}
+
+// CurrencyContainsFold applies the ContainsFold predicate on the "currency" field.
+func CurrencyContainsFold(v string) predicate.TaxRate {
+	return predicate.TaxRate(sql.FieldContainsFold(FieldCurrency, v))
 }
 
 // PercentageValueEQ applies the EQ predicate on the "percentage_value" field.

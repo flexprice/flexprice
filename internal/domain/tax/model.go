@@ -19,6 +19,7 @@ type TaxRate struct {
 	TaxRateType     types.TaxRateType   `json:"tax_rate_type,omitempty"`
 	Scope           types.TaxRateScope  `json:"scope,omitempty"`
 	PercentageValue *decimal.Decimal    `json:"percentage_value,omitempty"`
+	Currency        string              `json:"currency,omitempty"`
 	FixedValue      *decimal.Decimal    `json:"fixed_value,omitempty"`
 	ValidFrom       *time.Time          `json:"valid_from,omitempty"`
 	ValidTo         *time.Time          `json:"valid_to,omitempty"`
@@ -35,6 +36,7 @@ func FromEnt(e *ent.TaxRate) *TaxRate {
 		ID:              e.ID,
 		Name:            e.Name,
 		Description:     e.Description,
+		Currency:        e.Currency,
 		Code:            e.Code,
 		TaxRateStatus:   types.TaxRateStatus(e.TaxRateStatus),
 		TaxRateType:     types.TaxRateType(e.TaxRateType),

@@ -36,6 +36,7 @@ type Handlers struct {
 	Secret            *v1.SecretHandler
 	CostSheet         *v1.CostSheetHandler
 	CreditNote        *v1.CreditNoteHandler
+	TaxConfig         *v1.TaxConfigHandler
 
 	Webhook *v1.WebhookHandler
 	TaxRate *v1.TaxRateHandler

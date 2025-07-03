@@ -31,7 +31,7 @@ type CreateTaxRateRequest struct {
 	// name is the human-readable name for the tax rate (required)
 	Name string `json:"name" validate:"required"`
 
-	// code is the unique alphanumeric identifier for the tax rate (required)
+	// code is the unique alpxuhanumeric identifier for the tax rate (required)
 	Code string `json:"code" validate:"required"`
 
 	// description is an optional text description providing details about the tax rate
@@ -57,6 +57,9 @@ type CreateTaxRateRequest struct {
 
 	// metadata contains additional key-value pairs for storing extra information
 	Metadata map[string]string `json:"metadata,omitempty"`
+
+	// currency is the currency of the tax rate
+	Currency string `json:"currency"validate:"required"`
 }
 
 // UpdateTaxRateRequest represents the request to update a tax rate
@@ -178,6 +181,7 @@ func (r CreateTaxRateRequest) ToTaxRate(ctx context.Context) (*taxrate.TaxRate, 
 		Description:     r.Description,
 		PercentageValue: r.PercentageValue,
 		FixedValue:      r.FixedValue,
+		Currency:        r.Currency,
 		Scope:           r.Scope,
 		ValidFrom:       validFrom,
 		ValidTo:         validTo,

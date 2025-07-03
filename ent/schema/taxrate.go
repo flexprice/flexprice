@@ -58,6 +58,10 @@ func (TaxRate) Fields() []ent.Field {
 		field.String("scope").
 			NotEmpty(),
 
+		field.String("currency").
+			NotEmpty().
+			Immutable(),
+
 		field.Other("percentage_value", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(9,6)",
