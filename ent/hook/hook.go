@@ -105,6 +105,18 @@ func (f CustomerFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, er
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CustomerMutation", m)
 }
 
+// The DefaultTaxRateConfigFunc type is an adapter to allow the use of ordinary
+// function as DefaultTaxRateConfig mutator.
+type DefaultTaxRateConfigFunc func(context.Context, *ent.DefaultTaxRateConfigMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f DefaultTaxRateConfigFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.DefaultTaxRateConfigMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.DefaultTaxRateConfigMutation", m)
+}
+
 // The EntitlementFunc type is an adapter to allow the use of ordinary
 // function as Entitlement mutator.
 type EntitlementFunc func(context.Context, *ent.EntitlementMutation) (ent.Value, error)

@@ -5,13 +5,13 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
-	"github.com/flexprice/flexprice/internal/domain/taxrate"
+	taxrate "github.com/flexprice/flexprice/internal/domain/tax"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
-type TaxRateService interface {
+type TaxService interface {
 	// Core CRUD operations
 	CreateTaxRate(ctx context.Context, req dto.CreateTaxRateRequest) (*dto.TaxRateResponse, error)
 	GetTaxRate(ctx context.Context, id string) (*dto.TaxRateResponse, error)
@@ -21,21 +21,21 @@ type TaxRateService interface {
 	DeleteTaxRate(ctx context.Context, id string) error
 }
 
-type taxRateService struct {
+type taxService struct {
 	repo   taxrate.Repository
 	logger *logger.Logger
 }
 
 // NewTaxRateService creates a new instance of TaxRateService
-func NewTaxRateService(repo taxrate.Repository, logger *logger.Logger) TaxRateService {
-	return &taxRateService{
+func NewTaxService(repo taxrate.Repository, logger *logger.Logger) TaxService {
+	return &taxService{
 		repo:   repo,
 		logger: logger,
 	}
 }
 
 // CreateTaxRate creates a new tax rate
-func (s *taxRateService) CreateTaxRate(ctx context.Context, req dto.CreateTaxRateRequest) (*dto.TaxRateResponse, error) {
+func (s *taxService) CreateTaxRate(ctx context.Context, req dto.CreateTaxRateRequest) (*dto.TaxRateResponse, error) {
 	// Validate the request
 	if err := req.Validate(); err != nil {
 		s.logger.Warnw("tax rate creation validation failed",
@@ -90,7 +90,7 @@ func (s *taxRateService) CreateTaxRate(ctx context.Context, req dto.CreateTaxRat
 }
 
 // GetTaxRate retrieves a tax rate by ID
-func (s *taxRateService) GetTaxRate(ctx context.Context, id string) (*dto.TaxRateResponse, error) {
+func (s *taxService) GetTaxRate(ctx context.Context, id string) (*dto.TaxRateResponse, error) {
 	if id == "" {
 		return nil, ierr.NewError("tax_rate_id is required").
 			WithHint("Tax rate ID is required").
@@ -112,7 +112,7 @@ func (s *taxRateService) GetTaxRate(ctx context.Context, id string) (*dto.TaxRat
 }
 
 // ListTaxRates lists tax rates based on the provided filter
-func (s *taxRateService) ListTaxRates(ctx context.Context, filter *types.TaxRateFilter) (*dto.ListTaxRatesResponse, error) {
+func (s *taxService) ListTaxRates(ctx context.Context, filter *types.TaxRateFilter) (*dto.ListTaxRatesResponse, error) {
 	if filter == nil {
 		filter = types.NewTaxRateFilter()
 	}
@@ -158,7 +158,7 @@ func (s *taxRateService) ListTaxRates(ctx context.Context, filter *types.TaxRate
 }
 
 // UpdateTaxRate updates an existing tax rate in place
-func (s *taxRateService) UpdateTaxRate(ctx context.Context, id string, req dto.UpdateTaxRateRequest) (*dto.TaxRateResponse, error) {
+func (s *taxService) UpdateTaxRate(ctx context.Context, id string, req dto.UpdateTaxRateRequest) (*dto.TaxRateResponse, error) {
 	if id == "" {
 		return nil, ierr.NewError("tax_rate_id is required").
 			WithHint("Tax rate ID is required").
@@ -232,7 +232,7 @@ func (s *taxRateService) UpdateTaxRate(ctx context.Context, id string, req dto.U
 }
 
 // DeleteTaxRate archives a tax rate by setting its status to archived
-func (s *taxRateService) DeleteTaxRate(ctx context.Context, id string) error {
+func (s *taxService) DeleteTaxRate(ctx context.Context, id string) error {
 	if id == "" {
 		return ierr.NewError("tax_rate_id is required").
 			WithHint("Tax rate ID is required").
@@ -268,7 +268,7 @@ func (s *taxRateService) DeleteTaxRate(ctx context.Context, id string) error {
 }
 
 // GetTaxRateByCode retrieves a tax rate by its code
-func (s *taxRateService) GetTaxRateByCode(ctx context.Context, code string) (*dto.TaxRateResponse, error) {
+func (s *taxService) GetTaxRateByCode(ctx context.Context, code string) (*dto.TaxRateResponse, error) {
 	if code == "" {
 		return nil, ierr.NewError("tax_rate_code is required").
 			WithHint("Tax rate code is required").
@@ -290,7 +290,7 @@ func (s *taxRateService) GetTaxRateByCode(ctx context.Context, code string) (*dt
 }
 
 // validateUpdateRequest validates the update request
-func (s *taxRateService) validateUpdateRequest(req dto.UpdateTaxRateRequest) error {
+func (s *taxService) validateUpdateRequest(req dto.UpdateTaxRateRequest) error {
 	// Validate that at least one field is being updated
 	if req.Name == "" && req.Code == "" && req.Description == "" &&
 		req.ValidFrom == nil && req.ValidTo == nil &&
@@ -311,7 +311,7 @@ func (s *taxRateService) validateUpdateRequest(req dto.UpdateTaxRateRequest) err
 }
 
 // calculateTaxRateStatus determines the appropriate status based on validity dates
-func (s *taxRateService) calculateTaxRateStatus(taxRate *taxrate.TaxRate, now time.Time) types.TaxRateStatus {
+func (s *taxService) calculateTaxRateStatus(taxRate *taxrate.TaxRate, now time.Time) types.TaxRateStatus {
 	// If ValidFrom is in the future, tax rate should be inactive
 	if taxRate.ValidFrom != nil && taxRate.ValidFrom.After(now) {
 		return types.TaxRateStatusInactive
