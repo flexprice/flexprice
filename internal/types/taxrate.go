@@ -55,6 +55,34 @@ func (s TaxRateScope) Validate() error {
 	return nil
 }
 
+type TaxrateEntityType string
+
+const (
+	TaxrateEntityTypeCustomer     TaxrateEntityType = "CUSTOMER"
+	TaxrateEntityTypeSubscription TaxrateEntityType = "SUBSCRIPTION"
+	TaxrateEntityTypeInvoice      TaxrateEntityType = "INVOICE"
+)
+
+func (t TaxrateEntityType) String() string {
+	return string(t)
+}
+
+func (t TaxrateEntityType) Validate() error {
+	allowedValues := []string{
+		TaxrateEntityTypeCustomer.String(),
+		TaxrateEntityTypeSubscription.String(),
+		TaxrateEntityTypeInvoice.String(),
+	}
+
+	if !slices.Contains(allowedValues, string(t)) {
+		return ierr.NewError("invalid tax rate entity type").
+			WithHint("Invalid tax rate entity type").
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}
+
 // TaxRateStatus defines the status of a tax rate
 type TaxRateStatus string
 
@@ -76,6 +104,34 @@ func (s TaxRateStatus) Validate() error {
 	if !slices.Contains(allowedValues, string(s)) {
 		return ierr.NewError("invalid tax rate status").
 			WithHint("Tax rate status must be either ACTIVE or INACTIVE").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// TaxRateAssignmentStatus defines the status of a tax rate assignment
+type TaxRateAssignmentStatus string
+
+const (
+	TaxRateAssignmentStatusActive    TaxRateAssignmentStatus = "ACTIVE"
+	TaxRateAssignmentStatusInactive  TaxRateAssignmentStatus = "INACTIVE"
+	TaxRateAssignmentStatusSuspended TaxRateAssignmentStatus = "SUSPENDED"
+)
+
+func (s TaxRateAssignmentStatus) String() string {
+	return string(s)
+}
+
+func (s TaxRateAssignmentStatus) Validate() error {
+	allowedValues := []string{
+		TaxRateAssignmentStatusActive.String(),
+		TaxRateAssignmentStatusInactive.String(),
+		TaxRateAssignmentStatusSuspended.String(),
+	}
+
+	if !slices.Contains(allowedValues, string(s)) {
+		return ierr.NewError("invalid tax rate assignment status").
+			WithHint("Tax rate assignment status must be ACTIVE, INACTIVE, or SUSPENDED").
 			Mark(ierr.ErrValidation)
 	}
 	return nil
@@ -159,20 +215,3 @@ func (f TaxRateFilter) Validate() error {
 func (f TaxRateFilter) GetLimit() int {
 	return f.QueryFilter.GetLimit()
 }
-
-// TaxRateCreationReason defines how a tax rate was created
-type TaxRateCreationReason string
-
-const (
-	// User-initiated creation
-	TaxRateCreationReasonExplicitAPI       TaxRateCreationReason = "EXPLICIT_VIA_API"       // Created by user/integration via API
-	TaxRateCreationReasonExplicitDashboard TaxRateCreationReason = "EXPLICIT_VIA_DASHBOARD" // Created by user via dashboard/UI
-
-	// System-initiated creation
-	TaxRateCreationReasonAutomatic     TaxRateCreationReason = "AUTOMATIC_FROM_MANUAL" // Auto-created from manual tax amounts (like Stripe)
-	TaxRateCreationReasonSystemDefault TaxRateCreationReason = "SYSTEM_DEFAULT"        // Pre-configured system tax rates
-
-	// External sources
-	TaxRateCreationReasonExternalIntegration TaxRateCreationReason = "EXTERNAL_INTEGRATION" // From tax calculation services (Avalara, TaxJar, etc.)
-	TaxRateCreationReasonImport              TaxRateCreationReason = "IMPORT"               // Imported from other systems during migration
-)

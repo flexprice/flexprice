@@ -13,11 +13,11 @@ import (
 )
 
 type TaxRateHandler struct {
-	service service.TaxRateService
+	service service.TaxService
 	logger  *logger.Logger
 }
 
-func NewTaxRateHandler(service service.TaxRateService, logger *logger.Logger) *TaxRateHandler {
+func NewTaxRateHandler(service service.TaxService, logger *logger.Logger) *TaxRateHandler {
 	return &TaxRateHandler{
 		service: service,
 		logger:  logger,

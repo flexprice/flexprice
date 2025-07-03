@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/flexprice/flexprice/internal/domain/taxrate"
+	taxrate "github.com/flexprice/flexprice/internal/domain/tax"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"

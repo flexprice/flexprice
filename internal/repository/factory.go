@@ -21,7 +21,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/task"
-	"github.com/flexprice/flexprice/internal/domain/taxrate"
+	taxrate "github.com/flexprice/flexprice/internal/domain/tax"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
