@@ -19,12 +19,4 @@ type Repository interface {
 
 	// Lookup operations
 	GetByCode(ctx context.Context, code string) (*TaxRate, error)
-
-	// DefaultTaxRateConfig operations
-	GetDefaultTaxRateConfigByID(ctx context.Context, id string) (*DefaultTaxRateConfig, error)
-	ListDefaultTaxRateConfigs(ctx context.Context, f *types.DefaultTaxRateConfigFilter) ([]*DefaultTaxRateConfig, error)
-	CountDefaultTaxRateConfigs(ctx context.Context, f *types.DefaultTaxRateConfigFilter) (int, error)
-	UpdateDefaultTaxRateConfig(ctx context.Context, id string, config *DefaultTaxRateConfig) error
-	CreateDefaultTaxRateConfig(ctx context.Context, config *DefaultTaxRateConfig) error
-	DeleteDefaultTaxRateConfig(ctx context.Context, id string) error
 }

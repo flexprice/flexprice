@@ -10,11 +10,11 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/flexprice/flexprice/ent/defaulttaxrateconfig"
+	"github.com/flexprice/flexprice/ent/taxconfig"
 )
 
-// DefaultTaxRateConfig is the model entity for the DefaultTaxRateConfig schema.
-type DefaultTaxRateConfig struct {
+// TaxConfig is the model entity for the TaxConfig schema.
+type TaxConfig struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID string `json:"id,omitempty"`
@@ -54,19 +54,19 @@ type DefaultTaxRateConfig struct {
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
-func (*DefaultTaxRateConfig) scanValues(columns []string) ([]any, error) {
+func (*TaxConfig) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case defaulttaxrateconfig.FieldMetadata:
+		case taxconfig.FieldMetadata:
 			values[i] = new([]byte)
-		case defaulttaxrateconfig.FieldAutoApply:
+		case taxconfig.FieldAutoApply:
 			values[i] = new(sql.NullBool)
-		case defaulttaxrateconfig.FieldPriority:
+		case taxconfig.FieldPriority:
 			values[i] = new(sql.NullInt64)
-		case defaulttaxrateconfig.FieldID, defaulttaxrateconfig.FieldTenantID, defaulttaxrateconfig.FieldStatus, defaulttaxrateconfig.FieldCreatedBy, defaulttaxrateconfig.FieldUpdatedBy, defaulttaxrateconfig.FieldEnvironmentID, defaulttaxrateconfig.FieldTaxRateID, defaulttaxrateconfig.FieldEntityType, defaulttaxrateconfig.FieldEntityID, defaulttaxrateconfig.FieldCurrency:
+		case taxconfig.FieldID, taxconfig.FieldTenantID, taxconfig.FieldStatus, taxconfig.FieldCreatedBy, taxconfig.FieldUpdatedBy, taxconfig.FieldEnvironmentID, taxconfig.FieldTaxRateID, taxconfig.FieldEntityType, taxconfig.FieldEntityID, taxconfig.FieldCurrency:
 			values[i] = new(sql.NullString)
-		case defaulttaxrateconfig.FieldCreatedAt, defaulttaxrateconfig.FieldUpdatedAt, defaulttaxrateconfig.FieldValidFrom, defaulttaxrateconfig.FieldValidTo:
+		case taxconfig.FieldCreatedAt, taxconfig.FieldUpdatedAt, taxconfig.FieldValidFrom, taxconfig.FieldValidTo:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -76,209 +76,209 @@ func (*DefaultTaxRateConfig) scanValues(columns []string) ([]any, error) {
 }
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
-// to the DefaultTaxRateConfig fields.
-func (dtrc *DefaultTaxRateConfig) assignValues(columns []string, values []any) error {
+// to the TaxConfig fields.
+func (tc *TaxConfig) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
 	for i := range columns {
 		switch columns[i] {
-		case defaulttaxrateconfig.FieldID:
+		case taxconfig.FieldID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				dtrc.ID = value.String
+				tc.ID = value.String
 			}
-		case defaulttaxrateconfig.FieldTenantID:
+		case taxconfig.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				dtrc.TenantID = value.String
+				tc.TenantID = value.String
 			}
-		case defaulttaxrateconfig.FieldStatus:
+		case taxconfig.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				dtrc.Status = value.String
+				tc.Status = value.String
 			}
-		case defaulttaxrateconfig.FieldCreatedAt:
+		case taxconfig.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				dtrc.CreatedAt = value.Time
+				tc.CreatedAt = value.Time
 			}
-		case defaulttaxrateconfig.FieldUpdatedAt:
+		case taxconfig.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				dtrc.UpdatedAt = value.Time
+				tc.UpdatedAt = value.Time
 			}
-		case defaulttaxrateconfig.FieldCreatedBy:
+		case taxconfig.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				dtrc.CreatedBy = value.String
+				tc.CreatedBy = value.String
 			}
-		case defaulttaxrateconfig.FieldUpdatedBy:
+		case taxconfig.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				dtrc.UpdatedBy = value.String
+				tc.UpdatedBy = value.String
 			}
-		case defaulttaxrateconfig.FieldEnvironmentID:
+		case taxconfig.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				dtrc.EnvironmentID = value.String
+				tc.EnvironmentID = value.String
 			}
-		case defaulttaxrateconfig.FieldTaxRateID:
+		case taxconfig.FieldTaxRateID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tax_rate_id", values[i])
 			} else if value.Valid {
-				dtrc.TaxRateID = value.String
+				tc.TaxRateID = value.String
 			}
-		case defaulttaxrateconfig.FieldEntityType:
+		case taxconfig.FieldEntityType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field entity_type", values[i])
 			} else if value.Valid {
-				dtrc.EntityType = value.String
+				tc.EntityType = value.String
 			}
-		case defaulttaxrateconfig.FieldEntityID:
+		case taxconfig.FieldEntityID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field entity_id", values[i])
 			} else if value.Valid {
-				dtrc.EntityID = value.String
+				tc.EntityID = value.String
 			}
-		case defaulttaxrateconfig.FieldPriority:
+		case taxconfig.FieldPriority:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field priority", values[i])
 			} else if value.Valid {
-				dtrc.Priority = int(value.Int64)
+				tc.Priority = int(value.Int64)
 			}
-		case defaulttaxrateconfig.FieldAutoApply:
+		case taxconfig.FieldAutoApply:
 			if value, ok := values[i].(*sql.NullBool); !ok {
 				return fmt.Errorf("unexpected type %T for field auto_apply", values[i])
 			} else if value.Valid {
-				dtrc.AutoApply = value.Bool
+				tc.AutoApply = value.Bool
 			}
-		case defaulttaxrateconfig.FieldValidFrom:
+		case taxconfig.FieldValidFrom:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field valid_from", values[i])
 			} else if value.Valid {
-				dtrc.ValidFrom = new(time.Time)
-				*dtrc.ValidFrom = value.Time
+				tc.ValidFrom = new(time.Time)
+				*tc.ValidFrom = value.Time
 			}
-		case defaulttaxrateconfig.FieldValidTo:
+		case taxconfig.FieldValidTo:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field valid_to", values[i])
 			} else if value.Valid {
-				dtrc.ValidTo = new(time.Time)
-				*dtrc.ValidTo = value.Time
+				tc.ValidTo = new(time.Time)
+				*tc.ValidTo = value.Time
 			}
-		case defaulttaxrateconfig.FieldCurrency:
+		case taxconfig.FieldCurrency:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field currency", values[i])
 			} else if value.Valid {
-				dtrc.Currency = value.String
+				tc.Currency = value.String
 			}
-		case defaulttaxrateconfig.FieldMetadata:
+		case taxconfig.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &dtrc.Metadata); err != nil {
+				if err := json.Unmarshal(*value, &tc.Metadata); err != nil {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
 		default:
-			dtrc.selectValues.Set(columns[i], values[i])
+			tc.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
 }
 
-// Value returns the ent.Value that was dynamically selected and assigned to the DefaultTaxRateConfig.
+// Value returns the ent.Value that was dynamically selected and assigned to the TaxConfig.
 // This includes values selected through modifiers, order, etc.
-func (dtrc *DefaultTaxRateConfig) Value(name string) (ent.Value, error) {
-	return dtrc.selectValues.Get(name)
+func (tc *TaxConfig) Value(name string) (ent.Value, error) {
+	return tc.selectValues.Get(name)
 }
 
-// Update returns a builder for updating this DefaultTaxRateConfig.
-// Note that you need to call DefaultTaxRateConfig.Unwrap() before calling this method if this DefaultTaxRateConfig
+// Update returns a builder for updating this TaxConfig.
+// Note that you need to call TaxConfig.Unwrap() before calling this method if this TaxConfig
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (dtrc *DefaultTaxRateConfig) Update() *DefaultTaxRateConfigUpdateOne {
-	return NewDefaultTaxRateConfigClient(dtrc.config).UpdateOne(dtrc)
+func (tc *TaxConfig) Update() *TaxConfigUpdateOne {
+	return NewTaxConfigClient(tc.config).UpdateOne(tc)
 }
 
-// Unwrap unwraps the DefaultTaxRateConfig entity that was returned from a transaction after it was closed,
+// Unwrap unwraps the TaxConfig entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (dtrc *DefaultTaxRateConfig) Unwrap() *DefaultTaxRateConfig {
-	_tx, ok := dtrc.config.driver.(*txDriver)
+func (tc *TaxConfig) Unwrap() *TaxConfig {
+	_tx, ok := tc.config.driver.(*txDriver)
 	if !ok {
-		panic("ent: DefaultTaxRateConfig is not a transactional entity")
+		panic("ent: TaxConfig is not a transactional entity")
 	}
-	dtrc.config.driver = _tx.drv
-	return dtrc
+	tc.config.driver = _tx.drv
+	return tc
 }
 
 // String implements the fmt.Stringer.
-func (dtrc *DefaultTaxRateConfig) String() string {
+func (tc *TaxConfig) String() string {
 	var builder strings.Builder
-	builder.WriteString("DefaultTaxRateConfig(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", dtrc.ID))
+	builder.WriteString("TaxConfig(")
+	builder.WriteString(fmt.Sprintf("id=%v, ", tc.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(dtrc.TenantID)
+	builder.WriteString(tc.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(dtrc.Status)
+	builder.WriteString(tc.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(dtrc.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(tc.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(dtrc.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(tc.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(dtrc.CreatedBy)
+	builder.WriteString(tc.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(dtrc.UpdatedBy)
+	builder.WriteString(tc.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(dtrc.EnvironmentID)
+	builder.WriteString(tc.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("tax_rate_id=")
-	builder.WriteString(dtrc.TaxRateID)
+	builder.WriteString(tc.TaxRateID)
 	builder.WriteString(", ")
 	builder.WriteString("entity_type=")
-	builder.WriteString(dtrc.EntityType)
+	builder.WriteString(tc.EntityType)
 	builder.WriteString(", ")
 	builder.WriteString("entity_id=")
-	builder.WriteString(dtrc.EntityID)
+	builder.WriteString(tc.EntityID)
 	builder.WriteString(", ")
 	builder.WriteString("priority=")
-	builder.WriteString(fmt.Sprintf("%v", dtrc.Priority))
+	builder.WriteString(fmt.Sprintf("%v", tc.Priority))
 	builder.WriteString(", ")
 	builder.WriteString("auto_apply=")
-	builder.WriteString(fmt.Sprintf("%v", dtrc.AutoApply))
+	builder.WriteString(fmt.Sprintf("%v", tc.AutoApply))
 	builder.WriteString(", ")
-	if v := dtrc.ValidFrom; v != nil {
+	if v := tc.ValidFrom; v != nil {
 		builder.WriteString("valid_from=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := dtrc.ValidTo; v != nil {
+	if v := tc.ValidTo; v != nil {
 		builder.WriteString("valid_to=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("currency=")
-	builder.WriteString(dtrc.Currency)
+	builder.WriteString(tc.Currency)
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
-	builder.WriteString(fmt.Sprintf("%v", dtrc.Metadata))
+	builder.WriteString(fmt.Sprintf("%v", tc.Metadata))
 	builder.WriteByte(')')
 	return builder.String()
 }
 
-// DefaultTaxRateConfigs is a parsable slice of DefaultTaxRateConfig.
-type DefaultTaxRateConfigs []*DefaultTaxRateConfig
+// TaxConfigs is a parsable slice of TaxConfig.
+type TaxConfigs []*TaxConfig

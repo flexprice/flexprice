@@ -1,4 +1,4 @@
-package taxrate
+package taxconfig
 
 import (
 	"time"
@@ -7,8 +7,8 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
-// DefaultTaxRateConfig is the model entity for the DefaultTaxRateConfig schema.
-type DefaultTaxRateConfig struct {
+// TaxConfig is the model entity for the TaxConfig schema.
+type TaxConfig struct {
 	// ID of the ent.
 	ID string `json:"id,omitempty"`
 	// Reference to the TaxRate entity
@@ -36,8 +36,8 @@ type DefaultTaxRateConfig struct {
 	types.BaseModel
 }
 
-func (d *DefaultTaxRateConfig) FromEnt(ent *ent.DefaultTaxRateConfig) *DefaultTaxRateConfig {
-	return &DefaultTaxRateConfig{
+func FromEnt(ent *ent.TaxConfig) *TaxConfig {
+	return &TaxConfig{
 		ID:            ent.ID,
 		TaxRateID:     ent.TaxRateID,
 		EntityType:    ent.EntityType,
@@ -58,10 +58,10 @@ func (d *DefaultTaxRateConfig) FromEnt(ent *ent.DefaultTaxRateConfig) *DefaultTa
 	}
 }
 
-func (d *DefaultTaxRateConfig) FromEntList(ents []*ent.DefaultTaxRateConfig) []*DefaultTaxRateConfig {
-	var configs []*DefaultTaxRateConfig
+func FromEntList(ents []*ent.TaxConfig) []*TaxConfig {
+	var configs []*TaxConfig
 	for _, ent := range ents {
-		configs = append(configs, d.FromEnt(ent))
+		configs = append(configs, FromEnt(ent))
 	}
 	return configs
 }

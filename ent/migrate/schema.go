@@ -366,71 +366,6 @@ var (
 			},
 		},
 	}
-	// DefaultTaxRateConfigsColumns holds the columns for the "default_tax_rate_configs" table.
-	DefaultTaxRateConfigsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "updated_at", Type: field.TypeTime},
-		{Name: "created_by", Type: field.TypeString, Nullable: true},
-		{Name: "updated_by", Type: field.TypeString, Nullable: true},
-		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "tax_rate_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "entity_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "entity_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "priority", Type: field.TypeInt, Default: 100, SchemaType: map[string]string{"postgres": "integer"}},
-		{Name: "auto_apply", Type: field.TypeBool, Default: false},
-		{Name: "valid_from", Type: field.TypeTime, Nullable: true},
-		{Name: "valid_to", Type: field.TypeTime, Nullable: true},
-		{Name: "currency", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(100)"}},
-		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
-	}
-	// DefaultTaxRateConfigsTable holds the schema information for the "default_tax_rate_configs" table.
-	DefaultTaxRateConfigsTable = &schema.Table{
-		Name:       "default_tax_rate_configs",
-		Columns:    DefaultTaxRateConfigsColumns,
-		PrimaryKey: []*schema.Column{DefaultTaxRateConfigsColumns[0]},
-		Indexes: []*schema.Index{
-			{
-				Name:    "idx_entity_lookup_active",
-				Unique:  false,
-				Columns: []*schema.Column{DefaultTaxRateConfigsColumns[1], DefaultTaxRateConfigsColumns[7], DefaultTaxRateConfigsColumns[9], DefaultTaxRateConfigsColumns[10], DefaultTaxRateConfigsColumns[2]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published'",
-				},
-			},
-			{
-				Name:    "idx_tax_rate_id_tenant_id_environment_id",
-				Unique:  false,
-				Columns: []*schema.Column{DefaultTaxRateConfigsColumns[1], DefaultTaxRateConfigsColumns[7], DefaultTaxRateConfigsColumns[8], DefaultTaxRateConfigsColumns[2]},
-			},
-			{
-				Name:    "idx_auto_apply_lookup",
-				Unique:  false,
-				Columns: []*schema.Column{DefaultTaxRateConfigsColumns[1], DefaultTaxRateConfigsColumns[7], DefaultTaxRateConfigsColumns[12], DefaultTaxRateConfigsColumns[9], DefaultTaxRateConfigsColumns[2]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "auto_apply = true AND status = 'published'",
-				},
-			},
-			{
-				Name:    "unique_entity_tax_mapping",
-				Unique:  true,
-				Columns: []*schema.Column{DefaultTaxRateConfigsColumns[1], DefaultTaxRateConfigsColumns[7], DefaultTaxRateConfigsColumns[9], DefaultTaxRateConfigsColumns[10], DefaultTaxRateConfigsColumns[8]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published'",
-				},
-			},
-			{
-				Name:    "idx_currency_entity_lookup",
-				Unique:  false,
-				Columns: []*schema.Column{DefaultTaxRateConfigsColumns[1], DefaultTaxRateConfigsColumns[7], DefaultTaxRateConfigsColumns[15], DefaultTaxRateConfigsColumns[9], DefaultTaxRateConfigsColumns[2]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "currency IS NOT NULL AND status = 'published'",
-				},
-			},
-		},
-	}
 	// EntitlementsColumns holds the columns for the "entitlements" table.
 	EntitlementsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -1371,6 +1306,59 @@ var (
 			},
 		},
 	}
+	// TaxConfigsColumns holds the columns for the "tax_configs" table.
+	TaxConfigsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tax_rate_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "entity_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "entity_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "priority", Type: field.TypeInt, Default: 100, SchemaType: map[string]string{"postgres": "integer"}},
+		{Name: "auto_apply", Type: field.TypeBool, Default: false},
+		{Name: "valid_from", Type: field.TypeTime, Nullable: true},
+		{Name: "valid_to", Type: field.TypeTime, Nullable: true},
+		{Name: "currency", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(100)"}},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+	}
+	// TaxConfigsTable holds the schema information for the "tax_configs" table.
+	TaxConfigsTable = &schema.Table{
+		Name:       "tax_configs",
+		Columns:    TaxConfigsColumns,
+		PrimaryKey: []*schema.Column{TaxConfigsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "idx_entity_lookup_active",
+				Unique:  false,
+				Columns: []*schema.Column{TaxConfigsColumns[1], TaxConfigsColumns[7], TaxConfigsColumns[9], TaxConfigsColumns[10]},
+			},
+			{
+				Name:    "idx_tax_rate_id_tenant_id_environment_id",
+				Unique:  false,
+				Columns: []*schema.Column{TaxConfigsColumns[1], TaxConfigsColumns[7], TaxConfigsColumns[8]},
+			},
+			{
+				Name:    "idx_auto_apply_lookup",
+				Unique:  false,
+				Columns: []*schema.Column{TaxConfigsColumns[1], TaxConfigsColumns[7], TaxConfigsColumns[12], TaxConfigsColumns[9]},
+			},
+			{
+				Name:    "unique_entity_tax_mapping",
+				Unique:  true,
+				Columns: []*schema.Column{TaxConfigsColumns[1], TaxConfigsColumns[7], TaxConfigsColumns[9], TaxConfigsColumns[10], TaxConfigsColumns[8]},
+			},
+			{
+				Name:    "idx_currency_entity_lookup",
+				Unique:  false,
+				Columns: []*schema.Column{TaxConfigsColumns[1], TaxConfigsColumns[7], TaxConfigsColumns[15], TaxConfigsColumns[9]},
+			},
+		},
+	}
 	// TaxRatesColumns holds the columns for the "tax_rates" table.
 	TaxRatesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -1595,7 +1583,6 @@ var (
 		CreditNotesTable,
 		CreditNoteLineItemsTable,
 		CustomersTable,
-		DefaultTaxRateConfigsTable,
 		EntitlementsTable,
 		EnvironmentsTable,
 		FeaturesTable,
@@ -1614,6 +1601,7 @@ var (
 		SubscriptionSchedulesTable,
 		SubscriptionSchedulePhasesTable,
 		TasksTable,
+		TaxConfigsTable,
 		TaxRatesTable,
 		TenantsTable,
 		UsersTable,

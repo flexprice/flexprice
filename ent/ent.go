@@ -20,7 +20,6 @@ import (
 	"github.com/flexprice/flexprice/ent/creditnote"
 	"github.com/flexprice/flexprice/ent/creditnotelineitem"
 	"github.com/flexprice/flexprice/ent/customer"
-	"github.com/flexprice/flexprice/ent/defaulttaxrateconfig"
 	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/ent/environment"
 	"github.com/flexprice/flexprice/ent/feature"
@@ -39,6 +38,7 @@ import (
 	"github.com/flexprice/flexprice/ent/subscriptionschedule"
 	"github.com/flexprice/flexprice/ent/subscriptionschedulephase"
 	"github.com/flexprice/flexprice/ent/task"
+	"github.com/flexprice/flexprice/ent/taxconfig"
 	"github.com/flexprice/flexprice/ent/taxrate"
 	"github.com/flexprice/flexprice/ent/tenant"
 	"github.com/flexprice/flexprice/ent/user"
@@ -112,7 +112,6 @@ func checkColumn(table, column string) error {
 			creditnote.Table:                creditnote.ValidColumn,
 			creditnotelineitem.Table:        creditnotelineitem.ValidColumn,
 			customer.Table:                  customer.ValidColumn,
-			defaulttaxrateconfig.Table:      defaulttaxrateconfig.ValidColumn,
 			entitlement.Table:               entitlement.ValidColumn,
 			environment.Table:               environment.ValidColumn,
 			feature.Table:                   feature.ValidColumn,
@@ -131,6 +130,7 @@ func checkColumn(table, column string) error {
 			subscriptionschedule.Table:      subscriptionschedule.ValidColumn,
 			subscriptionschedulephase.Table: subscriptionschedulephase.ValidColumn,
 			task.Table:                      task.ValidColumn,
+			taxconfig.Table:                 taxconfig.ValidColumn,
 			taxrate.Table:                   taxrate.ValidColumn,
 			tenant.Table:                    tenant.ValidColumn,
 			user.Table:                      user.ValidColumn,

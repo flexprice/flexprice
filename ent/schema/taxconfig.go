@@ -16,21 +16,21 @@ const (
 	Idx_currency_entity_lookup                         = "idx_currency_entity_lookup"
 )
 
-// DefaultTaxRateConfig holds the schema definition for the DefaultTaxRateConfig entity.
-type DefaultTaxRateConfig struct {
+// TaxConfig holds the schema definition for the TaxConfig entity.
+type TaxConfig struct {
 	ent.Schema
 }
 
-// Mixin of the DefaultTaxRateConfig.
-func (DefaultTaxRateConfig) Mixin() []ent.Mixin {
+// Mixin of the TaxConfig.
+func (TaxConfig) Mixin() []ent.Mixin {
 	return []ent.Mixin{
 		baseMixin.BaseMixin{},
 		baseMixin.EnvironmentMixin{},
 	}
 }
 
-// Fields of the DefaultTaxRateConfig.
-func (DefaultTaxRateConfig) Fields() []ent.Field {
+// Fields of the TaxConfig.
+func (TaxConfig) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("id").
 			SchemaType(map[string]string{
@@ -100,13 +100,13 @@ func (DefaultTaxRateConfig) Fields() []ent.Field {
 	}
 }
 
-// Edges of the DefaultTaxRateConfig.
-func (DefaultTaxRateConfig) Edges() []ent.Edge {
+// Edges of the TaxConfig.
+func (TaxConfig) Edges() []ent.Edge {
 	return []ent.Edge{}
 }
 
-// Indexes of the DefaultTaxRateConfig.
-func (DefaultTaxRateConfig) Indexes() []ent.Index {
+// Indexes of the TaxConfig.
+func (TaxConfig) Indexes() []ent.Index {
 	return []ent.Index{
 		// Primary lookup: find tax assignments for entity
 		index.Fields("tenant_id", "environment_id", "entity_type", "entity_id").
@@ -126,6 +126,7 @@ func (DefaultTaxRateConfig) Indexes() []ent.Index {
 			Unique(),
 
 		// Currency-based lookup
+
 		index.Fields("tenant_id", "environment_id", "currency", "entity_type").
 			StorageKey(Idx_currency_entity_lookup),
 	}
