@@ -21,6 +21,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/task"
 	taxrate "github.com/flexprice/flexprice/internal/domain/tax"
+	"github.com/flexprice/flexprice/internal/domain/taxconfig"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
@@ -68,6 +69,7 @@ type ServiceParams struct {
 	CreditNoteLineItemRepo     creditnote.CreditNoteLineItemRepository
 	CreditGrantApplicationRepo creditgrantapplication.Repository
 	TaxRateRepo                taxrate.Repository
+	TaxConfigRepo              taxconfig.Repository
 	// Publishers
 	EventPublisher   publisher.EventPublisher
 	WebhookPublisher webhookPublisher.WebhookPublisher
@@ -104,14 +106,15 @@ func NewServiceParams(
 	creditGrantRepo creditgrant.Repository,
 	creditNoteRepo creditnote.Repository,
 	creditNoteLineItemRepo creditnote.CreditNoteLineItemRepository,
+	taxConfigRepo taxconfig.Repository,
+	taskRepo task.Repository,
+	costSheetRepo costsheet.Repository,
+	taxRateRepo taxrate.Repository,
 	eventPublisher publisher.EventPublisher,
 	webhookPublisher webhookPublisher.WebhookPublisher,
 	s3Service s3.Service,
 	client httpclient.Client,
 
-	taskRepo task.Repository,
-	costSheetRepo costsheet.Repository,
-	taxRateRepo taxrate.Repository,
 ) ServiceParams {
 	return ServiceParams{
 		Logger:                     logger,
@@ -138,15 +141,15 @@ func NewServiceParams(
 		EnvironmentRepo:            environmentRepo,
 		CreditGrantRepo:            creditGrantRepo,
 		CreditGrantApplicationRepo: creditGrantApplicationRepo,
+		TaskRepo:                   taskRepo,
+		CostSheetRepo:              costSheetRepo,
+		CreditNoteRepo:             creditNoteRepo,
+		CreditNoteLineItemRepo:     creditNoteLineItemRepo,
+		TaxRateRepo:                taxRateRepo,
+		TaxConfigRepo:              taxConfigRepo,
 		EventPublisher:             eventPublisher,
 		WebhookPublisher:           webhookPublisher,
 		S3:                         s3Service,
 		Client:                     client,
-
-		TaskRepo:               taskRepo,
-		CostSheetRepo:          costSheetRepo,
-		CreditNoteRepo:         creditNoteRepo,
-		CreditNoteLineItemRepo: creditNoteLineItemRepo,
-		TaxRateRepo:            taxRateRepo,
 	}
 }
