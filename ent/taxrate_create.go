@@ -163,6 +163,12 @@ func (trc *TaxRateCreate) SetScope(s string) *TaxRateCreate {
 	return trc
 }
 
+// SetCurrency sets the "currency" field.
+func (trc *TaxRateCreate) SetCurrency(s string) *TaxRateCreate {
+	trc.mutation.SetCurrency(s)
+	return trc
+}
+
 // SetPercentageValue sets the "percentage_value" field.
 func (trc *TaxRateCreate) SetPercentageValue(d decimal.Decimal) *TaxRateCreate {
 	trc.mutation.SetPercentageValue(d)
@@ -355,6 +361,14 @@ func (trc *TaxRateCreate) check() error {
 			return &ValidationError{Name: "scope", err: fmt.Errorf(`ent: validator failed for field "TaxRate.scope": %w`, err)}
 		}
 	}
+	if _, ok := trc.mutation.Currency(); !ok {
+		return &ValidationError{Name: "currency", err: errors.New(`ent: missing required field "TaxRate.currency"`)}
+	}
+	if v, ok := trc.mutation.Currency(); ok {
+		if err := taxrate.CurrencyValidator(v); err != nil {
+			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "TaxRate.currency": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -441,6 +455,10 @@ func (trc *TaxRateCreate) createSpec() (*TaxRate, *sqlgraph.CreateSpec) {
 	if value, ok := trc.mutation.Scope(); ok {
 		_spec.SetField(taxrate.FieldScope, field.TypeString, value)
 		_node.Scope = value
+	}
+	if value, ok := trc.mutation.Currency(); ok {
+		_spec.SetField(taxrate.FieldCurrency, field.TypeString, value)
+		_node.Currency = value
 	}
 	if value, ok := trc.mutation.PercentageValue(); ok {
 		_spec.SetField(taxrate.FieldPercentageValue, field.TypeOther, value)

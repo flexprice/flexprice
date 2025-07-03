@@ -76,8 +76,30 @@ func (o TaxConfigQueryOptions) GetFieldName(field string) string {
 		return entTaxConfig.FieldUpdatedAt
 	case "priority":
 		return entTaxConfig.FieldPriority
+	case "auto_apply":
+		return entTaxConfig.FieldAutoApply
+	case "valid_from":
+		return entTaxConfig.FieldValidFrom
+	case "valid_to":
+		return entTaxConfig.FieldValidTo
+	case "currency":
+		return entTaxConfig.FieldCurrency
+	case "metadata":
+		return entTaxConfig.FieldMetadata
+	case "environment_id":
+		return entTaxConfig.FieldEnvironmentID
+	case "tax_rate_id":
+		return entTaxConfig.FieldTaxRateID
+	case "entity_type":
+		return entTaxConfig.FieldEntityType
+	case "entity_id":
+		return entTaxConfig.FieldEntityID
+	case "tenant_id":
+		return entTaxConfig.FieldTenantID
+	case "id":
+		return entTaxConfig.FieldID
 	default:
-		return field
+		return ""
 	}
 }
 

@@ -22,6 +22,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/task"
 	taxrate "github.com/flexprice/flexprice/internal/domain/tax"
+	"github.com/flexprice/flexprice/internal/domain/taxconfig"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
@@ -140,4 +141,8 @@ func NewCreditNoteLineItemRepository(p RepositoryParams) creditnote.CreditNoteLi
 
 func NewTaxRateRepository(p RepositoryParams) taxrate.Repository {
 	return entRepo.NewTaxRateRepository(p.EntClient, p.Logger, p.Cache)
+}
+
+func NewTaxConfigRepository(p RepositoryParams) taxconfig.Repository {
+	return entRepo.NewTaxConfigRepository(p.EntClient, p.Logger, p.Cache)
 }
