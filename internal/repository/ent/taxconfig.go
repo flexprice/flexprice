@@ -78,10 +78,6 @@ func (o TaxConfigQueryOptions) GetFieldName(field string) string {
 		return entTaxConfig.FieldPriority
 	case "auto_apply":
 		return entTaxConfig.FieldAutoApply
-	case "valid_from":
-		return entTaxConfig.FieldValidFrom
-	case "valid_to":
-		return entTaxConfig.FieldValidTo
 	case "currency":
 		return entTaxConfig.FieldCurrency
 	case "metadata":
@@ -157,8 +153,6 @@ func (r *taxConfigRepository) Create(ctx context.Context, t *domainTaxConfig.Tax
 		SetEntityID(t.EntityID).
 		SetPriority(t.Priority).
 		SetAutoApply(t.AutoApply).
-		SetNillableValidFrom(t.ValidFrom).
-		SetNillableValidTo(t.ValidTo).
 		SetCurrency(t.Currency).
 		SetMetadata(t.Metadata).
 		SetEnvironmentID(t.EnvironmentID).
@@ -243,8 +237,6 @@ func (r *taxConfigRepository) Update(ctx context.Context, t *domainTaxConfig.Tax
 		SetEntityID(t.EntityID).
 		SetPriority(t.Priority).
 		SetAutoApply(t.AutoApply).
-		SetNillableValidFrom(t.ValidFrom).
-		SetNillableValidTo(t.ValidTo).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetMetadata(t.Metadata).

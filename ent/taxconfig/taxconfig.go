@@ -37,10 +37,6 @@ const (
 	FieldPriority = "priority"
 	// FieldAutoApply holds the string denoting the auto_apply field in the database.
 	FieldAutoApply = "auto_apply"
-	// FieldValidFrom holds the string denoting the valid_from field in the database.
-	FieldValidFrom = "valid_from"
-	// FieldValidTo holds the string denoting the valid_to field in the database.
-	FieldValidTo = "valid_to"
 	// FieldCurrency holds the string denoting the currency field in the database.
 	FieldCurrency = "currency"
 	// FieldMetadata holds the string denoting the metadata field in the database.
@@ -64,8 +60,6 @@ var Columns = []string{
 	FieldEntityID,
 	FieldPriority,
 	FieldAutoApply,
-	FieldValidFrom,
-	FieldValidTo,
 	FieldCurrency,
 	FieldMetadata,
 }
@@ -173,16 +167,6 @@ func ByPriority(opts ...sql.OrderTermOption) OrderOption {
 // ByAutoApply orders the results by the auto_apply field.
 func ByAutoApply(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAutoApply, opts...).ToFunc()
-}
-
-// ByValidFrom orders the results by the valid_from field.
-func ByValidFrom(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldValidFrom, opts...).ToFunc()
-}
-
-// ByValidTo orders the results by the valid_to field.
-func ByValidTo(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldValidTo, opts...).ToFunc()
 }
 
 // ByCurrency orders the results by the currency field.

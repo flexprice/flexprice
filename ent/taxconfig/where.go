@@ -124,16 +124,6 @@ func AutoApply(v bool) predicate.TaxConfig {
 	return predicate.TaxConfig(sql.FieldEQ(FieldAutoApply, v))
 }
 
-// ValidFrom applies equality check predicate on the "valid_from" field. It's identical to ValidFromEQ.
-func ValidFrom(v time.Time) predicate.TaxConfig {
-	return predicate.TaxConfig(sql.FieldEQ(FieldValidFrom, v))
-}
-
-// ValidTo applies equality check predicate on the "valid_to" field. It's identical to ValidToEQ.
-func ValidTo(v time.Time) predicate.TaxConfig {
-	return predicate.TaxConfig(sql.FieldEQ(FieldValidTo, v))
-}
-
 // Currency applies equality check predicate on the "currency" field. It's identical to CurrencyEQ.
 func Currency(v string) predicate.TaxConfig {
 	return predicate.TaxConfig(sql.FieldEQ(FieldCurrency, v))
@@ -817,106 +807,6 @@ func AutoApplyEQ(v bool) predicate.TaxConfig {
 // AutoApplyNEQ applies the NEQ predicate on the "auto_apply" field.
 func AutoApplyNEQ(v bool) predicate.TaxConfig {
 	return predicate.TaxConfig(sql.FieldNEQ(FieldAutoApply, v))
-}
-
-// ValidFromEQ applies the EQ predicate on the "valid_from" field.
-func ValidFromEQ(v time.Time) predicate.TaxConfig {
-	return predicate.TaxConfig(sql.FieldEQ(FieldValidFrom, v))
-}
-
-// ValidFromNEQ applies the NEQ predicate on the "valid_from" field.
-func ValidFromNEQ(v time.Time) predicate.TaxConfig {
-	return predicate.TaxConfig(sql.FieldNEQ(FieldValidFrom, v))
-}
-
-// ValidFromIn applies the In predicate on the "valid_from" field.
-func ValidFromIn(vs ...time.Time) predicate.TaxConfig {
-	return predicate.TaxConfig(sql.FieldIn(FieldValidFrom, vs...))
-}
-
-// ValidFromNotIn applies the NotIn predicate on the "valid_from" field.
-func ValidFromNotIn(vs ...time.Time) predicate.TaxConfig {
-	return predicate.TaxConfig(sql.FieldNotIn(FieldValidFrom, vs...))
-}
-
-// ValidFromGT applies the GT predicate on the "valid_from" field.
-func ValidFromGT(v time.Time) predicate.TaxConfig {
-	return predicate.TaxConfig(sql.FieldGT(FieldValidFrom, v))
-}
-
-// ValidFromGTE applies the GTE predicate on the "valid_from" field.
-func ValidFromGTE(v time.Time) predicate.TaxConfig {
-	return predicate.TaxConfig(sql.FieldGTE(FieldValidFrom, v))
-}
-
-// ValidFromLT applies the LT predicate on the "valid_from" field.
-func ValidFromLT(v time.Time) predicate.TaxConfig {
-	return predicate.TaxConfig(sql.FieldLT(FieldValidFrom, v))
-}
-
-// ValidFromLTE applies the LTE predicate on the "valid_from" field.
-func ValidFromLTE(v time.Time) predicate.TaxConfig {
-	return predicate.TaxConfig(sql.FieldLTE(FieldValidFrom, v))
-}
-
-// ValidFromIsNil applies the IsNil predicate on the "valid_from" field.
-func ValidFromIsNil() predicate.TaxConfig {
-	return predicate.TaxConfig(sql.FieldIsNull(FieldValidFrom))
-}
-
-// ValidFromNotNil applies the NotNil predicate on the "valid_from" field.
-func ValidFromNotNil() predicate.TaxConfig {
-	return predicate.TaxConfig(sql.FieldNotNull(FieldValidFrom))
-}
-
-// ValidToEQ applies the EQ predicate on the "valid_to" field.
-func ValidToEQ(v time.Time) predicate.TaxConfig {
-	return predicate.TaxConfig(sql.FieldEQ(FieldValidTo, v))
-}
-
-// ValidToNEQ applies the NEQ predicate on the "valid_to" field.
-func ValidToNEQ(v time.Time) predicate.TaxConfig {
-	return predicate.TaxConfig(sql.FieldNEQ(FieldValidTo, v))
-}
-
-// ValidToIn applies the In predicate on the "valid_to" field.
-func ValidToIn(vs ...time.Time) predicate.TaxConfig {
-	return predicate.TaxConfig(sql.FieldIn(FieldValidTo, vs...))
-}
-
-// ValidToNotIn applies the NotIn predicate on the "valid_to" field.
-func ValidToNotIn(vs ...time.Time) predicate.TaxConfig {
-	return predicate.TaxConfig(sql.FieldNotIn(FieldValidTo, vs...))
-}
-
-// ValidToGT applies the GT predicate on the "valid_to" field.
-func ValidToGT(v time.Time) predicate.TaxConfig {
-	return predicate.TaxConfig(sql.FieldGT(FieldValidTo, v))
-}
-
-// ValidToGTE applies the GTE predicate on the "valid_to" field.
-func ValidToGTE(v time.Time) predicate.TaxConfig {
-	return predicate.TaxConfig(sql.FieldGTE(FieldValidTo, v))
-}
-
-// ValidToLT applies the LT predicate on the "valid_to" field.
-func ValidToLT(v time.Time) predicate.TaxConfig {
-	return predicate.TaxConfig(sql.FieldLT(FieldValidTo, v))
-}
-
-// ValidToLTE applies the LTE predicate on the "valid_to" field.
-func ValidToLTE(v time.Time) predicate.TaxConfig {
-	return predicate.TaxConfig(sql.FieldLTE(FieldValidTo, v))
-}
-
-// ValidToIsNil applies the IsNil predicate on the "valid_to" field.
-func ValidToIsNil() predicate.TaxConfig {
-	return predicate.TaxConfig(sql.FieldIsNull(FieldValidTo))
-}
-
-// ValidToNotNil applies the NotNil predicate on the "valid_to" field.
-func ValidToNotNil() predicate.TaxConfig {
-	return predicate.TaxConfig(sql.FieldNotNull(FieldValidTo))
 }
 
 // CurrencyEQ applies the EQ predicate on the "currency" field.

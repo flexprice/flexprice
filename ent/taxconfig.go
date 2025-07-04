@@ -42,10 +42,6 @@ type TaxConfig struct {
 	Priority int `json:"priority,omitempty"`
 	// Whether this tax should be automatically applied
 	AutoApply bool `json:"auto_apply,omitempty"`
-	// Start date for this tax assignment
-	ValidFrom *time.Time `json:"valid_from,omitempty"`
-	// End date for this tax assignment
-	ValidTo *time.Time `json:"valid_to,omitempty"`
 	// Currency
 	Currency string `json:"currency,omitempty"`
 	// Metadata holds the value of the "metadata" field.
@@ -66,7 +62,7 @@ func (*TaxConfig) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullInt64)
 		case taxconfig.FieldID, taxconfig.FieldTenantID, taxconfig.FieldStatus, taxconfig.FieldCreatedBy, taxconfig.FieldUpdatedBy, taxconfig.FieldEnvironmentID, taxconfig.FieldTaxRateID, taxconfig.FieldEntityType, taxconfig.FieldEntityID, taxconfig.FieldCurrency:
 			values[i] = new(sql.NullString)
-		case taxconfig.FieldCreatedAt, taxconfig.FieldUpdatedAt, taxconfig.FieldValidFrom, taxconfig.FieldValidTo:
+		case taxconfig.FieldCreatedAt, taxconfig.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -161,20 +157,6 @@ func (tc *TaxConfig) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				tc.AutoApply = value.Bool
 			}
-		case taxconfig.FieldValidFrom:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field valid_from", values[i])
-			} else if value.Valid {
-				tc.ValidFrom = new(time.Time)
-				*tc.ValidFrom = value.Time
-			}
-		case taxconfig.FieldValidTo:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field valid_to", values[i])
-			} else if value.Valid {
-				tc.ValidTo = new(time.Time)
-				*tc.ValidTo = value.Time
-			}
 		case taxconfig.FieldCurrency:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field currency", values[i])
@@ -260,16 +242,6 @@ func (tc *TaxConfig) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("auto_apply=")
 	builder.WriteString(fmt.Sprintf("%v", tc.AutoApply))
-	builder.WriteString(", ")
-	if v := tc.ValidFrom; v != nil {
-		builder.WriteString("valid_from=")
-		builder.WriteString(v.Format(time.ANSIC))
-	}
-	builder.WriteString(", ")
-	if v := tc.ValidTo; v != nil {
-		builder.WriteString("valid_to=")
-		builder.WriteString(v.Format(time.ANSIC))
-	}
 	builder.WriteString(", ")
 	builder.WriteString("currency=")
 	builder.WriteString(tc.Currency)

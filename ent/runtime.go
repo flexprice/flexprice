@@ -1357,7 +1357,7 @@ func init() {
 	// taxconfig.DefaultAutoApply holds the default value on creation for the auto_apply field.
 	taxconfig.DefaultAutoApply = taxconfigDescAutoApply.Default.(bool)
 	// taxconfigDescCurrency is the schema descriptor for currency field.
-	taxconfigDescCurrency := taxconfigFields[8].Descriptor()
+	taxconfigDescCurrency := taxconfigFields[6].Descriptor()
 	// taxconfig.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
 	taxconfig.CurrencyValidator = taxconfigDescCurrency.Validators[0].(func(string) error)
 	taxrateMixin := schema.TaxRate{}.Mixin()

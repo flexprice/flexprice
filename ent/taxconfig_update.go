@@ -117,46 +117,6 @@ func (tcu *TaxConfigUpdate) SetNillableAutoApply(b *bool) *TaxConfigUpdate {
 	return tcu
 }
 
-// SetValidFrom sets the "valid_from" field.
-func (tcu *TaxConfigUpdate) SetValidFrom(t time.Time) *TaxConfigUpdate {
-	tcu.mutation.SetValidFrom(t)
-	return tcu
-}
-
-// SetNillableValidFrom sets the "valid_from" field if the given value is not nil.
-func (tcu *TaxConfigUpdate) SetNillableValidFrom(t *time.Time) *TaxConfigUpdate {
-	if t != nil {
-		tcu.SetValidFrom(*t)
-	}
-	return tcu
-}
-
-// ClearValidFrom clears the value of the "valid_from" field.
-func (tcu *TaxConfigUpdate) ClearValidFrom() *TaxConfigUpdate {
-	tcu.mutation.ClearValidFrom()
-	return tcu
-}
-
-// SetValidTo sets the "valid_to" field.
-func (tcu *TaxConfigUpdate) SetValidTo(t time.Time) *TaxConfigUpdate {
-	tcu.mutation.SetValidTo(t)
-	return tcu
-}
-
-// SetNillableValidTo sets the "valid_to" field if the given value is not nil.
-func (tcu *TaxConfigUpdate) SetNillableValidTo(t *time.Time) *TaxConfigUpdate {
-	if t != nil {
-		tcu.SetValidTo(*t)
-	}
-	return tcu
-}
-
-// ClearValidTo clears the value of the "valid_to" field.
-func (tcu *TaxConfigUpdate) ClearValidTo() *TaxConfigUpdate {
-	tcu.mutation.ClearValidTo()
-	return tcu
-}
-
 // SetMetadata sets the "metadata" field.
 func (tcu *TaxConfigUpdate) SetMetadata(m map[string]string) *TaxConfigUpdate {
 	tcu.mutation.SetMetadata(m)
@@ -261,18 +221,6 @@ func (tcu *TaxConfigUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := tcu.mutation.AutoApply(); ok {
 		_spec.SetField(taxconfig.FieldAutoApply, field.TypeBool, value)
-	}
-	if value, ok := tcu.mutation.ValidFrom(); ok {
-		_spec.SetField(taxconfig.FieldValidFrom, field.TypeTime, value)
-	}
-	if tcu.mutation.ValidFromCleared() {
-		_spec.ClearField(taxconfig.FieldValidFrom, field.TypeTime)
-	}
-	if value, ok := tcu.mutation.ValidTo(); ok {
-		_spec.SetField(taxconfig.FieldValidTo, field.TypeTime, value)
-	}
-	if tcu.mutation.ValidToCleared() {
-		_spec.ClearField(taxconfig.FieldValidTo, field.TypeTime)
 	}
 	if tcu.mutation.CurrencyCleared() {
 		_spec.ClearField(taxconfig.FieldCurrency, field.TypeString)
@@ -389,46 +337,6 @@ func (tcuo *TaxConfigUpdateOne) SetNillableAutoApply(b *bool) *TaxConfigUpdateOn
 	if b != nil {
 		tcuo.SetAutoApply(*b)
 	}
-	return tcuo
-}
-
-// SetValidFrom sets the "valid_from" field.
-func (tcuo *TaxConfigUpdateOne) SetValidFrom(t time.Time) *TaxConfigUpdateOne {
-	tcuo.mutation.SetValidFrom(t)
-	return tcuo
-}
-
-// SetNillableValidFrom sets the "valid_from" field if the given value is not nil.
-func (tcuo *TaxConfigUpdateOne) SetNillableValidFrom(t *time.Time) *TaxConfigUpdateOne {
-	if t != nil {
-		tcuo.SetValidFrom(*t)
-	}
-	return tcuo
-}
-
-// ClearValidFrom clears the value of the "valid_from" field.
-func (tcuo *TaxConfigUpdateOne) ClearValidFrom() *TaxConfigUpdateOne {
-	tcuo.mutation.ClearValidFrom()
-	return tcuo
-}
-
-// SetValidTo sets the "valid_to" field.
-func (tcuo *TaxConfigUpdateOne) SetValidTo(t time.Time) *TaxConfigUpdateOne {
-	tcuo.mutation.SetValidTo(t)
-	return tcuo
-}
-
-// SetNillableValidTo sets the "valid_to" field if the given value is not nil.
-func (tcuo *TaxConfigUpdateOne) SetNillableValidTo(t *time.Time) *TaxConfigUpdateOne {
-	if t != nil {
-		tcuo.SetValidTo(*t)
-	}
-	return tcuo
-}
-
-// ClearValidTo clears the value of the "valid_to" field.
-func (tcuo *TaxConfigUpdateOne) ClearValidTo() *TaxConfigUpdateOne {
-	tcuo.mutation.ClearValidTo()
 	return tcuo
 }
 
@@ -566,18 +474,6 @@ func (tcuo *TaxConfigUpdateOne) sqlSave(ctx context.Context) (_node *TaxConfig, 
 	}
 	if value, ok := tcuo.mutation.AutoApply(); ok {
 		_spec.SetField(taxconfig.FieldAutoApply, field.TypeBool, value)
-	}
-	if value, ok := tcuo.mutation.ValidFrom(); ok {
-		_spec.SetField(taxconfig.FieldValidFrom, field.TypeTime, value)
-	}
-	if tcuo.mutation.ValidFromCleared() {
-		_spec.ClearField(taxconfig.FieldValidFrom, field.TypeTime)
-	}
-	if value, ok := tcuo.mutation.ValidTo(); ok {
-		_spec.SetField(taxconfig.FieldValidTo, field.TypeTime, value)
-	}
-	if tcuo.mutation.ValidToCleared() {
-		_spec.ClearField(taxconfig.FieldValidTo, field.TypeTime)
 	}
 	if tcuo.mutation.CurrencyCleared() {
 		_spec.ClearField(taxconfig.FieldCurrency, field.TypeString)

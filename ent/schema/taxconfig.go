@@ -73,16 +73,6 @@ func (TaxConfig) Fields() []ent.Field {
 			Default(false).
 			Comment("Whether this tax should be automatically applied"),
 
-		field.Time("valid_from").
-			Optional().
-			Nillable().
-			Comment("Start date for this tax assignment"),
-
-		field.Time("valid_to").
-			Optional().
-			Nillable().
-			Comment("End date for this tax assignment"),
-
 		field.String("currency").
 			Optional().
 			SchemaType(map[string]string{
@@ -109,7 +99,7 @@ func (TaxConfig) Edges() []ent.Edge {
 func (TaxConfig) Indexes() []ent.Index {
 	return []ent.Index{
 		// Primary lookup: find tax assignments for entity
-		index.Fields("tenant_id", "environment_id", "entity_type", "entity_id").
+		index.Fields("tenant_id", "environment_id", "entity_type", "entity_id", "status").
 			StorageKey(Idx_entity_lookup_active),
 
 		// Tax rate reverse lookup: find entities using specific tax rate

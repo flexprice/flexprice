@@ -1321,8 +1321,6 @@ var (
 		{Name: "entity_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "priority", Type: field.TypeInt, Default: 100, SchemaType: map[string]string{"postgres": "integer"}},
 		{Name: "auto_apply", Type: field.TypeBool, Default: false},
-		{Name: "valid_from", Type: field.TypeTime, Nullable: true},
-		{Name: "valid_to", Type: field.TypeTime, Nullable: true},
 		{Name: "currency", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(100)"}},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 	}
@@ -1335,7 +1333,7 @@ var (
 			{
 				Name:    "idx_entity_lookup_active",
 				Unique:  false,
-				Columns: []*schema.Column{TaxConfigsColumns[1], TaxConfigsColumns[7], TaxConfigsColumns[9], TaxConfigsColumns[10]},
+				Columns: []*schema.Column{TaxConfigsColumns[1], TaxConfigsColumns[7], TaxConfigsColumns[9], TaxConfigsColumns[10], TaxConfigsColumns[2]},
 			},
 			{
 				Name:    "idx_tax_rate_id_tenant_id_environment_id",
@@ -1355,7 +1353,7 @@ var (
 			{
 				Name:    "idx_currency_entity_lookup",
 				Unique:  false,
-				Columns: []*schema.Column{TaxConfigsColumns[1], TaxConfigsColumns[7], TaxConfigsColumns[15], TaxConfigsColumns[9]},
+				Columns: []*schema.Column{TaxConfigsColumns[1], TaxConfigsColumns[7], TaxConfigsColumns[13], TaxConfigsColumns[9]},
 			},
 		},
 	}

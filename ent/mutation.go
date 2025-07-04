@@ -37519,8 +37519,6 @@ type TaxConfigMutation struct {
 	priority       *int
 	addpriority    *int
 	auto_apply     *bool
-	valid_from     *time.Time
-	valid_to       *time.Time
 	currency       *string
 	metadata       *map[string]string
 	clearedFields  map[string]struct{}
@@ -38124,104 +38122,6 @@ func (m *TaxConfigMutation) ResetAutoApply() {
 	m.auto_apply = nil
 }
 
-// SetValidFrom sets the "valid_from" field.
-func (m *TaxConfigMutation) SetValidFrom(t time.Time) {
-	m.valid_from = &t
-}
-
-// ValidFrom returns the value of the "valid_from" field in the mutation.
-func (m *TaxConfigMutation) ValidFrom() (r time.Time, exists bool) {
-	v := m.valid_from
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldValidFrom returns the old "valid_from" field's value of the TaxConfig entity.
-// If the TaxConfig object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *TaxConfigMutation) OldValidFrom(ctx context.Context) (v *time.Time, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldValidFrom is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldValidFrom requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldValidFrom: %w", err)
-	}
-	return oldValue.ValidFrom, nil
-}
-
-// ClearValidFrom clears the value of the "valid_from" field.
-func (m *TaxConfigMutation) ClearValidFrom() {
-	m.valid_from = nil
-	m.clearedFields[taxconfig.FieldValidFrom] = struct{}{}
-}
-
-// ValidFromCleared returns if the "valid_from" field was cleared in this mutation.
-func (m *TaxConfigMutation) ValidFromCleared() bool {
-	_, ok := m.clearedFields[taxconfig.FieldValidFrom]
-	return ok
-}
-
-// ResetValidFrom resets all changes to the "valid_from" field.
-func (m *TaxConfigMutation) ResetValidFrom() {
-	m.valid_from = nil
-	delete(m.clearedFields, taxconfig.FieldValidFrom)
-}
-
-// SetValidTo sets the "valid_to" field.
-func (m *TaxConfigMutation) SetValidTo(t time.Time) {
-	m.valid_to = &t
-}
-
-// ValidTo returns the value of the "valid_to" field in the mutation.
-func (m *TaxConfigMutation) ValidTo() (r time.Time, exists bool) {
-	v := m.valid_to
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldValidTo returns the old "valid_to" field's value of the TaxConfig entity.
-// If the TaxConfig object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *TaxConfigMutation) OldValidTo(ctx context.Context) (v *time.Time, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldValidTo is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldValidTo requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldValidTo: %w", err)
-	}
-	return oldValue.ValidTo, nil
-}
-
-// ClearValidTo clears the value of the "valid_to" field.
-func (m *TaxConfigMutation) ClearValidTo() {
-	m.valid_to = nil
-	m.clearedFields[taxconfig.FieldValidTo] = struct{}{}
-}
-
-// ValidToCleared returns if the "valid_to" field was cleared in this mutation.
-func (m *TaxConfigMutation) ValidToCleared() bool {
-	_, ok := m.clearedFields[taxconfig.FieldValidTo]
-	return ok
-}
-
-// ResetValidTo resets all changes to the "valid_to" field.
-func (m *TaxConfigMutation) ResetValidTo() {
-	m.valid_to = nil
-	delete(m.clearedFields, taxconfig.FieldValidTo)
-}
-
 // SetCurrency sets the "currency" field.
 func (m *TaxConfigMutation) SetCurrency(s string) {
 	m.currency = &s
@@ -38354,7 +38254,7 @@ func (m *TaxConfigMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TaxConfigMutation) Fields() []string {
-	fields := make([]string, 0, 16)
+	fields := make([]string, 0, 14)
 	if m.tenant_id != nil {
 		fields = append(fields, taxconfig.FieldTenantID)
 	}
@@ -38390,12 +38290,6 @@ func (m *TaxConfigMutation) Fields() []string {
 	}
 	if m.auto_apply != nil {
 		fields = append(fields, taxconfig.FieldAutoApply)
-	}
-	if m.valid_from != nil {
-		fields = append(fields, taxconfig.FieldValidFrom)
-	}
-	if m.valid_to != nil {
-		fields = append(fields, taxconfig.FieldValidTo)
 	}
 	if m.currency != nil {
 		fields = append(fields, taxconfig.FieldCurrency)
@@ -38435,10 +38329,6 @@ func (m *TaxConfigMutation) Field(name string) (ent.Value, bool) {
 		return m.Priority()
 	case taxconfig.FieldAutoApply:
 		return m.AutoApply()
-	case taxconfig.FieldValidFrom:
-		return m.ValidFrom()
-	case taxconfig.FieldValidTo:
-		return m.ValidTo()
 	case taxconfig.FieldCurrency:
 		return m.Currency()
 	case taxconfig.FieldMetadata:
@@ -38476,10 +38366,6 @@ func (m *TaxConfigMutation) OldField(ctx context.Context, name string) (ent.Valu
 		return m.OldPriority(ctx)
 	case taxconfig.FieldAutoApply:
 		return m.OldAutoApply(ctx)
-	case taxconfig.FieldValidFrom:
-		return m.OldValidFrom(ctx)
-	case taxconfig.FieldValidTo:
-		return m.OldValidTo(ctx)
 	case taxconfig.FieldCurrency:
 		return m.OldCurrency(ctx)
 	case taxconfig.FieldMetadata:
@@ -38577,20 +38463,6 @@ func (m *TaxConfigMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetAutoApply(v)
 		return nil
-	case taxconfig.FieldValidFrom:
-		v, ok := value.(time.Time)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetValidFrom(v)
-		return nil
-	case taxconfig.FieldValidTo:
-		v, ok := value.(time.Time)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetValidTo(v)
-		return nil
 	case taxconfig.FieldCurrency:
 		v, ok := value.(string)
 		if !ok {
@@ -38659,12 +38531,6 @@ func (m *TaxConfigMutation) ClearedFields() []string {
 	if m.FieldCleared(taxconfig.FieldEnvironmentID) {
 		fields = append(fields, taxconfig.FieldEnvironmentID)
 	}
-	if m.FieldCleared(taxconfig.FieldValidFrom) {
-		fields = append(fields, taxconfig.FieldValidFrom)
-	}
-	if m.FieldCleared(taxconfig.FieldValidTo) {
-		fields = append(fields, taxconfig.FieldValidTo)
-	}
 	if m.FieldCleared(taxconfig.FieldCurrency) {
 		fields = append(fields, taxconfig.FieldCurrency)
 	}
@@ -38693,12 +38559,6 @@ func (m *TaxConfigMutation) ClearField(name string) error {
 		return nil
 	case taxconfig.FieldEnvironmentID:
 		m.ClearEnvironmentID()
-		return nil
-	case taxconfig.FieldValidFrom:
-		m.ClearValidFrom()
-		return nil
-	case taxconfig.FieldValidTo:
-		m.ClearValidTo()
 		return nil
 	case taxconfig.FieldCurrency:
 		m.ClearCurrency()
@@ -38749,12 +38609,6 @@ func (m *TaxConfigMutation) ResetField(name string) error {
 		return nil
 	case taxconfig.FieldAutoApply:
 		m.ResetAutoApply()
-		return nil
-	case taxconfig.FieldValidFrom:
-		m.ResetValidFrom()
-		return nil
-	case taxconfig.FieldValidTo:
-		m.ResetValidTo()
 		return nil
 	case taxconfig.FieldCurrency:
 		m.ResetCurrency()
