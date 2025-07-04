@@ -43,7 +43,7 @@ type CreateCustomerRequest struct {
 	Metadata map[string]string `json:"metadata,omitempty"`
 
 	// tax_rate_overrides contains tax rate configurations to be linked to this customer
-	TaxRateOverrides []*TaxRateLink `json:"tax_rate_overrides,omitempty"`
+	TaxRateOverrides []*TaxRateOverride `json:"tax_rate_overrides,omitempty"`
 }
 
 // UpdateCustomerRequest represents the request to update an existing customer
@@ -95,7 +95,7 @@ func (r *CreateCustomerRequest) Validate() error {
 		return err
 	}
 
-	// Validate tax rate links if provided
+	// Validate tax rate overrides if provided
 	if len(r.TaxRateOverrides) > 0 {
 		for i, taxRate := range r.TaxRateOverrides {
 			if err := taxRate.Validate(); err != nil {
