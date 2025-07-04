@@ -84,6 +84,9 @@ type SubscriptionSchedulePhase func(*sql.Selector)
 // Task is the predicate function for task builders.
 type Task func(*sql.Selector)
 
+// TaxApplied is the predicate function for taxapplied builders.
+type TaxApplied func(*sql.Selector)
+
 // TaxAssociation is the predicate function for taxassociation builders.
 type TaxAssociation func(*sql.Selector)
 

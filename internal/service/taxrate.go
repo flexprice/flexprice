@@ -48,11 +48,7 @@ func (s *taxService) CreateTaxRate(ctx context.Context, req dto.CreateTaxRateReq
 
 	// Set tax rate status based on validity period
 	now := time.Now().UTC()
-	if req.ValidFrom != nil && req.ValidFrom.Before(now) {
-		taxRate.TaxRateStatus = types.TaxRateStatusActive
-	} else {
-		taxRate.TaxRateStatus = types.TaxRateStatusInactive
-	}
+	taxRate.TaxRateStatus = s.calculateTaxRateStatus(taxRate, now)
 
 	// Create the tax rate in the repository
 	if err := s.TaxRateRepo.Create(ctx, taxRate); err != nil {
@@ -309,6 +305,6 @@ func (s *taxService) calculateTaxRateStatus(taxRate *taxrate.TaxRate, now time.T
 		return types.TaxRateStatusInactive
 	}
 
-	// Otherwise, tax rate should be active
+	// If ValidFrom is nil or in the past, and ValidTo is nil or in the future, tax rate should be active
 	return types.TaxRateStatusActive
 }

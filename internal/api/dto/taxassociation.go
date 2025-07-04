@@ -24,6 +24,19 @@ func (r *CreateTaxAssociationRequest) Validate() error {
 		return err
 	}
 
+	// Explicit validation for required fields
+	if r.TaxRateID == "" {
+		return ierr.NewError("tax_rate_id is required").
+			WithHint("Tax rate ID cannot be empty").
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.EntityID == "" {
+		return ierr.NewError("entity_id is required").
+			WithHint("Entity ID cannot be empty").
+			Mark(ierr.ErrValidation)
+	}
+
 	if r.Priority < 0 {
 		return ierr.NewError("priority cannot be less than 0").
 			WithHint("Priority cannot be less than 0").
@@ -156,7 +169,7 @@ func (tr *TaxRateOverride) ToTaxEntityAssociation(_ context.Context, entityID st
 	return &CreateEntityTaxAssociation{
 		CreateTaxRateRequest: tr.CreateTaxRateRequest,
 		TaxRateID:            tr.TaxRateID,
-		EntityType:           string(entityType),
+		EntityType:           entityType,
 		EntityID:             entityID,
 		Priority:             tr.Priority,
 		AutoApply:            tr.AutoApply,
@@ -166,11 +179,11 @@ func (tr *TaxRateOverride) ToTaxEntityAssociation(_ context.Context, entityID st
 type CreateEntityTaxAssociation struct {
 	CreateTaxRateRequest
 
-	TaxRateID  *string `json:"tax_rate_id" binding:"omitempty"`
-	EntityType string  `json:"entity_type" binding:"required"`
-	EntityID   string  `json:"entity_id" binding:"required"`
-	Priority   int     `json:"priority" binding:"omitempty"`
-	AutoApply  bool    `json:"auto_apply" binding:"omitempty"`
+	TaxRateID  *string                 `json:"tax_rate_id" binding:"omitempty"`
+	EntityType types.TaxrateEntityType `json:"entity_type" binding:"required"`
+	EntityID   string                  `json:"entity_id" binding:"required"`
+	Priority   int                     `json:"priority" binding:"omitempty"`
+	AutoApply  bool                    `json:"auto_apply" binding:"omitempty"`
 }
 
 func (tr *CreateEntityTaxAssociation) Validate() error {
@@ -184,6 +197,17 @@ func (tr *CreateEntityTaxAssociation) Validate() error {
 			return err
 		}
 	}
+
+	if err := tr.EntityType.Validate(); err != nil {
+		return err
+	}
+
+	if tr.EntityID == "" {
+		return ierr.NewError("entity_id is required").
+			WithHint("Entity ID cannot be empty").
+			Mark(ierr.ErrValidation)
+	}
+
 	return nil
 }
 

@@ -369,8 +369,8 @@ func (s *subscriptionService) handleTaxRateLinking(ctx context.Context, sub *sub
 		for _, taxConfig := range customerTaxes.Items {
 			// simply just link the tax rate to the subscription
 			taxRateLink := &dto.CreateEntityTaxAssociation{
-				TaxRateID:  lo.ToPtr(taxConfig.TaxRateID),
-				EntityType: string(types.TaxrateEntityTypeSubscription),
+				TaxRateID:  lo.ToPtr(taxConfig.TaxRateID),	
+				EntityType: types.TaxrateEntityTypeSubscription,
 				EntityID:   sub.ID,
 				Priority:   taxConfig.Priority,
 				AutoApply:  taxConfig.AutoApply,
