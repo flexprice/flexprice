@@ -225,6 +225,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			taxConfig.GET("", handlers.TaxConfig.ListTaxConfigs)
 			taxConfig.GET("/:id", handlers.TaxConfig.GetTaxConfig)
 			taxConfig.PUT("/:id", handlers.TaxConfig.UpdateTaxConfig)
+			taxConfig.DELETE("/:id", handlers.TaxConfig.DeleteTaxConfig)
 		}
 
 		feature := v1Private.Group("/features")

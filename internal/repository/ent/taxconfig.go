@@ -150,15 +150,16 @@ func (r *taxConfigRepository) Create(ctx context.Context, t *domainTaxConfig.Tax
 		SetID(t.ID).
 		SetTaxRateID(t.TaxRateID).
 		SetEntityType(t.EntityType).
-		SetEntityID(t.EntityID).
+		SetCurrency(t.Currency).
 		SetPriority(t.Priority).
 		SetAutoApply(t.AutoApply).
-		SetCurrency(t.Currency).
 		SetMetadata(t.Metadata).
 		SetEnvironmentID(t.EnvironmentID).
+		SetEntityID(t.EntityID).
 		SetCreatedAt(t.CreatedAt).
 		SetUpdatedAt(t.UpdatedAt).
 		SetCreatedBy(t.CreatedBy).
+		SetTenantID(t.TenantID).
 		SetUpdatedBy(t.UpdatedBy).
 		Save(ctx)
 	if err != nil {
@@ -276,10 +277,11 @@ func (r *taxConfigRepository) Delete(ctx context.Context, t *domainTaxConfig.Tax
 			entTaxConfig.TenantID(types.GetTenantID(ctx)),
 			entTaxConfig.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
+		SetStatus(string(types.StatusArchived)).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		SetAutoApply(false).
 		Save(ctx)
+
 	if err != nil {
 		SetSpanError(span, err)
 		if ent.IsNotFound(err) {
