@@ -8,12 +8,12 @@ import (
 type TaxAssociationFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
-	TaxAssociationIDs []string `json:"tax_association_ids,omitempty" form:"tax_association_ids"`
-	TaxRateIDs        []string `json:"tax_rate_ids,omitempty" form:"tax_rate_ids"`
-	EntityType        string   `json:"entity_type,omitempty" form:"entity_type"`
-	EntityID          string   `json:"entity_id,omitempty" form:"entity_id"`
-	Currency          string   `json:"currency,omitempty" form:"currency"`
-	AutoApply         *bool    `json:"auto_apply,omitempty" form:"auto_apply"`
+	TaxAssociationIDs []string          `json:"tax_association_ids,omitempty" form:"tax_association_ids"`
+	TaxRateIDs        []string          `json:"tax_rate_ids,omitempty" form:"tax_rate_ids"`
+	EntityType        TaxrateEntityType `json:"entity_type,omitempty" form:"entity_type"`
+	EntityID          string            `json:"entity_id,omitempty" form:"entity_id"`
+	Currency          string            `json:"currency,omitempty" form:"currency"`
+	AutoApply         *bool             `json:"auto_apply,omitempty" form:"auto_apply"`
 }
 
 // NewTaxAssociationFilter creates a new tax association filter with default options
@@ -34,12 +34,23 @@ func NewNoLimitTaxAssociationFilter() *TaxAssociationFilter {
 func (f *TaxAssociationFilter) Validate() error {
 	if f.QueryFilter != nil {
 		if err := f.QueryFilter.Validate(); err != nil {
-			return ierr.WithError(err).WithHint("invalid query filter").Mark(ierr.ErrValidation)
+			return ierr.WithError(err).
+				WithHint("invalid query filter").
+				Mark(ierr.ErrValidation)
 		}
 	}
 	if f.TimeRangeFilter != nil {
 		if err := f.TimeRangeFilter.Validate(); err != nil {
-			return ierr.WithError(err).WithHint("invalid time range").Mark(ierr.ErrValidation)
+			return ierr.WithError(err).
+				WithHint("invalid time range").
+				Mark(ierr.ErrValidation)
+		}
+	}
+	if f.EntityType != "" {
+		if err := f.EntityType.Validate(); err != nil {
+			return ierr.WithError(err).
+				WithHint("invalid entity type").
+				Mark(ierr.ErrValidation)
 		}
 	}
 	return nil

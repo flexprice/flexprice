@@ -118,7 +118,7 @@ func (o TaxAssociationQueryOptions) applyEntityQueryOptions(_ context.Context, f
 		query = query.Where(entTaxConfig.TaxRateIDIn(f.TaxRateIDs...))
 	}
 	if f.EntityType != "" {
-		query = query.Where(entTaxConfig.EntityType(f.EntityType))
+		query = query.Where(entTaxConfig.EntityType(string(f.EntityType)))
 	}
 	if f.EntityID != "" {
 		query = query.Where(entTaxConfig.EntityID(f.EntityID))

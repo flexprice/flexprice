@@ -271,7 +271,7 @@ func (f *TaxRateFilter) GetExpand() Expand {
 // IsUnlimited implements BaseFilter interface
 func (f *TaxRateFilter) IsUnlimited() bool {
 	if f.QueryFilter == nil {
-		return NewDefaultQueryFilter().IsUnlimited()
+		return NewNoLimitQueryFilter().IsUnlimited()
 	}
 	return f.QueryFilter.IsUnlimited()
 }

@@ -356,7 +356,7 @@ func (s *subscriptionService) handleTaxRateLinking(ctx context.Context, sub *sub
 	} else {
 		// if subscription has no tax rate overrides, get the tax configs for the customer
 		filter := types.NewNoLimitTaxAssociationFilter()
-		filter.EntityType = string(types.TaxrateEntityTypeCustomer)
+		filter.EntityType = types.TaxrateEntityTypeCustomer
 		filter.EntityID = sub.CustomerID
 		filter.Currency = sub.Currency
 		filter.AutoApply = lo.ToPtr(true)
