@@ -156,6 +156,12 @@ func NewTaxRateFilter() *TaxRateFilter {
 	}
 }
 
+func NewDefaultTaxRateFilter() *TaxRateFilter {
+	return &TaxRateFilter{
+		QueryFilter: NewDefaultQueryFilter(),
+	}
+}
+
 // NewNoLimitTaxRateFilter creates a new TaxRateFilter with no pagination limits
 func NewNoLimitTaxRateFilter() *TaxRateFilter {
 	return &TaxRateFilter{
@@ -164,7 +170,7 @@ func NewNoLimitTaxRateFilter() *TaxRateFilter {
 }
 
 // Validate validates the TaxRateFilter
-func (f TaxRateFilter) Validate() error {
+func (f *TaxRateFilter) Validate() error {
 	if f.QueryFilter != nil {
 		if err := f.QueryFilter.Validate(); err != nil {
 			return err
@@ -213,6 +219,57 @@ func (f TaxRateFilter) Validate() error {
 }
 
 // GetLimit returns the limit for the TaxRateFilter
-func (f TaxRateFilter) GetLimit() int {
+func (f *TaxRateFilter) GetLimit() int {
+	if f.QueryFilter == nil {
+		return NewDefaultQueryFilter().GetLimit()
+	}
 	return f.QueryFilter.GetLimit()
+}
+
+// GetOffset implements BaseFilter interface
+func (f *TaxRateFilter) GetOffset() int {
+	if f.QueryFilter == nil {
+		return NewDefaultQueryFilter().GetOffset()
+	}
+	return f.QueryFilter.GetOffset()
+}
+
+// GetSort implements BaseFilter interface
+func (f *TaxRateFilter) GetSort() string {
+	if f.QueryFilter == nil {
+		return NewDefaultQueryFilter().GetSort()
+	}
+	return f.QueryFilter.GetSort()
+}
+
+// GetOrder implements BaseFilter interface
+func (f *TaxRateFilter) GetOrder() string {
+	if f.QueryFilter == nil {
+		return NewDefaultQueryFilter().GetOrder()
+	}
+	return f.QueryFilter.GetOrder()
+}
+
+// GetStatus implements BaseFilter interface
+func (f *TaxRateFilter) GetStatus() string {
+	if f.QueryFilter == nil {
+		return NewDefaultQueryFilter().GetStatus()
+	}
+	return f.QueryFilter.GetStatus()
+}
+
+// GetExpand implements BaseFilter interface
+func (f *TaxRateFilter) GetExpand() Expand {
+	if f.QueryFilter == nil {
+		return NewDefaultQueryFilter().GetExpand()
+	}
+	return f.QueryFilter.GetExpand()
+}
+
+// IsUnlimited implements BaseFilter interface
+func (f *TaxRateFilter) IsUnlimited() bool {
+	if f.QueryFilter == nil {
+		return NewDefaultQueryFilter().IsUnlimited()
+	}
+	return f.QueryFilter.IsUnlimited()
 }

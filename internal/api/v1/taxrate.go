@@ -9,7 +9,6 @@ import (
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
-	"github.com/samber/lo"
 )
 
 type TaxRateHandler struct {
@@ -93,10 +92,6 @@ func (h *TaxRateHandler) GetTaxRates(c *gin.Context) {
 		return
 	}
 
-	if filter.GetLimit() == 0 {
-		filter.Limit = lo.ToPtr(types.GetDefaultFilter().Limit)
-	}
-
 	taxRates, err := h.service.ListTaxRates(c.Request.Context(), &filter)
 	if err != nil {
 		c.Error(err)
@@ -158,37 +153,4 @@ func (h *TaxRateHandler) DeleteTaxRate(c *gin.Context) {
 	}
 
 	c.Status(http.StatusNoContent)
-}
-
-// @Summary List tax rates by filter
-// @Description List tax rates by filter
-// @Tags Tax Rates
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param filter body types.TaxRateFilter true "Filter"
-// @Success 200 {object} dto.ListTaxRatesResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /taxrate/search [post]
-func (h *TaxRateHandler) ListTaxRatesByFilter(c *gin.Context) {
-	var filter types.TaxRateFilter
-	if err := c.ShouldBindJSON(&filter); err != nil {
-		c.Error(ierr.WithError(err).
-			WithHint("Invalid filter parameters").
-			Mark(ierr.ErrValidation))
-		return
-	}
-
-	if filter.GetLimit() == 0 {
-		filter.Limit = lo.ToPtr(types.GetDefaultFilter().Limit)
-	}
-
-	resp, err := h.service.ListTaxRates(c.Request.Context(), &filter)
-	if err != nil {
-		c.Error(err)
-		return
-	}
-
-	c.JSON(http.StatusOK, resp)
 }

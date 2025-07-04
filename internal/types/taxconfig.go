@@ -13,6 +13,7 @@ type TaxConfigFilter struct {
 	EntityType   string   `json:"entity_type,omitempty" form:"entity_type"`
 	EntityID     string   `json:"entity_id,omitempty" form:"entity_id"`
 	Currency     string   `json:"currency,omitempty" form:"currency"`
+	AutoApply    *bool    `json:"auto_apply,omitempty" form:"auto_apply"`
 }
 
 // NewTaxConfigFilter creates a new tax config filter with default options

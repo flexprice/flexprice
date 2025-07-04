@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 type taxConfigRepository struct {
@@ -45,6 +46,13 @@ func (o TaxConfigQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query
 		return query.Where(entTaxConfig.EnvironmentID(envID))
 	}
 	return query
+}
+
+func (o TaxConfigQueryOptions) ApplyStatusFilter(query TaxConfigQuery, status string) TaxConfigQuery {
+	if status == "" {
+		return query.Where(entTaxConfig.StatusNotIn(string(types.StatusDeleted)))
+	}
+	return query.Where(entTaxConfig.Status(status))
 }
 
 func (o TaxConfigQueryOptions) ApplySortFilter(query TaxConfigQuery, field, order string) TaxConfigQuery {
@@ -117,6 +125,9 @@ func (o TaxConfigQueryOptions) applyEntityQueryOptions(_ context.Context, f *typ
 	}
 	if f.Currency != "" {
 		query = query.Where(entTaxConfig.Currency(f.Currency))
+	}
+	if f.AutoApply != nil {
+		query = query.Where(entTaxConfig.AutoApply(lo.FromPtr(f.AutoApply)))
 	}
 	if f.TimeRangeFilter != nil {
 		if f.TimeRangeFilter.StartTime != nil {

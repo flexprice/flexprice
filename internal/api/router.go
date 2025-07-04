@@ -277,14 +277,13 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		}
 
 		// Tax rate routes
-		taxRates := v1Private.Group("/taxrate")
+		taxRates := v1Private.Group("/taxrates")
 		{
 			taxRates.POST("", handlers.TaxRate.CreateTaxRate)
 			taxRates.GET("", handlers.TaxRate.GetTaxRates)
 			taxRates.GET("/:id", handlers.TaxRate.GetTaxRate)
 			taxRates.PUT("/:id", handlers.TaxRate.UpdateTaxRate)
 			taxRates.DELETE("/:id", handlers.TaxRate.DeleteTaxRate)
-			taxRates.POST("/search", handlers.TaxRate.ListTaxRatesByFilter)
 		}
 
 		// Secret routes

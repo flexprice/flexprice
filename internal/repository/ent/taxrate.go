@@ -87,11 +87,12 @@ func (r *taxrateRepository) Create(ctx context.Context, t *domainTaxRate.TaxRate
 			if errors.As(err, &pqErr) {
 				if pqErr.Constraint == schema.Idx_code_tenant_id_environment_id {
 					return ierr.WithError(err).
-						WithHint("A taxrate with this code already exists").
+						WithHintf("A taxrate with this code %s already exists", t.Code).
 						WithReportableDetails(map[string]any{
 							"taxrate_code": t.Code,
 							"taxrate_id":   t.ID,
 							"taxrate_name": t.Name,
+							"error":        err.Error(),
 						}).
 						Mark(ierr.ErrAlreadyExists)
 				}
