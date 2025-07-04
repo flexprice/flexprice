@@ -53,7 +53,7 @@ func (s *taxConfigService) Create(ctx context.Context, req *dto.CreateTaxAssocia
 		"auto_apply", tc.AutoApply)
 
 	// Create tax config
-	err = s.TaxConfigRepo.Create(ctx, tc)
+	err = s.TaxAssociationRepo.Create(ctx, tc)
 	if err != nil {
 		s.Logger.Errorw("failed to create tax config",
 			"error", err,
@@ -81,7 +81,7 @@ func (s *taxConfigService) Get(ctx context.Context, id string) (*dto.TaxAssociat
 
 	s.Logger.Debugw("getting tax config", "tax_config_id", id)
 
-	tc, err := s.TaxConfigRepo.Get(ctx, id)
+	tc, err := s.TaxAssociationRepo.Get(ctx, id)
 	if err != nil {
 		s.Logger.Errorw("failed to get tax config",
 			"error", err,
@@ -113,7 +113,7 @@ func (s *taxConfigService) Update(ctx context.Context, id string, req *dto.TaxAs
 	}
 
 	// Get existing tax config to ensure it exists
-	existing, err := s.TaxConfigRepo.Get(ctx, id)
+	existing, err := s.TaxAssociationRepo.Get(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +144,7 @@ func (s *taxConfigService) Update(ctx context.Context, id string, req *dto.TaxAs
 		"entity_id", existing.EntityID)
 
 	// Update tax config
-	err = s.TaxConfigRepo.Update(ctx, existing)
+	err = s.TaxAssociationRepo.Update(ctx, existing)
 	if err != nil {
 		s.Logger.Errorw("failed to update tax config",
 			"error", err,
@@ -169,13 +169,13 @@ func (s *taxConfigService) Delete(ctx context.Context, id string) error {
 	}
 
 	// Get existing tax config to ensure it exists
-	existing, err := s.TaxConfigRepo.Get(ctx, id)
+	existing, err := s.TaxAssociationRepo.Get(ctx, id)
 	if err != nil {
 		return err
 	}
 
 	// Delete tax config
-	err = s.TaxConfigRepo.Delete(ctx, existing)
+	err = s.TaxAssociationRepo.Delete(ctx, existing)
 	if err != nil {
 		s.Logger.Errorw("failed to delete tax config",
 			"error", err,
@@ -204,7 +204,7 @@ func (s *taxConfigService) List(ctx context.Context, filter *types.TaxAssociatio
 		"tax_rate_ids_count", len(filter.TaxRateIDs))
 
 	// List tax configs
-	taxConfigs, err := s.TaxConfigRepo.List(ctx, filter)
+	taxConfigs, err := s.TaxAssociationRepo.List(ctx, filter)
 	if err != nil {
 		s.Logger.Errorw("failed to list tax configs",
 			"error", err,
@@ -214,7 +214,7 @@ func (s *taxConfigService) List(ctx context.Context, filter *types.TaxAssociatio
 	}
 
 	// Get total count for pagination
-	total, err := s.TaxConfigRepo.Count(ctx, filter)
+	total, err := s.TaxAssociationRepo.Count(ctx, filter)
 	if err != nil {
 		return nil, err
 	}

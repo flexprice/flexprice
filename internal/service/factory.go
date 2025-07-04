@@ -69,7 +69,7 @@ type ServiceParams struct {
 	CreditNoteLineItemRepo     creditnote.CreditNoteLineItemRepository
 	CreditGrantApplicationRepo creditgrantapplication.Repository
 	TaxRateRepo                taxrate.Repository
-	TaxConfigRepo              taxassociation.Repository
+	TaxAssociationRepo         taxassociation.Repository
 	// Publishers
 	EventPublisher   publisher.EventPublisher
 	WebhookPublisher webhookPublisher.WebhookPublisher
@@ -146,7 +146,7 @@ func NewServiceParams(
 		CreditNoteRepo:             creditNoteRepo,
 		CreditNoteLineItemRepo:     creditNoteLineItemRepo,
 		TaxRateRepo:                taxRateRepo,
-		TaxConfigRepo:              taxConfigRepo,
+		TaxAssociationRepo:         taxConfigRepo,
 		EventPublisher:             eventPublisher,
 		WebhookPublisher:           webhookPublisher,
 		S3:                         s3Service,

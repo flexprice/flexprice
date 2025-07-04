@@ -321,6 +321,18 @@ func (f TaskFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error)
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.TaskMutation", m)
 }
 
+// The TaxAppliedFunc type is an adapter to allow the use of ordinary
+// function as TaxApplied mutator.
+type TaxAppliedFunc func(context.Context, *ent.TaxAppliedMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f TaxAppliedFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.TaxAppliedMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.TaxAppliedMutation", m)
+}
+
 // The TaxAssociationFunc type is an adapter to allow the use of ordinary
 // function as TaxAssociation mutator.
 type TaxAssociationFunc func(context.Context, *ent.TaxAssociationMutation) (ent.Value, error)
