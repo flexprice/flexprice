@@ -131,6 +131,23 @@ type TaxRateOverride struct {
 	AutoApply bool    `json:"auto_apply" binding:"omitempty"`
 }
 
+func (tr *TaxRateOverride) Validate() error {
+
+	// if the id is not provided, we need to validate the create tax rate request
+	if tr.TaxRateID == nil {
+
+		if err := validator.ValidateRequest(tr); err != nil {
+			return err
+		}
+
+		if err := tr.CreateTaxRateRequest.Validate(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (tr *TaxRateOverride) ToTaxLink(_ context.Context, entityID string, entityType types.TaxrateEntityType) *TaxRateLink {
 	return &TaxRateLink{
 		CreateTaxRateRequest: tr.CreateTaxRateRequest,
@@ -153,17 +170,16 @@ type TaxRateLink struct {
 }
 
 func (tr *TaxRateLink) Validate() error {
-	if err := validator.ValidateRequest(tr); err != nil {
-		return err
-	}
-
 	// if the id is not provided, we need to validate the create tax rate request
 	if tr.TaxRateID == nil {
+		if err := validator.ValidateRequest(tr); err != nil {
+			return err
+		}
+
 		if err := tr.CreateTaxRateRequest.Validate(); err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
