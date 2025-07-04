@@ -1,8 +1,6 @@
 package taxconfig
 
 import (
-	"time"
-
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -21,10 +19,6 @@ type TaxConfig struct {
 	Priority int `json:"priority,omitempty"`
 	// Whether this tax should be automatically applied
 	AutoApply bool `json:"auto_apply,omitempty"`
-	// Start date for this tax assignment
-	ValidFrom *time.Time `json:"valid_from,omitempty"`
-	// End date for this tax assignment
-	ValidTo *time.Time `json:"valid_to,omitempty"`
 	// Currency
 	Currency string `json:"currency,omitempty"`
 	// Metadata holds the value of the "metadata" field.
@@ -44,8 +38,6 @@ func FromEnt(ent *ent.TaxConfig) *TaxConfig {
 		EntityID:      ent.EntityID,
 		Priority:      ent.Priority,
 		AutoApply:     ent.AutoApply,
-		ValidFrom:     ent.ValidFrom,
-		ValidTo:       ent.ValidTo,
 		Currency:      ent.Currency,
 		EnvironmentID: ent.EnvironmentID,
 		Metadata:      ent.Metadata,

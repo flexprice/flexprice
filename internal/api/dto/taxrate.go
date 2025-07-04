@@ -59,7 +59,7 @@ type CreateTaxRateRequest struct {
 	Metadata map[string]string `json:"metadata,omitempty"`
 
 	// currency is the currency of the tax rate
-	Currency string `json:"currency"validate:"required"`
+	Currency string `json:"currency" binding:"required"`
 }
 
 // UpdateTaxRateRequest represents the request to update a tax rate
