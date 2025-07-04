@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
-	entTaxConfig "github.com/flexprice/flexprice/ent/taxconfig"
+	entTaxConfig "github.com/flexprice/flexprice/ent/taxassociation"
 	"github.com/flexprice/flexprice/internal/cache"
-	domainTaxConfig "github.com/flexprice/flexprice/internal/domain/taxconfig"
+	domainTaxConfig "github.com/flexprice/flexprice/internal/domain/taxassociation"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
@@ -32,7 +32,7 @@ func NewTaxConfigRepository(client postgres.IClient, logger *logger.Logger, cach
 	}
 }
 
-type TaxConfigQuery = *ent.TaxConfigQuery
+type TaxConfigQuery = *ent.TaxAssociationQuery
 
 type TaxConfigQueryOptions struct{}
 
@@ -157,7 +157,7 @@ func (r *taxConfigRepository) Create(ctx context.Context, t *domainTaxConfig.Tax
 		t.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
 
-	_, err := client.TaxConfig.Create().
+	_, err := client.TaxAssociation.Create().
 		SetID(t.ID).
 		SetTaxRateID(t.TaxRateID).
 		SetEntityType(t.EntityType).
@@ -203,7 +203,7 @@ func (r *taxConfigRepository) Get(ctx context.Context, id string) (*domainTaxCon
 	client := r.client.Querier(ctx)
 	r.logger.Debugw("getting tax config", "tax_config_id", id)
 
-	tc, err := client.TaxConfig.Query().
+	tc, err := client.TaxAssociation.Query().
 		Where(
 			entTaxConfig.ID(id),
 			entTaxConfig.TenantID(types.GetTenantID(ctx)),
@@ -240,7 +240,7 @@ func (r *taxConfigRepository) Update(ctx context.Context, t *domainTaxConfig.Tax
 	})
 	defer FinishSpan(span)
 
-	_, err := client.TaxConfig.Update().
+	_, err := client.TaxAssociation.Update().
 		Where(
 			entTaxConfig.ID(t.ID),
 			entTaxConfig.TenantID(types.GetTenantID(ctx)),
@@ -282,7 +282,7 @@ func (r *taxConfigRepository) Delete(ctx context.Context, t *domainTaxConfig.Tax
 	})
 	defer FinishSpan(span)
 
-	_, err := client.TaxConfig.Update().
+	_, err := client.TaxAssociation.Update().
 		Where(
 			entTaxConfig.ID(t.ID),
 			entTaxConfig.TenantID(types.GetTenantID(ctx)),
@@ -321,7 +321,7 @@ func (r *taxConfigRepository) List(ctx context.Context, filter *types.TaxConfigF
 	})
 	defer FinishSpan(span)
 
-	query := client.TaxConfig.Query()
+	query := client.TaxAssociation.Query()
 	query = r.queryOpts.ApplyTenantFilter(ctx, query)
 	query = r.queryOpts.ApplyEnvironmentFilter(ctx, query)
 	var err error
@@ -356,7 +356,7 @@ func (r *taxConfigRepository) Count(ctx context.Context, filter *types.TaxConfig
 	})
 	defer FinishSpan(span)
 
-	query := client.TaxConfig.Query()
+	query := client.TaxAssociation.Query()
 	query = r.queryOpts.ApplyTenantFilter(ctx, query)
 	query = r.queryOpts.ApplyEnvironmentFilter(ctx, query)
 	var err error
@@ -387,7 +387,7 @@ func (r *taxConfigRepository) SetCache(ctx context.Context, t *domainTaxConfig.T
 
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixTaxConfig, tenantID, environmentID, t.ID)
+	cacheKey := cache.GenerateKey(cache.PrefixTaxAssociation, tenantID, environmentID, t.ID)
 	r.cache.Set(ctx, cacheKey, t, cache.ExpiryDefaultInMemory)
 }
 
@@ -399,7 +399,7 @@ func (r *taxConfigRepository) GetCache(ctx context.Context, key string) *domainT
 
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixTaxConfig, tenantID, environmentID, key)
+	cacheKey := cache.GenerateKey(cache.PrefixTaxAssociation, tenantID, environmentID, key)
 	if value, found := r.cache.Get(ctx, cacheKey); found {
 		if tc, ok := value.(*domainTaxConfig.TaxConfig); ok {
 			return tc
@@ -416,6 +416,6 @@ func (r *taxConfigRepository) DeleteCache(ctx context.Context, t *domainTaxConfi
 
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixTaxConfig, tenantID, environmentID, t.ID)
+	cacheKey := cache.GenerateKey(cache.PrefixTaxAssociation, tenantID, environmentID, t.ID)
 	r.cache.Delete(ctx, cacheKey)
 }

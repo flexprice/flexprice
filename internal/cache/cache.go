@@ -46,7 +46,7 @@ const (
 	PrefixCreditGrantApplication = "creditgrantapplication:v1:"
 	PrefixCreditNote             = "creditnote:v1:"
 	PrefixTaxRate                = "taxrate:v1:"
-	PrefixTaxConfig              = "taxconfig:v1:"
+	PrefixTaxAssociation         = "taxassociation:v1:"
 )
 
 // GenerateKey creates a cache key from a prefix and a set of parameters
