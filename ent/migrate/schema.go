@@ -1306,8 +1306,8 @@ var (
 			},
 		},
 	}
-	// TaxConfigsColumns holds the columns for the "tax_configs" table.
-	TaxConfigsColumns = []*schema.Column{
+	// TaxAssociationsColumns holds the columns for the "tax_associations" table.
+	TaxAssociationsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
@@ -1324,36 +1324,36 @@ var (
 		{Name: "currency", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(100)"}},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 	}
-	// TaxConfigsTable holds the schema information for the "tax_configs" table.
-	TaxConfigsTable = &schema.Table{
-		Name:       "tax_configs",
-		Columns:    TaxConfigsColumns,
-		PrimaryKey: []*schema.Column{TaxConfigsColumns[0]},
+	// TaxAssociationsTable holds the schema information for the "tax_associations" table.
+	TaxAssociationsTable = &schema.Table{
+		Name:       "tax_associations",
+		Columns:    TaxAssociationsColumns,
+		PrimaryKey: []*schema.Column{TaxAssociationsColumns[0]},
 		Indexes: []*schema.Index{
 			{
 				Name:    "idx_entity_lookup_active",
 				Unique:  false,
-				Columns: []*schema.Column{TaxConfigsColumns[1], TaxConfigsColumns[7], TaxConfigsColumns[9], TaxConfigsColumns[10], TaxConfigsColumns[2]},
+				Columns: []*schema.Column{TaxAssociationsColumns[1], TaxAssociationsColumns[7], TaxAssociationsColumns[9], TaxAssociationsColumns[10], TaxAssociationsColumns[2]},
 			},
 			{
 				Name:    "idx_tax_rate_id_tenant_id_environment_id",
 				Unique:  false,
-				Columns: []*schema.Column{TaxConfigsColumns[1], TaxConfigsColumns[7], TaxConfigsColumns[8]},
+				Columns: []*schema.Column{TaxAssociationsColumns[1], TaxAssociationsColumns[7], TaxAssociationsColumns[8]},
 			},
 			{
 				Name:    "idx_auto_apply_lookup",
 				Unique:  false,
-				Columns: []*schema.Column{TaxConfigsColumns[1], TaxConfigsColumns[7], TaxConfigsColumns[12], TaxConfigsColumns[9]},
+				Columns: []*schema.Column{TaxAssociationsColumns[1], TaxAssociationsColumns[7], TaxAssociationsColumns[12], TaxAssociationsColumns[9]},
 			},
 			{
 				Name:    "unique_entity_tax_mapping",
 				Unique:  true,
-				Columns: []*schema.Column{TaxConfigsColumns[1], TaxConfigsColumns[7], TaxConfigsColumns[9], TaxConfigsColumns[10], TaxConfigsColumns[8]},
+				Columns: []*schema.Column{TaxAssociationsColumns[1], TaxAssociationsColumns[7], TaxAssociationsColumns[9], TaxAssociationsColumns[10], TaxAssociationsColumns[8]},
 			},
 			{
 				Name:    "idx_currency_entity_lookup",
 				Unique:  false,
-				Columns: []*schema.Column{TaxConfigsColumns[1], TaxConfigsColumns[7], TaxConfigsColumns[13], TaxConfigsColumns[9]},
+				Columns: []*schema.Column{TaxAssociationsColumns[1], TaxAssociationsColumns[7], TaxAssociationsColumns[13], TaxAssociationsColumns[9]},
 			},
 		},
 	}
@@ -1600,7 +1600,7 @@ var (
 		SubscriptionSchedulesTable,
 		SubscriptionSchedulePhasesTable,
 		TasksTable,
-		TaxConfigsTable,
+		TaxAssociationsTable,
 		TaxRatesTable,
 		TenantsTable,
 		UsersTable,

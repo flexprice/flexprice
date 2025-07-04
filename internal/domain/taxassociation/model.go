@@ -30,7 +30,7 @@ type TaxConfig struct {
 	types.BaseModel
 }
 
-func FromEnt(ent *ent.TaxConfig) *TaxConfig {
+func FromEnt(ent *ent.TaxAssociation) *TaxConfig {
 	return &TaxConfig{
 		ID:            ent.ID,
 		TaxRateID:     ent.TaxRateID,
@@ -52,7 +52,7 @@ func FromEnt(ent *ent.TaxConfig) *TaxConfig {
 	}
 }
 
-func FromEntList(ents []*ent.TaxConfig) []*TaxConfig {
+func FromEntList(ents []*ent.TaxAssociation) []*TaxConfig {
 	var configs []*TaxConfig
 	for _, ent := range ents {
 		configs = append(configs, FromEnt(ent))

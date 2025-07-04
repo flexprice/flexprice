@@ -16,21 +16,21 @@ const (
 	Idx_currency_entity_lookup                         = "idx_currency_entity_lookup"
 )
 
-// TaxConfig holds the schema definition for the TaxConfig entity.
-type TaxConfig struct {
+// TaxAssociation holds the schema definition for the TaxAssociation entity.
+type TaxAssociation struct {
 	ent.Schema
 }
 
-// Mixin of the TaxConfig.
-func (TaxConfig) Mixin() []ent.Mixin {
+// Mixin of the TaxAssociation.
+func (TaxAssociation) Mixin() []ent.Mixin {
 	return []ent.Mixin{
 		baseMixin.BaseMixin{},
 		baseMixin.EnvironmentMixin{},
 	}
 }
 
-// Fields of the TaxConfig.
-func (TaxConfig) Fields() []ent.Field {
+// Fields of the TaxAssociation.
+func (TaxAssociation) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("id").
 			SchemaType(map[string]string{
@@ -90,13 +90,13 @@ func (TaxConfig) Fields() []ent.Field {
 	}
 }
 
-// Edges of the TaxConfig.
-func (TaxConfig) Edges() []ent.Edge {
+// Edges of the TaxAssociation.
+func (TaxAssociation) Edges() []ent.Edge {
 	return []ent.Edge{}
 }
 
-// Indexes of the TaxConfig.
-func (TaxConfig) Indexes() []ent.Index {
+// Indexes of the TaxAssociation.
+func (TaxAssociation) Indexes() []ent.Index {
 	return []ent.Index{
 		// Primary lookup: find tax assignments for entity
 		index.Fields("tenant_id", "environment_id", "entity_type", "entity_id", "status").

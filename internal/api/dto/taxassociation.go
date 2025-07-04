@@ -5,13 +5,13 @@ import (
 	"time"
 
 	taxrate "github.com/flexprice/flexprice/internal/domain/tax"
-	"github.com/flexprice/flexprice/internal/domain/taxconfig"
+	taxconfig "github.com/flexprice/flexprice/internal/domain/taxassociation"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
 )
 
-type TaxConfigCreateRequest struct {
+type CreateTaxAssociationRequest struct {
 	TaxRateID  string `json:"tax_rate_id" binding:"required"`
 	EntityType string `json:"entity_type" binding:"required"`
 	EntityID   string `json:"entity_id" binding:"required"`
@@ -19,7 +19,7 @@ type TaxConfigCreateRequest struct {
 	AutoApply  bool   `json:"auto_apply" binding:"omitempty"`
 }
 
-func (r *TaxConfigCreateRequest) Validate() error {
+func (r *CreateTaxAssociationRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
 	}
@@ -33,9 +33,9 @@ func (r *TaxConfigCreateRequest) Validate() error {
 	return nil
 }
 
-func (r *TaxConfigCreateRequest) ToTaxConfig(ctx context.Context, t taxrate.TaxRate) *taxconfig.TaxConfig {
+func (r *CreateTaxAssociationRequest) ToTaxConfig(ctx context.Context, t taxrate.TaxRate) *taxconfig.TaxConfig {
 	return &taxconfig.TaxConfig{
-		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TAX_CONFIG),
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TAX_ASSOCIATION),
 		TaxRateID:     r.TaxRateID,
 		EntityType:    r.EntityType,
 		EntityID:      r.EntityID,
@@ -148,8 +148,8 @@ func (tr *TaxRateOverride) Validate() error {
 	return nil
 }
 
-func (tr *TaxRateOverride) ToTaxLink(_ context.Context, entityID string, entityType types.TaxrateEntityType) *TaxRateLink {
-	return &TaxRateLink{
+func (tr *TaxRateOverride) ToTaxLink(_ context.Context, entityID string, entityType types.TaxrateEntityType) *CreateEntityTaxAssociation {
+	return &CreateEntityTaxAssociation{
 		CreateTaxRateRequest: tr.CreateTaxRateRequest,
 		TaxRateID:            tr.TaxRateID,
 		EntityType:           string(entityType),
@@ -159,7 +159,7 @@ func (tr *TaxRateOverride) ToTaxLink(_ context.Context, entityID string, entityT
 	}
 }
 
-type TaxRateLink struct {
+type CreateEntityTaxAssociation struct {
 	CreateTaxRateRequest
 
 	TaxRateID  *string `json:"tax_rate_id" binding:"omitempty"`
@@ -169,7 +169,7 @@ type TaxRateLink struct {
 	AutoApply  bool    `json:"auto_apply" binding:"omitempty"`
 }
 
-func (tr *TaxRateLink) Validate() error {
+func (tr *CreateEntityTaxAssociation) Validate() error {
 	// if the id is not provided, we need to validate the create tax rate request
 	if tr.TaxRateID == nil {
 		if err := validator.ValidateRequest(tr); err != nil {

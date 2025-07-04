@@ -90,7 +90,7 @@ const (
 	UUID_PREFIX_TASK                        = "task"
 	UUID_PREFIX_SECRET                      = "secret"
 	UUID_PREFIX_TAX_RATE                    = "taxrate"
-	UUID_PREFIX_TAX_CONFIG                  = "tc"
+	UUID_PREFIX_TAX_ASSOCIATION             = "ta"
 	UUID_PREFIX_CREDIT_GRANT                = "cg"
 	UUID_PREFIX_COSTSHEET                   = "cost"
 	UUID_PREFIX_CREDIT_NOTE_LINE_ITEM       = "cn_line"

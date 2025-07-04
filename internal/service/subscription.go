@@ -343,7 +343,7 @@ func (s *subscriptionService) handleTaxRateLinking(ctx context.Context, sub *sub
 
 	// handle tax rate linking
 	taxConfigService := NewTaxConfigService(s.ServiceParams)
-	taxLinkingRequests := make([]*dto.TaxRateLink, 0)
+	taxLinkingRequests := make([]*dto.CreateEntityTaxAssociation, 0)
 
 	// if subscription has tax rate overrides, link them to the subscription
 	if len(req.TaxRateOverrides) > 0 {
@@ -357,7 +357,7 @@ func (s *subscriptionService) handleTaxRateLinking(ctx context.Context, sub *sub
 		// if subscription has no tax rate overrides, get the tax configs for the customer
 		filter := types.NewNoLimitTaxConfigFilter()
 		filter.EntityType = string(types.TaxrateEntityTypeCustomer)
-     		filter.EntityID = sub.CustomerID
+		filter.EntityID = sub.CustomerID
 		filter.Currency = sub.Currency
 		filter.AutoApply = lo.ToPtr(true)
 
@@ -368,7 +368,7 @@ func (s *subscriptionService) handleTaxRateLinking(ctx context.Context, sub *sub
 
 		for _, taxConfig := range customerTaxes.Items {
 			// simply just link the tax rate to the subscription
-			taxRateLink := &dto.TaxRateLink{
+			taxRateLink := &dto.CreateEntityTaxAssociation{
 				TaxRateID:  lo.ToPtr(taxConfig.TaxRateID),
 				EntityType: string(types.TaxrateEntityTypeSubscription),
 				EntityID:   sub.ID,
