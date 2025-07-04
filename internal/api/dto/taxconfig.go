@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	taxrate "github.com/flexprice/flexprice/internal/domain/tax"
 	"github.com/flexprice/flexprice/internal/domain/taxconfig"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -11,13 +12,11 @@ import (
 )
 
 type TaxConfigCreateRequest struct {
-	TaxRateID  string     `json:"tax_rate_id" binding:"required"`
-	EntityType string     `json:"entity_type" binding:"required"`
-	EntityID   string     `json:"entity_id" binding:"required"`
-	Priority   int        `json:"priority" binding:"omitempty"`
-	AutoApply  bool       `json:"auto_apply" binding:"omitempty"`
-	ValidFrom  *time.Time `json:"valid_from" binding:"omitempty"`
-	ValidTo    *time.Time `json:"valid_to" binding:"omitempty"`
+	TaxRateID  string `json:"tax_rate_id" binding:"required"`
+	EntityType string `json:"entity_type" binding:"required"`
+	EntityID   string `json:"entity_id" binding:"required"`
+	Priority   int    `json:"priority" binding:"omitempty"`
+	AutoApply  bool   `json:"auto_apply" binding:"omitempty"`
 }
 
 func (r *TaxConfigCreateRequest) Validate() error {
@@ -34,7 +33,7 @@ func (r *TaxConfigCreateRequest) Validate() error {
 	return nil
 }
 
-func (r *TaxConfigCreateRequest) ToTaxConfig(ctx context.Context) *taxconfig.TaxConfig {
+func (r *TaxConfigCreateRequest) ToTaxConfig(ctx context.Context, t taxrate.TaxRate) *taxconfig.TaxConfig {
 	return &taxconfig.TaxConfig{
 		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TAX_CONFIG),
 		TaxRateID:     r.TaxRateID,
@@ -42,6 +41,7 @@ func (r *TaxConfigCreateRequest) ToTaxConfig(ctx context.Context) *taxconfig.Tax
 		EntityID:      r.EntityID,
 		Priority:      r.Priority,
 		AutoApply:     r.AutoApply,
+		Currency:      t.Currency,
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		BaseModel:     types.GetDefaultBaseModel(ctx),
 	}
