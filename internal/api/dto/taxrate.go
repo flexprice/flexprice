@@ -142,12 +142,6 @@ func (r CreateTaxRateRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	if r.ValidFrom != nil && r.ValidFrom.Before(time.Now().UTC()) {
-		return ierr.NewError("valid_from cannot be in the past").
-			WithHint("Valid from date cannot be in the past").
-			Mark(ierr.ErrValidation)
-	}
-
 	if r.ValidFrom != nil && r.ValidTo != nil && r.ValidFrom.After(lo.FromPtr(r.ValidTo)) {
 		return ierr.NewError("valid_from cannot be after valid_to").
 			WithHint("Valid from date cannot be after valid to date").
