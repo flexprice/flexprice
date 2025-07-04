@@ -47,17 +47,7 @@ func (s *taxService) CreateTaxRate(ctx context.Context, req dto.CreateTaxRateReq
 	}
 
 	// Convert the request to a domain model
-	taxRate, err := req.ToTaxRate(ctx)
-	if err != nil {
-		s.logger.Errorw("failed to convert request to tax rate",
-			"error", err,
-			"name", req.Name,
-			"code", req.Code,
-		)
-		return nil, ierr.WithError(err).
-			WithHint("Invalid tax rate payload").
-			Mark(ierr.ErrValidation)
-	}
+	taxRate := req.ToTaxRate(ctx)
 
 	// Set tax rate status based on validity period
 	now := time.Now().UTC()

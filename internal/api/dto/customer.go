@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
 )
@@ -40,6 +41,9 @@ type CreateCustomerRequest struct {
 
 	// metadata contains additional key-value pairs for storing extra information
 	Metadata map[string]string `json:"metadata,omitempty"`
+
+	// tax_rate_overrides contains tax rate configurations to be linked to this customer
+	TaxRateOverrides []*TaxRateLink `json:"tax_rate_overrides,omitempty"`
 }
 
 // UpdateCustomerRequest represents the request to update an existing customer
@@ -87,7 +91,22 @@ type CustomerResponse struct {
 type ListCustomersResponse = types.ListResponse[*CustomerResponse]
 
 func (r *CreateCustomerRequest) Validate() error {
-	return validator.ValidateRequest(r)
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+
+	// Validate tax rate links if provided
+	if len(r.TaxRateOverrides) > 0 {
+		for i, taxRate := range r.TaxRateOverrides {
+			if err := taxRate.Validate(); err != nil {
+				return ierr.WithError(err).
+					WithHint("Invalid tax rate configuration at index " + string(rune(i))).
+					Mark(ierr.ErrValidation)
+			}
+		}
+	}
+
+	return nil
 }
 
 func (r *CreateCustomerRequest) ToCustomer(ctx context.Context) *customer.Customer {
