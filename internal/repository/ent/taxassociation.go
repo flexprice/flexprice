@@ -15,32 +15,32 @@ import (
 	"github.com/samber/lo"
 )
 
-type taxConfigRepository struct {
+type taxAssociationRepository struct {
 	client    postgres.IClient
 	logger    *logger.Logger
-	queryOpts TaxConfigQueryOptions
+	queryOpts TaxAssociationQueryOptions
 	cache     cache.Cache
 }
 
-// NewTaxConfigRepository creates a new tax config repository
-func NewTaxConfigRepository(client postgres.IClient, logger *logger.Logger, cache cache.Cache) domainTaxConfig.Repository {
-	return &taxConfigRepository{
+// NewTaxAssociationRepository creates a new tax association repository
+func NewTaxAssociationRepository(client postgres.IClient, logger *logger.Logger, cache cache.Cache) domainTaxConfig.Repository {
+	return &taxAssociationRepository{
 		client:    client,
 		logger:    logger,
-		queryOpts: TaxConfigQueryOptions{},
+		queryOpts: TaxAssociationQueryOptions{},
 		cache:     cache,
 	}
 }
 
-type TaxConfigQuery = *ent.TaxAssociationQuery
+type TaxAssociationQuery = *ent.TaxAssociationQuery
 
-type TaxConfigQueryOptions struct{}
+type TaxAssociationQueryOptions struct{}
 
-func (o TaxConfigQueryOptions) ApplyTenantFilter(ctx context.Context, query TaxConfigQuery) TaxConfigQuery {
+func (o TaxAssociationQueryOptions) ApplyTenantFilter(ctx context.Context, query TaxAssociationQuery) TaxAssociationQuery {
 	return query.Where(entTaxConfig.TenantID(types.GetTenantID(ctx)))
 }
 
-func (o TaxConfigQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query TaxConfigQuery) TaxConfigQuery {
+func (o TaxAssociationQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query TaxAssociationQuery) TaxAssociationQuery {
 	envID := types.GetEnvironmentID(ctx)
 	if envID != "" {
 		return query.Where(entTaxConfig.EnvironmentID(envID))
@@ -48,14 +48,14 @@ func (o TaxConfigQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query
 	return query
 }
 
-func (o TaxConfigQueryOptions) ApplyStatusFilter(query TaxConfigQuery, status string) TaxConfigQuery {
+func (o TaxAssociationQueryOptions) ApplyStatusFilter(query TaxAssociationQuery, status string) TaxAssociationQuery {
 	if status == "" {
 		return query.Where(entTaxConfig.StatusNotIn(string(types.StatusDeleted)))
 	}
 	return query.Where(entTaxConfig.Status(status))
 }
 
-func (o TaxConfigQueryOptions) ApplySortFilter(query TaxConfigQuery, field, order string) TaxConfigQuery {
+func (o TaxAssociationQueryOptions) ApplySortFilter(query TaxAssociationQuery, field, order string) TaxAssociationQuery {
 	if field != "" {
 		if order == types.OrderDesc {
 			query = query.Order(ent.Desc(o.GetFieldName(field)))
@@ -66,7 +66,7 @@ func (o TaxConfigQueryOptions) ApplySortFilter(query TaxConfigQuery, field, orde
 	return query
 }
 
-func (o TaxConfigQueryOptions) ApplyPaginationFilter(query TaxConfigQuery, limit, offset int) TaxConfigQuery {
+func (o TaxAssociationQueryOptions) ApplyPaginationFilter(query TaxAssociationQuery, limit, offset int) TaxAssociationQuery {
 	if limit > 0 {
 		query = query.Limit(limit)
 	}
@@ -76,7 +76,7 @@ func (o TaxConfigQueryOptions) ApplyPaginationFilter(query TaxConfigQuery, limit
 	return query
 }
 
-func (o TaxConfigQueryOptions) GetFieldName(field string) string {
+func (o TaxAssociationQueryOptions) GetFieldName(field string) string {
 	switch field {
 	case "created_at":
 		return entTaxConfig.FieldCreatedAt
@@ -107,12 +107,12 @@ func (o TaxConfigQueryOptions) GetFieldName(field string) string {
 	}
 }
 
-func (o TaxConfigQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.TaxConfigFilter, query TaxConfigQuery) (TaxConfigQuery, error) {
+func (o TaxAssociationQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.TaxAssociationFilter, query TaxAssociationQuery) (TaxAssociationQuery, error) {
 	if f == nil {
 		return query, nil
 	}
-	if len(f.TaxConfigIDs) > 0 {
-		query = query.Where(entTaxConfig.IDIn(f.TaxConfigIDs...))
+	if len(f.TaxAssociationIDs) > 0 {
+		query = query.Where(entTaxConfig.IDIn(f.TaxAssociationIDs...))
 	}
 	if len(f.TaxRateIDs) > 0 {
 		query = query.Where(entTaxConfig.TaxRateIDIn(f.TaxRateIDs...))
@@ -141,15 +141,15 @@ func (o TaxConfigQueryOptions) applyEntityQueryOptions(_ context.Context, f *typ
 }
 
 // Create creates a new tax config
-func (r *taxConfigRepository) Create(ctx context.Context, t *domainTaxConfig.TaxConfig) error {
+func (r *taxAssociationRepository) Create(ctx context.Context, t *domainTaxConfig.TaxAssociation) error {
 	client := r.client.Querier(ctx)
-	r.logger.Debugw("creating tax config", "tax_config_id", t.ID, "tax_rate_id", t.TaxRateID, "entity_type", t.EntityType, "entity_id", t.EntityID)
+	r.logger.Debugw("creating tax association", "tax_association_id", t.ID, "tax_rate_id", t.TaxRateID, "entity_type", t.EntityType, "entity_id", t.EntityID)
 
-	span := StartRepositorySpan(ctx, "taxconfig", "create", map[string]interface{}{
-		"tax_config_id": t.ID,
-		"tax_rate_id":   t.TaxRateID,
-		"entity_type":   t.EntityType,
-		"entity_id":     t.EntityID,
+	span := StartRepositorySpan(ctx, "taxassociation", "create", map[string]interface{}{
+		"tax_association_id": t.ID,
+		"tax_rate_id":        t.TaxRateID,
+		"entity_type":        t.EntityType,
+		"entity_id":          t.EntityID,
 	})
 	defer FinishSpan(span)
 
@@ -160,7 +160,7 @@ func (r *taxConfigRepository) Create(ctx context.Context, t *domainTaxConfig.Tax
 	_, err := client.TaxAssociation.Create().
 		SetID(t.ID).
 		SetTaxRateID(t.TaxRateID).
-		SetEntityType(t.EntityType).
+		SetEntityType(string(t.EntityType)).
 		SetCurrency(t.Currency).
 		SetPriority(t.Priority).
 		SetAutoApply(t.AutoApply).
@@ -176,12 +176,12 @@ func (r *taxConfigRepository) Create(ctx context.Context, t *domainTaxConfig.Tax
 	if err != nil {
 		SetSpanError(span, err)
 		return ierr.WithError(err).
-			WithHint("Failed to create tax config").
+			WithHint("Failed to create tax association").
 			WithReportableDetails(map[string]interface{}{
-				"tax_config_id": t.ID,
-				"tax_rate_id":   t.TaxRateID,
-				"entity_type":   t.EntityType,
-				"entity_id":     t.EntityID,
+				"tax_association_id": t.ID,
+				"tax_rate_id":        t.TaxRateID,
+				"entity_type":        t.EntityType,
+				"entity_id":          t.EntityID,
 			}).
 			Mark(ierr.ErrDatabase)
 	}
@@ -189,10 +189,10 @@ func (r *taxConfigRepository) Create(ctx context.Context, t *domainTaxConfig.Tax
 	return nil
 }
 
-// Get retrieves a tax config by ID
-func (r *taxConfigRepository) Get(ctx context.Context, id string) (*domainTaxConfig.TaxConfig, error) {
-	span := StartRepositorySpan(ctx, "taxconfig", "get", map[string]interface{}{
-		"tax_config_id": id,
+// Get retrieves a tax association by ID
+func (r *taxAssociationRepository) Get(ctx context.Context, id string) (*domainTaxConfig.TaxAssociation, error) {
+	span := StartRepositorySpan(ctx, "taxassociation", "get", map[string]interface{}{
+		"tax_association_id": id,
 	})
 	defer FinishSpan(span)
 
@@ -201,7 +201,7 @@ func (r *taxConfigRepository) Get(ctx context.Context, id string) (*domainTaxCon
 	}
 
 	client := r.client.Querier(ctx)
-	r.logger.Debugw("getting tax config", "tax_config_id", id)
+	r.logger.Debugw("getting tax association", "tax_association_id", id)
 
 	tc, err := client.TaxAssociation.Query().
 		Where(
@@ -214,29 +214,29 @@ func (r *taxConfigRepository) Get(ctx context.Context, id string) (*domainTaxCon
 		SetSpanError(span, err)
 		if ent.IsNotFound(err) {
 			return nil, ierr.WithError(err).
-				WithHintf("TaxConfig with ID %s was not found", id).
+				WithHintf("TaxAssociation with ID %s was not found", id).
 				WithReportableDetails(map[string]any{
-					"tax_config_id": id,
+					"tax_association_id": id,
 				}).
 				Mark(ierr.ErrNotFound)
 		}
 		return nil, ierr.WithError(err).
-			WithHint("Failed to get tax config").
+			WithHint("Failed to get tax association").
 			Mark(ierr.ErrDatabase)
 	}
 	SetSpanSuccess(span)
-	taxConfig := domainTaxConfig.FromEnt(tc)
-	r.SetCache(ctx, taxConfig)
-	return taxConfig, nil
+	taxAssociation := domainTaxConfig.FromEnt(tc)
+	r.SetCache(ctx, taxAssociation)
+	return taxAssociation, nil
 }
 
-// Update updates a tax config
-func (r *taxConfigRepository) Update(ctx context.Context, t *domainTaxConfig.TaxConfig) error {
+// Update updates a tax association
+func (r *taxAssociationRepository) Update(ctx context.Context, t *domainTaxConfig.TaxAssociation) error {
 	client := r.client.Querier(ctx)
-	r.logger.Debugw("updating tax config", "tax_config_id", t.ID)
+	r.logger.Debugw("updating tax association", "tax_association_id", t.ID)
 
-	span := StartRepositorySpan(ctx, "taxconfig", "update", map[string]interface{}{
-		"tax_config_id": t.ID,
+	span := StartRepositorySpan(ctx, "taxassociation", "update", map[string]interface{}{
+		"tax_association_id": t.ID,
 	})
 	defer FinishSpan(span)
 
@@ -257,14 +257,14 @@ func (r *taxConfigRepository) Update(ctx context.Context, t *domainTaxConfig.Tax
 		SetSpanError(span, err)
 		if ent.IsNotFound(err) {
 			return ierr.WithError(err).
-				WithHintf("TaxConfig with ID %s was not found", t.ID).
+				WithHintf("TaxAssociation with ID %s was not found", t.ID).
 				WithReportableDetails(map[string]any{
-					"tax_config_id": t.ID,
+					"tax_association_id": t.ID,
 				}).
 				Mark(ierr.ErrNotFound)
 		}
 		return ierr.WithError(err).
-			WithHint("Failed to update tax config").
+			WithHint("Failed to update tax association").
 			Mark(ierr.ErrDatabase)
 	}
 	SetSpanSuccess(span)
@@ -272,13 +272,13 @@ func (r *taxConfigRepository) Update(ctx context.Context, t *domainTaxConfig.Tax
 	return nil
 }
 
-// Delete deletes a tax config by ID
-func (r *taxConfigRepository) Delete(ctx context.Context, t *domainTaxConfig.TaxConfig) error {
+// Delete deletes a tax association by ID
+func (r *taxAssociationRepository) Delete(ctx context.Context, t *domainTaxConfig.TaxAssociation) error {
 	client := r.client.Querier(ctx)
-	r.logger.Debugw("deleting tax config", "tax_config_id", t.ID)
+	r.logger.Debugw("deleting tax association", "tax_association_id", t.ID)
 
-	span := StartRepositorySpan(ctx, "taxconfig", "delete", map[string]interface{}{
-		"tax_config_id": t.ID,
+	span := StartRepositorySpan(ctx, "taxassociation", "delete", map[string]interface{}{
+		"tax_association_id": t.ID,
 	})
 	defer FinishSpan(span)
 
@@ -297,14 +297,14 @@ func (r *taxConfigRepository) Delete(ctx context.Context, t *domainTaxConfig.Tax
 		SetSpanError(span, err)
 		if ent.IsNotFound(err) {
 			return ierr.WithError(err).
-				WithHintf("TaxConfig with ID %s was not found", t.ID).
+				WithHintf("TaxAssociation with ID %s was not found", t.ID).
 				WithReportableDetails(map[string]any{
-					"tax_config_id": t.ID,
+					"tax_association_id": t.ID,
 				}).
 				Mark(ierr.ErrNotFound)
 		}
 		return ierr.WithError(err).
-			WithHint("Failed to delete tax config").
+			WithHint("Failed to delete tax association").
 			Mark(ierr.ErrDatabase)
 	}
 	SetSpanSuccess(span)
@@ -313,10 +313,10 @@ func (r *taxConfigRepository) Delete(ctx context.Context, t *domainTaxConfig.Tax
 }
 
 // List retrieves tax configs based on filter
-func (r *taxConfigRepository) List(ctx context.Context, filter *types.TaxConfigFilter) ([]*domainTaxConfig.TaxConfig, error) {
+func (r *taxAssociationRepository) List(ctx context.Context, filter *types.TaxAssociationFilter) ([]*domainTaxConfig.TaxAssociation, error) {
 	client := r.client.Querier(ctx)
 
-	span := StartRepositorySpan(ctx, "taxconfig", "list", map[string]interface{}{
+	span := StartRepositorySpan(ctx, "taxassociation", "list", map[string]interface{}{
 		"filter": filter,
 	})
 	defer FinishSpan(span)
@@ -329,29 +329,29 @@ func (r *taxConfigRepository) List(ctx context.Context, filter *types.TaxConfigF
 	if err != nil {
 		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
-			WithHint("Failed to list tax configs").
+			WithHint("Failed to list tax associations").
 			Mark(ierr.ErrDatabase)
 	}
 	if filter != nil {
 		query = r.queryOpts.ApplySortFilter(query, filter.GetSort(), filter.GetOrder())
 		query = r.queryOpts.ApplyPaginationFilter(query, filter.GetLimit(), filter.GetOffset())
 	}
-	taxconfigs, err := query.All(ctx)
+	taxassociations, err := query.All(ctx)
 	if err != nil {
 		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
-			WithHint("Failed to list tax configs").
+			WithHint("Failed to list tax associations").
 			Mark(ierr.ErrDatabase)
 	}
 	SetSpanSuccess(span)
-	return domainTaxConfig.FromEntList(taxconfigs), nil
+	return domainTaxConfig.FromEntList(taxassociations), nil
 }
 
 // Count counts tax configs based on filter
-func (r *taxConfigRepository) Count(ctx context.Context, filter *types.TaxConfigFilter) (int, error) {
+func (r *taxAssociationRepository) Count(ctx context.Context, filter *types.TaxAssociationFilter) (int, error) {
 	client := r.client.Querier(ctx)
 
-	span := StartRepositorySpan(ctx, "taxconfig", "count", map[string]interface{}{
+	span := StartRepositorySpan(ctx, "taxassociation", "count", map[string]interface{}{
 		"filter": filter,
 	})
 	defer FinishSpan(span)
@@ -364,14 +364,14 @@ func (r *taxConfigRepository) Count(ctx context.Context, filter *types.TaxConfig
 	if err != nil {
 		SetSpanError(span, err)
 		return 0, ierr.WithError(err).
-			WithHint("Failed to count tax configs").
+			WithHint("Failed to count tax associations").
 			Mark(ierr.ErrDatabase)
 	}
 	count, err := query.Count(ctx)
 	if err != nil {
 		SetSpanError(span, err)
 		return 0, ierr.WithError(err).
-			WithHint("Failed to count tax configs").
+			WithHint("Failed to count tax associations").
 			Mark(ierr.ErrDatabase)
 	}
 	SetSpanSuccess(span)
@@ -379,9 +379,9 @@ func (r *taxConfigRepository) Count(ctx context.Context, filter *types.TaxConfig
 }
 
 // Cache operations
-func (r *taxConfigRepository) SetCache(ctx context.Context, t *domainTaxConfig.TaxConfig) {
-	span := cache.StartCacheSpan(ctx, "taxconfig", "set", map[string]interface{}{
-		"tax_config_id": t.ID,
+func (r *taxAssociationRepository) SetCache(ctx context.Context, t *domainTaxConfig.TaxAssociation) {
+	span := cache.StartCacheSpan(ctx, "taxassociation", "set", map[string]interface{}{
+		"tax_association_id": t.ID,
 	})
 	defer cache.FinishSpan(span)
 
@@ -391,9 +391,9 @@ func (r *taxConfigRepository) SetCache(ctx context.Context, t *domainTaxConfig.T
 	r.cache.Set(ctx, cacheKey, t, cache.ExpiryDefaultInMemory)
 }
 
-func (r *taxConfigRepository) GetCache(ctx context.Context, key string) *domainTaxConfig.TaxConfig {
-	span := cache.StartCacheSpan(ctx, "taxconfig", "get", map[string]interface{}{
-		"tax_config_id": key,
+func (r *taxAssociationRepository) GetCache(ctx context.Context, key string) *domainTaxConfig.TaxAssociation {
+	span := cache.StartCacheSpan(ctx, "taxassociation", "get", map[string]interface{}{
+		"tax_association_id": key,
 	})
 	defer cache.FinishSpan(span)
 
@@ -401,16 +401,16 @@ func (r *taxConfigRepository) GetCache(ctx context.Context, key string) *domainT
 	environmentID := types.GetEnvironmentID(ctx)
 	cacheKey := cache.GenerateKey(cache.PrefixTaxAssociation, tenantID, environmentID, key)
 	if value, found := r.cache.Get(ctx, cacheKey); found {
-		if tc, ok := value.(*domainTaxConfig.TaxConfig); ok {
+		if tc, ok := value.(*domainTaxConfig.TaxAssociation); ok {
 			return tc
 		}
 	}
 	return nil
 }
 
-func (r *taxConfigRepository) DeleteCache(ctx context.Context, t *domainTaxConfig.TaxConfig) {
-	span := cache.StartCacheSpan(ctx, "taxconfig", "delete", map[string]interface{}{
-		"tax_config_id": t.ID,
+func (r *taxAssociationRepository) DeleteCache(ctx context.Context, t *domainTaxConfig.TaxAssociation) {
+	span := cache.StartCacheSpan(ctx, "taxassociation", "delete", map[string]interface{}{
+		"tax_association_id": t.ID,
 	})
 	defer cache.FinishSpan(span)
 
