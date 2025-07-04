@@ -118,6 +118,30 @@ func ToTaxConfigResponse(tc *taxconfig.TaxConfig) *TaxConfigResponse {
 // ListTaxConfigsResponse represents the response for listing tax configs
 type ListTaxConfigsResponse = types.ListResponse[*TaxConfigResponse]
 
+// TaxRateOverride represents a tax rate override for a specific entity
+// This is used to override the tax rate for a specific entity
+// It can either be a new tax rate or an existing tax rate
+// If a new tax rate is provided, it will be created and then linked to the entity
+// If an existing tax rate is provided, it will be linked to the entity
+// The priority and auto apply fields are used to determine the order of the tax rates
+type TaxRateOverride struct {
+	CreateTaxRateRequest
+	TaxRateID *string `json:"tax_rate_id" binding:"omitempty"`
+	Priority  int     `json:"priority" binding:"omitempty"`
+	AutoApply bool    `json:"auto_apply" binding:"omitempty"`
+}
+
+func (tr *TaxRateOverride) ToTaxLink(ctx context.Context, entityID string, entityType types.TaxrateEntityType) *TaxRateLink {
+	return &TaxRateLink{
+		CreateTaxRateRequest: tr.CreateTaxRateRequest,
+		TaxRateID:            tr.TaxRateID,
+		EntityType:           string(entityType),
+		EntityID:             entityID,
+		Priority:             tr.Priority,
+		AutoApply:            tr.AutoApply,
+	}
+}
+
 type TaxRateLink struct {
 	CreateTaxRateRequest
 

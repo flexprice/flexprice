@@ -45,11 +45,12 @@ func (s TaxRateScope) Validate() error {
 	allowedValues := []string{
 		TaxRateScopeInternal.String(),
 		TaxRateScopeExternal.String(),
+		TaxRateScopeOneTime.String(),
 	}
 
 	if !slices.Contains(allowedValues, string(s)) {
 		return ierr.NewError("invalid tax rate scope").
-			WithHint("Tax rate scope must be either INTERNAL or EXTERNAL").
+			WithHint("Tax rate scope must be either INTERNAL, EXTERNAL, or ONETIME").
 			Mark(ierr.ErrValidation)
 	}
 	return nil

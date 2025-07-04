@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	taxrate "github.com/flexprice/flexprice/internal/domain/tax"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -258,17 +259,21 @@ func (s *taxConfigService) LinkTaxRatesToEntity(ctx context.Context, entityType 
 	}
 
 	var linkedTaxRates []*dto.LinkedTaxRateInfo
+	taxService := NewTaxService(s.ServiceParams)
 
 	// Execute all operations within a single transaction
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		linkedTaxRates = make([]*dto.LinkedTaxRateInfo, 0, len(taxRateLinks))
 
 		for _, taxRateLink := range taxRateLinks {
+			var taxRateToUse *taxrate.TaxRate
+			var wasCreated bool
+
 			// Step 1: Resolve or create tax rate
-			// Use existing tax rate if ID is provided
 			if taxRateLink.TaxRateID != nil {
+				// Use existing tax rate
 				taxRateID := *taxRateLink.TaxRateID
-				_, err := s.TaxRateRepo.Get(txCtx, taxRateID)
+				existingTaxRate, err := s.TaxRateRepo.Get(txCtx, taxRateID)
 				if err != nil {
 					return ierr.WithError(err).
 						WithHint("Tax rate not found").
@@ -277,27 +282,38 @@ func (s *taxConfigService) LinkTaxRatesToEntity(ctx context.Context, entityType 
 						}).
 						Mark(ierr.ErrNotFound)
 				}
-				return nil
-			}
+				taxRateToUse = existingTaxRate
+				wasCreated = false
+			} else {
+				// Create new tax rate
+				taxRate := taxRateLink.ToTaxRate(txCtx)
+				createTaxRateReq := dto.CreateTaxRateRequest{
+					Name:            taxRate.Name,
+					Code:            taxRate.Code,
+					Description:     taxRate.Description,
+					PercentageValue: taxRate.PercentageValue,
+					FixedValue:      taxRate.FixedValue,
+				}
 
-			// Create new tax rate
-			taxRate := taxRateLink.ToTaxRate(txCtx)
-
-			if err := s.TaxRateRepo.Create(txCtx, taxRate); err != nil {
-				return ierr.WithError(err).
-					WithHint("Failed to create tax rate").
-					Mark(ierr.ErrDatabase)
+				taxRateResponse, err := taxService.CreateTaxRate(txCtx, createTaxRateReq)
+				if err != nil {
+					return ierr.WithError(err).
+						WithHint("Failed to create tax rate").
+						Mark(ierr.ErrDatabase)
+				}
+				taxRateToUse = taxRateResponse.TaxRate
+				wasCreated = true
 			}
 
 			// Step 2: Create tax config
-			taxConfigReq := taxRateLink.ToTaxConfigCreateRequest(txCtx, taxRate)
+			taxConfigReq := taxRateLink.ToTaxConfigCreateRequest(txCtx, taxRateToUse)
 			if err := taxConfigReq.Validate(); err != nil {
 				return ierr.WithError(err).
 					WithHint("Invalid tax rate configuration").
 					Mark(ierr.ErrValidation)
 			}
 
-			// step 3: using internal service to create tax config
+			// Step 3: using internal service to create tax config
 			taxConfig, err := s.Create(txCtx, taxConfigReq)
 			if err != nil {
 				return ierr.WithError(err).
@@ -305,11 +321,11 @@ func (s *taxConfigService) LinkTaxRatesToEntity(ctx context.Context, entityType 
 					Mark(ierr.ErrDatabase)
 			}
 
-			// step 4: Add to results
+			// Step 4: Add to results
 			linkedTaxRates = append(linkedTaxRates, &dto.LinkedTaxRateInfo{
-				TaxRateID:   taxRate.ID,
+				TaxRateID:   taxRateToUse.ID,
 				TaxConfigID: taxConfig.ID,
-				WasCreated:  true,
+				WasCreated:  wasCreated,
 				Priority:    taxConfig.Priority,
 				AutoApply:   taxConfig.AutoApply,
 			})
