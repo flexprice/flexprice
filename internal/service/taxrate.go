@@ -101,7 +101,7 @@ func (s *taxService) GetTaxRate(ctx context.Context, id string) (*dto.TaxRateRes
 // ListTaxRates lists tax rates based on the provided filter
 func (s *taxService) ListTaxRates(ctx context.Context, filter *types.TaxRateFilter) (*dto.ListTaxRatesResponse, error) {
 	if filter == nil {
-		filter = types.NewTaxRateFilter()
+		filter = types.NewDefaultTaxRateFilter()
 	}
 
 	// Get tax rates from the repository
