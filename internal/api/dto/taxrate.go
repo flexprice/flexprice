@@ -158,7 +158,7 @@ func (r CreateTaxRateRequest) Validate() error {
 }
 
 // ToTaxRate converts a CreateTaxRateRequest to a domain TaxRate
-func (r CreateTaxRateRequest) ToTaxRate(ctx context.Context) (*taxrate.TaxRate, error) {
+func (r CreateTaxRateRequest) ToTaxRate(ctx context.Context) *taxrate.TaxRate {
 	id := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TAX_RATE)
 
 	now := time.Now().UTC()
@@ -190,5 +190,5 @@ func (r CreateTaxRateRequest) ToTaxRate(ctx context.Context) (*taxrate.TaxRate, 
 		EnvironmentID:   types.GetEnvironmentID(ctx),
 		BaseModel:       types.GetDefaultBaseModel(ctx),
 	}
-	return taxRate, nil
+	return taxRate
 }

@@ -16,6 +16,9 @@ type TaxConfigService interface {
 	Update(ctx context.Context, id string, taxconfig *dto.TaxConfigUpdateRequest) (*dto.TaxConfigResponse, error)
 	Delete(ctx context.Context, id string) error
 	List(ctx context.Context, filter *types.TaxConfigFilter) (*dto.ListTaxConfigsResponse, error)
+
+	// LinkTaxRatesToEntity links tax rates to any entity type
+	LinkTaxRatesToEntity(ctx context.Context, entityType types.TaxrateEntityType, entityID string, taxRateLinks []*dto.TaxRateLink) (*dto.TaxLinkingResponse, error)
 }
 
 type taxConfigService struct {
@@ -232,4 +235,106 @@ func (s *taxConfigService) List(ctx context.Context, filter *types.TaxConfigFilt
 		"offset", filter.GetOffset())
 
 	return response, nil
+}
+
+// LinkTaxRatesToEntity links tax rates to any entity in a single transaction
+func (s *taxConfigService) LinkTaxRatesToEntity(ctx context.Context, entityType types.TaxrateEntityType, entityID string, taxRateLinks []*dto.TaxRateLink) (*dto.TaxLinkingResponse, error) {
+	// Early return for empty input
+	if len(taxRateLinks) == 0 {
+		return &dto.TaxLinkingResponse{
+			EntityID:       entityID,
+			EntityType:     entityType,
+			LinkedTaxRates: []*dto.LinkedTaxRateInfo{},
+		}, nil
+	}
+
+	// Pre-validate all tax rate links before starting transaction
+	for _, taxRateLink := range taxRateLinks {
+		if err := taxRateLink.Validate(); err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Invalid tax rate configuration").
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	var linkedTaxRates []*dto.LinkedTaxRateInfo
+
+	// Execute all operations within a single transaction
+	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		linkedTaxRates = make([]*dto.LinkedTaxRateInfo, 0, len(taxRateLinks))
+
+		for _, taxRateLink := range taxRateLinks {
+			// Step 1: Resolve or create tax rate
+			// Use existing tax rate if ID is provided
+			if taxRateLink.TaxRateID != nil {
+				taxRateID := *taxRateLink.TaxRateID
+				_, err := s.TaxRateRepo.Get(txCtx, taxRateID)
+				if err != nil {
+					return ierr.WithError(err).
+						WithHint("Tax rate not found").
+						WithReportableDetails(map[string]interface{}{
+							"tax_rate_id": taxRateID,
+						}).
+						Mark(ierr.ErrNotFound)
+				}
+				return nil
+			}
+
+			// Create new tax rate
+			taxRate := taxRateLink.ToTaxRate(txCtx)
+
+			if err := s.TaxRateRepo.Create(txCtx, taxRate); err != nil {
+				return ierr.WithError(err).
+					WithHint("Failed to create tax rate").
+					Mark(ierr.ErrDatabase)
+			}
+
+			// Step 2: Create tax config
+			taxConfigReq := taxRateLink.ToTaxConfigCreateRequest(txCtx, taxRate)
+			if err := taxConfigReq.Validate(); err != nil {
+				return ierr.WithError(err).
+					WithHint("Invalid tax rate configuration").
+					Mark(ierr.ErrValidation)
+			}
+
+			// step 3: using internal service to create tax config
+			taxConfig, err := s.Create(txCtx, taxConfigReq)
+			if err != nil {
+				return ierr.WithError(err).
+					WithHint("Failed to create tax configuration").
+					Mark(ierr.ErrDatabase)
+			}
+
+			// step 4: Add to results
+			linkedTaxRates = append(linkedTaxRates, &dto.LinkedTaxRateInfo{
+				TaxRateID:   taxRate.ID,
+				TaxConfigID: taxConfig.ID,
+				WasCreated:  true,
+				Priority:    taxConfig.Priority,
+				AutoApply:   taxConfig.AutoApply,
+			})
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		s.Logger.Errorw("failed to link tax rates to entity",
+			"error", err,
+			"entity_type", entityType,
+			"entity_id", entityID,
+			"links_count", len(taxRateLinks))
+		return nil, err
+	}
+
+	s.Logger.Infow("successfully linked tax rates to entity",
+		"entity_type", entityType,
+		"entity_id", entityID,
+		"links_count", len(linkedTaxRates))
+
+	return &dto.TaxLinkingResponse{
+		EntityID:       entityID,
+		EntityType:     entityType,
+		LinkedTaxRates: linkedTaxRates,
+	}, nil
 }
