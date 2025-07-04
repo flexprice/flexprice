@@ -54,7 +54,7 @@ func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCust
 		if len(req.TaxRateOverrides) > 0 {
 			taxConfigService := NewTaxConfigService(s.ServiceParams)
 
-			taxRateLinks := make([]*dto.TaxRateLink, 0, len(req.TaxRateOverrides))
+			taxRateLinks := make([]*dto.CreateEntityTaxAssociation, 0, len(req.TaxRateOverrides))
 			for _, taxRateOverride := range req.TaxRateOverrides {
 				taxRateLink := taxRateOverride.ToTaxLink(txCtx, cust.ID, types.TaxrateEntityTypeCustomer)
 				taxRateLinks = append(taxRateLinks, taxRateLink)

@@ -41,7 +41,7 @@ import (
 	"github.com/flexprice/flexprice/ent/subscriptionschedule"
 	"github.com/flexprice/flexprice/ent/subscriptionschedulephase"
 	"github.com/flexprice/flexprice/ent/task"
-	"github.com/flexprice/flexprice/ent/taxconfig"
+	"github.com/flexprice/flexprice/ent/taxassociation"
 	"github.com/flexprice/flexprice/ent/taxrate"
 	"github.com/flexprice/flexprice/ent/tenant"
 	"github.com/flexprice/flexprice/ent/user"
@@ -108,8 +108,8 @@ type Client struct {
 	SubscriptionSchedulePhase *SubscriptionSchedulePhaseClient
 	// Task is the client for interacting with the Task builders.
 	Task *TaskClient
-	// TaxConfig is the client for interacting with the TaxConfig builders.
-	TaxConfig *TaxConfigClient
+	// TaxAssociation is the client for interacting with the TaxAssociation builders.
+	TaxAssociation *TaxAssociationClient
 	// TaxRate is the client for interacting with the TaxRate builders.
 	TaxRate *TaxRateClient
 	// Tenant is the client for interacting with the Tenant builders.
@@ -157,7 +157,7 @@ func (c *Client) init() {
 	c.SubscriptionSchedule = NewSubscriptionScheduleClient(c.config)
 	c.SubscriptionSchedulePhase = NewSubscriptionSchedulePhaseClient(c.config)
 	c.Task = NewTaskClient(c.config)
-	c.TaxConfig = NewTaxConfigClient(c.config)
+	c.TaxAssociation = NewTaxAssociationClient(c.config)
 	c.TaxRate = NewTaxRateClient(c.config)
 	c.Tenant = NewTenantClient(c.config)
 	c.User = NewUserClient(c.config)
@@ -281,7 +281,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		SubscriptionSchedule:      NewSubscriptionScheduleClient(cfg),
 		SubscriptionSchedulePhase: NewSubscriptionSchedulePhaseClient(cfg),
 		Task:                      NewTaskClient(cfg),
-		TaxConfig:                 NewTaxConfigClient(cfg),
+		TaxAssociation:            NewTaxAssociationClient(cfg),
 		TaxRate:                   NewTaxRateClient(cfg),
 		Tenant:                    NewTenantClient(cfg),
 		User:                      NewUserClient(cfg),
@@ -332,7 +332,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		SubscriptionSchedule:      NewSubscriptionScheduleClient(cfg),
 		SubscriptionSchedulePhase: NewSubscriptionSchedulePhaseClient(cfg),
 		Task:                      NewTaskClient(cfg),
-		TaxConfig:                 NewTaxConfigClient(cfg),
+		TaxAssociation:            NewTaxAssociationClient(cfg),
 		TaxRate:                   NewTaxRateClient(cfg),
 		Tenant:                    NewTenantClient(cfg),
 		User:                      NewUserClient(cfg),
@@ -372,8 +372,8 @@ func (c *Client) Use(hooks ...Hook) {
 		c.Feature, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Payment,
 		c.PaymentAttempt, c.Plan, c.Price, c.Secret, c.Subscription,
 		c.SubscriptionLineItem, c.SubscriptionPause, c.SubscriptionSchedule,
-		c.SubscriptionSchedulePhase, c.Task, c.TaxConfig, c.TaxRate, c.Tenant, c.User,
-		c.Wallet, c.WalletTransaction,
+		c.SubscriptionSchedulePhase, c.Task, c.TaxAssociation, c.TaxRate, c.Tenant,
+		c.User, c.Wallet, c.WalletTransaction,
 	} {
 		n.Use(hooks...)
 	}
@@ -388,8 +388,8 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.Feature, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Payment,
 		c.PaymentAttempt, c.Plan, c.Price, c.Secret, c.Subscription,
 		c.SubscriptionLineItem, c.SubscriptionPause, c.SubscriptionSchedule,
-		c.SubscriptionSchedulePhase, c.Task, c.TaxConfig, c.TaxRate, c.Tenant, c.User,
-		c.Wallet, c.WalletTransaction,
+		c.SubscriptionSchedulePhase, c.Task, c.TaxAssociation, c.TaxRate, c.Tenant,
+		c.User, c.Wallet, c.WalletTransaction,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -450,8 +450,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.SubscriptionSchedulePhase.mutate(ctx, m)
 	case *TaskMutation:
 		return c.Task.mutate(ctx, m)
-	case *TaxConfigMutation:
-		return c.TaxConfig.mutate(ctx, m)
+	case *TaxAssociationMutation:
+		return c.TaxAssociation.mutate(ctx, m)
 	case *TaxRateMutation:
 		return c.TaxRate.mutate(ctx, m)
 	case *TenantMutation:
@@ -4309,107 +4309,107 @@ func (c *TaskClient) mutate(ctx context.Context, m *TaskMutation) (Value, error)
 	}
 }
 
-// TaxConfigClient is a client for the TaxConfig schema.
-type TaxConfigClient struct {
+// TaxAssociationClient is a client for the TaxAssociation schema.
+type TaxAssociationClient struct {
 	config
 }
 
-// NewTaxConfigClient returns a client for the TaxConfig from the given config.
-func NewTaxConfigClient(c config) *TaxConfigClient {
-	return &TaxConfigClient{config: c}
+// NewTaxAssociationClient returns a client for the TaxAssociation from the given config.
+func NewTaxAssociationClient(c config) *TaxAssociationClient {
+	return &TaxAssociationClient{config: c}
 }
 
 // Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `taxconfig.Hooks(f(g(h())))`.
-func (c *TaxConfigClient) Use(hooks ...Hook) {
-	c.hooks.TaxConfig = append(c.hooks.TaxConfig, hooks...)
+// A call to `Use(f, g, h)` equals to `taxassociation.Hooks(f(g(h())))`.
+func (c *TaxAssociationClient) Use(hooks ...Hook) {
+	c.hooks.TaxAssociation = append(c.hooks.TaxAssociation, hooks...)
 }
 
 // Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `taxconfig.Intercept(f(g(h())))`.
-func (c *TaxConfigClient) Intercept(interceptors ...Interceptor) {
-	c.inters.TaxConfig = append(c.inters.TaxConfig, interceptors...)
+// A call to `Intercept(f, g, h)` equals to `taxassociation.Intercept(f(g(h())))`.
+func (c *TaxAssociationClient) Intercept(interceptors ...Interceptor) {
+	c.inters.TaxAssociation = append(c.inters.TaxAssociation, interceptors...)
 }
 
-// Create returns a builder for creating a TaxConfig entity.
-func (c *TaxConfigClient) Create() *TaxConfigCreate {
-	mutation := newTaxConfigMutation(c.config, OpCreate)
-	return &TaxConfigCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+// Create returns a builder for creating a TaxAssociation entity.
+func (c *TaxAssociationClient) Create() *TaxAssociationCreate {
+	mutation := newTaxAssociationMutation(c.config, OpCreate)
+	return &TaxAssociationCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
-// CreateBulk returns a builder for creating a bulk of TaxConfig entities.
-func (c *TaxConfigClient) CreateBulk(builders ...*TaxConfigCreate) *TaxConfigCreateBulk {
-	return &TaxConfigCreateBulk{config: c.config, builders: builders}
+// CreateBulk returns a builder for creating a bulk of TaxAssociation entities.
+func (c *TaxAssociationClient) CreateBulk(builders ...*TaxAssociationCreate) *TaxAssociationCreateBulk {
+	return &TaxAssociationCreateBulk{config: c.config, builders: builders}
 }
 
 // MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
 // a builder and applies setFunc on it.
-func (c *TaxConfigClient) MapCreateBulk(slice any, setFunc func(*TaxConfigCreate, int)) *TaxConfigCreateBulk {
+func (c *TaxAssociationClient) MapCreateBulk(slice any, setFunc func(*TaxAssociationCreate, int)) *TaxAssociationCreateBulk {
 	rv := reflect.ValueOf(slice)
 	if rv.Kind() != reflect.Slice {
-		return &TaxConfigCreateBulk{err: fmt.Errorf("calling to TaxConfigClient.MapCreateBulk with wrong type %T, need slice", slice)}
+		return &TaxAssociationCreateBulk{err: fmt.Errorf("calling to TaxAssociationClient.MapCreateBulk with wrong type %T, need slice", slice)}
 	}
-	builders := make([]*TaxConfigCreate, rv.Len())
+	builders := make([]*TaxAssociationCreate, rv.Len())
 	for i := 0; i < rv.Len(); i++ {
 		builders[i] = c.Create()
 		setFunc(builders[i], i)
 	}
-	return &TaxConfigCreateBulk{config: c.config, builders: builders}
+	return &TaxAssociationCreateBulk{config: c.config, builders: builders}
 }
 
-// Update returns an update builder for TaxConfig.
-func (c *TaxConfigClient) Update() *TaxConfigUpdate {
-	mutation := newTaxConfigMutation(c.config, OpUpdate)
-	return &TaxConfigUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+// Update returns an update builder for TaxAssociation.
+func (c *TaxAssociationClient) Update() *TaxAssociationUpdate {
+	mutation := newTaxAssociationMutation(c.config, OpUpdate)
+	return &TaxAssociationUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
 // UpdateOne returns an update builder for the given entity.
-func (c *TaxConfigClient) UpdateOne(tc *TaxConfig) *TaxConfigUpdateOne {
-	mutation := newTaxConfigMutation(c.config, OpUpdateOne, withTaxConfig(tc))
-	return &TaxConfigUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+func (c *TaxAssociationClient) UpdateOne(ta *TaxAssociation) *TaxAssociationUpdateOne {
+	mutation := newTaxAssociationMutation(c.config, OpUpdateOne, withTaxAssociation(ta))
+	return &TaxAssociationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
 // UpdateOneID returns an update builder for the given id.
-func (c *TaxConfigClient) UpdateOneID(id string) *TaxConfigUpdateOne {
-	mutation := newTaxConfigMutation(c.config, OpUpdateOne, withTaxConfigID(id))
-	return &TaxConfigUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+func (c *TaxAssociationClient) UpdateOneID(id string) *TaxAssociationUpdateOne {
+	mutation := newTaxAssociationMutation(c.config, OpUpdateOne, withTaxAssociationID(id))
+	return &TaxAssociationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
-// Delete returns a delete builder for TaxConfig.
-func (c *TaxConfigClient) Delete() *TaxConfigDelete {
-	mutation := newTaxConfigMutation(c.config, OpDelete)
-	return &TaxConfigDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+// Delete returns a delete builder for TaxAssociation.
+func (c *TaxAssociationClient) Delete() *TaxAssociationDelete {
+	mutation := newTaxAssociationMutation(c.config, OpDelete)
+	return &TaxAssociationDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
 // DeleteOne returns a builder for deleting the given entity.
-func (c *TaxConfigClient) DeleteOne(tc *TaxConfig) *TaxConfigDeleteOne {
-	return c.DeleteOneID(tc.ID)
+func (c *TaxAssociationClient) DeleteOne(ta *TaxAssociation) *TaxAssociationDeleteOne {
+	return c.DeleteOneID(ta.ID)
 }
 
 // DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *TaxConfigClient) DeleteOneID(id string) *TaxConfigDeleteOne {
-	builder := c.Delete().Where(taxconfig.ID(id))
+func (c *TaxAssociationClient) DeleteOneID(id string) *TaxAssociationDeleteOne {
+	builder := c.Delete().Where(taxassociation.ID(id))
 	builder.mutation.id = &id
 	builder.mutation.op = OpDeleteOne
-	return &TaxConfigDeleteOne{builder}
+	return &TaxAssociationDeleteOne{builder}
 }
 
-// Query returns a query builder for TaxConfig.
-func (c *TaxConfigClient) Query() *TaxConfigQuery {
-	return &TaxConfigQuery{
+// Query returns a query builder for TaxAssociation.
+func (c *TaxAssociationClient) Query() *TaxAssociationQuery {
+	return &TaxAssociationQuery{
 		config: c.config,
-		ctx:    &QueryContext{Type: TypeTaxConfig},
+		ctx:    &QueryContext{Type: TypeTaxAssociation},
 		inters: c.Interceptors(),
 	}
 }
 
-// Get returns a TaxConfig entity by its id.
-func (c *TaxConfigClient) Get(ctx context.Context, id string) (*TaxConfig, error) {
-	return c.Query().Where(taxconfig.ID(id)).Only(ctx)
+// Get returns a TaxAssociation entity by its id.
+func (c *TaxAssociationClient) Get(ctx context.Context, id string) (*TaxAssociation, error) {
+	return c.Query().Where(taxassociation.ID(id)).Only(ctx)
 }
 
 // GetX is like Get, but panics if an error occurs.
-func (c *TaxConfigClient) GetX(ctx context.Context, id string) *TaxConfig {
+func (c *TaxAssociationClient) GetX(ctx context.Context, id string) *TaxAssociation {
 	obj, err := c.Get(ctx, id)
 	if err != nil {
 		panic(err)
@@ -4418,27 +4418,27 @@ func (c *TaxConfigClient) GetX(ctx context.Context, id string) *TaxConfig {
 }
 
 // Hooks returns the client hooks.
-func (c *TaxConfigClient) Hooks() []Hook {
-	return c.hooks.TaxConfig
+func (c *TaxAssociationClient) Hooks() []Hook {
+	return c.hooks.TaxAssociation
 }
 
 // Interceptors returns the client interceptors.
-func (c *TaxConfigClient) Interceptors() []Interceptor {
-	return c.inters.TaxConfig
+func (c *TaxAssociationClient) Interceptors() []Interceptor {
+	return c.inters.TaxAssociation
 }
 
-func (c *TaxConfigClient) mutate(ctx context.Context, m *TaxConfigMutation) (Value, error) {
+func (c *TaxAssociationClient) mutate(ctx context.Context, m *TaxAssociationMutation) (Value, error) {
 	switch m.Op() {
 	case OpCreate:
-		return (&TaxConfigCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+		return (&TaxAssociationCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
 	case OpUpdate:
-		return (&TaxConfigUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+		return (&TaxAssociationUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
 	case OpUpdateOne:
-		return (&TaxConfigUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+		return (&TaxAssociationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
 	case OpDelete, OpDeleteOne:
-		return (&TaxConfigDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+		return (&TaxAssociationDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
-		return nil, fmt.Errorf("ent: unknown TaxConfig mutation op: %q", m.Op())
+		return nil, fmt.Errorf("ent: unknown TaxAssociation mutation op: %q", m.Op())
 	}
 }
 
@@ -5114,7 +5114,7 @@ type (
 		CreditNote, CreditNoteLineItem, Customer, Entitlement, Environment, Feature,
 		Invoice, InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt,
 		Plan, Price, Secret, Subscription, SubscriptionLineItem, SubscriptionPause,
-		SubscriptionSchedule, SubscriptionSchedulePhase, Task, TaxConfig, TaxRate,
+		SubscriptionSchedule, SubscriptionSchedulePhase, Task, TaxAssociation, TaxRate,
 		Tenant, User, Wallet, WalletTransaction []ent.Hook
 	}
 	inters struct {
@@ -5122,7 +5122,7 @@ type (
 		CreditNote, CreditNoteLineItem, Customer, Entitlement, Environment, Feature,
 		Invoice, InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt,
 		Plan, Price, Secret, Subscription, SubscriptionLineItem, SubscriptionPause,
-		SubscriptionSchedule, SubscriptionSchedulePhase, Task, TaxConfig, TaxRate,
+		SubscriptionSchedule, SubscriptionSchedulePhase, Task, TaxAssociation, TaxRate,
 		Tenant, User, Wallet, WalletTransaction []ent.Interceptor
 	}
 )
