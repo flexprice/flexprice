@@ -42,6 +42,8 @@ func FromEnt(ent *ent.TaxConfig) *TaxConfig {
 		EnvironmentID: ent.EnvironmentID,
 		Metadata:      ent.Metadata,
 		BaseModel: types.BaseModel{
+			TenantID:  ent.TenantID,
+			Status:    types.Status(ent.Status),
 			CreatedAt: ent.CreatedAt,
 			UpdatedAt: ent.UpdatedAt,
 			CreatedBy: ent.CreatedBy,

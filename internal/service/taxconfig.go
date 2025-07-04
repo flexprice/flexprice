@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 type TaxConfigService interface {
@@ -32,8 +33,13 @@ func (s *taxConfigService) Create(ctx context.Context, req *dto.TaxConfigCreateR
 		return nil, err
 	}
 
+	taxRate, err := s.TaxRateRepo.Get(ctx, req.TaxRateID)
+	if err != nil {
+		return nil, err
+	}
+
 	// Convert request to domain model
-	tc := req.ToTaxConfig(ctx)
+	tc := req.ToTaxConfig(ctx, lo.FromPtr(taxRate))
 
 	s.Logger.Infow("creating tax config",
 		"tax_rate_id", tc.TaxRateID,
@@ -43,7 +49,7 @@ func (s *taxConfigService) Create(ctx context.Context, req *dto.TaxConfigCreateR
 		"auto_apply", tc.AutoApply)
 
 	// Create tax config
-	err := s.TaxConfigRepo.Create(ctx, tc)
+	err = s.TaxConfigRepo.Create(ctx, tc)
 	if err != nil {
 		s.Logger.Errorw("failed to create tax config",
 			"error", err,
@@ -164,21 +170,6 @@ func (s *taxConfigService) Delete(ctx context.Context, id string) error {
 		return err
 	}
 
-	if existing == nil {
-		return ierr.NewError("tax config not found").
-			WithHint(fmt.Sprintf("Tax config with ID %s does not exist", id)).
-			WithReportableDetails(map[string]interface{}{
-				"tax_config_id": id,
-			}).
-			Mark(ierr.ErrNotFound)
-	}
-
-	s.Logger.Infow("deleting tax config",
-		"tax_config_id", id,
-		"tax_rate_id", existing.TaxRateID,
-		"entity_type", existing.EntityType,
-		"entity_id", existing.EntityID)
-
 	// Delete tax config
 	err = s.TaxConfigRepo.Delete(ctx, existing)
 	if err != nil {
@@ -187,12 +178,6 @@ func (s *taxConfigService) Delete(ctx context.Context, id string) error {
 			"tax_config_id", id)
 		return err
 	}
-
-	s.Logger.Infow("tax config deleted successfully",
-		"tax_config_id", id,
-		"tax_rate_id", existing.TaxRateID,
-		"entity_type", existing.EntityType,
-		"entity_id", existing.EntityID)
 
 	return nil
 }
