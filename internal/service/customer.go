@@ -48,6 +48,16 @@ func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCust
 		// No need to wrap the error as the repository already returns properly formatted errors
 		return nil, err
 	}
+
+	// Link tax rates to customer if provided
+	if len(req.TaxRateOverrides) > 0 {
+		taxConfigService := NewTaxConfigService(s.ServiceParams)
+		_, err := taxConfigService.LinkTaxRatesToEntity(ctx, types.TaxrateEntityTypeCustomer, cust.ID, req.TaxRateOverrides)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	s.publishWebhookEvent(ctx, types.WebhookEventCustomerCreated, cust.ID)
 	return &dto.CustomerResponse{Customer: cust}, nil
 }

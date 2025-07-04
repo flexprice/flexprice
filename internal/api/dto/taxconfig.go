@@ -117,3 +117,51 @@ func ToTaxConfigResponse(tc *taxconfig.TaxConfig) *TaxConfigResponse {
 
 // ListTaxConfigsResponse represents the response for listing tax configs
 type ListTaxConfigsResponse = types.ListResponse[*TaxConfigResponse]
+
+type TaxRateLink struct {
+	CreateTaxRateRequest
+
+	TaxRateID  *string `json:"tax_rate_id" binding:"omitempty"`
+	EntityType string  `json:"entity_type" binding:"required"`
+	EntityID   string  `json:"entity_id" binding:"required"`
+	Priority   int     `json:"priority" binding:"omitempty"`
+	AutoApply  bool    `json:"auto_apply" binding:"omitempty"`
+}
+
+func (tr *TaxRateLink) Validate() error {
+	if err := validator.ValidateRequest(tr); err != nil {
+		return err
+	}
+
+	if tr.TaxRateID == nil {
+		if err := tr.CreateTaxRateRequest.Validate(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (tr *TaxRateLink) ToTaxConfigCreateRequest(ctx context.Context, taxRate *taxrate.TaxRate) *TaxConfigCreateRequest {
+	return &TaxConfigCreateRequest{
+		TaxRateID:  taxRate.ID,
+		EntityType: tr.EntityType,
+		EntityID:   tr.EntityID,
+		Priority:   tr.Priority,
+		AutoApply:  tr.AutoApply,
+	}
+}
+
+type TaxLinkingResponse struct {
+	EntityID       string                  `json:"entity_id"`
+	EntityType     types.TaxrateEntityType `json:"entity_type"`
+	LinkedTaxRates []*LinkedTaxRateInfo    `json:"linked_tax_rates"`
+}
+
+type LinkedTaxRateInfo struct {
+	TaxRateID   string `json:"tax_rate_id"`
+	TaxConfigID string `json:"tax_config_id"`
+	WasCreated  bool   `json:"was_created"`
+	Priority    int    `json:"priority"`
+	AutoApply   bool   `json:"auto_apply"`
+}
