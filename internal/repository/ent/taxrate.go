@@ -73,8 +73,9 @@ func (r *taxrateRepository) Create(ctx context.Context, t *domainTaxRate.TaxRate
 		SetNillableValidTo(t.ValidTo).
 		SetStatus(string(t.Status)).
 		SetTenantID(t.TenantID).
+		SetCurrency(t.Currency).
+		SetCreatedBy(t.CreatedBy).
 		SetTaxRateStatus(string(t.TaxRateStatus)).
-		SetTaxRateType(string(t.TaxRateType)).
 		SetEnvironmentID(t.EnvironmentID).
 		Save(ctx)
 

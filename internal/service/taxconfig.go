@@ -285,20 +285,15 @@ func (s *taxConfigService) LinkTaxRatesToEntity(ctx context.Context, entityType 
 				taxRateToUse = existingTaxRate
 				wasCreated = false
 			} else {
-				// Create new tax rate
-				taxRate := taxRateLink.ToTaxRate(txCtx)
-				createTaxRateReq := dto.CreateTaxRateRequest{
-					Name:            taxRate.Name,
-					Code:            taxRate.Code,
-					Description:     taxRate.Description,
-					PercentageValue: taxRate.PercentageValue,
-					FixedValue:      taxRate.FixedValue,
-				}
-
-				taxRateResponse, err := taxService.CreateTaxRate(txCtx, createTaxRateReq)
+				taxRateResponse, err := taxService.CreateTaxRate(txCtx, taxRateLink.CreateTaxRateRequest)
 				if err != nil {
 					return ierr.WithError(err).
 						WithHint("Failed to create tax rate").
+						WithReportableDetails(map[string]interface{}{
+							"tax_rate_id": taxRateLink.CreateTaxRateRequest.Code,
+							"entity_type": entityType,
+							"entity_id":   entityID,
+						}).
 						Mark(ierr.ErrDatabase)
 				}
 				taxRateToUse = taxRateResponse.TaxRate
@@ -306,19 +301,18 @@ func (s *taxConfigService) LinkTaxRatesToEntity(ctx context.Context, entityType 
 			}
 
 			// Step 2: Create tax config
-			taxConfigReq := taxRateLink.ToTaxConfigCreateRequest(txCtx, taxRateToUse)
-			if err := taxConfigReq.Validate(); err != nil {
-				return ierr.WithError(err).
-					WithHint("Invalid tax rate configuration").
-					Mark(ierr.ErrValidation)
+			taxConfigReq := &dto.TaxConfigCreateRequest{
+				TaxRateID:  taxRateToUse.ID,
+				EntityType: string(entityType),
+				EntityID:   entityID,
+				Priority:   taxRateLink.Priority,
+				AutoApply:  taxRateLink.AutoApply,
 			}
 
 			// Step 3: using internal service to create tax config
 			taxConfig, err := s.Create(txCtx, taxConfigReq)
 			if err != nil {
-				return ierr.WithError(err).
-					WithHint("Failed to create tax configuration").
-					Mark(ierr.ErrDatabase)
+				return err
 			}
 
 			// Step 4: Add to results
