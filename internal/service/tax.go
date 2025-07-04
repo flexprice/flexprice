@@ -7,7 +7,6 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	taxrate "github.com/flexprice/flexprice/internal/domain/tax"
 	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -22,15 +21,13 @@ type TaxService interface {
 }
 
 type taxService struct {
-	repo   taxrate.Repository
-	logger *logger.Logger
+	ServiceParams
 }
 
 // NewTaxRateService creates a new instance of TaxRateService
-func NewTaxService(repo taxrate.Repository, logger *logger.Logger) TaxService {
+func NewTaxService(params ServiceParams) TaxService {
 	return &taxService{
-		repo:   repo,
-		logger: logger,
+		ServiceParams: params,
 	}
 }
 
@@ -38,7 +35,7 @@ func NewTaxService(repo taxrate.Repository, logger *logger.Logger) TaxService {
 func (s *taxService) CreateTaxRate(ctx context.Context, req dto.CreateTaxRateRequest) (*dto.TaxRateResponse, error) {
 	// Validate the request
 	if err := req.Validate(); err != nil {
-		s.logger.Warnw("tax rate creation validation failed",
+		s.Logger.Warnw("tax rate creation validation failed",
 			"error", err,
 			"name", req.Name,
 			"code", req.Code,
@@ -58,8 +55,8 @@ func (s *taxService) CreateTaxRate(ctx context.Context, req dto.CreateTaxRateReq
 	}
 
 	// Create the tax rate in the repository
-	if err := s.repo.Create(ctx, taxRate); err != nil {
-		s.logger.Errorw("failed to create tax rate",
+	if err := s.TaxRateRepo.Create(ctx, taxRate); err != nil {
+		s.Logger.Errorw("failed to create tax rate",
 			"error", err,
 			"tax_rate_id", taxRate.ID,
 			"name", taxRate.Name,
@@ -68,7 +65,7 @@ func (s *taxService) CreateTaxRate(ctx context.Context, req dto.CreateTaxRateReq
 		return nil, err
 	}
 
-	s.logger.Infow("tax rate created successfully",
+	s.Logger.Infow("tax rate created successfully",
 		"tax_rate_id", taxRate.ID,
 		"name", taxRate.Name,
 		"code", taxRate.Code,
@@ -88,9 +85,9 @@ func (s *taxService) GetTaxRate(ctx context.Context, id string) (*dto.TaxRateRes
 	}
 
 	// Get the tax rate from the repository
-	taxRate, err := s.repo.Get(ctx, id)
+	taxRate, err := s.TaxRateRepo.Get(ctx, id)
 	if err != nil {
-		s.logger.Warnw("failed to get tax rate",
+		s.Logger.Warnw("failed to get tax rate",
 			"error", err,
 			"tax_rate_id", id,
 		)
@@ -108,9 +105,9 @@ func (s *taxService) ListTaxRates(ctx context.Context, filter *types.TaxRateFilt
 	}
 
 	// Get tax rates from the repository
-	taxRates, err := s.repo.List(ctx, filter)
+	taxRates, err := s.TaxRateRepo.List(ctx, filter)
 	if err != nil {
-		s.logger.Errorw("failed to list tax rates",
+		s.Logger.Errorw("failed to list tax rates",
 			"error", err,
 			"filter", filter,
 		)
@@ -118,9 +115,9 @@ func (s *taxService) ListTaxRates(ctx context.Context, filter *types.TaxRateFilt
 	}
 
 	// Get the total count of tax rates
-	count, err := s.repo.Count(ctx, filter)
+	count, err := s.TaxRateRepo.Count(ctx, filter)
 	if err != nil {
-		s.logger.Errorw("failed to count tax rates",
+		s.Logger.Errorw("failed to count tax rates",
 			"error", err,
 			"filter", filter,
 		)
@@ -157,7 +154,7 @@ func (s *taxService) UpdateTaxRate(ctx context.Context, id string, req dto.Updat
 
 	// Validate the update request
 	if err := s.validateUpdateRequest(req); err != nil {
-		s.logger.Warnw("tax rate update validation failed",
+		s.Logger.Warnw("tax rate update validation failed",
 			"error", err,
 			"tax_rate_id", id,
 		)
@@ -165,7 +162,7 @@ func (s *taxService) UpdateTaxRate(ctx context.Context, id string, req dto.Updat
 	}
 
 	// Get the existing tax rate
-	taxRate, err := s.repo.Get(ctx, id)
+	taxRate, err := s.TaxRateRepo.Get(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -202,15 +199,15 @@ func (s *taxService) UpdateTaxRate(ctx context.Context, id string, req dto.Updat
 	}
 
 	// Perform the update in the repository
-	if err := s.repo.Update(ctx, taxRate); err != nil {
-		s.logger.Errorw("failed to update tax rate",
+	if err := s.TaxRateRepo.Update(ctx, taxRate); err != nil {
+		s.Logger.Errorw("failed to update tax rate",
 			"error", err,
 			"tax_rate_id", id,
 		)
 		return nil, err
 	}
 
-	s.logger.Infow("tax rate updated successfully",
+	s.Logger.Infow("tax rate updated successfully",
 		"tax_rate_id", id,
 		"name", taxRate.Name,
 		"code", taxRate.Code,
@@ -230,9 +227,9 @@ func (s *taxService) DeleteTaxRate(ctx context.Context, id string) error {
 	}
 
 	// Get the tax rate to archive
-	taxRate, err := s.repo.Get(ctx, id)
+	taxRate, err := s.TaxRateRepo.Get(ctx, id)
 	if err != nil {
-		s.logger.Warnw("failed to get tax rate for deletion",
+		s.Logger.Warnw("failed to get tax rate for deletion",
 			"error", err,
 			"tax_rate_id", id,
 		)
@@ -240,15 +237,15 @@ func (s *taxService) DeleteTaxRate(ctx context.Context, id string) error {
 	}
 
 	// Call the repository's Delete method which handles archiving
-	if err := s.repo.Delete(ctx, taxRate); err != nil {
-		s.logger.Errorw("failed to delete tax rate",
+	if err := s.TaxRateRepo.Delete(ctx, taxRate); err != nil {
+		s.Logger.Errorw("failed to delete tax rate",
 			"error", err,
 			"tax_rate_id", id,
 		)
 		return err
 	}
 
-	s.logger.Infow("tax rate deleted successfully",
+	s.Logger.Infow("tax rate deleted successfully",
 		"tax_rate_id", id,
 		"name", taxRate.Name,
 		"code", taxRate.Code,
@@ -266,9 +263,9 @@ func (s *taxService) GetTaxRateByCode(ctx context.Context, code string) (*dto.Ta
 	}
 
 	// Get the tax rate by code from the repository
-	taxRate, err := s.repo.GetByCode(ctx, code)
+	taxRate, err := s.TaxRateRepo.GetByCode(ctx, code)
 	if err != nil {
-		s.logger.Warnw("failed to get tax rate by code",
+		s.Logger.Warnw("failed to get tax rate by code",
 			"error", err,
 			"code", code,
 		)
