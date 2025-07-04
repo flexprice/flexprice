@@ -156,34 +156,6 @@ func (tcc *TaxConfigCreate) SetNillableAutoApply(b *bool) *TaxConfigCreate {
 	return tcc
 }
 
-// SetValidFrom sets the "valid_from" field.
-func (tcc *TaxConfigCreate) SetValidFrom(t time.Time) *TaxConfigCreate {
-	tcc.mutation.SetValidFrom(t)
-	return tcc
-}
-
-// SetNillableValidFrom sets the "valid_from" field if the given value is not nil.
-func (tcc *TaxConfigCreate) SetNillableValidFrom(t *time.Time) *TaxConfigCreate {
-	if t != nil {
-		tcc.SetValidFrom(*t)
-	}
-	return tcc
-}
-
-// SetValidTo sets the "valid_to" field.
-func (tcc *TaxConfigCreate) SetValidTo(t time.Time) *TaxConfigCreate {
-	tcc.mutation.SetValidTo(t)
-	return tcc
-}
-
-// SetNillableValidTo sets the "valid_to" field if the given value is not nil.
-func (tcc *TaxConfigCreate) SetNillableValidTo(t *time.Time) *TaxConfigCreate {
-	if t != nil {
-		tcc.SetValidTo(*t)
-	}
-	return tcc
-}
-
 // SetCurrency sets the "currency" field.
 func (tcc *TaxConfigCreate) SetCurrency(s string) *TaxConfigCreate {
 	tcc.mutation.SetCurrency(s)
@@ -407,14 +379,6 @@ func (tcc *TaxConfigCreate) createSpec() (*TaxConfig, *sqlgraph.CreateSpec) {
 	if value, ok := tcc.mutation.AutoApply(); ok {
 		_spec.SetField(taxconfig.FieldAutoApply, field.TypeBool, value)
 		_node.AutoApply = value
-	}
-	if value, ok := tcc.mutation.ValidFrom(); ok {
-		_spec.SetField(taxconfig.FieldValidFrom, field.TypeTime, value)
-		_node.ValidFrom = &value
-	}
-	if value, ok := tcc.mutation.ValidTo(); ok {
-		_spec.SetField(taxconfig.FieldValidTo, field.TypeTime, value)
-		_node.ValidTo = &value
 	}
 	if value, ok := tcc.mutation.Currency(); ok {
 		_spec.SetField(taxconfig.FieldCurrency, field.TypeString, value)
