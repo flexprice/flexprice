@@ -1,18 +1,18 @@
-package taxconfig
+package taxassociation
 
 import (
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
-// TaxConfig is the model entity for the TaxConfig schema.
-type TaxConfig struct {
+// TaxAssociation is the model entity for the TaxAssociation schema.
+type TaxAssociation struct {
 	// ID of the ent.
 	ID string `json:"id,omitempty"`
 	// Reference to the TaxRate entity
 	TaxRateID string `json:"tax_rate_id,omitempty"`
 	// Type of entity this tax rate applies to
-	EntityType string `json:"entity_type,omitempty"`
+	EntityType types.TaxrateEntityType `json:"entity_type,omitempty"`
 	// ID of the entity this tax rate applies to
 	EntityID string `json:"entity_id,omitempty"`
 	// Priority for tax resolution (lower number = higher priority)
@@ -30,11 +30,11 @@ type TaxConfig struct {
 	types.BaseModel
 }
 
-func FromEnt(ent *ent.TaxAssociation) *TaxConfig {
-	return &TaxConfig{
+func FromEnt(ent *ent.TaxAssociation) *TaxAssociation {
+	return &TaxAssociation{
 		ID:            ent.ID,
 		TaxRateID:     ent.TaxRateID,
-		EntityType:    ent.EntityType,
+		EntityType:    types.TaxrateEntityType(ent.EntityType),
 		EntityID:      ent.EntityID,
 		Priority:      ent.Priority,
 		AutoApply:     ent.AutoApply,
@@ -52,8 +52,8 @@ func FromEnt(ent *ent.TaxAssociation) *TaxConfig {
 	}
 }
 
-func FromEntList(ents []*ent.TaxAssociation) []*TaxConfig {
-	var configs []*TaxConfig
+func FromEntList(ents []*ent.TaxAssociation) []*TaxAssociation {
+	var configs []*TaxAssociation
 	for _, ent := range ents {
 		configs = append(configs, FromEnt(ent))
 	}

@@ -12,11 +12,11 @@ import (
 )
 
 type CreateTaxAssociationRequest struct {
-	TaxRateID  string `json:"tax_rate_id" binding:"required"`
-	EntityType string `json:"entity_type" binding:"required"`
-	EntityID   string `json:"entity_id" binding:"required"`
-	Priority   int    `json:"priority" binding:"omitempty"`
-	AutoApply  bool   `json:"auto_apply" binding:"omitempty"`
+	TaxRateID  string                  `json:"tax_rate_id" binding:"required"`
+	EntityType types.TaxrateEntityType `json:"entity_type" binding:"required"`
+	EntityID   string                  `json:"entity_id" binding:"required"`
+	Priority   int                     `json:"priority" binding:"omitempty"`
+	AutoApply  bool                    `json:"auto_apply" binding:"omitempty"`
 }
 
 func (r *CreateTaxAssociationRequest) Validate() error {
@@ -30,11 +30,15 @@ func (r *CreateTaxAssociationRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
+	if err := r.EntityType.Validate(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
-func (r *CreateTaxAssociationRequest) ToTaxConfig(ctx context.Context, t taxrate.TaxRate) *taxconfig.TaxConfig {
-	return &taxconfig.TaxConfig{
+func (r *CreateTaxAssociationRequest) ToTaxAssociation(ctx context.Context, t taxrate.TaxRate) *taxconfig.TaxAssociation {
+	return &taxconfig.TaxAssociation{
 		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TAX_ASSOCIATION),
 		TaxRateID:     r.TaxRateID,
 		EntityType:    r.EntityType,
@@ -47,7 +51,7 @@ func (r *CreateTaxAssociationRequest) ToTaxConfig(ctx context.Context, t taxrate
 	}
 }
 
-type TaxConfigUpdateRequest struct {
+type TaxAssociationUpdateRequest struct {
 	Priority  int               `json:"priority" binding:"omitempty"`
 	AutoApply bool              `json:"auto_apply" binding:"omitempty"`
 	ValidFrom *time.Time        `json:"valid_from" binding:"omitempty"`
@@ -55,7 +59,7 @@ type TaxConfigUpdateRequest struct {
 	Metadata  map[string]string `json:"metadata" binding:"omitempty"`
 }
 
-func (r *TaxConfigUpdateRequest) Validate() error {
+func (r *TaxAssociationUpdateRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
 	}
@@ -69,34 +73,34 @@ func (r *TaxConfigUpdateRequest) Validate() error {
 	return nil
 }
 
-// TaxConfigResponse represents the response for tax config operations
-type TaxConfigResponse struct {
-	ID            string            `json:"id"`
-	TaxRateID     string            `json:"tax_rate_id"`
-	EntityType    string            `json:"entity_type"`
-	EntityID      string            `json:"entity_id"`
-	Priority      int               `json:"priority"`
-	AutoApply     bool              `json:"auto_apply"`
-	ValidFrom     *time.Time        `json:"valid_from,omitempty"`
-	ValidTo       *time.Time        `json:"valid_to,omitempty"`
-	Currency      string            `json:"currency"`
-	Metadata      map[string]string `json:"metadata,omitempty"`
-	EnvironmentID string            `json:"environment_id"`
-	TenantID      string            `json:"tenant_id"`
-	Status        string            `json:"status"`
-	CreatedAt     time.Time         `json:"created_at"`
-	UpdatedAt     time.Time         `json:"updated_at"`
-	CreatedBy     string            `json:"created_by"`
-	UpdatedBy     string            `json:"updated_by"`
+// TaxAssociationResponse represents the response for tax association operations
+type TaxAssociationResponse struct {
+	ID            string                  `json:"id"`
+	TaxRateID     string                  `json:"tax_rate_id"`
+	EntityType    types.TaxrateEntityType `json:"entity_type"`
+	EntityID      string                  `json:"entity_id"`
+	Priority      int                     `json:"priority"`
+	AutoApply     bool                    `json:"auto_apply"`
+	ValidFrom     *time.Time              `json:"valid_from,omitempty"`
+	ValidTo       *time.Time              `json:"valid_to,omitempty"`
+	Currency      string                  `json:"currency"`
+	Metadata      map[string]string       `json:"metadata,omitempty"`
+	EnvironmentID string                  `json:"environment_id"`
+	TenantID      string                  `json:"tenant_id"`
+	Status        string                  `json:"status"`
+	CreatedAt     time.Time               `json:"created_at"`
+	UpdatedAt     time.Time               `json:"updated_at"`
+	CreatedBy     string                  `json:"created_by"`
+	UpdatedBy     string                  `json:"updated_by"`
 }
 
-// ToTaxConfigResponse converts a domain TaxConfig to a TaxConfigResponse
-func ToTaxConfigResponse(tc *taxconfig.TaxConfig) *TaxConfigResponse {
+// ToTaxAssociationResponse converts a domain TaxConfig to a TaxConfigResponse
+func ToTaxAssociationResponse(tc *taxconfig.TaxAssociation) *TaxAssociationResponse {
 	if tc == nil {
 		return nil
 	}
 
-	return &TaxConfigResponse{
+	return &TaxAssociationResponse{
 		ID:            tc.ID,
 		TaxRateID:     tc.TaxRateID,
 		EntityType:    tc.EntityType,
@@ -116,7 +120,7 @@ func ToTaxConfigResponse(tc *taxconfig.TaxConfig) *TaxConfigResponse {
 }
 
 // ListTaxConfigsResponse represents the response for listing tax configs
-type ListTaxConfigsResponse = types.ListResponse[*TaxConfigResponse]
+type ListTaxConfigsResponse = types.ListResponse[*TaxAssociationResponse]
 
 // TaxRateOverride represents a tax rate override for a specific entity
 // This is used to override the tax rate for a specific entity
@@ -148,7 +152,7 @@ func (tr *TaxRateOverride) Validate() error {
 	return nil
 }
 
-func (tr *TaxRateOverride) ToTaxLink(_ context.Context, entityID string, entityType types.TaxrateEntityType) *CreateEntityTaxAssociation {
+func (tr *TaxRateOverride) ToTaxEntityAssociation(_ context.Context, entityID string, entityType types.TaxrateEntityType) *CreateEntityTaxAssociation {
 	return &CreateEntityTaxAssociation{
 		CreateTaxRateRequest: tr.CreateTaxRateRequest,
 		TaxRateID:            tr.TaxRateID,
@@ -183,16 +187,16 @@ func (tr *CreateEntityTaxAssociation) Validate() error {
 	return nil
 }
 
-type TaxLinkingResponse struct {
+type EntityTaxAssociationResponse struct {
 	EntityID       string                  `json:"entity_id"`
 	EntityType     types.TaxrateEntityType `json:"entity_type"`
 	LinkedTaxRates []*LinkedTaxRateInfo    `json:"linked_tax_rates"`
 }
 
 type LinkedTaxRateInfo struct {
-	TaxRateID   string `json:"tax_rate_id"`
-	TaxConfigID string `json:"tax_config_id"`
-	WasCreated  bool   `json:"was_created"`
-	Priority    int    `json:"priority"`
-	AutoApply   bool   `json:"auto_apply"`
+	TaxRateID        string `json:"tax_rate_id"`
+	TaxAssociationID string `json:"tax_association_id"`
+	Priority         int    `json:"priority"`
+	AutoApply        bool   `json:"auto_apply"`
+	WasCreated       bool   `json:"was_created"`
 }

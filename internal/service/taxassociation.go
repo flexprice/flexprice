@@ -12,14 +12,14 @@ import (
 )
 
 type TaxConfigService interface {
-	Create(ctx context.Context, taxconfig *dto.CreateTaxAssociationRequest) (*dto.TaxConfigResponse, error)
-	Get(ctx context.Context, id string) (*dto.TaxConfigResponse, error)
-	Update(ctx context.Context, id string, taxconfig *dto.TaxConfigUpdateRequest) (*dto.TaxConfigResponse, error)
+	Create(ctx context.Context, taxconfig *dto.CreateTaxAssociationRequest) (*dto.TaxAssociationResponse, error)
+	Get(ctx context.Context, id string) (*dto.TaxAssociationResponse, error)
+	Update(ctx context.Context, id string, taxconfig *dto.TaxAssociationUpdateRequest) (*dto.TaxAssociationResponse, error)
 	Delete(ctx context.Context, id string) error
-	List(ctx context.Context, filter *types.TaxConfigFilter) (*dto.ListTaxConfigsResponse, error)
+	List(ctx context.Context, filter *types.TaxAssociationFilter) (*dto.ListTaxConfigsResponse, error)
 
 	// LinkTaxRatesToEntity links tax rates to any entity type
-	LinkTaxRatesToEntity(ctx context.Context, entityType types.TaxrateEntityType, entityID string, taxRateLinks []*dto.CreateEntityTaxAssociation) (*dto.TaxLinkingResponse, error)
+	LinkTaxRatesToEntity(ctx context.Context, entityType types.TaxrateEntityType, entityID string, taxRateLinks []*dto.CreateEntityTaxAssociation) (*dto.EntityTaxAssociationResponse, error)
 }
 
 type taxConfigService struct {
@@ -32,7 +32,7 @@ func NewTaxConfigService(p ServiceParams) TaxConfigService {
 	}
 }
 
-func (s *taxConfigService) Create(ctx context.Context, req *dto.CreateTaxAssociationRequest) (*dto.TaxConfigResponse, error) {
+func (s *taxConfigService) Create(ctx context.Context, req *dto.CreateTaxAssociationRequest) (*dto.TaxAssociationResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
@@ -43,7 +43,7 @@ func (s *taxConfigService) Create(ctx context.Context, req *dto.CreateTaxAssocia
 	}
 
 	// Convert request to domain model
-	tc := req.ToTaxConfig(ctx, lo.FromPtr(taxRate))
+	tc := req.ToTaxAssociation(ctx, lo.FromPtr(taxRate))
 
 	s.Logger.Infow("creating tax config",
 		"tax_rate_id", tc.TaxRateID,
@@ -69,10 +69,10 @@ func (s *taxConfigService) Create(ctx context.Context, req *dto.CreateTaxAssocia
 		"entity_type", tc.EntityType,
 		"entity_id", tc.EntityID)
 
-	return dto.ToTaxConfigResponse(tc), nil
+	return dto.ToTaxAssociationResponse(tc), nil
 }
 
-func (s *taxConfigService) Get(ctx context.Context, id string) (*dto.TaxConfigResponse, error) {
+func (s *taxConfigService) Get(ctx context.Context, id string) (*dto.TaxAssociationResponse, error) {
 	if id == "" {
 		return nil, ierr.NewError("tax config ID is required").
 			WithHint("Tax config ID cannot be empty").
@@ -98,10 +98,10 @@ func (s *taxConfigService) Get(ctx context.Context, id string) (*dto.TaxConfigRe
 			Mark(ierr.ErrNotFound)
 	}
 
-	return dto.ToTaxConfigResponse(tc), nil
+	return dto.ToTaxAssociationResponse(tc), nil
 }
 
-func (s *taxConfigService) Update(ctx context.Context, id string, req *dto.TaxConfigUpdateRequest) (*dto.TaxConfigResponse, error) {
+func (s *taxConfigService) Update(ctx context.Context, id string, req *dto.TaxAssociationUpdateRequest) (*dto.TaxAssociationResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
@@ -158,7 +158,7 @@ func (s *taxConfigService) Update(ctx context.Context, id string, req *dto.TaxCo
 		"entity_type", existing.EntityType,
 		"entity_id", existing.EntityID)
 
-	return dto.ToTaxConfigResponse(existing), nil
+	return dto.ToTaxAssociationResponse(existing), nil
 }
 
 func (s *taxConfigService) Delete(ctx context.Context, id string) error {
@@ -186,9 +186,9 @@ func (s *taxConfigService) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-func (s *taxConfigService) List(ctx context.Context, filter *types.TaxConfigFilter) (*dto.ListTaxConfigsResponse, error) {
+func (s *taxConfigService) List(ctx context.Context, filter *types.TaxAssociationFilter) (*dto.ListTaxConfigsResponse, error) {
 	if filter == nil {
-		filter = types.NewTaxConfigFilter()
+		filter = types.NewTaxAssociationFilter()
 	}
 
 	// Validate filter
@@ -220,11 +220,11 @@ func (s *taxConfigService) List(ctx context.Context, filter *types.TaxConfigFilt
 	}
 
 	response := &dto.ListTaxConfigsResponse{
-		Items: make([]*dto.TaxConfigResponse, len(taxConfigs)),
+		Items: make([]*dto.TaxAssociationResponse, len(taxConfigs)),
 	}
 
 	for i, tc := range taxConfigs {
-		response.Items[i] = dto.ToTaxConfigResponse(tc)
+		response.Items[i] = dto.ToTaxAssociationResponse(tc)
 	}
 
 	response.Pagination = types.NewPaginationResponse(total, filter.GetLimit(), filter.GetOffset())
@@ -239,10 +239,10 @@ func (s *taxConfigService) List(ctx context.Context, filter *types.TaxConfigFilt
 }
 
 // LinkTaxRatesToEntity links tax rates to any entity in a single transaction
-func (s *taxConfigService) LinkTaxRatesToEntity(ctx context.Context, entityType types.TaxrateEntityType, entityID string, taxRateLinks []*dto.CreateEntityTaxAssociation) (*dto.TaxLinkingResponse, error) {
+func (s *taxConfigService) LinkTaxRatesToEntity(ctx context.Context, entityType types.TaxrateEntityType, entityID string, taxRateLinks []*dto.CreateEntityTaxAssociation) (*dto.EntityTaxAssociationResponse, error) {
 	// Early return for empty input
 	if len(taxRateLinks) == 0 {
-		return &dto.TaxLinkingResponse{
+		return &dto.EntityTaxAssociationResponse{
 			EntityID:       entityID,
 			EntityType:     entityType,
 			LinkedTaxRates: []*dto.LinkedTaxRateInfo{},
@@ -303,7 +303,7 @@ func (s *taxConfigService) LinkTaxRatesToEntity(ctx context.Context, entityType 
 			// Step 2: Create tax config
 			taxConfigReq := &dto.CreateTaxAssociationRequest{
 				TaxRateID:  taxRateToUse.ID,
-				EntityType: string(entityType),
+				EntityType: entityType,
 				EntityID:   entityID,
 				Priority:   taxRateLink.Priority,
 				AutoApply:  taxRateLink.AutoApply,
@@ -317,11 +317,11 @@ func (s *taxConfigService) LinkTaxRatesToEntity(ctx context.Context, entityType 
 
 			// Step 4: Add to results
 			linkedTaxRates = append(linkedTaxRates, &dto.LinkedTaxRateInfo{
-				TaxRateID:   taxRateToUse.ID,
-				TaxConfigID: taxConfig.ID,
-				WasCreated:  wasCreated,
-				Priority:    taxConfig.Priority,
-				AutoApply:   taxConfig.AutoApply,
+				TaxRateID:        taxRateToUse.ID,
+				TaxAssociationID: taxConfig.ID,
+				WasCreated:       wasCreated,
+				Priority:         taxConfig.Priority,
+				AutoApply:        taxConfig.AutoApply,
 			})
 		}
 
@@ -342,7 +342,7 @@ func (s *taxConfigService) LinkTaxRatesToEntity(ctx context.Context, entityType 
 		"entity_id", entityID,
 		"links_count", len(linkedTaxRates))
 
-	return &dto.TaxLinkingResponse{
+	return &dto.EntityTaxAssociationResponse{
 		EntityID:       entityID,
 		EntityType:     entityType,
 		LinkedTaxRates: linkedTaxRates,

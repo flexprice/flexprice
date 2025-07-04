@@ -91,7 +91,7 @@ func (h *TaxConfigHandler) GetTaxConfig(c *gin.Context) {
 func (h *TaxConfigHandler) UpdateTaxConfig(c *gin.Context) {
 	id := c.Param("id")
 
-	var req dto.TaxConfigUpdateRequest
+	var req dto.TaxAssociationUpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
@@ -141,7 +141,7 @@ func (h *TaxConfigHandler) DeleteTaxConfig(c *gin.Context) {
 // @Failure 500 {object} ierr.ErrorResponse
 // @Router /taxconfigs [get]
 func (h *TaxConfigHandler) ListTaxConfigs(c *gin.Context) {
-	var filter types.TaxConfigFilter
+	var filter types.TaxAssociationFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid filter parameters").
