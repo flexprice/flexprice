@@ -219,13 +219,13 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			invoices.POST("/:id/recalculate", handlers.Invoice.RecalculateInvoice)
 		}
 
-		taxConfig := v1Private.Group("/taxconfigs")
+		taxConfig := v1Private.Group("/taxassociations")
 		{
-			taxConfig.POST("", handlers.TaxConfig.CreateTaxConfig)
-			taxConfig.GET("", handlers.TaxConfig.ListTaxConfigs)
-			taxConfig.GET("/:id", handlers.TaxConfig.GetTaxConfig)
-			taxConfig.PUT("/:id", handlers.TaxConfig.UpdateTaxConfig)
-			taxConfig.DELETE("/:id", handlers.TaxConfig.DeleteTaxConfig)
+			taxConfig.POST("", handlers.TaxConfig.CreateTaxAssociation)
+			taxConfig.GET("", handlers.TaxConfig.ListTaxAssociations)
+			taxConfig.GET("/:id", handlers.TaxConfig.GetTaxAssociation)
+			taxConfig.PUT("/:id", handlers.TaxConfig.UpdateTaxAssociation)
+			taxConfig.DELETE("/:id", handlers.TaxConfig.DeleteTaxAssociation)
 		}
 
 		feature := v1Private.Group("/features")

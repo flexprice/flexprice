@@ -135,6 +135,9 @@ func ToTaxAssociationResponse(tc *taxconfig.TaxAssociation) *TaxAssociationRespo
 // ListTaxConfigsResponse represents the response for listing tax configs
 type ListTaxConfigsResponse = types.ListResponse[*TaxAssociationResponse]
 
+// ListTaxAssociationsResponse represents the response for listing tax associations
+type ListTaxAssociationsResponse = types.ListResponse[*TaxAssociationResponse]
+
 // TaxRateOverride represents a tax rate override for a specific entity
 // This is used to override the tax rate for a specific entity
 // It can either be a new tax rate or an existing tax rate

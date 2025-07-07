@@ -24,8 +24,8 @@ func NewTaxConfigHandler(s service.TaxConfigService, logger *logger.Logger) *Tax
 	}
 }
 
-// @Summary CreateTaxConfig tax config
-// @Description CreateTaxConfig a new tax config
+// @Summary CreateTaxAssociation tax config
+// @Description CreateTaxAssociation a new tax config
 // @Tags Tax Configs
 // @Accept json
 // @Produce json
@@ -34,8 +34,8 @@ func NewTaxConfigHandler(s service.TaxConfigService, logger *logger.Logger) *Tax
 // @Success 200 {object} dto.TaxAssociationResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
-// @Router /taxconfigs [post]
-func (h *TaxConfigHandler) CreateTaxConfig(c *gin.Context) {
+// @Router /taxassociations [post]
+func (h *TaxConfigHandler) CreateTaxAssociation(c *gin.Context) {
 	var req dto.CreateTaxAssociationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.Error(ierr.WithError(err).
@@ -53,8 +53,8 @@ func (h *TaxConfigHandler) CreateTaxConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, taxConfig)
 }
 
-// @Summary GetTaxConfig tax config
-// @Description GetTaxConfig a tax config by ID
+// @Summary GetTaxAssociation tax config
+// @Description GetTaxAssociation a tax config by ID
 // @Tags Tax Configs
 // @Accept json
 // @Produce json
@@ -63,8 +63,8 @@ func (h *TaxConfigHandler) CreateTaxConfig(c *gin.Context) {
 // @Success 200 {object} dto.TaxAssociationResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
-// @Router /taxconfigs/{id} [get]
-func (h *TaxConfigHandler) GetTaxConfig(c *gin.Context) {
+// @Router /taxassociations/{id} [get]
+func (h *TaxConfigHandler) GetTaxAssociation(c *gin.Context) {
 	id := c.Param("id")
 
 	taxConfig, err := h.s.Get(c.Request.Context(), id)
@@ -76,8 +76,8 @@ func (h *TaxConfigHandler) GetTaxConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, taxConfig)
 }
 
-// @Summary Update tax config
-// @Description Update a tax config by ID
+// @Summary Update tax association
+// @Description Update a tax association by ID
 // @Tags Tax Configs
 // @Accept json
 // @Produce json
@@ -87,8 +87,8 @@ func (h *TaxConfigHandler) GetTaxConfig(c *gin.Context) {
 // @Success 200 {object} dto.TaxAssociationResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
-// @Router /taxconfigs/{id} [put]
-func (h *TaxConfigHandler) UpdateTaxConfig(c *gin.Context) {
+// @Router /taxassociations/{id} [put]
+func (h *TaxConfigHandler) UpdateTaxAssociation(c *gin.Context) {
 	id := c.Param("id")
 
 	var req dto.TaxAssociationUpdateRequest
@@ -108,8 +108,8 @@ func (h *TaxConfigHandler) UpdateTaxConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, taxConfig)
 }
 
-// @Summary Delete tax config
-// @Description Delete a tax config by ID
+// @Summary Delete tax association
+// @Description Delete a tax association by ID
 // @Tags Tax Configs
 // @Accept json
 // @Produce json
@@ -118,8 +118,8 @@ func (h *TaxConfigHandler) UpdateTaxConfig(c *gin.Context) {
 // @Success 200 {object} dto.TaxAssociationResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
-// @Router /taxconfigs/{id} [delete]
-func (h *TaxConfigHandler) DeleteTaxConfig(c *gin.Context) {
+// @Router /taxassociations/{id} [delete]
+func (h *TaxConfigHandler) DeleteTaxAssociation(c *gin.Context) {
 	id := c.Param("id")
 
 	err := h.s.Delete(c.Request.Context(), id)
@@ -129,18 +129,18 @@ func (h *TaxConfigHandler) DeleteTaxConfig(c *gin.Context) {
 	}
 }
 
-// @Summary List tax configs
-// @Description List tax configs
+// @Summary List tax associations
+// @Description List tax associations
 // @Tags Tax Configs
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Param tax_config body types.TaxAssociationFilter true "Tax Config Filter"
-// @Success 200 {object} dto.ListTaxConfigsResponse
+// @Param tax_association body types.TaxAssociationFilter true "Tax Association Filter"
+// @Success 200 {object} dto.ListTaxAssociationsResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
-// @Router /taxconfigs [get]
-func (h *TaxConfigHandler) ListTaxConfigs(c *gin.Context) {
+// @Router /taxassociations [get]
+func (h *TaxConfigHandler) ListTaxAssociations(c *gin.Context) {
 	var filter types.TaxAssociationFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
 		c.Error(ierr.WithError(err).
