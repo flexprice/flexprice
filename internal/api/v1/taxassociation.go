@@ -30,8 +30,8 @@ func NewTaxConfigHandler(s service.TaxConfigService, logger *logger.Logger) *Tax
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Param tax_config body dto.TaxConfigCreateRequest true "Tax Config Request"
-// @Success 200 {object} dto.TaxConfigResponse
+// @Param tax_config body dto.CreateTaxAssociationRequest true "Tax Config Request"
+// @Success 200 {object} dto.TaxAssociationResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
 // @Router /taxconfigs [post]
@@ -60,7 +60,7 @@ func (h *TaxConfigHandler) CreateTaxConfig(c *gin.Context) {
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Tax Config ID"
-// @Success 200 {object} dto.TaxConfigResponse
+// @Success 200 {object} dto.TaxAssociationResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
 // @Router /taxconfigs/{id} [get]
@@ -83,8 +83,8 @@ func (h *TaxConfigHandler) GetTaxConfig(c *gin.Context) {
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Tax Config ID"
-// @Param tax_config body dto.TaxConfigUpdateRequest true "Tax Config Request"
-// @Success 200 {object} dto.TaxConfigResponse
+// @Param tax_config body dto.TaxAssociationUpdateRequest true "Tax Config Request"
+// @Success 200 {object} dto.TaxAssociationResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
 // @Router /taxconfigs/{id} [put]
@@ -115,7 +115,7 @@ func (h *TaxConfigHandler) UpdateTaxConfig(c *gin.Context) {
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Tax Config ID"
-// @Success 200 {object} dto.TaxConfigResponse
+// @Success 200 {object} dto.TaxAssociationResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
 // @Router /taxconfigs/{id} [delete]
@@ -135,7 +135,7 @@ func (h *TaxConfigHandler) DeleteTaxConfig(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Param tax_config body types.TaxConfigFilter true "Tax Config Filter"
+// @Param tax_config body types.TaxAssociationFilter true "Tax Config Filter"
 // @Success 200 {object} dto.ListTaxConfigsResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
