@@ -349,6 +349,13 @@ func (s *taxService) ApplyTaxOnInvoice(ctx context.Context, invoiceId string) er
 			return err
 		}
 
+		s.Logger.Infow("tax associations found for subscription",
+			"invoice_id", invoiceId,
+			"entity_type", types.TaxrateEntityTypeSubscription,
+			"subscription_id", lo.FromPtr(invoice.SubscriptionID),
+			"tax_associations", taxAssociations,
+		)
+
 		if len(taxAssociations) == 0 {
 			s.Logger.Infow("no tax associations found for subscription, skipping tax application",
 				"invoice_id", invoiceId,
