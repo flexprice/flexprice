@@ -135,11 +135,6 @@ func Currency(v string) predicate.TaxApplied {
 	return predicate.TaxApplied(sql.FieldEQ(FieldCurrency, v))
 }
 
-// Jurisdiction applies equality check predicate on the "jurisdiction" field. It's identical to JurisdictionEQ.
-func Jurisdiction(v string) predicate.TaxApplied {
-	return predicate.TaxApplied(sql.FieldEQ(FieldJurisdiction, v))
-}
-
 // AppliedAt applies equality check predicate on the "applied_at" field. It's identical to AppliedAtEQ.
 func AppliedAt(v time.Time) predicate.TaxApplied {
 	return predicate.TaxApplied(sql.FieldEQ(FieldAppliedAt, v))
@@ -993,81 +988,6 @@ func CurrencyEqualFold(v string) predicate.TaxApplied {
 // CurrencyContainsFold applies the ContainsFold predicate on the "currency" field.
 func CurrencyContainsFold(v string) predicate.TaxApplied {
 	return predicate.TaxApplied(sql.FieldContainsFold(FieldCurrency, v))
-}
-
-// JurisdictionEQ applies the EQ predicate on the "jurisdiction" field.
-func JurisdictionEQ(v string) predicate.TaxApplied {
-	return predicate.TaxApplied(sql.FieldEQ(FieldJurisdiction, v))
-}
-
-// JurisdictionNEQ applies the NEQ predicate on the "jurisdiction" field.
-func JurisdictionNEQ(v string) predicate.TaxApplied {
-	return predicate.TaxApplied(sql.FieldNEQ(FieldJurisdiction, v))
-}
-
-// JurisdictionIn applies the In predicate on the "jurisdiction" field.
-func JurisdictionIn(vs ...string) predicate.TaxApplied {
-	return predicate.TaxApplied(sql.FieldIn(FieldJurisdiction, vs...))
-}
-
-// JurisdictionNotIn applies the NotIn predicate on the "jurisdiction" field.
-func JurisdictionNotIn(vs ...string) predicate.TaxApplied {
-	return predicate.TaxApplied(sql.FieldNotIn(FieldJurisdiction, vs...))
-}
-
-// JurisdictionGT applies the GT predicate on the "jurisdiction" field.
-func JurisdictionGT(v string) predicate.TaxApplied {
-	return predicate.TaxApplied(sql.FieldGT(FieldJurisdiction, v))
-}
-
-// JurisdictionGTE applies the GTE predicate on the "jurisdiction" field.
-func JurisdictionGTE(v string) predicate.TaxApplied {
-	return predicate.TaxApplied(sql.FieldGTE(FieldJurisdiction, v))
-}
-
-// JurisdictionLT applies the LT predicate on the "jurisdiction" field.
-func JurisdictionLT(v string) predicate.TaxApplied {
-	return predicate.TaxApplied(sql.FieldLT(FieldJurisdiction, v))
-}
-
-// JurisdictionLTE applies the LTE predicate on the "jurisdiction" field.
-func JurisdictionLTE(v string) predicate.TaxApplied {
-	return predicate.TaxApplied(sql.FieldLTE(FieldJurisdiction, v))
-}
-
-// JurisdictionContains applies the Contains predicate on the "jurisdiction" field.
-func JurisdictionContains(v string) predicate.TaxApplied {
-	return predicate.TaxApplied(sql.FieldContains(FieldJurisdiction, v))
-}
-
-// JurisdictionHasPrefix applies the HasPrefix predicate on the "jurisdiction" field.
-func JurisdictionHasPrefix(v string) predicate.TaxApplied {
-	return predicate.TaxApplied(sql.FieldHasPrefix(FieldJurisdiction, v))
-}
-
-// JurisdictionHasSuffix applies the HasSuffix predicate on the "jurisdiction" field.
-func JurisdictionHasSuffix(v string) predicate.TaxApplied {
-	return predicate.TaxApplied(sql.FieldHasSuffix(FieldJurisdiction, v))
-}
-
-// JurisdictionIsNil applies the IsNil predicate on the "jurisdiction" field.
-func JurisdictionIsNil() predicate.TaxApplied {
-	return predicate.TaxApplied(sql.FieldIsNull(FieldJurisdiction))
-}
-
-// JurisdictionNotNil applies the NotNil predicate on the "jurisdiction" field.
-func JurisdictionNotNil() predicate.TaxApplied {
-	return predicate.TaxApplied(sql.FieldNotNull(FieldJurisdiction))
-}
-
-// JurisdictionEqualFold applies the EqualFold predicate on the "jurisdiction" field.
-func JurisdictionEqualFold(v string) predicate.TaxApplied {
-	return predicate.TaxApplied(sql.FieldEqualFold(FieldJurisdiction, v))
-}
-
-// JurisdictionContainsFold applies the ContainsFold predicate on the "jurisdiction" field.
-func JurisdictionContainsFold(v string) predicate.TaxApplied {
-	return predicate.TaxApplied(sql.FieldContainsFold(FieldJurisdiction, v))
 }
 
 // AppliedAtEQ applies the EQ predicate on the "applied_at" field.

@@ -6,7 +6,6 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	taxrate "github.com/flexprice/flexprice/internal/domain/tax"
-	"github.com/flexprice/flexprice/internal/domain/taxapplied"
 	"github.com/flexprice/flexprice/internal/domain/taxassociation"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -67,13 +66,6 @@ func (s *taxService) CreateTaxRate(ctx context.Context, req dto.CreateTaxRateReq
 		)
 		return nil, err
 	}
-
-	s.Logger.Infow("tax rate created successfully",
-		"tax_rate_id", taxRate.ID,
-		"name", taxRate.Name,
-		"code", taxRate.Code,
-		"status", taxRate.TaxRateStatus,
-	)
 
 	// Return the created tax rate
 	return &dto.TaxRateResponse{TaxRate: taxRate}, nil
@@ -156,12 +148,33 @@ func (s *taxService) UpdateTaxRate(ctx context.Context, id string, req dto.Updat
 	}
 
 	// Validate the update request
-	if err := s.validateUpdateRequest(req); err != nil {
+	if err := req.Validate(); err != nil {
 		s.Logger.Warnw("tax rate update validation failed",
 			"error", err,
 			"tax_rate_id", id,
 		)
 		return nil, err
+	}
+
+	// check is tax rate is being used in any tax assignments
+	taxAssociations, err := s.TaxAssociationRepo.List(ctx, &types.TaxAssociationFilter{
+		TaxRateIDs: []string{id},
+	})
+	if err != nil {
+		s.Logger.Errorw("failed to get tax associations for tax rate",
+			"error", err,
+			"tax_rate_id", id,
+		)
+		return nil, err
+	}
+
+	if len(taxAssociations) > 0 {
+		s.Logger.Warnw("tax rate is being used in tax assignments, cannot update",
+			"tax_rate_id", id,
+		)
+		return nil, ierr.NewError("tax rate is being used in tax assignments, cannot update").
+			WithHint("Tax rate is being used in tax assignments, cannot update").
+			Mark(ierr.ErrValidation)
 	}
 
 	// Get the existing tax rate
@@ -279,27 +292,6 @@ func (s *taxService) GetTaxRateByCode(ctx context.Context, code string) (*dto.Ta
 	return &dto.TaxRateResponse{TaxRate: taxRate}, nil
 }
 
-// validateUpdateRequest validates the update request
-func (s *taxService) validateUpdateRequest(req dto.UpdateTaxRateRequest) error {
-	// Validate that at least one field is being updated
-	if req.Name == "" && req.Code == "" && req.Description == "" &&
-		req.ValidFrom == nil && req.ValidTo == nil &&
-		len(req.Metadata) == 0 {
-		return ierr.NewError("at least one field must be provided for update").
-			WithHint("Please provide at least one field to update").
-			Mark(ierr.ErrValidation)
-	}
-
-	// Validate date range if both dates are provided
-	if req.ValidFrom != nil && req.ValidTo != nil && req.ValidFrom.After(*req.ValidTo) {
-		return ierr.NewError("valid_from cannot be after valid_to").
-			WithHint("Valid from date cannot be after valid to date").
-			Mark(ierr.ErrValidation)
-	}
-
-	return nil
-}
-
 // calculateTaxRateStatus determines the appropriate status based on validity dates
 func (s *taxService) calculateTaxRateStatus(taxRate *taxrate.TaxRate, now time.Time) types.TaxRateStatus {
 	// If ValidFrom is in the future, tax rate should be inactive
@@ -414,8 +406,7 @@ func (s *taxService) ApplyTaxOnInvoice(ctx context.Context, invoiceId string) er
 			taxAssociation := taxAssociationMap[taxRate.ID]
 
 			// Create a tax applied record
-			taxApplied := &taxapplied.TaxApplied{
-				ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TAX_APPLIED),
+			taxAppliedRecord := &dto.CreateTaxAppliedRequest{
 				TaxRateID:        taxRate.ID,
 				EntityType:       types.TaxrateEntityTypeInvoice,
 				EntityID:         invoiceId,
@@ -423,29 +414,23 @@ func (s *taxService) ApplyTaxOnInvoice(ctx context.Context, invoiceId string) er
 				TaxableAmount:    taxableAmount,
 				TaxAmount:        taxAmount,
 				Currency:         invoice.Currency,
-				AppliedAt:        time.Now().UTC(),
-				BaseModel:        types.GetDefaultBaseModel(txCtx),
 			}
 
-			// Set environment ID
-			if invoice.EnvironmentID != "" {
-				taxApplied.EnvironmentID = invoice.EnvironmentID
-			} else {
-				taxApplied.EnvironmentID = types.GetEnvironmentID(txCtx)
-			}
+			taxApplied := taxAppliedRecord.ToTaxApplied(txCtx)
+
+			// set applied at to the invoice due date
+			taxApplied.AppliedAt = time.Now().UTC()
 
 			// Create the tax applied record
 			if err := s.TaxAppliedRepo.Create(txCtx, taxApplied); err != nil {
 				s.Logger.Errorw("failed to create tax applied record",
 					"error", err,
-					"tax_applied_id", taxApplied.ID,
 					"tax_rate_id", taxRate.ID,
 				)
 				return err
 			}
 
 			s.Logger.Infow("created tax applied record",
-				"tax_applied_id", taxApplied.ID,
 				"tax_rate_id", taxRate.ID,
 				"tax_rate_code", taxRate.Code,
 				"tax_amount", taxAmount,
@@ -468,14 +453,6 @@ func (s *taxService) ApplyTaxOnInvoice(ctx context.Context, invoiceId string) er
 			)
 			return err
 		}
-
-		s.Logger.Infow("successfully applied taxes to invoice",
-			"invoice_id", invoiceId,
-			"subtotal", invoice.Subtotal,
-			"total_tax", totalTaxAmount,
-			"total", invoice.Total,
-			"tax_rates_applied", len(taxRates),
-		)
 
 		return nil
 	})

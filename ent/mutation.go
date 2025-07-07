@@ -37595,7 +37595,6 @@ type TaxAppliedMutation struct {
 	taxable_amount     *decimal.Decimal
 	tax_amount         *decimal.Decimal
 	currency           *string
-	jurisdiction       *string
 	applied_at         *time.Time
 	metadata           *map[string]string
 	clearedFields      map[string]struct{}
@@ -38264,55 +38263,6 @@ func (m *TaxAppliedMutation) ResetCurrency() {
 	m.currency = nil
 }
 
-// SetJurisdiction sets the "jurisdiction" field.
-func (m *TaxAppliedMutation) SetJurisdiction(s string) {
-	m.jurisdiction = &s
-}
-
-// Jurisdiction returns the value of the "jurisdiction" field in the mutation.
-func (m *TaxAppliedMutation) Jurisdiction() (r string, exists bool) {
-	v := m.jurisdiction
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldJurisdiction returns the old "jurisdiction" field's value of the TaxApplied entity.
-// If the TaxApplied object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *TaxAppliedMutation) OldJurisdiction(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldJurisdiction is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldJurisdiction requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldJurisdiction: %w", err)
-	}
-	return oldValue.Jurisdiction, nil
-}
-
-// ClearJurisdiction clears the value of the "jurisdiction" field.
-func (m *TaxAppliedMutation) ClearJurisdiction() {
-	m.jurisdiction = nil
-	m.clearedFields[taxapplied.FieldJurisdiction] = struct{}{}
-}
-
-// JurisdictionCleared returns if the "jurisdiction" field was cleared in this mutation.
-func (m *TaxAppliedMutation) JurisdictionCleared() bool {
-	_, ok := m.clearedFields[taxapplied.FieldJurisdiction]
-	return ok
-}
-
-// ResetJurisdiction resets all changes to the "jurisdiction" field.
-func (m *TaxAppliedMutation) ResetJurisdiction() {
-	m.jurisdiction = nil
-	delete(m.clearedFields, taxapplied.FieldJurisdiction)
-}
-
 // SetAppliedAt sets the "applied_at" field.
 func (m *TaxAppliedMutation) SetAppliedAt(t time.Time) {
 	m.applied_at = &t
@@ -38432,7 +38382,7 @@ func (m *TaxAppliedMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TaxAppliedMutation) Fields() []string {
-	fields := make([]string, 0, 17)
+	fields := make([]string, 0, 16)
 	if m.tenant_id != nil {
 		fields = append(fields, taxapplied.FieldTenantID)
 	}
@@ -38474,9 +38424,6 @@ func (m *TaxAppliedMutation) Fields() []string {
 	}
 	if m.currency != nil {
 		fields = append(fields, taxapplied.FieldCurrency)
-	}
-	if m.jurisdiction != nil {
-		fields = append(fields, taxapplied.FieldJurisdiction)
 	}
 	if m.applied_at != nil {
 		fields = append(fields, taxapplied.FieldAppliedAt)
@@ -38520,8 +38467,6 @@ func (m *TaxAppliedMutation) Field(name string) (ent.Value, bool) {
 		return m.TaxAmount()
 	case taxapplied.FieldCurrency:
 		return m.Currency()
-	case taxapplied.FieldJurisdiction:
-		return m.Jurisdiction()
 	case taxapplied.FieldAppliedAt:
 		return m.AppliedAt()
 	case taxapplied.FieldMetadata:
@@ -38563,8 +38508,6 @@ func (m *TaxAppliedMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldTaxAmount(ctx)
 	case taxapplied.FieldCurrency:
 		return m.OldCurrency(ctx)
-	case taxapplied.FieldJurisdiction:
-		return m.OldJurisdiction(ctx)
 	case taxapplied.FieldAppliedAt:
 		return m.OldAppliedAt(ctx)
 	case taxapplied.FieldMetadata:
@@ -38676,13 +38619,6 @@ func (m *TaxAppliedMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetCurrency(v)
 		return nil
-	case taxapplied.FieldJurisdiction:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetJurisdiction(v)
-		return nil
 	case taxapplied.FieldAppliedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -38739,9 +38675,6 @@ func (m *TaxAppliedMutation) ClearedFields() []string {
 	if m.FieldCleared(taxapplied.FieldTaxAssociationID) {
 		fields = append(fields, taxapplied.FieldTaxAssociationID)
 	}
-	if m.FieldCleared(taxapplied.FieldJurisdiction) {
-		fields = append(fields, taxapplied.FieldJurisdiction)
-	}
 	if m.FieldCleared(taxapplied.FieldMetadata) {
 		fields = append(fields, taxapplied.FieldMetadata)
 	}
@@ -38770,9 +38703,6 @@ func (m *TaxAppliedMutation) ClearField(name string) error {
 		return nil
 	case taxapplied.FieldTaxAssociationID:
 		m.ClearTaxAssociationID()
-		return nil
-	case taxapplied.FieldJurisdiction:
-		m.ClearJurisdiction()
 		return nil
 	case taxapplied.FieldMetadata:
 		m.ClearMetadata()
@@ -38826,9 +38756,6 @@ func (m *TaxAppliedMutation) ResetField(name string) error {
 		return nil
 	case taxapplied.FieldCurrency:
 		m.ResetCurrency()
-		return nil
-	case taxapplied.FieldJurisdiction:
-		m.ResetJurisdiction()
 		return nil
 	case taxapplied.FieldAppliedAt:
 		m.ResetAppliedAt()

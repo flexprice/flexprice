@@ -41,8 +41,6 @@ const (
 	FieldTaxAmount = "tax_amount"
 	// FieldCurrency holds the string denoting the currency field in the database.
 	FieldCurrency = "currency"
-	// FieldJurisdiction holds the string denoting the jurisdiction field in the database.
-	FieldJurisdiction = "jurisdiction"
 	// FieldAppliedAt holds the string denoting the applied_at field in the database.
 	FieldAppliedAt = "applied_at"
 	// FieldMetadata holds the string denoting the metadata field in the database.
@@ -68,7 +66,6 @@ var Columns = []string{
 	FieldTaxableAmount,
 	FieldTaxAmount,
 	FieldCurrency,
-	FieldJurisdiction,
 	FieldAppliedAt,
 	FieldMetadata,
 }
@@ -184,11 +181,6 @@ func ByTaxAmount(opts ...sql.OrderTermOption) OrderOption {
 // ByCurrency orders the results by the currency field.
 func ByCurrency(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCurrency, opts...).ToFunc()
-}
-
-// ByJurisdiction orders the results by the jurisdiction field.
-func ByJurisdiction(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldJurisdiction, opts...).ToFunc()
 }
 
 // ByAppliedAt orders the results by the applied_at field.

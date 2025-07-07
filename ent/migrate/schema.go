@@ -1324,7 +1324,6 @@ var (
 		{Name: "taxable_amount", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(15,6)"}},
 		{Name: "tax_amount", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(15,6)"}},
 		{Name: "currency", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(3)"}},
-		{Name: "jurisdiction", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(100)"}},
 		{Name: "applied_at", Type: field.TypeTime},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 	}

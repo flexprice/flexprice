@@ -1358,7 +1358,7 @@ func init() {
 	// taxapplied.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
 	taxapplied.CurrencyValidator = taxappliedDescCurrency.Validators[0].(func(string) error)
 	// taxappliedDescAppliedAt is the schema descriptor for applied_at field.
-	taxappliedDescAppliedAt := taxappliedFields[9].Descriptor()
+	taxappliedDescAppliedAt := taxappliedFields[8].Descriptor()
 	// taxapplied.DefaultAppliedAt holds the default value on creation for the applied_at field.
 	taxapplied.DefaultAppliedAt = taxappliedDescAppliedAt.Default.(func() time.Time)
 	taxassociationMixin := schema.TaxAssociation{}.Mixin()

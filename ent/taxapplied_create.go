@@ -161,20 +161,6 @@ func (tac *TaxAppliedCreate) SetCurrency(s string) *TaxAppliedCreate {
 	return tac
 }
 
-// SetJurisdiction sets the "jurisdiction" field.
-func (tac *TaxAppliedCreate) SetJurisdiction(s string) *TaxAppliedCreate {
-	tac.mutation.SetJurisdiction(s)
-	return tac
-}
-
-// SetNillableJurisdiction sets the "jurisdiction" field if the given value is not nil.
-func (tac *TaxAppliedCreate) SetNillableJurisdiction(s *string) *TaxAppliedCreate {
-	if s != nil {
-		tac.SetJurisdiction(*s)
-	}
-	return tac
-}
-
 // SetAppliedAt sets the "applied_at" field.
 func (tac *TaxAppliedCreate) SetAppliedAt(t time.Time) *TaxAppliedCreate {
 	tac.mutation.SetAppliedAt(t)
@@ -408,10 +394,6 @@ func (tac *TaxAppliedCreate) createSpec() (*TaxApplied, *sqlgraph.CreateSpec) {
 	if value, ok := tac.mutation.Currency(); ok {
 		_spec.SetField(taxapplied.FieldCurrency, field.TypeString, value)
 		_node.Currency = value
-	}
-	if value, ok := tac.mutation.Jurisdiction(); ok {
-		_spec.SetField(taxapplied.FieldJurisdiction, field.TypeString, value)
-		_node.Jurisdiction = value
 	}
 	if value, ok := tac.mutation.AppliedAt(); ok {
 		_spec.SetField(taxapplied.FieldAppliedAt, field.TypeTime, value)
