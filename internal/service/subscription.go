@@ -319,6 +319,14 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			return err
 		}
 
+		return nil
+
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
 		invoiceService := NewInvoiceService(s.ServiceParams)
 
 		// Create invoice for the subscription (in case it has advance charges)
@@ -331,9 +339,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		if err != nil {
 			return err
 		}
-
 		return nil
-
 	})
 	if err != nil {
 		return nil, err
@@ -386,12 +392,7 @@ func (s *subscriptionService) handleTaxRateLinking(ctx context.Context, sub *sub
 	// link tax rates to subscription
 	_, err := taxAssociationService.LinkTaxRatesToEntity(ctx, types.TaxrateEntityTypeSubscription, sub.ID, taxLinkingRequests)
 	if err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to link tax rates to subscription").
-			WithReportableDetails(map[string]interface{}{
-				"subscription_id": sub.ID,
-			}).
-			Mark(ierr.ErrDatabase)
+		return err
 	}
 
 	return nil

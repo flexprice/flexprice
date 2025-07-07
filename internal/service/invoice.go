@@ -179,6 +179,13 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 		}
 
 		// Apply taxes if this is a subscription invoice
+		s.Logger.Infow("applying taxes to invoice",
+			"invoice_id", inv.ID,
+			"subscription_id", inv.SubscriptionID,
+			"customer_id", inv.CustomerID,
+			"period_start", inv.PeriodStart,
+			"period_end", inv.PeriodEnd,
+		)
 		if err := s.handleTaxRateOverrides(ctx, inv, req); err != nil {
 			return err
 		}
