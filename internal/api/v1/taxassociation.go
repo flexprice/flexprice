@@ -12,13 +12,13 @@ import (
 	"github.com/samber/lo"
 )
 
-type TaxConfigHandler struct {
-	s      service.TaxConfigService
+type TaxAssociationHandler struct {
+	s      service.TaxAssociationService
 	logger *logger.Logger
 }
 
-func NewTaxConfigHandler(s service.TaxConfigService, logger *logger.Logger) *TaxConfigHandler {
-	return &TaxConfigHandler{
+func NewTaxAssociationHandler(s service.TaxAssociationService, logger *logger.Logger) *TaxAssociationHandler {
+	return &TaxAssociationHandler{
 		s:      s,
 		logger: logger,
 	}
@@ -35,7 +35,7 @@ func NewTaxConfigHandler(s service.TaxConfigService, logger *logger.Logger) *Tax
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
 // @Router /taxassociations [post]
-func (h *TaxConfigHandler) CreateTaxAssociation(c *gin.Context) {
+func (h *TaxAssociationHandler) CreateTaxAssociation(c *gin.Context) {
 	var req dto.CreateTaxAssociationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.Error(ierr.WithError(err).
@@ -64,7 +64,7 @@ func (h *TaxConfigHandler) CreateTaxAssociation(c *gin.Context) {
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
 // @Router /taxassociations/{id} [get]
-func (h *TaxConfigHandler) GetTaxAssociation(c *gin.Context) {
+func (h *TaxAssociationHandler) GetTaxAssociation(c *gin.Context) {
 	id := c.Param("id")
 
 	taxConfig, err := h.s.Get(c.Request.Context(), id)
@@ -88,7 +88,7 @@ func (h *TaxConfigHandler) GetTaxAssociation(c *gin.Context) {
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
 // @Router /taxassociations/{id} [put]
-func (h *TaxConfigHandler) UpdateTaxAssociation(c *gin.Context) {
+func (h *TaxAssociationHandler) UpdateTaxAssociation(c *gin.Context) {
 	id := c.Param("id")
 
 	var req dto.TaxAssociationUpdateRequest
@@ -119,7 +119,7 @@ func (h *TaxConfigHandler) UpdateTaxAssociation(c *gin.Context) {
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
 // @Router /taxassociations/{id} [delete]
-func (h *TaxConfigHandler) DeleteTaxAssociation(c *gin.Context) {
+func (h *TaxAssociationHandler) DeleteTaxAssociation(c *gin.Context) {
 	id := c.Param("id")
 
 	err := h.s.Delete(c.Request.Context(), id)
@@ -140,7 +140,7 @@ func (h *TaxConfigHandler) DeleteTaxAssociation(c *gin.Context) {
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
 // @Router /taxassociations [get]
-func (h *TaxConfigHandler) ListTaxAssociations(c *gin.Context) {
+func (h *TaxAssociationHandler) ListTaxAssociations(c *gin.Context) {
 	var filter types.TaxAssociationFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
 		c.Error(ierr.WithError(err).

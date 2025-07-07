@@ -187,7 +187,7 @@ func main() {
 			service.NewCostSheetService,
 			service.NewCreditNoteService,
 			service.NewTaxService,
-			service.NewTaxConfigService,
+			service.NewTaxAssociationService,
 		),
 	)
 
@@ -237,7 +237,7 @@ func provideHandlers(
 	costSheetService service.CostSheetService,
 	creditNoteService service.CreditNoteService,
 	svixClient *svix.Client,
-	taxConfigService service.TaxConfigService,
+	taxAssociationService service.TaxAssociationService,
 	taxRateService service.TaxService,
 ) api.Handlers {
 	return api.Handlers{
@@ -269,7 +269,7 @@ func provideHandlers(
 		CronCreditGrant:   cron.NewCreditGrantCronHandler(creditGrantService, logger),
 		CreditNote:        v1.NewCreditNoteHandler(creditNoteService, logger),
 		Webhook:           v1.NewWebhookHandler(cfg, svixClient, logger),
-		TaxConfig:         v1.NewTaxConfigHandler(taxConfigService, logger),
+		TaxAssociation:    v1.NewTaxAssociationHandler(taxAssociationService, logger),
 	}
 }
 
