@@ -33,7 +33,7 @@ func NewTaxRateHandler(service service.TaxService, logger *logger.Logger) *TaxRa
 // @Success 201 {object} dto.TaxRateResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
-// @Router /taxrate [post]
+// @Router /taxrates [post]
 func (h *TaxRateHandler) CreateTaxRate(c *gin.Context) {
 	var req dto.CreateTaxRateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -62,7 +62,7 @@ func (h *TaxRateHandler) CreateTaxRate(c *gin.Context) {
 // @Success 200 {object} dto.TaxRateResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
-// @Router /taxrate/{id} [get]
+// @Router /taxrates/{id} [get]
 func (h *TaxRateHandler) GetTaxRate(c *gin.Context) {
 	taxRates, err := h.service.GetTaxRate(c.Request.Context(), c.Param("id"))
 	if err != nil {
@@ -82,7 +82,7 @@ func (h *TaxRateHandler) GetTaxRate(c *gin.Context) {
 // @Success 200 {object} []dto.TaxRateResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
-// @Router /taxrate [get]
+// @Router /taxrates [get]
 func (h *TaxRateHandler) GetTaxRates(c *gin.Context) {
 	var filter types.TaxRateFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
@@ -111,7 +111,7 @@ func (h *TaxRateHandler) GetTaxRates(c *gin.Context) {
 // @Success 200 {object} dto.TaxRateResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
-// @Router /taxrate/{id} [put]
+// @Router /taxrates/{id} [put]
 func (h *TaxRateHandler) UpdateTaxRate(c *gin.Context) {
 	var req dto.UpdateTaxRateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -142,7 +142,7 @@ func (h *TaxRateHandler) UpdateTaxRate(c *gin.Context) {
 // @Success 204 {object} nil
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
-// @Router /taxrate/{id} [delete]
+// @Router /taxrates/{id} [delete]
 func (h *TaxRateHandler) DeleteTaxRate(c *gin.Context) {
 	id := c.Param("id")
 

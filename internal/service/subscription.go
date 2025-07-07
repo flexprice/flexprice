@@ -61,7 +61,6 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
-	invoiceService := NewInvoiceService(s.ServiceParams)
 
 	// Get customer based on the provided IDs
 	var customer *customer.Customer
@@ -314,6 +313,14 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			}
 		}
 
+		// handle tax rate linking
+		err = s.handleTaxRateLinking(ctx, sub, req)
+		if err != nil {
+			return err
+		}
+
+		invoiceService := NewInvoiceService(s.ServiceParams)
+
 		// Create invoice for the subscription (in case it has advance charges)
 		_, err = invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
 			SubscriptionID: sub.ID,
@@ -321,9 +328,6 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			PeriodEnd:      sub.CurrentPeriodEnd,
 			ReferencePoint: types.ReferencePointPeriodStart,
 		})
-
-		// handle tax rate linking
-		err = s.handleTaxRateLinking(ctx, sub, req)
 		if err != nil {
 			return err
 		}
@@ -369,7 +373,7 @@ func (s *subscriptionService) handleTaxRateLinking(ctx context.Context, sub *sub
 		for _, taxConfig := range customerTaxes.Items {
 			// simply just link the tax rate to the subscription
 			taxRateLink := &dto.CreateEntityTaxAssociation{
-				TaxRateID:  lo.ToPtr(taxConfig.TaxRateID),	
+				TaxRateID:  lo.ToPtr(taxConfig.TaxRateID),
 				EntityType: types.TaxrateEntityTypeSubscription,
 				EntityID:   sub.ID,
 				Priority:   taxConfig.Priority,
