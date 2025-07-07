@@ -29,7 +29,7 @@ func copyTaxAssociation(ta *taxassociation.TaxAssociation) *taxassociation.TaxAs
 	}
 
 	// Deep copy of tax association
-	copy := &taxassociation.TaxAssociation{
+	copied := &taxassociation.TaxAssociation{
 		ID:            ta.ID,
 		TaxRateID:     ta.TaxRateID,
 		EntityType:    ta.EntityType,
@@ -43,10 +43,10 @@ func copyTaxAssociation(ta *taxassociation.TaxAssociation) *taxassociation.TaxAs
 
 	// Deep copy metadata
 	if ta.Metadata != nil {
-		copy.Metadata = lo.Assign(map[string]string{}, ta.Metadata)
+		copied.Metadata = lo.Assign(map[string]string{}, ta.Metadata)
 	}
 
-	return copy
+	return copied
 }
 
 // taxAssociationFilterFn implements filtering logic for tax associations
@@ -55,16 +55,7 @@ func taxAssociationFilterFn(ctx context.Context, ta *taxassociation.TaxAssociati
 		return false
 	}
 
-	// Always filter out deleted items unless specifically requested
-	if ta.Status == types.StatusDeleted {
-		// Only show deleted items if specifically requested via status filter
-		filter_, ok := filter.(*types.TaxAssociationFilter)
-		if !ok || filter_.GetStatus() != string(types.StatusDeleted) {
-			return false
-		}
-	}
-
-	filter_, ok := filter.(*types.TaxAssociationFilter)
+	f, ok := filter.(*types.TaxAssociationFilter)
 	if !ok {
 		return true // No filter applied
 	}
@@ -82,50 +73,46 @@ func taxAssociationFilterFn(ctx context.Context, ta *taxassociation.TaxAssociati
 	}
 
 	// Filter by status
-	if filter_.GetStatus() != "" && string(ta.Status) != filter_.GetStatus() {
+	if f.GetStatus() != "" && string(ta.Status) != f.GetStatus() {
 		return false
 	}
 
 	// Filter by tax association IDs
-	if len(filter_.TaxAssociationIDs) > 0 {
-		if !lo.Contains(filter_.TaxAssociationIDs, ta.ID) {
-			return false
-		}
+	if len(f.TaxAssociationIDs) > 0 && !lo.Contains(f.TaxAssociationIDs, ta.ID) {
+		return false
 	}
 
 	// Filter by tax rate IDs
-	if len(filter_.TaxRateIDs) > 0 {
-		if !lo.Contains(filter_.TaxRateIDs, ta.TaxRateID) {
-			return false
-		}
+	if len(f.TaxRateIDs) > 0 && !lo.Contains(f.TaxRateIDs, ta.TaxRateID) {
+		return false
 	}
 
 	// Filter by entity type
-	if filter_.EntityType != "" && ta.EntityType != filter_.EntityType {
+	if f.EntityType != "" && ta.EntityType != f.EntityType {
 		return false
 	}
 
 	// Filter by entity ID
-	if filter_.EntityID != "" && ta.EntityID != filter_.EntityID {
+	if f.EntityID != "" && ta.EntityID != f.EntityID {
 		return false
 	}
 
 	// Filter by currency
-	if filter_.Currency != "" && ta.Currency != filter_.Currency {
+	if f.Currency != "" && ta.Currency != f.Currency {
 		return false
 	}
 
 	// Filter by auto apply
-	if filter_.AutoApply != nil && ta.AutoApply != *filter_.AutoApply {
+	if f.AutoApply != nil && ta.AutoApply != *f.AutoApply {
 		return false
 	}
 
 	// Filter by time range
-	if filter_.TimeRangeFilter != nil {
-		if filter_.StartTime != nil && ta.CreatedAt.Before(*filter_.StartTime) {
+	if f.TimeRangeFilter != nil {
+		if f.TimeRangeFilter.StartTime != nil && ta.CreatedAt.Before(*f.TimeRangeFilter.StartTime) {
 			return false
 		}
-		if filter_.EndTime != nil && ta.CreatedAt.After(*filter_.EndTime) {
+		if f.TimeRangeFilter.EndTime != nil && ta.CreatedAt.After(*f.TimeRangeFilter.EndTime) {
 			return false
 		}
 	}
@@ -138,10 +125,6 @@ func taxAssociationSortFn(i, j *taxassociation.TaxAssociation) bool {
 	if i == nil || j == nil {
 		return false
 	}
-	// Sort by priority first (lower number = higher priority), then by created date
-	if i.Priority != j.Priority {
-		return i.Priority < j.Priority
-	}
 	return i.CreatedAt.After(j.CreatedAt)
 }
 
@@ -149,7 +132,7 @@ func taxAssociationSortFn(i, j *taxassociation.TaxAssociation) bool {
 func (s *InMemoryTaxAssociationStore) Create(ctx context.Context, ta *taxassociation.TaxAssociation) error {
 	if ta == nil {
 		return ierr.NewError("tax association cannot be nil").
-			WithHint("Tax association data is required").
+			WithHint("Tax association cannot be nil").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -175,30 +158,12 @@ func (s *InMemoryTaxAssociationStore) Get(ctx context.Context, id string) (*taxa
 	if err != nil {
 		return nil, err
 	}
-
-	// Check if the item is soft deleted
-	if ta.Status == types.StatusDeleted {
-		return nil, ierr.NewError("tax association not found").
-			WithHintf("Tax association with ID %s was not found", id).
-			WithReportableDetails(map[string]any{
-				"tax_association_id": id,
-			}).
-			Mark(ierr.ErrNotFound)
-	}
-
 	return copyTaxAssociation(ta), nil
 }
 
 // List retrieves tax associations based on filter
 func (s *InMemoryTaxAssociationStore) List(ctx context.Context, filter *types.TaxAssociationFilter) ([]*taxassociation.TaxAssociation, error) {
-	items, err := s.InMemoryStore.List(ctx, filter, taxAssociationFilterFn, taxAssociationSortFn)
-	if err != nil {
-		return nil, err
-	}
-
-	return lo.Map(items, func(ta *taxassociation.TaxAssociation, _ int) *taxassociation.TaxAssociation {
-		return copyTaxAssociation(ta)
-	}), nil
+	return s.InMemoryStore.List(ctx, filter, taxAssociationFilterFn, taxAssociationSortFn)
 }
 
 // Count returns the number of tax associations matching the filter
@@ -210,7 +175,7 @@ func (s *InMemoryTaxAssociationStore) Count(ctx context.Context, filter *types.T
 func (s *InMemoryTaxAssociationStore) Update(ctx context.Context, ta *taxassociation.TaxAssociation) error {
 	if ta == nil {
 		return ierr.NewError("tax association cannot be nil").
-			WithHint("Tax association data is required").
+			WithHint("Tax association cannot be nil").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -220,22 +185,21 @@ func (s *InMemoryTaxAssociationStore) Update(ctx context.Context, ta *taxassocia
 	return s.InMemoryStore.Update(ctx, ta.ID, copyTaxAssociation(ta))
 }
 
-// Delete deletes a tax association (soft delete by setting status to deleted)
+// Delete deletes a tax association (soft delete by setting status to archived)
 func (s *InMemoryTaxAssociationStore) Delete(ctx context.Context, ta *taxassociation.TaxAssociation) error {
 	if ta == nil {
 		return ierr.NewError("tax association cannot be nil").
-			WithHint("Tax association data is required").
+			WithHint("Tax association cannot be nil").
 			Mark(ierr.ErrValidation)
 	}
 
-	// Get the existing tax association
-	existing, err := s.Get(ctx, ta.ID)
+	// Soft delete by setting status to archived
+	existing, err := s.InMemoryStore.Get(ctx, ta.ID)
 	if err != nil {
 		return err
 	}
 
-	// Mark as deleted
-	existing.Status = types.StatusDeleted
+	existing.Status = types.StatusArchived
 	existing.UpdatedAt = time.Now()
 
 	return s.InMemoryStore.Update(ctx, existing.ID, existing)
