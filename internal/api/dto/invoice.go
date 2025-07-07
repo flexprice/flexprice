@@ -552,6 +552,9 @@ type InvoiceResponse struct {
 	// customer contains the customer information associated with this invoice
 	Customer *CustomerResponse `json:"customer,omitempty"`
 
+	// total_tax is the total tax amount for this invoice
+	TotalTax decimal.Decimal `json:"total_tax"`
+
 	// tax_applied_records contains the tax applied records associated with this invoice
 	TaxAppliedRecords []*TaxAppliedResponse `json:"tax_applied_records,omitempty"`
 }
@@ -572,6 +575,7 @@ func NewInvoiceResponse(inv *invoice.Invoice) *InvoiceResponse {
 		Currency:        inv.Currency,
 		AmountDue:       inv.AmountDue,
 		Total:           inv.Total,
+		TotalTax:        inv.TotalTax,
 		Subtotal:        inv.Subtotal,
 		AmountPaid:      inv.AmountPaid,
 		AmountRemaining: inv.AmountRemaining,

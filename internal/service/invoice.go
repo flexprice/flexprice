@@ -179,10 +179,7 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 		}
 
 		// Apply taxes if this is a subscription invoice
-		s.applyTaxesToInvoice(ctx, inv)
-
-		// Recalculate the invoice amounts
-		if err := s.RecalculateInvoiceAmounts(ctx, inv.ID); err != nil {
+		if err := s.applyTaxesToInvoice(ctx, inv); err != nil {
 			return err
 		}
 
