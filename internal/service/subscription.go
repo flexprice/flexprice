@@ -347,7 +347,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 func (s *subscriptionService) handleTaxRateLinking(ctx context.Context, sub *subscription.Subscription, req dto.CreateSubscriptionRequest) error {
 
 	// handle tax rate linking
-	taxAssociationService := NewTaxAssociationService(s.ServiceParams)
+	taxService := NewTaxService(s.ServiceParams)
 	taxLinkingRequests := make([]*dto.CreateEntityTaxAssociation, 0)
 
 	// if subscription has tax rate overrides, link them to the subscription
@@ -366,7 +366,7 @@ func (s *subscriptionService) handleTaxRateLinking(ctx context.Context, sub *sub
 		filter.Currency = sub.Currency
 		filter.AutoApply = lo.ToPtr(true)
 
-		customerTaxes, err := taxAssociationService.List(ctx, filter)
+		customerTaxes, err := taxService.ListTaxAssociations(ctx, filter)
 		if err != nil {
 			return err
 		}
@@ -385,7 +385,7 @@ func (s *subscriptionService) handleTaxRateLinking(ctx context.Context, sub *sub
 	}
 
 	// link tax rates to subscription
-	_, err := taxAssociationService.LinkTaxRatesToEntity(ctx, types.TaxrateEntityTypeSubscription, sub.ID, taxLinkingRequests)
+	_, err := taxService.LinkTaxRatesToEntity(ctx, types.TaxrateEntityTypeSubscription, sub.ID, taxLinkingRequests)
 	if err != nil {
 		return err
 	}

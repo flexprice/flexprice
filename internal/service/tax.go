@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -24,6 +25,20 @@ type TaxService interface {
 
 	// Tax Applied operations
 	ApplyTaxOnInvoice(ctx context.Context, invoiceId string) error
+
+	// tax association operations
+	CreateTaxAssociation(ctx context.Context, ta *dto.CreateTaxAssociationRequest) (*dto.TaxAssociationResponse, error)
+	GetTaxAssociation(ctx context.Context, id string) (*dto.TaxAssociationResponse, error)
+	UpdateTaxAssociation(ctx context.Context, id string, ta *dto.TaxAssociationUpdateRequest) (*dto.TaxAssociationResponse, error)
+	DeleteTaxAssociation(ctx context.Context, id string) error
+	ListTaxAssociations(ctx context.Context, filter *types.TaxAssociationFilter) (*dto.ListTaxConfigsResponse, error)
+
+	// LinkTaxRatesToEntity links tax rates to any entity type
+	LinkTaxRatesToEntity(ctx context.Context, entityType types.TaxrateEntityType, entityID string, taxRateLinks []*dto.CreateEntityTaxAssociation) (*dto.EntityTaxAssociationResponse, error)
+
+	// New methods for handling tax rate creation and association separately
+	ResolveOrCreateTaxRates(ctx context.Context, taxRateLinks []*dto.CreateEntityTaxAssociation) ([]*dto.ResolvedTaxRateInfo, error)
+	CreateTaxAssociations(ctx context.Context, entityType types.TaxrateEntityType, entityID string, resolvedTaxRates []*dto.ResolvedTaxRateInfo) (*dto.EntityTaxAssociationResponse, error)
 
 	// tax application operations
 	CreateTaxApplied(ctx context.Context, req dto.CreateTaxAppliedRequest) (*dto.TaxAppliedResponse, error)
@@ -618,4 +633,380 @@ func (s *taxService) DeleteTaxApplied(ctx context.Context, id string) error {
 	)
 
 	return nil
+}
+
+// CreateTaxAssociation creates a new tax association
+func (s *taxService) CreateTaxAssociation(ctx context.Context, req *dto.CreateTaxAssociationRequest) (*dto.TaxAssociationResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	taxRate, err := s.TaxRateRepo.Get(ctx, req.TaxRateID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert request to domain model
+	tc := req.ToTaxAssociation(ctx, lo.FromPtr(taxRate))
+
+	s.Logger.Infow("creating tax config",
+		"tax_rate_id", tc.TaxRateID,
+		"entity_type", tc.EntityType,
+		"entity_id", tc.EntityID,
+		"priority", tc.Priority,
+		"auto_apply", tc.AutoApply)
+
+	// Create tax config
+	err = s.TaxAssociationRepo.Create(ctx, tc)
+	if err != nil {
+		s.Logger.Errorw("failed to create tax config",
+			"error", err,
+			"tax_rate_id", tc.TaxRateID,
+			"entity_type", tc.EntityType,
+			"entity_id", tc.EntityID)
+		return nil, err
+	}
+
+	s.Logger.Infow("tax config created successfully",
+		"tax_config_id", tc.ID,
+		"tax_rate_id", tc.TaxRateID,
+		"entity_type", tc.EntityType,
+		"entity_id", tc.EntityID)
+
+	return dto.ToTaxAssociationResponse(tc), nil
+}
+
+// GetTaxAssociation retrieves a tax association by ID
+func (s *taxService) GetTaxAssociation(ctx context.Context, id string) (*dto.TaxAssociationResponse, error) {
+	if id == "" {
+		return nil, ierr.NewError("tax config ID is required").
+			WithHint("Tax config ID cannot be empty").
+			Mark(ierr.ErrValidation)
+	}
+
+	s.Logger.Debugw("getting tax config", "tax_config_id", id)
+
+	tc, err := s.TaxAssociationRepo.Get(ctx, id)
+	if err != nil {
+		s.Logger.Errorw("failed to get tax config",
+			"error", err,
+			"tax_config_id", id)
+		return nil, err
+	}
+
+	if tc == nil {
+		return nil, ierr.NewError("tax config not found").
+			WithHint(fmt.Sprintf("Tax config with ID %s does not exist", id)).
+			WithReportableDetails(map[string]interface{}{
+				"tax_config_id": id,
+			}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	return dto.ToTaxAssociationResponse(tc), nil
+}
+
+// UpdateTaxAssociation updates a tax association
+func (s *taxService) UpdateTaxAssociation(ctx context.Context, id string, req *dto.TaxAssociationUpdateRequest) (*dto.TaxAssociationResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	if id == "" {
+		return nil, ierr.NewError("tax config ID is required").
+			WithHint("Tax config ID cannot be empty").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Get existing tax config to ensure it exists
+	existing, err := s.TaxAssociationRepo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if existing == nil {
+		return nil, ierr.NewError("tax config not found").
+			WithHint(fmt.Sprintf("Tax config with ID %s does not exist", id)).
+			WithReportableDetails(map[string]interface{}{
+				"tax_config_id": id,
+			}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	// Update fields if provided
+	if req.Priority >= 0 {
+		existing.Priority = req.Priority
+	}
+	existing.AutoApply = req.AutoApply
+
+	if req.Metadata != nil {
+		existing.Metadata = req.Metadata
+	}
+
+	s.Logger.Infow("updating tax config",
+		"tax_config_id", id,
+		"tax_rate_id", existing.TaxRateID,
+		"entity_type", existing.EntityType,
+		"entity_id", existing.EntityID)
+
+	// Update tax config
+	err = s.TaxAssociationRepo.Update(ctx, existing)
+	if err != nil {
+		s.Logger.Errorw("failed to update tax config",
+			"error", err,
+			"tax_config_id", id)
+		return nil, err
+	}
+
+	s.Logger.Infow("tax config updated successfully",
+		"tax_config_id", id,
+		"tax_rate_id", existing.TaxRateID,
+		"entity_type", existing.EntityType,
+		"entity_id", existing.EntityID)
+
+	return dto.ToTaxAssociationResponse(existing), nil
+}
+
+// DeleteTaxAssociation deletes a tax association
+func (s *taxService) DeleteTaxAssociation(ctx context.Context, id string) error {
+	if id == "" {
+		return ierr.NewError("tax config ID is required").
+			WithHint("Tax config ID cannot be empty").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Get existing tax config to ensure it exists
+	existing, err := s.TaxAssociationRepo.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	// Delete tax config
+	err = s.TaxAssociationRepo.Delete(ctx, existing)
+	if err != nil {
+		s.Logger.Errorw("failed to delete tax config",
+			"error", err,
+			"tax_config_id", id)
+		return err
+	}
+
+	return nil
+}
+
+// ListTaxAssociations lists tax associations
+func (s *taxService) ListTaxAssociations(ctx context.Context, filter *types.TaxAssociationFilter) (*dto.ListTaxConfigsResponse, error) {
+	if filter == nil {
+		filter = types.NewTaxAssociationFilter()
+	}
+
+	// Validate filter
+	if err := filter.Validate(); err != nil {
+		return nil, err
+	}
+
+	s.Logger.Debugw("listing tax configs",
+		"limit", filter.GetLimit(),
+		"offset", filter.GetOffset(),
+		"entity_type", filter.EntityType,
+		"entity_id", filter.EntityID,
+		"tax_rate_ids_count", len(filter.TaxRateIDs))
+
+	// List tax configs
+	taxConfigs, err := s.TaxAssociationRepo.List(ctx, filter)
+	if err != nil {
+		s.Logger.Errorw("failed to list tax configs",
+			"error", err,
+			"limit", filter.GetLimit(),
+			"offset", filter.GetOffset())
+		return nil, err
+	}
+
+	// Get total count for pagination
+	total, err := s.TaxAssociationRepo.Count(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	response := &dto.ListTaxConfigsResponse{
+		Items: make([]*dto.TaxAssociationResponse, len(taxConfigs)),
+	}
+
+	for i, tc := range taxConfigs {
+		response.Items[i] = dto.ToTaxAssociationResponse(tc)
+	}
+
+	response.Pagination = types.NewPaginationResponse(total, filter.GetLimit(), filter.GetOffset())
+
+	s.Logger.Debugw("successfully listed tax configs",
+		"count", len(taxConfigs),
+		"total", total,
+		"limit", filter.GetLimit(),
+		"offset", filter.GetOffset())
+
+	return response, nil
+}
+
+// LinkTaxRatesToEntity links tax rates to any entity in a single transaction
+func (s *taxService) LinkTaxRatesToEntity(ctx context.Context, entityType types.TaxrateEntityType, entityID string, taxRateLinks []*dto.CreateEntityTaxAssociation) (*dto.EntityTaxAssociationResponse, error) {
+	// Early return for empty input
+	if len(taxRateLinks) == 0 {
+		return &dto.EntityTaxAssociationResponse{
+			EntityID:       entityID,
+			EntityType:     entityType,
+			LinkedTaxRates: []*dto.LinkedTaxRateInfo{},
+		}, nil
+	}
+
+	// Pre-validate all tax rate links before starting transaction
+	for _, taxRateLink := range taxRateLinks {
+		if err := taxRateLink.Validate(); err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Invalid tax rate configuration").
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	// Execute all operations within a single transaction
+	var response *dto.EntityTaxAssociationResponse
+	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		// Step 1: Resolve or create tax rates
+		resolvedTaxRates, err := s.ResolveOrCreateTaxRates(txCtx, taxRateLinks)
+		if err != nil {
+			return err
+		}
+
+		// Step 2: Create tax associations
+		response, err = s.CreateTaxAssociations(txCtx, entityType, entityID, resolvedTaxRates)
+		return err
+	})
+
+	if err != nil {
+		s.Logger.Errorw("failed to link tax rates to entity",
+			"error", err,
+			"entity_type", entityType,
+			"entity_id", entityID,
+			"links_count", len(taxRateLinks))
+		return nil, err
+	}
+
+	s.Logger.Infow("successfully linked tax rates to entity",
+		"entity_type", entityType,
+		"entity_id", entityID,
+		"links_count", len(response.LinkedTaxRates))
+
+	return response, nil
+}
+
+// ResolveOrCreateTaxRates handles the creation or resolution of tax rates
+// This method can be used independently when you only need to ensure tax rates exist
+// without creating associations immediately
+func (s *taxService) ResolveOrCreateTaxRates(ctx context.Context, taxRateLinks []*dto.CreateEntityTaxAssociation) ([]*dto.ResolvedTaxRateInfo, error) {
+	if len(taxRateLinks) == 0 {
+		return []*dto.ResolvedTaxRateInfo{}, nil
+	}
+
+	resolvedTaxRates := make([]*dto.ResolvedTaxRateInfo, 0, len(taxRateLinks))
+	taxService := NewTaxService(s.ServiceParams)
+
+	for _, taxRateLink := range taxRateLinks {
+		var taxRateToUse *taxrate.TaxRate
+		var wasCreated bool
+
+		// Resolve or create tax rate
+		if taxRateLink.TaxRateID != nil {
+			// Use existing tax rate
+			taxRateID := *taxRateLink.TaxRateID
+			existingTaxRate, err := s.TaxRateRepo.Get(ctx, taxRateID)
+			if err != nil {
+				return nil, ierr.WithError(err).
+					WithHint("Tax rate not found").
+					WithReportableDetails(map[string]interface{}{
+						"tax_rate_id": taxRateID,
+					}).
+					Mark(ierr.ErrNotFound)
+			}
+			taxRateToUse = existingTaxRate
+			wasCreated = false
+		} else {
+			// Create new tax rate
+			taxRateResponse, err := taxService.CreateTaxRate(ctx, taxRateLink.CreateTaxRateRequest)
+			if err != nil {
+				return nil, ierr.WithError(err).
+					WithHint("Failed to create tax rate").
+					WithReportableDetails(map[string]interface{}{
+						"tax_rate_id": taxRateLink.CreateTaxRateRequest.Code,
+					}).
+					Mark(ierr.ErrDatabase)
+			}
+			taxRateToUse = taxRateResponse.TaxRate
+			wasCreated = true
+		}
+
+		// Add to results
+		resolvedTaxRates = append(resolvedTaxRates, &dto.ResolvedTaxRateInfo{
+			TaxRateID:  taxRateToUse.ID,
+			WasCreated: wasCreated,
+			Priority:   taxRateLink.Priority,
+			AutoApply:  taxRateLink.AutoApply,
+		})
+	}
+
+	s.Logger.Infow("successfully resolved or created tax rates",
+		"resolved_count", len(resolvedTaxRates),
+		"created_count", len(lo.Filter(resolvedTaxRates, func(r *dto.ResolvedTaxRateInfo, _ int) bool {
+			return r.WasCreated
+		})))
+
+	return resolvedTaxRates, nil
+}
+
+// CreateTaxAssociations creates tax associations for the given entity using resolved tax rates
+// This method can be used independently when you already have resolved tax rate IDs
+func (s *taxService) CreateTaxAssociations(ctx context.Context, entityType types.TaxrateEntityType, entityID string, resolvedTaxRates []*dto.ResolvedTaxRateInfo) (*dto.EntityTaxAssociationResponse, error) {
+	if len(resolvedTaxRates) == 0 {
+		return &dto.EntityTaxAssociationResponse{
+			EntityID:       entityID,
+			EntityType:     entityType,
+			LinkedTaxRates: []*dto.LinkedTaxRateInfo{},
+		}, nil
+	}
+
+	linkedTaxRates := make([]*dto.LinkedTaxRateInfo, 0, len(resolvedTaxRates))
+
+	for _, resolvedTaxRate := range resolvedTaxRates {
+		// Create tax association request
+		taxConfigReq := &dto.CreateTaxAssociationRequest{
+			TaxRateID:  resolvedTaxRate.TaxRateID,
+			EntityType: entityType,
+			EntityID:   entityID,
+			Priority:   resolvedTaxRate.Priority,
+			AutoApply:  resolvedTaxRate.AutoApply,
+		}
+
+		// Create tax association
+		taxConfig, err := s.CreateTaxAssociation(ctx, taxConfigReq)
+		if err != nil {
+			return nil, err
+		}
+
+		// Add to results
+		linkedTaxRates = append(linkedTaxRates, &dto.LinkedTaxRateInfo{
+			TaxRateID:        resolvedTaxRate.TaxRateID,
+			TaxAssociationID: taxConfig.ID,
+			WasCreated:       resolvedTaxRate.WasCreated,
+			Priority:         taxConfig.Priority,
+			AutoApply:        taxConfig.AutoApply,
+		})
+	}
+
+	s.Logger.Infow("successfully created tax associations",
+		"entity_type", entityType,
+		"entity_id", entityID,
+		"associations_count", len(linkedTaxRates))
+
+	return &dto.EntityTaxAssociationResponse{
+		EntityID:       entityID,
+		EntityType:     entityType,
+		LinkedTaxRates: linkedTaxRates,
+	}, nil
 }
