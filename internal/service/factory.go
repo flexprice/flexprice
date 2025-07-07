@@ -21,6 +21,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/task"
 	taxrate "github.com/flexprice/flexprice/internal/domain/tax"
+	taxapplied "github.com/flexprice/flexprice/internal/domain/taxapplied"
 	taxassociation "github.com/flexprice/flexprice/internal/domain/taxassociation"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
@@ -70,6 +71,7 @@ type ServiceParams struct {
 	CreditGrantApplicationRepo creditgrantapplication.Repository
 	TaxRateRepo                taxrate.Repository
 	TaxAssociationRepo         taxassociation.Repository
+	TaxAppliedRepo             taxapplied.Repository
 	// Publishers
 	EventPublisher   publisher.EventPublisher
 	WebhookPublisher webhookPublisher.WebhookPublisher
@@ -109,6 +111,7 @@ func NewServiceParams(
 	taxConfigRepo taxassociation.Repository,
 	taskRepo task.Repository,
 	costSheetRepo costsheet.Repository,
+	taxAppliedRepo taxapplied.Repository,
 	taxRateRepo taxrate.Repository,
 	eventPublisher publisher.EventPublisher,
 	webhookPublisher webhookPublisher.WebhookPublisher,
@@ -147,6 +150,7 @@ func NewServiceParams(
 		CreditNoteLineItemRepo:     creditNoteLineItemRepo,
 		TaxRateRepo:                taxRateRepo,
 		TaxAssociationRepo:         taxConfigRepo,
+		TaxAppliedRepo:             taxAppliedRepo,
 		EventPublisher:             eventPublisher,
 		WebhookPublisher:           webhookPublisher,
 		S3:                         s3Service,

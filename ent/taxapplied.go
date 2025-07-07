@@ -40,7 +40,7 @@ type TaxApplied struct {
 	// ID of the entity this tax was applied to
 	EntityID string `json:"entity_id,omitempty"`
 	// Reference to the TaxAssociation that triggered this application
-	TaxAssociationID string `json:"tax_association_id,omitempty"`
+	TaxAssociationID *string `json:"tax_association_id,omitempty"`
 	// Base amount on which tax was calculated
 	TaxableAmount decimal.Decimal `json:"taxable_amount,omitempty"`
 	// Calculated tax amount
@@ -154,7 +154,8 @@ func (ta *TaxApplied) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tax_association_id", values[i])
 			} else if value.Valid {
-				ta.TaxAssociationID = value.String
+				ta.TaxAssociationID = new(string)
+				*ta.TaxAssociationID = value.String
 			}
 		case taxapplied.FieldTaxableAmount:
 			if value, ok := values[i].(*decimal.Decimal); !ok {
@@ -260,8 +261,10 @@ func (ta *TaxApplied) String() string {
 	builder.WriteString("entity_id=")
 	builder.WriteString(ta.EntityID)
 	builder.WriteString(", ")
-	builder.WriteString("tax_association_id=")
-	builder.WriteString(ta.TaxAssociationID)
+	if v := ta.TaxAssociationID; v != nil {
+		builder.WriteString("tax_association_id=")
+		builder.WriteString(*v)
+	}
 	builder.WriteString(", ")
 	builder.WriteString("taxable_amount=")
 	builder.WriteString(fmt.Sprintf("%v", ta.TaxableAmount))

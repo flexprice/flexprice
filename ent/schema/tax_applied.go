@@ -66,8 +66,8 @@ func (TaxApplied) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
 			}).
-			NotEmpty().
-			Immutable().
+			Optional().
+			Nillable().
 			Comment("Reference to the TaxAssociation that triggered this application"),
 
 		// Enhanced tax calculation fields

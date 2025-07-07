@@ -131,6 +131,7 @@ func main() {
 			repository.NewEntitlementRepository,
 			repository.NewPaymentRepository,
 			repository.NewTaskRepository,
+			repository.NewTaxAppliedRepository,
 			repository.NewSecretRepository,
 			repository.NewCreditGrantRepository,
 			repository.NewCostSheetRepository,
@@ -322,7 +323,7 @@ func startServer(
 		startAPIServer(lc, r, cfg, log)
 		startMessageRouter(lc, router, webhookService, onboardingService, log)
 
-	case types.ModeTemporalWorker: 
+	case types.ModeTemporalWorker:
 		startTemporalWorker(lc, temporalClient, &cfg.Temporal, log)
 	case types.ModeConsumer:
 		if consumer == nil {

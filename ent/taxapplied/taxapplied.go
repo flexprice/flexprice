@@ -102,8 +102,6 @@ var (
 	EntityTypeValidator func(string) error
 	// EntityIDValidator is a validator for the "entity_id" field. It is called by the builders before save.
 	EntityIDValidator func(string) error
-	// TaxAssociationIDValidator is a validator for the "tax_association_id" field. It is called by the builders before save.
-	TaxAssociationIDValidator func(string) error
 	// CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
 	CurrencyValidator func(string) error
 	// DefaultAppliedAt holds the default value on creation for the "applied_at" field.

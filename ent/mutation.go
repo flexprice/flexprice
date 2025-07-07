@@ -13193,6 +13193,7 @@ type InvoiceMutation struct {
 	subtotal            *decimal.Decimal
 	adjustment_amount   *decimal.Decimal
 	refunded_amount     *decimal.Decimal
+	total_tax           *decimal.Decimal
 	total               *decimal.Decimal
 	description         *string
 	due_date            *time.Time
@@ -14099,6 +14100,55 @@ func (m *InvoiceMutation) ResetRefundedAmount() {
 	delete(m.clearedFields, invoice.FieldRefundedAmount)
 }
 
+// SetTotalTax sets the "total_tax" field.
+func (m *InvoiceMutation) SetTotalTax(d decimal.Decimal) {
+	m.total_tax = &d
+}
+
+// TotalTax returns the value of the "total_tax" field in the mutation.
+func (m *InvoiceMutation) TotalTax() (r decimal.Decimal, exists bool) {
+	v := m.total_tax
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTotalTax returns the old "total_tax" field's value of the Invoice entity.
+// If the Invoice object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceMutation) OldTotalTax(ctx context.Context) (v decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTotalTax is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTotalTax requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTotalTax: %w", err)
+	}
+	return oldValue.TotalTax, nil
+}
+
+// ClearTotalTax clears the value of the "total_tax" field.
+func (m *InvoiceMutation) ClearTotalTax() {
+	m.total_tax = nil
+	m.clearedFields[invoice.FieldTotalTax] = struct{}{}
+}
+
+// TotalTaxCleared returns if the "total_tax" field was cleared in this mutation.
+func (m *InvoiceMutation) TotalTaxCleared() bool {
+	_, ok := m.clearedFields[invoice.FieldTotalTax]
+	return ok
+}
+
+// ResetTotalTax resets all changes to the "total_tax" field.
+func (m *InvoiceMutation) ResetTotalTax() {
+	m.total_tax = nil
+	delete(m.clearedFields, invoice.FieldTotalTax)
+}
+
 // SetTotal sets the "total" field.
 func (m *InvoiceMutation) SetTotal(d decimal.Decimal) {
 	m.total = &d
@@ -14999,7 +15049,7 @@ func (m *InvoiceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *InvoiceMutation) Fields() []string {
-	fields := make([]string, 0, 35)
+	fields := make([]string, 0, 36)
 	if m.tenant_id != nil {
 		fields = append(fields, invoice.FieldTenantID)
 	}
@@ -15056,6 +15106,9 @@ func (m *InvoiceMutation) Fields() []string {
 	}
 	if m.refunded_amount != nil {
 		fields = append(fields, invoice.FieldRefundedAmount)
+	}
+	if m.total_tax != nil {
+		fields = append(fields, invoice.FieldTotalTax)
 	}
 	if m.total != nil {
 		fields = append(fields, invoice.FieldTotal)
@@ -15151,6 +15204,8 @@ func (m *InvoiceMutation) Field(name string) (ent.Value, bool) {
 		return m.AdjustmentAmount()
 	case invoice.FieldRefundedAmount:
 		return m.RefundedAmount()
+	case invoice.FieldTotalTax:
+		return m.TotalTax()
 	case invoice.FieldTotal:
 		return m.Total()
 	case invoice.FieldDescription:
@@ -15230,6 +15285,8 @@ func (m *InvoiceMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldAdjustmentAmount(ctx)
 	case invoice.FieldRefundedAmount:
 		return m.OldRefundedAmount(ctx)
+	case invoice.FieldTotalTax:
+		return m.OldTotalTax(ctx)
 	case invoice.FieldTotal:
 		return m.OldTotal(ctx)
 	case invoice.FieldDescription:
@@ -15403,6 +15460,13 @@ func (m *InvoiceMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetRefundedAmount(v)
+		return nil
+	case invoice.FieldTotalTax:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTotalTax(v)
 		return nil
 	case invoice.FieldTotal:
 		v, ok := value.(decimal.Decimal)
@@ -15594,6 +15658,9 @@ func (m *InvoiceMutation) ClearedFields() []string {
 	if m.FieldCleared(invoice.FieldRefundedAmount) {
 		fields = append(fields, invoice.FieldRefundedAmount)
 	}
+	if m.FieldCleared(invoice.FieldTotalTax) {
+		fields = append(fields, invoice.FieldTotalTax)
+	}
 	if m.FieldCleared(invoice.FieldTotal) {
 		fields = append(fields, invoice.FieldTotal)
 	}
@@ -15673,6 +15740,9 @@ func (m *InvoiceMutation) ClearField(name string) error {
 		return nil
 	case invoice.FieldRefundedAmount:
 		m.ClearRefundedAmount()
+		return nil
+	case invoice.FieldTotalTax:
+		m.ClearTotalTax()
 		return nil
 	case invoice.FieldTotal:
 		m.ClearTotal()
@@ -15783,6 +15853,9 @@ func (m *InvoiceMutation) ResetField(name string) error {
 		return nil
 	case invoice.FieldRefundedAmount:
 		m.ResetRefundedAmount()
+		return nil
+	case invoice.FieldTotalTax:
+		m.ResetTotalTax()
 		return nil
 	case invoice.FieldTotal:
 		m.ResetTotal()
@@ -38105,7 +38178,7 @@ func (m *TaxAppliedMutation) TaxAssociationID() (r string, exists bool) {
 // OldTaxAssociationID returns the old "tax_association_id" field's value of the TaxApplied entity.
 // If the TaxApplied object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *TaxAppliedMutation) OldTaxAssociationID(ctx context.Context) (v string, err error) {
+func (m *TaxAppliedMutation) OldTaxAssociationID(ctx context.Context) (v *string, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldTaxAssociationID is only allowed on UpdateOne operations")
 	}
@@ -38119,9 +38192,22 @@ func (m *TaxAppliedMutation) OldTaxAssociationID(ctx context.Context) (v string,
 	return oldValue.TaxAssociationID, nil
 }
 
+// ClearTaxAssociationID clears the value of the "tax_association_id" field.
+func (m *TaxAppliedMutation) ClearTaxAssociationID() {
+	m.tax_association_id = nil
+	m.clearedFields[taxapplied.FieldTaxAssociationID] = struct{}{}
+}
+
+// TaxAssociationIDCleared returns if the "tax_association_id" field was cleared in this mutation.
+func (m *TaxAppliedMutation) TaxAssociationIDCleared() bool {
+	_, ok := m.clearedFields[taxapplied.FieldTaxAssociationID]
+	return ok
+}
+
 // ResetTaxAssociationID resets all changes to the "tax_association_id" field.
 func (m *TaxAppliedMutation) ResetTaxAssociationID() {
 	m.tax_association_id = nil
+	delete(m.clearedFields, taxapplied.FieldTaxAssociationID)
 }
 
 // SetTaxableAmount sets the "taxable_amount" field.
@@ -38704,6 +38790,9 @@ func (m *TaxAppliedMutation) ClearedFields() []string {
 	if m.FieldCleared(taxapplied.FieldEnvironmentID) {
 		fields = append(fields, taxapplied.FieldEnvironmentID)
 	}
+	if m.FieldCleared(taxapplied.FieldTaxAssociationID) {
+		fields = append(fields, taxapplied.FieldTaxAssociationID)
+	}
 	if m.FieldCleared(taxapplied.FieldJurisdiction) {
 		fields = append(fields, taxapplied.FieldJurisdiction)
 	}
@@ -38732,6 +38821,9 @@ func (m *TaxAppliedMutation) ClearField(name string) error {
 		return nil
 	case taxapplied.FieldEnvironmentID:
 		m.ClearEnvironmentID()
+		return nil
+	case taxapplied.FieldTaxAssociationID:
+		m.ClearTaxAssociationID()
 		return nil
 	case taxapplied.FieldJurisdiction:
 		m.ClearJurisdiction()
