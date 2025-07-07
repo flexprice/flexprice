@@ -249,9 +249,9 @@ func (s *invoiceService) GetInvoice(ctx context.Context, id string) (*dto.Invoic
 		return nil, err
 	}
 	if len(appliedTaxes) > 0 {
-		response.TaxAppliedRecords = lo.Map(appliedTaxes, func(tax *taxapplied.TaxApplied, _ int) *dto.TaxAppliedResponse {
+		response.WithTaxAppliedRecords(lo.Map(appliedTaxes, func(tax *taxapplied.TaxApplied, _ int) *dto.TaxAppliedResponse {
 			return &dto.TaxAppliedResponse{TaxApplied: *tax}
-		})
+		}))
 	}
 
 	return response, nil

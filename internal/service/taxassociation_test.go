@@ -16,7 +16,7 @@ import (
 type TaxAssociationServiceSuite struct {
 	testutil.BaseServiceTestSuite
 	taxService    TaxService
-	configService TaxConfigService
+	configService TaxAssociationService
 }
 
 func TestTaxAssociationService(t *testing.T) {
@@ -34,7 +34,7 @@ func (s *TaxAssociationServiceSuite) SetupTest() {
 	}
 
 	s.taxService = NewTaxService(serviceParams)
-	s.configService = NewTaxConfigService(serviceParams)
+	s.configService = NewTaxAssociationService(serviceParams)
 }
 
 // Helper function to create a tax rate in the store

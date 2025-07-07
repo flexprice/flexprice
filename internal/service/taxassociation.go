@@ -11,7 +11,7 @@ import (
 	"github.com/samber/lo"
 )
 
-type TaxConfigService interface {
+type TaxAssociationService interface {
 	Create(ctx context.Context, taxconfig *dto.CreateTaxAssociationRequest) (*dto.TaxAssociationResponse, error)
 	Get(ctx context.Context, id string) (*dto.TaxAssociationResponse, error)
 	Update(ctx context.Context, id string, taxconfig *dto.TaxAssociationUpdateRequest) (*dto.TaxAssociationResponse, error)
@@ -22,17 +22,17 @@ type TaxConfigService interface {
 	LinkTaxRatesToEntity(ctx context.Context, entityType types.TaxrateEntityType, entityID string, taxRateLinks []*dto.CreateEntityTaxAssociation) (*dto.EntityTaxAssociationResponse, error)
 }
 
-type taxConfigService struct {
+type taxAssociationService struct {
 	ServiceParams
 }
 
-func NewTaxConfigService(p ServiceParams) TaxConfigService {
-	return &taxConfigService{
+func NewTaxAssociationService(p ServiceParams) TaxAssociationService {
+	return &taxAssociationService{
 		ServiceParams: p,
 	}
 }
 
-func (s *taxConfigService) Create(ctx context.Context, req *dto.CreateTaxAssociationRequest) (*dto.TaxAssociationResponse, error) {
+func (s *taxAssociationService) Create(ctx context.Context, req *dto.CreateTaxAssociationRequest) (*dto.TaxAssociationResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
@@ -72,7 +72,7 @@ func (s *taxConfigService) Create(ctx context.Context, req *dto.CreateTaxAssocia
 	return dto.ToTaxAssociationResponse(tc), nil
 }
 
-func (s *taxConfigService) Get(ctx context.Context, id string) (*dto.TaxAssociationResponse, error) {
+func (s *taxAssociationService) Get(ctx context.Context, id string) (*dto.TaxAssociationResponse, error) {
 	if id == "" {
 		return nil, ierr.NewError("tax config ID is required").
 			WithHint("Tax config ID cannot be empty").
@@ -101,7 +101,7 @@ func (s *taxConfigService) Get(ctx context.Context, id string) (*dto.TaxAssociat
 	return dto.ToTaxAssociationResponse(tc), nil
 }
 
-func (s *taxConfigService) Update(ctx context.Context, id string, req *dto.TaxAssociationUpdateRequest) (*dto.TaxAssociationResponse, error) {
+func (s *taxAssociationService) Update(ctx context.Context, id string, req *dto.TaxAssociationUpdateRequest) (*dto.TaxAssociationResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
@@ -161,7 +161,7 @@ func (s *taxConfigService) Update(ctx context.Context, id string, req *dto.TaxAs
 	return dto.ToTaxAssociationResponse(existing), nil
 }
 
-func (s *taxConfigService) Delete(ctx context.Context, id string) error {
+func (s *taxAssociationService) Delete(ctx context.Context, id string) error {
 	if id == "" {
 		return ierr.NewError("tax config ID is required").
 			WithHint("Tax config ID cannot be empty").
@@ -186,7 +186,7 @@ func (s *taxConfigService) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-func (s *taxConfigService) List(ctx context.Context, filter *types.TaxAssociationFilter) (*dto.ListTaxConfigsResponse, error) {
+func (s *taxAssociationService) List(ctx context.Context, filter *types.TaxAssociationFilter) (*dto.ListTaxConfigsResponse, error) {
 	if filter == nil {
 		filter = types.NewTaxAssociationFilter()
 	}
@@ -239,7 +239,7 @@ func (s *taxConfigService) List(ctx context.Context, filter *types.TaxAssociatio
 }
 
 // LinkTaxRatesToEntity links tax rates to any entity in a single transaction
-func (s *taxConfigService) LinkTaxRatesToEntity(ctx context.Context, entityType types.TaxrateEntityType, entityID string, taxRateLinks []*dto.CreateEntityTaxAssociation) (*dto.EntityTaxAssociationResponse, error) {
+func (s *taxAssociationService) LinkTaxRatesToEntity(ctx context.Context, entityType types.TaxrateEntityType, entityID string, taxRateLinks []*dto.CreateEntityTaxAssociation) (*dto.EntityTaxAssociationResponse, error) {
 	// Early return for empty input
 	if len(taxRateLinks) == 0 {
 		return &dto.EntityTaxAssociationResponse{

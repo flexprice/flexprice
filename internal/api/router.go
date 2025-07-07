@@ -36,7 +36,7 @@ type Handlers struct {
 	Secret            *v1.SecretHandler
 	CostSheet         *v1.CostSheetHandler
 	CreditNote        *v1.CreditNoteHandler
-	TaxConfig         *v1.TaxConfigHandler
+	TaxAssociation    *v1.TaxAssociationHandler
 
 	Webhook *v1.WebhookHandler
 	TaxRate *v1.TaxRateHandler
@@ -221,11 +221,11 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 
 		taxConfig := v1Private.Group("/taxassociations")
 		{
-			taxConfig.POST("", handlers.TaxConfig.CreateTaxAssociation)
-			taxConfig.GET("", handlers.TaxConfig.ListTaxAssociations)
-			taxConfig.GET("/:id", handlers.TaxConfig.GetTaxAssociation)
-			taxConfig.PUT("/:id", handlers.TaxConfig.UpdateTaxAssociation)
-			taxConfig.DELETE("/:id", handlers.TaxConfig.DeleteTaxAssociation)
+			taxConfig.POST("", handlers.TaxAssociation.CreateTaxAssociation)
+			taxConfig.GET("", handlers.TaxAssociation.ListTaxAssociations)
+			taxConfig.GET("/:id", handlers.TaxAssociation.GetTaxAssociation)
+			taxConfig.PUT("/:id", handlers.TaxAssociation.UpdateTaxAssociation)
+			taxConfig.DELETE("/:id", handlers.TaxAssociation.DeleteTaxAssociation)
 		}
 
 		feature := v1Private.Group("/features")
