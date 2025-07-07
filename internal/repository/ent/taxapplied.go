@@ -70,7 +70,6 @@ func (r *taxappliedRepository) Create(ctx context.Context, ta *domainTaxApplied.
 		SetTaxableAmount(ta.TaxableAmount).
 		SetTaxAmount(ta.TaxAmount).
 		SetCurrency(ta.Currency).
-		SetJurisdiction(ta.Jurisdiction).
 		SetAppliedAt(ta.AppliedAt).
 		SetEnvironmentID(ta.EnvironmentID).
 		SetMetadata(ta.Metadata).
@@ -190,7 +189,6 @@ func (r *taxappliedRepository) Update(ctx context.Context, ta *domainTaxApplied.
 		).
 		SetTaxableAmount(ta.TaxableAmount).
 		SetTaxAmount(ta.TaxAmount).
-		SetJurisdiction(ta.Jurisdiction).
 		SetMetadata(ta.Metadata).
 		SetStatus(string(ta.Status)).
 		SetUpdatedAt(time.Now().UTC()).
@@ -371,8 +369,6 @@ func (o TaxAppliedQueryOptions) GetFieldName(field string) string {
 		return taxapplied.FieldTaxAmount
 	case "currency":
 		return taxapplied.FieldCurrency
-	case "jurisdiction":
-		return taxapplied.FieldJurisdiction
 	case "applied_at":
 		return taxapplied.FieldAppliedAt
 	case "metadata":

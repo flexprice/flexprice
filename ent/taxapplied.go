@@ -47,8 +47,6 @@ type TaxApplied struct {
 	TaxAmount decimal.Decimal `json:"tax_amount,omitempty"`
 	// Currency code (ISO 4217)
 	Currency string `json:"currency,omitempty"`
-	// Tax jurisdiction (country, state, city, etc.)
-	Jurisdiction string `json:"jurisdiction,omitempty"`
 	// When the tax was applied
 	AppliedAt time.Time `json:"applied_at,omitempty"`
 	// Additional metadata for tax calculation details
@@ -65,7 +63,7 @@ func (*TaxApplied) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case taxapplied.FieldTaxableAmount, taxapplied.FieldTaxAmount:
 			values[i] = new(decimal.Decimal)
-		case taxapplied.FieldID, taxapplied.FieldTenantID, taxapplied.FieldStatus, taxapplied.FieldCreatedBy, taxapplied.FieldUpdatedBy, taxapplied.FieldEnvironmentID, taxapplied.FieldTaxRateID, taxapplied.FieldEntityType, taxapplied.FieldEntityID, taxapplied.FieldTaxAssociationID, taxapplied.FieldCurrency, taxapplied.FieldJurisdiction:
+		case taxapplied.FieldID, taxapplied.FieldTenantID, taxapplied.FieldStatus, taxapplied.FieldCreatedBy, taxapplied.FieldUpdatedBy, taxapplied.FieldEnvironmentID, taxapplied.FieldTaxRateID, taxapplied.FieldEntityType, taxapplied.FieldEntityID, taxapplied.FieldTaxAssociationID, taxapplied.FieldCurrency:
 			values[i] = new(sql.NullString)
 		case taxapplied.FieldCreatedAt, taxapplied.FieldUpdatedAt, taxapplied.FieldAppliedAt:
 			values[i] = new(sql.NullTime)
@@ -175,12 +173,6 @@ func (ta *TaxApplied) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				ta.Currency = value.String
 			}
-		case taxapplied.FieldJurisdiction:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field jurisdiction", values[i])
-			} else if value.Valid {
-				ta.Jurisdiction = value.String
-			}
 		case taxapplied.FieldAppliedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field applied_at", values[i])
@@ -274,9 +266,6 @@ func (ta *TaxApplied) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("currency=")
 	builder.WriteString(ta.Currency)
-	builder.WriteString(", ")
-	builder.WriteString("jurisdiction=")
-	builder.WriteString(ta.Jurisdiction)
 	builder.WriteString(", ")
 	builder.WriteString("applied_at=")
 	builder.WriteString(ta.AppliedAt.Format(time.ANSIC))

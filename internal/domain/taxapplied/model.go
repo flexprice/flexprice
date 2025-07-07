@@ -19,7 +19,6 @@ type TaxApplied struct {
 	TaxableAmount    decimal.Decimal         `json:"taxable_amount,omitempty"`
 	TaxAmount        decimal.Decimal         `json:"tax_amount,omitempty"`
 	Currency         string                  `json:"currency,omitempty"`
-	Jurisdiction     string                  `json:"jurisdiction,omitempty"`
 	AppliedAt        time.Time               `json:"applied_at,omitempty"`
 	EnvironmentID    string                  `json:"environment_id,omitempty"`
 	Metadata         map[string]string       `json:"metadata,omitempty"`
@@ -37,7 +36,6 @@ func FromEnt(ent *ent.TaxApplied) *TaxApplied {
 		TaxableAmount:    ent.TaxableAmount,
 		TaxAmount:        ent.TaxAmount,
 		Currency:         ent.Currency,
-		Jurisdiction:     ent.Jurisdiction,
 		AppliedAt:        ent.AppliedAt,
 		EnvironmentID:    ent.EnvironmentID,
 		Metadata:         ent.Metadata,

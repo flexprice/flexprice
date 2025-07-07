@@ -92,13 +92,6 @@ func (TaxApplied) Fields() []ent.Field {
 			Immutable().
 			Comment("Currency code (ISO 4217)"),
 
-		field.String("jurisdiction").
-			SchemaType(map[string]string{
-				"postgres": "varchar(100)",
-			}).
-			Optional().
-			Comment("Tax jurisdiction (country, state, city, etc.)"),
-
 		field.Time("applied_at").
 			Default(time.Now).
 			Immutable().

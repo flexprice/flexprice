@@ -84,6 +84,27 @@ type UpdateTaxRateRequest struct {
 	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
+// Validate validates the UpdateTaxRateRequest
+func (r UpdateTaxRateRequest) Validate() error {
+	// Validate that at least one field is being updated
+	if r.Name == "" && r.Code == "" && r.Description == "" &&
+		r.ValidFrom == nil && r.ValidTo == nil &&
+		len(r.Metadata) == 0 {
+		return ierr.NewError("at least one field must be provided for update").
+			WithHint("Please provide at least one field to update").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Validate date range if both dates are provided
+	if r.ValidFrom != nil && r.ValidTo != nil && r.ValidFrom.After(lo.FromPtr(r.ValidTo)) {
+		return ierr.NewError("valid_from cannot be after valid_to").
+			WithHint("Valid from date cannot be after valid to date").
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}
+
 // Validate validates the CreateTaxRateRequest
 func (r CreateTaxRateRequest) Validate() error {
 	if r.Name == "" {

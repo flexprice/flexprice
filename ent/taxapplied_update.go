@@ -117,26 +117,6 @@ func (tau *TaxAppliedUpdate) SetNillableTaxAmount(d *decimal.Decimal) *TaxApplie
 	return tau
 }
 
-// SetJurisdiction sets the "jurisdiction" field.
-func (tau *TaxAppliedUpdate) SetJurisdiction(s string) *TaxAppliedUpdate {
-	tau.mutation.SetJurisdiction(s)
-	return tau
-}
-
-// SetNillableJurisdiction sets the "jurisdiction" field if the given value is not nil.
-func (tau *TaxAppliedUpdate) SetNillableJurisdiction(s *string) *TaxAppliedUpdate {
-	if s != nil {
-		tau.SetJurisdiction(*s)
-	}
-	return tau
-}
-
-// ClearJurisdiction clears the value of the "jurisdiction" field.
-func (tau *TaxAppliedUpdate) ClearJurisdiction() *TaxAppliedUpdate {
-	tau.mutation.ClearJurisdiction()
-	return tau
-}
-
 // SetMetadata sets the "metadata" field.
 func (tau *TaxAppliedUpdate) SetMetadata(m map[string]string) *TaxAppliedUpdate {
 	tau.mutation.SetMetadata(m)
@@ -228,12 +208,6 @@ func (tau *TaxAppliedUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := tau.mutation.TaxAmount(); ok {
 		_spec.SetField(taxapplied.FieldTaxAmount, field.TypeOther, value)
-	}
-	if value, ok := tau.mutation.Jurisdiction(); ok {
-		_spec.SetField(taxapplied.FieldJurisdiction, field.TypeString, value)
-	}
-	if tau.mutation.JurisdictionCleared() {
-		_spec.ClearField(taxapplied.FieldJurisdiction, field.TypeString)
 	}
 	if value, ok := tau.mutation.Metadata(); ok {
 		_spec.SetField(taxapplied.FieldMetadata, field.TypeJSON, value)
@@ -346,26 +320,6 @@ func (tauo *TaxAppliedUpdateOne) SetNillableTaxAmount(d *decimal.Decimal) *TaxAp
 	if d != nil {
 		tauo.SetTaxAmount(*d)
 	}
-	return tauo
-}
-
-// SetJurisdiction sets the "jurisdiction" field.
-func (tauo *TaxAppliedUpdateOne) SetJurisdiction(s string) *TaxAppliedUpdateOne {
-	tauo.mutation.SetJurisdiction(s)
-	return tauo
-}
-
-// SetNillableJurisdiction sets the "jurisdiction" field if the given value is not nil.
-func (tauo *TaxAppliedUpdateOne) SetNillableJurisdiction(s *string) *TaxAppliedUpdateOne {
-	if s != nil {
-		tauo.SetJurisdiction(*s)
-	}
-	return tauo
-}
-
-// ClearJurisdiction clears the value of the "jurisdiction" field.
-func (tauo *TaxAppliedUpdateOne) ClearJurisdiction() *TaxAppliedUpdateOne {
-	tauo.mutation.ClearJurisdiction()
 	return tauo
 }
 
@@ -490,12 +444,6 @@ func (tauo *TaxAppliedUpdateOne) sqlSave(ctx context.Context) (_node *TaxApplied
 	}
 	if value, ok := tauo.mutation.TaxAmount(); ok {
 		_spec.SetField(taxapplied.FieldTaxAmount, field.TypeOther, value)
-	}
-	if value, ok := tauo.mutation.Jurisdiction(); ok {
-		_spec.SetField(taxapplied.FieldJurisdiction, field.TypeString, value)
-	}
-	if tauo.mutation.JurisdictionCleared() {
-		_spec.ClearField(taxapplied.FieldJurisdiction, field.TypeString)
 	}
 	if value, ok := tauo.mutation.Metadata(); ok {
 		_spec.SetField(taxapplied.FieldMetadata, field.TypeJSON, value)
