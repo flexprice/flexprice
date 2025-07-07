@@ -37651,6 +37651,7 @@ type TaxAppliedMutation struct {
 	currency           *string
 	applied_at         *time.Time
 	metadata           *map[string]string
+	idempotency_key    *string
 	clearedFields      map[string]struct{}
 	done               bool
 	oldValue           func(context.Context) (*TaxApplied, error)
@@ -38402,6 +38403,55 @@ func (m *TaxAppliedMutation) ResetMetadata() {
 	delete(m.clearedFields, taxapplied.FieldMetadata)
 }
 
+// SetIdempotencyKey sets the "idempotency_key" field.
+func (m *TaxAppliedMutation) SetIdempotencyKey(s string) {
+	m.idempotency_key = &s
+}
+
+// IdempotencyKey returns the value of the "idempotency_key" field in the mutation.
+func (m *TaxAppliedMutation) IdempotencyKey() (r string, exists bool) {
+	v := m.idempotency_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIdempotencyKey returns the old "idempotency_key" field's value of the TaxApplied entity.
+// If the TaxApplied object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAppliedMutation) OldIdempotencyKey(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIdempotencyKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIdempotencyKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIdempotencyKey: %w", err)
+	}
+	return oldValue.IdempotencyKey, nil
+}
+
+// ClearIdempotencyKey clears the value of the "idempotency_key" field.
+func (m *TaxAppliedMutation) ClearIdempotencyKey() {
+	m.idempotency_key = nil
+	m.clearedFields[taxapplied.FieldIdempotencyKey] = struct{}{}
+}
+
+// IdempotencyKeyCleared returns if the "idempotency_key" field was cleared in this mutation.
+func (m *TaxAppliedMutation) IdempotencyKeyCleared() bool {
+	_, ok := m.clearedFields[taxapplied.FieldIdempotencyKey]
+	return ok
+}
+
+// ResetIdempotencyKey resets all changes to the "idempotency_key" field.
+func (m *TaxAppliedMutation) ResetIdempotencyKey() {
+	m.idempotency_key = nil
+	delete(m.clearedFields, taxapplied.FieldIdempotencyKey)
+}
+
 // Where appends a list predicates to the TaxAppliedMutation builder.
 func (m *TaxAppliedMutation) Where(ps ...predicate.TaxApplied) {
 	m.predicates = append(m.predicates, ps...)
@@ -38436,7 +38486,7 @@ func (m *TaxAppliedMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TaxAppliedMutation) Fields() []string {
-	fields := make([]string, 0, 16)
+	fields := make([]string, 0, 17)
 	if m.tenant_id != nil {
 		fields = append(fields, taxapplied.FieldTenantID)
 	}
@@ -38485,6 +38535,9 @@ func (m *TaxAppliedMutation) Fields() []string {
 	if m.metadata != nil {
 		fields = append(fields, taxapplied.FieldMetadata)
 	}
+	if m.idempotency_key != nil {
+		fields = append(fields, taxapplied.FieldIdempotencyKey)
+	}
 	return fields
 }
 
@@ -38525,6 +38578,8 @@ func (m *TaxAppliedMutation) Field(name string) (ent.Value, bool) {
 		return m.AppliedAt()
 	case taxapplied.FieldMetadata:
 		return m.Metadata()
+	case taxapplied.FieldIdempotencyKey:
+		return m.IdempotencyKey()
 	}
 	return nil, false
 }
@@ -38566,6 +38621,8 @@ func (m *TaxAppliedMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldAppliedAt(ctx)
 	case taxapplied.FieldMetadata:
 		return m.OldMetadata(ctx)
+	case taxapplied.FieldIdempotencyKey:
+		return m.OldIdempotencyKey(ctx)
 	}
 	return nil, fmt.Errorf("unknown TaxApplied field %s", name)
 }
@@ -38687,6 +38744,13 @@ func (m *TaxAppliedMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetMetadata(v)
 		return nil
+	case taxapplied.FieldIdempotencyKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIdempotencyKey(v)
+		return nil
 	}
 	return fmt.Errorf("unknown TaxApplied field %s", name)
 }
@@ -38732,6 +38796,9 @@ func (m *TaxAppliedMutation) ClearedFields() []string {
 	if m.FieldCleared(taxapplied.FieldMetadata) {
 		fields = append(fields, taxapplied.FieldMetadata)
 	}
+	if m.FieldCleared(taxapplied.FieldIdempotencyKey) {
+		fields = append(fields, taxapplied.FieldIdempotencyKey)
+	}
 	return fields
 }
 
@@ -38760,6 +38827,9 @@ func (m *TaxAppliedMutation) ClearField(name string) error {
 		return nil
 	case taxapplied.FieldMetadata:
 		m.ClearMetadata()
+		return nil
+	case taxapplied.FieldIdempotencyKey:
+		m.ClearIdempotencyKey()
 		return nil
 	}
 	return fmt.Errorf("unknown TaxApplied nullable field %s", name)
@@ -38816,6 +38886,9 @@ func (m *TaxAppliedMutation) ResetField(name string) error {
 		return nil
 	case taxapplied.FieldMetadata:
 		m.ResetMetadata()
+		return nil
+	case taxapplied.FieldIdempotencyKey:
+		m.ResetIdempotencyKey()
 		return nil
 	}
 	return fmt.Errorf("unknown TaxApplied field %s", name)

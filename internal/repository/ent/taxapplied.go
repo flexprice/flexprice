@@ -75,6 +75,7 @@ func (r *taxappliedRepository) Create(ctx context.Context, ta *domainTaxApplied.
 		SetMetadata(ta.Metadata).
 		SetStatus(string(ta.Status)).
 		SetCreatedAt(ta.CreatedAt).
+		SetNillableIdempotencyKey(ta.IdempotencyKey).
 		SetUpdatedAt(ta.UpdatedAt).
 		SetCreatedBy(ta.CreatedBy).
 		SetUpdatedBy(ta.UpdatedBy).
@@ -307,6 +308,37 @@ func (r *taxappliedRepository) List(ctx context.Context, filter *types.TaxApplie
 	SetSpanSuccess(span)
 
 	return domainTaxApplied.FromEntList(taxapplieds), nil
+}
+
+// Count counts tax configs based on filter
+func (r *taxappliedRepository) Count(ctx context.Context, filter *types.TaxAppliedFilter) (int, error) {
+	client := r.client.Querier(ctx)
+
+	span := StartRepositorySpan(ctx, "taxapplied", "count", map[string]interface{}{
+		"filter": filter,
+	})
+	defer FinishSpan(span)
+
+	query := client.TaxApplied.Query()
+	query = ApplyQueryOptions(ctx, query, filter, r.queryOpts)
+	query = r.queryOpts.ApplyStatusFilter(query, string(types.StatusPublished))
+	var err error
+	query, err = r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
+	if err != nil {
+		SetSpanError(span, err)
+		return 0, ierr.WithError(err).
+			WithHint("Failed to count tax applied records").
+			Mark(ierr.ErrDatabase)
+	}
+	count, err := query.Count(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return 0, ierr.WithError(err).
+			WithHint("Failed to count tax applied records").
+			Mark(ierr.ErrDatabase)
+	}
+	SetSpanSuccess(span)
+	return count, nil
 }
 
 type TaxAppliedQuery = *ent.TaxAppliedQuery

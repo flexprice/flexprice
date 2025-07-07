@@ -12,4 +12,5 @@ type Repository interface {
 	Update(ctx context.Context, taxapplied *TaxApplied) error
 	Delete(ctx context.Context, id string) error
 	List(ctx context.Context, filter *types.TaxAppliedFilter) ([]*TaxApplied, error)
+	Count(ctx context.Context, filter *types.TaxAppliedFilter) (int, error)
 }

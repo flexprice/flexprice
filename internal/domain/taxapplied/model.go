@@ -22,7 +22,7 @@ type TaxApplied struct {
 	AppliedAt        time.Time               `json:"applied_at,omitempty"`
 	EnvironmentID    string                  `json:"environment_id,omitempty"`
 	Metadata         map[string]string       `json:"metadata,omitempty"`
-
+	IdempotencyKey   *string                 `json:"idempotency_key,omitempty"`
 	types.BaseModel
 }
 
@@ -39,6 +39,7 @@ func FromEnt(ent *ent.TaxApplied) *TaxApplied {
 		AppliedAt:        ent.AppliedAt,
 		EnvironmentID:    ent.EnvironmentID,
 		Metadata:         ent.Metadata,
+		IdempotencyKey:   ent.IdempotencyKey,
 		BaseModel: types.BaseModel{
 			TenantID:  ent.TenantID,
 			Status:    types.Status(ent.Status),

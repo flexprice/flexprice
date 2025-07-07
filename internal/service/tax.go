@@ -24,6 +24,12 @@ type TaxService interface {
 
 	// Tax Applied operations
 	ApplyTaxOnInvoice(ctx context.Context, invoiceId string) error
+
+	// tax application operations
+	CreateTaxApplied(ctx context.Context, req dto.CreateTaxAppliedRequest) (*dto.TaxAppliedResponse, error)
+	GetTaxApplied(ctx context.Context, id string) (*dto.TaxAppliedResponse, error)
+	ListTaxApplied(ctx context.Context, filter *types.TaxAppliedFilter) (*dto.ListTaxAppliedResponse, error)
+	DeleteTaxApplied(ctx context.Context, id string) error
 }
 
 type taxService struct {
@@ -456,4 +462,153 @@ func (s *taxService) ApplyTaxOnInvoice(ctx context.Context, invoiceId string) er
 
 		return nil
 	})
+}
+
+// CreateTaxApplied creates a new tax applied record
+func (s *taxService) CreateTaxApplied(ctx context.Context, req dto.CreateTaxAppliedRequest) (*dto.TaxAppliedResponse, error) {
+	// Validate the request
+	if err := req.Validate(); err != nil {
+		s.Logger.Warnw("tax applied creation validation failed",
+			"error", err,
+			"tax_rate_id", req.TaxRateID,
+			"entity_type", req.EntityType,
+			"entity_id", req.EntityID,
+		)
+		return nil, err
+	}
+
+	// Convert the request to a domain model
+	taxApplied := req.ToTaxApplied(ctx)
+
+	// Create the tax applied record in the repository
+	if err := s.TaxAppliedRepo.Create(ctx, taxApplied); err != nil {
+		s.Logger.Errorw("failed to create tax applied record",
+			"error", err,
+			"tax_applied_id", taxApplied.ID,
+			"tax_rate_id", taxApplied.TaxRateID,
+			"entity_type", taxApplied.EntityType,
+			"entity_id", taxApplied.EntityID,
+		)
+		return nil, err
+	}
+
+	s.Logger.Infow("tax applied record created successfully",
+		"tax_applied_id", taxApplied.ID,
+		"tax_rate_id", taxApplied.TaxRateID,
+		"entity_type", taxApplied.EntityType,
+		"entity_id", taxApplied.EntityID,
+		"tax_amount", taxApplied.TaxAmount,
+	)
+
+	// Return the created tax applied record
+	return &dto.TaxAppliedResponse{TaxApplied: *taxApplied}, nil
+}
+
+// GetTaxApplied retrieves a tax applied record by ID
+func (s *taxService) GetTaxApplied(ctx context.Context, id string) (*dto.TaxAppliedResponse, error) {
+	if id == "" {
+		return nil, ierr.NewError("tax_applied_id is required").
+			WithHint("Tax applied ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Get the tax applied record from the repository
+	taxApplied, err := s.TaxAppliedRepo.Get(ctx, id)
+	if err != nil {
+		s.Logger.Warnw("failed to get tax applied record",
+			"error", err,
+			"tax_applied_id", id,
+		)
+		return nil, err
+	}
+
+	// Return the tax applied record
+	return &dto.TaxAppliedResponse{TaxApplied: *taxApplied}, nil
+}
+
+// ListTaxApplied lists tax applied records based on the provided filter
+func (s *taxService) ListTaxApplied(ctx context.Context, filter *types.TaxAppliedFilter) (*dto.ListTaxAppliedResponse, error) {
+	if filter == nil {
+		filter = types.NewDefaultTaxAppliedFilter()
+	}
+
+	// Validate the filter
+	if err := filter.Validate(); err != nil {
+		s.Logger.Warnw("tax applied filter validation failed",
+			"error", err,
+			"filter", filter,
+		)
+		return nil, err
+	}
+
+	// Get tax applied records from the repository
+	taxAppliedRecords, err := s.TaxAppliedRepo.List(ctx, filter)
+	if err != nil {
+		s.Logger.Errorw("failed to list tax applied records",
+			"error", err,
+			"filter", filter,
+		)
+		return nil, err
+	}
+
+	// Build response items
+	items := make([]*dto.TaxAppliedResponse, len(taxAppliedRecords))
+	for i, ta := range taxAppliedRecords {
+		items[i] = &dto.TaxAppliedResponse{TaxApplied: *ta}
+	}
+
+	// Get the total count of tax applied records
+	count, err := s.TaxAppliedRepo.Count(ctx, filter)
+	if err != nil {
+		s.Logger.Errorw("failed to count tax applied records",
+			"error", err,
+			"filter", filter,
+		)
+		return nil, err
+	}
+
+	// Return the response with pagination
+	// Note: Since the repository doesn't have a Count method, we'll use the length of items
+	// This is a limitation, but it's consistent with how other services handle this
+	return &dto.ListTaxAppliedResponse{
+		Items:      items,
+		Pagination: types.NewPaginationResponse(count, filter.GetLimit(), filter.GetOffset()),
+	}, nil
+}
+
+// DeleteTaxApplied deletes a tax applied record
+func (s *taxService) DeleteTaxApplied(ctx context.Context, id string) error {
+	if id == "" {
+		return ierr.NewError("tax_applied_id is required").
+			WithHint("Tax applied ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Get the tax applied record to ensure it exists
+	taxApplied, err := s.TaxAppliedRepo.Get(ctx, id)
+	if err != nil {
+		s.Logger.Warnw("failed to get tax applied record for deletion",
+			"error", err,
+			"tax_applied_id", id,
+		)
+		return err
+	}
+
+	// Delete the tax applied record
+	if err := s.TaxAppliedRepo.Delete(ctx, id); err != nil {
+		s.Logger.Errorw("failed to delete tax applied record",
+			"error", err,
+			"tax_applied_id", id,
+		)
+		return err
+	}
+
+	s.Logger.Infow("tax applied record deleted successfully",
+		"tax_applied_id", id,
+		"tax_rate_id", taxApplied.TaxRateID,
+		"entity_type", taxApplied.EntityType,
+		"entity_id", taxApplied.EntityID,
+	)
+
+	return nil
 }

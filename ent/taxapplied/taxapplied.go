@@ -45,6 +45,8 @@ const (
 	FieldAppliedAt = "applied_at"
 	// FieldMetadata holds the string denoting the metadata field in the database.
 	FieldMetadata = "metadata"
+	// FieldIdempotencyKey holds the string denoting the idempotency_key field in the database.
+	FieldIdempotencyKey = "idempotency_key"
 	// Table holds the table name of the taxapplied in the database.
 	Table = "tax_applieds"
 )
@@ -68,6 +70,7 @@ var Columns = []string{
 	FieldCurrency,
 	FieldAppliedAt,
 	FieldMetadata,
+	FieldIdempotencyKey,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -186,4 +189,9 @@ func ByCurrency(opts ...sql.OrderTermOption) OrderOption {
 // ByAppliedAt orders the results by the applied_at field.
 func ByAppliedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAppliedAt, opts...).ToFunc()
+}
+
+// ByIdempotencyKey orders the results by the idempotency_key field.
+func ByIdempotencyKey(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIdempotencyKey, opts...).ToFunc()
 }

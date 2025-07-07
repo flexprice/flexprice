@@ -140,6 +140,11 @@ func AppliedAt(v time.Time) predicate.TaxApplied {
 	return predicate.TaxApplied(sql.FieldEQ(FieldAppliedAt, v))
 }
 
+// IdempotencyKey applies equality check predicate on the "idempotency_key" field. It's identical to IdempotencyKeyEQ.
+func IdempotencyKey(v string) predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldEQ(FieldIdempotencyKey, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.TaxApplied {
 	return predicate.TaxApplied(sql.FieldEQ(FieldTenantID, v))
@@ -1038,6 +1043,81 @@ func MetadataIsNil() predicate.TaxApplied {
 // MetadataNotNil applies the NotNil predicate on the "metadata" field.
 func MetadataNotNil() predicate.TaxApplied {
 	return predicate.TaxApplied(sql.FieldNotNull(FieldMetadata))
+}
+
+// IdempotencyKeyEQ applies the EQ predicate on the "idempotency_key" field.
+func IdempotencyKeyEQ(v string) predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldEQ(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyNEQ applies the NEQ predicate on the "idempotency_key" field.
+func IdempotencyKeyNEQ(v string) predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldNEQ(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyIn applies the In predicate on the "idempotency_key" field.
+func IdempotencyKeyIn(vs ...string) predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldIn(FieldIdempotencyKey, vs...))
+}
+
+// IdempotencyKeyNotIn applies the NotIn predicate on the "idempotency_key" field.
+func IdempotencyKeyNotIn(vs ...string) predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldNotIn(FieldIdempotencyKey, vs...))
+}
+
+// IdempotencyKeyGT applies the GT predicate on the "idempotency_key" field.
+func IdempotencyKeyGT(v string) predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldGT(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyGTE applies the GTE predicate on the "idempotency_key" field.
+func IdempotencyKeyGTE(v string) predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldGTE(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyLT applies the LT predicate on the "idempotency_key" field.
+func IdempotencyKeyLT(v string) predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldLT(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyLTE applies the LTE predicate on the "idempotency_key" field.
+func IdempotencyKeyLTE(v string) predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldLTE(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyContains applies the Contains predicate on the "idempotency_key" field.
+func IdempotencyKeyContains(v string) predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldContains(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyHasPrefix applies the HasPrefix predicate on the "idempotency_key" field.
+func IdempotencyKeyHasPrefix(v string) predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldHasPrefix(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyHasSuffix applies the HasSuffix predicate on the "idempotency_key" field.
+func IdempotencyKeyHasSuffix(v string) predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldHasSuffix(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyIsNil applies the IsNil predicate on the "idempotency_key" field.
+func IdempotencyKeyIsNil() predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldIsNull(FieldIdempotencyKey))
+}
+
+// IdempotencyKeyNotNil applies the NotNil predicate on the "idempotency_key" field.
+func IdempotencyKeyNotNil() predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldNotNull(FieldIdempotencyKey))
+}
+
+// IdempotencyKeyEqualFold applies the EqualFold predicate on the "idempotency_key" field.
+func IdempotencyKeyEqualFold(v string) predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldEqualFold(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyContainsFold applies the ContainsFold predicate on the "idempotency_key" field.
+func IdempotencyKeyContainsFold(v string) predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldContainsFold(FieldIdempotencyKey, v))
 }
 
 // And groups predicates with the AND operator between them.
