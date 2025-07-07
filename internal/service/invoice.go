@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	pdf "github.com/flexprice/flexprice/internal/domain/pdf"
+	taxapplied "github.com/flexprice/flexprice/internal/domain/taxapplied"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
@@ -235,6 +236,20 @@ func (s *invoiceService) GetInvoice(ctx context.Context, id string) (*dto.Invoic
 			return nil, err
 		}
 		response.WithCustomer(&dto.CustomerResponse{Customer: customer})
+	}
+
+	// get tax applied records
+	filter := types.NewNoLimitTaxAppliedFilter()
+	filter.EntityType = types.TaxrateEntityTypeInvoice
+	filter.EntityID = inv.ID
+	appliedTaxes, err := s.TaxAppliedRepo.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	if len(appliedTaxes) > 0 {
+		response.TaxAppliedRecords = lo.Map(appliedTaxes, func(tax *taxapplied.TaxApplied, _ int) *dto.TaxAppliedResponse {
+			return &dto.TaxAppliedResponse{TaxApplied: *tax}
+		})
 	}
 
 	return response, nil
