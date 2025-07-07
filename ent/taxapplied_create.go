@@ -181,6 +181,20 @@ func (tac *TaxAppliedCreate) SetMetadata(m map[string]string) *TaxAppliedCreate 
 	return tac
 }
 
+// SetIdempotencyKey sets the "idempotency_key" field.
+func (tac *TaxAppliedCreate) SetIdempotencyKey(s string) *TaxAppliedCreate {
+	tac.mutation.SetIdempotencyKey(s)
+	return tac
+}
+
+// SetNillableIdempotencyKey sets the "idempotency_key" field if the given value is not nil.
+func (tac *TaxAppliedCreate) SetNillableIdempotencyKey(s *string) *TaxAppliedCreate {
+	if s != nil {
+		tac.SetIdempotencyKey(*s)
+	}
+	return tac
+}
+
 // SetID sets the "id" field.
 func (tac *TaxAppliedCreate) SetID(s string) *TaxAppliedCreate {
 	tac.mutation.SetID(s)
@@ -402,6 +416,10 @@ func (tac *TaxAppliedCreate) createSpec() (*TaxApplied, *sqlgraph.CreateSpec) {
 	if value, ok := tac.mutation.Metadata(); ok {
 		_spec.SetField(taxapplied.FieldMetadata, field.TypeJSON, value)
 		_node.Metadata = value
+	}
+	if value, ok := tac.mutation.IdempotencyKey(); ok {
+		_spec.SetField(taxapplied.FieldIdempotencyKey, field.TypeString, value)
+		_node.IdempotencyKey = &value
 	}
 	return _node, _spec
 }

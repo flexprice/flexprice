@@ -129,6 +129,26 @@ func (tau *TaxAppliedUpdate) ClearMetadata() *TaxAppliedUpdate {
 	return tau
 }
 
+// SetIdempotencyKey sets the "idempotency_key" field.
+func (tau *TaxAppliedUpdate) SetIdempotencyKey(s string) *TaxAppliedUpdate {
+	tau.mutation.SetIdempotencyKey(s)
+	return tau
+}
+
+// SetNillableIdempotencyKey sets the "idempotency_key" field if the given value is not nil.
+func (tau *TaxAppliedUpdate) SetNillableIdempotencyKey(s *string) *TaxAppliedUpdate {
+	if s != nil {
+		tau.SetIdempotencyKey(*s)
+	}
+	return tau
+}
+
+// ClearIdempotencyKey clears the value of the "idempotency_key" field.
+func (tau *TaxAppliedUpdate) ClearIdempotencyKey() *TaxAppliedUpdate {
+	tau.mutation.ClearIdempotencyKey()
+	return tau
+}
+
 // Mutation returns the TaxAppliedMutation object of the builder.
 func (tau *TaxAppliedUpdate) Mutation() *TaxAppliedMutation {
 	return tau.mutation
@@ -214,6 +234,12 @@ func (tau *TaxAppliedUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if tau.mutation.MetadataCleared() {
 		_spec.ClearField(taxapplied.FieldMetadata, field.TypeJSON)
+	}
+	if value, ok := tau.mutation.IdempotencyKey(); ok {
+		_spec.SetField(taxapplied.FieldIdempotencyKey, field.TypeString, value)
+	}
+	if tau.mutation.IdempotencyKeyCleared() {
+		_spec.ClearField(taxapplied.FieldIdempotencyKey, field.TypeString)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, tau.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -335,6 +361,26 @@ func (tauo *TaxAppliedUpdateOne) ClearMetadata() *TaxAppliedUpdateOne {
 	return tauo
 }
 
+// SetIdempotencyKey sets the "idempotency_key" field.
+func (tauo *TaxAppliedUpdateOne) SetIdempotencyKey(s string) *TaxAppliedUpdateOne {
+	tauo.mutation.SetIdempotencyKey(s)
+	return tauo
+}
+
+// SetNillableIdempotencyKey sets the "idempotency_key" field if the given value is not nil.
+func (tauo *TaxAppliedUpdateOne) SetNillableIdempotencyKey(s *string) *TaxAppliedUpdateOne {
+	if s != nil {
+		tauo.SetIdempotencyKey(*s)
+	}
+	return tauo
+}
+
+// ClearIdempotencyKey clears the value of the "idempotency_key" field.
+func (tauo *TaxAppliedUpdateOne) ClearIdempotencyKey() *TaxAppliedUpdateOne {
+	tauo.mutation.ClearIdempotencyKey()
+	return tauo
+}
+
 // Mutation returns the TaxAppliedMutation object of the builder.
 func (tauo *TaxAppliedUpdateOne) Mutation() *TaxAppliedMutation {
 	return tauo.mutation
@@ -450,6 +496,12 @@ func (tauo *TaxAppliedUpdateOne) sqlSave(ctx context.Context) (_node *TaxApplied
 	}
 	if tauo.mutation.MetadataCleared() {
 		_spec.ClearField(taxapplied.FieldMetadata, field.TypeJSON)
+	}
+	if value, ok := tauo.mutation.IdempotencyKey(); ok {
+		_spec.SetField(taxapplied.FieldIdempotencyKey, field.TypeString, value)
+	}
+	if tauo.mutation.IdempotencyKeyCleared() {
+		_spec.ClearField(taxapplied.FieldIdempotencyKey, field.TypeString)
 	}
 	_node = &TaxApplied{config: tauo.config}
 	_spec.Assign = _node.assignValues

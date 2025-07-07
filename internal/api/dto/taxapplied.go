@@ -47,3 +47,5 @@ func (r *CreateTaxAppliedRequest) ToTaxApplied(ctx context.Context) *taxapplied.
 type TaxAppliedResponse struct {
 	taxapplied.TaxApplied `json:",inline"`
 }
+
+type ListTaxAppliedResponse = types.ListResponse[*TaxAppliedResponse]

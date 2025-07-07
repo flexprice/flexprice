@@ -179,7 +179,7 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 		}
 
 		// Apply taxes if this is a subscription invoice
-		if err := s.applyTaxesToInvoice(ctx, inv); err != nil {
+		if err := s.handleTaxRateOverrides(ctx, inv, req); err != nil {
 			return err
 		}
 
@@ -1126,35 +1126,12 @@ func (s *invoiceService) RecalculateInvoiceAmounts(ctx context.Context, invoiceI
 	}
 
 	// Apply taxes after amount recalculation
-	s.applyTaxesToInvoice(ctx, inv)
-	if err := s.applyTaxesToInvoice(ctx, inv); err != nil {
+	if err := s.RecalculateTaxesOnInvoice(ctx, inv); err != nil {
 		return err
 	}
 
 	return nil
 }
-
-// applyTaxesToInvoice applies taxes to an invoice if it's a subscription invoice
-func (s *invoiceService) applyTaxesToInvoice(ctx context.Context, inv *invoice.Invoice) error {
-	// Get the invoice to check if it's a subscription invoice
-
-	// Only apply taxes to subscription invoices
-	if inv.InvoiceType != types.InvoiceTypeSubscription || inv.SubscriptionID == nil {
-		return nil
-	}
-
-	taxService := NewTaxService(s.ServiceParams)
-	if err := taxService.ApplyTaxOnInvoice(ctx, inv.ID); err != nil {
-		s.Logger.Errorw("failed to apply taxes on invoice",
-			"error", err,
-			"invoice_id", inv.ID,
-			"subscription_id", *inv.SubscriptionID)
-		return err
-	}
-
-	return nil
-}
-
 func (s *invoiceService) publishInternalWebhookEvent(ctx context.Context, eventName string, invoiceID string) {
 	webhookPayload, err := json.Marshal(struct {
 		InvoiceID string `json:"invoice_id"`
@@ -1318,7 +1295,7 @@ func (s *invoiceService) RecalculateInvoice(ctx context.Context, id string, fina
 		}
 
 		// STEP 7: Apply taxes after recalculation
-		s.applyTaxesToInvoice(txCtx, inv)
+		s.RecalculateTaxesOnInvoice(txCtx, inv)
 
 		s.Logger.Infow("successfully recalculated invoice with fresh calculation",
 			"invoice_id", inv.ID,
@@ -1356,4 +1333,41 @@ func (s *invoiceService) RecalculateInvoice(ctx context.Context, id string, fina
 
 	// Return updated invoice
 	return s.GetInvoice(ctx, id)
+}
+
+// RecalculateTaxesOnInvoice recalculates taxes on an invoice if it's a subscription invoice
+func (s *invoiceService) RecalculateTaxesOnInvoice(ctx context.Context, inv *invoice.Invoice) error {
+	// Get the invoice to check if it's a subscription invoice
+
+	// Only apply taxes to subscription invoices
+	if inv.InvoiceType != types.InvoiceTypeSubscription || inv.SubscriptionID == nil {
+		return nil
+	}
+
+	taxService := NewTaxService(s.ServiceParams)
+	if err := taxService.ApplyTaxOnInvoice(ctx, inv.ID); err != nil {
+		s.Logger.Errorw("failed to apply taxes on invoice",
+			"error", err,
+			"invoice_id", inv.ID,
+			"subscription_id", *inv.SubscriptionID)
+		return err
+	}
+
+	return nil
+}
+
+func (s *invoiceService) handleTaxRateOverrides(ctx context.Context, inv *invoice.Invoice, req dto.CreateInvoiceRequest) error {
+
+	if len(req.TaxRateOverrides) > 0 {
+		// handle customer tax rate overrides
+
+	} else {
+		// handle subscription tax rate overrides
+		taxService := NewTaxService(s.ServiceParams)
+		if err := taxService.ApplyTaxOnInvoice(ctx, inv.ID); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

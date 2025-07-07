@@ -104,6 +104,14 @@ func (TaxApplied) Fields() []ent.Field {
 				"postgres": "jsonb",
 			}).
 			Comment("Additional metadata for tax calculation details"),
+
+		field.String("idempotency_key").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Comment("Idempotency key for the tax application"),
 	}
 }
 
