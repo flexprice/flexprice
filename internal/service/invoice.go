@@ -1393,8 +1393,8 @@ func (s *invoiceService) handleTaxRateOverrides(ctx context.Context, inv *invoic
 		}
 
 		// Step 2: Resolve or create tax rates
-		taxAssociationService := NewTaxAssociationService(s.ServiceParams)
-		resolvedTaxRates, err := taxAssociationService.ResolveOrCreateTaxRates(ctx, taxLinkingRequests)
+		taxService := NewTaxService(s.ServiceParams)
+		resolvedTaxRates, err := taxService.ResolveOrCreateTaxRates(ctx, taxLinkingRequests)
 		if err != nil {
 			s.Logger.Errorw("failed to resolve or create tax rates",
 				"error", err,
@@ -1409,7 +1409,6 @@ func (s *invoiceService) handleTaxRateOverrides(ctx context.Context, inv *invoic
 		}
 
 		// Step 4: Fetch all tax rates using the collected IDs
-		taxService := NewTaxService(s.ServiceParams)
 		taxRates, err := taxService.ListTaxRates(ctx, &types.TaxRateFilter{
 			TaxRateIDs: taxRateIDs,
 		})

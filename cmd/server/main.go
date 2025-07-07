@@ -187,7 +187,6 @@ func main() {
 			service.NewCostSheetService,
 			service.NewCreditNoteService,
 			service.NewTaxService,
-			service.NewTaxAssociationService,
 		),
 	)
 
@@ -237,8 +236,7 @@ func provideHandlers(
 	costSheetService service.CostSheetService,
 	creditNoteService service.CreditNoteService,
 	svixClient *svix.Client,
-	taxAssociationService service.TaxAssociationService,
-	taxRateService service.TaxService,
+	taxService service.TaxService,
 ) api.Handlers {
 	return api.Handlers{
 		Events:            v1.NewEventsHandler(eventService, eventPostProcessingService, logger),
@@ -260,7 +258,7 @@ func provideHandlers(
 		Payment:           v1.NewPaymentHandler(paymentService, paymentProcessorService, logger),
 		Task:              v1.NewTaskHandler(taskService, logger),
 		Secret:            v1.NewSecretHandler(secretService, logger),
-		TaxRate:           v1.NewTaxRateHandler(taxRateService, logger),
+		Tax:               v1.NewTaxHandler(taxService, logger),
 		Onboarding:        v1.NewOnboardingHandler(onboardingService, logger),
 		CronSubscription:  cron.NewSubscriptionHandler(subscriptionService, temporalService, logger),
 		CronWallet:        cron.NewWalletCronHandler(logger, temporalService, walletService, tenantService),
@@ -269,7 +267,6 @@ func provideHandlers(
 		CronCreditGrant:   cron.NewCreditGrantCronHandler(creditGrantService, logger),
 		CreditNote:        v1.NewCreditNoteHandler(creditNoteService, logger),
 		Webhook:           v1.NewWebhookHandler(cfg, svixClient, logger),
-		TaxAssociation:    v1.NewTaxAssociationHandler(taxAssociationService, logger),
 	}
 }
 

@@ -36,10 +36,9 @@ type Handlers struct {
 	Secret            *v1.SecretHandler
 	CostSheet         *v1.CostSheetHandler
 	CreditNote        *v1.CreditNoteHandler
-	TaxAssociation    *v1.TaxAssociationHandler
+	Tax               *v1.TaxHandler
 
 	Webhook *v1.WebhookHandler
-	TaxRate *v1.TaxRateHandler
 	// Portal handlers
 	Onboarding *v1.OnboardingHandler
 	// Cron jobs : TODO: move crons out of API based architecture
@@ -219,15 +218,6 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			invoices.POST("/:id/recalculate", handlers.Invoice.RecalculateInvoice)
 		}
 
-		taxConfig := v1Private.Group("/taxassociations")
-		{
-			taxConfig.POST("", handlers.TaxAssociation.CreateTaxAssociation)
-			taxConfig.GET("", handlers.TaxAssociation.ListTaxAssociations)
-			taxConfig.GET("/:id", handlers.TaxAssociation.GetTaxAssociation)
-			taxConfig.PUT("/:id", handlers.TaxAssociation.UpdateTaxAssociation)
-			taxConfig.DELETE("/:id", handlers.TaxAssociation.DeleteTaxAssociation)
-		}
-
 		feature := v1Private.Group("/features")
 		{
 
@@ -279,11 +269,20 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		// Tax rate routes
 		taxRates := v1Private.Group("/taxrates")
 		{
-			taxRates.POST("", handlers.TaxRate.CreateTaxRate)
-			taxRates.GET("", handlers.TaxRate.GetTaxRates)
-			taxRates.GET("/:id", handlers.TaxRate.GetTaxRate)
-			taxRates.PUT("/:id", handlers.TaxRate.UpdateTaxRate)
-			taxRates.DELETE("/:id", handlers.TaxRate.DeleteTaxRate)
+			taxRates.POST("", handlers.Tax.CreateTaxRate)
+			taxRates.GET("", handlers.Tax.ListTaxRates)
+			taxRates.GET("/:id", handlers.Tax.GetTaxRate)
+			taxRates.PUT("/:id", handlers.Tax.UpdateTaxRate)
+			taxRates.DELETE("/:id", handlers.Tax.DeleteTaxRate)
+		}
+
+		tax := v1Private.Group("/taxassociations")
+		{
+			tax.POST("", handlers.Tax.CreateTaxAssociation)
+			tax.GET("", handlers.Tax.ListTaxAssociations)
+			tax.GET("/:id", handlers.Tax.GetTaxAssociation)
+			tax.PUT("/:id", handlers.Tax.UpdateTaxAssociation)
+			tax.DELETE("/:id", handlers.Tax.DeleteTaxAssociation)
 		}
 
 		// Secret routes
