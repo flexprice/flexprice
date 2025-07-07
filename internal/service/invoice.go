@@ -248,10 +248,25 @@ func (s *invoiceService) GetInvoice(ctx context.Context, id string) (*dto.Invoic
 	if err != nil {
 		return nil, err
 	}
+
+	// Debug logging
+	s.Logger.Infow("Found tax applied records for invoice",
+		"invoice_id", inv.ID,
+		"tax_applied_count", len(appliedTaxes),
+		"entity_type", types.TaxrateEntityTypeInvoice,
+		"entity_id", inv.ID,
+	)
+
 	if len(appliedTaxes) > 0 {
-		response.WithTaxAppliedRecords(lo.Map(appliedTaxes, func(tax *taxapplied.TaxApplied, _ int) *dto.TaxAppliedResponse {
+		taxes := lo.Map(appliedTaxes, func(tax *taxapplied.TaxApplied, _ int) *dto.TaxAppliedResponse {
 			return &dto.TaxAppliedResponse{TaxApplied: *tax}
-		}))
+		})
+		s.Logger.Infow("Taxes slice before setting on response", "taxes", taxes)
+		response = response.WithTaxes(taxes)
+		s.Logger.Infow("Added tax applied records to response",
+			"invoice_id", inv.ID,
+			"tax_count", len(taxes),
+		)
 	}
 
 	return response, nil

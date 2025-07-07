@@ -304,7 +304,10 @@ func (r *taxappliedRepository) List(ctx context.Context, filter *types.TaxApplie
 			Mark(ierr.ErrDatabase)
 	}
 
-	r.log.Debugw("listing taxapplieds", "filter", filter)
+	r.log.Debugw("listing taxapplieds", 
+		"filter", filter, 
+		"count", len(taxapplieds),
+		"filter_status", filter.GetStatus())
 	SetSpanSuccess(span)
 
 	return domainTaxApplied.FromEntList(taxapplieds), nil
@@ -321,7 +324,6 @@ func (r *taxappliedRepository) Count(ctx context.Context, filter *types.TaxAppli
 
 	query := client.TaxApplied.Query()
 	query = ApplyQueryOptions(ctx, query, filter, r.queryOpts)
-	query = r.queryOpts.ApplyStatusFilter(query, string(types.StatusPublished))
 	var err error
 	query, err = r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
 	if err != nil {
@@ -354,6 +356,12 @@ func (o TaxAppliedQueryOptions) ApplyEnvironmentFilter(ctx context.Context, quer
 }
 
 func (o TaxAppliedQueryOptions) ApplyStatusFilter(query TaxAppliedQuery, status string) TaxAppliedQuery {
+	// Debug logging to understand what status is being applied
+	if status == "" {
+		// When status is empty, exclude deleted records
+		return query.Where(taxapplied.StatusNotIn(string(types.StatusDeleted)))
+	}
+	// When status is specified, filter by that exact status
 	return query.Where(taxapplied.Status(status))
 }
 
