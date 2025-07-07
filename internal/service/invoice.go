@@ -177,6 +177,9 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 			return err
 		}
 
+		// Apply taxes if this is a subscription invoice
+		s.applyTaxesToInvoice(ctx, inv)
+
 		// Convert to response
 		resp = dto.NewInvoiceResponse(inv)
 		return nil
@@ -1105,7 +1108,33 @@ func (s *invoiceService) RecalculateInvoiceAmounts(ctx context.Context, invoiceI
 		return err
 	}
 
+	// Apply taxes after amount recalculation
+	s.applyTaxesToInvoice(ctx, inv)
 	return nil
+}
+
+// applyTaxesToInvoice applies taxes to an invoice if it's a subscription invoice
+func (s *invoiceService) applyTaxesToInvoice(ctx context.Context, inv *invoice.Invoice) {
+	// Get the invoice to check if it's a subscription invoice
+
+	// Only apply taxes to subscription invoices
+	if inv.InvoiceType != types.InvoiceTypeSubscription || inv.SubscriptionID == nil {
+		return
+	}
+
+	taxService := NewTaxService(s.ServiceParams)
+	if err := taxService.ApplyTaxOnInvoice(ctx, inv.ID); err != nil {
+		s.Logger.Errorw("failed to apply taxes on invoice",
+			"error", err,
+			"invoice_id", inv.ID,
+			"subscription_id", *inv.SubscriptionID)
+		// Don't fail the entire operation, just log the error
+		// Tax calculation can be retried later
+	} else {
+		s.Logger.Infow("successfully applied taxes to invoice",
+			"invoice_id", inv.ID,
+			"subscription_id", *inv.SubscriptionID)
+	}
 }
 
 func (s *invoiceService) publishInternalWebhookEvent(ctx context.Context, eventName string, invoiceID string) {
@@ -1269,6 +1298,9 @@ func (s *invoiceService) RecalculateInvoice(ctx context.Context, id string, fina
 		if err := s.InvoiceRepo.Update(txCtx, inv); err != nil {
 			return err
 		}
+
+		// STEP 7: Apply taxes after recalculation
+		s.applyTaxesToInvoice(txCtx, inv)
 
 		s.Logger.Infow("successfully recalculated invoice with fresh calculation",
 			"invoice_id", inv.ID,
