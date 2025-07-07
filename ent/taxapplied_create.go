@@ -135,6 +135,14 @@ func (tac *TaxAppliedCreate) SetTaxAssociationID(s string) *TaxAppliedCreate {
 	return tac
 }
 
+// SetNillableTaxAssociationID sets the "tax_association_id" field if the given value is not nil.
+func (tac *TaxAppliedCreate) SetNillableTaxAssociationID(s *string) *TaxAppliedCreate {
+	if s != nil {
+		tac.SetTaxAssociationID(*s)
+	}
+	return tac
+}
+
 // SetTaxableAmount sets the "taxable_amount" field.
 func (tac *TaxAppliedCreate) SetTaxableAmount(d decimal.Decimal) *TaxAppliedCreate {
 	tac.mutation.SetTaxableAmount(d)
@@ -293,14 +301,6 @@ func (tac *TaxAppliedCreate) check() error {
 			return &ValidationError{Name: "entity_id", err: fmt.Errorf(`ent: validator failed for field "TaxApplied.entity_id": %w`, err)}
 		}
 	}
-	if _, ok := tac.mutation.TaxAssociationID(); !ok {
-		return &ValidationError{Name: "tax_association_id", err: errors.New(`ent: missing required field "TaxApplied.tax_association_id"`)}
-	}
-	if v, ok := tac.mutation.TaxAssociationID(); ok {
-		if err := taxapplied.TaxAssociationIDValidator(v); err != nil {
-			return &ValidationError{Name: "tax_association_id", err: fmt.Errorf(`ent: validator failed for field "TaxApplied.tax_association_id": %w`, err)}
-		}
-	}
 	if _, ok := tac.mutation.TaxableAmount(); !ok {
 		return &ValidationError{Name: "taxable_amount", err: errors.New(`ent: missing required field "TaxApplied.taxable_amount"`)}
 	}
@@ -395,7 +395,7 @@ func (tac *TaxAppliedCreate) createSpec() (*TaxApplied, *sqlgraph.CreateSpec) {
 	}
 	if value, ok := tac.mutation.TaxAssociationID(); ok {
 		_spec.SetField(taxapplied.FieldTaxAssociationID, field.TypeString, value)
-		_node.TaxAssociationID = value
+		_node.TaxAssociationID = &value
 	}
 	if value, ok := tac.mutation.TaxableAmount(); ok {
 		_spec.SetField(taxapplied.FieldTaxableAmount, field.TypeOther, value)

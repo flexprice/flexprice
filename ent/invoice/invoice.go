@@ -53,6 +53,8 @@ const (
 	FieldAdjustmentAmount = "adjustment_amount"
 	// FieldRefundedAmount holds the string denoting the refunded_amount field in the database.
 	FieldRefundedAmount = "refunded_amount"
+	// FieldTotalTax holds the string denoting the total_tax field in the database.
+	FieldTotalTax = "total_tax"
 	// FieldTotal holds the string denoting the total field in the database.
 	FieldTotal = "total"
 	// FieldDescription holds the string denoting the description field in the database.
@@ -120,6 +122,7 @@ var Columns = []string{
 	FieldSubtotal,
 	FieldAdjustmentAmount,
 	FieldRefundedAmount,
+	FieldTotalTax,
 	FieldTotal,
 	FieldDescription,
 	FieldDueDate,
@@ -183,6 +186,8 @@ var (
 	DefaultAdjustmentAmount decimal.Decimal
 	// DefaultRefundedAmount holds the default value on creation for the "refunded_amount" field.
 	DefaultRefundedAmount decimal.Decimal
+	// DefaultTotalTax holds the default value on creation for the "total_tax" field.
+	DefaultTotalTax decimal.Decimal
 	// DefaultTotal holds the default value on creation for the "total" field.
 	DefaultTotal decimal.Decimal
 	// DefaultVersion holds the default value on creation for the "version" field.
@@ -290,6 +295,11 @@ func ByAdjustmentAmount(opts ...sql.OrderTermOption) OrderOption {
 // ByRefundedAmount orders the results by the refunded_amount field.
 func ByRefundedAmount(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRefundedAmount, opts...).ToFunc()
+}
+
+// ByTotalTax orders the results by the total_tax field.
+func ByTotalTax(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTotalTax, opts...).ToFunc()
 }
 
 // ByTotal orders the results by the total field.

@@ -577,12 +577,16 @@ func init() {
 	invoiceDescRefundedAmount := invoiceFields[12].Descriptor()
 	// invoice.DefaultRefundedAmount holds the default value on creation for the refunded_amount field.
 	invoice.DefaultRefundedAmount = invoiceDescRefundedAmount.Default.(decimal.Decimal)
+	// invoiceDescTotalTax is the schema descriptor for total_tax field.
+	invoiceDescTotalTax := invoiceFields[13].Descriptor()
+	// invoice.DefaultTotalTax holds the default value on creation for the total_tax field.
+	invoice.DefaultTotalTax = invoiceDescTotalTax.Default.(decimal.Decimal)
 	// invoiceDescTotal is the schema descriptor for total field.
-	invoiceDescTotal := invoiceFields[13].Descriptor()
+	invoiceDescTotal := invoiceFields[14].Descriptor()
 	// invoice.DefaultTotal holds the default value on creation for the total field.
 	invoice.DefaultTotal = invoiceDescTotal.Default.(decimal.Decimal)
 	// invoiceDescVersion is the schema descriptor for version field.
-	invoiceDescVersion := invoiceFields[25].Descriptor()
+	invoiceDescVersion := invoiceFields[26].Descriptor()
 	// invoice.DefaultVersion holds the default value on creation for the version field.
 	invoice.DefaultVersion = invoiceDescVersion.Default.(int)
 	invoicelineitemMixin := schema.InvoiceLineItem{}.Mixin()
@@ -1349,10 +1353,6 @@ func init() {
 	taxappliedDescEntityID := taxappliedFields[3].Descriptor()
 	// taxapplied.EntityIDValidator is a validator for the "entity_id" field. It is called by the builders before save.
 	taxapplied.EntityIDValidator = taxappliedDescEntityID.Validators[0].(func(string) error)
-	// taxappliedDescTaxAssociationID is the schema descriptor for tax_association_id field.
-	taxappliedDescTaxAssociationID := taxappliedFields[4].Descriptor()
-	// taxapplied.TaxAssociationIDValidator is a validator for the "tax_association_id" field. It is called by the builders before save.
-	taxapplied.TaxAssociationIDValidator = taxappliedDescTaxAssociationID.Validators[0].(func(string) error)
 	// taxappliedDescCurrency is the schema descriptor for currency field.
 	taxappliedDescCurrency := taxappliedFields[7].Descriptor()
 	// taxapplied.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.

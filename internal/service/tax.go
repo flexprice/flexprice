@@ -6,8 +6,12 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	taxrate "github.com/flexprice/flexprice/internal/domain/tax"
+	"github.com/flexprice/flexprice/internal/domain/taxapplied"
+	"github.com/flexprice/flexprice/internal/domain/taxassociation"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 )
 
 type TaxService interface {
@@ -18,6 +22,9 @@ type TaxService interface {
 	UpdateTaxRate(ctx context.Context, id string, req dto.UpdateTaxRateRequest) (*dto.TaxRateResponse, error)
 	GetTaxRateByCode(ctx context.Context, code string) (*dto.TaxRateResponse, error)
 	DeleteTaxRate(ctx context.Context, id string) error
+
+	// Tax Applied operations
+	ApplyTaxOnInvoice(ctx context.Context, invoiceId string) error
 }
 
 type taxService struct {
@@ -307,4 +314,169 @@ func (s *taxService) calculateTaxRateStatus(taxRate *taxrate.TaxRate, now time.T
 
 	// If ValidFrom is nil or in the past, and ValidTo is nil or in the future, tax rate should be active
 	return types.TaxRateStatusActive
+}
+
+func (s *taxService) ApplyTaxOnInvoice(ctx context.Context, invoiceId string) error {
+	// Use database transaction to ensure all operations succeed or fail together
+	return s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		// Get the invoice
+		invoice, err := s.InvoiceRepo.Get(txCtx, invoiceId)
+		if err != nil {
+			s.Logger.Errorw("failed to get invoice for tax application",
+				"error", err,
+				"invoice_id", invoiceId,
+			)
+			return err
+		}
+
+		// Check if invoice has a subscription ID
+		if invoice.SubscriptionID == nil {
+			s.Logger.Warnw("invoice has no subscription ID, skipping tax application",
+				"invoice_id", invoiceId,
+			)
+			return nil
+		}
+
+		// Get all the taxes associated with the subscription of this invoice
+		taxAssociations, err := s.TaxAssociationRepo.List(txCtx, &types.TaxAssociationFilter{
+			EntityID:   lo.FromPtr(invoice.SubscriptionID),
+			EntityType: types.TaxrateEntityTypeSubscription,
+		})
+		if err != nil {
+			s.Logger.Errorw("failed to get tax associations for subscription",
+				"error", err,
+				"invoice_id", invoiceId,
+				"subscription_id", lo.FromPtr(invoice.SubscriptionID),
+			)
+			return err
+		}
+
+		if len(taxAssociations) == 0 {
+			s.Logger.Infow("no tax associations found for subscription, skipping tax application",
+				"invoice_id", invoiceId,
+				"subscription_id", lo.FromPtr(invoice.SubscriptionID),
+			)
+			return nil
+		}
+
+		// Get all the tax rate IDs associated with the tax associations
+		subscriptionTaxRateIds := lo.Map(taxAssociations, func(taxAssociation *taxassociation.TaxAssociation, _ int) string {
+			return taxAssociation.TaxRateID
+		})
+
+		// Get all the tax rates associated with the tax associations
+		taxRates, err := s.TaxRateRepo.List(txCtx, &types.TaxRateFilter{
+			TaxRateIDs: subscriptionTaxRateIds,
+		})
+		if err != nil {
+			s.Logger.Errorw("failed to get tax rates for tax associations",
+				"error", err,
+				"invoice_id", invoiceId,
+				"tax_rate_ids", subscriptionTaxRateIds,
+			)
+			return err
+		}
+
+		// Taxable amount is the subtotal of the invoice
+		taxableAmount := invoice.Subtotal
+		totalTaxAmount := decimal.Zero
+
+		// Create a map to store tax association by tax rate ID for quick lookup
+		taxAssociationMap := make(map[string]*taxassociation.TaxAssociation)
+		for _, ta := range taxAssociations {
+			taxAssociationMap[ta.TaxRateID] = ta
+		}
+
+		// Apply each tax rate to the taxable amount
+		for _, taxRate := range taxRates {
+			var taxAmount decimal.Decimal
+
+			// Calculate tax amount based on tax rate type
+			switch taxRate.TaxRateType {
+			case types.TaxRateTypePercentage:
+				// For percentage tax: taxable_amount * (percentage / 100)
+				taxAmount = taxableAmount.Mul(*taxRate.PercentageValue).Div(decimal.NewFromInt(100))
+			case types.TaxRateTypeFixed:
+				// For fixed tax: use the fixed value directly
+				taxAmount = *taxRate.FixedValue
+			default:
+				s.Logger.Warnw("unknown tax rate type, skipping",
+					"tax_rate_id", taxRate.ID,
+					"tax_rate_type", taxRate.TaxRateType,
+				)
+				continue
+			}
+
+			// Add tax amount to total
+			totalTaxAmount = totalTaxAmount.Add(taxAmount)
+
+			// Get the tax association for this tax rate
+			taxAssociation := taxAssociationMap[taxRate.ID]
+
+			// Create a tax applied record
+			taxApplied := &taxapplied.TaxApplied{
+				ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TAX_APPLIED),
+				TaxRateID:        taxRate.ID,
+				EntityType:       types.TaxrateEntityTypeInvoice,
+				EntityID:         invoiceId,
+				TaxAssociationID: lo.ToPtr(taxAssociation.ID),
+				TaxableAmount:    taxableAmount,
+				TaxAmount:        taxAmount,
+				Currency:         invoice.Currency,
+				AppliedAt:        time.Now().UTC(),
+				BaseModel:        types.GetDefaultBaseModel(txCtx),
+			}
+
+			// Set environment ID
+			if invoice.EnvironmentID != "" {
+				taxApplied.EnvironmentID = invoice.EnvironmentID
+			} else {
+				taxApplied.EnvironmentID = types.GetEnvironmentID(txCtx)
+			}
+
+			// Create the tax applied record
+			if err := s.TaxAppliedRepo.Create(txCtx, taxApplied); err != nil {
+				s.Logger.Errorw("failed to create tax applied record",
+					"error", err,
+					"tax_applied_id", taxApplied.ID,
+					"tax_rate_id", taxRate.ID,
+				)
+				return err
+			}
+
+			s.Logger.Infow("created tax applied record",
+				"tax_applied_id", taxApplied.ID,
+				"tax_rate_id", taxRate.ID,
+				"tax_rate_code", taxRate.Code,
+				"tax_amount", taxAmount,
+				"taxable_amount", taxableAmount,
+				"invoice_id", invoiceId,
+			)
+		}
+
+		// Update the invoice with the total tax and recalculate the total
+		invoice.TotalTax = totalTaxAmount
+		invoice.Total = invoice.Subtotal.Add(totalTaxAmount)
+
+		// Update the invoice
+		if err := s.InvoiceRepo.Update(txCtx, invoice); err != nil {
+			s.Logger.Errorw("failed to update invoice with tax amounts",
+				"error", err,
+				"invoice_id", invoiceId,
+				"total_tax", totalTaxAmount,
+				"new_total", invoice.Total,
+			)
+			return err
+		}
+
+		s.Logger.Infow("successfully applied taxes to invoice",
+			"invoice_id", invoiceId,
+			"subtotal", invoice.Subtotal,
+			"total_tax", totalTaxAmount,
+			"total", invoice.Total,
+			"tax_rates_applied", len(taxRates),
+		)
+
+		return nil
+	})
 }

@@ -69,6 +69,26 @@ func (tau *TaxAppliedUpdate) ClearUpdatedBy() *TaxAppliedUpdate {
 	return tau
 }
 
+// SetTaxAssociationID sets the "tax_association_id" field.
+func (tau *TaxAppliedUpdate) SetTaxAssociationID(s string) *TaxAppliedUpdate {
+	tau.mutation.SetTaxAssociationID(s)
+	return tau
+}
+
+// SetNillableTaxAssociationID sets the "tax_association_id" field if the given value is not nil.
+func (tau *TaxAppliedUpdate) SetNillableTaxAssociationID(s *string) *TaxAppliedUpdate {
+	if s != nil {
+		tau.SetTaxAssociationID(*s)
+	}
+	return tau
+}
+
+// ClearTaxAssociationID clears the value of the "tax_association_id" field.
+func (tau *TaxAppliedUpdate) ClearTaxAssociationID() *TaxAppliedUpdate {
+	tau.mutation.ClearTaxAssociationID()
+	return tau
+}
+
 // SetTaxableAmount sets the "taxable_amount" field.
 func (tau *TaxAppliedUpdate) SetTaxableAmount(d decimal.Decimal) *TaxAppliedUpdate {
 	tau.mutation.SetTaxableAmount(d)
@@ -197,6 +217,12 @@ func (tau *TaxAppliedUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if tau.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(taxapplied.FieldEnvironmentID, field.TypeString)
 	}
+	if value, ok := tau.mutation.TaxAssociationID(); ok {
+		_spec.SetField(taxapplied.FieldTaxAssociationID, field.TypeString, value)
+	}
+	if tau.mutation.TaxAssociationIDCleared() {
+		_spec.ClearField(taxapplied.FieldTaxAssociationID, field.TypeString)
+	}
 	if value, ok := tau.mutation.TaxableAmount(); ok {
 		_spec.SetField(taxapplied.FieldTaxableAmount, field.TypeOther, value)
 	}
@@ -272,6 +298,26 @@ func (tauo *TaxAppliedUpdateOne) SetNillableUpdatedBy(s *string) *TaxAppliedUpda
 // ClearUpdatedBy clears the value of the "updated_by" field.
 func (tauo *TaxAppliedUpdateOne) ClearUpdatedBy() *TaxAppliedUpdateOne {
 	tauo.mutation.ClearUpdatedBy()
+	return tauo
+}
+
+// SetTaxAssociationID sets the "tax_association_id" field.
+func (tauo *TaxAppliedUpdateOne) SetTaxAssociationID(s string) *TaxAppliedUpdateOne {
+	tauo.mutation.SetTaxAssociationID(s)
+	return tauo
+}
+
+// SetNillableTaxAssociationID sets the "tax_association_id" field if the given value is not nil.
+func (tauo *TaxAppliedUpdateOne) SetNillableTaxAssociationID(s *string) *TaxAppliedUpdateOne {
+	if s != nil {
+		tauo.SetTaxAssociationID(*s)
+	}
+	return tauo
+}
+
+// ClearTaxAssociationID clears the value of the "tax_association_id" field.
+func (tauo *TaxAppliedUpdateOne) ClearTaxAssociationID() *TaxAppliedUpdateOne {
+	tauo.mutation.ClearTaxAssociationID()
 	return tauo
 }
 
@@ -432,6 +478,12 @@ func (tauo *TaxAppliedUpdateOne) sqlSave(ctx context.Context) (_node *TaxApplied
 	}
 	if tauo.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(taxapplied.FieldEnvironmentID, field.TypeString)
+	}
+	if value, ok := tauo.mutation.TaxAssociationID(); ok {
+		_spec.SetField(taxapplied.FieldTaxAssociationID, field.TypeString, value)
+	}
+	if tauo.mutation.TaxAssociationIDCleared() {
+		_spec.ClearField(taxapplied.FieldTaxAssociationID, field.TypeString)
 	}
 	if value, ok := tauo.mutation.TaxableAmount(); ok {
 		_spec.SetField(taxapplied.FieldTaxableAmount, field.TypeOther, value)

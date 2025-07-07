@@ -830,6 +830,16 @@ func TaxAssociationIDHasSuffix(v string) predicate.TaxApplied {
 	return predicate.TaxApplied(sql.FieldHasSuffix(FieldTaxAssociationID, v))
 }
 
+// TaxAssociationIDIsNil applies the IsNil predicate on the "tax_association_id" field.
+func TaxAssociationIDIsNil() predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldIsNull(FieldTaxAssociationID))
+}
+
+// TaxAssociationIDNotNil applies the NotNil predicate on the "tax_association_id" field.
+func TaxAssociationIDNotNil() predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldNotNull(FieldTaxAssociationID))
+}
+
 // TaxAssociationIDEqualFold applies the EqualFold predicate on the "tax_association_id" field.
 func TaxAssociationIDEqualFold(v string) predicate.TaxApplied {
 	return predicate.TaxApplied(sql.FieldEqualFold(FieldTaxAssociationID, v))
