@@ -191,6 +191,37 @@ func (s *InMemoryTaxAppliedStore) Delete(ctx context.Context, id string) error {
 	return s.InMemoryStore.Update(ctx, existing.ID, existing)
 }
 
+// GetByIdempotencyKey retrieves a tax applied record by idempotency key
+func (s *InMemoryTaxAppliedStore) GetByIdempotencyKey(ctx context.Context, idempotencyKey string) (*taxapplied.TaxApplied, error) {
+	// Create a filter function that matches by idempotency key
+	filterFn := func(ctx context.Context, ta *taxapplied.TaxApplied, _ interface{}) bool {
+		return ta.IdempotencyKey != nil &&
+			*ta.IdempotencyKey == idempotencyKey &&
+			ta.TenantID == types.GetTenantID(ctx) &&
+			CheckEnvironmentFilter(ctx, ta.EnvironmentID) &&
+			ta.Status != types.StatusDeleted
+	}
+
+	// List all tax applied records with our filter
+	taxAppliedRecords, err := s.InMemoryStore.List(ctx, nil, filterFn, nil)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list tax applied records").
+			Mark(ierr.ErrDatabase)
+	}
+
+	if len(taxAppliedRecords) == 0 {
+		return nil, ierr.NewError("tax applied record not found").
+			WithHintf("Tax applied record with idempotency key %s was not found", idempotencyKey).
+			WithReportableDetails(map[string]any{
+				"idempotency_key": idempotencyKey,
+			}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	return copyTaxApplied(taxAppliedRecords[0]), nil
+}
+
 // Clear removes all tax applied records from the store
 func (s *InMemoryTaxAppliedStore) Clear() {
 	s.InMemoryStore.Clear()

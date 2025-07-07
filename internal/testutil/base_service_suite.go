@@ -24,6 +24,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/task"
 	taxrate "github.com/flexprice/flexprice/internal/domain/tax"
+	"github.com/flexprice/flexprice/internal/domain/taxapplied"
 	"github.com/flexprice/flexprice/internal/domain/taxassociation"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
@@ -62,6 +63,7 @@ type Stores struct {
 	CreditNoteRepo             creditnote.Repository
 	CreditNoteLineItemRepo     creditnote.CreditNoteLineItemRepository
 	TaxRateRepo                taxrate.Repository
+	TaxAppliedRepo             taxapplied.Repository
 	TaxAssociationRepo         taxassociation.Repository
 }
 
@@ -144,6 +146,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 		CreditNoteRepo:             NewInMemoryCreditNoteStore(),
 		CreditNoteLineItemRepo:     NewInMemoryCreditNoteLineItemStore(),
 		TaxRateRepo:                NewInMemoryTaxRateStore(),
+		TaxAppliedRepo:             NewInMemoryTaxAppliedStore(),
 		TaxAssociationRepo:         NewInMemoryTaxAssociationStore(),
 	}
 
@@ -182,6 +185,7 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.CreditNoteRepo.(*InMemoryCreditNoteStore).Clear()
 	s.stores.CreditNoteLineItemRepo.(*InMemoryCreditNoteLineItemStore).Clear()
 	s.stores.TaxRateRepo.(*InMemoryTaxRateStore).Clear()
+	s.stores.TaxAppliedRepo.(*InMemoryTaxAppliedStore).Clear()
 	s.stores.TaxAssociationRepo.(*InMemoryTaxAssociationStore).Clear()
 }
 
