@@ -14,12 +14,14 @@ import (
 // InMemoryTaxRateStore implements taxrate.Repository
 type InMemoryTaxRateStore struct {
 	*InMemoryStore[*taxrate.TaxRate]
+	codeIndex map[string]string // code -> tax_rate_id
 }
 
 // NewInMemoryTaxRateStore creates a new in-memory tax rate store
 func NewInMemoryTaxRateStore() *InMemoryTaxRateStore {
 	return &InMemoryTaxRateStore{
 		InMemoryStore: NewInMemoryStore[*taxrate.TaxRate](),
+		codeIndex:     make(map[string]string),
 	}
 }
 
@@ -30,7 +32,7 @@ func copyTaxRate(tr *taxrate.TaxRate) *taxrate.TaxRate {
 	}
 
 	// Deep copy of tax rate
-	copy := &taxrate.TaxRate{
+	copied := &taxrate.TaxRate{
 		ID:            tr.ID,
 		Name:          tr.Name,
 		Description:   tr.Description,
@@ -47,24 +49,24 @@ func copyTaxRate(tr *taxrate.TaxRate) *taxrate.TaxRate {
 
 	// Deep copy pointers
 	if tr.PercentageValue != nil {
-		copy.PercentageValue = &(*tr.PercentageValue)
+		copied.PercentageValue = &(*tr.PercentageValue)
 	}
 	if tr.FixedValue != nil {
-		copy.FixedValue = &(*tr.FixedValue)
+		copied.FixedValue = &(*tr.FixedValue)
 	}
 	if tr.ValidFrom != nil {
-		copy.ValidFrom = &(*tr.ValidFrom)
+		copied.ValidFrom = &(*tr.ValidFrom)
 	}
 	if tr.ValidTo != nil {
-		copy.ValidTo = &(*tr.ValidTo)
+		copied.ValidTo = &(*tr.ValidTo)
 	}
 
 	// Deep copy metadata
 	if tr.Metadata != nil {
-		copy.Metadata = lo.Assign(map[string]string{}, tr.Metadata)
+		copied.Metadata = lo.Assign(map[string]string{}, tr.Metadata)
 	}
 
-	return copy
+	return copied
 }
 
 // taxRateFilterFn implements filtering logic for tax rates
@@ -165,7 +167,29 @@ func (s *InMemoryTaxRateStore) Create(ctx context.Context, tr *taxrate.TaxRate) 
 		tr.UpdatedAt = time.Now()
 	}
 
-	return s.InMemoryStore.Create(ctx, tr.ID, copyTaxRate(tr))
+	// Check for duplicate code
+	s.mu.Lock()
+	if _, exists := s.codeIndex[tr.Code]; exists {
+		s.mu.Unlock()
+		return ierr.NewError("tax rate with this code already exists").
+			WithHintf("A tax rate with code %s already exists", tr.Code).
+			WithReportableDetails(map[string]any{
+				"tax_rate_code": tr.Code,
+				"tax_rate_id":   tr.ID,
+			}).
+			Mark(ierr.ErrAlreadyExists)
+	}
+
+	err := s.InMemoryStore.Create(ctx, tr.ID, copyTaxRate(tr))
+	if err != nil {
+		s.mu.Unlock()
+		return err
+	}
+
+	s.codeIndex[tr.Code] = tr.ID
+	s.mu.Unlock()
+
+	return nil
 }
 
 // Get retrieves a tax rate by ID
@@ -179,32 +203,20 @@ func (s *InMemoryTaxRateStore) Get(ctx context.Context, id string) (*taxrate.Tax
 
 // GetByCode retrieves a tax rate by code
 func (s *InMemoryTaxRateStore) GetByCode(ctx context.Context, code string) (*taxrate.TaxRate, error) {
-	// Create a filter function that matches by code, tenant_id, and environment_id
-	filterFn := func(ctx context.Context, tr *taxrate.TaxRate, _ interface{}) bool {
-		return tr.Code == code &&
-			tr.TenantID == types.GetTenantID(ctx) &&
-			CheckEnvironmentFilter(ctx, tr.EnvironmentID) &&
-			tr.Status != types.StatusDeleted
-	}
+	s.mu.RLock()
+	taxRateID, exists := s.codeIndex[code]
+	s.mu.RUnlock()
 
-	// List all tax rates with our filter
-	taxRates, err := s.InMemoryStore.List(ctx, nil, filterFn, nil)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to list tax rates").
-			Mark(ierr.ErrDatabase)
-	}
-
-	if len(taxRates) == 0 {
+	if !exists {
 		return nil, ierr.NewError("tax rate not found").
 			WithHintf("Tax rate with code %s was not found", code).
 			WithReportableDetails(map[string]any{
-				"code": code,
+				"tax_rate_code": code,
 			}).
 			Mark(ierr.ErrNotFound)
 	}
 
-	return copyTaxRate(taxRates[0]), nil
+	return s.Get(ctx, taxRateID)
 }
 
 // List retrieves tax rates based on filter
@@ -248,6 +260,32 @@ func (s *InMemoryTaxRateStore) Update(ctx context.Context, tr *taxrate.TaxRate) 
 	// Set updated timestamp
 	tr.UpdatedAt = time.Now()
 
+	// Check if the code is being changed and if it conflicts with existing code
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	existing, err := s.InMemoryStore.Get(ctx, tr.ID)
+	if err != nil {
+		return err
+	}
+
+	// If code is being changed, check for conflicts
+	if existing.Code != tr.Code {
+		if _, exists := s.codeIndex[tr.Code]; exists {
+			return ierr.NewError("tax rate with this code already exists").
+				WithHintf("A tax rate with code %s already exists", tr.Code).
+				WithReportableDetails(map[string]any{
+					"tax_rate_code": tr.Code,
+					"tax_rate_id":   tr.ID,
+				}).
+				Mark(ierr.ErrAlreadyExists)
+		}
+
+		// Update code index
+		delete(s.codeIndex, existing.Code)
+		s.codeIndex[tr.Code] = tr.ID
+	}
+
 	return s.InMemoryStore.Update(ctx, tr.ID, copyTaxRate(tr))
 }
 
@@ -269,10 +307,18 @@ func (s *InMemoryTaxRateStore) Delete(ctx context.Context, tr *taxrate.TaxRate) 
 	existing.Status = types.StatusDeleted
 	existing.UpdatedAt = time.Now()
 
+	// Remove from code index
+	s.mu.Lock()
+	delete(s.codeIndex, existing.Code)
+	s.mu.Unlock()
+
 	return s.InMemoryStore.Update(ctx, existing.ID, existing)
 }
 
 // Clear clears the tax rate store
 func (s *InMemoryTaxRateStore) Clear() {
 	s.InMemoryStore.Clear()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.codeIndex = make(map[string]string)
 }
