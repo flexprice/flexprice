@@ -20,6 +20,10 @@ type TaxAssociationService interface {
 
 	// LinkTaxRatesToEntity links tax rates to any entity type
 	LinkTaxRatesToEntity(ctx context.Context, entityType types.TaxrateEntityType, entityID string, taxRateLinks []*dto.CreateEntityTaxAssociation) (*dto.EntityTaxAssociationResponse, error)
+
+	// New methods for handling tax rate creation and association separately
+	ResolveOrCreateTaxRates(ctx context.Context, taxRateLinks []*dto.CreateEntityTaxAssociation) ([]*dto.ResolvedTaxRateInfo, error)
+	CreateTaxAssociations(ctx context.Context, entityType types.TaxrateEntityType, entityID string, resolvedTaxRates []*dto.ResolvedTaxRateInfo) (*dto.EntityTaxAssociationResponse, error)
 }
 
 type taxAssociationService struct {
@@ -258,74 +262,18 @@ func (s *taxAssociationService) LinkTaxRatesToEntity(ctx context.Context, entity
 		}
 	}
 
-	var linkedTaxRates []*dto.LinkedTaxRateInfo
-	taxService := NewTaxService(s.ServiceParams)
-
 	// Execute all operations within a single transaction
+	var response *dto.EntityTaxAssociationResponse
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		linkedTaxRates = make([]*dto.LinkedTaxRateInfo, 0, len(taxRateLinks))
-
-		for _, taxRateLink := range taxRateLinks {
-			var taxRateToUse *taxrate.TaxRate
-			var wasCreated bool
-
-			// Step 1: Resolve or create tax rate
-			if taxRateLink.TaxRateID != nil {
-				// Use existing tax rate
-				taxRateID := *taxRateLink.TaxRateID
-				existingTaxRate, err := s.TaxRateRepo.Get(txCtx, taxRateID)
-				if err != nil {
-					return ierr.WithError(err).
-						WithHint("Tax rate not found").
-						WithReportableDetails(map[string]interface{}{
-							"tax_rate_id": taxRateID,
-						}).
-						Mark(ierr.ErrNotFound)
-				}
-				taxRateToUse = existingTaxRate
-				wasCreated = false
-			} else {
-				taxRateResponse, err := taxService.CreateTaxRate(txCtx, taxRateLink.CreateTaxRateRequest)
-				if err != nil {
-					return ierr.WithError(err).
-						WithHint("Failed to create tax rate").
-						WithReportableDetails(map[string]interface{}{
-							"tax_rate_id": taxRateLink.CreateTaxRateRequest.Code,
-							"entity_type": entityType,
-							"entity_id":   entityID,
-						}).
-						Mark(ierr.ErrDatabase)
-				}
-				taxRateToUse = taxRateResponse.TaxRate
-				wasCreated = true
-			}
-
-			// Step 2: Create tax config
-			taxConfigReq := &dto.CreateTaxAssociationRequest{
-				TaxRateID:  taxRateToUse.ID,
-				EntityType: entityType,
-				EntityID:   entityID,
-				Priority:   taxRateLink.Priority,
-				AutoApply:  taxRateLink.AutoApply,
-			}
-
-			// Step 3: using internal service to create tax config
-			taxConfig, err := s.Create(txCtx, taxConfigReq)
-			if err != nil {
-				return err
-			}
-
-			// Step 4: Add to results
-			linkedTaxRates = append(linkedTaxRates, &dto.LinkedTaxRateInfo{
-				TaxRateID:        taxRateToUse.ID,
-				TaxAssociationID: taxConfig.ID,
-				WasCreated:       wasCreated,
-				Priority:         taxConfig.Priority,
-				AutoApply:        taxConfig.AutoApply,
-			})
+		// Step 1: Resolve or create tax rates
+		resolvedTaxRates, err := s.ResolveOrCreateTaxRates(txCtx, taxRateLinks)
+		if err != nil {
+			return err
 		}
 
-		return nil
+		// Step 2: Create tax associations
+		response, err = s.CreateTaxAssociations(txCtx, entityType, entityID, resolvedTaxRates)
+		return err
 	})
 
 	if err != nil {
@@ -340,7 +288,117 @@ func (s *taxAssociationService) LinkTaxRatesToEntity(ctx context.Context, entity
 	s.Logger.Infow("successfully linked tax rates to entity",
 		"entity_type", entityType,
 		"entity_id", entityID,
-		"links_count", len(linkedTaxRates))
+		"links_count", len(response.LinkedTaxRates))
+
+	return response, nil
+}
+
+// ResolveOrCreateTaxRates handles the creation or resolution of tax rates
+// This method can be used independently when you only need to ensure tax rates exist
+// without creating associations immediately
+func (s *taxAssociationService) ResolveOrCreateTaxRates(ctx context.Context, taxRateLinks []*dto.CreateEntityTaxAssociation) ([]*dto.ResolvedTaxRateInfo, error) {
+	if len(taxRateLinks) == 0 {
+		return []*dto.ResolvedTaxRateInfo{}, nil
+	}
+
+	resolvedTaxRates := make([]*dto.ResolvedTaxRateInfo, 0, len(taxRateLinks))
+	taxService := NewTaxService(s.ServiceParams)
+
+	for _, taxRateLink := range taxRateLinks {
+		var taxRateToUse *taxrate.TaxRate
+		var wasCreated bool
+
+		// Resolve or create tax rate
+		if taxRateLink.TaxRateID != nil {
+			// Use existing tax rate
+			taxRateID := *taxRateLink.TaxRateID
+			existingTaxRate, err := s.TaxRateRepo.Get(ctx, taxRateID)
+			if err != nil {
+				return nil, ierr.WithError(err).
+					WithHint("Tax rate not found").
+					WithReportableDetails(map[string]interface{}{
+						"tax_rate_id": taxRateID,
+					}).
+					Mark(ierr.ErrNotFound)
+			}
+			taxRateToUse = existingTaxRate
+			wasCreated = false
+		} else {
+			// Create new tax rate
+			taxRateResponse, err := taxService.CreateTaxRate(ctx, taxRateLink.CreateTaxRateRequest)
+			if err != nil {
+				return nil, ierr.WithError(err).
+					WithHint("Failed to create tax rate").
+					WithReportableDetails(map[string]interface{}{
+						"tax_rate_id": taxRateLink.CreateTaxRateRequest.Code,
+					}).
+					Mark(ierr.ErrDatabase)
+			}
+			taxRateToUse = taxRateResponse.TaxRate
+			wasCreated = true
+		}
+
+		// Add to results
+		resolvedTaxRates = append(resolvedTaxRates, &dto.ResolvedTaxRateInfo{
+			TaxRateID:  taxRateToUse.ID,
+			WasCreated: wasCreated,
+			Priority:   taxRateLink.Priority,
+			AutoApply:  taxRateLink.AutoApply,
+		})
+	}
+
+	s.Logger.Infow("successfully resolved or created tax rates",
+		"resolved_count", len(resolvedTaxRates),
+		"created_count", len(lo.Filter(resolvedTaxRates, func(r *dto.ResolvedTaxRateInfo, _ int) bool {
+			return r.WasCreated
+		})))
+
+	return resolvedTaxRates, nil
+}
+
+// CreateTaxAssociations creates tax associations for the given entity using resolved tax rates
+// This method can be used independently when you already have resolved tax rate IDs
+func (s *taxAssociationService) CreateTaxAssociations(ctx context.Context, entityType types.TaxrateEntityType, entityID string, resolvedTaxRates []*dto.ResolvedTaxRateInfo) (*dto.EntityTaxAssociationResponse, error) {
+	if len(resolvedTaxRates) == 0 {
+		return &dto.EntityTaxAssociationResponse{
+			EntityID:       entityID,
+			EntityType:     entityType,
+			LinkedTaxRates: []*dto.LinkedTaxRateInfo{},
+		}, nil
+	}
+
+	linkedTaxRates := make([]*dto.LinkedTaxRateInfo, 0, len(resolvedTaxRates))
+
+	for _, resolvedTaxRate := range resolvedTaxRates {
+		// Create tax association request
+		taxConfigReq := &dto.CreateTaxAssociationRequest{
+			TaxRateID:  resolvedTaxRate.TaxRateID,
+			EntityType: entityType,
+			EntityID:   entityID,
+			Priority:   resolvedTaxRate.Priority,
+			AutoApply:  resolvedTaxRate.AutoApply,
+		}
+
+		// Create tax association
+		taxConfig, err := s.Create(ctx, taxConfigReq)
+		if err != nil {
+			return nil, err
+		}
+
+		// Add to results
+		linkedTaxRates = append(linkedTaxRates, &dto.LinkedTaxRateInfo{
+			TaxRateID:        resolvedTaxRate.TaxRateID,
+			TaxAssociationID: taxConfig.ID,
+			WasCreated:       resolvedTaxRate.WasCreated,
+			Priority:         taxConfig.Priority,
+			AutoApply:        taxConfig.AutoApply,
+		})
+	}
+
+	s.Logger.Infow("successfully created tax associations",
+		"entity_type", entityType,
+		"entity_id", entityID,
+		"associations_count", len(linkedTaxRates))
 
 	return &dto.EntityTaxAssociationResponse{
 		EntityID:       entityID,
