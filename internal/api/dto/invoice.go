@@ -574,7 +574,7 @@ type InvoiceResponse struct {
 	TotalTax decimal.Decimal `json:"total_tax"`
 
 	// tax_applied_records contains the tax applied records associated with this invoice
-	TaxAppliedRecords []*TaxAppliedResponse `json:"tax_applied_records,omitempty"`
+	Taxes []*TaxAppliedResponse `json:"taxes,omitempty"`
 }
 
 // NewInvoiceResponse creates a new invoice response from domain invoice
@@ -642,8 +642,8 @@ func (r *InvoiceResponse) WithCustomer(customer *CustomerResponse) *InvoiceRespo
 }
 
 // WithTaxAppliedRecords adds tax applied records to the invoice response
-func (r *InvoiceResponse) WithTaxAppliedRecords(taxAppliedRecords []*TaxAppliedResponse) *InvoiceResponse {
-	r.TaxAppliedRecords = taxAppliedRecords
+func (r *InvoiceResponse) WithTaxes(taxes []*TaxAppliedResponse) *InvoiceResponse {
+	r.Taxes = taxes
 	return r
 }
 
