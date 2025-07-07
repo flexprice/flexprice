@@ -227,3 +227,12 @@ type LinkedTaxRateInfo struct {
 	AutoApply        bool   `json:"auto_apply"`
 	WasCreated       bool   `json:"was_created"`
 }
+
+// ResolvedTaxRateInfo represents a tax rate that has been resolved or created
+// This is used as an intermediate structure between tax rate creation and association
+type ResolvedTaxRateInfo struct {
+	TaxRateID  string `json:"tax_rate_id"`
+	WasCreated bool   `json:"was_created"`
+	Priority   int    `json:"priority"`
+	AutoApply  bool   `json:"auto_apply"`
+}

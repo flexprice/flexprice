@@ -1357,12 +1357,125 @@ func (s *invoiceService) RecalculateTaxesOnInvoice(ctx context.Context, inv *inv
 }
 
 func (s *invoiceService) handleTaxRateOverrides(ctx context.Context, inv *invoice.Invoice, req dto.CreateInvoiceRequest) error {
-
 	if len(req.TaxRateOverrides) > 0 {
-		// handle customer tax rate overrides
+		// Handle tax rate overrides for the invoice
+		s.Logger.Infow("processing tax rate overrides for invoice",
+			"invoice_id", inv.ID,
+			"overrides_count", len(req.TaxRateOverrides))
+
+		// Step 1: Convert tax overrides to tax entity associations
+		taxLinkingRequests := make([]*dto.CreateEntityTaxAssociation, 0, len(req.TaxRateOverrides))
+		for _, taxRateOverride := range req.TaxRateOverrides {
+			taxRateLink := taxRateOverride.ToTaxEntityAssociation(ctx, inv.ID, types.TaxrateEntityTypeInvoice)
+			taxLinkingRequests = append(taxLinkingRequests, taxRateLink)
+		}
+
+		// Step 2: Resolve or create tax rates
+		taxAssociationService := NewTaxAssociationService(s.ServiceParams)
+		resolvedTaxRates, err := taxAssociationService.ResolveOrCreateTaxRates(ctx, taxLinkingRequests)
+		if err != nil {
+			s.Logger.Errorw("failed to resolve or create tax rates",
+				"error", err,
+				"invoice_id", inv.ID)
+			return err
+		}
+
+		// Step 3: Collect all tax rate IDs
+		taxRateIDs := make([]string, 0, len(resolvedTaxRates))
+		for _, resolvedTaxRate := range resolvedTaxRates {
+			taxRateIDs = append(taxRateIDs, resolvedTaxRate.TaxRateID)
+		}
+
+		// Step 4: Fetch all tax rates using the collected IDs
+		taxService := NewTaxService(s.ServiceParams)
+		taxRates, err := taxService.ListTaxRates(ctx, &types.TaxRateFilter{
+			TaxRateIDs: taxRateIDs,
+		})
+		if err != nil {
+			s.Logger.Errorw("failed to fetch tax rates",
+				"error", err,
+				"invoice_id", inv.ID,
+				"tax_rate_ids", taxRateIDs)
+			return err
+		}
+
+		// Step 5: Apply taxes and calculate total tax amount
+		taxableAmount := inv.Subtotal
+		totalTaxAmount := decimal.Zero
+
+		for _, taxRate := range taxRates.Items {
+			var taxAmount decimal.Decimal
+
+			// Calculate tax amount based on tax rate type
+			switch taxRate.TaxRateType {
+			case types.TaxRateTypePercentage:
+				// For percentage tax: taxable_amount * (percentage / 100)
+				taxAmount = taxableAmount.Mul(*taxRate.PercentageValue).Div(decimal.NewFromInt(100))
+			case types.TaxRateTypeFixed:
+				// For fixed tax: use the fixed value directly
+				taxAmount = *taxRate.FixedValue
+			default:
+				s.Logger.Warnw("unknown tax rate type, skipping",
+					"tax_rate_id", taxRate.ID,
+					"tax_rate_type", taxRate.TaxRateType,
+				)
+				continue
+			}
+
+			// Add tax amount to total
+			totalTaxAmount = totalTaxAmount.Add(taxAmount)
+
+			// Create a tax applied record
+			taxAppliedRecord := &dto.CreateTaxAppliedRequest{
+				TaxRateID:     taxRate.ID,
+				EntityType:    types.TaxrateEntityTypeInvoice,
+				EntityID:      inv.ID,
+				TaxableAmount: taxableAmount,
+				TaxAmount:     taxAmount,
+				Currency:      inv.Currency,
+			}
+
+			// Create the tax applied record
+			_, err := taxService.CreateTaxApplied(ctx, *taxAppliedRecord)
+			if err != nil {
+				s.Logger.Errorw("failed to create tax applied record",
+					"error", err,
+					"tax_rate_id", taxRate.ID,
+					"invoice_id", inv.ID)
+				return err
+			}
+
+			s.Logger.Infow("created tax applied record for override",
+				"tax_rate_id", taxRate.ID,
+				"tax_rate_code", taxRate.Code,
+				"tax_amount", taxAmount,
+				"taxable_amount", taxableAmount,
+				"invoice_id", inv.ID,
+			)
+		}
+
+		// Step 7: Update the invoice with the total tax and recalculate the total
+		inv.TotalTax = totalTaxAmount
+		inv.Total = inv.Subtotal.Add(totalTaxAmount)
+
+		// Update the invoice
+		if err := s.InvoiceRepo.Update(ctx, inv); err != nil {
+			s.Logger.Errorw("failed to update invoice with tax amounts",
+				"error", err,
+				"invoice_id", inv.ID,
+				"total_tax", totalTaxAmount,
+				"new_total", inv.Total)
+			return err
+		}
+
+		s.Logger.Infow("successfully applied tax overrides to invoice",
+			"invoice_id", inv.ID,
+			"total_tax", totalTaxAmount,
+			"new_total", inv.Total,
+			"overrides_processed", len(req.TaxRateOverrides))
 
 	} else {
-		// handle subscription tax rate overrides
+		// Handle subscription tax rate overrides (existing logic)
 		taxService := NewTaxService(s.ServiceParams)
 		if err := taxService.ApplyTaxOnInvoice(ctx, inv.ID); err != nil {
 			return err
