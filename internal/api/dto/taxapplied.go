@@ -42,3 +42,8 @@ func (r *CreateTaxAppliedRequest) ToTaxApplied(ctx context.Context) *taxapplied.
 		BaseModel:        types.GetDefaultBaseModel(ctx),
 	}
 }
+
+// TaxAppliedResponse represents the response for tax applied operations
+type TaxAppliedResponse struct {
+	taxapplied.TaxApplied `json:",inline"`
+}

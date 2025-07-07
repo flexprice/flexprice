@@ -551,6 +551,9 @@ type InvoiceResponse struct {
 
 	// customer contains the customer information associated with this invoice
 	Customer *CustomerResponse `json:"customer,omitempty"`
+
+	// tax_applied_records contains the tax applied records associated with this invoice
+	TaxAppliedRecords []*TaxAppliedResponse `json:"tax_applied_records,omitempty"`
 }
 
 // NewInvoiceResponse creates a new invoice response from domain invoice
