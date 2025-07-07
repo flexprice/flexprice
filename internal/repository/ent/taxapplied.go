@@ -511,3 +511,28 @@ func (r *taxappliedRepository) DeleteCache(ctx context.Context, taxapplied *doma
 	r.cache.Delete(ctx, cacheKey)
 	r.log.Debugw("cache deleted", "key", cacheKey)
 }
+
+func (r *taxappliedRepository) GetByIdempotencyKey(ctx context.Context, idempotencyKey string) (*domainTaxApplied.TaxApplied, error) {
+	span := StartRepositorySpan(ctx, "taxapplied", "get_by_idempotency_key", map[string]interface{}{
+		"idempotency_key": idempotencyKey,
+	})
+	defer FinishSpan(span)
+
+	client := r.client.Querier(ctx)
+
+	taxapplied, err := client.TaxApplied.Query().
+		Where(taxapplied.IdempotencyKey(idempotencyKey),
+			taxapplied.TenantID(types.GetTenantID(ctx)),
+			taxapplied.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
+		Only(ctx)
+
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get tax applied record by idempotency key").
+			Mark(ierr.ErrDatabase)
+	}
+
+	return domainTaxApplied.FromEnt(taxapplied), nil
+}
