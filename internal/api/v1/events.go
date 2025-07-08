@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/gin-gonic/gin"
+	"github.com/samber/lo"
 )
 
 type EventsHandler struct {
@@ -188,6 +189,9 @@ func (h *EventsHandler) GetEvents(c *gin.Context) {
 	iterLastKey := c.Query("iter_last_key")
 	eventID := c.Query("event_id")
 	propertyFiltersStr := c.Query("property_filters")
+	source := c.Query("source")
+	sort := c.Query("sort")
+	order := c.Query("order")
 
 	// Parse property filters from query string (format: key1:value1,value2;key2:value3)
 	propertyFilters := make(map[string][]string)
@@ -248,6 +252,9 @@ func (h *EventsHandler) GetEvents(c *gin.Context) {
 		PropertyFilters:    propertyFilters,
 		Offset:             offset,
 		CountTotal:         countTotal,
+		Source:             source,
+		Sort:               lo.Ternary(sort != "", &sort, nil),
+		Order:              lo.Ternary(order != "", &order, nil),
 	})
 	if err != nil {
 		h.log.Error("Failed to get events", "error", err)
