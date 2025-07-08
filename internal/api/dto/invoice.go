@@ -76,6 +76,9 @@ type CreateInvoiceRequest struct {
 
 	// environment_id is the unique identifier of the environment this invoice belongs to
 	EnvironmentID string `json:"environment_id,omitempty"`
+
+	// tax_rate_overrides is the tax rate overrides to be applied to the invoice
+	TaxRateOverrides []*TaxRateOverride `json:"tax_rate_overrides,omitempty"`
 }
 
 func (r *CreateInvoiceRequest) Validate() error {
@@ -140,6 +143,21 @@ func (r *CreateInvoiceRequest) Validate() error {
 		// Verify total amount matches invoice amount
 		if !totalAmount.Equal(r.AmountDue) {
 			return ierr.NewError("sum of line item amounts must equal invoice amount_due").WithHintf("sum of line item amounts %s must equal invoice amount_due %s", totalAmount.String(), r.AmountDue.String()).Mark(ierr.ErrValidation)
+		}
+	}
+
+	// taxrate overrides validation
+	if len(r.TaxRateOverrides) > 0 {
+		for _, taxRateOverride := range r.TaxRateOverrides {
+			if err := taxRateOverride.Validate(); err != nil {
+				return ierr.NewError("invalid tax rate override").
+					WithHint("Tax rate override validation failed").
+					WithReportableDetails(map[string]interface{}{
+						"error":             err.Error(),
+						"tax_rate_override": taxRateOverride,
+					}).
+					Mark(ierr.ErrValidation)
+			}
 		}
 	}
 
@@ -551,6 +569,12 @@ type InvoiceResponse struct {
 
 	// customer contains the customer information associated with this invoice
 	Customer *CustomerResponse `json:"customer,omitempty"`
+
+	// total_tax is the total tax amount for this invoice
+	TotalTax decimal.Decimal `json:"total_tax"`
+
+	// tax_applied_records contains the tax applied records associated with this invoice
+	Taxes []*TaxAppliedResponse `json:"taxes,omitempty"`
 }
 
 // NewInvoiceResponse creates a new invoice response from domain invoice
@@ -569,6 +593,7 @@ func NewInvoiceResponse(inv *invoice.Invoice) *InvoiceResponse {
 		Currency:        inv.Currency,
 		AmountDue:       inv.AmountDue,
 		Total:           inv.Total,
+		TotalTax:        inv.TotalTax,
 		Subtotal:        inv.Subtotal,
 		AmountPaid:      inv.AmountPaid,
 		AmountRemaining: inv.AmountRemaining,
@@ -613,6 +638,12 @@ func (r *InvoiceResponse) WithSubscription(sub *SubscriptionResponse) *InvoiceRe
 // WithCustomer adds customer information to the invoice response
 func (r *InvoiceResponse) WithCustomer(customer *CustomerResponse) *InvoiceResponse {
 	r.Customer = customer
+	return r
+}
+
+// WithTaxAppliedRecords adds tax applied records to the invoice response
+func (r *InvoiceResponse) WithTaxes(taxes []*TaxAppliedResponse) *InvoiceResponse {
+	r.Taxes = taxes
 	return r
 }
 
