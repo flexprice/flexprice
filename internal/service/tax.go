@@ -33,7 +33,7 @@ type TaxService interface {
 	GetTaxAssociation(ctx context.Context, id string) (*dto.TaxAssociationResponse, error)
 	UpdateTaxAssociation(ctx context.Context, id string, ta *dto.TaxAssociationUpdateRequest) (*dto.TaxAssociationResponse, error)
 	DeleteTaxAssociation(ctx context.Context, id string) error
-	ListTaxAssociations(ctx context.Context, filter *types.TaxAssociationFilter) (*dto.ListTaxConfigsResponse, error)
+	ListTaxAssociations(ctx context.Context, filter *types.TaxAssociationFilter) (*dto.ListTaxAssociationsResponse, error)
 
 	// LinkTaxRatesToEntity links tax rates to any entity type
 	LinkTaxRatesToEntity(ctx context.Context, entityType types.TaxrateEntityType, entityID string, taxRateLinks []*dto.CreateEntityTaxAssociation) (*dto.EntityTaxAssociationResponse, error)
@@ -799,7 +799,7 @@ func (s *taxService) DeleteTaxAssociation(ctx context.Context, id string) error 
 }
 
 // ListTaxAssociations lists tax associations
-func (s *taxService) ListTaxAssociations(ctx context.Context, filter *types.TaxAssociationFilter) (*dto.ListTaxConfigsResponse, error) {
+func (s *taxService) ListTaxAssociations(ctx context.Context, filter *types.TaxAssociationFilter) (*dto.ListTaxAssociationsResponse, error) {
 	if filter == nil {
 		filter = types.NewTaxAssociationFilter()
 	}
@@ -832,7 +832,7 @@ func (s *taxService) ListTaxAssociations(ctx context.Context, filter *types.TaxA
 		return nil, err
 	}
 
-	response := &dto.ListTaxConfigsResponse{
+	response := &dto.ListTaxAssociationsResponse{
 		Items: make([]*dto.TaxAssociationResponse, len(taxConfigs)),
 	}
 
