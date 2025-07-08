@@ -139,7 +139,7 @@ func main() {
 			repository.NewCreditNoteRepository,
 			repository.NewCreditNoteLineItemRepository,
 			repository.NewTaxRateRepository,
-			repository.NewTaxConfigRepository,
+			repository.NewTaxAssociationRepository,
 
 			// PubSub
 			pubsubRouter.NewRouter,
