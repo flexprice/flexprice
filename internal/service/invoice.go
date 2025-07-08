@@ -12,7 +12,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	pdf "github.com/flexprice/flexprice/internal/domain/pdf"
-	taxapplied "github.com/flexprice/flexprice/internal/domain/taxapplied"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
@@ -178,18 +177,6 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 			return err
 		}
 
-		// Apply taxes if this is a subscription invoice
-		s.Logger.Infow("applying taxes to invoice",
-			"invoice_id", inv.ID,
-			"subscription_id", inv.SubscriptionID,
-			"customer_id", inv.CustomerID,
-			"period_start", inv.PeriodStart,
-			"period_end", inv.PeriodEnd,
-		)
-		if err := s.handleTaxRateOverrides(ctx, inv, req); err != nil {
-			return err
-		}
-
 		// Convert to response
 		resp = dto.NewInvoiceResponse(inv)
 		return nil
@@ -245,35 +232,6 @@ func (s *invoiceService) GetInvoice(ctx context.Context, id string) (*dto.Invoic
 			return nil, err
 		}
 		response.WithCustomer(&dto.CustomerResponse{Customer: customer})
-	}
-
-	// get tax applied records
-	filter := types.NewNoLimitTaxAppliedFilter()
-	filter.EntityType = types.TaxrateEntityTypeInvoice
-	filter.EntityID = inv.ID
-	appliedTaxes, err := s.TaxAppliedRepo.List(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-
-	// Debug logging
-	s.Logger.Infow("Found tax applied records for invoice",
-		"invoice_id", inv.ID,
-		"tax_applied_count", len(appliedTaxes),
-		"entity_type", types.TaxrateEntityTypeInvoice,
-		"entity_id", inv.ID,
-	)
-
-	if len(appliedTaxes) > 0 {
-		taxes := lo.Map(appliedTaxes, func(tax *taxapplied.TaxApplied, _ int) *dto.TaxAppliedResponse {
-			return &dto.TaxAppliedResponse{TaxApplied: *tax}
-		})
-		s.Logger.Infow("Taxes slice before setting on response", "taxes", taxes)
-		response = response.WithTaxes(taxes)
-		s.Logger.Infow("Added tax applied records to response",
-			"invoice_id", inv.ID,
-			"tax_count", len(taxes),
-		)
 	}
 
 	return response, nil
@@ -1142,11 +1100,6 @@ func (s *invoiceService) RecalculateInvoiceAmounts(ctx context.Context, invoiceI
 		return err
 	}
 
-	// Apply taxes after amount recalculation
-	if err := s.RecalculateTaxesOnInvoice(ctx, inv); err != nil {
-		return err
-	}
-
 	// Publish webhook event
 	s.publishInternalWebhookEvent(ctx, types.WebhookEventInvoiceAmountsRecalculated, inv.ID)
 
@@ -1315,9 +1268,6 @@ func (s *invoiceService) RecalculateInvoice(ctx context.Context, id string, fina
 			return err
 		}
 
-		// STEP 7: Apply taxes after recalculation
-		s.RecalculateTaxesOnInvoice(txCtx, inv)
-
 		s.Logger.Infow("successfully recalculated invoice with fresh calculation",
 			"invoice_id", inv.ID,
 			"subscription_id", *inv.SubscriptionID,
@@ -1354,87 +1304,4 @@ func (s *invoiceService) RecalculateInvoice(ctx context.Context, id string, fina
 
 	// Return updated invoice
 	return s.GetInvoice(ctx, id)
-}
-
-// RecalculateTaxesOnInvoice recalculates taxes on an invoice if it's a subscription invoice
-func (s *invoiceService) RecalculateTaxesOnInvoice(ctx context.Context, inv *invoice.Invoice) error {
-	// Only apply taxes to subscription invoices
-	if inv.InvoiceType != types.InvoiceTypeSubscription || inv.SubscriptionID == nil {
-		return nil
-	}
-
-	// Create a minimal request with subscription ID for tax preparation
-	// This follows the principle of passing only what's needed
-	req := dto.CreateInvoiceRequest{
-		SubscriptionID: inv.SubscriptionID,
-		CustomerID:     inv.CustomerID,
-	}
-
-	// Use tax service to prepare and apply taxes
-	taxService := NewTaxService(s.ServiceParams)
-
-	// Prepare tax rates for the invoice
-	taxRates, err := taxService.PrepareTaxRatesForInvoice(ctx, req)
-	if err != nil {
-		s.Logger.Errorw("failed to prepare tax rates for invoice",
-			"error", err,
-			"invoice_id", inv.ID,
-			"subscription_id", *inv.SubscriptionID)
-		return err
-	}
-
-	// Apply taxes to the invoice
-	taxResult, err := taxService.ApplyTaxesOnInvoice(ctx, inv, taxRates)
-	if err != nil {
-		return err
-	}
-
-	// Update the invoice with calculated tax amounts
-	inv.TotalTax = taxResult.TotalTaxAmount
-	inv.Total = inv.Subtotal.Add(taxResult.TotalTaxAmount)
-
-	// Update the invoice in the database
-	if err := s.InvoiceRepo.Update(ctx, inv); err != nil {
-		s.Logger.Errorw("failed to update invoice with tax amounts",
-			"error", err,
-			"invoice_id", inv.ID,
-			"total_tax", taxResult.TotalTaxAmount,
-			"new_total", inv.Total)
-		return err
-	}
-
-	return nil
-}
-
-func (s *invoiceService) handleTaxRateOverrides(ctx context.Context, inv *invoice.Invoice, req dto.CreateInvoiceRequest) error {
-	// Use tax service to prepare and apply taxes
-	taxService := NewTaxService(s.ServiceParams)
-
-	// Prepare tax rates for the invoice - now only needs the request
-	taxRates, err := taxService.PrepareTaxRatesForInvoice(ctx, req)
-	if err != nil {
-		return err
-	}
-
-	// Apply taxes to the invoice
-	taxResult, err := taxService.ApplyTaxesOnInvoice(ctx, inv, taxRates)
-	if err != nil {
-		return err
-	}
-
-	// Update the invoice with calculated tax amounts
-	inv.TotalTax = taxResult.TotalTaxAmount
-	inv.Total = inv.Subtotal.Add(taxResult.TotalTaxAmount)
-
-	// Update the invoice in the database
-	if err := s.InvoiceRepo.Update(ctx, inv); err != nil {
-		s.Logger.Errorw("failed to update invoice with tax amounts",
-			"error", err,
-			"invoice_id", inv.ID,
-			"total_tax", taxResult.TotalTaxAmount,
-			"new_total", inv.Total)
-		return err
-	}
-
-	return nil
 }

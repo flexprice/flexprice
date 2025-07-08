@@ -84,7 +84,6 @@ func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoi
 		SetSubtotal(inv.Subtotal).
 		SetUpdatedAt(inv.UpdatedAt).
 		SetCreatedBy(inv.CreatedBy).
-		SetTotalTax(inv.TotalTax).
 		SetUpdatedBy(inv.UpdatedBy).
 		SetNillablePeriodStart(inv.PeriodStart).
 		SetNillablePeriodEnd(inv.PeriodEnd).
@@ -166,7 +165,6 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 			SetCurrency(inv.Currency).
 			SetAmountDue(inv.AmountDue).
 			SetAmountPaid(inv.AmountPaid).
-			SetTotalTax(inv.TotalTax).
 			SetAmountRemaining(inv.AmountRemaining).
 			SetIdempotencyKey(lo.FromPtr(inv.IdempotencyKey)).
 			SetInvoiceNumber(lo.FromPtr(inv.InvoiceNumber)).
@@ -434,9 +432,6 @@ func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoi
 		SetAmountDue(inv.AmountDue).
 		SetAmountPaid(inv.AmountPaid).
 		SetAmountRemaining(inv.AmountRemaining).
-		SetSubtotal(inv.Subtotal).
-		SetTotalTax(inv.TotalTax).
-		SetTotal(inv.Total).
 		SetDescription(inv.Description).
 		SetNillableDueDate(inv.DueDate).
 		SetNillablePaidAt(inv.PaidAt).
