@@ -132,9 +132,6 @@ func ToTaxAssociationResponse(tc *taxconfig.TaxAssociation) *TaxAssociationRespo
 	}
 }
 
-// ListTaxConfigsResponse represents the response for listing tax configs
-type ListTaxConfigsResponse = types.ListResponse[*TaxAssociationResponse]
-
 // ListTaxAssociationsResponse represents the response for listing tax associations
 type ListTaxAssociationsResponse = types.ListResponse[*TaxAssociationResponse]
 
