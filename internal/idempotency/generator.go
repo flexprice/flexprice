@@ -23,6 +23,9 @@ const (
 
 	// Credit note
 	ScopeCreditNote Scope = "credit_note"
+
+	// Tax Application
+	ScopeTaxApplication Scope = "tax_application"
 )
 
 // Generator generates idempotency keys

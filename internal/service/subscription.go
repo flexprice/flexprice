@@ -61,7 +61,6 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
-	invoiceService := NewInvoiceService(s.ServiceParams)
 
 	// Get customer based on the provided IDs
 	var customer *customer.Customer
@@ -309,6 +308,22 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			}
 		}
 
+		// handle tax rate linking
+		err = s.handleTaxRateLinking(ctx, sub, req)
+		if err != nil {
+			return err
+		}
+
+		return nil
+
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
+		invoiceService := NewInvoiceService(s.ServiceParams)
+
 		// Create invoice for the subscription (in case it has advance charges)
 		_, err = invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
 			SubscriptionID: sub.ID,
@@ -316,7 +331,10 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			PeriodEnd:      sub.CurrentPeriodEnd,
 			ReferencePoint: types.ReferencePointPeriodStart,
 		})
-		return err
+		if err != nil {
+			return err
+		}
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -324,6 +342,55 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 
 	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionCreated, sub.ID)
 	return response, nil
+}
+
+func (s *subscriptionService) handleTaxRateLinking(ctx context.Context, sub *subscription.Subscription, req dto.CreateSubscriptionRequest) error {
+
+	// handle tax rate linking
+	taxService := NewTaxService(s.ServiceParams)
+	taxLinkingRequests := make([]*dto.CreateEntityTaxAssociation, 0)
+
+	// if subscription has tax rate overrides, link them to the subscription
+	if len(req.TaxRateOverrides) > 0 {
+		// if subscription has tax rate overrides, link them to the subscription
+		for _, taxRateOverride := range req.TaxRateOverrides {
+			taxRateLink := taxRateOverride.ToTaxEntityAssociation(ctx, sub.ID, types.TaxrateEntityTypeSubscription)
+			taxLinkingRequests = append(taxLinkingRequests, taxRateLink)
+		}
+
+	} else {
+		// if subscription has no tax rate overrides, get the tax configs for the customer
+		filter := types.NewNoLimitTaxAssociationFilter()
+		filter.EntityType = types.TaxrateEntityTypeCustomer
+		filter.EntityID = sub.CustomerID
+		filter.Currency = sub.Currency
+		filter.AutoApply = lo.ToPtr(true)
+
+		customerTaxes, err := taxService.ListTaxAssociations(ctx, filter)
+		if err != nil {
+			return err
+		}
+
+		for _, taxConfig := range customerTaxes.Items {
+			// simply just link the tax rate to the subscription
+			taxRateLink := &dto.CreateEntityTaxAssociation{
+				TaxRateID:  lo.ToPtr(taxConfig.TaxRateID),
+				EntityType: types.TaxrateEntityTypeSubscription,
+				EntityID:   sub.ID,
+				Priority:   taxConfig.Priority,
+				AutoApply:  taxConfig.AutoApply,
+			}
+			taxLinkingRequests = append(taxLinkingRequests, taxRateLink)
+		}
+	}
+
+	// link tax rates to subscription
+	_, err := taxService.LinkTaxRatesToEntity(ctx, types.TaxrateEntityTypeSubscription, sub.ID, taxLinkingRequests)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // handleCreditGrants processes credit grants for a subscription and creates wallet top-ups

@@ -44,10 +44,32 @@ func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCust
 			Mark(ierr.ErrValidation)
 	}
 
-	if err := s.CustomerRepo.Create(ctx, cust); err != nil {
-		// No need to wrap the error as the repository already returns properly formatted errors
+	if err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		if err := s.CustomerRepo.Create(txCtx, cust); err != nil {
+			// No need to wrap the error as the repository already returns properly formatted errors
+			return err
+		}
+
+		// Link tax rates to customer if provided
+		if len(req.TaxRateOverrides) > 0 {
+			taxConfigService := NewTaxService(s.ServiceParams)
+
+			taxRateLinks := make([]*dto.CreateEntityTaxAssociation, 0, len(req.TaxRateOverrides))
+			for _, taxRateOverride := range req.TaxRateOverrides {
+				taxRateLink := taxRateOverride.ToTaxEntityAssociation(txCtx, cust.ID, types.TaxrateEntityTypeCustomer)
+				taxRateLinks = append(taxRateLinks, taxRateLink)
+			}
+
+			_, err := taxConfigService.LinkTaxRatesToEntity(txCtx, types.TaxrateEntityTypeCustomer, cust.ID, taxRateLinks)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
 		return nil, err
 	}
+
 	s.publishWebhookEvent(ctx, types.WebhookEventCustomerCreated, cust.ID)
 	return &dto.CustomerResponse{Customer: cust}, nil
 }

@@ -105,6 +105,8 @@ type Invoice struct {
 	// refunded_amount is the total sum of credit notes of type "refund".
 	// These are actual refunds issued to the customer.
 	RefundedAmount decimal.Decimal `json:"refunded_amount"`
+	// TotalTax holds the value of the "total_tax" field.
+	TotalTax decimal.Decimal `json:"total_tax"`
 
 	// common fields including tenant information, creation/update timestamps, and status
 	types.BaseModel
@@ -157,6 +159,7 @@ func FromEnt(e *ent.Invoice) *Invoice {
 		LineItems:        lineItems,
 		Version:          e.Version,
 		EnvironmentID:    e.EnvironmentID,
+		TotalTax:         e.TotalTax,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),
