@@ -144,7 +144,7 @@ func NewTaxRateRepository(p RepositoryParams) taxrate.Repository {
 	return entRepo.NewTaxRateRepository(p.EntClient, p.Logger, p.Cache)
 }
 
-func NewTaxConfigRepository(p RepositoryParams) taxconfig.Repository {
+func NewTaxAssociationRepository(p RepositoryParams) taxconfig.Repository {
 	return entRepo.NewTaxAssociationRepository(p.EntClient, p.Logger, p.Cache)
 }
 
