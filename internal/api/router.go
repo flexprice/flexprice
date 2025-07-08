@@ -36,7 +36,6 @@ type Handlers struct {
 	Secret            *v1.SecretHandler
 	CostSheet         *v1.CostSheetHandler
 	CreditNote        *v1.CreditNoteHandler
-	Tax               *v1.TaxHandler
 
 	Webhook *v1.WebhookHandler
 	// Portal handlers
@@ -264,25 +263,6 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			tasks.GET("/:id", handlers.Task.GetTask)
 			tasks.PUT("/:id/status", handlers.Task.UpdateTaskStatus)
 			tasks.POST("/:id/process", handlers.Task.ProcessTask)
-		}
-
-		// Tax rate routes
-		taxRates := v1Private.Group("/taxrates")
-		{
-			taxRates.POST("", handlers.Tax.CreateTaxRate)
-			taxRates.GET("", handlers.Tax.ListTaxRates)
-			taxRates.GET("/:id", handlers.Tax.GetTaxRate)
-			taxRates.PUT("/:id", handlers.Tax.UpdateTaxRate)
-			taxRates.DELETE("/:id", handlers.Tax.DeleteTaxRate)
-		}
-
-		tax := v1Private.Group("/taxassociations")
-		{
-			tax.POST("", handlers.Tax.CreateTaxAssociation)
-			tax.GET("", handlers.Tax.ListTaxAssociations)
-			tax.GET("/:id", handlers.Tax.GetTaxAssociation)
-			tax.PUT("/:id", handlers.Tax.UpdateTaxAssociation)
-			tax.DELETE("/:id", handlers.Tax.DeleteTaxAssociation)
 		}
 
 		// Secret routes

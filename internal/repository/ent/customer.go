@@ -369,6 +369,7 @@ func (r *customerRepository) Update(ctx context.Context, c *domainCustomer.Custo
 }
 
 func (r *customerRepository) Delete(ctx context.Context, domainCustomer *domainCustomer.Customer) error {
+	client := r.client.Querier(ctx)
 
 	r.log.Debugw("deleting customer",
 		"customer_id", domainCustomer.ID,
@@ -382,7 +383,6 @@ func (r *customerRepository) Delete(ctx context.Context, domainCustomer *domainC
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
 	_, err := client.Customer.Update().
 		Where(
 			customer.ID(domainCustomer.ID),
