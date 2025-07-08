@@ -256,6 +256,20 @@ func (ic *InvoiceCreate) SetNillableRefundedAmount(d *decimal.Decimal) *InvoiceC
 	return ic
 }
 
+// SetTotalTax sets the "total_tax" field.
+func (ic *InvoiceCreate) SetTotalTax(d decimal.Decimal) *InvoiceCreate {
+	ic.mutation.SetTotalTax(d)
+	return ic
+}
+
+// SetNillableTotalTax sets the "total_tax" field if the given value is not nil.
+func (ic *InvoiceCreate) SetNillableTotalTax(d *decimal.Decimal) *InvoiceCreate {
+	if d != nil {
+		ic.SetTotalTax(*d)
+	}
+	return ic
+}
+
 // SetTotal sets the "total" field.
 func (ic *InvoiceCreate) SetTotal(d decimal.Decimal) *InvoiceCreate {
 	ic.mutation.SetTotal(d)
@@ -576,6 +590,10 @@ func (ic *InvoiceCreate) defaults() {
 		v := invoice.DefaultRefundedAmount
 		ic.mutation.SetRefundedAmount(v)
 	}
+	if _, ok := ic.mutation.TotalTax(); !ok {
+		v := invoice.DefaultTotalTax
+		ic.mutation.SetTotalTax(v)
+	}
 	if _, ok := ic.mutation.Total(); !ok {
 		v := invoice.DefaultTotal
 		ic.mutation.SetTotal(v)
@@ -757,6 +775,10 @@ func (ic *InvoiceCreate) createSpec() (*Invoice, *sqlgraph.CreateSpec) {
 	if value, ok := ic.mutation.RefundedAmount(); ok {
 		_spec.SetField(invoice.FieldRefundedAmount, field.TypeOther, value)
 		_node.RefundedAmount = value
+	}
+	if value, ok := ic.mutation.TotalTax(); ok {
+		_spec.SetField(invoice.FieldTotalTax, field.TypeOther, value)
+		_node.TotalTax = value
 	}
 	if value, ok := ic.mutation.Total(); ok {
 		_spec.SetField(invoice.FieldTotal, field.TypeOther, value)
