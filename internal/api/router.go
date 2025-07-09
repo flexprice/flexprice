@@ -133,7 +133,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			price.DELETE("/:id", handlers.Price.DeletePrice)
 		}
 
-		customPricingUnit := v1Private.Group("/cpu")
+		customPricingUnit := v1Private.Group("/pricing_units")
 		{
 			customPricingUnit.POST("", handlers.CustomPricingUnit.CreateCustomPricingUnit)
 			customPricingUnit.GET("", handlers.CustomPricingUnit.GetCustomPricingUnits)

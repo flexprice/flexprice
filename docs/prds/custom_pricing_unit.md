@@ -55,8 +55,16 @@ The system currently:
 type CreatePriceRequest struct {
 	Amount             string                   `json:"amount"`
 	Currency           string                   `json:"currency"omitempty,len=3"`
-	CustomCurrency     string                   `json:"custom_currency_code,omitempty,len=3"`
+	CustomPriceUnitCode     string                   `json:"custom_price_unit_code,omitempty,len=3"`
     // ... existing fields ...
+}
+```
+
+```go
+type PriceResponse struct {
+	*price.Price
+   CustomPriceUnitAmount string `json:"custom_price_unit_amount"`
+	Meter *MeterResponse `json:"meter,omitempty"`
 }
 ```
 

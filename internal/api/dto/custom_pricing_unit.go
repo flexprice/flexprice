@@ -40,9 +40,8 @@ type CustomPricingUnitResponse struct {
 
 // ListCustomPricingUnitsResponse represents the paginated response for listing custom pricing units
 type ListCustomPricingUnitsResponse struct {
-	Data       []CustomPricingUnitResponse `json:"data"`
+	Units      []CustomPricingUnitResponse `json:"units"`
 	TotalCount int                         `json:"total_count"`
-	HasMore    bool                        `json:"has_more"`
 }
 
 // CustomPricingUnitFilter represents the filter options for listing custom pricing units

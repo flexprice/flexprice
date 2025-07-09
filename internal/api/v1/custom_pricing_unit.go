@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/types"
@@ -31,19 +32,25 @@ func NewCustomPricingUnitHandler(service *service.CustomPricingUnitService, log 
 // @Param body body dto.CreateCustomPricingUnitRequest true "Custom pricing unit details"
 // @Success 201 {object} dto.CustomPricingUnitResponse
 // @Failure 400 {object} errors.Error
-// @Router /v1/cpu [post]
+// @Router /v1/pricing_units [post]
 func (h *CustomPricingUnitHandler) CreateCustomPricingUnit(c *gin.Context) {
 	var req dto.CreateCustomPricingUnitRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("failed to bind request", "error", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		h.log.Error("Failed to bind JSON", "error", err)
+		c.Error(ierr.NewError("invalid request body").
+			WithMessage("failed to parse request").
+			WithHint("The request body is invalid").
+			WithReportableDetails(map[string]interface{}{
+				"parsing_error": err.Error(),
+			}).
+			Mark(ierr.ErrValidation))
 		return
 	}
 
 	unit, err := h.service.Create(c.Request.Context(), &req)
 	if err != nil {
-		h.log.Error("failed to create custom pricing unit", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.log.Error("Failed to create custom pricing unit", "error", err)
+		c.Error(err)
 		return
 	}
 
@@ -56,10 +63,10 @@ func (h *CustomPricingUnitHandler) CreateCustomPricingUnit(c *gin.Context) {
 // @Tags Custom Pricing Units
 // @Accept json
 // @Produce json
-// @Param status query string false "Filter by status (published/archived/deleted)"
+// @Param status query string false "Filter by status"
 // @Success 200 {object} dto.ListCustomPricingUnitsResponse
 // @Failure 400 {object} errors.Error
-// @Router /v1/cpu [get]
+// @Router /v1/pricing_units [get]
 func (h *CustomPricingUnitHandler) GetCustomPricingUnits(c *gin.Context) {
 	filter := dto.CustomPricingUnitFilter{
 		Status: types.Status(c.Query("status")),
@@ -67,38 +74,53 @@ func (h *CustomPricingUnitHandler) GetCustomPricingUnits(c *gin.Context) {
 
 	response, err := h.service.List(c.Request.Context(), &filter)
 	if err != nil {
-		h.log.Error("failed to list custom pricing units", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.log.Error("Failed to list custom pricing units", "error", err)
+		c.Error(err)
 		return
 	}
 
 	c.JSON(http.StatusOK, response)
 }
 
-// UpdateCustomPricingUnit handles updating a specific custom pricing unit
+// UpdateCustomPricingUnit handles updating an existing custom pricing unit
 // @Summary Update a custom pricing unit
-// @Description Update a custom pricing unit's details
+// @Description Update an existing custom pricing unit with the provided details
 // @Tags Custom Pricing Units
 // @Accept json
 // @Produce json
 // @Param id path string true "Custom pricing unit ID"
-// @Param body body dto.UpdateCustomPricingUnitRequest true "Updated custom pricing unit details"
+// @Param body body dto.UpdateCustomPricingUnitRequest true "Custom pricing unit details"
 // @Success 200 {object} dto.CustomPricingUnitResponse
-// @Failure 400,404 {object} errors.Error
-// @Router /v1/cpu/{id} [put]
+// @Failure 400 {object} errors.Error
+// @Failure 404 {object} errors.Error
+// @Router /v1/pricing_units/{id} [put]
 func (h *CustomPricingUnitHandler) UpdateCustomPricingUnit(c *gin.Context) {
 	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("id is required").
+			WithMessage("missing id parameter").
+			WithHint("Custom pricing unit ID is required").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
 	var req dto.UpdateCustomPricingUnitRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("failed to bind request", "error", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		h.log.Error("Failed to bind JSON", "error", err)
+		c.Error(ierr.NewError("invalid request body").
+			WithMessage("failed to parse request").
+			WithHint("The request body is invalid").
+			WithReportableDetails(map[string]interface{}{
+				"parsing_error": err.Error(),
+			}).
+			Mark(ierr.ErrValidation))
 		return
 	}
 
 	unit, err := h.service.Update(c.Request.Context(), id, &req)
 	if err != nil {
-		h.log.Error("failed to update custom pricing unit", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.log.Error("Failed to update custom pricing unit", "error", err)
+		c.Error(err)
 		return
 	}
 
@@ -107,22 +129,31 @@ func (h *CustomPricingUnitHandler) UpdateCustomPricingUnit(c *gin.Context) {
 
 // DeleteCustomPricingUnit handles deleting a custom pricing unit
 // @Summary Delete a custom pricing unit
-// @Description Delete a custom pricing unit by its ID
+// @Description Delete an existing custom pricing unit
 // @Tags Custom Pricing Units
 // @Accept json
 // @Produce json
 // @Param id path string true "Custom pricing unit ID"
-// @Success 204 "No Content"
+// @Success 200 {object} gin.H
+// @Failure 400 {object} errors.Error
 // @Failure 404 {object} errors.Error
-// @Router /v1/cpu/{id} [delete]
+// @Router /v1/pricing_units/{id} [delete]
 func (h *CustomPricingUnitHandler) DeleteCustomPricingUnit(c *gin.Context) {
 	id := c.Param("id")
-	err := h.service.Delete(c.Request.Context(), id)
-	if err != nil {
-		h.log.Error("failed to delete custom pricing unit", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	if id == "" {
+		c.Error(ierr.NewError("id is required").
+			WithMessage("missing id parameter").
+			WithHint("Custom pricing unit ID is required").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
-	c.Status(http.StatusNoContent)
+	err := h.service.Delete(c.Request.Context(), id)
+	if err != nil {
+		h.log.Error("Failed to delete custom pricing unit", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Custom pricing unit deleted successfully"})
 }

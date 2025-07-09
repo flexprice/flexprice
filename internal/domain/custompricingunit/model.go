@@ -129,30 +129,3 @@ func (u *CustomPricingUnit) ConvertToBaseCurrency(customAmount decimal.Decimal) 
 func (u *CustomPricingUnit) ConvertFromBaseCurrency(baseAmount decimal.Decimal) decimal.Decimal {
 	return baseAmount.Div(u.ConversionRate)
 }
-
-// Update updates the mutable fields of the custom pricing unit
-func (u *CustomPricingUnit) Update(
-	name, symbol string,
-	conversionRate decimal.Decimal,
-	precision int,
-	status types.Status,
-) error {
-	if name != "" {
-		u.Name = name
-	}
-	if symbol != "" {
-		u.Symbol = symbol
-	}
-	if !conversionRate.IsZero() && !conversionRate.IsNegative() {
-		u.ConversionRate = conversionRate
-	}
-	if precision >= 0 && precision <= 8 {
-		u.Precision = precision
-	}
-	if status != "" && (status == types.StatusPublished || status == types.StatusArchived || status == types.StatusDeleted) {
-		u.Status = status
-	}
-
-	u.UpdatedAt = time.Now()
-	return u.Validate()
-}
