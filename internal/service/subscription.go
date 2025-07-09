@@ -376,6 +376,15 @@ func (s *subscriptionService) handleTaxRateLinking(ctx context.Context, sub *sub
 			return err
 		}
 
+		// if customer has no tax associations, do not link any tax rates to the subscription
+		if len(customerTaxes.Items) == 0 {
+			s.Logger.Infow("no tax associations found for customer, skipping tax rate linking for subscription",
+				"customer_id", sub.CustomerID,
+				"subscription_id", sub.ID,
+			)
+			return nil
+		}
+		// if customer has tax associations, link them to the subscription
 		for _, taxConfig := range customerTaxes.Items {
 			// simply just link the tax rate to the subscription
 			taxRateLink := &dto.CreateEntityTaxAssociation{
