@@ -48,6 +48,7 @@ const (
 	UUID_PREFIX_SECRET                      = "secret"
 	UUID_PREFIX_CREDIT_GRANT                = "cg"
 	UUID_PREFIX_STRIPE_BATCH                = "sbatch"
+	UUID_PREFIX_ENTITY_INTEGRATION_MAPPING  = "eim"
 
 	UUID_PREFIX_WEBHOOK_EVENT = "webhook"
 )

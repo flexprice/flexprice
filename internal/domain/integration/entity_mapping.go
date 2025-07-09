@@ -152,6 +152,7 @@ func (e *EntityIntegrationMapping) Validate() error {
 // NewCustomerMapping creates a new entity integration mapping for a customer
 func NewCustomerMapping(customerID, providerCustomerID string, providerType ProviderType, environmentID string, metadata map[string]interface{}) *EntityIntegrationMapping {
 	return &EntityIntegrationMapping{
+		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
 		EntityID:         customerID,
 		EntityType:       EntityTypeCustomer,
 		ProviderType:     providerType,
