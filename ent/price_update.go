@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/costsheet"
+	"github.com/flexprice/flexprice/ent/custompricingunit"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/schema"
@@ -117,6 +118,26 @@ func (pu *PriceUpdate) SetNillableDisplayAmount(s *string) *PriceUpdate {
 	if s != nil {
 		pu.SetDisplayAmount(*s)
 	}
+	return pu
+}
+
+// SetCustomPricingUnitID sets the "custom_pricing_unit_id" field.
+func (pu *PriceUpdate) SetCustomPricingUnitID(s string) *PriceUpdate {
+	pu.mutation.SetCustomPricingUnitID(s)
+	return pu
+}
+
+// SetNillableCustomPricingUnitID sets the "custom_pricing_unit_id" field if the given value is not nil.
+func (pu *PriceUpdate) SetNillableCustomPricingUnitID(s *string) *PriceUpdate {
+	if s != nil {
+		pu.SetCustomPricingUnitID(*s)
+	}
+	return pu
+}
+
+// ClearCustomPricingUnitID clears the value of the "custom_pricing_unit_id" field.
+func (pu *PriceUpdate) ClearCustomPricingUnitID() *PriceUpdate {
+	pu.mutation.ClearCustomPricingUnitID()
 	return pu
 }
 
@@ -368,6 +389,11 @@ func (pu *PriceUpdate) AddCostsheet(c ...*Costsheet) *PriceUpdate {
 	return pu.AddCostsheetIDs(ids...)
 }
 
+// SetCustomPricingUnit sets the "custom_pricing_unit" edge to the CustomPricingUnit entity.
+func (pu *PriceUpdate) SetCustomPricingUnit(c *CustomPricingUnit) *PriceUpdate {
+	return pu.SetCustomPricingUnitID(c.ID)
+}
+
 // Mutation returns the PriceMutation object of the builder.
 func (pu *PriceUpdate) Mutation() *PriceMutation {
 	return pu.mutation
@@ -392,6 +418,12 @@ func (pu *PriceUpdate) RemoveCostsheet(c ...*Costsheet) *PriceUpdate {
 		ids[i] = c[i].ID
 	}
 	return pu.RemoveCostsheetIDs(ids...)
+}
+
+// ClearCustomPricingUnit clears the "custom_pricing_unit" edge to the CustomPricingUnit entity.
+func (pu *PriceUpdate) ClearCustomPricingUnit() *PriceUpdate {
+	pu.mutation.ClearCustomPricingUnit()
+	return pu
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -639,6 +671,35 @@ func (pu *PriceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if pu.mutation.CustomPricingUnitCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   price.CustomPricingUnitTable,
+			Columns: []string{price.CustomPricingUnitColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(custompricingunit.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := pu.mutation.CustomPricingUnitIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   price.CustomPricingUnitTable,
+			Columns: []string{price.CustomPricingUnitColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(custompricingunit.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if n, err = sqlgraph.UpdateNodes(ctx, pu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{price.Label}
@@ -745,6 +806,26 @@ func (puo *PriceUpdateOne) SetNillableDisplayAmount(s *string) *PriceUpdateOne {
 	if s != nil {
 		puo.SetDisplayAmount(*s)
 	}
+	return puo
+}
+
+// SetCustomPricingUnitID sets the "custom_pricing_unit_id" field.
+func (puo *PriceUpdateOne) SetCustomPricingUnitID(s string) *PriceUpdateOne {
+	puo.mutation.SetCustomPricingUnitID(s)
+	return puo
+}
+
+// SetNillableCustomPricingUnitID sets the "custom_pricing_unit_id" field if the given value is not nil.
+func (puo *PriceUpdateOne) SetNillableCustomPricingUnitID(s *string) *PriceUpdateOne {
+	if s != nil {
+		puo.SetCustomPricingUnitID(*s)
+	}
+	return puo
+}
+
+// ClearCustomPricingUnitID clears the value of the "custom_pricing_unit_id" field.
+func (puo *PriceUpdateOne) ClearCustomPricingUnitID() *PriceUpdateOne {
+	puo.mutation.ClearCustomPricingUnitID()
 	return puo
 }
 
@@ -996,6 +1077,11 @@ func (puo *PriceUpdateOne) AddCostsheet(c ...*Costsheet) *PriceUpdateOne {
 	return puo.AddCostsheetIDs(ids...)
 }
 
+// SetCustomPricingUnit sets the "custom_pricing_unit" edge to the CustomPricingUnit entity.
+func (puo *PriceUpdateOne) SetCustomPricingUnit(c *CustomPricingUnit) *PriceUpdateOne {
+	return puo.SetCustomPricingUnitID(c.ID)
+}
+
 // Mutation returns the PriceMutation object of the builder.
 func (puo *PriceUpdateOne) Mutation() *PriceMutation {
 	return puo.mutation
@@ -1020,6 +1106,12 @@ func (puo *PriceUpdateOne) RemoveCostsheet(c ...*Costsheet) *PriceUpdateOne {
 		ids[i] = c[i].ID
 	}
 	return puo.RemoveCostsheetIDs(ids...)
+}
+
+// ClearCustomPricingUnit clears the "custom_pricing_unit" edge to the CustomPricingUnit entity.
+func (puo *PriceUpdateOne) ClearCustomPricingUnit() *PriceUpdateOne {
+	puo.mutation.ClearCustomPricingUnit()
+	return puo
 }
 
 // Where appends a list predicates to the PriceUpdate builder.
@@ -1290,6 +1382,35 @@ func (puo *PriceUpdateOne) sqlSave(ctx context.Context) (_node *Price, err error
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(costsheet.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if puo.mutation.CustomPricingUnitCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   price.CustomPricingUnitTable,
+			Columns: []string{price.CustomPricingUnitColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(custompricingunit.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := puo.mutation.CustomPricingUnitIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   price.CustomPricingUnitTable,
+			Columns: []string{price.CustomPricingUnitColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(custompricingunit.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

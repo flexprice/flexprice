@@ -10,6 +10,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/flexprice/flexprice/ent/custompricingunit"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/schema"
 )
@@ -39,6 +40,8 @@ type Price struct {
 	Currency string `json:"currency,omitempty"`
 	// DisplayAmount holds the value of the "display_amount" field.
 	DisplayAmount string `json:"display_amount,omitempty"`
+	// CustomPricingUnitID holds the value of the "custom_pricing_unit_id" field.
+	CustomPricingUnitID string `json:"custom_pricing_unit_id,omitempty"`
 	// PlanID holds the value of the "plan_id" field.
 	PlanID string `json:"plan_id,omitempty"`
 	// Type holds the value of the "type" field.
@@ -81,9 +84,11 @@ type Price struct {
 type PriceEdges struct {
 	// Costsheet holds the value of the costsheet edge.
 	Costsheet []*Costsheet `json:"costsheet,omitempty"`
+	// CustomPricingUnit holds the value of the custom_pricing_unit edge.
+	CustomPricingUnit *CustomPricingUnit `json:"custom_pricing_unit,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [1]bool
+	loadedTypes [2]bool
 }
 
 // CostsheetOrErr returns the Costsheet value or an error if the edge
@@ -93,6 +98,17 @@ func (e PriceEdges) CostsheetOrErr() ([]*Costsheet, error) {
 		return e.Costsheet, nil
 	}
 	return nil, &NotLoadedError{edge: "costsheet"}
+}
+
+// CustomPricingUnitOrErr returns the CustomPricingUnit value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e PriceEdges) CustomPricingUnitOrErr() (*CustomPricingUnit, error) {
+	if e.CustomPricingUnit != nil {
+		return e.CustomPricingUnit, nil
+	} else if e.loadedTypes[1] {
+		return nil, &NotFoundError{label: custompricingunit.Label}
+	}
+	return nil, &NotLoadedError{edge: "custom_pricing_unit"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -106,7 +122,7 @@ func (*Price) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullFloat64)
 		case price.FieldBillingPeriodCount, price.FieldTrialPeriod:
 			values[i] = new(sql.NullInt64)
-		case price.FieldID, price.FieldTenantID, price.FieldStatus, price.FieldCreatedBy, price.FieldUpdatedBy, price.FieldEnvironmentID, price.FieldCurrency, price.FieldDisplayAmount, price.FieldPlanID, price.FieldType, price.FieldBillingPeriod, price.FieldBillingModel, price.FieldBillingCadence, price.FieldInvoiceCadence, price.FieldMeterID, price.FieldTierMode, price.FieldLookupKey, price.FieldDescription:
+		case price.FieldID, price.FieldTenantID, price.FieldStatus, price.FieldCreatedBy, price.FieldUpdatedBy, price.FieldEnvironmentID, price.FieldCurrency, price.FieldDisplayAmount, price.FieldCustomPricingUnitID, price.FieldPlanID, price.FieldType, price.FieldBillingPeriod, price.FieldBillingModel, price.FieldBillingCadence, price.FieldInvoiceCadence, price.FieldMeterID, price.FieldTierMode, price.FieldLookupKey, price.FieldDescription:
 			values[i] = new(sql.NullString)
 		case price.FieldCreatedAt, price.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -190,6 +206,12 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field display_amount", values[i])
 			} else if value.Valid {
 				pr.DisplayAmount = value.String
+			}
+		case price.FieldCustomPricingUnitID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field custom_pricing_unit_id", values[i])
+			} else if value.Valid {
+				pr.CustomPricingUnitID = value.String
 			}
 		case price.FieldPlanID:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -315,6 +337,11 @@ func (pr *Price) QueryCostsheet() *CostsheetQuery {
 	return NewPriceClient(pr.config).QueryCostsheet(pr)
 }
 
+// QueryCustomPricingUnit queries the "custom_pricing_unit" edge of the Price entity.
+func (pr *Price) QueryCustomPricingUnit() *CustomPricingUnitQuery {
+	return NewPriceClient(pr.config).QueryCustomPricingUnit(pr)
+}
+
 // Update returns a builder for updating this Price.
 // Note that you need to call Price.Unwrap() before calling this method if this Price
 // was returned from a transaction, and the transaction was committed or rolled back.
@@ -367,6 +394,9 @@ func (pr *Price) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("display_amount=")
 	builder.WriteString(pr.DisplayAmount)
+	builder.WriteString(", ")
+	builder.WriteString("custom_pricing_unit_id=")
+	builder.WriteString(pr.CustomPricingUnitID)
 	builder.WriteString(", ")
 	builder.WriteString("plan_id=")
 	builder.WriteString(pr.PlanID)

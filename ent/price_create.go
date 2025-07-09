@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/costsheet"
+	"github.com/flexprice/flexprice/ent/custompricingunit"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/schema"
 )
@@ -127,6 +128,20 @@ func (pc *PriceCreate) SetCurrency(s string) *PriceCreate {
 // SetDisplayAmount sets the "display_amount" field.
 func (pc *PriceCreate) SetDisplayAmount(s string) *PriceCreate {
 	pc.mutation.SetDisplayAmount(s)
+	return pc
+}
+
+// SetCustomPricingUnitID sets the "custom_pricing_unit_id" field.
+func (pc *PriceCreate) SetCustomPricingUnitID(s string) *PriceCreate {
+	pc.mutation.SetCustomPricingUnitID(s)
+	return pc
+}
+
+// SetNillableCustomPricingUnitID sets the "custom_pricing_unit_id" field if the given value is not nil.
+func (pc *PriceCreate) SetNillableCustomPricingUnitID(s *string) *PriceCreate {
+	if s != nil {
+		pc.SetCustomPricingUnitID(*s)
+	}
 	return pc
 }
 
@@ -301,6 +316,11 @@ func (pc *PriceCreate) AddCostsheet(c ...*Costsheet) *PriceCreate {
 		ids[i] = c[i].ID
 	}
 	return pc.AddCostsheetIDs(ids...)
+}
+
+// SetCustomPricingUnit sets the "custom_pricing_unit" edge to the CustomPricingUnit entity.
+func (pc *PriceCreate) SetCustomPricingUnit(c *CustomPricingUnit) *PriceCreate {
+	return pc.SetCustomPricingUnitID(c.ID)
 }
 
 // Mutation returns the PriceMutation object of the builder.
@@ -602,6 +622,23 @@ func (pc *PriceCreate) createSpec() (*Price, *sqlgraph.CreateSpec) {
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := pc.mutation.CustomPricingUnitIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   price.CustomPricingUnitTable,
+			Columns: []string{price.CustomPricingUnitColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(custompricingunit.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.CustomPricingUnitID = nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec

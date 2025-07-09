@@ -34,6 +34,8 @@ const (
 	FieldCurrency = "currency"
 	// FieldDisplayAmount holds the string denoting the display_amount field in the database.
 	FieldDisplayAmount = "display_amount"
+	// FieldCustomPricingUnitID holds the string denoting the custom_pricing_unit_id field in the database.
+	FieldCustomPricingUnitID = "custom_pricing_unit_id"
 	// FieldPlanID holds the string denoting the plan_id field in the database.
 	FieldPlanID = "plan_id"
 	// FieldType holds the string denoting the type field in the database.
@@ -68,6 +70,8 @@ const (
 	FieldMetadata = "metadata"
 	// EdgeCostsheet holds the string denoting the costsheet edge name in mutations.
 	EdgeCostsheet = "costsheet"
+	// EdgeCustomPricingUnit holds the string denoting the custom_pricing_unit edge name in mutations.
+	EdgeCustomPricingUnit = "custom_pricing_unit"
 	// Table holds the table name of the price in the database.
 	Table = "prices"
 	// CostsheetTable is the table that holds the costsheet relation/edge.
@@ -77,6 +81,13 @@ const (
 	CostsheetInverseTable = "costsheet"
 	// CostsheetColumn is the table column denoting the costsheet relation/edge.
 	CostsheetColumn = "price_id"
+	// CustomPricingUnitTable is the table that holds the custom_pricing_unit relation/edge.
+	CustomPricingUnitTable = "prices"
+	// CustomPricingUnitInverseTable is the table name for the CustomPricingUnit entity.
+	// It exists in this package in order to avoid circular dependency with the "custompricingunit" package.
+	CustomPricingUnitInverseTable = "custom_pricing_unit"
+	// CustomPricingUnitColumn is the table column denoting the custom_pricing_unit relation/edge.
+	CustomPricingUnitColumn = "custom_pricing_unit_id"
 )
 
 // Columns holds all SQL columns for price fields.
@@ -92,6 +103,7 @@ var Columns = []string{
 	FieldAmount,
 	FieldCurrency,
 	FieldDisplayAmount,
+	FieldCustomPricingUnitID,
 	FieldPlanID,
 	FieldType,
 	FieldBillingPeriod,
@@ -211,6 +223,11 @@ func ByDisplayAmount(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDisplayAmount, opts...).ToFunc()
 }
 
+// ByCustomPricingUnitID orders the results by the custom_pricing_unit_id field.
+func ByCustomPricingUnitID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCustomPricingUnitID, opts...).ToFunc()
+}
+
 // ByPlanID orders the results by the plan_id field.
 func ByPlanID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPlanID, opts...).ToFunc()
@@ -284,10 +301,24 @@ func ByCostsheet(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newCostsheetStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
+
+// ByCustomPricingUnitField orders the results by custom_pricing_unit field.
+func ByCustomPricingUnitField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newCustomPricingUnitStep(), sql.OrderByField(field, opts...))
+	}
+}
 func newCostsheetStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(CostsheetInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, CostsheetTable, CostsheetColumn),
+	)
+}
+func newCustomPricingUnitStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(CustomPricingUnitInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, false, CustomPricingUnitTable, CustomPricingUnitColumn),
 	)
 }

@@ -20,6 +20,7 @@ import (
 	"github.com/flexprice/flexprice/ent/creditnote"
 	"github.com/flexprice/flexprice/ent/creditnotelineitem"
 	"github.com/flexprice/flexprice/ent/customer"
+	"github.com/flexprice/flexprice/ent/custompricingunit"
 	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/ent/environment"
 	"github.com/flexprice/flexprice/ent/feature"
@@ -109,6 +110,7 @@ func checkColumn(table, column string) error {
 			creditgrantapplication.Table:    creditgrantapplication.ValidColumn,
 			creditnote.Table:                creditnote.ValidColumn,
 			creditnotelineitem.Table:        creditnotelineitem.ValidColumn,
+			custompricingunit.Table:         custompricingunit.ValidColumn,
 			customer.Table:                  customer.ValidColumn,
 			entitlement.Table:               entitlement.ValidColumn,
 			environment.Table:               environment.ValidColumn,

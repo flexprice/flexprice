@@ -115,6 +115,11 @@ func DisplayAmount(v string) predicate.Price {
 	return predicate.Price(sql.FieldEQ(FieldDisplayAmount, v))
 }
 
+// CustomPricingUnitID applies equality check predicate on the "custom_pricing_unit_id" field. It's identical to CustomPricingUnitIDEQ.
+func CustomPricingUnitID(v string) predicate.Price {
+	return predicate.Price(sql.FieldEQ(FieldCustomPricingUnitID, v))
+}
+
 // PlanID applies equality check predicate on the "plan_id" field. It's identical to PlanIDEQ.
 func PlanID(v string) predicate.Price {
 	return predicate.Price(sql.FieldEQ(FieldPlanID, v))
@@ -778,6 +783,81 @@ func DisplayAmountEqualFold(v string) predicate.Price {
 // DisplayAmountContainsFold applies the ContainsFold predicate on the "display_amount" field.
 func DisplayAmountContainsFold(v string) predicate.Price {
 	return predicate.Price(sql.FieldContainsFold(FieldDisplayAmount, v))
+}
+
+// CustomPricingUnitIDEQ applies the EQ predicate on the "custom_pricing_unit_id" field.
+func CustomPricingUnitIDEQ(v string) predicate.Price {
+	return predicate.Price(sql.FieldEQ(FieldCustomPricingUnitID, v))
+}
+
+// CustomPricingUnitIDNEQ applies the NEQ predicate on the "custom_pricing_unit_id" field.
+func CustomPricingUnitIDNEQ(v string) predicate.Price {
+	return predicate.Price(sql.FieldNEQ(FieldCustomPricingUnitID, v))
+}
+
+// CustomPricingUnitIDIn applies the In predicate on the "custom_pricing_unit_id" field.
+func CustomPricingUnitIDIn(vs ...string) predicate.Price {
+	return predicate.Price(sql.FieldIn(FieldCustomPricingUnitID, vs...))
+}
+
+// CustomPricingUnitIDNotIn applies the NotIn predicate on the "custom_pricing_unit_id" field.
+func CustomPricingUnitIDNotIn(vs ...string) predicate.Price {
+	return predicate.Price(sql.FieldNotIn(FieldCustomPricingUnitID, vs...))
+}
+
+// CustomPricingUnitIDGT applies the GT predicate on the "custom_pricing_unit_id" field.
+func CustomPricingUnitIDGT(v string) predicate.Price {
+	return predicate.Price(sql.FieldGT(FieldCustomPricingUnitID, v))
+}
+
+// CustomPricingUnitIDGTE applies the GTE predicate on the "custom_pricing_unit_id" field.
+func CustomPricingUnitIDGTE(v string) predicate.Price {
+	return predicate.Price(sql.FieldGTE(FieldCustomPricingUnitID, v))
+}
+
+// CustomPricingUnitIDLT applies the LT predicate on the "custom_pricing_unit_id" field.
+func CustomPricingUnitIDLT(v string) predicate.Price {
+	return predicate.Price(sql.FieldLT(FieldCustomPricingUnitID, v))
+}
+
+// CustomPricingUnitIDLTE applies the LTE predicate on the "custom_pricing_unit_id" field.
+func CustomPricingUnitIDLTE(v string) predicate.Price {
+	return predicate.Price(sql.FieldLTE(FieldCustomPricingUnitID, v))
+}
+
+// CustomPricingUnitIDContains applies the Contains predicate on the "custom_pricing_unit_id" field.
+func CustomPricingUnitIDContains(v string) predicate.Price {
+	return predicate.Price(sql.FieldContains(FieldCustomPricingUnitID, v))
+}
+
+// CustomPricingUnitIDHasPrefix applies the HasPrefix predicate on the "custom_pricing_unit_id" field.
+func CustomPricingUnitIDHasPrefix(v string) predicate.Price {
+	return predicate.Price(sql.FieldHasPrefix(FieldCustomPricingUnitID, v))
+}
+
+// CustomPricingUnitIDHasSuffix applies the HasSuffix predicate on the "custom_pricing_unit_id" field.
+func CustomPricingUnitIDHasSuffix(v string) predicate.Price {
+	return predicate.Price(sql.FieldHasSuffix(FieldCustomPricingUnitID, v))
+}
+
+// CustomPricingUnitIDIsNil applies the IsNil predicate on the "custom_pricing_unit_id" field.
+func CustomPricingUnitIDIsNil() predicate.Price {
+	return predicate.Price(sql.FieldIsNull(FieldCustomPricingUnitID))
+}
+
+// CustomPricingUnitIDNotNil applies the NotNil predicate on the "custom_pricing_unit_id" field.
+func CustomPricingUnitIDNotNil() predicate.Price {
+	return predicate.Price(sql.FieldNotNull(FieldCustomPricingUnitID))
+}
+
+// CustomPricingUnitIDEqualFold applies the EqualFold predicate on the "custom_pricing_unit_id" field.
+func CustomPricingUnitIDEqualFold(v string) predicate.Price {
+	return predicate.Price(sql.FieldEqualFold(FieldCustomPricingUnitID, v))
+}
+
+// CustomPricingUnitIDContainsFold applies the ContainsFold predicate on the "custom_pricing_unit_id" field.
+func CustomPricingUnitIDContainsFold(v string) predicate.Price {
+	return predicate.Price(sql.FieldContainsFold(FieldCustomPricingUnitID, v))
 }
 
 // PlanIDEQ applies the EQ predicate on the "plan_id" field.
@@ -1615,6 +1695,29 @@ func HasCostsheet() predicate.Price {
 func HasCostsheetWith(preds ...predicate.Costsheet) predicate.Price {
 	return predicate.Price(func(s *sql.Selector) {
 		step := newCostsheetStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasCustomPricingUnit applies the HasEdge predicate on the "custom_pricing_unit" edge.
+func HasCustomPricingUnit() predicate.Price {
+	return predicate.Price(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, CustomPricingUnitTable, CustomPricingUnitColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasCustomPricingUnitWith applies the HasEdge predicate on the "custom_pricing_unit" edge with a given conditions (other predicates).
+func HasCustomPricingUnitWith(preds ...predicate.CustomPricingUnit) predicate.Price {
+	return predicate.Price(func(s *sql.Selector) {
+		step := newCustomPricingUnitStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

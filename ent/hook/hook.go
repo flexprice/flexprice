@@ -93,6 +93,18 @@ func (f CreditNoteLineItemFunc) Mutate(ctx context.Context, m ent.Mutation) (ent
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CreditNoteLineItemMutation", m)
 }
 
+// The CustomPricingUnitFunc type is an adapter to allow the use of ordinary
+// function as CustomPricingUnit mutator.
+type CustomPricingUnitFunc func(context.Context, *ent.CustomPricingUnitMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f CustomPricingUnitFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.CustomPricingUnitMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CustomPricingUnitMutation", m)
+}
+
 // The CustomerFunc type is an adapter to allow the use of ordinary
 // function as Customer mutator.
 type CustomerFunc func(context.Context, *ent.CustomerMutation) (ent.Value, error)

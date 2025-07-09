@@ -325,6 +325,44 @@ var (
 			},
 		},
 	}
+	// CustomPricingUnitColumns holds the columns for the "custom_pricing_unit" table.
+	CustomPricingUnitColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "name", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "code", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(3)"}},
+		{Name: "symbol", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(10)"}},
+		{Name: "base_currency", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(3)"}},
+		{Name: "conversion_rate", Type: field.TypeOther, Default: "1", SchemaType: map[string]string{"postgres": "numeric(10,5)"}},
+		{Name: "precision", Type: field.TypeInt, Default: 0},
+	}
+	// CustomPricingUnitTable holds the schema information for the "custom_pricing_unit" table.
+	CustomPricingUnitTable = &schema.Table{
+		Name:       "custom_pricing_unit",
+		Columns:    CustomPricingUnitColumns,
+		PrimaryKey: []*schema.Column{CustomPricingUnitColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "custompricingunit_code_tenant_id_environment_id",
+				Unique:  true,
+				Columns: []*schema.Column{CustomPricingUnitColumns[9], CustomPricingUnitColumns[1], CustomPricingUnitColumns[7]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published'",
+				},
+			},
+			{
+				Name:    "custompricingunit_tenant_id_environment_id",
+				Unique:  false,
+				Columns: []*schema.Column{CustomPricingUnitColumns[1], CustomPricingUnitColumns[7]},
+			},
+		},
+	}
 	// CustomersColumns holds the columns for the "customers" table.
 	CustomersColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -900,12 +938,21 @@ var (
 		{Name: "lookup_key", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "description", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
+		{Name: "custom_pricing_unit_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// PricesTable holds the schema information for the "prices" table.
 	PricesTable = &schema.Table{
 		Name:       "prices",
 		Columns:    PricesColumns,
 		PrimaryKey: []*schema.Column{PricesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "prices_custom_pricing_unit_custom_pricing_unit",
+				Columns:    []*schema.Column{PricesColumns[27]},
+				RefColumns: []*schema.Column{CustomPricingUnitColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
 		Indexes: []*schema.Index{
 			{
 				Name:    "price_tenant_id_environment_id_lookup_key",
@@ -1484,6 +1531,7 @@ var (
 		CreditGrantApplicationsTable,
 		CreditNotesTable,
 		CreditNoteLineItemsTable,
+		CustomPricingUnitTable,
 		CustomersTable,
 		EntitlementsTable,
 		EnvironmentsTable,
@@ -1519,9 +1567,13 @@ func init() {
 	CreditGrantsTable.ForeignKeys[0].RefTable = PlansTable
 	CreditGrantsTable.ForeignKeys[1].RefTable = SubscriptionsTable
 	CreditNoteLineItemsTable.ForeignKeys[0].RefTable = CreditNotesTable
+	CustomPricingUnitTable.Annotation = &entsql.Annotation{
+		Table: "custom_pricing_unit",
+	}
 	EntitlementsTable.ForeignKeys[0].RefTable = PlansTable
 	InvoiceLineItemsTable.ForeignKeys[0].RefTable = InvoicesTable
 	PaymentAttemptsTable.ForeignKeys[0].RefTable = PaymentsTable
+	PricesTable.ForeignKeys[0].RefTable = CustomPricingUnitTable
 	SubscriptionLineItemsTable.ForeignKeys[0].RefTable = SubscriptionsTable
 	SubscriptionPausesTable.ForeignKeys[0].RefTable = SubscriptionsTable
 	SubscriptionSchedulesTable.ForeignKeys[0].RefTable = SubscriptionsTable
