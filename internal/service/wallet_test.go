@@ -8,7 +8,9 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
@@ -188,7 +190,7 @@ func (s *WalletServiceSuite) setupTestData() {
 		BillingPeriodCount: 1,
 		BillingModel:       types.BILLING_MODEL_TIERED,
 		BillingCadence:     types.BILLING_CADENCE_RECURRING,
-		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
 		TierMode:           types.BILLING_TIER_SLAB,
 		MeterID:            s.testData.meters.apiCalls.ID,
 		Tiers: []price.PriceTier{
@@ -210,7 +212,7 @@ func (s *WalletServiceSuite) setupTestData() {
 		BillingPeriodCount: 1,
 		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
 		BillingCadence:     types.BILLING_CADENCE_RECURRING,
-		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
 		MeterID:            s.testData.meters.storage.ID,
 		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
 	}
@@ -226,11 +228,45 @@ func (s *WalletServiceSuite) setupTestData() {
 		BillingPeriodCount: 1,
 		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
 		BillingCadence:     types.BILLING_CADENCE_RECURRING,
-		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
 		MeterID:            s.testData.meters.storageArchive.ID,
 		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
 	}
 	s.NoError(s.GetStores().PriceRepo.Create(s.GetContext(), s.testData.prices.storageArchive))
+
+	// Create features for meters
+	apiCallsFeature := &feature.Feature{
+		ID:          "feat_api_calls",
+		Name:        "API Calls",
+		Description: "API Calls Feature",
+		Type:        types.FeatureTypeMetered,
+		MeterID:     s.testData.meters.apiCalls.ID,
+		BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
+	}
+	err := s.GetStores().FeatureRepo.Create(s.GetContext(), apiCallsFeature)
+	s.NoError(err)
+
+	storageFeature := &feature.Feature{
+		ID:          "feat_storage",
+		Name:        "Storage",
+		Description: "Storage Feature",
+		Type:        types.FeatureTypeMetered,
+		MeterID:     s.testData.meters.storage.ID,
+		BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
+	}
+	err = s.GetStores().FeatureRepo.Create(s.GetContext(), storageFeature)
+	s.NoError(err)
+
+	storageArchiveFeature := &feature.Feature{
+		ID:          "feat_storage_archive",
+		Name:        "Storage Archive",
+		Description: "Storage Archive Feature",
+		Type:        types.FeatureTypeMetered,
+		MeterID:     s.testData.meters.storageArchive.ID,
+		BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
+	}
+	err = s.GetStores().FeatureRepo.Create(s.GetContext(), storageArchiveFeature)
+	s.NoError(err)
 
 	s.testData.now = time.Now().UTC()
 	s.testData.subscription = &subscription.Subscription{
@@ -245,7 +281,59 @@ func (s *WalletServiceSuite) setupTestData() {
 		BillingPeriodCount: 1,
 		SubscriptionStatus: types.SubscriptionStatusActive,
 		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
-		LineItems:          []*subscription.SubscriptionLineItem{},
+		LineItems: []*subscription.SubscriptionLineItem{
+			{
+				CustomerID:       s.testData.customer.ID,
+				PlanID:           s.testData.plan.ID,
+				PlanDisplayName:  s.testData.plan.Name,
+				PriceID:          s.testData.prices.storage.ID,
+				PriceType:        types.PRICE_TYPE_USAGE,
+				MeterID:          s.testData.meters.storage.ID,
+				MeterDisplayName: s.testData.meters.storage.Name,
+				DisplayName:      s.testData.meters.storage.Name,
+				Quantity:         decimal.NewFromInt(0),
+				BillingPeriod:    types.BILLING_PERIOD_MONTHLY,
+				InvoiceCadence:   types.InvoiceCadenceArrear,
+				StartDate:        s.testData.now.Add(-24 * time.Hour),
+				EndDate:          s.testData.now.Add(6 * 24 * time.Hour),
+				Metadata:         map[string]string{},
+				BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+			},
+			{
+				CustomerID:       s.testData.customer.ID,
+				PlanID:           s.testData.plan.ID,
+				PlanDisplayName:  s.testData.plan.Name,
+				PriceID:          s.testData.prices.storageArchive.ID,
+				PriceType:        types.PRICE_TYPE_USAGE,
+				MeterID:          s.testData.meters.storageArchive.ID,
+				MeterDisplayName: s.testData.meters.storageArchive.Name,
+				DisplayName:      s.testData.meters.storageArchive.Name,
+				Quantity:         decimal.NewFromInt(0),
+				BillingPeriod:    types.BILLING_PERIOD_MONTHLY,
+				InvoiceCadence:   types.InvoiceCadenceArrear,
+				StartDate:        s.testData.now.Add(-24 * time.Hour),
+				EndDate:          s.testData.now.Add(6 * 24 * time.Hour),
+				Metadata:         map[string]string{},
+				BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+			},
+			{
+				CustomerID:       s.testData.customer.ID,
+				PlanID:           s.testData.plan.ID,
+				PlanDisplayName:  s.testData.plan.Name,
+				PriceID:          s.testData.prices.apiCalls.ID,
+				PriceType:        types.PRICE_TYPE_USAGE,
+				MeterID:          s.testData.meters.apiCalls.ID,
+				MeterDisplayName: s.testData.meters.apiCalls.Name,
+				DisplayName:      s.testData.meters.apiCalls.Name,
+				Quantity:         decimal.NewFromInt(0),
+				BillingPeriod:    types.BILLING_PERIOD_MONTHLY,
+				InvoiceCadence:   types.InvoiceCadenceArrear,
+				StartDate:        s.testData.now.Add(-24 * time.Hour),
+				EndDate:          s.testData.now.Add(6 * 24 * time.Hour),
+				Metadata:         map[string]string{},
+				BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+			},
+		},
 	}
 	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(s.GetContext(), s.testData.subscription, s.testData.subscription.LineItems))
 
@@ -262,30 +350,35 @@ func (s *WalletServiceSuite) setupTestData() {
 		s.NoError(s.GetStores().EventRepo.InsertEvent(s.GetContext(), event))
 	}
 
-	storageEvents := []struct {
-		bytes float64
-		tier  string
-	}{
-		{bytes: 100, tier: "standard"},
-		{bytes: 200, tier: "standard"},
-		{bytes: 300, tier: "archive"},
+	// Create storage events
+	storageEvent := &events.Event{
+		ID:                 s.GetUUID(),
+		TenantID:           s.testData.subscription.TenantID,
+		EventName:          s.testData.meters.storage.EventName,
+		ExternalCustomerID: s.testData.customer.ExternalID,
+		Timestamp:          s.testData.now.Add(-1 * time.Hour),
+		Properties: map[string]interface{}{
+			"bytes_used": 315,
+			"region":     "us-east-1",
+			"tier":       "standard",
+		},
 	}
+	s.NoError(s.GetStores().EventRepo.InsertEvent(s.GetContext(), storageEvent))
 
-	for _, se := range storageEvents {
-		event := &events.Event{
-			ID:                 s.GetUUID(),
-			TenantID:           s.testData.subscription.TenantID,
-			EventName:          s.testData.meters.storage.EventName,
-			ExternalCustomerID: s.testData.customer.ExternalID,
-			Timestamp:          s.testData.now.Add(-30 * time.Minute),
-			Properties: map[string]interface{}{
-				"bytes_used": se.bytes,
-				"region":     "us-east-1",
-				"tier":       se.tier,
-			},
-		}
-		s.NoError(s.GetStores().EventRepo.InsertEvent(s.GetContext(), event))
+	// Create storage archive events
+	storageArchiveEvent := &events.Event{
+		ID:                 s.GetUUID(),
+		TenantID:           s.testData.subscription.TenantID,
+		EventName:          s.testData.meters.storageArchive.EventName,
+		ExternalCustomerID: s.testData.customer.ExternalID,
+		Timestamp:          s.testData.now.Add(-1 * time.Hour),
+		Properties: map[string]interface{}{
+			"bytes_used": 250,
+			"region":     "us-east-1",
+			"tier":       "archive",
+		},
 	}
+	s.NoError(s.GetStores().EventRepo.InsertEvent(s.GetContext(), storageArchiveEvent))
 
 	// Setup subscriptions with different currencies
 	subscriptions := []*subscription.Subscription{
@@ -298,6 +391,8 @@ func (s *WalletServiceSuite) setupTestData() {
 			StartDate:          s.testData.now.Add(-24 * time.Hour),
 			CurrentPeriodStart: s.testData.now.Add(-24 * time.Hour),
 			CurrentPeriodEnd:   s.testData.now.Add(6 * 24 * time.Hour),
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
 			BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
 		},
 		{
@@ -309,6 +404,8 @@ func (s *WalletServiceSuite) setupTestData() {
 			StartDate:          s.testData.now.Add(-24 * time.Hour),
 			CurrentPeriodStart: s.testData.now.Add(-24 * time.Hour),
 			CurrentPeriodEnd:   s.testData.now.Add(6 * 24 * time.Hour),
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
 			BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
 		},
 		{
@@ -320,6 +417,8 @@ func (s *WalletServiceSuite) setupTestData() {
 			StartDate:          s.testData.now.Add(-24 * time.Hour),
 			CurrentPeriodStart: s.testData.now.Add(-24 * time.Hour),
 			CurrentPeriodEnd:   s.testData.now.Add(6 * 24 * time.Hour),
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
 			BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
 		},
 	}
@@ -336,6 +435,7 @@ func (s *WalletServiceSuite) setupTestData() {
 			DisplayName:      s.testData.meters.storage.Name,
 			Quantity:         decimal.NewFromInt(0),
 			BillingPeriod:    types.BILLING_PERIOD_MONTHLY,
+			InvoiceCadence:   types.InvoiceCadenceArrear,
 			StartDate:        s.testData.now.Add(-24 * time.Hour),
 			EndDate:          s.testData.now.Add(6 * 24 * time.Hour),
 			Metadata:         map[string]string{},
@@ -352,6 +452,7 @@ func (s *WalletServiceSuite) setupTestData() {
 			DisplayName:      s.testData.meters.storageArchive.Name,
 			Quantity:         decimal.NewFromInt(0),
 			BillingPeriod:    types.BILLING_PERIOD_MONTHLY,
+			InvoiceCadence:   types.InvoiceCadenceArrear,
 			StartDate:        s.testData.now.Add(-24 * time.Hour),
 			EndDate:          s.testData.now.Add(6 * 24 * time.Hour),
 			Metadata:         map[string]string{},
@@ -368,6 +469,7 @@ func (s *WalletServiceSuite) setupTestData() {
 			DisplayName:      s.testData.meters.apiCalls.Name,
 			Quantity:         decimal.NewFromInt(0),
 			BillingPeriod:    types.BILLING_PERIOD_MONTHLY,
+			InvoiceCadence:   types.InvoiceCadenceArrear,
 			StartDate:        s.testData.now.Add(-24 * time.Hour),
 			EndDate:          s.testData.now.Add(6 * 24 * time.Hour),
 			Metadata:         map[string]string{},
@@ -445,6 +547,7 @@ func (s *WalletServiceSuite) setupWallet() {
 	}
 	s.NoError(s.GetStores().WalletRepo.CreateWallet(s.GetContext(), s.testData.wallet))
 }
+
 func (s *WalletServiceSuite) TestCreateWallet() {
 	// Test successful wallet creation with CustomerID
 	req := &dto.CreateWalletRequest{
@@ -675,14 +778,14 @@ func (s *WalletServiceSuite) TestGetWalletBalance() {
 		expectedError           bool
 		expectedRealTimeBalance decimal.Decimal
 		expectedUnpaidAmount    decimal.Decimal
-		expectedCurrentUsage    decimal.Decimal
+		expectedUpcomingTotal   decimal.Decimal
 	}{
 		{
 			name:                    "Success - Active wallet with matching currency",
 			walletID:                s.testData.wallet.ID,
-			expectedRealTimeBalance: decimal.NewFromInt(688).Add(decimal.NewFromFloat(0.5)), // 1000 - (100 + 150) - 61.5
-			expectedUnpaidAmount:    decimal.NewFromInt(250),                                // 100 + 150 (USD invoices only)
-			expectedCurrentUsage:    decimal.NewFromFloat(61.5),                             // API calls: 30 + Storage: 31.5
+			expectedRealTimeBalance: decimal.NewFromInt(705), // Initial balance (1000) - Unpaid invoices (250) - Upcoming invoices (45)
+			expectedUnpaidAmount:    decimal.NewFromInt(250), // Sum of unpaid finalized invoices in USD
+			expectedUpcomingTotal:   decimal.NewFromInt(45),  // Total upcoming invoice amount
 		},
 		{
 			name:          "Error - Invalid wallet ID",
@@ -694,7 +797,7 @@ func (s *WalletServiceSuite) TestGetWalletBalance() {
 			walletID:                "wallet_inactive",
 			expectedRealTimeBalance: decimal.NewFromInt(0),
 			expectedUnpaidAmount:    decimal.NewFromInt(0),
-			expectedCurrentUsage:    decimal.NewFromInt(0),
+			expectedUpcomingTotal:   decimal.NewFromInt(0),
 			expectedError:           false,
 		},
 	}
@@ -730,9 +833,9 @@ func (s *WalletServiceSuite) TestGetWalletBalance() {
 			s.True(tc.expectedUnpaidAmount.Equal(lo.FromPtr(resp.UnpaidInvoiceAmount)),
 				"UnpaidInvoiceAmount mismatch: expected %s, got %s",
 				tc.expectedUnpaidAmount, lo.FromPtr(resp.UnpaidInvoiceAmount))
-			s.True(tc.expectedCurrentUsage.Equal(lo.FromPtr(resp.CurrentPeriodUsage)),
-				"CurrentPeriodUsage mismatch: expected %s, got %s",
-				tc.expectedCurrentUsage, lo.FromPtr(resp.CurrentPeriodUsage))
+			s.True(tc.expectedUpcomingTotal.Equal(lo.FromPtr(resp.UpcomingInvoiceTotal)),
+				"UpcomingInvoiceTotal mismatch: expected %s, got %s",
+				tc.expectedUpcomingTotal, lo.FromPtr(resp.UpcomingInvoiceTotal))
 			s.NotZero(resp.BalanceUpdatedAt)
 			s.NotNil(resp.Wallet)
 		})
@@ -1427,6 +1530,131 @@ func (s *WalletServiceSuite) TestGetCustomerWallets() {
 				s.NotNil(resp)
 				s.Equal(tc.expectedWalletsCount, len(resp))
 			}
+		})
+	}
+}
+
+func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
+	tests := []struct {
+		name                    string
+		setupFunc               func()
+		expectedRealTimeBalance decimal.Decimal
+		expectedUnpaidAmount    decimal.Decimal
+		expectedUpcomingTotal   decimal.Decimal
+		wantErr                 bool
+	}{
+		{
+			name: "usage_within_entitlement_limit",
+			setupFunc: func() {
+				entitlement := &entitlement.Entitlement{
+					ID:               "ent_test_1",
+					PlanID:           s.testData.plan.ID,
+					FeatureID:        "feat_api_calls",
+					FeatureType:      types.FeatureTypeMetered,
+					IsEnabled:        true,
+					UsageLimit:       lo.ToPtr(int64(2000)),
+					UsageResetPeriod: types.BILLING_PERIOD_MONTHLY,
+					IsSoftLimit:      false,
+					BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+				}
+				_, err := s.GetStores().EntitlementRepo.Create(s.GetContext(), entitlement)
+				s.NoError(err)
+			},
+			expectedRealTimeBalance: decimal.NewFromInt(750), // Initial balance (1000) - Unpaid invoices (250)
+			expectedUnpaidAmount:    decimal.NewFromInt(250), // Sum of unpaid finalized invoices
+			expectedUpcomingTotal:   decimal.Zero,            // No upcoming invoices due to entitlement
+			wantErr:                 false,
+		},
+		{
+			name: "usage_exceeds_entitlement_limit",
+			setupFunc: func() {
+				entitlement := &entitlement.Entitlement{
+					ID:               "ent_test_2",
+					PlanID:           s.testData.plan.ID,
+					FeatureID:        "feat_api_calls",
+					FeatureType:      types.FeatureTypeMetered,
+					IsEnabled:        true,
+					UsageLimit:       lo.ToPtr(int64(1000)),
+					UsageResetPeriod: types.BILLING_PERIOD_MONTHLY,
+					IsSoftLimit:      false,
+					BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+				}
+				_, err := s.GetStores().EntitlementRepo.Create(s.GetContext(), entitlement)
+				s.NoError(err)
+			},
+			expectedRealTimeBalance: decimal.NewFromInt(750), // Initial balance (1000) - Unpaid invoices (250)
+			expectedUnpaidAmount:    decimal.NewFromInt(250), // Sum of unpaid finalized invoices
+			expectedUpcomingTotal:   decimal.Zero,            // No upcoming invoices due to entitlement
+			wantErr:                 false,
+		},
+		{
+			name: "unlimited_entitlement",
+			setupFunc: func() {
+				entitlement := &entitlement.Entitlement{
+					ID:               "ent_test_3",
+					PlanID:           s.testData.plan.ID,
+					FeatureID:        "feat_api_calls",
+					FeatureType:      types.FeatureTypeMetered,
+					IsEnabled:        true,
+					UsageLimit:       nil,
+					UsageResetPeriod: types.BILLING_PERIOD_MONTHLY,
+					IsSoftLimit:      false,
+					BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+				}
+				_, err := s.GetStores().EntitlementRepo.Create(s.GetContext(), entitlement)
+				s.NoError(err)
+			},
+			expectedRealTimeBalance: decimal.NewFromInt(750), // Initial balance (1000) - Unpaid invoices (250)
+			expectedUnpaidAmount:    decimal.NewFromInt(250), // Sum of unpaid finalized invoices
+			expectedUpcomingTotal:   decimal.Zero,            // No upcoming invoices due to entitlement
+			wantErr:                 false,
+		},
+		{
+			name: "disabled_entitlement",
+			setupFunc: func() {
+				entitlement := &entitlement.Entitlement{
+					ID:               "ent_test_4",
+					PlanID:           s.testData.plan.ID,
+					FeatureID:        "feat_api_calls",
+					FeatureType:      types.FeatureTypeMetered,
+					IsEnabled:        false,
+					UsageLimit:       lo.ToPtr(int64(2000)),
+					UsageResetPeriod: types.BILLING_PERIOD_MONTHLY,
+					IsSoftLimit:      false,
+					BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+				}
+				_, err := s.GetStores().EntitlementRepo.Create(s.GetContext(), entitlement)
+				s.NoError(err)
+			},
+			expectedRealTimeBalance: decimal.NewFromInt(750), // Initial balance (1000) - Unpaid invoices (250)
+			expectedUnpaidAmount:    decimal.NewFromInt(250), // Sum of unpaid finalized invoices
+			expectedUpcomingTotal:   decimal.Zero,            // No upcoming invoices since it's handled at invoice calculation level
+			wantErr:                 false,
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.setupWallet()
+			if tt.setupFunc != nil {
+				tt.setupFunc()
+			}
+			resp, err := s.service.GetWalletBalance(s.GetContext(), s.testData.wallet.ID)
+			if tt.wantErr {
+				s.Error(err)
+				return
+			}
+			s.NoError(err)
+			s.NotNil(resp)
+			s.True(tt.expectedRealTimeBalance.Equal(lo.FromPtr(resp.RealTimeBalance)),
+				"RealTimeBalance mismatch: expected %s, got %s",
+				tt.expectedRealTimeBalance, resp.RealTimeBalance)
+			s.True(tt.expectedUnpaidAmount.Equal(lo.FromPtr(resp.UnpaidInvoiceAmount)),
+				"UnpaidInvoiceAmount mismatch: expected %s, got %s",
+				tt.expectedUnpaidAmount, lo.FromPtr(resp.UnpaidInvoiceAmount))
+			s.True(tt.expectedUpcomingTotal.Equal(lo.FromPtr(resp.UpcomingInvoiceTotal)),
+				"UpcomingInvoiceTotal mismatch: expected %s, got %s",
+				tt.expectedUpcomingTotal, lo.FromPtr(resp.UpcomingInvoiceTotal))
 		})
 	}
 }

@@ -165,6 +165,9 @@ func (s *billingService) CalculateUsageCharges(
 		}
 	}
 
+	// Create price service once before processing charges
+	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.Logger)
+
 	// Process usage charges from line items
 	for _, item := range sub.LineItems {
 		if item.PriceType != types.PRICE_TYPE_USAGE {
@@ -192,20 +195,33 @@ func (s *billingService) CalculateUsageCharges(
 			quantityForCalculation := decimal.NewFromFloat(matchingCharge.Quantity)
 			matchingEntitlement, ok := entitlementsByPlanMeterID[item.PlanID][item.MeterID]
 
-			// Apply entitlement adjustments only for non-overage charges
-			if !matchingCharge.IsOverage && ok && matchingEntitlement != nil {
+			// Only apply entitlement adjustments if:
+			// 1. This is not an overage charge
+			// 2. There is a matching entitlement
+			// 3. The entitlement is enabled
+			if !matchingCharge.IsOverage && ok && matchingEntitlement.IsEnabled {
 				if matchingEntitlement.UsageLimit != nil {
 					// usage limit is set, so we decrement the usage quantity by the already entitled usage
 					usageAllowed := decimal.NewFromFloat(float64(*matchingEntitlement.UsageLimit))
 					adjustedQuantity := decimal.NewFromFloat(matchingCharge.Quantity).Sub(usageAllowed)
 					quantityForCalculation = decimal.Max(adjustedQuantity, decimal.Zero)
+
+					// Recalculate the amount based on the adjusted quantity
+					if matchingCharge.Price != nil {
+						// For tiered pricing, we need to use the price service to calculate the cost
+						adjustedAmount := priceService.CalculateCost(ctx, matchingCharge.Price, quantityForCalculation)
+						matchingCharge.Amount = adjustedAmount.InexactFloat64()
+					}
 				} else {
 					// unlimited usage allowed, so we set the usage quantity for calculation to 0
 					quantityForCalculation = decimal.Zero
+					matchingCharge.Amount = 0
 				}
 			}
+			// For all other cases (no entitlement, disabled entitlement, or overage),
+			// use the full quantity and calculate the amount normally
 
-			// Recompute the amount based on the quantity for calculation
+			// Add the amount to total usage cost
 			lineItemAmount := decimal.NewFromFloat(matchingCharge.Amount)
 			totalUsageCost = totalUsageCost.Add(lineItemAmount)
 
