@@ -304,8 +304,8 @@ func (r *taxappliedRepository) List(ctx context.Context, filter *types.TaxApplie
 			Mark(ierr.ErrDatabase)
 	}
 
-	r.log.Debugw("listing taxapplieds", 
-		"filter", filter, 
+	r.log.Debugw("listing taxapplieds",
+		"filter", filter,
 		"count", len(taxapplieds),
 		"filter_status", filter.GetStatus())
 	SetSpanSuccess(span)
@@ -537,6 +537,13 @@ func (r *taxappliedRepository) GetByIdempotencyKey(ctx context.Context, idempote
 
 	if err != nil {
 		SetSpanError(span, err)
+
+		if ent.IsNotFound(err) {
+			return nil, ierr.WithError(err).
+				WithHint("Tax applied record with idempotency key was not found").
+				Mark(ierr.ErrNotFound)
+		}
+
 		return nil, ierr.WithError(err).
 			WithHint("Failed to get tax applied record by idempotency key").
 			Mark(ierr.ErrDatabase)

@@ -6,6 +6,7 @@ import ierr "github.com/flexprice/flexprice/internal/errors"
 type TaxAppliedFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
+	Expand           Expand             `json:"expand,omitempty" form:"expand" validate:"omitempty"`
 	Filters          []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
 	Sort             []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
 	TaxRateIDs       []string           `json:"taxrate_ids,omitempty" form:"taxrate_ids" validate:"omitempty"`
