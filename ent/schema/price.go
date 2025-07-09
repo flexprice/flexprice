@@ -46,6 +46,11 @@ func (Price) Fields() []ent.Field {
 				"postgres": "varchar(255)",
 			}).
 			NotEmpty(),
+		field.String("custom_pricing_unit_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional(),
 		field.String("plan_id").
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
@@ -116,6 +121,9 @@ func (Price) Fields() []ent.Field {
 func (Price) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.To("costsheet", Costsheet.Type),
+		edge.To("custom_pricing_unit", CustomPricingUnit.Type).
+			Field("custom_pricing_unit_id").
+			Unique(),
 	}
 }
 

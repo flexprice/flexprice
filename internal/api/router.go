@@ -36,6 +36,7 @@ type Handlers struct {
 	Secret            *v1.SecretHandler
 	CostSheet         *v1.CostSheetHandler
 	CreditNote        *v1.CreditNoteHandler
+	CustomPricingUnit *v1.CustomPricingUnitHandler
 
 	Webhook *v1.WebhookHandler
 	// Portal handlers
@@ -130,6 +131,14 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			price.GET("/:id", handlers.Price.GetPrice)
 			price.PUT("/:id", handlers.Price.UpdatePrice)
 			price.DELETE("/:id", handlers.Price.DeletePrice)
+		}
+
+		customPricingUnit := v1Private.Group("/cpu")
+		{
+			customPricingUnit.POST("", handlers.CustomPricingUnit.CreateCustomPricingUnit)
+			customPricingUnit.GET("", handlers.CustomPricingUnit.GetCustomPricingUnits)
+			customPricingUnit.PUT("/:id", handlers.CustomPricingUnit.UpdateCustomPricingUnit)
+			customPricingUnit.DELETE("/:id", handlers.CustomPricingUnit.DeleteCustomPricingUnit)
 		}
 
 		customer := v1Private.Group("/customers")

@@ -15,25 +15,30 @@ The system currently:
 ## 3. Feature Requirements
 
 ### 3.1 Core Functionality
-1. **Custom Currency Creation**
+1. **Custom Pricing Unit Creation**
    ```sql
-   CREATE TABLE custom_currency (
-       id VARCHAR(255) PRIMARY KEY,
-       name VARCHAR(255) NOT NULL,
-       code VARCHAR(3) NOT NULL,
-       symbol VARCHAR(10) NOT NULL,
-       base_currency VARCHAR(3) NOT NULL,
-       conversion_rate DECIMAL(20,8) NOT NULL,
-       precision INT NOT NULL DEFAULT 0,
-       tenant_id VARCHAR(255) NOT NULL,
-       environment_id VARCHAR(255) NOT NULL,
-       status VARCHAR(50) NOT NULL DEFAULT 'active',
-       created_at TIMESTAMP NOT NULL,
-       updated_at TIMESTAMP NOT NULL,
-       created_by VARCHAR(255),
-       updated_by VARCHAR(255),
-       UNIQUE(code, tenant_id, environment_id)
-   )
+   CREATE TABLE custom_pricing_units (
+      id VARCHAR(50) PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      code VARCHAR(3) NOT NULL,
+      symbol VARCHAR(10) NOT NULL,
+      base_currency VARCHAR(3) NOT NULL,
+      conversion_rate DECIMAL(20,8) NOT NULL,
+      precision INT NOT NULL DEFAULT 0,
+      tenant_id VARCHAR(255) NOT NULL,
+      environment_id VARCHAR(255) NOT NULL,
+      status VARCHAR(50) NOT NULL DEFAULT 'published',
+      created_at TIMESTAMP NOT NULL,
+      updated_at TIMESTAMP NOT NULL,
+      created_by VARCHAR(255),
+      updated_by VARCHAR(255),
+      UNIQUE(code, tenant_id, environment_id)
+      FOREIGN KEY (tenant_id)        REFERENCES tenants(id),
+      FOREIGN KEY (environment_id)   REFERENCES environments(id)
+   );
+   -- Indexes for query optimization
+   CREATE INDEX idx_cpu_tenant_env ON custom_pricing_units(tenant_id, environment_id);
+   CREATE UNIQUE INDEX idx_cpu_code_tenant_env ON custom_pricing_units(code, tenant_id, environment_id) WHERE status = 'published';
    ```
 
 2. **Price Model Extension**
@@ -101,7 +106,7 @@ config := v1Private.Group("/config")
 
 ### 4.1 Phase 1: Foundation
 1. Create custom_pricing_units config, table and model
-2. Implement CRUD operations for custom units
+2. Implement CRUD operations for custom pricing units
 3. Extend Price model with custom unit support
 4. Update currency handling utilities
 
