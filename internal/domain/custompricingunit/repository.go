@@ -3,18 +3,31 @@ package custompricingunit
 import (
 	"context"
 
-	"github.com/flexprice/flexprice/ent"
 	"github.com/shopspring/decimal"
 )
 
 // Repository defines the interface for custom pricing unit persistence
-// This abstracts away the underlying storage (ent, etc) for use in services and other modules
 type Repository interface {
+	// Create creates a new custom pricing unit
+	Create(ctx context.Context, unit *CustomPricingUnit) error
+
 	// GetByID fetches a custom pricing unit by its ID
-	GetByID(ctx context.Context, id string) (*ent.CustomPricingUnit, error)
+	GetByID(ctx context.Context, id string) (*CustomPricingUnit, error)
+
+	// List returns a list of custom pricing units based on filter
+	List(ctx context.Context, filter *CustomPricingUnitFilter) ([]*CustomPricingUnit, error)
+
+	// Count returns the total count of custom pricing units based on filter
+	Count(ctx context.Context, filter *CustomPricingUnitFilter) (int, error)
+
+	// Update updates an existing custom pricing unit
+	Update(ctx context.Context, unit *CustomPricingUnit) error
+
+	// Delete deletes a custom pricing unit by its ID
+	Delete(ctx context.Context, id string) error
 
 	// GetByCode fetches a custom pricing unit by its code, tenant, and environment (optionally status)
-	GetByCode(ctx context.Context, code, tenantID, environmentID string, status string) (*ent.CustomPricingUnit, error)
+	GetByCode(ctx context.Context, code, tenantID, environmentID string, status string) (*CustomPricingUnit, error)
 
 	// GetConversionRate returns the conversion rate for a given code/tenant/env
 	GetConversionRate(ctx context.Context, code, tenantID, environmentID string) (decimal.Decimal, error)

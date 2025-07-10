@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
@@ -16,19 +17,20 @@ import (
 
 // CustomPricingUnitService handles business logic for custom pricing units
 type CustomPricingUnitService struct {
-	client *ent.Client
+	repo   domainCPU.Repository
+	client *ent.Client // Keep client for price checks during deletion
 }
 
 // NewCustomPricingUnitService creates a new instance of CustomPricingUnitService
-func NewCustomPricingUnitService(client *ent.Client) *CustomPricingUnitService {
+func NewCustomPricingUnitService(repo domainCPU.Repository, client *ent.Client) *CustomPricingUnitService {
 	return &CustomPricingUnitService{
+		repo:   repo,
 		client: client,
 	}
 }
 
-// Create creates a new custom pricing unit
-func (s *CustomPricingUnitService) Create(ctx context.Context, req *dto.CreateCustomPricingUnitRequest) (*dto.CustomPricingUnitResponse, error) {
-	// Get tenant and environment IDs from context
+func (s *CustomPricingUnitService) Create(ctx context.Context, req *dto.CreateCustomPricingUnitRequest) (*domainCPU.CustomPricingUnit, error) {
+	// Validate tenant ID
 	tenantID := types.GetTenantID(ctx)
 	if tenantID == "" {
 		return nil, ierr.NewError("tenant id is required").
@@ -37,6 +39,7 @@ func (s *CustomPricingUnitService) Create(ctx context.Context, req *dto.CreateCu
 			Mark(ierr.ErrValidation)
 	}
 
+	// Validate environment ID
 	environmentID := types.GetEnvironmentID(ctx)
 	if environmentID == "" {
 		return nil, ierr.NewError("environment id is required").
@@ -48,7 +51,7 @@ func (s *CustomPricingUnitService) Create(ctx context.Context, req *dto.CreateCu
 	// Check if code already exists (only consider published records)
 	exists, err := s.client.CustomPricingUnit.Query().
 		Where(
-			custompricingunit.CodeEQ(req.Code),
+			custompricingunit.CodeEQ(strings.ToLower(req.Code)),
 			custompricingunit.TenantIDEQ(tenantID),
 			custompricingunit.EnvironmentIDEQ(environmentID),
 			custompricingunit.StatusEQ(string(types.StatusPublished)),
@@ -75,7 +78,7 @@ func (s *CustomPricingUnitService) Create(ctx context.Context, req *dto.CreateCu
 			Mark(ierr.ErrValidation)
 	}
 
-	// Validate conversion rate is provided (since it's required)
+	// Validate conversion rate is provided
 	if req.ConversionRate == nil {
 		return nil, ierr.NewError("conversion rate is required").
 			WithMessage("missing required conversion rate").
@@ -83,49 +86,50 @@ func (s *CustomPricingUnitService) Create(ctx context.Context, req *dto.CreateCu
 			Mark(ierr.ErrValidation)
 	}
 
-	// Create the custom pricing unit with prefixed UUID
-	unit, err := s.client.CustomPricingUnit.Create().
-		SetID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOM_PRICING_UNIT)).
-		SetTenantID(tenantID).
-		SetEnvironmentID(environmentID).
-		SetName(req.Name).
-		SetCode(req.Code).
-		SetSymbol(req.Symbol).
-		SetBaseCurrency(req.BaseCurrency).
-		SetConversionRate(*req.ConversionRate).
-		SetPrecision(req.Precision).
-		Save(ctx)
-	if err != nil {
-		// Preserve database errors without overwriting
-		if ierr.IsDatabase(err) {
-			return nil, err
-		}
-		return nil, ierr.WithError(err).
-			WithMessage("failed to create custom pricing unit").
-			WithHint("Failed to create custom pricing unit").
-			Mark(ierr.ErrDatabase)
+	now := time.Now().UTC()
+
+	// Generate ID with prefix
+	id := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOM_PRICING_UNIT)
+
+	unit := &domainCPU.CustomPricingUnit{
+		ID:             id,
+		Name:           req.Name,
+		Code:           strings.ToLower(req.Code),
+		Symbol:         req.Symbol,
+		BaseCurrency:   strings.ToLower(req.BaseCurrency),
+		ConversionRate: *req.ConversionRate,
+		Precision:      req.Precision,
+		Status:         types.StatusPublished,
+		TenantID:       tenantID,
+		EnvironmentID:  environmentID,
+		CreatedAt:      now,
+		UpdatedAt:      now,
 	}
 
-	return s.toResponse(unit), nil
+	if err := s.repo.Create(ctx, unit); err != nil {
+		return nil, err
+	}
+
+	return unit, nil
 }
 
 // List returns a paginated list of custom pricing units
 func (s *CustomPricingUnitService) List(ctx context.Context, filter *dto.CustomPricingUnitFilter) (*dto.ListCustomPricingUnitsResponse, error) {
-	query := s.client.CustomPricingUnit.Query()
-
-	// Apply filters
-	if filter.Status != "" {
-		query = query.Where(custompricingunit.StatusEQ(string(filter.Status)))
+	// Convert DTO filter to domain filter
+	domainFilter := &domainCPU.CustomPricingUnitFilter{
+		Status:        filter.Status,
+		TenantID:      types.GetTenantID(ctx),
+		EnvironmentID: types.GetEnvironmentID(ctx),
 	}
 
 	// Get total count
-	total, err := query.Clone().Count(ctx)
+	total, err := s.repo.Count(ctx, domainFilter)
 	if err != nil {
 		return nil, err
 	}
 
 	// Get paginated results
-	units, err := query.All(ctx)
+	units, err := s.repo.List(ctx, domainFilter)
 	if err != nil {
 		return nil, err
 	}
@@ -143,9 +147,9 @@ func (s *CustomPricingUnitService) List(ctx context.Context, filter *dto.CustomP
 	return response, nil
 }
 
-// Get retrieves a custom pricing unit by ID
-func (s *CustomPricingUnitService) Get(ctx context.Context, id string) (*dto.CustomPricingUnitResponse, error) {
-	unit, err := s.client.CustomPricingUnit.Get(ctx, id)
+// GetByID retrieves a custom pricing unit by ID
+func (s *CustomPricingUnitService) GetByID(ctx context.Context, id string) (*dto.CustomPricingUnitResponse, error) {
+	unit, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return nil, ierr.WithError(err).
@@ -159,53 +163,27 @@ func (s *CustomPricingUnitService) Get(ctx context.Context, id string) (*dto.Cus
 	return s.toResponse(unit), nil
 }
 
-// Update updates a custom pricing unit
-func (s *CustomPricingUnitService) Update(ctx context.Context, id string, req *dto.UpdateCustomPricingUnitRequest) (*dto.CustomPricingUnitResponse, error) {
-	// Get the existing unit first
-	existingUnit, err := s.client.CustomPricingUnit.Get(ctx, id)
+func (s *CustomPricingUnitService) GetByCode(ctx context.Context, code, tenantID, environmentID string) (*dto.CustomPricingUnitResponse, error) {
+	unit, err := s.repo.GetByCode(ctx, strings.ToLower(code), tenantID, environmentID, string(types.StatusPublished))
 	if err != nil {
-		if ent.IsNotFound(err) {
-			return nil, ierr.WithError(err).
-				WithMessage("custom pricing unit not found").
-				WithHint("Custom pricing unit not found").
-				Mark(ierr.ErrNotFound)
-		}
-		// Preserve database errors without overwriting
-		if ierr.IsDatabase(err) {
-			return nil, err
-		}
-		return nil, ierr.WithError(err).
-			WithMessage("failed to get custom pricing unit").
-			WithHint("Failed to get custom pricing unit").
-			Mark(ierr.ErrDatabase)
+		return nil, err
+	}
+	return s.toResponse(unit), nil
+}
+
+func (s *CustomPricingUnitService) Update(ctx context.Context, id string, req *dto.UpdateCustomPricingUnitRequest) (*dto.CustomPricingUnitResponse, error) {
+	// Get existing unit
+	existingUnit, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
 	}
 
-	// Create domain model for validation
-	domainUnit := &domainCPU.CustomPricingUnit{
-		ID:             existingUnit.ID,
-		Name:           existingUnit.Name,
-		Code:           existingUnit.Code,
-		Symbol:         existingUnit.Symbol,
-		BaseCurrency:   existingUnit.BaseCurrency,
-		ConversionRate: existingUnit.ConversionRate,
-		Precision:      existingUnit.Precision,
-		Status:         types.Status(existingUnit.Status),
-		TenantID:       existingUnit.TenantID,
-		EnvironmentID:  existingUnit.EnvironmentID,
-		CreatedAt:      existingUnit.CreatedAt,
-		UpdatedAt:      existingUnit.UpdatedAt,
-	}
-
-	// Build update query
-	update := s.client.CustomPricingUnit.UpdateOneID(id)
-
-	// Handle status update if provided
+	// Validate status transition
 	if req.Status != "" {
-		// Check if status is already the requested status
-		if existingUnit.Status == string(req.Status) {
+		if req.Status == existingUnit.Status {
 			return nil, ierr.NewError("invalid status transition").
-				WithMessage("status already set").
-				WithHint(fmt.Sprintf("Custom pricing unit is already in %s status", req.Status)).
+				WithMessage("unit is already in the requested status").
+				WithHint(fmt.Sprintf("The custom pricing unit is already in %s status", req.Status)).
 				WithReportableDetails(map[string]interface{}{
 					"current_status":   existingUnit.Status,
 					"requested_status": req.Status,
@@ -213,77 +191,63 @@ func (s *CustomPricingUnitService) Update(ctx context.Context, id string, req *d
 				Mark(ierr.ErrValidation)
 		}
 
-		// Validate status transitions
-		switch types.Status(existingUnit.Status) {
+		// Check valid transitions
+		switch existingUnit.Status {
 		case types.StatusPublished:
-			// Published can only transition to Archived
 			if req.Status != types.StatusArchived {
 				return nil, ierr.NewError("invalid status transition").
-					WithMessage("invalid status transition from published").
-					WithHint("Published pricing unit can only be archived").
+					WithMessage("cannot transition from published to requested status").
+					WithHint("Published units can only be archived").
 					WithReportableDetails(map[string]interface{}{
-						"current_status":      existingUnit.Status,
-						"requested_status":    req.Status,
-						"allowed_transitions": []string{string(types.StatusArchived)},
+						"current_status":   existingUnit.Status,
+						"requested_status": req.Status,
 					}).
 					Mark(ierr.ErrValidation)
 			}
 		case types.StatusArchived:
-			// Archived can transition to Published or Deleted
 			if req.Status != types.StatusPublished && req.Status != types.StatusDeleted {
 				return nil, ierr.NewError("invalid status transition").
-					WithMessage("invalid status transition from archived").
-					WithHint("Archived pricing unit can only be published or deleted").
+					WithMessage("cannot transition from archived to requested status").
+					WithHint("Archived units can only be published or deleted").
 					WithReportableDetails(map[string]interface{}{
 						"current_status":   existingUnit.Status,
 						"requested_status": req.Status,
-						"allowed_transitions": []string{
-							string(types.StatusPublished),
-							string(types.StatusDeleted),
-						},
 					}).
 					Mark(ierr.ErrValidation)
 			}
 
-			// If transitioning to Published, check code uniqueness
+			// If transitioning from archived to published, check code uniqueness
 			if req.Status == types.StatusPublished {
 				exists, err := s.client.CustomPricingUnit.Query().
 					Where(
-						custompricingunit.And(
-							custompricingunit.CodeEQ(existingUnit.Code),
-							custompricingunit.TenantIDEQ(existingUnit.TenantID),
-							custompricingunit.EnvironmentIDEQ(existingUnit.EnvironmentID),
-							custompricingunit.StatusEQ(string(types.StatusPublished)),
-							custompricingunit.IDNEQ(id), // Exclude current unit
-						),
+						custompricingunit.CodeEQ(existingUnit.Code),
+						custompricingunit.TenantIDEQ(existingUnit.TenantID),
+						custompricingunit.EnvironmentIDEQ(existingUnit.EnvironmentID),
+						custompricingunit.StatusEQ(string(types.StatusPublished)),
+						custompricingunit.IDNEQ(id),
 					).
 					Exist(ctx)
 				if err != nil {
-					// Preserve database errors without overwriting
-					if ierr.IsDatabase(err) {
-						return nil, err
-					}
 					return nil, ierr.WithError(err).
-						WithMessage("failed to check code uniqueness").
-						WithHint("Failed to check if code already exists").
+						WithMessage("failed to check if code exists").
+						WithHint("Failed to check if code exists").
 						Mark(ierr.ErrDatabase)
 				}
 				if exists {
-					return nil, ierr.NewError("duplicate code").
-						WithMessage("cannot publish due to code conflict").
-						WithHint("Cannot change status to published. Another unit with the same code is already published.").
+					return nil, ierr.NewError("code already exists").
+						WithMessage("duplicate code found for published unit").
+						WithHint("A published custom pricing unit with this code already exists").
 						WithReportableDetails(map[string]interface{}{
-							"code":               existingUnit.Code,
-							"conflicting_status": types.StatusPublished,
+							"code":   existingUnit.Code,
+							"status": types.StatusPublished,
 						}).
 						Mark(ierr.ErrValidation)
 				}
 			}
-		case types.StatusDeleted:
-			// Deleted is a terminal state
+		default:
 			return nil, ierr.NewError("invalid status transition").
-				WithMessage("cannot transition from deleted status").
-				WithHint("Deleted pricing unit cannot be updated").
+				WithMessage("current status does not allow transitions").
+				WithHint("Only published units can be archived, and archived units can be published or deleted").
 				WithReportableDetails(map[string]interface{}{
 					"current_status":   existingUnit.Status,
 					"requested_status": req.Status,
@@ -291,91 +255,44 @@ func (s *CustomPricingUnitService) Update(ctx context.Context, id string, req *d
 				Mark(ierr.ErrValidation)
 		}
 
-		domainUnit.Status = req.Status
-		if err := domainUnit.Validate(); err != nil {
-			return nil, err
-		}
-		update.SetStatus(string(req.Status))
+		existingUnit.Status = req.Status
 	}
 
-	// Handle other field updates
+	// Update other fields if provided
 	if req.Name != "" {
-		domainUnit.Name = req.Name
-		if err := domainUnit.Validate(); err != nil {
-			return nil, err
-		}
-		update.SetName(req.Name)
+		existingUnit.Name = req.Name
 	}
-
 	if req.Symbol != "" {
-		domainUnit.Symbol = req.Symbol
-		if err := domainUnit.Validate(); err != nil {
-			return nil, err
-		}
-		update.SetSymbol(req.Symbol)
+		existingUnit.Symbol = req.Symbol
 	}
-
 	if req.Precision != 0 {
-		domainUnit.Precision = req.Precision
-		if err := domainUnit.Validate(); err != nil {
-			return nil, err
-		}
-		update.SetPrecision(req.Precision)
+		existingUnit.Precision = req.Precision
 	}
 
-	// Perform update
-	unit, err := update.Save(ctx)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithMessage("failed to update custom pricing unit").
-			WithHint("Failed to update custom pricing unit").
-			Mark(ierr.ErrDatabase)
+	existingUnit.UpdatedAt = time.Now().UTC()
+
+	if err := s.repo.Update(ctx, existingUnit); err != nil {
+		return nil, err
 	}
 
-	return &dto.CustomPricingUnitResponse{
-		ID:             unit.ID,
-		Name:           unit.Name,
-		Code:           unit.Code,
-		Symbol:         unit.Symbol,
-		BaseCurrency:   unit.BaseCurrency,
-		ConversionRate: unit.ConversionRate,
-		Precision:      unit.Precision,
-		Status:         types.Status(unit.Status),
-		CreatedAt:      unit.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:      unit.UpdatedAt.Format(time.RFC3339),
-	}, nil
+	return s.toResponse(existingUnit), nil
 }
 
-// Delete archives a custom pricing unit
 func (s *CustomPricingUnitService) Delete(ctx context.Context, id string) error {
 	// Get the existing unit first
-	existingUnit, err := s.client.CustomPricingUnit.Get(ctx, id)
+	existingUnit, err := s.repo.GetByID(ctx, id)
 	if err != nil {
-		if ent.IsNotFound(err) {
-			return ierr.WithError(err).
-				WithMessage("custom pricing unit not found").
-				WithHint("Custom pricing unit not found").
-				Mark(ierr.ErrNotFound)
-		}
-		// Preserve database errors without overwriting
-		if ierr.IsDatabase(err) {
-			return err
-		}
-		return ierr.WithError(err).
-			WithMessage("failed to get custom pricing unit").
-			WithHint("Failed to get custom pricing unit").
-			Mark(ierr.ErrDatabase)
+		return err
 	}
 
 	// Check if already archived
-	if existingUnit.Status == string(types.StatusArchived) {
+	if existingUnit.Status == types.StatusArchived {
 		return ierr.NewError("custom pricing unit is already archived").
 			WithMessage("cannot archive unit in archived state").
 			WithHint("The custom pricing unit is already in archived state").
 			WithReportableDetails(map[string]interface{}{
-				"id":                  id,
-				"status":              existingUnit.Status,
-				"requested_operation": "archive",
+				"id":     id,
+				"status": existingUnit.Status,
 			}).
 			Mark(ierr.ErrValidation)
 	}
@@ -385,53 +302,26 @@ func (s *CustomPricingUnitService) Delete(ctx context.Context, id string) error 
 		Where(price.CustomPricingUnitIDEQ(id)).
 		Exist(ctx)
 	if err != nil {
-		// Preserve database errors without overwriting
-		if ierr.IsDatabase(err) {
-			return err
-		}
 		return ierr.WithError(err).
-			WithMessage("failed to check if custom pricing unit is in use").
 			WithHint("Failed to check if custom pricing unit is in use").
 			Mark(ierr.ErrDatabase)
 	}
 	if exists {
 		return ierr.NewError("custom pricing unit is in use").
-			WithMessage("cannot archive unit that is referenced by prices").
-			WithHint("Cannot archive a custom pricing unit that is being used by one or more prices").
-			WithReportableDetails(map[string]interface{}{
-				"id":                id,
-				"status":            existingUnit.Status,
-				"operation_blocked": "archive",
-			}).
+			WithMessage("cannot archive unit that is in use").
+			WithHint("This custom pricing unit is being used by one or more prices").
 			Mark(ierr.ErrValidation)
 	}
 
 	// Archive the unit by updating its status
-	_, err = s.client.CustomPricingUnit.UpdateOneID(id).
-		SetStatus(string(types.StatusArchived)).
-		Save(ctx)
-	if err != nil {
-		if ent.IsNotFound(err) {
-			return ierr.WithError(err).
-				WithMessage("custom pricing unit not found").
-				WithHint("Custom pricing unit not found").
-				Mark(ierr.ErrNotFound)
-		}
-		// Preserve database errors without overwriting
-		if ierr.IsDatabase(err) {
-			return err
-		}
-		return ierr.WithError(err).
-			WithMessage("failed to archive custom pricing unit").
-			WithHint("Failed to archive custom pricing unit").
-			Mark(ierr.ErrDatabase)
-	}
+	existingUnit.Status = types.StatusArchived
+	existingUnit.UpdatedAt = time.Now().UTC()
 
-	return nil
+	return s.repo.Update(ctx, existingUnit)
 }
 
-// toResponse converts an ent.CustomPricingUnit to a dto.CustomPricingUnitResponse
-func (s *CustomPricingUnitService) toResponse(unit *ent.CustomPricingUnit) *dto.CustomPricingUnitResponse {
+// toResponse converts a domain CustomPricingUnit to a dto.CustomPricingUnitResponse
+func (s *CustomPricingUnitService) toResponse(unit *domainCPU.CustomPricingUnit) *dto.CustomPricingUnitResponse {
 	return &dto.CustomPricingUnitResponse{
 		ID:             unit.ID,
 		Name:           unit.Name,
@@ -440,7 +330,7 @@ func (s *CustomPricingUnitService) toResponse(unit *ent.CustomPricingUnit) *dto.
 		BaseCurrency:   unit.BaseCurrency,
 		ConversionRate: unit.ConversionRate,
 		Precision:      unit.Precision,
-		Status:         types.Status(unit.Status),
+		Status:         unit.Status,
 		CreatedAt:      unit.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:      unit.UpdatedAt.Format(time.RFC3339),
 	}

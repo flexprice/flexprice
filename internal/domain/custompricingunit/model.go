@@ -3,6 +3,7 @@ package custompricingunit
 import (
 	"time"
 
+	"github.com/flexprice/flexprice/ent"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
@@ -128,4 +129,38 @@ func (u *CustomPricingUnit) ConvertToBaseCurrency(customAmount decimal.Decimal) 
 // Formula: amount in custom currency = amount in fiat currency / conversion rate
 func (u *CustomPricingUnit) ConvertFromBaseCurrency(baseAmount decimal.Decimal) decimal.Decimal {
 	return baseAmount.Div(u.ConversionRate)
+}
+
+// FromEnt converts an ent.CustomPricingUnit to a domain CustomPricingUnit
+func FromEnt(e *ent.CustomPricingUnit) *CustomPricingUnit {
+	if e == nil {
+		return nil
+	}
+
+	return &CustomPricingUnit{
+		ID:             e.ID,
+		Name:           e.Name,
+		Code:           e.Code,
+		Symbol:         e.Symbol,
+		BaseCurrency:   e.BaseCurrency,
+		ConversionRate: e.ConversionRate,
+		Precision:      e.Precision,
+		Status:         types.Status(e.Status),
+		CreatedAt:      e.CreatedAt,
+		UpdatedAt:      e.UpdatedAt,
+		TenantID:       e.TenantID,
+		EnvironmentID:  e.EnvironmentID,
+	}
+}
+
+// FromEntList converts a list of ent.CustomPricingUnit to domain CustomPricingUnit
+func FromEntList(list []*ent.CustomPricingUnit) []*CustomPricingUnit {
+	if list == nil {
+		return nil
+	}
+	units := make([]*CustomPricingUnit, len(list))
+	for i, item := range list {
+		units[i] = FromEnt(item)
+	}
+	return units
 }

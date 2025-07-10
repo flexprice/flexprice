@@ -137,6 +137,8 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		{
 			customPricingUnit.POST("", handlers.CustomPricingUnit.CreateCustomPricingUnit)
 			customPricingUnit.GET("", handlers.CustomPricingUnit.GetCustomPricingUnits)
+			customPricingUnit.GET("/:id", handlers.CustomPricingUnit.GetByID)
+			customPricingUnit.GET("/code/:code", handlers.CustomPricingUnit.GetByCode)
 			customPricingUnit.PUT("/:id", handlers.CustomPricingUnit.UpdateCustomPricingUnit)
 			customPricingUnit.DELETE("/:id", handlers.CustomPricingUnit.DeleteCustomPricingUnit)
 		}

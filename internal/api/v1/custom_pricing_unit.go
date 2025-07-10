@@ -157,3 +157,48 @@ func (h *CustomPricingUnitHandler) DeleteCustomPricingUnit(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Custom pricing unit deleted successfully"})
 }
+
+// GetByID handles GET /v1/pricing-units/:id
+func (h *CustomPricingUnitHandler) GetByID(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		return
+	}
+
+	unit, err := h.service.GetByID(c.Request.Context(), id)
+	if err != nil {
+		if ierr.IsNotFound(err) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "custom pricing unit not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get custom pricing unit"})
+		return
+	}
+
+	c.JSON(http.StatusOK, unit)
+}
+
+// GetByCode handles GET /v1/pricing-units/code/:code
+func (h *CustomPricingUnitHandler) GetByCode(c *gin.Context) {
+	code := c.Param("code")
+	if code == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "code is required"})
+		return
+	}
+
+	tenantID := types.GetTenantID(c.Request.Context())
+	environmentID := types.GetEnvironmentID(c.Request.Context())
+
+	unit, err := h.service.GetByCode(c.Request.Context(), code, tenantID, environmentID)
+	if err != nil {
+		if ierr.IsNotFound(err) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "custom pricing unit not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get custom pricing unit"})
+		return
+	}
+
+	c.JSON(http.StatusOK, unit)
+}

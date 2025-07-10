@@ -5,29 +5,185 @@ import (
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/custompricingunit"
+	"github.com/flexprice/flexprice/internal/cache"
 	domainCPU "github.com/flexprice/flexprice/internal/domain/custompricingunit"
+	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
-// customPricingUnitRepository handles business logic for custom pricing units
-type CustomPricingUnitRepository struct {
-	client *ent.Client
+type customPricingUnitRepository struct {
+	client postgres.IClient
+	log    *logger.Logger
+	cache  cache.Cache
 }
 
 // NewCustomPricingUnitRepository creates a new instance of customPricingUnitRepository
-func NewCustomPricingUnitRepository(client *ent.Client) domainCPU.Repository {
-	return &CustomPricingUnitRepository{
+func NewCustomPricingUnitRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainCPU.Repository {
+	return &customPricingUnitRepository{
 		client: client,
+		log:    log,
+		cache:  cache,
 	}
 }
 
-func (r *CustomPricingUnitRepository) GetByID(ctx context.Context, id string) (*ent.CustomPricingUnit, error) {
-	return r.client.CustomPricingUnit.Get(ctx, id)
+func (r *customPricingUnitRepository) Create(ctx context.Context, unit *domainCPU.CustomPricingUnit) error {
+	client := r.client.Querier(ctx)
+
+	_, err := client.CustomPricingUnit.Create().
+		SetID(unit.ID).
+		SetName(unit.Name).
+		SetCode(unit.Code).
+		SetSymbol(unit.Symbol).
+		SetBaseCurrency(unit.BaseCurrency).
+		SetConversionRate(unit.ConversionRate).
+		SetPrecision(unit.Precision).
+		SetStatus(string(types.StatusPublished)). // Set default status to published
+		SetTenantID(unit.TenantID).
+		SetEnvironmentID(unit.EnvironmentID).
+		SetCreatedAt(unit.CreatedAt).
+		SetUpdatedAt(unit.UpdatedAt).
+		Save(ctx)
+
+	if err != nil {
+		if ent.IsConstraintError(err) {
+			return ierr.WithError(err).
+				WithHint("A custom pricing unit with this code already exists").
+				WithReportableDetails(map[string]any{
+					"code": unit.Code,
+				}).
+				Mark(ierr.ErrAlreadyExists)
+		}
+		return ierr.WithError(err).
+			WithHint("Failed to create custom pricing unit").
+			Mark(ierr.ErrDatabase)
+	}
+
+	return nil
 }
 
-func (r *CustomPricingUnitRepository) GetByCode(ctx context.Context, code, tenantID, environmentID, status string) (*ent.CustomPricingUnit, error) {
-	q := r.client.CustomPricingUnit.Query().
+// GetByID retrieves a custom pricing unit by ID
+func (r *customPricingUnitRepository) GetByID(ctx context.Context, id string) (*domainCPU.CustomPricingUnit, error) {
+	client := r.client.Querier(ctx)
+
+	unit, err := client.CustomPricingUnit.Get(ctx, id)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, ierr.WithError(err).
+				WithHint("Custom pricing unit not found").
+				Mark(ierr.ErrNotFound)
+		}
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get custom pricing unit").
+			Mark(ierr.ErrDatabase)
+	}
+
+	return domainCPU.FromEnt(unit), nil
+}
+
+func (r *customPricingUnitRepository) List(ctx context.Context, filter *domainCPU.CustomPricingUnitFilter) ([]*domainCPU.CustomPricingUnit, error) {
+	client := r.client.Querier(ctx)
+
+	query := client.CustomPricingUnit.Query()
+
+	if filter.Status != "" {
+		query = query.Where(custompricingunit.StatusEQ(string(filter.Status)))
+	}
+
+	if filter.TenantID != "" {
+		query = query.Where(custompricingunit.TenantIDEQ(filter.TenantID))
+	}
+
+	if filter.EnvironmentID != "" {
+		query = query.Where(custompricingunit.EnvironmentIDEQ(filter.EnvironmentID))
+	}
+
+	units, err := query.All(ctx)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list custom pricing units").
+			Mark(ierr.ErrDatabase)
+	}
+
+	return domainCPU.FromEntList(units), nil
+}
+
+func (r *customPricingUnitRepository) Count(ctx context.Context, filter *domainCPU.CustomPricingUnitFilter) (int, error) {
+	client := r.client.Querier(ctx)
+
+	query := client.CustomPricingUnit.Query()
+
+	if filter.Status != "" {
+		query = query.Where(custompricingunit.StatusEQ(string(filter.Status)))
+	}
+
+	if filter.TenantID != "" {
+		query = query.Where(custompricingunit.TenantIDEQ(filter.TenantID))
+	}
+
+	if filter.EnvironmentID != "" {
+		query = query.Where(custompricingunit.EnvironmentIDEQ(filter.EnvironmentID))
+	}
+
+	count, err := query.Count(ctx)
+	if err != nil {
+		return 0, ierr.WithError(err).
+			WithHint("Failed to count custom pricing units").
+			Mark(ierr.ErrDatabase)
+	}
+
+	return count, nil
+}
+
+func (r *customPricingUnitRepository) Update(ctx context.Context, unit *domainCPU.CustomPricingUnit) error {
+	client := r.client.Querier(ctx)
+
+	_, err := client.CustomPricingUnit.UpdateOneID(unit.ID).
+		SetName(unit.Name).
+		SetSymbol(unit.Symbol).
+		SetPrecision(unit.Precision).
+		SetStatus(string(unit.Status)).
+		SetUpdatedAt(unit.UpdatedAt).
+		Save(ctx)
+
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return ierr.WithError(err).
+				WithHint("Custom pricing unit not found").
+				Mark(ierr.ErrNotFound)
+		}
+		return ierr.WithError(err).
+			WithHint("Failed to update custom pricing unit").
+			Mark(ierr.ErrDatabase)
+	}
+
+	return nil
+}
+
+func (r *customPricingUnitRepository) Delete(ctx context.Context, id string) error {
+	client := r.client.Querier(ctx)
+
+	err := client.CustomPricingUnit.DeleteOneID(id).Exec(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return ierr.WithError(err).
+				WithHint("Custom pricing unit not found").
+				Mark(ierr.ErrNotFound)
+		}
+		return ierr.WithError(err).
+			WithHint("Failed to delete custom pricing unit").
+			Mark(ierr.ErrDatabase)
+	}
+
+	return nil
+}
+
+func (r *customPricingUnitRepository) GetByCode(ctx context.Context, code, tenantID, environmentID string, status string) (*domainCPU.CustomPricingUnit, error) {
+	client := r.client.Querier(ctx)
+
+	q := client.CustomPricingUnit.Query().
 		Where(
 			custompricingunit.CodeEQ(code),
 			custompricingunit.TenantIDEQ(tenantID),
@@ -36,10 +192,21 @@ func (r *CustomPricingUnitRepository) GetByCode(ctx context.Context, code, tenan
 	if status != "" {
 		q = q.Where(custompricingunit.StatusEQ(status))
 	}
-	return q.Only(ctx)
+	unit, err := q.Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, ierr.WithError(err).
+				WithHint("Custom pricing unit not found").
+				Mark(ierr.ErrNotFound)
+		}
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get custom pricing unit").
+			Mark(ierr.ErrDatabase)
+	}
+	return domainCPU.FromEnt(unit), nil
 }
 
-func (r *CustomPricingUnitRepository) GetConversionRate(ctx context.Context, code, tenantID, environmentID string) (decimal.Decimal, error) {
+func (r *customPricingUnitRepository) GetConversionRate(ctx context.Context, code, tenantID, environmentID string) (decimal.Decimal, error) {
 	unit, err := r.GetByCode(ctx, code, tenantID, environmentID, string(types.StatusPublished))
 	if err != nil {
 		return decimal.Zero, err
@@ -47,7 +214,7 @@ func (r *CustomPricingUnitRepository) GetConversionRate(ctx context.Context, cod
 	return unit.ConversionRate, nil
 }
 
-func (r *CustomPricingUnitRepository) GetSymbol(ctx context.Context, code, tenantID, environmentID string) (string, error) {
+func (r *customPricingUnitRepository) GetSymbol(ctx context.Context, code, tenantID, environmentID string) (string, error) {
 	unit, err := r.GetByCode(ctx, code, tenantID, environmentID, string(types.StatusPublished))
 	if err != nil {
 		return "", err
@@ -55,7 +222,7 @@ func (r *CustomPricingUnitRepository) GetSymbol(ctx context.Context, code, tenan
 	return unit.Symbol, nil
 }
 
-func (r *CustomPricingUnitRepository) ConvertToBaseCurrency(ctx context.Context, code, tenantID, environmentID string, customAmount decimal.Decimal) (decimal.Decimal, error) {
+func (r *customPricingUnitRepository) ConvertToBaseCurrency(ctx context.Context, code, tenantID, environmentID string, customAmount decimal.Decimal) (decimal.Decimal, error) {
 	unit, err := r.GetByCode(ctx, code, tenantID, environmentID, string(types.StatusPublished))
 	if err != nil {
 		return decimal.Zero, err

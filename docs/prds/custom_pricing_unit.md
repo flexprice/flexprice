@@ -76,6 +76,22 @@ type PriceResponse struct {
 2. Base currency must be from supported fiat currencies
 3. Conversion rate must be positive non-zero decimal
 4. Precision must be between 0-8
+5. Create Validations:
+      Tenant ID required
+      Environment ID required
+      Code must be unique for published units
+      Conversion rate required
+6. Update Status Transitions:
+      Published -> Archived
+      Archived -> Published (with code uniqueness check)
+      Archived -> Deleted
+      No other transitions allowed
+      Can't transition to same status
+7. Update Field Validations:
+      Name, Symbol, and Precision are optional
+      Status transitions are validated
+      Code uniqueness checked when going back to Published
+
 
 ### 3.3 Business Logic Changes
 
