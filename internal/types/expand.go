@@ -24,6 +24,8 @@ const (
 	ExpandCustomer     ExpandableField = "customer"
 	ExpandCreditNote   ExpandableField = "credit_note"
 	ExpandCreditGrant  ExpandableField = "credit_grant"
+	ExpandTaxApplied   ExpandableField = "tax_applied"
+	ExpandTaxRate      ExpandableField = "tax_rate"
 )
 
 // ExpandConfig defines which fields can be expanded and their nested expansions
@@ -77,6 +79,21 @@ var (
 			ExpandInvoice:      {},
 			ExpandSubscription: {},
 			ExpandCustomer:     {},
+		},
+	}
+
+	// TaxAppliedExpandConfig defines what can be expanded on a tax applied
+	TaxAppliedExpandConfig = ExpandConfig{
+		AllowedFields: []ExpandableField{ExpandTaxRate},
+		NestedExpands: map[ExpandableField][]ExpandableField{
+			ExpandTaxRate: {},
+		},
+	}
+
+	InvoiceExpandConfig = ExpandConfig{
+		AllowedFields: []ExpandableField{ExpandTaxApplied},
+		NestedExpands: map[ExpandableField][]ExpandableField{
+			ExpandTaxApplied: {ExpandTaxRate},
 		},
 	}
 )
