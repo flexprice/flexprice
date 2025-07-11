@@ -23,6 +23,7 @@ import (
 	"github.com/flexprice/flexprice/ent/creditnote"
 	"github.com/flexprice/flexprice/ent/creditnotelineitem"
 	"github.com/flexprice/flexprice/ent/customer"
+	"github.com/flexprice/flexprice/ent/custompricingunit"
 	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/ent/environment"
 	"github.com/flexprice/flexprice/ent/feature"
@@ -68,6 +69,8 @@ type Client struct {
 	CreditNote *CreditNoteClient
 	// CreditNoteLineItem is the client for interacting with the CreditNoteLineItem builders.
 	CreditNoteLineItem *CreditNoteLineItemClient
+	// CustomPricingUnit is the client for interacting with the CustomPricingUnit builders.
+	CustomPricingUnit *CustomPricingUnitClient
 	// Customer is the client for interacting with the Customer builders.
 	Customer *CustomerClient
 	// Entitlement is the client for interacting with the Entitlement builders.
@@ -132,6 +135,7 @@ func (c *Client) init() {
 	c.CreditGrantApplication = NewCreditGrantApplicationClient(c.config)
 	c.CreditNote = NewCreditNoteClient(c.config)
 	c.CreditNoteLineItem = NewCreditNoteLineItemClient(c.config)
+	c.CustomPricingUnit = NewCustomPricingUnitClient(c.config)
 	c.Customer = NewCustomerClient(c.config)
 	c.Entitlement = NewEntitlementClient(c.config)
 	c.Environment = NewEnvironmentClient(c.config)
@@ -254,6 +258,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		CreditGrantApplication:    NewCreditGrantApplicationClient(cfg),
 		CreditNote:                NewCreditNoteClient(cfg),
 		CreditNoteLineItem:        NewCreditNoteLineItemClient(cfg),
+		CustomPricingUnit:         NewCustomPricingUnitClient(cfg),
 		Customer:                  NewCustomerClient(cfg),
 		Entitlement:               NewEntitlementClient(cfg),
 		Environment:               NewEnvironmentClient(cfg),
@@ -303,6 +308,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		CreditGrantApplication:    NewCreditGrantApplicationClient(cfg),
 		CreditNote:                NewCreditNoteClient(cfg),
 		CreditNoteLineItem:        NewCreditNoteLineItemClient(cfg),
+		CustomPricingUnit:         NewCustomPricingUnitClient(cfg),
 		Customer:                  NewCustomerClient(cfg),
 		Entitlement:               NewEntitlementClient(cfg),
 		Environment:               NewEnvironmentClient(cfg),
@@ -356,12 +362,12 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.Auth, c.BillingSequence, c.Costsheet, c.CreditGrant, c.CreditGrantApplication,
-		c.CreditNote, c.CreditNoteLineItem, c.Customer, c.Entitlement, c.Environment,
-		c.Feature, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Payment,
-		c.PaymentAttempt, c.Plan, c.Price, c.Secret, c.Subscription,
-		c.SubscriptionLineItem, c.SubscriptionPause, c.SubscriptionSchedule,
-		c.SubscriptionSchedulePhase, c.Task, c.Tenant, c.User, c.Wallet,
-		c.WalletTransaction,
+		c.CreditNote, c.CreditNoteLineItem, c.CustomPricingUnit, c.Customer,
+		c.Entitlement, c.Environment, c.Feature, c.Invoice, c.InvoiceLineItem,
+		c.InvoiceSequence, c.Meter, c.Payment, c.PaymentAttempt, c.Plan, c.Price,
+		c.Secret, c.Subscription, c.SubscriptionLineItem, c.SubscriptionPause,
+		c.SubscriptionSchedule, c.SubscriptionSchedulePhase, c.Task, c.Tenant, c.User,
+		c.Wallet, c.WalletTransaction,
 	} {
 		n.Use(hooks...)
 	}
@@ -372,12 +378,12 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.Auth, c.BillingSequence, c.Costsheet, c.CreditGrant, c.CreditGrantApplication,
-		c.CreditNote, c.CreditNoteLineItem, c.Customer, c.Entitlement, c.Environment,
-		c.Feature, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Payment,
-		c.PaymentAttempt, c.Plan, c.Price, c.Secret, c.Subscription,
-		c.SubscriptionLineItem, c.SubscriptionPause, c.SubscriptionSchedule,
-		c.SubscriptionSchedulePhase, c.Task, c.Tenant, c.User, c.Wallet,
-		c.WalletTransaction,
+		c.CreditNote, c.CreditNoteLineItem, c.CustomPricingUnit, c.Customer,
+		c.Entitlement, c.Environment, c.Feature, c.Invoice, c.InvoiceLineItem,
+		c.InvoiceSequence, c.Meter, c.Payment, c.PaymentAttempt, c.Plan, c.Price,
+		c.Secret, c.Subscription, c.SubscriptionLineItem, c.SubscriptionPause,
+		c.SubscriptionSchedule, c.SubscriptionSchedulePhase, c.Task, c.Tenant, c.User,
+		c.Wallet, c.WalletTransaction,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -400,6 +406,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.CreditNote.mutate(ctx, m)
 	case *CreditNoteLineItemMutation:
 		return c.CreditNoteLineItem.mutate(ctx, m)
+	case *CustomPricingUnitMutation:
+		return c.CustomPricingUnit.mutate(ctx, m)
 	case *CustomerMutation:
 		return c.Customer.mutate(ctx, m)
 	case *EntitlementMutation:
@@ -1475,6 +1483,155 @@ func (c *CreditNoteLineItemClient) mutate(ctx context.Context, m *CreditNoteLine
 		return (&CreditNoteLineItemDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown CreditNoteLineItem mutation op: %q", m.Op())
+	}
+}
+
+// CustomPricingUnitClient is a client for the CustomPricingUnit schema.
+type CustomPricingUnitClient struct {
+	config
+}
+
+// NewCustomPricingUnitClient returns a client for the CustomPricingUnit from the given config.
+func NewCustomPricingUnitClient(c config) *CustomPricingUnitClient {
+	return &CustomPricingUnitClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `custompricingunit.Hooks(f(g(h())))`.
+func (c *CustomPricingUnitClient) Use(hooks ...Hook) {
+	c.hooks.CustomPricingUnit = append(c.hooks.CustomPricingUnit, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `custompricingunit.Intercept(f(g(h())))`.
+func (c *CustomPricingUnitClient) Intercept(interceptors ...Interceptor) {
+	c.inters.CustomPricingUnit = append(c.inters.CustomPricingUnit, interceptors...)
+}
+
+// Create returns a builder for creating a CustomPricingUnit entity.
+func (c *CustomPricingUnitClient) Create() *CustomPricingUnitCreate {
+	mutation := newCustomPricingUnitMutation(c.config, OpCreate)
+	return &CustomPricingUnitCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of CustomPricingUnit entities.
+func (c *CustomPricingUnitClient) CreateBulk(builders ...*CustomPricingUnitCreate) *CustomPricingUnitCreateBulk {
+	return &CustomPricingUnitCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *CustomPricingUnitClient) MapCreateBulk(slice any, setFunc func(*CustomPricingUnitCreate, int)) *CustomPricingUnitCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &CustomPricingUnitCreateBulk{err: fmt.Errorf("calling to CustomPricingUnitClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*CustomPricingUnitCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &CustomPricingUnitCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for CustomPricingUnit.
+func (c *CustomPricingUnitClient) Update() *CustomPricingUnitUpdate {
+	mutation := newCustomPricingUnitMutation(c.config, OpUpdate)
+	return &CustomPricingUnitUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *CustomPricingUnitClient) UpdateOne(cpu *CustomPricingUnit) *CustomPricingUnitUpdateOne {
+	mutation := newCustomPricingUnitMutation(c.config, OpUpdateOne, withCustomPricingUnit(cpu))
+	return &CustomPricingUnitUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *CustomPricingUnitClient) UpdateOneID(id string) *CustomPricingUnitUpdateOne {
+	mutation := newCustomPricingUnitMutation(c.config, OpUpdateOne, withCustomPricingUnitID(id))
+	return &CustomPricingUnitUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for CustomPricingUnit.
+func (c *CustomPricingUnitClient) Delete() *CustomPricingUnitDelete {
+	mutation := newCustomPricingUnitMutation(c.config, OpDelete)
+	return &CustomPricingUnitDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *CustomPricingUnitClient) DeleteOne(cpu *CustomPricingUnit) *CustomPricingUnitDeleteOne {
+	return c.DeleteOneID(cpu.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *CustomPricingUnitClient) DeleteOneID(id string) *CustomPricingUnitDeleteOne {
+	builder := c.Delete().Where(custompricingunit.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &CustomPricingUnitDeleteOne{builder}
+}
+
+// Query returns a query builder for CustomPricingUnit.
+func (c *CustomPricingUnitClient) Query() *CustomPricingUnitQuery {
+	return &CustomPricingUnitQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeCustomPricingUnit},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a CustomPricingUnit entity by its id.
+func (c *CustomPricingUnitClient) Get(ctx context.Context, id string) (*CustomPricingUnit, error) {
+	return c.Query().Where(custompricingunit.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *CustomPricingUnitClient) GetX(ctx context.Context, id string) *CustomPricingUnit {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryPrices queries the prices edge of a CustomPricingUnit.
+func (c *CustomPricingUnitClient) QueryPrices(cpu *CustomPricingUnit) *PriceQuery {
+	query := (&PriceClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := cpu.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(custompricingunit.Table, custompricingunit.FieldID, id),
+			sqlgraph.To(price.Table, price.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, true, custompricingunit.PricesTable, custompricingunit.PricesColumn),
+		)
+		fromV = sqlgraph.Neighbors(cpu.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *CustomPricingUnitClient) Hooks() []Hook {
+	return c.hooks.CustomPricingUnit
+}
+
+// Interceptors returns the client interceptors.
+func (c *CustomPricingUnitClient) Interceptors() []Interceptor {
+	return c.inters.CustomPricingUnit
+}
+
+func (c *CustomPricingUnitClient) mutate(ctx context.Context, m *CustomPricingUnitMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&CustomPricingUnitCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&CustomPricingUnitUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&CustomPricingUnitUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&CustomPricingUnitDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown CustomPricingUnit mutation op: %q", m.Op())
 	}
 }
 
@@ -3193,6 +3350,22 @@ func (c *PriceClient) QueryCostsheet(pr *Price) *CostsheetQuery {
 	return query
 }
 
+// QueryCustomPricingUnit queries the custom_pricing_unit edge of a Price.
+func (c *PriceClient) QueryCustomPricingUnit(pr *Price) *CustomPricingUnitQuery {
+	query := (&CustomPricingUnitClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := pr.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(price.Table, price.FieldID, id),
+			sqlgraph.To(custompricingunit.Table, custompricingunit.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, price.CustomPricingUnitTable, price.CustomPricingUnitColumn),
+		)
+		fromV = sqlgraph.Neighbors(pr.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *PriceClient) Hooks() []Hook {
 	return c.hooks.Price
@@ -4829,18 +5002,20 @@ func (c *WalletTransactionClient) mutate(ctx context.Context, m *WalletTransacti
 type (
 	hooks struct {
 		Auth, BillingSequence, Costsheet, CreditGrant, CreditGrantApplication,
-		CreditNote, CreditNoteLineItem, Customer, Entitlement, Environment, Feature,
-		Invoice, InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt,
-		Plan, Price, Secret, Subscription, SubscriptionLineItem, SubscriptionPause,
-		SubscriptionSchedule, SubscriptionSchedulePhase, Task, Tenant, User, Wallet,
+		CreditNote, CreditNoteLineItem, CustomPricingUnit, Customer, Entitlement,
+		Environment, Feature, Invoice, InvoiceLineItem, InvoiceSequence, Meter,
+		Payment, PaymentAttempt, Plan, Price, Secret, Subscription,
+		SubscriptionLineItem, SubscriptionPause, SubscriptionSchedule,
+		SubscriptionSchedulePhase, Task, Tenant, User, Wallet,
 		WalletTransaction []ent.Hook
 	}
 	inters struct {
 		Auth, BillingSequence, Costsheet, CreditGrant, CreditGrantApplication,
-		CreditNote, CreditNoteLineItem, Customer, Entitlement, Environment, Feature,
-		Invoice, InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt,
-		Plan, Price, Secret, Subscription, SubscriptionLineItem, SubscriptionPause,
-		SubscriptionSchedule, SubscriptionSchedulePhase, Task, Tenant, User, Wallet,
+		CreditNote, CreditNoteLineItem, CustomPricingUnit, Customer, Entitlement,
+		Environment, Feature, Invoice, InvoiceLineItem, InvoiceSequence, Meter,
+		Payment, PaymentAttempt, Plan, Price, Secret, Subscription,
+		SubscriptionLineItem, SubscriptionPause, SubscriptionSchedule,
+		SubscriptionSchedulePhase, Task, Tenant, User, Wallet,
 		WalletTransaction []ent.Interceptor
 	}
 )

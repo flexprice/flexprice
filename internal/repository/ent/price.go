@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
+	"github.com/flexprice/flexprice/ent/custompricingunit"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/schema"
 	"github.com/flexprice/flexprice/internal/cache"
@@ -57,7 +58,7 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 	}
 
 	// Create the price using the standard Ent API
-	price, err := client.Price.Create().
+	create := client.Price.Create().
 		SetID(p.ID).
 		SetTenantID(p.TenantID).
 		SetAmount(p.Amount.InexactFloat64()).
@@ -83,8 +84,37 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 		SetUpdatedAt(p.UpdatedAt).
 		SetCreatedBy(p.CreatedBy).
 		SetUpdatedBy(p.UpdatedBy).
-		SetEnvironmentID(p.EnvironmentID).
-		Save(ctx)
+		SetEnvironmentID(p.EnvironmentID)
+
+	// Set custom pricing unit fields if present
+	if p.PriceUnit != "" {
+		// Get the custom pricing unit ID
+		customPricingUnit, err := client.CustomPricingUnit.Query().
+			Where(
+				custompricingunit.CodeEQ(p.PriceUnit),
+				custompricingunit.TenantIDEQ(p.TenantID),
+				custompricingunit.EnvironmentIDEQ(p.EnvironmentID),
+				custompricingunit.StatusEQ(string(types.StatusPublished)),
+			).
+			Only(ctx)
+		if err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to get custom pricing unit").
+				WithReportableDetails(map[string]any{
+					"code": p.PriceUnit,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
+		create = create.
+			SetCustomPricingUnitID(customPricingUnit.ID).
+			SetPriceUnitAmount(p.PriceUnitAmount.InexactFloat64()).
+			SetDisplayPriceUnitAmount(p.DisplayPriceUnitAmount).
+			SetConversionRate(p.ConversionRate.InexactFloat64()).
+			SetPrecision(p.Precision)
+	}
+
+	price, err := create.Save(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
