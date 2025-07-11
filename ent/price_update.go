@@ -141,6 +141,107 @@ func (pu *PriceUpdate) ClearCustomPricingUnitID() *PriceUpdate {
 	return pu
 }
 
+// SetPriceUnitAmount sets the "price_unit_amount" field.
+func (pu *PriceUpdate) SetPriceUnitAmount(f float64) *PriceUpdate {
+	pu.mutation.ResetPriceUnitAmount()
+	pu.mutation.SetPriceUnitAmount(f)
+	return pu
+}
+
+// SetNillablePriceUnitAmount sets the "price_unit_amount" field if the given value is not nil.
+func (pu *PriceUpdate) SetNillablePriceUnitAmount(f *float64) *PriceUpdate {
+	if f != nil {
+		pu.SetPriceUnitAmount(*f)
+	}
+	return pu
+}
+
+// AddPriceUnitAmount adds f to the "price_unit_amount" field.
+func (pu *PriceUpdate) AddPriceUnitAmount(f float64) *PriceUpdate {
+	pu.mutation.AddPriceUnitAmount(f)
+	return pu
+}
+
+// ClearPriceUnitAmount clears the value of the "price_unit_amount" field.
+func (pu *PriceUpdate) ClearPriceUnitAmount() *PriceUpdate {
+	pu.mutation.ClearPriceUnitAmount()
+	return pu
+}
+
+// SetDisplayPriceUnitAmount sets the "display_price_unit_amount" field.
+func (pu *PriceUpdate) SetDisplayPriceUnitAmount(s string) *PriceUpdate {
+	pu.mutation.SetDisplayPriceUnitAmount(s)
+	return pu
+}
+
+// SetNillableDisplayPriceUnitAmount sets the "display_price_unit_amount" field if the given value is not nil.
+func (pu *PriceUpdate) SetNillableDisplayPriceUnitAmount(s *string) *PriceUpdate {
+	if s != nil {
+		pu.SetDisplayPriceUnitAmount(*s)
+	}
+	return pu
+}
+
+// ClearDisplayPriceUnitAmount clears the value of the "display_price_unit_amount" field.
+func (pu *PriceUpdate) ClearDisplayPriceUnitAmount() *PriceUpdate {
+	pu.mutation.ClearDisplayPriceUnitAmount()
+	return pu
+}
+
+// SetConversionRate sets the "conversion_rate" field.
+func (pu *PriceUpdate) SetConversionRate(f float64) *PriceUpdate {
+	pu.mutation.ResetConversionRate()
+	pu.mutation.SetConversionRate(f)
+	return pu
+}
+
+// SetNillableConversionRate sets the "conversion_rate" field if the given value is not nil.
+func (pu *PriceUpdate) SetNillableConversionRate(f *float64) *PriceUpdate {
+	if f != nil {
+		pu.SetConversionRate(*f)
+	}
+	return pu
+}
+
+// AddConversionRate adds f to the "conversion_rate" field.
+func (pu *PriceUpdate) AddConversionRate(f float64) *PriceUpdate {
+	pu.mutation.AddConversionRate(f)
+	return pu
+}
+
+// ClearConversionRate clears the value of the "conversion_rate" field.
+func (pu *PriceUpdate) ClearConversionRate() *PriceUpdate {
+	pu.mutation.ClearConversionRate()
+	return pu
+}
+
+// SetPrecision sets the "precision" field.
+func (pu *PriceUpdate) SetPrecision(i int) *PriceUpdate {
+	pu.mutation.ResetPrecision()
+	pu.mutation.SetPrecision(i)
+	return pu
+}
+
+// SetNillablePrecision sets the "precision" field if the given value is not nil.
+func (pu *PriceUpdate) SetNillablePrecision(i *int) *PriceUpdate {
+	if i != nil {
+		pu.SetPrecision(*i)
+	}
+	return pu
+}
+
+// AddPrecision adds i to the "precision" field.
+func (pu *PriceUpdate) AddPrecision(i int) *PriceUpdate {
+	pu.mutation.AddPrecision(i)
+	return pu
+}
+
+// ClearPrecision clears the value of the "precision" field.
+func (pu *PriceUpdate) ClearPrecision() *PriceUpdate {
+	pu.mutation.ClearPrecision()
+	return pu
+}
+
 // SetPlanID sets the "plan_id" field.
 func (pu *PriceUpdate) SetPlanID(s string) *PriceUpdate {
 	pu.mutation.SetPlanID(s)
@@ -549,6 +650,39 @@ func (pu *PriceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if value, ok := pu.mutation.DisplayAmount(); ok {
 		_spec.SetField(price.FieldDisplayAmount, field.TypeString, value)
 	}
+	if value, ok := pu.mutation.PriceUnitAmount(); ok {
+		_spec.SetField(price.FieldPriceUnitAmount, field.TypeFloat64, value)
+	}
+	if value, ok := pu.mutation.AddedPriceUnitAmount(); ok {
+		_spec.AddField(price.FieldPriceUnitAmount, field.TypeFloat64, value)
+	}
+	if pu.mutation.PriceUnitAmountCleared() {
+		_spec.ClearField(price.FieldPriceUnitAmount, field.TypeFloat64)
+	}
+	if value, ok := pu.mutation.DisplayPriceUnitAmount(); ok {
+		_spec.SetField(price.FieldDisplayPriceUnitAmount, field.TypeString, value)
+	}
+	if pu.mutation.DisplayPriceUnitAmountCleared() {
+		_spec.ClearField(price.FieldDisplayPriceUnitAmount, field.TypeString)
+	}
+	if value, ok := pu.mutation.ConversionRate(); ok {
+		_spec.SetField(price.FieldConversionRate, field.TypeFloat64, value)
+	}
+	if value, ok := pu.mutation.AddedConversionRate(); ok {
+		_spec.AddField(price.FieldConversionRate, field.TypeFloat64, value)
+	}
+	if pu.mutation.ConversionRateCleared() {
+		_spec.ClearField(price.FieldConversionRate, field.TypeFloat64)
+	}
+	if value, ok := pu.mutation.Precision(); ok {
+		_spec.SetField(price.FieldPrecision, field.TypeInt, value)
+	}
+	if value, ok := pu.mutation.AddedPrecision(); ok {
+		_spec.AddField(price.FieldPrecision, field.TypeInt, value)
+	}
+	if pu.mutation.PrecisionCleared() {
+		_spec.ClearField(price.FieldPrecision, field.TypeInt)
+	}
 	if value, ok := pu.mutation.PlanID(); ok {
 		_spec.SetField(price.FieldPlanID, field.TypeString, value)
 	}
@@ -826,6 +960,107 @@ func (puo *PriceUpdateOne) SetNillableCustomPricingUnitID(s *string) *PriceUpdat
 // ClearCustomPricingUnitID clears the value of the "custom_pricing_unit_id" field.
 func (puo *PriceUpdateOne) ClearCustomPricingUnitID() *PriceUpdateOne {
 	puo.mutation.ClearCustomPricingUnitID()
+	return puo
+}
+
+// SetPriceUnitAmount sets the "price_unit_amount" field.
+func (puo *PriceUpdateOne) SetPriceUnitAmount(f float64) *PriceUpdateOne {
+	puo.mutation.ResetPriceUnitAmount()
+	puo.mutation.SetPriceUnitAmount(f)
+	return puo
+}
+
+// SetNillablePriceUnitAmount sets the "price_unit_amount" field if the given value is not nil.
+func (puo *PriceUpdateOne) SetNillablePriceUnitAmount(f *float64) *PriceUpdateOne {
+	if f != nil {
+		puo.SetPriceUnitAmount(*f)
+	}
+	return puo
+}
+
+// AddPriceUnitAmount adds f to the "price_unit_amount" field.
+func (puo *PriceUpdateOne) AddPriceUnitAmount(f float64) *PriceUpdateOne {
+	puo.mutation.AddPriceUnitAmount(f)
+	return puo
+}
+
+// ClearPriceUnitAmount clears the value of the "price_unit_amount" field.
+func (puo *PriceUpdateOne) ClearPriceUnitAmount() *PriceUpdateOne {
+	puo.mutation.ClearPriceUnitAmount()
+	return puo
+}
+
+// SetDisplayPriceUnitAmount sets the "display_price_unit_amount" field.
+func (puo *PriceUpdateOne) SetDisplayPriceUnitAmount(s string) *PriceUpdateOne {
+	puo.mutation.SetDisplayPriceUnitAmount(s)
+	return puo
+}
+
+// SetNillableDisplayPriceUnitAmount sets the "display_price_unit_amount" field if the given value is not nil.
+func (puo *PriceUpdateOne) SetNillableDisplayPriceUnitAmount(s *string) *PriceUpdateOne {
+	if s != nil {
+		puo.SetDisplayPriceUnitAmount(*s)
+	}
+	return puo
+}
+
+// ClearDisplayPriceUnitAmount clears the value of the "display_price_unit_amount" field.
+func (puo *PriceUpdateOne) ClearDisplayPriceUnitAmount() *PriceUpdateOne {
+	puo.mutation.ClearDisplayPriceUnitAmount()
+	return puo
+}
+
+// SetConversionRate sets the "conversion_rate" field.
+func (puo *PriceUpdateOne) SetConversionRate(f float64) *PriceUpdateOne {
+	puo.mutation.ResetConversionRate()
+	puo.mutation.SetConversionRate(f)
+	return puo
+}
+
+// SetNillableConversionRate sets the "conversion_rate" field if the given value is not nil.
+func (puo *PriceUpdateOne) SetNillableConversionRate(f *float64) *PriceUpdateOne {
+	if f != nil {
+		puo.SetConversionRate(*f)
+	}
+	return puo
+}
+
+// AddConversionRate adds f to the "conversion_rate" field.
+func (puo *PriceUpdateOne) AddConversionRate(f float64) *PriceUpdateOne {
+	puo.mutation.AddConversionRate(f)
+	return puo
+}
+
+// ClearConversionRate clears the value of the "conversion_rate" field.
+func (puo *PriceUpdateOne) ClearConversionRate() *PriceUpdateOne {
+	puo.mutation.ClearConversionRate()
+	return puo
+}
+
+// SetPrecision sets the "precision" field.
+func (puo *PriceUpdateOne) SetPrecision(i int) *PriceUpdateOne {
+	puo.mutation.ResetPrecision()
+	puo.mutation.SetPrecision(i)
+	return puo
+}
+
+// SetNillablePrecision sets the "precision" field if the given value is not nil.
+func (puo *PriceUpdateOne) SetNillablePrecision(i *int) *PriceUpdateOne {
+	if i != nil {
+		puo.SetPrecision(*i)
+	}
+	return puo
+}
+
+// AddPrecision adds i to the "precision" field.
+func (puo *PriceUpdateOne) AddPrecision(i int) *PriceUpdateOne {
+	puo.mutation.AddPrecision(i)
+	return puo
+}
+
+// ClearPrecision clears the value of the "precision" field.
+func (puo *PriceUpdateOne) ClearPrecision() *PriceUpdateOne {
+	puo.mutation.ClearPrecision()
 	return puo
 }
 
@@ -1266,6 +1501,39 @@ func (puo *PriceUpdateOne) sqlSave(ctx context.Context) (_node *Price, err error
 	}
 	if value, ok := puo.mutation.DisplayAmount(); ok {
 		_spec.SetField(price.FieldDisplayAmount, field.TypeString, value)
+	}
+	if value, ok := puo.mutation.PriceUnitAmount(); ok {
+		_spec.SetField(price.FieldPriceUnitAmount, field.TypeFloat64, value)
+	}
+	if value, ok := puo.mutation.AddedPriceUnitAmount(); ok {
+		_spec.AddField(price.FieldPriceUnitAmount, field.TypeFloat64, value)
+	}
+	if puo.mutation.PriceUnitAmountCleared() {
+		_spec.ClearField(price.FieldPriceUnitAmount, field.TypeFloat64)
+	}
+	if value, ok := puo.mutation.DisplayPriceUnitAmount(); ok {
+		_spec.SetField(price.FieldDisplayPriceUnitAmount, field.TypeString, value)
+	}
+	if puo.mutation.DisplayPriceUnitAmountCleared() {
+		_spec.ClearField(price.FieldDisplayPriceUnitAmount, field.TypeString)
+	}
+	if value, ok := puo.mutation.ConversionRate(); ok {
+		_spec.SetField(price.FieldConversionRate, field.TypeFloat64, value)
+	}
+	if value, ok := puo.mutation.AddedConversionRate(); ok {
+		_spec.AddField(price.FieldConversionRate, field.TypeFloat64, value)
+	}
+	if puo.mutation.ConversionRateCleared() {
+		_spec.ClearField(price.FieldConversionRate, field.TypeFloat64)
+	}
+	if value, ok := puo.mutation.Precision(); ok {
+		_spec.SetField(price.FieldPrecision, field.TypeInt, value)
+	}
+	if value, ok := puo.mutation.AddedPrecision(); ok {
+		_spec.AddField(price.FieldPrecision, field.TypeInt, value)
+	}
+	if puo.mutation.PrecisionCleared() {
+		_spec.ClearField(price.FieldPrecision, field.TypeInt)
 	}
 	if value, ok := puo.mutation.PlanID(); ok {
 		_spec.SetField(price.FieldPlanID, field.TypeString, value)

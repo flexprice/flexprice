@@ -2,9 +2,12 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/custompricingunit"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -32,13 +35,28 @@ type PriceService interface {
 }
 
 type priceService struct {
-	repo      price.Repository
-	meterRepo meter.Repository
-	logger    *logger.Logger
+	repo                  price.Repository
+	meterRepo             meter.Repository
+	customPricingUnitRepo custompricingunit.Repository
+	logger                *logger.Logger
 }
 
 func NewPriceService(repo price.Repository, meterRepo meter.Repository, logger *logger.Logger) PriceService {
-	return &priceService{repo: repo, logger: logger, meterRepo: meterRepo}
+	return &priceService{
+		repo:      repo,
+		meterRepo: meterRepo,
+		logger:    logger,
+	}
+}
+
+// NewPriceServiceWithCustomPricing creates a new price service with custom pricing unit support
+func NewPriceServiceWithCustomPricing(repo price.Repository, meterRepo meter.Repository, customPricingUnitRepo custompricingunit.Repository, logger *logger.Logger) PriceService {
+	return &priceService{
+		repo:                  repo,
+		meterRepo:             meterRepo,
+		customPricingUnitRepo: customPricingUnitRepo,
+		logger:                logger,
+	}
 }
 
 func (s *priceService) CreatePrice(ctx context.Context, req dto.CreatePriceRequest) (*dto.PriceResponse, error) {
@@ -59,11 +77,89 @@ func (s *priceService) CreatePrice(ctx context.Context, req dto.CreatePriceReque
 			Mark(ierr.ErrValidation)
 	}
 
+	// Handle custom pricing unit if provided
+	if req.PriceUnit != "" {
+		// Get custom pricing unit - must be published
+		pricingUnit, err := s.customPricingUnitRepo.GetByCode(
+			ctx,
+			req.PriceUnit,
+			types.GetTenantID(ctx),
+			types.GetEnvironmentID(ctx),
+			string(types.StatusPublished),
+		)
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Failed to get custom pricing unit").
+				WithReportableDetails(map[string]interface{}{
+					"code": req.PriceUnit,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
+		// Ensure currencies match
+		if !strings.EqualFold(strings.ToLower(pricingUnit.BaseCurrency), strings.ToLower(price.Currency)) {
+			return nil, ierr.NewError("currency mismatch").
+				WithHint("Custom pricing unit base currency must match price currency").
+				WithReportableDetails(map[string]interface{}{
+					"price_currency":  price.Currency,
+					"unit_currency":   pricingUnit.BaseCurrency,
+					"price_unit_code": pricingUnit.Code,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
+		// Convert base amount to custom unit amount
+		customAmount, err := s.customPricingUnitRepo.ConvertToPriceUnit(
+			ctx,
+			pricingUnit.Code,
+			types.GetTenantID(ctx),
+			types.GetEnvironmentID(ctx),
+			price.Amount,
+		)
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Failed to convert amount to custom pricing unit").
+				Mark(ierr.ErrInternal)
+		}
+
+		// Set custom pricing unit fields
+		price.PriceUnit = pricingUnit.Code
+		price.PriceUnitAmount = customAmount
+		price.ConversionRate = pricingUnit.ConversionRate
+		price.Precision = pricingUnit.Precision
+		price.DisplayPriceUnitAmount = fmt.Sprintf("%s%s", pricingUnit.Symbol, customAmount.StringFixed(int32(pricingUnit.Precision)))
+	}
+
+	// Create the price
 	if err := s.repo.Create(ctx, price); err != nil {
 		return nil, err
 	}
 
-	return &dto.PriceResponse{Price: price}, nil
+	// Get meter if needed
+	var meterResp *dto.MeterResponse
+	if price.MeterID != "" {
+		m, err := s.meterRepo.GetMeter(ctx, price.MeterID)
+		if err != nil {
+			return nil, err
+		}
+		meterResp = &dto.MeterResponse{
+			ID:          m.ID,
+			Name:        m.Name,
+			TenantID:    m.TenantID,
+			EventName:   m.EventName,
+			Aggregation: m.Aggregation,
+			Filters:     m.Filters,
+			ResetUsage:  m.ResetUsage,
+			CreatedAt:   m.CreatedAt,
+			UpdatedAt:   m.UpdatedAt,
+			Status:      string(m.Status),
+		}
+	}
+
+	return &dto.PriceResponse{
+		Price: price,
+		Meter: meterResp,
+	}, nil
 }
 
 func (s *priceService) GetPrice(ctx context.Context, id string) (*dto.PriceResponse, error) {

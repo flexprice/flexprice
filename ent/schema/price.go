@@ -51,6 +51,23 @@ func (Price) Fields() []ent.Field {
 				"postgres": "varchar(50)",
 			}).
 			Optional(),
+		field.Float("price_unit_amount").
+			SchemaType(map[string]string{
+				"postgres": "numeric(25,15)",
+			}).
+			Optional(),
+		field.String("display_price_unit_amount").
+			SchemaType(map[string]string{
+				"postgres": "varchar(255)",
+			}).
+			Optional(),
+		field.Float("conversion_rate").
+			SchemaType(map[string]string{
+				"postgres": "numeric(25,15)",
+			}).
+			Optional(),
+		field.Int("precision").
+			Optional(),
 		field.String("plan_id").
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",

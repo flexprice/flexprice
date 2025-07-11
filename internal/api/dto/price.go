@@ -14,6 +14,7 @@ import (
 type CreatePriceRequest struct {
 	Amount             string                   `json:"amount"`
 	Currency           string                   `json:"currency" validate:"required,len=3"`
+	PriceUnit          string                   `json:"price_unit,omitempty"`
 	PlanID             string                   `json:"plan_id,omitempty"`
 	Type               types.PriceType          `json:"type" validate:"required"`
 	BillingPeriod      types.BillingPeriod      `json:"billing_period" validate:"required"`

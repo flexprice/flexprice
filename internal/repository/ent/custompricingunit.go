@@ -227,5 +227,15 @@ func (r *customPricingUnitRepository) ConvertToBaseCurrency(ctx context.Context,
 	if err != nil {
 		return decimal.Zero, err
 	}
+	// amount in fiat currency = amount in custom currency * conversion_rate
 	return customAmount.Mul(unit.ConversionRate), nil
+}
+
+func (r *customPricingUnitRepository) ConvertToPriceUnit(ctx context.Context, code, tenantID, environmentID string, fiatAmount decimal.Decimal) (decimal.Decimal, error) {
+	unit, err := r.GetByCode(ctx, code, tenantID, environmentID, string(types.StatusPublished))
+	if err != nil {
+		return decimal.Zero, err
+	}
+	// amount in custom currency = amount in fiat currency / conversion_rate
+	return fiatAmount.Div(unit.ConversionRate), nil
 }

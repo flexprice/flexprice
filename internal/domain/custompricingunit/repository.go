@@ -32,9 +32,11 @@ type Repository interface {
 	// GetConversionRate returns the conversion rate for a given code/tenant/env
 	GetConversionRate(ctx context.Context, code, tenantID, environmentID string) (decimal.Decimal, error)
 
-	// GetSymbol returns the symbol for a given code/tenant/env
-	GetSymbol(ctx context.Context, code, tenantID, environmentID string) (string, error)
-
-	// ConvertToBaseCurrency returns the converted amount for a given code/tenant/env and amount
+	// ConvertToBaseCurrency converts an amount from custom pricing unit to base currency
+	// amount in fiat currency = amount in custom currency * conversion_rate
 	ConvertToBaseCurrency(ctx context.Context, code, tenantID, environmentID string, customAmount decimal.Decimal) (decimal.Decimal, error)
+
+	// ConvertToPriceUnit converts an amount from base currency to custom pricing unit
+	// amount in custom currency = amount in fiat currency / conversion_rate
+	ConvertToPriceUnit(ctx context.Context, code, tenantID, environmentID string, fiatAmount decimal.Decimal) (decimal.Decimal, error)
 }

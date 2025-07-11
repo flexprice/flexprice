@@ -13,6 +13,7 @@ import (
 	domainCPU "github.com/flexprice/flexprice/internal/domain/custompricingunit"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // CustomPricingUnitService handles business logic for custom pricing units
@@ -318,6 +319,46 @@ func (s *CustomPricingUnitService) Delete(ctx context.Context, id string) error 
 	existingUnit.UpdatedAt = time.Now().UTC()
 
 	return s.repo.Update(ctx, existingUnit)
+}
+
+// ConvertToBaseCurrency converts an amount from custom pricing unit to base currency
+// amount in fiat currency = amount in custom currency * conversion_rate
+func (s *CustomPricingUnitService) ConvertToBaseCurrency(ctx context.Context, code, tenantID, environmentID string, customAmount decimal.Decimal) (decimal.Decimal, error) {
+	if customAmount.IsZero() {
+		return decimal.Zero, nil
+	}
+
+	if customAmount.IsNegative() {
+		return decimal.Zero, ierr.NewError("amount must be positive").
+			WithMessage("negative amount provided for conversion").
+			WithHint("Amount must be greater than zero").
+			WithReportableDetails(map[string]interface{}{
+				"amount": customAmount,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	return s.repo.ConvertToBaseCurrency(ctx, strings.ToLower(code), tenantID, environmentID, customAmount)
+}
+
+// ConvertToPriceUnit converts an amount from base currency to custom pricing unit
+// amount in custom currency = amount in fiat currency / conversion_rate
+func (s *CustomPricingUnitService) ConvertToPriceUnit(ctx context.Context, code, tenantID, environmentID string, fiatAmount decimal.Decimal) (decimal.Decimal, error) {
+	if fiatAmount.IsZero() {
+		return decimal.Zero, nil
+	}
+
+	if fiatAmount.IsNegative() {
+		return decimal.Zero, ierr.NewError("amount must be positive").
+			WithMessage("negative amount provided for conversion").
+			WithHint("Amount must be greater than zero").
+			WithReportableDetails(map[string]interface{}{
+				"amount": fiatAmount,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	return s.repo.ConvertToPriceUnit(ctx, strings.ToLower(code), tenantID, environmentID, fiatAmount)
 }
 
 // toResponse converts a domain CustomPricingUnit to a dto.CustomPricingUnitResponse

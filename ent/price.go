@@ -42,6 +42,14 @@ type Price struct {
 	DisplayAmount string `json:"display_amount,omitempty"`
 	// CustomPricingUnitID holds the value of the "custom_pricing_unit_id" field.
 	CustomPricingUnitID string `json:"custom_pricing_unit_id,omitempty"`
+	// PriceUnitAmount holds the value of the "price_unit_amount" field.
+	PriceUnitAmount float64 `json:"price_unit_amount,omitempty"`
+	// DisplayPriceUnitAmount holds the value of the "display_price_unit_amount" field.
+	DisplayPriceUnitAmount string `json:"display_price_unit_amount,omitempty"`
+	// ConversionRate holds the value of the "conversion_rate" field.
+	ConversionRate float64 `json:"conversion_rate,omitempty"`
+	// Precision holds the value of the "precision" field.
+	Precision int `json:"precision,omitempty"`
 	// PlanID holds the value of the "plan_id" field.
 	PlanID string `json:"plan_id,omitempty"`
 	// Type holds the value of the "type" field.
@@ -118,11 +126,11 @@ func (*Price) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case price.FieldFilterValues, price.FieldTiers, price.FieldTransformQuantity, price.FieldMetadata:
 			values[i] = new([]byte)
-		case price.FieldAmount:
+		case price.FieldAmount, price.FieldPriceUnitAmount, price.FieldConversionRate:
 			values[i] = new(sql.NullFloat64)
-		case price.FieldBillingPeriodCount, price.FieldTrialPeriod:
+		case price.FieldPrecision, price.FieldBillingPeriodCount, price.FieldTrialPeriod:
 			values[i] = new(sql.NullInt64)
-		case price.FieldID, price.FieldTenantID, price.FieldStatus, price.FieldCreatedBy, price.FieldUpdatedBy, price.FieldEnvironmentID, price.FieldCurrency, price.FieldDisplayAmount, price.FieldCustomPricingUnitID, price.FieldPlanID, price.FieldType, price.FieldBillingPeriod, price.FieldBillingModel, price.FieldBillingCadence, price.FieldInvoiceCadence, price.FieldMeterID, price.FieldTierMode, price.FieldLookupKey, price.FieldDescription:
+		case price.FieldID, price.FieldTenantID, price.FieldStatus, price.FieldCreatedBy, price.FieldUpdatedBy, price.FieldEnvironmentID, price.FieldCurrency, price.FieldDisplayAmount, price.FieldCustomPricingUnitID, price.FieldDisplayPriceUnitAmount, price.FieldPlanID, price.FieldType, price.FieldBillingPeriod, price.FieldBillingModel, price.FieldBillingCadence, price.FieldInvoiceCadence, price.FieldMeterID, price.FieldTierMode, price.FieldLookupKey, price.FieldDescription:
 			values[i] = new(sql.NullString)
 		case price.FieldCreatedAt, price.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -212,6 +220,30 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field custom_pricing_unit_id", values[i])
 			} else if value.Valid {
 				pr.CustomPricingUnitID = value.String
+			}
+		case price.FieldPriceUnitAmount:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field price_unit_amount", values[i])
+			} else if value.Valid {
+				pr.PriceUnitAmount = value.Float64
+			}
+		case price.FieldDisplayPriceUnitAmount:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field display_price_unit_amount", values[i])
+			} else if value.Valid {
+				pr.DisplayPriceUnitAmount = value.String
+			}
+		case price.FieldConversionRate:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field conversion_rate", values[i])
+			} else if value.Valid {
+				pr.ConversionRate = value.Float64
+			}
+		case price.FieldPrecision:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field precision", values[i])
+			} else if value.Valid {
+				pr.Precision = int(value.Int64)
 			}
 		case price.FieldPlanID:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -397,6 +429,18 @@ func (pr *Price) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("custom_pricing_unit_id=")
 	builder.WriteString(pr.CustomPricingUnitID)
+	builder.WriteString(", ")
+	builder.WriteString("price_unit_amount=")
+	builder.WriteString(fmt.Sprintf("%v", pr.PriceUnitAmount))
+	builder.WriteString(", ")
+	builder.WriteString("display_price_unit_amount=")
+	builder.WriteString(pr.DisplayPriceUnitAmount)
+	builder.WriteString(", ")
+	builder.WriteString("conversion_rate=")
+	builder.WriteString(fmt.Sprintf("%v", pr.ConversionRate))
+	builder.WriteString(", ")
+	builder.WriteString("precision=")
+	builder.WriteString(fmt.Sprintf("%v", pr.Precision))
 	builder.WriteString(", ")
 	builder.WriteString("plan_id=")
 	builder.WriteString(pr.PlanID)

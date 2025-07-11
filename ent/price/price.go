@@ -36,6 +36,14 @@ const (
 	FieldDisplayAmount = "display_amount"
 	// FieldCustomPricingUnitID holds the string denoting the custom_pricing_unit_id field in the database.
 	FieldCustomPricingUnitID = "custom_pricing_unit_id"
+	// FieldPriceUnitAmount holds the string denoting the price_unit_amount field in the database.
+	FieldPriceUnitAmount = "price_unit_amount"
+	// FieldDisplayPriceUnitAmount holds the string denoting the display_price_unit_amount field in the database.
+	FieldDisplayPriceUnitAmount = "display_price_unit_amount"
+	// FieldConversionRate holds the string denoting the conversion_rate field in the database.
+	FieldConversionRate = "conversion_rate"
+	// FieldPrecision holds the string denoting the precision field in the database.
+	FieldPrecision = "precision"
 	// FieldPlanID holds the string denoting the plan_id field in the database.
 	FieldPlanID = "plan_id"
 	// FieldType holds the string denoting the type field in the database.
@@ -104,6 +112,10 @@ var Columns = []string{
 	FieldCurrency,
 	FieldDisplayAmount,
 	FieldCustomPricingUnitID,
+	FieldPriceUnitAmount,
+	FieldDisplayPriceUnitAmount,
+	FieldConversionRate,
+	FieldPrecision,
 	FieldPlanID,
 	FieldType,
 	FieldBillingPeriod,
@@ -226,6 +238,26 @@ func ByDisplayAmount(opts ...sql.OrderTermOption) OrderOption {
 // ByCustomPricingUnitID orders the results by the custom_pricing_unit_id field.
 func ByCustomPricingUnitID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCustomPricingUnitID, opts...).ToFunc()
+}
+
+// ByPriceUnitAmount orders the results by the price_unit_amount field.
+func ByPriceUnitAmount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPriceUnitAmount, opts...).ToFunc()
+}
+
+// ByDisplayPriceUnitAmount orders the results by the display_price_unit_amount field.
+func ByDisplayPriceUnitAmount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDisplayPriceUnitAmount, opts...).ToFunc()
+}
+
+// ByConversionRate orders the results by the conversion_rate field.
+func ByConversionRate(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldConversionRate, opts...).ToFunc()
+}
+
+// ByPrecision orders the results by the precision field.
+func ByPrecision(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPrecision, opts...).ToFunc()
 }
 
 // ByPlanID orders the results by the plan_id field.

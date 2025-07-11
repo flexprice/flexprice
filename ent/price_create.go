@@ -145,6 +145,62 @@ func (pc *PriceCreate) SetNillableCustomPricingUnitID(s *string) *PriceCreate {
 	return pc
 }
 
+// SetPriceUnitAmount sets the "price_unit_amount" field.
+func (pc *PriceCreate) SetPriceUnitAmount(f float64) *PriceCreate {
+	pc.mutation.SetPriceUnitAmount(f)
+	return pc
+}
+
+// SetNillablePriceUnitAmount sets the "price_unit_amount" field if the given value is not nil.
+func (pc *PriceCreate) SetNillablePriceUnitAmount(f *float64) *PriceCreate {
+	if f != nil {
+		pc.SetPriceUnitAmount(*f)
+	}
+	return pc
+}
+
+// SetDisplayPriceUnitAmount sets the "display_price_unit_amount" field.
+func (pc *PriceCreate) SetDisplayPriceUnitAmount(s string) *PriceCreate {
+	pc.mutation.SetDisplayPriceUnitAmount(s)
+	return pc
+}
+
+// SetNillableDisplayPriceUnitAmount sets the "display_price_unit_amount" field if the given value is not nil.
+func (pc *PriceCreate) SetNillableDisplayPriceUnitAmount(s *string) *PriceCreate {
+	if s != nil {
+		pc.SetDisplayPriceUnitAmount(*s)
+	}
+	return pc
+}
+
+// SetConversionRate sets the "conversion_rate" field.
+func (pc *PriceCreate) SetConversionRate(f float64) *PriceCreate {
+	pc.mutation.SetConversionRate(f)
+	return pc
+}
+
+// SetNillableConversionRate sets the "conversion_rate" field if the given value is not nil.
+func (pc *PriceCreate) SetNillableConversionRate(f *float64) *PriceCreate {
+	if f != nil {
+		pc.SetConversionRate(*f)
+	}
+	return pc
+}
+
+// SetPrecision sets the "precision" field.
+func (pc *PriceCreate) SetPrecision(i int) *PriceCreate {
+	pc.mutation.SetPrecision(i)
+	return pc
+}
+
+// SetNillablePrecision sets the "precision" field if the given value is not nil.
+func (pc *PriceCreate) SetNillablePrecision(i *int) *PriceCreate {
+	if i != nil {
+		pc.SetPrecision(*i)
+	}
+	return pc
+}
+
 // SetPlanID sets the "plan_id" field.
 func (pc *PriceCreate) SetPlanID(s string) *PriceCreate {
 	pc.mutation.SetPlanID(s)
@@ -543,6 +599,22 @@ func (pc *PriceCreate) createSpec() (*Price, *sqlgraph.CreateSpec) {
 	if value, ok := pc.mutation.DisplayAmount(); ok {
 		_spec.SetField(price.FieldDisplayAmount, field.TypeString, value)
 		_node.DisplayAmount = value
+	}
+	if value, ok := pc.mutation.PriceUnitAmount(); ok {
+		_spec.SetField(price.FieldPriceUnitAmount, field.TypeFloat64, value)
+		_node.PriceUnitAmount = value
+	}
+	if value, ok := pc.mutation.DisplayPriceUnitAmount(); ok {
+		_spec.SetField(price.FieldDisplayPriceUnitAmount, field.TypeString, value)
+		_node.DisplayPriceUnitAmount = value
+	}
+	if value, ok := pc.mutation.ConversionRate(); ok {
+		_spec.SetField(price.FieldConversionRate, field.TypeFloat64, value)
+		_node.ConversionRate = value
+	}
+	if value, ok := pc.mutation.Precision(); ok {
+		_spec.SetField(price.FieldPrecision, field.TypeInt, value)
+		_node.Precision = value
 	}
 	if value, ok := pc.mutation.PlanID(); ok {
 		_spec.SetField(price.FieldPlanID, field.TypeString, value)
