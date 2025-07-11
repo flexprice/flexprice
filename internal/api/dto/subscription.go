@@ -43,7 +43,7 @@ type CreateSubscriptionRequest struct {
 	// calendar billing the billing anchor will be 2025-05-01 vs 2025-04-15 for anniversary billing.
 	BillingCycle types.BillingCycle `json:"billing_cycle"`
 	// Credit grants to be applied when subscription is created
-	CreditGrants []CreateCreditGrantRequest `json:"credit_grants,omitempty"`
+	CreditGrants *[]CreateCreditGrantRequest `json:"credit_grants,omitempty"`
 	// CommitmentAmount is the minimum amount a customer commits to paying for a billing period
 	CommitmentAmount *decimal.Decimal `json:"commitment_amount,omitempty"`
 	// OverageFactor is a multiplier applied to usage beyond the commitment amount
@@ -173,20 +173,8 @@ func (r *CreateSubscriptionRequest) Validate() error {
 	}
 
 	// Validate credit grants if provided
-	if len(r.CreditGrants) > 0 {
-		for i, grant := range r.CreditGrants {
-			// Ensure currency matches subscription currency
-			if grant.Currency != r.Currency {
-				return ierr.NewError("credit grant currency mismatch").
-					WithHintf("Credit grant currency '%s' must match subscription currency '%s'",
-						grant.Currency, r.Currency).
-					WithReportableDetails(map[string]interface{}{
-						"grant_currency":        grant.Currency,
-						"subscription_currency": r.Currency,
-						"grant_index":           i,
-					}).
-					Mark(ierr.ErrValidation)
-			}
+	if r.CreditGrants != nil && len(*r.CreditGrants) > 0 {
+		for i, grant := range *r.CreditGrants {
 
 			// Force scope to SUBSCRIPTION for all grants added this way
 			if grant.Scope != types.CreditGrantScopeSubscription {
@@ -229,22 +217,6 @@ func (r *CreateSubscriptionRequest) Validate() error {
 						"error": err.Error(),
 					}).
 					Mark(ierr.ErrValidation)
-			}
-
-			// Validate currency consistency
-			for j, grant := range phase.CreditGrants {
-				if grant.Currency != r.Currency {
-					return ierr.NewError("credit grant currency mismatch in phase").
-						WithHint(fmt.Sprintf("Credit grant currency '%s' must match subscription currency '%s'",
-							grant.Currency, r.Currency)).
-						WithReportableDetails(map[string]interface{}{
-							"phase_index":           i,
-							"grant_index":           j,
-							"grant_currency":        grant.Currency,
-							"subscription_currency": r.Currency,
-						}).
-						Mark(ierr.ErrValidation)
-				}
 			}
 
 			// Validate phase continuity

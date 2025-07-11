@@ -46,8 +46,6 @@ type CreditGrant struct {
 	SubscriptionID *string `json:"subscription_id,omitempty"`
 	// Credits holds the value of the "credits" field.
 	Credits decimal.Decimal `json:"credits,omitempty"`
-	// Currency holds the value of the "currency" field.
-	Currency string `json:"currency,omitempty"`
 	// Cadence holds the value of the "cadence" field.
 	Cadence types.CreditGrantCadence `json:"cadence,omitempty"`
 	// Period holds the value of the "period" field.
@@ -114,7 +112,7 @@ func (*CreditGrant) scanValues(columns []string) ([]any, error) {
 			values[i] = new(decimal.Decimal)
 		case creditgrant.FieldPeriodCount, creditgrant.FieldExpirationDuration, creditgrant.FieldPriority:
 			values[i] = new(sql.NullInt64)
-		case creditgrant.FieldID, creditgrant.FieldTenantID, creditgrant.FieldStatus, creditgrant.FieldCreatedBy, creditgrant.FieldUpdatedBy, creditgrant.FieldEnvironmentID, creditgrant.FieldName, creditgrant.FieldScope, creditgrant.FieldPlanID, creditgrant.FieldSubscriptionID, creditgrant.FieldCurrency, creditgrant.FieldCadence, creditgrant.FieldPeriod, creditgrant.FieldExpirationType, creditgrant.FieldExpirationDurationUnit:
+		case creditgrant.FieldID, creditgrant.FieldTenantID, creditgrant.FieldStatus, creditgrant.FieldCreatedBy, creditgrant.FieldUpdatedBy, creditgrant.FieldEnvironmentID, creditgrant.FieldName, creditgrant.FieldScope, creditgrant.FieldPlanID, creditgrant.FieldSubscriptionID, creditgrant.FieldCadence, creditgrant.FieldPeriod, creditgrant.FieldExpirationType, creditgrant.FieldExpirationDurationUnit:
 			values[i] = new(sql.NullString)
 		case creditgrant.FieldCreatedAt, creditgrant.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -212,12 +210,6 @@ func (cg *CreditGrant) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field credits", values[i])
 			} else if value != nil {
 				cg.Credits = *value
-			}
-		case creditgrant.FieldCurrency:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field currency", values[i])
-			} else if value.Valid {
-				cg.Currency = value.String
 			}
 		case creditgrant.FieldCadence:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -359,9 +351,6 @@ func (cg *CreditGrant) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("credits=")
 	builder.WriteString(fmt.Sprintf("%v", cg.Credits))
-	builder.WriteString(", ")
-	builder.WriteString("currency=")
-	builder.WriteString(cg.Currency)
 	builder.WriteString(", ")
 	builder.WriteString("cadence=")
 	builder.WriteString(fmt.Sprintf("%v", cg.Cadence))

@@ -2202,7 +2202,6 @@ type CreditGrantMutation struct {
 	name                     *string
 	scope                    *types.CreditGrantScope
 	credits                  *decimal.Decimal
-	currency                 *string
 	cadence                  *types.CreditGrantCadence
 	period                   *types.CreditGrantPeriod
 	period_count             *int
@@ -2825,42 +2824,6 @@ func (m *CreditGrantMutation) ResetCredits() {
 	m.credits = nil
 }
 
-// SetCurrency sets the "currency" field.
-func (m *CreditGrantMutation) SetCurrency(s string) {
-	m.currency = &s
-}
-
-// Currency returns the value of the "currency" field in the mutation.
-func (m *CreditGrantMutation) Currency() (r string, exists bool) {
-	v := m.currency
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldCurrency returns the old "currency" field's value of the CreditGrant entity.
-// If the CreditGrant object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *CreditGrantMutation) OldCurrency(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldCurrency is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldCurrency requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldCurrency: %w", err)
-	}
-	return oldValue.Currency, nil
-}
-
-// ResetCurrency resets all changes to the "currency" field.
-func (m *CreditGrantMutation) ResetCurrency() {
-	m.currency = nil
-}
-
 // SetCadence sets the "cadence" field.
 func (m *CreditGrantMutation) SetCadence(tgc types.CreditGrantCadence) {
 	m.cadence = &tgc
@@ -3378,7 +3341,7 @@ func (m *CreditGrantMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CreditGrantMutation) Fields() []string {
-	fields := make([]string, 0, 21)
+	fields := make([]string, 0, 20)
 	if m.tenant_id != nil {
 		fields = append(fields, creditgrant.FieldTenantID)
 	}
@@ -3414,9 +3377,6 @@ func (m *CreditGrantMutation) Fields() []string {
 	}
 	if m.credits != nil {
 		fields = append(fields, creditgrant.FieldCredits)
-	}
-	if m.currency != nil {
-		fields = append(fields, creditgrant.FieldCurrency)
 	}
 	if m.cadence != nil {
 		fields = append(fields, creditgrant.FieldCadence)
@@ -3474,8 +3434,6 @@ func (m *CreditGrantMutation) Field(name string) (ent.Value, bool) {
 		return m.SubscriptionID()
 	case creditgrant.FieldCredits:
 		return m.Credits()
-	case creditgrant.FieldCurrency:
-		return m.Currency()
 	case creditgrant.FieldCadence:
 		return m.Cadence()
 	case creditgrant.FieldPeriod:
@@ -3525,8 +3483,6 @@ func (m *CreditGrantMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldSubscriptionID(ctx)
 	case creditgrant.FieldCredits:
 		return m.OldCredits(ctx)
-	case creditgrant.FieldCurrency:
-		return m.OldCurrency(ctx)
 	case creditgrant.FieldCadence:
 		return m.OldCadence(ctx)
 	case creditgrant.FieldPeriod:
@@ -3635,13 +3591,6 @@ func (m *CreditGrantMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetCredits(v)
-		return nil
-	case creditgrant.FieldCurrency:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetCurrency(v)
 		return nil
 	case creditgrant.FieldCadence:
 		v, ok := value.(types.CreditGrantCadence)
@@ -3891,9 +3840,6 @@ func (m *CreditGrantMutation) ResetField(name string) error {
 		return nil
 	case creditgrant.FieldCredits:
 		m.ResetCredits()
-		return nil
-	case creditgrant.FieldCurrency:
-		m.ResetCurrency()
 		return nil
 	case creditgrant.FieldCadence:
 		m.ResetCadence()

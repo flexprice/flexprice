@@ -128,11 +128,6 @@ func Credits(v decimal.Decimal) predicate.CreditGrant {
 	return predicate.CreditGrant(sql.FieldEQ(FieldCredits, v))
 }
 
-// Currency applies equality check predicate on the "currency" field. It's identical to CurrencyEQ.
-func Currency(v string) predicate.CreditGrant {
-	return predicate.CreditGrant(sql.FieldEQ(FieldCurrency, v))
-}
-
 // Cadence applies equality check predicate on the "cadence" field. It's identical to CadenceEQ.
 func Cadence(v types.CreditGrantCadence) predicate.CreditGrant {
 	vc := string(v)
@@ -944,71 +939,6 @@ func CreditsLT(v decimal.Decimal) predicate.CreditGrant {
 // CreditsLTE applies the LTE predicate on the "credits" field.
 func CreditsLTE(v decimal.Decimal) predicate.CreditGrant {
 	return predicate.CreditGrant(sql.FieldLTE(FieldCredits, v))
-}
-
-// CurrencyEQ applies the EQ predicate on the "currency" field.
-func CurrencyEQ(v string) predicate.CreditGrant {
-	return predicate.CreditGrant(sql.FieldEQ(FieldCurrency, v))
-}
-
-// CurrencyNEQ applies the NEQ predicate on the "currency" field.
-func CurrencyNEQ(v string) predicate.CreditGrant {
-	return predicate.CreditGrant(sql.FieldNEQ(FieldCurrency, v))
-}
-
-// CurrencyIn applies the In predicate on the "currency" field.
-func CurrencyIn(vs ...string) predicate.CreditGrant {
-	return predicate.CreditGrant(sql.FieldIn(FieldCurrency, vs...))
-}
-
-// CurrencyNotIn applies the NotIn predicate on the "currency" field.
-func CurrencyNotIn(vs ...string) predicate.CreditGrant {
-	return predicate.CreditGrant(sql.FieldNotIn(FieldCurrency, vs...))
-}
-
-// CurrencyGT applies the GT predicate on the "currency" field.
-func CurrencyGT(v string) predicate.CreditGrant {
-	return predicate.CreditGrant(sql.FieldGT(FieldCurrency, v))
-}
-
-// CurrencyGTE applies the GTE predicate on the "currency" field.
-func CurrencyGTE(v string) predicate.CreditGrant {
-	return predicate.CreditGrant(sql.FieldGTE(FieldCurrency, v))
-}
-
-// CurrencyLT applies the LT predicate on the "currency" field.
-func CurrencyLT(v string) predicate.CreditGrant {
-	return predicate.CreditGrant(sql.FieldLT(FieldCurrency, v))
-}
-
-// CurrencyLTE applies the LTE predicate on the "currency" field.
-func CurrencyLTE(v string) predicate.CreditGrant {
-	return predicate.CreditGrant(sql.FieldLTE(FieldCurrency, v))
-}
-
-// CurrencyContains applies the Contains predicate on the "currency" field.
-func CurrencyContains(v string) predicate.CreditGrant {
-	return predicate.CreditGrant(sql.FieldContains(FieldCurrency, v))
-}
-
-// CurrencyHasPrefix applies the HasPrefix predicate on the "currency" field.
-func CurrencyHasPrefix(v string) predicate.CreditGrant {
-	return predicate.CreditGrant(sql.FieldHasPrefix(FieldCurrency, v))
-}
-
-// CurrencyHasSuffix applies the HasSuffix predicate on the "currency" field.
-func CurrencyHasSuffix(v string) predicate.CreditGrant {
-	return predicate.CreditGrant(sql.FieldHasSuffix(FieldCurrency, v))
-}
-
-// CurrencyEqualFold applies the EqualFold predicate on the "currency" field.
-func CurrencyEqualFold(v string) predicate.CreditGrant {
-	return predicate.CreditGrant(sql.FieldEqualFold(FieldCurrency, v))
-}
-
-// CurrencyContainsFold applies the ContainsFold predicate on the "currency" field.
-func CurrencyContainsFold(v string) predicate.CreditGrant {
-	return predicate.CreditGrant(sql.FieldContainsFold(FieldCurrency, v))
 }
 
 // CadenceEQ applies the EQ predicate on the "cadence" field.

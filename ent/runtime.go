@@ -170,22 +170,18 @@ func init() {
 	creditgrantDescCredits := creditgrantFields[5].Descriptor()
 	// creditgrant.DefaultCredits holds the default value on creation for the credits field.
 	creditgrant.DefaultCredits = creditgrantDescCredits.Default.(decimal.Decimal)
-	// creditgrantDescCurrency is the schema descriptor for currency field.
-	creditgrantDescCurrency := creditgrantFields[6].Descriptor()
-	// creditgrant.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
-	creditgrant.CurrencyValidator = creditgrantDescCurrency.Validators[0].(func(string) error)
 	// creditgrantDescCadence is the schema descriptor for cadence field.
-	creditgrantDescCadence := creditgrantFields[7].Descriptor()
+	creditgrantDescCadence := creditgrantFields[6].Descriptor()
 	// creditgrant.CadenceValidator is a validator for the "cadence" field. It is called by the builders before save.
 	creditgrant.CadenceValidator = creditgrantDescCadence.Validators[0].(func(string) error)
 	// creditgrantDescExpirationType is the schema descriptor for expiration_type field.
-	creditgrantDescExpirationType := creditgrantFields[10].Descriptor()
+	creditgrantDescExpirationType := creditgrantFields[9].Descriptor()
 	// creditgrant.DefaultExpirationType holds the default value on creation for the expiration_type field.
 	creditgrant.DefaultExpirationType = types.CreditGrantExpiryType(creditgrantDescExpirationType.Default.(string))
 	// creditgrant.ExpirationTypeValidator is a validator for the "expiration_type" field. It is called by the builders before save.
 	creditgrant.ExpirationTypeValidator = creditgrantDescExpirationType.Validators[0].(func(string) error)
 	// creditgrantDescMetadata is the schema descriptor for metadata field.
-	creditgrantDescMetadata := creditgrantFields[14].Descriptor()
+	creditgrantDescMetadata := creditgrantFields[13].Descriptor()
 	// creditgrant.DefaultMetadata holds the default value on creation for the metadata field.
 	creditgrant.DefaultMetadata = creditgrantDescMetadata.Default.(map[string]string)
 	creditgrantapplicationMixin := schema.CreditGrantApplication{}.Mixin()

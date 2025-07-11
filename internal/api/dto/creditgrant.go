@@ -18,7 +18,6 @@ type CreateCreditGrantRequest struct {
 	PlanID                 *string                              `json:"plan_id,omitempty"`
 	SubscriptionID         *string                              `json:"subscription_id,omitempty"`
 	Credits                decimal.Decimal                      `json:"credits" binding:"required"`
-	Currency               string                               `json:"currency" binding:"required"`
 	Cadence                types.CreditGrantCadence             `json:"cadence" binding:"required"`
 	Period                 *types.CreditGrantPeriod             `json:"period,omitempty"`
 	PeriodCount            *int                                 `json:"period_count,omitempty"`
@@ -79,14 +78,7 @@ func (r *CreateCreditGrantRequest) Validate() error {
 				}).
 				Mark(errors.ErrValidation)
 		}
-		if r.PlanID == nil || *r.PlanID == "" {
-			return errors.NewError("plan_id is required for SUBSCRIPTION-scoped grants").
-				WithHint("Please provide a valid plan ID").
-				WithReportableDetails(map[string]interface{}{
-					"scope": r.Scope,
-				}).
-				Mark(errors.ErrValidation)
-		}
+
 	default:
 		return errors.NewError("invalid scope").
 			WithHint("Scope must be either PLAN or SUBSCRIPTION").
@@ -102,12 +94,6 @@ func (r *CreateCreditGrantRequest) Validate() error {
 			WithReportableDetails(map[string]interface{}{
 				"credits": r.Credits,
 			}).
-			Mark(errors.ErrValidation)
-	}
-
-	if r.Currency == "" {
-		return errors.NewError("currency is required").
-			WithHint("Please provide a valid currency code").
 			Mark(errors.ErrValidation)
 	}
 
@@ -186,7 +172,6 @@ func (r *CreateCreditGrantRequest) ToCreditGrant(ctx context.Context) *creditgra
 		PlanID:                 r.PlanID,
 		SubscriptionID:         r.SubscriptionID,
 		Credits:                r.Credits,
-		Currency:               r.Currency,
 		Cadence:                r.Cadence,
 		Period:                 r.Period,
 		PeriodCount:            r.PeriodCount,

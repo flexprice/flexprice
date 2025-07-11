@@ -168,12 +168,6 @@ func (cgc *CreditGrantCreate) SetNillableCredits(d *decimal.Decimal) *CreditGran
 	return cgc
 }
 
-// SetCurrency sets the "currency" field.
-func (cgc *CreditGrantCreate) SetCurrency(s string) *CreditGrantCreate {
-	cgc.mutation.SetCurrency(s)
-	return cgc
-}
-
 // SetCadence sets the "cadence" field.
 func (cgc *CreditGrantCreate) SetCadence(tgc types.CreditGrantCadence) *CreditGrantCreate {
 	cgc.mutation.SetCadence(tgc)
@@ -389,14 +383,6 @@ func (cgc *CreditGrantCreate) check() error {
 	if _, ok := cgc.mutation.Credits(); !ok {
 		return &ValidationError{Name: "credits", err: errors.New(`ent: missing required field "CreditGrant.credits"`)}
 	}
-	if _, ok := cgc.mutation.Currency(); !ok {
-		return &ValidationError{Name: "currency", err: errors.New(`ent: missing required field "CreditGrant.currency"`)}
-	}
-	if v, ok := cgc.mutation.Currency(); ok {
-		if err := creditgrant.CurrencyValidator(v); err != nil {
-			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "CreditGrant.currency": %w`, err)}
-		}
-	}
 	if _, ok := cgc.mutation.Cadence(); !ok {
 		return &ValidationError{Name: "cadence", err: errors.New(`ent: missing required field "CreditGrant.cadence"`)}
 	}
@@ -497,10 +483,6 @@ func (cgc *CreditGrantCreate) createSpec() (*CreditGrant, *sqlgraph.CreateSpec) 
 	if value, ok := cgc.mutation.Credits(); ok {
 		_spec.SetField(creditgrant.FieldCredits, field.TypeOther, value)
 		_node.Credits = value
-	}
-	if value, ok := cgc.mutation.Currency(); ok {
-		_spec.SetField(creditgrant.FieldCurrency, field.TypeString, value)
-		_node.Currency = value
 	}
 	if value, ok := cgc.mutation.Cadence(); ok {
 		_spec.SetField(creditgrant.FieldCadence, field.TypeString, value)

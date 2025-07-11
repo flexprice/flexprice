@@ -110,12 +110,6 @@ func (r *CreatePlanRequest) validateCreditGrantForPlan(cg CreateCreditGrantReque
 			Mark(errors.ErrValidation)
 	}
 
-	if cg.Currency == "" {
-		return errors.NewError("currency is required").
-			WithHint("Please provide a valid currency code").
-			Mark(errors.ErrValidation)
-	}
-
 	if err := cg.Cadence.Validate(); err != nil {
 		return err
 	}

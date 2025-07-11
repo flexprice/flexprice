@@ -62,12 +62,6 @@ func (CreditGrant) Fields() []ent.Field {
 			}).
 			Default(decimal.Zero).
 			Immutable(),
-		field.String("currency").
-			SchemaType(map[string]string{
-				"postgres": "varchar(3)",
-			}).
-			NotEmpty().
-			Immutable(),
 		field.String("cadence").
 			GoType(types.CreditGrantCadence(types.CreditGrantCadenceOneTime)).
 			SchemaType(map[string]string{

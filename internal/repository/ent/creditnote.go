@@ -150,10 +150,10 @@ func (r *creditnoteRepository) CreateWithLineItems(ctx context.Context, cn *doma
 			SetStatus(string(cn.Status)).
 			SetCreatedAt(cn.CreatedAt).
 			SetUpdatedAt(cn.UpdatedAt).
-			SetCreatedBy(cn.CreatedBy).
-			SetCustomerID(cn.CustomerID).
-			SetSubscriptionID(lo.FromPtr(cn.SubscriptionID)).
-			SetNillableVoidedAt(cn.VoidedAt).
+					SetCreatedBy(cn.CreatedBy).
+		SetCustomerID(cn.CustomerID).
+		SetNillableSubscriptionID(cn.SubscriptionID).
+		SetNillableVoidedAt(cn.VoidedAt).
 			SetNillableFinalizedAt(cn.FinalizedAt).
 			SetUpdatedBy(cn.UpdatedBy).
 			SetTotalAmount(cn.TotalAmount).

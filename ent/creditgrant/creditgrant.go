@@ -40,8 +40,6 @@ const (
 	FieldSubscriptionID = "subscription_id"
 	// FieldCredits holds the string denoting the credits field in the database.
 	FieldCredits = "credits"
-	// FieldCurrency holds the string denoting the currency field in the database.
-	FieldCurrency = "currency"
 	// FieldCadence holds the string denoting the cadence field in the database.
 	FieldCadence = "cadence"
 	// FieldPeriod holds the string denoting the period field in the database.
@@ -95,7 +93,6 @@ var Columns = []string{
 	FieldPlanID,
 	FieldSubscriptionID,
 	FieldCredits,
-	FieldCurrency,
 	FieldCadence,
 	FieldPeriod,
 	FieldPeriodCount,
@@ -135,8 +132,6 @@ var (
 	ScopeValidator func(string) error
 	// DefaultCredits holds the default value on creation for the "credits" field.
 	DefaultCredits decimal.Decimal
-	// CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
-	CurrencyValidator func(string) error
 	// CadenceValidator is a validator for the "cadence" field. It is called by the builders before save.
 	CadenceValidator func(string) error
 	// DefaultExpirationType holds the default value on creation for the "expiration_type" field.
@@ -213,11 +208,6 @@ func BySubscriptionID(opts ...sql.OrderTermOption) OrderOption {
 // ByCredits orders the results by the credits field.
 func ByCredits(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCredits, opts...).ToFunc()
-}
-
-// ByCurrency orders the results by the currency field.
-func ByCurrency(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldCurrency, opts...).ToFunc()
 }
 
 // ByCadence orders the results by the cadence field.
