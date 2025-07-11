@@ -41,16 +41,7 @@ type priceService struct {
 	logger                *logger.Logger
 }
 
-func NewPriceService(repo price.Repository, meterRepo meter.Repository, logger *logger.Logger) PriceService {
-	return &priceService{
-		repo:      repo,
-		meterRepo: meterRepo,
-		logger:    logger,
-	}
-}
-
-// NewPriceServiceWithCustomPricing creates a new price service with custom pricing unit support
-func NewPriceServiceWithCustomPricing(repo price.Repository, meterRepo meter.Repository, customPricingUnitRepo custompricingunit.Repository, logger *logger.Logger) PriceService {
+func NewPriceService(repo price.Repository, meterRepo meter.Repository, customPricingUnitRepo custompricingunit.Repository, logger *logger.Logger) PriceService {
 	return &priceService{
 		repo:                  repo,
 		meterRepo:             meterRepo,

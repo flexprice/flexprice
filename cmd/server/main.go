@@ -167,8 +167,7 @@ func main() {
 			service.NewMeterService,
 			service.NewEventService,
 			service.NewEventPostProcessingService,
-			// service.NewPriceService,
-			service.NewPriceServiceWithCustomPricing,
+			service.NewPriceService,
 
 			service.NewCustomerService,
 			service.NewPlanService,
