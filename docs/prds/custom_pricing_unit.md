@@ -54,16 +54,56 @@ The system currently:
 ```go
 type CreatePriceRequest struct {
 	Amount             string                   `json:"amount"`
-	Currency           string                   `json:"currency"omitempty,len=3"`
-	CustomPriceUnitCode     string                   `json:"custom_price_unit_code,omitempty,len=3"`
-    // ... existing fields ...
+	Currency           string                   `json:"currency,omitempty,len=3"`
+	PriceUnit          string                   `json:"price_unit,omitempty"`
+   // ... existing fields ...
+}
+```
+
+```go
+// Price model with JSONB tags
+type Price struct {
+	// ID uuid identifier for the price
+	ID string `db:"id" json:"id"`
+
+	// Amount stored in main currency units (e.g., dollars, not cents)
+	// For USD: 12.50 means $12.50
+	Amount decimal.Decimal `db:"amount" json:"amount"`
+
+	// DisplayAmount is the formatted amount with currency symbol
+	// For USD: $12.50
+	DisplayAmount string `db:"display_amount" json:"display_amount"`
+
+	// Currency 3 digit ISO currency code in lowercase ex usd, eur, gbp
+	Currency string `db:"currency" json:"currency"`
+
+	// PriceUnitAmount is the amount stored in price unit
+	// For BTC: 0.00000001 means 0.00000001 BTC
+	PriceUnitAmount decimal.Decimal `db:"price_unit_amount" json:"price_unit_amount"`
+
+	// DisplayPriceUnitAmount is the formatted amount with price unit symbol
+	// For BTC: 0.00000001 BTC
+	DisplayPriceUnitAmount string `db:"display_price_unit_amount" json:"display_price_unit_amount"`
+
+	// PriceUnit 3 digit ISO currency code in lowercase ex btc
+	// For BTC: btc
+	PriceUnit string `db:"price_unit" json:"price_unit"`
+
+	// ConversionRate is the rate of the price unit to the base currency
+	// For BTC: 1 BTC = 100000000 USD
+	ConversionRate decimal.Decimal `db:"conversion_rate" json:"conversion_rate"`
+
+	// Precision is the precision of the price unit
+	// For BTC: 8
+	Precision int `db:"precision" json:"precision"`
+
+   // ... existing fields ...
 }
 ```
 
 ```go
 type PriceResponse struct {
 	*price.Price
-   CustomPriceUnitAmount string `json:"custom_price_unit_amount"`
 	Meter *MeterResponse `json:"meter,omitempty"`
 }
 ```

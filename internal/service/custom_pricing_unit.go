@@ -286,11 +286,11 @@ func (s *CustomPricingUnitService) Delete(ctx context.Context, id string) error 
 		return err
 	}
 
-	// Check if already archived
-	if existingUnit.Status == types.StatusArchived {
-		return ierr.NewError("custom pricing unit is already archived").
-			WithMessage("cannot archive unit in archived state").
-			WithHint("The custom pricing unit is already in archived state").
+	// Check if the unit is archived - only archived units can be deleted
+	if existingUnit.Status != types.StatusArchived {
+		return ierr.NewError("custom pricing unit must be archived before deletion").
+			WithMessage("cannot delete unit that is not archived").
+			WithHint("Archive the custom pricing unit before deleting it").
 			WithReportableDetails(map[string]interface{}{
 				"id":     id,
 				"status": existingUnit.Status,
@@ -309,13 +309,13 @@ func (s *CustomPricingUnitService) Delete(ctx context.Context, id string) error 
 	}
 	if exists {
 		return ierr.NewError("custom pricing unit is in use").
-			WithMessage("cannot archive unit that is in use").
+			WithMessage("cannot delete unit that is in use").
 			WithHint("This custom pricing unit is being used by one or more prices").
 			Mark(ierr.ErrValidation)
 	}
 
-	// Archive the unit by updating its status
-	existingUnit.Status = types.StatusArchived
+	// Set status to deleted
+	existingUnit.Status = types.StatusDeleted
 	existingUnit.UpdatedAt = time.Now().UTC()
 
 	return s.repo.Update(ctx, existingUnit)
