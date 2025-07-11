@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/ent/schema"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 type Meter struct {
@@ -61,7 +62,7 @@ type Aggregation struct {
 	// Multiplier is the multiplier for the aggregation
 	// For ex if the aggregation type is sum_with_multiplier for API usage, the multiplier could be 1000
 	// to scale up by a factor of 1000
-	Multiplier int64 `json:"multiplier,omitempty"`
+	Multiplier decimal.Decimal `json:"multiplier,omitempty"`
 }
 
 // FromEnt converts an Ent Meter to a domain Meter
@@ -171,7 +172,7 @@ func (m *Meter) Validate() error {
 			}).
 			Mark(ierr.ErrValidation)
 	}
-	if m.Aggregation.Type == types.AggregationSumWithMultiplier && m.Aggregation.Multiplier <= 0 {
+	if m.Aggregation.Type == types.AggregationSumWithMultiplier && m.Aggregation.Multiplier.LessThanOrEqual(decimal.NewFromFloat(0)) {
 		return ierr.NewError("invalid multiplier value").
 			WithHint("Multiplier must be greater than zero").
 			WithReportableDetails(map[string]interface{}{

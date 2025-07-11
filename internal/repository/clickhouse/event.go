@@ -188,7 +188,7 @@ func (r *EventRepository) GetUsage(ctx context.Context, params *events.UsagePara
 
 	// Validate multiplier if provided for aggregations that use it
 	if params.Multiplier != nil {
-		if *params.Multiplier <= 0 {
+		if params.Multiplier.LessThanOrEqual(decimal.NewFromFloat(0)) {
 			err := ierr.NewError("invalid multiplier value").
 				WithHint("Multiplier must be greater than zero").
 				WithReportableDetails(map[string]interface{}{

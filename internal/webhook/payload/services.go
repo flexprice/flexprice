@@ -12,6 +12,7 @@ type Services struct {
 	SubscriptionService service.SubscriptionService
 	WalletService       service.WalletService
 	CustomerService     service.CustomerService
+	PaymentService      service.PaymentService
 }
 
 // NewServices creates a new Services container
@@ -24,6 +25,7 @@ func NewServices(
 	subscriptionService service.SubscriptionService,
 	walletService service.WalletService,
 	customerService service.CustomerService,
+	paymentService service.PaymentService,
 ) *Services {
 	return &Services{
 		InvoiceService:      invoiceService,
@@ -34,5 +36,6 @@ func NewServices(
 		SubscriptionService: subscriptionService,
 		WalletService:       walletService,
 		CustomerService:     customerService,
+		PaymentService:      paymentService,
 	}
 }

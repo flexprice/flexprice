@@ -7,6 +7,7 @@ import (
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // Meter holds the schema definition for the Meter entity.
@@ -79,5 +80,5 @@ type MeterFilter struct {
 type MeterAggregation struct {
 	Type       types.AggregationType `json:"type"`
 	Field      string                `json:"field,omitempty"`
-	Multiplier int64                 `json:"multiplier,omitempty"`
+	Multiplier decimal.Decimal       `json:"multiplier,omitempty"`
 }

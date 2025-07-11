@@ -36,7 +36,7 @@ import (
 
 // Sample .env file:
 // FLEXPRICE_API_KEY=your_api_key_here
-// FLEXPRICE_API_HOST=api.flexprice.io
+// FLEXPRICE_API_HOST=api.cloud.flexprice.io/v1
 
 func RunSample() {
 	// Load .env file if present

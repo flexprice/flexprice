@@ -1,6 +1,7 @@
 package kafka
 
 import (
+	"crypto/tls"
 	"time"
 
 	"github.com/Shopify/sarama"
@@ -25,6 +26,13 @@ func GetSaramaConfig(cfg *config.Configuration) *sarama.Config {
 
 	// When rebalancing happens, use the last committed offset
 	saramaConfig.Consumer.Offsets.Retry.Max = 3
+
+	if cfg.Kafka.TLS {
+		saramaConfig.Net.TLS.Enable = true
+		saramaConfig.Net.TLS.Config = &tls.Config{
+			InsecureSkipVerify: false,
+		}
+	}
 
 	if !cfg.Kafka.UseSASL {
 		return saramaConfig

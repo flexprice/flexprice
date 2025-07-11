@@ -251,7 +251,7 @@ from flexprice.api import customers_api
 
 async def get_customer(customer_id):
     configuration = flexprice.Configuration(
-        host="https://api.flexprice.io"
+        host="https://api.cloud.flexprice.io/v1"
     )
     configuration.api_key['x-api-key'] = "your-api-key"
     

@@ -95,13 +95,13 @@ func (tc *tracedConn) Query(ctx context.Context, query string, args ...any) (dri
 		return tc.conn.Query(ctx, query, args...)
 	}
 
-	span, ctx := tc.sentry.StartClickHouseSpan(ctx, "clickhouse.query", map[string]interface{}{
-		"query":      truncateQuery(query),
-		"args_count": len(args),
-	})
-	if span != nil {
-		defer span.Finish()
-	}
+	// span, ctx := tc.sentry.StartClickHouseSpan(ctx, "clickhouse.query", map[string]interface{}{
+	// 	"query":      truncateQuery(query),
+	// 	"args_count": len(args),
+	// })
+	// if span != nil {
+	// 	defer span.Finish()
+	// }
 
 	return tc.conn.Query(ctx, query, args...)
 }
@@ -129,12 +129,12 @@ func (tc *tracedConn) PrepareBatch(ctx context.Context, query string, options ..
 		return tc.conn.PrepareBatch(ctx, query, options...)
 	}
 
-	span, ctx := tc.sentry.StartClickHouseSpan(ctx, "clickhouse.prepare_batch", map[string]interface{}{
-		"query": truncateQuery(query),
-	})
-	if span != nil {
-		defer span.Finish()
-	}
+	// span, ctx := tc.sentry.StartClickHouseSpan(ctx, "clickhouse.prepare_batch", map[string]interface{}{
+	// 	"query": truncateQuery(query),
+	// })
+	// if span != nil {
+	// 	defer span.Finish()
+	// }
 
 	batch, err := tc.conn.PrepareBatch(ctx, query, options...)
 	if err != nil {
@@ -142,8 +142,8 @@ func (tc *tracedConn) PrepareBatch(ctx context.Context, query string, options ..
 	}
 
 	return &tracedBatch{
-		batch:  batch,
-		sentry: tc.sentry,
+		batch: batch,
+		// sentry: tc.sentry,
 	}, nil
 }
 
@@ -153,13 +153,13 @@ func (tc *tracedConn) Exec(ctx context.Context, query string, args ...any) error
 		return tc.conn.Exec(ctx, query, args...)
 	}
 
-	span, ctx := tc.sentry.StartClickHouseSpan(ctx, "clickhouse.exec", map[string]interface{}{
-		"query":      truncateQuery(query),
-		"args_count": len(args),
-	})
-	if span != nil {
-		defer span.Finish()
-	}
+	// span, ctx := tc.sentry.StartClickHouseSpan(ctx, "clickhouse.exec", map[string]interface{}{
+	// 	"query":      truncateQuery(query),
+	// 	"args_count": len(args),
+	// })
+	// if span != nil {
+	// 	defer span.Finish()
+	// }
 
 	return tc.conn.Exec(ctx, query, args...)
 }
@@ -170,13 +170,13 @@ func (tc *tracedConn) AsyncInsert(ctx context.Context, query string, wait bool, 
 		return tc.conn.AsyncInsert(ctx, query, wait, args...)
 	}
 
-	span, ctx := tc.sentry.StartClickHouseSpan(ctx, "clickhouse.async_insert", map[string]interface{}{
-		"query": truncateQuery(query),
-		"wait":  wait,
-	})
-	if span != nil {
-		defer span.Finish()
-	}
+	// span, ctx := tc.sentry.StartClickHouseSpan(ctx, "clickhouse.async_insert", map[string]interface{}{
+	// 	"query": truncateQuery(query),
+	// 	"wait":  wait,
+	// })
+	// if span != nil {
+	// 	defer span.Finish()
+	// }
 
 	return tc.conn.AsyncInsert(ctx, query, wait, args...)
 }
@@ -252,13 +252,13 @@ func (tb *tracedBatch) Send() error {
 		return tb.batch.Send()
 	}
 
-	ctx := context.Background()
-	span, _ := tb.sentry.StartClickHouseSpan(ctx, "clickhouse.batch_send", map[string]interface{}{
-		"count": tb.batch.IsSent(),
-	})
-	if span != nil {
-		defer span.Finish()
-	}
+	// ctx := context.Background()
+	// span, _ := tb.sentry.StartClickHouseSpan(ctx, "clickhouse.batch_send", map[string]interface{}{
+	// 	"count": tb.batch.IsSent(),
+	// })
+	// if span != nil {
+	// 	defer span.Finish()
+	// }
 
 	return tb.batch.Send()
 }

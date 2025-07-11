@@ -24,6 +24,7 @@ kafka:
   # Will be overridden by FLEXPRICE_KAFKA_BROKERS env var in Docker
   consumer_group: "flexprice-consumer-local"
   topic: "events"
+  tls: false
   use_sasl: false
   sasl_mechanism: ""
   sasl_user: ""

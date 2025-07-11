@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -10,6 +11,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/types"
+	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/samber/lo"
 )
 
@@ -104,6 +106,8 @@ func (s *paymentService) CreatePayment(ctx context.Context, req *dto.CreatePayme
 	if err := s.PaymentRepo.Create(ctx, p); err != nil {
 		return nil, err
 	}
+
+	s.publishWebhookEvent(ctx, types.WebhookEventPaymentCreated, p.ID)
 
 	if req.ProcessPayment {
 		paymentProcessor := NewPaymentProcessorService(s.ServiceParams)
@@ -257,6 +261,8 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 		return nil, err // Repository already using ierr
 	}
 
+	s.publishWebhookEvent(ctx, types.WebhookEventPaymentUpdated, p.ID)
+
 	return dto.NewPaymentResponse(p), nil
 }
 
@@ -334,4 +340,29 @@ func (s *paymentService) DeletePayment(ctx context.Context, id string) error {
 	}
 
 	return s.PaymentRepo.Delete(ctx, id) // Repository already using ierr
+}
+
+func (s *paymentService) publishWebhookEvent(ctx context.Context, eventName string, paymentID string) {
+	webhookPayload, err := json.Marshal(webhookDto.InternalPaymentEvent{
+		PaymentID: paymentID,
+		TenantID:  types.GetTenantID(ctx),
+	})
+
+	if err != nil {
+		s.Logger.Errorw("failed to marshal webhook payload", "error", err)
+		return
+	}
+
+	webhookEvent := &types.WebhookEvent{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WEBHOOK_EVENT),
+		EventName:     eventName,
+		TenantID:      types.GetTenantID(ctx),
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		UserID:        types.GetUserID(ctx),
+		Timestamp:     time.Now().UTC(),
+		Payload:       json.RawMessage(webhookPayload),
+	}
+	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
+		s.Logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
+	}
 }

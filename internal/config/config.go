@@ -76,6 +76,7 @@ type KafkaConfig struct {
 	Brokers       []string             `mapstructure:"brokers" validate:"required"`
 	ConsumerGroup string               `mapstructure:"consumer_group" validate:"required"`
 	Topic         string               `mapstructure:"topic" validate:"required"`
+	TLS           bool                 `mapstructure:"tls"` // set to true if using 9094 port else can set to false
 	UseSASL       bool                 `mapstructure:"use_sasl"`
 	SASLMechanism sarama.SASLMechanism `mapstructure:"sasl_mechanism"`
 	SASLUser      string               `mapstructure:"sasl_user"`

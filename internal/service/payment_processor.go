@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
@@ -53,13 +55,14 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 		}
 	}
 
-	// Update payment status to processing
+	// Update payment status to processing and fire pending event
 	// TODO: take a lock on the payment object here to avoid race conditions
 	paymentObj.PaymentStatus = types.PaymentStatusProcessing
 	paymentObj.UpdatedAt = time.Now().UTC()
 	if err := p.PaymentRepo.Update(ctx, paymentObj); err != nil {
 		return paymentObj, err
 	}
+	p.publishWebhookEvent(ctx, types.WebhookEventPaymentPending, paymentObj.ID)
 
 	// Process payment based on payment method type
 	var processErr error
@@ -115,10 +118,12 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 		paymentObj.ErrorMessage = lo.ToPtr(errMsg)
 		failedAt := time.Now().UTC()
 		paymentObj.FailedAt = &failedAt
+		p.publishWebhookEvent(ctx, types.WebhookEventPaymentFailed, paymentObj.ID)
 	} else {
 		paymentObj.PaymentStatus = types.PaymentStatusSucceeded
 		succeededAt := time.Now().UTC()
 		paymentObj.SucceededAt = &succeededAt
+		p.publishWebhookEvent(ctx, types.WebhookEventPaymentSuccess, paymentObj.ID)
 	}
 
 	paymentObj.UpdatedAt = time.Now().UTC()
@@ -322,4 +327,29 @@ func (p *paymentProcessor) createNewAttempt(ctx context.Context, paymentObj *pay
 	}
 
 	return attempt, nil
+}
+
+func (p *paymentProcessor) publishWebhookEvent(ctx context.Context, eventName string, paymentID string) {
+	webhookPayload, err := json.Marshal(webhookDto.InternalPaymentEvent{
+		PaymentID: paymentID,
+		TenantID:  types.GetTenantID(ctx),
+	})
+
+	if err != nil {
+		p.Logger.Errorw("failed to marshal webhook payload", "error", err)
+		return
+	}
+
+	webhookEvent := &types.WebhookEvent{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WEBHOOK_EVENT),
+		EventName:     eventName,
+		TenantID:      types.GetTenantID(ctx),
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		UserID:        types.GetUserID(ctx),
+		Timestamp:     time.Now().UTC(),
+		Payload:       json.RawMessage(webhookPayload),
+	}
+	if err := p.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
+		p.Logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
+	}
 }

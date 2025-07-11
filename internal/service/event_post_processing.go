@@ -316,25 +316,8 @@ func (s *eventPostProcessingService) processEvent(ctx context.Context, event *ev
 
 	if len(processedEvents) > 0 {
 		if err := s.processedEventRepo.BulkInsertProcessedEvents(ctx, processedEvents); err != nil {
-			s.Logger.Errorw("failed to insert processed events",
-				"event_id", event.ID,
-				"count", len(processedEvents),
-				"error", err,
-			)
 			return err
 		}
-
-		s.Logger.Infow("successfully processed event",
-			"event_id", event.ID,
-			"processed_events", len(processedEvents),
-		)
-	} else {
-		s.Logger.Debugw("no processed events found for event",
-			"event_id", event.ID,
-			"event_name", event.EventName,
-			"tenant_id", event.TenantID,
-			"environment_id", event.EnvironmentID,
-		)
 	}
 
 	return nil
@@ -653,7 +636,7 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 
 	// Return all processed events
 	if len(processedEventsPerSub) > 0 {
-		s.Logger.Debugw("event processing complete",
+		s.Logger.Debugw("event processing request prepared",
 			"event_id", event.ID,
 			"processed_events_count", len(processedEventsPerSub),
 		)

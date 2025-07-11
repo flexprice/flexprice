@@ -21,7 +21,7 @@ import (
 
 // Sample .env file:
 // FLEXPRICE_API_KEY=your_api_key_here
-// FLEXPRICE_API_HOST=api.flexprice.io
+// FLEXPRICE_API_HOST=api.cloud.flexprice.io/v1
 
 func RunSample(client *flexprice.APIClient) {
 	ctx := context.Background()
@@ -92,7 +92,7 @@ func RunAsyncSample(client *flexprice.APIClient) {
 	// Create an AsyncClient with debug enabled
 	asyncConfig := flexprice.DefaultAsyncConfig()
 	asyncConfig.Debug = true
-	
+
 	asyncClient := client.NewAsyncClient()
 	// Ensure the client is closed properly on exit
 	defer asyncClient.Close()

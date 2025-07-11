@@ -8,6 +8,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 func GetAggregator(aggregationType types.AggregationType) events.Aggregator {
@@ -460,14 +461,14 @@ func (a *SumWithMultiAggregator) GetQuery(ctx context.Context, params *events.Us
 	filterConditions := buildFilterConditions(params.Filters)
 	timeConditions := buildTimeConditions(params)
 
-	multiplier := int64(1)
+	multiplier := decimal.NewFromInt(1)
 	if params.Multiplier != nil {
 		multiplier = *params.Multiplier
 	}
 
 	return fmt.Sprintf(`
         SELECT 
-            %s (sum(value) * %d) as total
+            %s (sum(value) * %f) as total
         FROM (
             SELECT
                 %s anyLast(JSONExtractFloat(assumeNotNull(properties), '%s')) as value
@@ -484,7 +485,7 @@ func (a *SumWithMultiAggregator) GetQuery(ctx context.Context, params *events.Us
         %s
     `,
 		selectClause,
-		multiplier,
+		multiplier.InexactFloat64(),
 		windowClause,
 		params.PropertyName,
 		types.GetTenantID(ctx),

@@ -63,7 +63,7 @@ type GetUsageRequest struct {
 	Filters            map[string][]string   `form:"filters,omitempty" json:"filters,omitempty"`
 	PriceID            string                `form:"-" json:"-"` // this is just for internal use to store the price id
 	MeterID            string                `form:"-" json:"-"` // this is just for internal use to store the meter id
-	Multiplier         *int64                `form:"multiplier" json:"multiplier,omitempty"`
+	Multiplier         *decimal.Decimal      `form:"multiplier" json:"multiplier,omitempty"`
 }
 
 type GetUsageByMeterRequest struct {
