@@ -324,6 +324,10 @@ type SubscriptionLineItemRequest struct {
 // SubscriptionLineItemResponse represents the response for a subscription line item
 type SubscriptionLineItemResponse struct {
 	*subscription.SubscriptionLineItem
+	// Custom pricing unit fields
+	PriceUnit       string          `json:"price_unit,omitempty"` // code
+	PriceUnitSymbol string          `json:"price_unit_symbol,omitempty"`
+	PriceUnitAmount decimal.Decimal `json:"price_unit_amount,omitempty"`
 }
 
 // ToSubscriptionLineItem converts a request to a domain subscription line item

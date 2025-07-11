@@ -29,6 +29,10 @@ type SubscriptionLineItem struct {
 	EndDate          time.Time            `db:"end_date" json:"end_date,omitempty"`
 	Metadata         map[string]string    `db:"metadata" json:"metadata,omitempty"`
 	EnvironmentID    string               `db:"environment_id" json:"environment_id"`
+	// Custom pricing unit fields
+	PriceUnit       string          `db:"price_unit" json:"price_unit,omitempty"` // code
+	PriceUnitSymbol string          `db:"price_unit_symbol" json:"price_unit_symbol,omitempty"`
+	PriceUnitAmount decimal.Decimal `db:"price_unit_amount" json:"price_unit_amount,omitempty"`
 	types.BaseModel
 }
 
