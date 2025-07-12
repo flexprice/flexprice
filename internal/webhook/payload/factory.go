@@ -39,7 +39,12 @@ func NewPayloadBuilderFactory(services *Services) PayloadBuilderFactory {
 	f.builders[types.WebhookEventInvoiceAmountsRecalculated] = func() PayloadBuilder {
 		return NewInvoicePayloadBuilder(f.services)
 	}
-
+	f.builders[types.WebhookEventInvoicePaymentOverdue] = func() PayloadBuilder {
+		return NewInvoicePayloadBuilder(f.services)
+	}
+	f.builders[types.WebhookEventInvoicePaymentStatusChanged] = func() PayloadBuilder {
+		return NewInvoicePayloadBuilder(f.services)
+	}
 	// Register subscription builders
 	f.builders[types.WebhookEventSubscriptionCreated] = func() PayloadBuilder {
 		return NewSubscriptionPayloadBuilder(f.services)
@@ -53,8 +58,30 @@ func NewPayloadBuilderFactory(services *Services) PayloadBuilderFactory {
 	f.builders[types.WebhookEventSubscriptionResumed] = func() PayloadBuilder {
 		return NewSubscriptionPayloadBuilder(f.services)
 	}
-	f.builders[types.WebhookEventSubscriptionExpired] = func() PayloadBuilder {
+	f.builders[types.WebhookEventSubscriptionUpdated] = func() PayloadBuilder {
 		return NewSubscriptionPayloadBuilder(f.services)
+	}
+
+	// Register feature builders
+	f.builders[types.WebhookEventFeatureCreated] = func() PayloadBuilder {
+		return NewFeaturePayloadBuilder(f.services)
+	}
+	f.builders[types.WebhookEventFeatureUpdated] = func() PayloadBuilder {
+		return NewFeaturePayloadBuilder(f.services)
+	}
+	f.builders[types.WebhookEventFeatureDeleted] = func() PayloadBuilder {
+		return NewFeaturePayloadBuilder(f.services)
+	}
+
+	// Register entitlement builders
+	f.builders[types.WebhookEventEntitlementCreated] = func() PayloadBuilder {
+		return NewEntitlementPayloadBuilder(f.services)
+	}
+	f.builders[types.WebhookEventEntitlementUpdated] = func() PayloadBuilder {
+		return NewEntitlementPayloadBuilder(f.services)
+	}
+	f.builders[types.WebhookEventEntitlementDeleted] = func() PayloadBuilder {
+		return NewEntitlementPayloadBuilder(f.services)
 	}
 
 	// wallet builders

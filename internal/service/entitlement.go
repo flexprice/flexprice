@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
@@ -10,8 +12,9 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/logger"
+
 	"github.com/flexprice/flexprice/internal/types"
+	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/samber/lo"
 )
 
@@ -27,26 +30,12 @@ type EntitlementService interface {
 }
 
 type entitlementService struct {
-	repo        entitlement.Repository
-	planRepo    plan.Repository
-	featureRepo feature.Repository
-	meterRepo   meter.Repository
-	log         *logger.Logger
+	ServiceParams
 }
 
-func NewEntitlementService(
-	repo entitlement.Repository,
-	planRepo plan.Repository,
-	featureRepo feature.Repository,
-	meterRepo meter.Repository,
-	log *logger.Logger,
-) EntitlementService {
+func NewEntitlementService(params ServiceParams) EntitlementService {
 	return &entitlementService{
-		repo:        repo,
-		planRepo:    planRepo,
-		featureRepo: featureRepo,
-		meterRepo:   meterRepo,
-		log:         log,
+		ServiceParams: params,
 	}
 }
 
@@ -61,13 +50,13 @@ func (s *entitlementService) CreateEntitlement(ctx context.Context, req dto.Crea
 	}
 
 	// Validate plan exists
-	plan, err := s.planRepo.Get(ctx, req.PlanID)
+	plan, err := s.PlanRepo.Get(ctx, req.PlanID)
 	if err != nil {
 		return nil, err
 	}
 
 	// Validate feature exists
-	feature, err := s.featureRepo.Get(ctx, req.FeatureID)
+	feature, err := s.FeatureRepo.Get(ctx, req.FeatureID)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +75,7 @@ func (s *entitlementService) CreateEntitlement(ctx context.Context, req dto.Crea
 	// Create entitlement
 	e := req.ToEntitlement(ctx)
 
-	result, err := s.repo.Create(ctx, e)
+	result, err := s.EntitlementRepo.Create(ctx, e)
 	if err != nil {
 		return nil, err
 	}
@@ -97,12 +86,15 @@ func (s *entitlementService) CreateEntitlement(ctx context.Context, req dto.Crea
 	response.Feature = &dto.FeatureResponse{Feature: feature}
 	response.Plan = &dto.PlanResponse{Plan: plan}
 
+	// Publish webhook event
+	s.publishWebhookEvent(ctx, types.WebhookEventEntitlementCreated, result.ID)
+
 	return response, nil
 }
 
 func (s *entitlementService) GetEntitlement(ctx context.Context, id string) (*dto.EntitlementResponse, error) {
 
-	result, err := s.repo.Get(ctx, id)
+	result, err := s.EntitlementRepo.Get(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -110,13 +102,13 @@ func (s *entitlementService) GetEntitlement(ctx context.Context, id string) (*dt
 	response := &dto.EntitlementResponse{Entitlement: result}
 
 	// Add expanded fields
-	feature, err := s.featureRepo.Get(ctx, result.FeatureID)
+	feature, err := s.FeatureRepo.Get(ctx, result.FeatureID)
 	if err != nil {
 		return nil, err
 	}
 	response.Feature = &dto.FeatureResponse{Feature: feature}
 
-	plan, err := s.planRepo.Get(ctx, result.PlanID)
+	plan, err := s.PlanRepo.Get(ctx, result.PlanID)
 	if err != nil {
 		return nil, err
 	}
@@ -140,12 +132,12 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 		filter.QueryFilter.Order = lo.ToPtr("desc")
 	}
 
-	entitlements, err := s.repo.List(ctx, filter)
+	entitlements, err := s.EntitlementRepo.List(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
 
-	count, err := s.repo.Count(ctx, filter)
+	count, err := s.EntitlementRepo.Count(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +161,7 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 			if len(featureIDs) > 0 {
 				featureFilter := types.NewNoLimitFeatureFilter()
 				featureFilter.FeatureIDs = featureIDs
-				features, err := s.featureRepo.List(ctx, featureFilter)
+				features, err := s.FeatureRepo.List(ctx, featureFilter)
 				if err != nil {
 					return nil, err
 				}
@@ -179,7 +171,7 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 					featuresByID[f.ID] = f
 				}
 
-				s.log.Debugw("fetched features for entitlements", "count", len(features))
+				s.Logger.Debugw("fetched features for entitlements", "count", len(features))
 			}
 		}
 
@@ -193,7 +185,7 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 			if len(meterIDs) > 0 {
 				meterFilter := types.NewNoLimitMeterFilter()
 				meterFilter.MeterIDs = meterIDs
-				meters, err := s.meterRepo.List(ctx, meterFilter)
+				meters, err := s.MeterRepo.List(ctx, meterFilter)
 				if err != nil {
 					return nil, err
 				}
@@ -203,7 +195,7 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 					metersByID[m.ID] = m
 				}
 
-				s.log.Debugw("fetched meters for entitlements", "count", len(meters))
+				s.Logger.Debugw("fetched meters for entitlements", "count", len(meters))
 			}
 		}
 
@@ -216,7 +208,7 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 			if len(planIDs) > 0 {
 				planFilter := types.NewNoLimitPlanFilter()
 				planFilter.PlanIDs = planIDs
-				plans, err := s.planRepo.List(ctx, planFilter)
+				plans, err := s.PlanRepo.List(ctx, planFilter)
 				if err != nil {
 					return nil, err
 				}
@@ -226,7 +218,7 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 					plansByID[p.ID] = p
 				}
 
-				s.log.Debugw("fetched plans for entitlements", "count", len(plans))
+				s.Logger.Debugw("fetched plans for entitlements", "count", len(plans))
 			}
 		}
 	}
@@ -265,7 +257,7 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 }
 
 func (s *entitlementService) UpdateEntitlement(ctx context.Context, id string, req dto.UpdateEntitlementRequest) (*dto.EntitlementResponse, error) {
-	existing, err := s.repo.Get(ctx, id)
+	existing, err := s.EntitlementRepo.Get(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -298,17 +290,23 @@ func (s *entitlementService) UpdateEntitlement(ctx context.Context, id string, r
 		return nil, err
 	}
 
-	result, err := s.repo.Update(ctx, existing)
+	result, err := s.EntitlementRepo.Update(ctx, existing)
 	if err != nil {
 		return nil, err
 	}
 
 	response := &dto.EntitlementResponse{Entitlement: result}
+
+	// Publish webhook event
+	s.publishWebhookEvent(ctx, types.WebhookEventEntitlementUpdated, result.ID)
+
 	return response, nil
 }
 
 func (s *entitlementService) DeleteEntitlement(ctx context.Context, id string) error {
-	return s.repo.Delete(ctx, id)
+	// Publish webhook event before deletion
+	s.publishWebhookEvent(ctx, types.WebhookEventEntitlementDeleted, id)
+	return s.EntitlementRepo.Delete(ctx, id)
 }
 
 func (s *entitlementService) GetPlanEntitlements(ctx context.Context, planID string) (*dto.ListEntitlementsResponse, error) {
@@ -332,4 +330,28 @@ func (s *entitlementService) GetPlanFeatureEntitlements(ctx context.Context, pla
 
 	// Use the standard list function to get the entitlements with expansion
 	return s.ListEntitlements(ctx, filter)
+}
+
+func (s *entitlementService) publishWebhookEvent(ctx context.Context, eventName string, entitlementID string) {
+	webhookPayload, err := json.Marshal(webhookDto.InternalEntitlementEvent{
+		EntitlementID: entitlementID,
+		TenantID:      types.GetTenantID(ctx),
+	})
+	if err != nil {
+		s.Logger.Errorw("failed to marshal webhook payload", "error", err)
+		return
+	}
+
+	webhookEvent := &types.WebhookEvent{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WEBHOOK_EVENT),
+		EventName:     eventName,
+		TenantID:      types.GetTenantID(ctx),
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		UserID:        types.GetUserID(ctx),
+		Timestamp:     time.Now().UTC(),
+		Payload:       json.RawMessage(webhookPayload),
+	}
+	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
+		s.Logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
+	}
 }

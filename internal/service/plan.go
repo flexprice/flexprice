@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/repository/ent"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -41,13 +42,15 @@ type PlanService interface {
 
 type planService struct {
 	ServiceParams
+	client postgres.IClient
 }
 
 func NewPlanService(
-	serviceParams ServiceParams,
+	params ServiceParams, client postgres.IClient,
 ) PlanService {
 	return &planService{
-		ServiceParams: serviceParams,
+		ServiceParams: params,
+		client:        client,
 	}
 }
 
@@ -159,7 +162,14 @@ func (s *planService) GetPlan(ctx context.Context, id string) (*dto.PlanResponse
 	}
 
 	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.Logger)
-	entitlementService := NewEntitlementService(s.EntitlementRepo, s.PlanRepo, s.FeatureRepo, s.MeterRepo, s.Logger)
+	entitlementService := NewEntitlementService(ServiceParams{
+		EntitlementRepo:  s.EntitlementRepo,
+		PlanRepo:         s.PlanRepo,
+		FeatureRepo:      s.FeatureRepo,
+		MeterRepo:        s.MeterRepo,
+		Logger:           s.Logger,
+		WebhookPublisher: s.WebhookPublisher,
+	})
 
 	pricesResponse, err := priceService.GetPricesByPlanID(ctx, plan.ID)
 	if err != nil {
@@ -173,8 +183,7 @@ func (s *planService) GetPlan(ctx context.Context, id string) (*dto.PlanResponse
 		return nil, err
 	}
 
-	creditGrantService := NewCreditGrantService(s.ServiceParams)
-	creditGrants, err := creditGrantService.GetCreditGrantsByPlan(ctx, plan.ID)
+	creditGrants, err := NewCreditGrantService(s.ServiceParams).GetCreditGrantsByPlan(ctx, plan.ID)
 	if err != nil {
 		s.Logger.Errorw("failed to fetch credit grants for plan", "plan_id", plan.ID, "error", err)
 		return nil, err
@@ -241,8 +250,14 @@ func (s *planService) GetPlans(ctx context.Context, filter *types.PlanFilter) (*
 	creditGrantsByPlanID := make(map[string][]*dto.CreditGrantResponse)
 
 	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.Logger)
-	entitlementService := NewEntitlementService(s.EntitlementRepo, s.PlanRepo, s.FeatureRepo, s.MeterRepo, s.Logger)
-	creditGrantService := NewCreditGrantService(s.ServiceParams)
+	entitlementService := NewEntitlementService(ServiceParams{
+		EntitlementRepo:  s.EntitlementRepo,
+		PlanRepo:         s.PlanRepo,
+		FeatureRepo:      s.FeatureRepo,
+		MeterRepo:        s.MeterRepo,
+		Logger:           s.Logger,
+		WebhookPublisher: s.WebhookPublisher,
+	})
 
 	// If prices or entitlements expansion is requested, fetch them in bulk
 	// Fetch prices if requested
@@ -293,7 +308,7 @@ func (s *planService) GetPlans(ctx context.Context, filter *types.PlanFilter) (*
 			WithPlanIDs(planIDs).
 			WithStatus(types.StatusPublished)
 
-		creditGrants, err := creditGrantService.ListCreditGrants(ctx, creditGrantFilter)
+		creditGrants, err := NewCreditGrantService(s.ServiceParams).ListCreditGrants(ctx, creditGrantFilter)
 		if err != nil {
 			return nil, err
 		}

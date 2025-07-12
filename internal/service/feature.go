@@ -2,15 +2,15 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
-	"github.com/flexprice/flexprice/internal/domain/entitlement"
-	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/samber/lo"
 )
 
@@ -23,23 +23,17 @@ type FeatureService interface {
 }
 
 type featureService struct {
-	repo            feature.Repository
-	meterRepo       meter.Repository
-	entitlementRepo entitlement.Repository
-	logger          *logger.Logger
+	ServiceParams
 }
 
-func NewFeatureService(repo feature.Repository, meterRepo meter.Repository, entitlementRepo entitlement.Repository, logger *logger.Logger) FeatureService {
+func NewFeatureService(params ServiceParams) FeatureService {
 	return &featureService{
-		repo:            repo,
-		meterRepo:       meterRepo,
-		entitlementRepo: entitlementRepo,
-		logger:          logger,
+		ServiceParams: params,
 	}
 }
 
 func (s *featureService) CreateFeature(ctx context.Context, req dto.CreateFeatureRequest) (*dto.FeatureResponse, error) {
-	meterService := NewMeterService(s.meterRepo)
+	meterService := NewMeterService(s.MeterRepo)
 	err := req.Validate()
 	if err != nil {
 		return nil, err // Validation errors are already properly formatted in the DTO
@@ -74,15 +68,18 @@ func (s *featureService) CreateFeature(ctx context.Context, req dto.CreateFeatur
 		return nil, err
 	}
 
-	if err := s.repo.Create(ctx, featureModel); err != nil {
+	if err := s.FeatureRepo.Create(ctx, featureModel); err != nil {
 		return nil, err
 	}
+
+	// Publish webhook event
+	s.publishWebhookEvent(ctx, types.WebhookEventFeatureCreated, featureModel.ID)
 
 	return &dto.FeatureResponse{Feature: featureModel}, nil
 }
 
 func (s *featureService) GetFeature(ctx context.Context, id string) (*dto.FeatureResponse, error) {
-	feature, err := s.repo.Get(ctx, id)
+	feature, err := s.FeatureRepo.Get(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +88,7 @@ func (s *featureService) GetFeature(ctx context.Context, id string) (*dto.Featur
 
 	// Expand meter if it exists and feature is metered
 	if feature.Type == types.FeatureTypeMetered && feature.MeterID != "" {
-		meter, err := s.meterRepo.GetMeter(ctx, feature.MeterID)
+		meter, err := s.MeterRepo.GetMeter(ctx, feature.MeterID)
 		if err != nil {
 			return nil, err
 		}
@@ -121,12 +118,12 @@ func (s *featureService) GetFeatures(ctx context.Context, filter *types.FeatureF
 		return nil, err
 	}
 
-	features, err := s.repo.List(ctx, filter)
+	features, err := s.FeatureRepo.List(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
 
-	featureCount, err := s.repo.Count(ctx, filter)
+	featureCount, err := s.FeatureRepo.Count(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +147,7 @@ func (s *featureService) GetFeatures(ctx context.Context, filter *types.FeatureF
 			// Create a filter to fetch all meters
 			meterFilter := types.NewNoLimitMeterFilter()
 			meterFilter.MeterIDs = meterIDs
-			meters, err := s.meterRepo.List(ctx, meterFilter)
+			meters, err := s.MeterRepo.List(ctx, meterFilter)
 			if err != nil {
 				return nil, err
 			}
@@ -161,7 +158,7 @@ func (s *featureService) GetFeatures(ctx context.Context, filter *types.FeatureF
 				metersByID[m.ID] = m
 			}
 
-			s.logger.Debugw("fetched meters for features", "count", len(meters))
+			s.Logger.Debugw("fetched meters for features", "count", len(meters))
 		}
 	}
 
@@ -192,7 +189,7 @@ func (s *featureService) UpdateFeature(ctx context.Context, id string, req dto.U
 			Mark(ierr.ErrValidation)
 	}
 
-	feature, err := s.repo.Get(ctx, id)
+	feature, err := s.FeatureRepo.Get(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -215,7 +212,7 @@ func (s *featureService) UpdateFeature(ctx context.Context, id string, req dto.U
 
 	if feature.Type == types.FeatureTypeMetered && feature.MeterID != "" {
 		// update meter filters if provided
-		meterService := NewMeterService(s.meterRepo)
+		meterService := NewMeterService(s.MeterRepo)
 		if req.Filters != nil {
 			if _, err := meterService.UpdateMeter(ctx, feature.MeterID, *req.Filters); err != nil {
 				return nil, err
@@ -230,9 +227,12 @@ func (s *featureService) UpdateFeature(ctx context.Context, id string, req dto.U
 			Mark(ierr.ErrValidation)
 	}
 
-	if err := s.repo.Update(ctx, feature); err != nil {
+	if err := s.FeatureRepo.Update(ctx, feature); err != nil {
 		return nil, err
 	}
+
+	// Publish webhook event
+	s.publishWebhookEvent(ctx, types.WebhookEventFeatureUpdated, feature.ID)
 
 	return &dto.FeatureResponse{Feature: feature}, nil
 }
@@ -244,7 +244,7 @@ func (s *featureService) DeleteFeature(ctx context.Context, id string) error {
 			Mark(ierr.ErrValidation)
 	}
 
-	feature, err := s.repo.Get(ctx, id)
+	feature, err := s.FeatureRepo.Get(ctx, id)
 	if err != nil {
 		return ierr.NewError(fmt.Sprintf("Feature with ID %s was not found", id)).
 			WithHint("The specified feature does not exist").
@@ -255,7 +255,7 @@ func (s *featureService) DeleteFeature(ctx context.Context, id string) error {
 	entitlementFilter.QueryFilter.Limit = lo.ToPtr(1)
 	entitlementFilter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
 	entitlementFilter.FeatureIDs = []string{id}
-	entitlements, err := s.entitlementRepo.List(ctx, entitlementFilter)
+	entitlements, err := s.EntitlementRepo.List(ctx, entitlementFilter)
 
 	if err != nil {
 		return err
@@ -267,14 +267,41 @@ func (s *featureService) DeleteFeature(ctx context.Context, id string) error {
 	}
 
 	if feature.Type == types.FeatureTypeMetered {
-		if err := s.meterRepo.DisableMeter(ctx, feature.MeterID); err != nil {
+		if err := s.MeterRepo.DisableMeter(ctx, feature.MeterID); err != nil {
 			return err
 		}
 	}
 
-	if err := s.repo.Delete(ctx, id); err != nil {
+	if err := s.FeatureRepo.Delete(ctx, id); err != nil {
 		return err
 	}
 
+	// Publish webhook event
+	s.publishWebhookEvent(ctx, types.WebhookEventFeatureDeleted, id)
+
 	return nil
+}
+
+func (s *featureService) publishWebhookEvent(ctx context.Context, eventName string, featureID string) {
+	webhookPayload, err := json.Marshal(webhookDto.InternalFeatureEvent{
+		FeatureID: featureID,
+		TenantID:  types.GetTenantID(ctx),
+	})
+	if err != nil {
+		s.Logger.Errorw("failed to marshal webhook payload", "error", err)
+		return
+	}
+
+	webhookEvent := &types.WebhookEvent{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WEBHOOK_EVENT),
+		EventName:     eventName,
+		TenantID:      types.GetTenantID(ctx),
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		UserID:        types.GetUserID(ctx),
+		Timestamp:     time.Now().UTC(),
+		Payload:       json.RawMessage(webhookPayload),
+	}
+	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
+		s.Logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
+	}
 }

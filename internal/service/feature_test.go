@@ -55,12 +55,13 @@ func (s *FeatureServiceSuite) setupService() {
 	s.meterRepo = testutil.NewInMemoryMeterStore()
 	s.entitlementRepo = testutil.NewInMemoryEntitlementStore()
 
-	s.service = NewFeatureService(
-		s.featureRepo,
-		s.meterRepo,
-		s.entitlementRepo,
-		s.GetLogger(),
-	)
+	s.service = NewFeatureService(ServiceParams{
+		Logger:           s.GetLogger(),
+		FeatureRepo:      s.featureRepo,
+		MeterRepo:        s.meterRepo,
+		EntitlementRepo:  s.entitlementRepo,
+		WebhookPublisher: s.GetWebhookPublisher(),
+	})
 }
 
 func (s *FeatureServiceSuite) setupTestData() {

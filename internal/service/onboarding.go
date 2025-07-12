@@ -51,7 +51,13 @@ func NewOnboardingService(
 func (s *onboardingService) GenerateEvents(ctx context.Context, req *dto.OnboardingEventsRequest) (*dto.OnboardingEventsResponse, error) {
 	var customerID string
 	meters := make([]types.MeterInfo, 0)
-	featureService := NewFeatureService(s.FeatureRepo, s.MeterRepo, s.EntitlementRepo, s.Logger)
+	featureService := NewFeatureService(ServiceParams{
+		FeatureRepo:      s.FeatureRepo,
+		MeterRepo:        s.MeterRepo,
+		EntitlementRepo:  s.EntitlementRepo,
+		Logger:           s.Logger,
+		WebhookPublisher: s.WebhookPublisher,
+	})
 	featureFilter := types.NewNoLimitFeatureFilter()
 	featureFilter.Expand = lo.ToPtr(string(types.ExpandMeters))
 
@@ -575,7 +581,13 @@ func (s *onboardingService) createDefaultFeatures(ctx context.Context, meters []
 	}
 
 	// Create a feature service instance
-	featureService := NewFeatureService(s.FeatureRepo, s.MeterRepo, s.EntitlementRepo, s.Logger)
+	featureService := NewFeatureService(ServiceParams{
+		FeatureRepo:      s.FeatureRepo,
+		MeterRepo:        s.MeterRepo,
+		EntitlementRepo:  s.EntitlementRepo,
+		Logger:           s.Logger,
+		WebhookPublisher: s.WebhookPublisher,
+	})
 
 	// Define features based on Cursor pricing
 	features := []dto.CreateFeatureRequest{
@@ -648,7 +660,10 @@ func (s *onboardingService) createDefaultPlans(ctx context.Context, features []*
 	s.Logger.Infow("creating default plans for Cursor pricing model")
 
 	// Create a plan service instance with all required dependencies
-	planService := NewPlanService(s.ServiceParams)
+	planService := NewPlanService(
+		s.ServiceParams,
+		s.DB,
+	)
 
 	// Define plans based on Cursor pricing
 	plans := []*dto.CreatePlanRequest{

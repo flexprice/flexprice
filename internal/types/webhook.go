@@ -18,11 +18,13 @@ type WebhookEvent struct {
 
 // Common webhook event names
 const (
-	WebhookEventInvoiceCreateDraft         = "invoice.create.drafted"
-	WebhookEventInvoiceUpdateFinalized     = "invoice.update.finalized"
-	WebhookEventInvoiceUpdatePayment       = "invoice.updated.payment"
-	WebhookEventInvoiceUpdateVoided        = "invoice.update.voided"
-	WebhookEventInvoiceAmountsRecalculated = "invoice.amounts.recalculated"
+	WebhookEventInvoiceCreateDraft          = "invoice.create.drafted"
+	WebhookEventInvoiceUpdateFinalized      = "invoice.update.finalized"
+	WebhookEventInvoiceUpdatePayment        = "invoice.updated.payment"
+	WebhookEventInvoiceUpdateVoided         = "invoice.update.voided"
+	WebhookEventInvoiceAmountsRecalculated  = "invoice.amounts.recalculated"
+	WebhookEventInvoicePaymentOverdue       = "invoice.payment.overdue"
+	WebhookEventInvoicePaymentStatusChanged = "invoice.payment.status.changed"
 )
 
 // subscription event names
@@ -31,7 +33,21 @@ const (
 	WebhookEventSubscriptionPaused    = "subscription.paused"
 	WebhookEventSubscriptionCancelled = "subscription.cancelled"
 	WebhookEventSubscriptionResumed   = "subscription.resumed"
-	WebhookEventSubscriptionExpired   = "subscription.expired"
+	WebhookEventSubscriptionUpdated   = "subscription.updated"
+)
+
+// feature event names
+const (
+	WebhookEventFeatureCreated = "feature.created"
+	WebhookEventFeatureUpdated = "feature.updated"
+	WebhookEventFeatureDeleted = "feature.deleted"
+)
+
+// entitlement event names
+const (
+	WebhookEventEntitlementCreated = "entitlement.created"
+	WebhookEventEntitlementUpdated = "entitlement.updated"
+	WebhookEventEntitlementDeleted = "entitlement.deleted"
 )
 
 // wallet event names

@@ -471,7 +471,10 @@ func (s *invoiceService) UpdatePaymentStatus(ctx context.Context, id string, sta
 		return err
 	}
 
+	// Publish webhook events
 	s.publishInternalWebhookEvent(ctx, types.WebhookEventInvoiceUpdatePayment, inv.ID)
+	s.publishInternalWebhookEvent(ctx, types.WebhookEventInvoicePaymentStatusChanged, inv.ID)
+
 	return nil
 }
 
@@ -615,6 +618,9 @@ func (s *invoiceService) GetCustomerInvoiceSummary(ctx context.Context, customer
 		if inv.DueDate != nil && inv.DueDate.Before(now) {
 			summary.TotalOverdueAmount = summary.TotalOverdueAmount.Add(inv.AmountRemaining)
 			summary.OverdueInvoiceCount++
+
+			// Publish webhook event
+			s.publishInternalWebhookEvent(ctx, types.WebhookEventInvoicePaymentOverdue, inv.ID)
 		}
 
 		// Split charges by type

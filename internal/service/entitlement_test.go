@@ -29,13 +29,14 @@ func (s *EntitlementServiceSuite) SetupTest() {
 
 func (s *EntitlementServiceSuite) setupService() {
 	stores := s.GetStores()
-	s.service = NewEntitlementService(
-		stores.EntitlementRepo,
-		stores.PlanRepo,
-		stores.FeatureRepo,
-		testutil.NewInMemoryMeterStore(),
-		s.GetLogger(),
-	)
+	s.service = NewEntitlementService(ServiceParams{
+		Logger:           s.GetLogger(),
+		EntitlementRepo:  stores.EntitlementRepo,
+		PlanRepo:         stores.PlanRepo,
+		FeatureRepo:      stores.FeatureRepo,
+		MeterRepo:        testutil.NewInMemoryMeterStore(),
+		WebhookPublisher: s.GetWebhookPublisher(),
+	})
 }
 
 func (s *EntitlementServiceSuite) TestCreateEntitlement() {

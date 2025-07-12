@@ -106,7 +106,7 @@ func (s *tenantService) onboardTenantOnFreePlan(ctx context.Context, t *tenant.T
 	ctx = context.WithValue(ctx, types.CtxTenantID, flexpriceTenantID)
 	ctx = context.WithValue(ctx, types.CtxEnvironmentID, flexpriceEnvironmentID)
 
-	planService := NewPlanService(s.ServiceParams)
+	planService := NewPlanService(s.ServiceParams, s.DB)
 	// List plans
 	planFilter := types.NewNoLimitPlanFilter()
 	planFilter.Expand = lo.ToPtr(string(types.ExpandPrices))

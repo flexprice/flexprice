@@ -414,7 +414,7 @@ func (s *subscriptionService) GetSubscription(ctx context.Context, id string) (*
 	}
 
 	// expand plan
-	planService := NewPlanService(s.ServiceParams)
+	planService := NewPlanService(s.ServiceParams, s.DB)
 
 	plan, err := planService.GetPlan(ctx, subscription.PlanID)
 	if err != nil {
@@ -468,12 +468,15 @@ func (s *subscriptionService) CancelSubscription(ctx context.Context, id string,
 		return err
 	}
 
+	// Publish webhook event
+	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionUpdated, subscription.ID)
 	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionCancelled, subscription.ID)
+
 	return nil
 }
 
 func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *types.SubscriptionFilter) (*dto.ListSubscriptionsResponse, error) {
-	planService := NewPlanService(s.ServiceParams)
+	planService := NewPlanService(s.ServiceParams, s.DB)
 
 	if filter == nil {
 		filter = types.NewSubscriptionFilter()
@@ -1347,6 +1350,8 @@ func (s *subscriptionService) PauseSubscription(
 	response.BillingImpact = impact
 
 	// Return the response
+	// Publish webhook event
+	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionUpdated, subscriptionID)
 	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionPaused, subscriptionID)
 	return response, nil
 }
@@ -1491,7 +1496,8 @@ func (s *subscriptionService) ResumeSubscription(
 		return nil, err
 	}
 
-	// Publish the webhook event
+	// Publish webhook event
+	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionUpdated, subscriptionID)
 	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionResumed, subscriptionID)
 
 	// Return the response

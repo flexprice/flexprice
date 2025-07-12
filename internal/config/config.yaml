@@ -91,8 +91,7 @@ webhook:
   svix_config:
     enabled: false
     auth_token: "svix_auth_token"
-    base_url: "https://api.svix.com"
-    
+    base_url: "https://api.us.svix.com"
 
 temporal:
   address: "127.0.0.1:7233" # For local mode

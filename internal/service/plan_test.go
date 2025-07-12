@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -19,6 +20,8 @@ import (
 type PlanServiceSuite struct {
 	testutil.BaseServiceTestSuite
 	service PlanService
+	db      postgres.IClient
+	params  ServiceParams
 }
 
 func TestPlanService(t *testing.T) {
@@ -28,17 +31,8 @@ func TestPlanService(t *testing.T) {
 func (s *PlanServiceSuite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
 	s.service = NewPlanService(
-		ServiceParams{
-			DB:              s.GetDB(),
-			PlanRepo:        s.GetStores().PlanRepo,
-			PriceRepo:       s.GetStores().PriceRepo,
-			SubRepo:         s.GetStores().SubscriptionRepo,
-			MeterRepo:       s.GetStores().MeterRepo,
-			FeatureRepo:     s.GetStores().FeatureRepo,
-			EntitlementRepo: s.GetStores().EntitlementRepo,
-			CreditGrantRepo: s.GetStores().CreditGrantRepo,
-			Logger:          s.GetLogger(),
-		},
+		s.params,
+		s.db,
 	)
 }
 
