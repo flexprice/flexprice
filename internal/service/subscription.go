@@ -467,7 +467,7 @@ func (s *subscriptionService) CancelSubscription(ctx context.Context, id string,
 	if err := s.SubRepo.Update(ctx, subscription); err != nil {
 		return err
 	}
-
+	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionUpdated, subscription.ID)
 	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionCancelled, subscription.ID)
 	return nil
 }
@@ -1347,6 +1347,7 @@ func (s *subscriptionService) PauseSubscription(
 	response.BillingImpact = impact
 
 	// Return the response
+	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionUpdated, subscriptionID)
 	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionPaused, subscriptionID)
 	return response, nil
 }
@@ -1492,6 +1493,7 @@ func (s *subscriptionService) ResumeSubscription(
 	}
 
 	// Publish the webhook event
+	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionUpdated, subscriptionID)
 	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionResumed, subscriptionID)
 
 	// Return the response

@@ -88,9 +88,9 @@ webhook:
         - "tenant.created"
         - "tenant.updated"
   svix_config:
-    enabled: false
-    auth_token: "svix_auth_token"
-    base_url: "https://api.svix.com"
+    enabled: true
+    auth_token: "sk_Ppb1BWrU5gAeMk9fNUXKI0IMZP3FOAbf.us"
+    base_url: "https://api.us.svix.com"
     
 
 temporal:

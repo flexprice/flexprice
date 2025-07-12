@@ -159,7 +159,14 @@ func (s *planService) GetPlan(ctx context.Context, id string) (*dto.PlanResponse
 	}
 
 	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.Logger)
-	entitlementService := NewEntitlementService(s.EntitlementRepo, s.PlanRepo, s.FeatureRepo, s.MeterRepo, s.Logger)
+	entitlementService := NewEntitlementService(ServiceParams{
+		EntitlementRepo:  s.EntitlementRepo,
+		PlanRepo:         s.PlanRepo,
+		FeatureRepo:      s.FeatureRepo,
+		MeterRepo:        s.MeterRepo,
+		Logger:           s.Logger,
+		WebhookPublisher: s.WebhookPublisher,
+	})
 
 	pricesResponse, err := priceService.GetPricesByPlanID(ctx, plan.ID)
 	if err != nil {
@@ -241,7 +248,14 @@ func (s *planService) GetPlans(ctx context.Context, filter *types.PlanFilter) (*
 	creditGrantsByPlanID := make(map[string][]*dto.CreditGrantResponse)
 
 	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.Logger)
-	entitlementService := NewEntitlementService(s.EntitlementRepo, s.PlanRepo, s.FeatureRepo, s.MeterRepo, s.Logger)
+	entitlementService := NewEntitlementService(ServiceParams{
+		EntitlementRepo:  s.EntitlementRepo,
+		PlanRepo:         s.PlanRepo,
+		FeatureRepo:      s.FeatureRepo,
+		MeterRepo:        s.MeterRepo,
+		Logger:           s.Logger,
+		WebhookPublisher: s.WebhookPublisher,
+	})
 	creditGrantService := NewCreditGrantService(s.ServiceParams)
 
 	// If prices or entitlements expansion is requested, fetch them in bulk
