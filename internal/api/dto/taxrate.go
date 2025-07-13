@@ -2,30 +2,16 @@ package dto
 
 import (
 	"context"
-	"time"
 
 	taxrate "github.com/flexprice/flexprice/internal/domain/tax"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/validator"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
-// TaxRateResponse represents the response for tax rate operations
-// @Description Tax rate response object containing all tax rate information
-type TaxRateResponse struct {
-	*taxrate.TaxRate `json:",inline"`
-}
-
-// ListTaxRatesResponse represents the response for listing tax rates
-// @Description Response object for listing tax rates with pagination
-type ListTaxRatesResponse struct {
-	// items contains the list of tax rate objects
-	Items      []*TaxRateResponse        `json:"items"`
-	Pagination *types.PaginationResponse `json:"pagination,omitempty"`
-}
-
 // CreateTaxRateRequest represents the request to create a tax rate
-// @Description Request object for creating a new tax rate
 type CreateTaxRateRequest struct {
 	// name is the human-readable name for the tax rate (required)
 	Name string `json:"name" validate:"required"`
@@ -42,27 +28,17 @@ type CreateTaxRateRequest struct {
 	// fixed_value is the fixed monetary amount when tax_rate_type is "fixed"
 	FixedValue *decimal.Decimal `json:"fixed_value,omitempty"`
 
-	// valid_from is the ISO 8601 timestamp when this tax rate becomes effective
-	ValidFrom *time.Time `json:"valid_from"`
-
-	// valid_to is the ISO 8601 timestamp when this tax rate expires
-	ValidTo *time.Time `json:"valid_to"`
-
 	// tax_rate_type determines how the tax is calculated ("percentage" or "fixed")
 	TaxRateType types.TaxRateType `json:"tax_rate_type"`
 
 	// scope defines where this tax rate applies
-	Scope types.TaxRateScope `json:"scope"`
+	Scope *types.TaxRateScope `json:"scope,omitempty"`
 
 	// metadata contains additional key-value pairs for storing extra information
 	Metadata map[string]string `json:"metadata,omitempty"`
-
-	// currency is the currency of the tax rate
-	Currency string `json:"currency" binding:"required"`
 }
 
 // UpdateTaxRateRequest represents the request to update a tax rate
-// @Description Request object for updating an existing tax rate. All fields are optional - only provided fields will be updated
 type UpdateTaxRateRequest struct {
 	// name is the updated human-readable name for the tax rate
 	Name string `json:"name,omitempty"`
@@ -75,16 +51,21 @@ type UpdateTaxRateRequest struct {
 
 	// metadata contains updated key-value pairs that will replace existing metadata
 	Metadata map[string]string `json:"metadata,omitempty"`
+
+	// tax_rate_type determines how the tax is calculated ("percentage" or "fixed")
+	TaxRateStatus *types.TaxRateStatus `json:"tax_rate_status,omitempty"`
 }
 
 // Validate validates the UpdateTaxRateRequest
 func (r UpdateTaxRateRequest) Validate() error {
-	// Validate that at least one field is being updated
-	if r.Name == "" && r.Code == "" && r.Description == "" &&
-		len(r.Metadata) == 0 {
-		return ierr.NewError("at least one field must be provided for update").
-			WithHint("Please provide at least one field to update").
-			Mark(ierr.ErrValidation)
+	if err := validator.ValidateRequest(&r); err != nil {
+		return err
+	}
+
+	if r.TaxRateStatus != nil {
+		if err := r.TaxRateStatus.Validate(); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -92,16 +73,8 @@ func (r UpdateTaxRateRequest) Validate() error {
 
 // Validate validates the CreateTaxRateRequest
 func (r CreateTaxRateRequest) Validate() error {
-	if r.Name == "" {
-		return ierr.NewError("name is required").
-			WithHint("Tax rate name is required").
-			Mark(ierr.ErrValidation)
-	}
-
-	if r.Code == "" {
-		return ierr.NewError("code is required").
-			WithHint("Tax rate code is required").
-			Mark(ierr.ErrValidation)
+	if err := validator.ValidateRequest(&r); err != nil {
+		return err
 	}
 
 	if err := r.TaxRateType.Validate(); err != nil {
@@ -153,6 +126,12 @@ func (r CreateTaxRateRequest) Validate() error {
 
 // ToTaxRate converts a CreateTaxRateRequest to a domain TaxRate
 func (r CreateTaxRateRequest) ToTaxRate(ctx context.Context) *taxrate.TaxRate {
+
+	// if taxrate scope is not provided, set it to internal
+	if r.Scope == nil {
+		r.Scope = lo.ToPtr(types.TaxRateScopeInternal)
+	}
+
 	taxRate := &taxrate.TaxRate{
 		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TAX_RATE),
 		Name:            r.Name,
@@ -160,7 +139,7 @@ func (r CreateTaxRateRequest) ToTaxRate(ctx context.Context) *taxrate.TaxRate {
 		Description:     r.Description,
 		PercentageValue: r.PercentageValue,
 		FixedValue:      r.FixedValue,
-		Scope:           r.Scope,
+		Scope:           lo.FromPtr(r.Scope),
 		TaxRateType:     r.TaxRateType,
 		Metadata:        r.Metadata,
 		EnvironmentID:   types.GetEnvironmentID(ctx),
@@ -168,3 +147,11 @@ func (r CreateTaxRateRequest) ToTaxRate(ctx context.Context) *taxrate.TaxRate {
 	}
 	return taxRate
 }
+
+// TaxRateResponse represents the response for tax rate operations
+type TaxRateResponse struct {
+	*taxrate.TaxRate `json:",inline"`
+}
+
+// ListTaxRatesResponse represents the response for listing tax rates
+type ListTaxRatesResponse = types.ListResponse[*TaxRateResponse]

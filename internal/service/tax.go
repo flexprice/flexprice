@@ -160,7 +160,7 @@ func (s *taxService) ListTaxRates(ctx context.Context, filter *types.TaxRateFilt
 	// Return the response
 	return &dto.ListTaxRatesResponse{
 		Items:      items,
-		Pagination: &pagination,
+		Pagination: pagination,
 	}, nil
 }
 
@@ -182,9 +182,10 @@ func (s *taxService) UpdateTaxRate(ctx context.Context, id string, req dto.Updat
 	}
 
 	// check is tax rate is being used in any tax assignments
-	taxAssociations, err := s.TaxAssociationRepo.List(ctx, &types.TaxAssociationFilter{
-		TaxRateIDs: []string{id},
-	})
+	taxAssociationFilter := types.NewTaxAssociationFilter()
+	taxAssociationFilter.TaxRateIDs = []string{id}
+	taxAssociationFilter.Limit = lo.ToPtr(1)
+	taxAssociations, err := s.TaxAssociationRepo.List(ctx, taxAssociationFilter)
 	if err != nil {
 		s.Logger.Errorw("failed to get tax associations for tax rate",
 			"error", err,
@@ -202,13 +203,34 @@ func (s *taxService) UpdateTaxRate(ctx context.Context, id string, req dto.Updat
 			Mark(ierr.ErrValidation)
 	}
 
+	// also check if the tax rate is being used in any tax applied records
+	taxAppliedFilter := types.NewTaxAppliedFilter()
+	taxAppliedFilter.TaxRateIDs = []string{id}
+	taxAppliedFilter.Limit = lo.ToPtr(1)
+	taxAppliedRecords, err := s.TaxAppliedRepo.List(ctx, taxAppliedFilter)
+	if err != nil {
+		s.Logger.Errorw("failed to get tax applied records for tax rate",
+			"error", err,
+			"tax_rate_id", id,
+		)
+		return nil, err
+	}
+
+	if len(taxAppliedRecords) > 0 {
+		s.Logger.Warnw("tax rate is being used in tax applied records, cannot update",
+			"tax_rate_id", id,
+		)
+		return nil, ierr.NewError("tax rate is being used in tax applied records, cannot update").
+			WithHint("Tax rate is being used in tax applied records, cannot update").
+			Mark(ierr.ErrValidation)
+	}
+
 	// Get the existing tax rate
 	taxRate, err := s.TaxRateRepo.Get(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
-	// TODO: check if tax is being used in any tax assignments then dont allow update
 	// Apply updates only for non-empty fields
 	if req.Name != "" {
 		taxRate.Name = req.Name
@@ -224,6 +246,10 @@ func (s *taxService) UpdateTaxRate(ctx context.Context, id string, req dto.Updat
 
 	if len(req.Metadata) > 0 {
 		taxRate.Metadata = req.Metadata
+	}
+
+	if req.TaxRateStatus != nil {
+		taxRate.TaxRateStatus = lo.FromPtr(req.TaxRateStatus)
 	}
 
 	// Perform the update in the repository
@@ -317,6 +343,7 @@ func (s *taxService) RecalculateInvoiceTaxes(ctx context.Context, invoiceId stri
 			return err
 		}
 
+		// TODO: check if the invoice is a one time invoice, if so, skip tax recalculation
 		// Check if invoice has a subscription ID
 		if invoice.SubscriptionID == nil {
 			s.Logger.Warnw("invoice has no subscription ID, skipping tax recalculation",

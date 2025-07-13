@@ -90,12 +90,9 @@ func (TaxRate) Edges() []ent.Edge {
 // Indexes of the TaxRate.
 func (TaxRate) Indexes() []ent.Index {
 	return []ent.Index{
-		index.Fields("code", "tenant_id", "environment_id").
+		index.Fields("tenant_id", "environment_id", "code").
 			Unique().
 			StorageKey(Idx_code_tenant_id_environment_id).
 			Annotations(entsql.IndexWhere("(code IS NOT NULL AND code != '' and status = 'published')")),
-
-		index.Fields("code").
-			Annotations(entsql.IndexWhere("(code IS NOT NULL AND code != '')")),
 	}
 }
