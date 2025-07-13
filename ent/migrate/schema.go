@@ -1416,17 +1416,9 @@ var (
 			{
 				Name:    "idx_code_tenant_id_environment_id",
 				Unique:  true,
-				Columns: []*schema.Column{TaxRatesColumns[10], TaxRatesColumns[1], TaxRatesColumns[7]},
+				Columns: []*schema.Column{TaxRatesColumns[1], TaxRatesColumns[7], TaxRatesColumns[10]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "(code IS NOT NULL AND code != '' and status = 'published')",
-				},
-			},
-			{
-				Name:    "taxrate_code",
-				Unique:  false,
-				Columns: []*schema.Column{TaxRatesColumns[10]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "(code IS NOT NULL AND code != '')",
 				},
 			},
 		},
