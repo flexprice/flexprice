@@ -208,6 +208,8 @@ func (r *taxrateRepository) Count(ctx context.Context, filter *types.TaxRateFilt
 
 	query := r.client.Querier(ctx).TaxRate.Query()
 
+	query = ApplyQueryOptions(ctx, query, filter, r.queryOpts)
+
 	query, err := r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
 	if err != nil {
 		SetSpanError(span, err)

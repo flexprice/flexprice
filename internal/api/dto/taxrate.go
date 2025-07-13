@@ -16,7 +16,7 @@ type CreateTaxRateRequest struct {
 	// name is the human-readable name for the tax rate (required)
 	Name string `json:"name" validate:"required"`
 
-	// code is the unique alpxuhanumeric identifier for the tax rate (required)
+	// code is the unique alphanumeric case sensitive identifier for the tax rate (required)
 	Code string `json:"code" validate:"required"`
 
 	// description is an optional text description providing details about the tax rate
