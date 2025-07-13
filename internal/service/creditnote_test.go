@@ -75,6 +75,8 @@ func (s *CreditNoteServiceSuite) setupService() {
 		TaxAssociationRepo:         s.GetStores().TaxAssociationRepo,
 		CreditGrantApplicationRepo: s.GetStores().CreditGrantApplicationRepo,
 		WebhookPublisher:           s.GetWebhookPublisher(),
+		TaxRateRepo:                s.GetStores().TaxRateRepo,
+		TaxAppliedRepo:             s.GetStores().TaxAppliedRepo,
 	})
 }
 
