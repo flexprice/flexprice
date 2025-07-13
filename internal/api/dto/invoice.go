@@ -74,9 +74,6 @@ type CreateInvoiceRequest struct {
 	// metadata contains additional custom key-value pairs for storing extra information
 	Metadata types.Metadata `json:"metadata,omitempty"`
 
-	// environment_id is the unique identifier of the environment this invoice belongs to
-	EnvironmentID string `json:"environment_id,omitempty"`
-
 	// tax_rate_overrides is the tax rate overrides to be applied to the invoice
 	TaxRateOverrides []*TaxRateOverride `json:"tax_rate_overrides,omitempty"`
 }
@@ -191,9 +188,7 @@ func (r *CreateInvoiceRequest) ToInvoice(ctx context.Context) (*invoice.Invoice,
 		AmountRemaining: decimal.Zero,
 	}
 
-	if r.EnvironmentID != "" {
-		inv.EnvironmentID = r.EnvironmentID
-	} else {
+	if inv.EnvironmentID == "" {
 		inv.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
 
