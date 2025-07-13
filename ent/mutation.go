@@ -40075,11 +40075,8 @@ type TaxRateMutation struct {
 	tax_rate_status  *string
 	tax_rate_type    *string
 	scope            *string
-	currency         *string
 	percentage_value *decimal.Decimal
 	fixed_value      *decimal.Decimal
-	valid_from       *time.Time
-	valid_to         *time.Time
 	metadata         *map[string]string
 	clearedFields    map[string]struct{}
 	done             bool
@@ -40711,42 +40708,6 @@ func (m *TaxRateMutation) ResetScope() {
 	m.scope = nil
 }
 
-// SetCurrency sets the "currency" field.
-func (m *TaxRateMutation) SetCurrency(s string) {
-	m.currency = &s
-}
-
-// Currency returns the value of the "currency" field in the mutation.
-func (m *TaxRateMutation) Currency() (r string, exists bool) {
-	v := m.currency
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldCurrency returns the old "currency" field's value of the TaxRate entity.
-// If the TaxRate object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *TaxRateMutation) OldCurrency(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldCurrency is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldCurrency requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldCurrency: %w", err)
-	}
-	return oldValue.Currency, nil
-}
-
-// ResetCurrency resets all changes to the "currency" field.
-func (m *TaxRateMutation) ResetCurrency() {
-	m.currency = nil
-}
-
 // SetPercentageValue sets the "percentage_value" field.
 func (m *TaxRateMutation) SetPercentageValue(d decimal.Decimal) {
 	m.percentage_value = &d
@@ -40845,104 +40806,6 @@ func (m *TaxRateMutation) ResetFixedValue() {
 	delete(m.clearedFields, taxrate.FieldFixedValue)
 }
 
-// SetValidFrom sets the "valid_from" field.
-func (m *TaxRateMutation) SetValidFrom(t time.Time) {
-	m.valid_from = &t
-}
-
-// ValidFrom returns the value of the "valid_from" field in the mutation.
-func (m *TaxRateMutation) ValidFrom() (r time.Time, exists bool) {
-	v := m.valid_from
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldValidFrom returns the old "valid_from" field's value of the TaxRate entity.
-// If the TaxRate object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *TaxRateMutation) OldValidFrom(ctx context.Context) (v *time.Time, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldValidFrom is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldValidFrom requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldValidFrom: %w", err)
-	}
-	return oldValue.ValidFrom, nil
-}
-
-// ClearValidFrom clears the value of the "valid_from" field.
-func (m *TaxRateMutation) ClearValidFrom() {
-	m.valid_from = nil
-	m.clearedFields[taxrate.FieldValidFrom] = struct{}{}
-}
-
-// ValidFromCleared returns if the "valid_from" field was cleared in this mutation.
-func (m *TaxRateMutation) ValidFromCleared() bool {
-	_, ok := m.clearedFields[taxrate.FieldValidFrom]
-	return ok
-}
-
-// ResetValidFrom resets all changes to the "valid_from" field.
-func (m *TaxRateMutation) ResetValidFrom() {
-	m.valid_from = nil
-	delete(m.clearedFields, taxrate.FieldValidFrom)
-}
-
-// SetValidTo sets the "valid_to" field.
-func (m *TaxRateMutation) SetValidTo(t time.Time) {
-	m.valid_to = &t
-}
-
-// ValidTo returns the value of the "valid_to" field in the mutation.
-func (m *TaxRateMutation) ValidTo() (r time.Time, exists bool) {
-	v := m.valid_to
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldValidTo returns the old "valid_to" field's value of the TaxRate entity.
-// If the TaxRate object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *TaxRateMutation) OldValidTo(ctx context.Context) (v *time.Time, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldValidTo is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldValidTo requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldValidTo: %w", err)
-	}
-	return oldValue.ValidTo, nil
-}
-
-// ClearValidTo clears the value of the "valid_to" field.
-func (m *TaxRateMutation) ClearValidTo() {
-	m.valid_to = nil
-	m.clearedFields[taxrate.FieldValidTo] = struct{}{}
-}
-
-// ValidToCleared returns if the "valid_to" field was cleared in this mutation.
-func (m *TaxRateMutation) ValidToCleared() bool {
-	_, ok := m.clearedFields[taxrate.FieldValidTo]
-	return ok
-}
-
-// ResetValidTo resets all changes to the "valid_to" field.
-func (m *TaxRateMutation) ResetValidTo() {
-	m.valid_to = nil
-	delete(m.clearedFields, taxrate.FieldValidTo)
-}
-
 // SetMetadata sets the "metadata" field.
 func (m *TaxRateMutation) SetMetadata(value map[string]string) {
 	m.metadata = &value
@@ -41026,7 +40889,7 @@ func (m *TaxRateMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TaxRateMutation) Fields() []string {
-	fields := make([]string, 0, 19)
+	fields := make([]string, 0, 16)
 	if m.tenant_id != nil {
 		fields = append(fields, taxrate.FieldTenantID)
 	}
@@ -41066,20 +40929,11 @@ func (m *TaxRateMutation) Fields() []string {
 	if m.scope != nil {
 		fields = append(fields, taxrate.FieldScope)
 	}
-	if m.currency != nil {
-		fields = append(fields, taxrate.FieldCurrency)
-	}
 	if m.percentage_value != nil {
 		fields = append(fields, taxrate.FieldPercentageValue)
 	}
 	if m.fixed_value != nil {
 		fields = append(fields, taxrate.FieldFixedValue)
-	}
-	if m.valid_from != nil {
-		fields = append(fields, taxrate.FieldValidFrom)
-	}
-	if m.valid_to != nil {
-		fields = append(fields, taxrate.FieldValidTo)
 	}
 	if m.metadata != nil {
 		fields = append(fields, taxrate.FieldMetadata)
@@ -41118,16 +40972,10 @@ func (m *TaxRateMutation) Field(name string) (ent.Value, bool) {
 		return m.TaxRateType()
 	case taxrate.FieldScope:
 		return m.Scope()
-	case taxrate.FieldCurrency:
-		return m.Currency()
 	case taxrate.FieldPercentageValue:
 		return m.PercentageValue()
 	case taxrate.FieldFixedValue:
 		return m.FixedValue()
-	case taxrate.FieldValidFrom:
-		return m.ValidFrom()
-	case taxrate.FieldValidTo:
-		return m.ValidTo()
 	case taxrate.FieldMetadata:
 		return m.Metadata()
 	}
@@ -41165,16 +41013,10 @@ func (m *TaxRateMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldTaxRateType(ctx)
 	case taxrate.FieldScope:
 		return m.OldScope(ctx)
-	case taxrate.FieldCurrency:
-		return m.OldCurrency(ctx)
 	case taxrate.FieldPercentageValue:
 		return m.OldPercentageValue(ctx)
 	case taxrate.FieldFixedValue:
 		return m.OldFixedValue(ctx)
-	case taxrate.FieldValidFrom:
-		return m.OldValidFrom(ctx)
-	case taxrate.FieldValidTo:
-		return m.OldValidTo(ctx)
 	case taxrate.FieldMetadata:
 		return m.OldMetadata(ctx)
 	}
@@ -41277,13 +41119,6 @@ func (m *TaxRateMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetScope(v)
 		return nil
-	case taxrate.FieldCurrency:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetCurrency(v)
-		return nil
 	case taxrate.FieldPercentageValue:
 		v, ok := value.(decimal.Decimal)
 		if !ok {
@@ -41297,20 +41132,6 @@ func (m *TaxRateMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetFixedValue(v)
-		return nil
-	case taxrate.FieldValidFrom:
-		v, ok := value.(time.Time)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetValidFrom(v)
-		return nil
-	case taxrate.FieldValidTo:
-		v, ok := value.(time.Time)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetValidTo(v)
 		return nil
 	case taxrate.FieldMetadata:
 		v, ok := value.(map[string]string)
@@ -41367,12 +41188,6 @@ func (m *TaxRateMutation) ClearedFields() []string {
 	if m.FieldCleared(taxrate.FieldFixedValue) {
 		fields = append(fields, taxrate.FieldFixedValue)
 	}
-	if m.FieldCleared(taxrate.FieldValidFrom) {
-		fields = append(fields, taxrate.FieldValidFrom)
-	}
-	if m.FieldCleared(taxrate.FieldValidTo) {
-		fields = append(fields, taxrate.FieldValidTo)
-	}
 	if m.FieldCleared(taxrate.FieldMetadata) {
 		fields = append(fields, taxrate.FieldMetadata)
 	}
@@ -41407,12 +41222,6 @@ func (m *TaxRateMutation) ClearField(name string) error {
 		return nil
 	case taxrate.FieldFixedValue:
 		m.ClearFixedValue()
-		return nil
-	case taxrate.FieldValidFrom:
-		m.ClearValidFrom()
-		return nil
-	case taxrate.FieldValidTo:
-		m.ClearValidTo()
 		return nil
 	case taxrate.FieldMetadata:
 		m.ClearMetadata()
@@ -41464,20 +41273,11 @@ func (m *TaxRateMutation) ResetField(name string) error {
 	case taxrate.FieldScope:
 		m.ResetScope()
 		return nil
-	case taxrate.FieldCurrency:
-		m.ResetCurrency()
-		return nil
 	case taxrate.FieldPercentageValue:
 		m.ResetPercentageValue()
 		return nil
 	case taxrate.FieldFixedValue:
 		m.ResetFixedValue()
-		return nil
-	case taxrate.FieldValidFrom:
-		m.ResetValidFrom()
-		return nil
-	case taxrate.FieldValidTo:
-		m.ResetValidTo()
 		return nil
 	case taxrate.FieldMetadata:
 		m.ResetMetadata()

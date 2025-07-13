@@ -1,8 +1,6 @@
 package taxrate
 
 import (
-	"time"
-
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -19,10 +17,7 @@ type TaxRate struct {
 	TaxRateType     types.TaxRateType   `json:"tax_rate_type,omitempty"`
 	Scope           types.TaxRateScope  `json:"scope,omitempty"`
 	PercentageValue *decimal.Decimal    `json:"percentage_value,omitempty"`
-	Currency        string              `json:"currency,omitempty"`
 	FixedValue      *decimal.Decimal    `json:"fixed_value,omitempty"`
-	ValidFrom       *time.Time          `json:"valid_from,omitempty"`
-	ValidTo         *time.Time          `json:"valid_to,omitempty"`
 	Metadata        map[string]string   `json:"metadata,omitempty"`
 	types.BaseModel
 }
@@ -36,15 +31,12 @@ func FromEnt(e *ent.TaxRate) *TaxRate {
 		ID:              e.ID,
 		Name:            e.Name,
 		Description:     e.Description,
-		Currency:        e.Currency,
 		Code:            e.Code,
 		TaxRateStatus:   types.TaxRateStatus(e.TaxRateStatus),
 		TaxRateType:     types.TaxRateType(e.TaxRateType),
 		Scope:           types.TaxRateScope(e.Scope),
 		PercentageValue: e.PercentageValue,
 		FixedValue:      e.FixedValue,
-		ValidFrom:       e.ValidFrom,
-		ValidTo:         e.ValidTo,
 		EnvironmentID:   e.EnvironmentID,
 		Metadata:        e.Metadata,
 		BaseModel: types.BaseModel{

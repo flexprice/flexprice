@@ -78,9 +78,8 @@ func (s *taxService) CreateTaxRate(ctx context.Context, req dto.CreateTaxRateReq
 	// Convert the request to a domain model
 	taxRate := req.ToTaxRate(ctx)
 
-	// Set tax rate status based on validity period
-	now := time.Now().UTC()
-	taxRate.TaxRateStatus = s.calculateTaxRateStatus(taxRate, now)
+	// Set tax rate status to active by default
+	taxRate.TaxRateStatus = types.TaxRateStatusActive
 
 	// Create the tax rate in the repository
 	if err := s.TaxRateRepo.Create(ctx, taxRate); err != nil {
@@ -223,21 +222,8 @@ func (s *taxService) UpdateTaxRate(ctx context.Context, id string, req dto.Updat
 		taxRate.Description = req.Description
 	}
 
-	if req.ValidFrom != nil {
-		taxRate.ValidFrom = req.ValidFrom
-	}
-
-	if req.ValidTo != nil {
-		taxRate.ValidTo = req.ValidTo
-	}
-
 	if len(req.Metadata) > 0 {
 		taxRate.Metadata = req.Metadata
-	}
-
-	// Update status based on validity period if dates were updated
-	if req.ValidFrom != nil || req.ValidTo != nil {
-		taxRate.TaxRateStatus = s.calculateTaxRateStatus(taxRate, time.Now().UTC())
 	}
 
 	// Perform the update in the repository
@@ -316,22 +302,6 @@ func (s *taxService) GetTaxRateByCode(ctx context.Context, code string) (*dto.Ta
 
 	// Return the tax rate
 	return &dto.TaxRateResponse{TaxRate: taxRate}, nil
-}
-
-// calculateTaxRateStatus determines the appropriate status based on validity dates
-func (s *taxService) calculateTaxRateStatus(taxRate *taxrate.TaxRate, now time.Time) types.TaxRateStatus {
-	// If ValidFrom is in the future, tax rate should be inactive
-	if taxRate.ValidFrom != nil && taxRate.ValidFrom.After(now) {
-		return types.TaxRateStatusInactive
-	}
-
-	// If ValidTo is in the past, tax rate should be inactive
-	if taxRate.ValidTo != nil && taxRate.ValidTo.Before(now) {
-		return types.TaxRateStatusInactive
-	}
-
-	// If ValidFrom is nil or in the past, and ValidTo is nil or in the future, tax rate should be active
-	return types.TaxRateStatusActive
 }
 
 func (s *taxService) RecalculateInvoiceTaxes(ctx context.Context, invoiceId string) error {
@@ -646,13 +616,20 @@ func (s *taxService) CreateTaxAssociation(ctx context.Context, req *dto.CreateTa
 		return nil, err
 	}
 
+	// validate tax rate exists and is valid
 	taxRate, err := s.TaxRateRepo.Get(ctx, req.TaxRateID)
 	if err != nil {
 		return nil, err
 	}
 
+	if taxRate.TaxRateStatus != types.TaxRateStatusActive {
+		return nil, ierr.NewError("tax rate is not active").
+			WithHint("Tax rate is not active").
+			Mark(ierr.ErrValidation)
+	}
+
 	// Convert request to domain model
-	tc := req.ToTaxAssociation(ctx, lo.FromPtr(taxRate))
+	tc := req.ToTaxAssociation(ctx)
 
 	s.Logger.Infow("creating tax association",
 		"tax_rate_id", tc.TaxRateID,

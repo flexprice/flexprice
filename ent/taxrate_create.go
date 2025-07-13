@@ -163,12 +163,6 @@ func (trc *TaxRateCreate) SetScope(s string) *TaxRateCreate {
 	return trc
 }
 
-// SetCurrency sets the "currency" field.
-func (trc *TaxRateCreate) SetCurrency(s string) *TaxRateCreate {
-	trc.mutation.SetCurrency(s)
-	return trc
-}
-
 // SetPercentageValue sets the "percentage_value" field.
 func (trc *TaxRateCreate) SetPercentageValue(d decimal.Decimal) *TaxRateCreate {
 	trc.mutation.SetPercentageValue(d)
@@ -193,34 +187,6 @@ func (trc *TaxRateCreate) SetFixedValue(d decimal.Decimal) *TaxRateCreate {
 func (trc *TaxRateCreate) SetNillableFixedValue(d *decimal.Decimal) *TaxRateCreate {
 	if d != nil {
 		trc.SetFixedValue(*d)
-	}
-	return trc
-}
-
-// SetValidFrom sets the "valid_from" field.
-func (trc *TaxRateCreate) SetValidFrom(t time.Time) *TaxRateCreate {
-	trc.mutation.SetValidFrom(t)
-	return trc
-}
-
-// SetNillableValidFrom sets the "valid_from" field if the given value is not nil.
-func (trc *TaxRateCreate) SetNillableValidFrom(t *time.Time) *TaxRateCreate {
-	if t != nil {
-		trc.SetValidFrom(*t)
-	}
-	return trc
-}
-
-// SetValidTo sets the "valid_to" field.
-func (trc *TaxRateCreate) SetValidTo(t time.Time) *TaxRateCreate {
-	trc.mutation.SetValidTo(t)
-	return trc
-}
-
-// SetNillableValidTo sets the "valid_to" field if the given value is not nil.
-func (trc *TaxRateCreate) SetNillableValidTo(t *time.Time) *TaxRateCreate {
-	if t != nil {
-		trc.SetValidTo(*t)
 	}
 	return trc
 }
@@ -361,14 +327,6 @@ func (trc *TaxRateCreate) check() error {
 			return &ValidationError{Name: "scope", err: fmt.Errorf(`ent: validator failed for field "TaxRate.scope": %w`, err)}
 		}
 	}
-	if _, ok := trc.mutation.Currency(); !ok {
-		return &ValidationError{Name: "currency", err: errors.New(`ent: missing required field "TaxRate.currency"`)}
-	}
-	if v, ok := trc.mutation.Currency(); ok {
-		if err := taxrate.CurrencyValidator(v); err != nil {
-			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "TaxRate.currency": %w`, err)}
-		}
-	}
 	return nil
 }
 
@@ -456,10 +414,6 @@ func (trc *TaxRateCreate) createSpec() (*TaxRate, *sqlgraph.CreateSpec) {
 		_spec.SetField(taxrate.FieldScope, field.TypeString, value)
 		_node.Scope = value
 	}
-	if value, ok := trc.mutation.Currency(); ok {
-		_spec.SetField(taxrate.FieldCurrency, field.TypeString, value)
-		_node.Currency = value
-	}
 	if value, ok := trc.mutation.PercentageValue(); ok {
 		_spec.SetField(taxrate.FieldPercentageValue, field.TypeOther, value)
 		_node.PercentageValue = &value
@@ -467,14 +421,6 @@ func (trc *TaxRateCreate) createSpec() (*TaxRate, *sqlgraph.CreateSpec) {
 	if value, ok := trc.mutation.FixedValue(); ok {
 		_spec.SetField(taxrate.FieldFixedValue, field.TypeOther, value)
 		_node.FixedValue = &value
-	}
-	if value, ok := trc.mutation.ValidFrom(); ok {
-		_spec.SetField(taxrate.FieldValidFrom, field.TypeTime, value)
-		_node.ValidFrom = &value
-	}
-	if value, ok := trc.mutation.ValidTo(); ok {
-		_spec.SetField(taxrate.FieldValidTo, field.TypeTime, value)
-		_node.ValidTo = &value
 	}
 	if value, ok := trc.mutation.Metadata(); ok {
 		_spec.SetField(taxrate.FieldMetadata, field.TypeJSON, value)

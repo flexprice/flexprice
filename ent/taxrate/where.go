@@ -130,11 +130,6 @@ func Scope(v string) predicate.TaxRate {
 	return predicate.TaxRate(sql.FieldEQ(FieldScope, v))
 }
 
-// Currency applies equality check predicate on the "currency" field. It's identical to CurrencyEQ.
-func Currency(v string) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldEQ(FieldCurrency, v))
-}
-
 // PercentageValue applies equality check predicate on the "percentage_value" field. It's identical to PercentageValueEQ.
 func PercentageValue(v decimal.Decimal) predicate.TaxRate {
 	return predicate.TaxRate(sql.FieldEQ(FieldPercentageValue, v))
@@ -143,16 +138,6 @@ func PercentageValue(v decimal.Decimal) predicate.TaxRate {
 // FixedValue applies equality check predicate on the "fixed_value" field. It's identical to FixedValueEQ.
 func FixedValue(v decimal.Decimal) predicate.TaxRate {
 	return predicate.TaxRate(sql.FieldEQ(FieldFixedValue, v))
-}
-
-// ValidFrom applies equality check predicate on the "valid_from" field. It's identical to ValidFromEQ.
-func ValidFrom(v time.Time) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldEQ(FieldValidFrom, v))
-}
-
-// ValidTo applies equality check predicate on the "valid_to" field. It's identical to ValidToEQ.
-func ValidTo(v time.Time) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldEQ(FieldValidTo, v))
 }
 
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
@@ -990,71 +975,6 @@ func ScopeContainsFold(v string) predicate.TaxRate {
 	return predicate.TaxRate(sql.FieldContainsFold(FieldScope, v))
 }
 
-// CurrencyEQ applies the EQ predicate on the "currency" field.
-func CurrencyEQ(v string) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldEQ(FieldCurrency, v))
-}
-
-// CurrencyNEQ applies the NEQ predicate on the "currency" field.
-func CurrencyNEQ(v string) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldNEQ(FieldCurrency, v))
-}
-
-// CurrencyIn applies the In predicate on the "currency" field.
-func CurrencyIn(vs ...string) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldIn(FieldCurrency, vs...))
-}
-
-// CurrencyNotIn applies the NotIn predicate on the "currency" field.
-func CurrencyNotIn(vs ...string) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldNotIn(FieldCurrency, vs...))
-}
-
-// CurrencyGT applies the GT predicate on the "currency" field.
-func CurrencyGT(v string) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldGT(FieldCurrency, v))
-}
-
-// CurrencyGTE applies the GTE predicate on the "currency" field.
-func CurrencyGTE(v string) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldGTE(FieldCurrency, v))
-}
-
-// CurrencyLT applies the LT predicate on the "currency" field.
-func CurrencyLT(v string) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldLT(FieldCurrency, v))
-}
-
-// CurrencyLTE applies the LTE predicate on the "currency" field.
-func CurrencyLTE(v string) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldLTE(FieldCurrency, v))
-}
-
-// CurrencyContains applies the Contains predicate on the "currency" field.
-func CurrencyContains(v string) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldContains(FieldCurrency, v))
-}
-
-// CurrencyHasPrefix applies the HasPrefix predicate on the "currency" field.
-func CurrencyHasPrefix(v string) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldHasPrefix(FieldCurrency, v))
-}
-
-// CurrencyHasSuffix applies the HasSuffix predicate on the "currency" field.
-func CurrencyHasSuffix(v string) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldHasSuffix(FieldCurrency, v))
-}
-
-// CurrencyEqualFold applies the EqualFold predicate on the "currency" field.
-func CurrencyEqualFold(v string) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldEqualFold(FieldCurrency, v))
-}
-
-// CurrencyContainsFold applies the ContainsFold predicate on the "currency" field.
-func CurrencyContainsFold(v string) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldContainsFold(FieldCurrency, v))
-}
-
 // PercentageValueEQ applies the EQ predicate on the "percentage_value" field.
 func PercentageValueEQ(v decimal.Decimal) predicate.TaxRate {
 	return predicate.TaxRate(sql.FieldEQ(FieldPercentageValue, v))
@@ -1153,106 +1073,6 @@ func FixedValueIsNil() predicate.TaxRate {
 // FixedValueNotNil applies the NotNil predicate on the "fixed_value" field.
 func FixedValueNotNil() predicate.TaxRate {
 	return predicate.TaxRate(sql.FieldNotNull(FieldFixedValue))
-}
-
-// ValidFromEQ applies the EQ predicate on the "valid_from" field.
-func ValidFromEQ(v time.Time) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldEQ(FieldValidFrom, v))
-}
-
-// ValidFromNEQ applies the NEQ predicate on the "valid_from" field.
-func ValidFromNEQ(v time.Time) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldNEQ(FieldValidFrom, v))
-}
-
-// ValidFromIn applies the In predicate on the "valid_from" field.
-func ValidFromIn(vs ...time.Time) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldIn(FieldValidFrom, vs...))
-}
-
-// ValidFromNotIn applies the NotIn predicate on the "valid_from" field.
-func ValidFromNotIn(vs ...time.Time) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldNotIn(FieldValidFrom, vs...))
-}
-
-// ValidFromGT applies the GT predicate on the "valid_from" field.
-func ValidFromGT(v time.Time) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldGT(FieldValidFrom, v))
-}
-
-// ValidFromGTE applies the GTE predicate on the "valid_from" field.
-func ValidFromGTE(v time.Time) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldGTE(FieldValidFrom, v))
-}
-
-// ValidFromLT applies the LT predicate on the "valid_from" field.
-func ValidFromLT(v time.Time) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldLT(FieldValidFrom, v))
-}
-
-// ValidFromLTE applies the LTE predicate on the "valid_from" field.
-func ValidFromLTE(v time.Time) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldLTE(FieldValidFrom, v))
-}
-
-// ValidFromIsNil applies the IsNil predicate on the "valid_from" field.
-func ValidFromIsNil() predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldIsNull(FieldValidFrom))
-}
-
-// ValidFromNotNil applies the NotNil predicate on the "valid_from" field.
-func ValidFromNotNil() predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldNotNull(FieldValidFrom))
-}
-
-// ValidToEQ applies the EQ predicate on the "valid_to" field.
-func ValidToEQ(v time.Time) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldEQ(FieldValidTo, v))
-}
-
-// ValidToNEQ applies the NEQ predicate on the "valid_to" field.
-func ValidToNEQ(v time.Time) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldNEQ(FieldValidTo, v))
-}
-
-// ValidToIn applies the In predicate on the "valid_to" field.
-func ValidToIn(vs ...time.Time) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldIn(FieldValidTo, vs...))
-}
-
-// ValidToNotIn applies the NotIn predicate on the "valid_to" field.
-func ValidToNotIn(vs ...time.Time) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldNotIn(FieldValidTo, vs...))
-}
-
-// ValidToGT applies the GT predicate on the "valid_to" field.
-func ValidToGT(v time.Time) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldGT(FieldValidTo, v))
-}
-
-// ValidToGTE applies the GTE predicate on the "valid_to" field.
-func ValidToGTE(v time.Time) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldGTE(FieldValidTo, v))
-}
-
-// ValidToLT applies the LT predicate on the "valid_to" field.
-func ValidToLT(v time.Time) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldLT(FieldValidTo, v))
-}
-
-// ValidToLTE applies the LTE predicate on the "valid_to" field.
-func ValidToLTE(v time.Time) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldLTE(FieldValidTo, v))
-}
-
-// ValidToIsNil applies the IsNil predicate on the "valid_to" field.
-func ValidToIsNil() predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldIsNull(FieldValidTo))
-}
-
-// ValidToNotNil applies the NotNil predicate on the "valid_to" field.
-func ValidToNotNil() predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldNotNull(FieldValidTo))
 }
 
 // MetadataIsNil applies the IsNil predicate on the "metadata" field.

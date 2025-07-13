@@ -185,46 +185,6 @@ func (tru *TaxRateUpdate) ClearFixedValue() *TaxRateUpdate {
 	return tru
 }
 
-// SetValidFrom sets the "valid_from" field.
-func (tru *TaxRateUpdate) SetValidFrom(t time.Time) *TaxRateUpdate {
-	tru.mutation.SetValidFrom(t)
-	return tru
-}
-
-// SetNillableValidFrom sets the "valid_from" field if the given value is not nil.
-func (tru *TaxRateUpdate) SetNillableValidFrom(t *time.Time) *TaxRateUpdate {
-	if t != nil {
-		tru.SetValidFrom(*t)
-	}
-	return tru
-}
-
-// ClearValidFrom clears the value of the "valid_from" field.
-func (tru *TaxRateUpdate) ClearValidFrom() *TaxRateUpdate {
-	tru.mutation.ClearValidFrom()
-	return tru
-}
-
-// SetValidTo sets the "valid_to" field.
-func (tru *TaxRateUpdate) SetValidTo(t time.Time) *TaxRateUpdate {
-	tru.mutation.SetValidTo(t)
-	return tru
-}
-
-// SetNillableValidTo sets the "valid_to" field if the given value is not nil.
-func (tru *TaxRateUpdate) SetNillableValidTo(t *time.Time) *TaxRateUpdate {
-	if t != nil {
-		tru.SetValidTo(*t)
-	}
-	return tru
-}
-
-// ClearValidTo clears the value of the "valid_to" field.
-func (tru *TaxRateUpdate) ClearValidTo() *TaxRateUpdate {
-	tru.mutation.ClearValidTo()
-	return tru
-}
-
 // SetMetadata sets the "metadata" field.
 func (tru *TaxRateUpdate) SetMetadata(m map[string]string) *TaxRateUpdate {
 	tru.mutation.SetMetadata(m)
@@ -362,18 +322,6 @@ func (tru *TaxRateUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if tru.mutation.FixedValueCleared() {
 		_spec.ClearField(taxrate.FieldFixedValue, field.TypeOther)
-	}
-	if value, ok := tru.mutation.ValidFrom(); ok {
-		_spec.SetField(taxrate.FieldValidFrom, field.TypeTime, value)
-	}
-	if tru.mutation.ValidFromCleared() {
-		_spec.ClearField(taxrate.FieldValidFrom, field.TypeTime)
-	}
-	if value, ok := tru.mutation.ValidTo(); ok {
-		_spec.SetField(taxrate.FieldValidTo, field.TypeTime, value)
-	}
-	if tru.mutation.ValidToCleared() {
-		_spec.ClearField(taxrate.FieldValidTo, field.TypeTime)
 	}
 	if value, ok := tru.mutation.Metadata(); ok {
 		_spec.SetField(taxrate.FieldMetadata, field.TypeJSON, value)
@@ -557,46 +505,6 @@ func (truo *TaxRateUpdateOne) ClearFixedValue() *TaxRateUpdateOne {
 	return truo
 }
 
-// SetValidFrom sets the "valid_from" field.
-func (truo *TaxRateUpdateOne) SetValidFrom(t time.Time) *TaxRateUpdateOne {
-	truo.mutation.SetValidFrom(t)
-	return truo
-}
-
-// SetNillableValidFrom sets the "valid_from" field if the given value is not nil.
-func (truo *TaxRateUpdateOne) SetNillableValidFrom(t *time.Time) *TaxRateUpdateOne {
-	if t != nil {
-		truo.SetValidFrom(*t)
-	}
-	return truo
-}
-
-// ClearValidFrom clears the value of the "valid_from" field.
-func (truo *TaxRateUpdateOne) ClearValidFrom() *TaxRateUpdateOne {
-	truo.mutation.ClearValidFrom()
-	return truo
-}
-
-// SetValidTo sets the "valid_to" field.
-func (truo *TaxRateUpdateOne) SetValidTo(t time.Time) *TaxRateUpdateOne {
-	truo.mutation.SetValidTo(t)
-	return truo
-}
-
-// SetNillableValidTo sets the "valid_to" field if the given value is not nil.
-func (truo *TaxRateUpdateOne) SetNillableValidTo(t *time.Time) *TaxRateUpdateOne {
-	if t != nil {
-		truo.SetValidTo(*t)
-	}
-	return truo
-}
-
-// ClearValidTo clears the value of the "valid_to" field.
-func (truo *TaxRateUpdateOne) ClearValidTo() *TaxRateUpdateOne {
-	truo.mutation.ClearValidTo()
-	return truo
-}
-
 // SetMetadata sets the "metadata" field.
 func (truo *TaxRateUpdateOne) SetMetadata(m map[string]string) *TaxRateUpdateOne {
 	truo.mutation.SetMetadata(m)
@@ -764,18 +672,6 @@ func (truo *TaxRateUpdateOne) sqlSave(ctx context.Context) (_node *TaxRate, err 
 	}
 	if truo.mutation.FixedValueCleared() {
 		_spec.ClearField(taxrate.FieldFixedValue, field.TypeOther)
-	}
-	if value, ok := truo.mutation.ValidFrom(); ok {
-		_spec.SetField(taxrate.FieldValidFrom, field.TypeTime, value)
-	}
-	if truo.mutation.ValidFromCleared() {
-		_spec.ClearField(taxrate.FieldValidFrom, field.TypeTime)
-	}
-	if value, ok := truo.mutation.ValidTo(); ok {
-		_spec.SetField(taxrate.FieldValidTo, field.TypeTime, value)
-	}
-	if truo.mutation.ValidToCleared() {
-		_spec.ClearField(taxrate.FieldValidTo, field.TypeTime)
 	}
 	if value, ok := truo.mutation.Metadata(); ok {
 		_spec.SetField(taxrate.FieldMetadata, field.TypeJSON, value)

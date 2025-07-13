@@ -7,7 +7,6 @@ import (
 	taxrate "github.com/flexprice/flexprice/internal/domain/tax"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -74,12 +73,6 @@ type UpdateTaxRateRequest struct {
 	// description is the updated text description for the tax rate
 	Description string `json:"description,omitempty"`
 
-	// valid_from is the updated ISO 8601 timestamp when this tax rate becomes effective
-	ValidFrom *time.Time `json:"valid_from,omitempty"`
-
-	// valid_to is the updated ISO 8601 timestamp when this tax rate expires
-	ValidTo *time.Time `json:"valid_to,omitempty"`
-
 	// metadata contains updated key-value pairs that will replace existing metadata
 	Metadata map[string]string `json:"metadata,omitempty"`
 }
@@ -88,17 +81,9 @@ type UpdateTaxRateRequest struct {
 func (r UpdateTaxRateRequest) Validate() error {
 	// Validate that at least one field is being updated
 	if r.Name == "" && r.Code == "" && r.Description == "" &&
-		r.ValidFrom == nil && r.ValidTo == nil &&
 		len(r.Metadata) == 0 {
 		return ierr.NewError("at least one field must be provided for update").
 			WithHint("Please provide at least one field to update").
-			Mark(ierr.ErrValidation)
-	}
-
-	// Validate date range if both dates are provided
-	if r.ValidFrom != nil && r.ValidTo != nil && r.ValidFrom.After(lo.FromPtr(r.ValidTo)) {
-		return ierr.NewError("valid_from cannot be after valid_to").
-			WithHint("Valid from date cannot be after valid to date").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -163,43 +148,19 @@ func (r CreateTaxRateRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	if r.ValidFrom != nil && r.ValidTo != nil && r.ValidFrom.After(lo.FromPtr(r.ValidTo)) {
-		return ierr.NewError("valid_from cannot be after valid_to").
-			WithHint("Valid from date cannot be after valid to date").
-			Mark(ierr.ErrValidation)
-	}
-
 	return nil
 }
 
 // ToTaxRate converts a CreateTaxRateRequest to a domain TaxRate
 func (r CreateTaxRateRequest) ToTaxRate(ctx context.Context) *taxrate.TaxRate {
-	id := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TAX_RATE)
-
-	now := time.Now().UTC()
-	var validFrom *time.Time
-	if r.ValidFrom != nil {
-		validFrom = r.ValidFrom
-	} else {
-		validFrom = lo.ToPtr(now)
-	}
-
-	var validTo *time.Time
-	if r.ValidTo != nil {
-		validTo = r.ValidTo
-	}
-
 	taxRate := &taxrate.TaxRate{
-		ID:              id,
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TAX_RATE),
 		Name:            r.Name,
 		Code:            r.Code,
 		Description:     r.Description,
 		PercentageValue: r.PercentageValue,
 		FixedValue:      r.FixedValue,
-		Currency:        r.Currency,
 		Scope:           r.Scope,
-		ValidFrom:       validFrom,
-		ValidTo:         validTo,
 		TaxRateType:     r.TaxRateType,
 		Metadata:        r.Metadata,
 		EnvironmentID:   types.GetEnvironmentID(ctx),

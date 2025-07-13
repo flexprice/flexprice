@@ -40,16 +40,10 @@ const (
 	FieldTaxRateType = "tax_rate_type"
 	// FieldScope holds the string denoting the scope field in the database.
 	FieldScope = "scope"
-	// FieldCurrency holds the string denoting the currency field in the database.
-	FieldCurrency = "currency"
 	// FieldPercentageValue holds the string denoting the percentage_value field in the database.
 	FieldPercentageValue = "percentage_value"
 	// FieldFixedValue holds the string denoting the fixed_value field in the database.
 	FieldFixedValue = "fixed_value"
-	// FieldValidFrom holds the string denoting the valid_from field in the database.
-	FieldValidFrom = "valid_from"
-	// FieldValidTo holds the string denoting the valid_to field in the database.
-	FieldValidTo = "valid_to"
 	// FieldMetadata holds the string denoting the metadata field in the database.
 	FieldMetadata = "metadata"
 	// Table holds the table name of the taxrate in the database.
@@ -72,11 +66,8 @@ var Columns = []string{
 	FieldTaxRateStatus,
 	FieldTaxRateType,
 	FieldScope,
-	FieldCurrency,
 	FieldPercentageValue,
 	FieldFixedValue,
-	FieldValidFrom,
-	FieldValidTo,
 	FieldMetadata,
 }
 
@@ -115,8 +106,6 @@ var (
 	TaxRateTypeValidator func(string) error
 	// ScopeValidator is a validator for the "scope" field. It is called by the builders before save.
 	ScopeValidator func(string) error
-	// CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
-	CurrencyValidator func(string) error
 	// DefaultPercentageValue holds the default value on creation for the "percentage_value" field.
 	DefaultPercentageValue decimal.Decimal
 	// DefaultFixedValue holds the default value on creation for the "fixed_value" field.
@@ -196,11 +185,6 @@ func ByScope(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldScope, opts...).ToFunc()
 }
 
-// ByCurrency orders the results by the currency field.
-func ByCurrency(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldCurrency, opts...).ToFunc()
-}
-
 // ByPercentageValue orders the results by the percentage_value field.
 func ByPercentageValue(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPercentageValue, opts...).ToFunc()
@@ -209,14 +193,4 @@ func ByPercentageValue(opts ...sql.OrderTermOption) OrderOption {
 // ByFixedValue orders the results by the fixed_value field.
 func ByFixedValue(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldFixedValue, opts...).ToFunc()
-}
-
-// ByValidFrom orders the results by the valid_from field.
-func ByValidFrom(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldValidFrom, opts...).ToFunc()
-}
-
-// ByValidTo orders the results by the valid_to field.
-func ByValidTo(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldValidTo, opts...).ToFunc()
 }

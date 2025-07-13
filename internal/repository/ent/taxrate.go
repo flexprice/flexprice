@@ -69,11 +69,8 @@ func (r *taxrateRepository) Create(ctx context.Context, t *domainTaxRate.TaxRate
 		SetNillablePercentageValue(t.PercentageValue).
 		SetNillableFixedValue(t.FixedValue).
 		SetScope(string(t.Scope)).
-		SetNillableValidFrom(t.ValidFrom).
-		SetNillableValidTo(t.ValidTo).
 		SetStatus(string(t.Status)).
 		SetTenantID(t.TenantID).
-		SetCurrency(t.Currency).
 		SetCreatedBy(t.CreatedBy).
 		SetTaxRateStatus(string(t.TaxRateStatus)).
 		SetEnvironmentID(t.EnvironmentID).
@@ -255,8 +252,6 @@ func (r *taxrateRepository) Update(ctx context.Context, t *domainTaxRate.TaxRate
 		SetNillablePercentageValue(t.PercentageValue).
 		SetNillableFixedValue(t.FixedValue).
 		SetScope(string(t.Scope)).
-		SetNillableValidFrom(t.ValidFrom).
-		SetNillableValidTo(t.ValidTo).
 		SetStatus(string(t.Status)).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
@@ -472,10 +467,6 @@ func (o TaxRateQueryOptions) GetFieldName(field string) string {
 		return taxrate.FieldFixedValue
 	case "scope":
 		return taxrate.FieldScope
-	case "valid_from":
-		return taxrate.FieldValidFrom
-	case "valid_to":
-		return taxrate.FieldValidTo
 	case "tax_rate_type":
 		return taxrate.FieldTaxRateType
 	case "status":

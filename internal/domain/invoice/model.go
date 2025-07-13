@@ -105,7 +105,8 @@ type Invoice struct {
 	// refunded_amount is the total sum of credit notes of type "refund".
 	// These are actual refunds issued to the customer.
 	RefundedAmount decimal.Decimal `json:"refunded_amount"`
-	// TotalTax holds the value of the "total_tax" field.
+	
+	// total_tax is the sum of all taxes combined at the invoice level.
 	TotalTax decimal.Decimal `json:"total_tax"`
 
 	// common fields including tenant information, creation/update timestamps, and status

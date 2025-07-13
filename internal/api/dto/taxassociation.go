@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	taxrate "github.com/flexprice/flexprice/internal/domain/tax"
 	taxconfig "github.com/flexprice/flexprice/internal/domain/taxassociation"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -16,6 +15,7 @@ type CreateTaxAssociationRequest struct {
 	EntityType types.TaxrateEntityType `json:"entity_type" binding:"required"`
 	EntityID   string                  `json:"entity_id" binding:"required"`
 	Priority   int                     `json:"priority" binding:"omitempty"`
+	Currency   string                  `json:"currency" binding:"omitempty"`
 	AutoApply  bool                    `json:"auto_apply" binding:"omitempty"`
 }
 
@@ -50,7 +50,7 @@ func (r *CreateTaxAssociationRequest) Validate() error {
 	return nil
 }
 
-func (r *CreateTaxAssociationRequest) ToTaxAssociation(ctx context.Context, t taxrate.TaxRate) *taxconfig.TaxAssociation {
+func (r *CreateTaxAssociationRequest) ToTaxAssociation(ctx context.Context) *taxconfig.TaxAssociation {
 	return &taxconfig.TaxAssociation{
 		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TAX_ASSOCIATION),
 		TaxRateID:     r.TaxRateID,
@@ -58,7 +58,7 @@ func (r *CreateTaxAssociationRequest) ToTaxAssociation(ctx context.Context, t ta
 		EntityID:      r.EntityID,
 		Priority:      r.Priority,
 		AutoApply:     r.AutoApply,
-		Currency:      t.Currency,
+		Currency:      r.Currency,
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		BaseModel:     types.GetDefaultBaseModel(ctx),
 	}
@@ -67,8 +67,6 @@ func (r *CreateTaxAssociationRequest) ToTaxAssociation(ctx context.Context, t ta
 type TaxAssociationUpdateRequest struct {
 	Priority  int               `json:"priority" binding:"omitempty"`
 	AutoApply bool              `json:"auto_apply" binding:"omitempty"`
-	ValidFrom *time.Time        `json:"valid_from" binding:"omitempty"`
-	ValidTo   *time.Time        `json:"valid_to" binding:"omitempty"`
 	Metadata  map[string]string `json:"metadata" binding:"omitempty"`
 }
 

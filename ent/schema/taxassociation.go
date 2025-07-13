@@ -13,7 +13,6 @@ const (
 	Idx_entity_lookup_active                           = "idx_entity_lookup_active"
 	Unique_entity_tax_mapping                          = "unique_entity_tax_mapping"
 	Idx_auto_apply_lookup                              = "idx_auto_apply_lookup"
-	Idx_currency_entity_lookup                         = "idx_currency_entity_lookup"
 )
 
 // TaxAssociation holds the schema definition for the TaxAssociation entity.
@@ -70,7 +69,7 @@ func (TaxAssociation) Fields() []ent.Field {
 			Comment("Priority for tax resolution (lower number = higher priority)"),
 
 		field.Bool("auto_apply").
-			Default(false).
+			Default(true).
 			Comment("Whether this tax should be automatically applied"),
 
 		field.String("currency").
@@ -106,18 +105,9 @@ func (TaxAssociation) Indexes() []ent.Index {
 		index.Fields("tenant_id", "environment_id", "tax_rate_id").
 			StorageKey(Idx_tax_rate_id_tenant_id_environment_id),
 
-		// Auto-apply lookup for bulk operations
-		index.Fields("tenant_id", "environment_id", "auto_apply", "entity_type").
-			StorageKey(Idx_auto_apply_lookup),
-
 		// Unique constraint: prevent duplicate assignments per entity
 		index.Fields("tenant_id", "environment_id", "entity_type", "entity_id", "tax_rate_id").
 			StorageKey(Unique_entity_tax_mapping).
 			Unique(),
-
-		// Currency-based lookup
-
-		index.Fields("tenant_id", "environment_id", "currency", "entity_type").
-			StorageKey(Idx_currency_entity_lookup),
 	}
 }

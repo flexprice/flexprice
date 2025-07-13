@@ -1360,7 +1360,7 @@ var (
 		{Name: "entity_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "entity_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "priority", Type: field.TypeInt, Default: 100, SchemaType: map[string]string{"postgres": "integer"}},
-		{Name: "auto_apply", Type: field.TypeBool, Default: false},
+		{Name: "auto_apply", Type: field.TypeBool, Default: true},
 		{Name: "currency", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(100)"}},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 	}
@@ -1381,19 +1381,9 @@ var (
 				Columns: []*schema.Column{TaxAssociationsColumns[1], TaxAssociationsColumns[7], TaxAssociationsColumns[8]},
 			},
 			{
-				Name:    "idx_auto_apply_lookup",
-				Unique:  false,
-				Columns: []*schema.Column{TaxAssociationsColumns[1], TaxAssociationsColumns[7], TaxAssociationsColumns[12], TaxAssociationsColumns[9]},
-			},
-			{
 				Name:    "unique_entity_tax_mapping",
 				Unique:  true,
 				Columns: []*schema.Column{TaxAssociationsColumns[1], TaxAssociationsColumns[7], TaxAssociationsColumns[9], TaxAssociationsColumns[10], TaxAssociationsColumns[8]},
-			},
-			{
-				Name:    "idx_currency_entity_lookup",
-				Unique:  false,
-				Columns: []*schema.Column{TaxAssociationsColumns[1], TaxAssociationsColumns[7], TaxAssociationsColumns[13], TaxAssociationsColumns[9]},
 			},
 		},
 	}
@@ -1413,11 +1403,8 @@ var (
 		{Name: "tax_rate_status", Type: field.TypeString},
 		{Name: "tax_rate_type", Type: field.TypeString, Default: "percentage"},
 		{Name: "scope", Type: field.TypeString},
-		{Name: "currency", Type: field.TypeString},
 		{Name: "percentage_value", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(9,6)"}},
 		{Name: "fixed_value", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(9,6)"}},
-		{Name: "valid_from", Type: field.TypeTime, Nullable: true},
-		{Name: "valid_to", Type: field.TypeTime, Nullable: true},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 	}
 	// TaxRatesTable holds the schema information for the "tax_rates" table.

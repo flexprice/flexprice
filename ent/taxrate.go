@@ -45,16 +45,10 @@ type TaxRate struct {
 	TaxRateType string `json:"tax_rate_type,omitempty"`
 	// Scope holds the value of the "scope" field.
 	Scope string `json:"scope,omitempty"`
-	// Currency holds the value of the "currency" field.
-	Currency string `json:"currency,omitempty"`
 	// PercentageValue holds the value of the "percentage_value" field.
 	PercentageValue *decimal.Decimal `json:"percentage_value,omitempty"`
 	// FixedValue holds the value of the "fixed_value" field.
 	FixedValue *decimal.Decimal `json:"fixed_value,omitempty"`
-	// ValidFrom holds the value of the "valid_from" field.
-	ValidFrom *time.Time `json:"valid_from,omitempty"`
-	// ValidTo holds the value of the "valid_to" field.
-	ValidTo *time.Time `json:"valid_to,omitempty"`
 	// Metadata holds the value of the "metadata" field.
 	Metadata     map[string]string `json:"metadata,omitempty"`
 	selectValues sql.SelectValues
@@ -69,9 +63,9 @@ func (*TaxRate) scanValues(columns []string) ([]any, error) {
 			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case taxrate.FieldMetadata:
 			values[i] = new([]byte)
-		case taxrate.FieldID, taxrate.FieldTenantID, taxrate.FieldStatus, taxrate.FieldCreatedBy, taxrate.FieldUpdatedBy, taxrate.FieldEnvironmentID, taxrate.FieldName, taxrate.FieldDescription, taxrate.FieldCode, taxrate.FieldTaxRateStatus, taxrate.FieldTaxRateType, taxrate.FieldScope, taxrate.FieldCurrency:
+		case taxrate.FieldID, taxrate.FieldTenantID, taxrate.FieldStatus, taxrate.FieldCreatedBy, taxrate.FieldUpdatedBy, taxrate.FieldEnvironmentID, taxrate.FieldName, taxrate.FieldDescription, taxrate.FieldCode, taxrate.FieldTaxRateStatus, taxrate.FieldTaxRateType, taxrate.FieldScope:
 			values[i] = new(sql.NullString)
-		case taxrate.FieldCreatedAt, taxrate.FieldUpdatedAt, taxrate.FieldValidFrom, taxrate.FieldValidTo:
+		case taxrate.FieldCreatedAt, taxrate.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -172,12 +166,6 @@ func (tr *TaxRate) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				tr.Scope = value.String
 			}
-		case taxrate.FieldCurrency:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field currency", values[i])
-			} else if value.Valid {
-				tr.Currency = value.String
-			}
 		case taxrate.FieldPercentageValue:
 			if value, ok := values[i].(*sql.NullScanner); !ok {
 				return fmt.Errorf("unexpected type %T for field percentage_value", values[i])
@@ -191,20 +179,6 @@ func (tr *TaxRate) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				tr.FixedValue = new(decimal.Decimal)
 				*tr.FixedValue = *value.S.(*decimal.Decimal)
-			}
-		case taxrate.FieldValidFrom:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field valid_from", values[i])
-			} else if value.Valid {
-				tr.ValidFrom = new(time.Time)
-				*tr.ValidFrom = value.Time
-			}
-		case taxrate.FieldValidTo:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field valid_to", values[i])
-			} else if value.Valid {
-				tr.ValidTo = new(time.Time)
-				*tr.ValidTo = value.Time
 			}
 		case taxrate.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -289,9 +263,6 @@ func (tr *TaxRate) String() string {
 	builder.WriteString("scope=")
 	builder.WriteString(tr.Scope)
 	builder.WriteString(", ")
-	builder.WriteString("currency=")
-	builder.WriteString(tr.Currency)
-	builder.WriteString(", ")
 	if v := tr.PercentageValue; v != nil {
 		builder.WriteString("percentage_value=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
@@ -300,16 +271,6 @@ func (tr *TaxRate) String() string {
 	if v := tr.FixedValue; v != nil {
 		builder.WriteString("fixed_value=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
-	}
-	builder.WriteString(", ")
-	if v := tr.ValidFrom; v != nil {
-		builder.WriteString("valid_from=")
-		builder.WriteString(v.Format(time.ANSIC))
-	}
-	builder.WriteString(", ")
-	if v := tr.ValidTo; v != nil {
-		builder.WriteString("valid_to=")
-		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")

@@ -58,10 +58,6 @@ func (TaxRate) Fields() []ent.Field {
 		field.String("scope").
 			NotEmpty(),
 
-		field.String("currency").
-			NotEmpty().
-			Immutable(),
-
 		field.Other("percentage_value", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(9,6)",
@@ -77,14 +73,6 @@ func (TaxRate) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Default(decimal.Zero),
-
-		field.Time("valid_from").
-			Optional().
-			Nillable(),
-
-		field.Time("valid_to").
-			Optional().
-			Nillable(),
 
 		field.JSON("metadata", map[string]string{}).
 			Optional().
