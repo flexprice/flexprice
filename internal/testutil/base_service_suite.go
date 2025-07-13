@@ -145,6 +145,9 @@ func (s *BaseServiceTestSuite) setupStores() {
 		CreditGrantApplicationRepo: NewInMemoryCreditGrantApplicationStore(),
 		CreditNoteRepo:             NewInMemoryCreditNoteStore(),
 		CreditNoteLineItemRepo:     NewInMemoryCreditNoteLineItemStore(),
+		TaxRateRepo:                NewInMemoryTaxRateStore(),
+		TaxAppliedRepo:             NewInMemoryTaxAppliedStore(),
+		TaxAssociationRepo:         NewInMemoryTaxAssociationStore(),
 	}
 
 	s.db = NewMockPostgresClient(s.logger)
@@ -181,6 +184,9 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.CreditGrantApplicationRepo.(*InMemoryCreditGrantApplicationStore).Clear()
 	s.stores.CreditNoteRepo.(*InMemoryCreditNoteStore).Clear()
 	s.stores.CreditNoteLineItemRepo.(*InMemoryCreditNoteLineItemStore).Clear()
+	s.stores.TaxRateRepo.(*InMemoryTaxRateStore).Clear()
+	s.stores.TaxAppliedRepo.(*InMemoryTaxAppliedStore).Clear()
+	s.stores.TaxAssociationRepo.(*InMemoryTaxAssociationStore).Clear()
 }
 
 func (s *BaseServiceTestSuite) ClearStores() {
