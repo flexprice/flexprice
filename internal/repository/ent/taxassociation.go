@@ -32,114 +32,6 @@ func NewTaxAssociationRepository(client postgres.IClient, logger *logger.Logger,
 	}
 }
 
-type TaxAssociationQuery = *ent.TaxAssociationQuery
-
-type TaxAssociationQueryOptions struct{}
-
-func (o TaxAssociationQueryOptions) ApplyTenantFilter(ctx context.Context, query TaxAssociationQuery) TaxAssociationQuery {
-	return query.Where(entTaxConfig.TenantID(types.GetTenantID(ctx)))
-}
-
-func (o TaxAssociationQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query TaxAssociationQuery) TaxAssociationQuery {
-	envID := types.GetEnvironmentID(ctx)
-	if envID != "" {
-		return query.Where(entTaxConfig.EnvironmentID(envID))
-	}
-	return query
-}
-
-func (o TaxAssociationQueryOptions) ApplyStatusFilter(query TaxAssociationQuery, status string) TaxAssociationQuery {
-	if status == "" {
-		return query.Where(entTaxConfig.StatusNotIn(string(types.StatusDeleted)))
-	}
-	return query.Where(entTaxConfig.Status(status))
-}
-
-func (o TaxAssociationQueryOptions) ApplySortFilter(query TaxAssociationQuery, field, order string) TaxAssociationQuery {
-	if field != "" {
-		if order == types.OrderDesc {
-			query = query.Order(ent.Desc(o.GetFieldName(field)))
-		} else {
-			query = query.Order(ent.Asc(o.GetFieldName(field)))
-		}
-	}
-	return query
-}
-
-func (o TaxAssociationQueryOptions) ApplyPaginationFilter(query TaxAssociationQuery, limit, offset int) TaxAssociationQuery {
-	if limit > 0 {
-		query = query.Limit(limit)
-	}
-	if offset > 0 {
-		query = query.Offset(offset)
-	}
-	return query
-}
-
-func (o TaxAssociationQueryOptions) GetFieldName(field string) string {
-	switch field {
-	case "created_at":
-		return entTaxConfig.FieldCreatedAt
-	case "updated_at":
-		return entTaxConfig.FieldUpdatedAt
-	case "priority":
-		return entTaxConfig.FieldPriority
-	case "auto_apply":
-		return entTaxConfig.FieldAutoApply
-	case "currency":
-		return entTaxConfig.FieldCurrency
-	case "metadata":
-		return entTaxConfig.FieldMetadata
-	case "environment_id":
-		return entTaxConfig.FieldEnvironmentID
-	case "tax_rate_id":
-		return entTaxConfig.FieldTaxRateID
-	case "entity_type":
-		return entTaxConfig.FieldEntityType
-	case "entity_id":
-		return entTaxConfig.FieldEntityID
-	case "tenant_id":
-		return entTaxConfig.FieldTenantID
-	case "id":
-		return entTaxConfig.FieldID
-	default:
-		return ""
-	}
-}
-
-func (o TaxAssociationQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.TaxAssociationFilter, query TaxAssociationQuery) (TaxAssociationQuery, error) {
-	if f == nil {
-		return query, nil
-	}
-	if len(f.TaxAssociationIDs) > 0 {
-		query = query.Where(entTaxConfig.IDIn(f.TaxAssociationIDs...))
-	}
-	if len(f.TaxRateIDs) > 0 {
-		query = query.Where(entTaxConfig.TaxRateIDIn(f.TaxRateIDs...))
-	}
-	if f.EntityType != "" {
-		query = query.Where(entTaxConfig.EntityType(string(f.EntityType)))
-	}
-	if f.EntityID != "" {
-		query = query.Where(entTaxConfig.EntityID(f.EntityID))
-	}
-	if f.Currency != "" {
-		query = query.Where(entTaxConfig.Currency(f.Currency))
-	}
-	if f.AutoApply != nil {
-		query = query.Where(entTaxConfig.AutoApply(lo.FromPtr(f.AutoApply)))
-	}
-	if f.TimeRangeFilter != nil {
-		if f.TimeRangeFilter.StartTime != nil {
-			query = query.Where(entTaxConfig.CreatedAtGTE(*f.TimeRangeFilter.StartTime))
-		}
-		if f.TimeRangeFilter.EndTime != nil {
-			query = query.Where(entTaxConfig.CreatedAtLTE(*f.TimeRangeFilter.EndTime))
-		}
-	}
-	return query, nil
-}
-
 // Create creates a new tax config
 func (r *taxAssociationRepository) Create(ctx context.Context, t *domainTaxConfig.TaxAssociation) error {
 	client := r.client.Querier(ctx)
@@ -175,6 +67,19 @@ func (r *taxAssociationRepository) Create(ctx context.Context, t *domainTaxConfi
 		Save(ctx)
 	if err != nil {
 		SetSpanError(span, err)
+
+		if ent.IsConstraintError(err) {
+			return ierr.WithError(err).
+				WithHint("Tax association with this entitiy id and tax rate id already exists").
+				WithReportableDetails(map[string]interface{}{
+					"tax_association_id": t.ID,
+					"tax_rate_id":        t.TaxRateID,
+					"entity_type":        t.EntityType,
+					"entity_id":          t.EntityID,
+				}).
+				Mark(ierr.ErrDatabase)
+		}
+
 		return ierr.WithError(err).
 			WithHint("Failed to create tax association").
 			WithReportableDetails(map[string]interface{}{
@@ -322,20 +227,15 @@ func (r *taxAssociationRepository) List(ctx context.Context, filter *types.TaxAs
 	defer FinishSpan(span)
 
 	query := client.TaxAssociation.Query()
-	query = r.queryOpts.ApplyTenantFilter(ctx, query)
-	query = r.queryOpts.ApplyEnvironmentFilter(ctx, query)
-	var err error
-	query, err = r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
+	query = ApplyQueryOptions(ctx, query, filter, r.queryOpts)
+	query, err := r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
 	if err != nil {
 		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to list tax associations").
 			Mark(ierr.ErrDatabase)
 	}
-	if filter != nil {
-		query = r.queryOpts.ApplySortFilter(query, filter.GetSort(), filter.GetOrder())
-		query = r.queryOpts.ApplyPaginationFilter(query, filter.GetLimit(), filter.GetOffset())
-	}
+
 	taxassociations, err := query.All(ctx)
 	if err != nil {
 		SetSpanError(span, err)
@@ -357,10 +257,8 @@ func (r *taxAssociationRepository) Count(ctx context.Context, filter *types.TaxA
 	defer FinishSpan(span)
 
 	query := client.TaxAssociation.Query()
-	query = r.queryOpts.ApplyTenantFilter(ctx, query)
-	query = r.queryOpts.ApplyEnvironmentFilter(ctx, query)
-	var err error
-	query, err = r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
+	query = ApplyQueryOptions(ctx, query, filter, r.queryOpts)
+	query, err := r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
 	if err != nil {
 		SetSpanError(span, err)
 		return 0, ierr.WithError(err).
@@ -418,4 +316,112 @@ func (r *taxAssociationRepository) DeleteCache(ctx context.Context, t *domainTax
 	environmentID := types.GetEnvironmentID(ctx)
 	cacheKey := cache.GenerateKey(cache.PrefixTaxAssociation, tenantID, environmentID, t.ID)
 	r.cache.Delete(ctx, cacheKey)
+}
+
+type TaxAssociationQuery = *ent.TaxAssociationQuery
+
+type TaxAssociationQueryOptions struct{}
+
+func (o TaxAssociationQueryOptions) ApplyTenantFilter(ctx context.Context, query TaxAssociationQuery) TaxAssociationQuery {
+	return query.Where(entTaxConfig.TenantID(types.GetTenantID(ctx)))
+}
+
+func (o TaxAssociationQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query TaxAssociationQuery) TaxAssociationQuery {
+	envID := types.GetEnvironmentID(ctx)
+	if envID != "" {
+		return query.Where(entTaxConfig.EnvironmentID(envID))
+	}
+	return query
+}
+
+func (o TaxAssociationQueryOptions) ApplyStatusFilter(query TaxAssociationQuery, status string) TaxAssociationQuery {
+	if status == "" {
+		return query.Where(entTaxConfig.StatusNotIn(string(types.StatusDeleted)))
+	}
+	return query.Where(entTaxConfig.Status(status))
+}
+
+func (o TaxAssociationQueryOptions) ApplySortFilter(query TaxAssociationQuery, field, order string) TaxAssociationQuery {
+	if field != "" {
+		if order == types.OrderDesc {
+			query = query.Order(ent.Desc(o.GetFieldName(field)))
+		} else {
+			query = query.Order(ent.Asc(o.GetFieldName(field)))
+		}
+	}
+	return query
+}
+
+func (o TaxAssociationQueryOptions) ApplyPaginationFilter(query TaxAssociationQuery, limit, offset int) TaxAssociationQuery {
+	if limit > 0 {
+		query = query.Limit(limit)
+	}
+	if offset > 0 {
+		query = query.Offset(offset)
+	}
+	return query
+}
+
+func (o TaxAssociationQueryOptions) GetFieldName(field string) string {
+	switch field {
+	case "created_at":
+		return entTaxConfig.FieldCreatedAt
+	case "updated_at":
+		return entTaxConfig.FieldUpdatedAt
+	case "priority":
+		return entTaxConfig.FieldPriority
+	case "auto_apply":
+		return entTaxConfig.FieldAutoApply
+	case "currency":
+		return entTaxConfig.FieldCurrency
+	case "metadata":
+		return entTaxConfig.FieldMetadata
+	case "environment_id":
+		return entTaxConfig.FieldEnvironmentID
+	case "tax_rate_id":
+		return entTaxConfig.FieldTaxRateID
+	case "entity_type":
+		return entTaxConfig.FieldEntityType
+	case "entity_id":
+		return entTaxConfig.FieldEntityID
+	case "tenant_id":
+		return entTaxConfig.FieldTenantID
+	case "id":
+		return entTaxConfig.FieldID
+	default:
+		return ""
+	}
+}
+
+func (o TaxAssociationQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.TaxAssociationFilter, query TaxAssociationQuery) (TaxAssociationQuery, error) {
+	if f == nil {
+		return query, nil
+	}
+	if len(f.TaxAssociationIDs) > 0 {
+		query = query.Where(entTaxConfig.IDIn(f.TaxAssociationIDs...))
+	}
+	if len(f.TaxRateIDs) > 0 {
+		query = query.Where(entTaxConfig.TaxRateIDIn(f.TaxRateIDs...))
+	}
+	if f.EntityType != "" {
+		query = query.Where(entTaxConfig.EntityType(string(f.EntityType)))
+	}
+	if f.EntityID != "" {
+		query = query.Where(entTaxConfig.EntityID(f.EntityID))
+	}
+	if f.Currency != "" {
+		query = query.Where(entTaxConfig.Currency(f.Currency))
+	}
+	if f.AutoApply != nil {
+		query = query.Where(entTaxConfig.AutoApply(lo.FromPtr(f.AutoApply)))
+	}
+	if f.TimeRangeFilter != nil {
+		if f.TimeRangeFilter.StartTime != nil {
+			query = query.Where(entTaxConfig.CreatedAtGTE(*f.TimeRangeFilter.StartTime))
+		}
+		if f.TimeRangeFilter.EndTime != nil {
+			query = query.Where(entTaxConfig.CreatedAtLTE(*f.TimeRangeFilter.EndTime))
+		}
+	}
+	return query, nil
 }

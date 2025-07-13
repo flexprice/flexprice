@@ -2,12 +2,11 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
-	taxrate "github.com/flexprice/flexprice/internal/domain/tax"
+	taxapplied "github.com/flexprice/flexprice/internal/domain/taxapplied"
 	"github.com/flexprice/flexprice/internal/domain/taxassociation"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
@@ -36,10 +35,7 @@ type TaxService interface {
 	ListTaxAssociations(ctx context.Context, filter *types.TaxAssociationFilter) (*dto.ListTaxAssociationsResponse, error)
 
 	// LinkTaxRatesToEntity links tax rates to any entity type
-	LinkTaxRatesToEntity(ctx context.Context, entityType types.TaxrateEntityType, entityID string, taxRateLinks []*dto.CreateEntityTaxAssociation) (*dto.EntityTaxAssociationResponse, error)
-
-	// New methods for handling tax rate creation and association separately
-	ResolveTaxOverrides(ctx context.Context, taxRateOverrides []*dto.TaxRateOverride) ([]*dto.ResolvedTaxRateInfo, error)
+	LinkTaxRatesToEntity(ctx context.Context, req dto.LinkTaxRateToEntityRequest) error
 
 	// tax application operations
 	CreateTaxApplied(ctx context.Context, req dto.CreateTaxAppliedRequest) (*dto.TaxAppliedResponse, error)
@@ -644,7 +640,7 @@ func (s *taxService) CreateTaxAssociation(ctx context.Context, req *dto.CreateTa
 	}
 
 	// validate tax rate exists and is valid
-	taxRate, err := s.TaxRateRepo.Get(ctx, req.TaxRateID)
+	taxRate, err := s.TaxRateRepo.GetByCode(ctx, req.TaxRateCode)
 	if err != nil {
 		return nil, err
 	}
@@ -703,15 +699,6 @@ func (s *taxService) GetTaxAssociation(ctx context.Context, id string) (*dto.Tax
 		return nil, err
 	}
 
-	if tc == nil {
-		return nil, ierr.NewError("tax association not found").
-			WithHint(fmt.Sprintf("Tax association with ID %s does not exist", id)).
-			WithReportableDetails(map[string]interface{}{
-				"tax_association_id": id,
-			}).
-			Mark(ierr.ErrNotFound)
-	}
-
 	return dto.ToTaxAssociationResponse(tc), nil
 }
 
@@ -733,23 +720,17 @@ func (s *taxService) UpdateTaxAssociation(ctx context.Context, id string, req *d
 		return nil, err
 	}
 
-	if existing == nil {
-		return nil, ierr.NewError("tax association not found").
-			WithHint(fmt.Sprintf("Tax association with ID %s does not exist", id)).
-			WithReportableDetails(map[string]interface{}{
-				"tax_association_id": id,
-			}).
-			Mark(ierr.ErrNotFound)
+	// Update fields if provided
+	if req.Priority != nil {
+		existing.Priority = lo.FromPtr(req.Priority)
 	}
 
-	// Update fields if provided
-	if req.Priority >= 0 {
-		existing.Priority = req.Priority
+	if req.AutoApply != nil {
+		existing.AutoApply = lo.FromPtr(req.AutoApply)
 	}
-	existing.AutoApply = req.AutoApply
 
 	if req.Metadata != nil {
-		existing.Metadata = req.Metadata
+		existing.Metadata = lo.FromPtr(req.Metadata)
 	}
 
 	s.Logger.Infow("updating tax association",
@@ -814,19 +795,15 @@ func (s *taxService) ListTaxAssociations(ctx context.Context, filter *types.TaxA
 	}
 
 	s.Logger.Debugw("listing tax associations",
-		"limit", filter.GetLimit(),
-		"offset", filter.GetOffset(),
 		"entity_type", filter.EntityType,
-		"entity_id", filter.EntityID,
-		"tax_rate_ids_count", len(filter.TaxRateIDs))
+		"entity_id", filter.EntityID)
 
 	// List tax associations
 	taxAssociations, err := s.TaxAssociationRepo.List(ctx, filter)
 	if err != nil {
 		s.Logger.Errorw("failed to list tax associations",
 			"error", err,
-			"limit", filter.GetLimit(),
-			"offset", filter.GetOffset())
+			"filter", filter)
 		return nil, err
 	}
 
@@ -846,261 +823,172 @@ func (s *taxService) ListTaxAssociations(ctx context.Context, filter *types.TaxA
 
 	response.Pagination = types.NewPaginationResponse(total, filter.GetLimit(), filter.GetOffset())
 
-	s.Logger.Debugw("successfully listed tax associations",
-		"count", len(taxAssociations),
-		"total", total,
-		"limit", filter.GetLimit(),
-		"offset", filter.GetOffset())
-
 	return response, nil
 }
 
 // LinkTaxRatesToEntity links tax rates to any entity in a single transaction
-func (s *taxService) LinkTaxRatesToEntity(ctx context.Context, entityType types.TaxrateEntityType, entityID string, taxRateLinks []*dto.CreateEntityTaxAssociation) (*dto.EntityTaxAssociationResponse, error) {
-	// Early return for empty input
-	if len(taxRateLinks) == 0 {
-		return &dto.EntityTaxAssociationResponse{
-			EntityID:       entityID,
-			EntityType:     entityType,
-			LinkedTaxRates: []*dto.LinkedTaxRateInfo{},
-		}, nil
+// It is only used while linking tax rates to an entity during creation
+// It is not used while updating an entity
+func (s *taxService) LinkTaxRatesToEntity(ctx context.Context, req dto.LinkTaxRateToEntityRequest) error {
+	if err := req.Validate(); err != nil {
+		return err
 	}
 
-	// Pre-validate all tax rate links before starting transaction
-	for _, taxRateLink := range taxRateLinks {
-		if err := taxRateLink.Validate(); err != nil {
-			return nil, ierr.WithError(err).
-				WithHint("Invalid tax rate configuration").
-				Mark(ierr.ErrValidation)
-		}
-	}
-
-	// Execute all operations within a single transaction
-	var response *dto.EntityTaxAssociationResponse
-	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		// Step 1: Convert entity tax associations to tax overrides for resolution
-		taxRateOverrides := make([]*dto.TaxRateOverride, 0, len(taxRateLinks))
-		for _, taxRateLink := range taxRateLinks {
-			taxRateOverride := &dto.TaxRateOverride{
-				CreateTaxRateRequest: taxRateLink.CreateTaxRateRequest,
-				TaxRateID:            taxRateLink.TaxRateID,
-				Priority:             taxRateLink.Priority,
-				AutoApply:            taxRateLink.AutoApply,
-			}
-			taxRateOverrides = append(taxRateOverrides, taxRateOverride)
-		}
-
-		// Step 2: Resolve or create tax rates
-		resolvedTaxRates, err := s.ResolveTaxOverrides(txCtx, taxRateOverrides)
-		if err != nil {
-			return err
-		}
-
-		// Step 3: Create tax associations
-		linkedTaxRates := make([]*dto.LinkedTaxRateInfo, 0, len(resolvedTaxRates))
-		for _, resolvedTaxRate := range resolvedTaxRates {
-			// Create tax association request
-			taxAssociationReq := &dto.CreateTaxAssociationRequest{
-				TaxRateID:  resolvedTaxRate.TaxRateID,
-				EntityType: entityType,
-				EntityID:   entityID,
-				Priority:   resolvedTaxRate.Priority,
-				AutoApply:  resolvedTaxRate.AutoApply,
+	entityType := req.EntityType
+	entityID := req.EntityID
+	return s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		if len(req.TaxRateOverrides) > 0 {
+			// Validate all overrides first
+			for _, taxOverride := range req.TaxRateOverrides {
+				if err := taxOverride.Validate(); err != nil {
+					return err
+				}
 			}
 
-			// Create tax association
-			s.Logger.Infow("creating tax association",
-				"tax_rate_id", resolvedTaxRate.TaxRateID,
+			// Create tax associations from overrides
+			for _, taxOverride := range req.TaxRateOverrides {
+				taxAssociationReq := taxOverride.ToTaxAssociationRequest(ctx, entityID, entityType)
+
+				s.Logger.Infow("creating tax association from override",
+					"taxrate_code", taxOverride.TaxRateCode,
+					"entity_type", entityType,
+					"entity_id", entityID,
+					"priority", taxOverride.Priority,
+					"auto_apply", taxOverride.AutoApply,
+				)
+
+				if _, err := s.CreateTaxAssociation(ctx, taxAssociationReq); err != nil {
+					return err
+				}
+			}
+
+			s.Logger.Infow("successfully created tax associations from overrides",
 				"entity_type", entityType,
 				"entity_id", entityID,
-				"priority", resolvedTaxRate.Priority,
-				"auto_apply", resolvedTaxRate.AutoApply,
-			)
-			taxAssociation, err := s.CreateTaxAssociation(txCtx, taxAssociationReq)
-			if err != nil {
-				return err
+				"associations_count", len(req.TaxRateOverrides))
+		}
+
+		if len(req.ExistingTaxAssociations) > 0 {
+			for _, taxAssociation := range req.ExistingTaxAssociations {
+				// Get the tax rate to get its code
+				taxRate, err := s.GetTaxRate(ctx, taxAssociation.TaxRateID)
+				if err != nil {
+					s.Logger.Errorw("failed to get tax rate for association",
+						"error", err,
+						"tax_rate_id", taxAssociation.TaxRateID)
+					return err
+				}
+
+				// Create tax association request for the target entity
+				taxAssociationReq := &dto.CreateTaxAssociationRequest{
+					TaxRateCode: taxRate.Code,
+					EntityType:  entityType,
+					EntityID:    entityID,
+					Priority:    taxAssociation.Priority,
+					AutoApply:   taxAssociation.AutoApply,
+					Currency:    taxAssociation.Currency,
+					Metadata:    taxAssociation.Metadata,
+				}
+
+				s.Logger.Infow("creating tax association",
+					"taxrate_code", taxRate.Code,
+					"entity_type", entityType,
+					"entity_id", entityID,
+					"priority", taxAssociation.Priority,
+					"auto_apply", taxAssociation.AutoApply,
+				)
+
+				if _, err := s.CreateTaxAssociation(ctx, taxAssociationReq); err != nil {
+					s.Logger.Errorw("failed to create tax association",
+						"error", err,
+						"taxrate_code", taxRate.Code)
+					return err
+				}
 			}
 
-			// Add to results
-			linkedTaxRates = append(linkedTaxRates, &dto.LinkedTaxRateInfo{
-				TaxRateID:        resolvedTaxRate.TaxRateID,
-				TaxAssociationID: taxAssociation.ID,
-				WasCreated:       resolvedTaxRate.WasCreated,
-				Priority:         taxAssociation.Priority,
-				AutoApply:        taxAssociation.AutoApply,
-			})
 		}
 
-		s.Logger.Infow("successfully created tax associations",
-			"entity_type", entityType,
-			"entity_id", entityID,
-			"associations_count", len(linkedTaxRates))
-
-		response = &dto.EntityTaxAssociationResponse{
-			EntityID:       entityID,
-			EntityType:     entityType,
-			LinkedTaxRates: linkedTaxRates,
-		}
 		return nil
 	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	s.Logger.Infow("successfully linked tax rates to entity",
-		"entity_type", entityType,
-		"entity_id", entityID,
-		"links_count", len(response.LinkedTaxRates))
-
-	return response, nil
-}
-
-// ResolveTaxOverrides handles the creation or resolution of tax rates from tax overrides
-// This method focuses purely on ensuring tax rates exist and returning resolved information
-// without entity-specific concerns, making it more reusable and purposeful
-func (s *taxService) ResolveTaxOverrides(ctx context.Context, taxRateOverrides []*dto.TaxRateOverride) ([]*dto.ResolvedTaxRateInfo, error) {
-	if len(taxRateOverrides) == 0 {
-		return []*dto.ResolvedTaxRateInfo{}, nil
-	}
-
-	resolvedTaxRates := make([]*dto.ResolvedTaxRateInfo, 0, len(taxRateOverrides))
-
-	for _, taxRateOverride := range taxRateOverrides {
-		var taxRateToUse *taxrate.TaxRate
-		var wasCreated bool
-
-		// Resolve or create tax rate
-		if taxRateOverride.TaxRateID != nil {
-			// Use existing tax rate
-			taxRateID := *taxRateOverride.TaxRateID
-			existingTaxRate, err := s.TaxRateRepo.Get(ctx, taxRateID)
-			if err != nil {
-				return nil, ierr.WithError(err).
-					WithHint("Tax rate not found").
-					WithReportableDetails(map[string]interface{}{
-						"tax_rate_id": taxRateID,
-					}).
-					Mark(ierr.ErrNotFound)
-			}
-			taxRateToUse = existingTaxRate
-			wasCreated = false
-		} else {
-			// Create new tax rate using the service's methods directly
-			taxRateResponse, err := s.CreateTaxRate(ctx, taxRateOverride.CreateTaxRateRequest)
-			if err != nil {
-				return nil, ierr.WithError(err).
-					WithHint("Failed to create tax rate").
-					WithReportableDetails(map[string]interface{}{
-						"tax_rate_code": taxRateOverride.CreateTaxRateRequest.Code,
-					}).
-					Mark(ierr.ErrDatabase)
-			}
-			taxRateToUse = taxRateResponse.TaxRate
-			wasCreated = true
-		}
-
-		// Add to results
-		resolvedTaxRates = append(resolvedTaxRates, &dto.ResolvedTaxRateInfo{
-			TaxRateID:  taxRateToUse.ID,
-			WasCreated: wasCreated,
-			Priority:   taxRateOverride.Priority,
-			AutoApply:  taxRateOverride.AutoApply,
-		})
-	}
-
-	s.Logger.Infow("successfully resolved or created tax rates",
-		"resolved_count", len(resolvedTaxRates),
-		"created_count", len(lo.Filter(resolvedTaxRates, func(r *dto.ResolvedTaxRateInfo, _ int) bool {
-			return r.WasCreated
-		})))
-
-	return resolvedTaxRates, nil
 }
 
 // PrepareTaxRatesForInvoice prepares tax rates for an invoice based on the request
 // This method handles both tax rate overrides and subscription tax rates
-// Following clean architecture principles - only depends on the request data
 func (s *taxService) PrepareTaxRatesForInvoice(ctx context.Context, req dto.CreateInvoiceRequest) ([]*dto.TaxRateResponse, error) {
-	var taxRates []*dto.TaxRateResponse
-
 	if len(req.TaxRateOverrides) > 0 {
-		// Handle tax rate overrides for the invoice
-		s.Logger.Infow("processing tax rate overrides for invoice",
-			"customer_id", req.CustomerID,
-			"subscription_id", req.SubscriptionID,
-			"overrides_count", len(req.TaxRateOverrides))
-
-		// Step 1: Resolve or create tax rates directly from overrides
-		resolvedTaxRates, err := s.ResolveTaxOverrides(ctx, req.TaxRateOverrides)
-		if err != nil {
-			s.Logger.Errorw("failed to resolve or create tax rates",
-				"error", err,
-				"customer_id", req.CustomerID)
-			return nil, err
-		}
-
-		// Step 2: Collect all tax rate IDs
-		taxRateIDs := make([]string, 0, len(resolvedTaxRates))
-		for _, resolvedTaxRate := range resolvedTaxRates {
-			taxRateIDs = append(taxRateIDs, resolvedTaxRate.TaxRateID)
-		}
-
-		// Step 3: Fetch all tax rates using the collected IDs
-		taxRatesResponse, err := s.ListTaxRates(ctx, &types.TaxRateFilter{
-			TaxRateIDs: taxRateIDs,
-		})
-		if err != nil {
-			s.Logger.Errorw("failed to fetch tax rates",
-				"error", err,
-				"customer_id", req.CustomerID,
-				"tax_rate_ids", taxRateIDs)
-			return nil, err
-		}
-
-		taxRates = taxRatesResponse.Items
-	} else {
-		// Handle subscription tax rate overrides (existing logic)
-		// For subscription invoices, we need to get the associated tax rates
-		if req.SubscriptionID != nil {
-			// Get tax associations for the subscription
-			filter := types.NewNoLimitTaxAssociationFilter()
-			filter.EntityType = types.TaxrateEntityTypeSubscription
-			filter.EntityID = *req.SubscriptionID
-			filter.AutoApply = lo.ToPtr(true)
-
-			taxAssociations, err := s.ListTaxAssociations(ctx, filter)
-			if err != nil {
-				s.Logger.Errorw("failed to get tax associations for subscription",
-					"error", err,
-					"subscription_id", *req.SubscriptionID)
-				return nil, err
-			}
-
-			// Get tax rates for the associations
-			if len(taxAssociations.Items) > 0 {
-				taxRateIDs := make([]string, 0, len(taxAssociations.Items))
-				for _, association := range taxAssociations.Items {
-					taxRateIDs = append(taxRateIDs, association.TaxRateID)
-				}
-
-				taxRatesResponse, err := s.ListTaxRates(ctx, &types.TaxRateFilter{
-					TaxRateIDs: taxRateIDs,
-				})
-				if err != nil {
-					s.Logger.Errorw("failed to fetch subscription tax rates",
-						"error", err,
-						"subscription_id", *req.SubscriptionID,
-						"tax_rate_ids", taxRateIDs)
-					return nil, err
-				}
-
-				taxRates = taxRatesResponse.Items
-			}
-		}
+		return s.getTaxRatesFromOverrides(ctx, req.TaxRateOverrides)
 	}
 
-	return taxRates, nil
+	if req.SubscriptionID != nil {
+		return s.getTaxRatesFromSubscription(ctx, *req.SubscriptionID)
+	}
+
+	return []*dto.TaxRateResponse{}, nil
+}
+
+// getTaxRatesFromOverrides retrieves tax rates from provided overrides
+func (s *taxService) getTaxRatesFromOverrides(ctx context.Context, overrides []*dto.TaxRateOverride) ([]*dto.TaxRateResponse, error) {
+	s.Logger.Infow("processing tax rate overrides for invoice",
+		"overrides_count", len(overrides))
+
+	taxRateCodes := make([]string, len(overrides))
+	for i, override := range overrides {
+		taxRateCodes[i] = override.TaxRateCode
+	}
+
+	filter := types.NewNoLimitTaxRateFilter()
+	filter.TaxRateCodes = taxRateCodes
+
+	taxRatesResponse, err := s.ListTaxRates(ctx, filter)
+	if err != nil {
+		s.Logger.Errorw("failed to resolve tax rates from overrides",
+			"error", err,
+			"tax_rate_codes", taxRateCodes)
+		return nil, err
+	}
+
+	return taxRatesResponse.Items, nil
+}
+
+// getTaxRatesFromSubscription retrieves tax rates from subscription associations
+func (s *taxService) getTaxRatesFromSubscription(ctx context.Context, subscriptionID string) ([]*dto.TaxRateResponse, error) {
+	// Get tax associations for the subscription
+	filter := types.NewNoLimitTaxAssociationFilter()
+	filter.EntityType = types.TaxrateEntityTypeSubscription
+	filter.EntityID = subscriptionID
+	filter.AutoApply = lo.ToPtr(true)
+
+	taxAssociations, err := s.ListTaxAssociations(ctx, filter)
+	if err != nil {
+		s.Logger.Errorw("failed to get tax associations for subscription",
+			"error", err,
+			"subscription_id", subscriptionID)
+		return nil, err
+	}
+
+	if len(taxAssociations.Items) == 0 {
+		return []*dto.TaxRateResponse{}, nil
+	}
+
+	// Get tax rates for the associations
+	taxRateIDs := make([]string, len(taxAssociations.Items))
+	for i, association := range taxAssociations.Items {
+		taxRateIDs[i] = association.TaxRateID
+	}
+
+	taxRateFilter := types.NewNoLimitTaxRateFilter()
+	taxRateFilter.TaxRateIDs = taxRateIDs
+
+	taxRatesResponse, err := s.ListTaxRates(ctx, taxRateFilter)
+	if err != nil {
+		s.Logger.Errorw("failed to fetch subscription tax rates",
+			"error", err,
+			"subscription_id", subscriptionID,
+			"tax_rate_ids", taxRateIDs)
+		return nil, err
+	}
+
+	return taxRatesResponse.Items, nil
 }
 
 // TaxCalculationResult represents the result of tax calculations
@@ -1116,129 +1004,31 @@ type TaxCalculationResult struct {
 func (s *taxService) ApplyTaxesOnInvoice(ctx context.Context, inv *invoice.Invoice, taxRates []*dto.TaxRateResponse) (*TaxCalculationResult, error) {
 	if len(taxRates) == 0 {
 		s.Logger.Infow("no tax rates to apply to invoice", "invoice_id", inv.ID)
-		return &TaxCalculationResult{
-			TotalTaxAmount:    decimal.Zero,
-			TaxAppliedRecords: []*dto.TaxAppliedResponse{},
-			TaxRates:          taxRates,
-		}, nil
+		return s.createEmptyTaxCalculationResult(taxRates), nil
 	}
 
 	s.Logger.Infow("applying taxes to invoice",
 		"invoice_id", inv.ID,
 		"tax_rates_count", len(taxRates))
 
-	// Initialize tax calculation variables
 	taxableAmount := inv.Subtotal
 	totalTaxAmount := decimal.Zero
-	idempGen := idempotency.NewGenerator()
 	taxAppliedRecords := make([]*dto.TaxAppliedResponse, 0, len(taxRates))
 
 	// Process each tax rate
 	for _, taxRate := range taxRates {
-		var taxAmount decimal.Decimal
-
-		// Calculate tax amount based on tax rate type
-		switch taxRate.TaxRateType {
-		case types.TaxRateTypePercentage:
-			// For percentage tax: taxable_amount * (percentage / 100)
-			taxAmount = taxableAmount.Mul(*taxRate.PercentageValue).Div(decimal.NewFromInt(100))
-		case types.TaxRateTypeFixed:
-			// For fixed tax: use the fixed value directly
-			taxAmount = *taxRate.FixedValue
-		default:
-			s.Logger.Warnw("unknown tax rate type, skipping",
-				"tax_rate_id", taxRate.ID,
-				"tax_rate_type", taxRate.TaxRateType,
-			)
-			continue
+		taxAmount := s.calculateTaxAmount(taxRate, taxableAmount)
+		if taxAmount == nil {
+			continue // Skip invalid tax rate types
 		}
 
-		// Add tax amount to total
-		totalTaxAmount = totalTaxAmount.Add(taxAmount)
-
-		// Generate idempotency key for this tax application
-		idempotencyKey := idempGen.GenerateKey(idempotency.ScopeTaxApplication, map[string]interface{}{
-			"tax_rate_id": taxRate.ID,
-			"entity_id":   inv.ID,
-			"entity_type": string(types.TaxrateEntityTypeInvoice),
-		})
-
-		// Check if tax applied record already exists
-		existingTaxApplied, err := s.TaxAppliedRepo.GetByIdempotencyKey(ctx, idempotencyKey)
-		if err != nil && !ierr.IsNotFound(err) {
-			s.Logger.Errorw("failed to check existing tax applied record",
-				"error", err,
-				"tax_rate_id", taxRate.ID,
-				"invoice_id", inv.ID,
-				"idempotency_key", idempotencyKey)
+		totalTaxAmount = totalTaxAmount.Add(*taxAmount)
+		taxAppliedRecord, err := s.processTaxApplication(ctx, inv, taxRate, taxableAmount, *taxAmount)
+		if err != nil {
 			return nil, err
 		}
 
-		var taxAppliedResponse *dto.TaxAppliedResponse
-
-		if existingTaxApplied != nil {
-			// Update existing tax applied record
-			existingTaxApplied.TaxableAmount = taxableAmount
-			existingTaxApplied.TaxAmount = taxAmount
-			existingTaxApplied.AppliedAt = time.Now().UTC()
-
-			if err := s.TaxAppliedRepo.Update(ctx, existingTaxApplied); err != nil {
-				s.Logger.Errorw("failed to update existing tax applied record",
-					"error", err,
-					"tax_applied_id", existingTaxApplied.ID,
-					"tax_rate_id", taxRate.ID,
-					"invoice_id", inv.ID)
-				return nil, err
-			}
-
-			taxAppliedResponse = &dto.TaxAppliedResponse{TaxApplied: *existingTaxApplied}
-
-			s.Logger.Infow("updated existing tax applied record",
-				"tax_applied_id", existingTaxApplied.ID,
-				"tax_rate_id", taxRate.ID,
-				"tax_rate_code", taxRate.Code,
-				"tax_amount", taxAmount,
-				"taxable_amount", taxableAmount,
-				"invoice_id", inv.ID,
-			)
-		} else {
-			// Create new tax applied record
-			taxAppliedRecord := &dto.CreateTaxAppliedRequest{
-				TaxRateID:     taxRate.ID,
-				EntityType:    types.TaxrateEntityTypeInvoice,
-				EntityID:      inv.ID,
-				TaxableAmount: taxableAmount,
-				TaxAmount:     taxAmount,
-				Currency:      inv.Currency,
-			}
-
-			// Convert to domain model and set idempotency key
-			taxApplied := taxAppliedRecord.ToTaxApplied(ctx)
-			taxApplied.IdempotencyKey = &idempotencyKey
-
-			// Create the tax applied record
-			if err := s.TaxAppliedRepo.Create(ctx, taxApplied); err != nil {
-				s.Logger.Errorw("failed to create tax applied record",
-					"error", err,
-					"tax_rate_id", taxRate.ID,
-					"invoice_id", inv.ID,
-					"idempotency_key", idempotencyKey)
-				return nil, err
-			}
-
-			taxAppliedResponse = &dto.TaxAppliedResponse{TaxApplied: *taxApplied}
-
-			s.Logger.Infow("created new tax applied record",
-				"tax_applied_id", taxApplied.ID,
-				"tax_rate_id", taxRate.ID,
-				"tax_rate_code", taxRate.Code,
-				"tax_amount", taxAmount,
-				"taxable_amount", taxableAmount,
-				"invoice_id", inv.ID,
-			)
-		}
-
-		taxAppliedRecords = append(taxAppliedRecords, taxAppliedResponse)
+		taxAppliedRecords = append(taxAppliedRecords, taxAppliedRecord)
 	}
 
 	s.Logger.Infow("successfully calculated taxes for invoice",
@@ -1251,4 +1041,121 @@ func (s *taxService) ApplyTaxesOnInvoice(ctx context.Context, inv *invoice.Invoi
 		TaxAppliedRecords: taxAppliedRecords,
 		TaxRates:          taxRates,
 	}, nil
+}
+
+// createEmptyTaxCalculationResult creates an empty tax calculation result
+func (s *taxService) createEmptyTaxCalculationResult(taxRates []*dto.TaxRateResponse) *TaxCalculationResult {
+	return &TaxCalculationResult{
+		TotalTaxAmount:    decimal.Zero,
+		TaxAppliedRecords: []*dto.TaxAppliedResponse{},
+		TaxRates:          taxRates,
+	}
+}
+
+// calculateTaxAmount calculates the tax amount for a given tax rate and taxable amount
+func (s *taxService) calculateTaxAmount(taxRate *dto.TaxRateResponse, taxableAmount decimal.Decimal) *decimal.Decimal {
+	var taxAmount decimal.Decimal
+
+	switch taxRate.TaxRateType {
+	case types.TaxRateTypePercentage:
+		// For percentage tax: taxable_amount * (percentage / 100)
+		taxAmount = taxableAmount.Mul(*taxRate.PercentageValue).Div(decimal.NewFromInt(100))
+	case types.TaxRateTypeFixed:
+		// For fixed tax: use the fixed value directly
+		taxAmount = *taxRate.FixedValue
+	default:
+		s.Logger.Warnw("unknown tax rate type, skipping",
+			"tax_rate_id", taxRate.ID,
+			"tax_rate_type", taxRate.TaxRateType,
+		)
+		return nil
+	}
+
+	return &taxAmount
+}
+
+// processTaxApplication handles the creation or update of tax applied records
+func (s *taxService) processTaxApplication(ctx context.Context, inv *invoice.Invoice, taxRate *dto.TaxRateResponse, taxableAmount, taxAmount decimal.Decimal) (*dto.TaxAppliedResponse, error) {
+	idempGen := idempotency.NewGenerator()
+	idempotencyKey := idempGen.GenerateKey(idempotency.ScopeTaxApplication, map[string]interface{}{
+		"tax_rate_id": taxRate.ID,
+		"entity_id":   inv.ID,
+		"entity_type": string(types.TaxrateEntityTypeInvoice),
+	})
+
+	// Check if tax applied record already exists
+	existingTaxApplied, err := s.TaxAppliedRepo.GetByIdempotencyKey(ctx, idempotencyKey)
+	if err != nil && !ierr.IsNotFound(err) {
+		s.Logger.Errorw("failed to check existing tax applied record",
+			"error", err,
+			"tax_rate_id", taxRate.ID,
+			"invoice_id", inv.ID,
+			"idempotency_key", idempotencyKey)
+		return nil, err
+	}
+
+	if existingTaxApplied != nil {
+		return s.updateExistingTaxApplied(ctx, existingTaxApplied, taxableAmount, taxAmount, taxRate)
+	}
+
+	return s.createNewTaxApplied(ctx, inv, taxRate, taxableAmount, taxAmount, idempotencyKey)
+}
+
+// updateExistingTaxApplied updates an existing tax applied record
+func (s *taxService) updateExistingTaxApplied(ctx context.Context, existingTaxApplied *taxapplied.TaxApplied, taxableAmount, taxAmount decimal.Decimal, taxRate *dto.TaxRateResponse) (*dto.TaxAppliedResponse, error) {
+	existingTaxApplied.TaxableAmount = taxableAmount
+	existingTaxApplied.TaxAmount = taxAmount
+	existingTaxApplied.AppliedAt = time.Now().UTC()
+
+	if err := s.TaxAppliedRepo.Update(ctx, existingTaxApplied); err != nil {
+		s.Logger.Errorw("failed to update existing tax applied record",
+			"error", err,
+			"tax_applied_id", existingTaxApplied.ID,
+			"tax_rate_id", taxRate.ID)
+		return nil, err
+	}
+
+	s.Logger.Infow("updated existing tax applied record",
+		"tax_applied_id", existingTaxApplied.ID,
+		"tax_rate_id", taxRate.ID,
+		"tax_rate_code", taxRate.Code,
+		"tax_amount", taxAmount,
+		"taxable_amount", taxableAmount)
+
+	return &dto.TaxAppliedResponse{TaxApplied: *existingTaxApplied}, nil
+}
+
+// createNewTaxApplied creates a new tax applied record
+func (s *taxService) createNewTaxApplied(ctx context.Context, inv *invoice.Invoice, taxRate *dto.TaxRateResponse, taxableAmount, taxAmount decimal.Decimal, idempotencyKey string) (*dto.TaxAppliedResponse, error) {
+	taxAppliedRecord := &dto.CreateTaxAppliedRequest{
+		TaxRateID:     taxRate.ID,
+		EntityType:    types.TaxrateEntityTypeInvoice,
+		EntityID:      inv.ID,
+		TaxableAmount: taxableAmount,
+		TaxAmount:     taxAmount,
+		Currency:      inv.Currency,
+	}
+
+	// Convert to domain model and set idempotency key
+	taxApplied := taxAppliedRecord.ToTaxApplied(ctx)
+	taxApplied.IdempotencyKey = &idempotencyKey
+
+	// Create the tax applied record
+	if err := s.TaxAppliedRepo.Create(ctx, taxApplied); err != nil {
+		s.Logger.Errorw("failed to create tax applied record",
+			"error", err,
+			"tax_rate_id", taxRate.ID,
+			"invoice_id", inv.ID,
+			"idempotency_key", idempotencyKey)
+		return nil, err
+	}
+
+	s.Logger.Infow("created new tax applied record",
+		"tax_applied_id", taxApplied.ID,
+		"tax_rate_id", taxRate.ID,
+		"tax_rate_code", taxRate.Code,
+		"tax_amount", taxAmount,
+		"taxable_amount", taxableAmount)
+
+	return &dto.TaxAppliedResponse{TaxApplied: *taxApplied}, nil
 }

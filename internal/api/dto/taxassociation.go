@@ -11,12 +11,13 @@ import (
 )
 
 type CreateTaxAssociationRequest struct {
-	TaxRateID  string                  `json:"tax_rate_id" binding:"required"`
-	EntityType types.TaxrateEntityType `json:"entity_type" binding:"required"`
-	EntityID   string                  `json:"entity_id" binding:"required"`
-	Priority   int                     `json:"priority" binding:"omitempty"`
-	Currency   string                  `json:"currency" binding:"omitempty"`
-	AutoApply  bool                    `json:"auto_apply" binding:"omitempty"`
+	TaxRateCode string                  `json:"tax_rate_code" binding:"required"`
+	EntityType  types.TaxrateEntityType `json:"entity_type" binding:"required"`
+	EntityID    string                  `json:"entity_id" binding:"required"`
+	Priority    int                     `json:"priority" binding:"omitempty"`
+	Currency    string                  `json:"currency" binding:"omitempty"`
+	AutoApply   bool                    `json:"auto_apply" binding:"omitempty"`
+	Metadata    map[string]string       `json:"metadata" binding:"omitempty"`
 }
 
 func (r *CreateTaxAssociationRequest) Validate() error {
@@ -25,8 +26,8 @@ func (r *CreateTaxAssociationRequest) Validate() error {
 	}
 
 	// Explicit validation for required fields
-	if r.TaxRateID == "" {
-		return ierr.NewError("tax_rate_id is required").
+	if r.TaxRateCode == "" {
+		return ierr.NewError("tax_rate_code is required").
 			WithHint("Tax rate ID cannot be empty").
 			Mark(ierr.ErrValidation)
 	}
@@ -53,7 +54,7 @@ func (r *CreateTaxAssociationRequest) Validate() error {
 func (r *CreateTaxAssociationRequest) ToTaxAssociation(ctx context.Context) *taxconfig.TaxAssociation {
 	return &taxconfig.TaxAssociation{
 		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TAX_ASSOCIATION),
-		TaxRateID:     r.TaxRateID,
+		TaxRateID:     r.TaxRateCode,
 		EntityType:    r.EntityType,
 		EntityID:      r.EntityID,
 		Priority:      r.Priority,
@@ -61,13 +62,14 @@ func (r *CreateTaxAssociationRequest) ToTaxAssociation(ctx context.Context) *tax
 		Currency:      r.Currency,
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		BaseModel:     types.GetDefaultBaseModel(ctx),
+		Metadata:      r.Metadata,
 	}
 }
 
 type TaxAssociationUpdateRequest struct {
-	Priority  int               `json:"priority" binding:"omitempty"`
-	AutoApply bool              `json:"auto_apply" binding:"omitempty"`
-	Metadata  map[string]string `json:"metadata" binding:"omitempty"`
+	Priority  *int               `json:"priority" binding:"omitempty"`
+	AutoApply *bool              `json:"auto_apply" binding:"omitempty"`
+	Metadata  *map[string]string `json:"metadata" binding:"omitempty"`
 }
 
 func (r *TaxAssociationUpdateRequest) Validate() error {
@@ -75,10 +77,25 @@ func (r *TaxAssociationUpdateRequest) Validate() error {
 		return err
 	}
 
-	if r.Priority < 0 {
+	if r.Priority != nil && *r.Priority < 0 {
 		return ierr.NewError("priority cannot be less than 0").
 			WithHint("Priority cannot be less than 0").
 			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}
+
+type LinkTaxRateToEntityRequest struct {
+	TaxRateOverrides        []*TaxRateOverride        `json:"tax_rate_overrides" binding:"omitempty"`
+	ExistingTaxAssociations []*TaxAssociationResponse `json:"existing_tax_associations" binding:"omitempty"`
+	EntityType              types.TaxrateEntityType   `json:"entity_type" binding:"required" default:"tenant"`
+	EntityID                string                    `json:"entity_id" binding:"required"`
+}
+
+func (r *LinkTaxRateToEntityRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
 	}
 
 	return nil
@@ -134,100 +151,39 @@ func ToTaxAssociationResponse(tc *taxconfig.TaxAssociation) *TaxAssociationRespo
 type ListTaxAssociationsResponse = types.ListResponse[*TaxAssociationResponse]
 
 // TaxRateOverride represents a tax rate override for a specific entity
-// This is used to override the tax rate for a specific entity
-// It can either be a new tax rate or an existing tax rate
-// If a new tax rate is provided, it will be created and then linked to the entity
-// If an existing tax rate is provided, it will be linked to the entity
+// This is used to override the tax rate for a specific entity i.e if you give `tax_overrides` in the create customer request it will link the tax rate to the customer else it will inherit the tenant tax rate,
+// It links an existing tax rate to the entity
 // The priority and auto apply fields are used to determine the order of the tax rates
 type TaxRateOverride struct {
-	CreateTaxRateRequest
-	TaxRateID *string `json:"tax_rate_id" binding:"omitempty"`
-	Priority  int     `json:"priority" binding:"omitempty"`
-	AutoApply bool    `json:"auto_apply" binding:"omitempty"`
+	TaxRateCode string            `json:"tax_rate_code" binding:"required"`
+	Priority    int               `json:"priority" binding:"omitempty"`
+	Currency    string            `json:"currency" binding:"required"`
+	AutoApply   bool              `json:"auto_apply" binding:"omitempty" default:"true"`
+	Metadata    map[string]string `json:"metadata" binding:"omitempty"`
 }
 
 func (tr *TaxRateOverride) Validate() error {
-
-	// if the id is not provided, we need to validate the create tax rate request
-	if tr.TaxRateID == nil {
-
-		if err := validator.ValidateRequest(tr); err != nil {
-			return err
-		}
-
-		if err := tr.CreateTaxRateRequest.Validate(); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (tr *TaxRateOverride) ToTaxEntityAssociation(_ context.Context, entityID string, entityType types.TaxrateEntityType) *CreateEntityTaxAssociation {
-	return &CreateEntityTaxAssociation{
-		CreateTaxRateRequest: tr.CreateTaxRateRequest,
-		TaxRateID:            tr.TaxRateID,
-		EntityType:           entityType,
-		EntityID:             entityID,
-		Priority:             tr.Priority,
-		AutoApply:            tr.AutoApply,
-	}
-}
-
-type CreateEntityTaxAssociation struct {
-	CreateTaxRateRequest
-
-	TaxRateID  *string                 `json:"tax_rate_id" binding:"omitempty"`
-	EntityType types.TaxrateEntityType `json:"entity_type" binding:"required"`
-	EntityID   string                  `json:"entity_id" binding:"required"`
-	Priority   int                     `json:"priority" binding:"omitempty"`
-	AutoApply  bool                    `json:"auto_apply" binding:"omitempty"`
-}
-
-func (tr *CreateEntityTaxAssociation) Validate() error {
-	// if the id is not provided, we need to validate the create tax rate request
-	if tr.TaxRateID == nil {
-		if err := validator.ValidateRequest(tr); err != nil {
-			return err
-		}
-
-		if err := tr.CreateTaxRateRequest.Validate(); err != nil {
-			return err
-		}
-	}
-
-	if err := tr.EntityType.Validate(); err != nil {
+	if err := validator.ValidateRequest(tr); err != nil {
 		return err
 	}
 
-	if tr.EntityID == "" {
-		return ierr.NewError("entity_id is required").
-			WithHint("Entity ID cannot be empty").
+	if tr.Priority < 0 {
+		return ierr.NewError("priority cannot be less than 0").
+			WithHint("Priority cannot be less than 0").
 			Mark(ierr.ErrValidation)
 	}
 
 	return nil
 }
 
-type EntityTaxAssociationResponse struct {
-	EntityID       string                  `json:"entity_id"`
-	EntityType     types.TaxrateEntityType `json:"entity_type"`
-	LinkedTaxRates []*LinkedTaxRateInfo    `json:"linked_tax_rates"`
-}
-
-type LinkedTaxRateInfo struct {
-	TaxRateID        string `json:"tax_rate_id"`
-	TaxAssociationID string `json:"tax_association_id"`
-	Priority         int    `json:"priority"`
-	AutoApply        bool   `json:"auto_apply"`
-	WasCreated       bool   `json:"was_created"`
-}
-
-// ResolvedTaxRateInfo represents a tax rate that has been resolved or created
-// This is used as an intermediate structure between tax rate creation and association
-type ResolvedTaxRateInfo struct {
-	TaxRateID  string `json:"tax_rate_id"`
-	WasCreated bool   `json:"was_created"`
-	Priority   int    `json:"priority"`
-	AutoApply  bool   `json:"auto_apply"`
+func (tr *TaxRateOverride) ToTaxAssociationRequest(_ context.Context, entityID string, entityType types.TaxrateEntityType) *CreateTaxAssociationRequest {
+	return &CreateTaxAssociationRequest{
+		TaxRateCode: tr.TaxRateCode,
+		EntityType:  entityType,
+		EntityID:    entityID,
+		Priority:    tr.Priority,
+		AutoApply:   tr.AutoApply,
+		Currency:    tr.Currency,
+		Metadata:    tr.Metadata,
+	}
 }

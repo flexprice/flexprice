@@ -16,6 +16,25 @@ type TaxAssociationFilter struct {
 	AutoApply         *bool             `json:"auto_apply,omitempty" form:"auto_apply"`
 }
 
+// EntityHierarchy defines the hierarchy levels for tax associations
+// The order determines precedence: first level has highest priority
+var EntityHierarchy = []TaxrateEntityType{
+	TaxrateEntityTypeTenant,
+	TaxrateEntityTypeCustomer,
+	TaxrateEntityTypeSubscription,
+}
+
+// GetHierarchyLevels returns the hierarchy levels excluding the current entity type
+func GetHierarchyLevels(currentEntityType TaxrateEntityType) []TaxrateEntityType {
+	var levels []TaxrateEntityType
+	for _, level := range EntityHierarchy {
+		if level != currentEntityType {
+			levels = append(levels, level)
+		}
+	}
+	return levels
+}
+
 // NewTaxAssociationFilter creates a new tax association filter with default options
 func NewTaxAssociationFilter() *TaxAssociationFilter {
 	return &TaxAssociationFilter{

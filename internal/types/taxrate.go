@@ -144,11 +144,11 @@ func (s TaxRateAssignmentStatus) Validate() error {
 type TaxRateFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
-	Filters    []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
-	Sort       []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
-	TaxRateIDs []string           `json:"taxrate_ids,omitempty" form:"taxrate_ids" validate:"omitempty"`
-	Code       string             `json:"code,omitempty" form:"code" validate:"omitempty"`
-	Scope      TaxRateScope       `json:"scope,omitempty" form:"scope" validate:"omitempty"`
+	Filters      []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
+	Sort         []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
+	TaxRateIDs   []string           `json:"taxrate_ids,omitempty" form:"taxrate_ids" validate:"omitempty"`
+	TaxRateCodes []string           `json:"taxrate_codes,omitempty" form:"taxrate_codes" validate:"omitempty"`
+	Scope        TaxRateScope       `json:"scope,omitempty" form:"scope" validate:"omitempty"`
 }
 
 // NewTaxRateFilter creates a new TaxRateFilter with default values

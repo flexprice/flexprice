@@ -350,60 +350,37 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 }
 
 func (s *subscriptionService) handleTaxRateLinking(ctx context.Context, sub *subscription.Subscription, req dto.CreateSubscriptionRequest) error {
-
-	// handle tax rate linking
 	taxService := NewTaxService(s.ServiceParams)
-	taxLinkingRequests := make([]*dto.CreateEntityTaxAssociation, 0)
 
-	// if subscription has tax rate overrides, link them to the subscription
+	// if tax overrides are provided, link them to the subscription
 	if len(req.TaxRateOverrides) > 0 {
-		// if subscription has tax rate overrides, link them to the subscription
-		for _, taxRateOverride := range req.TaxRateOverrides {
-			taxRateLink := taxRateOverride.ToTaxEntityAssociation(ctx, sub.ID, types.TaxrateEntityTypeSubscription)
-			taxLinkingRequests = append(taxLinkingRequests, taxRateLink)
+		err := taxService.LinkTaxRatesToEntity(ctx, dto.LinkTaxRateToEntityRequest{
+			EntityType:       types.TaxrateEntityTypeSubscription,
+			EntityID:         sub.ID,
+			TaxRateOverrides: req.TaxRateOverrides,
+		})
+		if err != nil {
+			return err
 		}
-
 	} else {
-		// if subscription has no tax rate overrides, get the tax configs for the customer
 		filter := types.NewNoLimitTaxAssociationFilter()
-		filter.EntityType = types.TaxrateEntityTypeCustomer
-		filter.EntityID = sub.CustomerID
-		filter.Currency = sub.Currency
+		filter.EntityType = types.TaxrateEntityTypeTenant
+		filter.EntityID = types.GetTenantID(ctx)
 		filter.AutoApply = lo.ToPtr(true)
-
-		customerTaxes, err := taxService.ListTaxAssociations(ctx, filter)
+		tenantTaxAssociations, err := taxService.ListTaxAssociations(ctx, filter)
 		if err != nil {
 			return err
 		}
 
-		// if customer has no tax associations, do not link any tax rates to the subscription
-		if len(customerTaxes.Items) == 0 {
-			s.Logger.Infow("no tax associations found for customer, skipping tax rate linking for subscription",
-				"customer_id", sub.CustomerID,
-				"subscription_id", sub.ID,
-			)
-			return nil
-		}
-		// if customer has tax associations, link them to the subscription
-		for _, taxConfig := range customerTaxes.Items {
-			// simply just link the tax rate to the subscription
-			taxRateLink := &dto.CreateEntityTaxAssociation{
-				TaxRateID:  lo.ToPtr(taxConfig.TaxRateID),
-				EntityType: types.TaxrateEntityTypeSubscription,
-				EntityID:   sub.ID,
-				Priority:   taxConfig.Priority,
-				AutoApply:  taxConfig.AutoApply,
-			}
-			taxLinkingRequests = append(taxLinkingRequests, taxRateLink)
+		err = taxService.LinkTaxRatesToEntity(ctx, dto.LinkTaxRateToEntityRequest{
+			EntityType:              types.TaxrateEntityTypeSubscription,
+			EntityID:                sub.ID,
+			ExistingTaxAssociations: tenantTaxAssociations.Items,
+		})
+		if err != nil {
+			return err
 		}
 	}
-
-	// link tax rates to subscription
-	_, err := taxService.LinkTaxRatesToEntity(ctx, types.TaxrateEntityTypeSubscription, sub.ID, taxLinkingRequests)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 

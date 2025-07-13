@@ -493,8 +493,8 @@ func (o TaxRateQueryOptions) applyEntityQueryOptions(_ context.Context, f *types
 		return query, nil
 	}
 
-	if f.Code != "" {
-		query = query.Where(taxrate.Code(f.Code))
+	if f.TaxRateCodes != nil {
+		query = query.Where(taxrate.CodeIn(f.TaxRateCodes...))
 	}
 
 	if f.TaxRateIDs != nil {
