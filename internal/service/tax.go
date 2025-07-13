@@ -652,7 +652,7 @@ func (s *taxService) CreateTaxAssociation(ctx context.Context, req *dto.CreateTa
 	}
 
 	// Convert request to domain model
-	tc := req.ToTaxAssociation(ctx)
+	tc := req.ToTaxAssociation(ctx, taxRate.ID)
 
 	s.Logger.Infow("creating tax association",
 		"tax_rate_id", tc.TaxRateID,

@@ -364,8 +364,8 @@ func (s *subscriptionService) handleTaxRateLinking(ctx context.Context, sub *sub
 		}
 	} else {
 		filter := types.NewNoLimitTaxAssociationFilter()
-		filter.EntityType = types.TaxrateEntityTypeTenant
-		filter.EntityID = types.GetTenantID(ctx)
+		filter.EntityType = types.TaxrateEntityTypeCustomer
+		filter.EntityID = sub.CustomerID
 		filter.AutoApply = lo.ToPtr(true)
 		tenantTaxAssociations, err := taxService.ListTaxAssociations(ctx, filter)
 		if err != nil {

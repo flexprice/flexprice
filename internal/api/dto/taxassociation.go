@@ -51,10 +51,10 @@ func (r *CreateTaxAssociationRequest) Validate() error {
 	return nil
 }
 
-func (r *CreateTaxAssociationRequest) ToTaxAssociation(ctx context.Context) *taxconfig.TaxAssociation {
+func (r *CreateTaxAssociationRequest) ToTaxAssociation(ctx context.Context, taxRateID string) *taxconfig.TaxAssociation {
 	return &taxconfig.TaxAssociation{
 		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TAX_ASSOCIATION),
-		TaxRateID:     r.TaxRateCode,
+		TaxRateID:     taxRateID,
 		EntityType:    r.EntityType,
 		EntityID:      r.EntityID,
 		Priority:      r.Priority,
