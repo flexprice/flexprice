@@ -27,6 +27,9 @@ type CreditNote func(*sql.Selector)
 // CreditNoteLineItem is the predicate function for creditnotelineitem builders.
 type CreditNoteLineItem func(*sql.Selector)
 
+// CustomPricingUnit is the predicate function for custompricingunit builders.
+type CustomPricingUnit func(*sql.Selector)
+
 // Customer is the predicate function for customer builders.
 type Customer func(*sql.Selector)
 

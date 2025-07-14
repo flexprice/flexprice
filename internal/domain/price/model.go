@@ -43,6 +43,26 @@ type Price struct {
 	// Currency 3 digit ISO currency code in lowercase ex usd, eur, gbp
 	Currency string `db:"currency" json:"currency"`
 
+	// PriceUnitAmount is the amount stored in price unit
+	// For BTC: 0.00000001 means 0.00000001 BTC
+	PriceUnitAmount decimal.Decimal `db:"price_unit_amount" json:"price_unit_amount"`
+
+	// DisplayPriceUnitAmount is the formatted amount with price unit symbol
+	// For BTC: 0.00000001 BTC
+	DisplayPriceUnitAmount string `db:"display_price_unit_amount" json:"display_price_unit_amount"`
+
+	// PriceUnit 3 digit ISO currency code in lowercase ex btc
+	// For BTC: btc
+	PriceUnit string `db:"price_unit" json:"price_unit"`
+
+	// ConversionRate is the rate of the price unit to the base currency
+	// For BTC: 1 BTC = 100000000 USD
+	ConversionRate decimal.Decimal `db:"conversion_rate" json:"conversion_rate"`
+
+	// Precision is the precision of the price unit
+	// For BTC: 8
+	Precision int `db:"precision" json:"precision"`
+
 	// PlanID is the id of the plan for plan based pricing
 	PlanID string `db:"plan_id" json:"plan_id"`
 
@@ -312,7 +332,7 @@ func FromEnt(e *ent.Price) *Price {
 		}
 	}
 
-	return &Price{
+	p := &Price{
 		ID:                 e.ID,
 		Amount:             decimal.NewFromFloat(e.Amount),
 		Currency:           e.Currency,
@@ -342,6 +362,17 @@ func FromEnt(e *ent.Price) *Price {
 			UpdatedBy: e.UpdatedBy,
 		},
 	}
+
+	// Handle custom pricing unit fields
+	if e.CustomPricingUnitID != "" {
+		p.PriceUnit = e.CustomPricingUnitID
+		p.PriceUnitAmount = decimal.NewFromFloat(e.PriceUnitAmount)
+		p.DisplayPriceUnitAmount = e.DisplayPriceUnitAmount
+		p.ConversionRate = decimal.NewFromFloat(e.ConversionRate)
+		p.Precision = e.Precision
+	}
+
+	return p
 }
 
 // FromEntList converts a list of Ent Prices to domain Prices

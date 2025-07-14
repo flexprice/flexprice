@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/domain/auth"
@@ -9,6 +10,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/creditgrantapplication"
 	"github.com/flexprice/flexprice/internal/domain/creditnote"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/custompricingunit"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/events"
@@ -39,6 +41,7 @@ type RepositoryParams struct {
 	EntClient    postgres.IClient
 	ClickHouseDB *clickhouse.ClickHouseStore
 	Cache        cache.Cache
+	Client       *ent.Client
 }
 
 func NewEventRepository(p RepositoryParams) events.Repository {
@@ -135,4 +138,8 @@ func NewCreditNoteRepository(p RepositoryParams) creditnote.Repository {
 
 func NewCreditNoteLineItemRepository(p RepositoryParams) creditnote.CreditNoteLineItemRepository {
 	return entRepo.NewCreditNoteLineItemRepository(p.EntClient, p.Logger, p.Cache)
+}
+
+func NewCustomPricingUnitRepository(p RepositoryParams) custompricingunit.Repository {
+	return entRepo.NewCustomPricingUnitRepository(p.EntClient, p.Logger, p.Cache)
 }
