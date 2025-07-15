@@ -1619,6 +1619,74 @@ func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
 			expectedCurrentUsage:    decimal.NewFromInt(0),   // No usage charges due to entitlement
 			wantErr:                 false,
 		},
+		{
+			name: "mixed_charges_with_entitlement",
+			setupFunc: func() {
+				// Add entitlement for API calls
+				entitlement := &entitlement.Entitlement{
+					ID:               "ent_test_5",
+					PlanID:           s.testData.plan.ID,
+					FeatureID:        "feat_api_calls",
+					FeatureType:      types.FeatureTypeMetered,
+					IsEnabled:        true,
+					UsageLimit:       lo.ToPtr(int64(2000)),
+					UsageResetPeriod: types.BILLING_PERIOD_MONTHLY,
+					IsSoftLimit:      false,
+					BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+				}
+				_, err := s.GetStores().EntitlementRepo.Create(s.GetContext(), entitlement)
+				s.NoError(err)
+
+				// Add fixed charge subscription
+				fixedPrice := &price.Price{
+					ID:                 "price_fixed_1",
+					Amount:             decimal.NewFromInt(50),
+					Currency:           "usd",
+					PlanID:             s.testData.plan.ID,
+					Type:               types.PRICE_TYPE_FIXED,
+					BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+					BillingPeriodCount: 1,
+					BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+					BillingCadence:     types.BILLING_CADENCE_RECURRING,
+					InvoiceCadence:     types.InvoiceCadenceAdvance,
+					BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
+				}
+				s.NoError(s.GetStores().PriceRepo.Create(s.GetContext(), fixedPrice))
+
+				sub := &subscription.Subscription{
+					ID:                 "sub_fixed_1",
+					PlanID:             s.testData.plan.ID,
+					CustomerID:         s.testData.customer.ID,
+					StartDate:          s.testData.now.Add(-24 * time.Hour),
+					CurrentPeriodStart: s.testData.now.Add(-24 * time.Hour),
+					CurrentPeriodEnd:   s.testData.now.Add(6 * 24 * time.Hour),
+					Currency:           "usd",
+					BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+					BillingPeriodCount: 1,
+					SubscriptionStatus: types.SubscriptionStatusActive,
+					BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
+				}
+				lineItem := &subscription.SubscriptionLineItem{
+					CustomerID:      s.testData.customer.ID,
+					PlanID:          s.testData.plan.ID,
+					PlanDisplayName: s.testData.plan.Name,
+					PriceID:         fixedPrice.ID,
+					PriceType:       types.PRICE_TYPE_FIXED,
+					DisplayName:     "Fixed Monthly Fee",
+					Quantity:        decimal.NewFromInt(1),
+					BillingPeriod:   types.BILLING_PERIOD_MONTHLY,
+					StartDate:       s.testData.now.Add(-24 * time.Hour),
+					EndDate:         s.testData.now.Add(6 * 24 * time.Hour),
+					Metadata:        map[string]string{},
+					BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
+				}
+				s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(s.GetContext(), sub, []*subscription.SubscriptionLineItem{lineItem}))
+			},
+			expectedRealTimeBalance: decimal.NewFromInt(700), // 1000 - 250 (unpaid) - 50 (fixed)
+			expectedUnpaidAmount:    decimal.NewFromInt(250), // 100 + 150 (USD invoices)
+			expectedCurrentUsage:    decimal.NewFromInt(50),  // Fixed charge only, API calls covered by entitlement
+			wantErr:                 false,
+		},
 	}
 
 	for _, tt := range tests {
