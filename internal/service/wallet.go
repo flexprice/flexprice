@@ -389,7 +389,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 // It considers:
 // 1. Current wallet balance
 // 2. Unpaid invoices
-// 3. Current period charges (including fixed charges and usage charges with entitlements)
+// 3. Current period charges (usage charges with entitlements)
 func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (*dto.WalletBalanceResponse, error) {
 	if walletID == "" {
 		return nil, ierr.NewError("wallet_id is required").
@@ -452,7 +452,7 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 	// Initialize billing service
 	billingService := NewBillingService(s.ServiceParams)
 
-	// Calculate total pending charges (both fixed and usage)
+	// Calculate total pending charges (usage)
 	totalPendingCharges := decimal.Zero
 	for _, sub := range filteredSubscriptions {
 		// Get current period
@@ -470,12 +470,6 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 			return nil, err
 		}
 
-		// Calculate fixed charges
-		fixedCharges, fixedTotal, err := billingService.CalculateFixedCharges(ctx, sub, periodStart, periodEnd)
-		if err != nil {
-			return nil, err
-		}
-
 		// Calculate usage charges
 		usageCharges, usageTotal, err := billingService.CalculateUsageCharges(ctx, sub, usage, periodStart, periodEnd)
 		if err != nil {
@@ -484,12 +478,10 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 
 		s.Logger.Infow("subscription charges details",
 			"subscription_id", sub.ID,
-			"fixed_total", fixedTotal,
 			"usage_total", usageTotal,
-			"num_fixed_charges", len(fixedCharges),
 			"num_usage_charges", len(usageCharges))
 
-		totalPendingCharges = totalPendingCharges.Add(fixedTotal).Add(usageTotal)
+		totalPendingCharges = totalPendingCharges.Add(usageTotal)
 	}
 
 	// Calculate real-time balance
