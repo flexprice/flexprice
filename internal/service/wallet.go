@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -384,98 +385,126 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 	return paymentID, err
 }
 
+// GetWalletBalance calculates the real-time available balance for a wallet
+// It considers:
+// 1. Current wallet balance
+// 2. Unpaid invoices
+// 3. Current period charges (usage charges with entitlements)
 func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (*dto.WalletBalanceResponse, error) {
-	response := &dto.WalletBalanceResponse{
-		RealTimeBalance: lo.ToPtr(decimal.Zero),
+	if walletID == "" {
+		return nil, ierr.NewError("wallet_id is required").
+			WithHint("Wallet ID is required").
+			Mark(ierr.ErrValidation)
 	}
 
+	// Get wallet details
 	w, err := s.WalletRepo.GetWalletByID(ctx, walletID)
 	if err != nil {
 		return nil, err
 	}
 
+	// Safety check: Return zero balance for inactive wallets
+	// This prevents any calculations on invalid wallet states
 	if w.WalletStatus != types.WalletStatusActive {
-		response.Wallet = w
-		response.RealTimeBalance = lo.ToPtr(decimal.Zero)
-		response.RealTimeCreditBalance = lo.ToPtr(decimal.Zero)
-		response.BalanceUpdatedAt = lo.ToPtr(w.UpdatedAt)
-		return response, nil
+		return &dto.WalletBalanceResponse{
+			Wallet:                w,
+			RealTimeBalance:       lo.ToPtr(decimal.Zero),
+			RealTimeCreditBalance: lo.ToPtr(decimal.Zero),
+			BalanceUpdatedAt:      lo.ToPtr(w.UpdatedAt),
+			UnpaidInvoiceAmount:   lo.ToPtr(decimal.Zero),
+			CurrentPeriodUsage:    lo.ToPtr(decimal.Zero),
+		}, nil
 	}
 
-	// Get invoice summary for unpaid amounts
+	// STEP 1: Get all unpaid invoices for the customer
+	// This includes any previously generated invoices that haven't been paid
 	invoiceService := NewInvoiceService(s.ServiceParams)
-
 	invoiceSummary, err := invoiceService.GetCustomerInvoiceSummary(ctx, w.CustomerID, w.Currency)
 	if err != nil {
 		return nil, err
 	}
 
-	// Get current period usage for active subscriptions
-	subscriptionService := NewSubscriptionService(s.ServiceParams)
+	s.Logger.Infow("unpaid invoice summary",
+		"customer_id", w.CustomerID,
+		"currency", w.Currency,
+		"total_unpaid", invoiceSummary.TotalUnpaidAmount,
+		"total_overdue", invoiceSummary.TotalOverdueAmount)
 
-	filter := types.NewSubscriptionFilter()
-	filter.CustomerID = w.CustomerID
-	filter.SubscriptionStatus = []types.SubscriptionStatus{
-		types.SubscriptionStatusActive,
-	}
-
-	subscriptionsResp, err := subscriptionService.ListSubscriptions(ctx, filter)
+	// STEP 2: Get all active subscriptions to calculate current usage
+	subscriptions, err := s.SubRepo.ListByCustomerID(ctx, w.CustomerID)
 	if err != nil {
 		return nil, err
 	}
 
-	currentPeriodUsage := decimal.Zero
-	for _, sub := range subscriptionsResp.Items {
-		// Skip subscriptions with different currency
-		if !types.IsMatchingCurrency(sub.Subscription.Currency, w.Currency) {
-			continue
-		}
-
-		// Get current period usage for subscription
-		usageResp, err := subscriptionService.GetUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
-			SubscriptionID: sub.Subscription.ID,
-			StartTime:      sub.Subscription.CurrentPeriodStart,
-			EndTime:        sub.Subscription.CurrentPeriodEnd,
-			LifetimeUsage:  false, // Only get current period usage
-		})
-		if err != nil {
-			s.Logger.Errorw("failed to get current period usage",
-				"wallet_id", walletID,
+	// Filter subscriptions by currency
+	filteredSubscriptions := make([]*subscription.Subscription, 0)
+	for _, sub := range subscriptions {
+		if sub.Currency == w.Currency {
+			filteredSubscriptions = append(filteredSubscriptions, sub)
+			s.Logger.Infow("found matching subscription",
 				"subscription_id", sub.ID,
-				"error", err,
-			)
-			continue
-		}
-
-		if usageResp.Amount > 0 {
-			currentPeriodUsage = currentPeriodUsage.Add(decimal.NewFromFloat(usageResp.Amount))
+				"currency", sub.Currency,
+				"period_start", sub.CurrentPeriodStart,
+				"period_end", sub.CurrentPeriodEnd)
 		}
 	}
 
-	// Calculate real-time balance:
-	// wallet_balance - (unpaid_invoices + current_period_usage)
-	// NOTE: in future, we can add a feature to allow customers to set a threshold for real-time balance
-	// NOTE: in future we can restrict a wallet balance to be adjusted only for usage or fixed amount
-	realTimeBalance := w.Balance.
-		Sub(invoiceSummary.TotalUnpaidAmount).
-		Sub(currentPeriodUsage)
+	// Initialize billing service
+	billingService := NewBillingService(s.ServiceParams)
 
-	s.Logger.Debugw("calculated real-time balance",
-		"wallet_id", walletID,
+	// Calculate total pending charges (usage)
+	totalPendingCharges := decimal.Zero
+	for _, sub := range filteredSubscriptions {
+		// Get current period
+		periodStart := sub.CurrentPeriodStart
+		periodEnd := sub.CurrentPeriodEnd
+
+		// Get usage data for current period
+		subscriptionService := NewSubscriptionService(s.ServiceParams)
+		usage, err := subscriptionService.GetUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
+			SubscriptionID: sub.ID,
+			StartTime:      periodStart,
+			EndTime:        periodEnd,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		// Calculate usage charges
+		usageCharges, usageTotal, err := billingService.CalculateUsageCharges(ctx, sub, usage, periodStart, periodEnd)
+		if err != nil {
+			return nil, err
+		}
+
+		s.Logger.Infow("subscription charges details",
+			"subscription_id", sub.ID,
+			"usage_total", usageTotal,
+			"num_usage_charges", len(usageCharges))
+
+		totalPendingCharges = totalPendingCharges.Add(usageTotal)
+	}
+
+	// Calculate real-time balance
+	realTimeBalance := w.Balance.Sub(invoiceSummary.TotalUnpaidAmount).Sub(totalPendingCharges)
+
+	s.Logger.Debugw("detailed balance calculation",
+		"wallet_id", w.ID,
 		"current_balance", w.Balance,
 		"unpaid_invoices", invoiceSummary.TotalUnpaidAmount,
-		"current_period_usage", currentPeriodUsage,
+		"pending_charges", totalPendingCharges,
 		"real_time_balance", realTimeBalance,
-		"currency", w.Currency,
-	)
+		"credit_balance", w.CreditBalance)
+
+	// Convert real-time balance to credit balance
+	realTimeCreditBalance := s.GetCreditsFromCurrencyAmount(realTimeBalance, w.ConversionRate)
 
 	return &dto.WalletBalanceResponse{
 		Wallet:                w,
-		RealTimeBalance:       lo.ToPtr(realTimeBalance),
-		RealTimeCreditBalance: lo.ToPtr(s.GetCreditsFromCurrencyAmount(realTimeBalance, w.ConversionRate)),
-		BalanceUpdatedAt:      lo.ToPtr(time.Now().UTC()),
-		UnpaidInvoiceAmount:   lo.ToPtr(invoiceSummary.TotalUnpaidAmount),
-		CurrentPeriodUsage:    lo.ToPtr(currentPeriodUsage),
+		RealTimeBalance:       &realTimeBalance,
+		RealTimeCreditBalance: &realTimeCreditBalance,
+		BalanceUpdatedAt:      lo.ToPtr(w.UpdatedAt),
+		UnpaidInvoiceAmount:   &invoiceSummary.TotalUnpaidAmount,
+		CurrentPeriodUsage:    &totalPendingCharges,
 	}, nil
 }
 
