@@ -351,6 +351,7 @@ func (r *taxrateRepository) GetByCode(ctx context.Context, code string) (*domain
 			taxrate.Code(code),
 			taxrate.TenantID(types.GetTenantID(ctx)),
 			taxrate.EnvironmentID(types.GetEnvironmentID(ctx)),
+			taxrate.Status(string(types.StatusPublished)),
 		).
 		Only(ctx)
 

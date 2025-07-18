@@ -12,20 +12,21 @@ type ExpandableField string
 
 // Common expandable fields
 const (
-	ExpandPrices       ExpandableField = "prices"
-	ExpandPlan         ExpandableField = "plan"
-	ExpandMeters       ExpandableField = "meters"
-	ExpandFeatures     ExpandableField = "features"
-	ExpandPlans        ExpandableField = "plans"
-	ExpandEntitlements ExpandableField = "entitlements"
-	ExpandSchedule     ExpandableField = "schedule"
-	ExpandInvoice      ExpandableField = "invoice"
-	ExpandSubscription ExpandableField = "subscription"
-	ExpandCustomer     ExpandableField = "customer"
-	ExpandCreditNote   ExpandableField = "credit_note"
-	ExpandCreditGrant  ExpandableField = "credit_grant"
-	ExpandTaxApplied   ExpandableField = "tax_applied"
-	ExpandTaxRate      ExpandableField = "tax_rate"
+	ExpandPrices         ExpandableField = "prices"
+	ExpandPlan           ExpandableField = "plan"
+	ExpandMeters         ExpandableField = "meters"
+	ExpandFeatures       ExpandableField = "features"
+	ExpandPlans          ExpandableField = "plans"
+	ExpandEntitlements   ExpandableField = "entitlements"
+	ExpandSchedule       ExpandableField = "schedule"
+	ExpandInvoice        ExpandableField = "invoice"
+	ExpandSubscription   ExpandableField = "subscription"
+	ExpandCustomer       ExpandableField = "customer"
+	ExpandCreditNote     ExpandableField = "credit_note"
+	ExpandCreditGrant    ExpandableField = "credit_grant"
+	ExpandTaxApplied     ExpandableField = "tax_applied"
+	ExpandTaxRate        ExpandableField = "tax_rate"
+	ExpandTaxAssociation ExpandableField = "tax_association"
 )
 
 // ExpandConfig defines which fields can be expanded and their nested expansions
@@ -84,6 +85,14 @@ var (
 
 	// TaxAppliedExpandConfig defines what can be expanded on a tax applied
 	TaxAppliedExpandConfig = ExpandConfig{
+		AllowedFields: []ExpandableField{ExpandTaxRate},
+		NestedExpands: map[ExpandableField][]ExpandableField{
+			ExpandTaxRate: {},
+		},
+	}
+
+	// TaxAssociationExpandConfig defines what can be expanded on a tax association
+	TaxAssociationExpandConfig = ExpandConfig{
 		AllowedFields: []ExpandableField{ExpandTaxRate},
 		NestedExpands: map[ExpandableField][]ExpandableField{
 			ExpandTaxRate: {},

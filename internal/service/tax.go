@@ -6,7 +6,6 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
-	taxapplied "github.com/flexprice/flexprice/internal/domain/taxapplied"
 	"github.com/flexprice/flexprice/internal/domain/taxassociation"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
@@ -699,7 +698,15 @@ func (s *taxService) GetTaxAssociation(ctx context.Context, id string) (*dto.Tax
 		return nil, err
 	}
 
-	return dto.ToTaxAssociationResponse(tc), nil
+	taxRate, err := s.GetTaxRate(ctx, tc.TaxRateID)
+	if err != nil {
+		return nil, err
+	}
+
+	response := dto.ToTaxAssociationResponse(tc)
+	response.TaxRate = taxRate
+
+	return response, nil
 }
 
 // UpdateTaxAssociation updates a tax association
@@ -819,6 +826,7 @@ func (s *taxService) ListTaxAssociations(ctx context.Context, filter *types.TaxA
 
 	for i, tc := range taxAssociations {
 		response.Items[i] = dto.ToTaxAssociationResponse(tc)
+
 	}
 
 	response.Pagination = types.NewPaginationResponse(total, filter.GetLimit(), filter.GetOffset())
@@ -1085,38 +1093,28 @@ func (s *taxService) processTaxApplication(ctx context.Context, inv *invoice.Inv
 	}
 
 	if existingTaxApplied != nil {
-		return s.updateExistingTaxApplied(ctx, existingTaxApplied, taxableAmount, taxAmount, taxRate)
-	}
+		existingTaxApplied.TaxableAmount = taxableAmount
+		existingTaxApplied.TaxAmount = taxAmount
+		existingTaxApplied.AppliedAt = time.Now().UTC()
 
-	return s.createNewTaxApplied(ctx, inv, taxRate, taxableAmount, taxAmount, idempotencyKey)
-}
+		if err := s.TaxAppliedRepo.Update(ctx, existingTaxApplied); err != nil {
+			s.Logger.Errorw("failed to update existing tax applied record",
+				"error", err,
+				"tax_applied_id", existingTaxApplied.ID,
+				"tax_rate_id", taxRate.ID)
+			return nil, err
+		}
 
-// updateExistingTaxApplied updates an existing tax applied record
-func (s *taxService) updateExistingTaxApplied(ctx context.Context, existingTaxApplied *taxapplied.TaxApplied, taxableAmount, taxAmount decimal.Decimal, taxRate *dto.TaxRateResponse) (*dto.TaxAppliedResponse, error) {
-	existingTaxApplied.TaxableAmount = taxableAmount
-	existingTaxApplied.TaxAmount = taxAmount
-	existingTaxApplied.AppliedAt = time.Now().UTC()
-
-	if err := s.TaxAppliedRepo.Update(ctx, existingTaxApplied); err != nil {
-		s.Logger.Errorw("failed to update existing tax applied record",
-			"error", err,
+		s.Logger.Infow("updated existing tax applied record",
 			"tax_applied_id", existingTaxApplied.ID,
-			"tax_rate_id", taxRate.ID)
-		return nil, err
+			"tax_rate_id", taxRate.ID,
+			"tax_rate_code", taxRate.Code,
+			"tax_amount", taxAmount,
+			"taxable_amount", taxableAmount)
+
+		return &dto.TaxAppliedResponse{TaxApplied: *existingTaxApplied}, nil
 	}
 
-	s.Logger.Infow("updated existing tax applied record",
-		"tax_applied_id", existingTaxApplied.ID,
-		"tax_rate_id", taxRate.ID,
-		"tax_rate_code", taxRate.Code,
-		"tax_amount", taxAmount,
-		"taxable_amount", taxableAmount)
-
-	return &dto.TaxAppliedResponse{TaxApplied: *existingTaxApplied}, nil
-}
-
-// createNewTaxApplied creates a new tax applied record
-func (s *taxService) createNewTaxApplied(ctx context.Context, inv *invoice.Invoice, taxRate *dto.TaxRateResponse, taxableAmount, taxAmount decimal.Decimal, idempotencyKey string) (*dto.TaxAppliedResponse, error) {
 	taxAppliedRecord := &dto.CreateTaxAppliedRequest{
 		TaxRateID:     taxRate.ID,
 		EntityType:    types.TaxrateEntityTypeInvoice,
@@ -1129,6 +1127,7 @@ func (s *taxService) createNewTaxApplied(ctx context.Context, inv *invoice.Invoi
 	// Convert to domain model and set idempotency key
 	taxApplied := taxAppliedRecord.ToTaxApplied(ctx)
 	taxApplied.IdempotencyKey = &idempotencyKey
+	taxApplied.AppliedAt = time.Now().UTC()
 
 	// Create the tax applied record
 	if err := s.TaxAppliedRepo.Create(ctx, taxApplied); err != nil {

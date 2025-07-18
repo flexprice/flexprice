@@ -218,6 +218,9 @@ func (s *InMemoryTaxRateStore) GetByCode(ctx context.Context, code string) (*tax
 		TaxRateCodes: []string{code},
 	}
 
+	// Apply status filter
+	filter.Status = lo.ToPtr(types.StatusPublished)
+
 	taxRates, err := s.List(ctx, filter)
 	if err != nil {
 		return nil, ierr.WithError(err).

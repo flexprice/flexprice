@@ -120,6 +120,7 @@ type TaxAssociationResponse struct {
 	UpdatedAt     time.Time               `json:"updated_at"`
 	CreatedBy     string                  `json:"created_by"`
 	UpdatedBy     string                  `json:"updated_by"`
+	TaxRate       *TaxRateResponse        `json:"tax_rate,omitempty"`
 }
 
 // ToTaxAssociationResponse converts a domain TaxConfig to a TaxConfigResponse
@@ -145,6 +146,11 @@ func ToTaxAssociationResponse(tc *taxassociation.TaxAssociation) *TaxAssociation
 		CreatedBy:     tc.CreatedBy,
 		UpdatedBy:     tc.UpdatedBy,
 	}
+}
+
+func (r *TaxAssociationResponse) WithTaxRate(taxRate *TaxRateResponse) *TaxAssociationResponse {
+	r.TaxRate = taxRate
+	return r
 }
 
 // ListTaxAssociationsResponse represents the response for listing tax associations

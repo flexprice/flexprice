@@ -12,7 +12,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	pdf "github.com/flexprice/flexprice/internal/domain/pdf"
-	taxapplied "github.com/flexprice/flexprice/internal/domain/taxapplied"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
@@ -248,33 +247,16 @@ func (s *invoiceService) GetInvoice(ctx context.Context, id string) (*dto.Invoic
 	}
 
 	// get tax applied records
+	taxService := NewTaxService(s.ServiceParams)
 	filter := types.NewNoLimitTaxAppliedFilter()
 	filter.EntityType = types.TaxrateEntityTypeInvoice
 	filter.EntityID = inv.ID
-	appliedTaxes, err := s.TaxAppliedRepo.List(ctx, filter)
+	appliedTaxes, err := taxService.ListTaxApplied(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
 
-	// Debug logging
-	s.Logger.Infow("Found tax applied records for invoice",
-		"invoice_id", inv.ID,
-		"tax_applied_count", len(appliedTaxes),
-		"entity_type", types.TaxrateEntityTypeInvoice,
-		"entity_id", inv.ID,
-	)
-
-	if len(appliedTaxes) > 0 {
-		taxes := lo.Map(appliedTaxes, func(tax *taxapplied.TaxApplied, _ int) *dto.TaxAppliedResponse {
-			return &dto.TaxAppliedResponse{TaxApplied: *tax}
-		})
-		s.Logger.Infow("Taxes slice before setting on response", "taxes", taxes)
-		response = response.WithTaxes(taxes)
-		s.Logger.Infow("Added tax applied records to response",
-			"invoice_id", inv.ID,
-			"tax_count", len(taxes),
-		)
-	}
+	response.Taxes = appliedTaxes.Items
 
 	return response, nil
 }
