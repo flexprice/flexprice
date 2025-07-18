@@ -267,7 +267,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		}
 
 		// Tax rate routes
-		taxRates := v1Private.Group("/taxrates")
+		taxRates := v1Private.Group("/taxes/rates")
 		{
 			taxRates.POST("", handlers.Tax.CreateTaxRate)
 			taxRates.GET("", handlers.Tax.ListTaxRates)
