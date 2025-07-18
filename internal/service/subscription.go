@@ -362,7 +362,10 @@ func (s *subscriptionService) handleTaxRateLinking(ctx context.Context, sub *sub
 		if err != nil {
 			return err
 		}
-	} else {
+	}
+
+	// If no tax rate overrides are provided, link the customer's tax association to the subscription
+	if req.TaxRateOverrides == nil {
 		filter := types.NewNoLimitTaxAssociationFilter()
 		filter.EntityType = types.TaxrateEntityTypeCustomer
 		filter.EntityID = sub.CustomerID

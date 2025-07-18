@@ -63,7 +63,10 @@ func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCust
 			if err != nil {
 				return err
 			}
-		} else {
+		}
+
+		// If no tax rate overrides are provided, link the tenant tax rate to the customer
+		if req.TaxRateOverrides == nil {
 			filter := types.NewNoLimitTaxAssociationFilter()
 			filter.EntityType = types.TaxrateEntityTypeTenant
 			filter.EntityID = types.GetTenantID(txCtx)

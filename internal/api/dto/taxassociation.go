@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	taxconfig "github.com/flexprice/flexprice/internal/domain/taxassociation"
+	taxassociation "github.com/flexprice/flexprice/internal/domain/taxassociation"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
@@ -51,8 +51,8 @@ func (r *CreateTaxAssociationRequest) Validate() error {
 	return nil
 }
 
-func (r *CreateTaxAssociationRequest) ToTaxAssociation(ctx context.Context, taxRateID string) *taxconfig.TaxAssociation {
-	return &taxconfig.TaxAssociation{
+func (r *CreateTaxAssociationRequest) ToTaxAssociation(ctx context.Context, taxRateID string) *taxassociation.TaxAssociation {
+	return &taxassociation.TaxAssociation{
 		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TAX_ASSOCIATION),
 		TaxRateID:     taxRateID,
 		EntityType:    r.EntityType,
@@ -123,7 +123,7 @@ type TaxAssociationResponse struct {
 }
 
 // ToTaxAssociationResponse converts a domain TaxConfig to a TaxConfigResponse
-func ToTaxAssociationResponse(tc *taxconfig.TaxAssociation) *TaxAssociationResponse {
+func ToTaxAssociationResponse(tc *taxassociation.TaxAssociation) *TaxAssociationResponse {
 	if tc == nil {
 		return nil
 	}

@@ -23,7 +23,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/task"
 	taxrate "github.com/flexprice/flexprice/internal/domain/tax"
 	taxapplied "github.com/flexprice/flexprice/internal/domain/taxapplied"
-	taxconfig "github.com/flexprice/flexprice/internal/domain/taxassociation"
+	"github.com/flexprice/flexprice/internal/domain/taxassociation"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
@@ -144,7 +144,7 @@ func NewTaxRateRepository(p RepositoryParams) taxrate.Repository {
 	return entRepo.NewTaxRateRepository(p.EntClient, p.Logger, p.Cache)
 }
 
-func NewTaxAssociationRepository(p RepositoryParams) taxconfig.Repository {
+func NewTaxAssociationRepository(p RepositoryParams) taxassociation.Repository {
 	return entRepo.NewTaxAssociationRepository(p.EntClient, p.Logger, p.Cache)
 }
 
