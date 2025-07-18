@@ -68,6 +68,8 @@ func (s *SubscriptionServiceSuite) setupService() {
 		Logger:                     s.GetLogger(),
 		Config:                     s.GetConfig(),
 		DB:                         s.GetDB(),
+		TaxAssociationRepo:         s.GetStores().TaxAssociationRepo,
+		TaxRateRepo:                s.GetStores().TaxRateRepo,
 		SubRepo:                    s.GetStores().SubscriptionRepo,
 		PlanRepo:                   s.GetStores().PlanRepo,
 		PriceRepo:                  s.GetStores().PriceRepo,

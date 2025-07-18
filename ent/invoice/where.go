@@ -161,6 +161,11 @@ func RefundedAmount(v decimal.Decimal) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldRefundedAmount, v))
 }
 
+// TotalTax applies equality check predicate on the "total_tax" field. It's identical to TotalTaxEQ.
+func TotalTax(v decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldTotalTax, v))
+}
+
 // Total applies equality check predicate on the "total" field. It's identical to TotalEQ.
 func Total(v decimal.Decimal) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldTotal, v))
@@ -1339,6 +1344,56 @@ func RefundedAmountIsNil() predicate.Invoice {
 // RefundedAmountNotNil applies the NotNil predicate on the "refunded_amount" field.
 func RefundedAmountNotNil() predicate.Invoice {
 	return predicate.Invoice(sql.FieldNotNull(FieldRefundedAmount))
+}
+
+// TotalTaxEQ applies the EQ predicate on the "total_tax" field.
+func TotalTaxEQ(v decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldTotalTax, v))
+}
+
+// TotalTaxNEQ applies the NEQ predicate on the "total_tax" field.
+func TotalTaxNEQ(v decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNEQ(FieldTotalTax, v))
+}
+
+// TotalTaxIn applies the In predicate on the "total_tax" field.
+func TotalTaxIn(vs ...decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldIn(FieldTotalTax, vs...))
+}
+
+// TotalTaxNotIn applies the NotIn predicate on the "total_tax" field.
+func TotalTaxNotIn(vs ...decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotIn(FieldTotalTax, vs...))
+}
+
+// TotalTaxGT applies the GT predicate on the "total_tax" field.
+func TotalTaxGT(v decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGT(FieldTotalTax, v))
+}
+
+// TotalTaxGTE applies the GTE predicate on the "total_tax" field.
+func TotalTaxGTE(v decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGTE(FieldTotalTax, v))
+}
+
+// TotalTaxLT applies the LT predicate on the "total_tax" field.
+func TotalTaxLT(v decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLT(FieldTotalTax, v))
+}
+
+// TotalTaxLTE applies the LTE predicate on the "total_tax" field.
+func TotalTaxLTE(v decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLTE(FieldTotalTax, v))
+}
+
+// TotalTaxIsNil applies the IsNil predicate on the "total_tax" field.
+func TotalTaxIsNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldIsNull(FieldTotalTax))
+}
+
+// TotalTaxNotNil applies the NotNil predicate on the "total_tax" field.
+func TotalTaxNotNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotNull(FieldTotalTax))
 }
 
 // TotalEQ applies the EQ predicate on the "total" field.
