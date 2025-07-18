@@ -824,9 +824,40 @@ func (s *taxService) ListTaxAssociations(ctx context.Context, filter *types.TaxA
 		Items: make([]*dto.TaxAssociationResponse, len(taxAssociations)),
 	}
 
+	// Initialize response items
 	for i, tc := range taxAssociations {
 		response.Items[i] = dto.ToTaxAssociationResponse(tc)
+	}
 
+	// Fetch tax rates if requested
+	if filter.GetExpand().Has(types.ExpandTaxRate) {
+		taxRateIDs := lo.Map(taxAssociations, func(tc *taxassociation.TaxAssociation, _ int) string {
+			return tc.TaxRateID
+		})
+
+		taxRateFilter := types.NewNoLimitTaxRateFilter()
+		taxRateFilter.TaxRateIDs = taxRateIDs
+
+		taxRatesResponse, err := s.ListTaxRates(ctx, taxRateFilter)
+		if err != nil {
+			s.Logger.Errorw("failed to list tax rates",
+				"error", err,
+				"tax_rate_ids", taxRateIDs)
+			return nil, err
+		}
+
+		// Create a map for quick lookup
+		taxRatesByID := make(map[string]*dto.TaxRateResponse)
+		for _, taxRate := range taxRatesResponse.Items {
+			taxRatesByID[taxRate.ID] = taxRate
+		}
+
+		// Assign tax rates to the appropriate associations
+		for i, tc := range taxAssociations {
+			if taxRate, exists := taxRatesByID[tc.TaxRateID]; exists {
+				response.Items[i].TaxRate = taxRate
+			}
+		}
 	}
 
 	response.Pagination = types.NewPaginationResponse(total, filter.GetLimit(), filter.GetOffset())
