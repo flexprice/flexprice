@@ -916,79 +916,69 @@ func (s *taxService) LinkTaxRatesToEntity(ctx context.Context, req dto.LinkTaxRa
 // This method handles both tax rate overrides and subscription tax rates
 func (s *taxService) PrepareTaxRatesForInvoice(ctx context.Context, req dto.CreateInvoiceRequest) ([]*dto.TaxRateResponse, error) {
 	if len(req.TaxRateOverrides) > 0 {
-		return s.getTaxRatesFromOverrides(ctx, req.TaxRateOverrides)
+		s.Logger.Infow("processing tax rate overrides for invoice",
+			"overrides_count", len(req.TaxRateOverrides))
+
+		taxRateCodes := make([]string, len(req.TaxRateOverrides))
+		for i, override := range req.TaxRateOverrides {
+			taxRateCodes[i] = override.TaxRateCode
+		}
+
+		filter := types.NewNoLimitTaxRateFilter()
+		filter.TaxRateCodes = taxRateCodes
+
+		taxRatesResponse, err := s.ListTaxRates(ctx, filter)
+		if err != nil {
+			s.Logger.Errorw("failed to resolve tax rates from overrides",
+				"error", err,
+				"tax_rate_codes", taxRateCodes)
+			return nil, err
+		}
+
+		return taxRatesResponse.Items, nil
 	}
 
 	if req.SubscriptionID != nil {
-		return s.getTaxRatesFromSubscription(ctx, *req.SubscriptionID)
+		filter := types.NewNoLimitTaxAssociationFilter()
+		filter.EntityType = types.TaxrateEntityTypeSubscription
+		filter.EntityID = lo.FromPtr(req.SubscriptionID)
+		filter.AutoApply = lo.ToPtr(true)
+
+		taxAssociations, err := s.ListTaxAssociations(ctx, filter)
+		if err != nil {
+			s.Logger.Errorw("failed to get tax associations for subscription",
+				"error", err,
+				"subscription_id", lo.FromPtr(req.SubscriptionID),
+			)
+			return nil, err
+		}
+
+		if len(taxAssociations.Items) == 0 {
+			return []*dto.TaxRateResponse{}, nil
+		}
+
+		// Get tax rates for the associations
+		taxRateIDs := make([]string, len(taxAssociations.Items))
+		for i, association := range taxAssociations.Items {
+			taxRateIDs[i] = association.TaxRateID
+		}
+
+		taxRateFilter := types.NewNoLimitTaxRateFilter()
+		taxRateFilter.TaxRateIDs = taxRateIDs
+
+		taxRatesResponse, err := s.ListTaxRates(ctx, taxRateFilter)
+		if err != nil {
+			s.Logger.Errorw("failed to fetch subscription tax rates",
+				"error", err,
+				"subscription_id", lo.FromPtr(req.SubscriptionID),
+				"tax_rate_ids", taxRateIDs)
+			return nil, err
+		}
+
+		return taxRatesResponse.Items, nil
 	}
 
 	return []*dto.TaxRateResponse{}, nil
-}
-
-// getTaxRatesFromOverrides retrieves tax rates from provided overrides
-func (s *taxService) getTaxRatesFromOverrides(ctx context.Context, overrides []*dto.TaxRateOverride) ([]*dto.TaxRateResponse, error) {
-	s.Logger.Infow("processing tax rate overrides for invoice",
-		"overrides_count", len(overrides))
-
-	taxRateCodes := make([]string, len(overrides))
-	for i, override := range overrides {
-		taxRateCodes[i] = override.TaxRateCode
-	}
-
-	filter := types.NewNoLimitTaxRateFilter()
-	filter.TaxRateCodes = taxRateCodes
-
-	taxRatesResponse, err := s.ListTaxRates(ctx, filter)
-	if err != nil {
-		s.Logger.Errorw("failed to resolve tax rates from overrides",
-			"error", err,
-			"tax_rate_codes", taxRateCodes)
-		return nil, err
-	}
-
-	return taxRatesResponse.Items, nil
-}
-
-// getTaxRatesFromSubscription retrieves tax rates from subscription associations
-func (s *taxService) getTaxRatesFromSubscription(ctx context.Context, subscriptionID string) ([]*dto.TaxRateResponse, error) {
-	// Get tax associations for the subscription
-	filter := types.NewNoLimitTaxAssociationFilter()
-	filter.EntityType = types.TaxrateEntityTypeSubscription
-	filter.EntityID = subscriptionID
-	filter.AutoApply = lo.ToPtr(true)
-
-	taxAssociations, err := s.ListTaxAssociations(ctx, filter)
-	if err != nil {
-		s.Logger.Errorw("failed to get tax associations for subscription",
-			"error", err,
-			"subscription_id", subscriptionID)
-		return nil, err
-	}
-
-	if len(taxAssociations.Items) == 0 {
-		return []*dto.TaxRateResponse{}, nil
-	}
-
-	// Get tax rates for the associations
-	taxRateIDs := make([]string, len(taxAssociations.Items))
-	for i, association := range taxAssociations.Items {
-		taxRateIDs[i] = association.TaxRateID
-	}
-
-	taxRateFilter := types.NewNoLimitTaxRateFilter()
-	taxRateFilter.TaxRateIDs = taxRateIDs
-
-	taxRatesResponse, err := s.ListTaxRates(ctx, taxRateFilter)
-	if err != nil {
-		s.Logger.Errorw("failed to fetch subscription tax rates",
-			"error", err,
-			"subscription_id", subscriptionID,
-			"tax_rate_ids", taxRateIDs)
-		return nil, err
-	}
-
-	return taxRatesResponse.Items, nil
 }
 
 // TaxCalculationResult represents the result of tax calculations
