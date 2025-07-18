@@ -276,7 +276,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			taxRates.DELETE("/:id", handlers.Tax.DeleteTaxRate)
 		}
 
-		tax := v1Private.Group("/taxassociations")
+		tax := v1Private.Group("/taxes/associations")
 		{
 			tax.POST("", handlers.Tax.CreateTaxAssociation)
 			tax.GET("", handlers.Tax.ListTaxAssociations)
