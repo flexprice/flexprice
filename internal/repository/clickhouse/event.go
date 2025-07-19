@@ -277,6 +277,11 @@ func (r *EventRepository) GetUsage(ctx context.Context, params *events.UsagePara
 						Mark(ierr.ErrDatabase)
 				}
 				value = decimal.NewFromFloat(floatValue)
+
+				// For Latest aggregation, return 0 if negative
+				if params.AggregationType == types.AggregationLatest && value.LessThan(decimal.Zero) {
+					value = decimal.Zero
+				}
 			default:
 				err := ierr.NewError("unsupported aggregation type for scanning").
 					WithHint("The specified aggregation type is not supported for scanning").
@@ -320,6 +325,11 @@ func (r *EventRepository) GetUsage(ctx context.Context, params *events.UsagePara
 						Mark(ierr.ErrDatabase)
 				}
 				result.Value = decimal.NewFromFloat(value)
+
+				// For Latest aggregation, return 0 if negative
+				if params.AggregationType == types.AggregationLatest && result.Value.LessThan(decimal.Zero) {
+					result.Value = decimal.Zero
+				}
 			default:
 				err := ierr.NewError("unsupported aggregation type for scanning").
 					WithHint("The specified aggregation type is not supported for scanning").
