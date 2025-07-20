@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -14,6 +15,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/repository/ent"
 	"github.com/flexprice/flexprice/internal/types"
+	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
@@ -101,6 +103,11 @@ func (s *planService) CreatePlan(ctx context.Context, req dto.CreatePlanRequest)
 			// Create entitlements in bulk
 			if _, err := s.EntitlementRepo.CreateBulk(ctx, entitlements); err != nil {
 				return err
+			}
+
+			// Publish webhook events for each entitlement
+			for _, ent := range entitlements {
+				s.publishEntitlementWebhookEvent(ctx, types.WebhookEventEntitlementCreated, ent.ID)
 			}
 		}
 
@@ -463,6 +470,11 @@ func (s *planService) UpdatePlan(ctx context.Context, id string, req dto.UpdateP
 			if len(newEntitlements) > 0 {
 				if _, err := s.EntitlementRepo.CreateBulk(ctx, newEntitlements); err != nil {
 					return err
+				}
+
+				// Publish webhook events for each new entitlement
+				for _, ent := range newEntitlements {
+					s.publishEntitlementWebhookEvent(ctx, types.WebhookEventEntitlementCreated, ent.ID)
 				}
 			}
 		}
@@ -828,4 +840,28 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*SyncPlanP
 	s.Logger.Infow("Plan sync completed", "total_added", totalAdded, "total_removed", totalRemoved, "total_skipped", totalSkipped)
 
 	return response, nil
+}
+
+func (s *planService) publishEntitlementWebhookEvent(ctx context.Context, eventName string, entitlementID string) {
+	webhookPayload, err := json.Marshal(webhookDto.InternalEntitlementEvent{
+		EntitlementID: entitlementID,
+		TenantID:      types.GetTenantID(ctx),
+	})
+	if err != nil {
+		s.Logger.Errorw("failed to marshal webhook payload", "error", err)
+		return
+	}
+
+	webhookEvent := &types.WebhookEvent{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WEBHOOK_EVENT),
+		EventName:     eventName,
+		TenantID:      types.GetTenantID(ctx),
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		UserID:        types.GetUserID(ctx),
+		Timestamp:     time.Now().UTC(),
+		Payload:       json.RawMessage(webhookPayload),
+	}
+	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
+		s.Logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
+	}
 }
