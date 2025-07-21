@@ -611,6 +611,25 @@ definitions:
     - subtotal
     - total
     type: object
+  dto.CreateMeterMappingRequest:
+    properties:
+      configuration:
+        additionalProperties: true
+        type: object
+      meter_id:
+        type: string
+      provider_meter_id:
+        type: string
+      provider_type:
+        description: enum in service layer
+        type: string
+      sync_enabled:
+        type: boolean
+    required:
+    - meter_id
+    - provider_meter_id
+    - provider_type
+    type: object
   dto.CreateMeterRequest:
     properties:
       aggregation:
@@ -632,6 +651,24 @@ definitions:
     - event_name
     - name
     - reset_usage
+    type: object
+  dto.CreateOrUpdateStripeConfigRequest:
+    properties:
+      aggregation_window_minutes:
+        maximum: 60
+        minimum: 5
+        type: integer
+      api_key:
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      sync_enabled:
+        type: boolean
+      webhook_config:
+        $ref: '#/definitions/dto.StripeWebhookConfigDTO'
+    required:
+    - api_key
     type: object
   dto.CreatePaymentRequest:
     properties:
@@ -2102,6 +2139,30 @@ definitions:
     - email
     - password
     type: object
+  dto.MeterMappingResponse:
+    properties:
+      configuration:
+        additionalProperties: true
+        type: object
+      created_at:
+        type: string
+      environment_id:
+        type: string
+      id:
+        type: string
+      meter_id:
+        type: string
+      provider_meter_id:
+        type: string
+      provider_type:
+        type: string
+      sync_enabled:
+        type: boolean
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+    type: object
   dto.MeterResponse:
     properties:
       aggregation:
@@ -2422,6 +2483,97 @@ definitions:
         type: string
     required:
     - email
+    type: object
+  dto.StripeConfigHistoryEntry:
+    properties:
+      change_type:
+        description: '"created", "updated", "deleted"'
+        type: string
+      changed_at:
+        type: string
+      changed_by:
+        type: string
+      changes:
+        additionalProperties: true
+        type: object
+      description:
+        type: string
+      id:
+        type: string
+    type: object
+  dto.StripeConfigHistoryResponse:
+    properties:
+      has_more:
+        type: boolean
+      items:
+        items:
+          $ref: '#/definitions/dto.StripeConfigHistoryEntry'
+        type: array
+      limit:
+        type: integer
+      offset:
+        type: integer
+      total:
+        type: integer
+    type: object
+  dto.StripeConfigResponse:
+    properties:
+      aggregation_window_minutes:
+        type: integer
+      created_at:
+        type: string
+      environment_id:
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      sync_enabled:
+        type: boolean
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+      webhook_config:
+        $ref: '#/definitions/dto.StripeWebhookConfigDTO'
+    type: object
+  dto.StripeConfigStatusResponse:
+    properties:
+      configuration_ok:
+        type: boolean
+      configured:
+        type: boolean
+      connection_status:
+        $ref: '#/definitions/dto.StripeConnectionTestResponse'
+      issues:
+        items:
+          type: string
+        type: array
+      last_tested_at:
+        type: string
+      sync_enabled:
+        type: boolean
+    type: object
+  dto.StripeConnectionTestResponse:
+    properties:
+      latency_ms:
+        type: integer
+      message:
+        type: string
+      success:
+        type: boolean
+      tested_at:
+        type: string
+    type: object
+  dto.StripeWebhookConfigDTO:
+    properties:
+      enabled:
+        type: boolean
+      endpoint_url:
+        type: string
+      secret:
+        type: string
+    required:
+    - endpoint_url
     type: object
   dto.SubscriptionLineItemRequest:
     properties:
@@ -2987,6 +3139,19 @@ definitions:
         type: string
       unit_singular:
         type: string
+    type: object
+  dto.UpdateMeterMappingRequest:
+    properties:
+      configuration:
+        additionalProperties: true
+        description: Provider-specific configuration (optional)
+        type: object
+      provider_meter_id:
+        description: New provider meter ID (optional)
+        type: string
+      sync_enabled:
+        description: Enable/disable sync (optional)
+        type: boolean
     type: object
   dto.UpdatePaymentRequest:
     properties:
@@ -4402,6 +4567,13 @@ definitions:
     - WindowSize12Hour
     - WindowSizeDay
     - WindowSizeWeek
+  webhookDto.StripeWebhookResponse:
+    properties:
+      message:
+        type: string
+      received:
+        type: boolean
+    type: object
 info:
   contact: {}
   description: FlexPrice API Service
@@ -7908,6 +8080,300 @@ paths:
       summary: List linked integrations
       tags:
       - Integrations
+  /stripe/config:
+    delete:
+      consumes:
+      - application/json
+      description: Delete the Stripe integration configuration for the current tenant
+        and environment
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Configuration deleted successfully
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Configuration not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Delete Stripe configuration
+      tags:
+      - stripe-config
+    get:
+      consumes:
+      - application/json
+      description: Get the Stripe integration configuration for the current tenant
+        and environment
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Stripe configuration retrieved successfully
+          schema:
+            $ref: '#/definitions/dto.StripeConfigResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Configuration not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get Stripe configuration
+      tags:
+      - stripe-config
+    put:
+      consumes:
+      - application/json
+      description: Create or update the Stripe integration configuration for the current
+        tenant and environment
+      parameters:
+      - description: Stripe configuration request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateOrUpdateStripeConfigRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Configuration updated successfully
+          schema:
+            $ref: '#/definitions/dto.StripeConfigResponse'
+        "201":
+          description: Configuration created successfully
+          schema:
+            $ref: '#/definitions/dto.StripeConfigResponse'
+        "400":
+          description: Bad request - invalid payload
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create or update Stripe configuration
+      tags:
+      - stripe-config
+  /stripe/config/history:
+    get:
+      consumes:
+      - application/json
+      description: Get the change history for Stripe configuration (for audit purposes)
+      parameters:
+      - default: 50
+        description: Number of records to return
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Number of records to skip
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Configuration history retrieved
+          schema:
+            $ref: '#/definitions/dto.StripeConfigHistoryResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List Stripe configuration history
+      tags:
+      - stripe-config
+  /stripe/config/status:
+    get:
+      consumes:
+      - application/json
+      description: Get a summary of the Stripe integration configuration status including
+        validation and health
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Configuration status retrieved
+          schema:
+            $ref: '#/definitions/dto.StripeConfigStatusResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get Stripe configuration status
+      tags:
+      - stripe-config
+  /stripe/config/test:
+    post:
+      consumes:
+      - application/json
+      description: Test the Stripe API connection for the current tenant and environment
+        configuration
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Connection test completed
+          schema:
+            $ref: '#/definitions/dto.StripeConnectionTestResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Configuration not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Test Stripe connection
+      tags:
+      - stripe-config
+  /stripe/meter-mappings:
+    post:
+      consumes:
+      - application/json
+      description: Map a FlexPrice meter to a provider-specific meter (e.g. Stripe).
+      parameters:
+      - description: Meter mapping request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateMeterMappingRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.MeterMappingResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create Stripe meter mapping
+      tags:
+      - stripe-meter-mapping
+  /stripe/meter-mappings/{meter_id}:
+    put:
+      consumes:
+      - application/json
+      description: Update an existing meter mapping.
+      parameters:
+      - description: FlexPrice meter ID
+        in: path
+        name: meter_id
+        required: true
+        type: string
+      - description: 'Provider type (default: stripe)'
+        in: query
+        name: provider_type
+        type: string
+      - description: Update request payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateMeterMappingRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.MeterMappingResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update Stripe meter mapping
+      tags:
+      - stripe-meter-mapping
   /subscriptions:
     get:
       description: Get subscriptions with optional filtering
@@ -9037,6 +9503,66 @@ paths:
       summary: Get wallet transactions
       tags:
       - Wallets
+  /webhooks/stripe/{tenant_id}/{environment_id}:
+    post:
+      consumes:
+      - application/json
+      description: Receives and processes Stripe webhook events, specifically customer.created
+        events
+      parameters:
+      - description: Stripe webhook signature for verification
+        in: header
+        name: Stripe-Signature
+        required: true
+        type: string
+      - description: Stripe webhook event payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook processed successfully
+          schema:
+            $ref: '#/definitions/webhookDto.StripeWebhookResponse'
+        "400":
+          description: Bad request - invalid payload or signature
+          schema:
+            $ref: '#/definitions/webhookDto.StripeWebhookResponse'
+        "401":
+          description: Unauthorized - invalid signature
+          schema:
+            $ref: '#/definitions/webhookDto.StripeWebhookResponse'
+        "403":
+          description: Forbidden - webhook not configured
+          schema:
+            $ref: '#/definitions/webhookDto.StripeWebhookResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/webhookDto.StripeWebhookResponse'
+      summary: Receive Stripe webhook
+      tags:
+      - webhooks
+  /webhooks/stripe/test:
+    get:
+      consumes:
+      - application/json
+      description: Test endpoint to validate webhook configuration and connectivity
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Test successful
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Test Stripe webhook endpoint
+      tags:
+      - webhooks
 schemes:
 - http
 - https

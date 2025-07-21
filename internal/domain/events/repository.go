@@ -45,6 +45,13 @@ type ProcessedEventRepository interface {
 
 	// GetDetailedUsageAnalytics provides comprehensive usage analytics with filtering, grouping, and time-series data
 	GetDetailedUsageAnalytics(ctx context.Context, params *UsageAnalyticsParams) ([]*DetailedUsageAnalytic, error)
+
+	// GetBillableEventsForSync aggregates billable events for external provider synchronization
+	GetBillableEventsForSync(ctx context.Context, params *BillableEventSyncParams) ([]*BillableEventSyncBatch, *QueryPerformanceMetrics, error)
+
+	// GetBillableEventsForSyncWithProviderMapping aggregates billable events with provider mapping resolution
+	// This method includes joins with customer integration mappings and meter provider mappings
+	GetBillableEventsForSyncWithProviderMapping(ctx context.Context, params *BillableEventSyncParams) ([]*BillableEventSyncBatch, *QueryPerformanceMetrics, error)
 }
 
 // Additional types needed for the new methods

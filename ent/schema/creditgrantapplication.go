@@ -2,6 +2,8 @@ package schema
 
 import (
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
+	"entgo.io/ent/schema"
 	"entgo.io/ent/schema/field"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
 	"github.com/flexprice/flexprice/internal/types"
@@ -118,4 +120,11 @@ func (CreditGrantApplication) Fields() []ent.Field {
 // Edges of the CreditGrantApplication.
 func (CreditGrantApplication) Edges() []ent.Edge {
 	return nil // define if you want relationships with CreditGrant, Subscription, etc.
+}
+
+// Add Annotations method to skip migrations for this table.
+func (CreditGrantApplication) Annotations() []schema.Annotation {
+	return []schema.Annotation{
+		entsql.Skip(),
+	}
 }

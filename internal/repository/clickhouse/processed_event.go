@@ -105,8 +105,9 @@ func (r *ProcessedEventRepository) BulkInsertProcessedEvents(ctx context.Context
 		return nil
 	}
 
-	// Split events in batches of 100
-	eventsBatches := lo.Chunk(events, 100)
+	// Split events in batches (use smaller chunks for bulk inserts to avoid memory issues)
+	chunkSize := 1000 // Reasonable chunk size for ClickHouse bulk inserts
+	eventsBatches := lo.Chunk(events, chunkSize)
 
 	for _, eventsBatch := range eventsBatches {
 		// Prepare batch statement
@@ -196,6 +197,7 @@ func (r *ProcessedEventRepository) BulkInsertProcessedEvents(ctx context.Context
 
 // GetProcessedEvents retrieves processed events based on the provided parameters
 func (r *ProcessedEventRepository) GetProcessedEvents(ctx context.Context, params *events.GetProcessedEventsParams) ([]*events.ProcessedEvent, uint64, error) {
+	// Build base queries with FINAL modifier positioned immediately after the table name.
 	query := `
 		SELECT 
 			id, tenant_id, external_customer_id, customer_id, event_name, source, 
@@ -203,7 +205,7 @@ func (r *ProcessedEventRepository) GetProcessedEvents(ctx context.Context, param
 			subscription_id, sub_line_item_id, price_id, meter_id, feature_id, period_id,
 			unique_hash, qty_total, qty_billable, qty_free_applied, tier_snapshot, 
 			unit_cost, cost, currency, version, sign, final_lag_ms
-		FROM events_processed
+		FROM events_processed FINAL
 		WHERE tenant_id = ?
 		AND environment_id = ?
 		AND timestamp >= ?
@@ -212,7 +214,7 @@ func (r *ProcessedEventRepository) GetProcessedEvents(ctx context.Context, param
 
 	countQuery := `
 		SELECT COUNT(*)
-		FROM events_processed
+		FROM events_processed FINAL
 		WHERE tenant_id = ?
 		AND environment_id = ?
 		AND timestamp >= ?
@@ -257,10 +259,6 @@ func (r *ProcessedEventRepository) GetProcessedEvents(ctx context.Context, param
 		args = append(args, params.PriceID)
 		countArgs = append(countArgs, params.PriceID)
 	}
-
-	// Add FINAL modifier to handle ReplacingMergeTree
-	query += " FINAL"
-	countQuery += " FINAL"
 
 	// Apply pagination
 	if params.Limit > 0 {
@@ -869,4 +867,406 @@ func (r *ProcessedEventRepository) getAnalyticsPoints(
 	}
 
 	return points, nil
+}
+
+// GetBillableEventsForSync aggregates billable events for external provider synchronization
+// Optimized for high-volume processing with proper ClickHouse optimizations
+func (r *ProcessedEventRepository) GetBillableEventsForSync(ctx context.Context, params *events.BillableEventSyncParams) ([]*events.BillableEventSyncBatch, *events.QueryPerformanceMetrics, error) {
+	// Start performance tracking
+	queryStartTime := time.Now()
+
+	// Set default batch size if not provided
+	batchSize := params.BatchSize
+	if batchSize <= 0 {
+		batchSize = 10000 // Default batch size for high volume processing
+	}
+
+	// Build optimized aggregation query with proper ClickHouse optimizations
+	query := `
+		SELECT 
+			customer_id,
+			meter_id,
+			event_name,
+			-- Aggregations with proper handling of signs for ReplacingMergeTree
+			sum(qty_billable * sign) AS aggregated_quantity,
+			count(DISTINCT id) AS event_count,
+			-- Window boundaries for tracking
+			? AS window_start,
+			? AS window_end,
+			-- Context identifiers
+			tenant_id,
+			environment_id
+		FROM events_processed FINAL  -- Use FINAL for ReplacingMergeTree consistency
+		WHERE 
+			tenant_id = ?
+			AND environment_id = ?
+			AND timestamp >= ?
+			AND timestamp <= ?
+			AND qty_billable > 0  -- Only billable events
+			AND sign != 0  -- Exclude logically deleted records
+		GROUP BY 
+			customer_id,
+			meter_id, 
+			event_name,
+			tenant_id,
+			environment_id
+		HAVING 
+			aggregated_quantity > 0  -- Only positive aggregated amounts
+		ORDER BY 
+			customer_id, meter_id, event_name
+		LIMIT ?
+	`
+
+	// Prepare query parameters
+	queryParams := []interface{}{
+		params.WindowStart, // window_start placeholder
+		params.WindowEnd,   // window_end placeholder
+		params.TenantID,
+		params.EnvironmentID,
+		params.WindowStart,
+		params.WindowEnd,
+		batchSize,
+	}
+
+	r.logger.Infow("executing billable events sync aggregation query",
+		"tenant_id", params.TenantID,
+		"environment_id", params.EnvironmentID,
+		"window_start", params.WindowStart,
+		"window_end", params.WindowEnd,
+		"batch_size", batchSize,
+		"provider_type", params.ProviderType,
+	)
+
+	// Execute the aggregation query
+	rows, err := r.store.GetConn().Query(ctx, query, queryParams...)
+	if err != nil {
+		queryEndTime := time.Now()
+		executionTime := queryEndTime.Sub(queryStartTime).Milliseconds()
+
+		return nil, &events.QueryPerformanceMetrics{
+				QueryStartTime:  queryStartTime,
+				QueryEndTime:    queryEndTime,
+				ExecutionTimeMs: executionTime,
+				RowsProcessed:   0,
+				ResultSetSize:   0,
+			}, ierr.WithError(err).
+				WithHint("Failed to execute billable events sync aggregation query").
+				WithReportableDetails(map[string]interface{}{
+					"tenant_id":         params.TenantID,
+					"environment_id":    params.EnvironmentID,
+					"window_start":      params.WindowStart,
+					"window_end":        params.WindowEnd,
+					"execution_time_ms": executionTime,
+				}).
+				Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	// Process query results
+	var syncBatches []*events.BillableEventSyncBatch
+	var rowsProcessed uint64 = 0
+
+	for rows.Next() {
+		var batch events.BillableEventSyncBatch
+
+		err := rows.Scan(
+			&batch.CustomerID,
+			&batch.MeterID,
+			&batch.EventName,
+			&batch.AggregatedQuantity,
+			&batch.EventCount,
+			&batch.WindowStart,
+			&batch.WindowEnd,
+			&batch.TenantID,
+			&batch.EnvironmentID,
+		)
+		if err != nil {
+			queryEndTime := time.Now()
+			executionTime := queryEndTime.Sub(queryStartTime).Milliseconds()
+
+			return nil, &events.QueryPerformanceMetrics{
+					QueryStartTime:  queryStartTime,
+					QueryEndTime:    queryEndTime,
+					ExecutionTimeMs: executionTime,
+					RowsProcessed:   rowsProcessed,
+					ResultSetSize:   uint64(len(syncBatches)),
+				}, ierr.WithError(err).
+					WithHint("Failed to scan billable events sync batch").
+					WithReportableDetails(map[string]interface{}{
+						"tenant_id":      params.TenantID,
+						"environment_id": params.EnvironmentID,
+						"rows_processed": rowsProcessed,
+					}).
+					Mark(ierr.ErrDatabase)
+		}
+
+		syncBatches = append(syncBatches, &batch)
+		rowsProcessed++
+	}
+
+	// Check for iteration errors
+	if err := rows.Err(); err != nil {
+		queryEndTime := time.Now()
+		executionTime := queryEndTime.Sub(queryStartTime).Milliseconds()
+
+		return nil, &events.QueryPerformanceMetrics{
+				QueryStartTime:  queryStartTime,
+				QueryEndTime:    queryEndTime,
+				ExecutionTimeMs: executionTime,
+				RowsProcessed:   rowsProcessed,
+				ResultSetSize:   uint64(len(syncBatches)),
+			}, ierr.WithError(err).
+				WithHint("Error iterating billable events sync results").
+				WithReportableDetails(map[string]interface{}{
+					"tenant_id":      params.TenantID,
+					"environment_id": params.EnvironmentID,
+					"rows_processed": rowsProcessed,
+					"result_count":   len(syncBatches),
+				}).
+				Mark(ierr.ErrDatabase)
+	}
+
+	// Complete performance tracking
+	queryEndTime := time.Now()
+	executionTime := queryEndTime.Sub(queryStartTime).Milliseconds()
+
+	metrics := &events.QueryPerformanceMetrics{
+		QueryStartTime:  queryStartTime,
+		QueryEndTime:    queryEndTime,
+		ExecutionTimeMs: executionTime,
+		RowsProcessed:   rowsProcessed,
+		ResultSetSize:   uint64(len(syncBatches)),
+		MemoryUsageMB:   float64(len(syncBatches)) * 0.1, // Rough estimate: 100 bytes per batch
+	}
+
+	r.logger.Infow("billable events sync aggregation completed",
+		"tenant_id", params.TenantID,
+		"environment_id", params.EnvironmentID,
+		"window_start", params.WindowStart,
+		"window_end", params.WindowEnd,
+		"execution_time_ms", executionTime,
+		"rows_processed", rowsProcessed,
+		"result_count", len(syncBatches),
+		"provider_type", params.ProviderType,
+	)
+
+	return syncBatches, metrics, nil
+}
+
+// GetBillableEventsForSyncWithProviderMapping aggregates billable events with provider mapping resolution
+// This method includes joins with customer integration mappings and meter provider mappings
+// to resolve external provider IDs (e.g., Stripe customer IDs, Stripe meter IDs)
+func (r *ProcessedEventRepository) GetBillableEventsForSyncWithProviderMapping(ctx context.Context, params *events.BillableEventSyncParams) ([]*events.BillableEventSyncBatch, *events.QueryPerformanceMetrics, error) {
+	// Start performance tracking
+	queryStartTime := time.Now()
+
+	// Set default batch size if not provided
+	batchSize := params.BatchSize
+	if batchSize <= 0 {
+		batchSize = 10000 // Default batch size for high volume processing
+	}
+
+	// Build optimized aggregation query with integration mapping joins
+	// This query joins with customer integration mappings and meter provider mappings
+	// Note: These tables would be created as part of Tasks 1-2 of the Stripe integration
+	query := `
+		SELECT 
+			ep.customer_id,
+			ep.meter_id,
+			ep.event_name,
+			-- Provider mappings from joined tables
+			COALESCE(cim.provider_entity_id, '') AS provider_customer_id,
+			COALESCE(mpm.provider_meter_id, ep.meter_id) AS provider_meter_id,
+			-- Aggregations with proper handling of signs for ReplacingMergeTree
+			sum(ep.qty_billable * ep.sign) AS aggregated_quantity,
+			count(DISTINCT ep.id) AS event_count,
+			-- Window boundaries for tracking
+			? AS window_start,
+			? AS window_end,
+			-- Context identifiers
+			ep.tenant_id,
+			ep.environment_id
+		FROM events_processed FINAL ep  -- Use FINAL for ReplacingMergeTree consistency
+		-- Left join with entity integration mappings (customer entity_type) to resolve provider customer IDs
+		LEFT JOIN entity_integration_mappings cim ON (
+			ep.customer_id = cim.entity_id
+			AND cim.entity_type = 'customer'
+			AND cim.provider_type = ?
+			AND cim.tenant_id = ep.tenant_id
+			AND cim.environment_id = ep.environment_id
+			AND cim.status = 'published'
+		)
+		-- Left join with meter provider mappings to resolve provider meter IDs  
+		LEFT JOIN meter_provider_mappings mpm ON (
+			ep.meter_id = mpm.meter_id
+			AND mpm.provider_type = ?
+			AND mpm.tenant_id = ep.tenant_id
+			AND mpm.environment_id = ep.environment_id
+			AND mpm.sync_enabled = true
+		)
+		WHERE 
+			ep.tenant_id = ?
+			AND ep.environment_id = ?
+			AND ep.timestamp >= ?
+			AND ep.timestamp <= ?
+			AND ep.qty_billable > 0  -- Only billable events
+			AND ep.sign != 0  -- Exclude logically deleted records
+			-- Only include events where we have either customer mapping or meter mapping
+			AND (cim.provider_entity_id IS NOT NULL OR mpm.provider_meter_id IS NOT NULL)
+		GROUP BY 
+			ep.customer_id,
+			ep.meter_id, 
+			ep.event_name,
+			cim.provider_entity_id,
+			mpm.provider_meter_id,
+			ep.tenant_id,
+			ep.environment_id
+		HAVING 
+			aggregated_quantity > 0  -- Only positive aggregated amounts
+		ORDER BY 
+			ep.customer_id, ep.meter_id, ep.event_name
+		LIMIT ?
+	`
+
+	// Prepare query parameters with provider type for joins
+	queryParams := []interface{}{
+		params.WindowStart,  // window_start placeholder
+		params.WindowEnd,    // window_end placeholder
+		params.ProviderType, // provider_type for customer mapping join
+		params.ProviderType, // provider_type for meter mapping join
+		params.TenantID,
+		params.EnvironmentID,
+		params.WindowStart,
+		params.WindowEnd,
+		batchSize,
+	}
+
+	r.logger.Infow("executing billable events sync aggregation query with provider mappings",
+		"tenant_id", params.TenantID,
+		"environment_id", params.EnvironmentID,
+		"window_start", params.WindowStart,
+		"window_end", params.WindowEnd,
+		"batch_size", batchSize,
+		"provider_type", params.ProviderType,
+	)
+
+	// Execute the aggregation query
+	rows, err := r.store.GetConn().Query(ctx, query, queryParams...)
+	if err != nil {
+		queryEndTime := time.Now()
+		executionTime := queryEndTime.Sub(queryStartTime).Milliseconds()
+
+		return nil, &events.QueryPerformanceMetrics{
+				QueryStartTime:  queryStartTime,
+				QueryEndTime:    queryEndTime,
+				ExecutionTimeMs: executionTime,
+				RowsProcessed:   0,
+				ResultSetSize:   0,
+			}, ierr.WithError(err).
+				WithHint("Failed to execute billable events sync aggregation query with provider mappings").
+				WithReportableDetails(map[string]interface{}{
+					"tenant_id":         params.TenantID,
+					"environment_id":    params.EnvironmentID,
+					"window_start":      params.WindowStart,
+					"window_end":        params.WindowEnd,
+					"provider_type":     params.ProviderType,
+					"execution_time_ms": executionTime,
+				}).
+				Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	// Process query results
+	var syncBatches []*events.BillableEventSyncBatch
+	var rowsProcessed uint64 = 0
+
+	for rows.Next() {
+		var batch events.BillableEventSyncBatch
+
+		err := rows.Scan(
+			&batch.CustomerID,
+			&batch.MeterID,
+			&batch.EventName,
+			&batch.ProviderCustomerID,
+			&batch.ProviderMeterID,
+			&batch.AggregatedQuantity,
+			&batch.EventCount,
+			&batch.WindowStart,
+			&batch.WindowEnd,
+			&batch.TenantID,
+			&batch.EnvironmentID,
+		)
+		if err != nil {
+			queryEndTime := time.Now()
+			executionTime := queryEndTime.Sub(queryStartTime).Milliseconds()
+
+			return nil, &events.QueryPerformanceMetrics{
+					QueryStartTime:  queryStartTime,
+					QueryEndTime:    queryEndTime,
+					ExecutionTimeMs: executionTime,
+					RowsProcessed:   rowsProcessed,
+					ResultSetSize:   uint64(len(syncBatches)),
+				}, ierr.WithError(err).
+					WithHint("Failed to scan billable events sync batch with provider mappings").
+					WithReportableDetails(map[string]interface{}{
+						"tenant_id":      params.TenantID,
+						"environment_id": params.EnvironmentID,
+						"provider_type":  params.ProviderType,
+						"rows_processed": rowsProcessed,
+					}).
+					Mark(ierr.ErrDatabase)
+		}
+
+		syncBatches = append(syncBatches, &batch)
+		rowsProcessed++
+	}
+
+	// Check for iteration errors
+	if err := rows.Err(); err != nil {
+		queryEndTime := time.Now()
+		executionTime := queryEndTime.Sub(queryStartTime).Milliseconds()
+
+		return nil, &events.QueryPerformanceMetrics{
+				QueryStartTime:  queryStartTime,
+				QueryEndTime:    queryEndTime,
+				ExecutionTimeMs: executionTime,
+				RowsProcessed:   rowsProcessed,
+				ResultSetSize:   uint64(len(syncBatches)),
+			}, ierr.WithError(err).
+				WithHint("Error iterating billable events sync results with provider mappings").
+				WithReportableDetails(map[string]interface{}{
+					"tenant_id":      params.TenantID,
+					"environment_id": params.EnvironmentID,
+					"provider_type":  params.ProviderType,
+					"rows_processed": rowsProcessed,
+					"result_count":   len(syncBatches),
+				}).
+				Mark(ierr.ErrDatabase)
+	}
+
+	// Complete performance tracking
+	queryEndTime := time.Now()
+	executionTime := queryEndTime.Sub(queryStartTime).Milliseconds()
+
+	metrics := &events.QueryPerformanceMetrics{
+		QueryStartTime:  queryStartTime,
+		QueryEndTime:    queryEndTime,
+		ExecutionTimeMs: executionTime,
+		RowsProcessed:   rowsProcessed,
+		ResultSetSize:   uint64(len(syncBatches)),
+		MemoryUsageMB:   float64(len(syncBatches)) * 0.15, // Slightly higher estimate due to joins
+	}
+
+	r.logger.Infow("billable events sync aggregation with provider mappings completed",
+		"tenant_id", params.TenantID,
+		"environment_id", params.EnvironmentID,
+		"window_start", params.WindowStart,
+		"window_end", params.WindowEnd,
+		"provider_type", params.ProviderType,
+		"execution_time_ms", executionTime,
+		"rows_processed", rowsProcessed,
+		"result_count", len(syncBatches),
+	)
+
+	return syncBatches, metrics, nil
 }

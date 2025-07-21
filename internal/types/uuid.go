@@ -93,8 +93,9 @@ const (
 	UUID_PREFIX_CREDIT_GRANT_APPLICATION    = "cga"
 	UUID_PREFIX_CREDIT_NOTE                 = "cn"
 	UUID_PREFIX_CREDIT_NOTE_LINE_ITEM       = "cn_line"
-
-	UUID_PREFIX_WEBHOOK_EVENT = "webhook"
+	UUID_PREFIX_STRIPE_BATCH                = "sbatch"
+	UUID_PREFIX_ENTITY_INTEGRATION_MAPPING  = "eim"
+	UUID_PREFIX_WEBHOOK_EVENT               = "webhook"
 )
 
 const (

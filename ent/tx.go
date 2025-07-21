@@ -32,6 +32,8 @@ type Tx struct {
 	Customer *CustomerClient
 	// Entitlement is the client for interacting with the Entitlement builders.
 	Entitlement *EntitlementClient
+	// EntityIntegrationMapping is the client for interacting with the EntityIntegrationMapping builders.
+	EntityIntegrationMapping *EntityIntegrationMappingClient
 	// Environment is the client for interacting with the Environment builders.
 	Environment *EnvironmentClient
 	// Feature is the client for interacting with the Feature builders.
@@ -44,6 +46,8 @@ type Tx struct {
 	InvoiceSequence *InvoiceSequenceClient
 	// Meter is the client for interacting with the Meter builders.
 	Meter *MeterClient
+	// MeterProviderMapping is the client for interacting with the MeterProviderMapping builders.
+	MeterProviderMapping *MeterProviderMappingClient
 	// Payment is the client for interacting with the Payment builders.
 	Payment *PaymentClient
 	// PaymentAttempt is the client for interacting with the PaymentAttempt builders.
@@ -54,6 +58,10 @@ type Tx struct {
 	Price *PriceClient
 	// Secret is the client for interacting with the Secret builders.
 	Secret *SecretClient
+	// StripeSyncBatch is the client for interacting with the StripeSyncBatch builders.
+	StripeSyncBatch *StripeSyncBatchClient
+	// StripeTenantConfig is the client for interacting with the StripeTenantConfig builders.
+	StripeTenantConfig *StripeTenantConfigClient
 	// Subscription is the client for interacting with the Subscription builders.
 	Subscription *SubscriptionClient
 	// SubscriptionLineItem is the client for interacting with the SubscriptionLineItem builders.
@@ -214,17 +222,21 @@ func (tx *Tx) init() {
 	tx.CreditNoteLineItem = NewCreditNoteLineItemClient(tx.config)
 	tx.Customer = NewCustomerClient(tx.config)
 	tx.Entitlement = NewEntitlementClient(tx.config)
+	tx.EntityIntegrationMapping = NewEntityIntegrationMappingClient(tx.config)
 	tx.Environment = NewEnvironmentClient(tx.config)
 	tx.Feature = NewFeatureClient(tx.config)
 	tx.Invoice = NewInvoiceClient(tx.config)
 	tx.InvoiceLineItem = NewInvoiceLineItemClient(tx.config)
 	tx.InvoiceSequence = NewInvoiceSequenceClient(tx.config)
 	tx.Meter = NewMeterClient(tx.config)
+	tx.MeterProviderMapping = NewMeterProviderMappingClient(tx.config)
 	tx.Payment = NewPaymentClient(tx.config)
 	tx.PaymentAttempt = NewPaymentAttemptClient(tx.config)
 	tx.Plan = NewPlanClient(tx.config)
 	tx.Price = NewPriceClient(tx.config)
 	tx.Secret = NewSecretClient(tx.config)
+	tx.StripeSyncBatch = NewStripeSyncBatchClient(tx.config)
+	tx.StripeTenantConfig = NewStripeTenantConfigClient(tx.config)
 	tx.Subscription = NewSubscriptionClient(tx.config)
 	tx.SubscriptionLineItem = NewSubscriptionLineItemClient(tx.config)
 	tx.SubscriptionPause = NewSubscriptionPauseClient(tx.config)

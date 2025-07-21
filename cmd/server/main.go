@@ -32,6 +32,7 @@ import (
 	"github.com/flexprice/flexprice/internal/typst"
 	"github.com/flexprice/flexprice/internal/validator"
 	"github.com/flexprice/flexprice/internal/webhook"
+	whandler "github.com/flexprice/flexprice/internal/webhook/handler"
 	"go.uber.org/fx"
 
 	lambdaEvents "github.com/aws/aws-lambda-go/events"
@@ -39,6 +40,9 @@ import (
 	ginadapter "github.com/awslabs/aws-lambda-go-api-proxy/gin"
 	_ "github.com/flexprice/flexprice/docs/swagger"
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/domain/integration"
+	"github.com/flexprice/flexprice/internal/domain/stripe"
+	"github.com/flexprice/flexprice/internal/security"
 	"github.com/gin-gonic/gin"
 )
 
@@ -138,6 +142,13 @@ func main() {
 			repository.NewCreditNoteRepository,
 			repository.NewCreditNoteLineItemRepository,
 
+			// Integration Repositories
+			repository.NewCustomerIntegrationMappingRepository,
+			repository.NewStripeSyncBatchRepository,
+			repository.NewStripeTenantConfigRepository,
+			repository.NewMeterProviderMappingRepository,
+			repository.NewStripeClientRepository,
+
 			// PubSub
 			pubsubRouter.NewRouter,
 
@@ -183,6 +194,7 @@ func main() {
 			service.NewCreditGrantService,
 			service.NewCostSheetService,
 			service.NewCreditNoteService,
+			service.NewStripeIntegrationService,
 		),
 	)
 
@@ -229,38 +241,44 @@ func provideHandlers(
 	onboardingService service.OnboardingService,
 	billingService service.BillingService,
 	creditGrantService service.CreditGrantService,
+	stripeWebhookHandler whandler.StripeWebhookHandler,
+	stripeIntegrationService service.StripeIntegrationService,
 	costSheetService service.CostSheetService,
 	creditNoteService service.CreditNoteService,
 	svixClient *svix.Client,
 ) api.Handlers {
 	return api.Handlers{
-		Events:            v1.NewEventsHandler(eventService, eventPostProcessingService, logger),
-		Meter:             v1.NewMeterHandler(meterService, logger),
-		Auth:              v1.NewAuthHandler(cfg, authService, logger),
-		User:              v1.NewUserHandler(userService, logger),
-		Environment:       v1.NewEnvironmentHandler(environmentService, logger),
-		Health:            v1.NewHealthHandler(logger),
-		Price:             v1.NewPriceHandler(priceService, logger),
-		Customer:          v1.NewCustomerHandler(customerService, billingService, logger),
-		Plan:              v1.NewPlanHandler(planService, entitlementService, creditGrantService, logger),
-		Subscription:      v1.NewSubscriptionHandler(subscriptionService, logger),
-		SubscriptionPause: v1.NewSubscriptionPauseHandler(subscriptionService, logger),
-		Wallet:            v1.NewWalletHandler(walletService, logger),
-		Tenant:            v1.NewTenantHandler(tenantService, logger),
-		Invoice:           v1.NewInvoiceHandler(invoiceService, temporalService, logger),
-		Feature:           v1.NewFeatureHandler(featureService, logger),
-		Entitlement:       v1.NewEntitlementHandler(entitlementService, logger),
-		Payment:           v1.NewPaymentHandler(paymentService, paymentProcessorService, logger),
-		Task:              v1.NewTaskHandler(taskService, logger),
-		Secret:            v1.NewSecretHandler(secretService, logger),
-		Onboarding:        v1.NewOnboardingHandler(onboardingService, logger),
-		CronSubscription:  cron.NewSubscriptionHandler(subscriptionService, temporalService, logger),
-		CronWallet:        cron.NewWalletCronHandler(logger, temporalService, walletService, tenantService),
-		CreditGrant:       v1.NewCreditGrantHandler(creditGrantService, logger),
-		CostSheet:         v1.NewCostSheetHandler(costSheetService, logger),
-		CronCreditGrant:   cron.NewCreditGrantCronHandler(creditGrantService, logger),
-		CreditNote:        v1.NewCreditNoteHandler(creditNoteService, logger),
-		Webhook:           v1.NewWebhookHandler(cfg, svixClient, logger),
+		Events:             v1.NewEventsHandler(eventService, eventPostProcessingService, logger),
+		Meter:              v1.NewMeterHandler(meterService, logger),
+		Auth:               v1.NewAuthHandler(cfg, authService, logger),
+		User:               v1.NewUserHandler(userService, logger),
+		Environment:        v1.NewEnvironmentHandler(environmentService, logger),
+		Health:             v1.NewHealthHandler(logger),
+		Price:              v1.NewPriceHandler(priceService, logger),
+		Customer:           v1.NewCustomerHandler(customerService, billingService, logger),
+		Plan:               v1.NewPlanHandler(planService, entitlementService, creditGrantService, logger),
+		Subscription:       v1.NewSubscriptionHandler(subscriptionService, logger),
+		SubscriptionPause:  v1.NewSubscriptionPauseHandler(subscriptionService, logger),
+		Wallet:             v1.NewWalletHandler(walletService, logger),
+		Tenant:             v1.NewTenantHandler(tenantService, logger),
+		Invoice:            v1.NewInvoiceHandler(invoiceService, temporalService, logger),
+		Feature:            v1.NewFeatureHandler(featureService, logger),
+		Entitlement:        v1.NewEntitlementHandler(entitlementService, logger),
+		Payment:            v1.NewPaymentHandler(paymentService, paymentProcessorService, logger),
+		Task:               v1.NewTaskHandler(taskService, logger),
+		Secret:             v1.NewSecretHandler(secretService, logger),
+		Onboarding:         v1.NewOnboardingHandler(onboardingService, logger),
+		CronSubscription:   cron.NewSubscriptionHandler(subscriptionService, temporalService, logger),
+		CronWallet:         cron.NewWalletCronHandler(logger, temporalService, walletService, tenantService),
+		CreditGrant:        v1.NewCreditGrantHandler(creditGrantService, logger),
+		CostSheet:          v1.NewCostSheetHandler(costSheetService, logger),
+		CronCreditGrant:    cron.NewCreditGrantCronHandler(creditGrantService, logger),
+		CreditNote:         v1.NewCreditNoteHandler(creditNoteService, logger),
+		Webhook:            v1.NewWebhookHandler(cfg, svixClient, logger),
+		StripeWebhook:      v1.NewStripeWebhookHandler(stripeWebhookHandler, logger),
+		StripeConfig:       v1.NewStripeConfigHandler(stripeIntegrationService, logger),
+		StripeMeterMapping: v1.NewStripeMeterMappingHandler(stripeIntegrationService, logger),
+		StripeSync:         v1.NewStripeSyncHandler(stripeIntegrationService, logger),
 	}
 }
 
@@ -294,6 +312,12 @@ func startServer(
 	log *logger.Logger,
 	sentryService *sentry.Service,
 	eventPostProcessingSvc service.EventPostProcessingService,
+	processedEventRepo events.ProcessedEventRepository,
+	customerMappingRepo integration.EntityIntegrationMappingRepository,
+	stripeSyncBatchRepo integration.StripeSyncBatchRepository,
+	stripeTenantConfigRepo integration.StripeTenantConfigRepository,
+	meterProviderMappingRepo integration.MeterProviderMappingRepository,
+	stripeClient stripe.Client,
 ) {
 	mode := cfg.Deployment.Mode
 	if mode == "" {
@@ -309,13 +333,15 @@ func startServer(
 		startConsumer(lc, consumer, eventRepo, cfg, log, sentryService, eventPostProcessingSvc)
 		startMessageRouter(lc, router, webhookService, onboardingService, log)
 		startPostProcessingConsumer(lc, router, eventPostProcessingSvc, cfg, log)
-		startTemporalWorker(lc, temporalClient, &cfg.Temporal, log)
+		encSvc, _ := security.NewEncryptionService(cfg, log)
+		startTemporalWorker(lc, temporalClient, &cfg.Temporal, processedEventRepo, customerMappingRepo, stripeSyncBatchRepo, stripeTenantConfigRepo, meterProviderMappingRepo, stripeClient, encSvc, log)
 	case types.ModeAPI:
 		startAPIServer(lc, r, cfg, log)
 		startMessageRouter(lc, router, webhookService, onboardingService, log)
 
 	case types.ModeTemporalWorker:
-		startTemporalWorker(lc, temporalClient, &cfg.Temporal, log)
+		encSvc, _ := security.NewEncryptionService(cfg, log)
+		startTemporalWorker(lc, temporalClient, &cfg.Temporal, processedEventRepo, customerMappingRepo, stripeSyncBatchRepo, stripeTenantConfigRepo, meterProviderMappingRepo, stripeClient, encSvc, log)
 	case types.ModeConsumer:
 		if consumer == nil {
 			log.Fatal("Kafka consumer required for consumer mode")
@@ -336,10 +362,31 @@ func startTemporalWorker(
 	lc fx.Lifecycle,
 	temporalClient *temporal.TemporalClient,
 	cfg *config.TemporalConfig,
+	processedEventRepo events.ProcessedEventRepository,
+	customerMappingRepo integration.EntityIntegrationMappingRepository,
+	stripeSyncBatchRepo integration.StripeSyncBatchRepository,
+	stripeTenantConfigRepo integration.StripeTenantConfigRepository,
+	meterProviderMappingRepo integration.MeterProviderMappingRepository,
+	stripeClient stripe.Client,
+	encryptionService security.EncryptionService,
 	log *logger.Logger,
 ) {
-	worker := temporal.NewWorker(temporalClient, *cfg, log)
-	worker.RegisterWithLifecycle(lc)
+	workerWrapper := temporal.NewWorker(temporalClient, *cfg, log)
+
+	// Register Stripe-sync activities so they're available to workflows
+	temporal.RegisterStripeSyncActivities(
+		workerWrapper.SDKWorker(),
+		processedEventRepo,
+		customerMappingRepo,
+		stripeSyncBatchRepo,
+		stripeTenantConfigRepo,
+		meterProviderMappingRepo,
+		stripeClient,
+		encryptionService,
+		log,
+	)
+
+	workerWrapper.RegisterWithLifecycle(lc)
 }
 
 func startAPIServer(

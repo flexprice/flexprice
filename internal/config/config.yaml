@@ -139,3 +139,20 @@ event_post_processing:
   topic_backfill: "events_post_processing_backfill"
   rate_limit_backfill: 1
   consumer_group_backfill: "v1_events_post_processing_backfill"
+
+stripe:
+  enabled: true # Enable Stripe integration
+  webhook_secret: "" # Global webhook signature validation secret
+  sync_grace_period_minutes: 5 # Grace period for event aggregation
+  batch_size_limit: 10000 # Maximum events per sync batch
+  api_timeout_seconds: 30 # API call timeout
+  max_retries: 3 # Maximum retry attempts for API calls
+  rate_limit_per_tenant_per_minute: 100 # Rate limit per tenant
+  default_aggregation_window_minutes: 60 # Default aggregation window
+  concurrent_sync_limit: 10 # Concurrent sync operations
+  sync_batch_retention_days: 30 # How long to keep sync batch records
+  circuit_breaker:
+    enabled: true
+    failure_threshold: 5 # Failures before opening circuit
+    recovery_timeout_seconds: 60 # Wait time before attempting to close
+    min_request_threshold: 10 # Minimum requests before circuit can open
