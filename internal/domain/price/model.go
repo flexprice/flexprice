@@ -161,9 +161,16 @@ func (p *Price) GetDisplayAmount() string {
 
 // CalculateAmount performs calculation
 func (p *Price) CalculateAmount(quantity decimal.Decimal) decimal.Decimal {
-	// Calculate with full precision
-	result := p.Amount.Mul(quantity)
-	return result
+	// If this is a custom pricing unit price, convert quantity to base currency first
+	if p.PriceUnit != "" && !p.ConversionRate.IsZero() {
+		// Convert quantity to base currency
+		// quantity in base currency = quantity in custom currency * conversion_rate
+		baseQuantity := quantity.Mul(p.ConversionRate)
+		return baseQuantity
+	}
+
+	// For regular prices, just multiply amount by quantity
+	return p.Amount.Mul(quantity)
 }
 
 // CalculateTierAmount performs calculation for tier price with flat and fixed ampunt
