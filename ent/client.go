@@ -379,8 +379,9 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.Auth, c.BillingSequence, c.CreditGrant, c.CreditGrantApplication, c.Customer,
-		c.Entitlement, c.EntityIntegrationMapping, c.Environment, c.Feature, c.Invoice,
+		c.Auth, c.BillingSequence, c.Costsheet, c.CreditGrant, c.CreditGrantApplication,
+		c.CreditNote, c.CreditNoteLineItem, c.Customer, c.Entitlement,
+		c.EntityIntegrationMapping, c.Environment, c.Feature, c.Invoice,
 		c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.MeterProviderMapping,
 		c.Payment, c.PaymentAttempt, c.Plan, c.Price, c.Secret, c.StripeSyncBatch,
 		c.StripeTenantConfig, c.Subscription, c.SubscriptionLineItem,
@@ -395,8 +396,9 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.Auth, c.BillingSequence, c.CreditGrant, c.CreditGrantApplication, c.Customer,
-		c.Entitlement, c.EntityIntegrationMapping, c.Environment, c.Feature, c.Invoice,
+		c.Auth, c.BillingSequence, c.Costsheet, c.CreditGrant, c.CreditGrantApplication,
+		c.CreditNote, c.CreditNoteLineItem, c.Customer, c.Entitlement,
+		c.EntityIntegrationMapping, c.Environment, c.Feature, c.Invoice,
 		c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.MeterProviderMapping,
 		c.Payment, c.PaymentAttempt, c.Plan, c.Price, c.Secret, c.StripeSyncBatch,
 		c.StripeTenantConfig, c.Subscription, c.SubscriptionLineItem,
@@ -5392,20 +5394,22 @@ func (c *WalletTransactionClient) mutate(ctx context.Context, m *WalletTransacti
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		Auth, BillingSequence, CreditGrant, CreditGrantApplication, Customer,
-		Entitlement, EntityIntegrationMapping, Environment, Feature, Invoice,
-		InvoiceLineItem, InvoiceSequence, Meter, MeterProviderMapping, Payment,
-		PaymentAttempt, Plan, Price, Secret, StripeSyncBatch, StripeTenantConfig,
-		Subscription, SubscriptionLineItem, SubscriptionPause, SubscriptionSchedule,
+		Auth, BillingSequence, Costsheet, CreditGrant, CreditGrantApplication,
+		CreditNote, CreditNoteLineItem, Customer, Entitlement,
+		EntityIntegrationMapping, Environment, Feature, Invoice, InvoiceLineItem,
+		InvoiceSequence, Meter, MeterProviderMapping, Payment, PaymentAttempt, Plan,
+		Price, Secret, StripeSyncBatch, StripeTenantConfig, Subscription,
+		SubscriptionLineItem, SubscriptionPause, SubscriptionSchedule,
 		SubscriptionSchedulePhase, Task, Tenant, User, Wallet,
 		WalletTransaction []ent.Hook
 	}
 	inters struct {
-		Auth, BillingSequence, CreditGrant, CreditGrantApplication, Customer,
-		Entitlement, EntityIntegrationMapping, Environment, Feature, Invoice,
-		InvoiceLineItem, InvoiceSequence, Meter, MeterProviderMapping, Payment,
-		PaymentAttempt, Plan, Price, Secret, StripeSyncBatch, StripeTenantConfig,
-		Subscription, SubscriptionLineItem, SubscriptionPause, SubscriptionSchedule,
+		Auth, BillingSequence, Costsheet, CreditGrant, CreditGrantApplication,
+		CreditNote, CreditNoteLineItem, Customer, Entitlement,
+		EntityIntegrationMapping, Environment, Feature, Invoice, InvoiceLineItem,
+		InvoiceSequence, Meter, MeterProviderMapping, Payment, PaymentAttempt, Plan,
+		Price, Secret, StripeSyncBatch, StripeTenantConfig, Subscription,
+		SubscriptionLineItem, SubscriptionPause, SubscriptionSchedule,
 		SubscriptionSchedulePhase, Task, Tenant, User, Wallet,
 		WalletTransaction []ent.Interceptor
 	}
