@@ -343,6 +343,8 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		webhookGroup := v1Private.Group("/webhooks")
 		{
 			webhookGroup.GET("/dashboard", handlers.Webhook.GetDashboardURL)
+		}
+
 		// Stripe integration configuration routes
 		stripe := v1Private.Group("/stripe")
 		{
