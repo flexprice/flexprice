@@ -579,6 +579,19 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "enum": [
+                            "PLAN",
+                            "SUBSCRIPTION"
+                        ],
+                        "type": "string",
+                        "x-enum-varnames": [
+                            "CreditGrantScopePlan",
+                            "CreditGrantScopeSubscription"
+                        ],
+                        "name": "scope",
+                        "in": "query"
+                    },
+                    {
                         "type": "string",
                         "name": "sort",
                         "in": "query"
@@ -8068,7 +8081,6 @@ const docTemplate = `{
             "required": [
                 "cadence",
                 "credits",
-                "currency",
                 "name",
                 "scope"
             ],
@@ -8078,9 +8090,6 @@ const docTemplate = `{
                 },
                 "credits": {
                     "type": "number"
-                },
-                "currency": {
-                    "type": "string"
                 },
                 "expiration_duration": {
                     "type": "integer"
@@ -8183,6 +8192,11 @@ const docTemplate = `{
                             "$ref": "#/definitions/types.Metadata"
                         }
                     ]
+                },
+                "process_credit_note": {
+                    "description": "process_credit_note is a flag to process the credit note after creation",
+                    "type": "boolean",
+                    "default": true
                 },
                 "reason": {
                     "description": "reason specifies the reason for creating this credit note (duplicate, fraudulent, order_change, product_unsatisfactory)",
@@ -9104,9 +9118,6 @@ const docTemplate = `{
                 "credits": {
                     "type": "number"
                 },
-                "currency": {
-                    "type": "string"
-                },
                 "environment_id": {
                     "type": "string"
                 },
@@ -10021,7 +10032,7 @@ const docTemplate = `{
                     }
                 },
                 "multiplier": {
-                    "type": "integer"
+                    "type": "number"
                 },
                 "property_name": {
                     "description": "will be empty/ignored in case of COUNT",
@@ -12117,7 +12128,6 @@ const docTemplate = `{
             "required": [
                 "cadence",
                 "credits",
-                "currency",
                 "name",
                 "scope"
             ],
@@ -12127,9 +12137,6 @@ const docTemplate = `{
                 },
                 "credits": {
                     "type": "number"
-                },
-                "currency": {
-                    "type": "string"
                 },
                 "expiration_duration": {
                     "type": "integer"
@@ -12740,7 +12747,7 @@ const docTemplate = `{
                 },
                 "multiplier": {
                     "description": "Multiplier is the multiplier for the aggregation\nFor ex if the aggregation type is sum_with_multiplier for API usage, the multiplier could be 1000\nto scale up by a factor of 1000",
-                    "type": "integer"
+                    "type": "number"
                 },
                 "type": {
                     "$ref": "#/definitions/types.AggregationType"
@@ -13116,6 +13123,9 @@ const docTemplate = `{
             "x-enum-comments": {
                 "AggregationSumWithMultiplier": "Sum with a multiplier - [sum(value) * multiplier]"
             },
+            "x-enum-descriptions": [
+                "Sum with a multiplier - [sum(value) * multiplier]"
+            ],
             "x-enum-varnames": [
                 "AggregationCount",
                 "AggregationSum",

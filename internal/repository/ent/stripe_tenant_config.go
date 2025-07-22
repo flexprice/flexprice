@@ -56,7 +56,14 @@ func (r *stripeTenantConfigRepository) Create(ctx context.Context, config *domai
 		Save(ctx)
 	if err != nil {
 		SetSpanError(span, err)
-		return ierr.WithError(err).WithHint("failed to create stripe tenant config").Mark(ierr.ErrDatabase)
+		return ierr.WithError(err).
+			WithHint("Failed to create Stripe tenant config").
+			WithReportableDetails(map[string]any{
+				"config_id":      config.ID,
+				"tenant_id":      config.TenantID,
+				"environment_id": config.EnvironmentID,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	SetSpanSuccess(span)
@@ -81,9 +88,23 @@ func (r *stripeTenantConfigRepository) Get(ctx context.Context, id string) (*dom
 	if err != nil {
 		SetSpanError(span, err)
 		if ent.IsNotFound(err) {
-			return nil, ierr.WithError(err).Mark(ierr.ErrNotFound)
+			return nil, ierr.WithError(err).
+				WithHintf("Stripe tenant config with ID %s not found for tenant %s and environment %s", id, types.GetTenantID(ctx), types.GetEnvironmentID(ctx)).
+				WithReportableDetails(map[string]any{
+					"config_id":      id,
+					"tenant_id":      types.GetTenantID(ctx),
+					"environment_id": types.GetEnvironmentID(ctx),
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-		return nil, ierr.WithError(err).Mark(ierr.ErrDatabase)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get Stripe tenant config").
+			WithReportableDetails(map[string]any{
+				"config_id":      id,
+				"tenant_id":      types.GetTenantID(ctx),
+				"environment_id": types.GetEnvironmentID(ctx),
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	SetSpanSuccess(span)
@@ -142,7 +163,13 @@ func (r *stripeTenantConfigRepository) List(ctx context.Context, filter *domainI
 	stcs, err := query.All(ctx)
 	if err != nil {
 		SetSpanError(span, err)
-		return nil, ierr.WithError(err).Mark(ierr.ErrDatabase)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list Stripe tenant configs").
+			WithReportableDetails(map[string]any{
+				"tenant_id":      types.GetTenantID(ctx),
+				"environment_id": types.GetEnvironmentID(ctx),
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	configs := make([]*domainIntegration.StripeTenantConfig, 0, len(stcs))
@@ -176,7 +203,13 @@ func (r *stripeTenantConfigRepository) Count(ctx context.Context, filter *domain
 	count, err := query.Count(ctx)
 	if err != nil {
 		SetSpanError(span, err)
-		return 0, ierr.WithError(err).Mark(ierr.ErrDatabase)
+		return 0, ierr.WithError(err).
+			WithHint("Failed to count Stripe tenant configs").
+			WithReportableDetails(map[string]any{
+				"tenant_id":      types.GetTenantID(ctx),
+				"environment_id": types.GetEnvironmentID(ctx),
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	SetSpanSuccess(span)
@@ -208,9 +241,23 @@ func (r *stripeTenantConfigRepository) Update(ctx context.Context, config *domai
 	if err != nil {
 		SetSpanError(span, err)
 		if ent.IsNotFound(err) {
-			return ierr.WithError(err).Mark(ierr.ErrNotFound)
+			return ierr.WithError(err).
+				WithHintf("Stripe tenant config with ID %s not found for tenant %s and environment %s", config.ID, types.GetTenantID(ctx), types.GetEnvironmentID(ctx)).
+				WithReportableDetails(map[string]any{
+					"config_id":      config.ID,
+					"tenant_id":      types.GetTenantID(ctx),
+					"environment_id": types.GetEnvironmentID(ctx),
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-		return ierr.WithError(err).Mark(ierr.ErrDatabase)
+		return ierr.WithError(err).
+			WithHint("Failed to update Stripe tenant config").
+			WithReportableDetails(map[string]any{
+				"config_id":      config.ID,
+				"tenant_id":      types.GetTenantID(ctx),
+				"environment_id": types.GetEnvironmentID(ctx),
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	SetSpanSuccess(span)
@@ -238,7 +285,14 @@ func (r *stripeTenantConfigRepository) Delete(ctx context.Context, config *domai
 		Save(ctx)
 	if err != nil {
 		SetSpanError(span, err)
-		return ierr.WithError(err).Mark(ierr.ErrDatabase)
+		return ierr.WithError(err).
+			WithHint("Failed to delete Stripe tenant config").
+			WithReportableDetails(map[string]any{
+				"config_id":      config.ID,
+				"tenant_id":      config.TenantID,
+				"environment_id": config.EnvironmentID,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	SetSpanSuccess(span)
@@ -264,9 +318,21 @@ func (r *stripeTenantConfigRepository) GetByTenantAndEnvironment(ctx context.Con
 	if err != nil {
 		SetSpanError(span, err)
 		if ent.IsNotFound(err) {
-			return nil, ierr.WithError(err).Mark(ierr.ErrNotFound)
+			return nil, ierr.WithError(err).
+				WithHintf("Stripe tenant config not found for tenant %s and environment %s", tenantID, environmentID).
+				WithReportableDetails(map[string]any{
+					"tenant_id":      tenantID,
+					"environment_id": environmentID,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-		return nil, ierr.WithError(err).Mark(ierr.ErrDatabase)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get Stripe tenant config by tenant and environment").
+			WithReportableDetails(map[string]any{
+				"tenant_id":      tenantID,
+				"environment_id": environmentID,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	SetSpanSuccess(span)
@@ -295,7 +361,12 @@ func (r *stripeTenantConfigRepository) ListActiveTenants(ctx context.Context, fi
 	stcs, err := query.All(ctx)
 	if err != nil {
 		SetSpanError(span, err)
-		return nil, ierr.WithError(err).Mark(ierr.ErrDatabase)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list active Stripe tenant configs").
+			WithReportableDetails(map[string]any{
+				"filter": filter,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	configs := make([]*domainIntegration.StripeTenantConfig, 0, len(stcs))

@@ -271,8 +271,6 @@ definitions:
         $ref: '#/definitions/types.CreditGrantCadence'
       credits:
         type: number
-      currency:
-        type: string
       expiration_duration:
         type: integer
       expiration_duration_unit:
@@ -298,7 +296,6 @@ definitions:
     required:
     - cadence
     - credits
-    - currency
     - name
     - scope
     type: object
@@ -353,6 +350,11 @@ definitions:
         - $ref: '#/definitions/types.Metadata'
         description: metadata contains additional custom key-value pairs for storing
           extra information
+      process_credit_note:
+        default: true
+        description: process_credit_note is a flag to process the credit note after
+          creation
+        type: boolean
       reason:
         allOf:
         - $ref: '#/definitions/types.CreditNoteReason'
@@ -1034,8 +1036,6 @@ definitions:
         type: string
       credits:
         type: number
-      currency:
-        type: string
       environment_id:
         type: string
       expiration_duration:
@@ -1683,7 +1683,7 @@ definitions:
           type: array
         type: object
       multiplier:
-        type: integer
+        type: number
       property_name:
         description: will be empty/ignored in case of COUNT
         example: request_size
@@ -3179,8 +3179,6 @@ definitions:
         $ref: '#/definitions/types.CreditGrantCadence'
       credits:
         type: number
-      currency:
-        type: string
       expiration_duration:
         type: integer
       expiration_duration_unit:
@@ -3210,7 +3208,6 @@ definitions:
     required:
     - cadence
     - credits
-    - currency
     - name
     - scope
     type: object
@@ -3601,7 +3598,7 @@ definitions:
           Multiplier is the multiplier for the aggregation
           For ex if the aggregation type is sum_with_multiplier for API usage, the multiplier could be 1000
           to scale up by a factor of 1000
-        type: integer
+        type: number
       type:
         $ref: '#/definitions/types.AggregationType'
     type: object
@@ -3877,6 +3874,8 @@ definitions:
     type: string
     x-enum-comments:
       AggregationSumWithMultiplier: Sum with a multiplier - [sum(value) * multiplier]
+    x-enum-descriptions:
+    - Sum with a multiplier - [sum(value) * multiplier]
     x-enum-varnames:
     - AggregationCount
     - AggregationSum
@@ -4939,6 +4938,15 @@ paths:
           type: string
         name: plan_ids
         type: array
+      - enum:
+        - PLAN
+        - SUBSCRIPTION
+        in: query
+        name: scope
+        type: string
+        x-enum-varnames:
+        - CreditGrantScopePlan
+        - CreditGrantScopeSubscription
       - in: query
         name: sort
         type: string
