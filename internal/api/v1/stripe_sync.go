@@ -33,7 +33,6 @@ func (h *StripeSyncHandler) GetSyncStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, status)
 }
 
-// ListBatches GET /stripe/sync/batches
 func (h *StripeSyncHandler) ListBatches(c *gin.Context) {
 	ctx := c.Request.Context()
 	// For now, no filters parsed
@@ -45,7 +44,6 @@ func (h *StripeSyncHandler) ListBatches(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// GetBatch GET /stripe/sync/batches/:id
 func (h *StripeSyncHandler) GetBatch(c *gin.Context) {
 	id := c.Param("id")
 	ctx := c.Request.Context()
@@ -57,7 +55,6 @@ func (h *StripeSyncHandler) GetBatch(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// ManualSync POST /stripe/sync/manual
 func (h *StripeSyncHandler) ManualSync(c *gin.Context) {
 	var req dto.ManualSyncRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -81,7 +78,6 @@ func (h *StripeSyncHandler) ManualSync(c *gin.Context) {
 	c.JSON(http.StatusAccepted, resp)
 }
 
-// RetryBatches POST /stripe/batches/retry
 func (h *StripeSyncHandler) RetryBatches(c *gin.Context) {
 	var req dto.RetryFailedBatchesRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
