@@ -37507,6 +37507,7 @@ type TenantMutation struct {
 	created_at      *time.Time
 	updated_at      *time.Time
 	billing_details *schema.TenantBillingDetails
+	metadata        *map[string]string
 	clearedFields   map[string]struct{}
 	done            bool
 	oldValue        func(context.Context) (*Tenant, error)
@@ -37810,6 +37811,55 @@ func (m *TenantMutation) ResetBillingDetails() {
 	delete(m.clearedFields, tenant.FieldBillingDetails)
 }
 
+// SetMetadata sets the "metadata" field.
+func (m *TenantMutation) SetMetadata(value map[string]string) {
+	m.metadata = &value
+}
+
+// Metadata returns the value of the "metadata" field in the mutation.
+func (m *TenantMutation) Metadata() (r map[string]string, exists bool) {
+	v := m.metadata
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMetadata returns the old "metadata" field's value of the Tenant entity.
+// If the Tenant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TenantMutation) OldMetadata(ctx context.Context) (v map[string]string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMetadata is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMetadata requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMetadata: %w", err)
+	}
+	return oldValue.Metadata, nil
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (m *TenantMutation) ClearMetadata() {
+	m.metadata = nil
+	m.clearedFields[tenant.FieldMetadata] = struct{}{}
+}
+
+// MetadataCleared returns if the "metadata" field was cleared in this mutation.
+func (m *TenantMutation) MetadataCleared() bool {
+	_, ok := m.clearedFields[tenant.FieldMetadata]
+	return ok
+}
+
+// ResetMetadata resets all changes to the "metadata" field.
+func (m *TenantMutation) ResetMetadata() {
+	m.metadata = nil
+	delete(m.clearedFields, tenant.FieldMetadata)
+}
+
 // Where appends a list predicates to the TenantMutation builder.
 func (m *TenantMutation) Where(ps ...predicate.Tenant) {
 	m.predicates = append(m.predicates, ps...)
@@ -37844,7 +37894,7 @@ func (m *TenantMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TenantMutation) Fields() []string {
-	fields := make([]string, 0, 5)
+	fields := make([]string, 0, 6)
 	if m.name != nil {
 		fields = append(fields, tenant.FieldName)
 	}
@@ -37859,6 +37909,9 @@ func (m *TenantMutation) Fields() []string {
 	}
 	if m.billing_details != nil {
 		fields = append(fields, tenant.FieldBillingDetails)
+	}
+	if m.metadata != nil {
+		fields = append(fields, tenant.FieldMetadata)
 	}
 	return fields
 }
@@ -37878,6 +37931,8 @@ func (m *TenantMutation) Field(name string) (ent.Value, bool) {
 		return m.UpdatedAt()
 	case tenant.FieldBillingDetails:
 		return m.BillingDetails()
+	case tenant.FieldMetadata:
+		return m.Metadata()
 	}
 	return nil, false
 }
@@ -37897,6 +37952,8 @@ func (m *TenantMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldUpdatedAt(ctx)
 	case tenant.FieldBillingDetails:
 		return m.OldBillingDetails(ctx)
+	case tenant.FieldMetadata:
+		return m.OldMetadata(ctx)
 	}
 	return nil, fmt.Errorf("unknown Tenant field %s", name)
 }
@@ -37941,6 +37998,13 @@ func (m *TenantMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetBillingDetails(v)
 		return nil
+	case tenant.FieldMetadata:
+		v, ok := value.(map[string]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMetadata(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Tenant field %s", name)
 }
@@ -37974,6 +38038,9 @@ func (m *TenantMutation) ClearedFields() []string {
 	if m.FieldCleared(tenant.FieldBillingDetails) {
 		fields = append(fields, tenant.FieldBillingDetails)
 	}
+	if m.FieldCleared(tenant.FieldMetadata) {
+		fields = append(fields, tenant.FieldMetadata)
+	}
 	return fields
 }
 
@@ -37990,6 +38057,9 @@ func (m *TenantMutation) ClearField(name string) error {
 	switch name {
 	case tenant.FieldBillingDetails:
 		m.ClearBillingDetails()
+		return nil
+	case tenant.FieldMetadata:
+		m.ClearMetadata()
 		return nil
 	}
 	return fmt.Errorf("unknown Tenant nullable field %s", name)
@@ -38013,6 +38083,9 @@ func (m *TenantMutation) ResetField(name string) error {
 		return nil
 	case tenant.FieldBillingDetails:
 		m.ResetBillingDetails()
+		return nil
+	case tenant.FieldMetadata:
+		m.ResetMetadata()
 		return nil
 	}
 	return fmt.Errorf("unknown Tenant field %s", name)

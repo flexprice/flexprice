@@ -29,7 +29,9 @@ type Tenant struct {
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
 	// BillingDetails holds the value of the "billing_details" field.
 	BillingDetails schema.TenantBillingDetails `json:"billing_details,omitempty"`
-	selectValues   sql.SelectValues
+	// Metadata holds the value of the "metadata" field.
+	Metadata     map[string]string `json:"metadata,omitempty"`
+	selectValues sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -37,7 +39,7 @@ func (*Tenant) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case tenant.FieldBillingDetails:
+		case tenant.FieldBillingDetails, tenant.FieldMetadata:
 			values[i] = new([]byte)
 		case tenant.FieldID, tenant.FieldName, tenant.FieldStatus:
 			values[i] = new(sql.NullString)
@@ -96,6 +98,14 @@ func (t *Tenant) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field billing_details: %w", err)
 				}
 			}
+		case tenant.FieldMetadata:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field metadata", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &t.Metadata); err != nil {
+					return fmt.Errorf("unmarshal field metadata: %w", err)
+				}
+			}
 		default:
 			t.selectValues.Set(columns[i], values[i])
 		}
@@ -146,6 +156,9 @@ func (t *Tenant) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("billing_details=")
 	builder.WriteString(fmt.Sprintf("%v", t.BillingDetails))
+	builder.WriteString(", ")
+	builder.WriteString("metadata=")
+	builder.WriteString(fmt.Sprintf("%v", t.Metadata))
 	builder.WriteByte(')')
 	return builder.String()
 }

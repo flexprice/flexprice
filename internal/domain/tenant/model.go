@@ -31,6 +31,7 @@ type Tenant struct {
 	Name           string               `json:"name"`
 	Status         types.Status         `json:"status"`
 	BillingDetails TenantBillingDetails `json:"billing_details"`
+	Metadata       types.Metadata       `json:"metadata"`
 	CreatedAt      time.Time            `json:"created_at"`
 	UpdatedAt      time.Time            `json:"updated_at"`
 }
@@ -45,6 +46,7 @@ func FromEnt(e *ent.Tenant) *Tenant {
 		ID:             e.ID,
 		Name:           e.Name,
 		Status:         types.Status(e.Status),
+		Metadata:       e.Metadata,
 		CreatedAt:      e.CreatedAt,
 		UpdatedAt:      e.UpdatedAt,
 		BillingDetails: FromEntBillingDetails(e.BillingDetails),

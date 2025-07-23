@@ -10,10 +10,10 @@ import (
 
 // TenantBillingDetails structure for the billing details
 type TenantBillingDetails struct {
-	Email     string         `json:"email,omitempty"`
-	HelpEmail string         `json:"help_email,omitempty"`
-	Phone     string         `json:"phone,omitempty"`
-	Address   TenantAddress  `json:"address,omitempty"`
+	Email     string        `json:"email,omitempty"`
+	HelpEmail string        `json:"help_email,omitempty"`
+	Phone     string        `json:"phone,omitempty"`
+	Address   TenantAddress `json:"address,omitempty"`
 }
 
 // TenantAddress represents a physical address in the tenant billing details
@@ -58,6 +58,11 @@ func (Tenant) Fields() []ent.Field {
 		field.JSON("billing_details", TenantBillingDetails{}).
 			Optional().
 			Default(TenantBillingDetails{}).
+			SchemaType(map[string]string{
+				"postgres": "jsonb",
+			}),
+		field.JSON("metadata", map[string]string{}).
+			Optional().
 			SchemaType(map[string]string{
 				"postgres": "jsonb",
 			}),

@@ -238,6 +238,10 @@ func (s *tenantService) UpdateTenant(ctx context.Context, id string, req dto.Upd
 		existingTenant.Name = req.Name
 	}
 
+	if req.Metadata != nil {
+		existingTenant.Metadata = lo.FromPtr(req.Metadata)
+	}
+
 	// Update the timestamp
 	existingTenant.UpdatedAt = time.Now()
 

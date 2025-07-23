@@ -83,6 +83,12 @@ func (tc *TenantCreate) SetNillableBillingDetails(sbd *schema.TenantBillingDetai
 	return tc
 }
 
+// SetMetadata sets the "metadata" field.
+func (tc *TenantCreate) SetMetadata(m map[string]string) *TenantCreate {
+	tc.mutation.SetMetadata(m)
+	return tc
+}
+
 // SetID sets the "id" field.
 func (tc *TenantCreate) SetID(s string) *TenantCreate {
 	tc.mutation.SetID(s)
@@ -215,6 +221,10 @@ func (tc *TenantCreate) createSpec() (*Tenant, *sqlgraph.CreateSpec) {
 	if value, ok := tc.mutation.BillingDetails(); ok {
 		_spec.SetField(tenant.FieldBillingDetails, field.TypeJSON, value)
 		_node.BillingDetails = value
+	}
+	if value, ok := tc.mutation.Metadata(); ok {
+		_spec.SetField(tenant.FieldMetadata, field.TypeJSON, value)
+		_node.Metadata = value
 	}
 	return _node, _spec
 }

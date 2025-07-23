@@ -24,6 +24,8 @@ const (
 	FieldUpdatedAt = "updated_at"
 	// FieldBillingDetails holds the string denoting the billing_details field in the database.
 	FieldBillingDetails = "billing_details"
+	// FieldMetadata holds the string denoting the metadata field in the database.
+	FieldMetadata = "metadata"
 	// Table holds the table name of the tenant in the database.
 	Table = "tenants"
 )
@@ -36,6 +38,7 @@ var Columns = []string{
 	FieldCreatedAt,
 	FieldUpdatedAt,
 	FieldBillingDetails,
+	FieldMetadata,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).

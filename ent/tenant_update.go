@@ -83,6 +83,18 @@ func (tu *TenantUpdate) ClearBillingDetails() *TenantUpdate {
 	return tu
 }
 
+// SetMetadata sets the "metadata" field.
+func (tu *TenantUpdate) SetMetadata(m map[string]string) *TenantUpdate {
+	tu.mutation.SetMetadata(m)
+	return tu
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (tu *TenantUpdate) ClearMetadata() *TenantUpdate {
+	tu.mutation.ClearMetadata()
+	return tu
+}
+
 // Mutation returns the TenantMutation object of the builder.
 func (tu *TenantUpdate) Mutation() *TenantMutation {
 	return tu.mutation
@@ -161,6 +173,12 @@ func (tu *TenantUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if tu.mutation.BillingDetailsCleared() {
 		_spec.ClearField(tenant.FieldBillingDetails, field.TypeJSON)
 	}
+	if value, ok := tu.mutation.Metadata(); ok {
+		_spec.SetField(tenant.FieldMetadata, field.TypeJSON, value)
+	}
+	if tu.mutation.MetadataCleared() {
+		_spec.ClearField(tenant.FieldMetadata, field.TypeJSON)
+	}
 	if n, err = sqlgraph.UpdateNodes(ctx, tu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{tenant.Label}
@@ -232,6 +250,18 @@ func (tuo *TenantUpdateOne) SetNillableBillingDetails(sbd *schema.TenantBillingD
 // ClearBillingDetails clears the value of the "billing_details" field.
 func (tuo *TenantUpdateOne) ClearBillingDetails() *TenantUpdateOne {
 	tuo.mutation.ClearBillingDetails()
+	return tuo
+}
+
+// SetMetadata sets the "metadata" field.
+func (tuo *TenantUpdateOne) SetMetadata(m map[string]string) *TenantUpdateOne {
+	tuo.mutation.SetMetadata(m)
+	return tuo
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (tuo *TenantUpdateOne) ClearMetadata() *TenantUpdateOne {
+	tuo.mutation.ClearMetadata()
 	return tuo
 }
 
@@ -342,6 +372,12 @@ func (tuo *TenantUpdateOne) sqlSave(ctx context.Context) (_node *Tenant, err err
 	}
 	if tuo.mutation.BillingDetailsCleared() {
 		_spec.ClearField(tenant.FieldBillingDetails, field.TypeJSON)
+	}
+	if value, ok := tuo.mutation.Metadata(); ok {
+		_spec.SetField(tenant.FieldMetadata, field.TypeJSON, value)
+	}
+	if tuo.mutation.MetadataCleared() {
+		_spec.ClearField(tenant.FieldMetadata, field.TypeJSON)
 	}
 	_node = &Tenant{config: tuo.config}
 	_spec.Assign = _node.assignValues

@@ -304,6 +304,16 @@ func BillingDetailsNotNil() predicate.Tenant {
 	return predicate.Tenant(sql.FieldNotNull(FieldBillingDetails))
 }
 
+// MetadataIsNil applies the IsNil predicate on the "metadata" field.
+func MetadataIsNil() predicate.Tenant {
+	return predicate.Tenant(sql.FieldIsNull(FieldMetadata))
+}
+
+// MetadataNotNil applies the NotNil predicate on the "metadata" field.
+func MetadataNotNil() predicate.Tenant {
+	return predicate.Tenant(sql.FieldNotNull(FieldMetadata))
+}
+
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.Tenant) predicate.Tenant {
 	return predicate.Tenant(sql.AndPredicates(predicates...))
