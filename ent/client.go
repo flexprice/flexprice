@@ -34,6 +34,7 @@ import (
 	"github.com/flexprice/flexprice/ent/paymentattempt"
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/price"
+	"github.com/flexprice/flexprice/ent/priceunit"
 	"github.com/flexprice/flexprice/ent/secret"
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
@@ -92,6 +93,8 @@ type Client struct {
 	Plan *PlanClient
 	// Price is the client for interacting with the Price builders.
 	Price *PriceClient
+	// PriceUnit is the client for interacting with the PriceUnit builders.
+	PriceUnit *PriceUnitClient
 	// Secret is the client for interacting with the Secret builders.
 	Secret *SecretClient
 	// Subscription is the client for interacting with the Subscription builders.
@@ -144,6 +147,7 @@ func (c *Client) init() {
 	c.PaymentAttempt = NewPaymentAttemptClient(c.config)
 	c.Plan = NewPlanClient(c.config)
 	c.Price = NewPriceClient(c.config)
+	c.PriceUnit = NewPriceUnitClient(c.config)
 	c.Secret = NewSecretClient(c.config)
 	c.Subscription = NewSubscriptionClient(c.config)
 	c.SubscriptionLineItem = NewSubscriptionLineItemClient(c.config)
@@ -266,6 +270,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		PaymentAttempt:            NewPaymentAttemptClient(cfg),
 		Plan:                      NewPlanClient(cfg),
 		Price:                     NewPriceClient(cfg),
+		PriceUnit:                 NewPriceUnitClient(cfg),
 		Secret:                    NewSecretClient(cfg),
 		Subscription:              NewSubscriptionClient(cfg),
 		SubscriptionLineItem:      NewSubscriptionLineItemClient(cfg),
@@ -315,6 +320,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		PaymentAttempt:            NewPaymentAttemptClient(cfg),
 		Plan:                      NewPlanClient(cfg),
 		Price:                     NewPriceClient(cfg),
+		PriceUnit:                 NewPriceUnitClient(cfg),
 		Secret:                    NewSecretClient(cfg),
 		Subscription:              NewSubscriptionClient(cfg),
 		SubscriptionLineItem:      NewSubscriptionLineItemClient(cfg),
@@ -358,7 +364,7 @@ func (c *Client) Use(hooks ...Hook) {
 		c.Auth, c.BillingSequence, c.Costsheet, c.CreditGrant, c.CreditGrantApplication,
 		c.CreditNote, c.CreditNoteLineItem, c.Customer, c.Entitlement, c.Environment,
 		c.Feature, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Payment,
-		c.PaymentAttempt, c.Plan, c.Price, c.Secret, c.Subscription,
+		c.PaymentAttempt, c.Plan, c.Price, c.PriceUnit, c.Secret, c.Subscription,
 		c.SubscriptionLineItem, c.SubscriptionPause, c.SubscriptionSchedule,
 		c.SubscriptionSchedulePhase, c.Task, c.Tenant, c.User, c.Wallet,
 		c.WalletTransaction,
@@ -374,7 +380,7 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.Auth, c.BillingSequence, c.Costsheet, c.CreditGrant, c.CreditGrantApplication,
 		c.CreditNote, c.CreditNoteLineItem, c.Customer, c.Entitlement, c.Environment,
 		c.Feature, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Payment,
-		c.PaymentAttempt, c.Plan, c.Price, c.Secret, c.Subscription,
+		c.PaymentAttempt, c.Plan, c.Price, c.PriceUnit, c.Secret, c.Subscription,
 		c.SubscriptionLineItem, c.SubscriptionPause, c.SubscriptionSchedule,
 		c.SubscriptionSchedulePhase, c.Task, c.Tenant, c.User, c.Wallet,
 		c.WalletTransaction,
@@ -424,6 +430,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Plan.mutate(ctx, m)
 	case *PriceMutation:
 		return c.Price.mutate(ctx, m)
+	case *PriceUnitMutation:
+		return c.PriceUnit.mutate(ctx, m)
 	case *SecretMutation:
 		return c.Secret.mutate(ctx, m)
 	case *SubscriptionMutation:
@@ -3193,6 +3201,22 @@ func (c *PriceClient) QueryCostsheet(pr *Price) *CostsheetQuery {
 	return query
 }
 
+// QueryPriceUnit queries the price_unit edge of a Price.
+func (c *PriceClient) QueryPriceUnit(pr *Price) *PriceUnitQuery {
+	query := (&PriceUnitClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := pr.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(price.Table, price.FieldID, id),
+			sqlgraph.To(priceunit.Table, priceunit.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, price.PriceUnitTable, price.PriceUnitColumn),
+		)
+		fromV = sqlgraph.Neighbors(pr.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *PriceClient) Hooks() []Hook {
 	return c.hooks.Price
@@ -3215,6 +3239,155 @@ func (c *PriceClient) mutate(ctx context.Context, m *PriceMutation) (Value, erro
 		return (&PriceDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Price mutation op: %q", m.Op())
+	}
+}
+
+// PriceUnitClient is a client for the PriceUnit schema.
+type PriceUnitClient struct {
+	config
+}
+
+// NewPriceUnitClient returns a client for the PriceUnit from the given config.
+func NewPriceUnitClient(c config) *PriceUnitClient {
+	return &PriceUnitClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `priceunit.Hooks(f(g(h())))`.
+func (c *PriceUnitClient) Use(hooks ...Hook) {
+	c.hooks.PriceUnit = append(c.hooks.PriceUnit, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `priceunit.Intercept(f(g(h())))`.
+func (c *PriceUnitClient) Intercept(interceptors ...Interceptor) {
+	c.inters.PriceUnit = append(c.inters.PriceUnit, interceptors...)
+}
+
+// Create returns a builder for creating a PriceUnit entity.
+func (c *PriceUnitClient) Create() *PriceUnitCreate {
+	mutation := newPriceUnitMutation(c.config, OpCreate)
+	return &PriceUnitCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of PriceUnit entities.
+func (c *PriceUnitClient) CreateBulk(builders ...*PriceUnitCreate) *PriceUnitCreateBulk {
+	return &PriceUnitCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *PriceUnitClient) MapCreateBulk(slice any, setFunc func(*PriceUnitCreate, int)) *PriceUnitCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &PriceUnitCreateBulk{err: fmt.Errorf("calling to PriceUnitClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*PriceUnitCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &PriceUnitCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for PriceUnit.
+func (c *PriceUnitClient) Update() *PriceUnitUpdate {
+	mutation := newPriceUnitMutation(c.config, OpUpdate)
+	return &PriceUnitUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *PriceUnitClient) UpdateOne(pu *PriceUnit) *PriceUnitUpdateOne {
+	mutation := newPriceUnitMutation(c.config, OpUpdateOne, withPriceUnit(pu))
+	return &PriceUnitUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *PriceUnitClient) UpdateOneID(id string) *PriceUnitUpdateOne {
+	mutation := newPriceUnitMutation(c.config, OpUpdateOne, withPriceUnitID(id))
+	return &PriceUnitUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for PriceUnit.
+func (c *PriceUnitClient) Delete() *PriceUnitDelete {
+	mutation := newPriceUnitMutation(c.config, OpDelete)
+	return &PriceUnitDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *PriceUnitClient) DeleteOne(pu *PriceUnit) *PriceUnitDeleteOne {
+	return c.DeleteOneID(pu.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *PriceUnitClient) DeleteOneID(id string) *PriceUnitDeleteOne {
+	builder := c.Delete().Where(priceunit.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &PriceUnitDeleteOne{builder}
+}
+
+// Query returns a query builder for PriceUnit.
+func (c *PriceUnitClient) Query() *PriceUnitQuery {
+	return &PriceUnitQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypePriceUnit},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a PriceUnit entity by its id.
+func (c *PriceUnitClient) Get(ctx context.Context, id string) (*PriceUnit, error) {
+	return c.Query().Where(priceunit.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *PriceUnitClient) GetX(ctx context.Context, id string) *PriceUnit {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryPrices queries the prices edge of a PriceUnit.
+func (c *PriceUnitClient) QueryPrices(pu *PriceUnit) *PriceQuery {
+	query := (&PriceClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := pu.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(priceunit.Table, priceunit.FieldID, id),
+			sqlgraph.To(price.Table, price.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, true, priceunit.PricesTable, priceunit.PricesColumn),
+		)
+		fromV = sqlgraph.Neighbors(pu.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *PriceUnitClient) Hooks() []Hook {
+	return c.hooks.PriceUnit
+}
+
+// Interceptors returns the client interceptors.
+func (c *PriceUnitClient) Interceptors() []Interceptor {
+	return c.inters.PriceUnit
+}
+
+func (c *PriceUnitClient) mutate(ctx context.Context, m *PriceUnitMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&PriceUnitCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&PriceUnitUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&PriceUnitUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&PriceUnitDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown PriceUnit mutation op: %q", m.Op())
 	}
 }
 
@@ -4831,17 +5004,17 @@ type (
 		Auth, BillingSequence, Costsheet, CreditGrant, CreditGrantApplication,
 		CreditNote, CreditNoteLineItem, Customer, Entitlement, Environment, Feature,
 		Invoice, InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt,
-		Plan, Price, Secret, Subscription, SubscriptionLineItem, SubscriptionPause,
-		SubscriptionSchedule, SubscriptionSchedulePhase, Task, Tenant, User, Wallet,
-		WalletTransaction []ent.Hook
+		Plan, Price, PriceUnit, Secret, Subscription, SubscriptionLineItem,
+		SubscriptionPause, SubscriptionSchedule, SubscriptionSchedulePhase, Task,
+		Tenant, User, Wallet, WalletTransaction []ent.Hook
 	}
 	inters struct {
 		Auth, BillingSequence, Costsheet, CreditGrant, CreditGrantApplication,
 		CreditNote, CreditNoteLineItem, Customer, Entitlement, Environment, Feature,
 		Invoice, InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt,
-		Plan, Price, Secret, Subscription, SubscriptionLineItem, SubscriptionPause,
-		SubscriptionSchedule, SubscriptionSchedulePhase, Task, Tenant, User, Wallet,
-		WalletTransaction []ent.Interceptor
+		Plan, Price, PriceUnit, Secret, Subscription, SubscriptionLineItem,
+		SubscriptionPause, SubscriptionSchedule, SubscriptionSchedulePhase, Task,
+		Tenant, User, Wallet, WalletTransaction []ent.Interceptor
 	}
 )
 

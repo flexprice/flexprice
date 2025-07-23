@@ -24,6 +24,7 @@ import (
 	"github.com/flexprice/flexprice/ent/paymentattempt"
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/price"
+	"github.com/flexprice/flexprice/ent/priceunit"
 	"github.com/flexprice/flexprice/ent/schema"
 	"github.com/flexprice/flexprice/ent/secret"
 	"github.com/flexprice/flexprice/ent/subscription"
@@ -875,33 +876,102 @@ func init() {
 	// price.DisplayAmountValidator is a validator for the "display_amount" field. It is called by the builders before save.
 	price.DisplayAmountValidator = priceDescDisplayAmount.Validators[0].(func(string) error)
 	// priceDescPlanID is the schema descriptor for plan_id field.
-	priceDescPlanID := priceFields[4].Descriptor()
+	priceDescPlanID := priceFields[9].Descriptor()
 	// price.PlanIDValidator is a validator for the "plan_id" field. It is called by the builders before save.
 	price.PlanIDValidator = priceDescPlanID.Validators[0].(func(string) error)
 	// priceDescType is the schema descriptor for type field.
-	priceDescType := priceFields[5].Descriptor()
+	priceDescType := priceFields[10].Descriptor()
 	// price.TypeValidator is a validator for the "type" field. It is called by the builders before save.
 	price.TypeValidator = priceDescType.Validators[0].(func(string) error)
 	// priceDescBillingPeriod is the schema descriptor for billing_period field.
-	priceDescBillingPeriod := priceFields[6].Descriptor()
+	priceDescBillingPeriod := priceFields[11].Descriptor()
 	// price.BillingPeriodValidator is a validator for the "billing_period" field. It is called by the builders before save.
 	price.BillingPeriodValidator = priceDescBillingPeriod.Validators[0].(func(string) error)
 	// priceDescBillingPeriodCount is the schema descriptor for billing_period_count field.
-	priceDescBillingPeriodCount := priceFields[7].Descriptor()
+	priceDescBillingPeriodCount := priceFields[12].Descriptor()
 	// price.BillingPeriodCountValidator is a validator for the "billing_period_count" field. It is called by the builders before save.
 	price.BillingPeriodCountValidator = priceDescBillingPeriodCount.Validators[0].(func(int) error)
 	// priceDescBillingModel is the schema descriptor for billing_model field.
-	priceDescBillingModel := priceFields[8].Descriptor()
+	priceDescBillingModel := priceFields[13].Descriptor()
 	// price.BillingModelValidator is a validator for the "billing_model" field. It is called by the builders before save.
 	price.BillingModelValidator = priceDescBillingModel.Validators[0].(func(string) error)
 	// priceDescBillingCadence is the schema descriptor for billing_cadence field.
-	priceDescBillingCadence := priceFields[9].Descriptor()
+	priceDescBillingCadence := priceFields[14].Descriptor()
 	// price.BillingCadenceValidator is a validator for the "billing_cadence" field. It is called by the builders before save.
 	price.BillingCadenceValidator = priceDescBillingCadence.Validators[0].(func(string) error)
 	// priceDescTrialPeriod is the schema descriptor for trial_period field.
-	priceDescTrialPeriod := priceFields[11].Descriptor()
+	priceDescTrialPeriod := priceFields[16].Descriptor()
 	// price.DefaultTrialPeriod holds the default value on creation for the trial_period field.
 	price.DefaultTrialPeriod = priceDescTrialPeriod.Default.(int)
+	priceunitMixin := schema.PriceUnit{}.Mixin()
+	priceunitMixinFields0 := priceunitMixin[0].Fields()
+	_ = priceunitMixinFields0
+	priceunitMixinFields1 := priceunitMixin[1].Fields()
+	_ = priceunitMixinFields1
+	priceunitFields := schema.PriceUnit{}.Fields()
+	_ = priceunitFields
+	// priceunitDescTenantID is the schema descriptor for tenant_id field.
+	priceunitDescTenantID := priceunitMixinFields0[0].Descriptor()
+	// priceunit.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	priceunit.TenantIDValidator = priceunitDescTenantID.Validators[0].(func(string) error)
+	// priceunitDescStatus is the schema descriptor for status field.
+	priceunitDescStatus := priceunitMixinFields0[1].Descriptor()
+	// priceunit.DefaultStatus holds the default value on creation for the status field.
+	priceunit.DefaultStatus = priceunitDescStatus.Default.(string)
+	// priceunitDescCreatedAt is the schema descriptor for created_at field.
+	priceunitDescCreatedAt := priceunitMixinFields0[2].Descriptor()
+	// priceunit.DefaultCreatedAt holds the default value on creation for the created_at field.
+	priceunit.DefaultCreatedAt = priceunitDescCreatedAt.Default.(func() time.Time)
+	// priceunitDescUpdatedAt is the schema descriptor for updated_at field.
+	priceunitDescUpdatedAt := priceunitMixinFields0[3].Descriptor()
+	// priceunit.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	priceunit.DefaultUpdatedAt = priceunitDescUpdatedAt.Default.(func() time.Time)
+	// priceunit.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	priceunit.UpdateDefaultUpdatedAt = priceunitDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// priceunitDescEnvironmentID is the schema descriptor for environment_id field.
+	priceunitDescEnvironmentID := priceunitMixinFields1[0].Descriptor()
+	// priceunit.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	priceunit.DefaultEnvironmentID = priceunitDescEnvironmentID.Default.(string)
+	// priceunitDescName is the schema descriptor for name field.
+	priceunitDescName := priceunitFields[1].Descriptor()
+	// priceunit.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	priceunit.NameValidator = priceunitDescName.Validators[0].(func(string) error)
+	// priceunitDescCode is the schema descriptor for code field.
+	priceunitDescCode := priceunitFields[2].Descriptor()
+	// priceunit.CodeValidator is a validator for the "code" field. It is called by the builders before save.
+	priceunit.CodeValidator = priceunitDescCode.Validators[0].(func(string) error)
+	// priceunitDescSymbol is the schema descriptor for symbol field.
+	priceunitDescSymbol := priceunitFields[3].Descriptor()
+	// priceunit.SymbolValidator is a validator for the "symbol" field. It is called by the builders before save.
+	priceunit.SymbolValidator = priceunitDescSymbol.Validators[0].(func(string) error)
+	// priceunitDescBaseCurrency is the schema descriptor for base_currency field.
+	priceunitDescBaseCurrency := priceunitFields[4].Descriptor()
+	// priceunit.BaseCurrencyValidator is a validator for the "base_currency" field. It is called by the builders before save.
+	priceunit.BaseCurrencyValidator = priceunitDescBaseCurrency.Validators[0].(func(string) error)
+	// priceunitDescConversionRate is the schema descriptor for conversion_rate field.
+	priceunitDescConversionRate := priceunitFields[5].Descriptor()
+	// priceunit.DefaultConversionRate holds the default value on creation for the conversion_rate field.
+	priceunit.DefaultConversionRate = priceunitDescConversionRate.Default.(decimal.Decimal)
+	// priceunitDescPrecision is the schema descriptor for precision field.
+	priceunitDescPrecision := priceunitFields[6].Descriptor()
+	// priceunit.DefaultPrecision holds the default value on creation for the precision field.
+	priceunit.DefaultPrecision = priceunitDescPrecision.Default.(int)
+	// priceunit.PrecisionValidator is a validator for the "precision" field. It is called by the builders before save.
+	priceunit.PrecisionValidator = func() func(int) error {
+		validators := priceunitDescPrecision.Validators
+		fns := [...]func(int) error{
+			validators[0].(func(int) error),
+			validators[1].(func(int) error),
+		}
+		return func(precision int) error {
+			for _, fn := range fns {
+				if err := fn(precision); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
 	secretMixin := schema.Secret{}.Mixin()
 	secretMixinFields0 := secretMixin[0].Fields()
 	_ = secretMixinFields0
