@@ -107,6 +107,12 @@ type StripeSyncBatchFilter struct {
 	RetryCountMax     *int         `json:"retry_count_max,omitempty"`
 }
 
+func NewStripeSyncBatchFilter() *StripeSyncBatchFilter {
+	return &StripeSyncBatchFilter{
+		QueryFilter: types.QueryFilter{},
+	}
+}
+
 // StripeTenantConfigFilter defines filtering options for stripe tenant config queries
 type StripeTenantConfigFilter struct {
 	types.QueryFilter

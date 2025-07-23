@@ -418,6 +418,11 @@ func (s *stripeIntegrationService) GetSyncStatus(ctx context.Context, filter *St
 }
 
 func (s *stripeIntegrationService) GetSyncBatches(ctx context.Context, filter *integration.StripeSyncBatchFilter) (*ListStripeSyncBatchesResponse, error) {
+
+	if filter == nil {
+		filter = integration.NewStripeSyncBatchFilter()
+	}
+
 	batches, err := s.StripeSyncBatchRepo.List(ctx, filter)
 	if err != nil {
 		return nil, err

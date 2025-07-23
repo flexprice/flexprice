@@ -6609,6 +6609,64 @@
                 "x-codegen-request-body-name": "request"
             }
         },
+        "/stripe/batches/retry": {
+            "post": {
+                "tags": [
+                    "stripe-sync"
+                ],
+                "summary": "Retry failed Stripe sync batches",
+                "description": "Retry failed Stripe sync batches by batch IDs, entity, or meter",
+                "requestBody": {
+                    "description": "Retry failed batches request",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/dto.RetryFailedBatchesRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/service.RetryFailedBatchesResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/errors.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/errors.ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "x-codegen-request-body-name": "request"
+            }
+        },
         "/stripe/config": {
             "get": {
                 "tags": [
@@ -7170,6 +7228,223 @@
                     }
                 ],
                 "x-codegen-request-body-name": "body"
+            }
+        },
+        "/stripe/sync/batches": {
+            "get": {
+                "tags": [
+                    "stripe-sync"
+                ],
+                "summary": "List Stripe sync batches",
+                "description": "List all Stripe sync batches with optional filters",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/service.ListStripeSyncBatchesResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/errors.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/errors.ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ]
+            }
+        },
+        "/stripe/sync/batches/{id}": {
+            "get": {
+                "tags": [
+                    "stripe-sync"
+                ],
+                "summary": "Get Stripe sync batch by ID",
+                "description": "Get details of a specific Stripe sync batch",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "Batch ID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/service.StripeSyncBatchResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/errors.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/errors.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/errors.ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ]
+            }
+        },
+        "/stripe/sync/manual": {
+            "post": {
+                "tags": [
+                    "stripe-sync"
+                ],
+                "summary": "Trigger manual Stripe sync",
+                "description": "Manually trigger a Stripe sync for a specific entity and time range",
+                "requestBody": {
+                    "description": "Manual sync request",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/dto.ManualSyncRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/service.ManualSyncResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/errors.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/errors.ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "x-codegen-request-body-name": "request"
+            }
+        },
+        "/stripe/sync/status": {
+            "get": {
+                "tags": [
+                    "stripe-sync"
+                ],
+                "summary": "Get Stripe sync status",
+                "description": "Get the current status and metrics of Stripe sync batches",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/service.StripeSyncStatusResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/errors.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/errors.ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ]
             }
         },
         "/subscriptions": {
@@ -12257,6 +12532,37 @@
                     }
                 }
             },
+            "dto.ManualSyncRequest": {
+                "required": [
+                    "entity_id",
+                    "entity_type",
+                    "time_from",
+                    "time_to"
+                ],
+                "type": "object",
+                "properties": {
+                    "entity_id": {
+                        "type": "string"
+                    },
+                    "entity_type": {
+                        "type": "string",
+                        "description": "customer, subscription etc."
+                    },
+                    "force_rerun": {
+                        "type": "boolean"
+                    },
+                    "meter_id": {
+                        "type": "string"
+                    },
+                    "time_from": {
+                        "type": "string",
+                        "description": "RFC3339"
+                    },
+                    "time_to": {
+                        "type": "string"
+                    }
+                }
+            },
             "dto.MeterMappingResponse": {
                 "type": "object",
                 "properties": {
@@ -12690,6 +12996,27 @@
                     },
                     "resume_mode": {
                         "$ref": "#/components/schemas/types.ResumeMode"
+                    }
+                }
+            },
+            "dto.RetryFailedBatchesRequest": {
+                "type": "object",
+                "properties": {
+                    "batch_ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "entity_id": {
+                        "type": "string"
+                    },
+                    "max_retry_age": {
+                        "type": "string",
+                        "description": "duration string e.g. 24h"
+                    },
+                    "meter_id": {
+                        "type": "string"
                     }
                 }
             },
@@ -14329,6 +14656,32 @@
                     }
                 }
             },
+            "integration.EntityType": {
+                "type": "string",
+                "enum": [
+                    "customer"
+                ],
+                "x-enum-varnames": [
+                    "EntityTypeCustomer"
+                ]
+            },
+            "integration.SyncStatus": {
+                "type": "string",
+                "enum": [
+                    "pending",
+                    "processing",
+                    "completed",
+                    "failed",
+                    "retrying"
+                ],
+                "x-enum-varnames": [
+                    "SyncStatusPending",
+                    "SyncStatusProcessing",
+                    "SyncStatusCompleted",
+                    "SyncStatusFailed",
+                    "SyncStatusRetrying"
+                ]
+            },
             "meter.Aggregation": {
                 "type": "object",
                 "properties": {
@@ -14516,6 +14869,144 @@
                     }
                 }
             },
+            "service.ListStripeSyncBatchesResponse": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/service.StripeSyncBatchResponse"
+                        }
+                    },
+                    "pagination": {
+                        "$ref": "#/components/schemas/types.PaginationResponse"
+                    }
+                }
+            },
+            "service.ManualSyncResponse": {
+                "type": "object",
+                "properties": {
+                    "estimated_eta": {
+                        "type": "string"
+                    },
+                    "run_id": {
+                        "type": "string"
+                    },
+                    "triggered_at": {
+                        "type": "string"
+                    },
+                    "workflow_id": {
+                        "type": "string"
+                    }
+                }
+            },
+            "service.RetryFailedBatchesResponse": {
+                "type": "object",
+                "properties": {
+                    "batch_ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "retried_count": {
+                        "type": "integer"
+                    },
+                    "skipped_count": {
+                        "type": "integer"
+                    }
+                }
+            },
+            "service.StripeSyncBatchResponse": {
+                "type": "object",
+                "properties": {
+                    "aggregated_quantity": {
+                        "type": "number"
+                    },
+                    "created_at": {
+                        "type": "string"
+                    },
+                    "entity_id": {
+                        "type": "string"
+                    },
+                    "entity_type": {
+                        "$ref": "#/components/schemas/integration.EntityType"
+                    },
+                    "error_message": {
+                        "type": "string"
+                    },
+                    "event_count": {
+                        "type": "integer"
+                    },
+                    "event_type": {
+                        "type": "string"
+                    },
+                    "id": {
+                        "type": "string"
+                    },
+                    "meter_id": {
+                        "type": "string"
+                    },
+                    "retry_count": {
+                        "type": "integer"
+                    },
+                    "stripe_event_id": {
+                        "type": "string"
+                    },
+                    "sync_status": {
+                        "$ref": "#/components/schemas/integration.SyncStatus"
+                    },
+                    "synced_at": {
+                        "type": "string"
+                    },
+                    "updated_at": {
+                        "type": "string"
+                    },
+                    "window_end": {
+                        "type": "string"
+                    },
+                    "window_start": {
+                        "type": "string"
+                    }
+                }
+            },
+            "service.StripeSyncStatusResponse": {
+                "type": "object",
+                "properties": {
+                    "metrics": {
+                        "$ref": "#/components/schemas/service.SyncMetrics"
+                    },
+                    "recent_batches": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/service.StripeSyncBatchResponse"
+                        }
+                    },
+                    "summary": {
+                        "$ref": "#/components/schemas/service.SyncStatusSummary"
+                    }
+                }
+            },
+            "service.SyncMetrics": {
+                "type": "object",
+                "properties": {
+                    "average_latency": {
+                        "$ref": "#/components/schemas/time.Duration"
+                    },
+                    "events_per_second": {
+                        "type": "number"
+                    },
+                    "last_sync_time": {
+                        "type": "string"
+                    },
+                    "success_rate": {
+                        "type": "number"
+                    },
+                    "total_events": {
+                        "type": "integer"
+                    }
+                }
+            },
             "service.SyncPlanPricesResponse": {
                 "type": "object",
                 "properties": {
@@ -14544,6 +15035,29 @@
                                 "type": "integer"
                             }
                         }
+                    }
+                }
+            },
+            "service.SyncStatusSummary": {
+                "type": "object",
+                "properties": {
+                    "failed_batches": {
+                        "type": "integer"
+                    },
+                    "pending_batches": {
+                        "type": "integer"
+                    },
+                    "status_breakdown": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "integer"
+                        }
+                    },
+                    "successful_batches": {
+                        "type": "integer"
+                    },
+                    "total_batches": {
+                        "type": "integer"
                     }
                 }
             },
@@ -14700,6 +15214,30 @@
                         "type": "string"
                     }
                 }
+            },
+            "time.Duration": {
+                "type": "integer",
+                "format": "int64",
+                "enum": [
+                    -9223372036854776000,
+                    9223372036854776000,
+                    1,
+                    1000,
+                    1000000,
+                    1000000000,
+                    60000000000,
+                    3600000000000
+                ],
+                "x-enum-varnames": [
+                    "minDuration",
+                    "maxDuration",
+                    "Nanosecond",
+                    "Microsecond",
+                    "Millisecond",
+                    "Second",
+                    "Minute",
+                    "Hour"
+                ]
             },
             "types.AggregationType": {
                 "type": "string",
