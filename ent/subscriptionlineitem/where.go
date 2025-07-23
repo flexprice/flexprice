@@ -181,6 +181,21 @@ func EndDate(v time.Time) predicate.SubscriptionLineItem {
 	return predicate.SubscriptionLineItem(sql.FieldEQ(FieldEndDate, v))
 }
 
+// PriceUnit applies equality check predicate on the "price_unit" field. It's identical to PriceUnitEQ.
+func PriceUnit(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldEQ(FieldPriceUnit, v))
+}
+
+// PriceUnitConversionRate applies equality check predicate on the "price_unit_conversion_rate" field. It's identical to PriceUnitConversionRateEQ.
+func PriceUnitConversionRate(v decimal.Decimal) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldEQ(FieldPriceUnitConversionRate, v))
+}
+
+// PriceUnitAmount applies equality check predicate on the "price_unit_amount" field. It's identical to PriceUnitAmountEQ.
+func PriceUnitAmount(v decimal.Decimal) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldEQ(FieldPriceUnitAmount, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.SubscriptionLineItem {
 	return predicate.SubscriptionLineItem(sql.FieldEQ(FieldTenantID, v))
@@ -1654,6 +1669,181 @@ func MetadataIsNil() predicate.SubscriptionLineItem {
 // MetadataNotNil applies the NotNil predicate on the "metadata" field.
 func MetadataNotNil() predicate.SubscriptionLineItem {
 	return predicate.SubscriptionLineItem(sql.FieldNotNull(FieldMetadata))
+}
+
+// PriceUnitEQ applies the EQ predicate on the "price_unit" field.
+func PriceUnitEQ(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldEQ(FieldPriceUnit, v))
+}
+
+// PriceUnitNEQ applies the NEQ predicate on the "price_unit" field.
+func PriceUnitNEQ(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldNEQ(FieldPriceUnit, v))
+}
+
+// PriceUnitIn applies the In predicate on the "price_unit" field.
+func PriceUnitIn(vs ...string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldIn(FieldPriceUnit, vs...))
+}
+
+// PriceUnitNotIn applies the NotIn predicate on the "price_unit" field.
+func PriceUnitNotIn(vs ...string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldNotIn(FieldPriceUnit, vs...))
+}
+
+// PriceUnitGT applies the GT predicate on the "price_unit" field.
+func PriceUnitGT(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldGT(FieldPriceUnit, v))
+}
+
+// PriceUnitGTE applies the GTE predicate on the "price_unit" field.
+func PriceUnitGTE(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldGTE(FieldPriceUnit, v))
+}
+
+// PriceUnitLT applies the LT predicate on the "price_unit" field.
+func PriceUnitLT(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldLT(FieldPriceUnit, v))
+}
+
+// PriceUnitLTE applies the LTE predicate on the "price_unit" field.
+func PriceUnitLTE(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldLTE(FieldPriceUnit, v))
+}
+
+// PriceUnitContains applies the Contains predicate on the "price_unit" field.
+func PriceUnitContains(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldContains(FieldPriceUnit, v))
+}
+
+// PriceUnitHasPrefix applies the HasPrefix predicate on the "price_unit" field.
+func PriceUnitHasPrefix(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldHasPrefix(FieldPriceUnit, v))
+}
+
+// PriceUnitHasSuffix applies the HasSuffix predicate on the "price_unit" field.
+func PriceUnitHasSuffix(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldHasSuffix(FieldPriceUnit, v))
+}
+
+// PriceUnitIsNil applies the IsNil predicate on the "price_unit" field.
+func PriceUnitIsNil() predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldIsNull(FieldPriceUnit))
+}
+
+// PriceUnitNotNil applies the NotNil predicate on the "price_unit" field.
+func PriceUnitNotNil() predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldNotNull(FieldPriceUnit))
+}
+
+// PriceUnitEqualFold applies the EqualFold predicate on the "price_unit" field.
+func PriceUnitEqualFold(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldEqualFold(FieldPriceUnit, v))
+}
+
+// PriceUnitContainsFold applies the ContainsFold predicate on the "price_unit" field.
+func PriceUnitContainsFold(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldContainsFold(FieldPriceUnit, v))
+}
+
+// PriceUnitConversionRateEQ applies the EQ predicate on the "price_unit_conversion_rate" field.
+func PriceUnitConversionRateEQ(v decimal.Decimal) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldEQ(FieldPriceUnitConversionRate, v))
+}
+
+// PriceUnitConversionRateNEQ applies the NEQ predicate on the "price_unit_conversion_rate" field.
+func PriceUnitConversionRateNEQ(v decimal.Decimal) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldNEQ(FieldPriceUnitConversionRate, v))
+}
+
+// PriceUnitConversionRateIn applies the In predicate on the "price_unit_conversion_rate" field.
+func PriceUnitConversionRateIn(vs ...decimal.Decimal) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldIn(FieldPriceUnitConversionRate, vs...))
+}
+
+// PriceUnitConversionRateNotIn applies the NotIn predicate on the "price_unit_conversion_rate" field.
+func PriceUnitConversionRateNotIn(vs ...decimal.Decimal) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldNotIn(FieldPriceUnitConversionRate, vs...))
+}
+
+// PriceUnitConversionRateGT applies the GT predicate on the "price_unit_conversion_rate" field.
+func PriceUnitConversionRateGT(v decimal.Decimal) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldGT(FieldPriceUnitConversionRate, v))
+}
+
+// PriceUnitConversionRateGTE applies the GTE predicate on the "price_unit_conversion_rate" field.
+func PriceUnitConversionRateGTE(v decimal.Decimal) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldGTE(FieldPriceUnitConversionRate, v))
+}
+
+// PriceUnitConversionRateLT applies the LT predicate on the "price_unit_conversion_rate" field.
+func PriceUnitConversionRateLT(v decimal.Decimal) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldLT(FieldPriceUnitConversionRate, v))
+}
+
+// PriceUnitConversionRateLTE applies the LTE predicate on the "price_unit_conversion_rate" field.
+func PriceUnitConversionRateLTE(v decimal.Decimal) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldLTE(FieldPriceUnitConversionRate, v))
+}
+
+// PriceUnitConversionRateIsNil applies the IsNil predicate on the "price_unit_conversion_rate" field.
+func PriceUnitConversionRateIsNil() predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldIsNull(FieldPriceUnitConversionRate))
+}
+
+// PriceUnitConversionRateNotNil applies the NotNil predicate on the "price_unit_conversion_rate" field.
+func PriceUnitConversionRateNotNil() predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldNotNull(FieldPriceUnitConversionRate))
+}
+
+// PriceUnitAmountEQ applies the EQ predicate on the "price_unit_amount" field.
+func PriceUnitAmountEQ(v decimal.Decimal) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldEQ(FieldPriceUnitAmount, v))
+}
+
+// PriceUnitAmountNEQ applies the NEQ predicate on the "price_unit_amount" field.
+func PriceUnitAmountNEQ(v decimal.Decimal) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldNEQ(FieldPriceUnitAmount, v))
+}
+
+// PriceUnitAmountIn applies the In predicate on the "price_unit_amount" field.
+func PriceUnitAmountIn(vs ...decimal.Decimal) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldIn(FieldPriceUnitAmount, vs...))
+}
+
+// PriceUnitAmountNotIn applies the NotIn predicate on the "price_unit_amount" field.
+func PriceUnitAmountNotIn(vs ...decimal.Decimal) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldNotIn(FieldPriceUnitAmount, vs...))
+}
+
+// PriceUnitAmountGT applies the GT predicate on the "price_unit_amount" field.
+func PriceUnitAmountGT(v decimal.Decimal) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldGT(FieldPriceUnitAmount, v))
+}
+
+// PriceUnitAmountGTE applies the GTE predicate on the "price_unit_amount" field.
+func PriceUnitAmountGTE(v decimal.Decimal) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldGTE(FieldPriceUnitAmount, v))
+}
+
+// PriceUnitAmountLT applies the LT predicate on the "price_unit_amount" field.
+func PriceUnitAmountLT(v decimal.Decimal) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldLT(FieldPriceUnitAmount, v))
+}
+
+// PriceUnitAmountLTE applies the LTE predicate on the "price_unit_amount" field.
+func PriceUnitAmountLTE(v decimal.Decimal) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldLTE(FieldPriceUnitAmount, v))
+}
+
+// PriceUnitAmountIsNil applies the IsNil predicate on the "price_unit_amount" field.
+func PriceUnitAmountIsNil() predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldIsNull(FieldPriceUnitAmount))
+}
+
+// PriceUnitAmountNotNil applies the NotNil predicate on the "price_unit_amount" field.
+func PriceUnitAmountNotNil() predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldNotNull(FieldPriceUnitAmount))
 }
 
 // HasSubscription applies the HasEdge predicate on the "subscription" edge.

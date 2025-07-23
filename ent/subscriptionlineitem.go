@@ -68,6 +68,12 @@ type SubscriptionLineItem struct {
 	EndDate *time.Time `json:"end_date,omitempty"`
 	// Metadata holds the value of the "metadata" field.
 	Metadata map[string]string `json:"metadata,omitempty"`
+	// PriceUnit holds the value of the "price_unit" field.
+	PriceUnit string `json:"price_unit,omitempty"`
+	// PriceUnitConversionRate holds the value of the "price_unit_conversion_rate" field.
+	PriceUnitConversionRate *decimal.Decimal `json:"price_unit_conversion_rate,omitempty"`
+	// PriceUnitAmount holds the value of the "price_unit_amount" field.
+	PriceUnitAmount *decimal.Decimal `json:"price_unit_amount,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the SubscriptionLineItemQuery when eager-loading is set.
 	Edges        SubscriptionLineItemEdges `json:"edges"`
@@ -99,13 +105,15 @@ func (*SubscriptionLineItem) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case subscriptionlineitem.FieldPriceUnitConversionRate, subscriptionlineitem.FieldPriceUnitAmount:
+			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case subscriptionlineitem.FieldMetadata:
 			values[i] = new([]byte)
 		case subscriptionlineitem.FieldQuantity:
 			values[i] = new(decimal.Decimal)
 		case subscriptionlineitem.FieldTrialPeriod:
 			values[i] = new(sql.NullInt64)
-		case subscriptionlineitem.FieldID, subscriptionlineitem.FieldTenantID, subscriptionlineitem.FieldStatus, subscriptionlineitem.FieldCreatedBy, subscriptionlineitem.FieldUpdatedBy, subscriptionlineitem.FieldEnvironmentID, subscriptionlineitem.FieldSubscriptionID, subscriptionlineitem.FieldCustomerID, subscriptionlineitem.FieldPlanID, subscriptionlineitem.FieldPlanDisplayName, subscriptionlineitem.FieldPriceID, subscriptionlineitem.FieldPriceType, subscriptionlineitem.FieldMeterID, subscriptionlineitem.FieldMeterDisplayName, subscriptionlineitem.FieldDisplayName, subscriptionlineitem.FieldCurrency, subscriptionlineitem.FieldBillingPeriod, subscriptionlineitem.FieldInvoiceCadence:
+		case subscriptionlineitem.FieldID, subscriptionlineitem.FieldTenantID, subscriptionlineitem.FieldStatus, subscriptionlineitem.FieldCreatedBy, subscriptionlineitem.FieldUpdatedBy, subscriptionlineitem.FieldEnvironmentID, subscriptionlineitem.FieldSubscriptionID, subscriptionlineitem.FieldCustomerID, subscriptionlineitem.FieldPlanID, subscriptionlineitem.FieldPlanDisplayName, subscriptionlineitem.FieldPriceID, subscriptionlineitem.FieldPriceType, subscriptionlineitem.FieldMeterID, subscriptionlineitem.FieldMeterDisplayName, subscriptionlineitem.FieldDisplayName, subscriptionlineitem.FieldCurrency, subscriptionlineitem.FieldBillingPeriod, subscriptionlineitem.FieldInvoiceCadence, subscriptionlineitem.FieldPriceUnit:
 			values[i] = new(sql.NullString)
 		case subscriptionlineitem.FieldCreatedAt, subscriptionlineitem.FieldUpdatedAt, subscriptionlineitem.FieldStartDate, subscriptionlineitem.FieldEndDate:
 			values[i] = new(sql.NullTime)
@@ -284,6 +292,26 @@ func (sli *SubscriptionLineItem) assignValues(columns []string, values []any) er
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
+		case subscriptionlineitem.FieldPriceUnit:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field price_unit", values[i])
+			} else if value.Valid {
+				sli.PriceUnit = value.String
+			}
+		case subscriptionlineitem.FieldPriceUnitConversionRate:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field price_unit_conversion_rate", values[i])
+			} else if value.Valid {
+				sli.PriceUnitConversionRate = new(decimal.Decimal)
+				*sli.PriceUnitConversionRate = *value.S.(*decimal.Decimal)
+			}
+		case subscriptionlineitem.FieldPriceUnitAmount:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field price_unit_amount", values[i])
+			} else if value.Valid {
+				sli.PriceUnitAmount = new(decimal.Decimal)
+				*sli.PriceUnitAmount = *value.S.(*decimal.Decimal)
+			}
 		default:
 			sli.selectValues.Set(columns[i], values[i])
 		}
@@ -412,6 +440,19 @@ func (sli *SubscriptionLineItem) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
 	builder.WriteString(fmt.Sprintf("%v", sli.Metadata))
+	builder.WriteString(", ")
+	builder.WriteString("price_unit=")
+	builder.WriteString(sli.PriceUnit)
+	builder.WriteString(", ")
+	if v := sli.PriceUnitConversionRate; v != nil {
+		builder.WriteString("price_unit_conversion_rate=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := sli.PriceUnitAmount; v != nil {
+		builder.WriteString("price_unit_amount=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }

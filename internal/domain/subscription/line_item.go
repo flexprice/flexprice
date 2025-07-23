@@ -30,9 +30,9 @@ type SubscriptionLineItem struct {
 	Metadata         map[string]string    `db:"metadata" json:"metadata,omitempty"`
 	EnvironmentID    string               `db:"environment_id" json:"environment_id"`
 	// Custom pricing unit fields
-	PriceUnit       string          `db:"price_unit" json:"price_unit,omitempty"` // code
-	PriceUnitSymbol string          `db:"price_unit_symbol" json:"price_unit_symbol,omitempty"`
-	PriceUnitAmount decimal.Decimal `db:"price_unit_amount" json:"price_unit_amount,omitempty"`
+	PriceUnit               string          `db:"price_unit" json:"price_unit,omitempty"` // code
+	PriceUnitConversionRate decimal.Decimal `db:"price_unit_conversion_rate" json:"price_unit_conversion_rate,omitempty"`
+	PriceUnitAmount         decimal.Decimal `db:"price_unit_amount" json:"price_unit_amount,omitempty"`
 	types.BaseModel
 }
 
@@ -81,6 +81,7 @@ func SubscriptionLineItemFromEnt(e *ent.SubscriptionLineItem) *SubscriptionLineI
 
 	var planID, planDisplayName, priceType, meterID, meterDisplayName, displayName string
 	var startDate, endDate time.Time
+	var priceUnitConversionRate, priceUnitAmount decimal.Decimal
 
 	if e.PlanID != nil {
 		planID = *e.PlanID
@@ -103,30 +104,40 @@ func SubscriptionLineItemFromEnt(e *ent.SubscriptionLineItem) *SubscriptionLineI
 	if e.StartDate != nil {
 		startDate = *e.StartDate
 	}
-	if e.EndDate != nil {
-		endDate = *e.EndDate
+	if e.PriceUnitConversionRate != nil {
+		priceUnitConversionRate = *e.PriceUnitConversionRate
+	} else {
+		priceUnitConversionRate = decimal.Zero
+	}
+	if e.PriceUnitAmount != nil {
+		priceUnitAmount = *e.PriceUnitAmount
+	} else {
+		priceUnitAmount = decimal.Zero
 	}
 
 	return &SubscriptionLineItem{
-		ID:               e.ID,
-		SubscriptionID:   e.SubscriptionID,
-		CustomerID:       e.CustomerID,
-		PlanID:           planID,
-		PlanDisplayName:  planDisplayName,
-		PriceID:          e.PriceID,
-		PriceType:        types.PriceType(priceType),
-		MeterID:          meterID,
-		MeterDisplayName: meterDisplayName,
-		DisplayName:      displayName,
-		Quantity:         e.Quantity,
-		Currency:         e.Currency,
-		BillingPeriod:    types.BillingPeriod(e.BillingPeriod),
-		InvoiceCadence:   types.InvoiceCadence(e.InvoiceCadence),
-		TrialPeriod:      e.TrialPeriod,
-		StartDate:        startDate,
-		EndDate:          endDate,
-		Metadata:         e.Metadata,
-		EnvironmentID:    e.EnvironmentID,
+		ID:                      e.ID,
+		SubscriptionID:          e.SubscriptionID,
+		CustomerID:              e.CustomerID,
+		PlanID:                  planID,
+		PlanDisplayName:         planDisplayName,
+		PriceID:                 e.PriceID,
+		PriceType:               types.PriceType(priceType),
+		MeterID:                 meterID,
+		MeterDisplayName:        meterDisplayName,
+		DisplayName:             displayName,
+		Quantity:                e.Quantity,
+		Currency:                e.Currency,
+		BillingPeriod:           types.BillingPeriod(e.BillingPeriod),
+		InvoiceCadence:          types.InvoiceCadence(e.InvoiceCadence),
+		TrialPeriod:             e.TrialPeriod,
+		StartDate:               startDate,
+		EndDate:                 endDate,
+		Metadata:                e.Metadata,
+		EnvironmentID:           e.EnvironmentID,
+		PriceUnit:               e.PriceUnit,
+		PriceUnitConversionRate: priceUnitConversionRate,
+		PriceUnitAmount:         priceUnitAmount,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

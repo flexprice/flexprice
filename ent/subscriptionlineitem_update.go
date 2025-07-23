@@ -318,6 +318,66 @@ func (sliu *SubscriptionLineItemUpdate) ClearMetadata() *SubscriptionLineItemUpd
 	return sliu
 }
 
+// SetPriceUnit sets the "price_unit" field.
+func (sliu *SubscriptionLineItemUpdate) SetPriceUnit(s string) *SubscriptionLineItemUpdate {
+	sliu.mutation.SetPriceUnit(s)
+	return sliu
+}
+
+// SetNillablePriceUnit sets the "price_unit" field if the given value is not nil.
+func (sliu *SubscriptionLineItemUpdate) SetNillablePriceUnit(s *string) *SubscriptionLineItemUpdate {
+	if s != nil {
+		sliu.SetPriceUnit(*s)
+	}
+	return sliu
+}
+
+// ClearPriceUnit clears the value of the "price_unit" field.
+func (sliu *SubscriptionLineItemUpdate) ClearPriceUnit() *SubscriptionLineItemUpdate {
+	sliu.mutation.ClearPriceUnit()
+	return sliu
+}
+
+// SetPriceUnitConversionRate sets the "price_unit_conversion_rate" field.
+func (sliu *SubscriptionLineItemUpdate) SetPriceUnitConversionRate(d decimal.Decimal) *SubscriptionLineItemUpdate {
+	sliu.mutation.SetPriceUnitConversionRate(d)
+	return sliu
+}
+
+// SetNillablePriceUnitConversionRate sets the "price_unit_conversion_rate" field if the given value is not nil.
+func (sliu *SubscriptionLineItemUpdate) SetNillablePriceUnitConversionRate(d *decimal.Decimal) *SubscriptionLineItemUpdate {
+	if d != nil {
+		sliu.SetPriceUnitConversionRate(*d)
+	}
+	return sliu
+}
+
+// ClearPriceUnitConversionRate clears the value of the "price_unit_conversion_rate" field.
+func (sliu *SubscriptionLineItemUpdate) ClearPriceUnitConversionRate() *SubscriptionLineItemUpdate {
+	sliu.mutation.ClearPriceUnitConversionRate()
+	return sliu
+}
+
+// SetPriceUnitAmount sets the "price_unit_amount" field.
+func (sliu *SubscriptionLineItemUpdate) SetPriceUnitAmount(d decimal.Decimal) *SubscriptionLineItemUpdate {
+	sliu.mutation.SetPriceUnitAmount(d)
+	return sliu
+}
+
+// SetNillablePriceUnitAmount sets the "price_unit_amount" field if the given value is not nil.
+func (sliu *SubscriptionLineItemUpdate) SetNillablePriceUnitAmount(d *decimal.Decimal) *SubscriptionLineItemUpdate {
+	if d != nil {
+		sliu.SetPriceUnitAmount(*d)
+	}
+	return sliu
+}
+
+// ClearPriceUnitAmount clears the value of the "price_unit_amount" field.
+func (sliu *SubscriptionLineItemUpdate) ClearPriceUnitAmount() *SubscriptionLineItemUpdate {
+	sliu.mutation.ClearPriceUnitAmount()
+	return sliu
+}
+
 // Mutation returns the SubscriptionLineItemMutation object of the builder.
 func (sliu *SubscriptionLineItemUpdate) Mutation() *SubscriptionLineItemMutation {
 	return sliu.mutation
@@ -486,6 +546,24 @@ func (sliu *SubscriptionLineItemUpdate) sqlSave(ctx context.Context) (n int, err
 	}
 	if sliu.mutation.MetadataCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldMetadata, field.TypeJSON)
+	}
+	if value, ok := sliu.mutation.PriceUnit(); ok {
+		_spec.SetField(subscriptionlineitem.FieldPriceUnit, field.TypeString, value)
+	}
+	if sliu.mutation.PriceUnitCleared() {
+		_spec.ClearField(subscriptionlineitem.FieldPriceUnit, field.TypeString)
+	}
+	if value, ok := sliu.mutation.PriceUnitConversionRate(); ok {
+		_spec.SetField(subscriptionlineitem.FieldPriceUnitConversionRate, field.TypeOther, value)
+	}
+	if sliu.mutation.PriceUnitConversionRateCleared() {
+		_spec.ClearField(subscriptionlineitem.FieldPriceUnitConversionRate, field.TypeOther)
+	}
+	if value, ok := sliu.mutation.PriceUnitAmount(); ok {
+		_spec.SetField(subscriptionlineitem.FieldPriceUnitAmount, field.TypeOther, value)
+	}
+	if sliu.mutation.PriceUnitAmountCleared() {
+		_spec.ClearField(subscriptionlineitem.FieldPriceUnitAmount, field.TypeOther)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, sliu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -796,6 +874,66 @@ func (sliuo *SubscriptionLineItemUpdateOne) ClearMetadata() *SubscriptionLineIte
 	return sliuo
 }
 
+// SetPriceUnit sets the "price_unit" field.
+func (sliuo *SubscriptionLineItemUpdateOne) SetPriceUnit(s string) *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.SetPriceUnit(s)
+	return sliuo
+}
+
+// SetNillablePriceUnit sets the "price_unit" field if the given value is not nil.
+func (sliuo *SubscriptionLineItemUpdateOne) SetNillablePriceUnit(s *string) *SubscriptionLineItemUpdateOne {
+	if s != nil {
+		sliuo.SetPriceUnit(*s)
+	}
+	return sliuo
+}
+
+// ClearPriceUnit clears the value of the "price_unit" field.
+func (sliuo *SubscriptionLineItemUpdateOne) ClearPriceUnit() *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.ClearPriceUnit()
+	return sliuo
+}
+
+// SetPriceUnitConversionRate sets the "price_unit_conversion_rate" field.
+func (sliuo *SubscriptionLineItemUpdateOne) SetPriceUnitConversionRate(d decimal.Decimal) *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.SetPriceUnitConversionRate(d)
+	return sliuo
+}
+
+// SetNillablePriceUnitConversionRate sets the "price_unit_conversion_rate" field if the given value is not nil.
+func (sliuo *SubscriptionLineItemUpdateOne) SetNillablePriceUnitConversionRate(d *decimal.Decimal) *SubscriptionLineItemUpdateOne {
+	if d != nil {
+		sliuo.SetPriceUnitConversionRate(*d)
+	}
+	return sliuo
+}
+
+// ClearPriceUnitConversionRate clears the value of the "price_unit_conversion_rate" field.
+func (sliuo *SubscriptionLineItemUpdateOne) ClearPriceUnitConversionRate() *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.ClearPriceUnitConversionRate()
+	return sliuo
+}
+
+// SetPriceUnitAmount sets the "price_unit_amount" field.
+func (sliuo *SubscriptionLineItemUpdateOne) SetPriceUnitAmount(d decimal.Decimal) *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.SetPriceUnitAmount(d)
+	return sliuo
+}
+
+// SetNillablePriceUnitAmount sets the "price_unit_amount" field if the given value is not nil.
+func (sliuo *SubscriptionLineItemUpdateOne) SetNillablePriceUnitAmount(d *decimal.Decimal) *SubscriptionLineItemUpdateOne {
+	if d != nil {
+		sliuo.SetPriceUnitAmount(*d)
+	}
+	return sliuo
+}
+
+// ClearPriceUnitAmount clears the value of the "price_unit_amount" field.
+func (sliuo *SubscriptionLineItemUpdateOne) ClearPriceUnitAmount() *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.ClearPriceUnitAmount()
+	return sliuo
+}
+
 // Mutation returns the SubscriptionLineItemMutation object of the builder.
 func (sliuo *SubscriptionLineItemUpdateOne) Mutation() *SubscriptionLineItemMutation {
 	return sliuo.mutation
@@ -994,6 +1132,24 @@ func (sliuo *SubscriptionLineItemUpdateOne) sqlSave(ctx context.Context) (_node 
 	}
 	if sliuo.mutation.MetadataCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldMetadata, field.TypeJSON)
+	}
+	if value, ok := sliuo.mutation.PriceUnit(); ok {
+		_spec.SetField(subscriptionlineitem.FieldPriceUnit, field.TypeString, value)
+	}
+	if sliuo.mutation.PriceUnitCleared() {
+		_spec.ClearField(subscriptionlineitem.FieldPriceUnit, field.TypeString)
+	}
+	if value, ok := sliuo.mutation.PriceUnitConversionRate(); ok {
+		_spec.SetField(subscriptionlineitem.FieldPriceUnitConversionRate, field.TypeOther, value)
+	}
+	if sliuo.mutation.PriceUnitConversionRateCleared() {
+		_spec.ClearField(subscriptionlineitem.FieldPriceUnitConversionRate, field.TypeOther)
+	}
+	if value, ok := sliuo.mutation.PriceUnitAmount(); ok {
+		_spec.SetField(subscriptionlineitem.FieldPriceUnitAmount, field.TypeOther, value)
+	}
+	if sliuo.mutation.PriceUnitAmountCleared() {
+		_spec.ClearField(subscriptionlineitem.FieldPriceUnitAmount, field.TypeOther)
 	}
 	_node = &SubscriptionLineItem{config: sliuo.config}
 	_spec.Assign = _node.assignValues

@@ -239,13 +239,8 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		// Add custom pricing unit details if available
 		if price.Price.PriceUnit != "" {
 			item.PriceUnit = price.Price.PriceUnit
+			item.PriceUnitConversionRate = price.Price.ConversionRate
 			item.PriceUnitAmount = price.Price.PriceUnitAmount
-
-			// Get custom pricing unit details to get the symbol
-			customPricingUnit, err := s.CustomPricingUnitRepo.GetByCode(ctx, price.Price.PriceUnit, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), string(types.StatusPublished))
-			if err == nil && customPricingUnit != nil {
-				item.PriceUnitSymbol = customPricingUnit.Symbol
-			}
 		}
 	}
 	sub.LineItems = lineItems

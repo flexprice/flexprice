@@ -5,11 +5,13 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
+	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 type subscriptionLineItemRepository struct {
@@ -39,6 +41,23 @@ func (r *subscriptionLineItemRepository) Create(ctx context.Context, item *subsc
 		item.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
 
+	// Populate custom pricing unit fields if price_id is set
+	if item.PriceID != "" {
+		p, err := client.Price.Query().
+			Where(price.ID(item.PriceID)).
+			WithCustomPricingUnit().
+			Only(ctx)
+		if err == nil {
+			if p.CustomPricingUnitID != "" && p.Edges.CustomPricingUnit != nil {
+				item.PriceUnit = p.Edges.CustomPricingUnit.Code
+				item.PriceUnitConversionRate = p.Edges.CustomPricingUnit.ConversionRate
+				if !p.Edges.CustomPricingUnit.ConversionRate.IsZero() {
+					item.PriceUnitAmount = decimal.NewFromFloat(p.Amount).Div(p.Edges.CustomPricingUnit.ConversionRate)
+				}
+			}
+		}
+	}
+
 	_, err := client.SubscriptionLineItem.Create().
 		SetID(item.ID).
 		SetSubscriptionID(item.SubscriptionID).
@@ -65,6 +84,9 @@ func (r *subscriptionLineItemRepository) Create(ctx context.Context, item *subsc
 		SetUpdatedBy(item.UpdatedBy).
 		SetCreatedAt(item.CreatedAt).
 		SetUpdatedAt(item.UpdatedAt).
+		SetNillablePriceUnit(types.ToNillableString(item.PriceUnit)).
+		SetNillablePriceUnitConversionRate(types.ToNillableDecimal(item.PriceUnitConversionRate)).
+		SetNillablePriceUnitAmount(types.ToNillableDecimal(item.PriceUnitAmount)).
 		Save(ctx)
 
 	if err != nil {
@@ -137,6 +159,22 @@ func (r *subscriptionLineItemRepository) Update(ctx context.Context, item *subsc
 	defer FinishSpan(span)
 
 	client := r.client.Querier(ctx)
+	// Populate custom pricing unit fields if price_id is set
+	if item.PriceID != "" {
+		p, err := client.Price.Query().
+			Where(price.ID(item.PriceID)).
+			WithCustomPricingUnit().
+			Only(ctx)
+		if err == nil {
+			if p.CustomPricingUnitID != "" && p.Edges.CustomPricingUnit != nil {
+				item.PriceUnit = p.Edges.CustomPricingUnit.Code
+				item.PriceUnitConversionRate = p.Edges.CustomPricingUnit.ConversionRate
+				if !p.Edges.CustomPricingUnit.ConversionRate.IsZero() {
+					item.PriceUnitAmount = decimal.NewFromFloat(p.Amount).Div(p.Edges.CustomPricingUnit.ConversionRate)
+				}
+			}
+		}
+	}
 	_, err := client.SubscriptionLineItem.UpdateOneID(item.ID).
 		SetNillablePlanID(types.ToNillableString(item.PlanID)).
 		SetNillablePlanDisplayName(types.ToNillableString(item.PlanDisplayName)).
@@ -154,6 +192,9 @@ func (r *subscriptionLineItemRepository) Update(ctx context.Context, item *subsc
 		SetStatus(string(item.Status)).
 		SetUpdatedBy(item.UpdatedBy).
 		SetUpdatedAt(time.Now()).
+		SetNillablePriceUnit(types.ToNillableString(item.PriceUnit)).
+		SetNillablePriceUnitConversionRate(types.ToNillableDecimal(item.PriceUnitConversionRate)).
+		SetNillablePriceUnitAmount(types.ToNillableDecimal(item.PriceUnitAmount)).
 		Save(ctx)
 
 	if err != nil {

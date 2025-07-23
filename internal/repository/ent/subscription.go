@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
+	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
@@ -15,6 +16,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 type subscriptionRepository struct {
@@ -562,6 +564,33 @@ func (r *subscriptionRepository) CreateWithLineItems(ctx context.Context, sub *d
 
 		// Create line items
 		client := r.client.Querier(ctx)
+		// Populate custom pricing unit fields for each item
+		for _, item := range items {
+			if item.PriceID != "" {
+				p, err := client.Price.Query().
+					Where(price.ID(item.PriceID)).
+					WithCustomPricingUnit().
+					Only(ctx)
+				if err == nil && p.CustomPricingUnitID != "" && p.Edges.CustomPricingUnit != nil {
+					item.PriceUnit = p.Edges.CustomPricingUnit.Code
+					item.PriceUnitConversionRate = p.Edges.CustomPricingUnit.ConversionRate
+					// Use ConvertToPriceUnit for price_unit_amount
+					priceUnitRepo := NewCustomPricingUnitRepository(r.client, r.logger, r.cache)
+					priceUnitAmount, err := priceUnitRepo.ConvertToPriceUnit(
+						ctx,
+						p.Edges.CustomPricingUnit.Code,
+						p.TenantID,
+						p.EnvironmentID,
+						decimal.NewFromFloat(p.Amount),
+					)
+					if err == nil {
+						item.PriceUnitAmount = priceUnitAmount
+					} else {
+						item.PriceUnitAmount = decimal.Zero
+					}
+				}
+			}
+		}
 		bulk := make([]*ent.SubscriptionLineItemCreate, len(items))
 		for i, item := range items {
 			// Set environment ID from context if not already set
@@ -594,7 +623,10 @@ func (r *subscriptionRepository) CreateWithLineItems(ctx context.Context, sub *d
 				SetCreatedBy(item.CreatedBy).
 				SetUpdatedBy(item.UpdatedBy).
 				SetCreatedAt(time.Now()).
-				SetUpdatedAt(time.Now())
+				SetUpdatedAt(time.Now()).
+				SetNillablePriceUnit(types.ToNillableString(item.PriceUnit)).
+				SetNillablePriceUnitConversionRate(types.ToNillableDecimal(item.PriceUnitConversionRate)).
+				SetNillablePriceUnitAmount(types.ToNillableDecimal(item.PriceUnitAmount))
 		}
 
 		if err := client.SubscriptionLineItem.CreateBulk(bulk...).Exec(ctx); err != nil {

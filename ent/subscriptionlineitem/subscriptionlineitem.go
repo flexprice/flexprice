@@ -63,6 +63,12 @@ const (
 	FieldEndDate = "end_date"
 	// FieldMetadata holds the string denoting the metadata field in the database.
 	FieldMetadata = "metadata"
+	// FieldPriceUnit holds the string denoting the price_unit field in the database.
+	FieldPriceUnit = "price_unit"
+	// FieldPriceUnitConversionRate holds the string denoting the price_unit_conversion_rate field in the database.
+	FieldPriceUnitConversionRate = "price_unit_conversion_rate"
+	// FieldPriceUnitAmount holds the string denoting the price_unit_amount field in the database.
+	FieldPriceUnitAmount = "price_unit_amount"
 	// EdgeSubscription holds the string denoting the subscription edge name in mutations.
 	EdgeSubscription = "subscription"
 	// Table holds the table name of the subscriptionlineitem in the database.
@@ -103,6 +109,9 @@ var Columns = []string{
 	FieldStartDate,
 	FieldEndDate,
 	FieldMetadata,
+	FieldPriceUnit,
+	FieldPriceUnitConversionRate,
+	FieldPriceUnitAmount,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -265,6 +274,21 @@ func ByStartDate(opts ...sql.OrderTermOption) OrderOption {
 // ByEndDate orders the results by the end_date field.
 func ByEndDate(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEndDate, opts...).ToFunc()
+}
+
+// ByPriceUnit orders the results by the price_unit field.
+func ByPriceUnit(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPriceUnit, opts...).ToFunc()
+}
+
+// ByPriceUnitConversionRate orders the results by the price_unit_conversion_rate field.
+func ByPriceUnitConversionRate(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPriceUnitConversionRate, opts...).ToFunc()
+}
+
+// ByPriceUnitAmount orders the results by the price_unit_amount field.
+func ByPriceUnitAmount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPriceUnitAmount, opts...).ToFunc()
 }
 
 // BySubscriptionField orders the results by subscription field.

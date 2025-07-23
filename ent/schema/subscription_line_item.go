@@ -109,6 +109,17 @@ func (SubscriptionLineItem) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "jsonb",
 			}),
+		field.String("price_unit").
+			SchemaType(map[string]string{"postgres": "varchar(10)"}).
+			Optional(),
+		field.Other("price_unit_conversion_rate", decimal.Decimal{}).
+			SchemaType(map[string]string{"postgres": "numeric(25,10)"}).
+			Optional().
+			Nillable(),
+		field.Other("price_unit_amount", decimal.Decimal{}).
+			SchemaType(map[string]string{"postgres": "numeric(25,10)"}).
+			Optional().
+			Nillable(),
 	}
 }
 

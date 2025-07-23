@@ -1119,6 +1119,9 @@ var (
 		{Name: "start_date", Type: field.TypeTime, Nullable: true},
 		{Name: "end_date", Type: field.TypeTime, Nullable: true},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "price_unit", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(10)"}},
+		{Name: "price_unit_conversion_rate", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(25,10)"}},
+		{Name: "price_unit_amount", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(25,10)"}},
 		{Name: "subscription_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// SubscriptionLineItemsTable holds the schema information for the "subscription_line_items" table.
@@ -1129,7 +1132,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "subscription_line_items_subscriptions_line_items",
-				Columns:    []*schema.Column{SubscriptionLineItemsColumns[24]},
+				Columns:    []*schema.Column{SubscriptionLineItemsColumns[27]},
 				RefColumns: []*schema.Column{SubscriptionsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -1138,7 +1141,7 @@ var (
 			{
 				Name:    "subscriptionlineitem_tenant_id_environment_id_subscription_id_status",
 				Unique:  false,
-				Columns: []*schema.Column{SubscriptionLineItemsColumns[1], SubscriptionLineItemsColumns[7], SubscriptionLineItemsColumns[24], SubscriptionLineItemsColumns[2]},
+				Columns: []*schema.Column{SubscriptionLineItemsColumns[1], SubscriptionLineItemsColumns[7], SubscriptionLineItemsColumns[27], SubscriptionLineItemsColumns[2]},
 			},
 			{
 				Name:    "subscriptionlineitem_tenant_id_environment_id_customer_id_status",

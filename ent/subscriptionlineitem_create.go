@@ -302,6 +302,48 @@ func (slic *SubscriptionLineItemCreate) SetMetadata(m map[string]string) *Subscr
 	return slic
 }
 
+// SetPriceUnit sets the "price_unit" field.
+func (slic *SubscriptionLineItemCreate) SetPriceUnit(s string) *SubscriptionLineItemCreate {
+	slic.mutation.SetPriceUnit(s)
+	return slic
+}
+
+// SetNillablePriceUnit sets the "price_unit" field if the given value is not nil.
+func (slic *SubscriptionLineItemCreate) SetNillablePriceUnit(s *string) *SubscriptionLineItemCreate {
+	if s != nil {
+		slic.SetPriceUnit(*s)
+	}
+	return slic
+}
+
+// SetPriceUnitConversionRate sets the "price_unit_conversion_rate" field.
+func (slic *SubscriptionLineItemCreate) SetPriceUnitConversionRate(d decimal.Decimal) *SubscriptionLineItemCreate {
+	slic.mutation.SetPriceUnitConversionRate(d)
+	return slic
+}
+
+// SetNillablePriceUnitConversionRate sets the "price_unit_conversion_rate" field if the given value is not nil.
+func (slic *SubscriptionLineItemCreate) SetNillablePriceUnitConversionRate(d *decimal.Decimal) *SubscriptionLineItemCreate {
+	if d != nil {
+		slic.SetPriceUnitConversionRate(*d)
+	}
+	return slic
+}
+
+// SetPriceUnitAmount sets the "price_unit_amount" field.
+func (slic *SubscriptionLineItemCreate) SetPriceUnitAmount(d decimal.Decimal) *SubscriptionLineItemCreate {
+	slic.mutation.SetPriceUnitAmount(d)
+	return slic
+}
+
+// SetNillablePriceUnitAmount sets the "price_unit_amount" field if the given value is not nil.
+func (slic *SubscriptionLineItemCreate) SetNillablePriceUnitAmount(d *decimal.Decimal) *SubscriptionLineItemCreate {
+	if d != nil {
+		slic.SetPriceUnitAmount(*d)
+	}
+	return slic
+}
+
 // SetID sets the "id" field.
 func (slic *SubscriptionLineItemCreate) SetID(s string) *SubscriptionLineItemCreate {
 	slic.mutation.SetID(s)
@@ -568,6 +610,18 @@ func (slic *SubscriptionLineItemCreate) createSpec() (*SubscriptionLineItem, *sq
 	if value, ok := slic.mutation.Metadata(); ok {
 		_spec.SetField(subscriptionlineitem.FieldMetadata, field.TypeJSON, value)
 		_node.Metadata = value
+	}
+	if value, ok := slic.mutation.PriceUnit(); ok {
+		_spec.SetField(subscriptionlineitem.FieldPriceUnit, field.TypeString, value)
+		_node.PriceUnit = value
+	}
+	if value, ok := slic.mutation.PriceUnitConversionRate(); ok {
+		_spec.SetField(subscriptionlineitem.FieldPriceUnitConversionRate, field.TypeOther, value)
+		_node.PriceUnitConversionRate = &value
+	}
+	if value, ok := slic.mutation.PriceUnitAmount(); ok {
+		_spec.SetField(subscriptionlineitem.FieldPriceUnitAmount, field.TypeOther, value)
+		_node.PriceUnitAmount = &value
 	}
 	if nodes := slic.mutation.SubscriptionIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

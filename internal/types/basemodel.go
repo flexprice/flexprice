@@ -3,6 +3,8 @@ package types
 import (
 	"context"
 	"time"
+
+	"github.com/shopspring/decimal"
 )
 
 // BaseModel is a base model for all domain models that need to be persisted in the database
@@ -26,4 +28,11 @@ func GetDefaultBaseModel(ctx context.Context) BaseModel {
 		CreatedBy: GetUserID(ctx),
 		UpdatedBy: GetUserID(ctx),
 	}
+}
+
+func ToNillableDecimal(val decimal.Decimal) *decimal.Decimal {
+	if val.IsZero() {
+		return nil
+	}
+	return &val
 }
