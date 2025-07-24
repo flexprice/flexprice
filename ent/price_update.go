@@ -141,6 +141,26 @@ func (pu *PriceUpdate) ClearPriceUnitID() *PriceUpdate {
 	return pu
 }
 
+// SetPriceUnit sets the "price_unit" field.
+func (pu *PriceUpdate) SetPriceUnit(s string) *PriceUpdate {
+	pu.mutation.SetPriceUnit(s)
+	return pu
+}
+
+// SetNillablePriceUnit sets the "price_unit" field if the given value is not nil.
+func (pu *PriceUpdate) SetNillablePriceUnit(s *string) *PriceUpdate {
+	if s != nil {
+		pu.SetPriceUnit(*s)
+	}
+	return pu
+}
+
+// ClearPriceUnit clears the value of the "price_unit" field.
+func (pu *PriceUpdate) ClearPriceUnit() *PriceUpdate {
+	pu.mutation.ClearPriceUnit()
+	return pu
+}
+
 // SetPriceUnitAmount sets the "price_unit_amount" field.
 func (pu *PriceUpdate) SetPriceUnitAmount(f float64) *PriceUpdate {
 	pu.mutation.ResetPriceUnitAmount()
@@ -212,33 +232,6 @@ func (pu *PriceUpdate) AddConversionRate(f float64) *PriceUpdate {
 // ClearConversionRate clears the value of the "conversion_rate" field.
 func (pu *PriceUpdate) ClearConversionRate() *PriceUpdate {
 	pu.mutation.ClearConversionRate()
-	return pu
-}
-
-// SetPrecision sets the "precision" field.
-func (pu *PriceUpdate) SetPrecision(i int) *PriceUpdate {
-	pu.mutation.ResetPrecision()
-	pu.mutation.SetPrecision(i)
-	return pu
-}
-
-// SetNillablePrecision sets the "precision" field if the given value is not nil.
-func (pu *PriceUpdate) SetNillablePrecision(i *int) *PriceUpdate {
-	if i != nil {
-		pu.SetPrecision(*i)
-	}
-	return pu
-}
-
-// AddPrecision adds i to the "precision" field.
-func (pu *PriceUpdate) AddPrecision(i int) *PriceUpdate {
-	pu.mutation.AddPrecision(i)
-	return pu
-}
-
-// ClearPrecision clears the value of the "precision" field.
-func (pu *PriceUpdate) ClearPrecision() *PriceUpdate {
-	pu.mutation.ClearPrecision()
 	return pu
 }
 
@@ -490,9 +483,23 @@ func (pu *PriceUpdate) AddCostsheet(c ...*Costsheet) *PriceUpdate {
 	return pu.AddCostsheetIDs(ids...)
 }
 
-// SetPriceUnit sets the "price_unit" edge to the PriceUnit entity.
-func (pu *PriceUpdate) SetPriceUnit(p *PriceUnit) *PriceUpdate {
-	return pu.SetPriceUnitID(p.ID)
+// SetPriceUnitEdgeID sets the "price_unit_edge" edge to the PriceUnit entity by ID.
+func (pu *PriceUpdate) SetPriceUnitEdgeID(id string) *PriceUpdate {
+	pu.mutation.SetPriceUnitEdgeID(id)
+	return pu
+}
+
+// SetNillablePriceUnitEdgeID sets the "price_unit_edge" edge to the PriceUnit entity by ID if the given value is not nil.
+func (pu *PriceUpdate) SetNillablePriceUnitEdgeID(id *string) *PriceUpdate {
+	if id != nil {
+		pu = pu.SetPriceUnitEdgeID(*id)
+	}
+	return pu
+}
+
+// SetPriceUnitEdge sets the "price_unit_edge" edge to the PriceUnit entity.
+func (pu *PriceUpdate) SetPriceUnitEdge(p *PriceUnit) *PriceUpdate {
+	return pu.SetPriceUnitEdgeID(p.ID)
 }
 
 // Mutation returns the PriceMutation object of the builder.
@@ -521,9 +528,9 @@ func (pu *PriceUpdate) RemoveCostsheet(c ...*Costsheet) *PriceUpdate {
 	return pu.RemoveCostsheetIDs(ids...)
 }
 
-// ClearPriceUnit clears the "price_unit" edge to the PriceUnit entity.
-func (pu *PriceUpdate) ClearPriceUnit() *PriceUpdate {
-	pu.mutation.ClearPriceUnit()
+// ClearPriceUnitEdge clears the "price_unit_edge" edge to the PriceUnit entity.
+func (pu *PriceUpdate) ClearPriceUnitEdge() *PriceUpdate {
+	pu.mutation.ClearPriceUnitEdge()
 	return pu
 }
 
@@ -650,6 +657,12 @@ func (pu *PriceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if value, ok := pu.mutation.DisplayAmount(); ok {
 		_spec.SetField(price.FieldDisplayAmount, field.TypeString, value)
 	}
+	if value, ok := pu.mutation.PriceUnit(); ok {
+		_spec.SetField(price.FieldPriceUnit, field.TypeString, value)
+	}
+	if pu.mutation.PriceUnitCleared() {
+		_spec.ClearField(price.FieldPriceUnit, field.TypeString)
+	}
 	if value, ok := pu.mutation.PriceUnitAmount(); ok {
 		_spec.SetField(price.FieldPriceUnitAmount, field.TypeFloat64, value)
 	}
@@ -673,15 +686,6 @@ func (pu *PriceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if pu.mutation.ConversionRateCleared() {
 		_spec.ClearField(price.FieldConversionRate, field.TypeFloat64)
-	}
-	if value, ok := pu.mutation.Precision(); ok {
-		_spec.SetField(price.FieldPrecision, field.TypeInt, value)
-	}
-	if value, ok := pu.mutation.AddedPrecision(); ok {
-		_spec.AddField(price.FieldPrecision, field.TypeInt, value)
-	}
-	if pu.mutation.PrecisionCleared() {
-		_spec.ClearField(price.FieldPrecision, field.TypeInt)
 	}
 	if value, ok := pu.mutation.PlanID(); ok {
 		_spec.SetField(price.FieldPlanID, field.TypeString, value)
@@ -805,12 +809,12 @@ func (pu *PriceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if pu.mutation.PriceUnitCleared() {
+	if pu.mutation.PriceUnitEdgeCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: false,
-			Table:   price.PriceUnitTable,
-			Columns: []string{price.PriceUnitColumn},
+			Table:   price.PriceUnitEdgeTable,
+			Columns: []string{price.PriceUnitEdgeColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(priceunit.FieldID, field.TypeString),
@@ -818,12 +822,12 @@ func (pu *PriceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := pu.mutation.PriceUnitIDs(); len(nodes) > 0 {
+	if nodes := pu.mutation.PriceUnitEdgeIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: false,
-			Table:   price.PriceUnitTable,
-			Columns: []string{price.PriceUnitColumn},
+			Table:   price.PriceUnitEdgeTable,
+			Columns: []string{price.PriceUnitEdgeColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(priceunit.FieldID, field.TypeString),
@@ -963,6 +967,26 @@ func (puo *PriceUpdateOne) ClearPriceUnitID() *PriceUpdateOne {
 	return puo
 }
 
+// SetPriceUnit sets the "price_unit" field.
+func (puo *PriceUpdateOne) SetPriceUnit(s string) *PriceUpdateOne {
+	puo.mutation.SetPriceUnit(s)
+	return puo
+}
+
+// SetNillablePriceUnit sets the "price_unit" field if the given value is not nil.
+func (puo *PriceUpdateOne) SetNillablePriceUnit(s *string) *PriceUpdateOne {
+	if s != nil {
+		puo.SetPriceUnit(*s)
+	}
+	return puo
+}
+
+// ClearPriceUnit clears the value of the "price_unit" field.
+func (puo *PriceUpdateOne) ClearPriceUnit() *PriceUpdateOne {
+	puo.mutation.ClearPriceUnit()
+	return puo
+}
+
 // SetPriceUnitAmount sets the "price_unit_amount" field.
 func (puo *PriceUpdateOne) SetPriceUnitAmount(f float64) *PriceUpdateOne {
 	puo.mutation.ResetPriceUnitAmount()
@@ -1034,33 +1058,6 @@ func (puo *PriceUpdateOne) AddConversionRate(f float64) *PriceUpdateOne {
 // ClearConversionRate clears the value of the "conversion_rate" field.
 func (puo *PriceUpdateOne) ClearConversionRate() *PriceUpdateOne {
 	puo.mutation.ClearConversionRate()
-	return puo
-}
-
-// SetPrecision sets the "precision" field.
-func (puo *PriceUpdateOne) SetPrecision(i int) *PriceUpdateOne {
-	puo.mutation.ResetPrecision()
-	puo.mutation.SetPrecision(i)
-	return puo
-}
-
-// SetNillablePrecision sets the "precision" field if the given value is not nil.
-func (puo *PriceUpdateOne) SetNillablePrecision(i *int) *PriceUpdateOne {
-	if i != nil {
-		puo.SetPrecision(*i)
-	}
-	return puo
-}
-
-// AddPrecision adds i to the "precision" field.
-func (puo *PriceUpdateOne) AddPrecision(i int) *PriceUpdateOne {
-	puo.mutation.AddPrecision(i)
-	return puo
-}
-
-// ClearPrecision clears the value of the "precision" field.
-func (puo *PriceUpdateOne) ClearPrecision() *PriceUpdateOne {
-	puo.mutation.ClearPrecision()
 	return puo
 }
 
@@ -1312,9 +1309,23 @@ func (puo *PriceUpdateOne) AddCostsheet(c ...*Costsheet) *PriceUpdateOne {
 	return puo.AddCostsheetIDs(ids...)
 }
 
-// SetPriceUnit sets the "price_unit" edge to the PriceUnit entity.
-func (puo *PriceUpdateOne) SetPriceUnit(p *PriceUnit) *PriceUpdateOne {
-	return puo.SetPriceUnitID(p.ID)
+// SetPriceUnitEdgeID sets the "price_unit_edge" edge to the PriceUnit entity by ID.
+func (puo *PriceUpdateOne) SetPriceUnitEdgeID(id string) *PriceUpdateOne {
+	puo.mutation.SetPriceUnitEdgeID(id)
+	return puo
+}
+
+// SetNillablePriceUnitEdgeID sets the "price_unit_edge" edge to the PriceUnit entity by ID if the given value is not nil.
+func (puo *PriceUpdateOne) SetNillablePriceUnitEdgeID(id *string) *PriceUpdateOne {
+	if id != nil {
+		puo = puo.SetPriceUnitEdgeID(*id)
+	}
+	return puo
+}
+
+// SetPriceUnitEdge sets the "price_unit_edge" edge to the PriceUnit entity.
+func (puo *PriceUpdateOne) SetPriceUnitEdge(p *PriceUnit) *PriceUpdateOne {
+	return puo.SetPriceUnitEdgeID(p.ID)
 }
 
 // Mutation returns the PriceMutation object of the builder.
@@ -1343,9 +1354,9 @@ func (puo *PriceUpdateOne) RemoveCostsheet(c ...*Costsheet) *PriceUpdateOne {
 	return puo.RemoveCostsheetIDs(ids...)
 }
 
-// ClearPriceUnit clears the "price_unit" edge to the PriceUnit entity.
-func (puo *PriceUpdateOne) ClearPriceUnit() *PriceUpdateOne {
-	puo.mutation.ClearPriceUnit()
+// ClearPriceUnitEdge clears the "price_unit_edge" edge to the PriceUnit entity.
+func (puo *PriceUpdateOne) ClearPriceUnitEdge() *PriceUpdateOne {
+	puo.mutation.ClearPriceUnitEdge()
 	return puo
 }
 
@@ -1502,6 +1513,12 @@ func (puo *PriceUpdateOne) sqlSave(ctx context.Context) (_node *Price, err error
 	if value, ok := puo.mutation.DisplayAmount(); ok {
 		_spec.SetField(price.FieldDisplayAmount, field.TypeString, value)
 	}
+	if value, ok := puo.mutation.PriceUnit(); ok {
+		_spec.SetField(price.FieldPriceUnit, field.TypeString, value)
+	}
+	if puo.mutation.PriceUnitCleared() {
+		_spec.ClearField(price.FieldPriceUnit, field.TypeString)
+	}
 	if value, ok := puo.mutation.PriceUnitAmount(); ok {
 		_spec.SetField(price.FieldPriceUnitAmount, field.TypeFloat64, value)
 	}
@@ -1525,15 +1542,6 @@ func (puo *PriceUpdateOne) sqlSave(ctx context.Context) (_node *Price, err error
 	}
 	if puo.mutation.ConversionRateCleared() {
 		_spec.ClearField(price.FieldConversionRate, field.TypeFloat64)
-	}
-	if value, ok := puo.mutation.Precision(); ok {
-		_spec.SetField(price.FieldPrecision, field.TypeInt, value)
-	}
-	if value, ok := puo.mutation.AddedPrecision(); ok {
-		_spec.AddField(price.FieldPrecision, field.TypeInt, value)
-	}
-	if puo.mutation.PrecisionCleared() {
-		_spec.ClearField(price.FieldPrecision, field.TypeInt)
 	}
 	if value, ok := puo.mutation.PlanID(); ok {
 		_spec.SetField(price.FieldPlanID, field.TypeString, value)
@@ -1657,12 +1665,12 @@ func (puo *PriceUpdateOne) sqlSave(ctx context.Context) (_node *Price, err error
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if puo.mutation.PriceUnitCleared() {
+	if puo.mutation.PriceUnitEdgeCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: false,
-			Table:   price.PriceUnitTable,
-			Columns: []string{price.PriceUnitColumn},
+			Table:   price.PriceUnitEdgeTable,
+			Columns: []string{price.PriceUnitEdgeColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(priceunit.FieldID, field.TypeString),
@@ -1670,12 +1678,12 @@ func (puo *PriceUpdateOne) sqlSave(ctx context.Context) (_node *Price, err error
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := puo.mutation.PriceUnitIDs(); len(nodes) > 0 {
+	if nodes := puo.mutation.PriceUnitEdgeIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: false,
-			Table:   price.PriceUnitTable,
-			Columns: []string{price.PriceUnitColumn},
+			Table:   price.PriceUnitEdgeTable,
+			Columns: []string{price.PriceUnitEdgeColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(priceunit.FieldID, field.TypeString),

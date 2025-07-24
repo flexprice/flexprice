@@ -21,12 +21,12 @@ import (
 // PriceQuery is the builder for querying Price entities.
 type PriceQuery struct {
 	config
-	ctx           *QueryContext
-	order         []price.OrderOption
-	inters        []Interceptor
-	predicates    []predicate.Price
-	withCostsheet *CostsheetQuery
-	withPriceUnit *PriceUnitQuery
+	ctx               *QueryContext
+	order             []price.OrderOption
+	inters            []Interceptor
+	predicates        []predicate.Price
+	withCostsheet     *CostsheetQuery
+	withPriceUnitEdge *PriceUnitQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -85,8 +85,8 @@ func (pq *PriceQuery) QueryCostsheet() *CostsheetQuery {
 	return query
 }
 
-// QueryPriceUnit chains the current query on the "price_unit" edge.
-func (pq *PriceQuery) QueryPriceUnit() *PriceUnitQuery {
+// QueryPriceUnitEdge chains the current query on the "price_unit_edge" edge.
+func (pq *PriceQuery) QueryPriceUnitEdge() *PriceUnitQuery {
 	query := (&PriceUnitClient{config: pq.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
 		if err := pq.prepareQuery(ctx); err != nil {
@@ -99,7 +99,7 @@ func (pq *PriceQuery) QueryPriceUnit() *PriceUnitQuery {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(price.Table, price.FieldID, selector),
 			sqlgraph.To(priceunit.Table, priceunit.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, price.PriceUnitTable, price.PriceUnitColumn),
+			sqlgraph.Edge(sqlgraph.M2O, false, price.PriceUnitEdgeTable, price.PriceUnitEdgeColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(pq.driver.Dialect(), step)
 		return fromU, nil
@@ -294,13 +294,13 @@ func (pq *PriceQuery) Clone() *PriceQuery {
 		return nil
 	}
 	return &PriceQuery{
-		config:        pq.config,
-		ctx:           pq.ctx.Clone(),
-		order:         append([]price.OrderOption{}, pq.order...),
-		inters:        append([]Interceptor{}, pq.inters...),
-		predicates:    append([]predicate.Price{}, pq.predicates...),
-		withCostsheet: pq.withCostsheet.Clone(),
-		withPriceUnit: pq.withPriceUnit.Clone(),
+		config:            pq.config,
+		ctx:               pq.ctx.Clone(),
+		order:             append([]price.OrderOption{}, pq.order...),
+		inters:            append([]Interceptor{}, pq.inters...),
+		predicates:        append([]predicate.Price{}, pq.predicates...),
+		withCostsheet:     pq.withCostsheet.Clone(),
+		withPriceUnitEdge: pq.withPriceUnitEdge.Clone(),
 		// clone intermediate query.
 		sql:  pq.sql.Clone(),
 		path: pq.path,
@@ -318,14 +318,14 @@ func (pq *PriceQuery) WithCostsheet(opts ...func(*CostsheetQuery)) *PriceQuery {
 	return pq
 }
 
-// WithPriceUnit tells the query-builder to eager-load the nodes that are connected to
-// the "price_unit" edge. The optional arguments are used to configure the query builder of the edge.
-func (pq *PriceQuery) WithPriceUnit(opts ...func(*PriceUnitQuery)) *PriceQuery {
+// WithPriceUnitEdge tells the query-builder to eager-load the nodes that are connected to
+// the "price_unit_edge" edge. The optional arguments are used to configure the query builder of the edge.
+func (pq *PriceQuery) WithPriceUnitEdge(opts ...func(*PriceUnitQuery)) *PriceQuery {
 	query := (&PriceUnitClient{config: pq.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	pq.withPriceUnit = query
+	pq.withPriceUnitEdge = query
 	return pq
 }
 
@@ -409,7 +409,7 @@ func (pq *PriceQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Price,
 		_spec       = pq.querySpec()
 		loadedTypes = [2]bool{
 			pq.withCostsheet != nil,
-			pq.withPriceUnit != nil,
+			pq.withPriceUnitEdge != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -437,9 +437,9 @@ func (pq *PriceQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Price,
 			return nil, err
 		}
 	}
-	if query := pq.withPriceUnit; query != nil {
-		if err := pq.loadPriceUnit(ctx, query, nodes, nil,
-			func(n *Price, e *PriceUnit) { n.Edges.PriceUnit = e }); err != nil {
+	if query := pq.withPriceUnitEdge; query != nil {
+		if err := pq.loadPriceUnitEdge(ctx, query, nodes, nil,
+			func(n *Price, e *PriceUnit) { n.Edges.PriceUnitEdge = e }); err != nil {
 			return nil, err
 		}
 	}
@@ -476,7 +476,7 @@ func (pq *PriceQuery) loadCostsheet(ctx context.Context, query *CostsheetQuery, 
 	}
 	return nil
 }
-func (pq *PriceQuery) loadPriceUnit(ctx context.Context, query *PriceUnitQuery, nodes []*Price, init func(*Price), assign func(*Price, *PriceUnit)) error {
+func (pq *PriceQuery) loadPriceUnitEdge(ctx context.Context, query *PriceUnitQuery, nodes []*Price, init func(*Price), assign func(*Price, *PriceUnit)) error {
 	ids := make([]string, 0, len(nodes))
 	nodeids := make(map[string][]*Price)
 	for i := range nodes {
@@ -531,7 +531,7 @@ func (pq *PriceQuery) querySpec() *sqlgraph.QuerySpec {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
 		}
-		if pq.withPriceUnit != nil {
+		if pq.withPriceUnitEdge != nil {
 			_spec.Node.AddColumnOnce(price.FieldPriceUnitID)
 		}
 	}

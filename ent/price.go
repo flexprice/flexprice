@@ -42,14 +42,14 @@ type Price struct {
 	DisplayAmount string `json:"display_amount,omitempty"`
 	// PriceUnitID holds the value of the "price_unit_id" field.
 	PriceUnitID string `json:"price_unit_id,omitempty"`
+	// PriceUnit holds the value of the "price_unit" field.
+	PriceUnit string `json:"price_unit,omitempty"`
 	// PriceUnitAmount holds the value of the "price_unit_amount" field.
 	PriceUnitAmount float64 `json:"price_unit_amount,omitempty"`
 	// DisplayPriceUnitAmount holds the value of the "display_price_unit_amount" field.
 	DisplayPriceUnitAmount string `json:"display_price_unit_amount,omitempty"`
 	// ConversionRate holds the value of the "conversion_rate" field.
 	ConversionRate float64 `json:"conversion_rate,omitempty"`
-	// Precision holds the value of the "precision" field.
-	Precision int `json:"precision,omitempty"`
 	// PlanID holds the value of the "plan_id" field.
 	PlanID string `json:"plan_id,omitempty"`
 	// Type holds the value of the "type" field.
@@ -92,8 +92,8 @@ type Price struct {
 type PriceEdges struct {
 	// Costsheet holds the value of the costsheet edge.
 	Costsheet []*Costsheet `json:"costsheet,omitempty"`
-	// PriceUnit holds the value of the price_unit edge.
-	PriceUnit *PriceUnit `json:"price_unit,omitempty"`
+	// PriceUnitEdge holds the value of the price_unit_edge edge.
+	PriceUnitEdge *PriceUnit `json:"price_unit_edge,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
 	loadedTypes [2]bool
@@ -108,15 +108,15 @@ func (e PriceEdges) CostsheetOrErr() ([]*Costsheet, error) {
 	return nil, &NotLoadedError{edge: "costsheet"}
 }
 
-// PriceUnitOrErr returns the PriceUnit value or an error if the edge
+// PriceUnitEdgeOrErr returns the PriceUnitEdge value or an error if the edge
 // was not loaded in eager-loading, or loaded but was not found.
-func (e PriceEdges) PriceUnitOrErr() (*PriceUnit, error) {
-	if e.PriceUnit != nil {
-		return e.PriceUnit, nil
+func (e PriceEdges) PriceUnitEdgeOrErr() (*PriceUnit, error) {
+	if e.PriceUnitEdge != nil {
+		return e.PriceUnitEdge, nil
 	} else if e.loadedTypes[1] {
 		return nil, &NotFoundError{label: priceunit.Label}
 	}
-	return nil, &NotLoadedError{edge: "price_unit"}
+	return nil, &NotLoadedError{edge: "price_unit_edge"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -128,9 +128,9 @@ func (*Price) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case price.FieldAmount, price.FieldPriceUnitAmount, price.FieldConversionRate:
 			values[i] = new(sql.NullFloat64)
-		case price.FieldPrecision, price.FieldBillingPeriodCount, price.FieldTrialPeriod:
+		case price.FieldBillingPeriodCount, price.FieldTrialPeriod:
 			values[i] = new(sql.NullInt64)
-		case price.FieldID, price.FieldTenantID, price.FieldStatus, price.FieldCreatedBy, price.FieldUpdatedBy, price.FieldEnvironmentID, price.FieldCurrency, price.FieldDisplayAmount, price.FieldPriceUnitID, price.FieldDisplayPriceUnitAmount, price.FieldPlanID, price.FieldType, price.FieldBillingPeriod, price.FieldBillingModel, price.FieldBillingCadence, price.FieldInvoiceCadence, price.FieldMeterID, price.FieldTierMode, price.FieldLookupKey, price.FieldDescription:
+		case price.FieldID, price.FieldTenantID, price.FieldStatus, price.FieldCreatedBy, price.FieldUpdatedBy, price.FieldEnvironmentID, price.FieldCurrency, price.FieldDisplayAmount, price.FieldPriceUnitID, price.FieldPriceUnit, price.FieldDisplayPriceUnitAmount, price.FieldPlanID, price.FieldType, price.FieldBillingPeriod, price.FieldBillingModel, price.FieldBillingCadence, price.FieldInvoiceCadence, price.FieldMeterID, price.FieldTierMode, price.FieldLookupKey, price.FieldDescription:
 			values[i] = new(sql.NullString)
 		case price.FieldCreatedAt, price.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -221,6 +221,12 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				pr.PriceUnitID = value.String
 			}
+		case price.FieldPriceUnit:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field price_unit", values[i])
+			} else if value.Valid {
+				pr.PriceUnit = value.String
+			}
 		case price.FieldPriceUnitAmount:
 			if value, ok := values[i].(*sql.NullFloat64); !ok {
 				return fmt.Errorf("unexpected type %T for field price_unit_amount", values[i])
@@ -238,12 +244,6 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field conversion_rate", values[i])
 			} else if value.Valid {
 				pr.ConversionRate = value.Float64
-			}
-		case price.FieldPrecision:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field precision", values[i])
-			} else if value.Valid {
-				pr.Precision = int(value.Int64)
 			}
 		case price.FieldPlanID:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -369,9 +369,9 @@ func (pr *Price) QueryCostsheet() *CostsheetQuery {
 	return NewPriceClient(pr.config).QueryCostsheet(pr)
 }
 
-// QueryPriceUnit queries the "price_unit" edge of the Price entity.
-func (pr *Price) QueryPriceUnit() *PriceUnitQuery {
-	return NewPriceClient(pr.config).QueryPriceUnit(pr)
+// QueryPriceUnitEdge queries the "price_unit_edge" edge of the Price entity.
+func (pr *Price) QueryPriceUnitEdge() *PriceUnitQuery {
+	return NewPriceClient(pr.config).QueryPriceUnitEdge(pr)
 }
 
 // Update returns a builder for updating this Price.
@@ -430,6 +430,9 @@ func (pr *Price) String() string {
 	builder.WriteString("price_unit_id=")
 	builder.WriteString(pr.PriceUnitID)
 	builder.WriteString(", ")
+	builder.WriteString("price_unit=")
+	builder.WriteString(pr.PriceUnit)
+	builder.WriteString(", ")
 	builder.WriteString("price_unit_amount=")
 	builder.WriteString(fmt.Sprintf("%v", pr.PriceUnitAmount))
 	builder.WriteString(", ")
@@ -438,9 +441,6 @@ func (pr *Price) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("conversion_rate=")
 	builder.WriteString(fmt.Sprintf("%v", pr.ConversionRate))
-	builder.WriteString(", ")
-	builder.WriteString("precision=")
-	builder.WriteString(fmt.Sprintf("%v", pr.Precision))
 	builder.WriteString(", ")
 	builder.WriteString("plan_id=")
 	builder.WriteString(pr.PlanID)

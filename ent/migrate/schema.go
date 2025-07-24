@@ -883,10 +883,10 @@ var (
 		{Name: "amount", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "numeric(25,15)"}},
 		{Name: "currency", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(3)"}},
 		{Name: "display_amount", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "price_unit", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(3)"}},
 		{Name: "price_unit_amount", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(25,15)"}},
 		{Name: "display_price_unit_amount", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "conversion_rate", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(25,15)"}},
-		{Name: "precision", Type: field.TypeInt, Nullable: true},
 		{Name: "plan_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "billing_period", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
@@ -912,7 +912,7 @@ var (
 		PrimaryKey: []*schema.Column{PricesColumns[0]},
 		ForeignKeys: []*schema.ForeignKey{
 			{
-				Symbol:     "prices_price_unit_price_unit",
+				Symbol:     "prices_price_unit_price_unit_edge",
 				Columns:    []*schema.Column{PricesColumns[31]},
 				RefColumns: []*schema.Column{PriceUnitColumns[0]},
 				OnDelete:   schema.SetNull,

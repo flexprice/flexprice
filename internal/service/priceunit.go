@@ -300,22 +300,22 @@ func (s *PriceUnitService) Delete(ctx context.Context, id string) error {
 
 // ConvertToBaseCurrency converts an amount from pricing unit to base currency
 // amount in fiat currency = amount in pricing unit * conversion_rate
-func (s *PriceUnitService) ConvertToBaseCurrency(ctx context.Context, code, tenantID, environmentID string, customAmount decimal.Decimal) (decimal.Decimal, error) {
-	if customAmount.IsZero() {
+func (s *PriceUnitService) ConvertToBaseCurrency(ctx context.Context, code, tenantID, environmentID string, priceUnitAmount decimal.Decimal) (decimal.Decimal, error) {
+	if priceUnitAmount.IsZero() {
 		return decimal.Zero, nil
 	}
 
-	if customAmount.IsNegative() {
+	if priceUnitAmount.IsNegative() {
 		return decimal.Zero, ierr.NewError("amount must be positive").
 			WithMessage("negative amount provided for conversion").
 			WithHint("Amount must be greater than zero").
 			WithReportableDetails(map[string]interface{}{
-				"amount": customAmount,
+				"amount": priceUnitAmount,
 			}).
 			Mark(ierr.ErrValidation)
 	}
 
-	return s.repo.ConvertToBaseCurrency(ctx, strings.ToLower(code), tenantID, environmentID, customAmount)
+	return s.repo.ConvertToBaseCurrency(ctx, strings.ToLower(code), tenantID, environmentID, priceUnitAmount)
 }
 
 // ConvertToPriceUnit converts an amount from base currency to pricing unit

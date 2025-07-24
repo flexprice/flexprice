@@ -87,7 +87,7 @@ func (s *billingService) CalculateFixedCharges(
 	fixedCost := decimal.Zero
 	fixedCostLineItems := make([]dto.CreateInvoiceLineItemRequest, 0)
 
-	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.Logger)
+	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.PriceUnitRepo, s.Logger)
 
 	// Process fixed charges from line items
 	for _, item := range sub.LineItems {
@@ -166,7 +166,7 @@ func (s *billingService) CalculateUsageCharges(
 	}
 
 	// Create price service once before processing charges
-	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.Logger)
+	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.PriceUnitRepo, s.Logger)
 
 	// Process usage charges from line items
 	for _, item := range sub.LineItems {

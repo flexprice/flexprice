@@ -76,7 +76,7 @@ func (PriceUnit) Fields() []ent.Field {
 func (PriceUnit) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.From("prices", Price.Type).
-			Ref("price_unit"),
+			Ref("price_unit_edge"),
 	}
 }
 

@@ -36,14 +36,14 @@ const (
 	FieldDisplayAmount = "display_amount"
 	// FieldPriceUnitID holds the string denoting the price_unit_id field in the database.
 	FieldPriceUnitID = "price_unit_id"
+	// FieldPriceUnit holds the string denoting the price_unit field in the database.
+	FieldPriceUnit = "price_unit"
 	// FieldPriceUnitAmount holds the string denoting the price_unit_amount field in the database.
 	FieldPriceUnitAmount = "price_unit_amount"
 	// FieldDisplayPriceUnitAmount holds the string denoting the display_price_unit_amount field in the database.
 	FieldDisplayPriceUnitAmount = "display_price_unit_amount"
 	// FieldConversionRate holds the string denoting the conversion_rate field in the database.
 	FieldConversionRate = "conversion_rate"
-	// FieldPrecision holds the string denoting the precision field in the database.
-	FieldPrecision = "precision"
 	// FieldPlanID holds the string denoting the plan_id field in the database.
 	FieldPlanID = "plan_id"
 	// FieldType holds the string denoting the type field in the database.
@@ -78,8 +78,8 @@ const (
 	FieldMetadata = "metadata"
 	// EdgeCostsheet holds the string denoting the costsheet edge name in mutations.
 	EdgeCostsheet = "costsheet"
-	// EdgePriceUnit holds the string denoting the price_unit edge name in mutations.
-	EdgePriceUnit = "price_unit"
+	// EdgePriceUnitEdge holds the string denoting the price_unit_edge edge name in mutations.
+	EdgePriceUnitEdge = "price_unit_edge"
 	// Table holds the table name of the price in the database.
 	Table = "prices"
 	// CostsheetTable is the table that holds the costsheet relation/edge.
@@ -89,13 +89,13 @@ const (
 	CostsheetInverseTable = "costsheet"
 	// CostsheetColumn is the table column denoting the costsheet relation/edge.
 	CostsheetColumn = "price_id"
-	// PriceUnitTable is the table that holds the price_unit relation/edge.
-	PriceUnitTable = "prices"
-	// PriceUnitInverseTable is the table name for the PriceUnit entity.
+	// PriceUnitEdgeTable is the table that holds the price_unit_edge relation/edge.
+	PriceUnitEdgeTable = "prices"
+	// PriceUnitEdgeInverseTable is the table name for the PriceUnit entity.
 	// It exists in this package in order to avoid circular dependency with the "priceunit" package.
-	PriceUnitInverseTable = "price_unit"
-	// PriceUnitColumn is the table column denoting the price_unit relation/edge.
-	PriceUnitColumn = "price_unit_id"
+	PriceUnitEdgeInverseTable = "price_unit"
+	// PriceUnitEdgeColumn is the table column denoting the price_unit_edge relation/edge.
+	PriceUnitEdgeColumn = "price_unit_id"
 )
 
 // Columns holds all SQL columns for price fields.
@@ -112,10 +112,10 @@ var Columns = []string{
 	FieldCurrency,
 	FieldDisplayAmount,
 	FieldPriceUnitID,
+	FieldPriceUnit,
 	FieldPriceUnitAmount,
 	FieldDisplayPriceUnitAmount,
 	FieldConversionRate,
-	FieldPrecision,
 	FieldPlanID,
 	FieldType,
 	FieldBillingPeriod,
@@ -240,6 +240,11 @@ func ByPriceUnitID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPriceUnitID, opts...).ToFunc()
 }
 
+// ByPriceUnit orders the results by the price_unit field.
+func ByPriceUnit(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPriceUnit, opts...).ToFunc()
+}
+
 // ByPriceUnitAmount orders the results by the price_unit_amount field.
 func ByPriceUnitAmount(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPriceUnitAmount, opts...).ToFunc()
@@ -253,11 +258,6 @@ func ByDisplayPriceUnitAmount(opts ...sql.OrderTermOption) OrderOption {
 // ByConversionRate orders the results by the conversion_rate field.
 func ByConversionRate(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldConversionRate, opts...).ToFunc()
-}
-
-// ByPrecision orders the results by the precision field.
-func ByPrecision(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldPrecision, opts...).ToFunc()
 }
 
 // ByPlanID orders the results by the plan_id field.
@@ -334,10 +334,10 @@ func ByCostsheet(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	}
 }
 
-// ByPriceUnitField orders the results by price_unit field.
-func ByPriceUnitField(field string, opts ...sql.OrderTermOption) OrderOption {
+// ByPriceUnitEdgeField orders the results by price_unit_edge field.
+func ByPriceUnitEdgeField(field string, opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newPriceUnitStep(), sql.OrderByField(field, opts...))
+		sqlgraph.OrderByNeighborTerms(s, newPriceUnitEdgeStep(), sql.OrderByField(field, opts...))
 	}
 }
 func newCostsheetStep() *sqlgraph.Step {
@@ -347,10 +347,10 @@ func newCostsheetStep() *sqlgraph.Step {
 		sqlgraph.Edge(sqlgraph.O2M, false, CostsheetTable, CostsheetColumn),
 	)
 }
-func newPriceUnitStep() *sqlgraph.Step {
+func newPriceUnitEdgeStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(PriceUnitInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2O, false, PriceUnitTable, PriceUnitColumn),
+		sqlgraph.To(PriceUnitEdgeInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, false, PriceUnitEdgeTable, PriceUnitEdgeColumn),
 	)
 }

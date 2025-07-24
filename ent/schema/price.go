@@ -46,27 +46,35 @@ func (Price) Fields() []ent.Field {
 				"postgres": "varchar(255)",
 			}).
 			NotEmpty(),
+		// price_unit_id is the id of the price unit
 		field.String("price_unit_id").
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
 			}).
 			Optional(),
+		// price_unit is the code of the price unit
+		field.String("price_unit").
+			SchemaType(map[string]string{
+				"postgres": "varchar(3)",
+			}).
+			Optional(),
+		// price_unit_amount is the amount of the price unit
 		field.Float("price_unit_amount").
 			SchemaType(map[string]string{
 				"postgres": "numeric(25,15)",
 			}).
 			Optional(),
+		// display_price_unit_amount is the amount of the price unit in the display currency
 		field.String("display_price_unit_amount").
 			SchemaType(map[string]string{
 				"postgres": "varchar(255)",
 			}).
 			Optional(),
+		// conversion_rate is the conversion rate of the price unit to the fiat currency
 		field.Float("conversion_rate").
 			SchemaType(map[string]string{
 				"postgres": "numeric(25,15)",
 			}).
-			Optional(),
-		field.Int("precision").
 			Optional(),
 		field.String("plan_id").
 			SchemaType(map[string]string{
@@ -138,7 +146,7 @@ func (Price) Fields() []ent.Field {
 func (Price) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.To("costsheet", Costsheet.Type),
-		edge.To("price_unit", PriceUnit.Type).
+		edge.To("price_unit_edge", PriceUnit.Type).
 			Field("price_unit_id").
 			Unique(),
 	}

@@ -622,7 +622,7 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 
 			// Calculate cost details using the price service
 			// since per event price can be very small, we don't round the cost
-			priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.Logger)
+			priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.PriceUnitRepo, s.Logger)
 			costDetails := priceService.CalculateCostWithBreakup(ctx, match.Price, billableQty, false)
 
 			// Set cost details on the processed event

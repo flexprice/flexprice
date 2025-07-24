@@ -43,6 +43,25 @@ type Price struct {
 	// Currency 3 digit ISO currency code in lowercase ex usd, eur, gbp
 	Currency string `db:"currency" json:"currency"`
 
+	// PriceUnitID is the id of the price unit
+	PriceUnitID string `db:"price_unit_id" json:"price_unit_id"`
+
+	// PriceUnitAmount is the amount stored in price unit
+	// For BTC: 0.00000001 means 0.00000001 BTC
+	PriceUnitAmount decimal.Decimal `db:"price_unit_amount" json:"price_unit_amount"`
+
+	// DisplayPriceUnitAmount is the formatted amount with price unit symbol
+	// For BTC: 0.00000001 BTC
+	DisplayPriceUnitAmount string `db:"display_price_unit_amount" json:"display_price_unit_amount"`
+
+	// PriceUnit 3 digit ISO currency code in lowercase ex btc
+	// For BTC: btc
+	PriceUnit string `db:"price_unit" json:"price_unit"`
+
+	// ConversionRate is the rate of the price unit to the base currency
+	// For BTC: 1 BTC = 100000000 USD
+	ConversionRate decimal.Decimal `db:"conversion_rate" json:"conversion_rate"`
+
 	// PlanID is the id of the plan for plan based pricing
 	PlanID string `db:"plan_id" json:"plan_id"`
 
@@ -333,6 +352,12 @@ func FromEnt(e *ent.Price) *Price {
 		TransformQuantity:  JSONBTransformQuantity(e.TransformQuantity),
 		Metadata:           JSONBMetadata(e.Metadata),
 		EnvironmentID:      e.EnvironmentID,
+		// Price unit fields
+		PriceUnitID:            e.PriceUnitID,
+		PriceUnit:              e.PriceUnit,
+		PriceUnitAmount:        decimal.NewFromFloat(e.PriceUnitAmount),
+		DisplayPriceUnitAmount: e.DisplayPriceUnitAmount,
+		ConversionRate:         decimal.NewFromFloat(e.ConversionRate),
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

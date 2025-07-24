@@ -3201,15 +3201,15 @@ func (c *PriceClient) QueryCostsheet(pr *Price) *CostsheetQuery {
 	return query
 }
 
-// QueryPriceUnit queries the price_unit edge of a Price.
-func (c *PriceClient) QueryPriceUnit(pr *Price) *PriceUnitQuery {
+// QueryPriceUnitEdge queries the price_unit_edge edge of a Price.
+func (c *PriceClient) QueryPriceUnitEdge(pr *Price) *PriceUnitQuery {
 	query := (&PriceUnitClient{config: c.config}).Query()
 	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
 		id := pr.ID
 		step := sqlgraph.NewStep(
 			sqlgraph.From(price.Table, price.FieldID, id),
 			sqlgraph.To(priceunit.Table, priceunit.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, price.PriceUnitTable, price.PriceUnitColumn),
+			sqlgraph.Edge(sqlgraph.M2O, false, price.PriceUnitEdgeTable, price.PriceUnitEdgeColumn),
 		)
 		fromV = sqlgraph.Neighbors(pr.driver.Dialect(), step)
 		return fromV, nil

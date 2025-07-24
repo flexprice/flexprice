@@ -50,6 +50,35 @@ func (h *PriceHandler) CreatePrice(c *gin.Context) {
 	c.JSON(http.StatusCreated, resp)
 }
 
+// @Summary Create a new price with a price unit config
+// @Description Create a new price with a price unit config
+// @Tags Prices
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param price body dto.CreatePriceWithUnitConfigRequest true "Price configuration"
+// @Success 201 {object} dto.PriceResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /prices/unit [post]
+func (h *PriceHandler) CreatePriceWithUnitConfig(c *gin.Context) {
+	var req dto.CreatePriceWithUnitConfigRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.service.CreatePriceWithUnitConfig(c.Request.Context(), req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, resp)
+}
+
 // @Summary Get a price by ID
 // @Description Get a price by ID
 // @Tags Prices
