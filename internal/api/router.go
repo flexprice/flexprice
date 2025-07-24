@@ -158,6 +158,9 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 
 		plan := v1Private.Group("/plans")
 		{
+			// list plans by filter
+			plan.POST("/search", handlers.Plan.ListPlansByFilter)
+
 			plan.POST("", handlers.Plan.CreatePlan)
 			plan.GET("", handlers.Plan.GetPlans)
 			plan.GET("/:id", handlers.Plan.GetPlan)

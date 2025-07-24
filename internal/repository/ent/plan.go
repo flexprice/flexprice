@@ -6,8 +6,10 @@ import (
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/plan"
+	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/internal/cache"
 	domainPlan "github.com/flexprice/flexprice/internal/domain/plan"
+	"github.com/flexprice/flexprice/internal/dsl"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
@@ -156,9 +158,14 @@ func (r *planRepository) List(ctx context.Context, filter *types.PlanFilter) ([]
 	defer FinishSpan(span)
 
 	query := client.Plan.Query()
+	query, err := r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list plans").
+			Mark(ierr.ErrDatabase)
+	}
 	query = ApplyQueryOptions(ctx, query, filter, r.queryOpts)
-	query = r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
-
 	plans, err := query.All(ctx)
 	if err != nil {
 		SetSpanError(span, err)
@@ -202,7 +209,10 @@ func (r *planRepository) Count(ctx context.Context, filter *types.PlanFilter) (i
 
 	query := client.Plan.Query()
 	query = ApplyBaseFilters(ctx, query, filter, r.queryOpts)
-	query = r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
+	query, err := r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
+	if err != nil {
+		return 0, err
+	}
 
 	count, err := query.Count(ctx)
 	if err != nil {
@@ -424,27 +434,51 @@ func (o PlanQueryOptions) GetFieldName(field string) string {
 	}
 }
 
-func (o PlanQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.PlanFilter, query PlanQuery) PlanQuery {
+func (o PlanQueryOptions) GetFieldResolver(field string) (string, error) {
+	fieldName := o.GetFieldName(field)
+	if fieldName == "" {
+		return "", ierr.NewErrorf("unknown field name '%s' in plan query", field).
+			Mark(ierr.ErrValidation)
+	}
+	return fieldName, nil
+}
+
+func (o PlanQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.PlanFilter, query PlanQuery) (PlanQuery, error) {
+	var err error
 	if f == nil {
-		return query
+		return query, nil
 	}
 
-	// Apply plan IDs filter if specified
 	if len(f.PlanIDs) > 0 {
 		query = query.Where(plan.IDIn(f.PlanIDs...))
 	}
 
-	// Apply time range filters if specified
-	if f.TimeRangeFilter != nil {
-		if f.StartTime != nil {
-			query = query.Where(plan.CreatedAtGTE(*f.StartTime))
-		}
-		if f.EndTime != nil {
-			query = query.Where(plan.CreatedAtLTE(*f.EndTime))
+	if f.Filters != nil {
+		query, err = dsl.ApplyFilters[PlanQuery, predicate.Plan](
+			query,
+			f.Filters,
+			o.GetFieldResolver,
+			func(p dsl.Predicate) predicate.Plan { return predicate.Plan(p) },
+		)
+		if err != nil {
+			return nil, err
 		}
 	}
 
-	return query
+	// Apply sorts using the generic function
+	if f.Sort != nil {
+		query, err = dsl.ApplySorts[PlanQuery, plan.OrderOption](
+			query,
+			f.Sort,
+			o.GetFieldResolver,
+			func(o dsl.OrderFunc) plan.OrderOption { return plan.OrderOption(o) },
+		)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return query, nil
 }
 
 func (r *planRepository) SetCache(ctx context.Context, plan *domainPlan.Plan) {

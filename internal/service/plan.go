@@ -194,7 +194,9 @@ func (s *planService) GetPlans(ctx context.Context, filter *types.PlanFilter) (*
 	}
 
 	if err := filter.Validate(); err != nil {
-		return nil, err
+		return nil, ierr.WithError(err).
+			WithHint("Invalid filter parameters").
+			Mark(ierr.ErrValidation)
 	}
 
 	// Fetch plans

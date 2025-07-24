@@ -6,7 +6,12 @@ import ierr "github.com/flexprice/flexprice/internal/errors"
 type PlanFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
-	PlanIDs []string `json:"plan_ids,omitempty" form:"plan_ids"`
+
+	// filters allows complex filtering based on multiple fields
+	Filters []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
+	Sort    []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
+
+	PlanIDs []string `json:"plan_ids,omitempty" form:"plan_ids" validate:"omitempty"`
 }
 
 // NewPlanFilter creates a new plan filter with default options
