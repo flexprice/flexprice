@@ -21,6 +21,8 @@ type InvoiceLineItem struct {
 	PriceType        *string         `json:"price_type,omitempty"`
 	MeterID          *string         `json:"meter_id,omitempty"`
 	MeterDisplayName *string         `json:"meter_display_name,omitempty"`
+	PriceUnitID      *string         `json:"price_unit_id,omitempty"`
+	PriceUnit        *string         `json:"price_unit,omitempty"`
 	DisplayName      *string         `json:"display_name,omitempty"`
 	Amount           decimal.Decimal `json:"amount"`
 	Quantity         decimal.Decimal `json:"quantity"`
@@ -49,6 +51,8 @@ func (i *InvoiceLineItem) FromEnt(e *ent.InvoiceLineItem) *InvoiceLineItem {
 		PriceType:        e.PriceType,
 		MeterID:          e.MeterID,
 		MeterDisplayName: e.MeterDisplayName,
+		PriceUnitID:      e.PriceUnitID,
+		PriceUnit:        e.PriceUnit,
 		DisplayName:      e.DisplayName,
 		Amount:           e.Amount,
 		Quantity:         e.Quantity,
