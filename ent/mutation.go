@@ -15885,6 +15885,7 @@ type InvoiceLineItemMutation struct {
 	meter_display_name *string
 	price_unit_id      *string
 	price_unit         *string
+	price_unit_amount  *decimal.Decimal
 	display_name       *string
 	amount             *decimal.Decimal
 	quantity           *decimal.Decimal
@@ -16808,6 +16809,55 @@ func (m *InvoiceLineItemMutation) ResetPriceUnit() {
 	delete(m.clearedFields, invoicelineitem.FieldPriceUnit)
 }
 
+// SetPriceUnitAmount sets the "price_unit_amount" field.
+func (m *InvoiceLineItemMutation) SetPriceUnitAmount(d decimal.Decimal) {
+	m.price_unit_amount = &d
+}
+
+// PriceUnitAmount returns the value of the "price_unit_amount" field in the mutation.
+func (m *InvoiceLineItemMutation) PriceUnitAmount() (r decimal.Decimal, exists bool) {
+	v := m.price_unit_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPriceUnitAmount returns the old "price_unit_amount" field's value of the InvoiceLineItem entity.
+// If the InvoiceLineItem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceLineItemMutation) OldPriceUnitAmount(ctx context.Context) (v *decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPriceUnitAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPriceUnitAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPriceUnitAmount: %w", err)
+	}
+	return oldValue.PriceUnitAmount, nil
+}
+
+// ClearPriceUnitAmount clears the value of the "price_unit_amount" field.
+func (m *InvoiceLineItemMutation) ClearPriceUnitAmount() {
+	m.price_unit_amount = nil
+	m.clearedFields[invoicelineitem.FieldPriceUnitAmount] = struct{}{}
+}
+
+// PriceUnitAmountCleared returns if the "price_unit_amount" field was cleared in this mutation.
+func (m *InvoiceLineItemMutation) PriceUnitAmountCleared() bool {
+	_, ok := m.clearedFields[invoicelineitem.FieldPriceUnitAmount]
+	return ok
+}
+
+// ResetPriceUnitAmount resets all changes to the "price_unit_amount" field.
+func (m *InvoiceLineItemMutation) ResetPriceUnitAmount() {
+	m.price_unit_amount = nil
+	delete(m.clearedFields, invoicelineitem.FieldPriceUnitAmount)
+}
+
 // SetDisplayName sets the "display_name" field.
 func (m *InvoiceLineItemMutation) SetDisplayName(s string) {
 	m.display_name = &s
@@ -17173,7 +17223,7 @@ func (m *InvoiceLineItemMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *InvoiceLineItemMutation) Fields() []string {
-	fields := make([]string, 0, 25)
+	fields := make([]string, 0, 26)
 	if m.tenant_id != nil {
 		fields = append(fields, invoicelineitem.FieldTenantID)
 	}
@@ -17227,6 +17277,9 @@ func (m *InvoiceLineItemMutation) Fields() []string {
 	}
 	if m.price_unit != nil {
 		fields = append(fields, invoicelineitem.FieldPriceUnit)
+	}
+	if m.price_unit_amount != nil {
+		fields = append(fields, invoicelineitem.FieldPriceUnitAmount)
 	}
 	if m.display_name != nil {
 		fields = append(fields, invoicelineitem.FieldDisplayName)
@@ -17293,6 +17346,8 @@ func (m *InvoiceLineItemMutation) Field(name string) (ent.Value, bool) {
 		return m.PriceUnitID()
 	case invoicelineitem.FieldPriceUnit:
 		return m.PriceUnit()
+	case invoicelineitem.FieldPriceUnitAmount:
+		return m.PriceUnitAmount()
 	case invoicelineitem.FieldDisplayName:
 		return m.DisplayName()
 	case invoicelineitem.FieldAmount:
@@ -17352,6 +17407,8 @@ func (m *InvoiceLineItemMutation) OldField(ctx context.Context, name string) (en
 		return m.OldPriceUnitID(ctx)
 	case invoicelineitem.FieldPriceUnit:
 		return m.OldPriceUnit(ctx)
+	case invoicelineitem.FieldPriceUnitAmount:
+		return m.OldPriceUnitAmount(ctx)
 	case invoicelineitem.FieldDisplayName:
 		return m.OldDisplayName(ctx)
 	case invoicelineitem.FieldAmount:
@@ -17501,6 +17558,13 @@ func (m *InvoiceLineItemMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetPriceUnit(v)
 		return nil
+	case invoicelineitem.FieldPriceUnitAmount:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPriceUnitAmount(v)
+		return nil
 	case invoicelineitem.FieldDisplayName:
 		v, ok := value.(string)
 		if !ok {
@@ -17616,6 +17680,9 @@ func (m *InvoiceLineItemMutation) ClearedFields() []string {
 	if m.FieldCleared(invoicelineitem.FieldPriceUnit) {
 		fields = append(fields, invoicelineitem.FieldPriceUnit)
 	}
+	if m.FieldCleared(invoicelineitem.FieldPriceUnitAmount) {
+		fields = append(fields, invoicelineitem.FieldPriceUnitAmount)
+	}
 	if m.FieldCleared(invoicelineitem.FieldDisplayName) {
 		fields = append(fields, invoicelineitem.FieldDisplayName)
 	}
@@ -17677,6 +17744,9 @@ func (m *InvoiceLineItemMutation) ClearField(name string) error {
 		return nil
 	case invoicelineitem.FieldPriceUnit:
 		m.ClearPriceUnit()
+		return nil
+	case invoicelineitem.FieldPriceUnitAmount:
+		m.ClearPriceUnitAmount()
 		return nil
 	case invoicelineitem.FieldDisplayName:
 		m.ClearDisplayName()
@@ -17751,6 +17821,9 @@ func (m *InvoiceLineItemMutation) ResetField(name string) error {
 		return nil
 	case invoicelineitem.FieldPriceUnit:
 		m.ResetPriceUnit()
+		return nil
+	case invoicelineitem.FieldPriceUnitAmount:
+		m.ResetPriceUnitAmount()
 		return nil
 	case invoicelineitem.FieldDisplayName:
 		m.ResetDisplayName()

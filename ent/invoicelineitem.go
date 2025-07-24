@@ -56,6 +56,8 @@ type InvoiceLineItem struct {
 	PriceUnitID *string `json:"price_unit_id,omitempty"`
 	// PriceUnit holds the value of the "price_unit" field.
 	PriceUnit *string `json:"price_unit,omitempty"`
+	// PriceUnitAmount holds the value of the "price_unit_amount" field.
+	PriceUnitAmount *decimal.Decimal `json:"price_unit_amount,omitempty"`
 	// DisplayName holds the value of the "display_name" field.
 	DisplayName *string `json:"display_name,omitempty"`
 	// Amount holds the value of the "amount" field.
@@ -101,6 +103,8 @@ func (*InvoiceLineItem) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case invoicelineitem.FieldPriceUnitAmount:
+			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case invoicelineitem.FieldMetadata:
 			values[i] = new([]byte)
 		case invoicelineitem.FieldAmount, invoicelineitem.FieldQuantity:
@@ -246,6 +250,13 @@ func (ili *InvoiceLineItem) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				ili.PriceUnit = new(string)
 				*ili.PriceUnit = value.String
+			}
+		case invoicelineitem.FieldPriceUnitAmount:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field price_unit_amount", values[i])
+			} else if value.Valid {
+				ili.PriceUnitAmount = new(decimal.Decimal)
+				*ili.PriceUnitAmount = *value.S.(*decimal.Decimal)
 			}
 		case invoicelineitem.FieldDisplayName:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -405,6 +416,11 @@ func (ili *InvoiceLineItem) String() string {
 	if v := ili.PriceUnit; v != nil {
 		builder.WriteString("price_unit=")
 		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := ili.PriceUnitAmount; v != nil {
+		builder.WriteString("price_unit_amount=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
 	if v := ili.DisplayName; v != nil {

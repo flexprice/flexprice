@@ -226,6 +226,9 @@ func (iliu *InvoiceLineItemUpdate) sqlSave(ctx context.Context) (n int, err erro
 	if iliu.mutation.PriceUnitCleared() {
 		_spec.ClearField(invoicelineitem.FieldPriceUnit, field.TypeString)
 	}
+	if iliu.mutation.PriceUnitAmountCleared() {
+		_spec.ClearField(invoicelineitem.FieldPriceUnitAmount, field.TypeOther)
+	}
 	if iliu.mutation.DisplayNameCleared() {
 		_spec.ClearField(invoicelineitem.FieldDisplayName, field.TypeString)
 	}
@@ -494,6 +497,9 @@ func (iliuo *InvoiceLineItemUpdateOne) sqlSave(ctx context.Context) (_node *Invo
 	}
 	if iliuo.mutation.PriceUnitCleared() {
 		_spec.ClearField(invoicelineitem.FieldPriceUnit, field.TypeString)
+	}
+	if iliuo.mutation.PriceUnitAmountCleared() {
+		_spec.ClearField(invoicelineitem.FieldPriceUnitAmount, field.TypeOther)
 	}
 	if iliuo.mutation.DisplayNameCleared() {
 		_spec.ClearField(invoicelineitem.FieldDisplayName, field.TypeString)

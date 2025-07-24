@@ -100,6 +100,13 @@ func (InvoiceLineItem) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Immutable(),
+		field.Other("price_unit_amount", decimal.Decimal{}).
+			SchemaType(map[string]string{
+				"postgres": "numeric(20,8)",
+			}).
+			Optional().
+			Nillable().
+			Immutable(),
 		field.String("display_name").
 			Optional().
 			Nillable().

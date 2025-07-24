@@ -51,6 +51,8 @@ const (
 	FieldPriceUnitID = "price_unit_id"
 	// FieldPriceUnit holds the string denoting the price_unit field in the database.
 	FieldPriceUnit = "price_unit"
+	// FieldPriceUnitAmount holds the string denoting the price_unit_amount field in the database.
+	FieldPriceUnitAmount = "price_unit_amount"
 	// FieldDisplayName holds the string denoting the display_name field in the database.
 	FieldDisplayName = "display_name"
 	// FieldAmount holds the string denoting the amount field in the database.
@@ -99,6 +101,7 @@ var Columns = []string{
 	FieldMeterDisplayName,
 	FieldPriceUnitID,
 	FieldPriceUnit,
+	FieldPriceUnitAmount,
 	FieldDisplayName,
 	FieldAmount,
 	FieldQuantity,
@@ -239,6 +242,11 @@ func ByPriceUnitID(opts ...sql.OrderTermOption) OrderOption {
 // ByPriceUnit orders the results by the price_unit field.
 func ByPriceUnit(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPriceUnit, opts...).ToFunc()
+}
+
+// ByPriceUnitAmount orders the results by the price_unit_amount field.
+func ByPriceUnitAmount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPriceUnitAmount, opts...).ToFunc()
 }
 
 // ByDisplayName orders the results by the display_name field.
