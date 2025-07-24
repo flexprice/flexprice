@@ -145,6 +145,8 @@ func MigrateSubscriptionLineItems() error {
 					Quantity:        decimal.Zero,
 					Currency:        sub.Currency,
 					BillingPeriod:   sub.BillingPeriod,
+					PriceUnitID:     price.PriceUnitID,
+					PriceUnit:       price.PriceUnit,
 					StartDate:       sub.CurrentPeriodStart,
 					EndDate:         sub.CurrentPeriodEnd,
 					BaseModel:       types.GetDefaultBaseModel(ctx),

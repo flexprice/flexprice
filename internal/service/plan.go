@@ -749,6 +749,8 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*SyncPlanP
 				BillingPeriod:   pr.BillingPeriod,
 				InvoiceCadence:  pr.InvoiceCadence,
 				TrialPeriod:     pr.TrialPeriod,
+				PriceUnitID:     pr.PriceUnitID,
+				PriceUnit:       pr.PriceUnit,
 				StartDate:       sub.StartDate, // Use subscription's start date
 				Metadata:        map[string]string{"added_by": "plan_sync_api"},
 				EnvironmentID:   environmentID,

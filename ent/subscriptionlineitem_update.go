@@ -183,6 +183,46 @@ func (sliu *SubscriptionLineItemUpdate) ClearMeterDisplayName() *SubscriptionLin
 	return sliu
 }
 
+// SetPriceUnitID sets the "price_unit_id" field.
+func (sliu *SubscriptionLineItemUpdate) SetPriceUnitID(s string) *SubscriptionLineItemUpdate {
+	sliu.mutation.SetPriceUnitID(s)
+	return sliu
+}
+
+// SetNillablePriceUnitID sets the "price_unit_id" field if the given value is not nil.
+func (sliu *SubscriptionLineItemUpdate) SetNillablePriceUnitID(s *string) *SubscriptionLineItemUpdate {
+	if s != nil {
+		sliu.SetPriceUnitID(*s)
+	}
+	return sliu
+}
+
+// ClearPriceUnitID clears the value of the "price_unit_id" field.
+func (sliu *SubscriptionLineItemUpdate) ClearPriceUnitID() *SubscriptionLineItemUpdate {
+	sliu.mutation.ClearPriceUnitID()
+	return sliu
+}
+
+// SetPriceUnit sets the "price_unit" field.
+func (sliu *SubscriptionLineItemUpdate) SetPriceUnit(s string) *SubscriptionLineItemUpdate {
+	sliu.mutation.SetPriceUnit(s)
+	return sliu
+}
+
+// SetNillablePriceUnit sets the "price_unit" field if the given value is not nil.
+func (sliu *SubscriptionLineItemUpdate) SetNillablePriceUnit(s *string) *SubscriptionLineItemUpdate {
+	if s != nil {
+		sliu.SetPriceUnit(*s)
+	}
+	return sliu
+}
+
+// ClearPriceUnit clears the value of the "price_unit" field.
+func (sliu *SubscriptionLineItemUpdate) ClearPriceUnit() *SubscriptionLineItemUpdate {
+	sliu.mutation.ClearPriceUnit()
+	return sliu
+}
+
 // SetDisplayName sets the "display_name" field.
 func (sliu *SubscriptionLineItemUpdate) SetDisplayName(s string) *SubscriptionLineItemUpdate {
 	sliu.mutation.SetDisplayName(s)
@@ -445,6 +485,18 @@ func (sliu *SubscriptionLineItemUpdate) sqlSave(ctx context.Context) (n int, err
 	if sliu.mutation.MeterDisplayNameCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldMeterDisplayName, field.TypeString)
 	}
+	if value, ok := sliu.mutation.PriceUnitID(); ok {
+		_spec.SetField(subscriptionlineitem.FieldPriceUnitID, field.TypeString, value)
+	}
+	if sliu.mutation.PriceUnitIDCleared() {
+		_spec.ClearField(subscriptionlineitem.FieldPriceUnitID, field.TypeString)
+	}
+	if value, ok := sliu.mutation.PriceUnit(); ok {
+		_spec.SetField(subscriptionlineitem.FieldPriceUnit, field.TypeString, value)
+	}
+	if sliu.mutation.PriceUnitCleared() {
+		_spec.ClearField(subscriptionlineitem.FieldPriceUnit, field.TypeString)
+	}
 	if value, ok := sliu.mutation.DisplayName(); ok {
 		_spec.SetField(subscriptionlineitem.FieldDisplayName, field.TypeString, value)
 	}
@@ -658,6 +710,46 @@ func (sliuo *SubscriptionLineItemUpdateOne) SetNillableMeterDisplayName(s *strin
 // ClearMeterDisplayName clears the value of the "meter_display_name" field.
 func (sliuo *SubscriptionLineItemUpdateOne) ClearMeterDisplayName() *SubscriptionLineItemUpdateOne {
 	sliuo.mutation.ClearMeterDisplayName()
+	return sliuo
+}
+
+// SetPriceUnitID sets the "price_unit_id" field.
+func (sliuo *SubscriptionLineItemUpdateOne) SetPriceUnitID(s string) *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.SetPriceUnitID(s)
+	return sliuo
+}
+
+// SetNillablePriceUnitID sets the "price_unit_id" field if the given value is not nil.
+func (sliuo *SubscriptionLineItemUpdateOne) SetNillablePriceUnitID(s *string) *SubscriptionLineItemUpdateOne {
+	if s != nil {
+		sliuo.SetPriceUnitID(*s)
+	}
+	return sliuo
+}
+
+// ClearPriceUnitID clears the value of the "price_unit_id" field.
+func (sliuo *SubscriptionLineItemUpdateOne) ClearPriceUnitID() *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.ClearPriceUnitID()
+	return sliuo
+}
+
+// SetPriceUnit sets the "price_unit" field.
+func (sliuo *SubscriptionLineItemUpdateOne) SetPriceUnit(s string) *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.SetPriceUnit(s)
+	return sliuo
+}
+
+// SetNillablePriceUnit sets the "price_unit" field if the given value is not nil.
+func (sliuo *SubscriptionLineItemUpdateOne) SetNillablePriceUnit(s *string) *SubscriptionLineItemUpdateOne {
+	if s != nil {
+		sliuo.SetPriceUnit(*s)
+	}
+	return sliuo
+}
+
+// ClearPriceUnit clears the value of the "price_unit" field.
+func (sliuo *SubscriptionLineItemUpdateOne) ClearPriceUnit() *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.ClearPriceUnit()
 	return sliuo
 }
 
@@ -952,6 +1044,18 @@ func (sliuo *SubscriptionLineItemUpdateOne) sqlSave(ctx context.Context) (_node 
 	}
 	if sliuo.mutation.MeterDisplayNameCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldMeterDisplayName, field.TypeString)
+	}
+	if value, ok := sliuo.mutation.PriceUnitID(); ok {
+		_spec.SetField(subscriptionlineitem.FieldPriceUnitID, field.TypeString, value)
+	}
+	if sliuo.mutation.PriceUnitIDCleared() {
+		_spec.ClearField(subscriptionlineitem.FieldPriceUnitID, field.TypeString)
+	}
+	if value, ok := sliuo.mutation.PriceUnit(); ok {
+		_spec.SetField(subscriptionlineitem.FieldPriceUnit, field.TypeString, value)
+	}
+	if sliuo.mutation.PriceUnitCleared() {
+		_spec.ClearField(subscriptionlineitem.FieldPriceUnit, field.TypeString)
 	}
 	if value, ok := sliuo.mutation.DisplayName(); ok {
 		_spec.SetField(subscriptionlineitem.FieldDisplayName, field.TypeString, value)

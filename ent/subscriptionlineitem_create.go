@@ -200,6 +200,34 @@ func (slic *SubscriptionLineItemCreate) SetNillableMeterDisplayName(s *string) *
 	return slic
 }
 
+// SetPriceUnitID sets the "price_unit_id" field.
+func (slic *SubscriptionLineItemCreate) SetPriceUnitID(s string) *SubscriptionLineItemCreate {
+	slic.mutation.SetPriceUnitID(s)
+	return slic
+}
+
+// SetNillablePriceUnitID sets the "price_unit_id" field if the given value is not nil.
+func (slic *SubscriptionLineItemCreate) SetNillablePriceUnitID(s *string) *SubscriptionLineItemCreate {
+	if s != nil {
+		slic.SetPriceUnitID(*s)
+	}
+	return slic
+}
+
+// SetPriceUnit sets the "price_unit" field.
+func (slic *SubscriptionLineItemCreate) SetPriceUnit(s string) *SubscriptionLineItemCreate {
+	slic.mutation.SetPriceUnit(s)
+	return slic
+}
+
+// SetNillablePriceUnit sets the "price_unit" field if the given value is not nil.
+func (slic *SubscriptionLineItemCreate) SetNillablePriceUnit(s *string) *SubscriptionLineItemCreate {
+	if s != nil {
+		slic.SetPriceUnit(*s)
+	}
+	return slic
+}
+
 // SetDisplayName sets the "display_name" field.
 func (slic *SubscriptionLineItemCreate) SetDisplayName(s string) *SubscriptionLineItemCreate {
 	slic.mutation.SetDisplayName(s)
@@ -532,6 +560,14 @@ func (slic *SubscriptionLineItemCreate) createSpec() (*SubscriptionLineItem, *sq
 	if value, ok := slic.mutation.MeterDisplayName(); ok {
 		_spec.SetField(subscriptionlineitem.FieldMeterDisplayName, field.TypeString, value)
 		_node.MeterDisplayName = &value
+	}
+	if value, ok := slic.mutation.PriceUnitID(); ok {
+		_spec.SetField(subscriptionlineitem.FieldPriceUnitID, field.TypeString, value)
+		_node.PriceUnitID = &value
+	}
+	if value, ok := slic.mutation.PriceUnit(); ok {
+		_spec.SetField(subscriptionlineitem.FieldPriceUnit, field.TypeString, value)
+		_node.PriceUnit = &value
 	}
 	if value, ok := slic.mutation.DisplayName(); ok {
 		_spec.SetField(subscriptionlineitem.FieldDisplayName, field.TypeString, value)

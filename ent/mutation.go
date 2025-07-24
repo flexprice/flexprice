@@ -31337,6 +31337,8 @@ type SubscriptionLineItemMutation struct {
 	price_type          *string
 	meter_id            *string
 	meter_display_name  *string
+	price_unit_id       *string
+	price_unit          *string
 	display_name        *string
 	quantity            *decimal.Decimal
 	currency            *string
@@ -32103,6 +32105,104 @@ func (m *SubscriptionLineItemMutation) ResetMeterDisplayName() {
 	delete(m.clearedFields, subscriptionlineitem.FieldMeterDisplayName)
 }
 
+// SetPriceUnitID sets the "price_unit_id" field.
+func (m *SubscriptionLineItemMutation) SetPriceUnitID(s string) {
+	m.price_unit_id = &s
+}
+
+// PriceUnitID returns the value of the "price_unit_id" field in the mutation.
+func (m *SubscriptionLineItemMutation) PriceUnitID() (r string, exists bool) {
+	v := m.price_unit_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPriceUnitID returns the old "price_unit_id" field's value of the SubscriptionLineItem entity.
+// If the SubscriptionLineItem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionLineItemMutation) OldPriceUnitID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPriceUnitID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPriceUnitID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPriceUnitID: %w", err)
+	}
+	return oldValue.PriceUnitID, nil
+}
+
+// ClearPriceUnitID clears the value of the "price_unit_id" field.
+func (m *SubscriptionLineItemMutation) ClearPriceUnitID() {
+	m.price_unit_id = nil
+	m.clearedFields[subscriptionlineitem.FieldPriceUnitID] = struct{}{}
+}
+
+// PriceUnitIDCleared returns if the "price_unit_id" field was cleared in this mutation.
+func (m *SubscriptionLineItemMutation) PriceUnitIDCleared() bool {
+	_, ok := m.clearedFields[subscriptionlineitem.FieldPriceUnitID]
+	return ok
+}
+
+// ResetPriceUnitID resets all changes to the "price_unit_id" field.
+func (m *SubscriptionLineItemMutation) ResetPriceUnitID() {
+	m.price_unit_id = nil
+	delete(m.clearedFields, subscriptionlineitem.FieldPriceUnitID)
+}
+
+// SetPriceUnit sets the "price_unit" field.
+func (m *SubscriptionLineItemMutation) SetPriceUnit(s string) {
+	m.price_unit = &s
+}
+
+// PriceUnit returns the value of the "price_unit" field in the mutation.
+func (m *SubscriptionLineItemMutation) PriceUnit() (r string, exists bool) {
+	v := m.price_unit
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPriceUnit returns the old "price_unit" field's value of the SubscriptionLineItem entity.
+// If the SubscriptionLineItem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionLineItemMutation) OldPriceUnit(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPriceUnit is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPriceUnit requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPriceUnit: %w", err)
+	}
+	return oldValue.PriceUnit, nil
+}
+
+// ClearPriceUnit clears the value of the "price_unit" field.
+func (m *SubscriptionLineItemMutation) ClearPriceUnit() {
+	m.price_unit = nil
+	m.clearedFields[subscriptionlineitem.FieldPriceUnit] = struct{}{}
+}
+
+// PriceUnitCleared returns if the "price_unit" field was cleared in this mutation.
+func (m *SubscriptionLineItemMutation) PriceUnitCleared() bool {
+	_, ok := m.clearedFields[subscriptionlineitem.FieldPriceUnit]
+	return ok
+}
+
+// ResetPriceUnit resets all changes to the "price_unit" field.
+func (m *SubscriptionLineItemMutation) ResetPriceUnit() {
+	m.price_unit = nil
+	delete(m.clearedFields, subscriptionlineitem.FieldPriceUnit)
+}
+
 // SetDisplayName sets the "display_name" field.
 func (m *SubscriptionLineItemMutation) SetDisplayName(s string) {
 	m.display_name = &s
@@ -32573,7 +32673,7 @@ func (m *SubscriptionLineItemMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SubscriptionLineItemMutation) Fields() []string {
-	fields := make([]string, 0, 24)
+	fields := make([]string, 0, 26)
 	if m.tenant_id != nil {
 		fields = append(fields, subscriptionlineitem.FieldTenantID)
 	}
@@ -32618,6 +32718,12 @@ func (m *SubscriptionLineItemMutation) Fields() []string {
 	}
 	if m.meter_display_name != nil {
 		fields = append(fields, subscriptionlineitem.FieldMeterDisplayName)
+	}
+	if m.price_unit_id != nil {
+		fields = append(fields, subscriptionlineitem.FieldPriceUnitID)
+	}
+	if m.price_unit != nil {
+		fields = append(fields, subscriptionlineitem.FieldPriceUnit)
 	}
 	if m.display_name != nil {
 		fields = append(fields, subscriptionlineitem.FieldDisplayName)
@@ -32684,6 +32790,10 @@ func (m *SubscriptionLineItemMutation) Field(name string) (ent.Value, bool) {
 		return m.MeterID()
 	case subscriptionlineitem.FieldMeterDisplayName:
 		return m.MeterDisplayName()
+	case subscriptionlineitem.FieldPriceUnitID:
+		return m.PriceUnitID()
+	case subscriptionlineitem.FieldPriceUnit:
+		return m.PriceUnit()
 	case subscriptionlineitem.FieldDisplayName:
 		return m.DisplayName()
 	case subscriptionlineitem.FieldQuantity:
@@ -32741,6 +32851,10 @@ func (m *SubscriptionLineItemMutation) OldField(ctx context.Context, name string
 		return m.OldMeterID(ctx)
 	case subscriptionlineitem.FieldMeterDisplayName:
 		return m.OldMeterDisplayName(ctx)
+	case subscriptionlineitem.FieldPriceUnitID:
+		return m.OldPriceUnitID(ctx)
+	case subscriptionlineitem.FieldPriceUnit:
+		return m.OldPriceUnit(ctx)
 	case subscriptionlineitem.FieldDisplayName:
 		return m.OldDisplayName(ctx)
 	case subscriptionlineitem.FieldQuantity:
@@ -32872,6 +32986,20 @@ func (m *SubscriptionLineItemMutation) SetField(name string, value ent.Value) er
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetMeterDisplayName(v)
+		return nil
+	case subscriptionlineitem.FieldPriceUnitID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPriceUnitID(v)
+		return nil
+	case subscriptionlineitem.FieldPriceUnit:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPriceUnit(v)
 		return nil
 	case subscriptionlineitem.FieldDisplayName:
 		v, ok := value.(string)
@@ -33005,6 +33133,12 @@ func (m *SubscriptionLineItemMutation) ClearedFields() []string {
 	if m.FieldCleared(subscriptionlineitem.FieldMeterDisplayName) {
 		fields = append(fields, subscriptionlineitem.FieldMeterDisplayName)
 	}
+	if m.FieldCleared(subscriptionlineitem.FieldPriceUnitID) {
+		fields = append(fields, subscriptionlineitem.FieldPriceUnitID)
+	}
+	if m.FieldCleared(subscriptionlineitem.FieldPriceUnit) {
+		fields = append(fields, subscriptionlineitem.FieldPriceUnit)
+	}
 	if m.FieldCleared(subscriptionlineitem.FieldDisplayName) {
 		fields = append(fields, subscriptionlineitem.FieldDisplayName)
 	}
@@ -33057,6 +33191,12 @@ func (m *SubscriptionLineItemMutation) ClearField(name string) error {
 		return nil
 	case subscriptionlineitem.FieldMeterDisplayName:
 		m.ClearMeterDisplayName()
+		return nil
+	case subscriptionlineitem.FieldPriceUnitID:
+		m.ClearPriceUnitID()
+		return nil
+	case subscriptionlineitem.FieldPriceUnit:
+		m.ClearPriceUnit()
 		return nil
 	case subscriptionlineitem.FieldDisplayName:
 		m.ClearDisplayName()
@@ -33125,6 +33265,12 @@ func (m *SubscriptionLineItemMutation) ResetField(name string) error {
 		return nil
 	case subscriptionlineitem.FieldMeterDisplayName:
 		m.ResetMeterDisplayName()
+		return nil
+	case subscriptionlineitem.FieldPriceUnitID:
+		m.ResetPriceUnitID()
+		return nil
+	case subscriptionlineitem.FieldPriceUnit:
+		m.ResetPriceUnit()
 		return nil
 	case subscriptionlineitem.FieldDisplayName:
 		m.ResetDisplayName()
