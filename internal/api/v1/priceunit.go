@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/priceunit"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
@@ -32,7 +33,7 @@ func NewPriceUnitHandler(service *service.PriceUnitService, log *logger.Logger) 
 // @Param body body dto.CreatePriceUnitRequest true "Price unit details"
 // @Success 201 {object} dto.PriceUnitResponse
 // @Failure 400 {object} errors.Error
-// @Router /v1/pricing/units [post]
+// @Router /prices/units [post]
 func (h *PriceUnitHandler) CreatePriceUnit(c *gin.Context) {
 	var req dto.CreatePriceUnitRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -64,13 +65,33 @@ func (h *PriceUnitHandler) CreatePriceUnit(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param status query string false "Filter by status"
+// @Param limit query int false "Limit number of results"
+// @Param offset query int false "Offset for pagination"
+// @Param sort query string false "Sort field"
+// @Param order query string false "Sort order (asc/desc)"
 // @Success 200 {object} dto.ListPriceUnitsResponse
 // @Failure 400 {object} errors.Error
-// @Router /v1/pricing/units [get]
+// @Router /prices/units [get]
 func (h *PriceUnitHandler) GetPriceUnits(c *gin.Context) {
-	filter := dto.PriceUnitFilter{
-		Status: types.Status(c.Query("status")),
+	var filter priceunit.PriceUnitFilter
+	if err := c.ShouldBindQuery(&filter); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid filter parameters").
+			Mark(ierr.ErrValidation))
+		return
 	}
+
+	if filter.GetLimit() == 0 {
+		filter.QueryFilter = types.NewDefaultQueryFilter()
+	}
+
+	// Debug logging to verify pagination
+	h.log.Info("PriceUnit filter applied",
+		"limit", filter.GetLimit(),
+		"offset", filter.GetOffset(),
+		"sort", filter.GetSort(),
+		"order", filter.GetOrder(),
+		"status", filter.Status)
 
 	response, err := h.service.List(c.Request.Context(), &filter)
 	if err != nil {
@@ -78,6 +99,13 @@ func (h *PriceUnitHandler) GetPriceUnits(c *gin.Context) {
 		c.Error(err)
 		return
 	}
+
+	// Debug logging for response
+	h.log.Info("PriceUnit response",
+		"items_count", len(response.Items),
+		"total", response.Pagination.Total,
+		"limit", response.Pagination.Limit,
+		"offset", response.Pagination.Offset)
 
 	c.JSON(http.StatusOK, response)
 }
@@ -93,7 +121,7 @@ func (h *PriceUnitHandler) GetPriceUnits(c *gin.Context) {
 // @Success 200 {object} dto.PriceUnitResponse
 // @Failure 400 {object} errors.Error
 // @Failure 404 {object} errors.Error
-// @Router /v1/pricing/units/{id} [put]
+// @Router /prices/units/{id} [put]
 func (h *PriceUnitHandler) UpdatePriceUnit(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -137,7 +165,7 @@ func (h *PriceUnitHandler) UpdatePriceUnit(c *gin.Context) {
 // @Success 200 {object} gin.H
 // @Failure 400 {object} errors.Error
 // @Failure 404 {object} errors.Error
-// @Router /v1/pricing/units/{id} [delete]
+// @Router /prices/units/{id} [delete]
 func (h *PriceUnitHandler) DeletePriceUnit(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -171,7 +199,17 @@ func (h *PriceUnitHandler) DeletePriceUnit(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Price unit archived successfully"})
 }
 
-// GetByID handles GET /v1/pricing/units/:id
+// @Summary Get a price unit by ID
+// @Description Get a price unit by ID
+// @Tags Price Units
+// @Accept json
+// @Produce json
+// @Param id path string true "Price unit ID"
+// @Success 200 {object} dto.PriceUnitResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /prices/units/{id} [get]
+// GetByID handles GET /prices/units/:id
 func (h *PriceUnitHandler) GetByID(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -204,7 +242,17 @@ func (h *PriceUnitHandler) GetByID(c *gin.Context) {
 	c.JSON(http.StatusOK, unit)
 }
 
-// GetByCode handles GET /v1/pricing/units/code/:code
+// @Summary Get a price unit by code
+// @Description Get a price unit by code
+// @Tags Price Units
+// @Accept json
+// @Produce json
+// @Param code path string true "Price unit code"
+// @Success 200 {object} dto.PriceUnitResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /prices/units/code/{code} [get]
+// GetByCode handles GET /prices/units/code/:code
 func (h *PriceUnitHandler) GetByCode(c *gin.Context) {
 	code := c.Param("code")
 	if code == "" {

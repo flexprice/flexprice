@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/flexprice/flexprice/internal/domain/price"
-	"github.com/flexprice/flexprice/internal/domain/priceunit"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
@@ -341,7 +340,7 @@ type CostBreakup struct {
 	FinalCost decimal.Decimal
 }
 
-// PriceConfigRequest is the request for creating a price with a price unit
+// CreatePriceWithUnitConfigRequest is the request for creating a price with a price unit
 type CreatePriceWithUnitConfigRequest struct {
 	PriceUnit          string                   `json:"price_unit" validate:"required,len=3"`
 	Amount             string                   `json:"amount"`
@@ -374,90 +373,4 @@ func (r *CreatePriceWithUnitConfigRequest) Validate() error {
 	r.Currency = strings.ToLower(r.Currency)
 	r.PriceUnit = strings.ToLower(r.PriceUnit)
 	return nil
-}
-
-// ToPrice now takes a priceUnit *price.PriceUnit as argument, which should be fetched in the service layer
-func (r *CreatePriceWithUnitConfigRequest) ToPrice(ctx context.Context, priceUnit *priceunit.PriceUnit) (*price.Price, error) {
-	if r.PriceUnit == "" || priceUnit == nil {
-		return nil, ierr.NewError("price_unit is required and must be valid").Mark(ierr.ErrValidation)
-	}
-	if r.Currency != priceUnit.BaseCurrency {
-		return nil, ierr.NewError("currency must match price unit's base currency").Mark(ierr.ErrValidation)
-	}
-
-	metadata := make(price.JSONBMetadata)
-	if r.Metadata != nil {
-		metadata = price.JSONBMetadata(r.Metadata)
-	}
-
-	var transformQuantity price.JSONBTransformQuantity
-	if r.TransformQuantity != nil {
-		transformQuantity = price.JSONBTransformQuantity(*r.TransformQuantity)
-	}
-
-	var tiers price.JSONBTiers
-	if r.Tiers != nil {
-		priceTiers := make([]price.PriceTier, len(r.Tiers))
-		for i, tier := range r.Tiers {
-			unitAmount, err := decimal.NewFromString(tier.UnitAmount)
-			if err != nil {
-				return nil, ierr.WithError(err).
-					WithHint("Unit amount must be a valid decimal number").
-					WithReportableDetails(map[string]interface{}{"unit_amount": tier.UnitAmount}).
-					Mark(ierr.ErrValidation)
-			}
-
-			var flatAmount *decimal.Decimal
-			if tier.FlatAmount != nil {
-				parsed, err := decimal.NewFromString(*tier.FlatAmount)
-				if err != nil {
-					return nil, ierr.WithError(err).
-						WithHint("Flat amount must be a valid decimal number").
-						WithReportableDetails(map[string]interface{}{"flat_amount": tier.FlatAmount}).
-						Mark(ierr.ErrValidation)
-				}
-				flatAmount = &parsed
-			}
-
-			priceTiers[i] = price.PriceTier{
-				UpTo:       tier.UpTo,
-				UnitAmount: unitAmount,
-				FlatAmount: flatAmount,
-			}
-		}
-		tiers = price.JSONBTiers(priceTiers)
-	}
-
-	// Note: This method is not used in the service layer
-	// The service layer handles conversion using repository methods
-	// Price unit amount calculation is done in the service layer
-
-	p := &price.Price{
-		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
-		Currency:           r.Currency,
-		PlanID:             r.PlanID,
-		Type:               r.Type,
-		BillingPeriod:      r.BillingPeriod,
-		BillingPeriodCount: r.BillingPeriodCount,
-		BillingModel:       r.BillingModel,
-		BillingCadence:     r.BillingCadence,
-		InvoiceCadence:     r.InvoiceCadence,
-		TrialPeriod:        r.TrialPeriod,
-		MeterID:            r.MeterID,
-		LookupKey:          r.LookupKey,
-		Description:        r.Description,
-		Metadata:           metadata,
-		TierMode:           r.TierMode,
-		Tiers:              tiers,
-		TransformQuantity:  transformQuantity,
-		EnvironmentID:      types.GetEnvironmentID(ctx),
-		BaseModel:          types.GetDefaultBaseModel(ctx),
-		// Price unit fields - these will be set by the service layer
-		PriceUnit:              priceUnit.Code,
-		PriceUnitAmount:        decimal.Zero, // Will be calculated by service
-		DisplayPriceUnitAmount: "",           // Will be calculated by service
-		ConversionRate:         priceUnit.ConversionRate,
-	}
-	p.DisplayAmount = p.GetDisplayAmount()
-	return p, nil
 }

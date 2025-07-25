@@ -130,18 +130,19 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			price.GET("/:id", handlers.Price.GetPrice)
 			price.PUT("/:id", handlers.Price.UpdatePrice)
 			price.DELETE("/:id", handlers.Price.DeletePrice)
-			price.POST("/unit", handlers.Price.CreatePriceWithUnitConfig)
+			price.POST("/config", handlers.Price.CreatePriceWithUnitConfig)
+
+			priceUnit := price.Group("/units")
+			{
+				priceUnit.POST("", handlers.PriceUnit.CreatePriceUnit)
+				priceUnit.GET("", handlers.PriceUnit.GetPriceUnits)
+				priceUnit.GET("/:id", handlers.PriceUnit.GetByID)
+				priceUnit.GET("/code/:code", handlers.PriceUnit.GetByCode)
+				priceUnit.PUT("/:id", handlers.PriceUnit.UpdatePriceUnit)
+				priceUnit.DELETE("/:id", handlers.PriceUnit.DeletePriceUnit)
+			}
 		}
 
-		priceUnit := v1Private.Group("/pricing/units")
-		{
-			priceUnit.POST("", handlers.PriceUnit.CreatePriceUnit)
-			priceUnit.GET("", handlers.PriceUnit.GetPriceUnits)
-			priceUnit.GET("/:id", handlers.PriceUnit.GetByID)
-			priceUnit.GET("/code/:code", handlers.PriceUnit.GetByCode)
-			priceUnit.PUT("/:id", handlers.PriceUnit.UpdatePriceUnit)
-			priceUnit.DELETE("/:id", handlers.PriceUnit.DeletePriceUnit)
-		}
 		customer := v1Private.Group("/customers")
 		{
 

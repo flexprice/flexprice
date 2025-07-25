@@ -40,8 +40,3 @@ type PriceUnitResponse struct {
 
 // ListPricingUnitsResponse represents the paginated response for listing pricing units
 type ListPriceUnitsResponse = types.ListResponse[*PriceUnitResponse]
-
-// PricingUnitFilter represents the filter options for listing pricing units
-type PriceUnitFilter struct {
-	Status types.Status `json:"status,omitempty"`
-}

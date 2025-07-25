@@ -117,16 +117,28 @@ func (s *PriceUnitService) Create(ctx context.Context, req *dto.CreatePriceUnitR
 }
 
 // List returns a paginated list of pricing units
-func (s *PriceUnitService) List(ctx context.Context, filter *dto.PriceUnitFilter) (*dto.ListPriceUnitsResponse, error) {
-	// Convert DTO filter to domain filter
-	domainFilter := &domainPriceUnit.PriceUnitFilter{
-		Status:        filter.Status,
-		TenantID:      types.GetTenantID(ctx),
-		EnvironmentID: types.GetEnvironmentID(ctx),
+func (s *PriceUnitService) List(ctx context.Context, filter *domainPriceUnit.PriceUnitFilter) (*dto.ListPriceUnitsResponse, error) {
+	// Set tenant and environment from context if not provided
+	if filter.TenantID == "" {
+		filter.TenantID = types.GetTenantID(ctx)
+	}
+	if filter.EnvironmentID == "" {
+		filter.EnvironmentID = types.GetEnvironmentID(ctx)
+	}
+
+	// Validate the filter
+	if err := filter.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Get total count for pagination
+	totalCount, err := s.repo.Count(ctx, filter)
+	if err != nil {
+		return nil, err
 	}
 
 	// Get paginated results
-	units, err := s.repo.List(ctx, domainFilter)
+	units, err := s.repo.List(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -134,12 +146,15 @@ func (s *PriceUnitService) List(ctx context.Context, filter *dto.PriceUnitFilter
 	// Convert to response
 	response := &dto.ListPriceUnitsResponse{
 		Items: make([]*dto.PriceUnitResponse, len(units)),
+		Pagination: types.PaginationResponse{
+			Total:  totalCount,
+			Limit:  filter.GetLimit(),
+			Offset: filter.GetOffset(),
+		},
 	}
 
-	response.Items = make([]*dto.PriceUnitResponse, len(units))
 	for i, unit := range units {
 		response.Items[i] = s.toResponse(unit)
-
 	}
 
 	return response, nil

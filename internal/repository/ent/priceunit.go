@@ -100,6 +100,54 @@ func (r *priceUnitRepository) List(ctx context.Context, filter *domainPriceUnit.
 		query = query.Where(priceunit.EnvironmentIDEQ(filter.EnvironmentID))
 	}
 
+	// Apply pagination
+	if filter.QueryFilter != nil {
+		if filter.QueryFilter.Offset != nil {
+			query = query.Offset(*filter.QueryFilter.Offset)
+		}
+		if filter.QueryFilter.Limit != nil {
+			query = query.Limit(*filter.QueryFilter.Limit)
+		}
+		// Apply sorting
+		if filter.QueryFilter.Sort != nil && filter.QueryFilter.Order != nil {
+			switch *filter.QueryFilter.Sort {
+			case "created_at":
+				if *filter.QueryFilter.Order == "desc" {
+					query = query.Order(ent.Desc(priceunit.FieldCreatedAt))
+				} else {
+					query = query.Order(ent.Asc(priceunit.FieldCreatedAt))
+				}
+			case "updated_at":
+				if *filter.QueryFilter.Order == "desc" {
+					query = query.Order(ent.Desc(priceunit.FieldUpdatedAt))
+				} else {
+					query = query.Order(ent.Asc(priceunit.FieldUpdatedAt))
+				}
+			case "name":
+				if *filter.QueryFilter.Order == "desc" {
+					query = query.Order(ent.Desc(priceunit.FieldName))
+				} else {
+					query = query.Order(ent.Asc(priceunit.FieldName))
+				}
+			case "code":
+				if *filter.QueryFilter.Order == "desc" {
+					query = query.Order(ent.Desc(priceunit.FieldCode))
+				} else {
+					query = query.Order(ent.Asc(priceunit.FieldCode))
+				}
+			default:
+				// Default sorting by created_at desc
+				query = query.Order(ent.Desc(priceunit.FieldCreatedAt))
+			}
+		} else {
+			// Default sorting by created_at desc
+			query = query.Order(ent.Desc(priceunit.FieldCreatedAt))
+		}
+	} else {
+		// Default sorting by created_at desc
+		query = query.Order(ent.Desc(priceunit.FieldCreatedAt))
+	}
+
 	units, err := query.All(ctx)
 	if err != nil {
 		return nil, ierr.WithError(err).

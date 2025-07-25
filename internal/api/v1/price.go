@@ -60,7 +60,7 @@ func (h *PriceHandler) CreatePrice(c *gin.Context) {
 // @Success 201 {object} dto.PriceResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
-// @Router /prices/unit [post]
+// @Router /prices/config [post]
 func (h *PriceHandler) CreatePriceWithUnitConfig(c *gin.Context) {
 	var req dto.CreatePriceWithUnitConfigRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

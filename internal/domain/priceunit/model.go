@@ -9,13 +9,6 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// PriceUnitFilter represents filter criteria for listing pricing units
-type PriceUnitFilter struct {
-	Status        types.Status
-	TenantID      string
-	EnvironmentID string
-}
-
 // PriceUnit represents a unit of pricing in the domain
 type PriceUnit struct {
 	ID             string
@@ -163,4 +156,95 @@ func FromEntList(list []*ent.PriceUnit) []*PriceUnit {
 		units[i] = FromEnt(item)
 	}
 	return units
+}
+
+// PriceUnitFilter represents filter criteria for listing pricing units
+type PriceUnitFilter struct {
+	// QueryFilter contains pagination and basic query parameters
+	QueryFilter *types.QueryFilter
+
+	// TimeRangeFilter allows filtering by time periods
+	TimeRangeFilter *types.TimeRangeFilter
+
+	// Status filters by price unit status
+	Status types.Status `json:"status,omitempty" form:"status"`
+
+	// TenantID filters by specific tenant ID
+	TenantID string `json:"tenant_id,omitempty" form:"tenant_id"`
+
+	// EnvironmentID filters by specific environment ID
+	EnvironmentID string `json:"environment_id,omitempty" form:"environment_id"`
+}
+
+// GetLimit implements BaseFilter interface
+func (f *PriceUnitFilter) GetLimit() int {
+	if f.QueryFilter == nil {
+		return types.NewDefaultQueryFilter().GetLimit()
+	}
+	return f.QueryFilter.GetLimit()
+}
+
+// GetOffset implements BaseFilter interface
+func (f *PriceUnitFilter) GetOffset() int {
+	if f.QueryFilter == nil {
+		return types.NewDefaultQueryFilter().GetOffset()
+	}
+	return f.QueryFilter.GetOffset()
+}
+
+// GetSort implements BaseFilter interface
+func (f *PriceUnitFilter) GetSort() string {
+	if f.QueryFilter == nil {
+		return types.NewDefaultQueryFilter().GetSort()
+	}
+	return f.QueryFilter.GetSort()
+}
+
+// GetOrder implements BaseFilter interface
+func (f *PriceUnitFilter) GetOrder() string {
+	if f.QueryFilter == nil {
+		return types.NewDefaultQueryFilter().GetOrder()
+	}
+	return f.QueryFilter.GetOrder()
+}
+
+// GetStatus implements BaseFilter interface
+func (f *PriceUnitFilter) GetStatus() string {
+	if f.QueryFilter == nil {
+		return types.NewDefaultQueryFilter().GetStatus()
+	}
+	return f.QueryFilter.GetStatus()
+}
+
+// GetExpand implements BaseFilter interface
+func (f *PriceUnitFilter) GetExpand() types.Expand {
+	if f.QueryFilter == nil {
+		return types.NewDefaultQueryFilter().GetExpand()
+	}
+	return f.QueryFilter.GetExpand()
+}
+
+// IsUnlimited returns true if this is an unlimited query
+func (f *PriceUnitFilter) IsUnlimited() bool {
+	if f.QueryFilter == nil {
+		return types.NewDefaultQueryFilter().IsUnlimited()
+	}
+	return f.QueryFilter.IsUnlimited()
+}
+
+// Validate validates the filter
+func (f *PriceUnitFilter) Validate() error {
+	if f.QueryFilter != nil {
+		if err := f.QueryFilter.Validate(); err != nil {
+			return err
+		}
+	}
+
+	if f.TimeRangeFilter != nil {
+		if err := f.TimeRangeFilter.Validate(); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
