@@ -271,6 +271,11 @@ func (r *ProcessedEventRepository) GetProcessedEvents(ctx context.Context, param
 		}
 	}
 
+	r.logger.Infow("query", "query", query)
+	r.logger.Infow("args", "args", args)
+	r.logger.Infow("count query", "count_query", countQuery)
+	r.logger.Infow("count args", "count_args", countArgs)
+
 	// Execute count query if requested
 	var totalCount uint64 = 0
 	if params.CountTotal {

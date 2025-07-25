@@ -338,6 +338,8 @@ func startServer(
 	case types.ModeAPI:
 		startAPIServer(lc, r, cfg, log)
 		startMessageRouter(lc, router, webhookService, onboardingService, log)
+		encSvc, _ := security.NewEncryptionService(cfg, log)
+		startTemporalWorker(lc, temporalClient, &cfg.Temporal, processedEventRepo, customerMappingRepo, stripeSyncBatchRepo, stripeTenantConfigRepo, meterProviderMappingRepo, stripeClient, encSvc, log)
 
 	case types.ModeTemporalWorker:
 		encSvc, _ := security.NewEncryptionService(cfg, log)

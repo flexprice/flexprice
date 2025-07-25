@@ -95,6 +95,14 @@ func (a *StripeSyncActivities) AggregateEventsActivity(ctx context.Context, inpu
 		Limit:      input.BatchSize,
 		CustomerID: input.CustomerID,
 	}
+	a.logger.Infow("customer id", "customer_id", input.CustomerID)
+	a.logger.Infow("window start", "window_start", input.WindowStart)
+	a.logger.Infow("window end", "window_end", input.WindowEnd)
+	a.logger.Infow("batch size", "batch_size", input.BatchSize)
+	a.logger.Infow("limit", "limit", params.Limit)
+	a.logger.Infow("customer id", "customer_id", params.CustomerID)
+	a.logger.Infow("start time", "start_time", params.StartTime)
+	a.logger.Infow("end time", "end_time", params.EndTime)
 
 	processedEvents, _, err := a.processedEventRepo.GetProcessedEvents(ctx, params)
 	if err != nil {
