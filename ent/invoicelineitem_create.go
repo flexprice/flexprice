@@ -222,6 +222,48 @@ func (ilic *InvoiceLineItemCreate) SetNillableMeterDisplayName(s *string) *Invoi
 	return ilic
 }
 
+// SetPriceUnitID sets the "price_unit_id" field.
+func (ilic *InvoiceLineItemCreate) SetPriceUnitID(s string) *InvoiceLineItemCreate {
+	ilic.mutation.SetPriceUnitID(s)
+	return ilic
+}
+
+// SetNillablePriceUnitID sets the "price_unit_id" field if the given value is not nil.
+func (ilic *InvoiceLineItemCreate) SetNillablePriceUnitID(s *string) *InvoiceLineItemCreate {
+	if s != nil {
+		ilic.SetPriceUnitID(*s)
+	}
+	return ilic
+}
+
+// SetPriceUnit sets the "price_unit" field.
+func (ilic *InvoiceLineItemCreate) SetPriceUnit(s string) *InvoiceLineItemCreate {
+	ilic.mutation.SetPriceUnit(s)
+	return ilic
+}
+
+// SetNillablePriceUnit sets the "price_unit" field if the given value is not nil.
+func (ilic *InvoiceLineItemCreate) SetNillablePriceUnit(s *string) *InvoiceLineItemCreate {
+	if s != nil {
+		ilic.SetPriceUnit(*s)
+	}
+	return ilic
+}
+
+// SetPriceUnitAmount sets the "price_unit_amount" field.
+func (ilic *InvoiceLineItemCreate) SetPriceUnitAmount(d decimal.Decimal) *InvoiceLineItemCreate {
+	ilic.mutation.SetPriceUnitAmount(d)
+	return ilic
+}
+
+// SetNillablePriceUnitAmount sets the "price_unit_amount" field if the given value is not nil.
+func (ilic *InvoiceLineItemCreate) SetNillablePriceUnitAmount(d *decimal.Decimal) *InvoiceLineItemCreate {
+	if d != nil {
+		ilic.SetPriceUnitAmount(*d)
+	}
+	return ilic
+}
+
 // SetDisplayName sets the "display_name" field.
 func (ilic *InvoiceLineItemCreate) SetDisplayName(s string) *InvoiceLineItemCreate {
 	ilic.mutation.SetDisplayName(s)
@@ -522,6 +564,18 @@ func (ilic *InvoiceLineItemCreate) createSpec() (*InvoiceLineItem, *sqlgraph.Cre
 	if value, ok := ilic.mutation.MeterDisplayName(); ok {
 		_spec.SetField(invoicelineitem.FieldMeterDisplayName, field.TypeString, value)
 		_node.MeterDisplayName = &value
+	}
+	if value, ok := ilic.mutation.PriceUnitID(); ok {
+		_spec.SetField(invoicelineitem.FieldPriceUnitID, field.TypeString, value)
+		_node.PriceUnitID = &value
+	}
+	if value, ok := ilic.mutation.PriceUnit(); ok {
+		_spec.SetField(invoicelineitem.FieldPriceUnit, field.TypeString, value)
+		_node.PriceUnit = &value
+	}
+	if value, ok := ilic.mutation.PriceUnitAmount(); ok {
+		_spec.SetField(invoicelineitem.FieldPriceUnitAmount, field.TypeOther, value)
+		_node.PriceUnitAmount = &value
 	}
 	if value, ok := ilic.mutation.DisplayName(); ok {
 		_spec.SetField(invoicelineitem.FieldDisplayName, field.TypeString, value)

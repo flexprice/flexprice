@@ -158,7 +158,7 @@ func (s *planService) GetPlan(ctx context.Context, id string) (*dto.PlanResponse
 		return nil, err
 	}
 
-	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.Logger)
+	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.PriceUnitRepo, s.Logger)
 	entitlementService := NewEntitlementService(s.ServiceParams)
 
 	pricesResponse, err := priceService.GetPricesByPlanID(ctx, plan.ID)
@@ -239,7 +239,7 @@ func (s *planService) GetPlans(ctx context.Context, filter *types.PlanFilter) (*
 	entitlementsByPlanID := make(map[string][]*dto.EntitlementResponse)
 	creditGrantsByPlanID := make(map[string][]*dto.CreditGrantResponse)
 
-	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.Logger)
+	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.PriceUnitRepo, s.Logger)
 	entitlementService := NewEntitlementService(s.ServiceParams)
 
 	// If prices or entitlements expansion is requested, fetch them in bulk
@@ -749,6 +749,8 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*SyncPlanP
 				BillingPeriod:   pr.BillingPeriod,
 				InvoiceCadence:  pr.InvoiceCadence,
 				TrialPeriod:     pr.TrialPeriod,
+				PriceUnitID:     pr.PriceUnitID,
+				PriceUnit:       pr.PriceUnit,
 				StartDate:       sub.StartDate, // Use subscription's start date
 				Metadata:        map[string]string{"added_by": "plan_sync_api"},
 				EnvironmentID:   environmentID,

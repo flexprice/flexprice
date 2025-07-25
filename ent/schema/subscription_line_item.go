@@ -72,6 +72,18 @@ func (SubscriptionLineItem) Fields() []ent.Field {
 		field.String("meter_display_name").
 			Optional().
 			Nillable(),
+		field.String("price_unit_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable(),
+		field.String("price_unit").
+			SchemaType(map[string]string{
+				"postgres": "varchar(3)",
+			}).
+			Optional().
+			Nillable(),
 		field.String("display_name").
 			Optional().
 			Nillable(),

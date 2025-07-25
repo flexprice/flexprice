@@ -36,8 +36,8 @@ type Handlers struct {
 	Secret            *v1.SecretHandler
 	CostSheet         *v1.CostSheetHandler
 	CreditNote        *v1.CreditNoteHandler
-
-	Webhook *v1.WebhookHandler
+	PriceUnit         *v1.PriceUnitHandler
+	Webhook           *v1.WebhookHandler
 	// Portal handlers
 	Onboarding *v1.OnboardingHandler
 	// Cron jobs : TODO: move crons out of API based architecture
@@ -130,6 +130,17 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			price.GET("/:id", handlers.Price.GetPrice)
 			price.PUT("/:id", handlers.Price.UpdatePrice)
 			price.DELETE("/:id", handlers.Price.DeletePrice)
+			price.POST("/config", handlers.Price.CreatePriceWithUnitConfig)
+
+			priceUnit := price.Group("/units")
+			{
+				priceUnit.POST("", handlers.PriceUnit.CreatePriceUnit)
+				priceUnit.GET("", handlers.PriceUnit.GetPriceUnits)
+				priceUnit.GET("/:id", handlers.PriceUnit.GetByID)
+				priceUnit.GET("/code/:code", handlers.PriceUnit.GetByCode)
+				priceUnit.PUT("/:id", handlers.PriceUnit.UpdatePriceUnit)
+				priceUnit.DELETE("/:id", handlers.PriceUnit.DeletePriceUnit)
+			}
 		}
 
 		customer := v1Private.Group("/customers")

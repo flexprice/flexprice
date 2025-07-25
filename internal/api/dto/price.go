@@ -339,3 +339,38 @@ type CostBreakup struct {
 	// FinalCost is the total cost for the quantity
 	FinalCost decimal.Decimal
 }
+
+// CreatePriceWithUnitConfigRequest is the request for creating a price with a price unit
+type CreatePriceWithUnitConfigRequest struct {
+	PriceUnit          string                   `json:"price_unit" validate:"required,len=3"`
+	Amount             string                   `json:"amount"`
+	Currency           string                   `json:"currency" validate:"required,len=3"`
+	PlanID             string                   `json:"plan_id,omitempty"`
+	Type               types.PriceType          `json:"type" validate:"required"`
+	BillingPeriod      types.BillingPeriod      `json:"billing_period" validate:"required"`
+	BillingPeriodCount int                      `json:"billing_period_count" validate:"required,min=1"`
+	BillingModel       types.BillingModel       `json:"billing_model" validate:"required"`
+	BillingCadence     types.BillingCadence     `json:"billing_cadence" validate:"required"`
+	MeterID            string                   `json:"meter_id,omitempty"`
+	FilterValues       map[string][]string      `json:"filter_values,omitempty"`
+	LookupKey          string                   `json:"lookup_key,omitempty"`
+	InvoiceCadence     types.InvoiceCadence     `json:"invoice_cadence" validate:"required"`
+	TrialPeriod        int                      `json:"trial_period"`
+	Description        string                   `json:"description,omitempty"`
+	Metadata           map[string]string        `json:"metadata,omitempty"`
+	TierMode           types.BillingTier        `json:"tier_mode,omitempty"`
+	Tiers              []CreatePriceTier        `json:"tiers,omitempty"`
+	TransformQuantity  *price.TransformQuantity `json:"transform_quantity,omitempty"`
+}
+
+func (r *CreatePriceWithUnitConfigRequest) Validate() error {
+	// Validate required fields
+	err := validator.ValidateRequest(r)
+	if err != nil {
+		return err
+	}
+	// Ensure currency and price unit are lowercase
+	r.Currency = strings.ToLower(r.Currency)
+	r.PriceUnit = strings.ToLower(r.PriceUnit)
+	return nil
+}

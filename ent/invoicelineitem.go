@@ -52,6 +52,12 @@ type InvoiceLineItem struct {
 	MeterID *string `json:"meter_id,omitempty"`
 	// MeterDisplayName holds the value of the "meter_display_name" field.
 	MeterDisplayName *string `json:"meter_display_name,omitempty"`
+	// PriceUnitID holds the value of the "price_unit_id" field.
+	PriceUnitID *string `json:"price_unit_id,omitempty"`
+	// PriceUnit holds the value of the "price_unit" field.
+	PriceUnit *string `json:"price_unit,omitempty"`
+	// PriceUnitAmount holds the value of the "price_unit_amount" field.
+	PriceUnitAmount *decimal.Decimal `json:"price_unit_amount,omitempty"`
 	// DisplayName holds the value of the "display_name" field.
 	DisplayName *string `json:"display_name,omitempty"`
 	// Amount holds the value of the "amount" field.
@@ -97,11 +103,13 @@ func (*InvoiceLineItem) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case invoicelineitem.FieldPriceUnitAmount:
+			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case invoicelineitem.FieldMetadata:
 			values[i] = new([]byte)
 		case invoicelineitem.FieldAmount, invoicelineitem.FieldQuantity:
 			values[i] = new(decimal.Decimal)
-		case invoicelineitem.FieldID, invoicelineitem.FieldTenantID, invoicelineitem.FieldStatus, invoicelineitem.FieldCreatedBy, invoicelineitem.FieldUpdatedBy, invoicelineitem.FieldEnvironmentID, invoicelineitem.FieldInvoiceID, invoicelineitem.FieldCustomerID, invoicelineitem.FieldSubscriptionID, invoicelineitem.FieldPlanID, invoicelineitem.FieldPlanDisplayName, invoicelineitem.FieldPriceID, invoicelineitem.FieldPriceType, invoicelineitem.FieldMeterID, invoicelineitem.FieldMeterDisplayName, invoicelineitem.FieldDisplayName, invoicelineitem.FieldCurrency:
+		case invoicelineitem.FieldID, invoicelineitem.FieldTenantID, invoicelineitem.FieldStatus, invoicelineitem.FieldCreatedBy, invoicelineitem.FieldUpdatedBy, invoicelineitem.FieldEnvironmentID, invoicelineitem.FieldInvoiceID, invoicelineitem.FieldCustomerID, invoicelineitem.FieldSubscriptionID, invoicelineitem.FieldPlanID, invoicelineitem.FieldPlanDisplayName, invoicelineitem.FieldPriceID, invoicelineitem.FieldPriceType, invoicelineitem.FieldMeterID, invoicelineitem.FieldMeterDisplayName, invoicelineitem.FieldPriceUnitID, invoicelineitem.FieldPriceUnit, invoicelineitem.FieldDisplayName, invoicelineitem.FieldCurrency:
 			values[i] = new(sql.NullString)
 		case invoicelineitem.FieldCreatedAt, invoicelineitem.FieldUpdatedAt, invoicelineitem.FieldPeriodStart, invoicelineitem.FieldPeriodEnd:
 			values[i] = new(sql.NullTime)
@@ -228,6 +236,27 @@ func (ili *InvoiceLineItem) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				ili.MeterDisplayName = new(string)
 				*ili.MeterDisplayName = value.String
+			}
+		case invoicelineitem.FieldPriceUnitID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field price_unit_id", values[i])
+			} else if value.Valid {
+				ili.PriceUnitID = new(string)
+				*ili.PriceUnitID = value.String
+			}
+		case invoicelineitem.FieldPriceUnit:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field price_unit", values[i])
+			} else if value.Valid {
+				ili.PriceUnit = new(string)
+				*ili.PriceUnit = value.String
+			}
+		case invoicelineitem.FieldPriceUnitAmount:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field price_unit_amount", values[i])
+			} else if value.Valid {
+				ili.PriceUnitAmount = new(decimal.Decimal)
+				*ili.PriceUnitAmount = *value.S.(*decimal.Decimal)
 			}
 		case invoicelineitem.FieldDisplayName:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -377,6 +406,21 @@ func (ili *InvoiceLineItem) String() string {
 	if v := ili.MeterDisplayName; v != nil {
 		builder.WriteString("meter_display_name=")
 		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := ili.PriceUnitID; v != nil {
+		builder.WriteString("price_unit_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := ili.PriceUnit; v != nil {
+		builder.WriteString("price_unit=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := ili.PriceUnitAmount; v != nil {
+		builder.WriteString("price_unit_amount=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
 	if v := ili.DisplayName; v != nil {

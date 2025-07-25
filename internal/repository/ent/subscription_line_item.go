@@ -49,6 +49,8 @@ func (r *subscriptionLineItemRepository) Create(ctx context.Context, item *subsc
 		SetNillablePriceType(types.ToNillableString(string(item.PriceType))).
 		SetNillableMeterID(types.ToNillableString(item.MeterID)).
 		SetNillableMeterDisplayName(types.ToNillableString(item.MeterDisplayName)).
+		SetNillablePriceUnitID(types.ToNillableString(item.PriceUnitID)).
+		SetNillablePriceUnit(types.ToNillableString(item.PriceUnit)).
 		SetNillableDisplayName(types.ToNillableString(item.DisplayName)).
 		SetQuantity(item.Quantity).
 		SetCurrency(item.Currency).
@@ -144,6 +146,8 @@ func (r *subscriptionLineItemRepository) Update(ctx context.Context, item *subsc
 		SetNillablePriceType(types.ToNillableString(string(item.PriceType))).
 		SetNillableMeterID(types.ToNillableString(item.MeterID)).
 		SetNillableMeterDisplayName(types.ToNillableString(item.MeterDisplayName)).
+		SetNillablePriceUnitID(types.ToNillableString(item.PriceUnitID)).
+		SetNillablePriceUnit(types.ToNillableString(item.PriceUnit)).
 		SetNillableDisplayName(types.ToNillableString(item.DisplayName)).
 		SetQuantity(item.Quantity).
 		SetCurrency(item.Currency).
@@ -239,6 +243,8 @@ func (r *subscriptionLineItemRepository) CreateBulk(ctx context.Context, items [
 			SetNillablePriceType(types.ToNillableString(string(item.PriceType))).
 			SetNillableMeterID(types.ToNillableString(item.MeterID)).
 			SetNillableMeterDisplayName(types.ToNillableString(item.MeterDisplayName)).
+			SetNillablePriceUnitID(types.ToNillableString(item.PriceUnitID)).
+			SetNillablePriceUnit(types.ToNillableString(item.PriceUnit)).
 			SetNillableDisplayName(types.ToNillableString(item.DisplayName)).
 			SetQuantity(item.Quantity).
 			SetCurrency(item.Currency).

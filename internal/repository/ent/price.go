@@ -57,7 +57,7 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 	}
 
 	// Create the price using the standard Ent API
-	price, err := client.Price.Create().
+	priceBuilder := client.Price.Create().
 		SetID(p.ID).
 		SetTenantID(p.TenantID).
 		SetAmount(p.Amount.InexactFloat64()).
@@ -84,7 +84,15 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 		SetCreatedBy(p.CreatedBy).
 		SetUpdatedBy(p.UpdatedBy).
 		SetEnvironmentID(p.EnvironmentID).
-		Save(ctx)
+		// Price unit fields
+		SetNillablePriceUnitID(lo.ToPtr(p.PriceUnitID)).
+		SetNillablePriceUnit(lo.ToPtr(p.PriceUnit)).
+		SetNillablePriceUnitAmount(lo.ToPtr(p.PriceUnitAmount.InexactFloat64())).
+		SetNillableDisplayPriceUnitAmount(lo.ToPtr(p.DisplayPriceUnitAmount))
+
+	priceBuilder.SetConversionRate(p.ConversionRate.InexactFloat64())
+
+	price, err := priceBuilder.Save(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
