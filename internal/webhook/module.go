@@ -30,6 +30,9 @@ var Module = fx.Options(
 		// Handler for processing webhook events
 		handler.NewHandler,
 
+		// Stripe webhook handler
+		handler.NewStripeWebhookHandler,
+
 		// Payload builder factory and services
 		providePayloadBuilderFactory,
 

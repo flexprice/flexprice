@@ -579,6 +579,19 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "enum": [
+                            "PLAN",
+                            "SUBSCRIPTION"
+                        ],
+                        "type": "string",
+                        "x-enum-varnames": [
+                            "CreditGrantScopePlan",
+                            "CreditGrantScopeSubscription"
+                        ],
+                        "name": "scope",
+                        "in": "query"
+                    },
+                    {
                         "type": "string",
                         "name": "sort",
                         "in": "query"
@@ -5410,6 +5423,696 @@ const docTemplate = `{
                 }
             }
         },
+        "/stripe/batches/retry": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Retry failed Stripe sync batches by batch IDs, entity, or meter",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "stripe-sync"
+                ],
+                "summary": "Retry failed Stripe sync batches",
+                "parameters": [
+                    {
+                        "description": "Retry failed batches request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.RetryFailedBatchesRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/service.RetryFailedBatchesResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/stripe/config": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get the Stripe integration configuration for the current tenant and environment",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "stripe-config"
+                ],
+                "summary": "Get Stripe configuration",
+                "responses": {
+                    "200": {
+                        "description": "Stripe configuration retrieved successfully",
+                        "schema": {
+                            "$ref": "#/definitions/dto.StripeConfigResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Configuration not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Create or update the Stripe integration configuration for the current tenant and environment",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "stripe-config"
+                ],
+                "summary": "Create or update Stripe configuration",
+                "parameters": [
+                    {
+                        "description": "Stripe configuration request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CreateOrUpdateStripeConfigRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Configuration updated successfully",
+                        "schema": {
+                            "$ref": "#/definitions/dto.StripeConfigResponse"
+                        }
+                    },
+                    "201": {
+                        "description": "Configuration created successfully",
+                        "schema": {
+                            "$ref": "#/definitions/dto.StripeConfigResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - invalid payload",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Delete the Stripe integration configuration for the current tenant and environment",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "stripe-config"
+                ],
+                "summary": "Delete Stripe configuration",
+                "responses": {
+                    "204": {
+                        "description": "Configuration deleted successfully"
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Configuration not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/stripe/config/history": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get the change history for Stripe configuration (for audit purposes)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "stripe-config"
+                ],
+                "summary": "List Stripe configuration history",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 50,
+                        "description": "Number of records to return",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 0,
+                        "description": "Number of records to skip",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Configuration history retrieved",
+                        "schema": {
+                            "$ref": "#/definitions/dto.StripeConfigHistoryResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/stripe/config/status": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get a summary of the Stripe integration configuration status including validation and health",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "stripe-config"
+                ],
+                "summary": "Get Stripe configuration status",
+                "responses": {
+                    "200": {
+                        "description": "Configuration status retrieved",
+                        "schema": {
+                            "$ref": "#/definitions/dto.StripeConfigStatusResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/stripe/config/test": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Test the Stripe API connection for the current tenant and environment configuration",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "stripe-config"
+                ],
+                "summary": "Test Stripe connection",
+                "responses": {
+                    "200": {
+                        "description": "Connection test completed",
+                        "schema": {
+                            "$ref": "#/definitions/dto.StripeConnectionTestResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Configuration not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/stripe/meter-mappings": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Map a FlexPrice meter to a provider-specific meter (e.g. Stripe).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "stripe-meter-mapping"
+                ],
+                "summary": "Create Stripe meter mapping",
+                "parameters": [
+                    {
+                        "description": "Meter mapping request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CreateMeterMappingRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/dto.MeterMappingResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/stripe/meter-mappings/{meter_id}": {
+            "put": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update an existing meter mapping.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "stripe-meter-mapping"
+                ],
+                "summary": "Update Stripe meter mapping",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "FlexPrice meter ID",
+                        "name": "meter_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Provider type (default: stripe)",
+                        "name": "provider_type",
+                        "in": "query"
+                    },
+                    {
+                        "description": "Update request payload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.UpdateMeterMappingRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.MeterMappingResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/stripe/sync/batches": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "List all Stripe sync batches with optional filters",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "stripe-sync"
+                ],
+                "summary": "List Stripe sync batches",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/service.ListStripeSyncBatchesResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/stripe/sync/batches/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get details of a specific Stripe sync batch",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "stripe-sync"
+                ],
+                "summary": "Get Stripe sync batch by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Batch ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/service.StripeSyncBatchResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/stripe/sync/manual": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Manually trigger a Stripe sync for a specific entity and time range",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "stripe-sync"
+                ],
+                "summary": "Trigger manual Stripe sync",
+                "parameters": [
+                    {
+                        "description": "Manual sync request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.ManualSyncRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "$ref": "#/definitions/service.ManualSyncResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/stripe/sync/status": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get the current status and metrics of Stripe sync batches",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "stripe-sync"
+                ],
+                "summary": "Get Stripe sync status",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/service.StripeSyncStatusResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/subscriptions": {
             "get": {
                 "security": [
@@ -7133,6 +7836,95 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/webhooks/stripe/test": {
+            "get": {
+                "description": "Test endpoint to validate webhook configuration and connectivity",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "webhooks"
+                ],
+                "summary": "Test Stripe webhook endpoint",
+                "responses": {
+                    "200": {
+                        "description": "Test successful",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/webhooks/stripe/{tenant_id}/{environment_id}": {
+            "post": {
+                "description": "Receives and processes Stripe webhook events, specifically customer.created events",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "webhooks"
+                ],
+                "summary": "Receive Stripe webhook",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Stripe webhook signature for verification",
+                        "name": "Stripe-Signature",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "Stripe webhook event payload",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Webhook processed successfully",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.StripeWebhookResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - invalid payload or signature",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.StripeWebhookResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized - invalid signature",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.StripeWebhookResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - webhook not configured",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.StripeWebhookResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.StripeWebhookResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -7526,7 +8318,6 @@ const docTemplate = `{
             "required": [
                 "cadence",
                 "credits",
-                "currency",
                 "name",
                 "scope"
             ],
@@ -7536,9 +8327,6 @@ const docTemplate = `{
                 },
                 "credits": {
                     "type": "number"
-                },
-                "currency": {
-                    "type": "string"
                 },
                 "expiration_duration": {
                     "type": "integer"
@@ -7641,6 +8429,11 @@ const docTemplate = `{
                             "$ref": "#/definitions/types.Metadata"
                         }
                     ]
+                },
+                "process_credit_note": {
+                    "description": "process_credit_note is a flag to process the credit note after creation",
+                    "type": "boolean",
+                    "default": true
                 },
                 "reason": {
                     "description": "reason specifies the reason for creating this credit note (duplicate, fraudulent, order_change, product_unsatisfactory)",
@@ -7984,6 +8777,33 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.CreateMeterMappingRequest": {
+            "type": "object",
+            "required": [
+                "meter_id",
+                "provider_meter_id",
+                "provider_type"
+            ],
+            "properties": {
+                "configuration": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "meter_id": {
+                    "type": "string"
+                },
+                "provider_meter_id": {
+                    "type": "string"
+                },
+                "provider_type": {
+                    "description": "enum in service layer",
+                    "type": "string"
+                },
+                "sync_enabled": {
+                    "type": "boolean"
+                }
+            }
+        },
         "dto.CreateMeterRequest": {
             "type": "object",
             "required": [
@@ -8012,6 +8832,32 @@ const docTemplate = `{
                 },
                 "reset_usage": {
                     "$ref": "#/definitions/types.ResetUsage"
+                }
+            }
+        },
+        "dto.CreateOrUpdateStripeConfigRequest": {
+            "type": "object",
+            "required": [
+                "api_key"
+            ],
+            "properties": {
+                "aggregation_window_minutes": {
+                    "type": "integer",
+                    "maximum": 60,
+                    "minimum": 5
+                },
+                "api_key": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "sync_enabled": {
+                    "type": "boolean"
+                },
+                "webhook_config": {
+                    "$ref": "#/definitions/dto.StripeWebhookConfigDTO"
                 }
             }
         },
@@ -8508,9 +9354,6 @@ const docTemplate = `{
                 },
                 "credits": {
                     "type": "number"
-                },
-                "currency": {
-                    "type": "string"
                 },
                 "environment_id": {
                     "type": "string"
@@ -9426,7 +10269,7 @@ const docTemplate = `{
                     }
                 },
                 "multiplier": {
-                    "type": "integer"
+                    "type": "number"
                 },
                 "property_name": {
                     "description": "will be empty/ignored in case of COUNT",
@@ -10044,6 +10887,73 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.ManualSyncRequest": {
+            "type": "object",
+            "required": [
+                "entity_id",
+                "entity_type",
+                "time_from",
+                "time_to"
+            ],
+            "properties": {
+                "entity_id": {
+                    "type": "string"
+                },
+                "entity_type": {
+                    "description": "customer, subscription etc.",
+                    "type": "string"
+                },
+                "force_rerun": {
+                    "type": "boolean"
+                },
+                "meter_id": {
+                    "type": "string"
+                },
+                "time_from": {
+                    "description": "RFC3339",
+                    "type": "string"
+                },
+                "time_to": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.MeterMappingResponse": {
+            "type": "object",
+            "properties": {
+                "configuration": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "environment_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "meter_id": {
+                    "type": "string"
+                },
+                "provider_meter_id": {
+                    "type": "string"
+                },
+                "provider_type": {
+                    "type": "string"
+                },
+                "sync_enabled": {
+                    "type": "boolean"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.MeterResponse": {
             "type": "object",
             "properties": {
@@ -10444,6 +11354,27 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.RetryFailedBatchesRequest": {
+            "type": "object",
+            "properties": {
+                "batch_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "entity_id": {
+                    "type": "string"
+                },
+                "max_retry_age": {
+                    "description": "duration string e.g. 24h",
+                    "type": "string"
+                },
+                "meter_id": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.SecretResponse": {
             "type": "object",
             "properties": {
@@ -10502,6 +11433,144 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "token": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.StripeConfigHistoryEntry": {
+            "type": "object",
+            "properties": {
+                "change_type": {
+                    "description": "\"created\", \"updated\", \"deleted\"",
+                    "type": "string"
+                },
+                "changed_at": {
+                    "type": "string"
+                },
+                "changed_by": {
+                    "type": "string"
+                },
+                "changes": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.StripeConfigHistoryResponse": {
+            "type": "object",
+            "properties": {
+                "has_more": {
+                    "type": "boolean"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.StripeConfigHistoryEntry"
+                    }
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "offset": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.StripeConfigResponse": {
+            "type": "object",
+            "properties": {
+                "aggregation_window_minutes": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "environment_id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "sync_enabled": {
+                    "type": "boolean"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "webhook_config": {
+                    "$ref": "#/definitions/dto.StripeWebhookConfigDTO"
+                }
+            }
+        },
+        "dto.StripeConfigStatusResponse": {
+            "type": "object",
+            "properties": {
+                "configuration_ok": {
+                    "type": "boolean"
+                },
+                "configured": {
+                    "type": "boolean"
+                },
+                "connection_status": {
+                    "$ref": "#/definitions/dto.StripeConnectionTestResponse"
+                },
+                "issues": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "last_tested_at": {
+                    "type": "string"
+                },
+                "sync_enabled": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "dto.StripeConnectionTestResponse": {
+            "type": "object",
+            "properties": {
+                "latency_ms": {
+                    "type": "integer"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                },
+                "tested_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.StripeWebhookConfigDTO": {
+            "type": "object",
+            "required": [
+                "endpoint_url"
+            ],
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                },
+                "endpoint_url": {
+                    "type": "string"
+                },
+                "secret": {
                     "type": "string"
                 }
             }
@@ -11294,6 +12363,24 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.UpdateMeterMappingRequest": {
+            "type": "object",
+            "properties": {
+                "configuration": {
+                    "description": "Provider-specific configuration (optional)",
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "provider_meter_id": {
+                    "description": "New provider meter ID (optional)",
+                    "type": "string"
+                },
+                "sync_enabled": {
+                    "description": "Enable/disable sync (optional)",
+                    "type": "boolean"
+                }
+            }
+        },
         "dto.UpdatePaymentRequest": {
             "type": "object",
             "properties": {
@@ -11330,7 +12417,6 @@ const docTemplate = `{
             "required": [
                 "cadence",
                 "credits",
-                "currency",
                 "name",
                 "scope"
             ],
@@ -11340,9 +12426,6 @@ const docTemplate = `{
                 },
                 "credits": {
                     "type": "number"
-                },
-                "currency": {
-                    "type": "string"
                 },
                 "expiration_duration": {
                     "type": "integer"
@@ -11944,6 +13027,32 @@ const docTemplate = `{
                 }
             }
         },
+        "integration.EntityType": {
+            "type": "string",
+            "enum": [
+                "customer"
+            ],
+            "x-enum-varnames": [
+                "EntityTypeCustomer"
+            ]
+        },
+        "integration.SyncStatus": {
+            "type": "string",
+            "enum": [
+                "pending",
+                "processing",
+                "completed",
+                "failed",
+                "retrying"
+            ],
+            "x-enum-varnames": [
+                "SyncStatusPending",
+                "SyncStatusProcessing",
+                "SyncStatusCompleted",
+                "SyncStatusFailed",
+                "SyncStatusRetrying"
+            ]
+        },
         "meter.Aggregation": {
             "type": "object",
             "properties": {
@@ -11953,7 +13062,7 @@ const docTemplate = `{
                 },
                 "multiplier": {
                     "description": "Multiplier is the multiplier for the aggregation\nFor ex if the aggregation type is sum_with_multiplier for API usage, the multiplier could be 1000\nto scale up by a factor of 1000",
-                    "type": "integer"
+                    "type": "number"
                 },
                 "type": {
                     "$ref": "#/definitions/types.AggregationType"
@@ -12131,6 +13240,144 @@ const docTemplate = `{
                 }
             }
         },
+        "service.ListStripeSyncBatchesResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.StripeSyncBatchResponse"
+                    }
+                },
+                "pagination": {
+                    "$ref": "#/definitions/types.PaginationResponse"
+                }
+            }
+        },
+        "service.ManualSyncResponse": {
+            "type": "object",
+            "properties": {
+                "estimated_eta": {
+                    "type": "string"
+                },
+                "run_id": {
+                    "type": "string"
+                },
+                "triggered_at": {
+                    "type": "string"
+                },
+                "workflow_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.RetryFailedBatchesResponse": {
+            "type": "object",
+            "properties": {
+                "batch_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "retried_count": {
+                    "type": "integer"
+                },
+                "skipped_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.StripeSyncBatchResponse": {
+            "type": "object",
+            "properties": {
+                "aggregated_quantity": {
+                    "type": "number"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "entity_id": {
+                    "type": "string"
+                },
+                "entity_type": {
+                    "$ref": "#/definitions/integration.EntityType"
+                },
+                "error_message": {
+                    "type": "string"
+                },
+                "event_count": {
+                    "type": "integer"
+                },
+                "event_type": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "meter_id": {
+                    "type": "string"
+                },
+                "retry_count": {
+                    "type": "integer"
+                },
+                "stripe_event_id": {
+                    "type": "string"
+                },
+                "sync_status": {
+                    "$ref": "#/definitions/integration.SyncStatus"
+                },
+                "synced_at": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "window_end": {
+                    "type": "string"
+                },
+                "window_start": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.StripeSyncStatusResponse": {
+            "type": "object",
+            "properties": {
+                "metrics": {
+                    "$ref": "#/definitions/service.SyncMetrics"
+                },
+                "recent_batches": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.StripeSyncBatchResponse"
+                    }
+                },
+                "summary": {
+                    "$ref": "#/definitions/service.SyncStatusSummary"
+                }
+            }
+        },
+        "service.SyncMetrics": {
+            "type": "object",
+            "properties": {
+                "average_latency": {
+                    "$ref": "#/definitions/time.Duration"
+                },
+                "events_per_second": {
+                    "type": "number"
+                },
+                "last_sync_time": {
+                    "type": "string"
+                },
+                "success_rate": {
+                    "type": "number"
+                },
+                "total_events": {
+                    "type": "integer"
+                }
+            }
+        },
         "service.SyncPlanPricesResponse": {
             "type": "object",
             "properties": {
@@ -12159,6 +13406,29 @@ const docTemplate = `{
                             "type": "integer"
                         }
                     }
+                }
+            }
+        },
+        "service.SyncStatusSummary": {
+            "type": "object",
+            "properties": {
+                "failed_batches": {
+                    "type": "integer"
+                },
+                "pending_batches": {
+                    "type": "integer"
+                },
+                "status_breakdown": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                },
+                "successful_batches": {
+                    "type": "integer"
+                },
+                "total_batches": {
+                    "type": "integer"
                 }
             }
         },
@@ -12316,6 +13586,30 @@ const docTemplate = `{
                 }
             }
         },
+        "time.Duration": {
+            "type": "integer",
+            "format": "int64",
+            "enum": [
+                -9223372036854775808,
+                9223372036854775807,
+                1,
+                1000,
+                1000000,
+                1000000000,
+                60000000000,
+                3600000000000
+            ],
+            "x-enum-varnames": [
+                "minDuration",
+                "maxDuration",
+                "Nanosecond",
+                "Microsecond",
+                "Millisecond",
+                "Second",
+                "Minute",
+                "Hour"
+            ]
+        },
         "types.AggregationType": {
             "type": "string",
             "enum": [
@@ -12329,6 +13623,9 @@ const docTemplate = `{
             "x-enum-comments": {
                 "AggregationSumWithMultiplier": "Sum with a multiplier - [sum(value) * multiplier]"
             },
+            "x-enum-descriptions": [
+                "Sum with a multiplier - [sum(value) * multiplier]"
+            ],
             "x-enum-varnames": [
                 "AggregationCount",
                 "AggregationSum",
@@ -13236,6 +14533,17 @@ const docTemplate = `{
                 "WindowSizeDay",
                 "WindowSizeWeek"
             ]
+        },
+        "webhookDto.StripeWebhookResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "received": {
+                    "type": "boolean"
+                }
+            }
         }
     },
     "securityDefinitions": {

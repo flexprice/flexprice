@@ -12,12 +12,14 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
+	"github.com/flexprice/flexprice/internal/domain/integration"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/secret"
+	"github.com/flexprice/flexprice/internal/domain/stripe"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/task"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
@@ -67,6 +69,15 @@ type ServiceParams struct {
 	CreditNoteLineItemRepo     creditnote.CreditNoteLineItemRepository
 	CreditGrantApplicationRepo creditgrantapplication.Repository
 
+	// Integration Repositories
+	EntityIntegrationMappingRepo integration.EntityIntegrationMappingRepository
+	StripeSyncBatchRepo          integration.StripeSyncBatchRepository
+	StripeTenantConfigRepo       integration.StripeTenantConfigRepository
+	MeterProviderMappingRepo     integration.MeterProviderMappingRepository
+
+	// External API Repositories
+	StripeClientRepo stripe.Client
+
 	// Publishers
 	EventPublisher   publisher.EventPublisher
 	WebhookPublisher webhookPublisher.WebhookPublisher
@@ -109,6 +120,11 @@ func NewServiceParams(
 	client httpclient.Client,
 	taskRepo task.Repository,
 	costSheetRepo costsheet.Repository,
+	entityIntegrationMappingRepo integration.EntityIntegrationMappingRepository,
+	stripeSyncBatchRepo integration.StripeSyncBatchRepository,
+	stripeTenantConfigRepo integration.StripeTenantConfigRepository,
+	meterProviderMappingRepo integration.MeterProviderMappingRepository,
+	stripeClientRepo stripe.Client,
 ) ServiceParams {
 	return ServiceParams{
 		Logger:                     logger,
@@ -143,5 +159,13 @@ func NewServiceParams(
 		CostSheetRepo:              costSheetRepo,
 		CreditNoteRepo:             creditNoteRepo,
 		CreditNoteLineItemRepo:     creditNoteLineItemRepo,
+		// Integration Repositories
+		EntityIntegrationMappingRepo: entityIntegrationMappingRepo,
+		StripeSyncBatchRepo:          stripeSyncBatchRepo,
+		StripeTenantConfigRepo:       stripeTenantConfigRepo,
+		MeterProviderMappingRepo:     meterProviderMappingRepo,
+
+		// External API Repositories
+		StripeClientRepo: stripeClientRepo,
 	}
 }

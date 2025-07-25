@@ -52,6 +52,12 @@ func (s *Service) StartBillingWorkflow(ctx context.Context, input models.Billing
 	}, nil
 }
 
+// ExecuteWorkflow is a thin wrapper around the Temporal SDK client ExecuteWorkflow, allowing callers
+// to start arbitrary workflows without depending on the SDK client directly.
+func (s *Service) ExecuteWorkflow(ctx context.Context, options client.StartWorkflowOptions, workflowName string, args interface{}) (client.WorkflowRun, error) {
+	return s.client.Client.ExecuteWorkflow(ctx, options, workflowName, args)
+}
+
 // Close closes the temporal client
 func (s *Service) Close() {
 	if s.client != nil {

@@ -20,12 +20,14 @@ import (
 	"github.com/flexprice/flexprice/ent/creditnotelineitem"
 	"github.com/flexprice/flexprice/ent/customer"
 	"github.com/flexprice/flexprice/ent/entitlement"
+	"github.com/flexprice/flexprice/ent/entityintegrationmapping"
 	"github.com/flexprice/flexprice/ent/environment"
 	"github.com/flexprice/flexprice/ent/feature"
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/ent/invoicesequence"
 	"github.com/flexprice/flexprice/ent/meter"
+	"github.com/flexprice/flexprice/ent/meterprovidermapping"
 	"github.com/flexprice/flexprice/ent/payment"
 	"github.com/flexprice/flexprice/ent/paymentattempt"
 	"github.com/flexprice/flexprice/ent/plan"
@@ -33,6 +35,8 @@ import (
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/schema"
 	"github.com/flexprice/flexprice/ent/secret"
+	"github.com/flexprice/flexprice/ent/stripesyncbatch"
+	"github.com/flexprice/flexprice/ent/stripetenantconfig"
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
@@ -65,17 +69,21 @@ const (
 	TypeCreditNoteLineItem        = "CreditNoteLineItem"
 	TypeCustomer                  = "Customer"
 	TypeEntitlement               = "Entitlement"
+	TypeEntityIntegrationMapping  = "EntityIntegrationMapping"
 	TypeEnvironment               = "Environment"
 	TypeFeature                   = "Feature"
 	TypeInvoice                   = "Invoice"
 	TypeInvoiceLineItem           = "InvoiceLineItem"
 	TypeInvoiceSequence           = "InvoiceSequence"
 	TypeMeter                     = "Meter"
+	TypeMeterProviderMapping      = "MeterProviderMapping"
 	TypePayment                   = "Payment"
 	TypePaymentAttempt            = "PaymentAttempt"
 	TypePlan                      = "Plan"
 	TypePrice                     = "Price"
 	TypeSecret                    = "Secret"
+	TypeStripeSyncBatch           = "StripeSyncBatch"
+	TypeStripeTenantConfig        = "StripeTenantConfig"
 	TypeSubscription              = "Subscription"
 	TypeSubscriptionLineItem      = "SubscriptionLineItem"
 	TypeSubscriptionPause         = "SubscriptionPause"
@@ -11114,6 +11122,1011 @@ func (m *EntitlementMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown Entitlement edge %s", name)
 }
 
+// EntityIntegrationMappingMutation represents an operation that mutates the EntityIntegrationMapping nodes in the graph.
+type EntityIntegrationMappingMutation struct {
+	config
+	op                 Op
+	typ                string
+	id                 *string
+	tenant_id          *string
+	status             *string
+	created_at         *time.Time
+	updated_at         *time.Time
+	created_by         *string
+	updated_by         *string
+	environment_id     *string
+	entity_id          *string
+	entity_type        *string
+	provider_type      *string
+	provider_entity_id *string
+	metadata           *map[string]interface{}
+	clearedFields      map[string]struct{}
+	done               bool
+	oldValue           func(context.Context) (*EntityIntegrationMapping, error)
+	predicates         []predicate.EntityIntegrationMapping
+}
+
+var _ ent.Mutation = (*EntityIntegrationMappingMutation)(nil)
+
+// entityintegrationmappingOption allows management of the mutation configuration using functional options.
+type entityintegrationmappingOption func(*EntityIntegrationMappingMutation)
+
+// newEntityIntegrationMappingMutation creates new mutation for the EntityIntegrationMapping entity.
+func newEntityIntegrationMappingMutation(c config, op Op, opts ...entityintegrationmappingOption) *EntityIntegrationMappingMutation {
+	m := &EntityIntegrationMappingMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeEntityIntegrationMapping,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withEntityIntegrationMappingID sets the ID field of the mutation.
+func withEntityIntegrationMappingID(id string) entityintegrationmappingOption {
+	return func(m *EntityIntegrationMappingMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *EntityIntegrationMapping
+		)
+		m.oldValue = func(ctx context.Context) (*EntityIntegrationMapping, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().EntityIntegrationMapping.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withEntityIntegrationMapping sets the old EntityIntegrationMapping of the mutation.
+func withEntityIntegrationMapping(node *EntityIntegrationMapping) entityintegrationmappingOption {
+	return func(m *EntityIntegrationMappingMutation) {
+		m.oldValue = func(context.Context) (*EntityIntegrationMapping, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m EntityIntegrationMappingMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m EntityIntegrationMappingMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of EntityIntegrationMapping entities.
+func (m *EntityIntegrationMappingMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *EntityIntegrationMappingMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *EntityIntegrationMappingMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().EntityIntegrationMapping.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (m *EntityIntegrationMappingMutation) SetTenantID(s string) {
+	m.tenant_id = &s
+}
+
+// TenantID returns the value of the "tenant_id" field in the mutation.
+func (m *EntityIntegrationMappingMutation) TenantID() (r string, exists bool) {
+	v := m.tenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTenantID returns the old "tenant_id" field's value of the EntityIntegrationMapping entity.
+// If the EntityIntegrationMapping object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntityIntegrationMappingMutation) OldTenantID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTenantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
+	}
+	return oldValue.TenantID, nil
+}
+
+// ResetTenantID resets all changes to the "tenant_id" field.
+func (m *EntityIntegrationMappingMutation) ResetTenantID() {
+	m.tenant_id = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *EntityIntegrationMappingMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *EntityIntegrationMappingMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the EntityIntegrationMapping entity.
+// If the EntityIntegrationMapping object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntityIntegrationMappingMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *EntityIntegrationMappingMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *EntityIntegrationMappingMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *EntityIntegrationMappingMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the EntityIntegrationMapping entity.
+// If the EntityIntegrationMapping object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntityIntegrationMappingMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *EntityIntegrationMappingMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *EntityIntegrationMappingMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *EntityIntegrationMappingMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the EntityIntegrationMapping entity.
+// If the EntityIntegrationMapping object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntityIntegrationMappingMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *EntityIntegrationMappingMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *EntityIntegrationMappingMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *EntityIntegrationMappingMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the EntityIntegrationMapping entity.
+// If the EntityIntegrationMapping object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntityIntegrationMappingMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (m *EntityIntegrationMappingMutation) ClearCreatedBy() {
+	m.created_by = nil
+	m.clearedFields[entityintegrationmapping.FieldCreatedBy] = struct{}{}
+}
+
+// CreatedByCleared returns if the "created_by" field was cleared in this mutation.
+func (m *EntityIntegrationMappingMutation) CreatedByCleared() bool {
+	_, ok := m.clearedFields[entityintegrationmapping.FieldCreatedBy]
+	return ok
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *EntityIntegrationMappingMutation) ResetCreatedBy() {
+	m.created_by = nil
+	delete(m.clearedFields, entityintegrationmapping.FieldCreatedBy)
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (m *EntityIntegrationMappingMutation) SetUpdatedBy(s string) {
+	m.updated_by = &s
+}
+
+// UpdatedBy returns the value of the "updated_by" field in the mutation.
+func (m *EntityIntegrationMappingMutation) UpdatedBy() (r string, exists bool) {
+	v := m.updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedBy returns the old "updated_by" field's value of the EntityIntegrationMapping entity.
+// If the EntityIntegrationMapping object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntityIntegrationMappingMutation) OldUpdatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
+	}
+	return oldValue.UpdatedBy, nil
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (m *EntityIntegrationMappingMutation) ClearUpdatedBy() {
+	m.updated_by = nil
+	m.clearedFields[entityintegrationmapping.FieldUpdatedBy] = struct{}{}
+}
+
+// UpdatedByCleared returns if the "updated_by" field was cleared in this mutation.
+func (m *EntityIntegrationMappingMutation) UpdatedByCleared() bool {
+	_, ok := m.clearedFields[entityintegrationmapping.FieldUpdatedBy]
+	return ok
+}
+
+// ResetUpdatedBy resets all changes to the "updated_by" field.
+func (m *EntityIntegrationMappingMutation) ResetUpdatedBy() {
+	m.updated_by = nil
+	delete(m.clearedFields, entityintegrationmapping.FieldUpdatedBy)
+}
+
+// SetEnvironmentID sets the "environment_id" field.
+func (m *EntityIntegrationMappingMutation) SetEnvironmentID(s string) {
+	m.environment_id = &s
+}
+
+// EnvironmentID returns the value of the "environment_id" field in the mutation.
+func (m *EntityIntegrationMappingMutation) EnvironmentID() (r string, exists bool) {
+	v := m.environment_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnvironmentID returns the old "environment_id" field's value of the EntityIntegrationMapping entity.
+// If the EntityIntegrationMapping object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntityIntegrationMappingMutation) OldEnvironmentID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnvironmentID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnvironmentID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnvironmentID: %w", err)
+	}
+	return oldValue.EnvironmentID, nil
+}
+
+// ClearEnvironmentID clears the value of the "environment_id" field.
+func (m *EntityIntegrationMappingMutation) ClearEnvironmentID() {
+	m.environment_id = nil
+	m.clearedFields[entityintegrationmapping.FieldEnvironmentID] = struct{}{}
+}
+
+// EnvironmentIDCleared returns if the "environment_id" field was cleared in this mutation.
+func (m *EntityIntegrationMappingMutation) EnvironmentIDCleared() bool {
+	_, ok := m.clearedFields[entityintegrationmapping.FieldEnvironmentID]
+	return ok
+}
+
+// ResetEnvironmentID resets all changes to the "environment_id" field.
+func (m *EntityIntegrationMappingMutation) ResetEnvironmentID() {
+	m.environment_id = nil
+	delete(m.clearedFields, entityintegrationmapping.FieldEnvironmentID)
+}
+
+// SetEntityID sets the "entity_id" field.
+func (m *EntityIntegrationMappingMutation) SetEntityID(s string) {
+	m.entity_id = &s
+}
+
+// EntityID returns the value of the "entity_id" field in the mutation.
+func (m *EntityIntegrationMappingMutation) EntityID() (r string, exists bool) {
+	v := m.entity_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEntityID returns the old "entity_id" field's value of the EntityIntegrationMapping entity.
+// If the EntityIntegrationMapping object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntityIntegrationMappingMutation) OldEntityID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEntityID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEntityID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEntityID: %w", err)
+	}
+	return oldValue.EntityID, nil
+}
+
+// ResetEntityID resets all changes to the "entity_id" field.
+func (m *EntityIntegrationMappingMutation) ResetEntityID() {
+	m.entity_id = nil
+}
+
+// SetEntityType sets the "entity_type" field.
+func (m *EntityIntegrationMappingMutation) SetEntityType(s string) {
+	m.entity_type = &s
+}
+
+// EntityType returns the value of the "entity_type" field in the mutation.
+func (m *EntityIntegrationMappingMutation) EntityType() (r string, exists bool) {
+	v := m.entity_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEntityType returns the old "entity_type" field's value of the EntityIntegrationMapping entity.
+// If the EntityIntegrationMapping object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntityIntegrationMappingMutation) OldEntityType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEntityType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEntityType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEntityType: %w", err)
+	}
+	return oldValue.EntityType, nil
+}
+
+// ResetEntityType resets all changes to the "entity_type" field.
+func (m *EntityIntegrationMappingMutation) ResetEntityType() {
+	m.entity_type = nil
+}
+
+// SetProviderType sets the "provider_type" field.
+func (m *EntityIntegrationMappingMutation) SetProviderType(s string) {
+	m.provider_type = &s
+}
+
+// ProviderType returns the value of the "provider_type" field in the mutation.
+func (m *EntityIntegrationMappingMutation) ProviderType() (r string, exists bool) {
+	v := m.provider_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProviderType returns the old "provider_type" field's value of the EntityIntegrationMapping entity.
+// If the EntityIntegrationMapping object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntityIntegrationMappingMutation) OldProviderType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProviderType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProviderType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProviderType: %w", err)
+	}
+	return oldValue.ProviderType, nil
+}
+
+// ResetProviderType resets all changes to the "provider_type" field.
+func (m *EntityIntegrationMappingMutation) ResetProviderType() {
+	m.provider_type = nil
+}
+
+// SetProviderEntityID sets the "provider_entity_id" field.
+func (m *EntityIntegrationMappingMutation) SetProviderEntityID(s string) {
+	m.provider_entity_id = &s
+}
+
+// ProviderEntityID returns the value of the "provider_entity_id" field in the mutation.
+func (m *EntityIntegrationMappingMutation) ProviderEntityID() (r string, exists bool) {
+	v := m.provider_entity_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProviderEntityID returns the old "provider_entity_id" field's value of the EntityIntegrationMapping entity.
+// If the EntityIntegrationMapping object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntityIntegrationMappingMutation) OldProviderEntityID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProviderEntityID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProviderEntityID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProviderEntityID: %w", err)
+	}
+	return oldValue.ProviderEntityID, nil
+}
+
+// ResetProviderEntityID resets all changes to the "provider_entity_id" field.
+func (m *EntityIntegrationMappingMutation) ResetProviderEntityID() {
+	m.provider_entity_id = nil
+}
+
+// SetMetadata sets the "metadata" field.
+func (m *EntityIntegrationMappingMutation) SetMetadata(value map[string]interface{}) {
+	m.metadata = &value
+}
+
+// Metadata returns the value of the "metadata" field in the mutation.
+func (m *EntityIntegrationMappingMutation) Metadata() (r map[string]interface{}, exists bool) {
+	v := m.metadata
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMetadata returns the old "metadata" field's value of the EntityIntegrationMapping entity.
+// If the EntityIntegrationMapping object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntityIntegrationMappingMutation) OldMetadata(ctx context.Context) (v map[string]interface{}, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMetadata is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMetadata requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMetadata: %w", err)
+	}
+	return oldValue.Metadata, nil
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (m *EntityIntegrationMappingMutation) ClearMetadata() {
+	m.metadata = nil
+	m.clearedFields[entityintegrationmapping.FieldMetadata] = struct{}{}
+}
+
+// MetadataCleared returns if the "metadata" field was cleared in this mutation.
+func (m *EntityIntegrationMappingMutation) MetadataCleared() bool {
+	_, ok := m.clearedFields[entityintegrationmapping.FieldMetadata]
+	return ok
+}
+
+// ResetMetadata resets all changes to the "metadata" field.
+func (m *EntityIntegrationMappingMutation) ResetMetadata() {
+	m.metadata = nil
+	delete(m.clearedFields, entityintegrationmapping.FieldMetadata)
+}
+
+// Where appends a list predicates to the EntityIntegrationMappingMutation builder.
+func (m *EntityIntegrationMappingMutation) Where(ps ...predicate.EntityIntegrationMapping) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the EntityIntegrationMappingMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *EntityIntegrationMappingMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.EntityIntegrationMapping, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *EntityIntegrationMappingMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *EntityIntegrationMappingMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (EntityIntegrationMapping).
+func (m *EntityIntegrationMappingMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *EntityIntegrationMappingMutation) Fields() []string {
+	fields := make([]string, 0, 12)
+	if m.tenant_id != nil {
+		fields = append(fields, entityintegrationmapping.FieldTenantID)
+	}
+	if m.status != nil {
+		fields = append(fields, entityintegrationmapping.FieldStatus)
+	}
+	if m.created_at != nil {
+		fields = append(fields, entityintegrationmapping.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, entityintegrationmapping.FieldUpdatedAt)
+	}
+	if m.created_by != nil {
+		fields = append(fields, entityintegrationmapping.FieldCreatedBy)
+	}
+	if m.updated_by != nil {
+		fields = append(fields, entityintegrationmapping.FieldUpdatedBy)
+	}
+	if m.environment_id != nil {
+		fields = append(fields, entityintegrationmapping.FieldEnvironmentID)
+	}
+	if m.entity_id != nil {
+		fields = append(fields, entityintegrationmapping.FieldEntityID)
+	}
+	if m.entity_type != nil {
+		fields = append(fields, entityintegrationmapping.FieldEntityType)
+	}
+	if m.provider_type != nil {
+		fields = append(fields, entityintegrationmapping.FieldProviderType)
+	}
+	if m.provider_entity_id != nil {
+		fields = append(fields, entityintegrationmapping.FieldProviderEntityID)
+	}
+	if m.metadata != nil {
+		fields = append(fields, entityintegrationmapping.FieldMetadata)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *EntityIntegrationMappingMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case entityintegrationmapping.FieldTenantID:
+		return m.TenantID()
+	case entityintegrationmapping.FieldStatus:
+		return m.Status()
+	case entityintegrationmapping.FieldCreatedAt:
+		return m.CreatedAt()
+	case entityintegrationmapping.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case entityintegrationmapping.FieldCreatedBy:
+		return m.CreatedBy()
+	case entityintegrationmapping.FieldUpdatedBy:
+		return m.UpdatedBy()
+	case entityintegrationmapping.FieldEnvironmentID:
+		return m.EnvironmentID()
+	case entityintegrationmapping.FieldEntityID:
+		return m.EntityID()
+	case entityintegrationmapping.FieldEntityType:
+		return m.EntityType()
+	case entityintegrationmapping.FieldProviderType:
+		return m.ProviderType()
+	case entityintegrationmapping.FieldProviderEntityID:
+		return m.ProviderEntityID()
+	case entityintegrationmapping.FieldMetadata:
+		return m.Metadata()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *EntityIntegrationMappingMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case entityintegrationmapping.FieldTenantID:
+		return m.OldTenantID(ctx)
+	case entityintegrationmapping.FieldStatus:
+		return m.OldStatus(ctx)
+	case entityintegrationmapping.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case entityintegrationmapping.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case entityintegrationmapping.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case entityintegrationmapping.FieldUpdatedBy:
+		return m.OldUpdatedBy(ctx)
+	case entityintegrationmapping.FieldEnvironmentID:
+		return m.OldEnvironmentID(ctx)
+	case entityintegrationmapping.FieldEntityID:
+		return m.OldEntityID(ctx)
+	case entityintegrationmapping.FieldEntityType:
+		return m.OldEntityType(ctx)
+	case entityintegrationmapping.FieldProviderType:
+		return m.OldProviderType(ctx)
+	case entityintegrationmapping.FieldProviderEntityID:
+		return m.OldProviderEntityID(ctx)
+	case entityintegrationmapping.FieldMetadata:
+		return m.OldMetadata(ctx)
+	}
+	return nil, fmt.Errorf("unknown EntityIntegrationMapping field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *EntityIntegrationMappingMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case entityintegrationmapping.FieldTenantID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTenantID(v)
+		return nil
+	case entityintegrationmapping.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case entityintegrationmapping.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case entityintegrationmapping.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case entityintegrationmapping.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case entityintegrationmapping.FieldUpdatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedBy(v)
+		return nil
+	case entityintegrationmapping.FieldEnvironmentID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnvironmentID(v)
+		return nil
+	case entityintegrationmapping.FieldEntityID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEntityID(v)
+		return nil
+	case entityintegrationmapping.FieldEntityType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEntityType(v)
+		return nil
+	case entityintegrationmapping.FieldProviderType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProviderType(v)
+		return nil
+	case entityintegrationmapping.FieldProviderEntityID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProviderEntityID(v)
+		return nil
+	case entityintegrationmapping.FieldMetadata:
+		v, ok := value.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMetadata(v)
+		return nil
+	}
+	return fmt.Errorf("unknown EntityIntegrationMapping field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *EntityIntegrationMappingMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *EntityIntegrationMappingMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *EntityIntegrationMappingMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown EntityIntegrationMapping numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *EntityIntegrationMappingMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(entityintegrationmapping.FieldCreatedBy) {
+		fields = append(fields, entityintegrationmapping.FieldCreatedBy)
+	}
+	if m.FieldCleared(entityintegrationmapping.FieldUpdatedBy) {
+		fields = append(fields, entityintegrationmapping.FieldUpdatedBy)
+	}
+	if m.FieldCleared(entityintegrationmapping.FieldEnvironmentID) {
+		fields = append(fields, entityintegrationmapping.FieldEnvironmentID)
+	}
+	if m.FieldCleared(entityintegrationmapping.FieldMetadata) {
+		fields = append(fields, entityintegrationmapping.FieldMetadata)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *EntityIntegrationMappingMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *EntityIntegrationMappingMutation) ClearField(name string) error {
+	switch name {
+	case entityintegrationmapping.FieldCreatedBy:
+		m.ClearCreatedBy()
+		return nil
+	case entityintegrationmapping.FieldUpdatedBy:
+		m.ClearUpdatedBy()
+		return nil
+	case entityintegrationmapping.FieldEnvironmentID:
+		m.ClearEnvironmentID()
+		return nil
+	case entityintegrationmapping.FieldMetadata:
+		m.ClearMetadata()
+		return nil
+	}
+	return fmt.Errorf("unknown EntityIntegrationMapping nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *EntityIntegrationMappingMutation) ResetField(name string) error {
+	switch name {
+	case entityintegrationmapping.FieldTenantID:
+		m.ResetTenantID()
+		return nil
+	case entityintegrationmapping.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case entityintegrationmapping.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case entityintegrationmapping.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case entityintegrationmapping.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case entityintegrationmapping.FieldUpdatedBy:
+		m.ResetUpdatedBy()
+		return nil
+	case entityintegrationmapping.FieldEnvironmentID:
+		m.ResetEnvironmentID()
+		return nil
+	case entityintegrationmapping.FieldEntityID:
+		m.ResetEntityID()
+		return nil
+	case entityintegrationmapping.FieldEntityType:
+		m.ResetEntityType()
+		return nil
+	case entityintegrationmapping.FieldProviderType:
+		m.ResetProviderType()
+		return nil
+	case entityintegrationmapping.FieldProviderEntityID:
+		m.ResetProviderEntityID()
+		return nil
+	case entityintegrationmapping.FieldMetadata:
+		m.ResetMetadata()
+		return nil
+	}
+	return fmt.Errorf("unknown EntityIntegrationMapping field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *EntityIntegrationMappingMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *EntityIntegrationMappingMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *EntityIntegrationMappingMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *EntityIntegrationMappingMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *EntityIntegrationMappingMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *EntityIntegrationMappingMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *EntityIntegrationMappingMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown EntityIntegrationMapping unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *EntityIntegrationMappingMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown EntityIntegrationMapping edge %s", name)
+}
+
 // EnvironmentMutation represents an operation that mutates the Environment nodes in the graph.
 type EnvironmentMutation struct {
 	config
@@ -19376,6 +20389,1011 @@ func (m *MeterMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown Meter edge %s", name)
 }
 
+// MeterProviderMappingMutation represents an operation that mutates the MeterProviderMapping nodes in the graph.
+type MeterProviderMappingMutation struct {
+	config
+	op                Op
+	typ               string
+	id                *string
+	tenant_id         *string
+	status            *string
+	created_at        *time.Time
+	updated_at        *time.Time
+	created_by        *string
+	updated_by        *string
+	environment_id    *string
+	meter_id          *string
+	provider_type     *string
+	provider_meter_id *string
+	sync_enabled      *bool
+	configuration     *map[string]interface{}
+	clearedFields     map[string]struct{}
+	done              bool
+	oldValue          func(context.Context) (*MeterProviderMapping, error)
+	predicates        []predicate.MeterProviderMapping
+}
+
+var _ ent.Mutation = (*MeterProviderMappingMutation)(nil)
+
+// meterprovidermappingOption allows management of the mutation configuration using functional options.
+type meterprovidermappingOption func(*MeterProviderMappingMutation)
+
+// newMeterProviderMappingMutation creates new mutation for the MeterProviderMapping entity.
+func newMeterProviderMappingMutation(c config, op Op, opts ...meterprovidermappingOption) *MeterProviderMappingMutation {
+	m := &MeterProviderMappingMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeMeterProviderMapping,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withMeterProviderMappingID sets the ID field of the mutation.
+func withMeterProviderMappingID(id string) meterprovidermappingOption {
+	return func(m *MeterProviderMappingMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *MeterProviderMapping
+		)
+		m.oldValue = func(ctx context.Context) (*MeterProviderMapping, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().MeterProviderMapping.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withMeterProviderMapping sets the old MeterProviderMapping of the mutation.
+func withMeterProviderMapping(node *MeterProviderMapping) meterprovidermappingOption {
+	return func(m *MeterProviderMappingMutation) {
+		m.oldValue = func(context.Context) (*MeterProviderMapping, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m MeterProviderMappingMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m MeterProviderMappingMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of MeterProviderMapping entities.
+func (m *MeterProviderMappingMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *MeterProviderMappingMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *MeterProviderMappingMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().MeterProviderMapping.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (m *MeterProviderMappingMutation) SetTenantID(s string) {
+	m.tenant_id = &s
+}
+
+// TenantID returns the value of the "tenant_id" field in the mutation.
+func (m *MeterProviderMappingMutation) TenantID() (r string, exists bool) {
+	v := m.tenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTenantID returns the old "tenant_id" field's value of the MeterProviderMapping entity.
+// If the MeterProviderMapping object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeterProviderMappingMutation) OldTenantID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTenantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
+	}
+	return oldValue.TenantID, nil
+}
+
+// ResetTenantID resets all changes to the "tenant_id" field.
+func (m *MeterProviderMappingMutation) ResetTenantID() {
+	m.tenant_id = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *MeterProviderMappingMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *MeterProviderMappingMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the MeterProviderMapping entity.
+// If the MeterProviderMapping object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeterProviderMappingMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *MeterProviderMappingMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *MeterProviderMappingMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *MeterProviderMappingMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the MeterProviderMapping entity.
+// If the MeterProviderMapping object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeterProviderMappingMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *MeterProviderMappingMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *MeterProviderMappingMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *MeterProviderMappingMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the MeterProviderMapping entity.
+// If the MeterProviderMapping object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeterProviderMappingMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *MeterProviderMappingMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *MeterProviderMappingMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *MeterProviderMappingMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the MeterProviderMapping entity.
+// If the MeterProviderMapping object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeterProviderMappingMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (m *MeterProviderMappingMutation) ClearCreatedBy() {
+	m.created_by = nil
+	m.clearedFields[meterprovidermapping.FieldCreatedBy] = struct{}{}
+}
+
+// CreatedByCleared returns if the "created_by" field was cleared in this mutation.
+func (m *MeterProviderMappingMutation) CreatedByCleared() bool {
+	_, ok := m.clearedFields[meterprovidermapping.FieldCreatedBy]
+	return ok
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *MeterProviderMappingMutation) ResetCreatedBy() {
+	m.created_by = nil
+	delete(m.clearedFields, meterprovidermapping.FieldCreatedBy)
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (m *MeterProviderMappingMutation) SetUpdatedBy(s string) {
+	m.updated_by = &s
+}
+
+// UpdatedBy returns the value of the "updated_by" field in the mutation.
+func (m *MeterProviderMappingMutation) UpdatedBy() (r string, exists bool) {
+	v := m.updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedBy returns the old "updated_by" field's value of the MeterProviderMapping entity.
+// If the MeterProviderMapping object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeterProviderMappingMutation) OldUpdatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
+	}
+	return oldValue.UpdatedBy, nil
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (m *MeterProviderMappingMutation) ClearUpdatedBy() {
+	m.updated_by = nil
+	m.clearedFields[meterprovidermapping.FieldUpdatedBy] = struct{}{}
+}
+
+// UpdatedByCleared returns if the "updated_by" field was cleared in this mutation.
+func (m *MeterProviderMappingMutation) UpdatedByCleared() bool {
+	_, ok := m.clearedFields[meterprovidermapping.FieldUpdatedBy]
+	return ok
+}
+
+// ResetUpdatedBy resets all changes to the "updated_by" field.
+func (m *MeterProviderMappingMutation) ResetUpdatedBy() {
+	m.updated_by = nil
+	delete(m.clearedFields, meterprovidermapping.FieldUpdatedBy)
+}
+
+// SetEnvironmentID sets the "environment_id" field.
+func (m *MeterProviderMappingMutation) SetEnvironmentID(s string) {
+	m.environment_id = &s
+}
+
+// EnvironmentID returns the value of the "environment_id" field in the mutation.
+func (m *MeterProviderMappingMutation) EnvironmentID() (r string, exists bool) {
+	v := m.environment_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnvironmentID returns the old "environment_id" field's value of the MeterProviderMapping entity.
+// If the MeterProviderMapping object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeterProviderMappingMutation) OldEnvironmentID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnvironmentID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnvironmentID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnvironmentID: %w", err)
+	}
+	return oldValue.EnvironmentID, nil
+}
+
+// ClearEnvironmentID clears the value of the "environment_id" field.
+func (m *MeterProviderMappingMutation) ClearEnvironmentID() {
+	m.environment_id = nil
+	m.clearedFields[meterprovidermapping.FieldEnvironmentID] = struct{}{}
+}
+
+// EnvironmentIDCleared returns if the "environment_id" field was cleared in this mutation.
+func (m *MeterProviderMappingMutation) EnvironmentIDCleared() bool {
+	_, ok := m.clearedFields[meterprovidermapping.FieldEnvironmentID]
+	return ok
+}
+
+// ResetEnvironmentID resets all changes to the "environment_id" field.
+func (m *MeterProviderMappingMutation) ResetEnvironmentID() {
+	m.environment_id = nil
+	delete(m.clearedFields, meterprovidermapping.FieldEnvironmentID)
+}
+
+// SetMeterID sets the "meter_id" field.
+func (m *MeterProviderMappingMutation) SetMeterID(s string) {
+	m.meter_id = &s
+}
+
+// MeterID returns the value of the "meter_id" field in the mutation.
+func (m *MeterProviderMappingMutation) MeterID() (r string, exists bool) {
+	v := m.meter_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMeterID returns the old "meter_id" field's value of the MeterProviderMapping entity.
+// If the MeterProviderMapping object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeterProviderMappingMutation) OldMeterID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMeterID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMeterID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMeterID: %w", err)
+	}
+	return oldValue.MeterID, nil
+}
+
+// ResetMeterID resets all changes to the "meter_id" field.
+func (m *MeterProviderMappingMutation) ResetMeterID() {
+	m.meter_id = nil
+}
+
+// SetProviderType sets the "provider_type" field.
+func (m *MeterProviderMappingMutation) SetProviderType(s string) {
+	m.provider_type = &s
+}
+
+// ProviderType returns the value of the "provider_type" field in the mutation.
+func (m *MeterProviderMappingMutation) ProviderType() (r string, exists bool) {
+	v := m.provider_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProviderType returns the old "provider_type" field's value of the MeterProviderMapping entity.
+// If the MeterProviderMapping object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeterProviderMappingMutation) OldProviderType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProviderType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProviderType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProviderType: %w", err)
+	}
+	return oldValue.ProviderType, nil
+}
+
+// ResetProviderType resets all changes to the "provider_type" field.
+func (m *MeterProviderMappingMutation) ResetProviderType() {
+	m.provider_type = nil
+}
+
+// SetProviderMeterID sets the "provider_meter_id" field.
+func (m *MeterProviderMappingMutation) SetProviderMeterID(s string) {
+	m.provider_meter_id = &s
+}
+
+// ProviderMeterID returns the value of the "provider_meter_id" field in the mutation.
+func (m *MeterProviderMappingMutation) ProviderMeterID() (r string, exists bool) {
+	v := m.provider_meter_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProviderMeterID returns the old "provider_meter_id" field's value of the MeterProviderMapping entity.
+// If the MeterProviderMapping object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeterProviderMappingMutation) OldProviderMeterID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProviderMeterID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProviderMeterID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProviderMeterID: %w", err)
+	}
+	return oldValue.ProviderMeterID, nil
+}
+
+// ResetProviderMeterID resets all changes to the "provider_meter_id" field.
+func (m *MeterProviderMappingMutation) ResetProviderMeterID() {
+	m.provider_meter_id = nil
+}
+
+// SetSyncEnabled sets the "sync_enabled" field.
+func (m *MeterProviderMappingMutation) SetSyncEnabled(b bool) {
+	m.sync_enabled = &b
+}
+
+// SyncEnabled returns the value of the "sync_enabled" field in the mutation.
+func (m *MeterProviderMappingMutation) SyncEnabled() (r bool, exists bool) {
+	v := m.sync_enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSyncEnabled returns the old "sync_enabled" field's value of the MeterProviderMapping entity.
+// If the MeterProviderMapping object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeterProviderMappingMutation) OldSyncEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSyncEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSyncEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSyncEnabled: %w", err)
+	}
+	return oldValue.SyncEnabled, nil
+}
+
+// ResetSyncEnabled resets all changes to the "sync_enabled" field.
+func (m *MeterProviderMappingMutation) ResetSyncEnabled() {
+	m.sync_enabled = nil
+}
+
+// SetConfiguration sets the "configuration" field.
+func (m *MeterProviderMappingMutation) SetConfiguration(value map[string]interface{}) {
+	m.configuration = &value
+}
+
+// Configuration returns the value of the "configuration" field in the mutation.
+func (m *MeterProviderMappingMutation) Configuration() (r map[string]interface{}, exists bool) {
+	v := m.configuration
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldConfiguration returns the old "configuration" field's value of the MeterProviderMapping entity.
+// If the MeterProviderMapping object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeterProviderMappingMutation) OldConfiguration(ctx context.Context) (v map[string]interface{}, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldConfiguration is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldConfiguration requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldConfiguration: %w", err)
+	}
+	return oldValue.Configuration, nil
+}
+
+// ClearConfiguration clears the value of the "configuration" field.
+func (m *MeterProviderMappingMutation) ClearConfiguration() {
+	m.configuration = nil
+	m.clearedFields[meterprovidermapping.FieldConfiguration] = struct{}{}
+}
+
+// ConfigurationCleared returns if the "configuration" field was cleared in this mutation.
+func (m *MeterProviderMappingMutation) ConfigurationCleared() bool {
+	_, ok := m.clearedFields[meterprovidermapping.FieldConfiguration]
+	return ok
+}
+
+// ResetConfiguration resets all changes to the "configuration" field.
+func (m *MeterProviderMappingMutation) ResetConfiguration() {
+	m.configuration = nil
+	delete(m.clearedFields, meterprovidermapping.FieldConfiguration)
+}
+
+// Where appends a list predicates to the MeterProviderMappingMutation builder.
+func (m *MeterProviderMappingMutation) Where(ps ...predicate.MeterProviderMapping) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the MeterProviderMappingMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *MeterProviderMappingMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.MeterProviderMapping, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *MeterProviderMappingMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *MeterProviderMappingMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (MeterProviderMapping).
+func (m *MeterProviderMappingMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *MeterProviderMappingMutation) Fields() []string {
+	fields := make([]string, 0, 12)
+	if m.tenant_id != nil {
+		fields = append(fields, meterprovidermapping.FieldTenantID)
+	}
+	if m.status != nil {
+		fields = append(fields, meterprovidermapping.FieldStatus)
+	}
+	if m.created_at != nil {
+		fields = append(fields, meterprovidermapping.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, meterprovidermapping.FieldUpdatedAt)
+	}
+	if m.created_by != nil {
+		fields = append(fields, meterprovidermapping.FieldCreatedBy)
+	}
+	if m.updated_by != nil {
+		fields = append(fields, meterprovidermapping.FieldUpdatedBy)
+	}
+	if m.environment_id != nil {
+		fields = append(fields, meterprovidermapping.FieldEnvironmentID)
+	}
+	if m.meter_id != nil {
+		fields = append(fields, meterprovidermapping.FieldMeterID)
+	}
+	if m.provider_type != nil {
+		fields = append(fields, meterprovidermapping.FieldProviderType)
+	}
+	if m.provider_meter_id != nil {
+		fields = append(fields, meterprovidermapping.FieldProviderMeterID)
+	}
+	if m.sync_enabled != nil {
+		fields = append(fields, meterprovidermapping.FieldSyncEnabled)
+	}
+	if m.configuration != nil {
+		fields = append(fields, meterprovidermapping.FieldConfiguration)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *MeterProviderMappingMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case meterprovidermapping.FieldTenantID:
+		return m.TenantID()
+	case meterprovidermapping.FieldStatus:
+		return m.Status()
+	case meterprovidermapping.FieldCreatedAt:
+		return m.CreatedAt()
+	case meterprovidermapping.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case meterprovidermapping.FieldCreatedBy:
+		return m.CreatedBy()
+	case meterprovidermapping.FieldUpdatedBy:
+		return m.UpdatedBy()
+	case meterprovidermapping.FieldEnvironmentID:
+		return m.EnvironmentID()
+	case meterprovidermapping.FieldMeterID:
+		return m.MeterID()
+	case meterprovidermapping.FieldProviderType:
+		return m.ProviderType()
+	case meterprovidermapping.FieldProviderMeterID:
+		return m.ProviderMeterID()
+	case meterprovidermapping.FieldSyncEnabled:
+		return m.SyncEnabled()
+	case meterprovidermapping.FieldConfiguration:
+		return m.Configuration()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *MeterProviderMappingMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case meterprovidermapping.FieldTenantID:
+		return m.OldTenantID(ctx)
+	case meterprovidermapping.FieldStatus:
+		return m.OldStatus(ctx)
+	case meterprovidermapping.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case meterprovidermapping.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case meterprovidermapping.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case meterprovidermapping.FieldUpdatedBy:
+		return m.OldUpdatedBy(ctx)
+	case meterprovidermapping.FieldEnvironmentID:
+		return m.OldEnvironmentID(ctx)
+	case meterprovidermapping.FieldMeterID:
+		return m.OldMeterID(ctx)
+	case meterprovidermapping.FieldProviderType:
+		return m.OldProviderType(ctx)
+	case meterprovidermapping.FieldProviderMeterID:
+		return m.OldProviderMeterID(ctx)
+	case meterprovidermapping.FieldSyncEnabled:
+		return m.OldSyncEnabled(ctx)
+	case meterprovidermapping.FieldConfiguration:
+		return m.OldConfiguration(ctx)
+	}
+	return nil, fmt.Errorf("unknown MeterProviderMapping field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *MeterProviderMappingMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case meterprovidermapping.FieldTenantID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTenantID(v)
+		return nil
+	case meterprovidermapping.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case meterprovidermapping.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case meterprovidermapping.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case meterprovidermapping.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case meterprovidermapping.FieldUpdatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedBy(v)
+		return nil
+	case meterprovidermapping.FieldEnvironmentID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnvironmentID(v)
+		return nil
+	case meterprovidermapping.FieldMeterID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMeterID(v)
+		return nil
+	case meterprovidermapping.FieldProviderType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProviderType(v)
+		return nil
+	case meterprovidermapping.FieldProviderMeterID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProviderMeterID(v)
+		return nil
+	case meterprovidermapping.FieldSyncEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSyncEnabled(v)
+		return nil
+	case meterprovidermapping.FieldConfiguration:
+		v, ok := value.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetConfiguration(v)
+		return nil
+	}
+	return fmt.Errorf("unknown MeterProviderMapping field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *MeterProviderMappingMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *MeterProviderMappingMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *MeterProviderMappingMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown MeterProviderMapping numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *MeterProviderMappingMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(meterprovidermapping.FieldCreatedBy) {
+		fields = append(fields, meterprovidermapping.FieldCreatedBy)
+	}
+	if m.FieldCleared(meterprovidermapping.FieldUpdatedBy) {
+		fields = append(fields, meterprovidermapping.FieldUpdatedBy)
+	}
+	if m.FieldCleared(meterprovidermapping.FieldEnvironmentID) {
+		fields = append(fields, meterprovidermapping.FieldEnvironmentID)
+	}
+	if m.FieldCleared(meterprovidermapping.FieldConfiguration) {
+		fields = append(fields, meterprovidermapping.FieldConfiguration)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *MeterProviderMappingMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *MeterProviderMappingMutation) ClearField(name string) error {
+	switch name {
+	case meterprovidermapping.FieldCreatedBy:
+		m.ClearCreatedBy()
+		return nil
+	case meterprovidermapping.FieldUpdatedBy:
+		m.ClearUpdatedBy()
+		return nil
+	case meterprovidermapping.FieldEnvironmentID:
+		m.ClearEnvironmentID()
+		return nil
+	case meterprovidermapping.FieldConfiguration:
+		m.ClearConfiguration()
+		return nil
+	}
+	return fmt.Errorf("unknown MeterProviderMapping nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *MeterProviderMappingMutation) ResetField(name string) error {
+	switch name {
+	case meterprovidermapping.FieldTenantID:
+		m.ResetTenantID()
+		return nil
+	case meterprovidermapping.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case meterprovidermapping.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case meterprovidermapping.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case meterprovidermapping.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case meterprovidermapping.FieldUpdatedBy:
+		m.ResetUpdatedBy()
+		return nil
+	case meterprovidermapping.FieldEnvironmentID:
+		m.ResetEnvironmentID()
+		return nil
+	case meterprovidermapping.FieldMeterID:
+		m.ResetMeterID()
+		return nil
+	case meterprovidermapping.FieldProviderType:
+		m.ResetProviderType()
+		return nil
+	case meterprovidermapping.FieldProviderMeterID:
+		m.ResetProviderMeterID()
+		return nil
+	case meterprovidermapping.FieldSyncEnabled:
+		m.ResetSyncEnabled()
+		return nil
+	case meterprovidermapping.FieldConfiguration:
+		m.ResetConfiguration()
+		return nil
+	}
+	return fmt.Errorf("unknown MeterProviderMapping field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *MeterProviderMappingMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *MeterProviderMappingMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *MeterProviderMappingMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *MeterProviderMappingMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *MeterProviderMappingMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *MeterProviderMappingMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *MeterProviderMappingMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown MeterProviderMapping unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *MeterProviderMappingMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown MeterProviderMapping edge %s", name)
+}
+
 // PaymentMutation represents an operation that mutates the Payment nodes in the graph.
 type PaymentMutation struct {
 	config
@@ -27009,6 +29027,2570 @@ func (m *SecretMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *SecretMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown Secret edge %s", name)
+}
+
+// StripeSyncBatchMutation represents an operation that mutates the StripeSyncBatch nodes in the graph.
+type StripeSyncBatchMutation struct {
+	config
+	op                     Op
+	typ                    string
+	id                     *string
+	tenant_id              *string
+	status                 *string
+	created_at             *time.Time
+	updated_at             *time.Time
+	created_by             *string
+	updated_by             *string
+	environment_id         *string
+	entity_id              *string
+	entity_type            *string
+	meter_id               *string
+	event_type             *string
+	aggregated_quantity    *float64
+	addaggregated_quantity *float64
+	event_count            *int
+	addevent_count         *int
+	stripe_event_id        *string
+	sync_status            *string
+	retry_count            *int
+	addretry_count         *int
+	error_message          *string
+	window_start           *time.Time
+	window_end             *time.Time
+	synced_at              *time.Time
+	clearedFields          map[string]struct{}
+	done                   bool
+	oldValue               func(context.Context) (*StripeSyncBatch, error)
+	predicates             []predicate.StripeSyncBatch
+}
+
+var _ ent.Mutation = (*StripeSyncBatchMutation)(nil)
+
+// stripesyncbatchOption allows management of the mutation configuration using functional options.
+type stripesyncbatchOption func(*StripeSyncBatchMutation)
+
+// newStripeSyncBatchMutation creates new mutation for the StripeSyncBatch entity.
+func newStripeSyncBatchMutation(c config, op Op, opts ...stripesyncbatchOption) *StripeSyncBatchMutation {
+	m := &StripeSyncBatchMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeStripeSyncBatch,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withStripeSyncBatchID sets the ID field of the mutation.
+func withStripeSyncBatchID(id string) stripesyncbatchOption {
+	return func(m *StripeSyncBatchMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *StripeSyncBatch
+		)
+		m.oldValue = func(ctx context.Context) (*StripeSyncBatch, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().StripeSyncBatch.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withStripeSyncBatch sets the old StripeSyncBatch of the mutation.
+func withStripeSyncBatch(node *StripeSyncBatch) stripesyncbatchOption {
+	return func(m *StripeSyncBatchMutation) {
+		m.oldValue = func(context.Context) (*StripeSyncBatch, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m StripeSyncBatchMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m StripeSyncBatchMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of StripeSyncBatch entities.
+func (m *StripeSyncBatchMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *StripeSyncBatchMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *StripeSyncBatchMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().StripeSyncBatch.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (m *StripeSyncBatchMutation) SetTenantID(s string) {
+	m.tenant_id = &s
+}
+
+// TenantID returns the value of the "tenant_id" field in the mutation.
+func (m *StripeSyncBatchMutation) TenantID() (r string, exists bool) {
+	v := m.tenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTenantID returns the old "tenant_id" field's value of the StripeSyncBatch entity.
+// If the StripeSyncBatch object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StripeSyncBatchMutation) OldTenantID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTenantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
+	}
+	return oldValue.TenantID, nil
+}
+
+// ResetTenantID resets all changes to the "tenant_id" field.
+func (m *StripeSyncBatchMutation) ResetTenantID() {
+	m.tenant_id = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *StripeSyncBatchMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *StripeSyncBatchMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the StripeSyncBatch entity.
+// If the StripeSyncBatch object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StripeSyncBatchMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *StripeSyncBatchMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *StripeSyncBatchMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *StripeSyncBatchMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the StripeSyncBatch entity.
+// If the StripeSyncBatch object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StripeSyncBatchMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *StripeSyncBatchMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *StripeSyncBatchMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *StripeSyncBatchMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the StripeSyncBatch entity.
+// If the StripeSyncBatch object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StripeSyncBatchMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *StripeSyncBatchMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *StripeSyncBatchMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *StripeSyncBatchMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the StripeSyncBatch entity.
+// If the StripeSyncBatch object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StripeSyncBatchMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (m *StripeSyncBatchMutation) ClearCreatedBy() {
+	m.created_by = nil
+	m.clearedFields[stripesyncbatch.FieldCreatedBy] = struct{}{}
+}
+
+// CreatedByCleared returns if the "created_by" field was cleared in this mutation.
+func (m *StripeSyncBatchMutation) CreatedByCleared() bool {
+	_, ok := m.clearedFields[stripesyncbatch.FieldCreatedBy]
+	return ok
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *StripeSyncBatchMutation) ResetCreatedBy() {
+	m.created_by = nil
+	delete(m.clearedFields, stripesyncbatch.FieldCreatedBy)
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (m *StripeSyncBatchMutation) SetUpdatedBy(s string) {
+	m.updated_by = &s
+}
+
+// UpdatedBy returns the value of the "updated_by" field in the mutation.
+func (m *StripeSyncBatchMutation) UpdatedBy() (r string, exists bool) {
+	v := m.updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedBy returns the old "updated_by" field's value of the StripeSyncBatch entity.
+// If the StripeSyncBatch object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StripeSyncBatchMutation) OldUpdatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
+	}
+	return oldValue.UpdatedBy, nil
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (m *StripeSyncBatchMutation) ClearUpdatedBy() {
+	m.updated_by = nil
+	m.clearedFields[stripesyncbatch.FieldUpdatedBy] = struct{}{}
+}
+
+// UpdatedByCleared returns if the "updated_by" field was cleared in this mutation.
+func (m *StripeSyncBatchMutation) UpdatedByCleared() bool {
+	_, ok := m.clearedFields[stripesyncbatch.FieldUpdatedBy]
+	return ok
+}
+
+// ResetUpdatedBy resets all changes to the "updated_by" field.
+func (m *StripeSyncBatchMutation) ResetUpdatedBy() {
+	m.updated_by = nil
+	delete(m.clearedFields, stripesyncbatch.FieldUpdatedBy)
+}
+
+// SetEnvironmentID sets the "environment_id" field.
+func (m *StripeSyncBatchMutation) SetEnvironmentID(s string) {
+	m.environment_id = &s
+}
+
+// EnvironmentID returns the value of the "environment_id" field in the mutation.
+func (m *StripeSyncBatchMutation) EnvironmentID() (r string, exists bool) {
+	v := m.environment_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnvironmentID returns the old "environment_id" field's value of the StripeSyncBatch entity.
+// If the StripeSyncBatch object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StripeSyncBatchMutation) OldEnvironmentID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnvironmentID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnvironmentID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnvironmentID: %w", err)
+	}
+	return oldValue.EnvironmentID, nil
+}
+
+// ClearEnvironmentID clears the value of the "environment_id" field.
+func (m *StripeSyncBatchMutation) ClearEnvironmentID() {
+	m.environment_id = nil
+	m.clearedFields[stripesyncbatch.FieldEnvironmentID] = struct{}{}
+}
+
+// EnvironmentIDCleared returns if the "environment_id" field was cleared in this mutation.
+func (m *StripeSyncBatchMutation) EnvironmentIDCleared() bool {
+	_, ok := m.clearedFields[stripesyncbatch.FieldEnvironmentID]
+	return ok
+}
+
+// ResetEnvironmentID resets all changes to the "environment_id" field.
+func (m *StripeSyncBatchMutation) ResetEnvironmentID() {
+	m.environment_id = nil
+	delete(m.clearedFields, stripesyncbatch.FieldEnvironmentID)
+}
+
+// SetEntityID sets the "entity_id" field.
+func (m *StripeSyncBatchMutation) SetEntityID(s string) {
+	m.entity_id = &s
+}
+
+// EntityID returns the value of the "entity_id" field in the mutation.
+func (m *StripeSyncBatchMutation) EntityID() (r string, exists bool) {
+	v := m.entity_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEntityID returns the old "entity_id" field's value of the StripeSyncBatch entity.
+// If the StripeSyncBatch object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StripeSyncBatchMutation) OldEntityID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEntityID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEntityID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEntityID: %w", err)
+	}
+	return oldValue.EntityID, nil
+}
+
+// ResetEntityID resets all changes to the "entity_id" field.
+func (m *StripeSyncBatchMutation) ResetEntityID() {
+	m.entity_id = nil
+}
+
+// SetEntityType sets the "entity_type" field.
+func (m *StripeSyncBatchMutation) SetEntityType(s string) {
+	m.entity_type = &s
+}
+
+// EntityType returns the value of the "entity_type" field in the mutation.
+func (m *StripeSyncBatchMutation) EntityType() (r string, exists bool) {
+	v := m.entity_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEntityType returns the old "entity_type" field's value of the StripeSyncBatch entity.
+// If the StripeSyncBatch object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StripeSyncBatchMutation) OldEntityType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEntityType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEntityType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEntityType: %w", err)
+	}
+	return oldValue.EntityType, nil
+}
+
+// ResetEntityType resets all changes to the "entity_type" field.
+func (m *StripeSyncBatchMutation) ResetEntityType() {
+	m.entity_type = nil
+}
+
+// SetMeterID sets the "meter_id" field.
+func (m *StripeSyncBatchMutation) SetMeterID(s string) {
+	m.meter_id = &s
+}
+
+// MeterID returns the value of the "meter_id" field in the mutation.
+func (m *StripeSyncBatchMutation) MeterID() (r string, exists bool) {
+	v := m.meter_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMeterID returns the old "meter_id" field's value of the StripeSyncBatch entity.
+// If the StripeSyncBatch object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StripeSyncBatchMutation) OldMeterID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMeterID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMeterID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMeterID: %w", err)
+	}
+	return oldValue.MeterID, nil
+}
+
+// ResetMeterID resets all changes to the "meter_id" field.
+func (m *StripeSyncBatchMutation) ResetMeterID() {
+	m.meter_id = nil
+}
+
+// SetEventType sets the "event_type" field.
+func (m *StripeSyncBatchMutation) SetEventType(s string) {
+	m.event_type = &s
+}
+
+// EventType returns the value of the "event_type" field in the mutation.
+func (m *StripeSyncBatchMutation) EventType() (r string, exists bool) {
+	v := m.event_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEventType returns the old "event_type" field's value of the StripeSyncBatch entity.
+// If the StripeSyncBatch object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StripeSyncBatchMutation) OldEventType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEventType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEventType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEventType: %w", err)
+	}
+	return oldValue.EventType, nil
+}
+
+// ResetEventType resets all changes to the "event_type" field.
+func (m *StripeSyncBatchMutation) ResetEventType() {
+	m.event_type = nil
+}
+
+// SetAggregatedQuantity sets the "aggregated_quantity" field.
+func (m *StripeSyncBatchMutation) SetAggregatedQuantity(f float64) {
+	m.aggregated_quantity = &f
+	m.addaggregated_quantity = nil
+}
+
+// AggregatedQuantity returns the value of the "aggregated_quantity" field in the mutation.
+func (m *StripeSyncBatchMutation) AggregatedQuantity() (r float64, exists bool) {
+	v := m.aggregated_quantity
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAggregatedQuantity returns the old "aggregated_quantity" field's value of the StripeSyncBatch entity.
+// If the StripeSyncBatch object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StripeSyncBatchMutation) OldAggregatedQuantity(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAggregatedQuantity is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAggregatedQuantity requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAggregatedQuantity: %w", err)
+	}
+	return oldValue.AggregatedQuantity, nil
+}
+
+// AddAggregatedQuantity adds f to the "aggregated_quantity" field.
+func (m *StripeSyncBatchMutation) AddAggregatedQuantity(f float64) {
+	if m.addaggregated_quantity != nil {
+		*m.addaggregated_quantity += f
+	} else {
+		m.addaggregated_quantity = &f
+	}
+}
+
+// AddedAggregatedQuantity returns the value that was added to the "aggregated_quantity" field in this mutation.
+func (m *StripeSyncBatchMutation) AddedAggregatedQuantity() (r float64, exists bool) {
+	v := m.addaggregated_quantity
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetAggregatedQuantity resets all changes to the "aggregated_quantity" field.
+func (m *StripeSyncBatchMutation) ResetAggregatedQuantity() {
+	m.aggregated_quantity = nil
+	m.addaggregated_quantity = nil
+}
+
+// SetEventCount sets the "event_count" field.
+func (m *StripeSyncBatchMutation) SetEventCount(i int) {
+	m.event_count = &i
+	m.addevent_count = nil
+}
+
+// EventCount returns the value of the "event_count" field in the mutation.
+func (m *StripeSyncBatchMutation) EventCount() (r int, exists bool) {
+	v := m.event_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEventCount returns the old "event_count" field's value of the StripeSyncBatch entity.
+// If the StripeSyncBatch object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StripeSyncBatchMutation) OldEventCount(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEventCount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEventCount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEventCount: %w", err)
+	}
+	return oldValue.EventCount, nil
+}
+
+// AddEventCount adds i to the "event_count" field.
+func (m *StripeSyncBatchMutation) AddEventCount(i int) {
+	if m.addevent_count != nil {
+		*m.addevent_count += i
+	} else {
+		m.addevent_count = &i
+	}
+}
+
+// AddedEventCount returns the value that was added to the "event_count" field in this mutation.
+func (m *StripeSyncBatchMutation) AddedEventCount() (r int, exists bool) {
+	v := m.addevent_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetEventCount resets all changes to the "event_count" field.
+func (m *StripeSyncBatchMutation) ResetEventCount() {
+	m.event_count = nil
+	m.addevent_count = nil
+}
+
+// SetStripeEventID sets the "stripe_event_id" field.
+func (m *StripeSyncBatchMutation) SetStripeEventID(s string) {
+	m.stripe_event_id = &s
+}
+
+// StripeEventID returns the value of the "stripe_event_id" field in the mutation.
+func (m *StripeSyncBatchMutation) StripeEventID() (r string, exists bool) {
+	v := m.stripe_event_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStripeEventID returns the old "stripe_event_id" field's value of the StripeSyncBatch entity.
+// If the StripeSyncBatch object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StripeSyncBatchMutation) OldStripeEventID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStripeEventID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStripeEventID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStripeEventID: %w", err)
+	}
+	return oldValue.StripeEventID, nil
+}
+
+// ClearStripeEventID clears the value of the "stripe_event_id" field.
+func (m *StripeSyncBatchMutation) ClearStripeEventID() {
+	m.stripe_event_id = nil
+	m.clearedFields[stripesyncbatch.FieldStripeEventID] = struct{}{}
+}
+
+// StripeEventIDCleared returns if the "stripe_event_id" field was cleared in this mutation.
+func (m *StripeSyncBatchMutation) StripeEventIDCleared() bool {
+	_, ok := m.clearedFields[stripesyncbatch.FieldStripeEventID]
+	return ok
+}
+
+// ResetStripeEventID resets all changes to the "stripe_event_id" field.
+func (m *StripeSyncBatchMutation) ResetStripeEventID() {
+	m.stripe_event_id = nil
+	delete(m.clearedFields, stripesyncbatch.FieldStripeEventID)
+}
+
+// SetSyncStatus sets the "sync_status" field.
+func (m *StripeSyncBatchMutation) SetSyncStatus(s string) {
+	m.sync_status = &s
+}
+
+// SyncStatus returns the value of the "sync_status" field in the mutation.
+func (m *StripeSyncBatchMutation) SyncStatus() (r string, exists bool) {
+	v := m.sync_status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSyncStatus returns the old "sync_status" field's value of the StripeSyncBatch entity.
+// If the StripeSyncBatch object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StripeSyncBatchMutation) OldSyncStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSyncStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSyncStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSyncStatus: %w", err)
+	}
+	return oldValue.SyncStatus, nil
+}
+
+// ResetSyncStatus resets all changes to the "sync_status" field.
+func (m *StripeSyncBatchMutation) ResetSyncStatus() {
+	m.sync_status = nil
+}
+
+// SetRetryCount sets the "retry_count" field.
+func (m *StripeSyncBatchMutation) SetRetryCount(i int) {
+	m.retry_count = &i
+	m.addretry_count = nil
+}
+
+// RetryCount returns the value of the "retry_count" field in the mutation.
+func (m *StripeSyncBatchMutation) RetryCount() (r int, exists bool) {
+	v := m.retry_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRetryCount returns the old "retry_count" field's value of the StripeSyncBatch entity.
+// If the StripeSyncBatch object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StripeSyncBatchMutation) OldRetryCount(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRetryCount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRetryCount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRetryCount: %w", err)
+	}
+	return oldValue.RetryCount, nil
+}
+
+// AddRetryCount adds i to the "retry_count" field.
+func (m *StripeSyncBatchMutation) AddRetryCount(i int) {
+	if m.addretry_count != nil {
+		*m.addretry_count += i
+	} else {
+		m.addretry_count = &i
+	}
+}
+
+// AddedRetryCount returns the value that was added to the "retry_count" field in this mutation.
+func (m *StripeSyncBatchMutation) AddedRetryCount() (r int, exists bool) {
+	v := m.addretry_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetRetryCount resets all changes to the "retry_count" field.
+func (m *StripeSyncBatchMutation) ResetRetryCount() {
+	m.retry_count = nil
+	m.addretry_count = nil
+}
+
+// SetErrorMessage sets the "error_message" field.
+func (m *StripeSyncBatchMutation) SetErrorMessage(s string) {
+	m.error_message = &s
+}
+
+// ErrorMessage returns the value of the "error_message" field in the mutation.
+func (m *StripeSyncBatchMutation) ErrorMessage() (r string, exists bool) {
+	v := m.error_message
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldErrorMessage returns the old "error_message" field's value of the StripeSyncBatch entity.
+// If the StripeSyncBatch object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StripeSyncBatchMutation) OldErrorMessage(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldErrorMessage is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldErrorMessage requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldErrorMessage: %w", err)
+	}
+	return oldValue.ErrorMessage, nil
+}
+
+// ClearErrorMessage clears the value of the "error_message" field.
+func (m *StripeSyncBatchMutation) ClearErrorMessage() {
+	m.error_message = nil
+	m.clearedFields[stripesyncbatch.FieldErrorMessage] = struct{}{}
+}
+
+// ErrorMessageCleared returns if the "error_message" field was cleared in this mutation.
+func (m *StripeSyncBatchMutation) ErrorMessageCleared() bool {
+	_, ok := m.clearedFields[stripesyncbatch.FieldErrorMessage]
+	return ok
+}
+
+// ResetErrorMessage resets all changes to the "error_message" field.
+func (m *StripeSyncBatchMutation) ResetErrorMessage() {
+	m.error_message = nil
+	delete(m.clearedFields, stripesyncbatch.FieldErrorMessage)
+}
+
+// SetWindowStart sets the "window_start" field.
+func (m *StripeSyncBatchMutation) SetWindowStart(t time.Time) {
+	m.window_start = &t
+}
+
+// WindowStart returns the value of the "window_start" field in the mutation.
+func (m *StripeSyncBatchMutation) WindowStart() (r time.Time, exists bool) {
+	v := m.window_start
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWindowStart returns the old "window_start" field's value of the StripeSyncBatch entity.
+// If the StripeSyncBatch object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StripeSyncBatchMutation) OldWindowStart(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWindowStart is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWindowStart requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWindowStart: %w", err)
+	}
+	return oldValue.WindowStart, nil
+}
+
+// ResetWindowStart resets all changes to the "window_start" field.
+func (m *StripeSyncBatchMutation) ResetWindowStart() {
+	m.window_start = nil
+}
+
+// SetWindowEnd sets the "window_end" field.
+func (m *StripeSyncBatchMutation) SetWindowEnd(t time.Time) {
+	m.window_end = &t
+}
+
+// WindowEnd returns the value of the "window_end" field in the mutation.
+func (m *StripeSyncBatchMutation) WindowEnd() (r time.Time, exists bool) {
+	v := m.window_end
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWindowEnd returns the old "window_end" field's value of the StripeSyncBatch entity.
+// If the StripeSyncBatch object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StripeSyncBatchMutation) OldWindowEnd(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWindowEnd is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWindowEnd requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWindowEnd: %w", err)
+	}
+	return oldValue.WindowEnd, nil
+}
+
+// ResetWindowEnd resets all changes to the "window_end" field.
+func (m *StripeSyncBatchMutation) ResetWindowEnd() {
+	m.window_end = nil
+}
+
+// SetSyncedAt sets the "synced_at" field.
+func (m *StripeSyncBatchMutation) SetSyncedAt(t time.Time) {
+	m.synced_at = &t
+}
+
+// SyncedAt returns the value of the "synced_at" field in the mutation.
+func (m *StripeSyncBatchMutation) SyncedAt() (r time.Time, exists bool) {
+	v := m.synced_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSyncedAt returns the old "synced_at" field's value of the StripeSyncBatch entity.
+// If the StripeSyncBatch object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StripeSyncBatchMutation) OldSyncedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSyncedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSyncedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSyncedAt: %w", err)
+	}
+	return oldValue.SyncedAt, nil
+}
+
+// ClearSyncedAt clears the value of the "synced_at" field.
+func (m *StripeSyncBatchMutation) ClearSyncedAt() {
+	m.synced_at = nil
+	m.clearedFields[stripesyncbatch.FieldSyncedAt] = struct{}{}
+}
+
+// SyncedAtCleared returns if the "synced_at" field was cleared in this mutation.
+func (m *StripeSyncBatchMutation) SyncedAtCleared() bool {
+	_, ok := m.clearedFields[stripesyncbatch.FieldSyncedAt]
+	return ok
+}
+
+// ResetSyncedAt resets all changes to the "synced_at" field.
+func (m *StripeSyncBatchMutation) ResetSyncedAt() {
+	m.synced_at = nil
+	delete(m.clearedFields, stripesyncbatch.FieldSyncedAt)
+}
+
+// Where appends a list predicates to the StripeSyncBatchMutation builder.
+func (m *StripeSyncBatchMutation) Where(ps ...predicate.StripeSyncBatch) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the StripeSyncBatchMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *StripeSyncBatchMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.StripeSyncBatch, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *StripeSyncBatchMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *StripeSyncBatchMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (StripeSyncBatch).
+func (m *StripeSyncBatchMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *StripeSyncBatchMutation) Fields() []string {
+	fields := make([]string, 0, 20)
+	if m.tenant_id != nil {
+		fields = append(fields, stripesyncbatch.FieldTenantID)
+	}
+	if m.status != nil {
+		fields = append(fields, stripesyncbatch.FieldStatus)
+	}
+	if m.created_at != nil {
+		fields = append(fields, stripesyncbatch.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, stripesyncbatch.FieldUpdatedAt)
+	}
+	if m.created_by != nil {
+		fields = append(fields, stripesyncbatch.FieldCreatedBy)
+	}
+	if m.updated_by != nil {
+		fields = append(fields, stripesyncbatch.FieldUpdatedBy)
+	}
+	if m.environment_id != nil {
+		fields = append(fields, stripesyncbatch.FieldEnvironmentID)
+	}
+	if m.entity_id != nil {
+		fields = append(fields, stripesyncbatch.FieldEntityID)
+	}
+	if m.entity_type != nil {
+		fields = append(fields, stripesyncbatch.FieldEntityType)
+	}
+	if m.meter_id != nil {
+		fields = append(fields, stripesyncbatch.FieldMeterID)
+	}
+	if m.event_type != nil {
+		fields = append(fields, stripesyncbatch.FieldEventType)
+	}
+	if m.aggregated_quantity != nil {
+		fields = append(fields, stripesyncbatch.FieldAggregatedQuantity)
+	}
+	if m.event_count != nil {
+		fields = append(fields, stripesyncbatch.FieldEventCount)
+	}
+	if m.stripe_event_id != nil {
+		fields = append(fields, stripesyncbatch.FieldStripeEventID)
+	}
+	if m.sync_status != nil {
+		fields = append(fields, stripesyncbatch.FieldSyncStatus)
+	}
+	if m.retry_count != nil {
+		fields = append(fields, stripesyncbatch.FieldRetryCount)
+	}
+	if m.error_message != nil {
+		fields = append(fields, stripesyncbatch.FieldErrorMessage)
+	}
+	if m.window_start != nil {
+		fields = append(fields, stripesyncbatch.FieldWindowStart)
+	}
+	if m.window_end != nil {
+		fields = append(fields, stripesyncbatch.FieldWindowEnd)
+	}
+	if m.synced_at != nil {
+		fields = append(fields, stripesyncbatch.FieldSyncedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *StripeSyncBatchMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case stripesyncbatch.FieldTenantID:
+		return m.TenantID()
+	case stripesyncbatch.FieldStatus:
+		return m.Status()
+	case stripesyncbatch.FieldCreatedAt:
+		return m.CreatedAt()
+	case stripesyncbatch.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case stripesyncbatch.FieldCreatedBy:
+		return m.CreatedBy()
+	case stripesyncbatch.FieldUpdatedBy:
+		return m.UpdatedBy()
+	case stripesyncbatch.FieldEnvironmentID:
+		return m.EnvironmentID()
+	case stripesyncbatch.FieldEntityID:
+		return m.EntityID()
+	case stripesyncbatch.FieldEntityType:
+		return m.EntityType()
+	case stripesyncbatch.FieldMeterID:
+		return m.MeterID()
+	case stripesyncbatch.FieldEventType:
+		return m.EventType()
+	case stripesyncbatch.FieldAggregatedQuantity:
+		return m.AggregatedQuantity()
+	case stripesyncbatch.FieldEventCount:
+		return m.EventCount()
+	case stripesyncbatch.FieldStripeEventID:
+		return m.StripeEventID()
+	case stripesyncbatch.FieldSyncStatus:
+		return m.SyncStatus()
+	case stripesyncbatch.FieldRetryCount:
+		return m.RetryCount()
+	case stripesyncbatch.FieldErrorMessage:
+		return m.ErrorMessage()
+	case stripesyncbatch.FieldWindowStart:
+		return m.WindowStart()
+	case stripesyncbatch.FieldWindowEnd:
+		return m.WindowEnd()
+	case stripesyncbatch.FieldSyncedAt:
+		return m.SyncedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *StripeSyncBatchMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case stripesyncbatch.FieldTenantID:
+		return m.OldTenantID(ctx)
+	case stripesyncbatch.FieldStatus:
+		return m.OldStatus(ctx)
+	case stripesyncbatch.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case stripesyncbatch.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case stripesyncbatch.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case stripesyncbatch.FieldUpdatedBy:
+		return m.OldUpdatedBy(ctx)
+	case stripesyncbatch.FieldEnvironmentID:
+		return m.OldEnvironmentID(ctx)
+	case stripesyncbatch.FieldEntityID:
+		return m.OldEntityID(ctx)
+	case stripesyncbatch.FieldEntityType:
+		return m.OldEntityType(ctx)
+	case stripesyncbatch.FieldMeterID:
+		return m.OldMeterID(ctx)
+	case stripesyncbatch.FieldEventType:
+		return m.OldEventType(ctx)
+	case stripesyncbatch.FieldAggregatedQuantity:
+		return m.OldAggregatedQuantity(ctx)
+	case stripesyncbatch.FieldEventCount:
+		return m.OldEventCount(ctx)
+	case stripesyncbatch.FieldStripeEventID:
+		return m.OldStripeEventID(ctx)
+	case stripesyncbatch.FieldSyncStatus:
+		return m.OldSyncStatus(ctx)
+	case stripesyncbatch.FieldRetryCount:
+		return m.OldRetryCount(ctx)
+	case stripesyncbatch.FieldErrorMessage:
+		return m.OldErrorMessage(ctx)
+	case stripesyncbatch.FieldWindowStart:
+		return m.OldWindowStart(ctx)
+	case stripesyncbatch.FieldWindowEnd:
+		return m.OldWindowEnd(ctx)
+	case stripesyncbatch.FieldSyncedAt:
+		return m.OldSyncedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown StripeSyncBatch field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *StripeSyncBatchMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case stripesyncbatch.FieldTenantID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTenantID(v)
+		return nil
+	case stripesyncbatch.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case stripesyncbatch.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case stripesyncbatch.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case stripesyncbatch.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case stripesyncbatch.FieldUpdatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedBy(v)
+		return nil
+	case stripesyncbatch.FieldEnvironmentID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnvironmentID(v)
+		return nil
+	case stripesyncbatch.FieldEntityID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEntityID(v)
+		return nil
+	case stripesyncbatch.FieldEntityType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEntityType(v)
+		return nil
+	case stripesyncbatch.FieldMeterID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMeterID(v)
+		return nil
+	case stripesyncbatch.FieldEventType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEventType(v)
+		return nil
+	case stripesyncbatch.FieldAggregatedQuantity:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAggregatedQuantity(v)
+		return nil
+	case stripesyncbatch.FieldEventCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEventCount(v)
+		return nil
+	case stripesyncbatch.FieldStripeEventID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStripeEventID(v)
+		return nil
+	case stripesyncbatch.FieldSyncStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSyncStatus(v)
+		return nil
+	case stripesyncbatch.FieldRetryCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRetryCount(v)
+		return nil
+	case stripesyncbatch.FieldErrorMessage:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetErrorMessage(v)
+		return nil
+	case stripesyncbatch.FieldWindowStart:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWindowStart(v)
+		return nil
+	case stripesyncbatch.FieldWindowEnd:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWindowEnd(v)
+		return nil
+	case stripesyncbatch.FieldSyncedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSyncedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown StripeSyncBatch field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *StripeSyncBatchMutation) AddedFields() []string {
+	var fields []string
+	if m.addaggregated_quantity != nil {
+		fields = append(fields, stripesyncbatch.FieldAggregatedQuantity)
+	}
+	if m.addevent_count != nil {
+		fields = append(fields, stripesyncbatch.FieldEventCount)
+	}
+	if m.addretry_count != nil {
+		fields = append(fields, stripesyncbatch.FieldRetryCount)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *StripeSyncBatchMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case stripesyncbatch.FieldAggregatedQuantity:
+		return m.AddedAggregatedQuantity()
+	case stripesyncbatch.FieldEventCount:
+		return m.AddedEventCount()
+	case stripesyncbatch.FieldRetryCount:
+		return m.AddedRetryCount()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *StripeSyncBatchMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case stripesyncbatch.FieldAggregatedQuantity:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAggregatedQuantity(v)
+		return nil
+	case stripesyncbatch.FieldEventCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddEventCount(v)
+		return nil
+	case stripesyncbatch.FieldRetryCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRetryCount(v)
+		return nil
+	}
+	return fmt.Errorf("unknown StripeSyncBatch numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *StripeSyncBatchMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(stripesyncbatch.FieldCreatedBy) {
+		fields = append(fields, stripesyncbatch.FieldCreatedBy)
+	}
+	if m.FieldCleared(stripesyncbatch.FieldUpdatedBy) {
+		fields = append(fields, stripesyncbatch.FieldUpdatedBy)
+	}
+	if m.FieldCleared(stripesyncbatch.FieldEnvironmentID) {
+		fields = append(fields, stripesyncbatch.FieldEnvironmentID)
+	}
+	if m.FieldCleared(stripesyncbatch.FieldStripeEventID) {
+		fields = append(fields, stripesyncbatch.FieldStripeEventID)
+	}
+	if m.FieldCleared(stripesyncbatch.FieldErrorMessage) {
+		fields = append(fields, stripesyncbatch.FieldErrorMessage)
+	}
+	if m.FieldCleared(stripesyncbatch.FieldSyncedAt) {
+		fields = append(fields, stripesyncbatch.FieldSyncedAt)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *StripeSyncBatchMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *StripeSyncBatchMutation) ClearField(name string) error {
+	switch name {
+	case stripesyncbatch.FieldCreatedBy:
+		m.ClearCreatedBy()
+		return nil
+	case stripesyncbatch.FieldUpdatedBy:
+		m.ClearUpdatedBy()
+		return nil
+	case stripesyncbatch.FieldEnvironmentID:
+		m.ClearEnvironmentID()
+		return nil
+	case stripesyncbatch.FieldStripeEventID:
+		m.ClearStripeEventID()
+		return nil
+	case stripesyncbatch.FieldErrorMessage:
+		m.ClearErrorMessage()
+		return nil
+	case stripesyncbatch.FieldSyncedAt:
+		m.ClearSyncedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown StripeSyncBatch nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *StripeSyncBatchMutation) ResetField(name string) error {
+	switch name {
+	case stripesyncbatch.FieldTenantID:
+		m.ResetTenantID()
+		return nil
+	case stripesyncbatch.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case stripesyncbatch.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case stripesyncbatch.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case stripesyncbatch.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case stripesyncbatch.FieldUpdatedBy:
+		m.ResetUpdatedBy()
+		return nil
+	case stripesyncbatch.FieldEnvironmentID:
+		m.ResetEnvironmentID()
+		return nil
+	case stripesyncbatch.FieldEntityID:
+		m.ResetEntityID()
+		return nil
+	case stripesyncbatch.FieldEntityType:
+		m.ResetEntityType()
+		return nil
+	case stripesyncbatch.FieldMeterID:
+		m.ResetMeterID()
+		return nil
+	case stripesyncbatch.FieldEventType:
+		m.ResetEventType()
+		return nil
+	case stripesyncbatch.FieldAggregatedQuantity:
+		m.ResetAggregatedQuantity()
+		return nil
+	case stripesyncbatch.FieldEventCount:
+		m.ResetEventCount()
+		return nil
+	case stripesyncbatch.FieldStripeEventID:
+		m.ResetStripeEventID()
+		return nil
+	case stripesyncbatch.FieldSyncStatus:
+		m.ResetSyncStatus()
+		return nil
+	case stripesyncbatch.FieldRetryCount:
+		m.ResetRetryCount()
+		return nil
+	case stripesyncbatch.FieldErrorMessage:
+		m.ResetErrorMessage()
+		return nil
+	case stripesyncbatch.FieldWindowStart:
+		m.ResetWindowStart()
+		return nil
+	case stripesyncbatch.FieldWindowEnd:
+		m.ResetWindowEnd()
+		return nil
+	case stripesyncbatch.FieldSyncedAt:
+		m.ResetSyncedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown StripeSyncBatch field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *StripeSyncBatchMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *StripeSyncBatchMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *StripeSyncBatchMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *StripeSyncBatchMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *StripeSyncBatchMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *StripeSyncBatchMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *StripeSyncBatchMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown StripeSyncBatch unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *StripeSyncBatchMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown StripeSyncBatch edge %s", name)
+}
+
+// StripeTenantConfigMutation represents an operation that mutates the StripeTenantConfig nodes in the graph.
+type StripeTenantConfigMutation struct {
+	config
+	op                            Op
+	typ                           string
+	id                            *string
+	tenant_id                     *string
+	status                        *string
+	created_at                    *time.Time
+	updated_at                    *time.Time
+	created_by                    *string
+	updated_by                    *string
+	environment_id                *string
+	api_key_encrypted             *string
+	sync_enabled                  *bool
+	aggregation_window_minutes    *int
+	addaggregation_window_minutes *int
+	webhook_config                *map[string]interface{}
+	clearedFields                 map[string]struct{}
+	done                          bool
+	oldValue                      func(context.Context) (*StripeTenantConfig, error)
+	predicates                    []predicate.StripeTenantConfig
+}
+
+var _ ent.Mutation = (*StripeTenantConfigMutation)(nil)
+
+// stripetenantconfigOption allows management of the mutation configuration using functional options.
+type stripetenantconfigOption func(*StripeTenantConfigMutation)
+
+// newStripeTenantConfigMutation creates new mutation for the StripeTenantConfig entity.
+func newStripeTenantConfigMutation(c config, op Op, opts ...stripetenantconfigOption) *StripeTenantConfigMutation {
+	m := &StripeTenantConfigMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeStripeTenantConfig,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withStripeTenantConfigID sets the ID field of the mutation.
+func withStripeTenantConfigID(id string) stripetenantconfigOption {
+	return func(m *StripeTenantConfigMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *StripeTenantConfig
+		)
+		m.oldValue = func(ctx context.Context) (*StripeTenantConfig, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().StripeTenantConfig.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withStripeTenantConfig sets the old StripeTenantConfig of the mutation.
+func withStripeTenantConfig(node *StripeTenantConfig) stripetenantconfigOption {
+	return func(m *StripeTenantConfigMutation) {
+		m.oldValue = func(context.Context) (*StripeTenantConfig, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m StripeTenantConfigMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m StripeTenantConfigMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of StripeTenantConfig entities.
+func (m *StripeTenantConfigMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *StripeTenantConfigMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *StripeTenantConfigMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().StripeTenantConfig.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (m *StripeTenantConfigMutation) SetTenantID(s string) {
+	m.tenant_id = &s
+}
+
+// TenantID returns the value of the "tenant_id" field in the mutation.
+func (m *StripeTenantConfigMutation) TenantID() (r string, exists bool) {
+	v := m.tenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTenantID returns the old "tenant_id" field's value of the StripeTenantConfig entity.
+// If the StripeTenantConfig object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StripeTenantConfigMutation) OldTenantID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTenantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
+	}
+	return oldValue.TenantID, nil
+}
+
+// ResetTenantID resets all changes to the "tenant_id" field.
+func (m *StripeTenantConfigMutation) ResetTenantID() {
+	m.tenant_id = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *StripeTenantConfigMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *StripeTenantConfigMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the StripeTenantConfig entity.
+// If the StripeTenantConfig object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StripeTenantConfigMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *StripeTenantConfigMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *StripeTenantConfigMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *StripeTenantConfigMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the StripeTenantConfig entity.
+// If the StripeTenantConfig object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StripeTenantConfigMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *StripeTenantConfigMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *StripeTenantConfigMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *StripeTenantConfigMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the StripeTenantConfig entity.
+// If the StripeTenantConfig object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StripeTenantConfigMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *StripeTenantConfigMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *StripeTenantConfigMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *StripeTenantConfigMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the StripeTenantConfig entity.
+// If the StripeTenantConfig object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StripeTenantConfigMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (m *StripeTenantConfigMutation) ClearCreatedBy() {
+	m.created_by = nil
+	m.clearedFields[stripetenantconfig.FieldCreatedBy] = struct{}{}
+}
+
+// CreatedByCleared returns if the "created_by" field was cleared in this mutation.
+func (m *StripeTenantConfigMutation) CreatedByCleared() bool {
+	_, ok := m.clearedFields[stripetenantconfig.FieldCreatedBy]
+	return ok
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *StripeTenantConfigMutation) ResetCreatedBy() {
+	m.created_by = nil
+	delete(m.clearedFields, stripetenantconfig.FieldCreatedBy)
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (m *StripeTenantConfigMutation) SetUpdatedBy(s string) {
+	m.updated_by = &s
+}
+
+// UpdatedBy returns the value of the "updated_by" field in the mutation.
+func (m *StripeTenantConfigMutation) UpdatedBy() (r string, exists bool) {
+	v := m.updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedBy returns the old "updated_by" field's value of the StripeTenantConfig entity.
+// If the StripeTenantConfig object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StripeTenantConfigMutation) OldUpdatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
+	}
+	return oldValue.UpdatedBy, nil
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (m *StripeTenantConfigMutation) ClearUpdatedBy() {
+	m.updated_by = nil
+	m.clearedFields[stripetenantconfig.FieldUpdatedBy] = struct{}{}
+}
+
+// UpdatedByCleared returns if the "updated_by" field was cleared in this mutation.
+func (m *StripeTenantConfigMutation) UpdatedByCleared() bool {
+	_, ok := m.clearedFields[stripetenantconfig.FieldUpdatedBy]
+	return ok
+}
+
+// ResetUpdatedBy resets all changes to the "updated_by" field.
+func (m *StripeTenantConfigMutation) ResetUpdatedBy() {
+	m.updated_by = nil
+	delete(m.clearedFields, stripetenantconfig.FieldUpdatedBy)
+}
+
+// SetEnvironmentID sets the "environment_id" field.
+func (m *StripeTenantConfigMutation) SetEnvironmentID(s string) {
+	m.environment_id = &s
+}
+
+// EnvironmentID returns the value of the "environment_id" field in the mutation.
+func (m *StripeTenantConfigMutation) EnvironmentID() (r string, exists bool) {
+	v := m.environment_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnvironmentID returns the old "environment_id" field's value of the StripeTenantConfig entity.
+// If the StripeTenantConfig object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StripeTenantConfigMutation) OldEnvironmentID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnvironmentID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnvironmentID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnvironmentID: %w", err)
+	}
+	return oldValue.EnvironmentID, nil
+}
+
+// ClearEnvironmentID clears the value of the "environment_id" field.
+func (m *StripeTenantConfigMutation) ClearEnvironmentID() {
+	m.environment_id = nil
+	m.clearedFields[stripetenantconfig.FieldEnvironmentID] = struct{}{}
+}
+
+// EnvironmentIDCleared returns if the "environment_id" field was cleared in this mutation.
+func (m *StripeTenantConfigMutation) EnvironmentIDCleared() bool {
+	_, ok := m.clearedFields[stripetenantconfig.FieldEnvironmentID]
+	return ok
+}
+
+// ResetEnvironmentID resets all changes to the "environment_id" field.
+func (m *StripeTenantConfigMutation) ResetEnvironmentID() {
+	m.environment_id = nil
+	delete(m.clearedFields, stripetenantconfig.FieldEnvironmentID)
+}
+
+// SetAPIKeyEncrypted sets the "api_key_encrypted" field.
+func (m *StripeTenantConfigMutation) SetAPIKeyEncrypted(s string) {
+	m.api_key_encrypted = &s
+}
+
+// APIKeyEncrypted returns the value of the "api_key_encrypted" field in the mutation.
+func (m *StripeTenantConfigMutation) APIKeyEncrypted() (r string, exists bool) {
+	v := m.api_key_encrypted
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAPIKeyEncrypted returns the old "api_key_encrypted" field's value of the StripeTenantConfig entity.
+// If the StripeTenantConfig object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StripeTenantConfigMutation) OldAPIKeyEncrypted(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAPIKeyEncrypted is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAPIKeyEncrypted requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAPIKeyEncrypted: %w", err)
+	}
+	return oldValue.APIKeyEncrypted, nil
+}
+
+// ResetAPIKeyEncrypted resets all changes to the "api_key_encrypted" field.
+func (m *StripeTenantConfigMutation) ResetAPIKeyEncrypted() {
+	m.api_key_encrypted = nil
+}
+
+// SetSyncEnabled sets the "sync_enabled" field.
+func (m *StripeTenantConfigMutation) SetSyncEnabled(b bool) {
+	m.sync_enabled = &b
+}
+
+// SyncEnabled returns the value of the "sync_enabled" field in the mutation.
+func (m *StripeTenantConfigMutation) SyncEnabled() (r bool, exists bool) {
+	v := m.sync_enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSyncEnabled returns the old "sync_enabled" field's value of the StripeTenantConfig entity.
+// If the StripeTenantConfig object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StripeTenantConfigMutation) OldSyncEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSyncEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSyncEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSyncEnabled: %w", err)
+	}
+	return oldValue.SyncEnabled, nil
+}
+
+// ResetSyncEnabled resets all changes to the "sync_enabled" field.
+func (m *StripeTenantConfigMutation) ResetSyncEnabled() {
+	m.sync_enabled = nil
+}
+
+// SetAggregationWindowMinutes sets the "aggregation_window_minutes" field.
+func (m *StripeTenantConfigMutation) SetAggregationWindowMinutes(i int) {
+	m.aggregation_window_minutes = &i
+	m.addaggregation_window_minutes = nil
+}
+
+// AggregationWindowMinutes returns the value of the "aggregation_window_minutes" field in the mutation.
+func (m *StripeTenantConfigMutation) AggregationWindowMinutes() (r int, exists bool) {
+	v := m.aggregation_window_minutes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAggregationWindowMinutes returns the old "aggregation_window_minutes" field's value of the StripeTenantConfig entity.
+// If the StripeTenantConfig object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StripeTenantConfigMutation) OldAggregationWindowMinutes(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAggregationWindowMinutes is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAggregationWindowMinutes requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAggregationWindowMinutes: %w", err)
+	}
+	return oldValue.AggregationWindowMinutes, nil
+}
+
+// AddAggregationWindowMinutes adds i to the "aggregation_window_minutes" field.
+func (m *StripeTenantConfigMutation) AddAggregationWindowMinutes(i int) {
+	if m.addaggregation_window_minutes != nil {
+		*m.addaggregation_window_minutes += i
+	} else {
+		m.addaggregation_window_minutes = &i
+	}
+}
+
+// AddedAggregationWindowMinutes returns the value that was added to the "aggregation_window_minutes" field in this mutation.
+func (m *StripeTenantConfigMutation) AddedAggregationWindowMinutes() (r int, exists bool) {
+	v := m.addaggregation_window_minutes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetAggregationWindowMinutes resets all changes to the "aggregation_window_minutes" field.
+func (m *StripeTenantConfigMutation) ResetAggregationWindowMinutes() {
+	m.aggregation_window_minutes = nil
+	m.addaggregation_window_minutes = nil
+}
+
+// SetWebhookConfig sets the "webhook_config" field.
+func (m *StripeTenantConfigMutation) SetWebhookConfig(value map[string]interface{}) {
+	m.webhook_config = &value
+}
+
+// WebhookConfig returns the value of the "webhook_config" field in the mutation.
+func (m *StripeTenantConfigMutation) WebhookConfig() (r map[string]interface{}, exists bool) {
+	v := m.webhook_config
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWebhookConfig returns the old "webhook_config" field's value of the StripeTenantConfig entity.
+// If the StripeTenantConfig object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StripeTenantConfigMutation) OldWebhookConfig(ctx context.Context) (v map[string]interface{}, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWebhookConfig is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWebhookConfig requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWebhookConfig: %w", err)
+	}
+	return oldValue.WebhookConfig, nil
+}
+
+// ClearWebhookConfig clears the value of the "webhook_config" field.
+func (m *StripeTenantConfigMutation) ClearWebhookConfig() {
+	m.webhook_config = nil
+	m.clearedFields[stripetenantconfig.FieldWebhookConfig] = struct{}{}
+}
+
+// WebhookConfigCleared returns if the "webhook_config" field was cleared in this mutation.
+func (m *StripeTenantConfigMutation) WebhookConfigCleared() bool {
+	_, ok := m.clearedFields[stripetenantconfig.FieldWebhookConfig]
+	return ok
+}
+
+// ResetWebhookConfig resets all changes to the "webhook_config" field.
+func (m *StripeTenantConfigMutation) ResetWebhookConfig() {
+	m.webhook_config = nil
+	delete(m.clearedFields, stripetenantconfig.FieldWebhookConfig)
+}
+
+// Where appends a list predicates to the StripeTenantConfigMutation builder.
+func (m *StripeTenantConfigMutation) Where(ps ...predicate.StripeTenantConfig) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the StripeTenantConfigMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *StripeTenantConfigMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.StripeTenantConfig, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *StripeTenantConfigMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *StripeTenantConfigMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (StripeTenantConfig).
+func (m *StripeTenantConfigMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *StripeTenantConfigMutation) Fields() []string {
+	fields := make([]string, 0, 11)
+	if m.tenant_id != nil {
+		fields = append(fields, stripetenantconfig.FieldTenantID)
+	}
+	if m.status != nil {
+		fields = append(fields, stripetenantconfig.FieldStatus)
+	}
+	if m.created_at != nil {
+		fields = append(fields, stripetenantconfig.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, stripetenantconfig.FieldUpdatedAt)
+	}
+	if m.created_by != nil {
+		fields = append(fields, stripetenantconfig.FieldCreatedBy)
+	}
+	if m.updated_by != nil {
+		fields = append(fields, stripetenantconfig.FieldUpdatedBy)
+	}
+	if m.environment_id != nil {
+		fields = append(fields, stripetenantconfig.FieldEnvironmentID)
+	}
+	if m.api_key_encrypted != nil {
+		fields = append(fields, stripetenantconfig.FieldAPIKeyEncrypted)
+	}
+	if m.sync_enabled != nil {
+		fields = append(fields, stripetenantconfig.FieldSyncEnabled)
+	}
+	if m.aggregation_window_minutes != nil {
+		fields = append(fields, stripetenantconfig.FieldAggregationWindowMinutes)
+	}
+	if m.webhook_config != nil {
+		fields = append(fields, stripetenantconfig.FieldWebhookConfig)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *StripeTenantConfigMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case stripetenantconfig.FieldTenantID:
+		return m.TenantID()
+	case stripetenantconfig.FieldStatus:
+		return m.Status()
+	case stripetenantconfig.FieldCreatedAt:
+		return m.CreatedAt()
+	case stripetenantconfig.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case stripetenantconfig.FieldCreatedBy:
+		return m.CreatedBy()
+	case stripetenantconfig.FieldUpdatedBy:
+		return m.UpdatedBy()
+	case stripetenantconfig.FieldEnvironmentID:
+		return m.EnvironmentID()
+	case stripetenantconfig.FieldAPIKeyEncrypted:
+		return m.APIKeyEncrypted()
+	case stripetenantconfig.FieldSyncEnabled:
+		return m.SyncEnabled()
+	case stripetenantconfig.FieldAggregationWindowMinutes:
+		return m.AggregationWindowMinutes()
+	case stripetenantconfig.FieldWebhookConfig:
+		return m.WebhookConfig()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *StripeTenantConfigMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case stripetenantconfig.FieldTenantID:
+		return m.OldTenantID(ctx)
+	case stripetenantconfig.FieldStatus:
+		return m.OldStatus(ctx)
+	case stripetenantconfig.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case stripetenantconfig.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case stripetenantconfig.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case stripetenantconfig.FieldUpdatedBy:
+		return m.OldUpdatedBy(ctx)
+	case stripetenantconfig.FieldEnvironmentID:
+		return m.OldEnvironmentID(ctx)
+	case stripetenantconfig.FieldAPIKeyEncrypted:
+		return m.OldAPIKeyEncrypted(ctx)
+	case stripetenantconfig.FieldSyncEnabled:
+		return m.OldSyncEnabled(ctx)
+	case stripetenantconfig.FieldAggregationWindowMinutes:
+		return m.OldAggregationWindowMinutes(ctx)
+	case stripetenantconfig.FieldWebhookConfig:
+		return m.OldWebhookConfig(ctx)
+	}
+	return nil, fmt.Errorf("unknown StripeTenantConfig field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *StripeTenantConfigMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case stripetenantconfig.FieldTenantID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTenantID(v)
+		return nil
+	case stripetenantconfig.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case stripetenantconfig.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case stripetenantconfig.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case stripetenantconfig.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case stripetenantconfig.FieldUpdatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedBy(v)
+		return nil
+	case stripetenantconfig.FieldEnvironmentID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnvironmentID(v)
+		return nil
+	case stripetenantconfig.FieldAPIKeyEncrypted:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAPIKeyEncrypted(v)
+		return nil
+	case stripetenantconfig.FieldSyncEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSyncEnabled(v)
+		return nil
+	case stripetenantconfig.FieldAggregationWindowMinutes:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAggregationWindowMinutes(v)
+		return nil
+	case stripetenantconfig.FieldWebhookConfig:
+		v, ok := value.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWebhookConfig(v)
+		return nil
+	}
+	return fmt.Errorf("unknown StripeTenantConfig field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *StripeTenantConfigMutation) AddedFields() []string {
+	var fields []string
+	if m.addaggregation_window_minutes != nil {
+		fields = append(fields, stripetenantconfig.FieldAggregationWindowMinutes)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *StripeTenantConfigMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case stripetenantconfig.FieldAggregationWindowMinutes:
+		return m.AddedAggregationWindowMinutes()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *StripeTenantConfigMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case stripetenantconfig.FieldAggregationWindowMinutes:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAggregationWindowMinutes(v)
+		return nil
+	}
+	return fmt.Errorf("unknown StripeTenantConfig numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *StripeTenantConfigMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(stripetenantconfig.FieldCreatedBy) {
+		fields = append(fields, stripetenantconfig.FieldCreatedBy)
+	}
+	if m.FieldCleared(stripetenantconfig.FieldUpdatedBy) {
+		fields = append(fields, stripetenantconfig.FieldUpdatedBy)
+	}
+	if m.FieldCleared(stripetenantconfig.FieldEnvironmentID) {
+		fields = append(fields, stripetenantconfig.FieldEnvironmentID)
+	}
+	if m.FieldCleared(stripetenantconfig.FieldWebhookConfig) {
+		fields = append(fields, stripetenantconfig.FieldWebhookConfig)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *StripeTenantConfigMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *StripeTenantConfigMutation) ClearField(name string) error {
+	switch name {
+	case stripetenantconfig.FieldCreatedBy:
+		m.ClearCreatedBy()
+		return nil
+	case stripetenantconfig.FieldUpdatedBy:
+		m.ClearUpdatedBy()
+		return nil
+	case stripetenantconfig.FieldEnvironmentID:
+		m.ClearEnvironmentID()
+		return nil
+	case stripetenantconfig.FieldWebhookConfig:
+		m.ClearWebhookConfig()
+		return nil
+	}
+	return fmt.Errorf("unknown StripeTenantConfig nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *StripeTenantConfigMutation) ResetField(name string) error {
+	switch name {
+	case stripetenantconfig.FieldTenantID:
+		m.ResetTenantID()
+		return nil
+	case stripetenantconfig.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case stripetenantconfig.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case stripetenantconfig.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case stripetenantconfig.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case stripetenantconfig.FieldUpdatedBy:
+		m.ResetUpdatedBy()
+		return nil
+	case stripetenantconfig.FieldEnvironmentID:
+		m.ResetEnvironmentID()
+		return nil
+	case stripetenantconfig.FieldAPIKeyEncrypted:
+		m.ResetAPIKeyEncrypted()
+		return nil
+	case stripetenantconfig.FieldSyncEnabled:
+		m.ResetSyncEnabled()
+		return nil
+	case stripetenantconfig.FieldAggregationWindowMinutes:
+		m.ResetAggregationWindowMinutes()
+		return nil
+	case stripetenantconfig.FieldWebhookConfig:
+		m.ResetWebhookConfig()
+		return nil
+	}
+	return fmt.Errorf("unknown StripeTenantConfig field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *StripeTenantConfigMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *StripeTenantConfigMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *StripeTenantConfigMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *StripeTenantConfigMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *StripeTenantConfigMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *StripeTenantConfigMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *StripeTenantConfigMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown StripeTenantConfig unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *StripeTenantConfigMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown StripeTenantConfig edge %s", name)
 }
 
 // SubscriptionMutation represents an operation that mutates the Subscription nodes in the graph.

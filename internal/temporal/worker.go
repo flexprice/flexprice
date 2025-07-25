@@ -64,3 +64,8 @@ func (w *Worker) RegisterWithLifecycle(lc fx.Lifecycle) {
 		},
 	})
 }
+
+// SDKWorker returns the underlying Temporal SDK worker instance.
+func (w *Worker) SDKWorker() worker.Worker {
+	return w.worker
+}

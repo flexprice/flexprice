@@ -76,7 +76,7 @@ api/*/*
 !api/*/tsconfig.node.json
 !api/*/tsconfig.app.json
 
-CLAUDE.m
-
 # temp files and script logs
 temp/*
+CLAUDE.md
+.cursor/
