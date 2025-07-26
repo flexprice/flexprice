@@ -455,6 +455,25 @@ func (r *UpdatePaymentStatusRequest) Validate() error {
 	return nil
 }
 
+// UpdateInvoiceRequest represents the request payload for updating an invoice
+type UpdateInvoiceRequest struct {
+	// invoice_pdf_url is the URL where customers can download the PDF version of this invoice
+	InvoicePDFURL *string `json:"invoice_pdf_url,omitempty"`
+}
+
+func (r *UpdateInvoiceRequest) Validate() error {
+	// url validation if url is provided
+	if r.InvoicePDFURL != nil {
+		if err := validator.ValidateURL(r.InvoicePDFURL); err != nil {
+			return ierr.WithError(err).
+				WithHint("invalid invoice_pdf_url").
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	return nil
+}
+
 // InvoiceResponse represents the response payload containing invoice information
 type InvoiceResponse struct {
 	// id is the unique identifier for this invoice
