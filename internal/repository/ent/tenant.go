@@ -2,6 +2,7 @@ package ent
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/ent"
 	entTenant "github.com/flexprice/flexprice/ent/tenant"
@@ -145,6 +146,9 @@ func (r *tenantRepository) Update(ctx context.Context, tenant *domainTenant.Tena
 	_, err := client.Tenant.
 		UpdateOneID(tenant.ID).
 		SetName(tenant.Name).
+		SetStatus(string(tenant.Status)).
+		SetUpdatedAt(time.Now()).
+		SetMetadata(tenant.Metadata).
 		SetBillingDetails(tenant.BillingDetails.ToSchema()).
 		Save(ctx)
 
