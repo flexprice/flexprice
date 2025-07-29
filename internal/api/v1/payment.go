@@ -216,3 +216,34 @@ func (h *PaymentHandler) ProcessPayment(c *gin.Context) {
 
 	c.JSON(http.StatusOK, dto.NewPaymentResponse(p))
 }
+
+// @Summary List payments by filter
+// @Description List payments by filter
+// @Tags Payments
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param filter body types.PaymentFilter true "Filter"
+// @Success 200 {object} dto.ListPaymentsResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /payments/search [post]
+func (h *PaymentHandler) ListPaymentsByFilter(c *gin.Context) {
+	var filter types.PaymentFilter
+	if err := c.ShouldBindJSON(&filter); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid filter parameters").
+			Mark(ierr.ErrValidation))
+		return
+	}
+	if filter.GetLimit() == 0 {
+		filter.Limit = lo.ToPtr(types.GetDefaultFilter().Limit)
+	}
+	resp, err := h.service.ListPayments(c.Request.Context(), &filter)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}

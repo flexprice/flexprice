@@ -104,6 +104,10 @@ type PaymentFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
 
+	// filters allows complex filtering based on multiple fields
+	Filters []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
+	Sort    []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
+
 	PaymentIDs        []string `form:"payment_ids"`
 	DestinationType   *string  `form:"destination_type"`
 	DestinationID     *string  `form:"destination_id"`

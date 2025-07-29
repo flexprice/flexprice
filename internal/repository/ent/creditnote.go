@@ -8,9 +8,11 @@ import (
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/creditnote"
 	"github.com/flexprice/flexprice/ent/creditnotelineitem"
+	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/schema"
 	"github.com/flexprice/flexprice/internal/cache"
 	domainCreditNote "github.com/flexprice/flexprice/internal/domain/creditnote"
+	"github.com/flexprice/flexprice/internal/dsl"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
@@ -150,10 +152,10 @@ func (r *creditnoteRepository) CreateWithLineItems(ctx context.Context, cn *doma
 			SetStatus(string(cn.Status)).
 			SetCreatedAt(cn.CreatedAt).
 			SetUpdatedAt(cn.UpdatedAt).
-					SetCreatedBy(cn.CreatedBy).
-		SetCustomerID(cn.CustomerID).
-		SetNillableSubscriptionID(cn.SubscriptionID).
-		SetNillableVoidedAt(cn.VoidedAt).
+			SetCreatedBy(cn.CreatedBy).
+			SetCustomerID(cn.CustomerID).
+			SetNillableSubscriptionID(cn.SubscriptionID).
+			SetNillableVoidedAt(cn.VoidedAt).
 			SetNillableFinalizedAt(cn.FinalizedAt).
 			SetUpdatedBy(cn.UpdatedBy).
 			SetTotalAmount(cn.TotalAmount).
@@ -463,37 +465,36 @@ func (r *creditnoteRepository) Delete(ctx context.Context, id string) error {
 
 // List returns a paginated list of credit notes based on the filter
 func (r *creditnoteRepository) List(ctx context.Context, filter *types.CreditNoteFilter) ([]*domainCreditNote.CreditNote, error) {
+	client := r.client.Querier(ctx)
+	r.log.Debugw("listing credit notes",
+		"tenant_id", types.GetTenantID(ctx),
+		"limit", filter.GetLimit(),
+		"offset", filter.GetOffset(),
+	)
+
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "creditnote", "list", map[string]interface{}{
 		"filter": filter,
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
 	query := client.CreditNote.Query().
 		WithLineItems()
 
-	// Apply common query options
+	query, err := r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).WithHint("Failed to list credit notes").Mark(ierr.ErrDatabase)
+	}
 	query = ApplyQueryOptions(ctx, query, filter, r.queryOpts)
-	// Apply entity-specific filters
-	query = r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
-
 	creditNotes, err := query.All(ctx)
 	if err != nil {
-		return nil, ierr.WithError(err).WithHint("credit note listing failed").WithReportableDetails(
-			map[string]any{
-				"cause": err.Error(),
-			},
-		).Mark(ierr.ErrDatabase)
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).WithHint("Failed to list credit notes").Mark(ierr.ErrDatabase)
 	}
 
-	// Convert to domain model
-	result := make([]*domainCreditNote.CreditNote, len(creditNotes))
-	for i, cn := range creditNotes {
-		result[i] = domainCreditNote.FromEnt(cn)
-	}
-
-	return result, nil
+	SetSpanSuccess(span)
+	return domainCreditNote.FromEntList(creditNotes), nil
 }
 
 // Count returns the total number of credit notes based on the filter
@@ -508,12 +509,17 @@ func (r *creditnoteRepository) Count(ctx context.Context, filter *types.CreditNo
 	query := client.CreditNote.Query()
 
 	query = ApplyBaseFilters(ctx, query, filter, r.queryOpts)
-	query = r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
+	query, err := r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
+	if err != nil {
+		return 0, err
+	}
 
 	count, err := query.Count(ctx)
 	if err != nil {
+		SetSpanError(span, err)
 		return 0, ierr.WithError(err).WithHint("credit note counting failed").Mark(ierr.ErrDatabase)
 	}
+	SetSpanSuccess(span)
 	return count, nil
 }
 
@@ -592,47 +598,86 @@ func (o CreditNoteQueryOptions) ApplyPaginationFilter(query CreditNoteQuery, lim
 
 func (o CreditNoteQueryOptions) GetFieldName(field string) string {
 	switch field {
+	case "invoice_id":
+		return creditnote.FieldInvoiceID
+	case "customer_id":
+		return creditnote.FieldCustomerID
+	case "subscription_id":
+		return creditnote.FieldSubscriptionID
+	case "credit_note_number":
+		return creditnote.FieldCreditNoteNumber
+	case "credit_note_type":
+		return creditnote.FieldCreditNoteType
+	case "credit_note_status":
+		return creditnote.FieldCreditNoteStatus
+	case "refund_status":
+		return creditnote.FieldRefundStatus
+	case "currency":
+		return creditnote.FieldCurrency
+	case "idempotency_key":
+		return creditnote.FieldIdempotencyKey
+	case "status":
+		return creditnote.FieldStatus
+	case "total_amount":
+		return creditnote.FieldTotalAmount
 	case "created_at":
 		return creditnote.FieldCreatedAt
 	case "updated_at":
 		return creditnote.FieldUpdatedAt
-	case "credit_note_number":
-		return creditnote.FieldCreditNoteNumber
+	case "voided_at":
+		return creditnote.FieldVoidedAt
+	case "finalized_at":
+		return creditnote.FieldFinalizedAt
 	default:
-		return field
+		return ""
 	}
 }
 
-func (o CreditNoteQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.CreditNoteFilter, query CreditNoteQuery) CreditNoteQuery {
+func (o CreditNoteQueryOptions) GetFieldResolver(field string) (string, error) {
+	fieldName := o.GetFieldName(field)
+	if fieldName == "" {
+		return "", ierr.NewErrorf("unknown field name '%s' in credit note query", field).
+			Mark(ierr.ErrValidation)
+	}
+	return fieldName, nil
+}
+
+func (o CreditNoteQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.CreditNoteFilter, query CreditNoteQuery) (CreditNoteQuery, error) {
+	var err error
 	if f == nil {
-		return query
+		return query, nil
 	}
 
-	// Apply entity-specific filters
-	if f.InvoiceID != "" {
-		query = query.Where(creditnote.InvoiceID(f.InvoiceID))
-	}
-	if f.CreditNoteType != "" {
-		query = query.Where(creditnote.CreditNoteType(f.CreditNoteType))
-	}
 	if len(f.CreditNoteIDs) > 0 {
 		query = query.Where(creditnote.IDIn(f.CreditNoteIDs...))
 	}
-	if len(f.CreditNoteStatus) > 0 {
-		query = query.Where(creditnote.CreditNoteStatusIn(f.CreditNoteStatus...))
+
+	if f.Filters != nil {
+		query, err = dsl.ApplyFilters[CreditNoteQuery, predicate.CreditNote](
+			query,
+			f.Filters,
+			o.GetFieldResolver,
+			func(p dsl.Predicate) predicate.CreditNote { return predicate.CreditNote(p) },
+		)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	// Apply time range filters
-	if f.TimeRangeFilter != nil {
-		if f.TimeRangeFilter.StartTime != nil {
-			query = query.Where(creditnote.CreatedAtGTE(*f.TimeRangeFilter.StartTime))
-		}
-		if f.TimeRangeFilter.EndTime != nil {
-			query = query.Where(creditnote.CreatedAtLTE(*f.TimeRangeFilter.EndTime))
+	// Apply sorts using the generic function
+	if f.Sort != nil {
+		query, err = dsl.ApplySorts[CreditNoteQuery, creditnote.OrderOption](
+			query,
+			f.Sort,
+			o.GetFieldResolver,
+			func(o dsl.OrderFunc) creditnote.OrderOption { return creditnote.OrderOption(o) },
+		)
+		if err != nil {
+			return nil, err
 		}
 	}
 
-	return query
+	return query, nil
 }
 
 func (r *creditnoteRepository) SetCache(ctx context.Context, cn *domainCreditNote.CreditNote) {

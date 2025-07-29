@@ -429,8 +429,13 @@ func (o PlanQueryOptions) GetFieldName(field string) string {
 		return plan.FieldLookupKey
 	case "name":
 		return plan.FieldName
+	case "description":
+		return plan.FieldDescription
+	case "status":
+		return plan.FieldStatus
 	default:
-		return field
+		// unknown field
+		return ""
 	}
 }
 

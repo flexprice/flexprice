@@ -157,9 +157,6 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 
 		plan := v1Private.Group("/plans")
 		{
-			// list plans by filter
-			plan.POST("/search", handlers.Plan.ListPlansByFilter)
-
 			plan.POST("", handlers.Plan.CreatePlan)
 			plan.GET("", handlers.Plan.GetPlans)
 			plan.GET("/:id", handlers.Plan.GetPlan)
@@ -170,6 +167,9 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			// entitlement routes
 			plan.GET("/:id/entitlements", handlers.Plan.GetPlanEntitlements)
 			plan.GET("/:id/creditgrants", handlers.Plan.GetPlanCreditGrants)
+
+			// list plans by filter
+			plan.POST("/search", handlers.Plan.ListPlansByFilter)
 		}
 
 		subscription := v1Private.Group("/subscriptions")
@@ -208,7 +208,6 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 
 		invoices := v1Private.Group("/invoices")
 		{
-			invoices.POST("/search", handlers.Invoice.ListInvoicesByFilter)
 			invoices.POST("", handlers.Invoice.CreateInvoice)
 			invoices.GET("", handlers.Invoice.ListInvoices)
 			invoices.GET("/:id", handlers.Invoice.GetInvoice)
@@ -220,6 +219,9 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			invoices.POST("/:id/payment/attempt", handlers.Invoice.AttemptPayment)
 			invoices.GET("/:id/pdf", handlers.Invoice.GetInvoicePDF)
 			invoices.POST("/:id/recalculate", handlers.Invoice.RecalculateInvoice)
+
+			// list invoices by filter
+			invoices.POST("/search", handlers.Invoice.ListInvoicesByFilter)
 		}
 
 		feature := v1Private.Group("/features")
@@ -260,6 +262,9 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			payments.PUT("/:id", handlers.Payment.UpdatePayment)
 			payments.DELETE("/:id", handlers.Payment.DeletePayment)
 			payments.POST("/:id/process", handlers.Payment.ProcessPayment)
+
+			// list payments by filter
+			payments.POST("/search", handlers.Payment.ListPaymentsByFilter)
 		}
 
 		tasks := v1Private.Group("/tasks")
@@ -311,6 +316,9 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			creditNotes.GET("/:id", handlers.CreditNote.GetCreditNote)
 			creditNotes.POST("/:id/void", handlers.CreditNote.VoidCreditNote)
 			creditNotes.POST("/:id/finalize", handlers.CreditNote.FinalizeCreditNote)
+
+			// list credit notes by filter
+			creditNotes.POST("/search", handlers.CreditNote.ListCreditNotesByFilter)
 		}
 
 		// Admin routes (API Key only)

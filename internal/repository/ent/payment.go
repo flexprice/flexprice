@@ -7,8 +7,10 @@ import (
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/payment"
 	"github.com/flexprice/flexprice/ent/paymentattempt"
+	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/internal/cache"
 	domainPayment "github.com/flexprice/flexprice/internal/domain/payment"
+	"github.com/flexprice/flexprice/internal/dsl"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
@@ -152,13 +154,13 @@ func (r *paymentRepository) Get(ctx context.Context, id string) (*domainPayment.
 }
 
 func (r *paymentRepository) List(ctx context.Context, filter *types.PaymentFilter) ([]*domainPayment.Payment, error) {
-	if filter == nil {
-		filter = &types.PaymentFilter{
-			QueryFilter: types.NewDefaultQueryFilter(),
-		}
-	}
 
 	client := r.client.Querier(ctx)
+	r.log.Debugw("listing payments",
+		"tenant_id", types.GetTenantID(ctx),
+		"limit", filter.GetLimit(),
+		"offset", filter.GetOffset(),
+	)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "payment", "list", map[string]interface{}{
@@ -169,8 +171,11 @@ func (r *paymentRepository) List(ctx context.Context, filter *types.PaymentFilte
 
 	query := client.Payment.Query().WithAttempts()
 
-	// Apply entity-specific filters
-	query = r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
+	query, err := r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).WithHint("Failed to list payments").Mark(ierr.ErrDatabase)
+	}
 
 	// Apply common query options
 	query = ApplyQueryOptions(ctx, query, filter, r.queryOpts)
@@ -202,7 +207,11 @@ func (r *paymentRepository) Count(ctx context.Context, filter *types.PaymentFilt
 	query := client.Payment.Query()
 
 	query = ApplyBaseFilters(ctx, query, filter, r.queryOpts)
-	query = r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
+	query, err := r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
+	if err != nil {
+		SetSpanError(span, err)
+		return 0, ierr.WithError(err).WithHint("Failed to count payments").Mark(ierr.ErrDatabase)
+	}
 
 	count, err := query.Count(ctx)
 	if err != nil {
@@ -637,70 +646,88 @@ func (o PaymentQueryOptions) ApplyPaginationFilter(query PaymentQuery, limit int
 
 func (o PaymentQueryOptions) GetFieldName(field string) string {
 	switch field {
+	case "idempotency_key":
+		return payment.FieldIdempotencyKey
+	case "destination_type":
+		return payment.FieldDestinationType
+	case "destination_id":
+		return payment.FieldDestinationID
+	case "payment_method_type":
+		return payment.FieldPaymentMethodType
+	case "payment_method_id":
+		return payment.FieldPaymentMethodID
+	case "payment_status":
+		return payment.FieldPaymentStatus
+	case "payment_gateway":
+		return payment.FieldPaymentGateway
+	case "currency":
+		return payment.FieldCurrency
+	case "amount":
+		return payment.FieldAmount
+	case "status":
+		return payment.FieldStatus
 	case "created_at":
 		return payment.FieldCreatedAt
 	case "updated_at":
 		return payment.FieldUpdatedAt
-	case "payment_status":
-		return payment.FieldPaymentStatus
-	case "amount":
-		return payment.FieldAmount
+	case "succeeded_at":
+		return payment.FieldSucceededAt
+	case "failed_at":
+		return payment.FieldFailedAt
+	case "refunded_at":
+		return payment.FieldRefundedAt
+	case "recorded_at":
+		return payment.FieldRecordedAt
+	case "track_attempts":
+		return payment.FieldTrackAttempts
 	default:
-		return field
+		// unknown field
+		return ""
 	}
 }
 
-func (o PaymentQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.PaymentFilter, query PaymentQuery) PaymentQuery {
+func (o PaymentQueryOptions) GetFieldResolver(field string) (string, error) {
+	fieldName := o.GetFieldName(field)
+	if fieldName == "" {
+		return "", ierr.NewErrorf("unknown field name '%s' in payment query", field).
+			Mark(ierr.ErrValidation)
+	}
+	return fieldName, nil
+}
+
+func (o PaymentQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.PaymentFilter, query PaymentQuery) (PaymentQuery, error) {
+	var err error
 	if f == nil {
-		return query
+		return query, nil
 	}
 
-	// Apply payment IDs filter if specified
 	if len(f.PaymentIDs) > 0 {
 		query = query.Where(payment.IDIn(f.PaymentIDs...))
 	}
 
-	// Apply destination type filter if specified
-	if f.DestinationType != nil {
-		query = query.Where(payment.DestinationType(*f.DestinationType))
+	if f.Filters != nil {
+		query, err = dsl.ApplyFilters[PaymentQuery, predicate.Payment](
+			query,
+			f.Filters,
+			o.GetFieldResolver,
+			func(p dsl.Predicate) predicate.Payment { return predicate.Payment(p) },
+		)
 	}
 
-	// Apply destination ID filter if specified
-	if f.DestinationID != nil {
-		query = query.Where(payment.DestinationID(*f.DestinationID))
-	}
-
-	// Apply payment method type filter if specified
-	if f.PaymentMethodType != nil {
-		query = query.Where(payment.PaymentMethodType(*f.PaymentMethodType))
-	}
-
-	// Apply payment status filter if specified
-	if f.PaymentStatus != nil {
-		query = query.Where(payment.PaymentStatus(*f.PaymentStatus))
-	}
-
-	// Apply payment gateway filter if specified
-	if f.PaymentGateway != nil {
-		query = query.Where(payment.PaymentGateway(*f.PaymentGateway))
-	}
-
-	// Apply currency filter if specified
-	if f.Currency != nil {
-		query = query.Where(payment.Currency(*f.Currency))
-	}
-
-	// Apply time range filters if specified
-	if f.TimeRangeFilter != nil {
-		if f.TimeRangeFilter.StartTime != nil {
-			query = query.Where(payment.CreatedAtGTE(*f.TimeRangeFilter.StartTime))
-		}
-		if f.TimeRangeFilter.EndTime != nil {
-			query = query.Where(payment.CreatedAtLTE(*f.TimeRangeFilter.EndTime))
+	// Apply sorts using the generic function
+	if f.Sort != nil {
+		query, err = dsl.ApplySorts[PaymentQuery, payment.OrderOption](
+			query,
+			f.Sort,
+			o.GetFieldResolver,
+			func(o dsl.OrderFunc) payment.OrderOption { return payment.OrderOption(o) },
+		)
+		if err != nil {
+			return nil, err
 		}
 	}
 
-	return query
+	return query, nil
 }
 
 func (r *paymentRepository) SetCache(ctx context.Context, payment *domainPayment.Payment) {

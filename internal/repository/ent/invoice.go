@@ -781,14 +781,61 @@ func (o InvoiceQueryOptions) ApplyPaginationFilter(query InvoiceQuery, limit int
 
 func (o InvoiceQueryOptions) GetFieldName(field string) string {
 	switch field {
+	case "invoice_number":
+		return invoice.FieldInvoiceNumber
+	case "invoice_type":
+		return invoice.FieldInvoiceType
+	case "invoice_status":
+		return invoice.FieldInvoiceStatus
+	case "payment_status":
+		return invoice.FieldPaymentStatus
+	case "status":
+		return invoice.FieldStatus
+	case "amount_due":
+		return invoice.FieldAmountDue
+	case "amount_paid":
+		return invoice.FieldAmountPaid
+	case "amount_remaining":
+		return invoice.FieldAmountRemaining
+	case "adjustment_amount":
+		return invoice.FieldAdjustmentAmount
+	case "refunded_amount":
+		return invoice.FieldRefundedAmount
+	case "subtotal":
+		return invoice.FieldSubtotal
+	case "total":
+		return invoice.FieldTotal
+	case "currency":
+		return invoice.FieldCurrency
+	case "due_date":
+		return invoice.FieldDueDate
+	case "period_start":
+		return invoice.FieldPeriodStart
+	case "period_end":
+		return invoice.FieldPeriodEnd
+	case "billing_period":
+		return invoice.FieldBillingPeriod
+	case "paid_at":
+		return invoice.FieldPaidAt
+	case "voided_at":
+		return invoice.FieldVoidedAt
+	case "finalized_at":
+		return invoice.FieldFinalizedAt
 	case "created_at":
 		return invoice.FieldCreatedAt
 	case "updated_at":
 		return invoice.FieldUpdatedAt
-	case "invoice_number":
-		return invoice.FieldInvoiceNumber
+	case "idempotency_key":
+		return invoice.FieldIdempotencyKey
+	case "customer_id":
+		return invoice.FieldCustomerID
+	case "subscription_id":
+		return invoice.FieldSubscriptionID
+	case "description":
+		return invoice.FieldDescription
 	default:
-		return field
+		// unknown field
+		return ""
 	}
 }
 
