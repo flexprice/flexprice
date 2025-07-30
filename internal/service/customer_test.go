@@ -50,6 +50,7 @@ func (s *CustomerServiceSuite) SetupTest() {
 		PaymentRepo:      s.GetStores().PaymentRepo,
 		EventPublisher:   s.GetPublisher(),
 		WebhookPublisher: s.GetWebhookPublisher(),
+		ConnectionRepo:   s.GetStores().ConnectionRepo,
 	})
 
 }

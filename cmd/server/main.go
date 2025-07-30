@@ -39,6 +39,7 @@ import (
 	ginadapter "github.com/awslabs/aws-lambda-go-api-proxy/gin"
 	_ "github.com/flexprice/flexprice/docs/swagger"
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/security"
 	"github.com/gin-gonic/gin"
 )
 
@@ -72,6 +73,9 @@ func main() {
 
 			// Logger
 			logger.NewLogger,
+
+			// Security
+			security.NewEncryptionService,
 
 			// storage
 			s3.NewService,
@@ -137,6 +141,7 @@ func main() {
 			repository.NewCreditGrantApplicationRepository,
 			repository.NewCreditNoteRepository,
 			repository.NewCreditNoteLineItemRepository,
+			repository.NewConnectionRepository,
 
 			// PubSub
 			pubsubRouter.NewRouter,
@@ -156,25 +161,22 @@ func main() {
 			service.NewServiceParams,
 
 			// Core services
-			service.NewTenantService,
+			service.NewEnvironmentService,
 			service.NewAuthService,
 			service.NewUserService,
-			service.NewEnvAccessService,
-			service.NewEnvironmentService,
-
-			// Business services
-			service.NewMeterService,
-			service.NewEventService,
-			service.NewEventPostProcessingService,
 			service.NewPriceService,
-			service.NewCustomerService,
 			service.NewPlanService,
 			service.NewSubscriptionService,
 			service.NewWalletService,
+			service.NewTenantService,
 			service.NewInvoiceService,
+			service.NewEventService,
+			service.NewEventPostProcessingService,
+			service.NewMeterService,
 			service.NewFeatureService,
 			service.NewEntitlementService,
 			service.NewPaymentService,
+			service.NewEnvAccessService,
 			service.NewPaymentProcessorService,
 			service.NewTaskService,
 			service.NewSecretService,
@@ -183,6 +185,9 @@ func main() {
 			service.NewCreditGrantService,
 			service.NewCostSheetService,
 			service.NewCreditNoteService,
+			service.NewConnectionService,
+			service.NewCustomerService,
+			service.NewStripeService,
 		),
 	)
 
@@ -231,6 +236,8 @@ func provideHandlers(
 	creditGrantService service.CreditGrantService,
 	costSheetService service.CostSheetService,
 	creditNoteService service.CreditNoteService,
+	stripeService *service.StripeService,
+	connectionService service.ConnectionService,
 	svixClient *svix.Client,
 ) api.Handlers {
 	return api.Handlers{
@@ -254,13 +261,14 @@ func provideHandlers(
 		Task:              v1.NewTaskHandler(taskService, logger),
 		Secret:            v1.NewSecretHandler(secretService, logger),
 		Onboarding:        v1.NewOnboardingHandler(onboardingService, logger),
-		CronSubscription:  cron.NewSubscriptionHandler(subscriptionService, temporalService, logger),
-		CronWallet:        cron.NewWalletCronHandler(logger, temporalService, walletService, tenantService),
 		CreditGrant:       v1.NewCreditGrantHandler(creditGrantService, logger),
 		CostSheet:         v1.NewCostSheetHandler(costSheetService, logger),
-		CronCreditGrant:   cron.NewCreditGrantCronHandler(creditGrantService, logger),
 		CreditNote:        v1.NewCreditNoteHandler(creditNoteService, logger),
-		Webhook:           v1.NewWebhookHandler(cfg, svixClient, logger),
+		Connection:        v1.NewConnectionHandler(connectionService, logger),
+		CronWallet:        cron.NewWalletCronHandler(logger, temporalService, walletService, tenantService),
+		CronSubscription:  cron.NewSubscriptionHandler(subscriptionService, temporalService, logger),
+		CronCreditGrant:   cron.NewCreditGrantCronHandler(creditGrantService, logger),
+		Webhook:           v1.NewWebhookHandler(cfg, svixClient, logger, stripeService),
 	}
 }
 

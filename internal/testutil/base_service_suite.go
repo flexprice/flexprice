@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/auth"
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/creditgrant"
 	"github.com/flexprice/flexprice/internal/domain/creditgrantapplication"
 	"github.com/flexprice/flexprice/internal/domain/creditnote"
@@ -59,6 +60,7 @@ type Stores struct {
 	SecretRepo                 secret.Repository
 	CreditNoteRepo             creditnote.Repository
 	CreditNoteLineItemRepo     creditnote.CreditNoteLineItemRepository
+	ConnectionRepo             connection.Repository
 }
 
 // BaseServiceTestSuite provides common functionality for all service test suites
@@ -84,6 +86,9 @@ func (s *BaseServiceTestSuite) SetupSuite() {
 	cfg := &config.Configuration{
 		Logging: config.LoggingConfig{
 			Level: types.LogLevelInfo,
+		},
+		Secrets: config.SecretsConfig{
+			EncryptionKey: "test-encryption-key-for-unit-tests-only",
 		},
 	}
 	var err error
@@ -139,6 +144,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 		CreditGrantApplicationRepo: NewInMemoryCreditGrantApplicationStore(),
 		CreditNoteRepo:             NewInMemoryCreditNoteStore(),
 		CreditNoteLineItemRepo:     NewInMemoryCreditNoteLineItemStore(),
+		ConnectionRepo:             NewInMemoryConnectionStore(),
 	}
 
 	s.db = NewMockPostgresClient(s.logger)
@@ -175,6 +181,7 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.CreditGrantApplicationRepo.(*InMemoryCreditGrantApplicationStore).Clear()
 	s.stores.CreditNoteRepo.(*InMemoryCreditNoteStore).Clear()
 	s.stores.CreditNoteLineItemRepo.(*InMemoryCreditNoteLineItemStore).Clear()
+	s.stores.ConnectionRepo.(*InMemoryConnectionStore).Clear()
 }
 
 func (s *BaseServiceTestSuite) ClearStores() {

@@ -43,6 +43,12 @@ func (p SecretProvider) Validate() error {
 	return nil
 }
 
+// IsValid checks if the SecretProvider is valid
+func (p SecretProvider) IsValid() bool {
+	allowedSecretProviders := []SecretProvider{SecretProviderFlexPrice, SecretProviderStripe, SecretProviderRazorpay}
+	return lo.Contains(allowedSecretProviders, p)
+}
+
 // SecretFilter defines the filter criteria for secrets
 type SecretFilter struct {
 	*QueryFilter

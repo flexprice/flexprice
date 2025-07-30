@@ -189,6 +189,32 @@ definitions:
     required:
     - subscription_id
     type: object
+  dto.ConnectionResponse:
+    properties:
+      created_at:
+        type: string
+      created_by:
+        type: string
+      environment_id:
+        type: string
+      id:
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      name:
+        type: string
+      provider_type:
+        $ref: '#/definitions/types.SecretProvider'
+      status:
+        $ref: '#/definitions/types.Status'
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+    type: object
   dto.CostBreakdownItem:
     properties:
       cost:
@@ -253,6 +279,20 @@ definitions:
       secret:
         $ref: '#/definitions/dto.SecretResponse'
     type: object
+  dto.CreateConnectionRequest:
+    properties:
+      metadata:
+        additionalProperties: true
+        type: object
+      name:
+        maxLength: 255
+        type: string
+      provider_type:
+        $ref: '#/definitions/types.SecretProvider'
+    required:
+    - name
+    - provider_type
+    type: object
   dto.CreateCostSheetRequest:
     properties:
       meter_id:
@@ -271,8 +311,6 @@ definitions:
         $ref: '#/definitions/types.CreditGrantCadence'
       credits:
         type: number
-      currency:
-        type: string
       expiration_duration:
         type: integer
       expiration_duration_unit:
@@ -298,7 +336,6 @@ definitions:
     required:
     - cadence
     - credits
-    - currency
     - name
     - scope
     type: object
@@ -353,6 +390,11 @@ definitions:
         - $ref: '#/definitions/types.Metadata'
         description: metadata contains additional custom key-value pairs for storing
           extra information
+      process_credit_note:
+        default: true
+        description: process_credit_note is a flag to process the credit note after
+          creation
+        type: boolean
       reason:
         allOf:
         - $ref: '#/definitions/types.CreditNoteReason'
@@ -997,8 +1039,6 @@ definitions:
         type: string
       credits:
         type: number
-      currency:
-        type: string
       environment_id:
         type: string
       expiration_duration:
@@ -1646,7 +1686,7 @@ definitions:
           type: array
         type: object
       multiplier:
-        type: integer
+        type: number
       property_name:
         description: will be empty/ignored in case of COUNT
         example: request_size
@@ -1940,6 +1980,19 @@ definitions:
         items:
           type: string
         type: array
+    type: object
+  dto.ListConnectionsResponse:
+    properties:
+      connections:
+        items:
+          $ref: '#/definitions/dto.ConnectionResponse'
+        type: array
+      limit:
+        type: integer
+      offset:
+        type: integer
+      total:
+        type: integer
     type: object
   dto.ListCostSheetsResponse:
     properties:
@@ -2903,6 +2956,17 @@ definitions:
     - idempotency_key
     - transaction_reason
     type: object
+  dto.UpdateConnectionRequest:
+    properties:
+      metadata:
+        additionalProperties: true
+        type: object
+      name:
+        maxLength: 255
+        type: string
+      provider_type:
+        $ref: '#/definitions/types.SecretProvider'
+    type: object
   dto.UpdateCostSheetRequest:
     properties:
       id:
@@ -3014,8 +3078,6 @@ definitions:
         $ref: '#/definitions/types.CreditGrantCadence'
       credits:
         type: number
-      currency:
-        type: string
       expiration_duration:
         type: integer
       expiration_duration_unit:
@@ -3045,7 +3107,6 @@ definitions:
     required:
     - cadence
     - credits
-    - currency
     - name
     - scope
     type: object
@@ -3436,7 +3497,7 @@ definitions:
           Multiplier is the multiplier for the aggregation
           For ex if the aggregation type is sum_with_multiplier for API usage, the multiplier could be 1000
           to scale up by a factor of 1000
-        type: integer
+        type: number
       type:
         $ref: '#/definitions/types.AggregationType'
     type: object
@@ -3712,6 +3773,13 @@ definitions:
     type: string
     x-enum-comments:
       AggregationSumWithMultiplier: Sum with a multiplier - [sum(value) * multiplier]
+    x-enum-descriptions:
+    - ""
+    - ""
+    - ""
+    - ""
+    - ""
+    - Sum with a multiplier - [sum(value) * multiplier]
     x-enum-varnames:
     - AggregationCount
     - AggregationSum
@@ -3777,6 +3845,43 @@ definitions:
     x-enum-varnames:
     - BILLING_TIER_VOLUME
     - BILLING_TIER_SLAB
+  types.ConnectionFilter:
+    properties:
+      connection_ids:
+        items:
+          type: string
+        type: array
+      end_time:
+        type: string
+      expand:
+        type: string
+      filters:
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      provider_type:
+        $ref: '#/definitions/types.SecretProvider'
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+    type: object
   types.CreditGrantCadence:
     enum:
     - ONETIME
@@ -4460,6 +4565,254 @@ paths:
       summary: Sign up
       tags:
       - Auth
+  /connections:
+    get:
+      consumes:
+      - application/json
+      description: Get a list of connections
+      parameters:
+      - collectionFormat: csv
+        in: query
+        items:
+          type: string
+        name: connection_ids
+        type: array
+      - in: query
+        name: end_time
+        type: string
+      - in: query
+        name: expand
+        type: string
+      - in: query
+        maximum: 1000
+        minimum: 1
+        name: limit
+        type: integer
+      - in: query
+        minimum: 0
+        name: offset
+        type: integer
+      - enum:
+        - asc
+        - desc
+        in: query
+        name: order
+        type: string
+      - enum:
+        - flexprice
+        - stripe
+        - razorpay
+        in: query
+        name: provider_type
+        type: string
+        x-enum-varnames:
+        - SecretProviderFlexPrice
+        - SecretProviderStripe
+        - SecretProviderRazorpay
+      - in: query
+        name: start_time
+        type: string
+      - enum:
+        - published
+        - deleted
+        - archived
+        in: query
+        name: status
+        type: string
+        x-enum-varnames:
+        - StatusPublished
+        - StatusDeleted
+        - StatusArchived
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ListConnectionsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get connections
+      tags:
+      - Connections
+    post:
+      consumes:
+      - application/json
+      description: Create a new integration connection
+      parameters:
+      - description: Connection
+        in: body
+        name: connection
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateConnectionRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.ConnectionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create a connection
+      tags:
+      - Connections
+  /connections/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a connection by ID
+      parameters:
+      - description: Connection ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Delete a connection
+      tags:
+      - Connections
+    get:
+      consumes:
+      - application/json
+      description: Get a connection by ID
+      parameters:
+      - description: Connection ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ConnectionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get a connection
+      tags:
+      - Connections
+    put:
+      consumes:
+      - application/json
+      description: Update a connection by ID
+      parameters:
+      - description: Connection ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Connection
+        in: body
+        name: connection
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateConnectionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ConnectionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update a connection
+      tags:
+      - Connections
+  /connections/search:
+    post:
+      consumes:
+      - application/json
+      description: List connections by filter
+      parameters:
+      - description: Filter
+        in: body
+        name: filter
+        required: true
+        schema:
+          $ref: '#/definitions/types.ConnectionFilter'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ListConnectionsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List connections by filter
+      tags:
+      - Connections
   /cost:
     get:
       consumes:
@@ -4767,6 +5120,15 @@ paths:
           type: string
         name: plan_ids
         type: array
+      - enum:
+        - PLAN
+        - SUBSCRIPTION
+        in: query
+        name: scope
+        type: string
+        x-enum-varnames:
+        - CreditGrantScopePlan
+        - CreditGrantScopeSubscription
       - in: query
         name: sort
         type: string

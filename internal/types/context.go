@@ -52,3 +52,18 @@ func GetEnvironmentID(ctx context.Context) string {
 	}
 	return ""
 }
+
+// SetTenantID sets the tenant ID in the context
+func SetTenantID(ctx context.Context, tenantID string) context.Context {
+	return context.WithValue(ctx, CtxTenantID, tenantID)
+}
+
+// SetEnvironmentID sets the environment ID in the context
+func SetEnvironmentID(ctx context.Context, environmentID string) context.Context {
+	return context.WithValue(ctx, CtxEnvironmentID, environmentID)
+}
+
+// SetUserID sets the user ID in the context
+func SetUserID(ctx context.Context, userID string) context.Context {
+	return context.WithValue(ctx, CtxUserID, userID)
+}

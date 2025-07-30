@@ -77,6 +77,7 @@ const (
 	UUID_PREFIX_SUBSCRIPTION_SCHEDULE       = "sched"
 	UUID_PREFIX_SUBSCRIPTION_SCHEDULE_PHASE = "phase"
 	UUID_PREFIX_CUSTOMER                    = "cust"
+	UUID_PREFIX_CONNECTION                  = "conn"
 	UUID_PREFIX_WALLET                      = "wallet"
 	UUID_PREFIX_WALLET_TRANSACTION          = "wtxn"
 	UUID_PREFIX_ENVIRONMENT                 = "env"

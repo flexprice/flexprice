@@ -3,6 +3,7 @@ package service
 import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/auth"
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	costsheet "github.com/flexprice/flexprice/internal/domain/costsheet"
 	"github.com/flexprice/flexprice/internal/domain/creditgrant"
 	"github.com/flexprice/flexprice/internal/domain/creditgrantapplication"
@@ -66,6 +67,7 @@ type ServiceParams struct {
 	CreditNoteRepo             creditnote.Repository
 	CreditNoteLineItemRepo     creditnote.CreditNoteLineItemRepository
 	CreditGrantApplicationRepo creditgrantapplication.Repository
+	ConnectionRepo             connection.Repository
 
 	// Publishers
 	EventPublisher   publisher.EventPublisher
@@ -109,6 +111,7 @@ func NewServiceParams(
 	client httpclient.Client,
 	taskRepo task.Repository,
 	costSheetRepo costsheet.Repository,
+	connectionRepo connection.Repository,
 ) ServiceParams {
 	return ServiceParams{
 		Logger:                     logger,
@@ -143,5 +146,6 @@ func NewServiceParams(
 		CostSheetRepo:              costSheetRepo,
 		CreditNoteRepo:             creditNoteRepo,
 		CreditNoteLineItemRepo:     creditNoteLineItemRepo,
+		ConnectionRepo:             connectionRepo,
 	}
 }
