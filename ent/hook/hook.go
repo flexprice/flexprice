@@ -33,6 +33,18 @@ func (f BillingSequenceFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Va
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BillingSequenceMutation", m)
 }
 
+// The ConnectionFunc type is an adapter to allow the use of ordinary
+// function as Connection mutator.
+type ConnectionFunc func(context.Context, *ent.ConnectionMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ConnectionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ConnectionMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ConnectionMutation", m)
+}
+
 // The CostsheetFunc type is an adapter to allow the use of ordinary
 // function as Costsheet mutator.
 type CostsheetFunc func(context.Context, *ent.CostsheetMutation) (ent.Value, error)

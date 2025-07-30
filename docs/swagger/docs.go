@@ -95,6 +95,391 @@ const docTemplate = `{
                 }
             }
         },
+        "/connections": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get a list of connections",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Connections"
+                ],
+                "summary": "Get connections",
+                "parameters": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "name": "connection_ids",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "end_time",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "expand",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 1000,
+                        "minimum": 1,
+                        "type": "integer",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "name": "order",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "flexprice",
+                            "stripe",
+                            "razorpay"
+                        ],
+                        "type": "string",
+                        "x-enum-varnames": [
+                            "SecretProviderFlexPrice",
+                            "SecretProviderStripe",
+                            "SecretProviderRazorpay"
+                        ],
+                        "name": "provider_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "start_time",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "published",
+                            "deleted",
+                            "archived"
+                        ],
+                        "type": "string",
+                        "x-enum-varnames": [
+                            "StatusPublished",
+                            "StatusDeleted",
+                            "StatusArchived"
+                        ],
+                        "name": "status",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ListConnectionsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Create a new integration connection",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Connections"
+                ],
+                "summary": "Create a connection",
+                "parameters": [
+                    {
+                        "description": "Connection",
+                        "name": "connection",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CreateConnectionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ConnectionResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/connections/search": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "List connections by filter",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Connections"
+                ],
+                "summary": "List connections by filter",
+                "parameters": [
+                    {
+                        "description": "Filter",
+                        "name": "filter",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/types.ConnectionFilter"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ListConnectionsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/connections/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get a connection by ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Connections"
+                ],
+                "summary": "Get a connection",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Connection ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ConnectionResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update a connection by ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Connections"
+                ],
+                "summary": "Update a connection",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Connection ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Connection",
+                        "name": "connection",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.UpdateConnectionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ConnectionResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Delete a connection by ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Connections"
+                ],
+                "summary": "Delete a connection",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Connection ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/cost": {
             "get": {
                 "security": [
@@ -576,6 +961,19 @@ const docTemplate = `{
                         "collectionFormat": "csv",
                         "description": "Specific filters for credit grants",
                         "name": "plan_ids",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "PLAN",
+                            "SUBSCRIPTION"
+                        ],
+                        "type": "string",
+                        "x-enum-varnames": [
+                            "CreditGrantScopePlan",
+                            "CreditGrantScopeSubscription"
+                        ],
+                        "name": "scope",
                         "in": "query"
                     },
                     {
@@ -7409,6 +7807,45 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.ConnectionResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "environment_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "name": {
+                    "type": "string"
+                },
+                "provider_type": {
+                    "$ref": "#/definitions/types.SecretProvider"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.CostBreakdownItem": {
             "type": "object",
             "properties": {
@@ -7504,6 +7941,26 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.CreateConnectionRequest": {
+            "type": "object",
+            "required": [
+                "name",
+                "provider_type"
+            ],
+            "properties": {
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "provider_type": {
+                    "$ref": "#/definitions/types.SecretProvider"
+                }
+            }
+        },
         "dto.CreateCostSheetRequest": {
             "type": "object",
             "required": [
@@ -7526,7 +7983,6 @@ const docTemplate = `{
             "required": [
                 "cadence",
                 "credits",
-                "currency",
                 "name",
                 "scope"
             ],
@@ -7536,9 +7992,6 @@ const docTemplate = `{
                 },
                 "credits": {
                     "type": "number"
-                },
-                "currency": {
-                    "type": "string"
                 },
                 "expiration_duration": {
                     "type": "integer"
@@ -7641,6 +8094,11 @@ const docTemplate = `{
                             "$ref": "#/definitions/types.Metadata"
                         }
                     ]
+                },
+                "process_credit_note": {
+                    "description": "process_credit_note is a flag to process the credit note after creation",
+                    "type": "boolean",
+                    "default": true
                 },
                 "reason": {
                     "description": "reason specifies the reason for creating this credit note (duplicate, fraudulent, order_change, product_unsatisfactory)",
@@ -8508,9 +8966,6 @@ const docTemplate = `{
                 },
                 "credits": {
                     "type": "number"
-                },
-                "currency": {
-                    "type": "string"
                 },
                 "environment_id": {
                     "type": "string"
@@ -9426,7 +9881,7 @@ const docTemplate = `{
                     }
                 },
                 "multiplier": {
-                    "type": "integer"
+                    "type": "number"
                 },
                 "property_name": {
                     "description": "will be empty/ignored in case of COUNT",
@@ -9792,6 +10247,26 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "dto.ListConnectionsResponse": {
+            "type": "object",
+            "properties": {
+                "connections": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.ConnectionResponse"
+                    }
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "offset": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
                 }
             }
         },
@@ -11167,6 +11642,22 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.UpdateConnectionRequest": {
+            "type": "object",
+            "properties": {
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "provider_type": {
+                    "$ref": "#/definitions/types.SecretProvider"
+                }
+            }
+        },
         "dto.UpdateCostSheetRequest": {
             "type": "object",
             "required": [
@@ -11330,7 +11821,6 @@ const docTemplate = `{
             "required": [
                 "cadence",
                 "credits",
-                "currency",
                 "name",
                 "scope"
             ],
@@ -11340,9 +11830,6 @@ const docTemplate = `{
                 },
                 "credits": {
                     "type": "number"
-                },
-                "currency": {
-                    "type": "string"
                 },
                 "expiration_duration": {
                     "type": "integer"
@@ -11953,7 +12440,7 @@ const docTemplate = `{
                 },
                 "multiplier": {
                     "description": "Multiplier is the multiplier for the aggregation\nFor ex if the aggregation type is sum_with_multiplier for API usage, the multiplier could be 1000\nto scale up by a factor of 1000",
-                    "type": "integer"
+                    "type": "number"
                 },
                 "type": {
                     "$ref": "#/definitions/types.AggregationType"
@@ -12329,6 +12816,14 @@ const docTemplate = `{
             "x-enum-comments": {
                 "AggregationSumWithMultiplier": "Sum with a multiplier - [sum(value) * multiplier]"
             },
+            "x-enum-descriptions": [
+                "",
+                "",
+                "",
+                "",
+                "",
+                "Sum with a multiplier - [sum(value) * multiplier]"
+            ],
             "x-enum-varnames": [
                 "AggregationCount",
                 "AggregationSum",
@@ -12413,6 +12908,60 @@ const docTemplate = `{
                 "BILLING_TIER_VOLUME",
                 "BILLING_TIER_SLAB"
             ]
+        },
+        "types.ConnectionFilter": {
+            "type": "object",
+            "properties": {
+                "connection_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "end_time": {
+                    "type": "string"
+                },
+                "expand": {
+                    "type": "string"
+                },
+                "filters": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.FilterCondition"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "maximum": 1000,
+                    "minimum": 1
+                },
+                "offset": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "order": {
+                    "type": "string",
+                    "enum": [
+                        "asc",
+                        "desc"
+                    ]
+                },
+                "provider_type": {
+                    "$ref": "#/definitions/types.SecretProvider"
+                },
+                "sort": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.SortCondition"
+                    }
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                }
+            }
         },
         "types.CreditGrantCadence": {
             "type": "string",

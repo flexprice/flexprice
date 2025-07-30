@@ -22,6 +22,7 @@ type Handlers struct {
 	Health            *v1.HealthHandler
 	Price             *v1.PriceHandler
 	Customer          *v1.CustomerHandler
+	Connection        *v1.ConnectionHandler
 	Plan              *v1.PlanHandler
 	Subscription      *v1.SubscriptionHandler
 	SubscriptionPause *v1.SubscriptionPauseHandler
@@ -291,6 +292,17 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			}
 		}
 
+		// Connection routes
+		connections := v1Private.Group("/connections")
+		{
+			connections.POST("", handlers.Connection.CreateConnection)
+			connections.GET("", handlers.Connection.GetConnections)
+			connections.GET("/:id", handlers.Connection.GetConnection)
+			connections.PUT("/:id", handlers.Connection.UpdateConnection)
+			connections.DELETE("/:id", handlers.Connection.DeleteConnection)
+			connections.POST("/search", handlers.Connection.ListConnectionsByFilter)
+		}
+
 		// Cost sheet routes
 		costSheet := v1Private.Group("/costs")
 		{
@@ -334,6 +346,14 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		{
 			webhookGroup.GET("/dashboard", handlers.Webhook.GetDashboardURL)
 		}
+	}
+
+	// Public webhook endpoints (no authentication required)
+	publicWebhooks := router.Group("/v1/webhooks")
+	publicWebhooks.Use(middleware.ErrorHandler())
+	{
+		// Stripe webhook endpoint: POST /v1/webhooks/stripe/{tenant_id}/{environment_id}
+		publicWebhooks.POST("/stripe/:tenant_id/:environment_id", handlers.Webhook.HandleStripeWebhook)
 	}
 
 	// Cron routes

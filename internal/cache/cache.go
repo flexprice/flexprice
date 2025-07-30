@@ -31,6 +31,7 @@ type Cache interface {
 const (
 	PrefixSecret                 = "secret:v1:"
 	PrefixCustomer               = "customer:v1:"
+	PrefixConnection             = "connection:v1:"
 	PrefixUser                   = "user:v1:"
 	PrefixTenant                 = "tenant:v1:"
 	PrefixPlan                   = "plan:v1:"
