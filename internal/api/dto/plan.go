@@ -2,6 +2,7 @@ package dto
 
 import (
 	"context"
+	"strings"
 
 	"github.com/flexprice/flexprice/internal/domain/creditgrant"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
@@ -26,8 +27,182 @@ type CreatePlanPriceRequest struct {
 	*CreatePriceRequest
 }
 
+// Validate validates the CreatePlanPriceRequest, skipping plan_id/addon_id validation
+// since these will be set after the plan is created
+func (r *CreatePlanPriceRequest) Validate() error {
+	if r.CreatePriceRequest == nil {
+		return errors.NewError("price request is required").
+			WithHint("Please provide a valid price request").
+			Mark(errors.ErrValidation)
+	}
+
+	// Validate all fields except plan_id/addon_id
+	req := r.CreatePriceRequest
+
+	// Validate amount
+	if req.Amount == "" {
+		return errors.NewError("amount is required").
+			WithHint("Please provide a valid amount").
+			Mark(errors.ErrValidation)
+	}
+
+	amount, err := decimal.NewFromString(req.Amount)
+	if err != nil {
+		return errors.NewError("invalid amount format").
+			WithHint("Please provide a valid decimal amount").
+			WithReportableDetails(map[string]interface{}{
+				"amount": req.Amount,
+			}).
+			Mark(errors.ErrValidation)
+	}
+
+	if amount.LessThan(decimal.Zero) {
+		return errors.NewError("amount must be greater than 0").
+			WithHint("Amount cannot be negative").
+			Mark(errors.ErrValidation)
+	}
+
+	// Ensure currency is lowercase
+	req.Currency = strings.ToLower(req.Currency)
+
+	// Skip plan_id/addon_id validation since they will be set after plan creation
+
+	// Billing model validations
+	err = validator.ValidateRequest(req)
+	if err != nil {
+		return err
+	}
+
+	// Validate input field types
+	err = req.Type.Validate()
+	if err != nil {
+		return err
+	}
+
+	err = req.BillingCadence.Validate()
+	if err != nil {
+		return err
+	}
+
+	err = req.BillingModel.Validate()
+	if err != nil {
+		return err
+	}
+
+	err = req.BillingPeriod.Validate()
+	if err != nil {
+		return err
+	}
+
+	err = req.InvoiceCadence.Validate()
+	if err != nil {
+		return err
+	}
+
+	switch req.BillingModel {
+	case types.BILLING_MODEL_TIERED:
+		if len(req.Tiers) == 0 {
+			return errors.NewError("tiers are required when billing model is TIERED").
+				WithHint("Price Tiers are required to set up tiered pricing").
+				Mark(errors.ErrValidation)
+		}
+		if req.TierMode == "" {
+			return errors.NewError("tier_mode is required when billing model is TIERED").
+				WithHint("Price Tier mode is required to set up tiered pricing").
+				Mark(errors.ErrValidation)
+		}
+		err = req.TierMode.Validate()
+		if err != nil {
+			return err
+		}
+
+	case types.BILLING_MODEL_PACKAGE:
+		if req.TransformQuantity == nil {
+			return errors.NewError("transform_quantity is required when billing model is PACKAGE").
+				WithHint("Please provide the number of units to set up package pricing").
+				Mark(errors.ErrValidation)
+		}
+
+		if req.TransformQuantity.DivideBy <= 0 {
+			return errors.NewError("transform_quantity.divide_by must be greater than 0 when billing model is PACKAGE").
+				WithHint("Please provide a valid number of units to set up package pricing").
+				Mark(errors.ErrValidation)
+		}
+
+		// Validate round type
+		if req.TransformQuantity.Round == "" {
+			req.TransformQuantity.Round = types.ROUND_UP // Default to rounding up
+		} else if req.TransformQuantity.Round != types.ROUND_UP && req.TransformQuantity.Round != types.ROUND_DOWN {
+			return errors.NewError("invalid rounding type- allowed values are up and down").
+				WithHint("Please provide a valid rounding type for package pricing").
+				WithReportableDetails(map[string]interface{}{
+					"round":   req.TransformQuantity.Round,
+					"allowed": []string{types.ROUND_UP, types.ROUND_DOWN},
+				}).
+				Mark(errors.ErrValidation)
+		}
+	}
+
+	switch req.Type {
+	case types.PRICE_TYPE_USAGE:
+		if req.MeterID == "" {
+			return errors.NewError("meter_id is required for usage-based pricing").
+				WithHint("Please provide a valid meter ID for usage-based pricing").
+				Mark(errors.ErrValidation)
+		}
+	}
+
+	return nil
+}
+
 type CreatePlanEntitlementRequest struct {
 	*CreateEntitlementRequest
+}
+
+// Validate validates the CreatePlanEntitlementRequest, skipping plan_id/addon_id validation
+// since these will be set after the plan is created
+func (r *CreatePlanEntitlementRequest) Validate() error {
+	if r.CreateEntitlementRequest == nil {
+		return errors.NewError("entitlement request is required").
+			WithHint("Please provide a valid entitlement request").
+			Mark(errors.ErrValidation)
+	}
+
+	// Validate all fields except plan_id/addon_id
+	req := r.CreateEntitlementRequest
+
+	// Validate feature_id
+	if req.FeatureID == "" {
+		return errors.NewError("feature_id is required").
+			WithHint("Please provide a valid feature ID").
+			Mark(errors.ErrValidation)
+	}
+
+	// Skip plan_id/addon_id validation since they will be set after plan creation
+
+	// Validate feature_type
+	err := req.FeatureType.Validate()
+	if err != nil {
+		return err
+	}
+
+	// Validate based on feature type
+	switch req.FeatureType {
+	case types.FeatureTypeMetered:
+		if req.UsageResetPeriod != "" {
+			if err := req.UsageResetPeriod.Validate(); err != nil {
+				return err
+			}
+		}
+	case types.FeatureTypeStatic:
+		if req.StaticValue == "" {
+			return errors.NewError("static_value is required for static features").
+				WithHint("Static value is required for static features").
+				Mark(errors.ErrValidation)
+		}
+	}
+
+	return nil
 }
 
 func (r *CreatePlanRequest) Validate() error {
