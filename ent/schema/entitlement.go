@@ -3,7 +3,6 @@ package schema
 import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/entsql"
-	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
@@ -36,7 +35,16 @@ func (Entitlement) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
 			}).
-			NotEmpty(),
+			Optional().
+			Nillable(),
+
+		field.String("addon_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable(),
+
 		field.String("feature_id").
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
@@ -66,13 +74,7 @@ func (Entitlement) Fields() []ent.Field {
 
 // Edges of the Entitlement.
 func (Entitlement) Edges() []ent.Edge {
-	return []ent.Edge{
-		edge.From("plan", Plan.Type).
-			Ref("entitlements").
-			Field("plan_id").
-			Unique().
-			Required(),
-	}
+	return []ent.Edge{}
 }
 
 // Indexes of the Entitlement.

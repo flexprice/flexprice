@@ -94,7 +94,7 @@ func (s *planService) CreatePlan(ctx context.Context, req dto.CreatePlanRequest)
 		if len(req.Entitlements) > 0 {
 			entitlements := make([]*entitlement.Entitlement, len(req.Entitlements))
 			for i, entReq := range req.Entitlements {
-				ent := entReq.ToEntitlement(ctx, plan.ID)
+				ent := entReq.ToEntitlement(ctx, &plan.ID, nil)
 				entitlements[i] = ent
 			}
 
@@ -283,7 +283,7 @@ func (s *planService) GetPlans(ctx context.Context, filter *types.PlanFilter) (*
 		}
 
 		for _, e := range entitlements.Items {
-			entitlementsByPlanID[e.PlanID] = append(entitlementsByPlanID[e.PlanID], e)
+			entitlementsByPlanID[*e.PlanID] = append(entitlementsByPlanID[*e.PlanID], e)
 		}
 	}
 
@@ -457,7 +457,7 @@ func (s *planService) UpdatePlan(ctx context.Context, id string, req dto.UpdateP
 			newEntitlements := make([]*entitlement.Entitlement, 0)
 			for _, reqEnt := range req.Entitlements {
 				if reqEnt.ID == "" {
-					ent := reqEnt.ToEntitlement(ctx, plan.ID)
+					ent := reqEnt.ToEntitlement(ctx, &plan.ID, nil)
 					newEntitlements = append(newEntitlements, ent)
 				}
 			}

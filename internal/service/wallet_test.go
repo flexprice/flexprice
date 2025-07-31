@@ -1536,7 +1536,7 @@ func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
 			setupFunc: func() {
 				entitlement := &entitlement.Entitlement{
 					ID:               "ent_test_1",
-					PlanID:           s.testData.plan.ID,
+					PlanID:           lo.ToPtr(s.testData.plan.ID),
 					FeatureID:        "feat_api_calls",
 					FeatureType:      types.FeatureTypeMetered,
 					IsEnabled:        true,
@@ -1558,7 +1558,7 @@ func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
 			setupFunc: func() {
 				entitlement := &entitlement.Entitlement{
 					ID:               "ent_test_2",
-					PlanID:           s.testData.plan.ID,
+					PlanID:           lo.ToPtr(s.testData.plan.ID),
 					FeatureID:        "feat_api_calls",
 					FeatureType:      types.FeatureTypeMetered,
 					IsEnabled:        true,
@@ -1580,7 +1580,7 @@ func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
 			setupFunc: func() {
 				entitlement := &entitlement.Entitlement{
 					ID:               "ent_test_3",
-					PlanID:           s.testData.plan.ID,
+					PlanID:           lo.ToPtr(s.testData.plan.ID),
 					FeatureID:        "feat_api_calls",
 					FeatureType:      types.FeatureTypeMetered,
 					IsEnabled:        true,
@@ -1602,7 +1602,7 @@ func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
 			setupFunc: func() {
 				entitlement := &entitlement.Entitlement{
 					ID:               "ent_test_4",
-					PlanID:           s.testData.plan.ID,
+					PlanID:           lo.ToPtr(s.testData.plan.ID),
 					FeatureID:        "feat_api_calls",
 					FeatureType:      types.FeatureTypeMetered,
 					IsEnabled:        false,

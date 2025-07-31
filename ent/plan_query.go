@@ -458,9 +458,6 @@ func (pq *PlanQuery) loadEntitlements(ctx context.Context, query *EntitlementQue
 		}
 	}
 	query.withFKs = true
-	if len(query.ctx.Fields) > 0 {
-		query.ctx.AppendFieldOnce(entitlement.FieldPlanID)
-	}
 	query.Where(predicate.Entitlement(func(s *sql.Selector) {
 		s.Where(sql.InValues(s.C(plan.EntitlementsColumn), fks...))
 	}))
@@ -469,10 +466,13 @@ func (pq *PlanQuery) loadEntitlements(ctx context.Context, query *EntitlementQue
 		return err
 	}
 	for _, n := range neighbors {
-		fk := n.PlanID
-		node, ok := nodeids[fk]
+		fk := n.plan_entitlements
+		if fk == nil {
+			return fmt.Errorf(`foreign-key "plan_entitlements" is nil for node %v`, n.ID)
+		}
+		node, ok := nodeids[*fk]
 		if !ok {
-			return fmt.Errorf(`unexpected referenced foreign-key "plan_id" returned %v for node %v`, fk, n.ID)
+			return fmt.Errorf(`unexpected referenced foreign-key "plan_entitlements" returned %v for node %v`, *fk, n.ID)
 		}
 		assign(node, n)
 	}

@@ -50,7 +50,8 @@ func (r *entitlementRepository) Create(ctx context.Context, e *domainEntitlement
 
 	result, err := client.Entitlement.Create().
 		SetID(e.ID).
-		SetPlanID(e.PlanID).
+		SetNillablePlanID(e.PlanID).
+		SetNillableAddonID(e.AddonID).
 		SetFeatureID(e.FeatureID).
 		SetFeatureType(string(e.FeatureType)).
 		SetIsEnabled(e.IsEnabled).
@@ -270,7 +271,8 @@ func (r *entitlementRepository) Update(ctx context.Context, e *domainEntitlement
 			entitlement.TenantID(e.TenantID),
 			entitlement.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
-		SetPlanID(e.PlanID).
+		SetNillablePlanID(e.PlanID).
+		SetNillableAddonID(e.AddonID).
 		SetFeatureID(e.FeatureID).
 		SetFeatureType(string(e.FeatureType)).
 		SetIsEnabled(e.IsEnabled).
@@ -368,7 +370,8 @@ func (r *entitlementRepository) CreateBulk(ctx context.Context, entitlements []*
 
 		builders[i] = client.Entitlement.Create().
 			SetID(e.ID).
-			SetPlanID(e.PlanID).
+			SetNillablePlanID(e.PlanID).
+			SetNillableAddonID(e.AddonID).
 			SetFeatureID(e.FeatureID).
 			SetFeatureType(string(e.FeatureType)).
 			SetIsEnabled(e.IsEnabled).

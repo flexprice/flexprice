@@ -41,6 +41,7 @@ type CreatePriceTier struct {
 
 // TODO : add all price validations
 func (r *CreatePriceRequest) Validate() error {
+
 	var err error
 	// Base validations
 	amount := decimal.Zero
@@ -64,6 +65,18 @@ func (r *CreatePriceRequest) Validate() error {
 
 	// Ensure currency is lowercase
 	r.Currency = strings.ToLower(r.Currency)
+
+	if r.PlanID == nil && r.AddonID == nil {
+		return ierr.NewError("plan_id or addon_id is required").
+			WithHint("Plan ID or Addon ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.PlanID != nil && r.AddonID != nil {
+		return ierr.NewError("only one of plan_id or addon_id should be provided").
+			WithHint("Either Plan ID or Addon ID should be provided, not both").
+			Mark(ierr.ErrValidation)
+	}
 
 	// Billing model validations
 	err = validator.ValidateRequest(r)

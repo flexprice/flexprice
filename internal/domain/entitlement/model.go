@@ -9,7 +9,8 @@ import (
 // Entitlement represents the benefits a customer gets from a subscription plan
 type Entitlement struct {
 	ID               string              `json:"id"`
-	PlanID           string              `json:"plan_id"`
+	PlanID           *string             `json:"plan_id"`
+	AddonID          *string             `json:"addon_id"`
 	FeatureID        string              `json:"feature_id"`
 	FeatureType      types.FeatureType   `json:"feature_type"`
 	IsEnabled        bool                `json:"is_enabled"`
@@ -23,9 +24,16 @@ type Entitlement struct {
 
 // Validate performs validation on the entitlement
 func (e *Entitlement) Validate() error {
-	if e.PlanID == "" {
-		return ierr.NewError("plan_id is required").
-			WithHint("Please provide a valid plan ID").
+
+	if e.PlanID == nil && e.AddonID == nil {
+		return ierr.NewError("plan_id or addon_id is required").
+			WithHint("Plan ID or Addon ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	if e.PlanID != nil && e.AddonID != nil {
+		return ierr.NewError("only one of plan_id or addon_id should be provided").
+			WithHint("Either Plan ID or Addon ID should be provided, not both").
 			Mark(ierr.ErrValidation)
 	}
 	if e.FeatureID == "" {

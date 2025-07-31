@@ -47,7 +47,7 @@ func entitlementFilterFn(ctx context.Context, e *entitlement.Entitlement, filter
 	if len(f.PlanIDs) > 0 {
 		found := false
 		for _, id := range f.PlanIDs {
-			if e.PlanID == id {
+			if e.PlanID != nil && *e.PlanID == id {
 				found = true
 				break
 			}

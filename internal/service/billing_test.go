@@ -1026,7 +1026,7 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithEntitlements() {
 				// Create entitlement with usage limit
 				entitlement := &entitlement.Entitlement{
 					ID:               "ent_test_1",
-					PlanID:           s.testData.plan.ID,
+					PlanID:           lo.ToPtr(s.testData.plan.ID),
 					FeatureID:        testFeature.ID,
 					FeatureType:      types.FeatureTypeMetered,
 					IsEnabled:        true,
@@ -1060,7 +1060,7 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithEntitlements() {
 				// Create entitlement with lower usage limit
 				entitlement := &entitlement.Entitlement{
 					ID:               "ent_test_2",
-					PlanID:           s.testData.plan.ID,
+					PlanID:           lo.ToPtr(s.testData.plan.ID),
 					FeatureID:        testFeature.ID,
 					FeatureType:      types.FeatureTypeMetered,
 					IsEnabled:        true,
@@ -1094,7 +1094,7 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithEntitlements() {
 				// Create unlimited entitlement
 				entitlement := &entitlement.Entitlement{
 					ID:               "ent_test_3",
-					PlanID:           s.testData.plan.ID,
+					PlanID:           lo.ToPtr(s.testData.plan.ID),
 					FeatureID:        testFeature.ID,
 					FeatureType:      types.FeatureTypeMetered,
 					IsEnabled:        true,
@@ -1128,7 +1128,7 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithEntitlements() {
 				// Create soft limit entitlement
 				entitlement := &entitlement.Entitlement{
 					ID:               "ent_test_4",
-					PlanID:           s.testData.plan.ID,
+					PlanID:           lo.ToPtr(s.testData.plan.ID),
 					FeatureID:        testFeature.ID,
 					FeatureType:      types.FeatureTypeMetered,
 					IsEnabled:        true,
@@ -1162,7 +1162,7 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithEntitlements() {
 				// Create disabled entitlement
 				entitlement := &entitlement.Entitlement{
 					ID:               "ent_test_5",
-					PlanID:           s.testData.plan.ID,
+					PlanID:           lo.ToPtr(s.testData.plan.ID),
 					FeatureID:        testFeature.ID,
 					FeatureType:      types.FeatureTypeMetered,
 					IsEnabled:        false, // Disabled entitlement

@@ -46,7 +46,7 @@ const (
 	// It exists in this package in order to avoid circular dependency with the "entitlement" package.
 	EntitlementsInverseTable = "entitlements"
 	// EntitlementsColumn is the table column denoting the entitlements relation/edge.
-	EntitlementsColumn = "plan_id"
+	EntitlementsColumn = "plan_entitlements"
 	// CreditGrantsTable is the table that holds the credit_grants relation/edge.
 	CreditGrantsTable = "credit_grants"
 	// CreditGrantsInverseTable is the table name for the CreditGrant entity.

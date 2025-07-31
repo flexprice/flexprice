@@ -918,10 +918,10 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 
 	for _, e := range entitlements {
 		featureIDs = append(featureIDs, e.FeatureID)
-		if _, ok := entitlementsByPlan[e.PlanID]; !ok {
-			entitlementsByPlan[e.PlanID] = make([]*entitlement.Entitlement, 0)
+		if _, ok := entitlementsByPlan[*e.PlanID]; !ok {
+			entitlementsByPlan[*e.PlanID] = make([]*entitlement.Entitlement, 0)
 		}
-		entitlementsByPlan[e.PlanID] = append(entitlementsByPlan[e.PlanID], e)
+		entitlementsByPlan[*e.PlanID] = append(entitlementsByPlan[*e.PlanID], e)
 	}
 	featureIDs = lo.Uniq(featureIDs)
 

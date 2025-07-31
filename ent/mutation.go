@@ -11033,6 +11033,8 @@ type EntitlementMutation struct {
 	created_by         *string
 	updated_by         *string
 	environment_id     *string
+	plan_id            *string
+	addon_id           *string
 	feature_id         *string
 	feature_type       *string
 	is_enabled         *bool
@@ -11042,8 +11044,6 @@ type EntitlementMutation struct {
 	is_soft_limit      *bool
 	static_value       *string
 	clearedFields      map[string]struct{}
-	plan               *string
-	clearedplan        bool
 	done               bool
 	oldValue           func(context.Context) (*Entitlement, error)
 	predicates         []predicate.Entitlement
@@ -11446,12 +11446,12 @@ func (m *EntitlementMutation) ResetEnvironmentID() {
 
 // SetPlanID sets the "plan_id" field.
 func (m *EntitlementMutation) SetPlanID(s string) {
-	m.plan = &s
+	m.plan_id = &s
 }
 
 // PlanID returns the value of the "plan_id" field in the mutation.
 func (m *EntitlementMutation) PlanID() (r string, exists bool) {
-	v := m.plan
+	v := m.plan_id
 	if v == nil {
 		return
 	}
@@ -11461,7 +11461,7 @@ func (m *EntitlementMutation) PlanID() (r string, exists bool) {
 // OldPlanID returns the old "plan_id" field's value of the Entitlement entity.
 // If the Entitlement object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *EntitlementMutation) OldPlanID(ctx context.Context) (v string, err error) {
+func (m *EntitlementMutation) OldPlanID(ctx context.Context) (v *string, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldPlanID is only allowed on UpdateOne operations")
 	}
@@ -11475,9 +11475,71 @@ func (m *EntitlementMutation) OldPlanID(ctx context.Context) (v string, err erro
 	return oldValue.PlanID, nil
 }
 
+// ClearPlanID clears the value of the "plan_id" field.
+func (m *EntitlementMutation) ClearPlanID() {
+	m.plan_id = nil
+	m.clearedFields[entitlement.FieldPlanID] = struct{}{}
+}
+
+// PlanIDCleared returns if the "plan_id" field was cleared in this mutation.
+func (m *EntitlementMutation) PlanIDCleared() bool {
+	_, ok := m.clearedFields[entitlement.FieldPlanID]
+	return ok
+}
+
 // ResetPlanID resets all changes to the "plan_id" field.
 func (m *EntitlementMutation) ResetPlanID() {
-	m.plan = nil
+	m.plan_id = nil
+	delete(m.clearedFields, entitlement.FieldPlanID)
+}
+
+// SetAddonID sets the "addon_id" field.
+func (m *EntitlementMutation) SetAddonID(s string) {
+	m.addon_id = &s
+}
+
+// AddonID returns the value of the "addon_id" field in the mutation.
+func (m *EntitlementMutation) AddonID() (r string, exists bool) {
+	v := m.addon_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAddonID returns the old "addon_id" field's value of the Entitlement entity.
+// If the Entitlement object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntitlementMutation) OldAddonID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAddonID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAddonID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAddonID: %w", err)
+	}
+	return oldValue.AddonID, nil
+}
+
+// ClearAddonID clears the value of the "addon_id" field.
+func (m *EntitlementMutation) ClearAddonID() {
+	m.addon_id = nil
+	m.clearedFields[entitlement.FieldAddonID] = struct{}{}
+}
+
+// AddonIDCleared returns if the "addon_id" field was cleared in this mutation.
+func (m *EntitlementMutation) AddonIDCleared() bool {
+	_, ok := m.clearedFields[entitlement.FieldAddonID]
+	return ok
+}
+
+// ResetAddonID resets all changes to the "addon_id" field.
+func (m *EntitlementMutation) ResetAddonID() {
+	m.addon_id = nil
+	delete(m.clearedFields, entitlement.FieldAddonID)
 }
 
 // SetFeatureID sets the "feature_id" field.
@@ -11792,33 +11854,6 @@ func (m *EntitlementMutation) ResetStaticValue() {
 	delete(m.clearedFields, entitlement.FieldStaticValue)
 }
 
-// ClearPlan clears the "plan" edge to the Plan entity.
-func (m *EntitlementMutation) ClearPlan() {
-	m.clearedplan = true
-	m.clearedFields[entitlement.FieldPlanID] = struct{}{}
-}
-
-// PlanCleared reports if the "plan" edge to the Plan entity was cleared.
-func (m *EntitlementMutation) PlanCleared() bool {
-	return m.clearedplan
-}
-
-// PlanIDs returns the "plan" edge IDs in the mutation.
-// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
-// PlanID instead. It exists only for internal usage by the builders.
-func (m *EntitlementMutation) PlanIDs() (ids []string) {
-	if id := m.plan; id != nil {
-		ids = append(ids, *id)
-	}
-	return
-}
-
-// ResetPlan resets all changes to the "plan" edge.
-func (m *EntitlementMutation) ResetPlan() {
-	m.plan = nil
-	m.clearedplan = false
-}
-
 // Where appends a list predicates to the EntitlementMutation builder.
 func (m *EntitlementMutation) Where(ps ...predicate.Entitlement) {
 	m.predicates = append(m.predicates, ps...)
@@ -11853,7 +11888,7 @@ func (m *EntitlementMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *EntitlementMutation) Fields() []string {
-	fields := make([]string, 0, 15)
+	fields := make([]string, 0, 16)
 	if m.tenant_id != nil {
 		fields = append(fields, entitlement.FieldTenantID)
 	}
@@ -11875,8 +11910,11 @@ func (m *EntitlementMutation) Fields() []string {
 	if m.environment_id != nil {
 		fields = append(fields, entitlement.FieldEnvironmentID)
 	}
-	if m.plan != nil {
+	if m.plan_id != nil {
 		fields = append(fields, entitlement.FieldPlanID)
+	}
+	if m.addon_id != nil {
+		fields = append(fields, entitlement.FieldAddonID)
 	}
 	if m.feature_id != nil {
 		fields = append(fields, entitlement.FieldFeatureID)
@@ -11923,6 +11961,8 @@ func (m *EntitlementMutation) Field(name string) (ent.Value, bool) {
 		return m.EnvironmentID()
 	case entitlement.FieldPlanID:
 		return m.PlanID()
+	case entitlement.FieldAddonID:
+		return m.AddonID()
 	case entitlement.FieldFeatureID:
 		return m.FeatureID()
 	case entitlement.FieldFeatureType:
@@ -11962,6 +12002,8 @@ func (m *EntitlementMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldEnvironmentID(ctx)
 	case entitlement.FieldPlanID:
 		return m.OldPlanID(ctx)
+	case entitlement.FieldAddonID:
+		return m.OldAddonID(ctx)
 	case entitlement.FieldFeatureID:
 		return m.OldFeatureID(ctx)
 	case entitlement.FieldFeatureType:
@@ -12040,6 +12082,13 @@ func (m *EntitlementMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetPlanID(v)
+		return nil
+	case entitlement.FieldAddonID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAddonID(v)
 		return nil
 	case entitlement.FieldFeatureID:
 		v, ok := value.(string)
@@ -12144,6 +12193,12 @@ func (m *EntitlementMutation) ClearedFields() []string {
 	if m.FieldCleared(entitlement.FieldEnvironmentID) {
 		fields = append(fields, entitlement.FieldEnvironmentID)
 	}
+	if m.FieldCleared(entitlement.FieldPlanID) {
+		fields = append(fields, entitlement.FieldPlanID)
+	}
+	if m.FieldCleared(entitlement.FieldAddonID) {
+		fields = append(fields, entitlement.FieldAddonID)
+	}
 	if m.FieldCleared(entitlement.FieldUsageLimit) {
 		fields = append(fields, entitlement.FieldUsageLimit)
 	}
@@ -12175,6 +12230,12 @@ func (m *EntitlementMutation) ClearField(name string) error {
 		return nil
 	case entitlement.FieldEnvironmentID:
 		m.ClearEnvironmentID()
+		return nil
+	case entitlement.FieldPlanID:
+		m.ClearPlanID()
+		return nil
+	case entitlement.FieldAddonID:
+		m.ClearAddonID()
 		return nil
 	case entitlement.FieldUsageLimit:
 		m.ClearUsageLimit()
@@ -12217,6 +12278,9 @@ func (m *EntitlementMutation) ResetField(name string) error {
 	case entitlement.FieldPlanID:
 		m.ResetPlanID()
 		return nil
+	case entitlement.FieldAddonID:
+		m.ResetAddonID()
+		return nil
 	case entitlement.FieldFeatureID:
 		m.ResetFeatureID()
 		return nil
@@ -12244,28 +12308,19 @@ func (m *EntitlementMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *EntitlementMutation) AddedEdges() []string {
-	edges := make([]string, 0, 1)
-	if m.plan != nil {
-		edges = append(edges, entitlement.EdgePlan)
-	}
+	edges := make([]string, 0, 0)
 	return edges
 }
 
 // AddedIDs returns all IDs (to other nodes) that were added for the given edge
 // name in this mutation.
 func (m *EntitlementMutation) AddedIDs(name string) []ent.Value {
-	switch name {
-	case entitlement.EdgePlan:
-		if id := m.plan; id != nil {
-			return []ent.Value{*id}
-		}
-	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *EntitlementMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 0)
 	return edges
 }
 
@@ -12277,42 +12332,25 @@ func (m *EntitlementMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *EntitlementMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 1)
-	if m.clearedplan {
-		edges = append(edges, entitlement.EdgePlan)
-	}
+	edges := make([]string, 0, 0)
 	return edges
 }
 
 // EdgeCleared returns a boolean which indicates if the edge with the given name
 // was cleared in this mutation.
 func (m *EntitlementMutation) EdgeCleared(name string) bool {
-	switch name {
-	case entitlement.EdgePlan:
-		return m.clearedplan
-	}
 	return false
 }
 
 // ClearEdge clears the value of the edge with the given name. It returns an error
 // if that edge is not defined in the schema.
 func (m *EntitlementMutation) ClearEdge(name string) error {
-	switch name {
-	case entitlement.EdgePlan:
-		m.ClearPlan()
-		return nil
-	}
 	return fmt.Errorf("unknown Entitlement unique edge %s", name)
 }
 
 // ResetEdge resets all changes to the edge with the given name in this mutation.
 // It returns an error if the edge is not defined in the schema.
 func (m *EntitlementMutation) ResetEdge(name string) error {
-	switch name {
-	case entitlement.EdgePlan:
-		m.ResetPlan()
-		return nil
-	}
 	return fmt.Errorf("unknown Entitlement edge %s", name)
 }
 

@@ -182,9 +182,10 @@ func (r *CreatePlanRequest) ToPlan(ctx context.Context) *plan.Plan {
 	return plan
 }
 
-func (r *CreatePlanEntitlementRequest) ToEntitlement(ctx context.Context, planID string) *entitlement.Entitlement {
+func (r *CreatePlanEntitlementRequest) ToEntitlement(ctx context.Context, planID *string, addonID *string) *entitlement.Entitlement {
 	ent := r.CreateEntitlementRequest.ToEntitlement(ctx)
 	ent.PlanID = planID
+	ent.AddonID = addonID
 	return ent
 }
 

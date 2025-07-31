@@ -46,17 +46,6 @@ func (s *priceService) CreatePrice(ctx context.Context, req dto.CreatePriceReque
 		return nil, err
 	}
 
-	if req.PlanID == nil && req.AddonID == nil {
-		return nil, ierr.NewError("plan_id or addon_id is required").
-			WithHint("Plan ID or Addon ID is required").
-			Mark(ierr.ErrValidation)
-	}
-
-	if req.PlanID != nil && req.AddonID != nil {
-		return nil, ierr.NewError("only one of plan_id or addon_id should be provided").
-			WithHint("Either Plan ID or Addon ID should be provided, not both").
-			Mark(ierr.ErrValidation)
-	}
 	price, err := req.ToPrice(ctx)
 	if err != nil {
 		return nil, ierr.WithError(err).

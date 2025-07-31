@@ -1892,22 +1892,6 @@ func (c *EntitlementClient) GetX(ctx context.Context, id string) *Entitlement {
 	return obj
 }
 
-// QueryPlan queries the plan edge of a Entitlement.
-func (c *EntitlementClient) QueryPlan(e *Entitlement) *PlanQuery {
-	query := (&PlanClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := e.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(entitlement.Table, entitlement.FieldID, id),
-			sqlgraph.To(plan.Table, plan.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, entitlement.PlanTable, entitlement.PlanColumn),
-		)
-		fromV = sqlgraph.Neighbors(e.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
 // Hooks returns the client hooks.
 func (c *EntitlementClient) Hooks() []Hook {
 	return c.hooks.Entitlement

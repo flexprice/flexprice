@@ -44,13 +44,13 @@ func (s *entitlementService) CreateEntitlement(ctx context.Context, req dto.Crea
 		return nil, err
 	}
 
-	if req.PlanID == "" {
+	if req.PlanID == nil {
 		return nil, ierr.NewError("plan_id is required").
 			Mark(ierr.ErrValidation)
 	}
 
 	// Validate plan exists
-	plan, err := s.PlanRepo.Get(ctx, req.PlanID)
+	plan, err := s.PlanRepo.Get(ctx, *req.PlanID)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +108,7 @@ func (s *entitlementService) GetEntitlement(ctx context.Context, id string) (*dt
 	}
 	response.Feature = &dto.FeatureResponse{Feature: feature}
 
-	plan, err := s.PlanRepo.Get(ctx, result.PlanID)
+	plan, err := s.PlanRepo.Get(ctx, *result.PlanID)
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +206,7 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 		if filter.GetExpand().Has(types.ExpandPlans) {
 			// Collect plan IDs
 			planIDs := lo.Map(entitlements, func(e *entitlement.Entitlement, _ int) string {
-				return e.PlanID
+				return *e.PlanID
 			})
 
 			if len(planIDs) > 0 {
@@ -245,7 +245,7 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 
 		// Add expanded plan if requested and available
 		if !filter.GetExpand().IsEmpty() && filter.GetExpand().Has(types.ExpandPlans) {
-			if p, ok := plansByID[e.PlanID]; ok {
+			if p, ok := plansByID[*e.PlanID]; ok {
 				response.Items[i].Plan = &dto.PlanResponse{Plan: p}
 			}
 		}

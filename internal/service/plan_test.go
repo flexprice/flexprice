@@ -661,7 +661,7 @@ func (s *PlanServiceSuite) TestUpdatePlanEntitlements() {
 
 	testEntitlement := &entitlement.Entitlement{
 		ID:          "ent-1",
-		PlanID:      testPlan.ID,
+		PlanID:      lo.ToPtr(testPlan.ID),
 		FeatureID:   testFeature.ID,
 		FeatureType: types.FeatureTypeBoolean,
 		IsEnabled:   false,
