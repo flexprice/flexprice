@@ -4,8 +4,11 @@ import (
 	"context"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/entitlement"
+	"github.com/flexprice/flexprice/internal/domain/price"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // AddonService interface defines the business logic for addon management
@@ -55,43 +58,54 @@ func (s *addonService) CreateAddon(ctx context.Context, req dto.CreateAddonReque
 	domainAddon := req.ToAddon(ctx)
 	s.Logger.Infof("domainAddon: %+v", domainAddon)
 
-	// Create the addon
-	if err := s.AddonRepo.Create(ctx, domainAddon); err != nil {
-		s.Logger.Errorf("failed to create addon", "error", err)
+	// Start a transaction to create addon, prices, and entitlements
+	err := s.DB.WithTx(ctx, func(ctx context.Context) error {
+		// 1. Create the addon
+		if err := s.AddonRepo.Create(ctx, domainAddon); err != nil {
+			return err
+		}
+
+		// 2. Create prices in bulk if present
+		if len(req.Prices) > 0 {
+			prices := make([]*price.Price, len(req.Prices))
+			for i, priceReq := range req.Prices {
+				price, err := priceReq.ToPrice(ctx)
+				if err != nil {
+					return ierr.WithError(err).
+						WithHint("Failed to create price").
+						Mark(ierr.ErrValidation)
+				}
+				price.AddonID = lo.ToPtr(domainAddon.ID)
+				prices[i] = price
+			}
+
+			// Create prices in bulk
+			if err := s.PriceRepo.CreateBulk(ctx, prices); err != nil {
+				return err
+			}
+		}
+
+		// 3. Create entitlements in bulk if present
+		if len(req.Entitlements) > 0 {
+			entitlements := make([]*entitlement.Entitlement, len(req.Entitlements))
+			for i, entReq := range req.Entitlements {
+				ent := entReq.ToEntitlement(ctx, lo.ToPtr(domainAddon.ID))
+				ent.AddonID = lo.ToPtr(domainAddon.ID)
+				entitlements[i] = ent
+			}
+
+			// Create entitlements in bulk
+			if _, err := s.EntitlementRepo.CreateBulk(ctx, entitlements); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
 		return nil, err
 	}
-
-	// Create associated prices
-	// for _, priceReq := range req.Prices {
-	// Set addon_id for the price
-	// priceReq.CreatePriceRequest.AddonID = domainAddon.ID
-
-	// Create price using existing price service logic
-	// if _, err := s.PriceRepo.Create(ctx, *priceReq.CreatePriceRequest); err != nil {
-	// 	return nil, ierr.WithError(err).
-	// 		WithHint("Failed to create addon price").
-	// 		WithReportableDetails(map[string]interface{}{
-	// 			"addon_id": domainAddon.ID,
-	// 		}).
-	// 		Mark(ierr.ErrSystem)
-	// }
-	// }
-
-	// Create associated entitlements
-	// for _, entitlementReq := range req.Entitlements {
-	// 	// Set addon_id for the entitlement
-	// 	entitlementReq.CreateEntitlementRequest.AddonID = domainAddon.ID
-
-	// 	// Create entitlement using existing entitlement service logic
-	// 	if _, err := s.entitlementService().CreateEntitlement(ctx, *entitlementReq.CreateEntitlementRequest); err != nil {
-	// 		return nil, ierr.WithError(err).
-	// 			WithHint("Failed to create addon entitlement").
-	// 			WithReportableDetails(map[string]interface{}{
-	// 				"addon_id": domainAddon.ID,
-	// 			}).
-	// 			Mark(ierr.ErrSystem)
-	// 	}
-	// }
 
 	// Return response
 	response := &dto.AddonResponse{}

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/addon"
+	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
@@ -14,13 +15,13 @@ import (
 
 // CreateAddonRequest represents the request to create an addon
 type CreateAddonRequest struct {
-	Name        string          `json:"name" validate:"required"`
-	LookupKey   string          `json:"lookup_key" validate:"required"`
-	Description string          `json:"description"`
-	Type        types.AddonType `json:"type" validate:"required"`
-	// Prices       []CreateAddonPriceRequest       `json:"prices"`
-	// Entitlements []CreateAddonEntitlementRequest `json:"entitlements"`
-	Metadata map[string]interface{} `json:"metadata"`
+	Name         string                          `json:"name" validate:"required"`
+	LookupKey    string                          `json:"lookup_key" validate:"required"`
+	Description  string                          `json:"description"`
+	Type         types.AddonType                 `json:"type" validate:"required"`
+	Prices       []CreateAddonPriceRequest       `json:"prices"`
+	Entitlements []CreateAddonEntitlementRequest `json:"entitlements"`
+	Metadata     map[string]interface{}          `json:"metadata"`
 }
 
 type CreateAddonPriceRequest struct {
@@ -29,6 +30,12 @@ type CreateAddonPriceRequest struct {
 
 type CreateAddonEntitlementRequest struct {
 	*CreateEntitlementRequest
+}
+
+func (r *CreateAddonEntitlementRequest) ToEntitlement(ctx context.Context, addonID *string) *entitlement.Entitlement {
+	ent := r.CreateEntitlementRequest.ToEntitlement(ctx)
+	ent.AddonID = addonID
+	return ent
 }
 
 func (r *CreateAddonRequest) Validate() error {
@@ -44,17 +51,17 @@ func (r *CreateAddonRequest) Validate() error {
 			Mark(errors.ErrValidation)
 	}
 
-	// for _, price := range r.Prices {
-	// 	if err := price.Validate(); err != nil {
-	// 		return err
-	// 	}
-	// }
+	for _, price := range r.Prices {
+		if err := price.Validate(); err != nil {
+			return err
+		}
+	}
 
-	// for _, ent := range r.Entitlements {
-	// 	if err := ent.Validate(); err != nil {
-	// 		return err
-	// 	}
-	// }
+	for _, ent := range r.Entitlements {
+		if err := ent.Validate(); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
