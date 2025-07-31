@@ -115,8 +115,10 @@ func (f *AddonFilter) Validate() error {
 		}
 	}
 
-	if err := f.AddonType.Validate(); err != nil {
-		return err
+	if f.AddonType != "" {
+		if err := f.AddonType.Validate(); err != nil {
+			return err
+		}
 	}
 
 	return nil

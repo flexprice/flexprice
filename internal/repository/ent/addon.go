@@ -36,24 +36,22 @@ func NewAddonRepository(client postgres.IClient, log *logger.Logger, cache cache
 }
 
 func (r *addonRepository) Create(ctx context.Context, a *domainAddon.Addon) error {
-
-	// Start a span for this repository operation
-	span := StartRepositorySpan(ctx, "addon", "create", map[string]interface{}{
-		"addon_id": a.ID,
-		"name":     a.Name,
-		"type":     a.Type,
-	})
-	defer FinishSpan(span)
-
 	client := r.client.Querier(ctx)
 
-	r.log.Infof("creating addon",
+	r.log.Debugw("creating addon",
 		"addon_id", a.ID,
 		"tenant_id", a.TenantID,
 		"name", a.Name,
 		"lookup_key", a.LookupKey,
-		"type", a.Type,
 	)
+
+	// Start a span for this repository operation
+	span := StartRepositorySpan(ctx, "addon", "create", map[string]interface{}{
+		"addon_id":   a.ID,
+		"name":       a.Name,
+		"lookup_key": a.LookupKey,
+	})
+	defer FinishSpan(span)
 
 	// Set environment ID from context if not already set
 	if a.EnvironmentID == "" {
@@ -64,7 +62,6 @@ func (r *addonRepository) Create(ctx context.Context, a *domainAddon.Addon) erro
 		SetID(a.ID).
 		SetTenantID(a.TenantID).
 		SetEnvironmentID(a.EnvironmentID).
-		SetTenantID(a.TenantID).
 		SetStatus(string(a.Status)).
 		SetName(a.Name).
 		SetDescription(a.Description).
@@ -73,8 +70,9 @@ func (r *addonRepository) Create(ctx context.Context, a *domainAddon.Addon) erro
 		SetMetadata(a.Metadata).
 		SetCreatedBy(types.GetUserID(ctx)).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		SetCreatedAt(time.Now()).
-		SetUpdatedAt(time.Now()).
+		SetCreatedAt(a.CreatedAt).
+		SetUpdatedAt(a.UpdatedAt).
+		SetEnvironmentID(a.EnvironmentID).
 		Save(ctx)
 
 	if err != nil {
@@ -86,7 +84,6 @@ func (r *addonRepository) Create(ctx context.Context, a *domainAddon.Addon) erro
 					return ierr.WithError(err).
 						WithHint("Addon with same lookup key already exists").
 						WithReportableDetails(map[string]any{
-							"addon_id":   a.ID,
 							"lookup_key": a.LookupKey,
 						}).
 						Mark(ierr.ErrAlreadyExists)
@@ -97,25 +94,20 @@ func (r *addonRepository) Create(ctx context.Context, a *domainAddon.Addon) erro
 				WithReportableDetails(map[string]any{
 					"addon_id": a.ID,
 				}).
-				Mark(ierr.ErrDatabase)
+				Mark(ierr.ErrAlreadyExists)
 		}
 		return ierr.WithError(err).
 			WithHint("Failed to create addon").
-			WithReportableDetails(map[string]interface{}{
-				"addon_id":  a.ID,
-				"tenant_id": a.TenantID,
-				"name":      a.Name,
-				"type":      a.Type,
-			}).
 			Mark(ierr.ErrDatabase)
 	}
 
+	SetSpanSuccess(span)
 	return nil
 }
 
 func (r *addonRepository) GetByID(ctx context.Context, id string) (*domainAddon.Addon, error) {
 	// Start a span for this repository operation
-	span := StartRepositorySpan(ctx, "addon", "get_by_id", map[string]interface{}{
+	span := StartRepositorySpan(ctx, "addon", "get", map[string]interface{}{
 		"addon_id": id,
 	})
 	defer FinishSpan(span)
@@ -127,200 +119,95 @@ func (r *addonRepository) GetByID(ctx context.Context, id string) (*domainAddon.
 
 	client := r.client.Querier(ctx)
 
-	r.log.Debugw("getting addon by id",
+	r.log.Debugw("getting addon",
 		"addon_id", id,
+		"tenant_id", types.GetTenantID(ctx),
 	)
 
-	entAddon, err := client.Addon.
-		Query().
+	a, err := client.Addon.Query().
 		Where(
 			addon.ID(id),
 			addon.TenantID(types.GetTenantID(ctx)),
 			addon.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
-		First(ctx)
+		Only(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
+
 		if ent.IsNotFound(err) {
 			return nil, ierr.WithError(err).
-				WithHint("Addon not found").
-				WithReportableDetails(map[string]interface{}{
+				WithHintf("Addon with ID %s was not found", id).
+				WithReportableDetails(map[string]any{
 					"addon_id": id,
 				}).
 				Mark(ierr.ErrNotFound)
 		}
 		return nil, ierr.WithError(err).
-			WithHint("Failed to get addon").
-			WithReportableDetails(map[string]interface{}{
-				"addon_id": id,
-			}).
+			WithHintf("Failed to get addon with ID %s", id).
 			Mark(ierr.ErrDatabase)
 	}
 
-	domainAddon := &domainAddon.Addon{}
-	result := domainAddon.FromEnt(entAddon)
-	r.SetCache(ctx, result)
-	return result, nil
+	SetSpanSuccess(span)
+	addonData := (&domainAddon.Addon{}).FromEnt(a)
+	r.SetCache(ctx, addonData)
+	return addonData, nil
 }
 
 func (r *addonRepository) GetByLookupKey(ctx context.Context, lookupKey string) (*domainAddon.Addon, error) {
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "addon", "get_by_lookup_key", map[string]interface{}{
-		"tenant_id":      types.GetTenantID(ctx),
-		"environment_id": types.GetEnvironmentID(ctx),
-		"lookup_key":     lookupKey,
+		"lookup_key": lookupKey,
 	})
 	defer FinishSpan(span)
+
+	// Try to get from cache first
+	if cachedAddon := r.GetCache(ctx, lookupKey); cachedAddon != nil {
+		return cachedAddon, nil
+	}
 
 	client := r.client.Querier(ctx)
 
 	r.log.Debugw("getting addon by lookup key",
-		"tenant_id", types.GetTenantID(ctx),
-		"environment_id", types.GetEnvironmentID(ctx),
 		"lookup_key", lookupKey,
 	)
 
-	entAddon, err := client.Addon.
-		Query().
+	a, err := client.Addon.Query().
 		Where(
-			addon.TenantID(types.GetTenantID(ctx)),
-			addon.EnvironmentIDEQ(types.GetEnvironmentID(ctx)),
 			addon.LookupKey(lookupKey),
-			addon.StatusEQ(string(types.StatusPublished)),
+			addon.TenantID(types.GetTenantID(ctx)),
+			addon.Status(string(types.StatusPublished)),
+			addon.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
-		First(ctx)
+		Only(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
+
 		if ent.IsNotFound(err) {
 			return nil, ierr.WithError(err).
-				WithHint("Addon not found").
-				WithReportableDetails(map[string]interface{}{
-					"tenant_id":      types.GetTenantID(ctx),
-					"environment_id": types.GetEnvironmentID(ctx),
-					"lookup_key":     lookupKey,
+				WithHintf("Addon with lookup key %s was not found", lookupKey).
+				WithReportableDetails(map[string]any{
+					"lookup_key": lookupKey,
 				}).
 				Mark(ierr.ErrNotFound)
 		}
 		return nil, ierr.WithError(err).
-			WithHint("Failed to get addon").
-			WithReportableDetails(map[string]interface{}{
-				"tenant_id":      types.GetTenantID(ctx),
-				"environment_id": types.GetEnvironmentID(ctx),
-				"lookup_key":     lookupKey,
-			}).
+			WithHint("Failed to get addon by lookup key").
 			Mark(ierr.ErrDatabase)
 	}
 
-	domainAddon := &domainAddon.Addon{}
-	return domainAddon.FromEnt(entAddon), nil
-}
-
-func (r *addonRepository) Update(ctx context.Context, a *domainAddon.Addon) error {
-	// Start a span for this repository operation
-	span := StartRepositorySpan(ctx, "addon", "update", map[string]interface{}{
-		"addon_id": a.ID,
-		"name":     a.Name,
-	})
-	defer FinishSpan(span)
-
-	client := r.client.Querier(ctx)
-
-	r.log.Debugw("updating addon",
-		"addon_id", a.ID,
-		"tenant_id", a.TenantID,
-		"name", a.Name,
-	)
-
-	updateBuilder := client.Addon.
-		Update().
-		Where(
-			addon.ID(a.ID),
-			addon.TenantID(types.GetTenantID(ctx)),
-			addon.EnvironmentID(types.GetEnvironmentID(ctx)),
-		).
-		SetName(a.Name).
-		SetDescription(a.Description).
-		SetMetadata(a.Metadata).
-		SetStatus(string(a.Status)).
-		SetType(string(a.Type)).
-		SetUpdatedBy(types.GetUserID(ctx)).
-		SetUpdatedAt(time.Now())
-
-	_, err := updateBuilder.Save(ctx)
-	if err != nil {
-		SetSpanError(span, err)
-		if ent.IsNotFound(err) {
-			return ierr.WithError(err).
-				WithHint("Addon not found").
-				WithReportableDetails(map[string]interface{}{
-					"addon_id": a.ID,
-				}).
-				Mark(ierr.ErrNotFound)
-		}
-		return ierr.WithError(err).
-			WithHint("Failed to update addon").
-			WithReportableDetails(map[string]interface{}{
-				"addon_id": a.ID,
-				"name":     a.Name,
-			}).
-			Mark(ierr.ErrDatabase)
-	}
-
-	r.DeleteCache(ctx, a.ID)
-	return nil
-}
-
-func (r *addonRepository) Delete(ctx context.Context, id string) error {
-	// Start a span for this repository operation
-	span := StartRepositorySpan(ctx, "addon", "delete", map[string]interface{}{
-		"addon_id": id,
-	})
-	defer FinishSpan(span)
-
-	client := r.client.Querier(ctx)
-
-	r.log.Debugw("deleting addon",
-		"addon_id", id,
-	)
-
-	_, err := client.Addon.
-		Update().
-		Where(
-			addon.ID(id),
-			addon.TenantID(types.GetTenantID(ctx)),
-			addon.EnvironmentID(types.GetEnvironmentID(ctx)),
-			addon.Status(string(types.StatusPublished)),
-		).
-		SetStatus(string(types.StatusDeleted)).
-		SetUpdatedAt(time.Now()).
-		SetUpdatedBy(types.GetUserID(ctx)).
-		Save(ctx)
-
-	if err != nil {
-		SetSpanError(span, err)
-		if ent.IsNotFound(err) {
-			return ierr.WithError(err).
-				WithHint("Addon not found").
-				WithReportableDetails(map[string]interface{}{
-					"addon_id": id,
-				}).
-				Mark(ierr.ErrNotFound)
-		}
-		return ierr.WithError(err).
-			WithHint("Failed to delete addon").
-			WithReportableDetails(map[string]interface{}{
-				"addon_id": id,
-			}).
-			Mark(ierr.ErrDatabase)
-	}
-
-	r.DeleteCache(ctx, id)
-	return nil
+	SetSpanSuccess(span)
+	return (&domainAddon.Addon{}).FromEnt(a), nil
 }
 
 func (r *addonRepository) List(ctx context.Context, filter *types.AddonFilter) ([]*domainAddon.Addon, error) {
+	if filter == nil {
+		filter = &types.AddonFilter{
+			QueryFilter: types.NewDefaultQueryFilter(),
+		}
+	}
+
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "addon", "list", map[string]interface{}{
 		"filter": filter,
@@ -328,318 +215,207 @@ func (r *addonRepository) List(ctx context.Context, filter *types.AddonFilter) (
 	defer FinishSpan(span)
 
 	client := r.client.Querier(ctx)
-
-	r.log.Debugw("listing addons",
-		"filter", filter,
-	)
-
 	query := client.Addon.Query()
+
+	// Apply entity-specific filters
+	query, err := r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
+	if err != nil {
+		return nil, err
+	}
 
 	// Apply common query options
 	query = ApplyQueryOptions(ctx, query, filter, r.queryOpts)
-	// Apply entity-specific filters
-	query = r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
 
-	entAddons, err := query.All(ctx)
+	addons, err := query.All(ctx)
 	if err != nil {
 		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to list addons").
-			WithReportableDetails(map[string]interface{}{
-				"cause": err.Error(),
+			WithReportableDetails(map[string]any{
+				"filter": filter,
 			}).
 			Mark(ierr.ErrDatabase)
 	}
 
-	domainAddon := &domainAddon.Addon{}
-	return domainAddon.FromEntList(entAddons), nil
+	SetSpanSuccess(span)
+	return (&domainAddon.Addon{}).FromEntList(addons), nil
 }
 
 func (r *addonRepository) Count(ctx context.Context, filter *types.AddonFilter) (int, error) {
+	client := r.client.Querier(ctx)
+
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "addon", "count", map[string]interface{}{
 		"filter": filter,
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
 	query := client.Addon.Query()
 
 	query = ApplyBaseFilters(ctx, query, filter, r.queryOpts)
-	query = r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
+	query, err := r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
+	if err != nil {
+		return 0, err
+	}
 
 	count, err := query.Count(ctx)
 	if err != nil {
 		SetSpanError(span, err)
 		return 0, ierr.WithError(err).
 			WithHint("Failed to count addons").
+			WithReportableDetails(map[string]any{
+				"filter": filter,
+			}).
 			Mark(ierr.ErrDatabase)
 	}
+
+	SetSpanSuccess(span)
 	return count, nil
 }
 
-// Subscription Addon methods
+func (r *addonRepository) ListAll(ctx context.Context, filter *types.AddonFilter) ([]*domainAddon.Addon, error) {
+	if filter == nil {
+		filter = types.NewNoLimitAddonFilter()
+	}
 
-// func (r *addonRepository) CreateSubscriptionAddon(ctx context.Context, sa *domainAddon.SubscriptionAddon) error {
-// 	client := r.client.Querier(ctx)
+	if filter.QueryFilter == nil {
+		filter.QueryFilter = types.NewNoLimitQueryFilter()
+	}
 
-// 	r.log.Debugw("creating subscription addon",
-// 		"subscription_addon_id", sa.ID,
-// 		"subscription_id", sa.SubscriptionID,
-// 		"addon_id", sa.AddonID,
-// 		"price_id", sa.PriceID,
-// 	)
+	if !filter.IsUnlimited() {
+		filter.QueryFilter.Limit = nil
+	}
 
-// 	// Start a span for this repository operation
-// 	span := StartRepositorySpan(ctx, "subscription_addon", "create", map[string]interface{}{
-// 		"subscription_addon_id": sa.ID,
-// 		"subscription_id":       sa.SubscriptionID,
-// 		"addon_id":              sa.AddonID,
-// 	})
-// 	defer FinishSpan(span)
+	if err := filter.Validate(); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Invalid filter parameters").
+			Mark(ierr.ErrValidation)
+	}
 
-// 	// Set environment ID from context if not already set
-// 	if sa.EnvironmentID == "" {
-// 		sa.EnvironmentID = types.GetEnvironmentID(ctx)
-// 	}
+	return r.List(ctx, filter)
+}
 
-// 	subAddonBuilder := client.SubscriptionAddon.Create().
-// 		SetID(sa.ID).
-// 		SetTenantID(sa.TenantID).
-// 		SetSubscriptionID(sa.SubscriptionID).
-// 		SetAddonID(sa.AddonID).
-// 		SetPriceID(sa.PriceID).
-// 		SetQuantity(sa.Quantity).
-// 		SetAddonStatus(string(sa.AddonStatus)).
-// 		SetProrationBehavior(string(sa.ProrationBehavior)).
-// 		SetStatus(string(sa.Status)).
-// 		SetCreatedAt(time.Now()).
-// 		SetCreatedBy(types.GetUserID(ctx)).
-// 		SetUpdatedAt(time.Now()).
-// 		SetUpdatedBy(types.GetUserID(ctx)).
-// 		SetEnvironmentID(sa.EnvironmentID).
-// 		SetMetadata(sa.Metadata)
+func (r *addonRepository) Update(ctx context.Context, a *domainAddon.Addon) error {
+	client := r.client.Querier(ctx)
 
-// 	if sa.StartDate != nil {
-// 		subAddonBuilder.SetStartDate(*sa.StartDate)
-// 	}
+	r.log.Debugw("updating addon",
+		"addon_id", a.ID,
+		"tenant_id", a.TenantID,
+	)
 
-// 	if sa.EndDate != nil {
-// 		subAddonBuilder.SetEndDate(*sa.EndDate)
-// 	}
+	// Start a span for this repository operation
+	span := StartRepositorySpan(ctx, "addon", "update", map[string]interface{}{
+		"addon_id": a.ID,
+	})
+	defer FinishSpan(span)
 
-// 	if sa.CancellationReason != "" {
-// 		subAddonBuilder.SetCancellationReason(sa.CancellationReason)
-// 	}
+	_, err := client.Addon.Update().
+		Where(
+			addon.ID(a.ID),
+			addon.TenantID(a.TenantID),
+			addon.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
+		SetName(a.Name).
+		SetDescription(a.Description).
+		SetStatus(string(a.Status)).
+		SetType(string(a.Type)).
+		SetMetadata(a.Metadata).
+		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		Save(ctx)
 
-// 	if sa.CancelledAt != nil {
-// 		subAddonBuilder.SetCancelledAt(*sa.CancelledAt)
-// 	}
+	if err != nil {
+		SetSpanError(span, err)
 
-// 	if sa.ProratedAmount != nil {
-// 		subAddonBuilder.SetProratedAmount(*sa.ProratedAmount)
-// 	}
+		if ent.IsNotFound(err) {
+			return ierr.WithError(err).
+				WithHintf("Addon with ID %s was not found", a.ID).
+				WithReportableDetails(map[string]any{
+					"addon_id": a.ID,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+		return ierr.WithError(err).
+			WithHint("Failed to update addon").
+			Mark(ierr.ErrDatabase)
+	}
 
-// 	if sa.UsageLimit != nil {
-// 		subAddonBuilder.SetUsageLimit(*sa.UsageLimit)
-// 	}
+	SetSpanSuccess(span)
+	r.DeleteCache(ctx, a.ID)
+	return nil
+}
 
-// 	if sa.UsageResetPeriod != "" {
-// 		subAddonBuilder.SetUsageResetPeriod(sa.UsageResetPeriod)
-// 	}
+func (r *addonRepository) Delete(ctx context.Context, id string) error {
+	client := r.client.Querier(ctx)
 
-// 	if sa.UsageResetDate != nil {
-// 		subAddonBuilder.SetUsageResetDate(*sa.UsageResetDate)
-// 	}
+	r.log.Debugw("deleting addon",
+		"addon_id", id,
+		"tenant_id", types.GetTenantID(ctx),
+	)
 
-// 	if sa.CreatedBy != "" {
-// 		subAddonBuilder.SetCreatedBy(sa.CreatedBy)
-// 	}
+	// Start a span for this repository operation
+	span := StartRepositorySpan(ctx, "addon", "delete", map[string]interface{}{
+		"addon_id": id,
+	})
+	defer FinishSpan(span)
 
-// 	if sa.UpdatedBy != "" {
-// 		subAddonBuilder.SetUpdatedBy(sa.UpdatedBy)
-// 	}
+	_, err := client.Addon.Update().
+		Where(
+			addon.ID(id),
+			addon.TenantID(types.GetTenantID(ctx)),
+			addon.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
+		SetStatus(string(types.StatusArchived)).
+		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		Save(ctx)
 
-// 	if sa.Metadata != nil {
-// 		subAddonBuilder.SetMetadata(sa.Metadata)
-// 	}
+	if err != nil {
+		SetSpanError(span, err)
 
-// 	_, err := subAddonBuilder.Save(ctx)
-// 	if err != nil {
-// 		SetSpanError(span, err)
-// 		return ierr.WithError(err).
-// 			WithHint("Failed to create subscription addon").
-// 			WithReportableDetails(map[string]interface{}{
-// 				"subscription_addon_id": sa.ID,
-// 				"subscription_id":       sa.SubscriptionID,
-// 				"addon_id":              sa.AddonID,
-// 				"price_id":              sa.PriceID,
-// 			}).
-// 			Mark(ierr.ErrDatabase)
-// 	}
+		if ent.IsNotFound(err) {
+			return ierr.WithError(err).
+				WithHintf("Addon with ID %s was not found", id).
+				WithReportableDetails(map[string]any{
+					"addon_id": id,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+		return ierr.WithError(err).
+			WithHint("Failed to delete addon").
+			WithReportableDetails(map[string]any{
+				"addon_id": id,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
 
-// 	return nil
-// }
+	SetSpanSuccess(span)
+	r.DeleteCache(ctx, id)
+	return nil
+}
 
-// func (r *addonRepository) GetSubscriptionAddonByID(ctx context.Context, id string) (*domainAddon.SubscriptionAddon, error) {
-// 	// Start a span for this repository operation
-// 	span := StartRepositorySpan(ctx, "subscription_addon", "get_by_id", map[string]interface{}{
-// 		"subscription_addon_id": id,
-// 	})
-// 	defer FinishSpan(span)
+// ListByIDs retrieves addons by their IDs
+func (r *addonRepository) ListByIDs(ctx context.Context, addonIDs []string) ([]*domainAddon.Addon, error) {
+	if len(addonIDs) == 0 {
+		return []*domainAddon.Addon{}, nil
+	}
 
-// 	client := r.client.Querier(ctx)
+	r.log.Debugw("listing addons by IDs", "addon_ids", addonIDs)
 
-// 	r.log.Debugw("getting subscription addon by id",
-// 		"subscription_addon_id", id,
-// 	)
+	// Create a filter with addon IDs
+	filter := &types.AddonFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		AddonIDs:    addonIDs,
+	}
 
-// 	entSubAddon, err := client.SubscriptionAddon.
-// 		Query().
-// 		Where(
-// 			subscriptionaddon.ID(id),
-// 			subscriptionaddon.TenantID(types.GetTenantID(ctx)),
-// 			subscriptionaddon.EnvironmentID(types.GetEnvironmentID(ctx)),
-// 		).
-// 		First(ctx)
-
-// 	if err != nil {
-// 		SetSpanError(span, err)
-// 		if ent.IsNotFound(err) {
-// 			return nil, ierr.WithError(err).
-// 				WithHint("Subscription addon not found").
-// 				WithReportableDetails(map[string]interface{}{
-// 					"subscription_addon_id": id,
-// 				}).
-// 				Mark(ierr.ErrNotFound)
-// 		}
-// 		return nil, ierr.WithError(err).
-// 			WithHint("Failed to get subscription addon").
-// 			WithReportableDetails(map[string]interface{}{
-// 				"subscription_addon_id": id,
-// 			}).
-// 			Mark(ierr.ErrDatabase)
-// 	}
-
-// 	domainSubAddon := &domainAddon.SubscriptionAddon{}
-// 	return domainSubAddon.FromEnt(entSubAddon), nil
-// }
-
-// func (r *addonRepository) GetSubscriptionAddons(ctx context.Context, subscriptionID string) ([]*domainAddon.SubscriptionAddon, error) {
-// 	// Start a span for this repository operation
-// 	span := StartRepositorySpan(ctx, "subscription_addon", "get_by_subscription", map[string]interface{}{
-// 		"subscription_id": subscriptionID,
-// 	})
-// 	defer FinishSpan(span)
-
-// 	client := r.client.Querier(ctx)
-
-// 	r.log.Debugw("getting subscription addons",
-// 		"subscription_id", subscriptionID,
-// 	)
-
-// 	entSubAddons, err := client.SubscriptionAddon.
-// 		Query().
-// 		Where(
-// 			subscriptionaddon.SubscriptionID(subscriptionID),
-// 			subscriptionaddon.TenantID(types.GetTenantID(ctx)),
-// 			subscriptionaddon.EnvironmentID(types.GetEnvironmentID(ctx)),
-// 			subscriptionaddon.StatusEQ(string(types.StatusPublished)),
-// 		).
-// 		All(ctx)
-
-// 	if err != nil {
-// 		SetSpanError(span, err)
-// 		return nil, ierr.WithError(err).
-// 			WithHint("Failed to get subscription addons").
-// 			WithReportableDetails(map[string]interface{}{
-// 				"subscription_id": subscriptionID,
-// 			}).
-// 			Mark(ierr.ErrDatabase)
-// 	}
-
-// 	domainSubAddons := make([]*domainAddon.SubscriptionAddon, len(entSubAddons))
-// 	for i, entSubAddon := range entSubAddons {
-// 		domainSubAddon := &domainAddon.SubscriptionAddon{}
-// 		domainSubAddons[i] = domainSubAddon.FromEnt(entSubAddon)
-// 	}
-
-// 	return domainSubAddons, nil
-// }
-
-// func (r *addonRepository) UpdateSubscriptionAddon(ctx context.Context, sa *domainAddon.SubscriptionAddon) error {
-// 	// Start a span for this repository operation
-// 	span := StartRepositorySpan(ctx, "subscription_addon", "update", map[string]interface{}{
-// 		"subscription_addon_id": sa.ID,
-// 		"addon_status":          sa.AddonStatus,
-// 	})
-// 	defer FinishSpan(span)
-
-// 	client := r.client.Querier(ctx)
-
-// 	r.log.Debugw("updating subscription addon",
-// 		"subscription_addon_id", sa.ID,
-// 		"addon_status", sa.AddonStatus,
-// 	)
-
-// 	updateBuilder := client.SubscriptionAddon.
-// 		UpdateOneID(sa.ID).
-// 		Where(
-// 			subscriptionaddon.TenantID(types.GetTenantID(ctx)),
-// 			subscriptionaddon.EnvironmentID(types.GetEnvironmentID(ctx)),
-// 		).
-// 		SetQuantity(sa.Quantity).
-// 		SetAddonStatus(string(sa.AddonStatus)).
-// 		SetProrationBehavior(string(sa.ProrationBehavior)).
-// 		SetUpdatedAt(time.Now()).
-// 		SetUpdatedBy(types.GetUserID(ctx))
-
-// 	if sa.EndDate != nil {
-// 		updateBuilder.SetEndDate(*sa.EndDate)
-// 	}
-
-// 	if sa.CancellationReason != "" {
-// 		updateBuilder.SetCancellationReason(sa.CancellationReason)
-// 	}
-
-// 	if sa.CancelledAt != nil {
-// 		updateBuilder.SetCancelledAt(*sa.CancelledAt)
-// 	}
-
-// 	if sa.ProratedAmount != nil {
-// 		updateBuilder.SetProratedAmount(*sa.ProratedAmount)
-// 	}
-
-// 	if sa.Metadata != nil {
-// 		updateBuilder.SetMetadata(sa.Metadata)
-// 	}
-
-// 	_, err := updateBuilder.Save(ctx)
-// 	if err != nil {
-// 		SetSpanError(span, err)
-// 		if ent.IsNotFound(err) {
-// 			return ierr.WithError(err).
-// 				WithHint("Subscription addon not found").
-// 				WithReportableDetails(map[string]interface{}{
-// 					"subscription_addon_id": sa.ID,
-// 				}).
-// 				Mark(ierr.ErrNotFound)
-// 		}
-// 		return ierr.WithError(err).
-// 			WithHint("Failed to update subscription addon").
-// 			WithReportableDetails(map[string]interface{}{
-// 				"subscription_addon_id": sa.ID,
-// 			}).
-// 			Mark(ierr.ErrDatabase)
-// 	}
-
-// 	return nil
-// }
+	// Use the existing List method
+	return r.List(ctx, filter)
+}
 
 // AddonQuery type alias for better readability
 type AddonQuery = *ent.AddonQuery
 
-// AddonQueryOptions implements BaseQueryOptions for addon queries
+// AddonQueryOptions implements query options for addon filtering and sorting
 type AddonQueryOptions struct{}
 
 func (o AddonQueryOptions) ApplyTenantFilter(ctx context.Context, query AddonQuery) AddonQuery {
@@ -649,7 +425,7 @@ func (o AddonQueryOptions) ApplyTenantFilter(ctx context.Context, query AddonQue
 func (o AddonQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query AddonQuery) AddonQuery {
 	environmentID := types.GetEnvironmentID(ctx)
 	if environmentID != "" {
-		return query.Where(addon.EnvironmentID(environmentID))
+		return query.Where(addon.EnvironmentIDEQ(environmentID))
 	}
 	return query
 }
@@ -677,15 +453,6 @@ func (o AddonQueryOptions) ApplyPaginationFilter(query AddonQuery, limit int, of
 	return query
 }
 
-func (o AddonQueryOptions) GetFieldResolver(field string) (string, error) {
-	fieldName := o.GetFieldName(field)
-	if fieldName == "" {
-		return "", ierr.NewErrorf("unknown field name '%s' in addon query", field).
-			Mark(ierr.ErrValidation)
-	}
-	return fieldName, nil
-}
-
 func (o AddonQueryOptions) GetFieldName(field string) string {
 	switch field {
 	case "created_at":
@@ -696,50 +463,84 @@ func (o AddonQueryOptions) GetFieldName(field string) string {
 		return addon.FieldName
 	case "lookup_key":
 		return addon.FieldLookupKey
+	case "type":
+		return addon.FieldType
+	case "status":
+		return addon.FieldStatus
 	default:
-		return field
+		// unknown field
+		return ""
 	}
 }
 
-func (o AddonQueryOptions) applyEntityQueryOptions(ctx context.Context, f *types.AddonFilter, query AddonQuery) AddonQuery {
+func (o AddonQueryOptions) applyEntityQueryOptions(ctx context.Context, f *types.AddonFilter, query AddonQuery) (AddonQuery, error) {
+	var err error
 	if f == nil {
-		return query
+		return query, nil
 	}
 
-	// Apply entity-specific filters
+	// Apply addon IDs filter if specified
 	if len(f.AddonIDs) > 0 {
 		query = query.Where(addon.IDIn(f.AddonIDs...))
 	}
 
+	// Apply addon type filter if specified
 	if f.AddonType != "" {
 		query = query.Where(addon.Type(string(f.AddonType)))
 	}
 
+	// Apply lookup keys filter if specified
 	if len(f.LookupKeys) > 0 {
 		query = query.Where(addon.LookupKeyIn(f.LookupKeys...))
 	}
 
-	// Apply DSL filters if provided
-	if len(f.Filters) > 0 {
-		query, _ = dsl.ApplyFilters[AddonQuery, predicate.Addon](
+	// Apply time range filters if specified
+	if f.TimeRangeFilter != nil {
+		if f.StartTime != nil {
+			query = query.Where(addon.CreatedAtGTE(*f.StartTime))
+		}
+		if f.EndTime != nil {
+			query = query.Where(addon.CreatedAtLTE(*f.EndTime))
+		}
+	}
+
+	// Apply filters using the generic function
+	if f.Filters != nil {
+		query, err = dsl.ApplyFilters[AddonQuery, predicate.Addon](
 			query,
 			f.Filters,
 			o.GetFieldResolver,
 			func(p dsl.Predicate) predicate.Addon { return predicate.Addon(p) },
 		)
-	}
-
-	// Apply time range filters
-	if f.TimeRangeFilter != nil {
-		if f.TimeRangeFilter.StartTime != nil {
-			query = query.Where(addon.CreatedAtGTE(*f.TimeRangeFilter.StartTime))
-		}
-		if f.TimeRangeFilter.EndTime != nil {
-			query = query.Where(addon.CreatedAtLTE(*f.TimeRangeFilter.EndTime))
+		if err != nil {
+			return nil, err
 		}
 	}
 
-	return query
+	// Apply sorts using the generic function
+	if f.Sort != nil {
+		query, err = dsl.ApplySorts[AddonQuery, addon.OrderOption](
+			query,
+			f.Sort,
+			o.GetFieldResolver,
+			func(o dsl.OrderFunc) addon.OrderOption { return addon.OrderOption(o) },
+		)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return query, nil
+}
+
+func (o AddonQueryOptions) GetFieldResolver(st string) (string, error) {
+	fieldName := o.GetFieldName(st)
+	if fieldName == "" {
+		return "", ierr.NewErrorf("unknown field name '%s' in addon query", st).
+			WithHintf("Unknown field name '%s' in addon query", st).
+			Mark(ierr.ErrValidation)
+	}
+	return fieldName, nil
 }
 
 func (r *addonRepository) SetCache(ctx context.Context, addon *domainAddon.Addon) {
@@ -752,8 +553,6 @@ func (r *addonRepository) SetCache(ctx context.Context, addon *domainAddon.Addon
 	environmentID := types.GetEnvironmentID(ctx)
 	cacheKey := cache.GenerateKey(cache.PrefixAddon, tenantID, environmentID, addon.ID)
 	r.cache.Set(ctx, cacheKey, addon, cache.ExpiryDefaultInMemory)
-
-	r.log.Debugw("set addon in cache", "id", addon.ID, "cache_key", cacheKey)
 }
 
 func (r *addonRepository) GetCache(ctx context.Context, key string) *domainAddon.Addon {
@@ -771,14 +570,14 @@ func (r *addonRepository) GetCache(ctx context.Context, key string) *domainAddon
 	return nil
 }
 
-func (r *addonRepository) DeleteCache(ctx context.Context, key string) {
+func (r *addonRepository) DeleteCache(ctx context.Context, addonID string) {
 	span := cache.StartCacheSpan(ctx, "addon", "delete", map[string]interface{}{
-		"addon_id": key,
+		"addon_id": addonID,
 	})
 	defer cache.FinishSpan(span)
 
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixAddon, tenantID, environmentID, key)
+	cacheKey := cache.GenerateKey(cache.PrefixAddon, tenantID, environmentID, addonID)
 	r.cache.Delete(ctx, cacheKey)
 }
