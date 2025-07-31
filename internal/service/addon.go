@@ -109,9 +109,10 @@ func (s *addonService) CreateAddon(ctx context.Context, req dto.CreateAddonReque
 	}
 
 	// Return response
-	response := &dto.AddonResponse{}
 	return &dto.CreateAddonResponse{
-		AddonResponse: response.FromDomain(domainAddon),
+		AddonResponse: &dto.AddonResponse{
+			Addon: domainAddon,
+		},
 	}, nil
 }
 
@@ -143,12 +144,11 @@ func (s *addonService) GetAddon(ctx context.Context, id string) (*dto.AddonRespo
 		return nil, err
 	}
 
-	response := &dto.AddonResponse{}
-	addonResponse := response.FromDomain(domainAddon)
-	addonResponse.Prices = pricesResponse.Items
-	addonResponse.Entitlements = entitlements.Items
-
-	return addonResponse, nil
+	return &dto.AddonResponse{
+		Addon:        domainAddon,
+		Prices:       pricesResponse.Items,
+		Entitlements: entitlements.Items,
+	}, nil
 }
 
 // GetAddonByLookupKey retrieves an addon by lookup key
@@ -179,12 +179,11 @@ func (s *addonService) GetAddonByLookupKey(ctx context.Context, lookupKey string
 		return nil, err
 	}
 
-	response := &dto.AddonResponse{}
-	addonResponse := response.FromDomain(domainAddon)
-	addonResponse.Prices = pricesResponse.Items
-	addonResponse.Entitlements = entitlements.Items
-
-	return addonResponse, nil
+	return &dto.AddonResponse{
+		Addon:        domainAddon,
+		Prices:       pricesResponse.Items,
+		Entitlements: entitlements.Items,
+	}, nil
 }
 
 // GetAddons lists addons with filtering
@@ -207,8 +206,14 @@ func (s *addonService) GetAddons(ctx context.Context, filter *types.AddonFilter)
 		return nil, err
 	}
 
+	items := lo.Map(result, func(addon *addon.Addon, _ int) *dto.AddonResponse {
+		return &dto.AddonResponse{
+			Addon: addon,
+		}
+	})
+
 	response := &dto.ListAddonsResponse{
-		Items: dto.AddonDomainToResponses(result),
+		Items: items,
 		Pagination: types.NewPaginationResponse(
 			count,
 			filter.GetLimit(),
@@ -216,7 +221,7 @@ func (s *addonService) GetAddons(ctx context.Context, filter *types.AddonFilter)
 		),
 	}
 
-	if len(result) == 0 {
+	if len(items) == 0 {
 		return response, nil
 	}
 
@@ -470,8 +475,9 @@ func (s *addonService) UpdateAddon(ctx context.Context, id string, req dto.Updat
 		return nil, err
 	}
 
-	response := &dto.AddonResponse{}
-	return response.FromDomain(domainAddon), nil
+	return &dto.AddonResponse{
+		Addon: domainAddon,
+	}, nil
 }
 
 // DeleteAddon soft deletes an addon

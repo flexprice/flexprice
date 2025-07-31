@@ -68,7 +68,7 @@ func (r *CreateAddonRequest) Validate() error {
 
 func (r *CreateAddonRequest) ToAddon(ctx context.Context) *addon.Addon {
 	return &addon.Addon{
-		ID:            types.GenerateShortIDWithPrefix(string(types.UUID_PREFIX_ADDON)),
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ADDON),
 		Name:          r.Name,
 		LookupKey:     r.LookupKey,
 		Description:   r.Description,
@@ -127,35 +127,11 @@ func (r *UpdateAddonRequest) Validate() error {
 
 // AddonResponse represents the addon response
 type AddonResponse struct {
-	ID          string                 `json:"id"`
-	Name        string                 `json:"name"`
-	LookupKey   string                 `json:"lookup_key,omitempty"`
-	Description string                 `json:"description,omitempty"`
-	Type        types.AddonType        `json:"type"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	CreatedAt   time.Time              `json:"created_at"`
-	UpdatedAt   time.Time              `json:"updated_at"`
+	*addon.Addon
 
 	// Optional expanded fields
 	Prices       []*PriceResponse       `json:"prices,omitempty"`
 	Entitlements []*EntitlementResponse `json:"entitlements,omitempty"`
-}
-
-func (r *AddonResponse) FromDomain(a *addon.Addon) *AddonResponse {
-	if a == nil {
-		return nil
-	}
-
-	return &AddonResponse{
-		ID:          a.ID,
-		Name:        a.Name,
-		LookupKey:   a.LookupKey,
-		Description: a.Description,
-		Type:        a.Type,
-		Metadata:    a.Metadata,
-		CreatedAt:   a.CreatedAt,
-		UpdatedAt:   a.UpdatedAt,
-	}
 }
 
 // CreateAddonResponse represents the response after creating an addon
@@ -294,19 +270,5 @@ func AddonResponsesToDomain(responses []*AddonResponse) []*addon.Addon {
 				UpdatedAt: r.UpdatedAt,
 			},
 		}
-	})
-}
-
-func AddonDomainToResponses(addons []*addon.Addon) []*AddonResponse {
-	return lo.Map(addons, func(a *addon.Addon, _ int) *AddonResponse {
-		response := &AddonResponse{}
-		return response.FromDomain(a)
-	})
-}
-
-func SubscriptionAddonDomainToResponses(subscriptionAddons []*addon.SubscriptionAddon) []*SubscriptionAddonResponse {
-	return lo.Map(subscriptionAddons, func(sa *addon.SubscriptionAddon, _ int) *SubscriptionAddonResponse {
-		response := &SubscriptionAddonResponse{}
-		return response.FromDomain(sa)
 	})
 }
