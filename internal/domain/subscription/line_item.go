@@ -36,7 +36,7 @@ type SubscriptionLineItem struct {
 // to check if the line item is active and is mostly used with time.Now()
 // and in case of event post processing, we pass the event timestamp
 func (li *SubscriptionLineItem) IsActive(t time.Time) bool {
-	if li.Status != types.StatusPublished {
+	if li.BaseModel.Status != types.StatusPublished {
 		return false
 	}
 	if li.StartDate.IsZero() {

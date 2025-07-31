@@ -5,6 +5,7 @@ package ent
 import (
 	"time"
 
+	"github.com/flexprice/flexprice/ent/addon"
 	"github.com/flexprice/flexprice/ent/auth"
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/costsheet"
@@ -44,6 +45,47 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
+	addonMixin := schema.Addon{}.Mixin()
+	addonMixinFields0 := addonMixin[0].Fields()
+	_ = addonMixinFields0
+	addonMixinFields1 := addonMixin[1].Fields()
+	_ = addonMixinFields1
+	addonFields := schema.Addon{}.Fields()
+	_ = addonFields
+	// addonDescTenantID is the schema descriptor for tenant_id field.
+	addonDescTenantID := addonMixinFields0[0].Descriptor()
+	// addon.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	addon.TenantIDValidator = addonDescTenantID.Validators[0].(func(string) error)
+	// addonDescStatus is the schema descriptor for status field.
+	addonDescStatus := addonMixinFields0[1].Descriptor()
+	// addon.DefaultStatus holds the default value on creation for the status field.
+	addon.DefaultStatus = addonDescStatus.Default.(string)
+	// addonDescCreatedAt is the schema descriptor for created_at field.
+	addonDescCreatedAt := addonMixinFields0[2].Descriptor()
+	// addon.DefaultCreatedAt holds the default value on creation for the created_at field.
+	addon.DefaultCreatedAt = addonDescCreatedAt.Default.(func() time.Time)
+	// addonDescUpdatedAt is the schema descriptor for updated_at field.
+	addonDescUpdatedAt := addonMixinFields0[3].Descriptor()
+	// addon.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	addon.DefaultUpdatedAt = addonDescUpdatedAt.Default.(func() time.Time)
+	// addon.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	addon.UpdateDefaultUpdatedAt = addonDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// addonDescEnvironmentID is the schema descriptor for environment_id field.
+	addonDescEnvironmentID := addonMixinFields1[0].Descriptor()
+	// addon.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	addon.DefaultEnvironmentID = addonDescEnvironmentID.Default.(string)
+	// addonDescLookupKey is the schema descriptor for lookup_key field.
+	addonDescLookupKey := addonFields[1].Descriptor()
+	// addon.LookupKeyValidator is a validator for the "lookup_key" field. It is called by the builders before save.
+	addon.LookupKeyValidator = addonDescLookupKey.Validators[0].(func(string) error)
+	// addonDescName is the schema descriptor for name field.
+	addonDescName := addonFields[2].Descriptor()
+	// addon.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	addon.NameValidator = addonDescName.Validators[0].(func(string) error)
+	// addonDescType is the schema descriptor for type field.
+	addonDescType := addonFields[4].Descriptor()
+	// addon.TypeValidator is a validator for the "type" field. It is called by the builders before save.
+	addon.TypeValidator = addonDescType.Validators[0].(func(string) error)
 	authFields := schema.Auth{}.Fields()
 	_ = authFields
 	// authDescProvider is the schema descriptor for provider field.

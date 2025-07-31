@@ -9,6 +9,38 @@ import (
 )
 
 var (
+	// AddonsColumns holds the columns for the "addons" table.
+	AddonsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "lookup_key", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "name", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "description", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+	}
+	// AddonsTable holds the schema information for the "addons" table.
+	AddonsTable = &schema.Table{
+		Name:       "addons",
+		Columns:    AddonsColumns,
+		PrimaryKey: []*schema.Column{AddonsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "addon_tenant_id_environment_id_lookup_key",
+				Unique:  true,
+				Columns: []*schema.Column{AddonsColumns[1], AddonsColumns[7], AddonsColumns[8]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published' AND lookup_key IS NOT NULL AND lookup_key != ''",
+				},
+			},
+		},
+	}
 	// AuthsColumns holds the columns for the "auths" table.
 	AuthsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -383,6 +415,7 @@ var (
 		{Name: "usage_reset_period", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "is_soft_limit", Type: field.TypeBool, Default: false},
 		{Name: "static_value", Type: field.TypeString, Nullable: true},
+		{Name: "addon_entitlements", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "plan_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// EntitlementsTable holds the schema information for the "entitlements" table.
@@ -392,8 +425,14 @@ var (
 		PrimaryKey: []*schema.Column{EntitlementsColumns[0]},
 		ForeignKeys: []*schema.ForeignKey{
 			{
-				Symbol:     "entitlements_plans_entitlements",
+				Symbol:     "entitlements_addons_entitlements",
 				Columns:    []*schema.Column{EntitlementsColumns[15]},
+				RefColumns: []*schema.Column{AddonsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "entitlements_plans_entitlements",
+				Columns:    []*schema.Column{EntitlementsColumns[16]},
 				RefColumns: []*schema.Column{PlansColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -402,7 +441,7 @@ var (
 			{
 				Name:    "entitlement_tenant_id_environment_id_plan_id_feature_id",
 				Unique:  true,
-				Columns: []*schema.Column{EntitlementsColumns[1], EntitlementsColumns[7], EntitlementsColumns[15], EntitlementsColumns[8]},
+				Columns: []*schema.Column{EntitlementsColumns[1], EntitlementsColumns[7], EntitlementsColumns[16], EntitlementsColumns[8]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "status = 'published'",
 				},
@@ -410,7 +449,7 @@ var (
 			{
 				Name:    "entitlement_tenant_id_environment_id_plan_id",
 				Unique:  false,
-				Columns: []*schema.Column{EntitlementsColumns[1], EntitlementsColumns[7], EntitlementsColumns[15]},
+				Columns: []*schema.Column{EntitlementsColumns[1], EntitlementsColumns[7], EntitlementsColumns[16]},
 			},
 			{
 				Name:    "entitlement_tenant_id_environment_id_feature_id",
@@ -899,12 +938,21 @@ var (
 		{Name: "lookup_key", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "description", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
+		{Name: "addon_prices", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// PricesTable holds the schema information for the "prices" table.
 	PricesTable = &schema.Table{
 		Name:       "prices",
 		Columns:    PricesColumns,
 		PrimaryKey: []*schema.Column{PricesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "prices_addons_prices",
+				Columns:    []*schema.Column{PricesColumns[27]},
+				RefColumns: []*schema.Column{AddonsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
 		Indexes: []*schema.Index{
 			{
 				Name:    "price_tenant_id_environment_id_lookup_key",
@@ -1477,6 +1525,7 @@ var (
 	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
+		AddonsTable,
 		AuthsTable,
 		BillingSequencesTable,
 		CostsheetTable,
@@ -1519,9 +1568,11 @@ func init() {
 	CreditGrantsTable.ForeignKeys[0].RefTable = PlansTable
 	CreditGrantsTable.ForeignKeys[1].RefTable = SubscriptionsTable
 	CreditNoteLineItemsTable.ForeignKeys[0].RefTable = CreditNotesTable
-	EntitlementsTable.ForeignKeys[0].RefTable = PlansTable
+	EntitlementsTable.ForeignKeys[0].RefTable = AddonsTable
+	EntitlementsTable.ForeignKeys[1].RefTable = PlansTable
 	InvoiceLineItemsTable.ForeignKeys[0].RefTable = InvoicesTable
 	PaymentAttemptsTable.ForeignKeys[0].RefTable = PaymentsTable
+	PricesTable.ForeignKeys[0].RefTable = AddonsTable
 	SubscriptionLineItemsTable.ForeignKeys[0].RefTable = SubscriptionsTable
 	SubscriptionPausesTable.ForeignKeys[0].RefTable = SubscriptionsTable
 	SubscriptionSchedulesTable.ForeignKeys[0].RefTable = SubscriptionsTable

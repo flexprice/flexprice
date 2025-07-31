@@ -24,6 +24,7 @@ type EntitlementQuery struct {
 	inters     []Interceptor
 	predicates []predicate.Entitlement
 	withPlan   *PlanQuery
+	withFKs    bool
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -369,11 +370,15 @@ func (eq *EntitlementQuery) prepareQuery(ctx context.Context) error {
 func (eq *EntitlementQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Entitlement, error) {
 	var (
 		nodes       = []*Entitlement{}
+		withFKs     = eq.withFKs
 		_spec       = eq.querySpec()
 		loadedTypes = [1]bool{
 			eq.withPlan != nil,
 		}
 	)
+	if withFKs {
+		_spec.Node.Columns = append(_spec.Node.Columns, entitlement.ForeignKeys...)
+	}
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*Entitlement).scanValues(nil, columns)
 	}

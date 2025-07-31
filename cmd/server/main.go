@@ -137,6 +137,7 @@ func main() {
 			repository.NewCreditGrantApplicationRepository,
 			repository.NewCreditNoteRepository,
 			repository.NewCreditNoteLineItemRepository,
+			repository.NewAddonRepository,	
 
 			// PubSub
 			pubsubRouter.NewRouter,
@@ -183,6 +184,7 @@ func main() {
 			service.NewCreditGrantService,
 			service.NewCostSheetService,
 			service.NewCreditNoteService,
+			service.NewAddonService,
 		),
 	)
 
@@ -231,6 +233,7 @@ func provideHandlers(
 	creditGrantService service.CreditGrantService,
 	costSheetService service.CostSheetService,
 	creditNoteService service.CreditNoteService,
+	addonService service.AddonService,
 	svixClient *svix.Client,
 ) api.Handlers {
 	return api.Handlers{
@@ -261,6 +264,7 @@ func provideHandlers(
 		CronCreditGrant:   cron.NewCreditGrantCronHandler(creditGrantService, logger),
 		CreditNote:        v1.NewCreditNoteHandler(creditNoteService, logger),
 		Webhook:           v1.NewWebhookHandler(cfg, svixClient, logger),
+		Addon:             v1.NewAddonHandler(addonService, logger),
 	}
 }
 

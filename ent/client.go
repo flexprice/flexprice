@@ -15,6 +15,7 @@ import (
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"github.com/flexprice/flexprice/ent/addon"
 	"github.com/flexprice/flexprice/ent/auth"
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/costsheet"
@@ -54,6 +55,8 @@ type Client struct {
 	config
 	// Schema is the client for creating, migrating and dropping schema.
 	Schema *migrate.Schema
+	// Addon is the client for interacting with the Addon builders.
+	Addon *AddonClient
 	// Auth is the client for interacting with the Auth builders.
 	Auth *AuthClient
 	// BillingSequence is the client for interacting with the BillingSequence builders.
@@ -125,6 +128,7 @@ func NewClient(opts ...Option) *Client {
 
 func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
+	c.Addon = NewAddonClient(c.config)
 	c.Auth = NewAuthClient(c.config)
 	c.BillingSequence = NewBillingSequenceClient(c.config)
 	c.Costsheet = NewCostsheetClient(c.config)
@@ -247,6 +251,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	return &Tx{
 		ctx:                       ctx,
 		config:                    cfg,
+		Addon:                     NewAddonClient(cfg),
 		Auth:                      NewAuthClient(cfg),
 		BillingSequence:           NewBillingSequenceClient(cfg),
 		Costsheet:                 NewCostsheetClient(cfg),
@@ -296,6 +301,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	return &Tx{
 		ctx:                       ctx,
 		config:                    cfg,
+		Addon:                     NewAddonClient(cfg),
 		Auth:                      NewAuthClient(cfg),
 		BillingSequence:           NewBillingSequenceClient(cfg),
 		Costsheet:                 NewCostsheetClient(cfg),
@@ -332,7 +338,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 // Debug returns a new debug-client. It's used to get verbose logging on specific operations.
 //
 //	client.Debug().
-//		Auth.
+//		Addon.
 //		Query().
 //		Count(ctx)
 func (c *Client) Debug() *Client {
@@ -355,13 +361,13 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.Auth, c.BillingSequence, c.Costsheet, c.CreditGrant, c.CreditGrantApplication,
-		c.CreditNote, c.CreditNoteLineItem, c.Customer, c.Entitlement, c.Environment,
-		c.Feature, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Payment,
-		c.PaymentAttempt, c.Plan, c.Price, c.Secret, c.Subscription,
-		c.SubscriptionLineItem, c.SubscriptionPause, c.SubscriptionSchedule,
-		c.SubscriptionSchedulePhase, c.Task, c.Tenant, c.User, c.Wallet,
-		c.WalletTransaction,
+		c.Addon, c.Auth, c.BillingSequence, c.Costsheet, c.CreditGrant,
+		c.CreditGrantApplication, c.CreditNote, c.CreditNoteLineItem, c.Customer,
+		c.Entitlement, c.Environment, c.Feature, c.Invoice, c.InvoiceLineItem,
+		c.InvoiceSequence, c.Meter, c.Payment, c.PaymentAttempt, c.Plan, c.Price,
+		c.Secret, c.Subscription, c.SubscriptionLineItem, c.SubscriptionPause,
+		c.SubscriptionSchedule, c.SubscriptionSchedulePhase, c.Task, c.Tenant, c.User,
+		c.Wallet, c.WalletTransaction,
 	} {
 		n.Use(hooks...)
 	}
@@ -371,13 +377,13 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.Auth, c.BillingSequence, c.Costsheet, c.CreditGrant, c.CreditGrantApplication,
-		c.CreditNote, c.CreditNoteLineItem, c.Customer, c.Entitlement, c.Environment,
-		c.Feature, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Payment,
-		c.PaymentAttempt, c.Plan, c.Price, c.Secret, c.Subscription,
-		c.SubscriptionLineItem, c.SubscriptionPause, c.SubscriptionSchedule,
-		c.SubscriptionSchedulePhase, c.Task, c.Tenant, c.User, c.Wallet,
-		c.WalletTransaction,
+		c.Addon, c.Auth, c.BillingSequence, c.Costsheet, c.CreditGrant,
+		c.CreditGrantApplication, c.CreditNote, c.CreditNoteLineItem, c.Customer,
+		c.Entitlement, c.Environment, c.Feature, c.Invoice, c.InvoiceLineItem,
+		c.InvoiceSequence, c.Meter, c.Payment, c.PaymentAttempt, c.Plan, c.Price,
+		c.Secret, c.Subscription, c.SubscriptionLineItem, c.SubscriptionPause,
+		c.SubscriptionSchedule, c.SubscriptionSchedulePhase, c.Task, c.Tenant, c.User,
+		c.Wallet, c.WalletTransaction,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -386,6 +392,8 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 // Mutate implements the ent.Mutator interface.
 func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 	switch m := m.(type) {
+	case *AddonMutation:
+		return c.Addon.mutate(ctx, m)
 	case *AuthMutation:
 		return c.Auth.mutate(ctx, m)
 	case *BillingSequenceMutation:
@@ -448,6 +456,171 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.WalletTransaction.mutate(ctx, m)
 	default:
 		return nil, fmt.Errorf("ent: unknown mutation type %T", m)
+	}
+}
+
+// AddonClient is a client for the Addon schema.
+type AddonClient struct {
+	config
+}
+
+// NewAddonClient returns a client for the Addon from the given config.
+func NewAddonClient(c config) *AddonClient {
+	return &AddonClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `addon.Hooks(f(g(h())))`.
+func (c *AddonClient) Use(hooks ...Hook) {
+	c.hooks.Addon = append(c.hooks.Addon, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `addon.Intercept(f(g(h())))`.
+func (c *AddonClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Addon = append(c.inters.Addon, interceptors...)
+}
+
+// Create returns a builder for creating a Addon entity.
+func (c *AddonClient) Create() *AddonCreate {
+	mutation := newAddonMutation(c.config, OpCreate)
+	return &AddonCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Addon entities.
+func (c *AddonClient) CreateBulk(builders ...*AddonCreate) *AddonCreateBulk {
+	return &AddonCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *AddonClient) MapCreateBulk(slice any, setFunc func(*AddonCreate, int)) *AddonCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &AddonCreateBulk{err: fmt.Errorf("calling to AddonClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*AddonCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &AddonCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Addon.
+func (c *AddonClient) Update() *AddonUpdate {
+	mutation := newAddonMutation(c.config, OpUpdate)
+	return &AddonUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *AddonClient) UpdateOne(a *Addon) *AddonUpdateOne {
+	mutation := newAddonMutation(c.config, OpUpdateOne, withAddon(a))
+	return &AddonUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *AddonClient) UpdateOneID(id string) *AddonUpdateOne {
+	mutation := newAddonMutation(c.config, OpUpdateOne, withAddonID(id))
+	return &AddonUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Addon.
+func (c *AddonClient) Delete() *AddonDelete {
+	mutation := newAddonMutation(c.config, OpDelete)
+	return &AddonDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *AddonClient) DeleteOne(a *Addon) *AddonDeleteOne {
+	return c.DeleteOneID(a.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *AddonClient) DeleteOneID(id string) *AddonDeleteOne {
+	builder := c.Delete().Where(addon.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &AddonDeleteOne{builder}
+}
+
+// Query returns a query builder for Addon.
+func (c *AddonClient) Query() *AddonQuery {
+	return &AddonQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeAddon},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Addon entity by its id.
+func (c *AddonClient) Get(ctx context.Context, id string) (*Addon, error) {
+	return c.Query().Where(addon.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *AddonClient) GetX(ctx context.Context, id string) *Addon {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryPrices queries the prices edge of a Addon.
+func (c *AddonClient) QueryPrices(a *Addon) *PriceQuery {
+	query := (&PriceClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := a.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(addon.Table, addon.FieldID, id),
+			sqlgraph.To(price.Table, price.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, addon.PricesTable, addon.PricesColumn),
+		)
+		fromV = sqlgraph.Neighbors(a.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryEntitlements queries the entitlements edge of a Addon.
+func (c *AddonClient) QueryEntitlements(a *Addon) *EntitlementQuery {
+	query := (&EntitlementClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := a.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(addon.Table, addon.FieldID, id),
+			sqlgraph.To(entitlement.Table, entitlement.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, addon.EntitlementsTable, addon.EntitlementsColumn),
+		)
+		fromV = sqlgraph.Neighbors(a.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *AddonClient) Hooks() []Hook {
+	return c.hooks.Addon
+}
+
+// Interceptors returns the client interceptors.
+func (c *AddonClient) Interceptors() []Interceptor {
+	return c.inters.Addon
+}
+
+func (c *AddonClient) mutate(ctx context.Context, m *AddonMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&AddonCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&AddonUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&AddonUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&AddonDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Addon mutation op: %q", m.Op())
 	}
 }
 
@@ -4828,7 +5001,7 @@ func (c *WalletTransactionClient) mutate(ctx context.Context, m *WalletTransacti
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		Auth, BillingSequence, Costsheet, CreditGrant, CreditGrantApplication,
+		Addon, Auth, BillingSequence, Costsheet, CreditGrant, CreditGrantApplication,
 		CreditNote, CreditNoteLineItem, Customer, Entitlement, Environment, Feature,
 		Invoice, InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt,
 		Plan, Price, Secret, Subscription, SubscriptionLineItem, SubscriptionPause,
@@ -4836,7 +5009,7 @@ type (
 		WalletTransaction []ent.Hook
 	}
 	inters struct {
-		Auth, BillingSequence, Costsheet, CreditGrant, CreditGrantApplication,
+		Addon, Auth, BillingSequence, Costsheet, CreditGrant, CreditGrantApplication,
 		CreditNote, CreditNoteLineItem, Customer, Entitlement, Environment, Feature,
 		Invoice, InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt,
 		Plan, Price, Secret, Subscription, SubscriptionLineItem, SubscriptionPause,

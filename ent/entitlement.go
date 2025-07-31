@@ -50,8 +50,9 @@ type Entitlement struct {
 	StaticValue string `json:"static_value,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the EntitlementQuery when eager-loading is set.
-	Edges        EntitlementEdges `json:"edges"`
-	selectValues sql.SelectValues
+	Edges              EntitlementEdges `json:"edges"`
+	addon_entitlements *string
+	selectValues       sql.SelectValues
 }
 
 // EntitlementEdges holds the relations/edges for other nodes in the graph.
@@ -87,6 +88,8 @@ func (*Entitlement) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullString)
 		case entitlement.FieldCreatedAt, entitlement.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
+		case entitlement.ForeignKeys[0]: // addon_entitlements
+			values[i] = new(sql.NullString)
 		default:
 			values[i] = new(sql.UnknownType)
 		}
@@ -198,6 +201,13 @@ func (e *Entitlement) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field static_value", values[i])
 			} else if value.Valid {
 				e.StaticValue = value.String
+			}
+		case entitlement.ForeignKeys[0]:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field addon_entitlements", values[i])
+			} else if value.Valid {
+				e.addon_entitlements = new(string)
+				*e.addon_entitlements = value.String
 			}
 		default:
 			e.selectValues.Set(columns[i], values[i])
