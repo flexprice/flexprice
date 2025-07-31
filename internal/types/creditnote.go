@@ -114,6 +114,11 @@ func (c CreditNoteType) Validate() error {
 type CreditNoteFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
+
+	// filters allows complex filtering based on multiple fields
+	Filters []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
+	Sort    []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
+
 	CreditNoteIDs    []string           `json:"credit_note_ids,omitempty" form:"credit_note_ids"`
 	InvoiceID        string             `json:"invoice_id,omitempty" form:"invoice_id"`
 	CreditNoteStatus []CreditNoteStatus `json:"credit_note_status,omitempty" form:"credit_note_status"`
@@ -208,6 +213,10 @@ func (f *CreditNoteFilter) IsUnlimited() bool {
 type CreditNoteLineItemFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
+
+	// filters allows complex filtering based on multiple fields
+	Filters []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
+	Sort    []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
 
 	CreditNoteIDs      []string `json:"credit_note_ids,omitempty" form:"credit_note_ids"`
 	InvoiceLineItemIDs []string `json:"invoice_line_item_ids,omitempty" form:"invoice_line_item_ids"`

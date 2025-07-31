@@ -186,3 +186,34 @@ func (h *CreditNoteHandler) FinalizeCreditNote(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Adjustment credit note processed successfully"})
 }
+
+// @Summary List credit notes by filter
+// @Description List credit notes by filter
+// @Tags Credit Notes
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param filter body types.CreditNoteFilter true "Filter"
+// @Success 200 {object} dto.ListCreditNotesResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /creditnotes/search [post]
+func (h *CreditNoteHandler) ListCreditNotesByFilter(c *gin.Context) {
+	var filter types.CreditNoteFilter
+	if err := c.ShouldBindJSON(&filter); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid filter parameters").
+			Mark(ierr.ErrValidation))
+		return
+	}
+	if filter.GetLimit() == 0 {
+		filter.Limit = lo.ToPtr(types.GetDefaultFilter().Limit)
+	}
+	resp, err := h.creditNoteService.ListCreditNotes(c.Request.Context(), &filter)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
