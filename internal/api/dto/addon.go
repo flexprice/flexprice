@@ -81,13 +81,48 @@ func (r *CreateAddonRequest) ToAddon(ctx context.Context) *addon.Addon {
 
 // UpdateAddonRequest represents the request to update an addon
 type UpdateAddonRequest struct {
-	Name        *string                `json:"name"`
-	Description *string                `json:"description"`
-	Metadata    map[string]interface{} `json:"metadata"`
+	Name         *string                         `json:"name,omitempty"`
+	Description  *string                         `json:"description,omitempty"`
+	Metadata     map[string]interface{}          `json:"metadata,omitempty"`
+	Prices       []UpdateAddonPriceRequest       `json:"prices,omitempty"`
+	Entitlements []UpdateAddonEntitlementRequest `json:"entitlements,omitempty"`
+}
+
+type UpdateAddonPriceRequest struct {
+	// The ID of the price to update (present if the price is being updated)
+	ID string `json:"id,omitempty"`
+	// The price request to update existing price or create new price
+	*CreatePriceRequest
+}
+
+type UpdateAddonEntitlementRequest struct {
+	// The ID of the entitlement to update (present if the entitlement is being updated)
+	ID string `json:"id,omitempty"`
+	// The entitlement request to update existing entitlement or create new entitlement
+	*CreateAddonEntitlementRequest
 }
 
 func (r *UpdateAddonRequest) Validate() error {
-	return validator.ValidateRequest(r)
+	err := validator.ValidateRequest(r)
+	if err != nil {
+		return err
+	}
+
+	// Validate prices
+	for _, price := range r.Prices {
+		if err := price.Validate(); err != nil {
+			return err
+		}
+	}
+
+	// Validate entitlements
+	for _, ent := range r.Entitlements {
+		if err := ent.Validate(); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // AddonResponse represents the addon response

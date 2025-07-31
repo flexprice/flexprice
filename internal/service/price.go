@@ -17,6 +17,7 @@ type PriceService interface {
 	CreatePrice(ctx context.Context, req dto.CreatePriceRequest) (*dto.PriceResponse, error)
 	GetPrice(ctx context.Context, id string) (*dto.PriceResponse, error)
 	GetPricesByPlanID(ctx context.Context, planID string) (*dto.ListPricesResponse, error)
+	GetPricesByAddonID(ctx context.Context, addonID string) (*dto.ListPricesResponse, error)
 	GetPrices(ctx context.Context, filter *types.PriceFilter) (*dto.ListPricesResponse, error)
 	UpdatePrice(ctx context.Context, id string, req dto.UpdatePriceRequest) (*dto.PriceResponse, error)
 	DeletePrice(ctx context.Context, id string) error
@@ -85,6 +86,22 @@ func (s *priceService) GetPricesByPlanID(ctx context.Context, planID string) (*d
 	// Use unlimited filter to fetch all prices
 	priceFilter := types.NewNoLimitPriceFilter().
 		WithPlanIDs([]string{planID}).
+		WithStatus(types.StatusPublished).
+		WithExpand(string(types.ExpandMeters))
+
+	return s.GetPrices(ctx, priceFilter)
+}
+
+func (s *priceService) GetPricesByAddonID(ctx context.Context, addonID string) (*dto.ListPricesResponse, error) {
+	if addonID == "" {
+		return nil, ierr.NewError("addon_id is required").
+			WithHint("Addon ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Use unlimited filter to fetch all prices
+	priceFilter := types.NewNoLimitPriceFilter().
+		WithAddonIDs([]string{addonID}).
 		WithStatus(types.StatusPublished).
 		WithExpand(string(types.ExpandMeters))
 

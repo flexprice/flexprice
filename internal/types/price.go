@@ -163,6 +163,7 @@ type PriceFilter struct {
 	*TimeRangeFilter
 	PlanIDs  []string `json:"plan_ids,omitempty" form:"plan_ids"`
 	PriceIDs []string `json:"price_ids,omitempty" form:"price_ids"`
+	AddonIDs []string `json:"addon_ids,omitempty" form:"addon_ids"`
 }
 
 // NewPriceFilter creates a new PriceFilter with default values
@@ -208,12 +209,26 @@ func (f PriceFilter) Validate() error {
 		}
 	}
 
+	for _, addonID := range f.AddonIDs {
+		if addonID == "" {
+			return ierr.NewError("addon id can not be empty").
+				WithHint("Addon ID cannot be empty").
+				Mark(ierr.ErrValidation)
+		}
+	}
+
 	return nil
 }
 
 // WithPlanIDs adds plan IDs to the filter
 func (f *PriceFilter) WithPlanIDs(planIDs []string) *PriceFilter {
 	f.PlanIDs = planIDs
+	return f
+}
+
+// WithAddonIDs adds addon IDs to the filter
+func (f *PriceFilter) WithAddonIDs(addonIDs []string) *PriceFilter {
+	f.AddonIDs = addonIDs
 	return f
 }
 

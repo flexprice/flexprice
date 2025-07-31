@@ -514,6 +514,11 @@ func (o PriceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.P
 		query = query.Where(price.PlanIDIn(f.PlanIDs...))
 	}
 
+	// Apply addon IDs filter if specified
+	if len(f.AddonIDs) > 0 {
+		query = query.Where(price.AddonIDIn(f.AddonIDs...))
+	}
+
 	// Apply price IDs filter if specified
 	if len(f.PriceIDs) > 0 {
 		query = query.Where(price.IDIn(f.PriceIDs...))

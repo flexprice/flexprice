@@ -560,6 +560,11 @@ func (o EntitlementQueryOptions) applyEntityQueryOptions(_ context.Context, f *t
 		query = query.Where(entitlement.PlanIDIn(f.PlanIDs...))
 	}
 
+	// Apply addon ID filter if specified
+	if len(f.AddonIDs) > 0 {
+		query = query.Where(entitlement.AddonIDIn(f.AddonIDs...))
+	}	
+
 	// Apply feature IDs filter if specified
 	if len(f.FeatureIDs) > 0 {
 		query = query.Where(entitlement.FeatureIDIn(f.FeatureIDs...))

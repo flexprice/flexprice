@@ -26,6 +26,7 @@ type EntitlementService interface {
 	UpdateEntitlement(ctx context.Context, id string, req dto.UpdateEntitlementRequest) (*dto.EntitlementResponse, error)
 	DeleteEntitlement(ctx context.Context, id string) error
 	GetPlanEntitlements(ctx context.Context, planID string) (*dto.ListEntitlementsResponse, error)
+	GetAddonEntitlements(ctx context.Context, addonID string) (*dto.ListEntitlementsResponse, error)
 	GetPlanFeatureEntitlements(ctx context.Context, planID, featureID string) (*dto.ListEntitlementsResponse, error)
 }
 
@@ -324,6 +325,17 @@ func (s *entitlementService) GetPlanEntitlements(ctx context.Context, planID str
 	// Create a filter for the plan's entitlements
 	filter := types.NewNoLimitEntitlementFilter()
 	filter.WithPlanIDs([]string{planID})
+	filter.WithStatus(types.StatusPublished)
+	filter.WithExpand(fmt.Sprintf("%s,%s", types.ExpandFeatures, types.ExpandMeters))
+
+	// Use the standard list function to get the entitlements with expansion
+	return s.ListEntitlements(ctx, filter)
+}
+
+func (s *entitlementService) GetAddonEntitlements(ctx context.Context, addonID string) (*dto.ListEntitlementsResponse, error) {
+	// Create a filter for the addon's entitlements
+	filter := types.NewNoLimitEntitlementFilter()
+	filter.WithAddonIDs([]string{addonID})
 	filter.WithStatus(types.StatusPublished)
 	filter.WithExpand(fmt.Sprintf("%s,%s", types.ExpandFeatures, types.ExpandMeters))
 
