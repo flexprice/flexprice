@@ -50,7 +50,16 @@ func (Price) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
 			}).
-			NotEmpty(),
+			Optional().
+			Nillable(),
+
+		field.String("addon_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable(),
+
 		field.String("type").
 			SchemaType(map[string]string{
 				"postgres": "varchar(20)",

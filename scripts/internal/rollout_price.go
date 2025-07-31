@@ -79,7 +79,7 @@ func SyncPlanPrices() error {
 	planPrices := make([]*price.Price, 0)
 	meterMap := make(map[string]*meter.Meter)
 	for _, price := range prices {
-		if price.PlanID == planID && price.TenantID == tenantID && price.EnvironmentID == environmentID {
+		if lo.FromPtr(price.PlanID) == planID && price.TenantID == tenantID && price.EnvironmentID == environmentID {
 			planPrices = append(planPrices, price)
 			if price.MeterID != "" {
 				meterMap[price.MeterID] = nil

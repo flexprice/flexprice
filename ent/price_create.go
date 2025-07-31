@@ -136,6 +136,28 @@ func (pc *PriceCreate) SetPlanID(s string) *PriceCreate {
 	return pc
 }
 
+// SetNillablePlanID sets the "plan_id" field if the given value is not nil.
+func (pc *PriceCreate) SetNillablePlanID(s *string) *PriceCreate {
+	if s != nil {
+		pc.SetPlanID(*s)
+	}
+	return pc
+}
+
+// SetAddonID sets the "addon_id" field.
+func (pc *PriceCreate) SetAddonID(s string) *PriceCreate {
+	pc.mutation.SetAddonID(s)
+	return pc
+}
+
+// SetNillableAddonID sets the "addon_id" field if the given value is not nil.
+func (pc *PriceCreate) SetNillableAddonID(s *string) *PriceCreate {
+	if s != nil {
+		pc.SetAddonID(*s)
+	}
+	return pc
+}
+
 // SetType sets the "type" field.
 func (pc *PriceCreate) SetType(s string) *PriceCreate {
 	pc.mutation.SetType(s)
@@ -398,14 +420,6 @@ func (pc *PriceCreate) check() error {
 			return &ValidationError{Name: "display_amount", err: fmt.Errorf(`ent: validator failed for field "Price.display_amount": %w`, err)}
 		}
 	}
-	if _, ok := pc.mutation.PlanID(); !ok {
-		return &ValidationError{Name: "plan_id", err: errors.New(`ent: missing required field "Price.plan_id"`)}
-	}
-	if v, ok := pc.mutation.PlanID(); ok {
-		if err := price.PlanIDValidator(v); err != nil {
-			return &ValidationError{Name: "plan_id", err: fmt.Errorf(`ent: validator failed for field "Price.plan_id": %w`, err)}
-		}
-	}
 	if _, ok := pc.mutation.GetType(); !ok {
 		return &ValidationError{Name: "type", err: errors.New(`ent: missing required field "Price.type"`)}
 	}
@@ -526,7 +540,11 @@ func (pc *PriceCreate) createSpec() (*Price, *sqlgraph.CreateSpec) {
 	}
 	if value, ok := pc.mutation.PlanID(); ok {
 		_spec.SetField(price.FieldPlanID, field.TypeString, value)
-		_node.PlanID = value
+		_node.PlanID = &value
+	}
+	if value, ok := pc.mutation.AddonID(); ok {
+		_spec.SetField(price.FieldAddonID, field.TypeString, value)
+		_node.AddonID = &value
 	}
 	if value, ok := pc.mutation.GetType(); ok {
 		_spec.SetField(price.FieldType, field.TypeString, value)

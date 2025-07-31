@@ -41,7 +41,7 @@ func (s *PriceServiceSuite) TestCreatePrice() {
 	req := dto.CreatePriceRequest{
 		Amount:             "100",
 		Currency:           "usd",
-		PlanID:             "plan-1",
+		PlanID:             lo.ToPtr("plan-1"),
 		Type:               types.PRICE_TYPE_USAGE,
 		MeterID:            "meter-1",
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
@@ -84,7 +84,7 @@ func (s *PriceServiceSuite) TestGetPrice() {
 		ID:       "price-1",
 		Amount:   decimal.NewFromInt(100),
 		Currency: "usd",
-		PlanID:   "plan-1",
+		PlanID:   lo.ToPtr("plan-1"),
 	}
 	_ = s.priceRepo.Create(s.ctx, price)
 
@@ -105,14 +105,14 @@ func (s *PriceServiceSuite) TestGetPrices() {
 		ID:        "price-1",
 		Amount:    decimal.NewFromInt(100),
 		Currency:  "usd",
-		PlanID:    "plan-1",
+		PlanID:    lo.ToPtr("plan-1"),
 		BaseModel: types.GetDefaultBaseModel(s.ctx),
 	})
 	_ = s.priceRepo.Create(s.ctx, &price.Price{
 		ID:        "price-2",
 		Amount:    decimal.NewFromInt(200),
 		Currency:  "usd",
-		PlanID:    "plan-1",
+		PlanID:    lo.ToPtr("plan-1"),
 		BaseModel: types.GetDefaultBaseModel(s.ctx),
 	})
 
@@ -150,7 +150,7 @@ func (s *PriceServiceSuite) TestUpdatePrice() {
 		ID:       "price-1",
 		Amount:   decimal.NewFromInt(100),
 		Currency: "usd",
-		PlanID:   "plan-1",
+		PlanID:   lo.ToPtr("plan-1"),
 	}
 	_ = s.priceRepo.Create(s.ctx, price)
 

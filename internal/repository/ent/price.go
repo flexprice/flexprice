@@ -63,7 +63,8 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 		SetAmount(p.Amount.InexactFloat64()).
 		SetCurrency(p.Currency).
 		SetDisplayAmount(p.DisplayAmount).
-		SetPlanID(p.PlanID).
+		SetNillablePlanID(p.PlanID).
+		SetNillableAddonID(p.AddonID).
 		SetType(string(p.Type)).
 		SetBillingPeriod(string(p.BillingPeriod)).
 		SetBillingPeriodCount(p.BillingPeriodCount).
@@ -373,7 +374,8 @@ func (r *priceRepository) CreateBulk(ctx context.Context, prices []*domainPrice.
 			SetAmount(p.Amount.InexactFloat64()).
 			SetCurrency(p.Currency).
 			SetDisplayAmount(p.DisplayAmount).
-			SetPlanID(p.PlanID).
+			SetNillablePlanID(p.PlanID).
+			SetNillableAddonID(p.AddonID).
 			SetType(string(p.Type)).
 			SetBillingPeriod(string(p.BillingPeriod)).
 			SetBillingPeriodCount(p.BillingPeriodCount).

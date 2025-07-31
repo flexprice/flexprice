@@ -22,6 +22,7 @@ import (
 	entRepo "github.com/flexprice/flexprice/internal/repository/ent"
 	"github.com/flexprice/flexprice/internal/sentry"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -418,7 +419,7 @@ func (s *pricingImportScript) updatePrice(ctx context.Context, row PricingRow) e
 	now := time.Now().UTC()
 	priceObj := &price.Price{
 		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
-		PlanID:             row.PlanID,
+		PlanID:             lo.ToPtr(row.PlanID),
 		MeterID:            row.MeterID,
 		Amount:             decimal.NewFromFloat(row.PerUnitPrice),
 		Currency:           "usd", // Default to USD

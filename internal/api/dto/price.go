@@ -14,7 +14,8 @@ import (
 type CreatePriceRequest struct {
 	Amount             string                   `json:"amount"`
 	Currency           string                   `json:"currency" validate:"required,len=3"`
-	PlanID             string                   `json:"plan_id,omitempty"`
+	PlanID             *string                  `json:"plan_id,omitempty"`
+	AddonID            *string                  `json:"addon_id,omitempty"`
 	Type               types.PriceType          `json:"type" validate:"required"`
 	BillingPeriod      types.BillingPeriod      `json:"billing_period" validate:"required"`
 	BillingPeriodCount int                      `json:"billing_period_count" validate:"required,min=1"`
@@ -292,6 +293,7 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*price.Price, error) 
 		Amount:             amount,
 		Currency:           r.Currency,
 		PlanID:             r.PlanID,
+		AddonID:            r.AddonID,
 		Type:               r.Type,
 		BillingPeriod:      r.BillingPeriod,
 		BillingPeriodCount: r.BillingPeriodCount,

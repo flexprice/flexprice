@@ -24773,6 +24773,7 @@ type PriceMutation struct {
 	currency                *string
 	display_amount          *string
 	plan_id                 *string
+	addon_id                *string
 	_type                   *string
 	billing_period          *string
 	billing_period_count    *int
@@ -25340,7 +25341,7 @@ func (m *PriceMutation) PlanID() (r string, exists bool) {
 // OldPlanID returns the old "plan_id" field's value of the Price entity.
 // If the Price object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PriceMutation) OldPlanID(ctx context.Context) (v string, err error) {
+func (m *PriceMutation) OldPlanID(ctx context.Context) (v *string, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldPlanID is only allowed on UpdateOne operations")
 	}
@@ -25354,9 +25355,71 @@ func (m *PriceMutation) OldPlanID(ctx context.Context) (v string, err error) {
 	return oldValue.PlanID, nil
 }
 
+// ClearPlanID clears the value of the "plan_id" field.
+func (m *PriceMutation) ClearPlanID() {
+	m.plan_id = nil
+	m.clearedFields[price.FieldPlanID] = struct{}{}
+}
+
+// PlanIDCleared returns if the "plan_id" field was cleared in this mutation.
+func (m *PriceMutation) PlanIDCleared() bool {
+	_, ok := m.clearedFields[price.FieldPlanID]
+	return ok
+}
+
 // ResetPlanID resets all changes to the "plan_id" field.
 func (m *PriceMutation) ResetPlanID() {
 	m.plan_id = nil
+	delete(m.clearedFields, price.FieldPlanID)
+}
+
+// SetAddonID sets the "addon_id" field.
+func (m *PriceMutation) SetAddonID(s string) {
+	m.addon_id = &s
+}
+
+// AddonID returns the value of the "addon_id" field in the mutation.
+func (m *PriceMutation) AddonID() (r string, exists bool) {
+	v := m.addon_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAddonID returns the old "addon_id" field's value of the Price entity.
+// If the Price object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PriceMutation) OldAddonID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAddonID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAddonID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAddonID: %w", err)
+	}
+	return oldValue.AddonID, nil
+}
+
+// ClearAddonID clears the value of the "addon_id" field.
+func (m *PriceMutation) ClearAddonID() {
+	m.addon_id = nil
+	m.clearedFields[price.FieldAddonID] = struct{}{}
+}
+
+// AddonIDCleared returns if the "addon_id" field was cleared in this mutation.
+func (m *PriceMutation) AddonIDCleared() bool {
+	_, ok := m.clearedFields[price.FieldAddonID]
+	return ok
+}
+
+// ResetAddonID resets all changes to the "addon_id" field.
+func (m *PriceMutation) ResetAddonID() {
+	m.addon_id = nil
+	delete(m.clearedFields, price.FieldAddonID)
 }
 
 // SetType sets the "type" field.
@@ -26160,7 +26223,7 @@ func (m *PriceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *PriceMutation) Fields() []string {
-	fields := make([]string, 0, 26)
+	fields := make([]string, 0, 27)
 	if m.tenant_id != nil {
 		fields = append(fields, price.FieldTenantID)
 	}
@@ -26193,6 +26256,9 @@ func (m *PriceMutation) Fields() []string {
 	}
 	if m.plan_id != nil {
 		fields = append(fields, price.FieldPlanID)
+	}
+	if m.addon_id != nil {
+		fields = append(fields, price.FieldAddonID)
 	}
 	if m._type != nil {
 		fields = append(fields, price.FieldType)
@@ -26269,6 +26335,8 @@ func (m *PriceMutation) Field(name string) (ent.Value, bool) {
 		return m.DisplayAmount()
 	case price.FieldPlanID:
 		return m.PlanID()
+	case price.FieldAddonID:
+		return m.AddonID()
 	case price.FieldType:
 		return m.GetType()
 	case price.FieldBillingPeriod:
@@ -26330,6 +26398,8 @@ func (m *PriceMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldDisplayAmount(ctx)
 	case price.FieldPlanID:
 		return m.OldPlanID(ctx)
+	case price.FieldAddonID:
+		return m.OldAddonID(ctx)
 	case price.FieldType:
 		return m.OldType(ctx)
 	case price.FieldBillingPeriod:
@@ -26445,6 +26515,13 @@ func (m *PriceMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetPlanID(v)
+		return nil
+	case price.FieldAddonID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAddonID(v)
 		return nil
 	case price.FieldType:
 		v, ok := value.(string)
@@ -26629,6 +26706,12 @@ func (m *PriceMutation) ClearedFields() []string {
 	if m.FieldCleared(price.FieldEnvironmentID) {
 		fields = append(fields, price.FieldEnvironmentID)
 	}
+	if m.FieldCleared(price.FieldPlanID) {
+		fields = append(fields, price.FieldPlanID)
+	}
+	if m.FieldCleared(price.FieldAddonID) {
+		fields = append(fields, price.FieldAddonID)
+	}
 	if m.FieldCleared(price.FieldInvoiceCadence) {
 		fields = append(fields, price.FieldInvoiceCadence)
 	}
@@ -26678,6 +26761,12 @@ func (m *PriceMutation) ClearField(name string) error {
 		return nil
 	case price.FieldEnvironmentID:
 		m.ClearEnvironmentID()
+		return nil
+	case price.FieldPlanID:
+		m.ClearPlanID()
+		return nil
+	case price.FieldAddonID:
+		m.ClearAddonID()
 		return nil
 	case price.FieldInvoiceCadence:
 		m.ClearInvoiceCadence()
@@ -26746,6 +26835,9 @@ func (m *PriceMutation) ResetField(name string) error {
 		return nil
 	case price.FieldPlanID:
 		m.ResetPlanID()
+		return nil
+	case price.FieldAddonID:
+		m.ResetAddonID()
 		return nil
 	case price.FieldType:
 		m.ResetType()

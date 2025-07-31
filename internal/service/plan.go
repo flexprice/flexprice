@@ -78,7 +78,7 @@ func (s *planService) CreatePlan(ctx context.Context, req dto.CreatePlanRequest)
 						WithHint("Failed to create price").
 						Mark(ierr.ErrValidation)
 				}
-				price.PlanID = plan.ID
+				price.PlanID = &plan.ID
 				prices[i] = price
 			}
 
@@ -262,7 +262,7 @@ func (s *planService) GetPlans(ctx context.Context, filter *types.PlanFilter) (*
 		}
 
 		for _, p := range prices.Items {
-			pricesByPlanID[p.PlanID] = append(pricesByPlanID[p.PlanID], p)
+			pricesByPlanID[lo.FromPtr(p.PlanID)] = append(pricesByPlanID[lo.FromPtr(p.PlanID)], p)
 		}
 	}
 
@@ -403,7 +403,7 @@ func (s *planService) UpdatePlan(ctx context.Context, id string, req dto.UpdateP
 							WithHint("Failed to create price").
 							Mark(ierr.ErrValidation)
 					}
-					newPrice.PlanID = plan.ID
+					newPrice.PlanID = &plan.ID
 					newPrices = append(newPrices, newPrice)
 				}
 			}
@@ -629,7 +629,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*SyncPlanP
 	planPrices := make([]*price.Price, 0)
 	meterMap := make(map[string]*meter.Meter)
 	for _, price := range prices {
-		if price.PlanID == id && price.TenantID == tenantID && price.EnvironmentID == environmentID {
+		if lo.FromPtr(price.PlanID) == id && price.TenantID == tenantID && price.EnvironmentID == environmentID {
 			planPrices = append(planPrices, price)
 			if price.MeterID != "" {
 				meterMap[price.MeterID] = nil

@@ -40,7 +40,9 @@ type Price struct {
 	// DisplayAmount holds the value of the "display_amount" field.
 	DisplayAmount string `json:"display_amount,omitempty"`
 	// PlanID holds the value of the "plan_id" field.
-	PlanID string `json:"plan_id,omitempty"`
+	PlanID *string `json:"plan_id,omitempty"`
+	// AddonID holds the value of the "addon_id" field.
+	AddonID *string `json:"addon_id,omitempty"`
 	// Type holds the value of the "type" field.
 	Type string `json:"type,omitempty"`
 	// BillingPeriod holds the value of the "billing_period" field.
@@ -107,7 +109,7 @@ func (*Price) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullFloat64)
 		case price.FieldBillingPeriodCount, price.FieldTrialPeriod:
 			values[i] = new(sql.NullInt64)
-		case price.FieldID, price.FieldTenantID, price.FieldStatus, price.FieldCreatedBy, price.FieldUpdatedBy, price.FieldEnvironmentID, price.FieldCurrency, price.FieldDisplayAmount, price.FieldPlanID, price.FieldType, price.FieldBillingPeriod, price.FieldBillingModel, price.FieldBillingCadence, price.FieldInvoiceCadence, price.FieldMeterID, price.FieldTierMode, price.FieldLookupKey, price.FieldDescription:
+		case price.FieldID, price.FieldTenantID, price.FieldStatus, price.FieldCreatedBy, price.FieldUpdatedBy, price.FieldEnvironmentID, price.FieldCurrency, price.FieldDisplayAmount, price.FieldPlanID, price.FieldAddonID, price.FieldType, price.FieldBillingPeriod, price.FieldBillingModel, price.FieldBillingCadence, price.FieldInvoiceCadence, price.FieldMeterID, price.FieldTierMode, price.FieldLookupKey, price.FieldDescription:
 			values[i] = new(sql.NullString)
 		case price.FieldCreatedAt, price.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -198,7 +200,15 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field plan_id", values[i])
 			} else if value.Valid {
-				pr.PlanID = value.String
+				pr.PlanID = new(string)
+				*pr.PlanID = value.String
+			}
+		case price.FieldAddonID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field addon_id", values[i])
+			} else if value.Valid {
+				pr.AddonID = new(string)
+				*pr.AddonID = value.String
 			}
 		case price.FieldType:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -378,8 +388,15 @@ func (pr *Price) String() string {
 	builder.WriteString("display_amount=")
 	builder.WriteString(pr.DisplayAmount)
 	builder.WriteString(", ")
-	builder.WriteString("plan_id=")
-	builder.WriteString(pr.PlanID)
+	if v := pr.PlanID; v != nil {
+		builder.WriteString("plan_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := pr.AddonID; v != nil {
+		builder.WriteString("addon_id=")
+		builder.WriteString(*v)
+	}
 	builder.WriteString(", ")
 	builder.WriteString("type=")
 	builder.WriteString(pr.Type)
