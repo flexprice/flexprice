@@ -1,6 +1,8 @@
 package schema
 
 import (
+	"github.com/flexprice/flexprice/internal/types"
+
 	"entgo.io/ent"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
@@ -60,6 +62,7 @@ func (SubscriptionLineItem) Fields() []ent.Field {
 				"postgres": "varchar(50)",
 			}).
 			NotEmpty().
+			Default(string(types.SubscriptionLineItemSourceTypePlan)).
 			Immutable(),
 		field.String("plan_display_name").
 			Optional().

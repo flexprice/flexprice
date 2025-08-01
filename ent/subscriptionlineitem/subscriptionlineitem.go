@@ -138,6 +138,8 @@ var (
 	SubscriptionIDValidator func(string) error
 	// CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
 	CustomerIDValidator func(string) error
+	// DefaultSourceType holds the default value on creation for the "source_type" field.
+	DefaultSourceType string
 	// SourceTypeValidator is a validator for the "source_type" field. It is called by the builders before save.
 	SourceTypeValidator func(string) error
 	// PriceIDValidator is a validator for the "price_id" field. It is called by the builders before save.

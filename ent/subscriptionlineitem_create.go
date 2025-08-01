@@ -158,6 +158,14 @@ func (slic *SubscriptionLineItemCreate) SetSourceType(s string) *SubscriptionLin
 	return slic
 }
 
+// SetNillableSourceType sets the "source_type" field if the given value is not nil.
+func (slic *SubscriptionLineItemCreate) SetNillableSourceType(s *string) *SubscriptionLineItemCreate {
+	if s != nil {
+		slic.SetSourceType(*s)
+	}
+	return slic
+}
+
 // SetPlanDisplayName sets the "plan_display_name" field.
 func (slic *SubscriptionLineItemCreate) SetPlanDisplayName(s string) *SubscriptionLineItemCreate {
 	slic.mutation.SetPlanDisplayName(s)
@@ -383,6 +391,10 @@ func (slic *SubscriptionLineItemCreate) defaults() {
 	if _, ok := slic.mutation.EnvironmentID(); !ok {
 		v := subscriptionlineitem.DefaultEnvironmentID
 		slic.mutation.SetEnvironmentID(v)
+	}
+	if _, ok := slic.mutation.SourceType(); !ok {
+		v := subscriptionlineitem.DefaultSourceType
+		slic.mutation.SetSourceType(v)
 	}
 	if _, ok := slic.mutation.Quantity(); !ok {
 		v := subscriptionlineitem.DefaultQuantity

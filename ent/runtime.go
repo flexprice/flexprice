@@ -1163,6 +1163,8 @@ func init() {
 	subscriptionlineitem.CustomerIDValidator = subscriptionlineitemDescCustomerID.Validators[0].(func(string) error)
 	// subscriptionlineitemDescSourceType is the schema descriptor for source_type field.
 	subscriptionlineitemDescSourceType := subscriptionlineitemFields[5].Descriptor()
+	// subscriptionlineitem.DefaultSourceType holds the default value on creation for the source_type field.
+	subscriptionlineitem.DefaultSourceType = subscriptionlineitemDescSourceType.Default.(string)
 	// subscriptionlineitem.SourceTypeValidator is a validator for the "source_type" field. It is called by the builders before save.
 	subscriptionlineitem.SourceTypeValidator = subscriptionlineitemDescSourceType.Validators[0].(func(string) error)
 	// subscriptionlineitemDescPriceID is the schema descriptor for price_id field.
