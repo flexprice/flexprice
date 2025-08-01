@@ -344,7 +344,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 func (s *subscriptionService) handleSubscriptionAddons(
 	ctx context.Context,
 	subscription *subscription.Subscription,
-	addonRequests []dto.SubscriptionAddonRequest,
+	addonRequests []dto.AddAddonToSubscriptionRequest,
 ) error {
 	if len(addonRequests) == 0 {
 		return nil
@@ -369,7 +369,7 @@ func (s *subscriptionService) handleSubscriptionAddons(
 
 		// Verify the addon exists and is active
 		addonService := NewAddonService(s.ServiceParams)
-		_, err := addonService.GetAddon(ctx, addonReq.AddonID)
+		subscriptionAddon, err := addonService.AddAddonToSubscription(ctx, subscription.ID, lo.ToPtr(addonReq))
 		if err != nil {
 			return ierr.WithError(err).
 				WithHint("Addon not found or not active").
@@ -380,19 +380,13 @@ func (s *subscriptionService) handleSubscriptionAddons(
 				Mark(ierr.ErrNotFound)
 		}
 
-		// Convert to domain model
-		subscriptionAddon := addonReq.ToDomain(ctx, subscription.ID)
-
-		// Create the subscription addon
-		err = s.SubscriptionAddonRepo.Create(ctx, subscriptionAddon)
-		if err != nil {
-			return err
-		}
-
 		s.Logger.Infow("created subscription addon",
 			"subscription_id", subscription.ID,
-			"addon_id", addonReq.AddonID,
-			"subscription_addon_id", subscriptionAddon.ID)
+			"addon_id", subscriptionAddon.AddonID,
+			"subscription_addon_id", subscriptionAddon.ID,
+			"start_date", subscriptionAddon.StartDate,
+			"end_date", subscriptionAddon.EndDate,
+		)
 	}
 
 	return nil
