@@ -132,7 +132,6 @@ type ListAddonsResponse = types.ListResponse[*AddonResponse]
 // AddAddonToSubscriptionRequest represents the request to add an addon to a subscription
 type AddAddonToSubscriptionRequest struct {
 	AddonID   string                 `json:"addon_id" validate:"required"`
-	Quantity  int                    `json:"quantity" validate:"min=1"`
 	StartDate *time.Time             `json:"start_date,omitempty"`
 	EndDate   *time.Time             `json:"end_date,omitempty"`
 	Metadata  map[string]interface{} `json:"metadata"`
@@ -142,10 +141,6 @@ func (r *AddAddonToSubscriptionRequest) Validate() error {
 	err := validator.ValidateRequest(r)
 	if err != nil {
 		return err
-	}
-
-	if r.Quantity <= 0 {
-		r.Quantity = 1
 	}
 
 	return nil
