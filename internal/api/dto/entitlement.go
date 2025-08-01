@@ -77,6 +77,7 @@ func (r *CreateEntitlementRequest) ToEntitlement(ctx context.Context) *entitleme
 	return &entitlement.Entitlement{
 		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITLEMENT),
 		PlanID:           r.PlanID,
+		AddonID:          r.AddonID,
 		FeatureID:        r.FeatureID,
 		FeatureType:      r.FeatureType,
 		IsEnabled:        r.IsEnabled,

@@ -229,3 +229,43 @@ func (h *AddonHandler) ListAddonsByFilter(c *gin.Context) {
 
 	c.JSON(http.StatusOK, resp)
 }
+
+// AddAddonToSubscription godoc
+// @Summary Add an addon to a subscription
+// @Description Add an addon to a subscription
+// @Tags Addons
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param subscription_id path string true "Subscription ID"
+// @Param request body dto.AddAddonToSubscriptionRequest true "Add addon request"
+// @Success 201 {object} dto.SubscriptionAddonResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /addons/subscriptions/{subscription_id} [post]
+func (h *AddonHandler) AddAddonToSubscription(c *gin.Context) {
+	subscriptionID := c.Param("subscription_id")
+	if subscriptionID == "" {
+		c.Error(ierr.NewError("subscription ID is required").
+			WithHint("Subscription ID is required").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	var req dto.AddAddonToSubscriptionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	subscriptionAddon, err := h.addonService.AddAddonToSubscription(c.Request.Context(), subscriptionID, &req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, subscriptionAddon)
+}

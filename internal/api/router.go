@@ -237,13 +237,14 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 
 		addon := v1Private.Group("/addons")
 		{
-			addon.POST("", handlers.Addon.CreateAddon)
-			addon.GET("", handlers.Addon.ListAddons)
-			addon.GET("/:id", handlers.Addon.GetAddon)
-			addon.PUT("/:id", handlers.Addon.UpdateAddon)
-			addon.DELETE("/:id", handlers.Addon.DeleteAddon)
-			addon.GET("/lookup/:lookup_key", handlers.Addon.GetAddonByLookupKey)
-			addon.POST("/search", handlers.Addon.ListAddonsByFilter)
+					addon.POST("", handlers.Addon.CreateAddon)
+		addon.GET("", handlers.Addon.ListAddons)
+		addon.GET("/:id", handlers.Addon.GetAddon)
+		addon.PUT("/:id", handlers.Addon.UpdateAddon)
+		addon.DELETE("/:id", handlers.Addon.DeleteAddon)
+		addon.GET("/lookup/:lookup_key", handlers.Addon.GetAddonByLookupKey)
+		addon.POST("/search", handlers.Addon.ListAddonsByFilter)
+		addon.POST("/subscriptions/:subscription_id", handlers.Addon.AddAddonToSubscription)
 		}
 
 		entitlement := v1Private.Group("/entitlements")

@@ -45,17 +45,6 @@ func (s *entitlementService) CreateEntitlement(ctx context.Context, req dto.Crea
 		return nil, err
 	}
 
-	if req.PlanID == nil {
-		return nil, ierr.NewError("plan_id is required").
-			Mark(ierr.ErrValidation)
-	}
-
-	// Validate plan exists
-	plan, err := s.PlanRepo.Get(ctx, *req.PlanID)
-	if err != nil {
-		return nil, err
-	}
-
 	// Validate feature exists
 	feature, err := s.FeatureRepo.Get(ctx, req.FeatureID)
 	if err != nil {
@@ -85,7 +74,24 @@ func (s *entitlementService) CreateEntitlement(ctx context.Context, req dto.Crea
 
 	// Add expanded fields
 	response.Feature = &dto.FeatureResponse{Feature: feature}
-	response.Plan = &dto.PlanResponse{Plan: plan}
+
+	// Add plan or addon to response based on what was provided
+	if req.PlanID != nil {
+		// Validate plan exists
+		plan, err := s.PlanRepo.Get(ctx, *req.PlanID)
+		if err != nil {
+			return nil, err
+		}
+		response.Plan = &dto.PlanResponse{Plan: plan}
+	} else if req.AddonID != nil {
+		// Validate addon exists
+		_, err := s.AddonRepo.GetByID(ctx, *req.AddonID)
+		if err != nil {
+			return nil, err
+		}
+		// Note: We don't have an AddonResponse field in EntitlementResponse yet
+		// For now, we'll just validate the addon exists
+	}
 
 	// Publish webhook event
 	s.publishWebhookEvent(ctx, types.WebhookEventEntitlementCreated, result.ID)

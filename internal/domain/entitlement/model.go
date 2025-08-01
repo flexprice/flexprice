@@ -83,6 +83,7 @@ func FromEnt(e *ent.Entitlement) *Entitlement {
 	return &Entitlement{
 		ID:               e.ID,
 		PlanID:           e.PlanID,
+		AddonID:          e.AddonID,
 		FeatureID:        e.FeatureID,
 		FeatureType:      types.FeatureType(e.FeatureType),
 		IsEnabled:        e.IsEnabled,

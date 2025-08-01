@@ -862,20 +862,27 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 		return resp, nil
 	}
 
-	// 2. Extract plan IDs from active line items in subscriptions
+	// 2. Extract plan IDs and addon IDs from active line items in subscriptions
 	planIDs := make([]string, 0)
+	addonIDs := make([]string, 0)
 	subscriptionMap := make(map[string]*subscription.Subscription)
 
 	for _, sub := range subscriptions {
 		subscriptionMap[sub.ID] = sub
 		for _, li := range sub.LineItems {
 			if li.IsActive(time.Now()) {
-				planIDs = append(planIDs, lo.FromPtr(li.PlanID))
+				if li.PlanID != nil {
+					planIDs = append(planIDs, *li.PlanID)
+				}
+				if li.AddonID != nil {
+					addonIDs = append(addonIDs, *li.AddonID)
+				}
 			}
 		}
 	}
-	// Deduplicate plan IDs
+	// Deduplicate plan IDs and addon IDs
 	planIDs = lo.Uniq(planIDs)
+	addonIDs = lo.Uniq(addonIDs)
 
 	// 3. Get plans for the subscriptions
 	planFilter := types.NewNoLimitPlanFilter()
@@ -891,14 +898,22 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 		planMap[p.ID] = p
 	}
 
-	// 4. Get entitlements for the plans
-	entitlements, err := s.EntitlementRepo.ListByPlanIDs(ctx, planIDs)
+	// 4. Get entitlements for the plans and addons
+	planEntitlements, err := s.EntitlementRepo.ListByPlanIDs(ctx, planIDs)
 	if err != nil {
 		return nil, err
 	}
 
+	addonEntitlements, err := s.EntitlementRepo.ListByAddonIDs(ctx, addonIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	// Combine plan and addon entitlements
+	allEntitlements := append(planEntitlements, addonEntitlements...)
+
 	filteredEntitlements := make([]*entitlement.Entitlement, 0)
-	for _, e := range entitlements {
+	for _, e := range allEntitlements {
 		if len(req.FeatureIDs) > 0 && !lo.Contains(req.FeatureIDs, e.FeatureID) {
 			continue
 		}
@@ -908,7 +923,7 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 		}
 		filteredEntitlements = append(filteredEntitlements, e)
 	}
-	entitlements = filteredEntitlements
+	entitlements := filteredEntitlements
 
 	if len(entitlements) == 0 {
 		return resp, nil
@@ -917,15 +932,24 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 	// 5. Get all unique feature IDs and organize entitlements
 	featureIDs := make([]string, 0)
 
-	// Map of plan ID to its entitlements
+	// Map of plan ID to its entitlements and addon ID to its entitlements
 	entitlementsByPlan := make(map[string][]*entitlement.Entitlement)
+	entitlementsByAddon := make(map[string][]*entitlement.Entitlement)
 
 	for _, e := range entitlements {
 		featureIDs = append(featureIDs, e.FeatureID)
-		if _, ok := entitlementsByPlan[*e.PlanID]; !ok {
-			entitlementsByPlan[*e.PlanID] = make([]*entitlement.Entitlement, 0)
+		if e.PlanID != nil {
+			if _, ok := entitlementsByPlan[*e.PlanID]; !ok {
+				entitlementsByPlan[*e.PlanID] = make([]*entitlement.Entitlement, 0)
+			}
+			entitlementsByPlan[*e.PlanID] = append(entitlementsByPlan[*e.PlanID], e)
 		}
-		entitlementsByPlan[*e.PlanID] = append(entitlementsByPlan[*e.PlanID], e)
+		if e.AddonID != nil {
+			if _, ok := entitlementsByAddon[*e.AddonID]; !ok {
+				entitlementsByAddon[*e.AddonID] = make([]*entitlement.Entitlement, 0)
+			}
+			entitlementsByAddon[*e.AddonID] = append(entitlementsByAddon[*e.AddonID], e)
+		}
 	}
 	featureIDs = lo.Uniq(featureIDs)
 
@@ -958,59 +982,107 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 				continue
 			}
 
-			// Get entitlements for this plan
-			planEntitlements, ok := entitlementsByPlan[lo.FromPtr(li.PlanID)]
-			if !ok {
-				continue
-			}
-
-			// Get the plan details
-			p, ok := planMap[lo.FromPtr(li.PlanID)]
-			if !ok {
-				continue
-			}
-
 			// Convert quantity to int (floor the decimal)
 			quantity := li.Quantity.IntPart()
 			if quantity <= 0 {
 				quantity = 1 // Ensure at least 1 quantity
 			}
 
-			// Process each entitlement for this plan
-			for _, e := range planEntitlements {
-				// Create a unique key for deduplication
-				sourceKey := fmt.Sprintf("%s-%s-%s-%s", e.FeatureID, sub.ID, p.ID, e.ID)
-				if sourceDedupeMap[sourceKey] {
-					continue // Skip if we've already processed this source
+			// Process plan entitlements if this line item has a plan
+			if li.PlanID != nil {
+				planEntitlements, ok := entitlementsByPlan[*li.PlanID]
+				if ok {
+					// Get the plan details
+					p, ok := planMap[*li.PlanID]
+					if ok {
+						// Process each entitlement for this plan
+						for _, e := range planEntitlements {
+							// Create a unique key for deduplication
+							sourceKey := fmt.Sprintf("%s-%s-%s-%s", e.FeatureID, sub.ID, p.ID, e.ID)
+							if sourceDedupeMap[sourceKey] {
+								continue // Skip if we've already processed this source
+							}
+							sourceDedupeMap[sourceKey] = true
+
+							// Create a source for this entitlement
+							source := &dto.EntitlementSource{
+								SubscriptionID: sub.ID,
+								SourceType:     dto.EntitlementSourceTypePlan,
+								PlanID:         p.ID,
+								PlanName:       p.Name,
+								Quantity:       quantity,
+								EntitlementID:  e.ID,
+								IsEnabled:      e.IsEnabled,
+								UsageLimit:     e.UsageLimit,
+								StaticValue:    e.StaticValue,
+							}
+
+							// Initialize feature collections if needed
+							if _, ok := entitlementsByFeature[e.FeatureID]; !ok {
+								entitlementsByFeature[e.FeatureID] = make([]*entitlement.Entitlement, 0)
+								sourcesByFeature[e.FeatureID] = make([]*dto.EntitlementSource, 0)
+							}
+
+							// Add source to feature sources
+							sourcesByFeature[e.FeatureID] = append(sourcesByFeature[e.FeatureID], source)
+
+							// For each quantity of the line item, add the entitlement
+							for range quantity {
+								// Duplicate the entitlement for each quantity
+								entitlementCopy := *e // Make a copy to avoid modifying the original
+								entitlementsByFeature[e.FeatureID] = append(entitlementsByFeature[e.FeatureID], &entitlementCopy)
+							}
+						}
+					}
 				}
-				sourceDedupeMap[sourceKey] = true
+			}
 
-				// Create a source for this entitlement
-				source := &dto.EntitlementSource{
-					SubscriptionID: sub.ID,
-					PlanID:         p.ID,
-					PlanName:       p.Name,
-					Quantity:       quantity,
-					EntitlementID:  e.ID,
-					IsEnabled:      e.IsEnabled,
-					UsageLimit:     e.UsageLimit,
-					StaticValue:    e.StaticValue,
-				}
+			// Process addon entitlements if this line item has an addon
+			if li.AddonID != nil {
+				addonEntitlements, ok := entitlementsByAddon[*li.AddonID]
+				if ok {
+					// Get the addon details
+					addon, err := s.AddonRepo.GetByID(ctx, *li.AddonID)
+					if err == nil && addon != nil {
+						// Process each entitlement for this addon
+						for _, e := range addonEntitlements {
+							// Create a unique key for deduplication
+							sourceKey := fmt.Sprintf("%s-%s-%s-%s", e.FeatureID, sub.ID, addon.ID, e.ID)
+							if sourceDedupeMap[sourceKey] {
+								continue // Skip if we've already processed this source
+							}
+							sourceDedupeMap[sourceKey] = true
 
-				// Initialize feature collections if needed
-				if _, ok := entitlementsByFeature[e.FeatureID]; !ok {
-					entitlementsByFeature[e.FeatureID] = make([]*entitlement.Entitlement, 0)
-					sourcesByFeature[e.FeatureID] = make([]*dto.EntitlementSource, 0)
-				}
+							// Create a source for this entitlement
+							source := &dto.EntitlementSource{
+								SubscriptionID: sub.ID,
+								SourceType:     dto.EntitlementSourceTypeAddon,
+								AddonID:        addon.ID,
+								AddonName:      addon.Name,
+								Quantity:       quantity,
+								EntitlementID:  e.ID,
+								IsEnabled:      e.IsEnabled,
+								UsageLimit:     e.UsageLimit,
+								StaticValue:    e.StaticValue,
+							}
 
-				// Add source to feature sources
-				sourcesByFeature[e.FeatureID] = append(sourcesByFeature[e.FeatureID], source)
+							// Initialize feature collections if needed
+							if _, ok := entitlementsByFeature[e.FeatureID]; !ok {
+								entitlementsByFeature[e.FeatureID] = make([]*entitlement.Entitlement, 0)
+								sourcesByFeature[e.FeatureID] = make([]*dto.EntitlementSource, 0)
+							}
 
-				// For each quantity of the line item, add the entitlement
-				for range quantity {
-					// Duplicate the entitlement for each quantity
-					entitlementCopy := *e // Make a copy to avoid modifying the original
-					entitlementsByFeature[e.FeatureID] = append(entitlementsByFeature[e.FeatureID], &entitlementCopy)
+							// Add source to feature sources
+							sourcesByFeature[e.FeatureID] = append(sourcesByFeature[e.FeatureID], source)
+
+							// For each quantity of the line item, add the entitlement
+							for range quantity {
+								// Duplicate the entitlement for each quantity
+								entitlementCopy := *e // Make a copy to avoid modifying the original
+								entitlementsByFeature[e.FeatureID] = append(entitlementsByFeature[e.FeatureID], &entitlementCopy)
+							}
+						}
+					}
 				}
 			}
 		}

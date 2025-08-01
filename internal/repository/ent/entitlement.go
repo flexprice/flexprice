@@ -488,6 +488,31 @@ func (r *entitlementRepository) ListByFeatureIDs(ctx context.Context, featureIDs
 	return r.List(ctx, filter)
 }
 
+// ListByAddonIDs retrieves all entitlements for the given addon IDs
+func (r *entitlementRepository) ListByAddonIDs(ctx context.Context, addonIDs []string) ([]*domainEntitlement.Entitlement, error) {
+	// Start a span for this repository operation
+	span := StartRepositorySpan(ctx, "entitlement", "list_by_addon_ids", map[string]interface{}{
+		"addon_ids":  addonIDs,
+		"tenant_id":  types.GetTenantID(ctx),
+	})
+	defer FinishSpan(span)
+
+	if len(addonIDs) == 0 {
+		return []*domainEntitlement.Entitlement{}, nil
+	}
+
+	r.log.Debugw("listing entitlements by addon IDs", "addon_ids", addonIDs)
+
+	// Create a filter with addon IDs
+	filter := &types.EntitlementFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		AddonIDs:    addonIDs,
+	}
+
+	// Use the existing List method
+	return r.List(ctx, filter)
+}
+
 // EntitlementQuery type alias for better readability
 type EntitlementQuery = *ent.EntitlementQuery
 
