@@ -554,15 +554,13 @@ func (s *addonService) AddAddonToSubscription(
 ) (*addon.SubscriptionAddon, error) {
 	// Validate request
 	if err := req.Validate(); err != nil {
-		return nil, ierr.WithError(err).Mark(ierr.ErrValidation)
+		return nil, err
 	}
 
 	// Check if subscription exists and is active
 	subscription, err := s.SubRepo.Get(ctx, subscriptionID)
 	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Subscription not found").
-			Mark(ierr.ErrNotFound)
+		return nil, err
 	}
 
 	if subscription.SubscriptionStatus != types.SubscriptionStatusActive {
@@ -571,22 +569,16 @@ func (s *addonService) AddAddonToSubscription(
 			Mark(ierr.ErrValidation)
 	}
 
-	// Check if addon exists and is active
-	addonService := NewAddonService(s.ServiceParams)
-	_, err = addonService.GetAddon(ctx, req.AddonID)
+	_, err = s.GetAddon(ctx, req.AddonID)
 	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Addon not found or not active").
-			Mark(ierr.ErrNotFound)
+		return nil, err
 	}
 
 	// Check if price exists
 	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.Logger)
 	price, err := priceService.GetPrice(ctx, req.PriceID)
 	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Price not found").
-			Mark(ierr.ErrNotFound)
+		return nil, err
 	}
 
 	// Check if addon is already added to subscription
@@ -595,11 +587,10 @@ func (s *addonService) AddAddonToSubscription(
 		return nil, err
 	}
 
+	// TODO: check if addon is already added to subscription only for single instance addons
 	for _, existingAddon := range existingAddons {
 		if existingAddon.AddonID == req.AddonID && existingAddon.AddonStatus == types.AddonStatusActive {
-			return nil, ierr.NewError("addon already added to subscription").
-				WithHint("Addon is already active on this subscription").
-				Mark(ierr.ErrAlreadyExists)
+			return nil, err
 		}
 	}
 
