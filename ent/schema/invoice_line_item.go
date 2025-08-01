@@ -57,10 +57,28 @@ func (InvoiceLineItem) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Immutable(),
+
+		field.String("source_type").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable().
+			Immutable(),
+
+		field.String("addon_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable().
+			Immutable(),
+
 		field.String("plan_display_name").
 			Optional().
 			Nillable().
 			Immutable(),
+
 		field.String("price_id").
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",

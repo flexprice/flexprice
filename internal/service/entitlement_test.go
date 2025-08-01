@@ -84,7 +84,7 @@ func (s *EntitlementServiceSuite) TestCreateEntitlement() {
 	// Test case: Valid boolean entitlement
 	s.Run("Valid Boolean Entitlement", func() {
 		req := dto.CreateEntitlementRequest{
-			PlanID:      testPlan.ID,
+			PlanID:      lo.ToPtr(testPlan.ID),
 			FeatureID:   boolFeature.ID,
 			FeatureType: types.FeatureTypeBoolean,
 			IsEnabled:   true,
@@ -101,7 +101,7 @@ func (s *EntitlementServiceSuite) TestCreateEntitlement() {
 	// Test case: Valid metered entitlement
 	s.Run("Valid Metered Entitlement", func() {
 		req := dto.CreateEntitlementRequest{
-			PlanID:           testPlan.ID,
+			PlanID:           lo.ToPtr(testPlan.ID),
 			FeatureID:        meteredFeature.ID,
 			FeatureType:      types.FeatureTypeMetered,
 			UsageLimit:       lo.ToPtr(int64(1000)),
@@ -121,7 +121,7 @@ func (s *EntitlementServiceSuite) TestCreateEntitlement() {
 	// Test case: Valid static entitlement
 	s.Run("Valid Static Entitlement", func() {
 		req := dto.CreateEntitlementRequest{
-			PlanID:      testPlan.ID,
+			PlanID:      lo.ToPtr(testPlan.ID),
 			FeatureID:   staticFeature.ID,
 			FeatureType: types.FeatureTypeStatic,
 			StaticValue: "premium",
@@ -138,7 +138,7 @@ func (s *EntitlementServiceSuite) TestCreateEntitlement() {
 	// Test case: Invalid feature ID
 	s.Run("Invalid Feature ID", func() {
 		req := dto.CreateEntitlementRequest{
-			PlanID:      testPlan.ID,
+			PlanID:      lo.ToPtr(testPlan.ID),
 			FeatureID:   "nonexistent",
 			FeatureType: types.FeatureTypeBoolean,
 			IsEnabled:   true,
@@ -152,7 +152,7 @@ func (s *EntitlementServiceSuite) TestCreateEntitlement() {
 	// Test case: Missing static value for static feature
 	s.Run("Missing Static Value", func() {
 		req := dto.CreateEntitlementRequest{
-			PlanID:      testPlan.ID,
+			PlanID:      lo.ToPtr(testPlan.ID),
 			FeatureID:   staticFeature.ID,
 			FeatureType: types.FeatureTypeStatic,
 		}
@@ -188,7 +188,7 @@ func (s *EntitlementServiceSuite) TestGetEntitlement() {
 	// Create an entitlement
 	ent := &entitlement.Entitlement{
 		ID:          "ent-1",
-		PlanID:      testPlan.ID,
+		PlanID:      lo.ToPtr(testPlan.ID),
 		FeatureID:   testFeature.ID,
 		FeatureType: types.FeatureTypeBoolean,
 		IsEnabled:   true,
@@ -243,7 +243,7 @@ func (s *EntitlementServiceSuite) TestListEntitlements() {
 	// Create multiple entitlements
 	ent1 := &entitlement.Entitlement{
 		ID:          "ent-1",
-		PlanID:      testPlan.ID,
+		PlanID:      lo.ToPtr(testPlan.ID),
 		FeatureID:   boolFeature.ID,
 		FeatureType: types.FeatureTypeBoolean,
 		IsEnabled:   true,
@@ -254,7 +254,7 @@ func (s *EntitlementServiceSuite) TestListEntitlements() {
 
 	ent2 := &entitlement.Entitlement{
 		ID:          "ent-2",
-		PlanID:      testPlan.ID,
+		PlanID:      lo.ToPtr(testPlan.ID),
 		FeatureID:   meteredFeature.ID,
 		FeatureType: types.FeatureTypeMetered,
 		UsageLimit:  lo.ToPtr(int64(1000)),
@@ -313,7 +313,7 @@ func (s *EntitlementServiceSuite) TestUpdateEntitlement() {
 	// Create an entitlement
 	ent := &entitlement.Entitlement{
 		ID:          "ent-1",
-		PlanID:      testPlan.ID,
+		PlanID:      lo.ToPtr(testPlan.ID),
 		FeatureID:   testFeature.ID,
 		FeatureType: types.FeatureTypeBoolean,
 		IsEnabled:   false,
@@ -364,7 +364,7 @@ func (s *EntitlementServiceSuite) TestDeleteEntitlement() {
 	// Create an entitlement
 	ent := &entitlement.Entitlement{
 		ID:          "ent-1",
-		PlanID:      testPlan.ID,
+		PlanID:      lo.ToPtr(testPlan.ID),
 		FeatureID:   testFeature.ID,
 		FeatureType: types.FeatureTypeBoolean,
 		IsEnabled:   true,

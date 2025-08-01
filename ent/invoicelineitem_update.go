@@ -205,6 +205,12 @@ func (iliu *InvoiceLineItemUpdate) sqlSave(ctx context.Context) (n int, err erro
 	if iliu.mutation.PlanIDCleared() {
 		_spec.ClearField(invoicelineitem.FieldPlanID, field.TypeString)
 	}
+	if iliu.mutation.SourceTypeCleared() {
+		_spec.ClearField(invoicelineitem.FieldSourceType, field.TypeString)
+	}
+	if iliu.mutation.AddonIDCleared() {
+		_spec.ClearField(invoicelineitem.FieldAddonID, field.TypeString)
+	}
 	if iliu.mutation.PlanDisplayNameCleared() {
 		_spec.ClearField(invoicelineitem.FieldPlanDisplayName, field.TypeString)
 	}
@@ -467,6 +473,12 @@ func (iliuo *InvoiceLineItemUpdateOne) sqlSave(ctx context.Context) (_node *Invo
 	}
 	if iliuo.mutation.PlanIDCleared() {
 		_spec.ClearField(invoicelineitem.FieldPlanID, field.TypeString)
+	}
+	if iliuo.mutation.SourceTypeCleared() {
+		_spec.ClearField(invoicelineitem.FieldSourceType, field.TypeString)
+	}
+	if iliuo.mutation.AddonIDCleared() {
+		_spec.ClearField(invoicelineitem.FieldAddonID, field.TypeString)
 	}
 	if iliuo.mutation.PlanDisplayNameCleared() {
 		_spec.ClearField(invoicelineitem.FieldPlanDisplayName, field.TypeString)

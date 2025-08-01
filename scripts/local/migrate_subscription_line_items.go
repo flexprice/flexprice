@@ -16,6 +16,7 @@ import (
 	entRepo "github.com/flexprice/flexprice/internal/repository/ent"
 	"github.com/flexprice/flexprice/internal/sentry"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -116,7 +117,7 @@ func MigrateSubscriptionLineItems() error {
 
 			validPrices := make([]*price.Price, 0)
 			for _, p := range prices {
-				if p.PlanID == plan.ID &&
+				if lo.FromPtr(p.PlanID) == plan.ID &&
 					p.Status == types.StatusPublished &&
 					types.IsMatchingCurrency(p.Currency, sub.Currency) &&
 					p.BillingPeriod == sub.BillingPeriod {
@@ -136,7 +137,8 @@ func MigrateSubscriptionLineItems() error {
 					ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
 					SubscriptionID:  sub.ID,
 					CustomerID:      sub.CustomerID,
-					PlanID:          plan.ID,
+					PlanID:          lo.ToPtr(plan.ID),
+					SourceType:      types.SubscriptionLineItemSourceTypePlan,
 					PriceID:         price.ID,
 					PriceType:       price.Type,
 					MeterID:         price.MeterID,

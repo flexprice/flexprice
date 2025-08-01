@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
-	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/flexprice/flexprice/ent/predicate"
 )
 
@@ -103,6 +102,11 @@ func EnvironmentID(v string) predicate.Entitlement {
 // PlanID applies equality check predicate on the "plan_id" field. It's identical to PlanIDEQ.
 func PlanID(v string) predicate.Entitlement {
 	return predicate.Entitlement(sql.FieldEQ(FieldPlanID, v))
+}
+
+// AddonID applies equality check predicate on the "addon_id" field. It's identical to AddonIDEQ.
+func AddonID(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldEQ(FieldAddonID, v))
 }
 
 // FeatureID applies equality check predicate on the "feature_id" field. It's identical to FeatureIDEQ.
@@ -630,6 +634,16 @@ func PlanIDHasSuffix(v string) predicate.Entitlement {
 	return predicate.Entitlement(sql.FieldHasSuffix(FieldPlanID, v))
 }
 
+// PlanIDIsNil applies the IsNil predicate on the "plan_id" field.
+func PlanIDIsNil() predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldIsNull(FieldPlanID))
+}
+
+// PlanIDNotNil applies the NotNil predicate on the "plan_id" field.
+func PlanIDNotNil() predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldNotNull(FieldPlanID))
+}
+
 // PlanIDEqualFold applies the EqualFold predicate on the "plan_id" field.
 func PlanIDEqualFold(v string) predicate.Entitlement {
 	return predicate.Entitlement(sql.FieldEqualFold(FieldPlanID, v))
@@ -638,6 +652,81 @@ func PlanIDEqualFold(v string) predicate.Entitlement {
 // PlanIDContainsFold applies the ContainsFold predicate on the "plan_id" field.
 func PlanIDContainsFold(v string) predicate.Entitlement {
 	return predicate.Entitlement(sql.FieldContainsFold(FieldPlanID, v))
+}
+
+// AddonIDEQ applies the EQ predicate on the "addon_id" field.
+func AddonIDEQ(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldEQ(FieldAddonID, v))
+}
+
+// AddonIDNEQ applies the NEQ predicate on the "addon_id" field.
+func AddonIDNEQ(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldNEQ(FieldAddonID, v))
+}
+
+// AddonIDIn applies the In predicate on the "addon_id" field.
+func AddonIDIn(vs ...string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldIn(FieldAddonID, vs...))
+}
+
+// AddonIDNotIn applies the NotIn predicate on the "addon_id" field.
+func AddonIDNotIn(vs ...string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldNotIn(FieldAddonID, vs...))
+}
+
+// AddonIDGT applies the GT predicate on the "addon_id" field.
+func AddonIDGT(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldGT(FieldAddonID, v))
+}
+
+// AddonIDGTE applies the GTE predicate on the "addon_id" field.
+func AddonIDGTE(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldGTE(FieldAddonID, v))
+}
+
+// AddonIDLT applies the LT predicate on the "addon_id" field.
+func AddonIDLT(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldLT(FieldAddonID, v))
+}
+
+// AddonIDLTE applies the LTE predicate on the "addon_id" field.
+func AddonIDLTE(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldLTE(FieldAddonID, v))
+}
+
+// AddonIDContains applies the Contains predicate on the "addon_id" field.
+func AddonIDContains(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldContains(FieldAddonID, v))
+}
+
+// AddonIDHasPrefix applies the HasPrefix predicate on the "addon_id" field.
+func AddonIDHasPrefix(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldHasPrefix(FieldAddonID, v))
+}
+
+// AddonIDHasSuffix applies the HasSuffix predicate on the "addon_id" field.
+func AddonIDHasSuffix(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldHasSuffix(FieldAddonID, v))
+}
+
+// AddonIDIsNil applies the IsNil predicate on the "addon_id" field.
+func AddonIDIsNil() predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldIsNull(FieldAddonID))
+}
+
+// AddonIDNotNil applies the NotNil predicate on the "addon_id" field.
+func AddonIDNotNil() predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldNotNull(FieldAddonID))
+}
+
+// AddonIDEqualFold applies the EqualFold predicate on the "addon_id" field.
+func AddonIDEqualFold(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldEqualFold(FieldAddonID, v))
+}
+
+// AddonIDContainsFold applies the ContainsFold predicate on the "addon_id" field.
+func AddonIDContainsFold(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldContainsFold(FieldAddonID, v))
 }
 
 // FeatureIDEQ applies the EQ predicate on the "feature_id" field.
@@ -988,29 +1077,6 @@ func StaticValueEqualFold(v string) predicate.Entitlement {
 // StaticValueContainsFold applies the ContainsFold predicate on the "static_value" field.
 func StaticValueContainsFold(v string) predicate.Entitlement {
 	return predicate.Entitlement(sql.FieldContainsFold(FieldStaticValue, v))
-}
-
-// HasPlan applies the HasEdge predicate on the "plan" edge.
-func HasPlan() predicate.Entitlement {
-	return predicate.Entitlement(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, PlanTable, PlanColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
-}
-
-// HasPlanWith applies the HasEdge predicate on the "plan" edge with a given conditions (other predicates).
-func HasPlanWith(preds ...predicate.Plan) predicate.Entitlement {
-	return predicate.Entitlement(func(s *sql.Selector) {
-		step := newPlanStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
 }
 
 // And groups predicates with the AND operator between them.

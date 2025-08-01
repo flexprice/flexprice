@@ -12,6 +12,7 @@ type EntitlementFilter struct {
 	FeatureIDs  []string           `form:"feature_ids" json:"feature_ids,omitempty"`
 	FeatureType *FeatureType       `form:"feature_type" json:"feature_type,omitempty"`
 	IsEnabled   *bool              `form:"is_enabled" json:"is_enabled,omitempty"`
+	AddonIDs    []string           `form:"addon_ids" json:"addon_ids,omitempty"`
 }
 
 // NewDefaultEntitlementFilter creates a new EntitlementFilter with default values
@@ -48,6 +49,12 @@ func (f EntitlementFilter) Validate() error {
 // WithPlanIDs adds plan IDs to the filter
 func (f *EntitlementFilter) WithPlanIDs(planIDs []string) *EntitlementFilter {
 	f.PlanIDs = planIDs
+	return f
+}
+
+// WithAddonIDs adds addon IDs to the filter
+func (f *EntitlementFilter) WithAddonIDs(addonIDs []string) *EntitlementFilter {
+	f.AddonIDs = addonIDs
 	return f
 }
 

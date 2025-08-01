@@ -78,7 +78,7 @@ func (s *planService) CreatePlan(ctx context.Context, req dto.CreatePlanRequest)
 						WithHint("Failed to create price").
 						Mark(ierr.ErrValidation)
 				}
-				price.PlanID = plan.ID
+				price.PlanID = &plan.ID
 				prices[i] = price
 			}
 
@@ -94,7 +94,7 @@ func (s *planService) CreatePlan(ctx context.Context, req dto.CreatePlanRequest)
 		if len(req.Entitlements) > 0 {
 			entitlements := make([]*entitlement.Entitlement, len(req.Entitlements))
 			for i, entReq := range req.Entitlements {
-				ent := entReq.ToEntitlement(ctx, plan.ID)
+				ent := entReq.ToEntitlement(ctx, &plan.ID, nil)
 				entitlements[i] = ent
 			}
 
@@ -262,7 +262,7 @@ func (s *planService) GetPlans(ctx context.Context, filter *types.PlanFilter) (*
 		}
 
 		for _, p := range prices.Items {
-			pricesByPlanID[p.PlanID] = append(pricesByPlanID[p.PlanID], p)
+			pricesByPlanID[lo.FromPtr(p.PlanID)] = append(pricesByPlanID[lo.FromPtr(p.PlanID)], p)
 		}
 	}
 
@@ -283,7 +283,7 @@ func (s *planService) GetPlans(ctx context.Context, filter *types.PlanFilter) (*
 		}
 
 		for _, e := range entitlements.Items {
-			entitlementsByPlanID[e.PlanID] = append(entitlementsByPlanID[e.PlanID], e)
+			entitlementsByPlanID[*e.PlanID] = append(entitlementsByPlanID[*e.PlanID], e)
 		}
 	}
 
@@ -403,7 +403,7 @@ func (s *planService) UpdatePlan(ctx context.Context, id string, req dto.UpdateP
 							WithHint("Failed to create price").
 							Mark(ierr.ErrValidation)
 					}
-					newPrice.PlanID = plan.ID
+					newPrice.PlanID = &plan.ID
 					newPrices = append(newPrices, newPrice)
 				}
 			}
@@ -457,7 +457,7 @@ func (s *planService) UpdatePlan(ctx context.Context, id string, req dto.UpdateP
 			newEntitlements := make([]*entitlement.Entitlement, 0)
 			for _, reqEnt := range req.Entitlements {
 				if reqEnt.ID == "" {
-					ent := reqEnt.ToEntitlement(ctx, plan.ID)
+					ent := reqEnt.ToEntitlement(ctx, &plan.ID, nil)
 					newEntitlements = append(newEntitlements, ent)
 				}
 			}
@@ -629,7 +629,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*SyncPlanP
 	planPrices := make([]*price.Price, 0)
 	meterMap := make(map[string]*meter.Meter)
 	for _, price := range prices {
-		if price.PlanID == id && price.TenantID == tenantID && price.EnvironmentID == environmentID {
+		if lo.FromPtr(price.PlanID) == id && price.TenantID == tenantID && price.EnvironmentID == environmentID {
 			planPrices = append(planPrices, price)
 			if price.MeterID != "" {
 				meterMap[price.MeterID] = nil
@@ -714,7 +714,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*SyncPlanP
 		// Create maps for fast lookups
 		existingPriceIDs := make(map[string]*subscription.SubscriptionLineItem)
 		for _, item := range lineItems {
-			if item.PlanID == id && item.Status == types.StatusPublished {
+			if lo.FromPtr(item.PlanID) == id && item.Status == types.StatusPublished {
 				existingPriceIDs[item.PriceID] = item
 			}
 		}
@@ -742,7 +742,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*SyncPlanP
 				ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
 				SubscriptionID:  sub.ID,
 				CustomerID:      sub.CustomerID,
-				PlanID:          id,
+				PlanID:          lo.ToPtr(id),
 				PlanDisplayName: p.Name,
 				PriceID:         pr.ID,
 				PriceType:       pr.Type,

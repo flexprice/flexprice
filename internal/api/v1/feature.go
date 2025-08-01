@@ -117,7 +117,7 @@ func (h *FeatureHandler) ListFeatures(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, resp)
-}
+}      
 
 // UpdateFeature godoc
 // @Summary Update a feature

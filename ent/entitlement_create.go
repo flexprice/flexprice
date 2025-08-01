@@ -11,7 +11,6 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/entitlement"
-	"github.com/flexprice/flexprice/ent/plan"
 )
 
 // EntitlementCreate is the builder for creating a Entitlement entity.
@@ -117,6 +116,28 @@ func (ec *EntitlementCreate) SetPlanID(s string) *EntitlementCreate {
 	return ec
 }
 
+// SetNillablePlanID sets the "plan_id" field if the given value is not nil.
+func (ec *EntitlementCreate) SetNillablePlanID(s *string) *EntitlementCreate {
+	if s != nil {
+		ec.SetPlanID(*s)
+	}
+	return ec
+}
+
+// SetAddonID sets the "addon_id" field.
+func (ec *EntitlementCreate) SetAddonID(s string) *EntitlementCreate {
+	ec.mutation.SetAddonID(s)
+	return ec
+}
+
+// SetNillableAddonID sets the "addon_id" field if the given value is not nil.
+func (ec *EntitlementCreate) SetNillableAddonID(s *string) *EntitlementCreate {
+	if s != nil {
+		ec.SetAddonID(*s)
+	}
+	return ec
+}
+
 // SetFeatureID sets the "feature_id" field.
 func (ec *EntitlementCreate) SetFeatureID(s string) *EntitlementCreate {
 	ec.mutation.SetFeatureID(s)
@@ -205,11 +226,6 @@ func (ec *EntitlementCreate) SetID(s string) *EntitlementCreate {
 	return ec
 }
 
-// SetPlan sets the "plan" edge to the Plan entity.
-func (ec *EntitlementCreate) SetPlan(p *Plan) *EntitlementCreate {
-	return ec.SetPlanID(p.ID)
-}
-
 // Mutation returns the EntitlementMutation object of the builder.
 func (ec *EntitlementCreate) Mutation() *EntitlementMutation {
 	return ec.mutation
@@ -290,14 +306,6 @@ func (ec *EntitlementCreate) check() error {
 	if _, ok := ec.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "Entitlement.updated_at"`)}
 	}
-	if _, ok := ec.mutation.PlanID(); !ok {
-		return &ValidationError{Name: "plan_id", err: errors.New(`ent: missing required field "Entitlement.plan_id"`)}
-	}
-	if v, ok := ec.mutation.PlanID(); ok {
-		if err := entitlement.PlanIDValidator(v); err != nil {
-			return &ValidationError{Name: "plan_id", err: fmt.Errorf(`ent: validator failed for field "Entitlement.plan_id": %w`, err)}
-		}
-	}
 	if _, ok := ec.mutation.FeatureID(); !ok {
 		return &ValidationError{Name: "feature_id", err: errors.New(`ent: missing required field "Entitlement.feature_id"`)}
 	}
@@ -324,9 +332,6 @@ func (ec *EntitlementCreate) check() error {
 		if err := entitlement.IDValidator(v); err != nil {
 			return &ValidationError{Name: "id", err: fmt.Errorf(`ent: validator failed for field "Entitlement.id": %w`, err)}
 		}
-	}
-	if len(ec.mutation.PlanIDs()) == 0 {
-		return &ValidationError{Name: "plan", err: errors.New(`ent: missing required edge "Entitlement.plan"`)}
 	}
 	return nil
 }
@@ -391,6 +396,14 @@ func (ec *EntitlementCreate) createSpec() (*Entitlement, *sqlgraph.CreateSpec) {
 		_spec.SetField(entitlement.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
 	}
+	if value, ok := ec.mutation.PlanID(); ok {
+		_spec.SetField(entitlement.FieldPlanID, field.TypeString, value)
+		_node.PlanID = &value
+	}
+	if value, ok := ec.mutation.AddonID(); ok {
+		_spec.SetField(entitlement.FieldAddonID, field.TypeString, value)
+		_node.AddonID = &value
+	}
 	if value, ok := ec.mutation.FeatureID(); ok {
 		_spec.SetField(entitlement.FieldFeatureID, field.TypeString, value)
 		_node.FeatureID = value
@@ -418,23 +431,6 @@ func (ec *EntitlementCreate) createSpec() (*Entitlement, *sqlgraph.CreateSpec) {
 	if value, ok := ec.mutation.StaticValue(); ok {
 		_spec.SetField(entitlement.FieldStaticValue, field.TypeString, value)
 		_node.StaticValue = value
-	}
-	if nodes := ec.mutation.PlanIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   entitlement.PlanTable,
-			Columns: []string{entitlement.PlanColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(plan.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_node.PlanID = nodes[0]
-		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
 }

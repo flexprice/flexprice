@@ -50,6 +50,8 @@ type CreateSubscriptionRequest struct {
 	OverageFactor *decimal.Decimal `json:"overage_factor,omitempty"`
 	// Phases represents an optional timeline of subscription phases
 	Phases []SubscriptionSchedulePhaseInput `json:"phases,omitempty" validate:"omitempty,dive"`
+	// Addons represents the addons to be linked to the subscription
+	Addons []AddAddonToSubscriptionRequest `json:"addons,omitempty" validate:"omitempty,dive"`
 }
 
 type UpdateSubscriptionRequest struct {

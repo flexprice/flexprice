@@ -37,6 +37,8 @@ type Handlers struct {
 	CostSheet         *v1.CostSheetHandler
 	CreditNote        *v1.CreditNoteHandler
 	Webhook           *v1.WebhookHandler
+	Addon             *v1.AddonHandler
+
 	// Portal handlers
 	Onboarding *v1.OnboardingHandler
 	// Cron jobs : TODO: move crons out of API based architecture
@@ -231,6 +233,22 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			feature.PUT("/:id", handlers.Feature.UpdateFeature)
 			feature.DELETE("/:id", handlers.Feature.DeleteFeature)
 			feature.POST("/search", handlers.Feature.ListFeaturesByFilter)
+		}
+
+		addon := v1Private.Group("/addons")
+		{
+					addon.POST("", handlers.Addon.CreateAddon)
+		addon.GET("", handlers.Addon.ListAddons)
+		addon.GET("/:id", handlers.Addon.GetAddon)
+		addon.PUT("/:id", handlers.Addon.UpdateAddon)
+		addon.DELETE("/:id", handlers.Addon.DeleteAddon)
+		addon.GET("/lookup/:lookup_key", handlers.Addon.GetAddonByLookupKey)
+		addon.POST("/search", handlers.Addon.ListAddonsByFilter)
+		addon.POST("/subscriptions/:subscription_id", handlers.Addon.AddAddonToSubscription)
+		addon.DELETE("/subscriptions/:subscription_id/:addon_id", handlers.Addon.RemoveAddonFromSubscription)
+		
+		// entitlement routes
+		addon.GET("/:id/entitlements", handlers.Addon.GetAddonEntitlements)
 		}
 
 		entitlement := v1Private.Group("/entitlements")

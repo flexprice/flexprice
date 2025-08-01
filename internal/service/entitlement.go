@@ -26,6 +26,7 @@ type EntitlementService interface {
 	UpdateEntitlement(ctx context.Context, id string, req dto.UpdateEntitlementRequest) (*dto.EntitlementResponse, error)
 	DeleteEntitlement(ctx context.Context, id string) error
 	GetPlanEntitlements(ctx context.Context, planID string) (*dto.ListEntitlementsResponse, error)
+	GetAddonEntitlements(ctx context.Context, addonID string) (*dto.ListEntitlementsResponse, error)
 	GetPlanFeatureEntitlements(ctx context.Context, planID, featureID string) (*dto.ListEntitlementsResponse, error)
 }
 
@@ -41,17 +42,6 @@ func NewEntitlementService(params ServiceParams) EntitlementService {
 
 func (s *entitlementService) CreateEntitlement(ctx context.Context, req dto.CreateEntitlementRequest) (*dto.EntitlementResponse, error) {
 	if err := req.Validate(); err != nil {
-		return nil, err
-	}
-
-	if req.PlanID == "" {
-		return nil, ierr.NewError("plan_id is required").
-			Mark(ierr.ErrValidation)
-	}
-
-	// Validate plan exists
-	plan, err := s.PlanRepo.Get(ctx, req.PlanID)
-	if err != nil {
 		return nil, err
 	}
 
@@ -84,7 +74,24 @@ func (s *entitlementService) CreateEntitlement(ctx context.Context, req dto.Crea
 
 	// Add expanded fields
 	response.Feature = &dto.FeatureResponse{Feature: feature}
-	response.Plan = &dto.PlanResponse{Plan: plan}
+
+	// Add plan or addon to response based on what was provided
+	if req.PlanID != nil {
+		// Validate plan exists
+		plan, err := s.PlanRepo.Get(ctx, *req.PlanID)
+		if err != nil {
+			return nil, err
+		}
+		response.Plan = &dto.PlanResponse{Plan: plan}
+	} else if req.AddonID != nil {
+		// Validate addon exists
+		_, err := s.AddonRepo.GetByID(ctx, *req.AddonID)
+		if err != nil {
+			return nil, err
+		}
+		// Note: We don't have an AddonResponse field in EntitlementResponse yet
+		// For now, we'll just validate the addon exists
+	}
 
 	// Publish webhook event
 	s.publishWebhookEvent(ctx, types.WebhookEventEntitlementCreated, result.ID)
@@ -108,7 +115,7 @@ func (s *entitlementService) GetEntitlement(ctx context.Context, id string) (*dt
 	}
 	response.Feature = &dto.FeatureResponse{Feature: feature}
 
-	plan, err := s.PlanRepo.Get(ctx, result.PlanID)
+	plan, err := s.PlanRepo.Get(ctx, *result.PlanID)
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +213,7 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 		if filter.GetExpand().Has(types.ExpandPlans) {
 			// Collect plan IDs
 			planIDs := lo.Map(entitlements, func(e *entitlement.Entitlement, _ int) string {
-				return e.PlanID
+				return *e.PlanID
 			})
 
 			if len(planIDs) > 0 {
@@ -245,7 +252,7 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 
 		// Add expanded plan if requested and available
 		if !filter.GetExpand().IsEmpty() && filter.GetExpand().Has(types.ExpandPlans) {
-			if p, ok := plansByID[e.PlanID]; ok {
+			if p, ok := plansByID[*e.PlanID]; ok {
 				response.Items[i].Plan = &dto.PlanResponse{Plan: p}
 			}
 		}
@@ -324,6 +331,17 @@ func (s *entitlementService) GetPlanEntitlements(ctx context.Context, planID str
 	// Create a filter for the plan's entitlements
 	filter := types.NewNoLimitEntitlementFilter()
 	filter.WithPlanIDs([]string{planID})
+	filter.WithStatus(types.StatusPublished)
+	filter.WithExpand(fmt.Sprintf("%s,%s", types.ExpandFeatures, types.ExpandMeters))
+
+	// Use the standard list function to get the entitlements with expansion
+	return s.ListEntitlements(ctx, filter)
+}
+
+func (s *entitlementService) GetAddonEntitlements(ctx context.Context, addonID string) (*dto.ListEntitlementsResponse, error) {
+	// Create a filter for the addon's entitlements
+	filter := types.NewNoLimitEntitlementFilter()
+	filter.WithAddonIDs([]string{addonID})
 	filter.WithStatus(types.StatusPublished)
 	filter.WithExpand(fmt.Sprintf("%s,%s", types.ExpandFeatures, types.ExpandMeters))
 

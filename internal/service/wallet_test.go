@@ -184,7 +184,7 @@ func (s *WalletServiceSuite) setupTestData() {
 		ID:                 "price_api_calls",
 		Amount:             decimal.Zero,
 		Currency:           "usd",
-		PlanID:             s.testData.plan.ID,
+		PlanID:             lo.ToPtr(s.testData.plan.ID),
 		Type:               types.PRICE_TYPE_USAGE,
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
@@ -206,7 +206,7 @@ func (s *WalletServiceSuite) setupTestData() {
 		ID:                 "price_storage",
 		Amount:             decimal.NewFromFloat(0.1),
 		Currency:           "usd",
-		PlanID:             s.testData.plan.ID,
+		PlanID:             lo.ToPtr(s.testData.plan.ID),
 		Type:               types.PRICE_TYPE_USAGE,
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
@@ -222,7 +222,7 @@ func (s *WalletServiceSuite) setupTestData() {
 		ID:                 "price_storage_archive",
 		Amount:             decimal.NewFromFloat(0.03),
 		Currency:           "usd",
-		PlanID:             s.testData.plan.ID,
+		PlanID:             lo.ToPtr(s.testData.plan.ID),
 		Type:               types.PRICE_TYPE_USAGE,
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
@@ -284,7 +284,7 @@ func (s *WalletServiceSuite) setupTestData() {
 		LineItems: []*subscription.SubscriptionLineItem{
 			{
 				CustomerID:       s.testData.customer.ID,
-				PlanID:           s.testData.plan.ID,
+				PlanID:           lo.ToPtr(s.testData.plan.ID),
 				PlanDisplayName:  s.testData.plan.Name,
 				PriceID:          s.testData.prices.storage.ID,
 				PriceType:        types.PRICE_TYPE_USAGE,
@@ -300,7 +300,7 @@ func (s *WalletServiceSuite) setupTestData() {
 			},
 			{
 				CustomerID:       s.testData.customer.ID,
-				PlanID:           s.testData.plan.ID,
+				PlanID:           lo.ToPtr(s.testData.plan.ID),
 				PlanDisplayName:  s.testData.plan.Name,
 				PriceID:          s.testData.prices.storageArchive.ID,
 				PriceType:        types.PRICE_TYPE_USAGE,
@@ -316,7 +316,7 @@ func (s *WalletServiceSuite) setupTestData() {
 			},
 			{
 				CustomerID:       s.testData.customer.ID,
-				PlanID:           s.testData.plan.ID,
+				PlanID:           lo.ToPtr(s.testData.plan.ID),
 				PlanDisplayName:  s.testData.plan.Name,
 				PriceID:          s.testData.prices.apiCalls.ID,
 				PriceType:        types.PRICE_TYPE_USAGE,
@@ -417,7 +417,7 @@ func (s *WalletServiceSuite) setupTestData() {
 	subscriptionLineItems := []*subscription.SubscriptionLineItem{
 		{
 			CustomerID:       s.testData.customer.ID,
-			PlanID:           s.testData.plan.ID,
+			PlanID:           lo.ToPtr(s.testData.plan.ID),
 			PlanDisplayName:  s.testData.plan.Name,
 			PriceID:          s.testData.prices.storage.ID,
 			PriceType:        types.PRICE_TYPE_USAGE,
@@ -433,7 +433,7 @@ func (s *WalletServiceSuite) setupTestData() {
 		},
 		{
 			CustomerID:       s.testData.customer.ID,
-			PlanID:           s.testData.plan.ID,
+			PlanID:           lo.ToPtr(s.testData.plan.ID),
 			PlanDisplayName:  s.testData.plan.Name,
 			PriceID:          s.testData.prices.storageArchive.ID,
 			PriceType:        types.PRICE_TYPE_USAGE,
@@ -449,7 +449,7 @@ func (s *WalletServiceSuite) setupTestData() {
 		},
 		{
 			CustomerID:       s.testData.customer.ID,
-			PlanID:           s.testData.plan.ID,
+			PlanID:           lo.ToPtr(s.testData.plan.ID),
 			PlanDisplayName:  s.testData.plan.Name,
 			PriceID:          s.testData.prices.apiCalls.ID,
 			PriceType:        types.PRICE_TYPE_USAGE,
@@ -1536,7 +1536,7 @@ func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
 			setupFunc: func() {
 				entitlement := &entitlement.Entitlement{
 					ID:               "ent_test_1",
-					PlanID:           s.testData.plan.ID,
+					PlanID:           lo.ToPtr(s.testData.plan.ID),
 					FeatureID:        "feat_api_calls",
 					FeatureType:      types.FeatureTypeMetered,
 					IsEnabled:        true,
@@ -1558,7 +1558,7 @@ func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
 			setupFunc: func() {
 				entitlement := &entitlement.Entitlement{
 					ID:               "ent_test_2",
-					PlanID:           s.testData.plan.ID,
+					PlanID:           lo.ToPtr(s.testData.plan.ID),
 					FeatureID:        "feat_api_calls",
 					FeatureType:      types.FeatureTypeMetered,
 					IsEnabled:        true,
@@ -1580,7 +1580,7 @@ func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
 			setupFunc: func() {
 				entitlement := &entitlement.Entitlement{
 					ID:               "ent_test_3",
-					PlanID:           s.testData.plan.ID,
+					PlanID:           lo.ToPtr(s.testData.plan.ID),
 					FeatureID:        "feat_api_calls",
 					FeatureType:      types.FeatureTypeMetered,
 					IsEnabled:        true,
@@ -1602,7 +1602,7 @@ func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
 			setupFunc: func() {
 				entitlement := &entitlement.Entitlement{
 					ID:               "ent_test_4",
-					PlanID:           s.testData.plan.ID,
+					PlanID:           lo.ToPtr(s.testData.plan.ID),
 					FeatureID:        "feat_api_calls",
 					FeatureType:      types.FeatureTypeMetered,
 					IsEnabled:        false,

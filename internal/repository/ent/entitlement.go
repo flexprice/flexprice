@@ -50,7 +50,8 @@ func (r *entitlementRepository) Create(ctx context.Context, e *domainEntitlement
 
 	result, err := client.Entitlement.Create().
 		SetID(e.ID).
-		SetPlanID(e.PlanID).
+		SetNillablePlanID(e.PlanID).
+		SetNillableAddonID(e.AddonID).
 		SetFeatureID(e.FeatureID).
 		SetFeatureType(string(e.FeatureType)).
 		SetIsEnabled(e.IsEnabled).
@@ -270,7 +271,8 @@ func (r *entitlementRepository) Update(ctx context.Context, e *domainEntitlement
 			entitlement.TenantID(e.TenantID),
 			entitlement.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
-		SetPlanID(e.PlanID).
+		SetNillablePlanID(e.PlanID).
+		SetNillableAddonID(e.AddonID).
 		SetFeatureID(e.FeatureID).
 		SetFeatureType(string(e.FeatureType)).
 		SetIsEnabled(e.IsEnabled).
@@ -368,7 +370,8 @@ func (r *entitlementRepository) CreateBulk(ctx context.Context, entitlements []*
 
 		builders[i] = client.Entitlement.Create().
 			SetID(e.ID).
-			SetPlanID(e.PlanID).
+			SetNillablePlanID(e.PlanID).
+			SetNillableAddonID(e.AddonID).
 			SetFeatureID(e.FeatureID).
 			SetFeatureType(string(e.FeatureType)).
 			SetIsEnabled(e.IsEnabled).
@@ -485,6 +488,31 @@ func (r *entitlementRepository) ListByFeatureIDs(ctx context.Context, featureIDs
 	return r.List(ctx, filter)
 }
 
+// ListByAddonIDs retrieves all entitlements for the given addon IDs
+func (r *entitlementRepository) ListByAddonIDs(ctx context.Context, addonIDs []string) ([]*domainEntitlement.Entitlement, error) {
+	// Start a span for this repository operation
+	span := StartRepositorySpan(ctx, "entitlement", "list_by_addon_ids", map[string]interface{}{
+		"addon_ids":  addonIDs,
+		"tenant_id":  types.GetTenantID(ctx),
+	})
+	defer FinishSpan(span)
+
+	if len(addonIDs) == 0 {
+		return []*domainEntitlement.Entitlement{}, nil
+	}
+
+	r.log.Debugw("listing entitlements by addon IDs", "addon_ids", addonIDs)
+
+	// Create a filter with addon IDs
+	filter := &types.EntitlementFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		AddonIDs:    addonIDs,
+	}
+
+	// Use the existing List method
+	return r.List(ctx, filter)
+}
+
 // EntitlementQuery type alias for better readability
 type EntitlementQuery = *ent.EntitlementQuery
 
@@ -556,6 +584,11 @@ func (o EntitlementQueryOptions) applyEntityQueryOptions(_ context.Context, f *t
 	if len(f.PlanIDs) > 0 {
 		query = query.Where(entitlement.PlanIDIn(f.PlanIDs...))
 	}
+
+	// Apply addon ID filter if specified
+	if len(f.AddonIDs) > 0 {
+		query = query.Where(entitlement.AddonIDIn(f.AddonIDs...))
+	}	
 
 	// Apply feature IDs filter if specified
 	if len(f.FeatureIDs) > 0 {

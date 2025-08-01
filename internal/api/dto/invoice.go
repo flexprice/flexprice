@@ -227,6 +227,12 @@ type CreateInvoiceLineItemRequest struct {
 	// plan_display_name is the optional human-readable name of the plan
 	PlanDisplayName *string `json:"plan_display_name,omitempty"`
 
+	// source_type indicates the source of this line item (plan or addon)
+	SourceType *types.InvoiceLineItemSourceType `json:"source_type,omitempty"`
+
+	// addon_id is the optional unique identifier of the addon associated with this line item
+	AddonID *string `json:"addon_id,omitempty"`
+
 	// price_type indicates the type of pricing (fixed, usage, tiered, etc.)
 	PriceType *string `json:"price_type,omitempty"`
 
@@ -299,6 +305,8 @@ func (r *CreateInvoiceLineItemRequest) ToInvoiceLineItem(ctx context.Context, in
 		SubscriptionID:   inv.SubscriptionID,
 		PriceID:          r.PriceID,
 		PlanID:           r.PlanID,
+		SourceType:       r.SourceType,
+		AddonID:          r.AddonID,
 		PlanDisplayName:  r.PlanDisplayName,
 		PriceType:        r.PriceType,
 		MeterID:          r.MeterID,
@@ -337,6 +345,12 @@ type InvoiceLineItemResponse struct {
 
 	// plan_display_name is the optional human-readable name of the plan
 	PlanDisplayName *string `json:"plan_display_name,omitempty"`
+
+	// source_type indicates the source of this line item (plan or addon)
+	SourceType *types.InvoiceLineItemSourceType `json:"source_type,omitempty"`
+
+	// addon_id is the optional unique identifier of the addon associated with this line item
+	AddonID *string `json:"addon_id,omitempty"`
 
 	// price_type indicates the type of pricing (fixed, usage, tiered, etc.)
 	PriceType *string `json:"price_type,omitempty"`
@@ -399,6 +413,8 @@ func NewInvoiceLineItemResponse(item *invoice.InvoiceLineItem) *InvoiceLineItemR
 		SubscriptionID:   item.SubscriptionID,
 		PlanID:           item.PlanID,
 		PlanDisplayName:  item.PlanDisplayName,
+		SourceType:       item.SourceType,
+		AddonID:          item.AddonID,
 		PriceID:          item.PriceID,
 		PriceType:        item.PriceType,
 		MeterID:          item.MeterID,

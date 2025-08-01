@@ -44,7 +44,10 @@ type Price struct {
 	Currency string `db:"currency" json:"currency"`
 
 	// PlanID is the id of the plan for plan based pricing
-	PlanID string `db:"plan_id" json:"plan_id"`
+	PlanID *string `db:"plan_id" json:"plan_id"`
+
+	// AddonID is the id of the addon for addon based pricing
+	AddonID *string `db:"addon_id" json:"addon_id"`
 
 	Type types.PriceType `db:"type" json:"type"`
 
@@ -318,6 +321,7 @@ func FromEnt(e *ent.Price) *Price {
 		Currency:           e.Currency,
 		DisplayAmount:      e.DisplayAmount,
 		PlanID:             e.PlanID,
+		AddonID:            e.AddonID,
 		Type:               types.PriceType(e.Type),
 		BillingPeriod:      types.BillingPeriod(e.BillingPeriod),
 		BillingPeriodCount: e.BillingPeriodCount,

@@ -53,16 +53,27 @@ type AggregatedEntitlement struct {
 	StaticValues     []string            `json:"static_values,omitempty"` // For static/SLA features
 }
 
+// EntitlementSourceType defines the type of entitlement source
+type EntitlementSourceType string
+
+const (
+	EntitlementSourceTypePlan  EntitlementSourceType = "plan"
+	EntitlementSourceTypeAddon EntitlementSourceType = "addon"
+)
+
 // EntitlementSource tracks which subscription provided the entitlement
 type EntitlementSource struct {
-	SubscriptionID string `json:"subscription_id"`
-	PlanID         string `json:"plan_id"`
-	Quantity       int64  `json:"quantity"`
-	PlanName       string `json:"plan_name"`
-	EntitlementID  string `json:"entitlement_id"`
-	IsEnabled      bool   `json:"is_enabled"`
-	UsageLimit     *int64 `json:"usage_limit,omitempty"`
-	StaticValue    string `json:"static_value,omitempty"`
+	SubscriptionID string                `json:"subscription_id"`
+	SourceType     EntitlementSourceType `json:"source_type"`
+	PlanID         string                `json:"plan_id,omitempty"`
+	PlanName       string                `json:"plan_name,omitempty"`
+	AddonID        string                `json:"addon_id,omitempty"`
+	AddonName      string                `json:"addon_name,omitempty"`
+	Quantity       int64                 `json:"quantity"`
+	EntitlementID  string                `json:"entitlement_id"`
+	IsEnabled      bool                  `json:"is_enabled"`
+	UsageLimit     *int64                `json:"usage_limit,omitempty"`
+	StaticValue    string                `json:"static_value,omitempty"`
 }
 
 // GetCustomerUsageSummaryRequest represents the request for getting customer usage summary

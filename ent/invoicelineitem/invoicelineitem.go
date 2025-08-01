@@ -37,6 +37,10 @@ const (
 	FieldSubscriptionID = "subscription_id"
 	// FieldPlanID holds the string denoting the plan_id field in the database.
 	FieldPlanID = "plan_id"
+	// FieldSourceType holds the string denoting the source_type field in the database.
+	FieldSourceType = "source_type"
+	// FieldAddonID holds the string denoting the addon_id field in the database.
+	FieldAddonID = "addon_id"
 	// FieldPlanDisplayName holds the string denoting the plan_display_name field in the database.
 	FieldPlanDisplayName = "plan_display_name"
 	// FieldPriceID holds the string denoting the price_id field in the database.
@@ -88,6 +92,8 @@ var Columns = []string{
 	FieldCustomerID,
 	FieldSubscriptionID,
 	FieldPlanID,
+	FieldSourceType,
+	FieldAddonID,
 	FieldPlanDisplayName,
 	FieldPriceID,
 	FieldPriceType,
@@ -198,6 +204,16 @@ func BySubscriptionID(opts ...sql.OrderTermOption) OrderOption {
 // ByPlanID orders the results by the plan_id field.
 func ByPlanID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPlanID, opts...).ToFunc()
+}
+
+// BySourceType orders the results by the source_type field.
+func BySourceType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSourceType, opts...).ToFunc()
+}
+
+// ByAddonID orders the results by the addon_id field.
+func ByAddonID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAddonID, opts...).ToFunc()
 }
 
 // ByPlanDisplayName orders the results by the plan_display_name field.

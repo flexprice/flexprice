@@ -180,7 +180,7 @@ func (s *BillingServiceSuite) setupTestData() {
 		ID:                 "price_api_calls",
 		Amount:             decimal.Zero,
 		Currency:           "usd",
-		PlanID:             s.testData.plan.ID,
+		PlanID:             lo.ToPtr(s.testData.plan.ID),
 		Type:               types.PRICE_TYPE_USAGE,
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
@@ -203,7 +203,7 @@ func (s *BillingServiceSuite) setupTestData() {
 		ID:                 "price_fixed",
 		Amount:             decimal.NewFromInt(10), // Fixed amount of 10
 		Currency:           "usd",
-		PlanID:             s.testData.plan.ID,
+		PlanID:             lo.ToPtr(s.testData.plan.ID),
 		Type:               types.PRICE_TYPE_FIXED, // Fixed price type
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
@@ -219,7 +219,7 @@ func (s *BillingServiceSuite) setupTestData() {
 		ID:                 "price_storage_archive",
 		Amount:             decimal.NewFromInt(5), // Fixed amount of 5
 		Currency:           "usd",
-		PlanID:             s.testData.plan.ID,
+		PlanID:             lo.ToPtr(s.testData.plan.ID),
 		Type:               types.PRICE_TYPE_FIXED, // Fixed price type
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
@@ -252,7 +252,7 @@ func (s *BillingServiceSuite) setupTestData() {
 			ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
 			SubscriptionID:  s.testData.subscription.ID,
 			CustomerID:      s.testData.subscription.CustomerID,
-			PlanID:          s.testData.plan.ID,
+			PlanID:          lo.ToPtr(s.testData.plan.ID),
 			PlanDisplayName: s.testData.plan.Name,
 			PriceID:         s.testData.prices.fixed.ID,
 			PriceType:       s.testData.prices.fixed.Type,
@@ -268,7 +268,7 @@ func (s *BillingServiceSuite) setupTestData() {
 			ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
 			SubscriptionID:   s.testData.subscription.ID,
 			CustomerID:       s.testData.subscription.CustomerID,
-			PlanID:           s.testData.plan.ID,
+			PlanID:           lo.ToPtr(s.testData.plan.ID),
 			PlanDisplayName:  s.testData.plan.Name,
 			PriceID:          s.testData.prices.apiCalls.ID,
 			PriceType:        s.testData.prices.apiCalls.Type,
@@ -286,7 +286,7 @@ func (s *BillingServiceSuite) setupTestData() {
 			ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
 			SubscriptionID:   s.testData.subscription.ID,
 			CustomerID:       s.testData.subscription.CustomerID,
-			PlanID:           s.testData.plan.ID,
+			PlanID:           lo.ToPtr(s.testData.plan.ID),
 			PlanDisplayName:  s.testData.plan.Name,
 			PriceID:          s.testData.prices.storageArchive.ID,
 			PriceType:        s.testData.prices.storageArchive.Type,
@@ -1026,7 +1026,7 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithEntitlements() {
 				// Create entitlement with usage limit
 				entitlement := &entitlement.Entitlement{
 					ID:               "ent_test_1",
-					PlanID:           s.testData.plan.ID,
+					PlanID:           lo.ToPtr(s.testData.plan.ID),
 					FeatureID:        testFeature.ID,
 					FeatureType:      types.FeatureTypeMetered,
 					IsEnabled:        true,
@@ -1060,7 +1060,7 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithEntitlements() {
 				// Create entitlement with lower usage limit
 				entitlement := &entitlement.Entitlement{
 					ID:               "ent_test_2",
-					PlanID:           s.testData.plan.ID,
+					PlanID:           lo.ToPtr(s.testData.plan.ID),
 					FeatureID:        testFeature.ID,
 					FeatureType:      types.FeatureTypeMetered,
 					IsEnabled:        true,
@@ -1094,7 +1094,7 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithEntitlements() {
 				// Create unlimited entitlement
 				entitlement := &entitlement.Entitlement{
 					ID:               "ent_test_3",
-					PlanID:           s.testData.plan.ID,
+					PlanID:           lo.ToPtr(s.testData.plan.ID),
 					FeatureID:        testFeature.ID,
 					FeatureType:      types.FeatureTypeMetered,
 					IsEnabled:        true,
@@ -1128,7 +1128,7 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithEntitlements() {
 				// Create soft limit entitlement
 				entitlement := &entitlement.Entitlement{
 					ID:               "ent_test_4",
-					PlanID:           s.testData.plan.ID,
+					PlanID:           lo.ToPtr(s.testData.plan.ID),
 					FeatureID:        testFeature.ID,
 					FeatureType:      types.FeatureTypeMetered,
 					IsEnabled:        true,
@@ -1162,7 +1162,7 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithEntitlements() {
 				// Create disabled entitlement
 				entitlement := &entitlement.Entitlement{
 					ID:               "ent_test_5",
-					PlanID:           s.testData.plan.ID,
+					PlanID:           lo.ToPtr(s.testData.plan.ID),
 					FeatureID:        testFeature.ID,
 					FeatureType:      types.FeatureTypeMetered,
 					IsEnabled:        false, // Disabled entitlement
@@ -1202,7 +1202,7 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithEntitlements() {
 						ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
 						SubscriptionID:   s.testData.subscription.ID,
 						CustomerID:       s.testData.subscription.CustomerID,
-						PlanID:           s.testData.plan.ID,
+						PlanID:           lo.ToPtr(s.testData.plan.ID),
 						PlanDisplayName:  s.testData.plan.Name,
 						PriceID:          s.testData.prices.apiCalls.ID,
 						PriceType:        s.testData.prices.apiCalls.Type,

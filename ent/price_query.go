@@ -25,6 +25,7 @@ type PriceQuery struct {
 	inters        []Interceptor
 	predicates    []predicate.Price
 	withCostsheet *CostsheetQuery
+	withFKs       bool
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -370,11 +371,15 @@ func (pq *PriceQuery) prepareQuery(ctx context.Context) error {
 func (pq *PriceQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Price, error) {
 	var (
 		nodes       = []*Price{}
+		withFKs     = pq.withFKs
 		_spec       = pq.querySpec()
 		loadedTypes = [1]bool{
 			pq.withCostsheet != nil,
 		}
 	)
+	if withFKs {
+		_spec.Node.Columns = append(_spec.Node.Columns, price.ForeignKeys...)
+	}
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*Price).scanValues(nil, columns)
 	}

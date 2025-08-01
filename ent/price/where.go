@@ -120,6 +120,11 @@ func PlanID(v string) predicate.Price {
 	return predicate.Price(sql.FieldEQ(FieldPlanID, v))
 }
 
+// AddonID applies equality check predicate on the "addon_id" field. It's identical to AddonIDEQ.
+func AddonID(v string) predicate.Price {
+	return predicate.Price(sql.FieldEQ(FieldAddonID, v))
+}
+
 // Type applies equality check predicate on the "type" field. It's identical to TypeEQ.
 func Type(v string) predicate.Price {
 	return predicate.Price(sql.FieldEQ(FieldType, v))
@@ -835,6 +840,16 @@ func PlanIDHasSuffix(v string) predicate.Price {
 	return predicate.Price(sql.FieldHasSuffix(FieldPlanID, v))
 }
 
+// PlanIDIsNil applies the IsNil predicate on the "plan_id" field.
+func PlanIDIsNil() predicate.Price {
+	return predicate.Price(sql.FieldIsNull(FieldPlanID))
+}
+
+// PlanIDNotNil applies the NotNil predicate on the "plan_id" field.
+func PlanIDNotNil() predicate.Price {
+	return predicate.Price(sql.FieldNotNull(FieldPlanID))
+}
+
 // PlanIDEqualFold applies the EqualFold predicate on the "plan_id" field.
 func PlanIDEqualFold(v string) predicate.Price {
 	return predicate.Price(sql.FieldEqualFold(FieldPlanID, v))
@@ -843,6 +858,81 @@ func PlanIDEqualFold(v string) predicate.Price {
 // PlanIDContainsFold applies the ContainsFold predicate on the "plan_id" field.
 func PlanIDContainsFold(v string) predicate.Price {
 	return predicate.Price(sql.FieldContainsFold(FieldPlanID, v))
+}
+
+// AddonIDEQ applies the EQ predicate on the "addon_id" field.
+func AddonIDEQ(v string) predicate.Price {
+	return predicate.Price(sql.FieldEQ(FieldAddonID, v))
+}
+
+// AddonIDNEQ applies the NEQ predicate on the "addon_id" field.
+func AddonIDNEQ(v string) predicate.Price {
+	return predicate.Price(sql.FieldNEQ(FieldAddonID, v))
+}
+
+// AddonIDIn applies the In predicate on the "addon_id" field.
+func AddonIDIn(vs ...string) predicate.Price {
+	return predicate.Price(sql.FieldIn(FieldAddonID, vs...))
+}
+
+// AddonIDNotIn applies the NotIn predicate on the "addon_id" field.
+func AddonIDNotIn(vs ...string) predicate.Price {
+	return predicate.Price(sql.FieldNotIn(FieldAddonID, vs...))
+}
+
+// AddonIDGT applies the GT predicate on the "addon_id" field.
+func AddonIDGT(v string) predicate.Price {
+	return predicate.Price(sql.FieldGT(FieldAddonID, v))
+}
+
+// AddonIDGTE applies the GTE predicate on the "addon_id" field.
+func AddonIDGTE(v string) predicate.Price {
+	return predicate.Price(sql.FieldGTE(FieldAddonID, v))
+}
+
+// AddonIDLT applies the LT predicate on the "addon_id" field.
+func AddonIDLT(v string) predicate.Price {
+	return predicate.Price(sql.FieldLT(FieldAddonID, v))
+}
+
+// AddonIDLTE applies the LTE predicate on the "addon_id" field.
+func AddonIDLTE(v string) predicate.Price {
+	return predicate.Price(sql.FieldLTE(FieldAddonID, v))
+}
+
+// AddonIDContains applies the Contains predicate on the "addon_id" field.
+func AddonIDContains(v string) predicate.Price {
+	return predicate.Price(sql.FieldContains(FieldAddonID, v))
+}
+
+// AddonIDHasPrefix applies the HasPrefix predicate on the "addon_id" field.
+func AddonIDHasPrefix(v string) predicate.Price {
+	return predicate.Price(sql.FieldHasPrefix(FieldAddonID, v))
+}
+
+// AddonIDHasSuffix applies the HasSuffix predicate on the "addon_id" field.
+func AddonIDHasSuffix(v string) predicate.Price {
+	return predicate.Price(sql.FieldHasSuffix(FieldAddonID, v))
+}
+
+// AddonIDIsNil applies the IsNil predicate on the "addon_id" field.
+func AddonIDIsNil() predicate.Price {
+	return predicate.Price(sql.FieldIsNull(FieldAddonID))
+}
+
+// AddonIDNotNil applies the NotNil predicate on the "addon_id" field.
+func AddonIDNotNil() predicate.Price {
+	return predicate.Price(sql.FieldNotNull(FieldAddonID))
+}
+
+// AddonIDEqualFold applies the EqualFold predicate on the "addon_id" field.
+func AddonIDEqualFold(v string) predicate.Price {
+	return predicate.Price(sql.FieldEqualFold(FieldAddonID, v))
+}
+
+// AddonIDContainsFold applies the ContainsFold predicate on the "addon_id" field.
+func AddonIDContainsFold(v string) predicate.Price {
+	return predicate.Price(sql.FieldContainsFold(FieldAddonID, v))
 }
 
 // TypeEQ applies the EQ predicate on the "type" field.

@@ -12,7 +12,6 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/entitlement"
-	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/predicate"
 )
 
@@ -80,6 +79,32 @@ func (eu *EntitlementUpdate) SetNillablePlanID(s *string) *EntitlementUpdate {
 	if s != nil {
 		eu.SetPlanID(*s)
 	}
+	return eu
+}
+
+// ClearPlanID clears the value of the "plan_id" field.
+func (eu *EntitlementUpdate) ClearPlanID() *EntitlementUpdate {
+	eu.mutation.ClearPlanID()
+	return eu
+}
+
+// SetAddonID sets the "addon_id" field.
+func (eu *EntitlementUpdate) SetAddonID(s string) *EntitlementUpdate {
+	eu.mutation.SetAddonID(s)
+	return eu
+}
+
+// SetNillableAddonID sets the "addon_id" field if the given value is not nil.
+func (eu *EntitlementUpdate) SetNillableAddonID(s *string) *EntitlementUpdate {
+	if s != nil {
+		eu.SetAddonID(*s)
+	}
+	return eu
+}
+
+// ClearAddonID clears the value of the "addon_id" field.
+func (eu *EntitlementUpdate) ClearAddonID() *EntitlementUpdate {
+	eu.mutation.ClearAddonID()
 	return eu
 }
 
@@ -206,20 +231,9 @@ func (eu *EntitlementUpdate) ClearStaticValue() *EntitlementUpdate {
 	return eu
 }
 
-// SetPlan sets the "plan" edge to the Plan entity.
-func (eu *EntitlementUpdate) SetPlan(p *Plan) *EntitlementUpdate {
-	return eu.SetPlanID(p.ID)
-}
-
 // Mutation returns the EntitlementMutation object of the builder.
 func (eu *EntitlementUpdate) Mutation() *EntitlementMutation {
 	return eu.mutation
-}
-
-// ClearPlan clears the "plan" edge to the Plan entity.
-func (eu *EntitlementUpdate) ClearPlan() *EntitlementUpdate {
-	eu.mutation.ClearPlan()
-	return eu
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -260,11 +274,6 @@ func (eu *EntitlementUpdate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (eu *EntitlementUpdate) check() error {
-	if v, ok := eu.mutation.PlanID(); ok {
-		if err := entitlement.PlanIDValidator(v); err != nil {
-			return &ValidationError{Name: "plan_id", err: fmt.Errorf(`ent: validator failed for field "Entitlement.plan_id": %w`, err)}
-		}
-	}
 	if v, ok := eu.mutation.FeatureID(); ok {
 		if err := entitlement.FeatureIDValidator(v); err != nil {
 			return &ValidationError{Name: "feature_id", err: fmt.Errorf(`ent: validator failed for field "Entitlement.feature_id": %w`, err)}
@@ -274,9 +283,6 @@ func (eu *EntitlementUpdate) check() error {
 		if err := entitlement.FeatureTypeValidator(v); err != nil {
 			return &ValidationError{Name: "feature_type", err: fmt.Errorf(`ent: validator failed for field "Entitlement.feature_type": %w`, err)}
 		}
-	}
-	if eu.mutation.PlanCleared() && len(eu.mutation.PlanIDs()) > 0 {
-		return errors.New(`ent: clearing a required unique edge "Entitlement.plan"`)
 	}
 	return nil
 }
@@ -311,6 +317,18 @@ func (eu *EntitlementUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if eu.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(entitlement.FieldEnvironmentID, field.TypeString)
 	}
+	if value, ok := eu.mutation.PlanID(); ok {
+		_spec.SetField(entitlement.FieldPlanID, field.TypeString, value)
+	}
+	if eu.mutation.PlanIDCleared() {
+		_spec.ClearField(entitlement.FieldPlanID, field.TypeString)
+	}
+	if value, ok := eu.mutation.AddonID(); ok {
+		_spec.SetField(entitlement.FieldAddonID, field.TypeString, value)
+	}
+	if eu.mutation.AddonIDCleared() {
+		_spec.ClearField(entitlement.FieldAddonID, field.TypeString)
+	}
 	if value, ok := eu.mutation.FeatureID(); ok {
 		_spec.SetField(entitlement.FieldFeatureID, field.TypeString, value)
 	}
@@ -343,35 +361,6 @@ func (eu *EntitlementUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if eu.mutation.StaticValueCleared() {
 		_spec.ClearField(entitlement.FieldStaticValue, field.TypeString)
-	}
-	if eu.mutation.PlanCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   entitlement.PlanTable,
-			Columns: []string{entitlement.PlanColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(plan.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := eu.mutation.PlanIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   entitlement.PlanTable,
-			Columns: []string{entitlement.PlanColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(plan.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, eu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -444,6 +433,32 @@ func (euo *EntitlementUpdateOne) SetNillablePlanID(s *string) *EntitlementUpdate
 	if s != nil {
 		euo.SetPlanID(*s)
 	}
+	return euo
+}
+
+// ClearPlanID clears the value of the "plan_id" field.
+func (euo *EntitlementUpdateOne) ClearPlanID() *EntitlementUpdateOne {
+	euo.mutation.ClearPlanID()
+	return euo
+}
+
+// SetAddonID sets the "addon_id" field.
+func (euo *EntitlementUpdateOne) SetAddonID(s string) *EntitlementUpdateOne {
+	euo.mutation.SetAddonID(s)
+	return euo
+}
+
+// SetNillableAddonID sets the "addon_id" field if the given value is not nil.
+func (euo *EntitlementUpdateOne) SetNillableAddonID(s *string) *EntitlementUpdateOne {
+	if s != nil {
+		euo.SetAddonID(*s)
+	}
+	return euo
+}
+
+// ClearAddonID clears the value of the "addon_id" field.
+func (euo *EntitlementUpdateOne) ClearAddonID() *EntitlementUpdateOne {
+	euo.mutation.ClearAddonID()
 	return euo
 }
 
@@ -570,20 +585,9 @@ func (euo *EntitlementUpdateOne) ClearStaticValue() *EntitlementUpdateOne {
 	return euo
 }
 
-// SetPlan sets the "plan" edge to the Plan entity.
-func (euo *EntitlementUpdateOne) SetPlan(p *Plan) *EntitlementUpdateOne {
-	return euo.SetPlanID(p.ID)
-}
-
 // Mutation returns the EntitlementMutation object of the builder.
 func (euo *EntitlementUpdateOne) Mutation() *EntitlementMutation {
 	return euo.mutation
-}
-
-// ClearPlan clears the "plan" edge to the Plan entity.
-func (euo *EntitlementUpdateOne) ClearPlan() *EntitlementUpdateOne {
-	euo.mutation.ClearPlan()
-	return euo
 }
 
 // Where appends a list predicates to the EntitlementUpdate builder.
@@ -637,11 +641,6 @@ func (euo *EntitlementUpdateOne) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (euo *EntitlementUpdateOne) check() error {
-	if v, ok := euo.mutation.PlanID(); ok {
-		if err := entitlement.PlanIDValidator(v); err != nil {
-			return &ValidationError{Name: "plan_id", err: fmt.Errorf(`ent: validator failed for field "Entitlement.plan_id": %w`, err)}
-		}
-	}
 	if v, ok := euo.mutation.FeatureID(); ok {
 		if err := entitlement.FeatureIDValidator(v); err != nil {
 			return &ValidationError{Name: "feature_id", err: fmt.Errorf(`ent: validator failed for field "Entitlement.feature_id": %w`, err)}
@@ -651,9 +650,6 @@ func (euo *EntitlementUpdateOne) check() error {
 		if err := entitlement.FeatureTypeValidator(v); err != nil {
 			return &ValidationError{Name: "feature_type", err: fmt.Errorf(`ent: validator failed for field "Entitlement.feature_type": %w`, err)}
 		}
-	}
-	if euo.mutation.PlanCleared() && len(euo.mutation.PlanIDs()) > 0 {
-		return errors.New(`ent: clearing a required unique edge "Entitlement.plan"`)
 	}
 	return nil
 }
@@ -705,6 +701,18 @@ func (euo *EntitlementUpdateOne) sqlSave(ctx context.Context) (_node *Entitlemen
 	if euo.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(entitlement.FieldEnvironmentID, field.TypeString)
 	}
+	if value, ok := euo.mutation.PlanID(); ok {
+		_spec.SetField(entitlement.FieldPlanID, field.TypeString, value)
+	}
+	if euo.mutation.PlanIDCleared() {
+		_spec.ClearField(entitlement.FieldPlanID, field.TypeString)
+	}
+	if value, ok := euo.mutation.AddonID(); ok {
+		_spec.SetField(entitlement.FieldAddonID, field.TypeString, value)
+	}
+	if euo.mutation.AddonIDCleared() {
+		_spec.ClearField(entitlement.FieldAddonID, field.TypeString)
+	}
 	if value, ok := euo.mutation.FeatureID(); ok {
 		_spec.SetField(entitlement.FieldFeatureID, field.TypeString, value)
 	}
@@ -737,35 +745,6 @@ func (euo *EntitlementUpdateOne) sqlSave(ctx context.Context) (_node *Entitlemen
 	}
 	if euo.mutation.StaticValueCleared() {
 		_spec.ClearField(entitlement.FieldStaticValue, field.TypeString)
-	}
-	if euo.mutation.PlanCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   entitlement.PlanTable,
-			Columns: []string{entitlement.PlanColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(plan.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := euo.mutation.PlanIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   entitlement.PlanTable,
-			Columns: []string{entitlement.PlanColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(plan.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_node = &Entitlement{config: euo.config}
 	_spec.Assign = _node.assignValues

@@ -14,6 +14,8 @@ import (
 // Tx is a transactional client that is created by calling Client.Tx().
 type Tx struct {
 	config
+	// Addon is the client for interacting with the Addon builders.
+	Addon *AddonClient
 	// Auth is the client for interacting with the Auth builders.
 	Auth *AuthClient
 	// BillingSequence is the client for interacting with the BillingSequence builders.
@@ -56,6 +58,8 @@ type Tx struct {
 	Secret *SecretClient
 	// Subscription is the client for interacting with the Subscription builders.
 	Subscription *SubscriptionClient
+	// SubscriptionAddon is the client for interacting with the SubscriptionAddon builders.
+	SubscriptionAddon *SubscriptionAddonClient
 	// SubscriptionLineItem is the client for interacting with the SubscriptionLineItem builders.
 	SubscriptionLineItem *SubscriptionLineItemClient
 	// SubscriptionPause is the client for interacting with the SubscriptionPause builders.
@@ -205,6 +209,7 @@ func (tx *Tx) Client() *Client {
 }
 
 func (tx *Tx) init() {
+	tx.Addon = NewAddonClient(tx.config)
 	tx.Auth = NewAuthClient(tx.config)
 	tx.BillingSequence = NewBillingSequenceClient(tx.config)
 	tx.Costsheet = NewCostsheetClient(tx.config)
@@ -226,6 +231,7 @@ func (tx *Tx) init() {
 	tx.Price = NewPriceClient(tx.config)
 	tx.Secret = NewSecretClient(tx.config)
 	tx.Subscription = NewSubscriptionClient(tx.config)
+	tx.SubscriptionAddon = NewSubscriptionAddonClient(tx.config)
 	tx.SubscriptionLineItem = NewSubscriptionLineItemClient(tx.config)
 	tx.SubscriptionPause = NewSubscriptionPauseClient(tx.config)
 	tx.SubscriptionSchedule = NewSubscriptionScheduleClient(tx.config)
@@ -244,7 +250,7 @@ func (tx *Tx) init() {
 // of them in order to commit or rollback the transaction.
 //
 // If a closed transaction is embedded in one of the generated entities, and the entity
-// applies a query, for example: Auth.QueryXXX(), the query will be executed
+// applies a query, for example: Addon.QueryXXX(), the query will be executed
 // through the driver which created this transaction.
 //
 // Note that txDriver is not goroutine safe.

@@ -47,7 +47,7 @@ func entitlementFilterFn(ctx context.Context, e *entitlement.Entitlement, filter
 	if len(f.PlanIDs) > 0 {
 		found := false
 		for _, id := range f.PlanIDs {
-			if e.PlanID == id {
+			if e.PlanID != nil && *e.PlanID == id {
 				found = true
 				break
 			}
@@ -264,6 +264,22 @@ func (s *InMemoryEntitlementStore) ListByFeatureIDs(ctx context.Context, feature
 	filter := &types.EntitlementFilter{
 		QueryFilter: types.NewNoLimitQueryFilter(),
 		FeatureIDs:  featureIDs,
+	}
+
+	// Use the existing List method
+	return s.List(ctx, filter)
+}
+
+// ListByAddonIDs retrieves all entitlements for the given addon IDs
+func (s *InMemoryEntitlementStore) ListByAddonIDs(ctx context.Context, addonIDs []string) ([]*entitlement.Entitlement, error) {
+	if len(addonIDs) == 0 {
+		return []*entitlement.Entitlement{}, nil
+	}
+
+	// Create a filter with addon IDs
+	filter := &types.EntitlementFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		AddonIDs:    addonIDs,
 	}
 
 	// Use the existing List method

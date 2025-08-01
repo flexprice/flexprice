@@ -63,7 +63,8 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 		SetAmount(p.Amount.InexactFloat64()).
 		SetCurrency(p.Currency).
 		SetDisplayAmount(p.DisplayAmount).
-		SetPlanID(p.PlanID).
+		SetNillablePlanID(p.PlanID).
+		SetNillableAddonID(p.AddonID).
 		SetType(string(p.Type)).
 		SetBillingPeriod(string(p.BillingPeriod)).
 		SetBillingPeriodCount(p.BillingPeriodCount).
@@ -373,7 +374,8 @@ func (r *priceRepository) CreateBulk(ctx context.Context, prices []*domainPrice.
 			SetAmount(p.Amount.InexactFloat64()).
 			SetCurrency(p.Currency).
 			SetDisplayAmount(p.DisplayAmount).
-			SetPlanID(p.PlanID).
+			SetNillablePlanID(p.PlanID).
+			SetNillableAddonID(p.AddonID).
 			SetType(string(p.Type)).
 			SetBillingPeriod(string(p.BillingPeriod)).
 			SetBillingPeriodCount(p.BillingPeriodCount).
@@ -510,6 +512,11 @@ func (o PriceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.P
 	// Apply plan IDs filter if specified
 	if len(f.PlanIDs) > 0 {
 		query = query.Where(price.PlanIDIn(f.PlanIDs...))
+	}
+
+	// Apply addon IDs filter if specified
+	if len(f.AddonIDs) > 0 {
+		query = query.Where(price.AddonIDIn(f.AddonIDs...))
 	}
 
 	// Apply price IDs filter if specified

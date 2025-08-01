@@ -14,7 +14,8 @@ import (
 type CreatePriceRequest struct {
 	Amount             string                   `json:"amount"`
 	Currency           string                   `json:"currency" validate:"required,len=3"`
-	PlanID             string                   `json:"plan_id,omitempty"`
+	PlanID             *string                  `json:"plan_id,omitempty"`
+	AddonID            *string                  `json:"addon_id,omitempty"`
 	Type               types.PriceType          `json:"type" validate:"required"`
 	BillingPeriod      types.BillingPeriod      `json:"billing_period" validate:"required"`
 	BillingPeriodCount int                      `json:"billing_period_count" validate:"required,min=1"`
@@ -40,6 +41,7 @@ type CreatePriceTier struct {
 
 // TODO : add all price validations
 func (r *CreatePriceRequest) Validate() error {
+
 	var err error
 	// Base validations
 	amount := decimal.Zero
@@ -63,6 +65,18 @@ func (r *CreatePriceRequest) Validate() error {
 
 	// Ensure currency is lowercase
 	r.Currency = strings.ToLower(r.Currency)
+
+	if r.PlanID == nil && r.AddonID == nil {
+		return ierr.NewError("plan_id or addon_id is required").
+			WithHint("Plan ID or Addon ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.PlanID != nil && r.AddonID != nil {
+		return ierr.NewError("only one of plan_id or addon_id should be provided").
+			WithHint("Either Plan ID or Addon ID should be provided, not both").
+			Mark(ierr.ErrValidation)
+	}
 
 	// Billing model validations
 	err = validator.ValidateRequest(r)
@@ -292,6 +306,7 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*price.Price, error) 
 		Amount:             amount,
 		Currency:           r.Currency,
 		PlanID:             r.PlanID,
+		AddonID:            r.AddonID,
 		Type:               r.Type,
 		BillingPeriod:      r.BillingPeriod,
 		BillingPeriodCount: r.BillingPeriodCount,

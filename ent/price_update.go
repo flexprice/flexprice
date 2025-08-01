@@ -134,6 +134,32 @@ func (pu *PriceUpdate) SetNillablePlanID(s *string) *PriceUpdate {
 	return pu
 }
 
+// ClearPlanID clears the value of the "plan_id" field.
+func (pu *PriceUpdate) ClearPlanID() *PriceUpdate {
+	pu.mutation.ClearPlanID()
+	return pu
+}
+
+// SetAddonID sets the "addon_id" field.
+func (pu *PriceUpdate) SetAddonID(s string) *PriceUpdate {
+	pu.mutation.SetAddonID(s)
+	return pu
+}
+
+// SetNillableAddonID sets the "addon_id" field if the given value is not nil.
+func (pu *PriceUpdate) SetNillableAddonID(s *string) *PriceUpdate {
+	if s != nil {
+		pu.SetAddonID(*s)
+	}
+	return pu
+}
+
+// ClearAddonID clears the value of the "addon_id" field.
+func (pu *PriceUpdate) ClearAddonID() *PriceUpdate {
+	pu.mutation.ClearAddonID()
+	return pu
+}
+
 // SetType sets the "type" field.
 func (pu *PriceUpdate) SetType(s string) *PriceUpdate {
 	pu.mutation.SetType(s)
@@ -442,11 +468,6 @@ func (pu *PriceUpdate) check() error {
 			return &ValidationError{Name: "display_amount", err: fmt.Errorf(`ent: validator failed for field "Price.display_amount": %w`, err)}
 		}
 	}
-	if v, ok := pu.mutation.PlanID(); ok {
-		if err := price.PlanIDValidator(v); err != nil {
-			return &ValidationError{Name: "plan_id", err: fmt.Errorf(`ent: validator failed for field "Price.plan_id": %w`, err)}
-		}
-	}
 	if v, ok := pu.mutation.GetType(); ok {
 		if err := price.TypeValidator(v); err != nil {
 			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "Price.type": %w`, err)}
@@ -519,6 +540,15 @@ func (pu *PriceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := pu.mutation.PlanID(); ok {
 		_spec.SetField(price.FieldPlanID, field.TypeString, value)
+	}
+	if pu.mutation.PlanIDCleared() {
+		_spec.ClearField(price.FieldPlanID, field.TypeString)
+	}
+	if value, ok := pu.mutation.AddonID(); ok {
+		_spec.SetField(price.FieldAddonID, field.TypeString, value)
+	}
+	if pu.mutation.AddonIDCleared() {
+		_spec.ClearField(price.FieldAddonID, field.TypeString)
 	}
 	if value, ok := pu.mutation.GetType(); ok {
 		_spec.SetField(price.FieldType, field.TypeString, value)
@@ -759,6 +789,32 @@ func (puo *PriceUpdateOne) SetNillablePlanID(s *string) *PriceUpdateOne {
 	if s != nil {
 		puo.SetPlanID(*s)
 	}
+	return puo
+}
+
+// ClearPlanID clears the value of the "plan_id" field.
+func (puo *PriceUpdateOne) ClearPlanID() *PriceUpdateOne {
+	puo.mutation.ClearPlanID()
+	return puo
+}
+
+// SetAddonID sets the "addon_id" field.
+func (puo *PriceUpdateOne) SetAddonID(s string) *PriceUpdateOne {
+	puo.mutation.SetAddonID(s)
+	return puo
+}
+
+// SetNillableAddonID sets the "addon_id" field if the given value is not nil.
+func (puo *PriceUpdateOne) SetNillableAddonID(s *string) *PriceUpdateOne {
+	if s != nil {
+		puo.SetAddonID(*s)
+	}
+	return puo
+}
+
+// ClearAddonID clears the value of the "addon_id" field.
+func (puo *PriceUpdateOne) ClearAddonID() *PriceUpdateOne {
+	puo.mutation.ClearAddonID()
 	return puo
 }
 
@@ -1083,11 +1139,6 @@ func (puo *PriceUpdateOne) check() error {
 			return &ValidationError{Name: "display_amount", err: fmt.Errorf(`ent: validator failed for field "Price.display_amount": %w`, err)}
 		}
 	}
-	if v, ok := puo.mutation.PlanID(); ok {
-		if err := price.PlanIDValidator(v); err != nil {
-			return &ValidationError{Name: "plan_id", err: fmt.Errorf(`ent: validator failed for field "Price.plan_id": %w`, err)}
-		}
-	}
 	if v, ok := puo.mutation.GetType(); ok {
 		if err := price.TypeValidator(v); err != nil {
 			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "Price.type": %w`, err)}
@@ -1177,6 +1228,15 @@ func (puo *PriceUpdateOne) sqlSave(ctx context.Context) (_node *Price, err error
 	}
 	if value, ok := puo.mutation.PlanID(); ok {
 		_spec.SetField(price.FieldPlanID, field.TypeString, value)
+	}
+	if puo.mutation.PlanIDCleared() {
+		_spec.ClearField(price.FieldPlanID, field.TypeString)
+	}
+	if value, ok := puo.mutation.AddonID(); ok {
+		_spec.SetField(price.FieldAddonID, field.TypeString, value)
+	}
+	if puo.mutation.AddonIDCleared() {
+		_spec.ClearField(price.FieldAddonID, field.TypeString)
 	}
 	if value, ok := puo.mutation.GetType(); ok {
 		_spec.SetField(price.FieldType, field.TypeString, value)

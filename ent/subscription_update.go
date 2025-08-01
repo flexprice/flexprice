@@ -14,6 +14,7 @@ import (
 	"github.com/flexprice/flexprice/ent/creditgrant"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/subscription"
+	"github.com/flexprice/flexprice/ent/subscriptionaddon"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
 	"github.com/flexprice/flexprice/ent/subscriptionschedule"
@@ -420,6 +421,21 @@ func (su *SubscriptionUpdate) SetSchedule(s *SubscriptionSchedule) *Subscription
 	return su.SetScheduleID(s.ID)
 }
 
+// AddSubscriptionAddonIDs adds the "subscription_addons" edge to the SubscriptionAddon entity by IDs.
+func (su *SubscriptionUpdate) AddSubscriptionAddonIDs(ids ...string) *SubscriptionUpdate {
+	su.mutation.AddSubscriptionAddonIDs(ids...)
+	return su
+}
+
+// AddSubscriptionAddons adds the "subscription_addons" edges to the SubscriptionAddon entity.
+func (su *SubscriptionUpdate) AddSubscriptionAddons(s ...*SubscriptionAddon) *SubscriptionUpdate {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return su.AddSubscriptionAddonIDs(ids...)
+}
+
 // Mutation returns the SubscriptionMutation object of the builder.
 func (su *SubscriptionUpdate) Mutation() *SubscriptionMutation {
 	return su.mutation
@@ -492,6 +508,27 @@ func (su *SubscriptionUpdate) RemoveCreditGrants(c ...*CreditGrant) *Subscriptio
 func (su *SubscriptionUpdate) ClearSchedule() *SubscriptionUpdate {
 	su.mutation.ClearSchedule()
 	return su
+}
+
+// ClearSubscriptionAddons clears all "subscription_addons" edges to the SubscriptionAddon entity.
+func (su *SubscriptionUpdate) ClearSubscriptionAddons() *SubscriptionUpdate {
+	su.mutation.ClearSubscriptionAddons()
+	return su
+}
+
+// RemoveSubscriptionAddonIDs removes the "subscription_addons" edge to SubscriptionAddon entities by IDs.
+func (su *SubscriptionUpdate) RemoveSubscriptionAddonIDs(ids ...string) *SubscriptionUpdate {
+	su.mutation.RemoveSubscriptionAddonIDs(ids...)
+	return su
+}
+
+// RemoveSubscriptionAddons removes "subscription_addons" edges to SubscriptionAddon entities.
+func (su *SubscriptionUpdate) RemoveSubscriptionAddons(s ...*SubscriptionAddon) *SubscriptionUpdate {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return su.RemoveSubscriptionAddonIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -795,6 +832,51 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(subscriptionschedule.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if su.mutation.SubscriptionAddonsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.SubscriptionAddonsTable,
+			Columns: []string{subscription.SubscriptionAddonsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionaddon.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := su.mutation.RemovedSubscriptionAddonsIDs(); len(nodes) > 0 && !su.mutation.SubscriptionAddonsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.SubscriptionAddonsTable,
+			Columns: []string{subscription.SubscriptionAddonsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionaddon.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := su.mutation.SubscriptionAddonsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.SubscriptionAddonsTable,
+			Columns: []string{subscription.SubscriptionAddonsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionaddon.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {
@@ -1209,6 +1291,21 @@ func (suo *SubscriptionUpdateOne) SetSchedule(s *SubscriptionSchedule) *Subscrip
 	return suo.SetScheduleID(s.ID)
 }
 
+// AddSubscriptionAddonIDs adds the "subscription_addons" edge to the SubscriptionAddon entity by IDs.
+func (suo *SubscriptionUpdateOne) AddSubscriptionAddonIDs(ids ...string) *SubscriptionUpdateOne {
+	suo.mutation.AddSubscriptionAddonIDs(ids...)
+	return suo
+}
+
+// AddSubscriptionAddons adds the "subscription_addons" edges to the SubscriptionAddon entity.
+func (suo *SubscriptionUpdateOne) AddSubscriptionAddons(s ...*SubscriptionAddon) *SubscriptionUpdateOne {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return suo.AddSubscriptionAddonIDs(ids...)
+}
+
 // Mutation returns the SubscriptionMutation object of the builder.
 func (suo *SubscriptionUpdateOne) Mutation() *SubscriptionMutation {
 	return suo.mutation
@@ -1281,6 +1378,27 @@ func (suo *SubscriptionUpdateOne) RemoveCreditGrants(c ...*CreditGrant) *Subscri
 func (suo *SubscriptionUpdateOne) ClearSchedule() *SubscriptionUpdateOne {
 	suo.mutation.ClearSchedule()
 	return suo
+}
+
+// ClearSubscriptionAddons clears all "subscription_addons" edges to the SubscriptionAddon entity.
+func (suo *SubscriptionUpdateOne) ClearSubscriptionAddons() *SubscriptionUpdateOne {
+	suo.mutation.ClearSubscriptionAddons()
+	return suo
+}
+
+// RemoveSubscriptionAddonIDs removes the "subscription_addons" edge to SubscriptionAddon entities by IDs.
+func (suo *SubscriptionUpdateOne) RemoveSubscriptionAddonIDs(ids ...string) *SubscriptionUpdateOne {
+	suo.mutation.RemoveSubscriptionAddonIDs(ids...)
+	return suo
+}
+
+// RemoveSubscriptionAddons removes "subscription_addons" edges to SubscriptionAddon entities.
+func (suo *SubscriptionUpdateOne) RemoveSubscriptionAddons(s ...*SubscriptionAddon) *SubscriptionUpdateOne {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return suo.RemoveSubscriptionAddonIDs(ids...)
 }
 
 // Where appends a list predicates to the SubscriptionUpdate builder.
@@ -1614,6 +1732,51 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(subscriptionschedule.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if suo.mutation.SubscriptionAddonsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.SubscriptionAddonsTable,
+			Columns: []string{subscription.SubscriptionAddonsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionaddon.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := suo.mutation.RemovedSubscriptionAddonsIDs(); len(nodes) > 0 && !suo.mutation.SubscriptionAddonsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.SubscriptionAddonsTable,
+			Columns: []string{subscription.SubscriptionAddonsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionaddon.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := suo.mutation.SubscriptionAddonsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.SubscriptionAddonsTable,
+			Columns: []string{subscription.SubscriptionAddonsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionaddon.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

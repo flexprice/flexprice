@@ -36,6 +36,8 @@ const (
 	FieldDisplayAmount = "display_amount"
 	// FieldPlanID holds the string denoting the plan_id field in the database.
 	FieldPlanID = "plan_id"
+	// FieldAddonID holds the string denoting the addon_id field in the database.
+	FieldAddonID = "addon_id"
 	// FieldType holds the string denoting the type field in the database.
 	FieldType = "type"
 	// FieldBillingPeriod holds the string denoting the billing_period field in the database.
@@ -93,6 +95,7 @@ var Columns = []string{
 	FieldCurrency,
 	FieldDisplayAmount,
 	FieldPlanID,
+	FieldAddonID,
 	FieldType,
 	FieldBillingPeriod,
 	FieldBillingPeriodCount,
@@ -110,10 +113,21 @@ var Columns = []string{
 	FieldMetadata,
 }
 
+// ForeignKeys holds the SQL foreign-keys that are owned by the "prices"
+// table and are not defined as standalone fields in the schema.
+var ForeignKeys = []string{
+	"addon_prices",
+}
+
 // ValidColumn reports if the column name is valid (part of the table columns).
 func ValidColumn(column string) bool {
 	for i := range Columns {
 		if column == Columns[i] {
+			return true
+		}
+	}
+	for i := range ForeignKeys {
+		if column == ForeignKeys[i] {
 			return true
 		}
 	}
@@ -137,8 +151,6 @@ var (
 	CurrencyValidator func(string) error
 	// DisplayAmountValidator is a validator for the "display_amount" field. It is called by the builders before save.
 	DisplayAmountValidator func(string) error
-	// PlanIDValidator is a validator for the "plan_id" field. It is called by the builders before save.
-	PlanIDValidator func(string) error
 	// TypeValidator is a validator for the "type" field. It is called by the builders before save.
 	TypeValidator func(string) error
 	// BillingPeriodValidator is a validator for the "billing_period" field. It is called by the builders before save.
@@ -214,6 +226,11 @@ func ByDisplayAmount(opts ...sql.OrderTermOption) OrderOption {
 // ByPlanID orders the results by the plan_id field.
 func ByPlanID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPlanID, opts...).ToFunc()
+}
+
+// ByAddonID orders the results by the addon_id field.
+func ByAddonID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAddonID, opts...).ToFunc()
 }
 
 // ByType orders the results by the type field.

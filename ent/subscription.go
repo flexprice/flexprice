@@ -100,9 +100,11 @@ type SubscriptionEdges struct {
 	CreditGrants []*CreditGrant `json:"credit_grants,omitempty"`
 	// Schedule holds the value of the schedule edge.
 	Schedule *SubscriptionSchedule `json:"schedule,omitempty"`
+	// SubscriptionAddons holds the value of the subscription_addons edge.
+	SubscriptionAddons []*SubscriptionAddon `json:"subscription_addons,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [4]bool
+	loadedTypes [5]bool
 }
 
 // LineItemsOrErr returns the LineItems value or an error if the edge
@@ -141,6 +143,15 @@ func (e SubscriptionEdges) ScheduleOrErr() (*SubscriptionSchedule, error) {
 		return nil, &NotFoundError{label: subscriptionschedule.Label}
 	}
 	return nil, &NotLoadedError{edge: "schedule"}
+}
+
+// SubscriptionAddonsOrErr returns the SubscriptionAddons value or an error if the edge
+// was not loaded in eager-loading.
+func (e SubscriptionEdges) SubscriptionAddonsOrErr() ([]*SubscriptionAddon, error) {
+	if e.loadedTypes[4] {
+		return e.SubscriptionAddons, nil
+	}
+	return nil, &NotLoadedError{edge: "subscription_addons"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -414,6 +425,11 @@ func (s *Subscription) QueryCreditGrants() *CreditGrantQuery {
 // QuerySchedule queries the "schedule" edge of the Subscription entity.
 func (s *Subscription) QuerySchedule() *SubscriptionScheduleQuery {
 	return NewSubscriptionClient(s.config).QuerySchedule(s)
+}
+
+// QuerySubscriptionAddons queries the "subscription_addons" edge of the Subscription entity.
+func (s *Subscription) QuerySubscriptionAddons() *SubscriptionAddonQuery {
+	return NewSubscriptionClient(s.config).QuerySubscriptionAddons(s)
 }
 
 // Update returns a builder for updating this Subscription.

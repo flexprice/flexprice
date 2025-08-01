@@ -6,29 +6,32 @@ import (
 	"github.com/flexprice/flexprice/ent"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
 // InvoiceLineItem represents a single line item in an invoice
 type InvoiceLineItem struct {
-	ID               string          `json:"id"`
-	InvoiceID        string          `json:"invoice_id"`
-	CustomerID       string          `json:"customer_id"`
-	SubscriptionID   *string         `json:"subscription_id,omitempty"`
-	PlanID           *string         `json:"plan_id,omitempty"`
-	PlanDisplayName  *string         `json:"plan_display_name,omitempty"`
-	PriceID          *string         `json:"price_id,omitempty"`
-	PriceType        *string         `json:"price_type,omitempty"`
-	MeterID          *string         `json:"meter_id,omitempty"`
-	MeterDisplayName *string         `json:"meter_display_name,omitempty"`
-	DisplayName      *string         `json:"display_name,omitempty"`
-	Amount           decimal.Decimal `json:"amount"`
-	Quantity         decimal.Decimal `json:"quantity"`
-	Currency         string          `json:"currency"`
-	PeriodStart      *time.Time      `json:"period_start,omitempty"`
-	PeriodEnd        *time.Time      `json:"period_end,omitempty"`
-	Metadata         types.Metadata  `json:"metadata,omitempty"`
-	EnvironmentID    string          `json:"environment_id"`
+	ID               string                           `json:"id"`
+	InvoiceID        string                           `json:"invoice_id"`
+	CustomerID       string                           `json:"customer_id"`
+	SubscriptionID   *string                          `json:"subscription_id,omitempty"`
+	PlanID           *string                          `json:"plan_id,omitempty"`
+	SourceType       *types.InvoiceLineItemSourceType `json:"source_type,omitempty"`
+	AddonID          *string                          `json:"addon_id,omitempty"`
+	PlanDisplayName  *string                          `json:"plan_display_name,omitempty"`
+	PriceID          *string                          `json:"price_id,omitempty"`
+	PriceType        *string                          `json:"price_type,omitempty"`
+	MeterID          *string                          `json:"meter_id,omitempty"`
+	MeterDisplayName *string                          `json:"meter_display_name,omitempty"`
+	DisplayName      *string                          `json:"display_name,omitempty"`
+	Amount           decimal.Decimal                  `json:"amount"`
+	Quantity         decimal.Decimal                  `json:"quantity"`
+	Currency         string                           `json:"currency"`
+	PeriodStart      *time.Time                       `json:"period_start,omitempty"`
+	PeriodEnd        *time.Time                       `json:"period_end,omitempty"`
+	Metadata         types.Metadata                   `json:"metadata,omitempty"`
+	EnvironmentID    string                           `json:"environment_id"`
 	types.BaseModel
 }
 
@@ -38,12 +41,19 @@ func (i *InvoiceLineItem) FromEnt(e *ent.InvoiceLineItem) *InvoiceLineItem {
 		return nil
 	}
 
+	var sourceType types.InvoiceLineItemSourceType
+	if e.SourceType != nil {
+		sourceType = types.InvoiceLineItemSourceType(*e.SourceType)
+	}
+
 	return &InvoiceLineItem{
 		ID:               e.ID,
 		InvoiceID:        e.InvoiceID,
 		CustomerID:       e.CustomerID,
 		SubscriptionID:   e.SubscriptionID,
 		PlanID:           e.PlanID,
+		SourceType:       lo.ToPtr(sourceType),
+		AddonID:          e.AddonID,
 		PlanDisplayName:  e.PlanDisplayName,
 		PriceID:          e.PriceID,
 		PriceType:        e.PriceType,
