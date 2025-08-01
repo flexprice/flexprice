@@ -145,3 +145,7 @@ func NewAddonRepository(p RepositoryParams) addon.Repository {
 func NewSubscriptionAddonRepository(p RepositoryParams) addon.SubscriptionAddonRepository {
 	return entRepo.NewSubscriptionAddonRepository(p.EntClient, p.Logger, p.Cache)
 }
+
+func NewSubscriptionLineItemRepository(p RepositoryParams) subscription.LineItemRepository {
+	return entRepo.NewSubscriptionLineItemRepository(p.EntClient)
+}

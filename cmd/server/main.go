@@ -139,6 +139,7 @@ func main() {
 			repository.NewCreditNoteLineItemRepository,
 			repository.NewAddonRepository,
 			repository.NewSubscriptionAddonRepository,
+			repository.NewSubscriptionLineItemRepository,
 
 			// PubSub
 			pubsubRouter.NewRouter,

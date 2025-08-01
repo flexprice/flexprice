@@ -115,6 +115,7 @@ func NewServiceParams(
 	costSheetRepo costsheet.Repository,
 	addonRepo addon.Repository,
 	subscriptionAddonRepo addon.SubscriptionAddonRepository,
+	lineItemRepo subscription.LineItemRepository,
 ) ServiceParams {
 	return ServiceParams{
 		Logger:                     logger,
@@ -151,5 +152,6 @@ func NewServiceParams(
 		CreditNoteLineItemRepo:     creditNoteLineItemRepo,
 		AddonRepo:                  addonRepo,
 		SubscriptionAddonRepo:      subscriptionAddonRepo,
+		LineItemRepo:               lineItemRepo,
 	}
 }
