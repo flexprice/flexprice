@@ -5,6 +5,9 @@ import (
 	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/domain/auth"
 	"github.com/flexprice/flexprice/internal/domain/costsheet"
+	"github.com/flexprice/flexprice/internal/domain/coupon"
+	"github.com/flexprice/flexprice/internal/domain/coupon_application"
+	"github.com/flexprice/flexprice/internal/domain/coupon_association"
 	"github.com/flexprice/flexprice/internal/domain/creditgrant"
 	"github.com/flexprice/flexprice/internal/domain/creditgrantapplication"
 	"github.com/flexprice/flexprice/internal/domain/creditnote"
@@ -127,6 +130,18 @@ func NewCostSheetRepository(p RepositoryParams) costsheet.Repository {
 
 func NewCreditGrantApplicationRepository(p RepositoryParams) creditgrantapplication.Repository {
 	return entRepo.NewCreditGrantApplicationRepository(p.EntClient, p.Logger, p.Cache)
+}
+
+func NewCouponRepository(p RepositoryParams) coupon.Repository {
+	return entRepo.NewCouponRepository(p.EntClient, p.Logger, p.Cache)
+}
+
+func NewCouponAssociationRepository(p RepositoryParams) coupon_association.Repository {
+	return entRepo.NewCouponAssociationRepository(p.EntClient, p.Logger, p.Cache)
+}
+
+func NewCouponApplicationRepository(p RepositoryParams) coupon_application.Repository {
+	return entRepo.NewCouponApplicationRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewCreditNoteRepository(p RepositoryParams) creditnote.Repository {

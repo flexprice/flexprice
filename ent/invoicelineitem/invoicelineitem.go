@@ -63,6 +63,8 @@ const (
 	FieldMetadata = "metadata"
 	// EdgeInvoice holds the string denoting the invoice edge name in mutations.
 	EdgeInvoice = "invoice"
+	// EdgeCouponApplications holds the string denoting the coupon_applications edge name in mutations.
+	EdgeCouponApplications = "coupon_applications"
 	// Table holds the table name of the invoicelineitem in the database.
 	Table = "invoice_line_items"
 	// InvoiceTable is the table that holds the invoice relation/edge.
@@ -72,6 +74,13 @@ const (
 	InvoiceInverseTable = "invoices"
 	// InvoiceColumn is the table column denoting the invoice relation/edge.
 	InvoiceColumn = "invoice_id"
+	// CouponApplicationsTable is the table that holds the coupon_applications relation/edge.
+	CouponApplicationsTable = "coupon_applications"
+	// CouponApplicationsInverseTable is the table name for the CouponApplication entity.
+	// It exists in this package in order to avoid circular dependency with the "couponapplication" package.
+	CouponApplicationsInverseTable = "coupon_applications"
+	// CouponApplicationsColumn is the table column denoting the coupon_applications relation/edge.
+	CouponApplicationsColumn = "invoice_line_item_id"
 )
 
 // Columns holds all SQL columns for invoicelineitem fields.
@@ -261,10 +270,31 @@ func ByInvoiceField(field string, opts ...sql.OrderTermOption) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newInvoiceStep(), sql.OrderByField(field, opts...))
 	}
 }
+
+// ByCouponApplicationsCount orders the results by coupon_applications count.
+func ByCouponApplicationsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newCouponApplicationsStep(), opts...)
+	}
+}
+
+// ByCouponApplications orders the results by coupon_applications terms.
+func ByCouponApplications(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newCouponApplicationsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
 func newInvoiceStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(InvoiceInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.M2O, true, InvoiceTable, InvoiceColumn),
+	)
+}
+func newCouponApplicationsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(CouponApplicationsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, CouponApplicationsTable, CouponApplicationsColumn),
 	)
 }

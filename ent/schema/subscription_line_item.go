@@ -121,6 +121,8 @@ func (SubscriptionLineItem) Edges() []ent.Edge {
 			Unique().
 			Required().
 			Immutable(),
+		edge.To("coupon_associations", CouponAssociation.Type).
+			Comment("Subscription line item can have multiple coupon associations"),
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/flexprice/flexprice/ent/couponassociation"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/shopspring/decimal"
@@ -318,9 +319,45 @@ func (sliu *SubscriptionLineItemUpdate) ClearMetadata() *SubscriptionLineItemUpd
 	return sliu
 }
 
+// AddCouponAssociationIDs adds the "coupon_associations" edge to the CouponAssociation entity by IDs.
+func (sliu *SubscriptionLineItemUpdate) AddCouponAssociationIDs(ids ...string) *SubscriptionLineItemUpdate {
+	sliu.mutation.AddCouponAssociationIDs(ids...)
+	return sliu
+}
+
+// AddCouponAssociations adds the "coupon_associations" edges to the CouponAssociation entity.
+func (sliu *SubscriptionLineItemUpdate) AddCouponAssociations(c ...*CouponAssociation) *SubscriptionLineItemUpdate {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return sliu.AddCouponAssociationIDs(ids...)
+}
+
 // Mutation returns the SubscriptionLineItemMutation object of the builder.
 func (sliu *SubscriptionLineItemUpdate) Mutation() *SubscriptionLineItemMutation {
 	return sliu.mutation
+}
+
+// ClearCouponAssociations clears all "coupon_associations" edges to the CouponAssociation entity.
+func (sliu *SubscriptionLineItemUpdate) ClearCouponAssociations() *SubscriptionLineItemUpdate {
+	sliu.mutation.ClearCouponAssociations()
+	return sliu
+}
+
+// RemoveCouponAssociationIDs removes the "coupon_associations" edge to CouponAssociation entities by IDs.
+func (sliu *SubscriptionLineItemUpdate) RemoveCouponAssociationIDs(ids ...string) *SubscriptionLineItemUpdate {
+	sliu.mutation.RemoveCouponAssociationIDs(ids...)
+	return sliu
+}
+
+// RemoveCouponAssociations removes "coupon_associations" edges to CouponAssociation entities.
+func (sliu *SubscriptionLineItemUpdate) RemoveCouponAssociations(c ...*CouponAssociation) *SubscriptionLineItemUpdate {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return sliu.RemoveCouponAssociationIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -486,6 +523,51 @@ func (sliu *SubscriptionLineItemUpdate) sqlSave(ctx context.Context) (n int, err
 	}
 	if sliu.mutation.MetadataCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldMetadata, field.TypeJSON)
+	}
+	if sliu.mutation.CouponAssociationsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscriptionlineitem.CouponAssociationsTable,
+			Columns: []string{subscriptionlineitem.CouponAssociationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(couponassociation.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := sliu.mutation.RemovedCouponAssociationsIDs(); len(nodes) > 0 && !sliu.mutation.CouponAssociationsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscriptionlineitem.CouponAssociationsTable,
+			Columns: []string{subscriptionlineitem.CouponAssociationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(couponassociation.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := sliu.mutation.CouponAssociationsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscriptionlineitem.CouponAssociationsTable,
+			Columns: []string{subscriptionlineitem.CouponAssociationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(couponassociation.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, sliu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -796,9 +878,45 @@ func (sliuo *SubscriptionLineItemUpdateOne) ClearMetadata() *SubscriptionLineIte
 	return sliuo
 }
 
+// AddCouponAssociationIDs adds the "coupon_associations" edge to the CouponAssociation entity by IDs.
+func (sliuo *SubscriptionLineItemUpdateOne) AddCouponAssociationIDs(ids ...string) *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.AddCouponAssociationIDs(ids...)
+	return sliuo
+}
+
+// AddCouponAssociations adds the "coupon_associations" edges to the CouponAssociation entity.
+func (sliuo *SubscriptionLineItemUpdateOne) AddCouponAssociations(c ...*CouponAssociation) *SubscriptionLineItemUpdateOne {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return sliuo.AddCouponAssociationIDs(ids...)
+}
+
 // Mutation returns the SubscriptionLineItemMutation object of the builder.
 func (sliuo *SubscriptionLineItemUpdateOne) Mutation() *SubscriptionLineItemMutation {
 	return sliuo.mutation
+}
+
+// ClearCouponAssociations clears all "coupon_associations" edges to the CouponAssociation entity.
+func (sliuo *SubscriptionLineItemUpdateOne) ClearCouponAssociations() *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.ClearCouponAssociations()
+	return sliuo
+}
+
+// RemoveCouponAssociationIDs removes the "coupon_associations" edge to CouponAssociation entities by IDs.
+func (sliuo *SubscriptionLineItemUpdateOne) RemoveCouponAssociationIDs(ids ...string) *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.RemoveCouponAssociationIDs(ids...)
+	return sliuo
+}
+
+// RemoveCouponAssociations removes "coupon_associations" edges to CouponAssociation entities.
+func (sliuo *SubscriptionLineItemUpdateOne) RemoveCouponAssociations(c ...*CouponAssociation) *SubscriptionLineItemUpdateOne {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return sliuo.RemoveCouponAssociationIDs(ids...)
 }
 
 // Where appends a list predicates to the SubscriptionLineItemUpdate builder.
@@ -994,6 +1112,51 @@ func (sliuo *SubscriptionLineItemUpdateOne) sqlSave(ctx context.Context) (_node 
 	}
 	if sliuo.mutation.MetadataCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldMetadata, field.TypeJSON)
+	}
+	if sliuo.mutation.CouponAssociationsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscriptionlineitem.CouponAssociationsTable,
+			Columns: []string{subscriptionlineitem.CouponAssociationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(couponassociation.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := sliuo.mutation.RemovedCouponAssociationsIDs(); len(nodes) > 0 && !sliuo.mutation.CouponAssociationsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscriptionlineitem.CouponAssociationsTable,
+			Columns: []string{subscriptionlineitem.CouponAssociationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(couponassociation.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := sliuo.mutation.CouponAssociationsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscriptionlineitem.CouponAssociationsTable,
+			Columns: []string{subscriptionlineitem.CouponAssociationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(couponassociation.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_node = &SubscriptionLineItem{config: sliuo.config}
 	_spec.Assign = _node.assignValues

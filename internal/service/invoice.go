@@ -177,6 +177,21 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 			return err
 		}
 
+		// Apply coupons if this is a subscription invoice or if coupons are provided
+		if req.SubscriptionID != nil || len(req.Coupons) > 0 {
+			s.Logger.Infow("applying coupons to invoice",
+				"invoice_id", inv.ID,
+				"subscription_id", req.SubscriptionID,
+				"customer_id", inv.CustomerID,
+				"period_start", inv.PeriodStart,
+				"period_end", inv.PeriodEnd,
+				"standalone_coupons", len(req.Coupons),
+			)
+			if err := s.applyCouponsToInvoice(ctx, inv, req); err != nil {
+				return err
+			}
+		}
+
 		// Convert to response
 		resp = dto.NewInvoiceResponse(inv)
 		return nil
@@ -232,6 +247,18 @@ func (s *invoiceService) GetInvoice(ctx context.Context, id string) (*dto.Invoic
 			return nil, err
 		}
 		response.WithCustomer(&dto.CustomerResponse{Customer: customer})
+	}
+
+	// Get coupon applications for the invoice
+	couponService := NewCouponService(s.ServiceParams)
+	couponApplications, err := couponService.GetCouponApplicationsByInvoice(ctx, inv.ID)
+	if err != nil {
+		s.Logger.Errorw("failed to get coupon applications for invoice",
+			"invoice_id", inv.ID,
+			"error", err)
+		// Don't fail the entire request if coupon applications can't be retrieved
+	} else {
+		response.WithCouponApplications(couponApplications)
 	}
 
 	return response, nil
@@ -1317,4 +1344,65 @@ func (s *invoiceService) RecalculateInvoice(ctx context.Context, id string, fina
 
 	// Return updated invoice
 	return s.GetInvoice(ctx, id)
+}
+
+// handleCouponOverrides handles coupon overrides for an invoice
+func (s *invoiceService) applyCouponsToInvoice(ctx context.Context, inv *invoice.Invoice, req dto.CreateInvoiceRequest) error {
+	// Use coupon service to prepare and apply coupons
+	couponService := NewCouponService(s.ServiceParams)
+
+	// Prepare coupons for the invoice
+	couponsWithAssociations, err := couponService.PrepareCouponsForInvoice(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	// Apply coupons to the invoice
+	couponResult, err := couponService.ApplyCouponsOnInvoice(ctx, inv, couponsWithAssociations)
+	if err != nil {
+		return err
+	}
+
+	// Update the invoice with calculated discount amounts
+	inv.TotalDiscount = couponResult.TotalDiscountAmount
+
+	// Calculate new total, ensuring it doesn't go below zero
+	originalTotal := inv.Total
+	newTotal := originalTotal.Sub(couponResult.TotalDiscountAmount)
+
+	// Ensure total doesn't go negative
+	if newTotal.LessThan(decimal.Zero) {
+		s.Logger.Warnw("discount amount exceeds invoice total, capping at zero",
+			"invoice_id", inv.ID,
+			"original_total", originalTotal,
+			"total_discount", couponResult.TotalDiscountAmount,
+			"calculated_total", newTotal)
+		newTotal = decimal.Zero
+		// Adjust the total discount to not exceed the original total
+		inv.TotalDiscount = originalTotal
+	}
+
+	inv.Total = newTotal
+
+	// Update AmountDue and AmountRemaining to reflect new total
+	inv.AmountDue = newTotal
+	inv.AmountRemaining = newTotal.Sub(inv.AmountPaid)
+
+	// Update the invoice in the database
+	if err := s.InvoiceRepo.Update(ctx, inv); err != nil {
+		s.Logger.Errorw("failed to update invoice with coupon amounts",
+			"error", err,
+			"invoice_id", inv.ID,
+			"total_discount", couponResult.TotalDiscountAmount,
+			"new_total", inv.Total)
+		return err
+	}
+
+	s.Logger.Infow("successfully updated invoice with coupon discounts",
+		"invoice_id", inv.ID,
+		"original_total", originalTotal,
+		"total_discount", inv.TotalDiscount,
+		"new_total", inv.Total)
+
+	return nil
 }

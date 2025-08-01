@@ -109,7 +109,13 @@ func (Invoice) Fields() []ent.Field {
 			}).
 			Optional().
 			Default(decimal.Zero),
-
+		field.Other("total_discount", decimal.Decimal{}).
+			SchemaType(map[string]string{
+				"postgres": "numeric(20,8)",
+			}).
+			Optional().
+			Nillable().
+			Default(decimal.Zero),
 		field.Other("total", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(20,8)",
@@ -182,6 +188,8 @@ func (Invoice) Fields() []ent.Field {
 func (Invoice) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.To("line_items", InvoiceLineItem.Type),
+		edge.To("coupon_applications", CouponApplication.Type).
+			Comment("Invoice can have multiple coupon applications"),
 	}
 }
 

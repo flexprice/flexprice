@@ -1679,6 +1679,29 @@ func HasSubscriptionWith(preds ...predicate.Subscription) predicate.Subscription
 	})
 }
 
+// HasCouponAssociations applies the HasEdge predicate on the "coupon_associations" edge.
+func HasCouponAssociations() predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, CouponAssociationsTable, CouponAssociationsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasCouponAssociationsWith applies the HasEdge predicate on the "coupon_associations" edge with a given conditions (other predicates).
+func HasCouponAssociationsWith(preds ...predicate.CouponAssociation) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(func(s *sql.Selector) {
+		step := newCouponAssociationsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.SubscriptionLineItem) predicate.SubscriptionLineItem {
 	return predicate.SubscriptionLineItem(sql.AndPredicates(predicates...))

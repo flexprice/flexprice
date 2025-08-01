@@ -40,6 +40,11 @@ type SubscriptionService interface {
 	UpdateSubscriptionSchedule(ctx context.Context, id string, req *dto.UpdateSubscriptionScheduleRequest) (*dto.SubscriptionScheduleResponse, error)
 	AddSchedulePhase(ctx context.Context, scheduleID string, req *dto.AddSchedulePhaseRequest) (*dto.SubscriptionScheduleResponse, error)
 	AddSubscriptionPhase(ctx context.Context, subscriptionID string, req *dto.AddSchedulePhaseRequest) (*dto.SubscriptionScheduleResponse, error)
+
+	// Coupon-related methods
+	ApplyCouponsToSubscription(ctx context.Context, subscriptionID string, couponIDs []string) error
+	GetSubscriptionCouponAssociations(ctx context.Context, subscriptionID string) ([]*dto.CouponAssociationResponse, error)
+	RemoveCouponFromSubscription(ctx context.Context, subscriptionID string, couponID string) error
 }
 
 type subscriptionService struct {
@@ -314,6 +319,12 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			}
 		}
 
+		// Apply coupons to the subscription
+		err = s.ApplyCouponsToSubscription(ctx, sub.ID, req.SubscriptionCoupons)
+		if err != nil {
+			return err
+		}
+
 		// Create invoice for the subscription (in case it has advance charges)
 		_, err = invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
 			SubscriptionID: sub.ID,
@@ -438,6 +449,17 @@ func (s *subscriptionService) GetSubscription(ctx context.Context, id string) (*
 	schedule, err := s.GetScheduleBySubscriptionID(ctx, id)
 	if err == nil && schedule != nil {
 		response.Schedule = schedule
+	}
+
+	// expand coupon associations
+	couponService := NewCouponService(s.ServiceParams)
+	couponAssociations, err := couponService.GetCouponAssociationsBySubscription(ctx, id)
+	if err != nil {
+		s.Logger.Errorw("failed to get coupon associations for subscription",
+			"subscription_id", id,
+			"error", err)
+	} else {
+		response.CouponAssociations = couponAssociations
 	}
 
 	return response, nil
@@ -2501,4 +2523,88 @@ func (s *subscriptionService) handleSubscriptionPause(ctx context.Context, subsc
 func (s *subscriptionService) handleSubscriptionResume(ctx context.Context, subscriptionID string) error {
 	// Process any missed recurring grants
 	return nil
+}
+
+// ApplyCouponsToSubscription applies coupons to a subscription
+func (s *subscriptionService) ApplyCouponsToSubscription(ctx context.Context, subscriptionID string, couponIDs []string) error {
+	if len(couponIDs) == 0 {
+		return nil
+	}
+
+	s.Logger.Infow("handling subscription-level coupon associations",
+		"subscription_id", subscriptionID,
+		"coupon_count", len(couponIDs))
+
+	// Create coupon service instance
+	couponService := NewCouponService(s.ServiceParams)
+
+	// Apply coupons to subscription
+	_, err := couponService.ApplyCouponToSubscription(ctx, couponIDs, subscriptionID)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to apply coupons to subscription").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_id": subscriptionID,
+				"coupon_ids":      couponIDs,
+			}).
+			Mark(ierr.ErrInternal)
+	}
+
+	s.Logger.Infow("successfully applied coupons to subscription",
+		"subscription_id", subscriptionID,
+		"coupon_count", len(couponIDs))
+
+	return nil
+}
+
+// GetSubscriptionCouponAssociations retrieves all coupon associations for a subscription
+func (s *subscriptionService) GetSubscriptionCouponAssociations(ctx context.Context, subscriptionID string) ([]*dto.CouponAssociationResponse, error) {
+	couponService := NewCouponService(s.ServiceParams)
+	return couponService.GetCouponAssociationsBySubscription(ctx, subscriptionID)
+}
+
+// RemoveCouponFromSubscription removes a coupon association from a subscription
+func (s *subscriptionService) RemoveCouponFromSubscription(ctx context.Context, subscriptionID string, couponID string) error {
+	couponService := NewCouponService(s.ServiceParams)
+
+	// Get coupon associations for this subscription
+	associations, err := couponService.GetCouponAssociationsBySubscription(ctx, subscriptionID)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to get coupon associations").
+			Mark(ierr.ErrInternal)
+	}
+
+	// Find the association with the specified coupon ID
+	for _, association := range associations {
+		if association.CouponID == couponID {
+			// Delete the association
+			err = couponService.DeleteCouponAssociation(ctx, association.ID)
+			if err != nil {
+				return ierr.WithError(err).
+					WithHint("Failed to remove coupon from subscription").
+					WithReportableDetails(map[string]interface{}{
+						"subscription_id": subscriptionID,
+						"coupon_id":       couponID,
+						"association_id":  association.ID,
+					}).
+					Mark(ierr.ErrInternal)
+			}
+
+			s.Logger.Infow("successfully removed coupon from subscription",
+				"subscription_id", subscriptionID,
+				"coupon_id", couponID,
+				"association_id", association.ID)
+
+			return nil
+		}
+	}
+
+	return ierr.NewError("coupon not found in subscription").
+		WithHint("The specified coupon is not associated with this subscription").
+		WithReportableDetails(map[string]interface{}{
+			"subscription_id": subscriptionID,
+			"coupon_id":       couponID,
+		}).
+		Mark(ierr.ErrNotFound)
 }

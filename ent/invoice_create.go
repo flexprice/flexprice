@@ -10,6 +10,7 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/flexprice/flexprice/ent/couponapplication"
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/shopspring/decimal"
@@ -256,6 +257,20 @@ func (ic *InvoiceCreate) SetNillableRefundedAmount(d *decimal.Decimal) *InvoiceC
 	return ic
 }
 
+// SetTotalDiscount sets the "total_discount" field.
+func (ic *InvoiceCreate) SetTotalDiscount(d decimal.Decimal) *InvoiceCreate {
+	ic.mutation.SetTotalDiscount(d)
+	return ic
+}
+
+// SetNillableTotalDiscount sets the "total_discount" field if the given value is not nil.
+func (ic *InvoiceCreate) SetNillableTotalDiscount(d *decimal.Decimal) *InvoiceCreate {
+	if d != nil {
+		ic.SetTotalDiscount(*d)
+	}
+	return ic
+}
+
 // SetTotal sets the "total" field.
 func (ic *InvoiceCreate) SetTotal(d decimal.Decimal) *InvoiceCreate {
 	ic.mutation.SetTotal(d)
@@ -493,6 +508,21 @@ func (ic *InvoiceCreate) AddLineItems(i ...*InvoiceLineItem) *InvoiceCreate {
 	return ic.AddLineItemIDs(ids...)
 }
 
+// AddCouponApplicationIDs adds the "coupon_applications" edge to the CouponApplication entity by IDs.
+func (ic *InvoiceCreate) AddCouponApplicationIDs(ids ...string) *InvoiceCreate {
+	ic.mutation.AddCouponApplicationIDs(ids...)
+	return ic
+}
+
+// AddCouponApplications adds the "coupon_applications" edges to the CouponApplication entity.
+func (ic *InvoiceCreate) AddCouponApplications(c ...*CouponApplication) *InvoiceCreate {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return ic.AddCouponApplicationIDs(ids...)
+}
+
 // Mutation returns the InvoiceMutation object of the builder.
 func (ic *InvoiceCreate) Mutation() *InvoiceMutation {
 	return ic.mutation
@@ -575,6 +605,10 @@ func (ic *InvoiceCreate) defaults() {
 	if _, ok := ic.mutation.RefundedAmount(); !ok {
 		v := invoice.DefaultRefundedAmount
 		ic.mutation.SetRefundedAmount(v)
+	}
+	if _, ok := ic.mutation.TotalDiscount(); !ok {
+		v := invoice.DefaultTotalDiscount
+		ic.mutation.SetTotalDiscount(v)
 	}
 	if _, ok := ic.mutation.Total(); !ok {
 		v := invoice.DefaultTotal
@@ -758,6 +792,10 @@ func (ic *InvoiceCreate) createSpec() (*Invoice, *sqlgraph.CreateSpec) {
 		_spec.SetField(invoice.FieldRefundedAmount, field.TypeOther, value)
 		_node.RefundedAmount = value
 	}
+	if value, ok := ic.mutation.TotalDiscount(); ok {
+		_spec.SetField(invoice.FieldTotalDiscount, field.TypeOther, value)
+		_node.TotalDiscount = &value
+	}
 	if value, ok := ic.mutation.Total(); ok {
 		_spec.SetField(invoice.FieldTotal, field.TypeOther, value)
 		_node.Total = value
@@ -831,6 +869,22 @@ func (ic *InvoiceCreate) createSpec() (*Invoice, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(invoicelineitem.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := ic.mutation.CouponApplicationsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   invoice.CouponApplicationsTable,
+			Columns: []string{invoice.CouponApplicationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(couponapplication.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

@@ -8,6 +8,9 @@ import (
 	"github.com/flexprice/flexprice/ent/auth"
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/costsheet"
+	"github.com/flexprice/flexprice/ent/coupon"
+	"github.com/flexprice/flexprice/ent/couponapplication"
+	"github.com/flexprice/flexprice/ent/couponassociation"
 	"github.com/flexprice/flexprice/ent/creditgrant"
 	"github.com/flexprice/flexprice/ent/creditgrantapplication"
 	"github.com/flexprice/flexprice/ent/creditnote"
@@ -129,6 +132,145 @@ func init() {
 	costsheetDescPriceID := costsheetFields[2].Descriptor()
 	// costsheet.PriceIDValidator is a validator for the "price_id" field. It is called by the builders before save.
 	costsheet.PriceIDValidator = costsheetDescPriceID.Validators[0].(func(string) error)
+	couponMixin := schema.Coupon{}.Mixin()
+	couponMixinFields0 := couponMixin[0].Fields()
+	_ = couponMixinFields0
+	couponMixinFields1 := couponMixin[1].Fields()
+	_ = couponMixinFields1
+	couponFields := schema.Coupon{}.Fields()
+	_ = couponFields
+	// couponDescTenantID is the schema descriptor for tenant_id field.
+	couponDescTenantID := couponMixinFields0[0].Descriptor()
+	// coupon.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	coupon.TenantIDValidator = couponDescTenantID.Validators[0].(func(string) error)
+	// couponDescStatus is the schema descriptor for status field.
+	couponDescStatus := couponMixinFields0[1].Descriptor()
+	// coupon.DefaultStatus holds the default value on creation for the status field.
+	coupon.DefaultStatus = couponDescStatus.Default.(string)
+	// couponDescCreatedAt is the schema descriptor for created_at field.
+	couponDescCreatedAt := couponMixinFields0[2].Descriptor()
+	// coupon.DefaultCreatedAt holds the default value on creation for the created_at field.
+	coupon.DefaultCreatedAt = couponDescCreatedAt.Default.(func() time.Time)
+	// couponDescUpdatedAt is the schema descriptor for updated_at field.
+	couponDescUpdatedAt := couponMixinFields0[3].Descriptor()
+	// coupon.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	coupon.DefaultUpdatedAt = couponDescUpdatedAt.Default.(func() time.Time)
+	// coupon.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	coupon.UpdateDefaultUpdatedAt = couponDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// couponDescEnvironmentID is the schema descriptor for environment_id field.
+	couponDescEnvironmentID := couponMixinFields1[0].Descriptor()
+	// coupon.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	coupon.DefaultEnvironmentID = couponDescEnvironmentID.Default.(string)
+	// couponDescName is the schema descriptor for name field.
+	couponDescName := couponFields[1].Descriptor()
+	// coupon.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	coupon.NameValidator = couponDescName.Validators[0].(func(string) error)
+	// couponDescTotalRedemptions is the schema descriptor for total_redemptions field.
+	couponDescTotalRedemptions := couponFields[5].Descriptor()
+	// coupon.DefaultTotalRedemptions holds the default value on creation for the total_redemptions field.
+	coupon.DefaultTotalRedemptions = couponDescTotalRedemptions.Default.(int)
+	// couponDescAmountOff is the schema descriptor for amount_off field.
+	couponDescAmountOff := couponFields[7].Descriptor()
+	// coupon.DefaultAmountOff holds the default value on creation for the amount_off field.
+	coupon.DefaultAmountOff = couponDescAmountOff.Default.(decimal.Decimal)
+	// couponDescPercentageOff is the schema descriptor for percentage_off field.
+	couponDescPercentageOff := couponFields[8].Descriptor()
+	// coupon.DefaultPercentageOff holds the default value on creation for the percentage_off field.
+	coupon.DefaultPercentageOff = couponDescPercentageOff.Default.(decimal.Decimal)
+	// couponDescType is the schema descriptor for type field.
+	couponDescType := couponFields[9].Descriptor()
+	// coupon.DefaultType holds the default value on creation for the type field.
+	coupon.DefaultType = couponDescType.Default.(string)
+	// coupon.TypeValidator is a validator for the "type" field. It is called by the builders before save.
+	coupon.TypeValidator = couponDescType.Validators[0].(func(string) error)
+	// couponDescCadence is the schema descriptor for cadence field.
+	couponDescCadence := couponFields[10].Descriptor()
+	// coupon.DefaultCadence holds the default value on creation for the cadence field.
+	coupon.DefaultCadence = couponDescCadence.Default.(string)
+	// coupon.CadenceValidator is a validator for the "cadence" field. It is called by the builders before save.
+	coupon.CadenceValidator = couponDescCadence.Validators[0].(func(string) error)
+	couponapplicationMixin := schema.CouponApplication{}.Mixin()
+	couponapplicationMixinFields0 := couponapplicationMixin[0].Fields()
+	_ = couponapplicationMixinFields0
+	couponapplicationMixinFields1 := couponapplicationMixin[1].Fields()
+	_ = couponapplicationMixinFields1
+	couponapplicationFields := schema.CouponApplication{}.Fields()
+	_ = couponapplicationFields
+	// couponapplicationDescTenantID is the schema descriptor for tenant_id field.
+	couponapplicationDescTenantID := couponapplicationMixinFields0[0].Descriptor()
+	// couponapplication.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	couponapplication.TenantIDValidator = couponapplicationDescTenantID.Validators[0].(func(string) error)
+	// couponapplicationDescStatus is the schema descriptor for status field.
+	couponapplicationDescStatus := couponapplicationMixinFields0[1].Descriptor()
+	// couponapplication.DefaultStatus holds the default value on creation for the status field.
+	couponapplication.DefaultStatus = couponapplicationDescStatus.Default.(string)
+	// couponapplicationDescCreatedAt is the schema descriptor for created_at field.
+	couponapplicationDescCreatedAt := couponapplicationMixinFields0[2].Descriptor()
+	// couponapplication.DefaultCreatedAt holds the default value on creation for the created_at field.
+	couponapplication.DefaultCreatedAt = couponapplicationDescCreatedAt.Default.(func() time.Time)
+	// couponapplicationDescUpdatedAt is the schema descriptor for updated_at field.
+	couponapplicationDescUpdatedAt := couponapplicationMixinFields0[3].Descriptor()
+	// couponapplication.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	couponapplication.DefaultUpdatedAt = couponapplicationDescUpdatedAt.Default.(func() time.Time)
+	// couponapplication.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	couponapplication.UpdateDefaultUpdatedAt = couponapplicationDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// couponapplicationDescEnvironmentID is the schema descriptor for environment_id field.
+	couponapplicationDescEnvironmentID := couponapplicationMixinFields1[0].Descriptor()
+	// couponapplication.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	couponapplication.DefaultEnvironmentID = couponapplicationDescEnvironmentID.Default.(string)
+	// couponapplicationDescCouponID is the schema descriptor for coupon_id field.
+	couponapplicationDescCouponID := couponapplicationFields[1].Descriptor()
+	// couponapplication.CouponIDValidator is a validator for the "coupon_id" field. It is called by the builders before save.
+	couponapplication.CouponIDValidator = couponapplicationDescCouponID.Validators[0].(func(string) error)
+	// couponapplicationDescInvoiceID is the schema descriptor for invoice_id field.
+	couponapplicationDescInvoiceID := couponapplicationFields[3].Descriptor()
+	// couponapplication.InvoiceIDValidator is a validator for the "invoice_id" field. It is called by the builders before save.
+	couponapplication.InvoiceIDValidator = couponapplicationDescInvoiceID.Validators[0].(func(string) error)
+	// couponapplicationDescAppliedAt is the schema descriptor for applied_at field.
+	couponapplicationDescAppliedAt := couponapplicationFields[5].Descriptor()
+	// couponapplication.DefaultAppliedAt holds the default value on creation for the applied_at field.
+	couponapplication.DefaultAppliedAt = couponapplicationDescAppliedAt.Default.(func() time.Time)
+	// couponapplicationDescDiscountType is the schema descriptor for discount_type field.
+	couponapplicationDescDiscountType := couponapplicationFields[9].Descriptor()
+	// couponapplication.DiscountTypeValidator is a validator for the "discount_type" field. It is called by the builders before save.
+	couponapplication.DiscountTypeValidator = couponapplicationDescDiscountType.Validators[0].(func(string) error)
+	couponassociationMixin := schema.CouponAssociation{}.Mixin()
+	couponassociationMixinFields0 := couponassociationMixin[0].Fields()
+	_ = couponassociationMixinFields0
+	couponassociationMixinFields1 := couponassociationMixin[1].Fields()
+	_ = couponassociationMixinFields1
+	couponassociationFields := schema.CouponAssociation{}.Fields()
+	_ = couponassociationFields
+	// couponassociationDescTenantID is the schema descriptor for tenant_id field.
+	couponassociationDescTenantID := couponassociationMixinFields0[0].Descriptor()
+	// couponassociation.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	couponassociation.TenantIDValidator = couponassociationDescTenantID.Validators[0].(func(string) error)
+	// couponassociationDescStatus is the schema descriptor for status field.
+	couponassociationDescStatus := couponassociationMixinFields0[1].Descriptor()
+	// couponassociation.DefaultStatus holds the default value on creation for the status field.
+	couponassociation.DefaultStatus = couponassociationDescStatus.Default.(string)
+	// couponassociationDescCreatedAt is the schema descriptor for created_at field.
+	couponassociationDescCreatedAt := couponassociationMixinFields0[2].Descriptor()
+	// couponassociation.DefaultCreatedAt holds the default value on creation for the created_at field.
+	couponassociation.DefaultCreatedAt = couponassociationDescCreatedAt.Default.(func() time.Time)
+	// couponassociationDescUpdatedAt is the schema descriptor for updated_at field.
+	couponassociationDescUpdatedAt := couponassociationMixinFields0[3].Descriptor()
+	// couponassociation.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	couponassociation.DefaultUpdatedAt = couponassociationDescUpdatedAt.Default.(func() time.Time)
+	// couponassociation.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	couponassociation.UpdateDefaultUpdatedAt = couponassociationDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// couponassociationDescEnvironmentID is the schema descriptor for environment_id field.
+	couponassociationDescEnvironmentID := couponassociationMixinFields1[0].Descriptor()
+	// couponassociation.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	couponassociation.DefaultEnvironmentID = couponassociationDescEnvironmentID.Default.(string)
+	// couponassociationDescCouponID is the schema descriptor for coupon_id field.
+	couponassociationDescCouponID := couponassociationFields[1].Descriptor()
+	// couponassociation.CouponIDValidator is a validator for the "coupon_id" field. It is called by the builders before save.
+	couponassociation.CouponIDValidator = couponassociationDescCouponID.Validators[0].(func(string) error)
+	// couponassociationDescSubscriptionID is the schema descriptor for subscription_id field.
+	couponassociationDescSubscriptionID := couponassociationFields[2].Descriptor()
+	// couponassociation.SubscriptionIDValidator is a validator for the "subscription_id" field. It is called by the builders before save.
+	couponassociation.SubscriptionIDValidator = couponassociationDescSubscriptionID.Validators[0].(func(string) error)
 	creditgrantMixin := schema.CreditGrant{}.Mixin()
 	creditgrantMixinFields0 := creditgrantMixin[0].Fields()
 	_ = creditgrantMixinFields0
@@ -574,12 +716,16 @@ func init() {
 	invoiceDescRefundedAmount := invoiceFields[12].Descriptor()
 	// invoice.DefaultRefundedAmount holds the default value on creation for the refunded_amount field.
 	invoice.DefaultRefundedAmount = invoiceDescRefundedAmount.Default.(decimal.Decimal)
+	// invoiceDescTotalDiscount is the schema descriptor for total_discount field.
+	invoiceDescTotalDiscount := invoiceFields[13].Descriptor()
+	// invoice.DefaultTotalDiscount holds the default value on creation for the total_discount field.
+	invoice.DefaultTotalDiscount = invoiceDescTotalDiscount.Default.(decimal.Decimal)
 	// invoiceDescTotal is the schema descriptor for total field.
-	invoiceDescTotal := invoiceFields[13].Descriptor()
+	invoiceDescTotal := invoiceFields[14].Descriptor()
 	// invoice.DefaultTotal holds the default value on creation for the total field.
 	invoice.DefaultTotal = invoiceDescTotal.Default.(decimal.Decimal)
 	// invoiceDescVersion is the schema descriptor for version field.
-	invoiceDescVersion := invoiceFields[25].Descriptor()
+	invoiceDescVersion := invoiceFields[26].Descriptor()
 	// invoice.DefaultVersion holds the default value on creation for the version field.
 	invoice.DefaultVersion = invoiceDescVersion.Default.(int)
 	invoicelineitemMixin := schema.InvoiceLineItem{}.Mixin()

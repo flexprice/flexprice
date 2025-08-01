@@ -15,6 +15,9 @@ import (
 	"github.com/flexprice/flexprice/ent/auth"
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/costsheet"
+	"github.com/flexprice/flexprice/ent/coupon"
+	"github.com/flexprice/flexprice/ent/couponapplication"
+	"github.com/flexprice/flexprice/ent/couponassociation"
 	"github.com/flexprice/flexprice/ent/creditgrant"
 	"github.com/flexprice/flexprice/ent/creditgrantapplication"
 	"github.com/flexprice/flexprice/ent/creditnote"
@@ -105,6 +108,9 @@ func checkColumn(table, column string) error {
 			auth.Table:                      auth.ValidColumn,
 			billingsequence.Table:           billingsequence.ValidColumn,
 			costsheet.Table:                 costsheet.ValidColumn,
+			coupon.Table:                    coupon.ValidColumn,
+			couponapplication.Table:         couponapplication.ValidColumn,
+			couponassociation.Table:         couponassociation.ValidColumn,
 			creditgrant.Table:               creditgrant.ValidColumn,
 			creditgrantapplication.Table:    creditgrantapplication.ValidColumn,
 			creditnote.Table:                creditnote.ValidColumn,

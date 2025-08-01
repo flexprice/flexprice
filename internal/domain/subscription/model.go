@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
+	"github.com/flexprice/flexprice/internal/domain/coupon_association"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -101,6 +102,8 @@ type Subscription struct {
 
 	Pauses []*SubscriptionPause `json:"pauses,omitempty"`
 
+	CouponAssociations []*coupon_association.CouponAssociation `json:"coupon_associations,omitempty"`
+
 	types.BaseModel
 }
 
@@ -122,6 +125,11 @@ func GetSubscriptionFromEnt(sub *ent.Subscription) *Subscription {
 	var pauses []*SubscriptionPause
 	if sub.Edges.Pauses != nil {
 		pauses = SubscriptionPauseListFromEnt(sub.Edges.Pauses)
+	}
+
+	var couponAssociations []*coupon_association.CouponAssociation
+	if sub.Edges.CouponAssociations != nil {
+		couponAssociations = coupon_association.FromEntList(sub.Edges.CouponAssociations)
 	}
 
 	return &Subscription{
@@ -153,6 +161,7 @@ func GetSubscriptionFromEnt(sub *ent.Subscription) *Subscription {
 		CommitmentAmount:   sub.CommitmentAmount,
 		OverageFactor:      sub.OverageFactor,
 		LineItems:          lineItems,
+		CouponAssociations: couponAssociations,
 		Pauses:             pauses,
 		BaseModel: types.BaseModel{
 			TenantID:  sub.TenantID,

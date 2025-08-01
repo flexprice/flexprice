@@ -1619,6 +1619,29 @@ func HasInvoiceWith(preds ...predicate.Invoice) predicate.InvoiceLineItem {
 	})
 }
 
+// HasCouponApplications applies the HasEdge predicate on the "coupon_applications" edge.
+func HasCouponApplications() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, CouponApplicationsTable, CouponApplicationsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasCouponApplicationsWith applies the HasEdge predicate on the "coupon_applications" edge with a given conditions (other predicates).
+func HasCouponApplicationsWith(preds ...predicate.CouponApplication) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(func(s *sql.Selector) {
+		step := newCouponApplicationsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.InvoiceLineItem) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.AndPredicates(predicates...))

@@ -15,6 +15,15 @@ type BillingSequence func(*sql.Selector)
 // Costsheet is the predicate function for costsheet builders.
 type Costsheet func(*sql.Selector)
 
+// Coupon is the predicate function for coupon builders.
+type Coupon func(*sql.Selector)
+
+// CouponApplication is the predicate function for couponapplication builders.
+type CouponApplication func(*sql.Selector)
+
+// CouponAssociation is the predicate function for couponassociation builders.
+type CouponAssociation func(*sql.Selector)
+
 // CreditGrant is the predicate function for creditgrant builders.
 type CreditGrant func(*sql.Selector)
 

@@ -100,9 +100,13 @@ type SubscriptionEdges struct {
 	CreditGrants []*CreditGrant `json:"credit_grants,omitempty"`
 	// Schedule holds the value of the schedule edge.
 	Schedule *SubscriptionSchedule `json:"schedule,omitempty"`
+	// Subscription can have multiple coupon associations
+	CouponAssociations []*CouponAssociation `json:"coupon_associations,omitempty"`
+	// Subscription can have multiple coupon applications
+	CouponApplications []*CouponApplication `json:"coupon_applications,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [4]bool
+	loadedTypes [6]bool
 }
 
 // LineItemsOrErr returns the LineItems value or an error if the edge
@@ -141,6 +145,24 @@ func (e SubscriptionEdges) ScheduleOrErr() (*SubscriptionSchedule, error) {
 		return nil, &NotFoundError{label: subscriptionschedule.Label}
 	}
 	return nil, &NotLoadedError{edge: "schedule"}
+}
+
+// CouponAssociationsOrErr returns the CouponAssociations value or an error if the edge
+// was not loaded in eager-loading.
+func (e SubscriptionEdges) CouponAssociationsOrErr() ([]*CouponAssociation, error) {
+	if e.loadedTypes[4] {
+		return e.CouponAssociations, nil
+	}
+	return nil, &NotLoadedError{edge: "coupon_associations"}
+}
+
+// CouponApplicationsOrErr returns the CouponApplications value or an error if the edge
+// was not loaded in eager-loading.
+func (e SubscriptionEdges) CouponApplicationsOrErr() ([]*CouponApplication, error) {
+	if e.loadedTypes[5] {
+		return e.CouponApplications, nil
+	}
+	return nil, &NotLoadedError{edge: "coupon_applications"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -414,6 +436,16 @@ func (s *Subscription) QueryCreditGrants() *CreditGrantQuery {
 // QuerySchedule queries the "schedule" edge of the Subscription entity.
 func (s *Subscription) QuerySchedule() *SubscriptionScheduleQuery {
 	return NewSubscriptionClient(s.config).QuerySchedule(s)
+}
+
+// QueryCouponAssociations queries the "coupon_associations" edge of the Subscription entity.
+func (s *Subscription) QueryCouponAssociations() *CouponAssociationQuery {
+	return NewSubscriptionClient(s.config).QueryCouponAssociations(s)
+}
+
+// QueryCouponApplications queries the "coupon_applications" edge of the Subscription entity.
+func (s *Subscription) QueryCouponApplications() *CouponApplicationQuery {
+	return NewSubscriptionClient(s.config).QueryCouponApplications(s)
 }
 
 // Update returns a builder for updating this Subscription.

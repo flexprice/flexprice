@@ -36,6 +36,7 @@ type Handlers struct {
 	Secret            *v1.SecretHandler
 	CostSheet         *v1.CostSheetHandler
 	CreditNote        *v1.CreditNoteHandler
+	Coupon            *v1.CouponHandler
 	Webhook           *v1.WebhookHandler
 	// Portal handlers
 	Onboarding *v1.OnboardingHandler
@@ -310,6 +311,17 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			creditNotes.GET("/:id", handlers.CreditNote.GetCreditNote)
 			creditNotes.POST("/:id/void", handlers.CreditNote.VoidCreditNote)
 			creditNotes.POST("/:id/finalize", handlers.CreditNote.FinalizeCreditNote)
+		}
+
+		// Coupon routes
+		coupon := v1Private.Group("/coupons")
+		{
+			coupon.POST("", handlers.Coupon.CreateCoupon)
+			coupon.GET("", handlers.Coupon.ListCouponsByFilter)
+			coupon.GET("/:id", handlers.Coupon.GetCoupon)
+			coupon.PUT("/:id", handlers.Coupon.UpdateCoupon)
+			coupon.DELETE("/:id", handlers.Coupon.DeleteCoupon)
+			coupon.POST("/search", handlers.Coupon.ListCouponsByFilter)
 		}
 
 		// Admin routes (API Key only)

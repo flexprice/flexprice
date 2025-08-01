@@ -76,9 +76,11 @@ type InvoiceLineItem struct {
 type InvoiceLineItemEdges struct {
 	// Invoice holds the value of the invoice edge.
 	Invoice *Invoice `json:"invoice,omitempty"`
+	// Invoice line item can have multiple coupon applications
+	CouponApplications []*CouponApplication `json:"coupon_applications,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [1]bool
+	loadedTypes [2]bool
 }
 
 // InvoiceOrErr returns the Invoice value or an error if the edge
@@ -90,6 +92,15 @@ func (e InvoiceLineItemEdges) InvoiceOrErr() (*Invoice, error) {
 		return nil, &NotFoundError{label: invoice.Label}
 	}
 	return nil, &NotLoadedError{edge: "invoice"}
+}
+
+// CouponApplicationsOrErr returns the CouponApplications value or an error if the edge
+// was not loaded in eager-loading.
+func (e InvoiceLineItemEdges) CouponApplicationsOrErr() ([]*CouponApplication, error) {
+	if e.loadedTypes[1] {
+		return e.CouponApplications, nil
+	}
+	return nil, &NotLoadedError{edge: "coupon_applications"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -292,6 +303,11 @@ func (ili *InvoiceLineItem) Value(name string) (ent.Value, error) {
 // QueryInvoice queries the "invoice" edge of the InvoiceLineItem entity.
 func (ili *InvoiceLineItem) QueryInvoice() *InvoiceQuery {
 	return NewInvoiceLineItemClient(ili.config).QueryInvoice(ili)
+}
+
+// QueryCouponApplications queries the "coupon_applications" edge of the InvoiceLineItem entity.
+func (ili *InvoiceLineItem) QueryCouponApplications() *CouponApplicationQuery {
+	return NewInvoiceLineItemClient(ili.config).QueryCouponApplications(ili)
 }
 
 // Update returns a builder for updating this InvoiceLineItem.

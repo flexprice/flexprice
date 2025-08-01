@@ -71,6 +71,9 @@ type CreateInvoiceRequest struct {
 	// line_items contains the individual items that make up this invoice
 	LineItems []CreateInvoiceLineItemRequest `json:"line_items,omitempty"`
 
+	// coupons
+	Coupons []string `json:"coupons,omitempty"`
+
 	// metadata contains additional custom key-value pairs for storing extra information
 	Metadata types.Metadata `json:"metadata,omitempty"`
 
@@ -484,6 +487,9 @@ type InvoiceResponse struct {
 	// total is the total amount of the invoice including taxes and discounts
 	Total decimal.Decimal `json:"total"`
 
+	// total_discount is the total discount amount from coupon applications
+	TotalDiscount decimal.Decimal `json:"total_discount"`
+
 	// subtotal is the amount before taxes and discounts are applied
 	Subtotal decimal.Decimal `json:"subtotal"`
 
@@ -564,6 +570,9 @@ type InvoiceResponse struct {
 
 	// customer contains the customer information associated with this invoice
 	Customer *CustomerResponse `json:"customer,omitempty"`
+
+	// coupon_applications contains the coupon applications associated with this invoice
+	CouponApplications []*CouponApplicationResponse `json:"coupon_applications,omitempty"`
 }
 
 // NewInvoiceResponse creates a new invoice response from domain invoice
@@ -582,6 +591,7 @@ func NewInvoiceResponse(inv *invoice.Invoice) *InvoiceResponse {
 		Currency:        inv.Currency,
 		AmountDue:       inv.AmountDue,
 		Total:           inv.Total,
+		TotalDiscount:   inv.TotalDiscount,
 		Subtotal:        inv.Subtotal,
 		AmountPaid:      inv.AmountPaid,
 		AmountRemaining: inv.AmountRemaining,
@@ -615,6 +625,15 @@ func NewInvoiceResponse(inv *invoice.Invoice) *InvoiceResponse {
 		}
 	}
 
+	if inv.CouponApplications != nil {
+		resp.CouponApplications = make([]*CouponApplicationResponse, len(inv.CouponApplications))
+		for i, ca := range inv.CouponApplications {
+			resp.CouponApplications[i] = &CouponApplicationResponse{
+				CouponApplication: ca,
+			}
+		}
+	}
+
 	return resp
 }
 
@@ -626,6 +645,12 @@ func (r *InvoiceResponse) WithSubscription(sub *SubscriptionResponse) *InvoiceRe
 // WithCustomer adds customer information to the invoice response
 func (r *InvoiceResponse) WithCustomer(customer *CustomerResponse) *InvoiceResponse {
 	r.Customer = customer
+	return r
+}
+
+// WithCouponApplications adds coupon applications to the invoice response
+func (r *InvoiceResponse) WithCouponApplications(couponApplications []*CouponApplicationResponse) *InvoiceResponse {
+	r.CouponApplications = couponApplications
 	return r
 }
 

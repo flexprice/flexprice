@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/flexprice/flexprice/ent/couponapplication"
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/ent/predicate"
@@ -20,11 +21,12 @@ import (
 // InvoiceQuery is the builder for querying Invoice entities.
 type InvoiceQuery struct {
 	config
-	ctx           *QueryContext
-	order         []invoice.OrderOption
-	inters        []Interceptor
-	predicates    []predicate.Invoice
-	withLineItems *InvoiceLineItemQuery
+	ctx                    *QueryContext
+	order                  []invoice.OrderOption
+	inters                 []Interceptor
+	predicates             []predicate.Invoice
+	withLineItems          *InvoiceLineItemQuery
+	withCouponApplications *CouponApplicationQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -76,6 +78,28 @@ func (iq *InvoiceQuery) QueryLineItems() *InvoiceLineItemQuery {
 			sqlgraph.From(invoice.Table, invoice.FieldID, selector),
 			sqlgraph.To(invoicelineitem.Table, invoicelineitem.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, invoice.LineItemsTable, invoice.LineItemsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(iq.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryCouponApplications chains the current query on the "coupon_applications" edge.
+func (iq *InvoiceQuery) QueryCouponApplications() *CouponApplicationQuery {
+	query := (&CouponApplicationClient{config: iq.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := iq.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := iq.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(invoice.Table, invoice.FieldID, selector),
+			sqlgraph.To(couponapplication.Table, couponapplication.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, invoice.CouponApplicationsTable, invoice.CouponApplicationsColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(iq.driver.Dialect(), step)
 		return fromU, nil
@@ -270,12 +294,13 @@ func (iq *InvoiceQuery) Clone() *InvoiceQuery {
 		return nil
 	}
 	return &InvoiceQuery{
-		config:        iq.config,
-		ctx:           iq.ctx.Clone(),
-		order:         append([]invoice.OrderOption{}, iq.order...),
-		inters:        append([]Interceptor{}, iq.inters...),
-		predicates:    append([]predicate.Invoice{}, iq.predicates...),
-		withLineItems: iq.withLineItems.Clone(),
+		config:                 iq.config,
+		ctx:                    iq.ctx.Clone(),
+		order:                  append([]invoice.OrderOption{}, iq.order...),
+		inters:                 append([]Interceptor{}, iq.inters...),
+		predicates:             append([]predicate.Invoice{}, iq.predicates...),
+		withLineItems:          iq.withLineItems.Clone(),
+		withCouponApplications: iq.withCouponApplications.Clone(),
 		// clone intermediate query.
 		sql:  iq.sql.Clone(),
 		path: iq.path,
@@ -290,6 +315,17 @@ func (iq *InvoiceQuery) WithLineItems(opts ...func(*InvoiceLineItemQuery)) *Invo
 		opt(query)
 	}
 	iq.withLineItems = query
+	return iq
+}
+
+// WithCouponApplications tells the query-builder to eager-load the nodes that are connected to
+// the "coupon_applications" edge. The optional arguments are used to configure the query builder of the edge.
+func (iq *InvoiceQuery) WithCouponApplications(opts ...func(*CouponApplicationQuery)) *InvoiceQuery {
+	query := (&CouponApplicationClient{config: iq.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	iq.withCouponApplications = query
 	return iq
 }
 
@@ -371,8 +407,9 @@ func (iq *InvoiceQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Invo
 	var (
 		nodes       = []*Invoice{}
 		_spec       = iq.querySpec()
-		loadedTypes = [1]bool{
+		loadedTypes = [2]bool{
 			iq.withLineItems != nil,
+			iq.withCouponApplications != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -400,6 +437,15 @@ func (iq *InvoiceQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Invo
 			return nil, err
 		}
 	}
+	if query := iq.withCouponApplications; query != nil {
+		if err := iq.loadCouponApplications(ctx, query, nodes,
+			func(n *Invoice) { n.Edges.CouponApplications = []*CouponApplication{} },
+			func(n *Invoice, e *CouponApplication) {
+				n.Edges.CouponApplications = append(n.Edges.CouponApplications, e)
+			}); err != nil {
+			return nil, err
+		}
+	}
 	return nodes, nil
 }
 
@@ -418,6 +464,36 @@ func (iq *InvoiceQuery) loadLineItems(ctx context.Context, query *InvoiceLineIte
 	}
 	query.Where(predicate.InvoiceLineItem(func(s *sql.Selector) {
 		s.Where(sql.InValues(s.C(invoice.LineItemsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.InvoiceID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "invoice_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (iq *InvoiceQuery) loadCouponApplications(ctx context.Context, query *CouponApplicationQuery, nodes []*Invoice, init func(*Invoice), assign func(*Invoice, *CouponApplication)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[string]*Invoice)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(couponapplication.FieldInvoiceID)
+	}
+	query.Where(predicate.CouponApplication(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(invoice.CouponApplicationsColumn), fks...))
 	}))
 	neighbors, err := query.All(ctx)
 	if err != nil {

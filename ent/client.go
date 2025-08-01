@@ -18,6 +18,9 @@ import (
 	"github.com/flexprice/flexprice/ent/auth"
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/costsheet"
+	"github.com/flexprice/flexprice/ent/coupon"
+	"github.com/flexprice/flexprice/ent/couponapplication"
+	"github.com/flexprice/flexprice/ent/couponassociation"
 	"github.com/flexprice/flexprice/ent/creditgrant"
 	"github.com/flexprice/flexprice/ent/creditgrantapplication"
 	"github.com/flexprice/flexprice/ent/creditnote"
@@ -60,6 +63,12 @@ type Client struct {
 	BillingSequence *BillingSequenceClient
 	// Costsheet is the client for interacting with the Costsheet builders.
 	Costsheet *CostsheetClient
+	// Coupon is the client for interacting with the Coupon builders.
+	Coupon *CouponClient
+	// CouponApplication is the client for interacting with the CouponApplication builders.
+	CouponApplication *CouponApplicationClient
+	// CouponAssociation is the client for interacting with the CouponAssociation builders.
+	CouponAssociation *CouponAssociationClient
 	// CreditGrant is the client for interacting with the CreditGrant builders.
 	CreditGrant *CreditGrantClient
 	// CreditGrantApplication is the client for interacting with the CreditGrantApplication builders.
@@ -128,6 +137,9 @@ func (c *Client) init() {
 	c.Auth = NewAuthClient(c.config)
 	c.BillingSequence = NewBillingSequenceClient(c.config)
 	c.Costsheet = NewCostsheetClient(c.config)
+	c.Coupon = NewCouponClient(c.config)
+	c.CouponApplication = NewCouponApplicationClient(c.config)
+	c.CouponAssociation = NewCouponAssociationClient(c.config)
 	c.CreditGrant = NewCreditGrantClient(c.config)
 	c.CreditGrantApplication = NewCreditGrantApplicationClient(c.config)
 	c.CreditNote = NewCreditNoteClient(c.config)
@@ -250,6 +262,9 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Auth:                      NewAuthClient(cfg),
 		BillingSequence:           NewBillingSequenceClient(cfg),
 		Costsheet:                 NewCostsheetClient(cfg),
+		Coupon:                    NewCouponClient(cfg),
+		CouponApplication:         NewCouponApplicationClient(cfg),
+		CouponAssociation:         NewCouponAssociationClient(cfg),
 		CreditGrant:               NewCreditGrantClient(cfg),
 		CreditGrantApplication:    NewCreditGrantApplicationClient(cfg),
 		CreditNote:                NewCreditNoteClient(cfg),
@@ -299,6 +314,9 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Auth:                      NewAuthClient(cfg),
 		BillingSequence:           NewBillingSequenceClient(cfg),
 		Costsheet:                 NewCostsheetClient(cfg),
+		Coupon:                    NewCouponClient(cfg),
+		CouponApplication:         NewCouponApplicationClient(cfg),
+		CouponAssociation:         NewCouponAssociationClient(cfg),
 		CreditGrant:               NewCreditGrantClient(cfg),
 		CreditGrantApplication:    NewCreditGrantApplicationClient(cfg),
 		CreditNote:                NewCreditNoteClient(cfg),
@@ -355,9 +373,10 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.Auth, c.BillingSequence, c.Costsheet, c.CreditGrant, c.CreditGrantApplication,
-		c.CreditNote, c.CreditNoteLineItem, c.Customer, c.Entitlement, c.Environment,
-		c.Feature, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Payment,
+		c.Auth, c.BillingSequence, c.Costsheet, c.Coupon, c.CouponApplication,
+		c.CouponAssociation, c.CreditGrant, c.CreditGrantApplication, c.CreditNote,
+		c.CreditNoteLineItem, c.Customer, c.Entitlement, c.Environment, c.Feature,
+		c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Payment,
 		c.PaymentAttempt, c.Plan, c.Price, c.Secret, c.Subscription,
 		c.SubscriptionLineItem, c.SubscriptionPause, c.SubscriptionSchedule,
 		c.SubscriptionSchedulePhase, c.Task, c.Tenant, c.User, c.Wallet,
@@ -371,9 +390,10 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.Auth, c.BillingSequence, c.Costsheet, c.CreditGrant, c.CreditGrantApplication,
-		c.CreditNote, c.CreditNoteLineItem, c.Customer, c.Entitlement, c.Environment,
-		c.Feature, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Payment,
+		c.Auth, c.BillingSequence, c.Costsheet, c.Coupon, c.CouponApplication,
+		c.CouponAssociation, c.CreditGrant, c.CreditGrantApplication, c.CreditNote,
+		c.CreditNoteLineItem, c.Customer, c.Entitlement, c.Environment, c.Feature,
+		c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Payment,
 		c.PaymentAttempt, c.Plan, c.Price, c.Secret, c.Subscription,
 		c.SubscriptionLineItem, c.SubscriptionPause, c.SubscriptionSchedule,
 		c.SubscriptionSchedulePhase, c.Task, c.Tenant, c.User, c.Wallet,
@@ -392,6 +412,12 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.BillingSequence.mutate(ctx, m)
 	case *CostsheetMutation:
 		return c.Costsheet.mutate(ctx, m)
+	case *CouponMutation:
+		return c.Coupon.mutate(ctx, m)
+	case *CouponApplicationMutation:
+		return c.CouponApplication.mutate(ctx, m)
+	case *CouponAssociationMutation:
+		return c.CouponAssociation.mutate(ctx, m)
 	case *CreditGrantMutation:
 		return c.CreditGrant.mutate(ctx, m)
 	case *CreditGrantApplicationMutation:
@@ -879,6 +905,581 @@ func (c *CostsheetClient) mutate(ctx context.Context, m *CostsheetMutation) (Val
 		return (&CostsheetDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Costsheet mutation op: %q", m.Op())
+	}
+}
+
+// CouponClient is a client for the Coupon schema.
+type CouponClient struct {
+	config
+}
+
+// NewCouponClient returns a client for the Coupon from the given config.
+func NewCouponClient(c config) *CouponClient {
+	return &CouponClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `coupon.Hooks(f(g(h())))`.
+func (c *CouponClient) Use(hooks ...Hook) {
+	c.hooks.Coupon = append(c.hooks.Coupon, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `coupon.Intercept(f(g(h())))`.
+func (c *CouponClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Coupon = append(c.inters.Coupon, interceptors...)
+}
+
+// Create returns a builder for creating a Coupon entity.
+func (c *CouponClient) Create() *CouponCreate {
+	mutation := newCouponMutation(c.config, OpCreate)
+	return &CouponCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Coupon entities.
+func (c *CouponClient) CreateBulk(builders ...*CouponCreate) *CouponCreateBulk {
+	return &CouponCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *CouponClient) MapCreateBulk(slice any, setFunc func(*CouponCreate, int)) *CouponCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &CouponCreateBulk{err: fmt.Errorf("calling to CouponClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*CouponCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &CouponCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Coupon.
+func (c *CouponClient) Update() *CouponUpdate {
+	mutation := newCouponMutation(c.config, OpUpdate)
+	return &CouponUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *CouponClient) UpdateOne(co *Coupon) *CouponUpdateOne {
+	mutation := newCouponMutation(c.config, OpUpdateOne, withCoupon(co))
+	return &CouponUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *CouponClient) UpdateOneID(id string) *CouponUpdateOne {
+	mutation := newCouponMutation(c.config, OpUpdateOne, withCouponID(id))
+	return &CouponUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Coupon.
+func (c *CouponClient) Delete() *CouponDelete {
+	mutation := newCouponMutation(c.config, OpDelete)
+	return &CouponDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *CouponClient) DeleteOne(co *Coupon) *CouponDeleteOne {
+	return c.DeleteOneID(co.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *CouponClient) DeleteOneID(id string) *CouponDeleteOne {
+	builder := c.Delete().Where(coupon.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &CouponDeleteOne{builder}
+}
+
+// Query returns a query builder for Coupon.
+func (c *CouponClient) Query() *CouponQuery {
+	return &CouponQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeCoupon},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Coupon entity by its id.
+func (c *CouponClient) Get(ctx context.Context, id string) (*Coupon, error) {
+	return c.Query().Where(coupon.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *CouponClient) GetX(ctx context.Context, id string) *Coupon {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryCouponAssociations queries the coupon_associations edge of a Coupon.
+func (c *CouponClient) QueryCouponAssociations(co *Coupon) *CouponAssociationQuery {
+	query := (&CouponAssociationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := co.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(coupon.Table, coupon.FieldID, id),
+			sqlgraph.To(couponassociation.Table, couponassociation.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, coupon.CouponAssociationsTable, coupon.CouponAssociationsColumn),
+		)
+		fromV = sqlgraph.Neighbors(co.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryCouponApplications queries the coupon_applications edge of a Coupon.
+func (c *CouponClient) QueryCouponApplications(co *Coupon) *CouponApplicationQuery {
+	query := (&CouponApplicationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := co.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(coupon.Table, coupon.FieldID, id),
+			sqlgraph.To(couponapplication.Table, couponapplication.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, coupon.CouponApplicationsTable, coupon.CouponApplicationsColumn),
+		)
+		fromV = sqlgraph.Neighbors(co.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *CouponClient) Hooks() []Hook {
+	return c.hooks.Coupon
+}
+
+// Interceptors returns the client interceptors.
+func (c *CouponClient) Interceptors() []Interceptor {
+	return c.inters.Coupon
+}
+
+func (c *CouponClient) mutate(ctx context.Context, m *CouponMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&CouponCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&CouponUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&CouponUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&CouponDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Coupon mutation op: %q", m.Op())
+	}
+}
+
+// CouponApplicationClient is a client for the CouponApplication schema.
+type CouponApplicationClient struct {
+	config
+}
+
+// NewCouponApplicationClient returns a client for the CouponApplication from the given config.
+func NewCouponApplicationClient(c config) *CouponApplicationClient {
+	return &CouponApplicationClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `couponapplication.Hooks(f(g(h())))`.
+func (c *CouponApplicationClient) Use(hooks ...Hook) {
+	c.hooks.CouponApplication = append(c.hooks.CouponApplication, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `couponapplication.Intercept(f(g(h())))`.
+func (c *CouponApplicationClient) Intercept(interceptors ...Interceptor) {
+	c.inters.CouponApplication = append(c.inters.CouponApplication, interceptors...)
+}
+
+// Create returns a builder for creating a CouponApplication entity.
+func (c *CouponApplicationClient) Create() *CouponApplicationCreate {
+	mutation := newCouponApplicationMutation(c.config, OpCreate)
+	return &CouponApplicationCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of CouponApplication entities.
+func (c *CouponApplicationClient) CreateBulk(builders ...*CouponApplicationCreate) *CouponApplicationCreateBulk {
+	return &CouponApplicationCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *CouponApplicationClient) MapCreateBulk(slice any, setFunc func(*CouponApplicationCreate, int)) *CouponApplicationCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &CouponApplicationCreateBulk{err: fmt.Errorf("calling to CouponApplicationClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*CouponApplicationCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &CouponApplicationCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for CouponApplication.
+func (c *CouponApplicationClient) Update() *CouponApplicationUpdate {
+	mutation := newCouponApplicationMutation(c.config, OpUpdate)
+	return &CouponApplicationUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *CouponApplicationClient) UpdateOne(ca *CouponApplication) *CouponApplicationUpdateOne {
+	mutation := newCouponApplicationMutation(c.config, OpUpdateOne, withCouponApplication(ca))
+	return &CouponApplicationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *CouponApplicationClient) UpdateOneID(id string) *CouponApplicationUpdateOne {
+	mutation := newCouponApplicationMutation(c.config, OpUpdateOne, withCouponApplicationID(id))
+	return &CouponApplicationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for CouponApplication.
+func (c *CouponApplicationClient) Delete() *CouponApplicationDelete {
+	mutation := newCouponApplicationMutation(c.config, OpDelete)
+	return &CouponApplicationDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *CouponApplicationClient) DeleteOne(ca *CouponApplication) *CouponApplicationDeleteOne {
+	return c.DeleteOneID(ca.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *CouponApplicationClient) DeleteOneID(id string) *CouponApplicationDeleteOne {
+	builder := c.Delete().Where(couponapplication.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &CouponApplicationDeleteOne{builder}
+}
+
+// Query returns a query builder for CouponApplication.
+func (c *CouponApplicationClient) Query() *CouponApplicationQuery {
+	return &CouponApplicationQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeCouponApplication},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a CouponApplication entity by its id.
+func (c *CouponApplicationClient) Get(ctx context.Context, id string) (*CouponApplication, error) {
+	return c.Query().Where(couponapplication.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *CouponApplicationClient) GetX(ctx context.Context, id string) *CouponApplication {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryCoupon queries the coupon edge of a CouponApplication.
+func (c *CouponApplicationClient) QueryCoupon(ca *CouponApplication) *CouponQuery {
+	query := (&CouponClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := ca.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(couponapplication.Table, couponapplication.FieldID, id),
+			sqlgraph.To(coupon.Table, coupon.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, couponapplication.CouponTable, couponapplication.CouponColumn),
+		)
+		fromV = sqlgraph.Neighbors(ca.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryCouponAssociation queries the coupon_association edge of a CouponApplication.
+func (c *CouponApplicationClient) QueryCouponAssociation(ca *CouponApplication) *CouponAssociationQuery {
+	query := (&CouponAssociationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := ca.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(couponapplication.Table, couponapplication.FieldID, id),
+			sqlgraph.To(couponassociation.Table, couponassociation.FieldID),
+			sqlgraph.Edge(sqlgraph.M2M, true, couponapplication.CouponAssociationTable, couponapplication.CouponAssociationPrimaryKey...),
+		)
+		fromV = sqlgraph.Neighbors(ca.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryInvoice queries the invoice edge of a CouponApplication.
+func (c *CouponApplicationClient) QueryInvoice(ca *CouponApplication) *InvoiceQuery {
+	query := (&InvoiceClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := ca.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(couponapplication.Table, couponapplication.FieldID, id),
+			sqlgraph.To(invoice.Table, invoice.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, couponapplication.InvoiceTable, couponapplication.InvoiceColumn),
+		)
+		fromV = sqlgraph.Neighbors(ca.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryInvoiceLineItem queries the invoice_line_item edge of a CouponApplication.
+func (c *CouponApplicationClient) QueryInvoiceLineItem(ca *CouponApplication) *InvoiceLineItemQuery {
+	query := (&InvoiceLineItemClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := ca.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(couponapplication.Table, couponapplication.FieldID, id),
+			sqlgraph.To(invoicelineitem.Table, invoicelineitem.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, couponapplication.InvoiceLineItemTable, couponapplication.InvoiceLineItemColumn),
+		)
+		fromV = sqlgraph.Neighbors(ca.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QuerySubscription queries the subscription edge of a CouponApplication.
+func (c *CouponApplicationClient) QuerySubscription(ca *CouponApplication) *SubscriptionQuery {
+	query := (&SubscriptionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := ca.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(couponapplication.Table, couponapplication.FieldID, id),
+			sqlgraph.To(subscription.Table, subscription.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, couponapplication.SubscriptionTable, couponapplication.SubscriptionColumn),
+		)
+		fromV = sqlgraph.Neighbors(ca.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *CouponApplicationClient) Hooks() []Hook {
+	return c.hooks.CouponApplication
+}
+
+// Interceptors returns the client interceptors.
+func (c *CouponApplicationClient) Interceptors() []Interceptor {
+	return c.inters.CouponApplication
+}
+
+func (c *CouponApplicationClient) mutate(ctx context.Context, m *CouponApplicationMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&CouponApplicationCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&CouponApplicationUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&CouponApplicationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&CouponApplicationDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown CouponApplication mutation op: %q", m.Op())
+	}
+}
+
+// CouponAssociationClient is a client for the CouponAssociation schema.
+type CouponAssociationClient struct {
+	config
+}
+
+// NewCouponAssociationClient returns a client for the CouponAssociation from the given config.
+func NewCouponAssociationClient(c config) *CouponAssociationClient {
+	return &CouponAssociationClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `couponassociation.Hooks(f(g(h())))`.
+func (c *CouponAssociationClient) Use(hooks ...Hook) {
+	c.hooks.CouponAssociation = append(c.hooks.CouponAssociation, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `couponassociation.Intercept(f(g(h())))`.
+func (c *CouponAssociationClient) Intercept(interceptors ...Interceptor) {
+	c.inters.CouponAssociation = append(c.inters.CouponAssociation, interceptors...)
+}
+
+// Create returns a builder for creating a CouponAssociation entity.
+func (c *CouponAssociationClient) Create() *CouponAssociationCreate {
+	mutation := newCouponAssociationMutation(c.config, OpCreate)
+	return &CouponAssociationCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of CouponAssociation entities.
+func (c *CouponAssociationClient) CreateBulk(builders ...*CouponAssociationCreate) *CouponAssociationCreateBulk {
+	return &CouponAssociationCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *CouponAssociationClient) MapCreateBulk(slice any, setFunc func(*CouponAssociationCreate, int)) *CouponAssociationCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &CouponAssociationCreateBulk{err: fmt.Errorf("calling to CouponAssociationClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*CouponAssociationCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &CouponAssociationCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for CouponAssociation.
+func (c *CouponAssociationClient) Update() *CouponAssociationUpdate {
+	mutation := newCouponAssociationMutation(c.config, OpUpdate)
+	return &CouponAssociationUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *CouponAssociationClient) UpdateOne(ca *CouponAssociation) *CouponAssociationUpdateOne {
+	mutation := newCouponAssociationMutation(c.config, OpUpdateOne, withCouponAssociation(ca))
+	return &CouponAssociationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *CouponAssociationClient) UpdateOneID(id string) *CouponAssociationUpdateOne {
+	mutation := newCouponAssociationMutation(c.config, OpUpdateOne, withCouponAssociationID(id))
+	return &CouponAssociationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for CouponAssociation.
+func (c *CouponAssociationClient) Delete() *CouponAssociationDelete {
+	mutation := newCouponAssociationMutation(c.config, OpDelete)
+	return &CouponAssociationDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *CouponAssociationClient) DeleteOne(ca *CouponAssociation) *CouponAssociationDeleteOne {
+	return c.DeleteOneID(ca.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *CouponAssociationClient) DeleteOneID(id string) *CouponAssociationDeleteOne {
+	builder := c.Delete().Where(couponassociation.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &CouponAssociationDeleteOne{builder}
+}
+
+// Query returns a query builder for CouponAssociation.
+func (c *CouponAssociationClient) Query() *CouponAssociationQuery {
+	return &CouponAssociationQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeCouponAssociation},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a CouponAssociation entity by its id.
+func (c *CouponAssociationClient) Get(ctx context.Context, id string) (*CouponAssociation, error) {
+	return c.Query().Where(couponassociation.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *CouponAssociationClient) GetX(ctx context.Context, id string) *CouponAssociation {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryCoupon queries the coupon edge of a CouponAssociation.
+func (c *CouponAssociationClient) QueryCoupon(ca *CouponAssociation) *CouponQuery {
+	query := (&CouponClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := ca.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(couponassociation.Table, couponassociation.FieldID, id),
+			sqlgraph.To(coupon.Table, coupon.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, couponassociation.CouponTable, couponassociation.CouponColumn),
+		)
+		fromV = sqlgraph.Neighbors(ca.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QuerySubscription queries the subscription edge of a CouponAssociation.
+func (c *CouponAssociationClient) QuerySubscription(ca *CouponAssociation) *SubscriptionQuery {
+	query := (&SubscriptionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := ca.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(couponassociation.Table, couponassociation.FieldID, id),
+			sqlgraph.To(subscription.Table, subscription.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, couponassociation.SubscriptionTable, couponassociation.SubscriptionColumn),
+		)
+		fromV = sqlgraph.Neighbors(ca.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QuerySubscriptionLineItem queries the subscription_line_item edge of a CouponAssociation.
+func (c *CouponAssociationClient) QuerySubscriptionLineItem(ca *CouponAssociation) *SubscriptionLineItemQuery {
+	query := (&SubscriptionLineItemClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := ca.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(couponassociation.Table, couponassociation.FieldID, id),
+			sqlgraph.To(subscriptionlineitem.Table, subscriptionlineitem.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, couponassociation.SubscriptionLineItemTable, couponassociation.SubscriptionLineItemColumn),
+		)
+		fromV = sqlgraph.Neighbors(ca.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryCouponApplications queries the coupon_applications edge of a CouponAssociation.
+func (c *CouponAssociationClient) QueryCouponApplications(ca *CouponAssociation) *CouponApplicationQuery {
+	query := (&CouponApplicationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := ca.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(couponassociation.Table, couponassociation.FieldID, id),
+			sqlgraph.To(couponapplication.Table, couponapplication.FieldID),
+			sqlgraph.Edge(sqlgraph.M2M, false, couponassociation.CouponApplicationsTable, couponassociation.CouponApplicationsPrimaryKey...),
+		)
+		fromV = sqlgraph.Neighbors(ca.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *CouponAssociationClient) Hooks() []Hook {
+	return c.hooks.CouponAssociation
+}
+
+// Interceptors returns the client interceptors.
+func (c *CouponAssociationClient) Interceptors() []Interceptor {
+	return c.inters.CouponAssociation
+}
+
+func (c *CouponAssociationClient) mutate(ctx context.Context, m *CouponAssociationMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&CouponAssociationCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&CouponAssociationUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&CouponAssociationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&CouponAssociationDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown CouponAssociation mutation op: %q", m.Op())
 	}
 }
 
@@ -2150,6 +2751,22 @@ func (c *InvoiceClient) QueryLineItems(i *Invoice) *InvoiceLineItemQuery {
 	return query
 }
 
+// QueryCouponApplications queries the coupon_applications edge of a Invoice.
+func (c *InvoiceClient) QueryCouponApplications(i *Invoice) *CouponApplicationQuery {
+	query := (&CouponApplicationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := i.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(invoice.Table, invoice.FieldID, id),
+			sqlgraph.To(couponapplication.Table, couponapplication.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, invoice.CouponApplicationsTable, invoice.CouponApplicationsColumn),
+		)
+		fromV = sqlgraph.Neighbors(i.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *InvoiceClient) Hooks() []Hook {
 	return c.hooks.Invoice
@@ -2292,6 +2909,22 @@ func (c *InvoiceLineItemClient) QueryInvoice(ili *InvoiceLineItem) *InvoiceQuery
 			sqlgraph.From(invoicelineitem.Table, invoicelineitem.FieldID, id),
 			sqlgraph.To(invoice.Table, invoice.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, invoicelineitem.InvoiceTable, invoicelineitem.InvoiceColumn),
+		)
+		fromV = sqlgraph.Neighbors(ili.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryCouponApplications queries the coupon_applications edge of a InvoiceLineItem.
+func (c *InvoiceLineItemClient) QueryCouponApplications(ili *InvoiceLineItem) *CouponApplicationQuery {
+	query := (&CouponApplicationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := ili.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(invoicelineitem.Table, invoicelineitem.FieldID, id),
+			sqlgraph.To(couponapplication.Table, couponapplication.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, invoicelineitem.CouponApplicationsTable, invoicelineitem.CouponApplicationsColumn),
 		)
 		fromV = sqlgraph.Neighbors(ili.driver.Dialect(), step)
 		return fromV, nil
@@ -3523,6 +4156,38 @@ func (c *SubscriptionClient) QuerySchedule(s *Subscription) *SubscriptionSchedul
 	return query
 }
 
+// QueryCouponAssociations queries the coupon_associations edge of a Subscription.
+func (c *SubscriptionClient) QueryCouponAssociations(s *Subscription) *CouponAssociationQuery {
+	query := (&CouponAssociationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := s.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(subscription.Table, subscription.FieldID, id),
+			sqlgraph.To(couponassociation.Table, couponassociation.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, subscription.CouponAssociationsTable, subscription.CouponAssociationsColumn),
+		)
+		fromV = sqlgraph.Neighbors(s.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryCouponApplications queries the coupon_applications edge of a Subscription.
+func (c *SubscriptionClient) QueryCouponApplications(s *Subscription) *CouponApplicationQuery {
+	query := (&CouponApplicationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := s.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(subscription.Table, subscription.FieldID, id),
+			sqlgraph.To(couponapplication.Table, couponapplication.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, subscription.CouponApplicationsTable, subscription.CouponApplicationsColumn),
+		)
+		fromV = sqlgraph.Neighbors(s.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *SubscriptionClient) Hooks() []Hook {
 	return c.hooks.Subscription
@@ -3665,6 +4330,22 @@ func (c *SubscriptionLineItemClient) QuerySubscription(sli *SubscriptionLineItem
 			sqlgraph.From(subscriptionlineitem.Table, subscriptionlineitem.FieldID, id),
 			sqlgraph.To(subscription.Table, subscription.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, subscriptionlineitem.SubscriptionTable, subscriptionlineitem.SubscriptionColumn),
+		)
+		fromV = sqlgraph.Neighbors(sli.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryCouponAssociations queries the coupon_associations edge of a SubscriptionLineItem.
+func (c *SubscriptionLineItemClient) QueryCouponAssociations(sli *SubscriptionLineItem) *CouponAssociationQuery {
+	query := (&CouponAssociationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := sli.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(subscriptionlineitem.Table, subscriptionlineitem.FieldID, id),
+			sqlgraph.To(couponassociation.Table, couponassociation.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, subscriptionlineitem.CouponAssociationsTable, subscriptionlineitem.CouponAssociationsColumn),
 		)
 		fromV = sqlgraph.Neighbors(sli.driver.Dialect(), step)
 		return fromV, nil
@@ -4828,19 +5509,21 @@ func (c *WalletTransactionClient) mutate(ctx context.Context, m *WalletTransacti
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		Auth, BillingSequence, Costsheet, CreditGrant, CreditGrantApplication,
-		CreditNote, CreditNoteLineItem, Customer, Entitlement, Environment, Feature,
-		Invoice, InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt,
-		Plan, Price, Secret, Subscription, SubscriptionLineItem, SubscriptionPause,
-		SubscriptionSchedule, SubscriptionSchedulePhase, Task, Tenant, User, Wallet,
+		Auth, BillingSequence, Costsheet, Coupon, CouponApplication, CouponAssociation,
+		CreditGrant, CreditGrantApplication, CreditNote, CreditNoteLineItem, Customer,
+		Entitlement, Environment, Feature, Invoice, InvoiceLineItem, InvoiceSequence,
+		Meter, Payment, PaymentAttempt, Plan, Price, Secret, Subscription,
+		SubscriptionLineItem, SubscriptionPause, SubscriptionSchedule,
+		SubscriptionSchedulePhase, Task, Tenant, User, Wallet,
 		WalletTransaction []ent.Hook
 	}
 	inters struct {
-		Auth, BillingSequence, Costsheet, CreditGrant, CreditGrantApplication,
-		CreditNote, CreditNoteLineItem, Customer, Entitlement, Environment, Feature,
-		Invoice, InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt,
-		Plan, Price, Secret, Subscription, SubscriptionLineItem, SubscriptionPause,
-		SubscriptionSchedule, SubscriptionSchedulePhase, Task, Tenant, User, Wallet,
+		Auth, BillingSequence, Costsheet, Coupon, CouponApplication, CouponAssociation,
+		CreditGrant, CreditGrantApplication, CreditNote, CreditNoteLineItem, Customer,
+		Entitlement, Environment, Feature, Invoice, InvoiceLineItem, InvoiceSequence,
+		Meter, Payment, PaymentAttempt, Plan, Price, Secret, Subscription,
+		SubscriptionLineItem, SubscriptionPause, SubscriptionSchedule,
+		SubscriptionSchedulePhase, Task, Tenant, User, Wallet,
 		WalletTransaction []ent.Interceptor
 	}
 )

@@ -2028,6 +2028,52 @@ func HasScheduleWith(preds ...predicate.SubscriptionSchedule) predicate.Subscrip
 	})
 }
 
+// HasCouponAssociations applies the HasEdge predicate on the "coupon_associations" edge.
+func HasCouponAssociations() predicate.Subscription {
+	return predicate.Subscription(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, CouponAssociationsTable, CouponAssociationsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasCouponAssociationsWith applies the HasEdge predicate on the "coupon_associations" edge with a given conditions (other predicates).
+func HasCouponAssociationsWith(preds ...predicate.CouponAssociation) predicate.Subscription {
+	return predicate.Subscription(func(s *sql.Selector) {
+		step := newCouponAssociationsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasCouponApplications applies the HasEdge predicate on the "coupon_applications" edge.
+func HasCouponApplications() predicate.Subscription {
+	return predicate.Subscription(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, CouponApplicationsTable, CouponApplicationsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasCouponApplicationsWith applies the HasEdge predicate on the "coupon_applications" edge with a given conditions (other predicates).
+func HasCouponApplicationsWith(preds ...predicate.CouponApplication) predicate.Subscription {
+	return predicate.Subscription(func(s *sql.Selector) {
+		step := newCouponApplicationsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.Subscription) predicate.Subscription {
 	return predicate.Subscription(sql.AndPredicates(predicates...))

@@ -57,6 +57,8 @@ type Invoice struct {
 	AdjustmentAmount decimal.Decimal `json:"adjustment_amount,omitempty"`
 	// RefundedAmount holds the value of the "refunded_amount" field.
 	RefundedAmount decimal.Decimal `json:"refunded_amount,omitempty"`
+	// TotalDiscount holds the value of the "total_discount" field.
+	TotalDiscount *decimal.Decimal `json:"total_discount,omitempty"`
 	// Total holds the value of the "total" field.
 	Total decimal.Decimal `json:"total,omitempty"`
 	// Description holds the value of the "description" field.
@@ -99,9 +101,11 @@ type Invoice struct {
 type InvoiceEdges struct {
 	// LineItems holds the value of the line_items edge.
 	LineItems []*InvoiceLineItem `json:"line_items,omitempty"`
+	// Invoice can have multiple coupon applications
+	CouponApplications []*CouponApplication `json:"coupon_applications,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [1]bool
+	loadedTypes [2]bool
 }
 
 // LineItemsOrErr returns the LineItems value or an error if the edge
@@ -113,11 +117,22 @@ func (e InvoiceEdges) LineItemsOrErr() ([]*InvoiceLineItem, error) {
 	return nil, &NotLoadedError{edge: "line_items"}
 }
 
+// CouponApplicationsOrErr returns the CouponApplications value or an error if the edge
+// was not loaded in eager-loading.
+func (e InvoiceEdges) CouponApplicationsOrErr() ([]*CouponApplication, error) {
+	if e.loadedTypes[1] {
+		return e.CouponApplications, nil
+	}
+	return nil, &NotLoadedError{edge: "coupon_applications"}
+}
+
 // scanValues returns the types for scanning values from sql.Rows.
 func (*Invoice) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case invoice.FieldTotalDiscount:
+			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case invoice.FieldMetadata:
 			values[i] = new([]byte)
 		case invoice.FieldAmountDue, invoice.FieldAmountPaid, invoice.FieldAmountRemaining, invoice.FieldSubtotal, invoice.FieldAdjustmentAmount, invoice.FieldRefundedAmount, invoice.FieldTotal:
@@ -264,6 +279,13 @@ func (i *Invoice) assignValues(columns []string, values []any) error {
 			} else if value != nil {
 				i.RefundedAmount = *value
 			}
+		case invoice.FieldTotalDiscount:
+			if value, ok := values[j].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field total_discount", values[j])
+			} else if value.Valid {
+				i.TotalDiscount = new(decimal.Decimal)
+				*i.TotalDiscount = *value.S.(*decimal.Decimal)
+			}
 		case invoice.FieldTotal:
 			if value, ok := values[j].(*decimal.Decimal); !ok {
 				return fmt.Errorf("unexpected type %T for field total", values[j])
@@ -391,6 +413,11 @@ func (i *Invoice) QueryLineItems() *InvoiceLineItemQuery {
 	return NewInvoiceClient(i.config).QueryLineItems(i)
 }
 
+// QueryCouponApplications queries the "coupon_applications" edge of the Invoice entity.
+func (i *Invoice) QueryCouponApplications() *CouponApplicationQuery {
+	return NewInvoiceClient(i.config).QueryCouponApplications(i)
+}
+
 // Update returns a builder for updating this Invoice.
 // Note that you need to call Invoice.Unwrap() before calling this method if this Invoice
 // was returned from a transaction, and the transaction was committed or rolled back.
@@ -472,6 +499,11 @@ func (i *Invoice) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("refunded_amount=")
 	builder.WriteString(fmt.Sprintf("%v", i.RefundedAmount))
+	builder.WriteString(", ")
+	if v := i.TotalDiscount; v != nil {
+		builder.WriteString("total_discount=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("total=")
 	builder.WriteString(fmt.Sprintf("%v", i.Total))

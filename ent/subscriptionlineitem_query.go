@@ -4,6 +4,7 @@ package ent
 
 import (
 	"context"
+	"database/sql/driver"
 	"fmt"
 	"math"
 
@@ -11,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/flexprice/flexprice/ent/couponassociation"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
@@ -19,11 +21,12 @@ import (
 // SubscriptionLineItemQuery is the builder for querying SubscriptionLineItem entities.
 type SubscriptionLineItemQuery struct {
 	config
-	ctx              *QueryContext
-	order            []subscriptionlineitem.OrderOption
-	inters           []Interceptor
-	predicates       []predicate.SubscriptionLineItem
-	withSubscription *SubscriptionQuery
+	ctx                    *QueryContext
+	order                  []subscriptionlineitem.OrderOption
+	inters                 []Interceptor
+	predicates             []predicate.SubscriptionLineItem
+	withSubscription       *SubscriptionQuery
+	withCouponAssociations *CouponAssociationQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -75,6 +78,28 @@ func (sliq *SubscriptionLineItemQuery) QuerySubscription() *SubscriptionQuery {
 			sqlgraph.From(subscriptionlineitem.Table, subscriptionlineitem.FieldID, selector),
 			sqlgraph.To(subscription.Table, subscription.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, subscriptionlineitem.SubscriptionTable, subscriptionlineitem.SubscriptionColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(sliq.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryCouponAssociations chains the current query on the "coupon_associations" edge.
+func (sliq *SubscriptionLineItemQuery) QueryCouponAssociations() *CouponAssociationQuery {
+	query := (&CouponAssociationClient{config: sliq.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := sliq.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := sliq.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(subscriptionlineitem.Table, subscriptionlineitem.FieldID, selector),
+			sqlgraph.To(couponassociation.Table, couponassociation.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, subscriptionlineitem.CouponAssociationsTable, subscriptionlineitem.CouponAssociationsColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(sliq.driver.Dialect(), step)
 		return fromU, nil
@@ -269,12 +294,13 @@ func (sliq *SubscriptionLineItemQuery) Clone() *SubscriptionLineItemQuery {
 		return nil
 	}
 	return &SubscriptionLineItemQuery{
-		config:           sliq.config,
-		ctx:              sliq.ctx.Clone(),
-		order:            append([]subscriptionlineitem.OrderOption{}, sliq.order...),
-		inters:           append([]Interceptor{}, sliq.inters...),
-		predicates:       append([]predicate.SubscriptionLineItem{}, sliq.predicates...),
-		withSubscription: sliq.withSubscription.Clone(),
+		config:                 sliq.config,
+		ctx:                    sliq.ctx.Clone(),
+		order:                  append([]subscriptionlineitem.OrderOption{}, sliq.order...),
+		inters:                 append([]Interceptor{}, sliq.inters...),
+		predicates:             append([]predicate.SubscriptionLineItem{}, sliq.predicates...),
+		withSubscription:       sliq.withSubscription.Clone(),
+		withCouponAssociations: sliq.withCouponAssociations.Clone(),
 		// clone intermediate query.
 		sql:  sliq.sql.Clone(),
 		path: sliq.path,
@@ -289,6 +315,17 @@ func (sliq *SubscriptionLineItemQuery) WithSubscription(opts ...func(*Subscripti
 		opt(query)
 	}
 	sliq.withSubscription = query
+	return sliq
+}
+
+// WithCouponAssociations tells the query-builder to eager-load the nodes that are connected to
+// the "coupon_associations" edge. The optional arguments are used to configure the query builder of the edge.
+func (sliq *SubscriptionLineItemQuery) WithCouponAssociations(opts ...func(*CouponAssociationQuery)) *SubscriptionLineItemQuery {
+	query := (&CouponAssociationClient{config: sliq.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	sliq.withCouponAssociations = query
 	return sliq
 }
 
@@ -370,8 +407,9 @@ func (sliq *SubscriptionLineItemQuery) sqlAll(ctx context.Context, hooks ...quer
 	var (
 		nodes       = []*SubscriptionLineItem{}
 		_spec       = sliq.querySpec()
-		loadedTypes = [1]bool{
+		loadedTypes = [2]bool{
 			sliq.withSubscription != nil,
+			sliq.withCouponAssociations != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -395,6 +433,15 @@ func (sliq *SubscriptionLineItemQuery) sqlAll(ctx context.Context, hooks ...quer
 	if query := sliq.withSubscription; query != nil {
 		if err := sliq.loadSubscription(ctx, query, nodes, nil,
 			func(n *SubscriptionLineItem, e *Subscription) { n.Edges.Subscription = e }); err != nil {
+			return nil, err
+		}
+	}
+	if query := sliq.withCouponAssociations; query != nil {
+		if err := sliq.loadCouponAssociations(ctx, query, nodes,
+			func(n *SubscriptionLineItem) { n.Edges.CouponAssociations = []*CouponAssociation{} },
+			func(n *SubscriptionLineItem, e *CouponAssociation) {
+				n.Edges.CouponAssociations = append(n.Edges.CouponAssociations, e)
+			}); err != nil {
 			return nil, err
 		}
 	}
@@ -427,6 +474,39 @@ func (sliq *SubscriptionLineItemQuery) loadSubscription(ctx context.Context, que
 		for i := range nodes {
 			assign(nodes[i], n)
 		}
+	}
+	return nil
+}
+func (sliq *SubscriptionLineItemQuery) loadCouponAssociations(ctx context.Context, query *CouponAssociationQuery, nodes []*SubscriptionLineItem, init func(*SubscriptionLineItem), assign func(*SubscriptionLineItem, *CouponAssociation)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[string]*SubscriptionLineItem)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(couponassociation.FieldSubscriptionLineItemID)
+	}
+	query.Where(predicate.CouponAssociation(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(subscriptionlineitem.CouponAssociationsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.SubscriptionLineItemID
+		if fk == nil {
+			return fmt.Errorf(`foreign-key "subscription_line_item_id" is nil for node %v`, n.ID)
+		}
+		node, ok := nodeids[*fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "subscription_line_item_id" returned %v for node %v`, *fk, n.ID)
+		}
+		assign(node, n)
 	}
 	return nil
 }

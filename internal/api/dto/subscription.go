@@ -50,6 +50,8 @@ type CreateSubscriptionRequest struct {
 	OverageFactor *decimal.Decimal `json:"overage_factor,omitempty"`
 	// Phases represents an optional timeline of subscription phases
 	Phases []SubscriptionSchedulePhaseInput `json:"phases,omitempty" validate:"omitempty,dive"`
+	// SubscriptionCoupons is a list of coupon IDs to be applied to the subscription
+	SubscriptionCoupons []string `json:"subscription_coupons,omitempty"`
 }
 
 type UpdateSubscriptionRequest struct {
@@ -64,6 +66,8 @@ type SubscriptionResponse struct {
 	Customer *CustomerResponse `json:"customer"`
 	// Schedule is included when the subscription has a schedule
 	Schedule *SubscriptionScheduleResponse `json:"schedule,omitempty"`
+	// CouponAssociations are the coupon associations for this subscription
+	CouponAssociations []*CouponAssociationResponse `json:"coupon_associations,omitempty"`
 }
 
 // ListSubscriptionsResponse represents the response for listing subscriptions
@@ -237,6 +241,21 @@ func (r *CreateSubscriptionRequest) Validate() error {
 						}).
 						Mark(ierr.ErrValidation)
 				}
+			}
+		}
+	}
+
+	// Validate subscription coupons if provided
+	if len(r.SubscriptionCoupons) > 0 {
+		// Validate that coupon IDs are not empty
+		for i, couponID := range r.SubscriptionCoupons {
+			if couponID == "" {
+				return ierr.NewError("subscription coupon ID cannot be empty").
+					WithHint("All subscription coupon IDs must be valid").
+					WithReportableDetails(map[string]interface{}{
+						"index": i,
+					}).
+					Mark(ierr.ErrValidation)
 			}
 		}
 	}

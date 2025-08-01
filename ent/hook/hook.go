@@ -45,6 +45,42 @@ func (f CostsheetFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, e
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CostsheetMutation", m)
 }
 
+// The CouponFunc type is an adapter to allow the use of ordinary
+// function as Coupon mutator.
+type CouponFunc func(context.Context, *ent.CouponMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f CouponFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.CouponMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CouponMutation", m)
+}
+
+// The CouponApplicationFunc type is an adapter to allow the use of ordinary
+// function as CouponApplication mutator.
+type CouponApplicationFunc func(context.Context, *ent.CouponApplicationMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f CouponApplicationFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.CouponApplicationMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CouponApplicationMutation", m)
+}
+
+// The CouponAssociationFunc type is an adapter to allow the use of ordinary
+// function as CouponAssociation mutator.
+type CouponAssociationFunc func(context.Context, *ent.CouponAssociationMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f CouponAssociationFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.CouponAssociationMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CouponAssociationMutation", m)
+}
+
 // The CreditGrantFunc type is an adapter to allow the use of ordinary
 // function as CreditGrant mutator.
 type CreditGrantFunc func(context.Context, *ent.CreditGrantMutation) (ent.Value, error)

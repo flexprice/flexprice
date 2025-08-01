@@ -4,6 +4,7 @@ package ent
 
 import (
 	"context"
+	"database/sql/driver"
 	"fmt"
 	"math"
 
@@ -11,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/flexprice/flexprice/ent/couponapplication"
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/ent/predicate"
@@ -19,11 +21,12 @@ import (
 // InvoiceLineItemQuery is the builder for querying InvoiceLineItem entities.
 type InvoiceLineItemQuery struct {
 	config
-	ctx         *QueryContext
-	order       []invoicelineitem.OrderOption
-	inters      []Interceptor
-	predicates  []predicate.InvoiceLineItem
-	withInvoice *InvoiceQuery
+	ctx                    *QueryContext
+	order                  []invoicelineitem.OrderOption
+	inters                 []Interceptor
+	predicates             []predicate.InvoiceLineItem
+	withInvoice            *InvoiceQuery
+	withCouponApplications *CouponApplicationQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -75,6 +78,28 @@ func (iliq *InvoiceLineItemQuery) QueryInvoice() *InvoiceQuery {
 			sqlgraph.From(invoicelineitem.Table, invoicelineitem.FieldID, selector),
 			sqlgraph.To(invoice.Table, invoice.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, invoicelineitem.InvoiceTable, invoicelineitem.InvoiceColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(iliq.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryCouponApplications chains the current query on the "coupon_applications" edge.
+func (iliq *InvoiceLineItemQuery) QueryCouponApplications() *CouponApplicationQuery {
+	query := (&CouponApplicationClient{config: iliq.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := iliq.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := iliq.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(invoicelineitem.Table, invoicelineitem.FieldID, selector),
+			sqlgraph.To(couponapplication.Table, couponapplication.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, invoicelineitem.CouponApplicationsTable, invoicelineitem.CouponApplicationsColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(iliq.driver.Dialect(), step)
 		return fromU, nil
@@ -269,12 +294,13 @@ func (iliq *InvoiceLineItemQuery) Clone() *InvoiceLineItemQuery {
 		return nil
 	}
 	return &InvoiceLineItemQuery{
-		config:      iliq.config,
-		ctx:         iliq.ctx.Clone(),
-		order:       append([]invoicelineitem.OrderOption{}, iliq.order...),
-		inters:      append([]Interceptor{}, iliq.inters...),
-		predicates:  append([]predicate.InvoiceLineItem{}, iliq.predicates...),
-		withInvoice: iliq.withInvoice.Clone(),
+		config:                 iliq.config,
+		ctx:                    iliq.ctx.Clone(),
+		order:                  append([]invoicelineitem.OrderOption{}, iliq.order...),
+		inters:                 append([]Interceptor{}, iliq.inters...),
+		predicates:             append([]predicate.InvoiceLineItem{}, iliq.predicates...),
+		withInvoice:            iliq.withInvoice.Clone(),
+		withCouponApplications: iliq.withCouponApplications.Clone(),
 		// clone intermediate query.
 		sql:  iliq.sql.Clone(),
 		path: iliq.path,
@@ -289,6 +315,17 @@ func (iliq *InvoiceLineItemQuery) WithInvoice(opts ...func(*InvoiceQuery)) *Invo
 		opt(query)
 	}
 	iliq.withInvoice = query
+	return iliq
+}
+
+// WithCouponApplications tells the query-builder to eager-load the nodes that are connected to
+// the "coupon_applications" edge. The optional arguments are used to configure the query builder of the edge.
+func (iliq *InvoiceLineItemQuery) WithCouponApplications(opts ...func(*CouponApplicationQuery)) *InvoiceLineItemQuery {
+	query := (&CouponApplicationClient{config: iliq.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	iliq.withCouponApplications = query
 	return iliq
 }
 
@@ -370,8 +407,9 @@ func (iliq *InvoiceLineItemQuery) sqlAll(ctx context.Context, hooks ...queryHook
 	var (
 		nodes       = []*InvoiceLineItem{}
 		_spec       = iliq.querySpec()
-		loadedTypes = [1]bool{
+		loadedTypes = [2]bool{
 			iliq.withInvoice != nil,
+			iliq.withCouponApplications != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -395,6 +433,15 @@ func (iliq *InvoiceLineItemQuery) sqlAll(ctx context.Context, hooks ...queryHook
 	if query := iliq.withInvoice; query != nil {
 		if err := iliq.loadInvoice(ctx, query, nodes, nil,
 			func(n *InvoiceLineItem, e *Invoice) { n.Edges.Invoice = e }); err != nil {
+			return nil, err
+		}
+	}
+	if query := iliq.withCouponApplications; query != nil {
+		if err := iliq.loadCouponApplications(ctx, query, nodes,
+			func(n *InvoiceLineItem) { n.Edges.CouponApplications = []*CouponApplication{} },
+			func(n *InvoiceLineItem, e *CouponApplication) {
+				n.Edges.CouponApplications = append(n.Edges.CouponApplications, e)
+			}); err != nil {
 			return nil, err
 		}
 	}
@@ -427,6 +474,39 @@ func (iliq *InvoiceLineItemQuery) loadInvoice(ctx context.Context, query *Invoic
 		for i := range nodes {
 			assign(nodes[i], n)
 		}
+	}
+	return nil
+}
+func (iliq *InvoiceLineItemQuery) loadCouponApplications(ctx context.Context, query *CouponApplicationQuery, nodes []*InvoiceLineItem, init func(*InvoiceLineItem), assign func(*InvoiceLineItem, *CouponApplication)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[string]*InvoiceLineItem)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(couponapplication.FieldInvoiceLineItemID)
+	}
+	query.Where(predicate.CouponApplication(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(invoicelineitem.CouponApplicationsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.InvoiceLineItemID
+		if fk == nil {
+			return fmt.Errorf(`foreign-key "invoice_line_item_id" is nil for node %v`, n.ID)
+		}
+		node, ok := nodeids[*fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "invoice_line_item_id" returned %v for node %v`, *fk, n.ID)
+		}
+		assign(node, n)
 	}
 	return nil
 }

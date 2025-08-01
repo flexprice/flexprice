@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/flexprice/flexprice/ent/couponapplication"
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/ent/predicate"
@@ -217,6 +218,26 @@ func (iu *InvoiceUpdate) SetNillableRefundedAmount(d *decimal.Decimal) *InvoiceU
 // ClearRefundedAmount clears the value of the "refunded_amount" field.
 func (iu *InvoiceUpdate) ClearRefundedAmount() *InvoiceUpdate {
 	iu.mutation.ClearRefundedAmount()
+	return iu
+}
+
+// SetTotalDiscount sets the "total_discount" field.
+func (iu *InvoiceUpdate) SetTotalDiscount(d decimal.Decimal) *InvoiceUpdate {
+	iu.mutation.SetTotalDiscount(d)
+	return iu
+}
+
+// SetNillableTotalDiscount sets the "total_discount" field if the given value is not nil.
+func (iu *InvoiceUpdate) SetNillableTotalDiscount(d *decimal.Decimal) *InvoiceUpdate {
+	if d != nil {
+		iu.SetTotalDiscount(*d)
+	}
+	return iu
+}
+
+// ClearTotalDiscount clears the value of the "total_discount" field.
+func (iu *InvoiceUpdate) ClearTotalDiscount() *InvoiceUpdate {
+	iu.mutation.ClearTotalDiscount()
 	return iu
 }
 
@@ -495,6 +516,21 @@ func (iu *InvoiceUpdate) AddLineItems(i ...*InvoiceLineItem) *InvoiceUpdate {
 	return iu.AddLineItemIDs(ids...)
 }
 
+// AddCouponApplicationIDs adds the "coupon_applications" edge to the CouponApplication entity by IDs.
+func (iu *InvoiceUpdate) AddCouponApplicationIDs(ids ...string) *InvoiceUpdate {
+	iu.mutation.AddCouponApplicationIDs(ids...)
+	return iu
+}
+
+// AddCouponApplications adds the "coupon_applications" edges to the CouponApplication entity.
+func (iu *InvoiceUpdate) AddCouponApplications(c ...*CouponApplication) *InvoiceUpdate {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return iu.AddCouponApplicationIDs(ids...)
+}
+
 // Mutation returns the InvoiceMutation object of the builder.
 func (iu *InvoiceUpdate) Mutation() *InvoiceMutation {
 	return iu.mutation
@@ -519,6 +555,27 @@ func (iu *InvoiceUpdate) RemoveLineItems(i ...*InvoiceLineItem) *InvoiceUpdate {
 		ids[j] = i[j].ID
 	}
 	return iu.RemoveLineItemIDs(ids...)
+}
+
+// ClearCouponApplications clears all "coupon_applications" edges to the CouponApplication entity.
+func (iu *InvoiceUpdate) ClearCouponApplications() *InvoiceUpdate {
+	iu.mutation.ClearCouponApplications()
+	return iu
+}
+
+// RemoveCouponApplicationIDs removes the "coupon_applications" edge to CouponApplication entities by IDs.
+func (iu *InvoiceUpdate) RemoveCouponApplicationIDs(ids ...string) *InvoiceUpdate {
+	iu.mutation.RemoveCouponApplicationIDs(ids...)
+	return iu
+}
+
+// RemoveCouponApplications removes "coupon_applications" edges to CouponApplication entities.
+func (iu *InvoiceUpdate) RemoveCouponApplications(c ...*CouponApplication) *InvoiceUpdate {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return iu.RemoveCouponApplicationIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -622,6 +679,12 @@ func (iu *InvoiceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if iu.mutation.RefundedAmountCleared() {
 		_spec.ClearField(invoice.FieldRefundedAmount, field.TypeOther)
+	}
+	if value, ok := iu.mutation.TotalDiscount(); ok {
+		_spec.SetField(invoice.FieldTotalDiscount, field.TypeOther, value)
+	}
+	if iu.mutation.TotalDiscountCleared() {
+		_spec.ClearField(invoice.FieldTotalDiscount, field.TypeOther)
 	}
 	if value, ok := iu.mutation.Total(); ok {
 		_spec.SetField(invoice.FieldTotal, field.TypeOther, value)
@@ -751,6 +814,51 @@ func (iu *InvoiceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(invoicelineitem.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if iu.mutation.CouponApplicationsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   invoice.CouponApplicationsTable,
+			Columns: []string{invoice.CouponApplicationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(couponapplication.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := iu.mutation.RemovedCouponApplicationsIDs(); len(nodes) > 0 && !iu.mutation.CouponApplicationsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   invoice.CouponApplicationsTable,
+			Columns: []string{invoice.CouponApplicationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(couponapplication.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := iu.mutation.CouponApplicationsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   invoice.CouponApplicationsTable,
+			Columns: []string{invoice.CouponApplicationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(couponapplication.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {
@@ -965,6 +1073,26 @@ func (iuo *InvoiceUpdateOne) SetNillableRefundedAmount(d *decimal.Decimal) *Invo
 // ClearRefundedAmount clears the value of the "refunded_amount" field.
 func (iuo *InvoiceUpdateOne) ClearRefundedAmount() *InvoiceUpdateOne {
 	iuo.mutation.ClearRefundedAmount()
+	return iuo
+}
+
+// SetTotalDiscount sets the "total_discount" field.
+func (iuo *InvoiceUpdateOne) SetTotalDiscount(d decimal.Decimal) *InvoiceUpdateOne {
+	iuo.mutation.SetTotalDiscount(d)
+	return iuo
+}
+
+// SetNillableTotalDiscount sets the "total_discount" field if the given value is not nil.
+func (iuo *InvoiceUpdateOne) SetNillableTotalDiscount(d *decimal.Decimal) *InvoiceUpdateOne {
+	if d != nil {
+		iuo.SetTotalDiscount(*d)
+	}
+	return iuo
+}
+
+// ClearTotalDiscount clears the value of the "total_discount" field.
+func (iuo *InvoiceUpdateOne) ClearTotalDiscount() *InvoiceUpdateOne {
+	iuo.mutation.ClearTotalDiscount()
 	return iuo
 }
 
@@ -1243,6 +1371,21 @@ func (iuo *InvoiceUpdateOne) AddLineItems(i ...*InvoiceLineItem) *InvoiceUpdateO
 	return iuo.AddLineItemIDs(ids...)
 }
 
+// AddCouponApplicationIDs adds the "coupon_applications" edge to the CouponApplication entity by IDs.
+func (iuo *InvoiceUpdateOne) AddCouponApplicationIDs(ids ...string) *InvoiceUpdateOne {
+	iuo.mutation.AddCouponApplicationIDs(ids...)
+	return iuo
+}
+
+// AddCouponApplications adds the "coupon_applications" edges to the CouponApplication entity.
+func (iuo *InvoiceUpdateOne) AddCouponApplications(c ...*CouponApplication) *InvoiceUpdateOne {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return iuo.AddCouponApplicationIDs(ids...)
+}
+
 // Mutation returns the InvoiceMutation object of the builder.
 func (iuo *InvoiceUpdateOne) Mutation() *InvoiceMutation {
 	return iuo.mutation
@@ -1267,6 +1410,27 @@ func (iuo *InvoiceUpdateOne) RemoveLineItems(i ...*InvoiceLineItem) *InvoiceUpda
 		ids[j] = i[j].ID
 	}
 	return iuo.RemoveLineItemIDs(ids...)
+}
+
+// ClearCouponApplications clears all "coupon_applications" edges to the CouponApplication entity.
+func (iuo *InvoiceUpdateOne) ClearCouponApplications() *InvoiceUpdateOne {
+	iuo.mutation.ClearCouponApplications()
+	return iuo
+}
+
+// RemoveCouponApplicationIDs removes the "coupon_applications" edge to CouponApplication entities by IDs.
+func (iuo *InvoiceUpdateOne) RemoveCouponApplicationIDs(ids ...string) *InvoiceUpdateOne {
+	iuo.mutation.RemoveCouponApplicationIDs(ids...)
+	return iuo
+}
+
+// RemoveCouponApplications removes "coupon_applications" edges to CouponApplication entities.
+func (iuo *InvoiceUpdateOne) RemoveCouponApplications(c ...*CouponApplication) *InvoiceUpdateOne {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return iuo.RemoveCouponApplicationIDs(ids...)
 }
 
 // Where appends a list predicates to the InvoiceUpdate builder.
@@ -1401,6 +1565,12 @@ func (iuo *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err e
 	if iuo.mutation.RefundedAmountCleared() {
 		_spec.ClearField(invoice.FieldRefundedAmount, field.TypeOther)
 	}
+	if value, ok := iuo.mutation.TotalDiscount(); ok {
+		_spec.SetField(invoice.FieldTotalDiscount, field.TypeOther, value)
+	}
+	if iuo.mutation.TotalDiscountCleared() {
+		_spec.ClearField(invoice.FieldTotalDiscount, field.TypeOther)
+	}
 	if value, ok := iuo.mutation.Total(); ok {
 		_spec.SetField(invoice.FieldTotal, field.TypeOther, value)
 	}
@@ -1529,6 +1699,51 @@ func (iuo *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err e
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(invoicelineitem.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if iuo.mutation.CouponApplicationsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   invoice.CouponApplicationsTable,
+			Columns: []string{invoice.CouponApplicationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(couponapplication.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := iuo.mutation.RemovedCouponApplicationsIDs(); len(nodes) > 0 && !iuo.mutation.CouponApplicationsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   invoice.CouponApplicationsTable,
+			Columns: []string{invoice.CouponApplicationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(couponapplication.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := iuo.mutation.CouponApplicationsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   invoice.CouponApplicationsTable,
+			Columns: []string{invoice.CouponApplicationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(couponapplication.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {
