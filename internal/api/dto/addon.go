@@ -131,12 +131,11 @@ type ListAddonsResponse = types.ListResponse[*AddonResponse]
 
 // AddAddonToSubscriptionRequest represents the request to add an addon to a subscription
 type AddAddonToSubscriptionRequest struct {
-	AddonID           string                  `json:"addon_id" validate:"required"`
-	PriceID           string                  `json:"price_id" validate:"required"`
-	Quantity          int                     `json:"quantity" validate:"min=1"`
-	StartDate         *time.Time              `json:"start_date,omitempty"`
-	ProrationBehavior types.ProrationBehavior `json:"proration_behavior"`
-	Metadata          map[string]interface{}  `json:"metadata"`
+	AddonID   string                 `json:"addon_id" validate:"required"`
+	Quantity  int                    `json:"quantity" validate:"min=1"`
+	StartDate *time.Time             `json:"start_date,omitempty"`
+	EndDate   *time.Time             `json:"end_date,omitempty"`
+	Metadata  map[string]interface{} `json:"metadata"`
 }
 
 func (r *AddAddonToSubscriptionRequest) Validate() error {
@@ -147,10 +146,6 @@ func (r *AddAddonToSubscriptionRequest) Validate() error {
 
 	if r.Quantity <= 0 {
 		r.Quantity = 1
-	}
-
-	if r.ProrationBehavior == "" {
-		r.ProrationBehavior = types.ProrationBehaviorCreateProrations
 	}
 
 	return nil
@@ -165,22 +160,22 @@ func (r *AddAddonToSubscriptionRequest) ToDomain(ctx context.Context, subscripti
 	}
 
 	return &addon.SubscriptionAddon{
-		ID:             types.GenerateShortIDWithPrefix(string(types.UUID_PREFIX_ADDON)),
+		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ADDON),
 		SubscriptionID: subscriptionID,
 		AddonID:        r.AddonID,
 		StartDate:      startDate,
 		AddonStatus:    types.AddonStatusActive,
 		Metadata:       r.Metadata,
+		EndDate:        r.EndDate,
+		EnvironmentID:  types.GetEnvironmentID(ctx),
 		BaseModel:      types.GetDefaultBaseModel(ctx),
 	}
 }
 
 // UpdateSubscriptionAddonRequest represents the request to update a subscription addon
 type UpdateSubscriptionAddonRequest struct {
-	Quantity          *int                     `json:"quantity" validate:"omitempty,min=1"`
-	PriceID           *string                  `json:"price_id"`
-	ProrationBehavior *types.ProrationBehavior `json:"proration_behavior"`
-	Metadata          map[string]interface{}   `json:"metadata"`
+	Quantity *int                   `json:"quantity" validate:"omitempty,min=1"`
+	Metadata map[string]interface{} `json:"metadata"`
 }
 
 func (r *UpdateSubscriptionAddonRequest) Validate() error {

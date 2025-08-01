@@ -383,7 +383,7 @@ func (s *subscriptionService) handleSubscriptionAddons(
 		subscriptionAddon := addonReq.ToDomain(ctx, subscription.ID)
 
 		// Create the subscription addon
-		err = s.AddonRepo.CreateSubscriptionAddon(ctx, subscriptionAddon)
+		err = s.SubscriptionAddonRepo.Create(ctx, subscriptionAddon)
 		if err != nil {
 			return err
 		}

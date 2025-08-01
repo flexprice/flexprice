@@ -141,3 +141,7 @@ func NewCreditNoteLineItemRepository(p RepositoryParams) creditnote.CreditNoteLi
 func NewAddonRepository(p RepositoryParams) addon.Repository {
 	return entRepo.NewAddonRepository(p.EntClient, p.Logger, p.Cache)
 }
+
+func NewSubscriptionAddonRepository(p RepositoryParams) addon.SubscriptionAddonRepository {
+	return entRepo.NewSubscriptionAddonRepository(p.EntClient, p.Logger, p.Cache)
+}

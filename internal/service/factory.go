@@ -69,6 +69,7 @@ type ServiceParams struct {
 	CreditGrantApplicationRepo creditgrantapplication.Repository
 	AddonRepo                  addon.Repository
 	LineItemRepo               subscription.LineItemRepository
+	SubscriptionAddonRepo      addon.SubscriptionAddonRepository
 
 	// Publishers
 	EventPublisher   publisher.EventPublisher
@@ -113,6 +114,7 @@ func NewServiceParams(
 	taskRepo task.Repository,
 	costSheetRepo costsheet.Repository,
 	addonRepo addon.Repository,
+	subscriptionAddonRepo addon.SubscriptionAddonRepository,
 ) ServiceParams {
 	return ServiceParams{
 		Logger:                     logger,
@@ -148,5 +150,6 @@ func NewServiceParams(
 		CreditNoteRepo:             creditNoteRepo,
 		CreditNoteLineItemRepo:     creditNoteLineItemRepo,
 		AddonRepo:                  addonRepo,
+		SubscriptionAddonRepo:      subscriptionAddonRepo,
 	}
 }

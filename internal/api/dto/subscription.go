@@ -303,23 +303,12 @@ type SubscriptionLineItemResponse struct {
 
 // SubscriptionAddonRequest represents the request to add an addon to a subscription
 type SubscriptionAddonRequest struct {
-	AddonID           string                  `json:"addon_id" validate:"required"`
-	PriceID           string                  `json:"price_id" validate:"required"`
-	Quantity          int                     `json:"quantity" validate:"min=1"`
-	StartDate         *time.Time              `json:"start_date,omitempty"`
-	EndDate           *time.Time              `json:"end_date,omitempty"`
-	ProrationBehavior types.ProrationBehavior `json:"proration_behavior"`
-
-	// Usage tracking
-	UsageLimit       *decimal.Decimal `json:"usage_limit,omitempty"`
-	UsageResetPeriod string           `json:"usage_reset_period,omitempty"`
-	UsageResetDate   *time.Time       `json:"usage_reset_date,omitempty"`
-
-	// Billing period alignment
-	BillingPeriod      types.BillingPeriod `json:"billing_period,omitempty"`
-	BillingPeriodCount int                 `json:"billing_period_count,omitempty"`
-
-	Metadata map[string]interface{} `json:"metadata,omitempty"`
+	AddonID   string                 `json:"addon_id" validate:"required"`
+	PriceID   string                 `json:"price_id" validate:"required"`
+	Quantity  int                    `json:"quantity" validate:"min=1"`
+	StartDate *time.Time             `json:"start_date,omitempty"`
+	EndDate   *time.Time             `json:"end_date,omitempty"`
+	Metadata  map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // AddonUsageResponse represents the usage response for an addon
@@ -340,10 +329,6 @@ func (r *SubscriptionAddonRequest) Validate() error {
 		return err
 	}
 
-	if r.ProrationBehavior == "" {
-		r.ProrationBehavior = types.ProrationBehaviorCreateProrations
-	}
-
 	return nil
 }
 
@@ -352,17 +337,6 @@ func (r *SubscriptionAddonRequest) ToDomain(ctx context.Context, subscriptionID 
 	if startDate == nil {
 		now := time.Now()
 		startDate = &now
-	}
-
-	// Set default billing period if not provided
-	billingPeriod := r.BillingPeriod
-	if billingPeriod == "" {
-		billingPeriod = types.BILLING_PERIOD_MONTHLY
-	}
-
-	billingPeriodCount := r.BillingPeriodCount
-	if billingPeriodCount == 0 {
-		billingPeriodCount = 1
 	}
 
 	return &addon.SubscriptionAddon{

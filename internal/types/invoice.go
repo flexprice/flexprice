@@ -12,8 +12,8 @@ import (
 type InvoiceLineItemSourceType string
 
 const (
-	InvoiceLineItemSourceTypePlan  InvoiceLineItemSourceType = "PLAN"
-	InvoiceLineItemSourceTypeAddon InvoiceLineItemSourceType = "ADDON"
+	InvoiceLineItemSourceTypePlan  InvoiceLineItemSourceType = "plan"
+	InvoiceLineItemSourceTypeAddon InvoiceLineItemSourceType = "addon"
 )
 
 func (t InvoiceLineItemSourceType) String() string {

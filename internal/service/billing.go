@@ -103,8 +103,9 @@ func (s *billingService) CalculateFixedCharges(
 		amount := priceService.CalculateCost(ctx, price.Price, item.Quantity)
 
 		fixedCostLineItems = append(fixedCostLineItems, dto.CreateInvoiceLineItemRequest{
-			PlanID: item.PlanID,
-			// TODO: add addon ID and source type
+			PlanID:          item.PlanID,
+			SourceType:      lo.ToPtr(types.InvoiceLineItemSourceType(item.SourceType)),
+			AddonID:         item.AddonID,
 			PlanDisplayName: lo.ToPtr(item.PlanDisplayName),
 			PriceID:         lo.ToPtr(item.PriceID),
 			PriceType:       lo.ToPtr(string(item.PriceType)),
@@ -251,6 +252,8 @@ func (s *billingService) CalculateUsageCharges(
 
 			usageCharges = append(usageCharges, dto.CreateInvoiceLineItemRequest{
 				PlanID:           item.PlanID,
+				SourceType:       lo.ToPtr(types.InvoiceLineItemSourceType(item.SourceType)),
+				AddonID:          item.AddonID,
 				PlanDisplayName:  lo.ToPtr(item.PlanDisplayName),
 				PriceType:        lo.ToPtr(string(item.PriceType)),
 				PriceID:          lo.ToPtr(item.PriceID),

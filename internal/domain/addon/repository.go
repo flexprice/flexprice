@@ -16,10 +16,15 @@ type Repository interface {
 	Delete(ctx context.Context, id string) error
 	List(ctx context.Context, filter *types.AddonFilter) ([]*Addon, error)
 	Count(ctx context.Context, filter *types.AddonFilter) (int, error)
+}
 
+// SubscriptionAddonRepository defines the interface for subscription addon repository operations
+type SubscriptionAddonRepository interface {
 	// Subscription Addon operations
-	CreateSubscriptionAddon(ctx context.Context, subscriptionAddon *SubscriptionAddon) error
-	GetSubscriptionAddonByID(ctx context.Context, id string) (*SubscriptionAddon, error)
-	GetSubscriptionAddons(ctx context.Context, subscriptionID string) ([]*SubscriptionAddon, error)
-	UpdateSubscriptionAddon(ctx context.Context, subscriptionAddon *SubscriptionAddon) error
+	Create(ctx context.Context, subscriptionAddon *SubscriptionAddon) error
+	GetByID(ctx context.Context, id string) (*SubscriptionAddon, error)
+	GetBySubscriptionID(ctx context.Context, subscriptionID string) ([]*SubscriptionAddon, error)
+	Update(ctx context.Context, subscriptionAddon *SubscriptionAddon) error
+	List(ctx context.Context, filter *types.SubscriptionAddonFilter) ([]*SubscriptionAddon, error)
+	Count(ctx context.Context, filter *types.SubscriptionAddonFilter) (int, error)
 }

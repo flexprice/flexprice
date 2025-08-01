@@ -1,10 +1,7 @@
 package types
 
 import (
-	"strings"
-
 	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/samber/lo"
 )
 
 // AddonType represents the type of addon
@@ -33,30 +30,6 @@ const (
 	AddonStatusCancelled AddonStatus = "cancelled"
 	AddonStatusPaused    AddonStatus = "paused"
 )
-
-// ProrationBehavior represents how proration should be handled
-type ProrationBehavior string
-
-const (
-	ProrationBehaviorCreateProrations ProrationBehavior = "create_prorations"
-	ProrationBehaviorNone             ProrationBehavior = "none"
-)
-
-func (pb ProrationBehavior) Validate() error {
-
-	allowedProrationBehaviors := []string{
-		string(ProrationBehaviorCreateProrations),
-		string(ProrationBehaviorNone),
-	}
-
-	if !lo.Contains(allowedProrationBehaviors, string(pb)) {
-		return ierr.NewError("invalid proration behavior").
-			WithHint("Proration behavior must be one of the following: " + strings.Join(allowedProrationBehaviors, ", ")).
-			Mark(ierr.ErrValidation)
-	}
-
-	return nil
-}
 
 // AddonFilter represents the filter options for addons
 type AddonFilter struct {
