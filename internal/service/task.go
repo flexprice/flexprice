@@ -470,6 +470,7 @@ func (s *taskService) processEvents(ctx context.Context, t *task.Task, tracker t
 		eventSvc := NewEventService(
 			s.EventRepo,
 			s.MeterRepo,
+			s.FeatureRepo,
 			s.EventPublisher,
 			s.Logger,
 			s.Config,

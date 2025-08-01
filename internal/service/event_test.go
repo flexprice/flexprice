@@ -18,12 +18,13 @@ import (
 
 type EventServiceSuite struct {
 	suite.Suite
-	ctx       context.Context
-	service   EventService
-	eventRepo *testutil.InMemoryEventStore
-	publisher *testutil.InMemoryPublisherService
-	logger    *logger.Logger
-	config    *config.Configuration
+	ctx         context.Context
+	service     EventService
+	eventRepo   *testutil.InMemoryEventStore
+	featureRepo *testutil.InMemoryFeatureStore
+	publisher   *testutil.InMemoryPublisherService
+	logger      *logger.Logger
+	config      *config.Configuration
 }
 
 func TestEventService(t *testing.T) {
@@ -33,6 +34,7 @@ func TestEventService(t *testing.T) {
 func (s *EventServiceSuite) SetupTest() {
 	s.ctx = testutil.SetupContext()
 	s.eventRepo = testutil.NewInMemoryEventStore()
+	s.featureRepo = testutil.NewInMemoryFeatureStore()
 	s.publisher = testutil.NewInMemoryEventPublisher(s.eventRepo).(*testutil.InMemoryPublisherService)
 	s.logger = logger.GetLogger()
 	s.config = config.GetDefaultConfig()
@@ -40,6 +42,7 @@ func (s *EventServiceSuite) SetupTest() {
 	s.service = NewEventService(
 		s.eventRepo,
 		nil, // meter repo not needed for these tests
+		s.featureRepo,
 		s.publisher,
 		s.logger,
 		s.config,
@@ -300,6 +303,7 @@ func (s *EventServiceSuite) TestGetUsageByMeter() {
 	s.service = NewEventService(
 		s.eventRepo,
 		mockedMeterRepo,
+		s.featureRepo,
 		s.publisher,
 		s.logger,
 		s.config,

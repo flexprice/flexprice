@@ -56,6 +56,10 @@ func (qb *QueryBuilder) WithBaseFilters(ctx context.Context, params *events.Usag
 		conditions = append(conditions, fmt.Sprintf("customer_id = '%s'", params.CustomerID))
 	}
 
+	if params.Source != "" {
+		conditions = append(conditions, fmt.Sprintf("source = '%s'", params.Source))
+	}
+
 	if params.Filters != nil {
 		for property, values := range params.Filters {
 			if len(values) > 0 {

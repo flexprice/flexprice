@@ -68,6 +68,7 @@ type UsageAnalytic struct {
 type UsageParams struct {
 	ExternalCustomerID string                `json:"external_customer_id"`
 	CustomerID         string                `json:"customer_id"`
+	Source             string                `json:"source"`
 	EventName          string                `json:"event_name" validate:"required"`
 	PropertyName       string                `json:"property_name" validate:"required"`
 	AggregationType    types.AggregationType `json:"aggregation_type" validate:"required"`

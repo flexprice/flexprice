@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -33,26 +34,29 @@ type EventService interface {
 }
 
 type eventService struct {
-	eventRepo events.Repository
-	meterRepo meter.Repository
-	publisher publisher.EventPublisher
-	logger    *logger.Logger
-	config    *config.Configuration
+	eventRepo   events.Repository
+	meterRepo   meter.Repository
+	featureRepo feature.Repository
+	publisher   publisher.EventPublisher
+	logger      *logger.Logger
+	config      *config.Configuration
 }
 
 func NewEventService(
 	eventRepo events.Repository,
 	meterRepo meter.Repository,
+	featureRepo feature.Repository,
 	publisher publisher.EventPublisher,
 	logger *logger.Logger,
 	config *config.Configuration,
 ) EventService {
 	return &eventService{
-		eventRepo: eventRepo,
-		meterRepo: meterRepo,
-		publisher: publisher,
-		logger:    logger,
-		config:    config,
+		eventRepo:   eventRepo,
+		meterRepo:   meterRepo,
+		featureRepo: featureRepo,
+		publisher:   publisher,
+		logger:      logger,
+		config:      config,
 	}
 }
 
@@ -107,6 +111,15 @@ func (s *eventService) GetUsage(ctx context.Context, getUsageRequest *dto.GetUsa
 }
 
 func (s *eventService) GetUsageByMeter(ctx context.Context, req *dto.GetUsageByMeterRequest) (*events.AggregationResult, error) {
+	if req.FeatureID != "" && req.MeterID == "" {
+		feature, err := s.featureRepo.Get(ctx, req.FeatureID)
+		if err != nil {
+			return nil, err
+		}
+
+		req.MeterID = feature.MeterID
+	}
+
 	var m *meter.Meter
 	var err error
 	if req.Meter == nil {

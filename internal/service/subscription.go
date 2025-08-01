@@ -600,7 +600,7 @@ func (s *subscriptionService) addSchedulesToSubscriptionResponses(ctx context.Co
 func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error) {
 	response := &dto.GetUsageBySubscriptionResponse{}
 
-	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config)
+	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.FeatureRepo, s.EventPublisher, s.Logger, s.Config)
 	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.Logger)
 
 	// Get subscription with line items
