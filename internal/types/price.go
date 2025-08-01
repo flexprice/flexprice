@@ -211,7 +211,7 @@ func (f PriceFilter) Validate() error {
 
 	for _, addonID := range f.AddonIDs {
 		if addonID == "" {
-			return ierr.NewError("addon id can not be empty").
+			return ierr.NewError("Addon ID cannot be empty").
 				WithHint("Addon ID cannot be empty").
 				Mark(ierr.ErrValidation)
 		}
