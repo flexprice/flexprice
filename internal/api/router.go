@@ -245,6 +245,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		addon.GET("/lookup/:lookup_key", handlers.Addon.GetAddonByLookupKey)
 		addon.POST("/search", handlers.Addon.ListAddonsByFilter)
 		addon.POST("/subscriptions/:subscription_id", handlers.Addon.AddAddonToSubscription)
+		addon.DELETE("/subscriptions/:subscription_id/:addon_id", handlers.Addon.RemoveAddonFromSubscription)
 		
 		// entitlement routes
 		addon.GET("/:id/entitlements", handlers.Addon.GetAddonEntitlements)

@@ -388,6 +388,13 @@ func (r *subscriptionLineItemRepository) List(ctx context.Context, filter *types
 		if len(filter.BillingPeriods) > 0 {
 			query = query.Where(subscriptionlineitem.BillingPeriodIn(filter.BillingPeriods...))
 		}
+		if len(filter.AddonIDs) > 0 {
+			query = query.Where(subscriptionlineitem.AddonIDIn(filter.AddonIDs...))
+		}
+		// Apply status filter from QueryFilter
+		if filter.Status != nil {
+			query = query.Where(subscriptionlineitem.Status(string(*filter.Status)))
+		}
 
 		// Apply pagination
 		if filter.Limit != nil {
@@ -455,6 +462,13 @@ func (r *subscriptionLineItemRepository) Count(ctx context.Context, filter *type
 		}
 		if len(filter.BillingPeriods) > 0 {
 			query = query.Where(subscriptionlineitem.BillingPeriodIn(filter.BillingPeriods...))
+		}
+		if len(filter.AddonIDs) > 0 {
+			query = query.Where(subscriptionlineitem.AddonIDIn(filter.AddonIDs...))
+		}
+		// Apply status filter from QueryFilter
+		if filter.Status != nil {
+			query = query.Where(subscriptionlineitem.Status(string(*filter.Status)))
 		}
 	}
 

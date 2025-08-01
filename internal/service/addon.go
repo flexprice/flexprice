@@ -486,7 +486,42 @@ func (s *addonService) DeleteAddon(ctx context.Context, id string) error {
 		return err
 	}
 
-	// TODO: check if addon is in use by any subscriptions
+	// Check if addon is in use by any subscriptions
+	filter := types.NewSubscriptionAddonFilter()
+	filter.AddonIDs = []string{id}
+	filter.AddonStatuses = []types.AddonStatus{types.AddonStatusActive}
+	filter.Limit = lo.ToPtr(1)
+
+	activeSubscriptions, err := s.SubscriptionAddonRepo.List(ctx, filter)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to check addon usage").
+			Mark(ierr.ErrSystem)
+	}
+
+	// Also check if any active line items exist for this addon
+	lineItemFilter := types.NewSubscriptionLineItemFilter()
+	lineItemFilter.AddonIDs = []string{id}
+	lineItemFilter.Status = lo.ToPtr(types.StatusPublished)
+	lineItemFilter.Limit = lo.ToPtr(1)
+
+	activeLineItems, err := s.LineItemRepo.List(ctx, lineItemFilter)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to check addon line item usage").
+			Mark(ierr.ErrSystem)
+	}
+
+	if len(activeSubscriptions) > 0 || len(activeLineItems) > 0 {
+		return ierr.NewError("cannot delete addon that is in use").
+			WithHint("Addon is currently active on one or more subscriptions. Remove it from all subscriptions before deleting.").
+			WithReportableDetails(map[string]interface{}{
+				"addon_id":                   id,
+				"active_subscriptions_count": len(activeSubscriptions),
+				"active_line_items_count":    len(activeLineItems),
+			}).
+			Mark(ierr.ErrValidation)
+	}
 
 	// Soft delete the addon
 	if err := s.AddonRepo.Delete(ctx, id); err != nil {
@@ -497,6 +532,9 @@ func (s *addonService) DeleteAddon(ctx context.Context, id string) error {
 			}).
 			Mark(ierr.ErrSystem)
 	}
+
+	s.Logger.Infow("addon deleted successfully",
+		"addon_id", id)
 
 	return nil
 }
@@ -693,36 +731,85 @@ func (s *addonService) RemoveAddonFromSubscription(
 			Mark(ierr.ErrNotFound)
 	}
 
-	// Update addon status to cancelled
+	// Update addon status to cancelled and delete line items in a transaction
 	now := time.Now()
 	targetAddon.AddonStatus = types.AddonStatusCancelled
 	targetAddon.CancellationReason = reason
 	targetAddon.CancelledAt = &now
 	targetAddon.EndDate = &now
 
-	err = s.SubscriptionAddonRepo.Update(ctx, targetAddon)
-	if err != nil {
-		return err
-	}
+	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
+		// Update subscription addon
+		err = s.SubscriptionAddonRepo.Update(ctx, targetAddon)
+		if err != nil {
+			return err
+		}
 
-	// End the corresponding line items for this addon
-	subscription, err := s.SubRepo.Get(ctx, subscriptionID)
-	if err != nil {
-		return err
-	}
+		// End the corresponding line items for this addon (soft delete approach)
+		subscription, err := s.SubRepo.Get(ctx, subscriptionID)
+		if err != nil {
+			return err
+		}
 
-	for _, lineItem := range subscription.LineItems {
-		if lineItem.Metadata["addon_id"] == addonID && lineItem.EndDate.IsZero() {
-			lineItem.EndDate = now
-			err = s.LineItemRepo.Update(ctx, lineItem)
-			if err != nil {
-				s.Logger.Errorw("failed to end line item for addon",
+		lineItemsEnded := 0
+		for _, lineItem := range subscription.LineItems {
+			// Debug logging to understand line item matching
+			s.Logger.Infow("checking line item for addon removal",
+				"subscription_id", subscriptionID,
+				"addon_id", addonID,
+				"line_item_id", lineItem.ID,
+				"line_item_addon_id", lineItem.AddonID,
+				"line_item_metadata", lineItem.Metadata,
+				"source_type", lineItem.SourceType)
+
+			// Check both metadata and direct addon_id field
+			metadataMatch := lineItem.Metadata != nil && lineItem.Metadata["addon_id"] == addonID
+			addonIDMatch := lineItem.AddonID != nil && *lineItem.AddonID == addonID
+
+			if metadataMatch || addonIDMatch {
+				s.Logger.Infow("found matching line item for addon removal",
 					"subscription_id", subscriptionID,
 					"addon_id", addonID,
 					"line_item_id", lineItem.ID,
-					"error", err)
+					"metadata_match", metadataMatch,
+					"addon_id_match", addonIDMatch)
+
+				// End the line item (soft delete approach like Togai)
+				lineItem.EndDate = now
+				lineItem.Status = types.StatusDeleted
+
+				// Add metadata for audit trail
+				if lineItem.Metadata == nil {
+					lineItem.Metadata = make(map[string]string)
+				}
+				lineItem.Metadata["removal_reason"] = reason
+				lineItem.Metadata["removed_at"] = now.Format(time.RFC3339)
+				lineItem.Metadata["removed_by"] = types.GetUserID(ctx)
+
+				err = s.LineItemRepo.Update(ctx, lineItem)
+				if err != nil {
+					s.Logger.Errorw("failed to end line item for addon",
+						"subscription_id", subscriptionID,
+						"addon_id", addonID,
+						"line_item_id", lineItem.ID,
+						"error", err)
+					return err
+				}
+				lineItemsEnded++
 			}
 		}
+
+		s.Logger.Infow("ended line items for addon removal",
+			"subscription_id", subscriptionID,
+			"addon_id", addonID,
+			"line_items_ended", lineItemsEnded,
+			"removal_reason", reason)
+
+		return nil
+	})
+
+	if err != nil {
+		return err
 	}
 
 	s.Logger.Infow("removed addon from subscription",

@@ -306,3 +306,52 @@ func (h *AddonHandler) GetAddonEntitlements(c *gin.Context) {
 
 	c.JSON(http.StatusOK, entitlements)
 }
+
+// RemoveAddonFromSubscription godoc
+// @Summary Remove an addon from a subscription
+// @Description Remove an addon from a subscription
+// @Tags Addons
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param subscription_id path string true "Subscription ID"
+// @Param addon_id path string true "Addon ID"
+// @Param request body dto.RemoveAddonFromSubscriptionRequest true "Remove addon request"
+// @Success 200 {object} gin.H
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /addons/subscriptions/{subscription_id}/{addon_id} [delete]
+func (h *AddonHandler) RemoveAddonFromSubscription(c *gin.Context) {
+	subscriptionID := c.Param("subscription_id")
+	if subscriptionID == "" {
+		c.Error(ierr.NewError("subscription ID is required").
+			WithHint("Subscription ID is required").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	addonID := c.Param("addon_id")
+	if addonID == "" {
+		c.Error(ierr.NewError("addon ID is required").
+			WithHint("Addon ID is required").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	var req dto.RemoveAddonFromSubscriptionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	err := h.addonService.RemoveAddonFromSubscription(c.Request.Context(), subscriptionID, addonID, req.Reason)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "addon removed from subscription successfully"})
+}

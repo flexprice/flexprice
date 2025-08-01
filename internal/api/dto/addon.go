@@ -167,6 +167,15 @@ func (r *AddAddonToSubscriptionRequest) ToDomain(ctx context.Context, subscripti
 	}
 }
 
+// RemoveAddonFromSubscriptionRequest represents the request to remove an addon from a subscription
+type RemoveAddonFromSubscriptionRequest struct {
+	Reason string `json:"reason" validate:"required"`
+}
+
+func (r *RemoveAddonFromSubscriptionRequest) Validate() error {
+	return validator.ValidateRequest(r)
+}
+
 // UpdateSubscriptionAddonRequest represents the request to update a subscription addon
 type UpdateSubscriptionAddonRequest struct {
 	Quantity *int                   `json:"quantity" validate:"omitempty,min=1"`
