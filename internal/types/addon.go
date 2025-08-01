@@ -18,7 +18,7 @@ const (
 func (at AddonType) Validate() error {
 	if at != AddonTypeSingleInstance && at != AddonTypeMultipleInstance {
 		return ierr.NewError("invalid addon type").
-			WithHint("Addon type must be single_instance or multi_instance").
+			WithHint("Addon type must be single or multiple").
 			Mark(ierr.ErrValidation)
 	}
 

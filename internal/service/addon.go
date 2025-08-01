@@ -57,7 +57,6 @@ func (s *addonService) CreateAddon(ctx context.Context, req dto.CreateAddonReque
 
 	// Convert request to domain model
 	domainAddon := req.ToAddon(ctx)
-	s.Logger.Infof("domainAddon: %+v", domainAddon)
 
 	// Start a transaction to create addon, prices, and entitlements
 	err := s.DB.WithTx(ctx, func(ctx context.Context) error {

@@ -51,18 +51,6 @@ func (r *CreateAddonRequest) Validate() error {
 			Mark(errors.ErrValidation)
 	}
 
-	for _, price := range r.Prices {
-		if err := price.Validate(); err != nil {
-			return err
-		}
-	}
-
-	for _, ent := range r.Entitlements {
-		if err := ent.Validate(); err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
