@@ -109,6 +109,25 @@ func (Price) Fields() []ent.Field {
 			Optional(),
 		field.JSON("metadata", map[string]string{}).
 			Optional(),
+		// Price override fields
+		field.Enum("scope").
+			Values("PLAN", "SUBSCRIPTION").
+			Default("PLAN").
+			SchemaType(map[string]string{
+				"postgres": "varchar(20)",
+			}),
+		field.String("parent_price_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable(),
+		field.String("subscription_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable(),
 	}
 }
 

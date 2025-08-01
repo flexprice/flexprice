@@ -84,6 +84,9 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 		SetCreatedBy(p.CreatedBy).
 		SetUpdatedBy(p.UpdatedBy).
 		SetEnvironmentID(p.EnvironmentID).
+		SetNillableParentPriceID(lo.ToPtr(p.ParentPriceID)).
+		SetNillableSubscriptionID(lo.ToPtr(p.SubscriptionID)).
+		SetNillableScope(lo.ToPtr(price.Scope(string(p.Scope)))).
 		Save(ctx)
 
 	if err != nil {

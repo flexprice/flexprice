@@ -71,6 +71,12 @@ type Price struct {
 	Description string `json:"description,omitempty"`
 	// Metadata holds the value of the "metadata" field.
 	Metadata map[string]string `json:"metadata,omitempty"`
+	// Scope holds the value of the "scope" field.
+	Scope price.Scope `json:"scope,omitempty"`
+	// ParentPriceID holds the value of the "parent_price_id" field.
+	ParentPriceID *string `json:"parent_price_id,omitempty"`
+	// SubscriptionID holds the value of the "subscription_id" field.
+	SubscriptionID *string `json:"subscription_id,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the PriceQuery when eager-loading is set.
 	Edges        PriceEdges `json:"edges"`
@@ -106,7 +112,7 @@ func (*Price) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullFloat64)
 		case price.FieldBillingPeriodCount, price.FieldTrialPeriod:
 			values[i] = new(sql.NullInt64)
-		case price.FieldID, price.FieldTenantID, price.FieldStatus, price.FieldCreatedBy, price.FieldUpdatedBy, price.FieldEnvironmentID, price.FieldCurrency, price.FieldDisplayAmount, price.FieldPlanID, price.FieldType, price.FieldBillingPeriod, price.FieldBillingModel, price.FieldBillingCadence, price.FieldInvoiceCadence, price.FieldMeterID, price.FieldTierMode, price.FieldLookupKey, price.FieldDescription:
+		case price.FieldID, price.FieldTenantID, price.FieldStatus, price.FieldCreatedBy, price.FieldUpdatedBy, price.FieldEnvironmentID, price.FieldCurrency, price.FieldDisplayAmount, price.FieldPlanID, price.FieldType, price.FieldBillingPeriod, price.FieldBillingModel, price.FieldBillingCadence, price.FieldInvoiceCadence, price.FieldMeterID, price.FieldTierMode, price.FieldLookupKey, price.FieldDescription, price.FieldScope, price.FieldParentPriceID, price.FieldSubscriptionID:
 			values[i] = new(sql.NullString)
 		case price.FieldCreatedAt, price.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -297,6 +303,26 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
+		case price.FieldScope:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field scope", values[i])
+			} else if value.Valid {
+				pr.Scope = price.Scope(value.String)
+			}
+		case price.FieldParentPriceID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field parent_price_id", values[i])
+			} else if value.Valid {
+				pr.ParentPriceID = new(string)
+				*pr.ParentPriceID = value.String
+			}
+		case price.FieldSubscriptionID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field subscription_id", values[i])
+			} else if value.Valid {
+				pr.SubscriptionID = new(string)
+				*pr.SubscriptionID = value.String
+			}
 		default:
 			pr.selectValues.Set(columns[i], values[i])
 		}
@@ -419,6 +445,19 @@ func (pr *Price) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
 	builder.WriteString(fmt.Sprintf("%v", pr.Metadata))
+	builder.WriteString(", ")
+	builder.WriteString("scope=")
+	builder.WriteString(fmt.Sprintf("%v", pr.Scope))
+	builder.WriteString(", ")
+	if v := pr.ParentPriceID; v != nil {
+		builder.WriteString("parent_price_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := pr.SubscriptionID; v != nil {
+		builder.WriteString("subscription_id=")
+		builder.WriteString(*v)
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }

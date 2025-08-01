@@ -83,12 +83,32 @@ type Price struct {
 	// EnvironmentID is the environment identifier for the price
 	EnvironmentID string `db:"environment_id" json:"environment_id"`
 
+	// Price override fields
+	// Scope indicates if this is a plan-level or subscription-level price
+	Scope types.PriceScope `db:"scope" json:"scope"`
+
+	// ParentPriceID references the original price (only set when scope is SUBSCRIPTION)
+	ParentPriceID string `db:"parent_price_id" json:"parent_price_id,omitempty"`
+
+	// SubscriptionID references the subscription (only set when scope is SUBSCRIPTION)
+	SubscriptionID string `db:"subscription_id" json:"subscription_id,omitempty"`
+
 	types.BaseModel
 }
 
 // IsUsage returns true if the price is a usage based price
 func (p *Price) IsUsage() bool {
 	return p.Type == types.PRICE_TYPE_USAGE && p.MeterID != ""
+}
+
+// IsSubscriptionScoped returns true if the price is subscription-scoped
+func (p *Price) IsSubscriptionScoped() bool {
+	return p.Scope == types.PRICE_SCOPE_SUBSCRIPTION
+}
+
+// IsPlanScoped returns true if the price is plan-scoped
+func (p *Price) IsPlanScoped() bool {
+	return p.Scope == types.PRICE_SCOPE_PLAN
 }
 
 // GetCurrencySymbol returns the currency symbol for the price
@@ -333,6 +353,10 @@ func FromEnt(e *ent.Price) *Price {
 		TransformQuantity:  JSONBTransformQuantity(e.TransformQuantity),
 		Metadata:           JSONBMetadata(e.Metadata),
 		EnvironmentID:      e.EnvironmentID,
+		// Price override fields - Default values for now, would be set from ent after schema generation
+		Scope:          types.PRICE_SCOPE_PLAN, // Default to plan scope
+		ParentPriceID:  lo.FromPtr(e.ParentPriceID),
+		SubscriptionID: lo.FromPtr(e.SubscriptionID),
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),
@@ -401,6 +425,46 @@ func (p *Price) ValidateInvoiceCadence() error {
 	return p.InvoiceCadence.Validate()
 }
 
+// ValidateOverrideFields validates price override fields
+func (p *Price) ValidateOverrideFields() error {
+	// Validate scope
+	if err := p.Scope.Validate(); err != nil {
+		return err
+	}
+
+	// For subscription-scoped prices
+	if p.IsSubscriptionScoped() {
+		// Parent price ID is required
+		if p.ParentPriceID == "" {
+			return ierr.NewError("parent_price_id is required for subscription-scoped prices").
+				WithHint("Subscription-scoped prices must reference a parent price").
+				Mark(ierr.ErrValidation)
+		}
+
+		// Subscription ID is required
+		if p.SubscriptionID == "" {
+			return ierr.NewError("subscription_id is required for subscription-scoped prices").
+				WithHint("Subscription-scoped prices must reference a subscription").
+				Mark(ierr.ErrValidation)
+		}
+	} else {
+		// For plan-scoped prices, parent_price_id and subscription_id should be empty
+		if p.ParentPriceID != "" {
+			return ierr.NewError("parent_price_id should be empty for plan-scoped prices").
+				WithHint("Plan-scoped prices should not have a parent price").
+				Mark(ierr.ErrValidation)
+		}
+
+		if p.SubscriptionID != "" {
+			return ierr.NewError("subscription_id should be empty for plan-scoped prices").
+				WithHint("Plan-scoped prices should not reference a subscription").
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	return nil
+}
+
 // Validate performs all validations on the price
 func (p *Price) Validate() error {
 	if err := p.ValidateAmount(); err != nil {
@@ -412,6 +476,10 @@ func (p *Price) Validate() error {
 	}
 
 	if err := p.ValidateInvoiceCadence(); err != nil {
+		return err
+	}
+
+	if err := p.ValidateOverrideFields(); err != nil {
 		return err
 	}
 

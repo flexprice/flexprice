@@ -353,6 +353,60 @@ func (pu *PriceUpdate) ClearMetadata() *PriceUpdate {
 	return pu
 }
 
+// SetScope sets the "scope" field.
+func (pu *PriceUpdate) SetScope(pr price.Scope) *PriceUpdate {
+	pu.mutation.SetScope(pr)
+	return pu
+}
+
+// SetNillableScope sets the "scope" field if the given value is not nil.
+func (pu *PriceUpdate) SetNillableScope(pr *price.Scope) *PriceUpdate {
+	if pr != nil {
+		pu.SetScope(*pr)
+	}
+	return pu
+}
+
+// SetParentPriceID sets the "parent_price_id" field.
+func (pu *PriceUpdate) SetParentPriceID(s string) *PriceUpdate {
+	pu.mutation.SetParentPriceID(s)
+	return pu
+}
+
+// SetNillableParentPriceID sets the "parent_price_id" field if the given value is not nil.
+func (pu *PriceUpdate) SetNillableParentPriceID(s *string) *PriceUpdate {
+	if s != nil {
+		pu.SetParentPriceID(*s)
+	}
+	return pu
+}
+
+// ClearParentPriceID clears the value of the "parent_price_id" field.
+func (pu *PriceUpdate) ClearParentPriceID() *PriceUpdate {
+	pu.mutation.ClearParentPriceID()
+	return pu
+}
+
+// SetSubscriptionID sets the "subscription_id" field.
+func (pu *PriceUpdate) SetSubscriptionID(s string) *PriceUpdate {
+	pu.mutation.SetSubscriptionID(s)
+	return pu
+}
+
+// SetNillableSubscriptionID sets the "subscription_id" field if the given value is not nil.
+func (pu *PriceUpdate) SetNillableSubscriptionID(s *string) *PriceUpdate {
+	if s != nil {
+		pu.SetSubscriptionID(*s)
+	}
+	return pu
+}
+
+// ClearSubscriptionID clears the value of the "subscription_id" field.
+func (pu *PriceUpdate) ClearSubscriptionID() *PriceUpdate {
+	pu.mutation.ClearSubscriptionID()
+	return pu
+}
+
 // AddCostsheetIDs adds the "costsheet" edge to the Costsheet entity by IDs.
 func (pu *PriceUpdate) AddCostsheetIDs(ids ...string) *PriceUpdate {
 	pu.mutation.AddCostsheetIDs(ids...)
@@ -470,6 +524,11 @@ func (pu *PriceUpdate) check() error {
 	if v, ok := pu.mutation.BillingCadence(); ok {
 		if err := price.BillingCadenceValidator(v); err != nil {
 			return &ValidationError{Name: "billing_cadence", err: fmt.Errorf(`ent: validator failed for field "Price.billing_cadence": %w`, err)}
+		}
+	}
+	if v, ok := pu.mutation.Scope(); ok {
+		if err := price.ScopeValidator(v); err != nil {
+			return &ValidationError{Name: "scope", err: fmt.Errorf(`ent: validator failed for field "Price.scope": %w`, err)}
 		}
 	}
 	return nil
@@ -593,6 +652,21 @@ func (pu *PriceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if pu.mutation.MetadataCleared() {
 		_spec.ClearField(price.FieldMetadata, field.TypeJSON)
+	}
+	if value, ok := pu.mutation.Scope(); ok {
+		_spec.SetField(price.FieldScope, field.TypeEnum, value)
+	}
+	if value, ok := pu.mutation.ParentPriceID(); ok {
+		_spec.SetField(price.FieldParentPriceID, field.TypeString, value)
+	}
+	if pu.mutation.ParentPriceIDCleared() {
+		_spec.ClearField(price.FieldParentPriceID, field.TypeString)
+	}
+	if value, ok := pu.mutation.SubscriptionID(); ok {
+		_spec.SetField(price.FieldSubscriptionID, field.TypeString, value)
+	}
+	if pu.mutation.SubscriptionIDCleared() {
+		_spec.ClearField(price.FieldSubscriptionID, field.TypeString)
 	}
 	if pu.mutation.CostsheetCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -981,6 +1055,60 @@ func (puo *PriceUpdateOne) ClearMetadata() *PriceUpdateOne {
 	return puo
 }
 
+// SetScope sets the "scope" field.
+func (puo *PriceUpdateOne) SetScope(pr price.Scope) *PriceUpdateOne {
+	puo.mutation.SetScope(pr)
+	return puo
+}
+
+// SetNillableScope sets the "scope" field if the given value is not nil.
+func (puo *PriceUpdateOne) SetNillableScope(pr *price.Scope) *PriceUpdateOne {
+	if pr != nil {
+		puo.SetScope(*pr)
+	}
+	return puo
+}
+
+// SetParentPriceID sets the "parent_price_id" field.
+func (puo *PriceUpdateOne) SetParentPriceID(s string) *PriceUpdateOne {
+	puo.mutation.SetParentPriceID(s)
+	return puo
+}
+
+// SetNillableParentPriceID sets the "parent_price_id" field if the given value is not nil.
+func (puo *PriceUpdateOne) SetNillableParentPriceID(s *string) *PriceUpdateOne {
+	if s != nil {
+		puo.SetParentPriceID(*s)
+	}
+	return puo
+}
+
+// ClearParentPriceID clears the value of the "parent_price_id" field.
+func (puo *PriceUpdateOne) ClearParentPriceID() *PriceUpdateOne {
+	puo.mutation.ClearParentPriceID()
+	return puo
+}
+
+// SetSubscriptionID sets the "subscription_id" field.
+func (puo *PriceUpdateOne) SetSubscriptionID(s string) *PriceUpdateOne {
+	puo.mutation.SetSubscriptionID(s)
+	return puo
+}
+
+// SetNillableSubscriptionID sets the "subscription_id" field if the given value is not nil.
+func (puo *PriceUpdateOne) SetNillableSubscriptionID(s *string) *PriceUpdateOne {
+	if s != nil {
+		puo.SetSubscriptionID(*s)
+	}
+	return puo
+}
+
+// ClearSubscriptionID clears the value of the "subscription_id" field.
+func (puo *PriceUpdateOne) ClearSubscriptionID() *PriceUpdateOne {
+	puo.mutation.ClearSubscriptionID()
+	return puo
+}
+
 // AddCostsheetIDs adds the "costsheet" edge to the Costsheet entity by IDs.
 func (puo *PriceUpdateOne) AddCostsheetIDs(ids ...string) *PriceUpdateOne {
 	puo.mutation.AddCostsheetIDs(ids...)
@@ -1111,6 +1239,11 @@ func (puo *PriceUpdateOne) check() error {
 	if v, ok := puo.mutation.BillingCadence(); ok {
 		if err := price.BillingCadenceValidator(v); err != nil {
 			return &ValidationError{Name: "billing_cadence", err: fmt.Errorf(`ent: validator failed for field "Price.billing_cadence": %w`, err)}
+		}
+	}
+	if v, ok := puo.mutation.Scope(); ok {
+		if err := price.ScopeValidator(v); err != nil {
+			return &ValidationError{Name: "scope", err: fmt.Errorf(`ent: validator failed for field "Price.scope": %w`, err)}
 		}
 	}
 	return nil
@@ -1251,6 +1384,21 @@ func (puo *PriceUpdateOne) sqlSave(ctx context.Context) (_node *Price, err error
 	}
 	if puo.mutation.MetadataCleared() {
 		_spec.ClearField(price.FieldMetadata, field.TypeJSON)
+	}
+	if value, ok := puo.mutation.Scope(); ok {
+		_spec.SetField(price.FieldScope, field.TypeEnum, value)
+	}
+	if value, ok := puo.mutation.ParentPriceID(); ok {
+		_spec.SetField(price.FieldParentPriceID, field.TypeString, value)
+	}
+	if puo.mutation.ParentPriceIDCleared() {
+		_spec.ClearField(price.FieldParentPriceID, field.TypeString)
+	}
+	if value, ok := puo.mutation.SubscriptionID(); ok {
+		_spec.SetField(price.FieldSubscriptionID, field.TypeString, value)
+	}
+	if puo.mutation.SubscriptionIDCleared() {
+		_spec.ClearField(price.FieldSubscriptionID, field.TypeString)
 	}
 	if puo.mutation.CostsheetCleared() {
 		edge := &sqlgraph.EdgeSpec{

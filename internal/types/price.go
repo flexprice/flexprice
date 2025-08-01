@@ -21,9 +21,16 @@ type BillingTier string
 // PriceType is the type of the price ex USAGE, FIXED
 type PriceType string
 
+// PriceScope indicates whether a price is at the plan level or subscription level
+type PriceScope string
+
 const (
 	PRICE_TYPE_USAGE PriceType = "USAGE"
 	PRICE_TYPE_FIXED PriceType = "FIXED"
+
+	// Price scope constants
+	PRICE_SCOPE_PLAN         PriceScope = "PLAN"
+	PRICE_SCOPE_SUBSCRIPTION PriceScope = "SUBSCRIPTION"
 
 	// Billing model for a flat fee per unit
 	BILLING_MODEL_FLAT_FEE BillingModel = "FLAT_FEE"
@@ -157,12 +164,33 @@ func (p PriceType) Validate() error {
 	return nil
 }
 
+func (p PriceScope) Validate() error {
+	allowed := []PriceScope{
+		PRICE_SCOPE_PLAN,
+		PRICE_SCOPE_SUBSCRIPTION,
+	}
+	if !lo.Contains(allowed, p) {
+		return ierr.NewError("invalid price scope").
+			WithHint("Invalid price scope").
+			WithReportableDetails(map[string]interface{}{
+				"price_scope": p,
+				"allowed":     allowed,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 // PriceFilter represents filters for price queries
 type PriceFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
 	PlanIDs  []string `json:"plan_ids,omitempty" form:"plan_ids"`
 	PriceIDs []string `json:"price_ids,omitempty" form:"price_ids"`
+	// Price override filtering fields
+	Scope          *PriceScope `json:"scope,omitempty" form:"scope"`
+	SubscriptionID *string     `json:"subscription_id,omitempty" form:"subscription_id"`
+	ParentPriceID  *string     `json:"parent_price_id,omitempty" form:"parent_price_id"`
 }
 
 // NewPriceFilter creates a new PriceFilter with default values
@@ -208,6 +236,27 @@ func (f PriceFilter) Validate() error {
 		}
 	}
 
+	// Validate scope if provided
+	if f.Scope != nil {
+		if err := f.Scope.Validate(); err != nil {
+			return err
+		}
+	}
+
+	// Validate subscription ID if provided
+	if f.SubscriptionID != nil && *f.SubscriptionID == "" {
+		return ierr.NewError("subscription id can not be empty").
+			WithHint("Subscription ID cannot be empty").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Validate parent price ID if provided
+	if f.ParentPriceID != nil && *f.ParentPriceID == "" {
+		return ierr.NewError("parent price id can not be empty").
+			WithHint("Parent price ID cannot be empty").
+			Mark(ierr.ErrValidation)
+	}
+
 	return nil
 }
 
@@ -232,6 +281,24 @@ func (f *PriceFilter) WithStatus(status Status) *PriceFilter {
 // WithExpand sets the expand field on the filter
 func (f *PriceFilter) WithExpand(expand string) *PriceFilter {
 	f.Expand = &expand
+	return f
+}
+
+// WithScope sets the scope filter (plan or subscription)
+func (f *PriceFilter) WithScope(scope PriceScope) *PriceFilter {
+	f.Scope = &scope
+	return f
+}
+
+// WithSubscriptionID sets the subscription ID filter
+func (f *PriceFilter) WithSubscriptionID(subscriptionID string) *PriceFilter {
+	f.SubscriptionID = &subscriptionID
+	return f
+}
+
+// WithParentPriceID sets the parent price ID filter
+func (f *PriceFilter) WithParentPriceID(parentPriceID string) *PriceFilter {
+	f.ParentPriceID = &parentPriceID
 	return f
 }
 

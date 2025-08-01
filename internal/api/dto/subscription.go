@@ -50,6 +50,8 @@ type CreateSubscriptionRequest struct {
 	OverageFactor *decimal.Decimal `json:"overage_factor,omitempty"`
 	// Phases represents an optional timeline of subscription phases
 	Phases []SubscriptionSchedulePhaseInput `json:"phases,omitempty" validate:"omitempty,dive"`
+	// OverrideLineItems allows customizing specific prices for this subscription
+	OverrideLineItems []OverrideLineItemRequest `json:"override_line_items,omitempty" validate:"omitempty,dive"`
 }
 
 type UpdateSubscriptionRequest struct {
@@ -241,6 +243,34 @@ func (r *CreateSubscriptionRequest) Validate() error {
 		}
 	}
 
+	// Validate override line items if provided
+	if len(r.OverrideLineItems) > 0 {
+		priceIDsSeen := make(map[string]bool)
+		for i, override := range r.OverrideLineItems {
+			if err := override.Validate(); err != nil {
+				return ierr.NewError(fmt.Sprintf("invalid override line item at index %d", i)).
+					WithHint("Override line item validation failed").
+					WithReportableDetails(map[string]interface{}{
+						"index": i,
+						"error": err.Error(),
+					}).
+					Mark(ierr.ErrValidation)
+			}
+
+			// Check for duplicate price IDs
+			if priceIDsSeen[override.PriceID] {
+				return ierr.NewError(fmt.Sprintf("duplicate price_id in override line items at index %d", i)).
+					WithHint("Each price can only be overridden once per subscription").
+					WithReportableDetails(map[string]interface{}{
+						"price_id": override.PriceID,
+						"index":    i,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+			priceIDsSeen[override.PriceID] = true
+		}
+	}
+
 	return nil
 }
 
@@ -296,6 +326,54 @@ type SubscriptionLineItemRequest struct {
 // SubscriptionLineItemResponse represents the response for a subscription line item
 type SubscriptionLineItemResponse struct {
 	*subscription.SubscriptionLineItem
+}
+
+// OverrideLineItemRequest represents a price override for a specific subscription
+type OverrideLineItemRequest struct {
+	// PriceID references the plan price to override
+	PriceID string `json:"price_id" validate:"required"`
+	// Quantity for this line item (optional)
+	Quantity *decimal.Decimal `json:"quantity,omitempty"`
+	// Amount is the new price amount that overrides the original price (optional)
+	Amount *decimal.Decimal `json:"amount,omitempty"`
+}
+
+// Validate validates the override line item request
+func (r *OverrideLineItemRequest) Validate() error {
+	if r.PriceID == "" {
+		return ierr.NewError("price_id is required for override line items").
+			WithHint("Price ID must be specified for price overrides").
+			Mark(ierr.ErrValidation)
+	}
+
+	// At least one override field (quantity or amount) must be provided
+	if r.Quantity == nil && r.Amount == nil {
+		return ierr.NewError("at least one override field (quantity or amount) must be provided").
+			WithHint("Specify either quantity, amount, or both for price override").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Validate amount if provided
+	if r.Amount != nil && r.Amount.IsNegative() {
+		return ierr.NewError("amount must be non-negative").
+			WithHint("Override amount cannot be negative").
+			WithReportableDetails(map[string]interface{}{
+				"amount": r.Amount.String(),
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Validate quantity if provided
+	if r.Quantity != nil && r.Quantity.IsNegative() {
+		return ierr.NewError("quantity must be non-negative").
+			WithHint("Override quantity cannot be negative").
+			WithReportableDetails(map[string]interface{}{
+				"quantity": r.Quantity.String(),
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
 }
 
 // ToSubscriptionLineItem converts a request to a domain subscription line item

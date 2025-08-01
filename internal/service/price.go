@@ -17,6 +17,7 @@ type PriceService interface {
 	CreatePrice(ctx context.Context, req dto.CreatePriceRequest) (*dto.PriceResponse, error)
 	GetPrice(ctx context.Context, id string) (*dto.PriceResponse, error)
 	GetPricesByPlanID(ctx context.Context, planID string) (*dto.ListPricesResponse, error)
+	GetPricesBySubscriptionID(ctx context.Context, subscriptionID string) (*dto.ListPricesResponse, error)
 	GetPrices(ctx context.Context, filter *types.PriceFilter) (*dto.ListPricesResponse, error)
 	UpdatePrice(ctx context.Context, id string, req dto.UpdatePriceRequest) (*dto.PriceResponse, error)
 	DeletePrice(ctx context.Context, id string) error
@@ -88,9 +89,28 @@ func (s *priceService) GetPricesByPlanID(ctx context.Context, planID string) (*d
 			Mark(ierr.ErrValidation)
 	}
 
-	// Use unlimited filter to fetch all prices
+	// Use unlimited filter to fetch plan-scoped prices only
 	priceFilter := types.NewNoLimitPriceFilter().
 		WithPlanIDs([]string{planID}).
+		WithStatus(types.StatusPublished).
+		WithScope(types.PRICE_SCOPE_PLAN).
+		WithExpand(string(types.ExpandMeters))
+
+	return s.GetPrices(ctx, priceFilter)
+}
+
+// GetPricesBySubscriptionID fetches subscription-scoped prices for a specific subscription
+func (s *priceService) GetPricesBySubscriptionID(ctx context.Context, subscriptionID string) (*dto.ListPricesResponse, error) {
+	if subscriptionID == "" {
+		return nil, ierr.NewError("subscription_id is required").
+			WithHint("Subscription ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Use unlimited filter to fetch subscription-scoped prices only
+	priceFilter := types.NewNoLimitPriceFilter().
+		WithSubscriptionID(subscriptionID).
+		WithScope(types.PRICE_SCOPE_SUBSCRIPTION).
 		WithStatus(types.StatusPublished).
 		WithExpand(string(types.ExpandMeters))
 

@@ -3,6 +3,7 @@
 package price
 
 import (
+	"fmt"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -66,6 +67,12 @@ const (
 	FieldDescription = "description"
 	// FieldMetadata holds the string denoting the metadata field in the database.
 	FieldMetadata = "metadata"
+	// FieldScope holds the string denoting the scope field in the database.
+	FieldScope = "scope"
+	// FieldParentPriceID holds the string denoting the parent_price_id field in the database.
+	FieldParentPriceID = "parent_price_id"
+	// FieldSubscriptionID holds the string denoting the subscription_id field in the database.
+	FieldSubscriptionID = "subscription_id"
 	// EdgeCostsheet holds the string denoting the costsheet edge name in mutations.
 	EdgeCostsheet = "costsheet"
 	// Table holds the table name of the price in the database.
@@ -108,6 +115,9 @@ var Columns = []string{
 	FieldLookupKey,
 	FieldDescription,
 	FieldMetadata,
+	FieldScope,
+	FieldParentPriceID,
+	FieldSubscriptionID,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -152,6 +162,32 @@ var (
 	// DefaultTrialPeriod holds the default value on creation for the "trial_period" field.
 	DefaultTrialPeriod int
 )
+
+// Scope defines the type for the "scope" enum field.
+type Scope string
+
+// ScopePLAN is the default value of the Scope enum.
+const DefaultScope = ScopePLAN
+
+// Scope values.
+const (
+	ScopePLAN         Scope = "PLAN"
+	ScopeSUBSCRIPTION Scope = "SUBSCRIPTION"
+)
+
+func (s Scope) String() string {
+	return string(s)
+}
+
+// ScopeValidator is a validator for the "scope" field enum values. It is called by the builders before save.
+func ScopeValidator(s Scope) error {
+	switch s {
+	case ScopePLAN, ScopeSUBSCRIPTION:
+		return nil
+	default:
+		return fmt.Errorf("price: invalid enum value for scope field: %q", s)
+	}
+}
 
 // OrderOption defines the ordering options for the Price queries.
 type OrderOption func(*sql.Selector)
@@ -269,6 +305,21 @@ func ByLookupKey(opts ...sql.OrderTermOption) OrderOption {
 // ByDescription orders the results by the description field.
 func ByDescription(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDescription, opts...).ToFunc()
+}
+
+// ByScope orders the results by the scope field.
+func ByScope(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldScope, opts...).ToFunc()
+}
+
+// ByParentPriceID orders the results by the parent_price_id field.
+func ByParentPriceID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldParentPriceID, opts...).ToFunc()
+}
+
+// BySubscriptionID orders the results by the subscription_id field.
+func BySubscriptionID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSubscriptionID, opts...).ToFunc()
 }
 
 // ByCostsheetCount orders the results by costsheet count.

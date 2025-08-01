@@ -249,7 +249,8 @@ func (s *planService) GetPlans(ctx context.Context, filter *types.PlanFilter) (*
 	if filter.GetExpand().Has(types.ExpandPrices) {
 		priceFilter := types.NewNoLimitPriceFilter().
 			WithPlanIDs(planIDs).
-			WithStatus(types.StatusPublished)
+			WithStatus(types.StatusPublished).
+			WithScope(types.PRICE_SCOPE_PLAN)
 
 		// If meters should be expanded, propagate the expansion to prices
 		if filter.GetExpand().Has(types.ExpandMeters) {
@@ -613,10 +614,11 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*SyncPlanP
 
 	s.Logger.Infow("Found plan", "plan_id", id, "plan_name", p.Name)
 
-	// Get all prices for the plan
+	// Get all plan-scoped prices for the plan (don't affect subscription overrides)
 	priceFilter := types.NewNoLimitPriceFilter()
 	priceFilter = priceFilter.WithStatus(types.StatusPublished)
 	priceFilter = priceFilter.WithPlanIDs([]string{id})
+	priceFilter = priceFilter.WithScope(types.PRICE_SCOPE_PLAN)
 
 	prices, err := s.PriceRepo.List(ctx, priceFilter)
 	if err != nil {
