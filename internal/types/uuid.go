@@ -94,6 +94,7 @@ const (
 	UUID_PREFIX_CREDIT_NOTE                 = "cn"
 	UUID_PREFIX_CREDIT_NOTE_LINE_ITEM       = "cn_line"
 	UUID_PREFIX_ADDON                       = "addon"
+	UUID_PREFIX_SUBSCRIPTION_ADDON          = "subs_addon"
 
 	UUID_PREFIX_WEBHOOK_EVENT = "webhook"
 )

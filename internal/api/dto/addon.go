@@ -155,7 +155,7 @@ func (r *AddAddonToSubscriptionRequest) ToDomain(ctx context.Context, subscripti
 	}
 
 	return &addon.SubscriptionAddon{
-		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ADDON),
+		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_ADDON),
 		SubscriptionID: subscriptionID,
 		AddonID:        r.AddonID,
 		StartDate:      startDate,
