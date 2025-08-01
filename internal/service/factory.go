@@ -68,6 +68,7 @@ type ServiceParams struct {
 	CreditNoteLineItemRepo     creditnote.CreditNoteLineItemRepository
 	CreditGrantApplicationRepo creditgrantapplication.Repository
 	AddonRepo                  addon.Repository
+	LineItemRepo               subscription.LineItemRepository
 
 	// Publishers
 	EventPublisher   publisher.EventPublisher

@@ -2,14 +2,18 @@ package service
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	subscriptionDomain "github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 )
 
 // AddonService interface defines the business logic for addon management
@@ -22,21 +26,32 @@ type AddonService interface {
 	UpdateAddon(ctx context.Context, id string, req dto.UpdateAddonRequest) (*dto.AddonResponse, error)
 	DeleteAddon(ctx context.Context, id string) error
 
-	// Subscription addon operations
-	// AddAddonToSubscription(ctx context.Context, subscriptionID string, req dto.AddAddonToSubscriptionRequest) (*dto.SubscriptionAddonResponse, error)
-	// RemoveAddonFromSubscription(ctx context.Context, subscriptionID, addonID string) error
-	// UpdateSubscriptionAddon(ctx context.Context, subscriptionAddonID string, req dto.UpdateSubscriptionAddonRequest) (*dto.SubscriptionAddonResponse, error)
-	// GetSubscriptionAddons(ctx context.Context, subscriptionID string) (*dto.ListSubscriptionAddonsResponse, error)
-	// GetSubscriptionAddon(ctx context.Context, subscriptionAddonID string) (*dto.SubscriptionAddonResponse, error)
+	// Add addon to subscription
+	AddAddonToSubscription(ctx context.Context, subscriptionID string, req *dto.AddAddonToSubscriptionRequest) (*addon.SubscriptionAddon, error)
 
-	// // Proration and lifecycle management
-	// CalculateAddonProration(ctx context.Context, subscriptionID, addonID string, changeDate time.Time) (*decimal.Decimal, error)
-	// CancelSubscriptionAddon(ctx context.Context, subscriptionAddonID string, reason string) error
-	// PauseSubscriptionAddon(ctx context.Context, subscriptionAddonID string) error
-	// ResumeSubscriptionAddon(ctx context.Context, subscriptionAddonID string) error
+	// Remove addon from subscription
+	RemoveAddonFromSubscription(ctx context.Context, subscriptionID, addonID string, reason string) error
 
-	// // Validation and compatibility
-	// ValidateAddonCompatibility(ctx context.Context, subscriptionID, addonID string) error
+	// Pause addon
+	PauseAddon(ctx context.Context, subscriptionID, addonID string, reason string) error
+
+	// Resume addon
+	ResumeAddon(ctx context.Context, subscriptionID, addonID string) error
+
+	// Update addon quantity (creates new subscription line item)
+	UpdateAddonQuantity(ctx context.Context, subscriptionID, addonID string, newQuantity int) error
+
+	// Update addon price (creates new subscription line item)
+	UpdateAddonPrice(ctx context.Context, subscriptionID, addonID string, newPriceID string) error
+
+	// Get subscription addons
+	GetSubscriptionAddons(ctx context.Context, subscriptionID string) ([]*addon.SubscriptionAddon, error)
+
+	// Get addon usage
+	GetAddonUsage(ctx context.Context, subscriptionID, addonID string, startTime, endTime time.Time) (*dto.AddonUsageResponse, error)
+
+	// Calculate addon charges for billing period (integrated with billing service)
+	CalculateAddonCharges(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error)
 }
 
 type addonService struct {
@@ -529,6 +544,690 @@ func (s *addonService) DeleteAddon(ctx context.Context, id string) error {
 	}
 
 	return nil
+}
+
+// AddAddonToSubscription adds an addon to a subscription
+func (s *addonService) AddAddonToSubscription(
+	ctx context.Context,
+	subscriptionID string,
+	req *dto.AddAddonToSubscriptionRequest,
+) (*addon.SubscriptionAddon, error) {
+	// Validate request
+	if err := req.Validate(); err != nil {
+		return nil, ierr.WithError(err).Mark(ierr.ErrValidation)
+	}
+
+	// Check if subscription exists and is active
+	subscription, err := s.SubRepo.Get(ctx, subscriptionID)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Subscription not found").
+			Mark(ierr.ErrNotFound)
+	}
+
+	if subscription.SubscriptionStatus != types.SubscriptionStatusActive {
+		return nil, ierr.NewError("subscription is not active").
+			WithHint("Cannot add addon to inactive subscription").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Check if addon exists and is active
+	addonService := NewAddonService(s.ServiceParams)
+	_, err = addonService.GetAddon(ctx, req.AddonID)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Addon not found or not active").
+			Mark(ierr.ErrNotFound)
+	}
+
+	// Check if price exists
+	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.Logger)
+	price, err := priceService.GetPrice(ctx, req.PriceID)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Price not found").
+			Mark(ierr.ErrNotFound)
+	}
+
+	// Check if addon is already added to subscription
+	existingAddons, err := s.AddonRepo.GetSubscriptionAddons(ctx, subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, existingAddon := range existingAddons {
+		if existingAddon.AddonID == req.AddonID && existingAddon.AddonStatus == types.AddonStatusActive {
+			return nil, ierr.NewError("addon already added to subscription").
+				WithHint("Addon is already active on this subscription").
+				Mark(ierr.ErrAlreadyExists)
+		}
+	}
+
+	// Create subscription addon
+	subscriptionAddon := req.ToDomain(ctx, subscriptionID)
+
+	err = s.AddonRepo.CreateSubscriptionAddon(ctx, subscriptionAddon)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create subscription line item for the addon
+	lineItem := &subscriptionDomain.SubscriptionLineItem{
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+		SubscriptionID:  subscriptionID,
+		CustomerID:      subscription.CustomerID,
+		PlanID:          "", // Addons don't have plan IDs
+		PlanDisplayName: "", // Addons don't have plan display names
+		PriceID:         req.PriceID,
+		PriceType:       price.Price.Type,
+		MeterID:         price.Price.MeterID,
+		DisplayName:     price.Price.Description,
+		Quantity:        decimal.NewFromInt(int64(req.Quantity)),
+		Currency:        subscription.Currency,
+		BillingPeriod:   subscription.BillingPeriod,
+		InvoiceCadence:  types.InvoiceCadenceAdvance, // Default to advance for addons
+		TrialPeriod:     0,
+		StartDate:       time.Now(),
+		EndDate:         time.Time{}, // No end date for active addons
+		Metadata: map[string]string{
+			"addon_id":        req.AddonID,
+			"subscription_id": subscriptionID,
+			"addon_quantity":  fmt.Sprintf("%d", req.Quantity),
+			"addon_status":    string(types.AddonStatusActive),
+		},
+		EnvironmentID: subscription.EnvironmentID,
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}
+
+	err = s.LineItemRepo.Create(ctx, lineItem)
+	if err != nil {
+		// Rollback addon creation if line item creation fails
+		s.Logger.Errorw("failed to create line item for addon, rolling back addon creation",
+			"subscription_id", subscriptionID,
+			"addon_id", req.AddonID,
+			"error", err)
+		return nil, err
+	}
+
+	s.Logger.Infow("added addon to subscription",
+		"subscription_id", subscriptionID,
+		"addon_id", req.AddonID,
+		"price_id", req.PriceID,
+		"quantity", req.Quantity)
+
+	return subscriptionAddon, nil
+}
+
+// RemoveAddonFromSubscription removes an addon from a subscription
+func (s *addonService) RemoveAddonFromSubscription(
+	ctx context.Context,
+	subscriptionID, addonID string,
+	reason string,
+) error {
+	// Get subscription addon
+	subscriptionAddons, err := s.AddonRepo.GetSubscriptionAddons(ctx, subscriptionID)
+	if err != nil {
+		return err
+	}
+
+	var targetAddon *addon.SubscriptionAddon
+	for _, sa := range subscriptionAddons {
+		if sa.AddonID == addonID && sa.AddonStatus == types.AddonStatusActive {
+			targetAddon = sa
+			break
+		}
+	}
+
+	if targetAddon == nil {
+		return ierr.NewError("addon not found on subscription").
+			WithHint("Addon is not active on this subscription").
+			Mark(ierr.ErrNotFound)
+	}
+
+	// Update addon status to cancelled
+	now := time.Now()
+	targetAddon.AddonStatus = types.AddonStatusCancelled
+	targetAddon.CancellationReason = reason
+	targetAddon.CancelledAt = &now
+	targetAddon.EndDate = &now
+
+	err = s.AddonRepo.UpdateSubscriptionAddon(ctx, targetAddon)
+	if err != nil {
+		return err
+	}
+
+	// End the corresponding line items for this addon
+	subscription, err := s.SubRepo.Get(ctx, subscriptionID)
+	if err != nil {
+		return err
+	}
+
+	for _, lineItem := range subscription.LineItems {
+		if lineItem.Metadata["addon_id"] == addonID && lineItem.EndDate.IsZero() {
+			lineItem.EndDate = now
+			err = s.LineItemRepo.Update(ctx, lineItem)
+			if err != nil {
+				s.Logger.Errorw("failed to end line item for addon",
+					"subscription_id", subscriptionID,
+					"addon_id", addonID,
+					"line_item_id", lineItem.ID,
+					"error", err)
+			}
+		}
+	}
+
+	s.Logger.Infow("removed addon from subscription",
+		"subscription_id", subscriptionID,
+		"addon_id", addonID,
+		"reason", reason)
+
+	return nil
+}
+
+// PauseAddon pauses an addon on a subscription
+func (s *addonService) PauseAddon(
+	ctx context.Context,
+	subscriptionID, addonID string,
+	reason string,
+) error {
+	// Get subscription addon
+	subscriptionAddons, err := s.AddonRepo.GetSubscriptionAddons(ctx, subscriptionID)
+	if err != nil {
+		return err
+	}
+
+	var targetAddon *addon.SubscriptionAddon
+	for _, sa := range subscriptionAddons {
+		if sa.AddonID == addonID && sa.AddonStatus == types.AddonStatusActive {
+			targetAddon = sa
+			break
+		}
+	}
+
+	if targetAddon == nil {
+		return ierr.NewError("addon not found on subscription").
+			WithHint("Addon is not active on this subscription").
+			Mark(ierr.ErrNotFound)
+	}
+
+	// Update addon status to paused
+	targetAddon.AddonStatus = types.AddonStatusPaused
+	targetAddon.CancellationReason = reason
+
+	err = s.AddonRepo.UpdateSubscriptionAddon(ctx, targetAddon)
+	if err != nil {
+		return err
+	}
+
+	// End the corresponding line items for this addon
+	subscription, err := s.SubRepo.Get(ctx, subscriptionID)
+	if err != nil {
+		return err
+	}
+
+	now := time.Now()
+	for _, lineItem := range subscription.LineItems {
+		if lineItem.Metadata["addon_id"] == addonID && lineItem.EndDate.IsZero() {
+			lineItem.EndDate = now
+			err = s.LineItemRepo.Update(ctx, lineItem)
+			if err != nil {
+				s.Logger.Errorw("failed to end line item for paused addon",
+					"subscription_id", subscriptionID,
+					"addon_id", addonID,
+					"line_item_id", lineItem.ID,
+					"error", err)
+			}
+		}
+	}
+
+	s.Logger.Infow("paused addon on subscription",
+		"subscription_id", subscriptionID,
+		"addon_id", addonID,
+		"reason", reason)
+
+	return nil
+}
+
+// ResumeAddon resumes a paused addon on a subscription
+func (s *addonService) ResumeAddon(
+	ctx context.Context,
+	subscriptionID, addonID string,
+) error {
+	// Get subscription addon
+	subscriptionAddons, err := s.AddonRepo.GetSubscriptionAddons(ctx, subscriptionID)
+	if err != nil {
+		return err
+	}
+
+	var targetAddon *addon.SubscriptionAddon
+	for _, sa := range subscriptionAddons {
+		if sa.AddonID == addonID && sa.AddonStatus == types.AddonStatusPaused {
+			targetAddon = sa
+			break
+		}
+	}
+
+	if targetAddon == nil {
+		return ierr.NewError("addon not found or not paused").
+			WithHint("Addon is not paused on this subscription").
+			Mark(ierr.ErrNotFound)
+	}
+
+	// Update addon status to active
+	targetAddon.AddonStatus = types.AddonStatusActive
+	targetAddon.CancellationReason = ""
+
+	err = s.AddonRepo.UpdateSubscriptionAddon(ctx, targetAddon)
+	if err != nil {
+		return err
+	}
+
+	// Create new line item for the resumed addon
+	subscription, err := s.SubRepo.Get(ctx, subscriptionID)
+	if err != nil {
+		return err
+	}
+
+	// Get the original line item to copy its properties
+	var originalLineItem *subscriptionDomain.SubscriptionLineItem
+	for _, lineItem := range subscription.LineItems {
+		if lineItem.Metadata["addon_id"] == addonID {
+			originalLineItem = lineItem
+			break
+		}
+	}
+
+	if originalLineItem != nil {
+		// Create new line item with current date
+		newLineItem := &subscriptionDomain.SubscriptionLineItem{
+			ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+			SubscriptionID:   subscriptionID,
+			CustomerID:       subscription.CustomerID,
+			PlanID:           originalLineItem.PlanID,
+			PlanDisplayName:  originalLineItem.PlanDisplayName,
+			PriceID:          originalLineItem.PriceID,
+			PriceType:        originalLineItem.PriceType,
+			MeterID:          originalLineItem.MeterID,
+			MeterDisplayName: originalLineItem.MeterDisplayName,
+			DisplayName:      originalLineItem.DisplayName,
+			Quantity:         originalLineItem.Quantity,
+			Currency:         subscription.Currency,
+			BillingPeriod:    subscription.BillingPeriod,
+			InvoiceCadence:   originalLineItem.InvoiceCadence,
+			TrialPeriod:      originalLineItem.TrialPeriod,
+			StartDate:        time.Now(),
+			EndDate:          time.Time{}, // No end date for active addons
+			Metadata:         originalLineItem.Metadata,
+			EnvironmentID:    subscription.EnvironmentID,
+			BaseModel:        types.GetDefaultBaseModel(ctx),
+		}
+
+		err = s.LineItemRepo.Create(ctx, newLineItem)
+		if err != nil {
+			s.Logger.Errorw("failed to create line item for resumed addon",
+				"subscription_id", subscriptionID,
+				"addon_id", addonID,
+				"error", err)
+			return err
+		}
+	}
+
+	s.Logger.Infow("resumed addon on subscription",
+		"subscription_id", subscriptionID,
+		"addon_id", addonID)
+
+	return nil
+}
+
+// UpdateAddonQuantity updates the quantity of an addon by creating a new line item
+func (s *addonService) UpdateAddonQuantity(
+	ctx context.Context,
+	subscriptionID, addonID string,
+	newQuantity int,
+) error {
+	if newQuantity <= 0 {
+		return ierr.NewError("quantity must be greater than 0").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Get subscription addon
+	subscriptionAddons, err := s.AddonRepo.GetSubscriptionAddons(ctx, subscriptionID)
+	if err != nil {
+		return err
+	}
+
+	var targetAddon *addon.SubscriptionAddon
+	for _, sa := range subscriptionAddons {
+		if sa.AddonID == addonID && sa.AddonStatus == types.AddonStatusActive {
+			targetAddon = sa
+			break
+		}
+	}
+
+	if targetAddon == nil {
+		return ierr.NewError("addon not found on subscription").
+			WithHint("Addon is not active on this subscription").
+			Mark(ierr.ErrNotFound)
+	}
+
+	// Get subscription to access line items
+	subscription, err := s.SubRepo.Get(ctx, subscriptionID)
+	if err != nil {
+		return err
+	}
+
+	// Find the current active line item for this addon
+	var currentLineItem *subscriptionDomain.SubscriptionLineItem
+	for _, lineItem := range subscription.LineItems {
+		if lineItem.Metadata["addon_id"] == addonID && lineItem.EndDate.IsZero() {
+			currentLineItem = lineItem
+			break
+		}
+	}
+
+	if currentLineItem == nil {
+		return ierr.NewError("no active line item found for addon").
+			Mark(ierr.ErrNotFound)
+	}
+
+	// End the current line item
+	now := time.Now()
+	currentLineItem.EndDate = now
+	err = s.LineItemRepo.Update(ctx, currentLineItem)
+	if err != nil {
+		return err
+	}
+
+	// Create new line item with updated quantity
+	newLineItem := &subscriptionDomain.SubscriptionLineItem{
+		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+		SubscriptionID:   subscriptionID,
+		CustomerID:       subscription.CustomerID,
+		PlanID:           currentLineItem.PlanID,
+		PlanDisplayName:  currentLineItem.PlanDisplayName,
+		PriceID:          currentLineItem.PriceID,
+		PriceType:        currentLineItem.PriceType,
+		MeterID:          currentLineItem.MeterID,
+		MeterDisplayName: currentLineItem.MeterDisplayName,
+		DisplayName:      currentLineItem.DisplayName,
+		Quantity:         decimal.NewFromInt(int64(newQuantity)),
+		Currency:         subscription.Currency,
+		BillingPeriod:    subscription.BillingPeriod,
+		InvoiceCadence:   currentLineItem.InvoiceCadence,
+		TrialPeriod:      currentLineItem.TrialPeriod,
+		StartDate:        now,
+		EndDate:          time.Time{}, // No end date for active addons
+		Metadata: map[string]string{
+			"addon_id":        addonID,
+			"subscription_id": subscriptionID,
+			"addon_quantity":  fmt.Sprintf("%d", newQuantity),
+			"addon_status":    string(types.AddonStatusActive),
+		},
+		EnvironmentID: subscription.EnvironmentID,
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}
+
+	err = s.LineItemRepo.Create(ctx, newLineItem)
+	if err != nil {
+		return err
+	}
+
+	s.Logger.Infow("updated addon quantity",
+		"subscription_id", subscriptionID,
+		"addon_id", addonID,
+		"new_quantity", newQuantity)
+
+	return nil
+}
+
+// UpdateAddonPrice updates the price of an addon by creating a new line item
+func (s *addonService) UpdateAddonPrice(
+	ctx context.Context,
+	subscriptionID, addonID string,
+	newPriceID string,
+) error {
+	// Check if new price exists
+	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.Logger)
+	price, err := priceService.GetPrice(ctx, newPriceID)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Price not found").
+			Mark(ierr.ErrNotFound)
+	}
+
+	// Get subscription addon
+	subscriptionAddons, err := s.AddonRepo.GetSubscriptionAddons(ctx, subscriptionID)
+	if err != nil {
+		return err
+	}
+
+	var targetAddon *addon.SubscriptionAddon
+	for _, sa := range subscriptionAddons {
+		if sa.AddonID == addonID && sa.AddonStatus == types.AddonStatusActive {
+			targetAddon = sa
+			break
+		}
+	}
+
+	if targetAddon == nil {
+		return ierr.NewError("addon not found on subscription").
+			WithHint("Addon is not active on this subscription").
+			Mark(ierr.ErrNotFound)
+	}
+
+	// Get subscription to access line items
+	subscription, err := s.SubRepo.Get(ctx, subscriptionID)
+	if err != nil {
+		return err
+	}
+
+	// Find the current active line item for this addon
+	var currentLineItem *subscriptionDomain.SubscriptionLineItem
+	for _, lineItem := range subscription.LineItems {
+		if lineItem.Metadata["addon_id"] == addonID && lineItem.EndDate.IsZero() {
+			currentLineItem = lineItem
+			break
+		}
+	}
+
+	if currentLineItem == nil {
+		return ierr.NewError("no active line item found for addon").
+			Mark(ierr.ErrNotFound)
+	}
+
+	// End the current line item
+	now := time.Now()
+	currentLineItem.EndDate = now
+	err = s.LineItemRepo.Update(ctx, currentLineItem)
+	if err != nil {
+		return err
+	}
+
+	// Create new line item with updated price
+	newLineItem := &subscriptionDomain.SubscriptionLineItem{
+		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+		SubscriptionID:   subscriptionID,
+		CustomerID:       subscription.CustomerID,
+		PlanID:           currentLineItem.PlanID,
+		PlanDisplayName:  currentLineItem.PlanDisplayName,
+		PriceID:          newPriceID,
+		PriceType:        types.PriceType(price.Type),
+		MeterID:          price.MeterID,
+		MeterDisplayName: price.Description,
+		DisplayName:      price.Description,
+		Quantity:         currentLineItem.Quantity,
+		Currency:         subscription.Currency,
+		BillingPeriod:    subscription.BillingPeriod,
+		InvoiceCadence:   currentLineItem.InvoiceCadence,
+		TrialPeriod:      currentLineItem.TrialPeriod,
+		StartDate:        now,
+		EndDate:          time.Time{}, // No end date for active addons
+		Metadata: map[string]string{
+			"addon_id":        addonID,
+			"subscription_id": subscriptionID,
+			"addon_quantity":  currentLineItem.Metadata["addon_quantity"],
+			"addon_status":    string(types.AddonStatusActive),
+		},
+		EnvironmentID: subscription.EnvironmentID,
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}
+
+	err = s.LineItemRepo.Create(ctx, newLineItem)
+	if err != nil {
+		return err
+	}
+
+	s.Logger.Infow("updated addon price",
+		"subscription_id", subscriptionID,
+		"addon_id", addonID,
+		"new_price_id", newPriceID)
+
+	return nil
+}
+
+// GetSubscriptionAddons gets all addons for a subscription
+func (s *addonService) GetSubscriptionAddons(
+	ctx context.Context,
+	subscriptionID string,
+) ([]*addon.SubscriptionAddon, error) {
+	return s.AddonRepo.GetSubscriptionAddons(ctx, subscriptionID)
+}
+
+// GetAddonUsage gets usage for a specific addon
+func (s *addonService) GetAddonUsage(
+	ctx context.Context,
+	subscriptionID, addonID string,
+	startTime, endTime time.Time,
+) (*dto.AddonUsageResponse, error) {
+	// Get subscription addon
+	subscriptionAddons, err := s.AddonRepo.GetSubscriptionAddons(ctx, subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	var targetAddon *addon.SubscriptionAddon
+	for _, sa := range subscriptionAddons {
+		if sa.AddonID == addonID {
+			targetAddon = sa
+			break
+		}
+	}
+
+	if targetAddon == nil {
+		return nil, ierr.NewError("addon not found on subscription").
+			Mark(ierr.ErrNotFound)
+	}
+
+	// Get subscription to find the price ID for this addon
+	subscription, err := s.SubRepo.Get(ctx, subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	var priceID string
+	var quantity int
+	for _, lineItem := range subscription.LineItems {
+		if lineItem.Metadata["addon_id"] == addonID && lineItem.EndDate.IsZero() {
+			priceID = lineItem.PriceID
+			quantity = int(lineItem.Quantity.IntPart())
+			break
+		}
+	}
+
+	if priceID == "" {
+		return nil, ierr.NewError("no active line item found for addon").
+			Mark(ierr.ErrNotFound)
+	}
+
+	// Get usage from subscription service
+	subscriptionService := NewSubscriptionService(s.ServiceParams)
+	usage, err := subscriptionService.GetUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
+		SubscriptionID: subscriptionID,
+		StartTime:      startTime,
+		EndTime:        endTime,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter usage for this specific addon
+	var addonUsage []*dto.SubscriptionUsageByMetersResponse
+	for _, charge := range usage.Charges {
+		if charge.Price.ID == priceID {
+			addonUsage = append(addonUsage, charge)
+		}
+	}
+
+	return &dto.AddonUsageResponse{
+		SubscriptionID: subscriptionID,
+		AddonID:        addonID,
+		PriceID:        priceID,
+		Quantity:       quantity,
+		UsageLimit:     nil, // Addons don't have usage limits in the current model
+		Charges:        addonUsage,
+		PeriodStart:    startTime,
+		PeriodEnd:      endTime,
+	}, nil
+}
+
+// CalculateAddonCharges calculates charges for addons in a billing period
+// This method now integrates with the billing service for consistent charge calculation
+func (s *addonService) CalculateAddonCharges(
+	ctx context.Context,
+	subscriptionID string,
+	periodStart, periodEnd time.Time,
+) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error) {
+	// Get subscription with line items
+	subscription, err := s.SubRepo.Get(ctx, subscriptionID)
+	if err != nil {
+		return nil, decimal.Zero, err
+	}
+
+	// Filter line items to only include addon line items
+	var addonLineItems []*subscriptionDomain.SubscriptionLineItem
+	for _, lineItem := range subscription.LineItems {
+		if lineItem.Metadata["addon_id"] != "" && lineItem.IsActive(periodStart) {
+			addonLineItems = append(addonLineItems, lineItem)
+		}
+	}
+
+	if len(addonLineItems) == 0 {
+		return []dto.CreateInvoiceLineItemRequest{}, decimal.Zero, nil
+	}
+
+	// Create a filtered subscription with only addon line items
+	filteredSub := *subscription
+	filteredSub.LineItems = addonLineItems
+
+	// Use the billing service to calculate charges for addon line items
+	billingService := NewBillingService(s.ServiceParams)
+
+	// Calculate fixed charges for addons
+	fixedCharges, fixedTotal, err := billingService.CalculateFixedCharges(ctx, &filteredSub, periodStart, periodEnd)
+	if err != nil {
+		return nil, decimal.Zero, err
+	}
+
+	// Calculate usage charges for addons
+	usageCharges, usageTotal, err := billingService.CalculateUsageCharges(ctx, &filteredSub, nil, periodStart, periodEnd)
+	if err != nil {
+		return nil, decimal.Zero, err
+	}
+
+	// Combine all charges
+	allCharges := append(fixedCharges, usageCharges...)
+	totalAmount := fixedTotal.Add(usageTotal)
+
+	// Add addon-specific metadata to line items
+	for i := range allCharges {
+		if allCharges[i].Metadata == nil {
+			allCharges[i].Metadata = make(types.Metadata)
+		}
+		allCharges[i].Metadata["is_addon"] = "true"
+		allCharges[i].Metadata["description"] = fmt.Sprintf("Addon: %s", *allCharges[i].DisplayName)
+	}
+
+	return allCharges, totalAmount, nil
 }
 
 // // AddAddonToSubscription adds an addon to a subscription
