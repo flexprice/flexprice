@@ -266,7 +266,7 @@ func provideHandlers(
 		CronCreditGrant:   cron.NewCreditGrantCronHandler(creditGrantService, logger),
 		CreditNote:        v1.NewCreditNoteHandler(creditNoteService, logger),
 		Webhook:           v1.NewWebhookHandler(cfg, svixClient, logger),
-		Addon:             v1.NewAddonHandler(addonService, logger),
+		Addon:             v1.NewAddonHandler(addonService, entitlementService, logger),
 	}
 }
 

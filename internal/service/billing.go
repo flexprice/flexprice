@@ -1026,12 +1026,11 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 							// Add source to feature sources
 							sourcesByFeature[e.FeatureID] = append(sourcesByFeature[e.FeatureID], source)
 
-							// For each quantity of the line item, add the entitlement
-							for range quantity {
-								// Duplicate the entitlement for each quantity
-								entitlementCopy := *e // Make a copy to avoid modifying the original
-								entitlementsByFeature[e.FeatureID] = append(entitlementsByFeature[e.FeatureID], &entitlementCopy)
-							}
+							// Add the entitlement only once per feature, regardless of quantity
+							// For boolean and static features, quantity doesn't matter
+							// For metered features, the aggregation function will handle the limits properly
+							entitlementCopy := *e // Make a copy to avoid modifying the original
+							entitlementsByFeature[e.FeatureID] = append(entitlementsByFeature[e.FeatureID], &entitlementCopy)
 						}
 					}
 				}
@@ -1075,12 +1074,11 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 							// Add source to feature sources
 							sourcesByFeature[e.FeatureID] = append(sourcesByFeature[e.FeatureID], source)
 
-							// For each quantity of the line item, add the entitlement
-							for range quantity {
-								// Duplicate the entitlement for each quantity
-								entitlementCopy := *e // Make a copy to avoid modifying the original
-								entitlementsByFeature[e.FeatureID] = append(entitlementsByFeature[e.FeatureID], &entitlementCopy)
-							}
+							// Add the entitlement only once per feature, regardless of quantity
+							// For boolean and static features, quantity doesn't matter
+							// For metered features, the aggregation function will handle the limits properly
+							entitlementCopy := *e // Make a copy to avoid modifying the original
+							entitlementsByFeature[e.FeatureID] = append(entitlementsByFeature[e.FeatureID], &entitlementCopy)
 						}
 					}
 				}

@@ -12,14 +12,16 @@ import (
 )
 
 type AddonHandler struct {
-	addonService service.AddonService
-	log          *logger.Logger
+	addonService       service.AddonService
+	entitlementService service.EntitlementService
+	log                *logger.Logger
 }
 
-func NewAddonHandler(addonService service.AddonService, log *logger.Logger) *AddonHandler {
+func NewAddonHandler(addonService service.AddonService, entitlementService service.EntitlementService, log *logger.Logger) *AddonHandler {
 	return &AddonHandler{
-		addonService: addonService,
-		log:          log,
+		addonService:       addonService,
+		entitlementService: entitlementService,
+		log:                log,
 	}
 }
 
@@ -268,4 +270,39 @@ func (h *AddonHandler) AddAddonToSubscription(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, subscriptionAddon)
+}
+
+// GetAddonEntitlements godoc
+// @Summary Get entitlements for an addon
+// @Description Get entitlements for an addon by ID
+// @Tags Addons
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Addon ID"
+// @Success 200 {object} dto.ListEntitlementsResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /addons/{id}/entitlements [get]
+func (h *AddonHandler) GetAddonEntitlements(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("addon ID is required").
+			WithHint("Addon ID is required").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	filter := types.NewNoLimitEntitlementFilter().
+		WithAddonIDs([]string{id}).
+		WithStatus(types.StatusPublished)
+
+	entitlements, err := h.entitlementService.ListEntitlements(c.Request.Context(), filter)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, entitlements)
 }
