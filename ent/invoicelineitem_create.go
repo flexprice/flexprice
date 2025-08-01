@@ -152,6 +152,34 @@ func (ilic *InvoiceLineItemCreate) SetNillablePlanID(s *string) *InvoiceLineItem
 	return ilic
 }
 
+// SetSourceType sets the "source_type" field.
+func (ilic *InvoiceLineItemCreate) SetSourceType(s string) *InvoiceLineItemCreate {
+	ilic.mutation.SetSourceType(s)
+	return ilic
+}
+
+// SetNillableSourceType sets the "source_type" field if the given value is not nil.
+func (ilic *InvoiceLineItemCreate) SetNillableSourceType(s *string) *InvoiceLineItemCreate {
+	if s != nil {
+		ilic.SetSourceType(*s)
+	}
+	return ilic
+}
+
+// SetAddonID sets the "addon_id" field.
+func (ilic *InvoiceLineItemCreate) SetAddonID(s string) *InvoiceLineItemCreate {
+	ilic.mutation.SetAddonID(s)
+	return ilic
+}
+
+// SetNillableAddonID sets the "addon_id" field if the given value is not nil.
+func (ilic *InvoiceLineItemCreate) SetNillableAddonID(s *string) *InvoiceLineItemCreate {
+	if s != nil {
+		ilic.SetAddonID(*s)
+	}
+	return ilic
+}
+
 // SetPlanDisplayName sets the "plan_display_name" field.
 func (ilic *InvoiceLineItemCreate) SetPlanDisplayName(s string) *InvoiceLineItemCreate {
 	ilic.mutation.SetPlanDisplayName(s)
@@ -502,6 +530,14 @@ func (ilic *InvoiceLineItemCreate) createSpec() (*InvoiceLineItem, *sqlgraph.Cre
 	if value, ok := ilic.mutation.PlanID(); ok {
 		_spec.SetField(invoicelineitem.FieldPlanID, field.TypeString, value)
 		_node.PlanID = &value
+	}
+	if value, ok := ilic.mutation.SourceType(); ok {
+		_spec.SetField(invoicelineitem.FieldSourceType, field.TypeString, value)
+		_node.SourceType = &value
+	}
+	if value, ok := ilic.mutation.AddonID(); ok {
+		_spec.SetField(invoicelineitem.FieldAddonID, field.TypeString, value)
+		_node.AddonID = &value
 	}
 	if value, ok := ilic.mutation.PlanDisplayName(); ok {
 		_spec.SetField(invoicelineitem.FieldPlanDisplayName, field.TypeString, value)

@@ -116,6 +116,16 @@ func PlanID(v string) predicate.SubscriptionLineItem {
 	return predicate.SubscriptionLineItem(sql.FieldEQ(FieldPlanID, v))
 }
 
+// AddonID applies equality check predicate on the "addon_id" field. It's identical to AddonIDEQ.
+func AddonID(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldEQ(FieldAddonID, v))
+}
+
+// SourceType applies equality check predicate on the "source_type" field. It's identical to SourceTypeEQ.
+func SourceType(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldEQ(FieldSourceType, v))
+}
+
 // PlanDisplayName applies equality check predicate on the "plan_display_name" field. It's identical to PlanDisplayNameEQ.
 func PlanDisplayName(v string) predicate.SubscriptionLineItem {
 	return predicate.SubscriptionLineItem(sql.FieldEQ(FieldPlanDisplayName, v))
@@ -819,6 +829,146 @@ func PlanIDEqualFold(v string) predicate.SubscriptionLineItem {
 // PlanIDContainsFold applies the ContainsFold predicate on the "plan_id" field.
 func PlanIDContainsFold(v string) predicate.SubscriptionLineItem {
 	return predicate.SubscriptionLineItem(sql.FieldContainsFold(FieldPlanID, v))
+}
+
+// AddonIDEQ applies the EQ predicate on the "addon_id" field.
+func AddonIDEQ(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldEQ(FieldAddonID, v))
+}
+
+// AddonIDNEQ applies the NEQ predicate on the "addon_id" field.
+func AddonIDNEQ(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldNEQ(FieldAddonID, v))
+}
+
+// AddonIDIn applies the In predicate on the "addon_id" field.
+func AddonIDIn(vs ...string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldIn(FieldAddonID, vs...))
+}
+
+// AddonIDNotIn applies the NotIn predicate on the "addon_id" field.
+func AddonIDNotIn(vs ...string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldNotIn(FieldAddonID, vs...))
+}
+
+// AddonIDGT applies the GT predicate on the "addon_id" field.
+func AddonIDGT(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldGT(FieldAddonID, v))
+}
+
+// AddonIDGTE applies the GTE predicate on the "addon_id" field.
+func AddonIDGTE(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldGTE(FieldAddonID, v))
+}
+
+// AddonIDLT applies the LT predicate on the "addon_id" field.
+func AddonIDLT(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldLT(FieldAddonID, v))
+}
+
+// AddonIDLTE applies the LTE predicate on the "addon_id" field.
+func AddonIDLTE(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldLTE(FieldAddonID, v))
+}
+
+// AddonIDContains applies the Contains predicate on the "addon_id" field.
+func AddonIDContains(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldContains(FieldAddonID, v))
+}
+
+// AddonIDHasPrefix applies the HasPrefix predicate on the "addon_id" field.
+func AddonIDHasPrefix(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldHasPrefix(FieldAddonID, v))
+}
+
+// AddonIDHasSuffix applies the HasSuffix predicate on the "addon_id" field.
+func AddonIDHasSuffix(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldHasSuffix(FieldAddonID, v))
+}
+
+// AddonIDIsNil applies the IsNil predicate on the "addon_id" field.
+func AddonIDIsNil() predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldIsNull(FieldAddonID))
+}
+
+// AddonIDNotNil applies the NotNil predicate on the "addon_id" field.
+func AddonIDNotNil() predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldNotNull(FieldAddonID))
+}
+
+// AddonIDEqualFold applies the EqualFold predicate on the "addon_id" field.
+func AddonIDEqualFold(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldEqualFold(FieldAddonID, v))
+}
+
+// AddonIDContainsFold applies the ContainsFold predicate on the "addon_id" field.
+func AddonIDContainsFold(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldContainsFold(FieldAddonID, v))
+}
+
+// SourceTypeEQ applies the EQ predicate on the "source_type" field.
+func SourceTypeEQ(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldEQ(FieldSourceType, v))
+}
+
+// SourceTypeNEQ applies the NEQ predicate on the "source_type" field.
+func SourceTypeNEQ(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldNEQ(FieldSourceType, v))
+}
+
+// SourceTypeIn applies the In predicate on the "source_type" field.
+func SourceTypeIn(vs ...string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldIn(FieldSourceType, vs...))
+}
+
+// SourceTypeNotIn applies the NotIn predicate on the "source_type" field.
+func SourceTypeNotIn(vs ...string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldNotIn(FieldSourceType, vs...))
+}
+
+// SourceTypeGT applies the GT predicate on the "source_type" field.
+func SourceTypeGT(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldGT(FieldSourceType, v))
+}
+
+// SourceTypeGTE applies the GTE predicate on the "source_type" field.
+func SourceTypeGTE(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldGTE(FieldSourceType, v))
+}
+
+// SourceTypeLT applies the LT predicate on the "source_type" field.
+func SourceTypeLT(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldLT(FieldSourceType, v))
+}
+
+// SourceTypeLTE applies the LTE predicate on the "source_type" field.
+func SourceTypeLTE(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldLTE(FieldSourceType, v))
+}
+
+// SourceTypeContains applies the Contains predicate on the "source_type" field.
+func SourceTypeContains(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldContains(FieldSourceType, v))
+}
+
+// SourceTypeHasPrefix applies the HasPrefix predicate on the "source_type" field.
+func SourceTypeHasPrefix(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldHasPrefix(FieldSourceType, v))
+}
+
+// SourceTypeHasSuffix applies the HasSuffix predicate on the "source_type" field.
+func SourceTypeHasSuffix(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldHasSuffix(FieldSourceType, v))
+}
+
+// SourceTypeEqualFold applies the EqualFold predicate on the "source_type" field.
+func SourceTypeEqualFold(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldEqualFold(FieldSourceType, v))
+}
+
+// SourceTypeContainsFold applies the ContainsFold predicate on the "source_type" field.
+func SourceTypeContainsFold(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldContainsFold(FieldSourceType, v))
 }
 
 // PlanDisplayNameEQ applies the EQ predicate on the "plan_display_name" field.

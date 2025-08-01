@@ -55,7 +55,7 @@ func lineItemFilterFn(ctx context.Context, item *subscription.SubscriptionLineIt
 	}
 
 	// Filter by plan IDs
-	if len(f.PlanIDs) > 0 && !lo.Contains(f.PlanIDs, item.PlanID) {
+	if len(f.PlanIDs) > 0 && item.PlanID != nil && !lo.Contains(f.PlanIDs, *item.PlanID) {
 		return false
 	}
 

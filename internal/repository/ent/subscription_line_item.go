@@ -43,7 +43,9 @@ func (r *subscriptionLineItemRepository) Create(ctx context.Context, item *subsc
 		SetID(item.ID).
 		SetSubscriptionID(item.SubscriptionID).
 		SetCustomerID(item.CustomerID).
-		SetNillablePlanID(types.ToNillableString(item.PlanID)).
+		SetNillablePlanID(item.PlanID).
+		SetNillableAddonID(item.AddonID).
+		SetSourceType(string(item.SourceType)).
 		SetNillablePlanDisplayName(types.ToNillableString(item.PlanDisplayName)).
 		SetPriceID(item.PriceID).
 		SetNillablePriceType(types.ToNillableString(string(item.PriceType))).
@@ -138,7 +140,8 @@ func (r *subscriptionLineItemRepository) Update(ctx context.Context, item *subsc
 
 	client := r.client.Querier(ctx)
 	_, err := client.SubscriptionLineItem.UpdateOneID(item.ID).
-		SetNillablePlanID(types.ToNillableString(item.PlanID)).
+		SetNillablePlanID(item.PlanID).
+		SetNillableAddonID(item.AddonID).
 		SetNillablePlanDisplayName(types.ToNillableString(item.PlanDisplayName)).
 		SetPriceID(item.PriceID).
 		SetNillablePriceType(types.ToNillableString(string(item.PriceType))).
@@ -233,7 +236,9 @@ func (r *subscriptionLineItemRepository) CreateBulk(ctx context.Context, items [
 			SetID(item.ID).
 			SetSubscriptionID(item.SubscriptionID).
 			SetCustomerID(item.CustomerID).
-			SetNillablePlanID(types.ToNillableString(item.PlanID)).
+			SetNillablePlanID(item.PlanID).
+			SetNillableAddonID(item.AddonID).
+			SetSourceType(string(item.SourceType)).
 			SetNillablePlanDisplayName(types.ToNillableString(item.PlanDisplayName)).
 			SetPriceID(item.PriceID).
 			SetNillablePriceType(types.ToNillableString(string(item.PriceType))).

@@ -241,6 +241,8 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 					SetCustomerID(item.CustomerID).
 					SetNillableSubscriptionID(item.SubscriptionID).
 					SetNillablePlanID(item.PlanID).
+					SetNillableSourceType(lo.ToPtr(string(*item.SourceType))).
+					SetNillableAddonID(item.AddonID).
 					SetNillablePlanDisplayName(item.PlanDisplayName).
 					SetNillablePriceType(item.PriceType).
 					SetNillablePriceID(item.PriceID).
@@ -302,6 +304,8 @@ func (r *invoiceRepository) AddLineItems(ctx context.Context, invoiceID string, 
 				SetCustomerID(item.CustomerID).
 				SetNillableSubscriptionID(item.SubscriptionID).
 				SetNillablePlanID(item.PlanID).
+				SetNillableSourceType(lo.ToPtr(string(*item.SourceType))).
+				SetNillableAddonID(item.AddonID).
 				SetNillablePlanDisplayName(item.PlanDisplayName).
 				SetNillablePriceType(item.PriceType).
 				SetNillablePriceID(item.PriceID).

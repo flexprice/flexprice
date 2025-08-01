@@ -628,7 +628,9 @@ func (r *subscriptionRepository) CreateWithLineItems(ctx context.Context, sub *d
 				SetID(item.ID).
 				SetSubscriptionID(item.SubscriptionID).
 				SetCustomerID(item.CustomerID).
-				SetNillablePlanID(types.ToNillableString(item.PlanID)).
+				SetNillablePlanID(item.PlanID).
+				SetNillableAddonID(item.AddonID).
+				SetSourceType(string(item.SourceType)).
 				SetNillablePlanDisplayName(types.ToNillableString(item.PlanDisplayName)).
 				SetPriceID(item.PriceID).
 				SetNillablePriceType(types.ToNillableString(string(item.PriceType))).

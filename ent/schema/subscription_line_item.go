@@ -49,6 +49,18 @@ func (SubscriptionLineItem) Fields() []ent.Field {
 			}).
 			Optional().
 			Nillable(),
+		field.String("addon_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable(),
+		field.String("source_type").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			NotEmpty().
+			Immutable(),
 		field.String("plan_display_name").
 			Optional().
 			Nillable(),

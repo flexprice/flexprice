@@ -6,6 +6,36 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// InvoiceLineItemSourceType represents the source type of an invoice line item
+// It can be either a plan or an addon
+// It is used to determine the source of the invoice line item
+type InvoiceLineItemSourceType string
+
+const (
+	InvoiceLineItemSourceTypePlan  InvoiceLineItemSourceType = "PLAN"
+	InvoiceLineItemSourceTypeAddon InvoiceLineItemSourceType = "ADDON"
+)
+
+func (t InvoiceLineItemSourceType) String() string {
+	return string(t)
+}
+
+func (t InvoiceLineItemSourceType) Validate() error {
+	allowed := []InvoiceLineItemSourceType{
+		InvoiceLineItemSourceTypePlan,
+		InvoiceLineItemSourceTypeAddon,
+	}
+	if !lo.Contains(allowed, t) {
+		return ierr.NewError("invalid invoice line item source type").
+			WithHint("Please provide a valid invoice line item source type").
+			WithReportableDetails(map[string]any{
+				"allowed": allowed,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 // InvoiceCadence defines when an invoice is generated relative to the billing period
 // ARREAR: Invoice generated at the end of the billing period (after service delivery)
 // ADVANCE: Invoice generated at the beginning of the billing period (before service delivery)

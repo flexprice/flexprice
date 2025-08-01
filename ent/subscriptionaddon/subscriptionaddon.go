@@ -117,6 +117,8 @@ var (
 	DefaultStartDate func() time.Time
 	// DefaultAddonStatus holds the default value on creation for the "addon_status" field.
 	DefaultAddonStatus string
+	// AddonStatusValidator is a validator for the "addon_status" field. It is called by the builders before save.
+	AddonStatusValidator func(string) error
 )
 
 // OrderOption defines the ordering options for the SubscriptionAddon queries.

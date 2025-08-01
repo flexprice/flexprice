@@ -17201,6 +17201,8 @@ type InvoiceLineItemMutation struct {
 	customer_id        *string
 	subscription_id    *string
 	plan_id            *string
+	source_type        *string
+	addon_id           *string
 	plan_display_name  *string
 	price_id           *string
 	price_type         *string
@@ -17784,6 +17786,104 @@ func (m *InvoiceLineItemMutation) PlanIDCleared() bool {
 func (m *InvoiceLineItemMutation) ResetPlanID() {
 	m.plan_id = nil
 	delete(m.clearedFields, invoicelineitem.FieldPlanID)
+}
+
+// SetSourceType sets the "source_type" field.
+func (m *InvoiceLineItemMutation) SetSourceType(s string) {
+	m.source_type = &s
+}
+
+// SourceType returns the value of the "source_type" field in the mutation.
+func (m *InvoiceLineItemMutation) SourceType() (r string, exists bool) {
+	v := m.source_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSourceType returns the old "source_type" field's value of the InvoiceLineItem entity.
+// If the InvoiceLineItem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceLineItemMutation) OldSourceType(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSourceType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSourceType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSourceType: %w", err)
+	}
+	return oldValue.SourceType, nil
+}
+
+// ClearSourceType clears the value of the "source_type" field.
+func (m *InvoiceLineItemMutation) ClearSourceType() {
+	m.source_type = nil
+	m.clearedFields[invoicelineitem.FieldSourceType] = struct{}{}
+}
+
+// SourceTypeCleared returns if the "source_type" field was cleared in this mutation.
+func (m *InvoiceLineItemMutation) SourceTypeCleared() bool {
+	_, ok := m.clearedFields[invoicelineitem.FieldSourceType]
+	return ok
+}
+
+// ResetSourceType resets all changes to the "source_type" field.
+func (m *InvoiceLineItemMutation) ResetSourceType() {
+	m.source_type = nil
+	delete(m.clearedFields, invoicelineitem.FieldSourceType)
+}
+
+// SetAddonID sets the "addon_id" field.
+func (m *InvoiceLineItemMutation) SetAddonID(s string) {
+	m.addon_id = &s
+}
+
+// AddonID returns the value of the "addon_id" field in the mutation.
+func (m *InvoiceLineItemMutation) AddonID() (r string, exists bool) {
+	v := m.addon_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAddonID returns the old "addon_id" field's value of the InvoiceLineItem entity.
+// If the InvoiceLineItem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceLineItemMutation) OldAddonID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAddonID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAddonID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAddonID: %w", err)
+	}
+	return oldValue.AddonID, nil
+}
+
+// ClearAddonID clears the value of the "addon_id" field.
+func (m *InvoiceLineItemMutation) ClearAddonID() {
+	m.addon_id = nil
+	m.clearedFields[invoicelineitem.FieldAddonID] = struct{}{}
+}
+
+// AddonIDCleared returns if the "addon_id" field was cleared in this mutation.
+func (m *InvoiceLineItemMutation) AddonIDCleared() bool {
+	_, ok := m.clearedFields[invoicelineitem.FieldAddonID]
+	return ok
+}
+
+// ResetAddonID resets all changes to the "addon_id" field.
+func (m *InvoiceLineItemMutation) ResetAddonID() {
+	m.addon_id = nil
+	delete(m.clearedFields, invoicelineitem.FieldAddonID)
 }
 
 // SetPlanDisplayName sets the "plan_display_name" field.
@@ -18396,7 +18496,7 @@ func (m *InvoiceLineItemMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *InvoiceLineItemMutation) Fields() []string {
-	fields := make([]string, 0, 23)
+	fields := make([]string, 0, 25)
 	if m.tenant_id != nil {
 		fields = append(fields, invoicelineitem.FieldTenantID)
 	}
@@ -18429,6 +18529,12 @@ func (m *InvoiceLineItemMutation) Fields() []string {
 	}
 	if m.plan_id != nil {
 		fields = append(fields, invoicelineitem.FieldPlanID)
+	}
+	if m.source_type != nil {
+		fields = append(fields, invoicelineitem.FieldSourceType)
+	}
+	if m.addon_id != nil {
+		fields = append(fields, invoicelineitem.FieldAddonID)
 	}
 	if m.plan_display_name != nil {
 		fields = append(fields, invoicelineitem.FieldPlanDisplayName)
@@ -18496,6 +18602,10 @@ func (m *InvoiceLineItemMutation) Field(name string) (ent.Value, bool) {
 		return m.SubscriptionID()
 	case invoicelineitem.FieldPlanID:
 		return m.PlanID()
+	case invoicelineitem.FieldSourceType:
+		return m.SourceType()
+	case invoicelineitem.FieldAddonID:
+		return m.AddonID()
 	case invoicelineitem.FieldPlanDisplayName:
 		return m.PlanDisplayName()
 	case invoicelineitem.FieldPriceID:
@@ -18551,6 +18661,10 @@ func (m *InvoiceLineItemMutation) OldField(ctx context.Context, name string) (en
 		return m.OldSubscriptionID(ctx)
 	case invoicelineitem.FieldPlanID:
 		return m.OldPlanID(ctx)
+	case invoicelineitem.FieldSourceType:
+		return m.OldSourceType(ctx)
+	case invoicelineitem.FieldAddonID:
+		return m.OldAddonID(ctx)
 	case invoicelineitem.FieldPlanDisplayName:
 		return m.OldPlanDisplayName(ctx)
 	case invoicelineitem.FieldPriceID:
@@ -18660,6 +18774,20 @@ func (m *InvoiceLineItemMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetPlanID(v)
+		return nil
+	case invoicelineitem.FieldSourceType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSourceType(v)
+		return nil
+	case invoicelineitem.FieldAddonID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAddonID(v)
 		return nil
 	case invoicelineitem.FieldPlanDisplayName:
 		v, ok := value.(string)
@@ -18790,6 +18918,12 @@ func (m *InvoiceLineItemMutation) ClearedFields() []string {
 	if m.FieldCleared(invoicelineitem.FieldPlanID) {
 		fields = append(fields, invoicelineitem.FieldPlanID)
 	}
+	if m.FieldCleared(invoicelineitem.FieldSourceType) {
+		fields = append(fields, invoicelineitem.FieldSourceType)
+	}
+	if m.FieldCleared(invoicelineitem.FieldAddonID) {
+		fields = append(fields, invoicelineitem.FieldAddonID)
+	}
 	if m.FieldCleared(invoicelineitem.FieldPlanDisplayName) {
 		fields = append(fields, invoicelineitem.FieldPlanDisplayName)
 	}
@@ -18845,6 +18979,12 @@ func (m *InvoiceLineItemMutation) ClearField(name string) error {
 		return nil
 	case invoicelineitem.FieldPlanID:
 		m.ClearPlanID()
+		return nil
+	case invoicelineitem.FieldSourceType:
+		m.ClearSourceType()
+		return nil
+	case invoicelineitem.FieldAddonID:
+		m.ClearAddonID()
 		return nil
 	case invoicelineitem.FieldPlanDisplayName:
 		m.ClearPlanDisplayName()
@@ -18913,6 +19053,12 @@ func (m *InvoiceLineItemMutation) ResetField(name string) error {
 		return nil
 	case invoicelineitem.FieldPlanID:
 		m.ResetPlanID()
+		return nil
+	case invoicelineitem.FieldSourceType:
+		m.ResetSourceType()
+		return nil
+	case invoicelineitem.FieldAddonID:
+		m.ResetAddonID()
 		return nil
 	case invoicelineitem.FieldPlanDisplayName:
 		m.ResetPlanDisplayName()
@@ -32512,6 +32658,8 @@ type SubscriptionLineItemMutation struct {
 	environment_id      *string
 	customer_id         *string
 	plan_id             *string
+	addon_id            *string
+	source_type         *string
 	plan_display_name   *string
 	price_id            *string
 	price_type          *string
@@ -33049,6 +33197,91 @@ func (m *SubscriptionLineItemMutation) PlanIDCleared() bool {
 func (m *SubscriptionLineItemMutation) ResetPlanID() {
 	m.plan_id = nil
 	delete(m.clearedFields, subscriptionlineitem.FieldPlanID)
+}
+
+// SetAddonID sets the "addon_id" field.
+func (m *SubscriptionLineItemMutation) SetAddonID(s string) {
+	m.addon_id = &s
+}
+
+// AddonID returns the value of the "addon_id" field in the mutation.
+func (m *SubscriptionLineItemMutation) AddonID() (r string, exists bool) {
+	v := m.addon_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAddonID returns the old "addon_id" field's value of the SubscriptionLineItem entity.
+// If the SubscriptionLineItem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionLineItemMutation) OldAddonID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAddonID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAddonID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAddonID: %w", err)
+	}
+	return oldValue.AddonID, nil
+}
+
+// ClearAddonID clears the value of the "addon_id" field.
+func (m *SubscriptionLineItemMutation) ClearAddonID() {
+	m.addon_id = nil
+	m.clearedFields[subscriptionlineitem.FieldAddonID] = struct{}{}
+}
+
+// AddonIDCleared returns if the "addon_id" field was cleared in this mutation.
+func (m *SubscriptionLineItemMutation) AddonIDCleared() bool {
+	_, ok := m.clearedFields[subscriptionlineitem.FieldAddonID]
+	return ok
+}
+
+// ResetAddonID resets all changes to the "addon_id" field.
+func (m *SubscriptionLineItemMutation) ResetAddonID() {
+	m.addon_id = nil
+	delete(m.clearedFields, subscriptionlineitem.FieldAddonID)
+}
+
+// SetSourceType sets the "source_type" field.
+func (m *SubscriptionLineItemMutation) SetSourceType(s string) {
+	m.source_type = &s
+}
+
+// SourceType returns the value of the "source_type" field in the mutation.
+func (m *SubscriptionLineItemMutation) SourceType() (r string, exists bool) {
+	v := m.source_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSourceType returns the old "source_type" field's value of the SubscriptionLineItem entity.
+// If the SubscriptionLineItem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionLineItemMutation) OldSourceType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSourceType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSourceType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSourceType: %w", err)
+	}
+	return oldValue.SourceType, nil
+}
+
+// ResetSourceType resets all changes to the "source_type" field.
+func (m *SubscriptionLineItemMutation) ResetSourceType() {
+	m.source_type = nil
 }
 
 // SetPlanDisplayName sets the "plan_display_name" field.
@@ -33753,7 +33986,7 @@ func (m *SubscriptionLineItemMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SubscriptionLineItemMutation) Fields() []string {
-	fields := make([]string, 0, 24)
+	fields := make([]string, 0, 26)
 	if m.tenant_id != nil {
 		fields = append(fields, subscriptionlineitem.FieldTenantID)
 	}
@@ -33783,6 +34016,12 @@ func (m *SubscriptionLineItemMutation) Fields() []string {
 	}
 	if m.plan_id != nil {
 		fields = append(fields, subscriptionlineitem.FieldPlanID)
+	}
+	if m.addon_id != nil {
+		fields = append(fields, subscriptionlineitem.FieldAddonID)
+	}
+	if m.source_type != nil {
+		fields = append(fields, subscriptionlineitem.FieldSourceType)
 	}
 	if m.plan_display_name != nil {
 		fields = append(fields, subscriptionlineitem.FieldPlanDisplayName)
@@ -33854,6 +34093,10 @@ func (m *SubscriptionLineItemMutation) Field(name string) (ent.Value, bool) {
 		return m.CustomerID()
 	case subscriptionlineitem.FieldPlanID:
 		return m.PlanID()
+	case subscriptionlineitem.FieldAddonID:
+		return m.AddonID()
+	case subscriptionlineitem.FieldSourceType:
+		return m.SourceType()
 	case subscriptionlineitem.FieldPlanDisplayName:
 		return m.PlanDisplayName()
 	case subscriptionlineitem.FieldPriceID:
@@ -33911,6 +34154,10 @@ func (m *SubscriptionLineItemMutation) OldField(ctx context.Context, name string
 		return m.OldCustomerID(ctx)
 	case subscriptionlineitem.FieldPlanID:
 		return m.OldPlanID(ctx)
+	case subscriptionlineitem.FieldAddonID:
+		return m.OldAddonID(ctx)
+	case subscriptionlineitem.FieldSourceType:
+		return m.OldSourceType(ctx)
 	case subscriptionlineitem.FieldPlanDisplayName:
 		return m.OldPlanDisplayName(ctx)
 	case subscriptionlineitem.FieldPriceID:
@@ -34017,6 +34264,20 @@ func (m *SubscriptionLineItemMutation) SetField(name string, value ent.Value) er
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetPlanID(v)
+		return nil
+	case subscriptionlineitem.FieldAddonID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAddonID(v)
+		return nil
+	case subscriptionlineitem.FieldSourceType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSourceType(v)
 		return nil
 	case subscriptionlineitem.FieldPlanDisplayName:
 		v, ok := value.(string)
@@ -34173,6 +34434,9 @@ func (m *SubscriptionLineItemMutation) ClearedFields() []string {
 	if m.FieldCleared(subscriptionlineitem.FieldPlanID) {
 		fields = append(fields, subscriptionlineitem.FieldPlanID)
 	}
+	if m.FieldCleared(subscriptionlineitem.FieldAddonID) {
+		fields = append(fields, subscriptionlineitem.FieldAddonID)
+	}
 	if m.FieldCleared(subscriptionlineitem.FieldPlanDisplayName) {
 		fields = append(fields, subscriptionlineitem.FieldPlanDisplayName)
 	}
@@ -34225,6 +34489,9 @@ func (m *SubscriptionLineItemMutation) ClearField(name string) error {
 		return nil
 	case subscriptionlineitem.FieldPlanID:
 		m.ClearPlanID()
+		return nil
+	case subscriptionlineitem.FieldAddonID:
+		m.ClearAddonID()
 		return nil
 	case subscriptionlineitem.FieldPlanDisplayName:
 		m.ClearPlanDisplayName()
@@ -34290,6 +34557,12 @@ func (m *SubscriptionLineItemMutation) ResetField(name string) error {
 		return nil
 	case subscriptionlineitem.FieldPlanID:
 		m.ResetPlanID()
+		return nil
+	case subscriptionlineitem.FieldAddonID:
+		m.ResetAddonID()
+		return nil
+	case subscriptionlineitem.FieldSourceType:
+		m.ResetSourceType()
 		return nil
 	case subscriptionlineitem.FieldPlanDisplayName:
 		m.ResetPlanDisplayName()

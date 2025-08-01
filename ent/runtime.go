@@ -659,15 +659,15 @@ func init() {
 	// invoicelineitem.CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
 	invoicelineitem.CustomerIDValidator = invoicelineitemDescCustomerID.Validators[0].(func(string) error)
 	// invoicelineitemDescAmount is the schema descriptor for amount field.
-	invoicelineitemDescAmount := invoicelineitemFields[11].Descriptor()
+	invoicelineitemDescAmount := invoicelineitemFields[13].Descriptor()
 	// invoicelineitem.DefaultAmount holds the default value on creation for the amount field.
 	invoicelineitem.DefaultAmount = invoicelineitemDescAmount.Default.(decimal.Decimal)
 	// invoicelineitemDescQuantity is the schema descriptor for quantity field.
-	invoicelineitemDescQuantity := invoicelineitemFields[12].Descriptor()
+	invoicelineitemDescQuantity := invoicelineitemFields[14].Descriptor()
 	// invoicelineitem.DefaultQuantity holds the default value on creation for the quantity field.
 	invoicelineitem.DefaultQuantity = invoicelineitemDescQuantity.Default.(decimal.Decimal)
 	// invoicelineitemDescCurrency is the schema descriptor for currency field.
-	invoicelineitemDescCurrency := invoicelineitemFields[13].Descriptor()
+	invoicelineitemDescCurrency := invoicelineitemFields[15].Descriptor()
 	// invoicelineitem.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
 	invoicelineitem.CurrencyValidator = invoicelineitemDescCurrency.Validators[0].(func(string) error)
 	invoicesequenceFields := schema.InvoiceSequence{}.Fields()
@@ -1122,6 +1122,8 @@ func init() {
 	subscriptionaddonDescAddonStatus := subscriptionaddonFields[5].Descriptor()
 	// subscriptionaddon.DefaultAddonStatus holds the default value on creation for the addon_status field.
 	subscriptionaddon.DefaultAddonStatus = subscriptionaddonDescAddonStatus.Default.(string)
+	// subscriptionaddon.AddonStatusValidator is a validator for the "addon_status" field. It is called by the builders before save.
+	subscriptionaddon.AddonStatusValidator = subscriptionaddonDescAddonStatus.Validators[0].(func(string) error)
 	subscriptionlineitemMixin := schema.SubscriptionLineItem{}.Mixin()
 	subscriptionlineitemMixinFields0 := subscriptionlineitemMixin[0].Fields()
 	_ = subscriptionlineitemMixinFields0
@@ -1159,24 +1161,28 @@ func init() {
 	subscriptionlineitemDescCustomerID := subscriptionlineitemFields[2].Descriptor()
 	// subscriptionlineitem.CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
 	subscriptionlineitem.CustomerIDValidator = subscriptionlineitemDescCustomerID.Validators[0].(func(string) error)
+	// subscriptionlineitemDescSourceType is the schema descriptor for source_type field.
+	subscriptionlineitemDescSourceType := subscriptionlineitemFields[5].Descriptor()
+	// subscriptionlineitem.SourceTypeValidator is a validator for the "source_type" field. It is called by the builders before save.
+	subscriptionlineitem.SourceTypeValidator = subscriptionlineitemDescSourceType.Validators[0].(func(string) error)
 	// subscriptionlineitemDescPriceID is the schema descriptor for price_id field.
-	subscriptionlineitemDescPriceID := subscriptionlineitemFields[5].Descriptor()
+	subscriptionlineitemDescPriceID := subscriptionlineitemFields[7].Descriptor()
 	// subscriptionlineitem.PriceIDValidator is a validator for the "price_id" field. It is called by the builders before save.
 	subscriptionlineitem.PriceIDValidator = subscriptionlineitemDescPriceID.Validators[0].(func(string) error)
 	// subscriptionlineitemDescQuantity is the schema descriptor for quantity field.
-	subscriptionlineitemDescQuantity := subscriptionlineitemFields[10].Descriptor()
+	subscriptionlineitemDescQuantity := subscriptionlineitemFields[12].Descriptor()
 	// subscriptionlineitem.DefaultQuantity holds the default value on creation for the quantity field.
 	subscriptionlineitem.DefaultQuantity = subscriptionlineitemDescQuantity.Default.(decimal.Decimal)
 	// subscriptionlineitemDescCurrency is the schema descriptor for currency field.
-	subscriptionlineitemDescCurrency := subscriptionlineitemFields[11].Descriptor()
+	subscriptionlineitemDescCurrency := subscriptionlineitemFields[13].Descriptor()
 	// subscriptionlineitem.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
 	subscriptionlineitem.CurrencyValidator = subscriptionlineitemDescCurrency.Validators[0].(func(string) error)
 	// subscriptionlineitemDescBillingPeriod is the schema descriptor for billing_period field.
-	subscriptionlineitemDescBillingPeriod := subscriptionlineitemFields[12].Descriptor()
+	subscriptionlineitemDescBillingPeriod := subscriptionlineitemFields[14].Descriptor()
 	// subscriptionlineitem.BillingPeriodValidator is a validator for the "billing_period" field. It is called by the builders before save.
 	subscriptionlineitem.BillingPeriodValidator = subscriptionlineitemDescBillingPeriod.Validators[0].(func(string) error)
 	// subscriptionlineitemDescTrialPeriod is the schema descriptor for trial_period field.
-	subscriptionlineitemDescTrialPeriod := subscriptionlineitemFields[14].Descriptor()
+	subscriptionlineitemDescTrialPeriod := subscriptionlineitemFields[16].Descriptor()
 	// subscriptionlineitem.DefaultTrialPeriod holds the default value on creation for the trial_period field.
 	subscriptionlineitem.DefaultTrialPeriod = subscriptionlineitemDescTrialPeriod.Default.(int)
 	subscriptionpauseMixin := schema.SubscriptionPause{}.Mixin()

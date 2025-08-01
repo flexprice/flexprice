@@ -217,6 +217,11 @@ func (sau *SubscriptionAddonUpdate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (sau *SubscriptionAddonUpdate) check() error {
+	if v, ok := sau.mutation.AddonStatus(); ok {
+		if err := subscriptionaddon.AddonStatusValidator(v); err != nil {
+			return &ValidationError{Name: "addon_status", err: fmt.Errorf(`ent: validator failed for field "SubscriptionAddon.addon_status": %w`, err)}
+		}
+	}
 	if sau.mutation.SubscriptionCleared() && len(sau.mutation.SubscriptionIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "SubscriptionAddon.subscription"`)
 	}
@@ -511,6 +516,11 @@ func (sauo *SubscriptionAddonUpdateOne) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (sauo *SubscriptionAddonUpdateOne) check() error {
+	if v, ok := sauo.mutation.AddonStatus(); ok {
+		if err := subscriptionaddon.AddonStatusValidator(v); err != nil {
+			return &ValidationError{Name: "addon_status", err: fmt.Errorf(`ent: validator failed for field "SubscriptionAddon.addon_status": %w`, err)}
+		}
+	}
 	if sauo.mutation.SubscriptionCleared() && len(sauo.mutation.SubscriptionIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "SubscriptionAddon.subscription"`)
 	}

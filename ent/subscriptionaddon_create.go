@@ -315,6 +315,11 @@ func (sac *SubscriptionAddonCreate) check() error {
 	if _, ok := sac.mutation.AddonStatus(); !ok {
 		return &ValidationError{Name: "addon_status", err: errors.New(`ent: missing required field "SubscriptionAddon.addon_status"`)}
 	}
+	if v, ok := sac.mutation.AddonStatus(); ok {
+		if err := subscriptionaddon.AddonStatusValidator(v); err != nil {
+			return &ValidationError{Name: "addon_status", err: fmt.Errorf(`ent: validator failed for field "SubscriptionAddon.addon_status": %w`, err)}
+		}
+	}
 	if len(sac.mutation.SubscriptionIDs()) == 0 {
 		return &ValidationError{Name: "subscription", err: errors.New(`ent: missing required edge "SubscriptionAddon.subscription"`)}
 	}

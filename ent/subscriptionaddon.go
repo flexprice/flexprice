@@ -42,7 +42,7 @@ type SubscriptionAddon struct {
 	StartDate *time.Time `json:"start_date,omitempty"`
 	// EndDate holds the value of the "end_date" field.
 	EndDate *time.Time `json:"end_date,omitempty"`
-	// active, cancelled, paused
+	// AddonStatus holds the value of the "addon_status" field.
 	AddonStatus string `json:"addon_status,omitempty"`
 	// CancellationReason holds the value of the "cancellation_reason" field.
 	CancellationReason string `json:"cancellation_reason,omitempty"`

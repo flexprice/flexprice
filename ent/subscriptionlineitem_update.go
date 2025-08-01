@@ -89,6 +89,26 @@ func (sliu *SubscriptionLineItemUpdate) ClearPlanID() *SubscriptionLineItemUpdat
 	return sliu
 }
 
+// SetAddonID sets the "addon_id" field.
+func (sliu *SubscriptionLineItemUpdate) SetAddonID(s string) *SubscriptionLineItemUpdate {
+	sliu.mutation.SetAddonID(s)
+	return sliu
+}
+
+// SetNillableAddonID sets the "addon_id" field if the given value is not nil.
+func (sliu *SubscriptionLineItemUpdate) SetNillableAddonID(s *string) *SubscriptionLineItemUpdate {
+	if s != nil {
+		sliu.SetAddonID(*s)
+	}
+	return sliu
+}
+
+// ClearAddonID clears the value of the "addon_id" field.
+func (sliu *SubscriptionLineItemUpdate) ClearAddonID() *SubscriptionLineItemUpdate {
+	sliu.mutation.ClearAddonID()
+	return sliu
+}
+
 // SetPlanDisplayName sets the "plan_display_name" field.
 func (sliu *SubscriptionLineItemUpdate) SetPlanDisplayName(s string) *SubscriptionLineItemUpdate {
 	sliu.mutation.SetPlanDisplayName(s)
@@ -418,6 +438,12 @@ func (sliu *SubscriptionLineItemUpdate) sqlSave(ctx context.Context) (n int, err
 	if sliu.mutation.PlanIDCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldPlanID, field.TypeString)
 	}
+	if value, ok := sliu.mutation.AddonID(); ok {
+		_spec.SetField(subscriptionlineitem.FieldAddonID, field.TypeString, value)
+	}
+	if sliu.mutation.AddonIDCleared() {
+		_spec.ClearField(subscriptionlineitem.FieldAddonID, field.TypeString)
+	}
 	if value, ok := sliu.mutation.PlanDisplayName(); ok {
 		_spec.SetField(subscriptionlineitem.FieldPlanDisplayName, field.TypeString, value)
 	}
@@ -564,6 +590,26 @@ func (sliuo *SubscriptionLineItemUpdateOne) SetNillablePlanID(s *string) *Subscr
 // ClearPlanID clears the value of the "plan_id" field.
 func (sliuo *SubscriptionLineItemUpdateOne) ClearPlanID() *SubscriptionLineItemUpdateOne {
 	sliuo.mutation.ClearPlanID()
+	return sliuo
+}
+
+// SetAddonID sets the "addon_id" field.
+func (sliuo *SubscriptionLineItemUpdateOne) SetAddonID(s string) *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.SetAddonID(s)
+	return sliuo
+}
+
+// SetNillableAddonID sets the "addon_id" field if the given value is not nil.
+func (sliuo *SubscriptionLineItemUpdateOne) SetNillableAddonID(s *string) *SubscriptionLineItemUpdateOne {
+	if s != nil {
+		sliuo.SetAddonID(*s)
+	}
+	return sliuo
+}
+
+// ClearAddonID clears the value of the "addon_id" field.
+func (sliuo *SubscriptionLineItemUpdateOne) ClearAddonID() *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.ClearAddonID()
 	return sliuo
 }
 
@@ -925,6 +971,12 @@ func (sliuo *SubscriptionLineItemUpdateOne) sqlSave(ctx context.Context) (_node 
 	}
 	if sliuo.mutation.PlanIDCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldPlanID, field.TypeString)
+	}
+	if value, ok := sliuo.mutation.AddonID(); ok {
+		_spec.SetField(subscriptionlineitem.FieldAddonID, field.TypeString, value)
+	}
+	if sliuo.mutation.AddonIDCleared() {
+		_spec.ClearField(subscriptionlineitem.FieldAddonID, field.TypeString)
 	}
 	if value, ok := sliuo.mutation.PlanDisplayName(); ok {
 		_spec.SetField(subscriptionlineitem.FieldPlanDisplayName, field.TypeString, value)

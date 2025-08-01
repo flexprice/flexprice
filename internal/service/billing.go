@@ -103,7 +103,8 @@ func (s *billingService) CalculateFixedCharges(
 		amount := priceService.CalculateCost(ctx, price.Price, item.Quantity)
 
 		fixedCostLineItems = append(fixedCostLineItems, dto.CreateInvoiceLineItemRequest{
-			PlanID:          lo.ToPtr(item.PlanID),
+			PlanID: item.PlanID,
+			// TODO: add addon ID and source type
 			PlanDisplayName: lo.ToPtr(item.PlanDisplayName),
 			PriceID:         lo.ToPtr(item.PriceID),
 			PriceType:       lo.ToPtr(string(item.PriceType)),
@@ -142,7 +143,7 @@ func (s *billingService) CalculateUsageCharges(
 	planIDs := make([]string, 0)
 	for _, item := range sub.LineItems {
 		if item.PriceType == types.PRICE_TYPE_USAGE {
-			planIDs = append(planIDs, item.PlanID)
+			planIDs = append(planIDs, lo.FromPtr(item.PlanID))
 		}
 	}
 	planIDs = lo.Uniq(planIDs)
@@ -193,7 +194,7 @@ func (s *billingService) CalculateUsageCharges(
 		// Process each matching charge individually (normal and overage charges)
 		for _, matchingCharge := range matchingCharges {
 			quantityForCalculation := decimal.NewFromFloat(matchingCharge.Quantity)
-			matchingEntitlement, ok := entitlementsByPlanMeterID[item.PlanID][item.MeterID]
+			matchingEntitlement, ok := entitlementsByPlanMeterID[lo.FromPtr(item.PlanID)][item.MeterID]
 
 			// Only apply entitlement adjustments if:
 			// 1. This is not an overage charge
@@ -249,7 +250,7 @@ func (s *billingService) CalculateUsageCharges(
 				"price_id", item.PriceID)
 
 			usageCharges = append(usageCharges, dto.CreateInvoiceLineItemRequest{
-				PlanID:           lo.ToPtr(item.PlanID),
+				PlanID:           item.PlanID,
 				PlanDisplayName:  lo.ToPtr(item.PlanDisplayName),
 				PriceType:        lo.ToPtr(string(item.PriceType)),
 				PriceID:          lo.ToPtr(item.PriceID),
@@ -866,7 +867,7 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 		subscriptionMap[sub.ID] = sub
 		for _, li := range sub.LineItems {
 			if li.IsActive(time.Now()) {
-				planIDs = append(planIDs, li.PlanID)
+				planIDs = append(planIDs, lo.FromPtr(li.PlanID))
 			}
 		}
 	}
@@ -955,13 +956,13 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 			}
 
 			// Get entitlements for this plan
-			planEntitlements, ok := entitlementsByPlan[li.PlanID]
+			planEntitlements, ok := entitlementsByPlan[lo.FromPtr(li.PlanID)]
 			if !ok {
 				continue
 			}
 
 			// Get the plan details
-			p, ok := planMap[li.PlanID]
+			p, ok := planMap[lo.FromPtr(li.PlanID)]
 			if !ok {
 				continue
 			}

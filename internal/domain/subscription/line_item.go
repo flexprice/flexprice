@@ -10,25 +10,27 @@ import (
 
 // SubscriptionLineItem represents a line item in a subscription
 type SubscriptionLineItem struct {
-	ID               string               `db:"id" json:"id"`
-	SubscriptionID   string               `db:"subscription_id" json:"subscription_id"`
-	CustomerID       string               `db:"customer_id" json:"customer_id"`
-	PlanID           string               `db:"plan_id" json:"plan_id,omitempty"`
-	PlanDisplayName  string               `db:"plan_display_name" json:"plan_display_name,omitempty"`
-	PriceID          string               `db:"price_id" json:"price_id"`
-	PriceType        types.PriceType      `db:"price_type" json:"price_type,omitempty"`
-	MeterID          string               `db:"meter_id" json:"meter_id,omitempty"`
-	MeterDisplayName string               `db:"meter_display_name" json:"meter_display_name,omitempty"`
-	DisplayName      string               `db:"display_name" json:"display_name,omitempty"`
-	Quantity         decimal.Decimal      `db:"quantity" json:"quantity"`
-	Currency         string               `db:"currency" json:"currency"`
-	BillingPeriod    types.BillingPeriod  `db:"billing_period" json:"billing_period"`
-	InvoiceCadence   types.InvoiceCadence `db:"invoice_cadence" json:"invoice_cadence"`
-	TrialPeriod      int                  `db:"trial_period" json:"trial_period"`
-	StartDate        time.Time            `db:"start_date" json:"start_date,omitempty"`
-	EndDate          time.Time            `db:"end_date" json:"end_date,omitempty"`
-	Metadata         map[string]string    `db:"metadata" json:"metadata,omitempty"`
-	EnvironmentID    string               `db:"environment_id" json:"environment_id"`
+	ID               string                               `db:"id" json:"id"`
+	SubscriptionID   string                               `db:"subscription_id" json:"subscription_id"`
+	CustomerID       string                               `db:"customer_id" json:"customer_id"`
+	PlanID           *string                              `db:"plan_id" json:"plan_id,omitempty"`
+	AddonID          *string                              `db:"addon_id" json:"addon_id,omitempty"`
+	SourceType       types.SubscriptionLineItemSourceType `db:"source_type" json:"source_type,omitempty"`
+	PlanDisplayName  string                               `db:"plan_display_name" json:"plan_display_name,omitempty"`
+	PriceID          string                               `db:"price_id" json:"price_id"`
+	PriceType        types.PriceType                      `db:"price_type" json:"price_type,omitempty"`
+	MeterID          string                               `db:"meter_id" json:"meter_id,omitempty"`
+	MeterDisplayName string                               `db:"meter_display_name" json:"meter_display_name,omitempty"`
+	DisplayName      string                               `db:"display_name" json:"display_name,omitempty"`
+	Quantity         decimal.Decimal                      `db:"quantity" json:"quantity"`
+	Currency         string                               `db:"currency" json:"currency"`
+	BillingPeriod    types.BillingPeriod                  `db:"billing_period" json:"billing_period"`
+	InvoiceCadence   types.InvoiceCadence                 `db:"invoice_cadence" json:"invoice_cadence"`
+	TrialPeriod      int                                  `db:"trial_period" json:"trial_period"`
+	StartDate        time.Time                            `db:"start_date" json:"start_date,omitempty"`
+	EndDate          time.Time                            `db:"end_date" json:"end_date,omitempty"`
+	Metadata         map[string]string                    `db:"metadata" json:"metadata,omitempty"`
+	EnvironmentID    string                               `db:"environment_id" json:"environment_id"`
 	types.BaseModel
 }
 
@@ -75,12 +77,9 @@ func SubscriptionLineItemFromEnt(e *ent.SubscriptionLineItem) *SubscriptionLineI
 		return nil
 	}
 
-	var planID, planDisplayName, priceType, meterID, meterDisplayName, displayName string
+	var planDisplayName, priceType, meterID, meterDisplayName, displayName string
 	var startDate, endDate time.Time
 
-	if e.PlanID != nil {
-		planID = *e.PlanID
-	}
 	if e.PlanDisplayName != nil {
 		planDisplayName = *e.PlanDisplayName
 	}
@@ -103,11 +102,16 @@ func SubscriptionLineItemFromEnt(e *ent.SubscriptionLineItem) *SubscriptionLineI
 		endDate = *e.EndDate
 	}
 
+	var sourceType types.SubscriptionLineItemSourceType
+	sourceType = types.SubscriptionLineItemSourceType(e.SourceType)
+
 	return &SubscriptionLineItem{
 		ID:               e.ID,
 		SubscriptionID:   e.SubscriptionID,
 		CustomerID:       e.CustomerID,
-		PlanID:           planID,
+		PlanID:           e.PlanID,
+		AddonID:          e.AddonID,
+		SourceType:       sourceType,
 		PlanDisplayName:  planDisplayName,
 		PriceID:          e.PriceID,
 		PriceType:        types.PriceType(priceType),

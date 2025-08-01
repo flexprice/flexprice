@@ -138,6 +138,26 @@ func (slic *SubscriptionLineItemCreate) SetNillablePlanID(s *string) *Subscripti
 	return slic
 }
 
+// SetAddonID sets the "addon_id" field.
+func (slic *SubscriptionLineItemCreate) SetAddonID(s string) *SubscriptionLineItemCreate {
+	slic.mutation.SetAddonID(s)
+	return slic
+}
+
+// SetNillableAddonID sets the "addon_id" field if the given value is not nil.
+func (slic *SubscriptionLineItemCreate) SetNillableAddonID(s *string) *SubscriptionLineItemCreate {
+	if s != nil {
+		slic.SetAddonID(*s)
+	}
+	return slic
+}
+
+// SetSourceType sets the "source_type" field.
+func (slic *SubscriptionLineItemCreate) SetSourceType(s string) *SubscriptionLineItemCreate {
+	slic.mutation.SetSourceType(s)
+	return slic
+}
+
 // SetPlanDisplayName sets the "plan_display_name" field.
 func (slic *SubscriptionLineItemCreate) SetPlanDisplayName(s string) *SubscriptionLineItemCreate {
 	slic.mutation.SetPlanDisplayName(s)
@@ -409,6 +429,14 @@ func (slic *SubscriptionLineItemCreate) check() error {
 			return &ValidationError{Name: "customer_id", err: fmt.Errorf(`ent: validator failed for field "SubscriptionLineItem.customer_id": %w`, err)}
 		}
 	}
+	if _, ok := slic.mutation.SourceType(); !ok {
+		return &ValidationError{Name: "source_type", err: errors.New(`ent: missing required field "SubscriptionLineItem.source_type"`)}
+	}
+	if v, ok := slic.mutation.SourceType(); ok {
+		if err := subscriptionlineitem.SourceTypeValidator(v); err != nil {
+			return &ValidationError{Name: "source_type", err: fmt.Errorf(`ent: validator failed for field "SubscriptionLineItem.source_type": %w`, err)}
+		}
+	}
 	if _, ok := slic.mutation.PriceID(); !ok {
 		return &ValidationError{Name: "price_id", err: errors.New(`ent: missing required field "SubscriptionLineItem.price_id"`)}
 	}
@@ -512,6 +540,14 @@ func (slic *SubscriptionLineItemCreate) createSpec() (*SubscriptionLineItem, *sq
 	if value, ok := slic.mutation.PlanID(); ok {
 		_spec.SetField(subscriptionlineitem.FieldPlanID, field.TypeString, value)
 		_node.PlanID = &value
+	}
+	if value, ok := slic.mutation.AddonID(); ok {
+		_spec.SetField(subscriptionlineitem.FieldAddonID, field.TypeString, value)
+		_node.AddonID = &value
+	}
+	if value, ok := slic.mutation.SourceType(); ok {
+		_spec.SetField(subscriptionlineitem.FieldSourceType, field.TypeString, value)
+		_node.SourceType = value
 	}
 	if value, ok := slic.mutation.PlanDisplayName(); ok {
 		_spec.SetField(subscriptionlineitem.FieldPlanDisplayName, field.TypeString, value)
