@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -50,6 +51,8 @@ type CreateSubscriptionRequest struct {
 	OverageFactor *decimal.Decimal `json:"overage_factor,omitempty"`
 	// Phases represents an optional timeline of subscription phases
 	Phases []SubscriptionSchedulePhaseInput `json:"phases,omitempty" validate:"omitempty,dive"`
+	// Addons represents the addons to be linked to the subscription
+	Addons []SubscriptionAddonRequest `json:"addons,omitempty" validate:"omitempty,dive"`
 }
 
 type UpdateSubscriptionRequest struct {
@@ -296,6 +299,82 @@ type SubscriptionLineItemRequest struct {
 // SubscriptionLineItemResponse represents the response for a subscription line item
 type SubscriptionLineItemResponse struct {
 	*subscription.SubscriptionLineItem
+}
+
+// SubscriptionAddonRequest represents the request to add an addon to a subscription
+type SubscriptionAddonRequest struct {
+	AddonID           string                  `json:"addon_id" validate:"required"`
+	PriceID           string                  `json:"price_id" validate:"required"`
+	Quantity          int                     `json:"quantity" validate:"min=1"`
+	StartDate         *time.Time              `json:"start_date,omitempty"`
+	EndDate           *time.Time              `json:"end_date,omitempty"`
+	ProrationBehavior types.ProrationBehavior `json:"proration_behavior"`
+
+	// Usage tracking
+	UsageLimit       *decimal.Decimal `json:"usage_limit,omitempty"`
+	UsageResetPeriod string           `json:"usage_reset_period,omitempty"`
+	UsageResetDate   *time.Time       `json:"usage_reset_date,omitempty"`
+
+	// Billing period alignment
+	BillingPeriod      types.BillingPeriod `json:"billing_period,omitempty"`
+	BillingPeriodCount int                 `json:"billing_period_count,omitempty"`
+
+	Metadata map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// AddonUsageResponse represents the usage response for an addon
+type AddonUsageResponse struct {
+	SubscriptionID string                               `json:"subscription_id"`
+	AddonID        string                               `json:"addon_id"`
+	PriceID        string                               `json:"price_id"`
+	Quantity       int                                  `json:"quantity"`
+	UsageLimit     *decimal.Decimal                     `json:"usage_limit,omitempty"`
+	Charges        []*SubscriptionUsageByMetersResponse `json:"charges"`
+	PeriodStart    time.Time                            `json:"period_start"`
+	PeriodEnd      time.Time                            `json:"period_end"`
+}
+
+func (r *SubscriptionAddonRequest) Validate() error {
+	err := validator.ValidateRequest(r)
+	if err != nil {
+		return err
+	}
+
+	if r.ProrationBehavior == "" {
+		r.ProrationBehavior = types.ProrationBehaviorCreateProrations
+	}
+
+	return nil
+}
+
+func (r *SubscriptionAddonRequest) ToDomain(ctx context.Context, subscriptionID string) *addon.SubscriptionAddon {
+	startDate := r.StartDate
+	if startDate == nil {
+		now := time.Now()
+		startDate = &now
+	}
+
+	// Set default billing period if not provided
+	billingPeriod := r.BillingPeriod
+	if billingPeriod == "" {
+		billingPeriod = types.BILLING_PERIOD_MONTHLY
+	}
+
+	billingPeriodCount := r.BillingPeriodCount
+	if billingPeriodCount == 0 {
+		billingPeriodCount = 1
+	}
+
+	return &addon.SubscriptionAddon{
+		ID:             types.GenerateShortIDWithPrefix(string(types.UUID_PREFIX_ADDON)),
+		SubscriptionID: subscriptionID,
+		AddonID:        r.AddonID,
+		StartDate:      startDate,
+		EndDate:        r.EndDate,
+		AddonStatus:    types.AddonStatusActive,
+		Metadata:       r.Metadata,
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
 }
 
 // ToSubscriptionLineItem converts a request to a domain subscription line item

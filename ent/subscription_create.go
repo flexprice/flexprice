@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/creditgrant"
 	"github.com/flexprice/flexprice/ent/subscription"
+	"github.com/flexprice/flexprice/ent/subscriptionaddon"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
 	"github.com/flexprice/flexprice/ent/subscriptionschedule"
@@ -487,6 +488,21 @@ func (sc *SubscriptionCreate) SetSchedule(s *SubscriptionSchedule) *Subscription
 	return sc.SetScheduleID(s.ID)
 }
 
+// AddSubscriptionAddonIDs adds the "subscription_addons" edge to the SubscriptionAddon entity by IDs.
+func (sc *SubscriptionCreate) AddSubscriptionAddonIDs(ids ...string) *SubscriptionCreate {
+	sc.mutation.AddSubscriptionAddonIDs(ids...)
+	return sc
+}
+
+// AddSubscriptionAddons adds the "subscription_addons" edges to the SubscriptionAddon entity.
+func (sc *SubscriptionCreate) AddSubscriptionAddons(s ...*SubscriptionAddon) *SubscriptionCreate {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return sc.AddSubscriptionAddonIDs(ids...)
+}
+
 // Mutation returns the SubscriptionMutation object of the builder.
 func (sc *SubscriptionCreate) Mutation() *SubscriptionMutation {
 	return sc.mutation
@@ -898,6 +914,22 @@ func (sc *SubscriptionCreate) createSpec() (*Subscription, *sqlgraph.CreateSpec)
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(subscriptionschedule.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := sc.mutation.SubscriptionAddonsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.SubscriptionAddonsTable,
+			Columns: []string{subscription.SubscriptionAddonsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionaddon.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

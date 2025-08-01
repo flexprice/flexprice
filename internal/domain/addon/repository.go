@@ -18,8 +18,8 @@ type Repository interface {
 	Count(ctx context.Context, filter *types.AddonFilter) (int, error)
 
 	// Subscription Addon operations
-	// CreateSubscriptionAddon(ctx context.Context, subscriptionAddon *SubscriptionAddon) error
-	// GetSubscriptionAddonByID(ctx context.Context, id string) (*SubscriptionAddon, error)
-	// GetSubscriptionAddons(ctx context.Context, subscriptionID string) ([]*SubscriptionAddon, error)
-	// UpdateSubscriptionAddon(ctx context.Context, subscriptionAddon *SubscriptionAddon) error
+	CreateSubscriptionAddon(ctx context.Context, subscriptionAddon *SubscriptionAddon) error
+	GetSubscriptionAddonByID(ctx context.Context, id string) (*SubscriptionAddon, error)
+	GetSubscriptionAddons(ctx context.Context, subscriptionID string) ([]*SubscriptionAddon, error)
+	UpdateSubscriptionAddon(ctx context.Context, subscriptionAddon *SubscriptionAddon) error
 }

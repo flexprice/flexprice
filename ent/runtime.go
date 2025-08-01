@@ -28,6 +28,7 @@ import (
 	"github.com/flexprice/flexprice/ent/schema"
 	"github.com/flexprice/flexprice/ent/secret"
 	"github.com/flexprice/flexprice/ent/subscription"
+	"github.com/flexprice/flexprice/ent/subscriptionaddon"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
 	"github.com/flexprice/flexprice/ent/subscriptionschedule"
@@ -1076,6 +1077,51 @@ func init() {
 	subscriptionDescOverageFactor := subscriptionFields[25].Descriptor()
 	// subscription.DefaultOverageFactor holds the default value on creation for the overage_factor field.
 	subscription.DefaultOverageFactor = subscriptionDescOverageFactor.Default.(decimal.Decimal)
+	subscriptionaddonMixin := schema.SubscriptionAddon{}.Mixin()
+	subscriptionaddonMixinFields0 := subscriptionaddonMixin[0].Fields()
+	_ = subscriptionaddonMixinFields0
+	subscriptionaddonMixinFields1 := subscriptionaddonMixin[1].Fields()
+	_ = subscriptionaddonMixinFields1
+	subscriptionaddonFields := schema.SubscriptionAddon{}.Fields()
+	_ = subscriptionaddonFields
+	// subscriptionaddonDescTenantID is the schema descriptor for tenant_id field.
+	subscriptionaddonDescTenantID := subscriptionaddonMixinFields0[0].Descriptor()
+	// subscriptionaddon.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	subscriptionaddon.TenantIDValidator = subscriptionaddonDescTenantID.Validators[0].(func(string) error)
+	// subscriptionaddonDescStatus is the schema descriptor for status field.
+	subscriptionaddonDescStatus := subscriptionaddonMixinFields0[1].Descriptor()
+	// subscriptionaddon.DefaultStatus holds the default value on creation for the status field.
+	subscriptionaddon.DefaultStatus = subscriptionaddonDescStatus.Default.(string)
+	// subscriptionaddonDescCreatedAt is the schema descriptor for created_at field.
+	subscriptionaddonDescCreatedAt := subscriptionaddonMixinFields0[2].Descriptor()
+	// subscriptionaddon.DefaultCreatedAt holds the default value on creation for the created_at field.
+	subscriptionaddon.DefaultCreatedAt = subscriptionaddonDescCreatedAt.Default.(func() time.Time)
+	// subscriptionaddonDescUpdatedAt is the schema descriptor for updated_at field.
+	subscriptionaddonDescUpdatedAt := subscriptionaddonMixinFields0[3].Descriptor()
+	// subscriptionaddon.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	subscriptionaddon.DefaultUpdatedAt = subscriptionaddonDescUpdatedAt.Default.(func() time.Time)
+	// subscriptionaddon.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	subscriptionaddon.UpdateDefaultUpdatedAt = subscriptionaddonDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// subscriptionaddonDescEnvironmentID is the schema descriptor for environment_id field.
+	subscriptionaddonDescEnvironmentID := subscriptionaddonMixinFields1[0].Descriptor()
+	// subscriptionaddon.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	subscriptionaddon.DefaultEnvironmentID = subscriptionaddonDescEnvironmentID.Default.(string)
+	// subscriptionaddonDescSubscriptionID is the schema descriptor for subscription_id field.
+	subscriptionaddonDescSubscriptionID := subscriptionaddonFields[1].Descriptor()
+	// subscriptionaddon.SubscriptionIDValidator is a validator for the "subscription_id" field. It is called by the builders before save.
+	subscriptionaddon.SubscriptionIDValidator = subscriptionaddonDescSubscriptionID.Validators[0].(func(string) error)
+	// subscriptionaddonDescAddonID is the schema descriptor for addon_id field.
+	subscriptionaddonDescAddonID := subscriptionaddonFields[2].Descriptor()
+	// subscriptionaddon.AddonIDValidator is a validator for the "addon_id" field. It is called by the builders before save.
+	subscriptionaddon.AddonIDValidator = subscriptionaddonDescAddonID.Validators[0].(func(string) error)
+	// subscriptionaddonDescStartDate is the schema descriptor for start_date field.
+	subscriptionaddonDescStartDate := subscriptionaddonFields[3].Descriptor()
+	// subscriptionaddon.DefaultStartDate holds the default value on creation for the start_date field.
+	subscriptionaddon.DefaultStartDate = subscriptionaddonDescStartDate.Default.(func() time.Time)
+	// subscriptionaddonDescAddonStatus is the schema descriptor for addon_status field.
+	subscriptionaddonDescAddonStatus := subscriptionaddonFields[5].Descriptor()
+	// subscriptionaddon.DefaultAddonStatus holds the default value on creation for the addon_status field.
+	subscriptionaddon.DefaultAddonStatus = subscriptionaddonDescAddonStatus.Default.(string)
 	subscriptionlineitemMixin := schema.SubscriptionLineItem{}.Mixin()
 	subscriptionlineitemMixinFields0 := subscriptionlineitemMixin[0].Fields()
 	_ = subscriptionlineitemMixinFields0

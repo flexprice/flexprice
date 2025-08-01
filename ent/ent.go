@@ -34,6 +34,7 @@ import (
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/secret"
 	"github.com/flexprice/flexprice/ent/subscription"
+	"github.com/flexprice/flexprice/ent/subscriptionaddon"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
 	"github.com/flexprice/flexprice/ent/subscriptionschedule"
@@ -125,6 +126,7 @@ func checkColumn(table, column string) error {
 			price.Table:                     price.ValidColumn,
 			secret.Table:                    secret.ValidColumn,
 			subscription.Table:              subscription.ValidColumn,
+			subscriptionaddon.Table:         subscriptionaddon.ValidColumn,
 			subscriptionlineitem.Table:      subscriptionlineitem.ValidColumn,
 			subscriptionpause.Table:         subscriptionpause.ValidColumn,
 			subscriptionschedule.Table:      subscriptionschedule.ValidColumn,

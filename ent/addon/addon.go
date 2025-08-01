@@ -42,6 +42,8 @@ const (
 	EdgePrices = "prices"
 	// EdgeEntitlements holds the string denoting the entitlements edge name in mutations.
 	EdgeEntitlements = "entitlements"
+	// EdgeSubscriptionAddons holds the string denoting the subscription_addons edge name in mutations.
+	EdgeSubscriptionAddons = "subscription_addons"
 	// Table holds the table name of the addon in the database.
 	Table = "addons"
 	// PricesTable is the table that holds the prices relation/edge.
@@ -58,6 +60,13 @@ const (
 	EntitlementsInverseTable = "entitlements"
 	// EntitlementsColumn is the table column denoting the entitlements relation/edge.
 	EntitlementsColumn = "addon_entitlements"
+	// SubscriptionAddonsTable is the table that holds the subscription_addons relation/edge.
+	SubscriptionAddonsTable = "subscription_addons"
+	// SubscriptionAddonsInverseTable is the table name for the SubscriptionAddon entity.
+	// It exists in this package in order to avoid circular dependency with the "subscriptionaddon" package.
+	SubscriptionAddonsInverseTable = "subscription_addons"
+	// SubscriptionAddonsColumn is the table column denoting the subscription_addons relation/edge.
+	SubscriptionAddonsColumn = "addon_id"
 )
 
 // Columns holds all SQL columns for addon fields.
@@ -198,6 +207,20 @@ func ByEntitlements(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newEntitlementsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
+
+// BySubscriptionAddonsCount orders the results by subscription_addons count.
+func BySubscriptionAddonsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newSubscriptionAddonsStep(), opts...)
+	}
+}
+
+// BySubscriptionAddons orders the results by subscription_addons terms.
+func BySubscriptionAddons(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newSubscriptionAddonsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
 func newPricesStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -210,5 +233,12 @@ func newEntitlementsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(EntitlementsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, EntitlementsTable, EntitlementsColumn),
+	)
+}
+func newSubscriptionAddonsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(SubscriptionAddonsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, SubscriptionAddonsTable, SubscriptionAddonsColumn),
 	)
 }

@@ -87,6 +87,8 @@ const (
 	EdgeCreditGrants = "credit_grants"
 	// EdgeSchedule holds the string denoting the schedule edge name in mutations.
 	EdgeSchedule = "schedule"
+	// EdgeSubscriptionAddons holds the string denoting the subscription_addons edge name in mutations.
+	EdgeSubscriptionAddons = "subscription_addons"
 	// Table holds the table name of the subscription in the database.
 	Table = "subscriptions"
 	// LineItemsTable is the table that holds the line_items relation/edge.
@@ -117,6 +119,13 @@ const (
 	ScheduleInverseTable = "subscription_schedules"
 	// ScheduleColumn is the table column denoting the schedule relation/edge.
 	ScheduleColumn = "subscription_id"
+	// SubscriptionAddonsTable is the table that holds the subscription_addons relation/edge.
+	SubscriptionAddonsTable = "subscription_addons"
+	// SubscriptionAddonsInverseTable is the table name for the SubscriptionAddon entity.
+	// It exists in this package in order to avoid circular dependency with the "subscriptionaddon" package.
+	SubscriptionAddonsInverseTable = "subscription_addons"
+	// SubscriptionAddonsColumn is the table column denoting the subscription_addons relation/edge.
+	SubscriptionAddonsColumn = "subscription_id"
 )
 
 // Columns holds all SQL columns for subscription fields.
@@ -426,6 +435,20 @@ func ByScheduleField(field string, opts ...sql.OrderTermOption) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newScheduleStep(), sql.OrderByField(field, opts...))
 	}
 }
+
+// BySubscriptionAddonsCount orders the results by subscription_addons count.
+func BySubscriptionAddonsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newSubscriptionAddonsStep(), opts...)
+	}
+}
+
+// BySubscriptionAddons orders the results by subscription_addons terms.
+func BySubscriptionAddons(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newSubscriptionAddonsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
 func newLineItemsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -452,5 +475,12 @@ func newScheduleStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(ScheduleInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2O, false, ScheduleTable, ScheduleColumn),
+	)
+}
+func newSubscriptionAddonsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(SubscriptionAddonsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, SubscriptionAddonsTable, SubscriptionAddonsColumn),
 	)
 }

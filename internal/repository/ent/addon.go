@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/ent/addon"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/schema"
+	subscriptionAddon "github.com/flexprice/flexprice/ent/subscriptionaddon"
 	"github.com/flexprice/flexprice/internal/cache"
 	domainAddon "github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/dsl"
@@ -391,6 +392,180 @@ func (r *addonRepository) Delete(ctx context.Context, id string) error {
 
 	SetSpanSuccess(span)
 	r.DeleteCache(ctx, id)
+	return nil
+}
+
+// CreateSubscriptionAddon creates a new subscription addon
+func (r *addonRepository) CreateSubscriptionAddon(ctx context.Context, sa *domainAddon.SubscriptionAddon) error {
+	client := r.client.Querier(ctx)
+
+	r.log.Debugw("creating subscription addon",
+		"subscription_id", sa.SubscriptionID,
+		"addon_id", sa.AddonID,
+	)
+
+	// Start a span for this repository operation
+	span := StartRepositorySpan(ctx, "subscription_addon", "create", map[string]interface{}{
+		"subscription_id": sa.SubscriptionID,
+		"addon_id":        sa.AddonID,
+	})
+	defer FinishSpan(span)
+
+	// Set environment ID from context if not already set
+	if sa.EnvironmentID == "" {
+		sa.EnvironmentID = types.GetEnvironmentID(ctx)
+	}
+
+	_, err := client.SubscriptionAddon.Create().
+		SetID(sa.ID).
+		SetTenantID(sa.TenantID).
+		SetEnvironmentID(sa.EnvironmentID).
+		SetStatus(string(sa.Status)).
+		SetSubscriptionID(sa.SubscriptionID).
+		SetAddonID(sa.AddonID).
+		SetNillableStartDate(sa.StartDate).
+		SetNillableEndDate(sa.EndDate).
+		SetAddonStatus(string(sa.AddonStatus)).
+		SetCancellationReason(sa.CancellationReason).
+		SetNillableCancelledAt(sa.CancelledAt).
+		SetMetadata(sa.Metadata).
+		SetCreatedBy(types.GetUserID(ctx)).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		SetCreatedAt(sa.CreatedAt).
+		SetUpdatedAt(sa.UpdatedAt).
+		Save(ctx)
+
+	if err != nil {
+		SetSpanError(span, err)
+		return ierr.WithError(err).
+			WithHint("Failed to create subscription addon").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return nil
+}
+
+// GetSubscriptionAddonByID retrieves a subscription addon by ID
+func (r *addonRepository) GetSubscriptionAddonByID(ctx context.Context, id string) (*domainAddon.SubscriptionAddon, error) {
+	// Start a span for this repository operation
+	span := StartRepositorySpan(ctx, "subscription_addon", "get", map[string]interface{}{
+		"subscription_addon_id": id,
+	})
+	defer FinishSpan(span)
+
+	client := r.client.Querier(ctx)
+
+	sa, err := client.SubscriptionAddon.Query().
+		Where(
+			subscriptionAddon.ID(id),
+			subscriptionAddon.TenantID(types.GetTenantID(ctx)),
+			subscriptionAddon.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
+		Only(ctx)
+
+	if err != nil {
+		SetSpanError(span, err)
+
+		if ent.IsNotFound(err) {
+			return nil, ierr.WithError(err).
+				WithHintf("Subscription addon with ID %s was not found", id).
+				WithReportableDetails(map[string]any{
+					"subscription_addon_id": id,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+		return nil, ierr.WithError(err).
+			WithHintf("Failed to get subscription addon with ID %s", id).
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return (&domainAddon.SubscriptionAddon{}).FromEnt(sa), nil
+}
+
+// GetSubscriptionAddons retrieves all addons for a subscription
+func (r *addonRepository) GetSubscriptionAddons(ctx context.Context, subscriptionID string) ([]*domainAddon.SubscriptionAddon, error) {
+	// Start a span for this repository operation
+	span := StartRepositorySpan(ctx, "subscription_addon", "get_by_subscription", map[string]interface{}{
+		"subscription_id": subscriptionID,
+	})
+	defer FinishSpan(span)
+
+	client := r.client.Querier(ctx)
+
+	subscriptionAddons, err := client.SubscriptionAddon.Query().
+		Where(
+			subscriptionAddon.SubscriptionID(subscriptionID),
+			subscriptionAddon.TenantID(types.GetTenantID(ctx)),
+			subscriptionAddon.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
+		All(ctx)
+
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve subscription addons").
+			WithReportableDetails(map[string]any{
+				"subscription_id": subscriptionID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return (&domainAddon.SubscriptionAddon{}).FromEntList(subscriptionAddons), nil
+}
+
+// UpdateSubscriptionAddon updates a subscription addon
+func (r *addonRepository) UpdateSubscriptionAddon(ctx context.Context, sa *domainAddon.SubscriptionAddon) error {
+	client := r.client.Querier(ctx)
+
+	r.log.Debugw("updating subscription addon",
+		"subscription_addon_id", sa.ID,
+		"subscription_id", sa.SubscriptionID,
+		"addon_id", sa.AddonID,
+	)
+
+	// Start a span for this repository operation
+	span := StartRepositorySpan(ctx, "subscription_addon", "update", map[string]interface{}{
+		"subscription_addon_id": sa.ID,
+	})
+	defer FinishSpan(span)
+
+	_, err := client.SubscriptionAddon.Update().
+		Where(
+			subscriptionAddon.ID(sa.ID),
+			subscriptionAddon.TenantID(sa.TenantID),
+			subscriptionAddon.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
+		SetNillableStartDate(sa.StartDate).
+		SetNillableEndDate(sa.EndDate).
+		SetAddonStatus(string(sa.AddonStatus)).
+		SetCancellationReason(sa.CancellationReason).
+		SetNillableCancelledAt(sa.CancelledAt).
+		SetMetadata(sa.Metadata).
+		SetStatus(string(sa.Status)).
+		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		Save(ctx)
+
+	if err != nil {
+		SetSpanError(span, err)
+
+		if ent.IsNotFound(err) {
+			return ierr.WithError(err).
+				WithHintf("Subscription addon with ID %s was not found", sa.ID).
+				WithReportableDetails(map[string]any{
+					"subscription_addon_id": sa.ID,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+		return ierr.WithError(err).
+			WithHint("Failed to update subscription addon").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
 	return nil
 }
 

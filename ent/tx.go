@@ -58,6 +58,8 @@ type Tx struct {
 	Secret *SecretClient
 	// Subscription is the client for interacting with the Subscription builders.
 	Subscription *SubscriptionClient
+	// SubscriptionAddon is the client for interacting with the SubscriptionAddon builders.
+	SubscriptionAddon *SubscriptionAddonClient
 	// SubscriptionLineItem is the client for interacting with the SubscriptionLineItem builders.
 	SubscriptionLineItem *SubscriptionLineItemClient
 	// SubscriptionPause is the client for interacting with the SubscriptionPause builders.
@@ -229,6 +231,7 @@ func (tx *Tx) init() {
 	tx.Price = NewPriceClient(tx.config)
 	tx.Secret = NewSecretClient(tx.config)
 	tx.Subscription = NewSubscriptionClient(tx.config)
+	tx.SubscriptionAddon = NewSubscriptionAddonClient(tx.config)
 	tx.SubscriptionLineItem = NewSubscriptionLineItemClient(tx.config)
 	tx.SubscriptionPause = NewSubscriptionPauseClient(tx.config)
 	tx.SubscriptionSchedule = NewSubscriptionScheduleClient(tx.config)

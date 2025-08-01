@@ -259,6 +259,14 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			return err
 		}
 
+		// Handle addons if provided
+		if len(req.Addons) > 0 {
+			err = s.handleSubscriptionAddons(ctx, sub, req.Addons)
+			if err != nil {
+				return err
+			}
+		}
+
 		creditGrantRequests := make([]dto.CreateCreditGrantRequest, 0)
 
 		// check if user has overidden the plan credit grants, if so add them to the request
@@ -329,6 +337,64 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 
 	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionCreated, sub.ID)
 	return response, nil
+}
+
+// handleSubscriptionAddons processes addons for a subscription
+func (s *subscriptionService) handleSubscriptionAddons(
+	ctx context.Context,
+	subscription *subscription.Subscription,
+	addonRequests []dto.SubscriptionAddonRequest,
+) error {
+	if len(addonRequests) == 0 {
+		return nil
+	}
+
+	s.Logger.Infow("processing addons for subscription",
+		"subscription_id", subscription.ID,
+		"addons_count", len(addonRequests))
+
+	// Validate and create subscription addons
+	for _, addonReq := range addonRequests {
+		// Validate the addon request
+		if err := addonReq.Validate(); err != nil {
+			return ierr.WithError(err).
+				WithHint("Invalid addon request").
+				WithReportableDetails(map[string]interface{}{
+					"subscription_id": subscription.ID,
+					"addon_id":        addonReq.AddonID,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
+		// Verify the addon exists and is active
+		addonService := NewAddonService(s.ServiceParams)
+		_, err := addonService.GetAddon(ctx, addonReq.AddonID)
+		if err != nil {
+			return ierr.WithError(err).
+				WithHint("Addon not found or not active").
+				WithReportableDetails(map[string]interface{}{
+					"subscription_id": subscription.ID,
+					"addon_id":        addonReq.AddonID,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+
+		// Convert to domain model
+		subscriptionAddon := addonReq.ToDomain(ctx, subscription.ID)
+
+		// Create the subscription addon
+		err = s.AddonRepo.CreateSubscriptionAddon(ctx, subscriptionAddon)
+		if err != nil {
+			return err
+		}
+
+		s.Logger.Infow("created subscription addon",
+			"subscription_id", subscription.ID,
+			"addon_id", addonReq.AddonID,
+			"subscription_addon_id", subscriptionAddon.ID)
+	}
+
+	return nil
 }
 
 // handleCreditGrants processes credit grants for a subscription and creates wallet top-ups

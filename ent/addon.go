@@ -54,9 +54,11 @@ type AddonEdges struct {
 	Prices []*Price `json:"prices,omitempty"`
 	// Entitlements holds the value of the entitlements edge.
 	Entitlements []*Entitlement `json:"entitlements,omitempty"`
+	// SubscriptionAddons holds the value of the subscription_addons edge.
+	SubscriptionAddons []*SubscriptionAddon `json:"subscription_addons,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
+	loadedTypes [3]bool
 }
 
 // PricesOrErr returns the Prices value or an error if the edge
@@ -75,6 +77,15 @@ func (e AddonEdges) EntitlementsOrErr() ([]*Entitlement, error) {
 		return e.Entitlements, nil
 	}
 	return nil, &NotLoadedError{edge: "entitlements"}
+}
+
+// SubscriptionAddonsOrErr returns the SubscriptionAddons value or an error if the edge
+// was not loaded in eager-loading.
+func (e AddonEdges) SubscriptionAddonsOrErr() ([]*SubscriptionAddon, error) {
+	if e.loadedTypes[2] {
+		return e.SubscriptionAddons, nil
+	}
+	return nil, &NotLoadedError{edge: "subscription_addons"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -204,6 +215,11 @@ func (a *Addon) QueryPrices() *PriceQuery {
 // QueryEntitlements queries the "entitlements" edge of the Addon entity.
 func (a *Addon) QueryEntitlements() *EntitlementQuery {
 	return NewAddonClient(a.config).QueryEntitlements(a)
+}
+
+// QuerySubscriptionAddons queries the "subscription_addons" edge of the Addon entity.
+func (a *Addon) QuerySubscriptionAddons() *SubscriptionAddonQuery {
+	return NewAddonClient(a.config).QuerySubscriptionAddons(a)
 }
 
 // Update returns a builder for updating this Addon.

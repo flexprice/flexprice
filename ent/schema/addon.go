@@ -72,6 +72,7 @@ func (Addon) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.To("prices", Price.Type),
 		edge.To("entitlements", Entitlement.Type),
+		edge.To("subscription_addons", SubscriptionAddon.Type),
 	}
 }
 

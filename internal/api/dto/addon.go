@@ -10,7 +10,6 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
 	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // CreateAddonRequest represents the request to create an addon
@@ -166,16 +165,13 @@ func (r *AddAddonToSubscriptionRequest) ToDomain(ctx context.Context, subscripti
 	}
 
 	return &addon.SubscriptionAddon{
-		ID:                types.GenerateShortIDWithPrefix(string(types.UUID_PREFIX_ADDON)),
-		SubscriptionID:    subscriptionID,
-		AddonID:           r.AddonID,
-		PriceID:           r.PriceID,
-		Quantity:          r.Quantity,
-		StartDate:         startDate,
-		AddonStatus:       types.AddonStatusActive,
-		ProrationBehavior: r.ProrationBehavior,
-		Metadata:          r.Metadata,
-		BaseModel:         types.GetDefaultBaseModel(ctx),
+		ID:             types.GenerateShortIDWithPrefix(string(types.UUID_PREFIX_ADDON)),
+		SubscriptionID: subscriptionID,
+		AddonID:        r.AddonID,
+		StartDate:      startDate,
+		AddonStatus:    types.AddonStatusActive,
+		Metadata:       r.Metadata,
+		BaseModel:      types.GetDefaultBaseModel(ctx),
 	}
 }
 
@@ -193,22 +189,15 @@ func (r *UpdateSubscriptionAddonRequest) Validate() error {
 
 // SubscriptionAddonResponse represents the subscription addon response
 type SubscriptionAddonResponse struct {
-	ID                string                  `json:"id"`
-	SubscriptionID    string                  `json:"subscription_id"`
-	AddonID           string                  `json:"addon_id"`
-	PriceID           string                  `json:"price_id"`
-	Quantity          int                     `json:"quantity"`
-	StartDate         *time.Time              `json:"start_date,omitempty"`
-	EndDate           *time.Time              `json:"end_date,omitempty"`
-	AddonStatus       types.AddonStatus       `json:"addon_status"`
-	ProrationBehavior types.ProrationBehavior `json:"proration_behavior"`
-	ProratedAmount    *decimal.Decimal        `json:"prorated_amount,omitempty"`
-	UsageLimit        *decimal.Decimal        `json:"usage_limit,omitempty"`
-	UsageResetPeriod  string                  `json:"usage_reset_period,omitempty"`
-	UsageResetDate    *time.Time              `json:"usage_reset_date,omitempty"`
-	Metadata          map[string]interface{}  `json:"metadata,omitempty"`
-	CreatedAt         time.Time               `json:"created_at"`
-	UpdatedAt         time.Time               `json:"updated_at"`
+	ID             string                 `json:"id"`
+	SubscriptionID string                 `json:"subscription_id"`
+	AddonID        string                 `json:"addon_id"`
+	StartDate      *time.Time             `json:"start_date,omitempty"`
+	EndDate        *time.Time             `json:"end_date,omitempty"`
+	AddonStatus    types.AddonStatus      `json:"addon_status"`
+	Metadata       map[string]interface{} `json:"metadata,omitempty"`
+	CreatedAt      time.Time              `json:"created_at"`
+	UpdatedAt      time.Time              `json:"updated_at"`
 
 	// Optional expanded fields
 	Addon *AddonResponse `json:"addon,omitempty"`
@@ -221,22 +210,15 @@ func (r *SubscriptionAddonResponse) FromDomain(sa *addon.SubscriptionAddon) *Sub
 	}
 
 	return &SubscriptionAddonResponse{
-		ID:                sa.ID,
-		SubscriptionID:    sa.SubscriptionID,
-		AddonID:           sa.AddonID,
-		PriceID:           sa.PriceID,
-		Quantity:          sa.Quantity,
-		StartDate:         sa.StartDate,
-		EndDate:           sa.EndDate,
-		AddonStatus:       sa.AddonStatus,
-		ProrationBehavior: sa.ProrationBehavior,
-		ProratedAmount:    sa.ProratedAmount,
-		UsageLimit:        sa.UsageLimit,
-		UsageResetPeriod:  sa.UsageResetPeriod,
-		UsageResetDate:    sa.UsageResetDate,
-		Metadata:          sa.Metadata,
-		CreatedAt:         sa.CreatedAt,
-		UpdatedAt:         sa.UpdatedAt,
+		ID:             sa.ID,
+		SubscriptionID: sa.SubscriptionID,
+		AddonID:        sa.AddonID,
+		StartDate:      sa.StartDate,
+		EndDate:        sa.EndDate,
+		AddonStatus:    sa.AddonStatus,
+		Metadata:       sa.Metadata,
+		CreatedAt:      sa.CreatedAt,
+		UpdatedAt:      sa.UpdatedAt,
 	}
 }
 

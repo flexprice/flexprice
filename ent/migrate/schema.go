@@ -1092,6 +1092,52 @@ var (
 			},
 		},
 	}
+	// SubscriptionAddonsColumns holds the columns for the "subscription_addons" table.
+	SubscriptionAddonsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "start_date", Type: field.TypeTime, Nullable: true},
+		{Name: "end_date", Type: field.TypeTime, Nullable: true},
+		{Name: "addon_status", Type: field.TypeString, Default: "active", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "cancellation_reason", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "cancelled_at", Type: field.TypeTime, Nullable: true},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "addon_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "subscription_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+	}
+	// SubscriptionAddonsTable holds the schema information for the "subscription_addons" table.
+	SubscriptionAddonsTable = &schema.Table{
+		Name:       "subscription_addons",
+		Columns:    SubscriptionAddonsColumns,
+		PrimaryKey: []*schema.Column{SubscriptionAddonsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "subscription_addons_addons_subscription_addons",
+				Columns:    []*schema.Column{SubscriptionAddonsColumns[14]},
+				RefColumns: []*schema.Column{AddonsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "subscription_addons_subscriptions_subscription_addons",
+				Columns:    []*schema.Column{SubscriptionAddonsColumns[15]},
+				RefColumns: []*schema.Column{SubscriptionsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "subscriptionaddon_tenant_id_environment_id_subscription_id_addon_id",
+				Unique:  false,
+				Columns: []*schema.Column{SubscriptionAddonsColumns[1], SubscriptionAddonsColumns[7], SubscriptionAddonsColumns[15], SubscriptionAddonsColumns[14]},
+			},
+		},
+	}
 	// SubscriptionLineItemsColumns holds the columns for the "subscription_line_items" table.
 	SubscriptionLineItemsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -1550,6 +1596,7 @@ var (
 		PricesTable,
 		SecretsTable,
 		SubscriptionsTable,
+		SubscriptionAddonsTable,
 		SubscriptionLineItemsTable,
 		SubscriptionPausesTable,
 		SubscriptionSchedulesTable,
@@ -1576,6 +1623,8 @@ func init() {
 	InvoiceLineItemsTable.ForeignKeys[0].RefTable = InvoicesTable
 	PaymentAttemptsTable.ForeignKeys[0].RefTable = PaymentsTable
 	PricesTable.ForeignKeys[0].RefTable = AddonsTable
+	SubscriptionAddonsTable.ForeignKeys[0].RefTable = AddonsTable
+	SubscriptionAddonsTable.ForeignKeys[1].RefTable = SubscriptionsTable
 	SubscriptionLineItemsTable.ForeignKeys[0].RefTable = SubscriptionsTable
 	SubscriptionPausesTable.ForeignKeys[0].RefTable = SubscriptionsTable
 	SubscriptionSchedulesTable.ForeignKeys[0].RefTable = SubscriptionsTable

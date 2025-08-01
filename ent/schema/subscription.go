@@ -142,6 +142,7 @@ func (Subscription) Edges() []ent.Edge {
 		edge.To("credit_grants", CreditGrant.Type),
 		edge.To("schedule", SubscriptionSchedule.Type).
 			Unique(),
+		edge.To("subscription_addons", SubscriptionAddon.Type),
 	}
 }
 

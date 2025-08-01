@@ -881,6 +881,29 @@ func HasEntitlementsWith(preds ...predicate.Entitlement) predicate.Addon {
 	})
 }
 
+// HasSubscriptionAddons applies the HasEdge predicate on the "subscription_addons" edge.
+func HasSubscriptionAddons() predicate.Addon {
+	return predicate.Addon(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, SubscriptionAddonsTable, SubscriptionAddonsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasSubscriptionAddonsWith applies the HasEdge predicate on the "subscription_addons" edge with a given conditions (other predicates).
+func HasSubscriptionAddonsWith(preds ...predicate.SubscriptionAddon) predicate.Addon {
+	return predicate.Addon(func(s *sql.Selector) {
+		step := newSubscriptionAddonsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.Addon) predicate.Addon {
 	return predicate.Addon(sql.AndPredicates(predicates...))
