@@ -107,6 +107,21 @@ func (Wallet) Fields() []ent.Field {
 			),
 		field.JSON("config", types.WalletConfig{}).
 			Optional(),
+		field.JSON("alert_config", &types.AlertConfig{}).
+			SchemaType(map[string]string{
+				"postgres": "jsonb",
+			}).
+			Optional(),
+
+		field.Bool("alert_enabled").
+			Optional().
+			Default(false),
+		field.String("alert_state").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Default(string(types.AlertStateOk)),
 	}
 }
 

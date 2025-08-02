@@ -13,6 +13,7 @@ type Repository interface {
 	CreateWallet(ctx context.Context, w *Wallet) error
 	GetWalletByID(ctx context.Context, id string) (*Wallet, error)
 	GetWalletsByCustomerID(ctx context.Context, customerID string) ([]*Wallet, error)
+	GetWalletsByFilter(ctx context.Context, filter *types.WalletFilter) ([]*Wallet, error)
 	UpdateWalletStatus(ctx context.Context, id string, status types.WalletStatus) error
 	UpdateWallet(ctx context.Context, id string, wallet *Wallet) error
 

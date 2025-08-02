@@ -1485,6 +1485,14 @@ func init() {
 	walletDescWalletType := walletFields[12].Descriptor()
 	// wallet.DefaultWalletType holds the default value on creation for the wallet_type field.
 	wallet.DefaultWalletType = walletDescWalletType.Default.(string)
+	// walletDescAlertEnabled is the schema descriptor for alert_enabled field.
+	walletDescAlertEnabled := walletFields[16].Descriptor()
+	// wallet.DefaultAlertEnabled holds the default value on creation for the alert_enabled field.
+	wallet.DefaultAlertEnabled = walletDescAlertEnabled.Default.(bool)
+	// walletDescAlertState is the schema descriptor for alert_state field.
+	walletDescAlertState := walletFields[17].Descriptor()
+	// wallet.DefaultAlertState holds the default value on creation for the alert_state field.
+	wallet.DefaultAlertState = walletDescAlertState.Default.(string)
 	wallettransactionMixin := schema.WalletTransaction{}.Mixin()
 	wallettransactionMixinFields0 := wallettransactionMixin[0].Fields()
 	_ = wallettransactionMixinFields0

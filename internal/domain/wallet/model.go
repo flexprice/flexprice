@@ -26,6 +26,9 @@ type Wallet struct {
 	Config              types.WalletConfig     `db:"config" json:"config"`
 	ConversionRate      decimal.Decimal        `db:"conversion_rate" json:"conversion_rate"`
 	EnvironmentID       string                 `db:"environment_id" json:"environment_id"`
+	AlertEnabled        bool                   `db:"alert_enabled" json:"alert_enabled"`
+	AlertConfig         *types.AlertConfig     `db:"alert_config" json:"alert_config,omitempty"`
+	AlertState          string                 `db:"alert_state" json:"alert_state"`
 	types.BaseModel
 }
 
@@ -74,12 +77,11 @@ func FromEnt(e *ent.Wallet) *Wallet {
 		return nil
 	}
 
-	var autoTopupMinBalance, autoTopupAmount decimal.Decimal
-	if e.AutoTopupMinBalance != nil {
-		autoTopupMinBalance = *e.AutoTopupMinBalance
-	}
-	if e.AutoTopupAmount != nil {
-		autoTopupAmount = *e.AutoTopupAmount
+	// Create a copy of AlertConfig if it has a threshold set
+	var alertConfig *types.AlertConfig
+	if e.AlertConfig.Threshold != nil {
+		alertConfigCopy := e.AlertConfig
+		alertConfig = &alertConfigCopy
 	}
 
 	return &Wallet{
@@ -93,19 +95,22 @@ func FromEnt(e *ent.Wallet) *Wallet {
 		Description:         e.Description,
 		Metadata:            e.Metadata,
 		AutoTopupTrigger:    types.AutoTopupTrigger(lo.FromPtr(e.AutoTopupTrigger)),
-		AutoTopupMinBalance: autoTopupMinBalance,
-		AutoTopupAmount:     autoTopupAmount,
+		AutoTopupMinBalance: lo.FromPtr(e.AutoTopupMinBalance),
+		AutoTopupAmount:     lo.FromPtr(e.AutoTopupAmount),
 		WalletType:          types.WalletType(e.WalletType),
 		Config:              e.Config,
 		ConversionRate:      e.ConversionRate,
 		EnvironmentID:       e.EnvironmentID,
+		AlertEnabled:        e.AlertEnabled,
+		AlertConfig:         alertConfig,
+		AlertState:          e.AlertState,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),
-			CreatedBy: e.CreatedBy,
-			UpdatedBy: e.UpdatedBy,
 			CreatedAt: e.CreatedAt,
 			UpdatedAt: e.UpdatedAt,
+			CreatedBy: e.CreatedBy,
+			UpdatedBy: e.UpdatedBy,
 		},
 	}
 }

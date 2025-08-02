@@ -46,6 +46,22 @@ type CreateWalletRequest struct {
 	// initial_credits_expiry_date_utc is the expiry date in UTC timezone (optional to set nil means no expiry)
 	// ex 2025-01-01 00:00:00 UTC
 	InitialCreditsExpiryDateUTC *time.Time `json:"initial_credits_expiry_date_utc,omitempty"`
+
+	// alert_enabled is the flag to enable alerts for the wallet
+	AlertEnabled bool `json:"alert_enabled,omitempty" default:"false"`
+
+	// alert_config is the alert configuration for the wallet
+	AlertConfig *AlertConfig `json:"alert_config,omitempty"`
+}
+
+type AlertConfig struct {
+	AllowedTenantIDs []string   `json:"allowed_tenant_ids,omitempty"`
+	Threshold        *Threshold `json:"threshold,omitempty"`
+}
+
+type Threshold struct {
+	Type  string          `json:"type"` //amount
+	Value decimal.Decimal `json:"value"`
 }
 
 // UpdateWalletRequest represents the request to update a wallet
@@ -136,6 +152,18 @@ func (r *CreateWalletRequest) ToWallet(ctx context.Context) *wallet.Wallet {
 		}
 	}
 
+	// Convert AlertConfig to types.AlertConfig
+	var alertConfig *types.AlertConfig
+	if r.AlertEnabled && r.AlertConfig != nil {
+		alertConfig = &types.AlertConfig{
+			AllowedTenantIDs: r.AlertConfig.AllowedTenantIDs,
+			Threshold: &types.AlertThreshold{
+				Type:  r.AlertConfig.Threshold.Type,
+				Value: r.AlertConfig.Threshold.Value,
+			},
+		}
+	}
+
 	return &wallet.Wallet{
 		ID:                  types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET),
 		CustomerID:          r.CustomerID,
@@ -154,6 +182,9 @@ func (r *CreateWalletRequest) ToWallet(ctx context.Context) *wallet.Wallet {
 		WalletType:          r.WalletType,
 		Config:              lo.FromPtr(r.Config),
 		ConversionRate:      r.ConversionRate,
+		AlertEnabled:        r.AlertEnabled,
+		AlertConfig:         alertConfig,
+		AlertState:          string(types.AlertStateOk),
 	}
 }
 
@@ -221,6 +252,9 @@ type WalletResponse struct {
 	WalletType          types.WalletType       `json:"wallet_type"`
 	Config              types.WalletConfig     `json:"config,omitempty"`
 	ConversionRate      decimal.Decimal        `json:"conversion_rate"`
+	AlertEnabled        bool                   `json:"alert_enabled"`
+	AlertConfig         *types.AlertConfig     `json:"alert_config,omitempty"`
+	AlertState          string                 `json:"alert_state,omitempty"`
 	CreatedAt           time.Time              `json:"created_at"`
 	UpdatedAt           time.Time              `json:"updated_at"`
 }
@@ -246,6 +280,9 @@ func FromWallet(w *wallet.Wallet) *WalletResponse {
 		WalletType:          w.WalletType,
 		Config:              w.Config,
 		ConversionRate:      w.ConversionRate,
+		AlertEnabled:        w.AlertEnabled,
+		AlertConfig:         w.AlertConfig,
+		AlertState:          w.AlertState,
 		CreatedAt:           w.CreatedAt,
 		UpdatedAt:           w.UpdatedAt,
 	}
