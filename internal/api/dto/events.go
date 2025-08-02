@@ -64,10 +64,12 @@ type GetUsageRequest struct {
 	PriceID            string                `form:"-" json:"-"` // this is just for internal use to store the price id
 	MeterID            string                `form:"-" json:"-"` // this is just for internal use to store the meter id
 	Multiplier         *decimal.Decimal      `form:"multiplier" json:"multiplier,omitempty"`
+	Source             string                `form:"source" json:"source" example:"api"`
 }
 
 type GetUsageByMeterRequest struct {
-	MeterID            string              `form:"meter_id" json:"meter_id" binding:"required" example:"123"`
+	FeatureID          string              `form:"feature_id" json:"feature_id" example:"feature_123"`
+	MeterID            string              `form:"meter_id" json:"meter_id" example:"123"`
 	Meter              *meter.Meter        `form:"-" json:"-"` // caller can set this in case already fetched from db to avoid extra db call
 	ExternalCustomerID string              `form:"external_customer_id" json:"external_customer_id" example:"user_5"`
 	CustomerID         string              `form:"customer_id" json:"customer_id" example:"customer456"`
@@ -180,6 +182,7 @@ func (r *GetUsageRequest) ToUsageParams() *events.UsageParams {
 		ExternalCustomerID: r.ExternalCustomerID,
 		CustomerID:         r.CustomerID,
 		EventName:          r.EventName,
+		Source:             r.Source,
 		PropertyName:       r.PropertyName,
 		AggregationType:    types.AggregationType(strings.ToUpper(string(r.AggregationType))),
 		StartTime:          r.StartTime,
@@ -194,6 +197,12 @@ func (r *GetUsageByMeterRequest) Validate() error {
 	err := validator.ValidateRequest(r)
 	if err != nil {
 		return err
+	}
+
+	if r.FeatureID == "" && r.MeterID == "" {
+		return ierr.NewError("either feature_id or meter_id is required").
+			WithHint("Please provide a valid feature_id or meter_id").
+			Mark(ierr.ErrValidation)
 	}
 
 	if err := r.WindowSize.Validate(); err != nil {

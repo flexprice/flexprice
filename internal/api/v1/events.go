@@ -98,8 +98,8 @@ func (h *EventsHandler) BulkIngestEvent(c *gin.Context) {
 	c.JSON(http.StatusAccepted, gin.H{"message": "Events accepted for processing"})
 }
 
-// @Summary Get usage by meter
-// @Description Retrieve aggregated usage statistics using meter configuration
+// @Summary Get usage by feature
+// @Description Retrieve aggregated usage statistics using feature configuration
 // @Tags Events
 // @Produce json
 // @Security ApiKeyAuth
