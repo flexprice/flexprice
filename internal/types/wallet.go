@@ -323,3 +323,43 @@ func (c WalletConfig) Validate() error {
 	}
 	return nil
 }
+
+// AlertState represents the current state of a wallet alert
+type AlertState string
+
+const (
+	AlertStateOk    AlertState = "ok"
+	AlertStateAlert AlertState = "alert"
+)
+
+// AlertConfig represents the configuration for wallet alerts
+type AlertConfig struct {
+	AllowedTenantIDs []string        `json:"allowed_tenant_ids,omitempty"`
+	Threshold        *AlertThreshold `json:"threshold,omitempty"`
+}
+
+// AlertThreshold represents the threshold configuration
+type AlertThreshold struct {
+	Type  string          `json:"type"` // amount
+	Value decimal.Decimal `json:"value"`
+}
+
+// WalletFilter represents the filter options for wallets
+type WalletFilter struct {
+	*QueryFilter
+	Status       *WalletStatus `json:"status,omitempty" form:"status"`
+	AlertEnabled *bool         `json:"alert_enabled,omitempty" form:"alert_enabled"`
+}
+
+func NewWalletFilter() *WalletFilter {
+	return &WalletFilter{
+		QueryFilter: NewDefaultQueryFilter(),
+	}
+}
+
+func (f *WalletFilter) Validate() error {
+	if f.QueryFilter == nil {
+		f.QueryFilter = NewDefaultQueryFilter()
+	}
+	return f.QueryFilter.Validate()
+}

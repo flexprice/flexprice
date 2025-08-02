@@ -268,6 +268,48 @@ func (wc *WalletCreate) SetNillableConfig(tc *types.WalletConfig) *WalletCreate 
 	return wc
 }
 
+// SetAlertConfig sets the "alert_config" field.
+func (wc *WalletCreate) SetAlertConfig(tc types.AlertConfig) *WalletCreate {
+	wc.mutation.SetAlertConfig(tc)
+	return wc
+}
+
+// SetNillableAlertConfig sets the "alert_config" field if the given value is not nil.
+func (wc *WalletCreate) SetNillableAlertConfig(tc *types.AlertConfig) *WalletCreate {
+	if tc != nil {
+		wc.SetAlertConfig(*tc)
+	}
+	return wc
+}
+
+// SetAlertEnabled sets the "alert_enabled" field.
+func (wc *WalletCreate) SetAlertEnabled(b bool) *WalletCreate {
+	wc.mutation.SetAlertEnabled(b)
+	return wc
+}
+
+// SetNillableAlertEnabled sets the "alert_enabled" field if the given value is not nil.
+func (wc *WalletCreate) SetNillableAlertEnabled(b *bool) *WalletCreate {
+	if b != nil {
+		wc.SetAlertEnabled(*b)
+	}
+	return wc
+}
+
+// SetAlertState sets the "alert_state" field.
+func (wc *WalletCreate) SetAlertState(s string) *WalletCreate {
+	wc.mutation.SetAlertState(s)
+	return wc
+}
+
+// SetNillableAlertState sets the "alert_state" field if the given value is not nil.
+func (wc *WalletCreate) SetNillableAlertState(s *string) *WalletCreate {
+	if s != nil {
+		wc.SetAlertState(*s)
+	}
+	return wc
+}
+
 // SetID sets the "id" field.
 func (wc *WalletCreate) SetID(s string) *WalletCreate {
 	wc.mutation.SetID(s)
@@ -340,6 +382,14 @@ func (wc *WalletCreate) defaults() {
 	if _, ok := wc.mutation.WalletType(); !ok {
 		v := wallet.DefaultWalletType
 		wc.mutation.SetWalletType(v)
+	}
+	if _, ok := wc.mutation.AlertEnabled(); !ok {
+		v := wallet.DefaultAlertEnabled
+		wc.mutation.SetAlertEnabled(v)
+	}
+	if _, ok := wc.mutation.AlertState(); !ok {
+		v := wallet.DefaultAlertState
+		wc.mutation.SetAlertState(v)
 	}
 }
 
@@ -516,6 +566,18 @@ func (wc *WalletCreate) createSpec() (*Wallet, *sqlgraph.CreateSpec) {
 	if value, ok := wc.mutation.Config(); ok {
 		_spec.SetField(wallet.FieldConfig, field.TypeJSON, value)
 		_node.Config = value
+	}
+	if value, ok := wc.mutation.AlertConfig(); ok {
+		_spec.SetField(wallet.FieldAlertConfig, field.TypeJSON, value)
+		_node.AlertConfig = value
+	}
+	if value, ok := wc.mutation.AlertEnabled(); ok {
+		_spec.SetField(wallet.FieldAlertEnabled, field.TypeBool, value)
+		_node.AlertEnabled = value
+	}
+	if value, ok := wc.mutation.AlertState(); ok {
+		_spec.SetField(wallet.FieldAlertState, field.TypeString, value)
+		_node.AlertState = value
 	}
 	return _node, _spec
 }

@@ -45,11 +45,11 @@ func (b WalletPayloadBuilder) BuildPayload(ctx context.Context, eventType string
 		return nil, err
 	}
 
-	payload := webhookDto.NewWalletWebhookPayload(walletData)
+	// Create webhook payload with alert info if present
+	payload := webhookDto.NewWalletWebhookPayload(walletData, parsedPayload.Alert)
 
 	// Marshal payload
 	return json.Marshal(payload)
-
 }
 
 func (b TransactionPayloadBuilder) BuildPayload(

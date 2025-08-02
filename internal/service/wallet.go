@@ -61,6 +61,21 @@ type WalletService interface {
 
 	// GetCustomerWallets retrieves all wallets for a customer
 	GetCustomerWallets(ctx context.Context, req *dto.GetCustomerWalletsRequest) ([]*dto.WalletBalanceResponse, error)
+
+	// GetWallets retrieves wallets based on filter
+	GetWallets(ctx context.Context, filter *types.WalletFilter) (*types.ListResponse[*wallet.Wallet], error)
+
+	// UpdateWalletAlertState updates the alert state of a wallet
+	UpdateWalletAlertState(ctx context.Context, walletID string, state types.AlertState) error
+
+	// PublishEvent publishes a webhook event for a wallet
+	PublishEvent(ctx context.Context, eventName string, w *wallet.Wallet) error
+
+	// CheckBalanceThresholds checks if wallet balance is below threshold and triggers alerts
+	CheckBalanceThresholds(ctx context.Context, w *wallet.Wallet, balance *dto.WalletBalanceResponse) error
+
+	// UpdateWalletBalance updates a wallet's balance and checks thresholds
+	UpdateWalletBalance(ctx context.Context, walletID string, finalBalance, newCreditBalance decimal.Decimal) error
 }
 
 type walletService struct {
@@ -983,4 +998,268 @@ func (s *walletService) GetCustomerWallets(ctx context.Context, req *dto.GetCust
 		}
 	}
 	return response, nil
+}
+
+// GetWallets retrieves wallets based on filter
+func (s *walletService) GetWallets(ctx context.Context, filter *types.WalletFilter) (*types.ListResponse[*wallet.Wallet], error) {
+	if filter == nil {
+		filter = types.NewWalletFilter()
+	}
+	if err := filter.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Get wallets using filter
+	wallets, err := s.WalletRepo.GetWalletsByFilter(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.ListResponse[*wallet.Wallet]{
+		Items: wallets,
+		Pagination: types.PaginationResponse{
+			Total:  len(wallets),
+			Limit:  50,
+			Offset: 0,
+		},
+	}, nil
+}
+
+// UpdateWalletAlertState updates the alert state of a wallet
+func (s *walletService) UpdateWalletAlertState(ctx context.Context, walletID string, state types.AlertState) error {
+	w, err := s.WalletRepo.GetWalletByID(ctx, walletID)
+	if err != nil {
+		return err
+	}
+
+	// Update alert state directly
+	w.AlertState = string(state)
+
+	return s.WalletRepo.UpdateWallet(ctx, walletID, w)
+}
+
+// PublishEvent publishes a webhook event for a wallet
+func (s *walletService) PublishEvent(ctx context.Context, eventName string, w *wallet.Wallet) error {
+	if s.WebhookPublisher == nil {
+		s.Logger.Warnw("webhook publisher not initialized", "event", eventName)
+		return nil
+	}
+
+	// Get real-time balance
+	balance, err := s.GetWalletBalance(ctx, w.ID)
+	if err != nil {
+		s.Logger.Errorw("failed to get wallet balance for webhook",
+			"wallet_id", w.ID,
+			"error", err,
+		)
+		return err
+	}
+
+	// Create internal event
+	internalEvent := &webhookDto.InternalWalletEvent{
+		EventType: eventName,
+		WalletID:  w.ID,
+		TenantID:  w.TenantID,
+	}
+
+	// Add alert info for alert events
+	if w.AlertConfig != nil && w.AlertConfig.Threshold != nil {
+		currentBalance := balance.RealTimeBalance
+		if currentBalance == nil {
+			currentBalance = &w.Balance
+		}
+		creditBalance := balance.RealTimeCreditBalance
+		if creditBalance == nil {
+			creditBalance = &w.CreditBalance
+		}
+
+		internalEvent.Alert = &webhookDto.WalletAlertInfo{
+			State:          w.AlertState,
+			Threshold:      w.AlertConfig.Threshold.Value,
+			CurrentBalance: *currentBalance,
+			CreditBalance:  *creditBalance,
+			AlertConfig:    w.AlertConfig,
+			AlertType:      getAlertType(eventName),
+		}
+	}
+
+	// Convert to JSON
+	eventJSON, err := json.Marshal(internalEvent)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to marshal internal event").
+			Mark(ierr.ErrInternal)
+	}
+
+	webhookEvent := &types.WebhookEvent{
+		ID:            types.GenerateUUID(),
+		EventName:     eventName,
+		TenantID:      w.TenantID,
+		EnvironmentID: w.EnvironmentID,
+		UserID:        types.GetUserID(ctx),
+		Timestamp:     time.Now().UTC(),
+		Payload:       eventJSON,
+	}
+
+	s.Logger.Infow("publishing webhook event",
+		"event_id", webhookEvent.ID,
+		"event_name", eventName,
+		"wallet_id", w.ID,
+		"alert_state", w.AlertState,
+		"alert_config", w.AlertConfig,
+	)
+
+	return s.WebhookPublisher.PublishWebhook(ctx, webhookEvent)
+}
+
+func getAlertType(eventName string) string {
+	switch eventName {
+	case types.WebhookEventWalletCreditBalanceDropped:
+		return "credit_balance"
+	case types.WebhookEventWalletOngoingBalanceDropped:
+		return "ongoing_balance"
+	default:
+		return ""
+	}
+}
+
+// CheckBalanceThresholds checks if wallet balance is below threshold and triggers alerts
+func (s *walletService) CheckBalanceThresholds(ctx context.Context, w *wallet.Wallet, balance *dto.WalletBalanceResponse) error {
+	// Skip if alerts not enabled or no config
+	if !w.AlertEnabled || w.AlertConfig == nil || w.AlertConfig.Threshold == nil {
+		return nil
+	}
+
+	threshold := w.AlertConfig.Threshold.Value
+	currentBalance := balance.RealTimeBalance
+	if currentBalance == nil {
+		currentBalance = &w.Balance
+	}
+	creditBalance := balance.RealTimeCreditBalance
+	if creditBalance == nil {
+		creditBalance = &w.CreditBalance
+	}
+
+	s.Logger.Infow("checking balance thresholds",
+		"wallet_id", w.ID,
+		"threshold", threshold,
+		"current_balance", currentBalance,
+		"credit_balance", creditBalance,
+		"alert_state", w.AlertState,
+	)
+
+	// Check if any balance is below threshold
+	isCurrentBalanceBelowThreshold := currentBalance.LessThanOrEqual(threshold)
+	isCreditBalanceBelowThreshold := creditBalance.LessThanOrEqual(threshold)
+	isAnyBalanceBelowThreshold := isCurrentBalanceBelowThreshold || isCreditBalanceBelowThreshold
+
+	// Handle balance above threshold (recovery)
+	if !isAnyBalanceBelowThreshold {
+		s.Logger.Infow("all balances above threshold - checking recovery",
+			"wallet_id", w.ID,
+			"threshold", threshold,
+			"current_balance", currentBalance,
+			"credit_balance", creditBalance,
+			"alert_state", w.AlertState,
+		)
+
+		// If current state is alert, update to ok (recovery)
+		if w.AlertState == string(types.AlertStateAlert) {
+			if err := s.UpdateWalletAlertState(ctx, w.ID, types.AlertStateOk); err != nil {
+				s.Logger.Errorw("failed to update wallet alert state",
+					"wallet_id", w.ID,
+					"error", err,
+				)
+				return err
+			}
+			s.Logger.Infow("wallet recovered from alert state",
+				"wallet_id", w.ID,
+			)
+			return s.PublishEvent(ctx, types.WebhookEventWalletUpdated, w)
+		}
+		return nil
+	}
+
+	// Skip if already in alert state
+	if w.AlertState == string(types.AlertStateAlert) {
+		s.Logger.Infow("skipping alert - already in alert state",
+			"wallet_id", w.ID,
+		)
+		return nil
+	}
+
+	s.Logger.Infow("balance below/equal threshold - triggering alert",
+		"wallet_id", w.ID,
+		"threshold", threshold,
+		"current_balance", currentBalance,
+		"credit_balance", creditBalance,
+	)
+
+	// Update wallet state to alert
+	if err := s.UpdateWalletAlertState(ctx, w.ID, types.AlertStateAlert); err != nil {
+		s.Logger.Errorw("failed to update wallet alert state",
+			"wallet_id", w.ID,
+			"error", err,
+		)
+		return err
+	}
+
+	// Trigger alerts based on which balance is below threshold
+	var errs []error
+	if isCreditBalanceBelowThreshold {
+		s.Logger.Infow("triggering credit balance alert",
+			"wallet_id", w.ID,
+			"credit_balance", creditBalance,
+			"threshold", threshold,
+		)
+		if err := s.PublishEvent(ctx, types.WebhookEventWalletCreditBalanceDropped, w); err != nil {
+			s.Logger.Errorw("failed to publish credit balance alert",
+				"wallet_id", w.ID,
+				"error", err,
+			)
+			errs = append(errs, err)
+		}
+	}
+	if isCurrentBalanceBelowThreshold {
+		s.Logger.Infow("triggering ongoing balance alert",
+			"wallet_id", w.ID,
+			"balance", currentBalance,
+			"threshold", threshold,
+		)
+		if err := s.PublishEvent(ctx, types.WebhookEventWalletOngoingBalanceDropped, w); err != nil {
+			s.Logger.Errorw("failed to publish ongoing balance alert",
+				"wallet_id", w.ID,
+				"error", err,
+			)
+			errs = append(errs, err)
+		}
+	}
+
+	if len(errs) > 0 {
+		return errs[0] // Return first error
+	}
+	return nil
+}
+
+// UpdateWalletBalance updates a wallet's balance and checks thresholds
+func (s *walletService) UpdateWalletBalance(ctx context.Context, walletID string, finalBalance, newCreditBalance decimal.Decimal) error {
+	// Update balance in database
+	if err := s.WalletRepo.UpdateWalletBalance(ctx, walletID, finalBalance, newCreditBalance); err != nil {
+		return err
+	}
+
+	// Get updated wallet
+	w, err := s.WalletRepo.GetWalletByID(ctx, walletID)
+	if err != nil {
+		return err
+	}
+
+	// Get real-time balance
+	balance, err := s.GetWalletBalance(ctx, walletID)
+	if err != nil {
+		return err
+	}
+
+	// Check thresholds and trigger alerts if needed
+	return s.CheckBalanceThresholds(ctx, w, balance)
 }

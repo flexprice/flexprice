@@ -160,6 +160,16 @@ func ConversionRate(v decimal.Decimal) predicate.Wallet {
 	return predicate.Wallet(sql.FieldEQ(FieldConversionRate, v))
 }
 
+// AlertEnabled applies equality check predicate on the "alert_enabled" field. It's identical to AlertEnabledEQ.
+func AlertEnabled(v bool) predicate.Wallet {
+	return predicate.Wallet(sql.FieldEQ(FieldAlertEnabled, v))
+}
+
+// AlertState applies equality check predicate on the "alert_state" field. It's identical to AlertStateEQ.
+func AlertState(v string) predicate.Wallet {
+	return predicate.Wallet(sql.FieldEQ(FieldAlertState, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.Wallet {
 	return predicate.Wallet(sql.FieldEQ(FieldTenantID, v))
@@ -1318,6 +1328,111 @@ func ConfigIsNil() predicate.Wallet {
 // ConfigNotNil applies the NotNil predicate on the "config" field.
 func ConfigNotNil() predicate.Wallet {
 	return predicate.Wallet(sql.FieldNotNull(FieldConfig))
+}
+
+// AlertConfigIsNil applies the IsNil predicate on the "alert_config" field.
+func AlertConfigIsNil() predicate.Wallet {
+	return predicate.Wallet(sql.FieldIsNull(FieldAlertConfig))
+}
+
+// AlertConfigNotNil applies the NotNil predicate on the "alert_config" field.
+func AlertConfigNotNil() predicate.Wallet {
+	return predicate.Wallet(sql.FieldNotNull(FieldAlertConfig))
+}
+
+// AlertEnabledEQ applies the EQ predicate on the "alert_enabled" field.
+func AlertEnabledEQ(v bool) predicate.Wallet {
+	return predicate.Wallet(sql.FieldEQ(FieldAlertEnabled, v))
+}
+
+// AlertEnabledNEQ applies the NEQ predicate on the "alert_enabled" field.
+func AlertEnabledNEQ(v bool) predicate.Wallet {
+	return predicate.Wallet(sql.FieldNEQ(FieldAlertEnabled, v))
+}
+
+// AlertEnabledIsNil applies the IsNil predicate on the "alert_enabled" field.
+func AlertEnabledIsNil() predicate.Wallet {
+	return predicate.Wallet(sql.FieldIsNull(FieldAlertEnabled))
+}
+
+// AlertEnabledNotNil applies the NotNil predicate on the "alert_enabled" field.
+func AlertEnabledNotNil() predicate.Wallet {
+	return predicate.Wallet(sql.FieldNotNull(FieldAlertEnabled))
+}
+
+// AlertStateEQ applies the EQ predicate on the "alert_state" field.
+func AlertStateEQ(v string) predicate.Wallet {
+	return predicate.Wallet(sql.FieldEQ(FieldAlertState, v))
+}
+
+// AlertStateNEQ applies the NEQ predicate on the "alert_state" field.
+func AlertStateNEQ(v string) predicate.Wallet {
+	return predicate.Wallet(sql.FieldNEQ(FieldAlertState, v))
+}
+
+// AlertStateIn applies the In predicate on the "alert_state" field.
+func AlertStateIn(vs ...string) predicate.Wallet {
+	return predicate.Wallet(sql.FieldIn(FieldAlertState, vs...))
+}
+
+// AlertStateNotIn applies the NotIn predicate on the "alert_state" field.
+func AlertStateNotIn(vs ...string) predicate.Wallet {
+	return predicate.Wallet(sql.FieldNotIn(FieldAlertState, vs...))
+}
+
+// AlertStateGT applies the GT predicate on the "alert_state" field.
+func AlertStateGT(v string) predicate.Wallet {
+	return predicate.Wallet(sql.FieldGT(FieldAlertState, v))
+}
+
+// AlertStateGTE applies the GTE predicate on the "alert_state" field.
+func AlertStateGTE(v string) predicate.Wallet {
+	return predicate.Wallet(sql.FieldGTE(FieldAlertState, v))
+}
+
+// AlertStateLT applies the LT predicate on the "alert_state" field.
+func AlertStateLT(v string) predicate.Wallet {
+	return predicate.Wallet(sql.FieldLT(FieldAlertState, v))
+}
+
+// AlertStateLTE applies the LTE predicate on the "alert_state" field.
+func AlertStateLTE(v string) predicate.Wallet {
+	return predicate.Wallet(sql.FieldLTE(FieldAlertState, v))
+}
+
+// AlertStateContains applies the Contains predicate on the "alert_state" field.
+func AlertStateContains(v string) predicate.Wallet {
+	return predicate.Wallet(sql.FieldContains(FieldAlertState, v))
+}
+
+// AlertStateHasPrefix applies the HasPrefix predicate on the "alert_state" field.
+func AlertStateHasPrefix(v string) predicate.Wallet {
+	return predicate.Wallet(sql.FieldHasPrefix(FieldAlertState, v))
+}
+
+// AlertStateHasSuffix applies the HasSuffix predicate on the "alert_state" field.
+func AlertStateHasSuffix(v string) predicate.Wallet {
+	return predicate.Wallet(sql.FieldHasSuffix(FieldAlertState, v))
+}
+
+// AlertStateIsNil applies the IsNil predicate on the "alert_state" field.
+func AlertStateIsNil() predicate.Wallet {
+	return predicate.Wallet(sql.FieldIsNull(FieldAlertState))
+}
+
+// AlertStateNotNil applies the NotNil predicate on the "alert_state" field.
+func AlertStateNotNil() predicate.Wallet {
+	return predicate.Wallet(sql.FieldNotNull(FieldAlertState))
+}
+
+// AlertStateEqualFold applies the EqualFold predicate on the "alert_state" field.
+func AlertStateEqualFold(v string) predicate.Wallet {
+	return predicate.Wallet(sql.FieldEqualFold(FieldAlertState, v))
+}
+
+// AlertStateContainsFold applies the ContainsFold predicate on the "alert_state" field.
+func AlertStateContainsFold(v string) predicate.Wallet {
+	return predicate.Wallet(sql.FieldContainsFold(FieldAlertState, v))
 }
 
 // And groups predicates with the AND operator between them.

@@ -48,7 +48,13 @@ func (r *walletRepository) CreateWallet(ctx context.Context, w *walletdomain.Wal
 		w.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
 
-	wallet, err := client.Wallet.Create().
+	// Convert AlertConfig from pointer to value
+	var alertConfig types.AlertConfig
+	if w.AlertConfig != nil {
+		alertConfig = *w.AlertConfig
+	}
+
+	_, err := client.Wallet.Create().
 		SetID(w.ID).
 		SetTenantID(w.TenantID).
 		SetCustomerID(w.CustomerID).
@@ -71,6 +77,9 @@ func (r *walletRepository) CreateWallet(ctx context.Context, w *walletdomain.Wal
 		SetUpdatedBy(w.UpdatedBy).
 		SetUpdatedAt(w.UpdatedAt).
 		SetEnvironmentID(w.EnvironmentID).
+		SetAlertEnabled(w.AlertEnabled).
+		SetAlertConfig(alertConfig).
+		SetAlertState(w.AlertState).
 		Save(ctx)
 
 	if err != nil {
@@ -78,14 +87,12 @@ func (r *walletRepository) CreateWallet(ctx context.Context, w *walletdomain.Wal
 		return ierr.WithError(err).
 			WithHint("Failed to create wallet").
 			WithReportableDetails(map[string]interface{}{
-				"customer_id": w.CustomerID,
-				"currency":    w.Currency,
+				"wallet_id": w.ID,
 			}).
 			Mark(ierr.ErrDatabase)
 	}
 
-	// Update the input wallet with created data
-	*w = *walletdomain.FromEnt(wallet)
+	r.SetCache(ctx, w)
 	return nil
 }
 
@@ -725,6 +732,12 @@ func (r *walletRepository) UpdateWallet(ctx context.Context, id string, w *walle
 	})
 	defer FinishSpan(span)
 
+	// Convert AlertConfig from pointer to value
+	var alertConfig types.AlertConfig
+	if w.AlertConfig != nil {
+		alertConfig = *w.AlertConfig
+	}
+
 	client := r.client.Querier(ctx)
 	update := client.Wallet.Update().
 		Where(
@@ -732,27 +745,39 @@ func (r *walletRepository) UpdateWallet(ctx context.Context, id string, w *walle
 			wallet.TenantID(types.GetTenantID(ctx)),
 			wallet.StatusEQ(string(types.StatusPublished)),
 			wallet.EnvironmentID(types.GetEnvironmentID(ctx)),
-		).
-		SetName(w.Name).
-		SetDescription(w.Description).
-		SetMetadata(w.Metadata).
-		SetConfig(w.Config).
-		SetUpdatedBy(types.GetUserID(ctx)).
-		SetUpdatedAt(time.Now().UTC())
+		)
 
-	if w.AutoTopupTrigger != "" {
-		if w.AutoTopupTrigger == types.AutoTopupTriggerDisabled {
-			// When disabling auto top-up, set all related fields to NULL
-			update.SetAutoTopupTrigger(string(types.AutoTopupTriggerDisabled))
-			update.ClearAutoTopupMinBalance()
-			update.ClearAutoTopupAmount()
-		} else {
-			// When enabling auto top-up, set all required fields
-			update.SetAutoTopupTrigger(string(w.AutoTopupTrigger))
-			update.SetAutoTopupMinBalance(w.AutoTopupMinBalance)
-			update.SetAutoTopupAmount(w.AutoTopupAmount)
-		}
+	if w.Name != "" {
+		update.SetName(w.Name)
 	}
+	if w.Description != "" {
+		update.SetDescription(w.Description)
+	}
+	if w.Metadata != nil {
+		update.SetMetadata(w.Metadata)
+	}
+	if w.AutoTopupTrigger != "" {
+		update.SetAutoTopupTrigger(string(w.AutoTopupTrigger))
+	}
+	if w.AutoTopupMinBalance.IsPositive() {
+		update.SetAutoTopupMinBalance(w.AutoTopupMinBalance)
+	}
+	if w.AutoTopupAmount.IsPositive() {
+		update.SetAutoTopupAmount(w.AutoTopupAmount)
+	}
+	// Check if Config has any non-nil fields
+	if w.Config.AllowedPriceTypes != nil {
+		update.SetConfig(w.Config)
+	}
+	if w.AlertConfig != nil {
+		update.SetAlertConfig(alertConfig)
+	}
+	if w.AlertState != "" {
+		update.SetAlertState(w.AlertState)
+	}
+	update.SetAlertEnabled(w.AlertEnabled)
+	update.SetUpdatedAt(time.Now().UTC())
+	update.SetUpdatedBy(types.GetUserID(ctx))
 
 	count, err := update.Save(ctx)
 	if err != nil {
@@ -811,4 +836,33 @@ func (r *walletRepository) DeleteCache(ctx context.Context, walletID string) {
 	environmentID := types.GetEnvironmentID(ctx)
 	cacheKey := cache.GenerateKey(cache.PrefixWallet, tenantID, environmentID, walletID)
 	r.cache.Delete(ctx, cacheKey)
+}
+
+func (r *walletRepository) GetWalletsByFilter(ctx context.Context, filter *types.WalletFilter) ([]*walletdomain.Wallet, error) {
+	client := r.client.Querier(ctx)
+	query := client.Wallet.Query().
+		Where(
+			wallet.TenantID(types.GetTenantID(ctx)),
+			wallet.StatusEQ(string(types.StatusPublished)),
+			wallet.EnvironmentID(types.GetEnvironmentID(ctx)),
+		)
+
+	// Apply status filter
+	if filter.Status != nil {
+		query = query.Where(wallet.WalletStatusEQ(string(*filter.Status)))
+	}
+
+	// Apply alert enabled filter
+	if filter.AlertEnabled != nil {
+		query = query.Where(wallet.AlertEnabledEQ(*filter.AlertEnabled))
+	}
+
+	wallets, err := query.All(ctx)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get wallets by filter").
+			Mark(ierr.ErrDatabase)
+	}
+
+	return walletdomain.FromEntList(wallets), nil
 }
