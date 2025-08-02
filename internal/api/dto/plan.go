@@ -37,6 +37,17 @@ func (r *CreatePlanRequest) Validate() error {
 	}
 
 	for _, price := range r.Prices {
+		if price.CreatePriceRequest == nil {
+			return errors.NewError("price request cannot be nil").
+				WithHint("Please provide valid price configuration").
+				Mark(errors.ErrValidation)
+		}
+
+		// Ensure price_unit_type is set, default to FIAT if not provided
+		if price.PriceUnitType == "" {
+			price.PriceUnitType = types.PRICE_UNIT_TYPE_FIAT
+		}
+
 		if err := price.Validate(); err != nil {
 			return err
 		}

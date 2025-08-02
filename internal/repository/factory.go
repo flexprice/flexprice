@@ -18,6 +18,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/priceunit"
 	"github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/task"
@@ -135,4 +136,8 @@ func NewCreditNoteRepository(p RepositoryParams) creditnote.Repository {
 
 func NewCreditNoteLineItemRepository(p RepositoryParams) creditnote.CreditNoteLineItemRepository {
 	return entRepo.NewCreditNoteLineItemRepository(p.EntClient, p.Logger, p.Cache)
+}
+
+func NewPriceUnitRepository(p RepositoryParams) priceunit.Repository {
+	return entRepo.NewPriceUnitRepository(p.EntClient, p.Logger, p.Cache)
 }

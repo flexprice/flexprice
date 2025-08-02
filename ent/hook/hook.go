@@ -237,6 +237,18 @@ func (f PriceFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PriceMutation", m)
 }
 
+// The PriceUnitFunc type is an adapter to allow the use of ordinary
+// function as PriceUnit mutator.
+type PriceUnitFunc func(context.Context, *ent.PriceUnitMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f PriceUnitFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.PriceUnitMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PriceUnitMutation", m)
+}
+
 // The SecretFunc type is an adapter to allow the use of ordinary
 // function as Secret mutator.
 type SecretFunc func(context.Context, *ent.SecretMutation) (ent.Value, error)

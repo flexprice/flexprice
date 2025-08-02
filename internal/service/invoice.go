@@ -38,6 +38,7 @@ type InvoiceService interface {
 	GetInvoicePDFUrl(ctx context.Context, id string) (string, error)
 	RecalculateInvoice(ctx context.Context, id string, finalize bool) (*dto.InvoiceResponse, error)
 	RecalculateInvoiceAmounts(ctx context.Context, invoiceID string) error
+	UpdateInvoice(ctx context.Context, id string, req dto.UpdateInvoiceRequest) (*dto.InvoiceResponse, error)
 }
 
 type invoiceService struct {
@@ -1316,5 +1317,31 @@ func (s *invoiceService) RecalculateInvoice(ctx context.Context, id string, fina
 	}
 
 	// Return updated invoice
+	return s.GetInvoice(ctx, id)
+}
+
+func (s *invoiceService) UpdateInvoice(ctx context.Context, id string, req dto.UpdateInvoiceRequest) (*dto.InvoiceResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Get the existing invoice
+	inv, err := s.InvoiceRepo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Update only the fields that are provided in the request
+	// For now, we only support updating the PDF URL
+	if req.InvoicePDFURL != nil {
+		inv.InvoicePDFURL = req.InvoicePDFURL
+	}
+
+	// Update the invoice in the repository
+	if err := s.InvoiceRepo.Update(ctx, inv); err != nil {
+		return nil, err
+	}
+
+	// Return the updated invoice
 	return s.GetInvoice(ctx, id)
 }

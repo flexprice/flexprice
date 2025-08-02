@@ -21,6 +21,14 @@ type BillingTier string
 // PriceType is the type of the price ex USAGE, FIXED
 type PriceType string
 
+// PriceUnitType is the type of the price unit- Fiat, Custom, Crypto
+type PriceUnitType string
+
+const (
+	PRICE_UNIT_TYPE_FIAT   PriceUnitType = "FIAT"
+	PRICE_UNIT_TYPE_CUSTOM PriceUnitType = "CUSTOM"
+)
+
 const (
 	PRICE_TYPE_USAGE PriceType = "USAGE"
 	PRICE_TYPE_FIXED PriceType = "FIXED"
@@ -151,6 +159,23 @@ func (p PriceType) Validate() error {
 			WithReportableDetails(map[string]interface{}{
 				"price_type": p,
 				"allowed":    allowed,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+func (p PriceUnitType) Validate() error {
+	allowed := []PriceUnitType{
+		PRICE_UNIT_TYPE_FIAT,
+		PRICE_UNIT_TYPE_CUSTOM,
+	}
+	if !lo.Contains(allowed, p) {
+		return ierr.NewError("invalid price unit type").
+			WithHint("Price unit type must be either FIAT or CUSTOM").
+			WithReportableDetails(map[string]interface{}{
+				"price_unit_type": p,
+				"allowed":         allowed,
 			}).
 			Mark(ierr.ErrValidation)
 	}

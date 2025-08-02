@@ -22,7 +22,7 @@ func NewPriceHandler(service service.PriceService, log *logger.Logger) *PriceHan
 }
 
 // @Summary Create a new price
-// @Description Create a new price with the specified configuration
+// @Description Create a new price with the specified configuration. Supports both regular and price unit configurations.
 // @Tags Prices
 // @Accept json
 // @Produce json

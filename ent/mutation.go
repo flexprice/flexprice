@@ -31,6 +31,7 @@ import (
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/price"
+	"github.com/flexprice/flexprice/ent/priceunit"
 	"github.com/flexprice/flexprice/ent/schema"
 	"github.com/flexprice/flexprice/ent/secret"
 	"github.com/flexprice/flexprice/ent/subscription"
@@ -75,6 +76,7 @@ const (
 	TypePaymentAttempt            = "PaymentAttempt"
 	TypePlan                      = "Plan"
 	TypePrice                     = "Price"
+	TypePriceUnit                 = "PriceUnit"
 	TypeSecret                    = "Secret"
 	TypeSubscription              = "Subscription"
 	TypeSubscriptionLineItem      = "SubscriptionLineItem"
@@ -15881,6 +15883,9 @@ type InvoiceLineItemMutation struct {
 	price_type         *string
 	meter_id           *string
 	meter_display_name *string
+	price_unit_id      *string
+	price_unit         *string
+	price_unit_amount  *decimal.Decimal
 	display_name       *string
 	amount             *decimal.Decimal
 	quantity           *decimal.Decimal
@@ -16706,6 +16711,153 @@ func (m *InvoiceLineItemMutation) ResetMeterDisplayName() {
 	delete(m.clearedFields, invoicelineitem.FieldMeterDisplayName)
 }
 
+// SetPriceUnitID sets the "price_unit_id" field.
+func (m *InvoiceLineItemMutation) SetPriceUnitID(s string) {
+	m.price_unit_id = &s
+}
+
+// PriceUnitID returns the value of the "price_unit_id" field in the mutation.
+func (m *InvoiceLineItemMutation) PriceUnitID() (r string, exists bool) {
+	v := m.price_unit_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPriceUnitID returns the old "price_unit_id" field's value of the InvoiceLineItem entity.
+// If the InvoiceLineItem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceLineItemMutation) OldPriceUnitID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPriceUnitID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPriceUnitID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPriceUnitID: %w", err)
+	}
+	return oldValue.PriceUnitID, nil
+}
+
+// ClearPriceUnitID clears the value of the "price_unit_id" field.
+func (m *InvoiceLineItemMutation) ClearPriceUnitID() {
+	m.price_unit_id = nil
+	m.clearedFields[invoicelineitem.FieldPriceUnitID] = struct{}{}
+}
+
+// PriceUnitIDCleared returns if the "price_unit_id" field was cleared in this mutation.
+func (m *InvoiceLineItemMutation) PriceUnitIDCleared() bool {
+	_, ok := m.clearedFields[invoicelineitem.FieldPriceUnitID]
+	return ok
+}
+
+// ResetPriceUnitID resets all changes to the "price_unit_id" field.
+func (m *InvoiceLineItemMutation) ResetPriceUnitID() {
+	m.price_unit_id = nil
+	delete(m.clearedFields, invoicelineitem.FieldPriceUnitID)
+}
+
+// SetPriceUnit sets the "price_unit" field.
+func (m *InvoiceLineItemMutation) SetPriceUnit(s string) {
+	m.price_unit = &s
+}
+
+// PriceUnit returns the value of the "price_unit" field in the mutation.
+func (m *InvoiceLineItemMutation) PriceUnit() (r string, exists bool) {
+	v := m.price_unit
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPriceUnit returns the old "price_unit" field's value of the InvoiceLineItem entity.
+// If the InvoiceLineItem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceLineItemMutation) OldPriceUnit(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPriceUnit is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPriceUnit requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPriceUnit: %w", err)
+	}
+	return oldValue.PriceUnit, nil
+}
+
+// ClearPriceUnit clears the value of the "price_unit" field.
+func (m *InvoiceLineItemMutation) ClearPriceUnit() {
+	m.price_unit = nil
+	m.clearedFields[invoicelineitem.FieldPriceUnit] = struct{}{}
+}
+
+// PriceUnitCleared returns if the "price_unit" field was cleared in this mutation.
+func (m *InvoiceLineItemMutation) PriceUnitCleared() bool {
+	_, ok := m.clearedFields[invoicelineitem.FieldPriceUnit]
+	return ok
+}
+
+// ResetPriceUnit resets all changes to the "price_unit" field.
+func (m *InvoiceLineItemMutation) ResetPriceUnit() {
+	m.price_unit = nil
+	delete(m.clearedFields, invoicelineitem.FieldPriceUnit)
+}
+
+// SetPriceUnitAmount sets the "price_unit_amount" field.
+func (m *InvoiceLineItemMutation) SetPriceUnitAmount(d decimal.Decimal) {
+	m.price_unit_amount = &d
+}
+
+// PriceUnitAmount returns the value of the "price_unit_amount" field in the mutation.
+func (m *InvoiceLineItemMutation) PriceUnitAmount() (r decimal.Decimal, exists bool) {
+	v := m.price_unit_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPriceUnitAmount returns the old "price_unit_amount" field's value of the InvoiceLineItem entity.
+// If the InvoiceLineItem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceLineItemMutation) OldPriceUnitAmount(ctx context.Context) (v *decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPriceUnitAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPriceUnitAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPriceUnitAmount: %w", err)
+	}
+	return oldValue.PriceUnitAmount, nil
+}
+
+// ClearPriceUnitAmount clears the value of the "price_unit_amount" field.
+func (m *InvoiceLineItemMutation) ClearPriceUnitAmount() {
+	m.price_unit_amount = nil
+	m.clearedFields[invoicelineitem.FieldPriceUnitAmount] = struct{}{}
+}
+
+// PriceUnitAmountCleared returns if the "price_unit_amount" field was cleared in this mutation.
+func (m *InvoiceLineItemMutation) PriceUnitAmountCleared() bool {
+	_, ok := m.clearedFields[invoicelineitem.FieldPriceUnitAmount]
+	return ok
+}
+
+// ResetPriceUnitAmount resets all changes to the "price_unit_amount" field.
+func (m *InvoiceLineItemMutation) ResetPriceUnitAmount() {
+	m.price_unit_amount = nil
+	delete(m.clearedFields, invoicelineitem.FieldPriceUnitAmount)
+}
+
 // SetDisplayName sets the "display_name" field.
 func (m *InvoiceLineItemMutation) SetDisplayName(s string) {
 	m.display_name = &s
@@ -17071,7 +17223,7 @@ func (m *InvoiceLineItemMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *InvoiceLineItemMutation) Fields() []string {
-	fields := make([]string, 0, 23)
+	fields := make([]string, 0, 26)
 	if m.tenant_id != nil {
 		fields = append(fields, invoicelineitem.FieldTenantID)
 	}
@@ -17119,6 +17271,15 @@ func (m *InvoiceLineItemMutation) Fields() []string {
 	}
 	if m.meter_display_name != nil {
 		fields = append(fields, invoicelineitem.FieldMeterDisplayName)
+	}
+	if m.price_unit_id != nil {
+		fields = append(fields, invoicelineitem.FieldPriceUnitID)
+	}
+	if m.price_unit != nil {
+		fields = append(fields, invoicelineitem.FieldPriceUnit)
+	}
+	if m.price_unit_amount != nil {
+		fields = append(fields, invoicelineitem.FieldPriceUnitAmount)
 	}
 	if m.display_name != nil {
 		fields = append(fields, invoicelineitem.FieldDisplayName)
@@ -17181,6 +17342,12 @@ func (m *InvoiceLineItemMutation) Field(name string) (ent.Value, bool) {
 		return m.MeterID()
 	case invoicelineitem.FieldMeterDisplayName:
 		return m.MeterDisplayName()
+	case invoicelineitem.FieldPriceUnitID:
+		return m.PriceUnitID()
+	case invoicelineitem.FieldPriceUnit:
+		return m.PriceUnit()
+	case invoicelineitem.FieldPriceUnitAmount:
+		return m.PriceUnitAmount()
 	case invoicelineitem.FieldDisplayName:
 		return m.DisplayName()
 	case invoicelineitem.FieldAmount:
@@ -17236,6 +17403,12 @@ func (m *InvoiceLineItemMutation) OldField(ctx context.Context, name string) (en
 		return m.OldMeterID(ctx)
 	case invoicelineitem.FieldMeterDisplayName:
 		return m.OldMeterDisplayName(ctx)
+	case invoicelineitem.FieldPriceUnitID:
+		return m.OldPriceUnitID(ctx)
+	case invoicelineitem.FieldPriceUnit:
+		return m.OldPriceUnit(ctx)
+	case invoicelineitem.FieldPriceUnitAmount:
+		return m.OldPriceUnitAmount(ctx)
 	case invoicelineitem.FieldDisplayName:
 		return m.OldDisplayName(ctx)
 	case invoicelineitem.FieldAmount:
@@ -17371,6 +17544,27 @@ func (m *InvoiceLineItemMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetMeterDisplayName(v)
 		return nil
+	case invoicelineitem.FieldPriceUnitID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPriceUnitID(v)
+		return nil
+	case invoicelineitem.FieldPriceUnit:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPriceUnit(v)
+		return nil
+	case invoicelineitem.FieldPriceUnitAmount:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPriceUnitAmount(v)
+		return nil
 	case invoicelineitem.FieldDisplayName:
 		v, ok := value.(string)
 		if !ok {
@@ -17480,6 +17674,15 @@ func (m *InvoiceLineItemMutation) ClearedFields() []string {
 	if m.FieldCleared(invoicelineitem.FieldMeterDisplayName) {
 		fields = append(fields, invoicelineitem.FieldMeterDisplayName)
 	}
+	if m.FieldCleared(invoicelineitem.FieldPriceUnitID) {
+		fields = append(fields, invoicelineitem.FieldPriceUnitID)
+	}
+	if m.FieldCleared(invoicelineitem.FieldPriceUnit) {
+		fields = append(fields, invoicelineitem.FieldPriceUnit)
+	}
+	if m.FieldCleared(invoicelineitem.FieldPriceUnitAmount) {
+		fields = append(fields, invoicelineitem.FieldPriceUnitAmount)
+	}
 	if m.FieldCleared(invoicelineitem.FieldDisplayName) {
 		fields = append(fields, invoicelineitem.FieldDisplayName)
 	}
@@ -17535,6 +17738,15 @@ func (m *InvoiceLineItemMutation) ClearField(name string) error {
 		return nil
 	case invoicelineitem.FieldMeterDisplayName:
 		m.ClearMeterDisplayName()
+		return nil
+	case invoicelineitem.FieldPriceUnitID:
+		m.ClearPriceUnitID()
+		return nil
+	case invoicelineitem.FieldPriceUnit:
+		m.ClearPriceUnit()
+		return nil
+	case invoicelineitem.FieldPriceUnitAmount:
+		m.ClearPriceUnitAmount()
 		return nil
 	case invoicelineitem.FieldDisplayName:
 		m.ClearDisplayName()
@@ -17603,6 +17815,15 @@ func (m *InvoiceLineItemMutation) ResetField(name string) error {
 		return nil
 	case invoicelineitem.FieldMeterDisplayName:
 		m.ResetMeterDisplayName()
+		return nil
+	case invoicelineitem.FieldPriceUnitID:
+		m.ResetPriceUnitID()
+		return nil
+	case invoicelineitem.FieldPriceUnit:
+		m.ResetPriceUnit()
+		return nil
+	case invoicelineitem.FieldPriceUnitAmount:
+		m.ResetPriceUnitAmount()
 		return nil
 	case invoicelineitem.FieldDisplayName:
 		m.ResetDisplayName()
@@ -23556,46 +23777,57 @@ func (m *PlanMutation) ResetEdge(name string) error {
 // PriceMutation represents an operation that mutates the Price nodes in the graph.
 type PriceMutation struct {
 	config
-	op                      Op
-	typ                     string
-	id                      *string
-	tenant_id               *string
-	status                  *string
-	created_at              *time.Time
-	updated_at              *time.Time
-	created_by              *string
-	updated_by              *string
-	environment_id          *string
-	amount                  *float64
-	addamount               *float64
-	currency                *string
-	display_amount          *string
-	plan_id                 *string
-	_type                   *string
-	billing_period          *string
-	billing_period_count    *int
-	addbilling_period_count *int
-	billing_model           *string
-	billing_cadence         *string
-	invoice_cadence         *string
-	trial_period            *int
-	addtrial_period         *int
-	meter_id                *string
-	filter_values           *map[string][]string
-	tier_mode               *string
-	tiers                   *[]schema.PriceTier
-	appendtiers             []schema.PriceTier
-	transform_quantity      *schema.TransformQuantity
-	lookup_key              *string
-	description             *string
-	metadata                *map[string]string
-	clearedFields           map[string]struct{}
-	costsheet               map[string]struct{}
-	removedcostsheet        map[string]struct{}
-	clearedcostsheet        bool
-	done                    bool
-	oldValue                func(context.Context) (*Price, error)
-	predicates              []predicate.Price
+	op                        Op
+	typ                       string
+	id                        *string
+	tenant_id                 *string
+	status                    *string
+	created_at                *time.Time
+	updated_at                *time.Time
+	created_by                *string
+	updated_by                *string
+	environment_id            *string
+	amount                    *float64
+	addamount                 *float64
+	currency                  *string
+	display_amount            *string
+	price_unit_type           *string
+	price_unit                *string
+	price_unit_amount         *float64
+	addprice_unit_amount      *float64
+	display_price_unit_amount *string
+	conversion_rate           *float64
+	addconversion_rate        *float64
+	plan_id                   *string
+	_type                     *string
+	billing_period            *string
+	billing_period_count      *int
+	addbilling_period_count   *int
+	billing_model             *string
+	billing_cadence           *string
+	invoice_cadence           *string
+	trial_period              *int
+	addtrial_period           *int
+	meter_id                  *string
+	filter_values             *map[string][]string
+	tier_mode                 *string
+	tiers                     *[]schema.PriceTier
+	appendtiers               []schema.PriceTier
+	price_unit_tiers          *[]schema.PriceTier
+	appendprice_unit_tiers    []schema.PriceTier
+	transform_quantity        *schema.TransformQuantity
+	lookup_key                *string
+	description               *string
+	metadata                  *map[string]string
+	clearedFields             map[string]struct{}
+	costsheet                 map[string]struct{}
+	removedcostsheet          map[string]struct{}
+	clearedcostsheet          bool
+	price_unit_edge           *string
+	clearedprice_unit_edge    bool
+	done                      bool
+	oldValue                  func(context.Context) (*Price, error)
+	predicates                []predicate.Price
 }
 
 var _ ent.Mutation = (*PriceMutation)(nil)
@@ -24119,6 +24351,329 @@ func (m *PriceMutation) OldDisplayAmount(ctx context.Context) (v string, err err
 // ResetDisplayAmount resets all changes to the "display_amount" field.
 func (m *PriceMutation) ResetDisplayAmount() {
 	m.display_amount = nil
+}
+
+// SetPriceUnitType sets the "price_unit_type" field.
+func (m *PriceMutation) SetPriceUnitType(s string) {
+	m.price_unit_type = &s
+}
+
+// PriceUnitType returns the value of the "price_unit_type" field in the mutation.
+func (m *PriceMutation) PriceUnitType() (r string, exists bool) {
+	v := m.price_unit_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPriceUnitType returns the old "price_unit_type" field's value of the Price entity.
+// If the Price object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PriceMutation) OldPriceUnitType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPriceUnitType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPriceUnitType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPriceUnitType: %w", err)
+	}
+	return oldValue.PriceUnitType, nil
+}
+
+// ResetPriceUnitType resets all changes to the "price_unit_type" field.
+func (m *PriceMutation) ResetPriceUnitType() {
+	m.price_unit_type = nil
+}
+
+// SetPriceUnitID sets the "price_unit_id" field.
+func (m *PriceMutation) SetPriceUnitID(s string) {
+	m.price_unit_edge = &s
+}
+
+// PriceUnitID returns the value of the "price_unit_id" field in the mutation.
+func (m *PriceMutation) PriceUnitID() (r string, exists bool) {
+	v := m.price_unit_edge
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPriceUnitID returns the old "price_unit_id" field's value of the Price entity.
+// If the Price object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PriceMutation) OldPriceUnitID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPriceUnitID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPriceUnitID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPriceUnitID: %w", err)
+	}
+	return oldValue.PriceUnitID, nil
+}
+
+// ClearPriceUnitID clears the value of the "price_unit_id" field.
+func (m *PriceMutation) ClearPriceUnitID() {
+	m.price_unit_edge = nil
+	m.clearedFields[price.FieldPriceUnitID] = struct{}{}
+}
+
+// PriceUnitIDCleared returns if the "price_unit_id" field was cleared in this mutation.
+func (m *PriceMutation) PriceUnitIDCleared() bool {
+	_, ok := m.clearedFields[price.FieldPriceUnitID]
+	return ok
+}
+
+// ResetPriceUnitID resets all changes to the "price_unit_id" field.
+func (m *PriceMutation) ResetPriceUnitID() {
+	m.price_unit_edge = nil
+	delete(m.clearedFields, price.FieldPriceUnitID)
+}
+
+// SetPriceUnit sets the "price_unit" field.
+func (m *PriceMutation) SetPriceUnit(s string) {
+	m.price_unit = &s
+}
+
+// PriceUnit returns the value of the "price_unit" field in the mutation.
+func (m *PriceMutation) PriceUnit() (r string, exists bool) {
+	v := m.price_unit
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPriceUnit returns the old "price_unit" field's value of the Price entity.
+// If the Price object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PriceMutation) OldPriceUnit(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPriceUnit is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPriceUnit requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPriceUnit: %w", err)
+	}
+	return oldValue.PriceUnit, nil
+}
+
+// ClearPriceUnit clears the value of the "price_unit" field.
+func (m *PriceMutation) ClearPriceUnit() {
+	m.price_unit = nil
+	m.clearedFields[price.FieldPriceUnit] = struct{}{}
+}
+
+// PriceUnitCleared returns if the "price_unit" field was cleared in this mutation.
+func (m *PriceMutation) PriceUnitCleared() bool {
+	_, ok := m.clearedFields[price.FieldPriceUnit]
+	return ok
+}
+
+// ResetPriceUnit resets all changes to the "price_unit" field.
+func (m *PriceMutation) ResetPriceUnit() {
+	m.price_unit = nil
+	delete(m.clearedFields, price.FieldPriceUnit)
+}
+
+// SetPriceUnitAmount sets the "price_unit_amount" field.
+func (m *PriceMutation) SetPriceUnitAmount(f float64) {
+	m.price_unit_amount = &f
+	m.addprice_unit_amount = nil
+}
+
+// PriceUnitAmount returns the value of the "price_unit_amount" field in the mutation.
+func (m *PriceMutation) PriceUnitAmount() (r float64, exists bool) {
+	v := m.price_unit_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPriceUnitAmount returns the old "price_unit_amount" field's value of the Price entity.
+// If the Price object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PriceMutation) OldPriceUnitAmount(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPriceUnitAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPriceUnitAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPriceUnitAmount: %w", err)
+	}
+	return oldValue.PriceUnitAmount, nil
+}
+
+// AddPriceUnitAmount adds f to the "price_unit_amount" field.
+func (m *PriceMutation) AddPriceUnitAmount(f float64) {
+	if m.addprice_unit_amount != nil {
+		*m.addprice_unit_amount += f
+	} else {
+		m.addprice_unit_amount = &f
+	}
+}
+
+// AddedPriceUnitAmount returns the value that was added to the "price_unit_amount" field in this mutation.
+func (m *PriceMutation) AddedPriceUnitAmount() (r float64, exists bool) {
+	v := m.addprice_unit_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearPriceUnitAmount clears the value of the "price_unit_amount" field.
+func (m *PriceMutation) ClearPriceUnitAmount() {
+	m.price_unit_amount = nil
+	m.addprice_unit_amount = nil
+	m.clearedFields[price.FieldPriceUnitAmount] = struct{}{}
+}
+
+// PriceUnitAmountCleared returns if the "price_unit_amount" field was cleared in this mutation.
+func (m *PriceMutation) PriceUnitAmountCleared() bool {
+	_, ok := m.clearedFields[price.FieldPriceUnitAmount]
+	return ok
+}
+
+// ResetPriceUnitAmount resets all changes to the "price_unit_amount" field.
+func (m *PriceMutation) ResetPriceUnitAmount() {
+	m.price_unit_amount = nil
+	m.addprice_unit_amount = nil
+	delete(m.clearedFields, price.FieldPriceUnitAmount)
+}
+
+// SetDisplayPriceUnitAmount sets the "display_price_unit_amount" field.
+func (m *PriceMutation) SetDisplayPriceUnitAmount(s string) {
+	m.display_price_unit_amount = &s
+}
+
+// DisplayPriceUnitAmount returns the value of the "display_price_unit_amount" field in the mutation.
+func (m *PriceMutation) DisplayPriceUnitAmount() (r string, exists bool) {
+	v := m.display_price_unit_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDisplayPriceUnitAmount returns the old "display_price_unit_amount" field's value of the Price entity.
+// If the Price object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PriceMutation) OldDisplayPriceUnitAmount(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDisplayPriceUnitAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDisplayPriceUnitAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDisplayPriceUnitAmount: %w", err)
+	}
+	return oldValue.DisplayPriceUnitAmount, nil
+}
+
+// ClearDisplayPriceUnitAmount clears the value of the "display_price_unit_amount" field.
+func (m *PriceMutation) ClearDisplayPriceUnitAmount() {
+	m.display_price_unit_amount = nil
+	m.clearedFields[price.FieldDisplayPriceUnitAmount] = struct{}{}
+}
+
+// DisplayPriceUnitAmountCleared returns if the "display_price_unit_amount" field was cleared in this mutation.
+func (m *PriceMutation) DisplayPriceUnitAmountCleared() bool {
+	_, ok := m.clearedFields[price.FieldDisplayPriceUnitAmount]
+	return ok
+}
+
+// ResetDisplayPriceUnitAmount resets all changes to the "display_price_unit_amount" field.
+func (m *PriceMutation) ResetDisplayPriceUnitAmount() {
+	m.display_price_unit_amount = nil
+	delete(m.clearedFields, price.FieldDisplayPriceUnitAmount)
+}
+
+// SetConversionRate sets the "conversion_rate" field.
+func (m *PriceMutation) SetConversionRate(f float64) {
+	m.conversion_rate = &f
+	m.addconversion_rate = nil
+}
+
+// ConversionRate returns the value of the "conversion_rate" field in the mutation.
+func (m *PriceMutation) ConversionRate() (r float64, exists bool) {
+	v := m.conversion_rate
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldConversionRate returns the old "conversion_rate" field's value of the Price entity.
+// If the Price object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PriceMutation) OldConversionRate(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldConversionRate is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldConversionRate requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldConversionRate: %w", err)
+	}
+	return oldValue.ConversionRate, nil
+}
+
+// AddConversionRate adds f to the "conversion_rate" field.
+func (m *PriceMutation) AddConversionRate(f float64) {
+	if m.addconversion_rate != nil {
+		*m.addconversion_rate += f
+	} else {
+		m.addconversion_rate = &f
+	}
+}
+
+// AddedConversionRate returns the value that was added to the "conversion_rate" field in this mutation.
+func (m *PriceMutation) AddedConversionRate() (r float64, exists bool) {
+	v := m.addconversion_rate
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearConversionRate clears the value of the "conversion_rate" field.
+func (m *PriceMutation) ClearConversionRate() {
+	m.conversion_rate = nil
+	m.addconversion_rate = nil
+	m.clearedFields[price.FieldConversionRate] = struct{}{}
+}
+
+// ConversionRateCleared returns if the "conversion_rate" field was cleared in this mutation.
+func (m *PriceMutation) ConversionRateCleared() bool {
+	_, ok := m.clearedFields[price.FieldConversionRate]
+	return ok
+}
+
+// ResetConversionRate resets all changes to the "conversion_rate" field.
+func (m *PriceMutation) ResetConversionRate() {
+	m.conversion_rate = nil
+	m.addconversion_rate = nil
+	delete(m.clearedFields, price.FieldConversionRate)
 }
 
 // SetPlanID sets the "plan_id" field.
@@ -24674,6 +25229,71 @@ func (m *PriceMutation) ResetTiers() {
 	delete(m.clearedFields, price.FieldTiers)
 }
 
+// SetPriceUnitTiers sets the "price_unit_tiers" field.
+func (m *PriceMutation) SetPriceUnitTiers(st []schema.PriceTier) {
+	m.price_unit_tiers = &st
+	m.appendprice_unit_tiers = nil
+}
+
+// PriceUnitTiers returns the value of the "price_unit_tiers" field in the mutation.
+func (m *PriceMutation) PriceUnitTiers() (r []schema.PriceTier, exists bool) {
+	v := m.price_unit_tiers
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPriceUnitTiers returns the old "price_unit_tiers" field's value of the Price entity.
+// If the Price object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PriceMutation) OldPriceUnitTiers(ctx context.Context) (v []schema.PriceTier, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPriceUnitTiers is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPriceUnitTiers requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPriceUnitTiers: %w", err)
+	}
+	return oldValue.PriceUnitTiers, nil
+}
+
+// AppendPriceUnitTiers adds st to the "price_unit_tiers" field.
+func (m *PriceMutation) AppendPriceUnitTiers(st []schema.PriceTier) {
+	m.appendprice_unit_tiers = append(m.appendprice_unit_tiers, st...)
+}
+
+// AppendedPriceUnitTiers returns the list of values that were appended to the "price_unit_tiers" field in this mutation.
+func (m *PriceMutation) AppendedPriceUnitTiers() ([]schema.PriceTier, bool) {
+	if len(m.appendprice_unit_tiers) == 0 {
+		return nil, false
+	}
+	return m.appendprice_unit_tiers, true
+}
+
+// ClearPriceUnitTiers clears the value of the "price_unit_tiers" field.
+func (m *PriceMutation) ClearPriceUnitTiers() {
+	m.price_unit_tiers = nil
+	m.appendprice_unit_tiers = nil
+	m.clearedFields[price.FieldPriceUnitTiers] = struct{}{}
+}
+
+// PriceUnitTiersCleared returns if the "price_unit_tiers" field was cleared in this mutation.
+func (m *PriceMutation) PriceUnitTiersCleared() bool {
+	_, ok := m.clearedFields[price.FieldPriceUnitTiers]
+	return ok
+}
+
+// ResetPriceUnitTiers resets all changes to the "price_unit_tiers" field.
+func (m *PriceMutation) ResetPriceUnitTiers() {
+	m.price_unit_tiers = nil
+	m.appendprice_unit_tiers = nil
+	delete(m.clearedFields, price.FieldPriceUnitTiers)
+}
+
 // SetTransformQuantity sets the "transform_quantity" field.
 func (m *PriceMutation) SetTransformQuantity(sq schema.TransformQuantity) {
 	m.transform_quantity = &sq
@@ -24924,6 +25544,46 @@ func (m *PriceMutation) ResetCostsheet() {
 	m.removedcostsheet = nil
 }
 
+// SetPriceUnitEdgeID sets the "price_unit_edge" edge to the PriceUnit entity by id.
+func (m *PriceMutation) SetPriceUnitEdgeID(id string) {
+	m.price_unit_edge = &id
+}
+
+// ClearPriceUnitEdge clears the "price_unit_edge" edge to the PriceUnit entity.
+func (m *PriceMutation) ClearPriceUnitEdge() {
+	m.clearedprice_unit_edge = true
+	m.clearedFields[price.FieldPriceUnitID] = struct{}{}
+}
+
+// PriceUnitEdgeCleared reports if the "price_unit_edge" edge to the PriceUnit entity was cleared.
+func (m *PriceMutation) PriceUnitEdgeCleared() bool {
+	return m.PriceUnitIDCleared() || m.clearedprice_unit_edge
+}
+
+// PriceUnitEdgeID returns the "price_unit_edge" edge ID in the mutation.
+func (m *PriceMutation) PriceUnitEdgeID() (id string, exists bool) {
+	if m.price_unit_edge != nil {
+		return *m.price_unit_edge, true
+	}
+	return
+}
+
+// PriceUnitEdgeIDs returns the "price_unit_edge" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// PriceUnitEdgeID instead. It exists only for internal usage by the builders.
+func (m *PriceMutation) PriceUnitEdgeIDs() (ids []string) {
+	if id := m.price_unit_edge; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetPriceUnitEdge resets all changes to the "price_unit_edge" edge.
+func (m *PriceMutation) ResetPriceUnitEdge() {
+	m.price_unit_edge = nil
+	m.clearedprice_unit_edge = false
+}
+
 // Where appends a list predicates to the PriceMutation builder.
 func (m *PriceMutation) Where(ps ...predicate.Price) {
 	m.predicates = append(m.predicates, ps...)
@@ -24958,7 +25618,7 @@ func (m *PriceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *PriceMutation) Fields() []string {
-	fields := make([]string, 0, 26)
+	fields := make([]string, 0, 33)
 	if m.tenant_id != nil {
 		fields = append(fields, price.FieldTenantID)
 	}
@@ -24988,6 +25648,24 @@ func (m *PriceMutation) Fields() []string {
 	}
 	if m.display_amount != nil {
 		fields = append(fields, price.FieldDisplayAmount)
+	}
+	if m.price_unit_type != nil {
+		fields = append(fields, price.FieldPriceUnitType)
+	}
+	if m.price_unit_edge != nil {
+		fields = append(fields, price.FieldPriceUnitID)
+	}
+	if m.price_unit != nil {
+		fields = append(fields, price.FieldPriceUnit)
+	}
+	if m.price_unit_amount != nil {
+		fields = append(fields, price.FieldPriceUnitAmount)
+	}
+	if m.display_price_unit_amount != nil {
+		fields = append(fields, price.FieldDisplayPriceUnitAmount)
+	}
+	if m.conversion_rate != nil {
+		fields = append(fields, price.FieldConversionRate)
 	}
 	if m.plan_id != nil {
 		fields = append(fields, price.FieldPlanID)
@@ -25024,6 +25702,9 @@ func (m *PriceMutation) Fields() []string {
 	}
 	if m.tiers != nil {
 		fields = append(fields, price.FieldTiers)
+	}
+	if m.price_unit_tiers != nil {
+		fields = append(fields, price.FieldPriceUnitTiers)
 	}
 	if m.transform_quantity != nil {
 		fields = append(fields, price.FieldTransformQuantity)
@@ -25065,6 +25746,18 @@ func (m *PriceMutation) Field(name string) (ent.Value, bool) {
 		return m.Currency()
 	case price.FieldDisplayAmount:
 		return m.DisplayAmount()
+	case price.FieldPriceUnitType:
+		return m.PriceUnitType()
+	case price.FieldPriceUnitID:
+		return m.PriceUnitID()
+	case price.FieldPriceUnit:
+		return m.PriceUnit()
+	case price.FieldPriceUnitAmount:
+		return m.PriceUnitAmount()
+	case price.FieldDisplayPriceUnitAmount:
+		return m.DisplayPriceUnitAmount()
+	case price.FieldConversionRate:
+		return m.ConversionRate()
 	case price.FieldPlanID:
 		return m.PlanID()
 	case price.FieldType:
@@ -25089,6 +25782,8 @@ func (m *PriceMutation) Field(name string) (ent.Value, bool) {
 		return m.TierMode()
 	case price.FieldTiers:
 		return m.Tiers()
+	case price.FieldPriceUnitTiers:
+		return m.PriceUnitTiers()
 	case price.FieldTransformQuantity:
 		return m.TransformQuantity()
 	case price.FieldLookupKey:
@@ -25126,6 +25821,18 @@ func (m *PriceMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldCurrency(ctx)
 	case price.FieldDisplayAmount:
 		return m.OldDisplayAmount(ctx)
+	case price.FieldPriceUnitType:
+		return m.OldPriceUnitType(ctx)
+	case price.FieldPriceUnitID:
+		return m.OldPriceUnitID(ctx)
+	case price.FieldPriceUnit:
+		return m.OldPriceUnit(ctx)
+	case price.FieldPriceUnitAmount:
+		return m.OldPriceUnitAmount(ctx)
+	case price.FieldDisplayPriceUnitAmount:
+		return m.OldDisplayPriceUnitAmount(ctx)
+	case price.FieldConversionRate:
+		return m.OldConversionRate(ctx)
 	case price.FieldPlanID:
 		return m.OldPlanID(ctx)
 	case price.FieldType:
@@ -25150,6 +25857,8 @@ func (m *PriceMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldTierMode(ctx)
 	case price.FieldTiers:
 		return m.OldTiers(ctx)
+	case price.FieldPriceUnitTiers:
+		return m.OldPriceUnitTiers(ctx)
 	case price.FieldTransformQuantity:
 		return m.OldTransformQuantity(ctx)
 	case price.FieldLookupKey:
@@ -25237,6 +25946,48 @@ func (m *PriceMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetDisplayAmount(v)
 		return nil
+	case price.FieldPriceUnitType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPriceUnitType(v)
+		return nil
+	case price.FieldPriceUnitID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPriceUnitID(v)
+		return nil
+	case price.FieldPriceUnit:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPriceUnit(v)
+		return nil
+	case price.FieldPriceUnitAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPriceUnitAmount(v)
+		return nil
+	case price.FieldDisplayPriceUnitAmount:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDisplayPriceUnitAmount(v)
+		return nil
+	case price.FieldConversionRate:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetConversionRate(v)
+		return nil
 	case price.FieldPlanID:
 		v, ok := value.(string)
 		if !ok {
@@ -25321,6 +26072,13 @@ func (m *PriceMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetTiers(v)
 		return nil
+	case price.FieldPriceUnitTiers:
+		v, ok := value.([]schema.PriceTier)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPriceUnitTiers(v)
+		return nil
 	case price.FieldTransformQuantity:
 		v, ok := value.(schema.TransformQuantity)
 		if !ok {
@@ -25360,6 +26118,12 @@ func (m *PriceMutation) AddedFields() []string {
 	if m.addamount != nil {
 		fields = append(fields, price.FieldAmount)
 	}
+	if m.addprice_unit_amount != nil {
+		fields = append(fields, price.FieldPriceUnitAmount)
+	}
+	if m.addconversion_rate != nil {
+		fields = append(fields, price.FieldConversionRate)
+	}
 	if m.addbilling_period_count != nil {
 		fields = append(fields, price.FieldBillingPeriodCount)
 	}
@@ -25376,6 +26140,10 @@ func (m *PriceMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
 	case price.FieldAmount:
 		return m.AddedAmount()
+	case price.FieldPriceUnitAmount:
+		return m.AddedPriceUnitAmount()
+	case price.FieldConversionRate:
+		return m.AddedConversionRate()
 	case price.FieldBillingPeriodCount:
 		return m.AddedBillingPeriodCount()
 	case price.FieldTrialPeriod:
@@ -25395,6 +26163,20 @@ func (m *PriceMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddAmount(v)
+		return nil
+	case price.FieldPriceUnitAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddPriceUnitAmount(v)
+		return nil
+	case price.FieldConversionRate:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddConversionRate(v)
 		return nil
 	case price.FieldBillingPeriodCount:
 		v, ok := value.(int)
@@ -25427,6 +26209,21 @@ func (m *PriceMutation) ClearedFields() []string {
 	if m.FieldCleared(price.FieldEnvironmentID) {
 		fields = append(fields, price.FieldEnvironmentID)
 	}
+	if m.FieldCleared(price.FieldPriceUnitID) {
+		fields = append(fields, price.FieldPriceUnitID)
+	}
+	if m.FieldCleared(price.FieldPriceUnit) {
+		fields = append(fields, price.FieldPriceUnit)
+	}
+	if m.FieldCleared(price.FieldPriceUnitAmount) {
+		fields = append(fields, price.FieldPriceUnitAmount)
+	}
+	if m.FieldCleared(price.FieldDisplayPriceUnitAmount) {
+		fields = append(fields, price.FieldDisplayPriceUnitAmount)
+	}
+	if m.FieldCleared(price.FieldConversionRate) {
+		fields = append(fields, price.FieldConversionRate)
+	}
 	if m.FieldCleared(price.FieldInvoiceCadence) {
 		fields = append(fields, price.FieldInvoiceCadence)
 	}
@@ -25441,6 +26238,9 @@ func (m *PriceMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(price.FieldTiers) {
 		fields = append(fields, price.FieldTiers)
+	}
+	if m.FieldCleared(price.FieldPriceUnitTiers) {
+		fields = append(fields, price.FieldPriceUnitTiers)
 	}
 	if m.FieldCleared(price.FieldTransformQuantity) {
 		fields = append(fields, price.FieldTransformQuantity)
@@ -25477,6 +26277,21 @@ func (m *PriceMutation) ClearField(name string) error {
 	case price.FieldEnvironmentID:
 		m.ClearEnvironmentID()
 		return nil
+	case price.FieldPriceUnitID:
+		m.ClearPriceUnitID()
+		return nil
+	case price.FieldPriceUnit:
+		m.ClearPriceUnit()
+		return nil
+	case price.FieldPriceUnitAmount:
+		m.ClearPriceUnitAmount()
+		return nil
+	case price.FieldDisplayPriceUnitAmount:
+		m.ClearDisplayPriceUnitAmount()
+		return nil
+	case price.FieldConversionRate:
+		m.ClearConversionRate()
+		return nil
 	case price.FieldInvoiceCadence:
 		m.ClearInvoiceCadence()
 		return nil
@@ -25491,6 +26306,9 @@ func (m *PriceMutation) ClearField(name string) error {
 		return nil
 	case price.FieldTiers:
 		m.ClearTiers()
+		return nil
+	case price.FieldPriceUnitTiers:
+		m.ClearPriceUnitTiers()
 		return nil
 	case price.FieldTransformQuantity:
 		m.ClearTransformQuantity()
@@ -25542,6 +26360,24 @@ func (m *PriceMutation) ResetField(name string) error {
 	case price.FieldDisplayAmount:
 		m.ResetDisplayAmount()
 		return nil
+	case price.FieldPriceUnitType:
+		m.ResetPriceUnitType()
+		return nil
+	case price.FieldPriceUnitID:
+		m.ResetPriceUnitID()
+		return nil
+	case price.FieldPriceUnit:
+		m.ResetPriceUnit()
+		return nil
+	case price.FieldPriceUnitAmount:
+		m.ResetPriceUnitAmount()
+		return nil
+	case price.FieldDisplayPriceUnitAmount:
+		m.ResetDisplayPriceUnitAmount()
+		return nil
+	case price.FieldConversionRate:
+		m.ResetConversionRate()
+		return nil
 	case price.FieldPlanID:
 		m.ResetPlanID()
 		return nil
@@ -25578,6 +26414,9 @@ func (m *PriceMutation) ResetField(name string) error {
 	case price.FieldTiers:
 		m.ResetTiers()
 		return nil
+	case price.FieldPriceUnitTiers:
+		m.ResetPriceUnitTiers()
+		return nil
 	case price.FieldTransformQuantity:
 		m.ResetTransformQuantity()
 		return nil
@@ -25596,9 +26435,12 @@ func (m *PriceMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *PriceMutation) AddedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 2)
 	if m.costsheet != nil {
 		edges = append(edges, price.EdgeCostsheet)
+	}
+	if m.price_unit_edge != nil {
+		edges = append(edges, price.EdgePriceUnitEdge)
 	}
 	return edges
 }
@@ -25613,13 +26455,17 @@ func (m *PriceMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case price.EdgePriceUnitEdge:
+		if id := m.price_unit_edge; id != nil {
+			return []ent.Value{*id}
+		}
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *PriceMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 2)
 	if m.removedcostsheet != nil {
 		edges = append(edges, price.EdgeCostsheet)
 	}
@@ -25642,9 +26488,12 @@ func (m *PriceMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *PriceMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 2)
 	if m.clearedcostsheet {
 		edges = append(edges, price.EdgeCostsheet)
+	}
+	if m.clearedprice_unit_edge {
+		edges = append(edges, price.EdgePriceUnitEdge)
 	}
 	return edges
 }
@@ -25655,6 +26504,8 @@ func (m *PriceMutation) EdgeCleared(name string) bool {
 	switch name {
 	case price.EdgeCostsheet:
 		return m.clearedcostsheet
+	case price.EdgePriceUnitEdge:
+		return m.clearedprice_unit_edge
 	}
 	return false
 }
@@ -25663,6 +26514,9 @@ func (m *PriceMutation) EdgeCleared(name string) bool {
 // if that edge is not defined in the schema.
 func (m *PriceMutation) ClearEdge(name string) error {
 	switch name {
+	case price.EdgePriceUnitEdge:
+		m.ClearPriceUnitEdge()
+		return nil
 	}
 	return fmt.Errorf("unknown Price unique edge %s", name)
 }
@@ -25674,8 +26528,1180 @@ func (m *PriceMutation) ResetEdge(name string) error {
 	case price.EdgeCostsheet:
 		m.ResetCostsheet()
 		return nil
+	case price.EdgePriceUnitEdge:
+		m.ResetPriceUnitEdge()
+		return nil
 	}
 	return fmt.Errorf("unknown Price edge %s", name)
+}
+
+// PriceUnitMutation represents an operation that mutates the PriceUnit nodes in the graph.
+type PriceUnitMutation struct {
+	config
+	op              Op
+	typ             string
+	id              *string
+	tenant_id       *string
+	status          *string
+	created_at      *time.Time
+	updated_at      *time.Time
+	created_by      *string
+	updated_by      *string
+	environment_id  *string
+	name            *string
+	code            *string
+	symbol          *string
+	base_currency   *string
+	conversion_rate *decimal.Decimal
+	precision       *int
+	addprecision    *int
+	clearedFields   map[string]struct{}
+	prices          map[string]struct{}
+	removedprices   map[string]struct{}
+	clearedprices   bool
+	done            bool
+	oldValue        func(context.Context) (*PriceUnit, error)
+	predicates      []predicate.PriceUnit
+}
+
+var _ ent.Mutation = (*PriceUnitMutation)(nil)
+
+// priceunitOption allows management of the mutation configuration using functional options.
+type priceunitOption func(*PriceUnitMutation)
+
+// newPriceUnitMutation creates new mutation for the PriceUnit entity.
+func newPriceUnitMutation(c config, op Op, opts ...priceunitOption) *PriceUnitMutation {
+	m := &PriceUnitMutation{
+		config:        c,
+		op:            op,
+		typ:           TypePriceUnit,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withPriceUnitID sets the ID field of the mutation.
+func withPriceUnitID(id string) priceunitOption {
+	return func(m *PriceUnitMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *PriceUnit
+		)
+		m.oldValue = func(ctx context.Context) (*PriceUnit, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().PriceUnit.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withPriceUnit sets the old PriceUnit of the mutation.
+func withPriceUnit(node *PriceUnit) priceunitOption {
+	return func(m *PriceUnitMutation) {
+		m.oldValue = func(context.Context) (*PriceUnit, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m PriceUnitMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m PriceUnitMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of PriceUnit entities.
+func (m *PriceUnitMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *PriceUnitMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *PriceUnitMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().PriceUnit.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (m *PriceUnitMutation) SetTenantID(s string) {
+	m.tenant_id = &s
+}
+
+// TenantID returns the value of the "tenant_id" field in the mutation.
+func (m *PriceUnitMutation) TenantID() (r string, exists bool) {
+	v := m.tenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTenantID returns the old "tenant_id" field's value of the PriceUnit entity.
+// If the PriceUnit object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PriceUnitMutation) OldTenantID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTenantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
+	}
+	return oldValue.TenantID, nil
+}
+
+// ResetTenantID resets all changes to the "tenant_id" field.
+func (m *PriceUnitMutation) ResetTenantID() {
+	m.tenant_id = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *PriceUnitMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *PriceUnitMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the PriceUnit entity.
+// If the PriceUnit object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PriceUnitMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *PriceUnitMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *PriceUnitMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *PriceUnitMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the PriceUnit entity.
+// If the PriceUnit object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PriceUnitMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *PriceUnitMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *PriceUnitMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *PriceUnitMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the PriceUnit entity.
+// If the PriceUnit object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PriceUnitMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *PriceUnitMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *PriceUnitMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *PriceUnitMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the PriceUnit entity.
+// If the PriceUnit object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PriceUnitMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (m *PriceUnitMutation) ClearCreatedBy() {
+	m.created_by = nil
+	m.clearedFields[priceunit.FieldCreatedBy] = struct{}{}
+}
+
+// CreatedByCleared returns if the "created_by" field was cleared in this mutation.
+func (m *PriceUnitMutation) CreatedByCleared() bool {
+	_, ok := m.clearedFields[priceunit.FieldCreatedBy]
+	return ok
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *PriceUnitMutation) ResetCreatedBy() {
+	m.created_by = nil
+	delete(m.clearedFields, priceunit.FieldCreatedBy)
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (m *PriceUnitMutation) SetUpdatedBy(s string) {
+	m.updated_by = &s
+}
+
+// UpdatedBy returns the value of the "updated_by" field in the mutation.
+func (m *PriceUnitMutation) UpdatedBy() (r string, exists bool) {
+	v := m.updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedBy returns the old "updated_by" field's value of the PriceUnit entity.
+// If the PriceUnit object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PriceUnitMutation) OldUpdatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
+	}
+	return oldValue.UpdatedBy, nil
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (m *PriceUnitMutation) ClearUpdatedBy() {
+	m.updated_by = nil
+	m.clearedFields[priceunit.FieldUpdatedBy] = struct{}{}
+}
+
+// UpdatedByCleared returns if the "updated_by" field was cleared in this mutation.
+func (m *PriceUnitMutation) UpdatedByCleared() bool {
+	_, ok := m.clearedFields[priceunit.FieldUpdatedBy]
+	return ok
+}
+
+// ResetUpdatedBy resets all changes to the "updated_by" field.
+func (m *PriceUnitMutation) ResetUpdatedBy() {
+	m.updated_by = nil
+	delete(m.clearedFields, priceunit.FieldUpdatedBy)
+}
+
+// SetEnvironmentID sets the "environment_id" field.
+func (m *PriceUnitMutation) SetEnvironmentID(s string) {
+	m.environment_id = &s
+}
+
+// EnvironmentID returns the value of the "environment_id" field in the mutation.
+func (m *PriceUnitMutation) EnvironmentID() (r string, exists bool) {
+	v := m.environment_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnvironmentID returns the old "environment_id" field's value of the PriceUnit entity.
+// If the PriceUnit object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PriceUnitMutation) OldEnvironmentID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnvironmentID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnvironmentID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnvironmentID: %w", err)
+	}
+	return oldValue.EnvironmentID, nil
+}
+
+// ClearEnvironmentID clears the value of the "environment_id" field.
+func (m *PriceUnitMutation) ClearEnvironmentID() {
+	m.environment_id = nil
+	m.clearedFields[priceunit.FieldEnvironmentID] = struct{}{}
+}
+
+// EnvironmentIDCleared returns if the "environment_id" field was cleared in this mutation.
+func (m *PriceUnitMutation) EnvironmentIDCleared() bool {
+	_, ok := m.clearedFields[priceunit.FieldEnvironmentID]
+	return ok
+}
+
+// ResetEnvironmentID resets all changes to the "environment_id" field.
+func (m *PriceUnitMutation) ResetEnvironmentID() {
+	m.environment_id = nil
+	delete(m.clearedFields, priceunit.FieldEnvironmentID)
+}
+
+// SetName sets the "name" field.
+func (m *PriceUnitMutation) SetName(s string) {
+	m.name = &s
+}
+
+// Name returns the value of the "name" field in the mutation.
+func (m *PriceUnitMutation) Name() (r string, exists bool) {
+	v := m.name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldName returns the old "name" field's value of the PriceUnit entity.
+// If the PriceUnit object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PriceUnitMutation) OldName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldName: %w", err)
+	}
+	return oldValue.Name, nil
+}
+
+// ResetName resets all changes to the "name" field.
+func (m *PriceUnitMutation) ResetName() {
+	m.name = nil
+}
+
+// SetCode sets the "code" field.
+func (m *PriceUnitMutation) SetCode(s string) {
+	m.code = &s
+}
+
+// Code returns the value of the "code" field in the mutation.
+func (m *PriceUnitMutation) Code() (r string, exists bool) {
+	v := m.code
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCode returns the old "code" field's value of the PriceUnit entity.
+// If the PriceUnit object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PriceUnitMutation) OldCode(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCode: %w", err)
+	}
+	return oldValue.Code, nil
+}
+
+// ResetCode resets all changes to the "code" field.
+func (m *PriceUnitMutation) ResetCode() {
+	m.code = nil
+}
+
+// SetSymbol sets the "symbol" field.
+func (m *PriceUnitMutation) SetSymbol(s string) {
+	m.symbol = &s
+}
+
+// Symbol returns the value of the "symbol" field in the mutation.
+func (m *PriceUnitMutation) Symbol() (r string, exists bool) {
+	v := m.symbol
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSymbol returns the old "symbol" field's value of the PriceUnit entity.
+// If the PriceUnit object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PriceUnitMutation) OldSymbol(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSymbol is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSymbol requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSymbol: %w", err)
+	}
+	return oldValue.Symbol, nil
+}
+
+// ResetSymbol resets all changes to the "symbol" field.
+func (m *PriceUnitMutation) ResetSymbol() {
+	m.symbol = nil
+}
+
+// SetBaseCurrency sets the "base_currency" field.
+func (m *PriceUnitMutation) SetBaseCurrency(s string) {
+	m.base_currency = &s
+}
+
+// BaseCurrency returns the value of the "base_currency" field in the mutation.
+func (m *PriceUnitMutation) BaseCurrency() (r string, exists bool) {
+	v := m.base_currency
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBaseCurrency returns the old "base_currency" field's value of the PriceUnit entity.
+// If the PriceUnit object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PriceUnitMutation) OldBaseCurrency(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBaseCurrency is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBaseCurrency requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBaseCurrency: %w", err)
+	}
+	return oldValue.BaseCurrency, nil
+}
+
+// ResetBaseCurrency resets all changes to the "base_currency" field.
+func (m *PriceUnitMutation) ResetBaseCurrency() {
+	m.base_currency = nil
+}
+
+// SetConversionRate sets the "conversion_rate" field.
+func (m *PriceUnitMutation) SetConversionRate(d decimal.Decimal) {
+	m.conversion_rate = &d
+}
+
+// ConversionRate returns the value of the "conversion_rate" field in the mutation.
+func (m *PriceUnitMutation) ConversionRate() (r decimal.Decimal, exists bool) {
+	v := m.conversion_rate
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldConversionRate returns the old "conversion_rate" field's value of the PriceUnit entity.
+// If the PriceUnit object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PriceUnitMutation) OldConversionRate(ctx context.Context) (v decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldConversionRate is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldConversionRate requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldConversionRate: %w", err)
+	}
+	return oldValue.ConversionRate, nil
+}
+
+// ResetConversionRate resets all changes to the "conversion_rate" field.
+func (m *PriceUnitMutation) ResetConversionRate() {
+	m.conversion_rate = nil
+}
+
+// SetPrecision sets the "precision" field.
+func (m *PriceUnitMutation) SetPrecision(i int) {
+	m.precision = &i
+	m.addprecision = nil
+}
+
+// Precision returns the value of the "precision" field in the mutation.
+func (m *PriceUnitMutation) Precision() (r int, exists bool) {
+	v := m.precision
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPrecision returns the old "precision" field's value of the PriceUnit entity.
+// If the PriceUnit object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PriceUnitMutation) OldPrecision(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPrecision is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPrecision requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPrecision: %w", err)
+	}
+	return oldValue.Precision, nil
+}
+
+// AddPrecision adds i to the "precision" field.
+func (m *PriceUnitMutation) AddPrecision(i int) {
+	if m.addprecision != nil {
+		*m.addprecision += i
+	} else {
+		m.addprecision = &i
+	}
+}
+
+// AddedPrecision returns the value that was added to the "precision" field in this mutation.
+func (m *PriceUnitMutation) AddedPrecision() (r int, exists bool) {
+	v := m.addprecision
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetPrecision resets all changes to the "precision" field.
+func (m *PriceUnitMutation) ResetPrecision() {
+	m.precision = nil
+	m.addprecision = nil
+}
+
+// AddPriceIDs adds the "prices" edge to the Price entity by ids.
+func (m *PriceUnitMutation) AddPriceIDs(ids ...string) {
+	if m.prices == nil {
+		m.prices = make(map[string]struct{})
+	}
+	for i := range ids {
+		m.prices[ids[i]] = struct{}{}
+	}
+}
+
+// ClearPrices clears the "prices" edge to the Price entity.
+func (m *PriceUnitMutation) ClearPrices() {
+	m.clearedprices = true
+}
+
+// PricesCleared reports if the "prices" edge to the Price entity was cleared.
+func (m *PriceUnitMutation) PricesCleared() bool {
+	return m.clearedprices
+}
+
+// RemovePriceIDs removes the "prices" edge to the Price entity by IDs.
+func (m *PriceUnitMutation) RemovePriceIDs(ids ...string) {
+	if m.removedprices == nil {
+		m.removedprices = make(map[string]struct{})
+	}
+	for i := range ids {
+		delete(m.prices, ids[i])
+		m.removedprices[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedPrices returns the removed IDs of the "prices" edge to the Price entity.
+func (m *PriceUnitMutation) RemovedPricesIDs() (ids []string) {
+	for id := range m.removedprices {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// PricesIDs returns the "prices" edge IDs in the mutation.
+func (m *PriceUnitMutation) PricesIDs() (ids []string) {
+	for id := range m.prices {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetPrices resets all changes to the "prices" edge.
+func (m *PriceUnitMutation) ResetPrices() {
+	m.prices = nil
+	m.clearedprices = false
+	m.removedprices = nil
+}
+
+// Where appends a list predicates to the PriceUnitMutation builder.
+func (m *PriceUnitMutation) Where(ps ...predicate.PriceUnit) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the PriceUnitMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *PriceUnitMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.PriceUnit, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *PriceUnitMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *PriceUnitMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (PriceUnit).
+func (m *PriceUnitMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *PriceUnitMutation) Fields() []string {
+	fields := make([]string, 0, 13)
+	if m.tenant_id != nil {
+		fields = append(fields, priceunit.FieldTenantID)
+	}
+	if m.status != nil {
+		fields = append(fields, priceunit.FieldStatus)
+	}
+	if m.created_at != nil {
+		fields = append(fields, priceunit.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, priceunit.FieldUpdatedAt)
+	}
+	if m.created_by != nil {
+		fields = append(fields, priceunit.FieldCreatedBy)
+	}
+	if m.updated_by != nil {
+		fields = append(fields, priceunit.FieldUpdatedBy)
+	}
+	if m.environment_id != nil {
+		fields = append(fields, priceunit.FieldEnvironmentID)
+	}
+	if m.name != nil {
+		fields = append(fields, priceunit.FieldName)
+	}
+	if m.code != nil {
+		fields = append(fields, priceunit.FieldCode)
+	}
+	if m.symbol != nil {
+		fields = append(fields, priceunit.FieldSymbol)
+	}
+	if m.base_currency != nil {
+		fields = append(fields, priceunit.FieldBaseCurrency)
+	}
+	if m.conversion_rate != nil {
+		fields = append(fields, priceunit.FieldConversionRate)
+	}
+	if m.precision != nil {
+		fields = append(fields, priceunit.FieldPrecision)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *PriceUnitMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case priceunit.FieldTenantID:
+		return m.TenantID()
+	case priceunit.FieldStatus:
+		return m.Status()
+	case priceunit.FieldCreatedAt:
+		return m.CreatedAt()
+	case priceunit.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case priceunit.FieldCreatedBy:
+		return m.CreatedBy()
+	case priceunit.FieldUpdatedBy:
+		return m.UpdatedBy()
+	case priceunit.FieldEnvironmentID:
+		return m.EnvironmentID()
+	case priceunit.FieldName:
+		return m.Name()
+	case priceunit.FieldCode:
+		return m.Code()
+	case priceunit.FieldSymbol:
+		return m.Symbol()
+	case priceunit.FieldBaseCurrency:
+		return m.BaseCurrency()
+	case priceunit.FieldConversionRate:
+		return m.ConversionRate()
+	case priceunit.FieldPrecision:
+		return m.Precision()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *PriceUnitMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case priceunit.FieldTenantID:
+		return m.OldTenantID(ctx)
+	case priceunit.FieldStatus:
+		return m.OldStatus(ctx)
+	case priceunit.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case priceunit.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case priceunit.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case priceunit.FieldUpdatedBy:
+		return m.OldUpdatedBy(ctx)
+	case priceunit.FieldEnvironmentID:
+		return m.OldEnvironmentID(ctx)
+	case priceunit.FieldName:
+		return m.OldName(ctx)
+	case priceunit.FieldCode:
+		return m.OldCode(ctx)
+	case priceunit.FieldSymbol:
+		return m.OldSymbol(ctx)
+	case priceunit.FieldBaseCurrency:
+		return m.OldBaseCurrency(ctx)
+	case priceunit.FieldConversionRate:
+		return m.OldConversionRate(ctx)
+	case priceunit.FieldPrecision:
+		return m.OldPrecision(ctx)
+	}
+	return nil, fmt.Errorf("unknown PriceUnit field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *PriceUnitMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case priceunit.FieldTenantID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTenantID(v)
+		return nil
+	case priceunit.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case priceunit.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case priceunit.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case priceunit.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case priceunit.FieldUpdatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedBy(v)
+		return nil
+	case priceunit.FieldEnvironmentID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnvironmentID(v)
+		return nil
+	case priceunit.FieldName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetName(v)
+		return nil
+	case priceunit.FieldCode:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCode(v)
+		return nil
+	case priceunit.FieldSymbol:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSymbol(v)
+		return nil
+	case priceunit.FieldBaseCurrency:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBaseCurrency(v)
+		return nil
+	case priceunit.FieldConversionRate:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetConversionRate(v)
+		return nil
+	case priceunit.FieldPrecision:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPrecision(v)
+		return nil
+	}
+	return fmt.Errorf("unknown PriceUnit field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *PriceUnitMutation) AddedFields() []string {
+	var fields []string
+	if m.addprecision != nil {
+		fields = append(fields, priceunit.FieldPrecision)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *PriceUnitMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case priceunit.FieldPrecision:
+		return m.AddedPrecision()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *PriceUnitMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case priceunit.FieldPrecision:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddPrecision(v)
+		return nil
+	}
+	return fmt.Errorf("unknown PriceUnit numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *PriceUnitMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(priceunit.FieldCreatedBy) {
+		fields = append(fields, priceunit.FieldCreatedBy)
+	}
+	if m.FieldCleared(priceunit.FieldUpdatedBy) {
+		fields = append(fields, priceunit.FieldUpdatedBy)
+	}
+	if m.FieldCleared(priceunit.FieldEnvironmentID) {
+		fields = append(fields, priceunit.FieldEnvironmentID)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *PriceUnitMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *PriceUnitMutation) ClearField(name string) error {
+	switch name {
+	case priceunit.FieldCreatedBy:
+		m.ClearCreatedBy()
+		return nil
+	case priceunit.FieldUpdatedBy:
+		m.ClearUpdatedBy()
+		return nil
+	case priceunit.FieldEnvironmentID:
+		m.ClearEnvironmentID()
+		return nil
+	}
+	return fmt.Errorf("unknown PriceUnit nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *PriceUnitMutation) ResetField(name string) error {
+	switch name {
+	case priceunit.FieldTenantID:
+		m.ResetTenantID()
+		return nil
+	case priceunit.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case priceunit.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case priceunit.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case priceunit.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case priceunit.FieldUpdatedBy:
+		m.ResetUpdatedBy()
+		return nil
+	case priceunit.FieldEnvironmentID:
+		m.ResetEnvironmentID()
+		return nil
+	case priceunit.FieldName:
+		m.ResetName()
+		return nil
+	case priceunit.FieldCode:
+		m.ResetCode()
+		return nil
+	case priceunit.FieldSymbol:
+		m.ResetSymbol()
+		return nil
+	case priceunit.FieldBaseCurrency:
+		m.ResetBaseCurrency()
+		return nil
+	case priceunit.FieldConversionRate:
+		m.ResetConversionRate()
+		return nil
+	case priceunit.FieldPrecision:
+		m.ResetPrecision()
+		return nil
+	}
+	return fmt.Errorf("unknown PriceUnit field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *PriceUnitMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.prices != nil {
+		edges = append(edges, priceunit.EdgePrices)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *PriceUnitMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case priceunit.EdgePrices:
+		ids := make([]ent.Value, 0, len(m.prices))
+		for id := range m.prices {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *PriceUnitMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.removedprices != nil {
+		edges = append(edges, priceunit.EdgePrices)
+	}
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *PriceUnitMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case priceunit.EdgePrices:
+		ids := make([]ent.Value, 0, len(m.removedprices))
+		for id := range m.removedprices {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *PriceUnitMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.clearedprices {
+		edges = append(edges, priceunit.EdgePrices)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *PriceUnitMutation) EdgeCleared(name string) bool {
+	switch name {
+	case priceunit.EdgePrices:
+		return m.clearedprices
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *PriceUnitMutation) ClearEdge(name string) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown PriceUnit unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *PriceUnitMutation) ResetEdge(name string) error {
+	switch name {
+	case priceunit.EdgePrices:
+		m.ResetPrices()
+		return nil
+	}
+	return fmt.Errorf("unknown PriceUnit edge %s", name)
 }
 
 // SecretMutation represents an operation that mutates the Secret nodes in the graph.
@@ -29674,6 +31700,8 @@ type SubscriptionLineItemMutation struct {
 	price_type          *string
 	meter_id            *string
 	meter_display_name  *string
+	price_unit_id       *string
+	price_unit          *string
 	display_name        *string
 	quantity            *decimal.Decimal
 	currency            *string
@@ -30440,6 +32468,104 @@ func (m *SubscriptionLineItemMutation) ResetMeterDisplayName() {
 	delete(m.clearedFields, subscriptionlineitem.FieldMeterDisplayName)
 }
 
+// SetPriceUnitID sets the "price_unit_id" field.
+func (m *SubscriptionLineItemMutation) SetPriceUnitID(s string) {
+	m.price_unit_id = &s
+}
+
+// PriceUnitID returns the value of the "price_unit_id" field in the mutation.
+func (m *SubscriptionLineItemMutation) PriceUnitID() (r string, exists bool) {
+	v := m.price_unit_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPriceUnitID returns the old "price_unit_id" field's value of the SubscriptionLineItem entity.
+// If the SubscriptionLineItem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionLineItemMutation) OldPriceUnitID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPriceUnitID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPriceUnitID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPriceUnitID: %w", err)
+	}
+	return oldValue.PriceUnitID, nil
+}
+
+// ClearPriceUnitID clears the value of the "price_unit_id" field.
+func (m *SubscriptionLineItemMutation) ClearPriceUnitID() {
+	m.price_unit_id = nil
+	m.clearedFields[subscriptionlineitem.FieldPriceUnitID] = struct{}{}
+}
+
+// PriceUnitIDCleared returns if the "price_unit_id" field was cleared in this mutation.
+func (m *SubscriptionLineItemMutation) PriceUnitIDCleared() bool {
+	_, ok := m.clearedFields[subscriptionlineitem.FieldPriceUnitID]
+	return ok
+}
+
+// ResetPriceUnitID resets all changes to the "price_unit_id" field.
+func (m *SubscriptionLineItemMutation) ResetPriceUnitID() {
+	m.price_unit_id = nil
+	delete(m.clearedFields, subscriptionlineitem.FieldPriceUnitID)
+}
+
+// SetPriceUnit sets the "price_unit" field.
+func (m *SubscriptionLineItemMutation) SetPriceUnit(s string) {
+	m.price_unit = &s
+}
+
+// PriceUnit returns the value of the "price_unit" field in the mutation.
+func (m *SubscriptionLineItemMutation) PriceUnit() (r string, exists bool) {
+	v := m.price_unit
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPriceUnit returns the old "price_unit" field's value of the SubscriptionLineItem entity.
+// If the SubscriptionLineItem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionLineItemMutation) OldPriceUnit(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPriceUnit is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPriceUnit requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPriceUnit: %w", err)
+	}
+	return oldValue.PriceUnit, nil
+}
+
+// ClearPriceUnit clears the value of the "price_unit" field.
+func (m *SubscriptionLineItemMutation) ClearPriceUnit() {
+	m.price_unit = nil
+	m.clearedFields[subscriptionlineitem.FieldPriceUnit] = struct{}{}
+}
+
+// PriceUnitCleared returns if the "price_unit" field was cleared in this mutation.
+func (m *SubscriptionLineItemMutation) PriceUnitCleared() bool {
+	_, ok := m.clearedFields[subscriptionlineitem.FieldPriceUnit]
+	return ok
+}
+
+// ResetPriceUnit resets all changes to the "price_unit" field.
+func (m *SubscriptionLineItemMutation) ResetPriceUnit() {
+	m.price_unit = nil
+	delete(m.clearedFields, subscriptionlineitem.FieldPriceUnit)
+}
+
 // SetDisplayName sets the "display_name" field.
 func (m *SubscriptionLineItemMutation) SetDisplayName(s string) {
 	m.display_name = &s
@@ -30910,7 +33036,7 @@ func (m *SubscriptionLineItemMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SubscriptionLineItemMutation) Fields() []string {
-	fields := make([]string, 0, 24)
+	fields := make([]string, 0, 26)
 	if m.tenant_id != nil {
 		fields = append(fields, subscriptionlineitem.FieldTenantID)
 	}
@@ -30955,6 +33081,12 @@ func (m *SubscriptionLineItemMutation) Fields() []string {
 	}
 	if m.meter_display_name != nil {
 		fields = append(fields, subscriptionlineitem.FieldMeterDisplayName)
+	}
+	if m.price_unit_id != nil {
+		fields = append(fields, subscriptionlineitem.FieldPriceUnitID)
+	}
+	if m.price_unit != nil {
+		fields = append(fields, subscriptionlineitem.FieldPriceUnit)
 	}
 	if m.display_name != nil {
 		fields = append(fields, subscriptionlineitem.FieldDisplayName)
@@ -31021,6 +33153,10 @@ func (m *SubscriptionLineItemMutation) Field(name string) (ent.Value, bool) {
 		return m.MeterID()
 	case subscriptionlineitem.FieldMeterDisplayName:
 		return m.MeterDisplayName()
+	case subscriptionlineitem.FieldPriceUnitID:
+		return m.PriceUnitID()
+	case subscriptionlineitem.FieldPriceUnit:
+		return m.PriceUnit()
 	case subscriptionlineitem.FieldDisplayName:
 		return m.DisplayName()
 	case subscriptionlineitem.FieldQuantity:
@@ -31078,6 +33214,10 @@ func (m *SubscriptionLineItemMutation) OldField(ctx context.Context, name string
 		return m.OldMeterID(ctx)
 	case subscriptionlineitem.FieldMeterDisplayName:
 		return m.OldMeterDisplayName(ctx)
+	case subscriptionlineitem.FieldPriceUnitID:
+		return m.OldPriceUnitID(ctx)
+	case subscriptionlineitem.FieldPriceUnit:
+		return m.OldPriceUnit(ctx)
 	case subscriptionlineitem.FieldDisplayName:
 		return m.OldDisplayName(ctx)
 	case subscriptionlineitem.FieldQuantity:
@@ -31209,6 +33349,20 @@ func (m *SubscriptionLineItemMutation) SetField(name string, value ent.Value) er
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetMeterDisplayName(v)
+		return nil
+	case subscriptionlineitem.FieldPriceUnitID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPriceUnitID(v)
+		return nil
+	case subscriptionlineitem.FieldPriceUnit:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPriceUnit(v)
 		return nil
 	case subscriptionlineitem.FieldDisplayName:
 		v, ok := value.(string)
@@ -31342,6 +33496,12 @@ func (m *SubscriptionLineItemMutation) ClearedFields() []string {
 	if m.FieldCleared(subscriptionlineitem.FieldMeterDisplayName) {
 		fields = append(fields, subscriptionlineitem.FieldMeterDisplayName)
 	}
+	if m.FieldCleared(subscriptionlineitem.FieldPriceUnitID) {
+		fields = append(fields, subscriptionlineitem.FieldPriceUnitID)
+	}
+	if m.FieldCleared(subscriptionlineitem.FieldPriceUnit) {
+		fields = append(fields, subscriptionlineitem.FieldPriceUnit)
+	}
 	if m.FieldCleared(subscriptionlineitem.FieldDisplayName) {
 		fields = append(fields, subscriptionlineitem.FieldDisplayName)
 	}
@@ -31394,6 +33554,12 @@ func (m *SubscriptionLineItemMutation) ClearField(name string) error {
 		return nil
 	case subscriptionlineitem.FieldMeterDisplayName:
 		m.ClearMeterDisplayName()
+		return nil
+	case subscriptionlineitem.FieldPriceUnitID:
+		m.ClearPriceUnitID()
+		return nil
+	case subscriptionlineitem.FieldPriceUnit:
+		m.ClearPriceUnit()
 		return nil
 	case subscriptionlineitem.FieldDisplayName:
 		m.ClearDisplayName()
@@ -31462,6 +33628,12 @@ func (m *SubscriptionLineItemMutation) ResetField(name string) error {
 		return nil
 	case subscriptionlineitem.FieldMeterDisplayName:
 		m.ResetMeterDisplayName()
+		return nil
+	case subscriptionlineitem.FieldPriceUnitID:
+		m.ResetPriceUnitID()
+		return nil
+	case subscriptionlineitem.FieldPriceUnit:
+		m.ResetPriceUnit()
 		return nil
 	case subscriptionlineitem.FieldDisplayName:
 		m.ResetDisplayName()

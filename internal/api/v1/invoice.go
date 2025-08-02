@@ -415,6 +415,43 @@ func (h *InvoiceHandler) RecalculateInvoice(c *gin.Context) {
 	c.JSON(http.StatusOK, invoice)
 }
 
+// UpdateInvoice godoc
+// @Summary Update an invoice
+// @Description Update invoice details like PDF URL
+// @Tags Invoices
+// @Accept json
+// @Produce json
+// @Param id path string true "Invoice ID"
+// @Param request body dto.UpdateInvoiceRequest true "Invoice Update Request"
+// @Success 200 {object} dto.InvoiceResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /invoices/{id} [put]
+func (h *InvoiceHandler) UpdateInvoice(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("invalid invoice id").Mark(ierr.ErrValidation))
+		return
+	}
+
+	var req dto.UpdateInvoiceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Errorw("failed to bind request", "error", err)
+		c.Error(ierr.WithError(err).WithHint("invalid request").Mark(ierr.ErrValidation))
+		return
+	}
+
+	invoice, err := h.invoiceService.UpdateInvoice(c.Request.Context(), id, req)
+	if err != nil {
+		h.logger.Errorw("failed to update invoice", "error", err, "invoice_id", id)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, invoice)
+}
+
 // ListInvoicesByFilter godoc
 // @Summary List invoices by filter
 // @Description List invoices by filter

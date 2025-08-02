@@ -87,7 +87,7 @@ func (s *billingService) CalculateFixedCharges(
 	fixedCost := decimal.Zero
 	fixedCostLineItems := make([]dto.CreateInvoiceLineItemRequest, 0)
 
-	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.Logger)
+	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.PriceUnitRepo, s.Logger)
 
 	// Process fixed charges from line items
 	for _, item := range sub.LineItems {
@@ -102,11 +102,27 @@ func (s *billingService) CalculateFixedCharges(
 
 		amount := priceService.CalculateCost(ctx, price.Price, item.Quantity)
 
+		// Calculate price unit amount if price unit is available
+		var priceUnitAmount *decimal.Decimal
+		if item.PriceUnit != "" {
+			convertedAmount, err := s.PriceUnitRepo.ConvertToPriceUnit(ctx, item.PriceUnit, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), amount)
+			if err != nil {
+				s.Logger.Warnw("failed to convert amount to price unit",
+					"error", err,
+					"price_unit", item.PriceUnit,
+					"amount", amount)
+			} else {
+				priceUnitAmount = &convertedAmount
+			}
+		}
+
 		fixedCostLineItems = append(fixedCostLineItems, dto.CreateInvoiceLineItemRequest{
 			PlanID:          lo.ToPtr(item.PlanID),
 			PlanDisplayName: lo.ToPtr(item.PlanDisplayName),
 			PriceID:         lo.ToPtr(item.PriceID),
 			PriceType:       lo.ToPtr(string(item.PriceType)),
+			PriceUnit:       lo.ToPtr(item.PriceUnit),
+			PriceUnitAmount: priceUnitAmount,
 			DisplayName:     lo.ToPtr(item.DisplayName),
 			Amount:          amount,
 			Quantity:        item.Quantity,
@@ -166,7 +182,7 @@ func (s *billingService) CalculateUsageCharges(
 	}
 
 	// Create price service once before processing charges
-	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.Logger)
+	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.PriceUnitRepo, s.Logger)
 
 	// Process usage charges from line items
 	for _, item := range sub.LineItems {
@@ -248,6 +264,20 @@ func (s *billingService) CalculateUsageCharges(
 				"line_item_id", item.ID,
 				"price_id", item.PriceID)
 
+			// Calculate price unit amount if price unit is available
+			var priceUnitAmount *decimal.Decimal
+			if item.PriceUnit != "" {
+				convertedAmount, err := s.PriceUnitRepo.ConvertToPriceUnit(ctx, item.PriceUnit, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), lineItemAmount)
+				if err != nil {
+					s.Logger.Warnw("failed to convert amount to price unit",
+						"error", err,
+						"price_unit", item.PriceUnit,
+						"amount", lineItemAmount)
+				} else {
+					priceUnitAmount = &convertedAmount
+				}
+			}
+
 			usageCharges = append(usageCharges, dto.CreateInvoiceLineItemRequest{
 				PlanID:           lo.ToPtr(item.PlanID),
 				PlanDisplayName:  lo.ToPtr(item.PlanDisplayName),
@@ -255,6 +285,8 @@ func (s *billingService) CalculateUsageCharges(
 				PriceID:          lo.ToPtr(item.PriceID),
 				MeterID:          lo.ToPtr(item.MeterID),
 				MeterDisplayName: lo.ToPtr(item.MeterDisplayName),
+				PriceUnit:        lo.ToPtr(item.PriceUnit),
+				PriceUnitAmount:  priceUnitAmount,
 				DisplayName:      displayName,
 				Amount:           lineItemAmount,
 				Quantity:         quantityForCalculation,

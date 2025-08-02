@@ -108,7 +108,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			Mark(ierr.ErrValidation)
 	}
 
-	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.Logger)
+	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.PriceUnitRepo, s.Logger)
 	priceFilter := types.NewNoLimitPriceFilter().
 		WithPlanIDs([]string{plan.ID}).
 		WithExpand(string(types.ExpandMeters))
@@ -231,6 +231,8 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		item.BillingPeriod = sub.BillingPeriod
 		item.InvoiceCadence = price.InvoiceCadence
 		item.TrialPeriod = price.TrialPeriod
+		item.PriceUnitID = price.PriceUnitID
+		item.PriceUnit = price.PriceUnit
 		item.StartDate = sub.StartDate
 		if sub.EndDate != nil {
 			item.EndDate = *sub.EndDate
@@ -601,7 +603,7 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 	response := &dto.GetUsageBySubscriptionResponse{}
 
 	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config)
-	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.Logger)
+	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.PriceUnitRepo, s.Logger)
 
 	// Get subscription with line items
 	subscription, lineItems, err := s.SubRepo.GetWithLineItems(ctx, req.SubscriptionID)

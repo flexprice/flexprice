@@ -58,6 +58,15 @@ sentry:
   environment: "development" # Change to "production" in prod
   sample_rate: 1.0 # Adjust sampling rate as needed (0.0 to 1.0)
 
+pyroscope:
+  enabled: false # Set to true to enable continuous profiling
+  server_address: "http://localhost:4040" # Pyroscope server URL or Grafana Cloud Profiles URL
+  application_name: "flexprice" # Your application name
+  basic_auth_user: "" # For Grafana Cloud (your stack user)
+  basic_auth_password: "" # For Grafana Cloud (your API key)
+  sample_rate: 100 # Sample rate in Hz (100 = 100 samples per second)
+  disable_gc_runs: false # Set to true if experiencing high CPU usage from GC
+
 event:
   publish_destination: "kafka"
 

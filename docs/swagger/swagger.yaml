@@ -271,8 +271,6 @@ definitions:
         $ref: '#/definitions/types.CreditGrantCadence'
       credits:
         type: number
-      currency:
-        type: string
       expiration_duration:
         type: integer
       expiration_duration_unit:
@@ -298,7 +296,6 @@ definitions:
     required:
     - cadence
     - credits
-    - currency
     - name
     - scope
     type: object
@@ -353,6 +350,11 @@ definitions:
         - $ref: '#/definitions/types.Metadata'
         description: metadata contains additional custom key-value pairs for storing
           extra information
+      process_credit_note:
+        default: true
+        description: process_credit_note is a flag to process the credit note after
+          creation
+        type: boolean
       reason:
         allOf:
         - $ref: '#/definitions/types.CreditNoteReason'
@@ -561,6 +563,10 @@ definitions:
       invoice_number:
         description: invoice_number is an optional human-readable identifier for the
           invoice
+        type: string
+      invoice_pdf_url:
+        description: invoice_pdf_url is the URL where customers can download the PDF
+          version of this invoice
         type: string
       invoice_status:
         allOf:
@@ -997,8 +1003,6 @@ definitions:
         type: string
       credits:
         type: number
-      currency:
-        type: string
       environment_id:
         type: string
       expiration_duration:
@@ -1646,7 +1650,7 @@ definitions:
           type: array
         type: object
       multiplier:
-        type: integer
+        type: number
       property_name:
         description: will be empty/ignored in case of COUNT
         example: request_size
@@ -2988,6 +2992,13 @@ definitions:
       unit_singular:
         type: string
     type: object
+  dto.UpdateInvoiceRequest:
+    properties:
+      invoice_pdf_url:
+        description: invoice_pdf_url is the URL where customers can download the PDF
+          version of this invoice
+        type: string
+    type: object
   dto.UpdatePaymentRequest:
     properties:
       metadata:
@@ -3014,8 +3025,6 @@ definitions:
         $ref: '#/definitions/types.CreditGrantCadence'
       credits:
         type: number
-      currency:
-        type: string
       expiration_duration:
         type: integer
       expiration_duration_unit:
@@ -3045,7 +3054,6 @@ definitions:
     required:
     - cadence
     - credits
-    - currency
     - name
     - scope
     type: object
@@ -3178,6 +3186,8 @@ definitions:
     properties:
       billing_details:
         $ref: '#/definitions/dto.TenantBillingDetails'
+      metadata:
+        $ref: '#/definitions/types.Metadata'
       name:
         type: string
     type: object
@@ -3436,7 +3446,7 @@ definitions:
           Multiplier is the multiplier for the aggregation
           For ex if the aggregation type is sum_with_multiplier for API usage, the multiplier could be 1000
           to scale up by a factor of 1000
-        type: integer
+        type: number
       type:
         $ref: '#/definitions/types.AggregationType'
     type: object
@@ -3712,6 +3722,8 @@ definitions:
     type: string
     x-enum-comments:
       AggregationSumWithMultiplier: Sum with a multiplier - [sum(value) * multiplier]
+    x-enum-descriptions:
+    - Sum with a multiplier - [sum(value) * multiplier]
     x-enum-varnames:
     - AggregationCount
     - AggregationSum
@@ -3922,6 +3934,50 @@ definitions:
     - DataTypeNumber
     - DataTypeDate
     - DataTypeArray
+  types.EntitlementFilter:
+    properties:
+      end_time:
+        type: string
+      expand:
+        type: string
+      feature_ids:
+        items:
+          type: string
+        type: array
+      feature_type:
+        $ref: '#/definitions/types.FeatureType'
+      filters:
+        description: Specific filters for entitlements
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      is_enabled:
+        type: boolean
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      plan_ids:
+        items:
+          type: string
+        type: array
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+    type: object
   types.EntityType:
     enum:
     - EVENTS
@@ -4046,6 +4102,89 @@ definitions:
     x-enum-varnames:
     - InvoiceCadenceArrear
     - InvoiceCadenceAdvance
+  types.InvoiceFilter:
+    properties:
+      amount_due_gt:
+        description: |-
+          amount_due_gt filters invoices with a total amount due greater than the specified value
+          Useful for finding invoices above a certain threshold or identifying high-value invoices
+        type: number
+      amount_remaining_gt:
+        description: |-
+          amount_remaining_gt filters invoices with an outstanding balance greater than the specified value
+          Useful for finding invoices that still have significant unpaid amounts
+        type: number
+      customer_id:
+        description: |-
+          customer_id filters invoices for a specific customer using FlexPrice's internal customer ID
+          This is the ID returned by FlexPrice when creating or retrieving customers
+        type: string
+      end_time:
+        type: string
+      expand:
+        type: string
+      external_customer_id:
+        description: |-
+          external_customer_id filters invoices for a customer using your system's customer identifier
+          This is the ID you provided when creating the customer in FlexPrice
+        type: string
+      filters:
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      invoice_ids:
+        description: |-
+          invoice_ids restricts results to invoices with the specified IDs
+          Use this to retrieve specific invoices when you know their exact identifiers
+        items:
+          type: string
+        type: array
+      invoice_status:
+        description: |-
+          invoice_status filters by the current state of invoices in their lifecycle
+          Multiple statuses can be specified to include invoices in any of the listed states
+        items:
+          $ref: '#/definitions/types.InvoiceStatus'
+        type: array
+      invoice_type:
+        allOf:
+        - $ref: '#/definitions/types.InvoiceType'
+        description: |-
+          invoice_type filters by the nature of the invoice (SUBSCRIPTION, ONE_OFF, or CREDIT)
+          Use this to separate recurring charges from one-time fees or credit adjustments
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      payment_status:
+        description: |-
+          payment_status filters by the payment state of invoices
+          Multiple statuses can be specified to include invoices with any of the listed payment states
+        items:
+          $ref: '#/definitions/types.PaymentStatus'
+        type: array
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      subscription_id:
+        description: |-
+          subscription_id filters invoices generated for a specific subscription
+          Only returns invoices that were created as part of the specified subscription's billing
+        type: string
+    type: object
   types.InvoiceStatus:
     enum:
     - DRAFT
@@ -4137,6 +4276,42 @@ definitions:
     - PaymentStatusFailed
     - PaymentStatusRefunded
     - PaymentStatusPartiallyRefunded
+  types.PlanFilter:
+    properties:
+      end_time:
+        type: string
+      expand:
+        type: string
+      filters:
+        description: filters allows complex filtering based on multiple fields
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      plan_ids:
+        items:
+          type: string
+        type: array
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+    type: object
   types.PriceType:
     enum:
     - USAGE
@@ -4237,6 +4412,68 @@ definitions:
     - StatusPublished
     - StatusDeleted
     - StatusArchived
+  types.SubscriptionFilter:
+    properties:
+      active_at:
+        description: ActiveAt filters subscriptions that are active at the given time
+        type: string
+      billing_cadence:
+        description: BillingCadence filters by billing cadence
+        items:
+          $ref: '#/definitions/types.BillingCadence'
+        type: array
+      billing_period:
+        description: BillingPeriod filters by billing period
+        items:
+          $ref: '#/definitions/types.BillingPeriod'
+        type: array
+      customer_id:
+        description: CustomerID filters by customer ID
+        type: string
+      end_time:
+        type: string
+      expand:
+        type: string
+      filters:
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      plan_id:
+        description: PlanID filters by plan ID
+        type: string
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      subscription_ids:
+        items:
+          type: string
+        type: array
+      subscription_status:
+        description: SubscriptionStatus filters by subscription status
+        items:
+          $ref: '#/definitions/types.SubscriptionStatus'
+        type: array
+      with_line_items:
+        description: WithLineItems includes line items in the response
+        type: boolean
+    type: object
   types.SubscriptionScheduleStatus:
     enum:
     - ACTIVE
@@ -4767,6 +5004,15 @@ paths:
           type: string
         name: plan_ids
         type: array
+      - enum:
+        - PLAN
+        - SUBSCRIPTION
+        in: query
+        name: scope
+        type: string
+        x-enum-varnames:
+        - CreditGrantScopePlan
+        - CreditGrantScopeSubscription
       - in: query
         name: sort
         type: string
@@ -5726,15 +5972,11 @@ paths:
         name: order
         type: string
       - collectionFormat: csv
-        description: Specific filters for entitlements
         in: query
         items:
           type: string
         name: plan_ids
         type: array
-      - in: query
-        name: sort
-        type: string
       - in: query
         name: start_time
         type: string
@@ -5895,6 +6137,38 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Update an entitlement
+      tags:
+      - Entitlements
+  /entitlements/search:
+    post:
+      consumes:
+      - application/json
+      description: List entitlements by filter
+      parameters:
+      - description: Filter
+        in: body
+        name: filter
+        required: true
+        schema:
+          $ref: '#/definitions/types.EntitlementFilter'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ListEntitlementsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List entitlements by filter
       tags:
       - Entitlements
   /environments:
@@ -6604,9 +6878,6 @@ paths:
         name: payment_status
         type: array
       - in: query
-        name: sort
-        type: string
-      - in: query
         name: start_time
         type: string
       - enum:
@@ -6700,6 +6971,44 @@ paths:
           schema:
             $ref: '#/definitions/errors.ErrorResponse'
       summary: Get an invoice by ID
+      tags:
+      - Invoices
+    put:
+      consumes:
+      - application/json
+      description: Update invoice details like PDF URL
+      parameters:
+      - description: Invoice ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Invoice Update Request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateInvoiceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.InvoiceResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      summary: Update an invoice
       tags:
       - Invoices
   /invoices/{id}/finalize:
@@ -6934,6 +7243,38 @@ paths:
           schema:
             $ref: '#/definitions/errors.ErrorResponse'
       summary: Get a preview invoice
+      tags:
+      - Invoices
+  /invoices/search:
+    post:
+      consumes:
+      - application/json
+      description: List invoices by filter
+      parameters:
+      - description: Filter
+        in: body
+        name: filter
+        required: true
+        schema:
+          $ref: '#/definitions/types.InvoiceFilter'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ListInvoicesResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List invoices by filter
       tags:
       - Invoices
   /payments:
@@ -7217,9 +7558,6 @@ paths:
         name: plan_ids
         type: array
       - in: query
-        name: sort
-        type: string
-      - in: query
         name: start_time
         type: string
       - enum:
@@ -7500,6 +7838,38 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Synchronize plan prices
+      tags:
+      - Plans
+  /plans/search:
+    post:
+      consumes:
+      - application/json
+      description: List plans by filter
+      parameters:
+      - description: Filter
+        in: body
+        name: filter
+        required: true
+        schema:
+          $ref: '#/definitions/types.PlanFilter'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ListPlansResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List plans by filter
       tags:
       - Plans
   /prices:
@@ -7970,9 +8340,6 @@ paths:
         name: plan_id
         type: string
       - in: query
-        name: sort
-        type: string
-      - in: query
         name: start_time
         type: string
       - enum:
@@ -8273,6 +8640,38 @@ paths:
           schema:
             $ref: '#/definitions/errors.ErrorResponse'
       summary: Resume a paused subscription
+      tags:
+      - Subscriptions
+  /subscriptions/search:
+    post:
+      consumes:
+      - application/json
+      description: List subscriptions by filter
+      parameters:
+      - description: Filter
+        in: body
+        name: filter
+        required: true
+        schema:
+          $ref: '#/definitions/types.SubscriptionFilter'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ListSubscriptionsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List subscriptions by filter
       tags:
       - Subscriptions
   /subscriptions/usage:

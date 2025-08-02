@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/costsheet"
 	"github.com/flexprice/flexprice/ent/price"
+	"github.com/flexprice/flexprice/ent/priceunit"
 	"github.com/flexprice/flexprice/ent/schema"
 )
 
@@ -130,6 +131,90 @@ func (pc *PriceCreate) SetDisplayAmount(s string) *PriceCreate {
 	return pc
 }
 
+// SetPriceUnitType sets the "price_unit_type" field.
+func (pc *PriceCreate) SetPriceUnitType(s string) *PriceCreate {
+	pc.mutation.SetPriceUnitType(s)
+	return pc
+}
+
+// SetNillablePriceUnitType sets the "price_unit_type" field if the given value is not nil.
+func (pc *PriceCreate) SetNillablePriceUnitType(s *string) *PriceCreate {
+	if s != nil {
+		pc.SetPriceUnitType(*s)
+	}
+	return pc
+}
+
+// SetPriceUnitID sets the "price_unit_id" field.
+func (pc *PriceCreate) SetPriceUnitID(s string) *PriceCreate {
+	pc.mutation.SetPriceUnitID(s)
+	return pc
+}
+
+// SetNillablePriceUnitID sets the "price_unit_id" field if the given value is not nil.
+func (pc *PriceCreate) SetNillablePriceUnitID(s *string) *PriceCreate {
+	if s != nil {
+		pc.SetPriceUnitID(*s)
+	}
+	return pc
+}
+
+// SetPriceUnit sets the "price_unit" field.
+func (pc *PriceCreate) SetPriceUnit(s string) *PriceCreate {
+	pc.mutation.SetPriceUnit(s)
+	return pc
+}
+
+// SetNillablePriceUnit sets the "price_unit" field if the given value is not nil.
+func (pc *PriceCreate) SetNillablePriceUnit(s *string) *PriceCreate {
+	if s != nil {
+		pc.SetPriceUnit(*s)
+	}
+	return pc
+}
+
+// SetPriceUnitAmount sets the "price_unit_amount" field.
+func (pc *PriceCreate) SetPriceUnitAmount(f float64) *PriceCreate {
+	pc.mutation.SetPriceUnitAmount(f)
+	return pc
+}
+
+// SetNillablePriceUnitAmount sets the "price_unit_amount" field if the given value is not nil.
+func (pc *PriceCreate) SetNillablePriceUnitAmount(f *float64) *PriceCreate {
+	if f != nil {
+		pc.SetPriceUnitAmount(*f)
+	}
+	return pc
+}
+
+// SetDisplayPriceUnitAmount sets the "display_price_unit_amount" field.
+func (pc *PriceCreate) SetDisplayPriceUnitAmount(s string) *PriceCreate {
+	pc.mutation.SetDisplayPriceUnitAmount(s)
+	return pc
+}
+
+// SetNillableDisplayPriceUnitAmount sets the "display_price_unit_amount" field if the given value is not nil.
+func (pc *PriceCreate) SetNillableDisplayPriceUnitAmount(s *string) *PriceCreate {
+	if s != nil {
+		pc.SetDisplayPriceUnitAmount(*s)
+	}
+	return pc
+}
+
+// SetConversionRate sets the "conversion_rate" field.
+func (pc *PriceCreate) SetConversionRate(f float64) *PriceCreate {
+	pc.mutation.SetConversionRate(f)
+	return pc
+}
+
+// SetNillableConversionRate sets the "conversion_rate" field if the given value is not nil.
+func (pc *PriceCreate) SetNillableConversionRate(f *float64) *PriceCreate {
+	if f != nil {
+		pc.SetConversionRate(*f)
+	}
+	return pc
+}
+
 // SetPlanID sets the "plan_id" field.
 func (pc *PriceCreate) SetPlanID(s string) *PriceCreate {
 	pc.mutation.SetPlanID(s)
@@ -234,6 +319,12 @@ func (pc *PriceCreate) SetTiers(st []schema.PriceTier) *PriceCreate {
 	return pc
 }
 
+// SetPriceUnitTiers sets the "price_unit_tiers" field.
+func (pc *PriceCreate) SetPriceUnitTiers(st []schema.PriceTier) *PriceCreate {
+	pc.mutation.SetPriceUnitTiers(st)
+	return pc
+}
+
 // SetTransformQuantity sets the "transform_quantity" field.
 func (pc *PriceCreate) SetTransformQuantity(sq schema.TransformQuantity) *PriceCreate {
 	pc.mutation.SetTransformQuantity(sq)
@@ -303,6 +394,25 @@ func (pc *PriceCreate) AddCostsheet(c ...*Costsheet) *PriceCreate {
 	return pc.AddCostsheetIDs(ids...)
 }
 
+// SetPriceUnitEdgeID sets the "price_unit_edge" edge to the PriceUnit entity by ID.
+func (pc *PriceCreate) SetPriceUnitEdgeID(id string) *PriceCreate {
+	pc.mutation.SetPriceUnitEdgeID(id)
+	return pc
+}
+
+// SetNillablePriceUnitEdgeID sets the "price_unit_edge" edge to the PriceUnit entity by ID if the given value is not nil.
+func (pc *PriceCreate) SetNillablePriceUnitEdgeID(id *string) *PriceCreate {
+	if id != nil {
+		pc = pc.SetPriceUnitEdgeID(*id)
+	}
+	return pc
+}
+
+// SetPriceUnitEdge sets the "price_unit_edge" edge to the PriceUnit entity.
+func (pc *PriceCreate) SetPriceUnitEdge(p *PriceUnit) *PriceCreate {
+	return pc.SetPriceUnitEdgeID(p.ID)
+}
+
 // Mutation returns the PriceMutation object of the builder.
 func (pc *PriceCreate) Mutation() *PriceMutation {
 	return pc.mutation
@@ -354,6 +464,10 @@ func (pc *PriceCreate) defaults() {
 		v := price.DefaultEnvironmentID
 		pc.mutation.SetEnvironmentID(v)
 	}
+	if _, ok := pc.mutation.PriceUnitType(); !ok {
+		v := price.DefaultPriceUnitType
+		pc.mutation.SetPriceUnitType(v)
+	}
 	if _, ok := pc.mutation.TrialPeriod(); !ok {
 		v := price.DefaultTrialPeriod
 		pc.mutation.SetTrialPeriod(v)
@@ -396,6 +510,14 @@ func (pc *PriceCreate) check() error {
 	if v, ok := pc.mutation.DisplayAmount(); ok {
 		if err := price.DisplayAmountValidator(v); err != nil {
 			return &ValidationError{Name: "display_amount", err: fmt.Errorf(`ent: validator failed for field "Price.display_amount": %w`, err)}
+		}
+	}
+	if _, ok := pc.mutation.PriceUnitType(); !ok {
+		return &ValidationError{Name: "price_unit_type", err: errors.New(`ent: missing required field "Price.price_unit_type"`)}
+	}
+	if v, ok := pc.mutation.PriceUnitType(); ok {
+		if err := price.PriceUnitTypeValidator(v); err != nil {
+			return &ValidationError{Name: "price_unit_type", err: fmt.Errorf(`ent: validator failed for field "Price.price_unit_type": %w`, err)}
 		}
 	}
 	if _, ok := pc.mutation.PlanID(); !ok {
@@ -524,6 +646,26 @@ func (pc *PriceCreate) createSpec() (*Price, *sqlgraph.CreateSpec) {
 		_spec.SetField(price.FieldDisplayAmount, field.TypeString, value)
 		_node.DisplayAmount = value
 	}
+	if value, ok := pc.mutation.PriceUnitType(); ok {
+		_spec.SetField(price.FieldPriceUnitType, field.TypeString, value)
+		_node.PriceUnitType = value
+	}
+	if value, ok := pc.mutation.PriceUnit(); ok {
+		_spec.SetField(price.FieldPriceUnit, field.TypeString, value)
+		_node.PriceUnit = value
+	}
+	if value, ok := pc.mutation.PriceUnitAmount(); ok {
+		_spec.SetField(price.FieldPriceUnitAmount, field.TypeFloat64, value)
+		_node.PriceUnitAmount = value
+	}
+	if value, ok := pc.mutation.DisplayPriceUnitAmount(); ok {
+		_spec.SetField(price.FieldDisplayPriceUnitAmount, field.TypeString, value)
+		_node.DisplayPriceUnitAmount = value
+	}
+	if value, ok := pc.mutation.ConversionRate(); ok {
+		_spec.SetField(price.FieldConversionRate, field.TypeFloat64, value)
+		_node.ConversionRate = value
+	}
 	if value, ok := pc.mutation.PlanID(); ok {
 		_spec.SetField(price.FieldPlanID, field.TypeString, value)
 		_node.PlanID = value
@@ -572,6 +714,10 @@ func (pc *PriceCreate) createSpec() (*Price, *sqlgraph.CreateSpec) {
 		_spec.SetField(price.FieldTiers, field.TypeJSON, value)
 		_node.Tiers = value
 	}
+	if value, ok := pc.mutation.PriceUnitTiers(); ok {
+		_spec.SetField(price.FieldPriceUnitTiers, field.TypeJSON, value)
+		_node.PriceUnitTiers = value
+	}
 	if value, ok := pc.mutation.TransformQuantity(); ok {
 		_spec.SetField(price.FieldTransformQuantity, field.TypeJSON, value)
 		_node.TransformQuantity = value
@@ -602,6 +748,23 @@ func (pc *PriceCreate) createSpec() (*Price, *sqlgraph.CreateSpec) {
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := pc.mutation.PriceUnitEdgeIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   price.PriceUnitEdgeTable,
+			Columns: []string{price.PriceUnitEdgeColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(priceunit.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.PriceUnitID = nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec

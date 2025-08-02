@@ -7,6 +7,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -46,6 +47,43 @@ func (Price) Fields() []ent.Field {
 				"postgres": "varchar(255)",
 			}).
 			NotEmpty(),
+		// price_unit_type is the type of the price unit- Fiat, Custom
+		field.String("price_unit_type").
+			SchemaType(map[string]string{
+				"postgres": "varchar(20)",
+			}).
+			NotEmpty().
+			Default(string(types.PRICE_UNIT_TYPE_FIAT)),
+		// price_unit_id is the id of the price unit
+		field.String("price_unit_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional(),
+		// price_unit is the code of the price unit
+		field.String("price_unit").
+			SchemaType(map[string]string{
+				"postgres": "varchar(3)",
+			}).
+			Optional(),
+		// price_unit_amount is the amount of the price unit
+		field.Float("price_unit_amount").
+			SchemaType(map[string]string{
+				"postgres": "numeric(25,15)",
+			}).
+			Optional(),
+		// display_price_unit_amount is the amount of the price unit in the display currency
+		field.String("display_price_unit_amount").
+			SchemaType(map[string]string{
+				"postgres": "varchar(255)",
+			}).
+			Optional(),
+		// conversion_rate is the conversion rate of the price unit to the fiat currency
+		field.Float("conversion_rate").
+			SchemaType(map[string]string{
+				"postgres": "numeric(25,15)",
+			}).
+			Optional(),
 		field.String("plan_id").
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
@@ -98,6 +136,8 @@ func (Price) Fields() []ent.Field {
 			Nillable(),
 		field.JSON("tiers", []PriceTier{}).
 			Optional(),
+		field.JSON("price_unit_tiers", []PriceTier{}).
+			Optional(),
 		field.JSON("transform_quantity", TransformQuantity{}).
 			Optional(),
 		field.String("lookup_key").
@@ -116,6 +156,9 @@ func (Price) Fields() []ent.Field {
 func (Price) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.To("costsheet", Costsheet.Type),
+		edge.To("price_unit_edge", PriceUnit.Type).
+			Field("price_unit_id").
+			Unique(),
 	}
 }
 

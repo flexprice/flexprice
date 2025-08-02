@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/price"
+	"github.com/flexprice/flexprice/ent/priceunit"
 	"github.com/flexprice/flexprice/ent/schema"
 )
 
@@ -39,6 +40,18 @@ type Price struct {
 	Currency string `json:"currency,omitempty"`
 	// DisplayAmount holds the value of the "display_amount" field.
 	DisplayAmount string `json:"display_amount,omitempty"`
+	// PriceUnitType holds the value of the "price_unit_type" field.
+	PriceUnitType string `json:"price_unit_type,omitempty"`
+	// PriceUnitID holds the value of the "price_unit_id" field.
+	PriceUnitID string `json:"price_unit_id,omitempty"`
+	// PriceUnit holds the value of the "price_unit" field.
+	PriceUnit string `json:"price_unit,omitempty"`
+	// PriceUnitAmount holds the value of the "price_unit_amount" field.
+	PriceUnitAmount float64 `json:"price_unit_amount,omitempty"`
+	// DisplayPriceUnitAmount holds the value of the "display_price_unit_amount" field.
+	DisplayPriceUnitAmount string `json:"display_price_unit_amount,omitempty"`
+	// ConversionRate holds the value of the "conversion_rate" field.
+	ConversionRate float64 `json:"conversion_rate,omitempty"`
 	// PlanID holds the value of the "plan_id" field.
 	PlanID string `json:"plan_id,omitempty"`
 	// Type holds the value of the "type" field.
@@ -63,6 +76,8 @@ type Price struct {
 	TierMode *string `json:"tier_mode,omitempty"`
 	// Tiers holds the value of the "tiers" field.
 	Tiers []schema.PriceTier `json:"tiers,omitempty"`
+	// PriceUnitTiers holds the value of the "price_unit_tiers" field.
+	PriceUnitTiers []schema.PriceTier `json:"price_unit_tiers,omitempty"`
 	// TransformQuantity holds the value of the "transform_quantity" field.
 	TransformQuantity schema.TransformQuantity `json:"transform_quantity,omitempty"`
 	// LookupKey holds the value of the "lookup_key" field.
@@ -81,9 +96,11 @@ type Price struct {
 type PriceEdges struct {
 	// Costsheet holds the value of the costsheet edge.
 	Costsheet []*Costsheet `json:"costsheet,omitempty"`
+	// PriceUnitEdge holds the value of the price_unit_edge edge.
+	PriceUnitEdge *PriceUnit `json:"price_unit_edge,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [1]bool
+	loadedTypes [2]bool
 }
 
 // CostsheetOrErr returns the Costsheet value or an error if the edge
@@ -95,18 +112,29 @@ func (e PriceEdges) CostsheetOrErr() ([]*Costsheet, error) {
 	return nil, &NotLoadedError{edge: "costsheet"}
 }
 
+// PriceUnitEdgeOrErr returns the PriceUnitEdge value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e PriceEdges) PriceUnitEdgeOrErr() (*PriceUnit, error) {
+	if e.PriceUnitEdge != nil {
+		return e.PriceUnitEdge, nil
+	} else if e.loadedTypes[1] {
+		return nil, &NotFoundError{label: priceunit.Label}
+	}
+	return nil, &NotLoadedError{edge: "price_unit_edge"}
+}
+
 // scanValues returns the types for scanning values from sql.Rows.
 func (*Price) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case price.FieldFilterValues, price.FieldTiers, price.FieldTransformQuantity, price.FieldMetadata:
+		case price.FieldFilterValues, price.FieldTiers, price.FieldPriceUnitTiers, price.FieldTransformQuantity, price.FieldMetadata:
 			values[i] = new([]byte)
-		case price.FieldAmount:
+		case price.FieldAmount, price.FieldPriceUnitAmount, price.FieldConversionRate:
 			values[i] = new(sql.NullFloat64)
 		case price.FieldBillingPeriodCount, price.FieldTrialPeriod:
 			values[i] = new(sql.NullInt64)
-		case price.FieldID, price.FieldTenantID, price.FieldStatus, price.FieldCreatedBy, price.FieldUpdatedBy, price.FieldEnvironmentID, price.FieldCurrency, price.FieldDisplayAmount, price.FieldPlanID, price.FieldType, price.FieldBillingPeriod, price.FieldBillingModel, price.FieldBillingCadence, price.FieldInvoiceCadence, price.FieldMeterID, price.FieldTierMode, price.FieldLookupKey, price.FieldDescription:
+		case price.FieldID, price.FieldTenantID, price.FieldStatus, price.FieldCreatedBy, price.FieldUpdatedBy, price.FieldEnvironmentID, price.FieldCurrency, price.FieldDisplayAmount, price.FieldPriceUnitType, price.FieldPriceUnitID, price.FieldPriceUnit, price.FieldDisplayPriceUnitAmount, price.FieldPlanID, price.FieldType, price.FieldBillingPeriod, price.FieldBillingModel, price.FieldBillingCadence, price.FieldInvoiceCadence, price.FieldMeterID, price.FieldTierMode, price.FieldLookupKey, price.FieldDescription:
 			values[i] = new(sql.NullString)
 		case price.FieldCreatedAt, price.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -191,6 +219,42 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				pr.DisplayAmount = value.String
 			}
+		case price.FieldPriceUnitType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field price_unit_type", values[i])
+			} else if value.Valid {
+				pr.PriceUnitType = value.String
+			}
+		case price.FieldPriceUnitID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field price_unit_id", values[i])
+			} else if value.Valid {
+				pr.PriceUnitID = value.String
+			}
+		case price.FieldPriceUnit:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field price_unit", values[i])
+			} else if value.Valid {
+				pr.PriceUnit = value.String
+			}
+		case price.FieldPriceUnitAmount:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field price_unit_amount", values[i])
+			} else if value.Valid {
+				pr.PriceUnitAmount = value.Float64
+			}
+		case price.FieldDisplayPriceUnitAmount:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field display_price_unit_amount", values[i])
+			} else if value.Valid {
+				pr.DisplayPriceUnitAmount = value.String
+			}
+		case price.FieldConversionRate:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field conversion_rate", values[i])
+			} else if value.Valid {
+				pr.ConversionRate = value.Float64
+			}
 		case price.FieldPlanID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field plan_id", values[i])
@@ -269,6 +333,14 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field tiers: %w", err)
 				}
 			}
+		case price.FieldPriceUnitTiers:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field price_unit_tiers", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &pr.PriceUnitTiers); err != nil {
+					return fmt.Errorf("unmarshal field price_unit_tiers: %w", err)
+				}
+			}
 		case price.FieldTransformQuantity:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field transform_quantity", values[i])
@@ -313,6 +385,11 @@ func (pr *Price) Value(name string) (ent.Value, error) {
 // QueryCostsheet queries the "costsheet" edge of the Price entity.
 func (pr *Price) QueryCostsheet() *CostsheetQuery {
 	return NewPriceClient(pr.config).QueryCostsheet(pr)
+}
+
+// QueryPriceUnitEdge queries the "price_unit_edge" edge of the Price entity.
+func (pr *Price) QueryPriceUnitEdge() *PriceUnitQuery {
+	return NewPriceClient(pr.config).QueryPriceUnitEdge(pr)
 }
 
 // Update returns a builder for updating this Price.
@@ -368,6 +445,24 @@ func (pr *Price) String() string {
 	builder.WriteString("display_amount=")
 	builder.WriteString(pr.DisplayAmount)
 	builder.WriteString(", ")
+	builder.WriteString("price_unit_type=")
+	builder.WriteString(pr.PriceUnitType)
+	builder.WriteString(", ")
+	builder.WriteString("price_unit_id=")
+	builder.WriteString(pr.PriceUnitID)
+	builder.WriteString(", ")
+	builder.WriteString("price_unit=")
+	builder.WriteString(pr.PriceUnit)
+	builder.WriteString(", ")
+	builder.WriteString("price_unit_amount=")
+	builder.WriteString(fmt.Sprintf("%v", pr.PriceUnitAmount))
+	builder.WriteString(", ")
+	builder.WriteString("display_price_unit_amount=")
+	builder.WriteString(pr.DisplayPriceUnitAmount)
+	builder.WriteString(", ")
+	builder.WriteString("conversion_rate=")
+	builder.WriteString(fmt.Sprintf("%v", pr.ConversionRate))
+	builder.WriteString(", ")
 	builder.WriteString("plan_id=")
 	builder.WriteString(pr.PlanID)
 	builder.WriteString(", ")
@@ -407,6 +502,9 @@ func (pr *Price) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("tiers=")
 	builder.WriteString(fmt.Sprintf("%v", pr.Tiers))
+	builder.WriteString(", ")
+	builder.WriteString("price_unit_tiers=")
+	builder.WriteString(fmt.Sprintf("%v", pr.PriceUnitTiers))
 	builder.WriteString(", ")
 	builder.WriteString("transform_quantity=")
 	builder.WriteString(fmt.Sprintf("%v", pr.TransformQuantity))
