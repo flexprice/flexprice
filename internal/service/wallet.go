@@ -1149,9 +1149,11 @@ func (s *walletService) PublishEvent(ctx context.Context, eventName string, w *w
 func getAlertType(eventName string) string {
 	switch eventName {
 	case types.WebhookEventWalletCreditBalanceDropped:
-		return "credit_balance"
+		return "credit_balance_dropped"
 	case types.WebhookEventWalletOngoingBalanceDropped:
-		return "ongoing_balance"
+		return "ongoing_balance_dropped"
+	case types.WebhookEventWalletOngoingBalanceRecovered:
+		return "ongoing_balance_recovered"
 	default:
 		return ""
 	}
@@ -1199,17 +1201,24 @@ func (s *walletService) CheckBalanceThresholds(ctx context.Context, w *wallet.Wa
 
 		// If current state is alert, update to ok (recovery)
 		if w.AlertState == string(types.AlertStateAlert) {
-			if err := s.UpdateWalletAlertState(ctx, w.ID, types.AlertStateOk); err != nil {
-				s.Logger.Errorw("failed to update wallet alert state",
+			// Check if ongoing balance has recovered
+			if !isCurrentBalanceBelowThreshold {
+				s.Logger.Infow("ongoing balance recovered above threshold",
 					"wallet_id", w.ID,
-					"error", err,
+					"current_balance", currentBalance,
+					"threshold", threshold,
 				)
-				return err
+				if err := s.UpdateWalletAlertState(ctx, w.ID, types.AlertStateOk); err != nil {
+					s.Logger.Errorw("failed to update wallet alert state",
+						"wallet_id", w.ID,
+						"error", err,
+					)
+					return err
+				}
+				return s.PublishEvent(ctx, types.WebhookEventWalletOngoingBalanceRecovered, w)
 			}
-			s.Logger.Infow("wallet recovered from alert state",
-				"wallet_id", w.ID,
-			)
-			return s.PublishEvent(ctx, types.WebhookEventWalletUpdated, w)
+			// If only credit balance recovered but ongoing balance still low, stay in alert
+			return nil
 		}
 		return nil
 	}

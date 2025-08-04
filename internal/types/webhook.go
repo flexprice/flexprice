@@ -79,6 +79,7 @@ const (
 
 // alert event names
 const (
-	WebhookEventWalletCreditBalanceDropped  = "wallet.credit_balance.dropped"
-	WebhookEventWalletOngoingBalanceDropped = "wallet.ongoing_balance.dropped"
+	WebhookEventWalletCreditBalanceDropped    = "wallet.credit_balance.dropped"
+	WebhookEventWalletOngoingBalanceDropped   = "wallet.ongoing_balance.dropped"
+	WebhookEventWalletOngoingBalanceRecovered = "wallet.ongoing_balance.recovered"
 )
