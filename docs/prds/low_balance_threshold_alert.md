@@ -224,7 +224,7 @@ type AlertWebhookPayload struct {
        "wallet_id", wallet.ID,
        "balance_type", "ongoing",
        "current_balance", balance,
-       "threshold", config.Thresholds.Amount,
+       "threshold", config.Thresholds.Value,
    )
    ```
 

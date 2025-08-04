@@ -260,6 +260,13 @@ func (h *WalletCronHandler) CheckAlerts(c *gin.Context) {
 							h.logger.Infow("wallet recovered from alert state",
 								"wallet_id", wallet.ID,
 							)
+							// Publish recovery webhook
+							if err := h.walletService.PublishEvent(c.Request.Context(), types.WebhookEventWalletOngoingBalanceRecovered, wallet); err != nil {
+								h.logger.Errorw("failed to publish recovery webhook",
+									"wallet_id", wallet.ID,
+									"error", err,
+								)
+							}
 						}
 					}
 					continue

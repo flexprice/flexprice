@@ -95,6 +95,9 @@ func NewPayloadBuilderFactory(services *Services) PayloadBuilderFactory {
 	f.builders[types.WebhookEventWalletOngoingBalanceDropped] = func() PayloadBuilder {
 		return NewWalletPayloadBuilder(f.services)
 	}
+	f.builders[types.WebhookEventWalletOngoingBalanceRecovered] = func() PayloadBuilder {
+		return NewWalletPayloadBuilder(f.services)
+	}
 	// customer builders
 	f.builders[types.WebhookEventCustomerCreated] = func() PayloadBuilder {
 		return NewCustomerPayloadBuilder(f.services)
