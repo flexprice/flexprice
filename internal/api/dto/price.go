@@ -593,6 +593,9 @@ type UpdatePriceRequest struct {
 type PriceResponse struct {
 	*price.Price
 	Meter *MeterResponse `json:"meter,omitempty"`
+
+	// TODO: Remove this once we have a proper price entity type
+	PlanID string `json:"plan_id,omitempty"`
 }
 
 // ListPricesResponse represents the response for listing prices

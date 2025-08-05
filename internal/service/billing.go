@@ -172,6 +172,12 @@ func (s *billingService) CalculateUsageCharges(
 		}
 
 		for _, entitlement := range entitlements.Items {
+
+			// TODO: !REMOVE after migration
+			if entitlement.EntityType == types.ENTITLEMENT_ENTITY_TYPE_PLAN {
+				entitlement.PlanID = entitlement.EntityID
+			}
+
 			if entitlement.FeatureType == types.FeatureTypeMetered {
 				if _, ok := entitlementsByPlanMeterID[planID]; !ok {
 					entitlementsByPlanMeterID[planID] = make(map[string]*dto.EntitlementResponse)

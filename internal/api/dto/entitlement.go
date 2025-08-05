@@ -100,6 +100,9 @@ type EntitlementResponse struct {
 	*entitlement.Entitlement
 	Feature *FeatureResponse `json:"feature,omitempty"`
 	Plan    *PlanResponse    `json:"plan,omitempty"`
+
+	// TODO: Remove this once we have a proper entitlement entity type
+	PlanID string `json:"plan_id,omitempty"`
 }
 
 // ListEntitlementsResponse represents a paginated list of entitlements
@@ -113,6 +116,9 @@ func EntitlementToResponse(e *entitlement.Entitlement) *EntitlementResponse {
 
 	return &EntitlementResponse{
 		Entitlement: e,
+
+		// TODO: !REMOVE after migration
+		PlanID: e.EntityID,
 	}
 }
 
@@ -121,6 +127,11 @@ func EntitlementsToResponse(entitlements []*entitlement.Entitlement) []*Entitlem
 	responses := make([]*EntitlementResponse, len(entitlements))
 	for i, e := range entitlements {
 		responses[i] = EntitlementToResponse(e)
+
+		// TODO: !REMOVE after migration
+		if responses[i].EntityType == types.ENTITLEMENT_ENTITY_TYPE_PLAN {
+			responses[i].PlanID = responses[i].EntityID
+		}
 	}
 	return responses
 }

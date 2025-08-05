@@ -82,6 +82,9 @@ func (s *entitlementService) CreateEntitlement(ctx context.Context, req dto.Crea
 
 	response := &dto.EntitlementResponse{Entitlement: result}
 
+	// TODO: !REMOVE after migration
+	response.PlanID = result.EntityID
+
 	// Add expanded fields
 	response.Feature = &dto.FeatureResponse{Feature: feature}
 	response.Plan = &dto.PlanResponse{Plan: plan}
@@ -108,11 +111,19 @@ func (s *entitlementService) GetEntitlement(ctx context.Context, id string) (*dt
 	}
 	response.Feature = &dto.FeatureResponse{Feature: feature}
 
-	plan, err := s.PlanRepo.Get(ctx, result.EntityID)
-	if err != nil {
-		return nil, err
+	if result.EntityType == types.ENTITLEMENT_ENTITY_TYPE_PLAN {
+		// TODO: !REMOVE after migration
+		response.PlanID = result.EntityID
+
+		// Keep this for backwards compatibility
+		plan, err := s.PlanRepo.Get(ctx, result.EntityID)
+		if err != nil {
+			return nil, err
+		}
+		response.Plan = &dto.PlanResponse{Plan: plan}
 	}
-	response.Plan = &dto.PlanResponse{Plan: plan}
+
+	// TODO: Implement the same for addon as we have for plan
 
 	return response, nil
 }
@@ -230,6 +241,11 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 	for i, e := range entitlements {
 		response.Items[i] = &dto.EntitlementResponse{Entitlement: e}
 
+		// TODO: !REMOVE after migration
+		if e.EntityType == types.ENTITLEMENT_ENTITY_TYPE_PLAN {
+			response.Items[i].PlanID = e.EntityID
+		}
+
 		// Add expanded feature if requested and available
 		if !filter.GetExpand().IsEmpty() && filter.GetExpand().Has(types.ExpandFeatures) {
 			if f, ok := featuresByID[e.FeatureID]; ok {
@@ -245,9 +261,16 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 
 		// Add expanded plan if requested and available
 		if !filter.GetExpand().IsEmpty() && filter.GetExpand().Has(types.ExpandPlans) {
-			if p, ok := plansByID[e.EntityID]; ok {
-				response.Items[i].Plan = &dto.PlanResponse{Plan: p}
+			if e.EntityType == types.ENTITLEMENT_ENTITY_TYPE_PLAN {
+
+				if p, ok := plansByID[e.EntityID]; ok {
+					response.Items[i].Plan = &dto.PlanResponse{Plan: p}
+				}
+
+				// TODO: !REMOVE after migration
+				response.Items[i].PlanID = e.EntityID
 			}
+
 		}
 	}
 
@@ -301,6 +324,11 @@ func (s *entitlementService) UpdateEntitlement(ctx context.Context, id string, r
 
 	response := &dto.EntitlementResponse{Entitlement: result}
 
+	// TODO: !REMOVE after migration
+	if result.EntityType == types.ENTITLEMENT_ENTITY_TYPE_PLAN {
+		response.PlanID = result.EntityID
+	}
+
 	// Publish webhook event
 	s.publishWebhookEvent(ctx, types.WebhookEventEntitlementUpdated, result.ID)
 
@@ -339,6 +367,7 @@ func (s *entitlementService) GetPlanFeatureEntitlements(ctx context.Context, pla
 	filter.WithFeatureID(featureID)
 	filter.WithStatus(types.StatusPublished)
 	filter.WithExpand(string(types.ExpandMeters))
+	filter.WithEntityType(types.ENTITLEMENT_ENTITY_TYPE_PLAN)
 
 	// Use the standard list function to get the entitlements with expansion
 	return s.ListEntitlements(ctx, filter)
