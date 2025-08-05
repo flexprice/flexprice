@@ -52,6 +52,9 @@ func (s *AuthServiceSuite) setupService() {
 		PaymentRepo:                s.GetStores().PaymentRepo,
 		TaskRepo:                   s.GetStores().TaskRepo,
 		SecretRepo:                 s.GetStores().SecretRepo,
+		CouponRepo:                 s.GetStores().CouponRepo,
+		CouponAssociationRepo:      s.GetStores().CouponAssociationRepo,
+		CouponApplicationRepo:      s.GetStores().CouponApplicationRepo,
 		EventPublisher:             s.GetPublisher(),
 		WebhookPublisher:           s.GetWebhookPublisher(),
 	}, pubSub)

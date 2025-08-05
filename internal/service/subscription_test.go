@@ -85,6 +85,9 @@ func (s *SubscriptionServiceSuite) setupService() {
 		PaymentRepo:                s.GetStores().PaymentRepo,
 		CreditGrantRepo:            s.GetStores().CreditGrantRepo,
 		CreditGrantApplicationRepo: s.GetStores().CreditGrantApplicationRepo,
+		CouponRepo:                 s.GetStores().CouponRepo,
+		CouponAssociationRepo:      s.GetStores().CouponAssociationRepo,
+		CouponApplicationRepo:      s.GetStores().CouponApplicationRepo,
 		EventPublisher:             s.GetPublisher(),
 		WebhookPublisher:           s.GetWebhookPublisher(),
 	})
@@ -999,10 +1002,15 @@ func (s *SubscriptionServiceSuite) TestProcessSubscriptionPeriod() {
 	}
 	s.NoError(s.GetStores().EventRepo.InsertEvent(s.GetContext(), storageEvent))
 
+	// Reset the subscription periods for the second test
+	sub.CurrentPeriodStart = periodStart
+	sub.CurrentPeriodEnd = periodEnd
+	s.NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), sub))
+
 	// Now process the period transition again
 	// This should succeed because we have proper line items with arrear invoice cadence
 	// and usage events for the period
-	err = subService.processSubscriptionPeriod(s.GetContext(), refreshedSub, now)
+	err = subService.processSubscriptionPeriod(s.GetContext(), sub, now)
 
 	// We still expect an error because the mock repository doesn't properly update the invoice status
 	// and the payment processing fails with "invoice has no remaining amount to pay"
