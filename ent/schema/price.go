@@ -180,7 +180,7 @@ func (Price) Fields() []ent.Field {
 
 		field.String("entity_id").
 			SchemaType(map[string]string{
-				"postgres": "varchar(20)",
+				"postgres": "varchar(50)",
 			}).
 			Immutable().
 			Nillable().
