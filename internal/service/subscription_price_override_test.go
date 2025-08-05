@@ -119,12 +119,12 @@ func TestPriceScopeFiltering(t *testing.T) {
 		filter := types.NewPriceFilter()
 
 		// Test plan scope filtering
-		filter = filter.WithScope(types.PRICE_SCOPE_PLAN)
-		assert.Equal(t, types.PRICE_SCOPE_PLAN, *filter.Scope)
+		filter = filter.WithEntityType(types.PRICE_ENTITY_TYPE_PLAN)
+		assert.Equal(t, types.PRICE_ENTITY_TYPE_PLAN, *filter.EntityType)
 
 		// Test subscription scope filtering
-		filter = filter.WithScope(types.PRICE_SCOPE_SUBSCRIPTION)
-		assert.Equal(t, types.PRICE_SCOPE_SUBSCRIPTION, *filter.Scope)
+		filter = filter.WithEntityType(types.PRICE_ENTITY_TYPE_SUBSCRIPTION)
+		assert.Equal(t, types.PRICE_ENTITY_TYPE_SUBSCRIPTION, *filter.EntityType)
 
 		// Test subscription ID filtering
 		subscriptionID := "test_subscription_123"

@@ -83,10 +83,11 @@ func (s *PriceServiceSuite) TestCreatePrice() {
 func (s *PriceServiceSuite) TestGetPrice() {
 	// Create a price
 	price := &price.Price{
-		ID:       "price-1",
-		Amount:   decimal.NewFromInt(100),
-		Currency: "usd",
-		PlanID:   "plan-1",
+		ID:         "price-1",
+		Amount:     decimal.NewFromInt(100),
+		Currency:   "usd",
+		EntityType: types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:   "plan-1",
 	}
 	_ = s.priceRepo.Create(s.ctx, price)
 
@@ -104,23 +105,25 @@ func (s *PriceServiceSuite) TestGetPrice() {
 func (s *PriceServiceSuite) TestGetPrices() {
 	// Prepopulate the repository with prices associated with a plan_id
 	_ = s.priceRepo.Create(s.ctx, &price.Price{
-		ID:        "price-1",
-		Amount:    decimal.NewFromInt(100),
-		Currency:  "usd",
-		PlanID:    "plan-1",
-		BaseModel: types.GetDefaultBaseModel(s.ctx),
+		ID:         "price-1",
+		Amount:     decimal.NewFromInt(100),
+		Currency:   "usd",
+		EntityType: types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:   "plan-1",
+		BaseModel:  types.GetDefaultBaseModel(s.ctx),
 	})
 	_ = s.priceRepo.Create(s.ctx, &price.Price{
-		ID:        "price-2",
-		Amount:    decimal.NewFromInt(200),
-		Currency:  "usd",
-		PlanID:    "plan-1",
-		BaseModel: types.GetDefaultBaseModel(s.ctx),
+		ID:         "price-2",
+		Amount:     decimal.NewFromInt(200),
+		Currency:   "usd",
+		EntityType: types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:   "plan-1",
+		BaseModel:  types.GetDefaultBaseModel(s.ctx),
 	})
 
 	// Retrieve all prices within limit
 	priceFilter := types.NewPriceFilter()
-	priceFilter.Scope = lo.ToPtr(types.PRICE_SCOPE_PLAN)
+	priceFilter.EntityType = lo.ToPtr(types.PRICE_ENTITY_TYPE_PLAN)
 	priceFilter.QueryFilter.Offset = lo.ToPtr(0)
 	priceFilter.QueryFilter.Limit = lo.ToPtr(10)
 	resp, err := s.priceService.GetPrices(s.ctx, priceFilter)
@@ -140,7 +143,7 @@ func (s *PriceServiceSuite) TestGetPrices() {
 	// Retrieve with offset exceeding available records
 	priceFilter.QueryFilter.Offset = lo.ToPtr(10)
 	priceFilter.QueryFilter.Limit = lo.ToPtr(10)
-	priceFilter.Scope = lo.ToPtr(types.PRICE_SCOPE_PLAN)
+	priceFilter.EntityType = lo.ToPtr(types.PRICE_ENTITY_TYPE_PLAN)
 	resp, err = s.priceService.GetPrices(s.ctx, priceFilter)
 	s.NoError(err)
 	s.NotNil(resp)
@@ -151,10 +154,11 @@ func (s *PriceServiceSuite) TestGetPrices() {
 func (s *PriceServiceSuite) TestUpdatePrice() {
 	// Create a price
 	price := &price.Price{
-		ID:       "price-1",
-		Amount:   decimal.NewFromInt(100),
-		Currency: "usd",
-		PlanID:   "plan-1",
+		ID:         "price-1",
+		Amount:     decimal.NewFromInt(100),
+		Currency:   "usd",
+		EntityType: types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:   "plan-1",
 	}
 	_ = s.priceRepo.Create(s.ctx, price)
 

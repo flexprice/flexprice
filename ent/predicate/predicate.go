@@ -6,6 +6,9 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
+// Addon is the predicate function for addon builders.
+type Addon func(*sql.Selector)
+
 // Auth is the predicate function for auth builders.
 type Auth func(*sql.Selector)
 
@@ -80,6 +83,9 @@ type Secret func(*sql.Selector)
 
 // Subscription is the predicate function for subscription builders.
 type Subscription func(*sql.Selector)
+
+// SubscriptionAddon is the predicate function for subscriptionaddon builders.
+type SubscriptionAddon func(*sql.Selector)
 
 // SubscriptionLineItem is the predicate function for subscriptionlineitem builders.
 type SubscriptionLineItem func(*sql.Selector)

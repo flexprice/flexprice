@@ -27,6 +27,40 @@ type PriceScope string
 // PriceUnitType is the type of the price unit- Fiat, Custom, Crypto
 type PriceUnitType string
 
+// PriceEntityType is the type of the entity that the price is associated with
+// i.e. PLAN, SUBSCRIPTION, ADDON, PRICE
+// If prices is create for plan then it will have PLAN as entity type with enitiy id as plan id
+// If prices is create for subscription then it will have SUBSCRIPTION as entity type with enitiy id as subscription id
+// If prices is create for addon then it will have ADDON as entity type with enitiy id as addon id
+// If prices is create for price overrides in subscription creation	 then it will have PRICE as entity type with enitiy id as price id
+type PriceEntityType string
+
+const (
+	PRICE_ENTITY_TYPE_PLAN         PriceEntityType = "PLAN"
+	PRICE_ENTITY_TYPE_SUBSCRIPTION PriceEntityType = "SUBSCRIPTION"
+	PRICE_ENTITY_TYPE_ADDON        PriceEntityType = "ADDON"
+	PRICE_ENTITY_TYPE_PRICE        PriceEntityType = "PRICE"
+)
+
+func (p PriceEntityType) Validate() error {
+	allowed := []PriceEntityType{
+		PRICE_ENTITY_TYPE_PLAN,
+		PRICE_ENTITY_TYPE_SUBSCRIPTION,
+		PRICE_ENTITY_TYPE_ADDON,
+		PRICE_ENTITY_TYPE_PRICE,
+	}
+	if !lo.Contains(allowed, p) {
+		return ierr.NewError("invalid price entity type").
+			WithHint("Invalid price entity type").
+			WithReportableDetails(map[string]interface{}{
+				"price_entity_type": p,
+				"allowed":           allowed,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 const (
 	PRICE_UNIT_TYPE_FIAT   PriceUnitType = "FIAT"
 	PRICE_UNIT_TYPE_CUSTOM PriceUnitType = "CUSTOM"
@@ -209,12 +243,12 @@ func (p PriceUnitType) Validate() error {
 type PriceFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
-	PlanIDs  []string `json:"plan_ids,omitempty" form:"plan_ids"`
 	PriceIDs []string `json:"price_ids,omitempty" form:"price_ids"`
 	// Price override filtering fields
-	Scope          *PriceScope `json:"scope,omitempty" form:"scope"`
-	SubscriptionID *string     `json:"subscription_id,omitempty" form:"subscription_id"`
-	ParentPriceID  *string     `json:"parent_price_id,omitempty" form:"parent_price_id"`
+	EntityType     *PriceEntityType `json:"entity_type,omitempty" form:"entity_type"`
+	EntityIDs      []string         `json:"entity_ids,omitempty" form:"entity_ids"`
+	SubscriptionID *string          `json:"subscription_id,omitempty" form:"subscription_id"`
+	ParentPriceID  *string          `json:"parent_price_id,omitempty" form:"parent_price_id"`
 }
 
 // NewPriceFilter creates a new PriceFilter with default values
@@ -244,14 +278,6 @@ func (f PriceFilter) Validate() error {
 		}
 	}
 
-	for _, planID := range f.PlanIDs {
-		if planID == "" {
-			return ierr.NewError("plan id can not be empty").
-				WithHint("Plan ID cannot be empty").
-				Mark(ierr.ErrValidation)
-		}
-	}
-
 	for _, priceID := range f.PriceIDs {
 		if priceID == "" {
 			return ierr.NewError("price id can not be empty").
@@ -261,8 +287,8 @@ func (f PriceFilter) Validate() error {
 	}
 
 	// Validate scope if provided
-	if f.Scope != nil {
-		if err := f.Scope.Validate(); err != nil {
+	if f.EntityType != nil {
+		if err := f.EntityType.Validate(); err != nil {
 			return err
 		}
 	}
@@ -284,12 +310,6 @@ func (f PriceFilter) Validate() error {
 	return nil
 }
 
-// WithPlanIDs adds plan IDs to the filter
-func (f *PriceFilter) WithPlanIDs(planIDs []string) *PriceFilter {
-	f.PlanIDs = planIDs
-	return f
-}
-
 // WithPriceIDs adds price IDs to the filter
 func (f *PriceFilter) WithPriceIDs(priceIDs []string) *PriceFilter {
 	f.PriceIDs = priceIDs
@@ -302,15 +322,21 @@ func (f *PriceFilter) WithStatus(status Status) *PriceFilter {
 	return f
 }
 
-// WithExpand sets the expand field on the filter
-func (f *PriceFilter) WithExpand(expand string) *PriceFilter {
-	f.Expand = &expand
+// WithEntityType sets the entity type on the filter
+func (f *PriceFilter) WithEntityType(entityType PriceEntityType) *PriceFilter {
+	f.EntityType = &entityType
 	return f
 }
 
-// WithScope sets the scope filter (plan or subscription)
-func (f *PriceFilter) WithScope(scope PriceScope) *PriceFilter {
-	f.Scope = &scope
+// WithEntityIDs adds entity IDs to the filter
+func (f *PriceFilter) WithEntityIDs(entityIDs []string) *PriceFilter {
+	f.EntityIDs = entityIDs
+	return f
+}
+
+// WithExpand sets the expand field on the filter
+func (f *PriceFilter) WithExpand(expand string) *PriceFilter {
+	f.Expand = &expand
 	return f
 }
 

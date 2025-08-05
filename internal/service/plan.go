@@ -103,7 +103,8 @@ func (s *planService) CreatePlan(ctx context.Context, req dto.CreatePlanRequest)
 					}
 				}
 
-				price.PlanID = plan.ID
+				price.EntityType = types.PRICE_ENTITY_TYPE_PLAN
+				price.EntityID = plan.ID
 				prices[i] = price
 			}
 
@@ -273,9 +274,9 @@ func (s *planService) GetPlans(ctx context.Context, filter *types.PlanFilter) (*
 	// Fetch prices if requested
 	if filter.GetExpand().Has(types.ExpandPrices) {
 		priceFilter := types.NewNoLimitPriceFilter().
-			WithPlanIDs(planIDs).
+			WithEntityIDs(planIDs).
 			WithStatus(types.StatusPublished).
-			WithScope(types.PRICE_SCOPE_PLAN)
+			WithEntityType(types.PRICE_ENTITY_TYPE_PLAN)
 
 		// If meters should be expanded, propagate the expansion to prices
 		if filter.GetExpand().Has(types.ExpandMeters) {
@@ -288,7 +289,7 @@ func (s *planService) GetPlans(ctx context.Context, filter *types.PlanFilter) (*
 		}
 
 		for _, p := range prices.Items {
-			pricesByPlanID[p.PlanID] = append(pricesByPlanID[p.PlanID], p)
+			pricesByPlanID[p.EntityID] = append(pricesByPlanID[p.EntityID], p)
 		}
 	}
 
@@ -455,7 +456,8 @@ func (s *planService) UpdatePlan(ctx context.Context, id string, req dto.UpdateP
 								WithHint("Failed to create price").
 								Mark(ierr.ErrValidation)
 						}
-						newPrice.PlanID = plan.ID
+						newPrice.EntityType = types.PRICE_ENTITY_TYPE_PLAN
+						newPrice.EntityID = plan.ID
 						// Add to both slices since this needs bulk creation
 						newPrices = append(newPrices, newPrice)
 						bulkCreatePrices = append(bulkCreatePrices, newPrice)
@@ -672,8 +674,8 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*SyncPlanP
 	// Get all plan-scoped prices for the plan (don't affect subscription overrides)
 	priceFilter := types.NewNoLimitPriceFilter()
 	priceFilter = priceFilter.WithStatus(types.StatusPublished)
-	priceFilter = priceFilter.WithPlanIDs([]string{id})
-	priceFilter = priceFilter.WithScope(types.PRICE_SCOPE_PLAN)
+	priceFilter = priceFilter.WithEntityIDs([]string{id})
+	priceFilter = priceFilter.WithEntityType(types.PRICE_ENTITY_TYPE_PLAN)
 
 	prices, err := s.PriceRepo.List(ctx, priceFilter)
 	if err != nil {
@@ -686,7 +688,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*SyncPlanP
 	planPrices := make([]*price.Price, 0)
 	meterMap := make(map[string]*meter.Meter)
 	for _, price := range prices {
-		if price.PlanID == id && price.TenantID == tenantID && price.EnvironmentID == environmentID {
+		if price.EntityID == id && price.TenantID == tenantID && price.EnvironmentID == environmentID {
 			planPrices = append(planPrices, price)
 			if price.MeterID != "" {
 				meterMap[price.MeterID] = nil

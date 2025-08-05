@@ -249,20 +249,6 @@ func (pu *PriceUpdate) ClearConversionRate() *PriceUpdate {
 	return pu
 }
 
-// SetPlanID sets the "plan_id" field.
-func (pu *PriceUpdate) SetPlanID(s string) *PriceUpdate {
-	pu.mutation.SetPlanID(s)
-	return pu
-}
-
-// SetNillablePlanID sets the "plan_id" field if the given value is not nil.
-func (pu *PriceUpdate) SetNillablePlanID(s *string) *PriceUpdate {
-	if s != nil {
-		pu.SetPlanID(*s)
-	}
-	return pu
-}
-
 // SetType sets the "type" field.
 func (pu *PriceUpdate) SetType(s string) *PriceUpdate {
 	pu.mutation.SetType(s)
@@ -500,40 +486,6 @@ func (pu *PriceUpdate) ClearMetadata() *PriceUpdate {
 	return pu
 }
 
-// SetScope sets the "scope" field.
-func (pu *PriceUpdate) SetScope(pr price.Scope) *PriceUpdate {
-	pu.mutation.SetScope(pr)
-	return pu
-}
-
-// SetNillableScope sets the "scope" field if the given value is not nil.
-func (pu *PriceUpdate) SetNillableScope(pr *price.Scope) *PriceUpdate {
-	if pr != nil {
-		pu.SetScope(*pr)
-	}
-	return pu
-}
-
-// SetParentPriceID sets the "parent_price_id" field.
-func (pu *PriceUpdate) SetParentPriceID(s string) *PriceUpdate {
-	pu.mutation.SetParentPriceID(s)
-	return pu
-}
-
-// SetNillableParentPriceID sets the "parent_price_id" field if the given value is not nil.
-func (pu *PriceUpdate) SetNillableParentPriceID(s *string) *PriceUpdate {
-	if s != nil {
-		pu.SetParentPriceID(*s)
-	}
-	return pu
-}
-
-// ClearParentPriceID clears the value of the "parent_price_id" field.
-func (pu *PriceUpdate) ClearParentPriceID() *PriceUpdate {
-	pu.mutation.ClearParentPriceID()
-	return pu
-}
-
 // SetSubscriptionID sets the "subscription_id" field.
 func (pu *PriceUpdate) SetSubscriptionID(s string) *PriceUpdate {
 	pu.mutation.SetSubscriptionID(s)
@@ -673,11 +625,6 @@ func (pu *PriceUpdate) check() error {
 			return &ValidationError{Name: "price_unit_type", err: fmt.Errorf(`ent: validator failed for field "Price.price_unit_type": %w`, err)}
 		}
 	}
-	if v, ok := pu.mutation.PlanID(); ok {
-		if err := price.PlanIDValidator(v); err != nil {
-			return &ValidationError{Name: "plan_id", err: fmt.Errorf(`ent: validator failed for field "Price.plan_id": %w`, err)}
-		}
-	}
 	if v, ok := pu.mutation.GetType(); ok {
 		if err := price.TypeValidator(v); err != nil {
 			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "Price.type": %w`, err)}
@@ -701,11 +648,6 @@ func (pu *PriceUpdate) check() error {
 	if v, ok := pu.mutation.BillingCadence(); ok {
 		if err := price.BillingCadenceValidator(v); err != nil {
 			return &ValidationError{Name: "billing_cadence", err: fmt.Errorf(`ent: validator failed for field "Price.billing_cadence": %w`, err)}
-		}
-	}
-	if v, ok := pu.mutation.Scope(); ok {
-		if err := price.ScopeValidator(v); err != nil {
-			return &ValidationError{Name: "scope", err: fmt.Errorf(`ent: validator failed for field "Price.scope": %w`, err)}
 		}
 	}
 	return nil
@@ -785,9 +727,6 @@ func (pu *PriceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if pu.mutation.ConversionRateCleared() {
 		_spec.ClearField(price.FieldConversionRate, field.TypeFloat64)
-	}
-	if value, ok := pu.mutation.PlanID(); ok {
-		_spec.SetField(price.FieldPlanID, field.TypeString, value)
 	}
 	if value, ok := pu.mutation.GetType(); ok {
 		_spec.SetField(price.FieldType, field.TypeString, value)
@@ -874,14 +813,11 @@ func (pu *PriceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if pu.mutation.MetadataCleared() {
 		_spec.ClearField(price.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := pu.mutation.Scope(); ok {
-		_spec.SetField(price.FieldScope, field.TypeEnum, value)
+	if pu.mutation.EntityTypeCleared() {
+		_spec.ClearField(price.FieldEntityType, field.TypeString)
 	}
-	if value, ok := pu.mutation.ParentPriceID(); ok {
-		_spec.SetField(price.FieldParentPriceID, field.TypeString, value)
-	}
-	if pu.mutation.ParentPriceIDCleared() {
-		_spec.ClearField(price.FieldParentPriceID, field.TypeString)
+	if pu.mutation.EntityIDCleared() {
+		_spec.ClearField(price.FieldEntityID, field.TypeString)
 	}
 	if value, ok := pu.mutation.SubscriptionID(); ok {
 		_spec.SetField(price.FieldSubscriptionID, field.TypeString, value)
@@ -1200,20 +1136,6 @@ func (puo *PriceUpdateOne) ClearConversionRate() *PriceUpdateOne {
 	return puo
 }
 
-// SetPlanID sets the "plan_id" field.
-func (puo *PriceUpdateOne) SetPlanID(s string) *PriceUpdateOne {
-	puo.mutation.SetPlanID(s)
-	return puo
-}
-
-// SetNillablePlanID sets the "plan_id" field if the given value is not nil.
-func (puo *PriceUpdateOne) SetNillablePlanID(s *string) *PriceUpdateOne {
-	if s != nil {
-		puo.SetPlanID(*s)
-	}
-	return puo
-}
-
 // SetType sets the "type" field.
 func (puo *PriceUpdateOne) SetType(s string) *PriceUpdateOne {
 	puo.mutation.SetType(s)
@@ -1451,40 +1373,6 @@ func (puo *PriceUpdateOne) ClearMetadata() *PriceUpdateOne {
 	return puo
 }
 
-// SetScope sets the "scope" field.
-func (puo *PriceUpdateOne) SetScope(pr price.Scope) *PriceUpdateOne {
-	puo.mutation.SetScope(pr)
-	return puo
-}
-
-// SetNillableScope sets the "scope" field if the given value is not nil.
-func (puo *PriceUpdateOne) SetNillableScope(pr *price.Scope) *PriceUpdateOne {
-	if pr != nil {
-		puo.SetScope(*pr)
-	}
-	return puo
-}
-
-// SetParentPriceID sets the "parent_price_id" field.
-func (puo *PriceUpdateOne) SetParentPriceID(s string) *PriceUpdateOne {
-	puo.mutation.SetParentPriceID(s)
-	return puo
-}
-
-// SetNillableParentPriceID sets the "parent_price_id" field if the given value is not nil.
-func (puo *PriceUpdateOne) SetNillableParentPriceID(s *string) *PriceUpdateOne {
-	if s != nil {
-		puo.SetParentPriceID(*s)
-	}
-	return puo
-}
-
-// ClearParentPriceID clears the value of the "parent_price_id" field.
-func (puo *PriceUpdateOne) ClearParentPriceID() *PriceUpdateOne {
-	puo.mutation.ClearParentPriceID()
-	return puo
-}
-
 // SetSubscriptionID sets the "subscription_id" field.
 func (puo *PriceUpdateOne) SetSubscriptionID(s string) *PriceUpdateOne {
 	puo.mutation.SetSubscriptionID(s)
@@ -1637,11 +1525,6 @@ func (puo *PriceUpdateOne) check() error {
 			return &ValidationError{Name: "price_unit_type", err: fmt.Errorf(`ent: validator failed for field "Price.price_unit_type": %w`, err)}
 		}
 	}
-	if v, ok := puo.mutation.PlanID(); ok {
-		if err := price.PlanIDValidator(v); err != nil {
-			return &ValidationError{Name: "plan_id", err: fmt.Errorf(`ent: validator failed for field "Price.plan_id": %w`, err)}
-		}
-	}
 	if v, ok := puo.mutation.GetType(); ok {
 		if err := price.TypeValidator(v); err != nil {
 			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "Price.type": %w`, err)}
@@ -1665,11 +1548,6 @@ func (puo *PriceUpdateOne) check() error {
 	if v, ok := puo.mutation.BillingCadence(); ok {
 		if err := price.BillingCadenceValidator(v); err != nil {
 			return &ValidationError{Name: "billing_cadence", err: fmt.Errorf(`ent: validator failed for field "Price.billing_cadence": %w`, err)}
-		}
-	}
-	if v, ok := puo.mutation.Scope(); ok {
-		if err := price.ScopeValidator(v); err != nil {
-			return &ValidationError{Name: "scope", err: fmt.Errorf(`ent: validator failed for field "Price.scope": %w`, err)}
 		}
 	}
 	return nil
@@ -1767,9 +1645,6 @@ func (puo *PriceUpdateOne) sqlSave(ctx context.Context) (_node *Price, err error
 	if puo.mutation.ConversionRateCleared() {
 		_spec.ClearField(price.FieldConversionRate, field.TypeFloat64)
 	}
-	if value, ok := puo.mutation.PlanID(); ok {
-		_spec.SetField(price.FieldPlanID, field.TypeString, value)
-	}
 	if value, ok := puo.mutation.GetType(); ok {
 		_spec.SetField(price.FieldType, field.TypeString, value)
 	}
@@ -1855,14 +1730,11 @@ func (puo *PriceUpdateOne) sqlSave(ctx context.Context) (_node *Price, err error
 	if puo.mutation.MetadataCleared() {
 		_spec.ClearField(price.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := puo.mutation.Scope(); ok {
-		_spec.SetField(price.FieldScope, field.TypeEnum, value)
+	if puo.mutation.EntityTypeCleared() {
+		_spec.ClearField(price.FieldEntityType, field.TypeString)
 	}
-	if value, ok := puo.mutation.ParentPriceID(); ok {
-		_spec.SetField(price.FieldParentPriceID, field.TypeString, value)
-	}
-	if puo.mutation.ParentPriceIDCleared() {
-		_spec.ClearField(price.FieldParentPriceID, field.TypeString)
+	if puo.mutation.EntityIDCleared() {
+		_spec.ClearField(price.FieldEntityID, field.TypeString)
 	}
 	if value, ok := puo.mutation.SubscriptionID(); ok {
 		_spec.SetField(price.FieldSubscriptionID, field.TypeString, value)

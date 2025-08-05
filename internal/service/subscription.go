@@ -408,7 +408,6 @@ func (s *subscriptionService) processSubscriptionPriceOverrides(
 			Amount:                 originalPrice.Amount,
 			Currency:               originalPrice.Currency,
 			DisplayAmount:          originalPrice.DisplayAmount,
-			PlanID:                 originalPrice.PlanID,
 			Type:                   originalPrice.Type,
 			BillingPeriod:          originalPrice.BillingPeriod,
 			BillingPeriodCount:     originalPrice.BillingPeriodCount,
@@ -419,7 +418,7 @@ func (s *subscriptionService) processSubscriptionPriceOverrides(
 			TierMode:               originalPrice.TierMode,
 			Tiers:                  originalPrice.Tiers,
 			MeterID:                originalPrice.MeterID,
-			LookupKey:              "", // Clear lookup key for subscription-scoped prices
+			LookupKey:              "",
 			Description:            originalPrice.Description,
 			PriceUnitID:            originalPrice.PriceUnitID,
 			PriceUnit:              originalPrice.PriceUnit,
@@ -431,11 +430,9 @@ func (s *subscriptionService) processSubscriptionPriceOverrides(
 			TransformQuantity:      originalPrice.TransformQuantity,
 			Metadata:               originalPrice.Metadata,
 			EnvironmentID:          originalPrice.EnvironmentID,
-			// Set override-specific fields
-			Scope:          types.PRICE_SCOPE_SUBSCRIPTION,
-			ParentPriceID:  originalPrice.ID,
-			SubscriptionID: sub.ID,
-			BaseModel:      types.GetDefaultBaseModel(ctx),
+			EntityType:             types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
+			EntityID:               sub.ID,
+			BaseModel:              types.GetDefaultBaseModel(ctx),
 		}
 
 		// Apply overrides

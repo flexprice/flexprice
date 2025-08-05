@@ -104,9 +104,11 @@ type SubscriptionEdges struct {
 	CouponAssociations []*CouponAssociation `json:"coupon_associations,omitempty"`
 	// Subscription can have multiple coupon applications
 	CouponApplications []*CouponApplication `json:"coupon_applications,omitempty"`
+	// SubscriptionAddons holds the value of the subscription_addons edge.
+	SubscriptionAddons []*SubscriptionAddon `json:"subscription_addons,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [6]bool
+	loadedTypes [7]bool
 }
 
 // LineItemsOrErr returns the LineItems value or an error if the edge
@@ -163,6 +165,15 @@ func (e SubscriptionEdges) CouponApplicationsOrErr() ([]*CouponApplication, erro
 		return e.CouponApplications, nil
 	}
 	return nil, &NotLoadedError{edge: "coupon_applications"}
+}
+
+// SubscriptionAddonsOrErr returns the SubscriptionAddons value or an error if the edge
+// was not loaded in eager-loading.
+func (e SubscriptionEdges) SubscriptionAddonsOrErr() ([]*SubscriptionAddon, error) {
+	if e.loadedTypes[6] {
+		return e.SubscriptionAddons, nil
+	}
+	return nil, &NotLoadedError{edge: "subscription_addons"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -446,6 +457,11 @@ func (s *Subscription) QueryCouponAssociations() *CouponAssociationQuery {
 // QueryCouponApplications queries the "coupon_applications" edge of the Subscription entity.
 func (s *Subscription) QueryCouponApplications() *CouponApplicationQuery {
 	return NewSubscriptionClient(s.config).QueryCouponApplications(s)
+}
+
+// QuerySubscriptionAddons queries the "subscription_addons" edge of the Subscription entity.
+func (s *Subscription) QuerySubscriptionAddons() *SubscriptionAddonQuery {
+	return NewSubscriptionClient(s.config).QuerySubscriptionAddons(s)
 }
 
 // Update returns a builder for updating this Subscription.

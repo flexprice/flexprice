@@ -250,7 +250,8 @@ func (s *priceService) createPriceWithUnitConfig(ctx context.Context, req dto.Cr
 		Amount:             baseAmount,
 		Currency:           req.Currency,
 		PriceUnitType:      req.PriceUnitType,
-		PlanID:             req.PlanID,
+		EntityType:         req.EntityType,
+		EntityID:           req.EntityID,
 		Type:               req.Type,
 		BillingPeriod:      req.BillingPeriod,
 		BillingPeriodCount: req.BillingPeriodCount,
@@ -317,9 +318,9 @@ func (s *priceService) GetPricesByPlanID(ctx context.Context, planID string) (*d
 
 	// Use unlimited filter to fetch plan-scoped prices only
 	priceFilter := types.NewNoLimitPriceFilter().
-		WithPlanIDs([]string{planID}).
+		WithEntityIDs([]string{planID}).
 		WithStatus(types.StatusPublished).
-		WithScope(types.PRICE_SCOPE_PLAN).
+		WithEntityType(types.PRICE_ENTITY_TYPE_PLAN).
 		WithExpand(string(types.ExpandMeters))
 
 	return s.GetPrices(ctx, priceFilter)
@@ -336,7 +337,7 @@ func (s *priceService) GetPricesBySubscriptionID(ctx context.Context, subscripti
 	// Use unlimited filter to fetch subscription-scoped prices only
 	priceFilter := types.NewNoLimitPriceFilter().
 		WithSubscriptionID(subscriptionID).
-		WithScope(types.PRICE_SCOPE_SUBSCRIPTION).
+		WithEntityType(types.PRICE_ENTITY_TYPE_SUBSCRIPTION).
 		WithStatus(types.StatusPublished).
 		WithExpand(string(types.ExpandMeters))
 

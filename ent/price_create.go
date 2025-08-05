@@ -215,12 +215,6 @@ func (pc *PriceCreate) SetNillableConversionRate(f *float64) *PriceCreate {
 	return pc
 }
 
-// SetPlanID sets the "plan_id" field.
-func (pc *PriceCreate) SetPlanID(s string) *PriceCreate {
-	pc.mutation.SetPlanID(s)
-	return pc
-}
-
 // SetType sets the "type" field.
 func (pc *PriceCreate) SetType(s string) *PriceCreate {
 	pc.mutation.SetType(s)
@@ -373,30 +367,30 @@ func (pc *PriceCreate) SetMetadata(m map[string]string) *PriceCreate {
 	return pc
 }
 
-// SetScope sets the "scope" field.
-func (pc *PriceCreate) SetScope(pr price.Scope) *PriceCreate {
-	pc.mutation.SetScope(pr)
+// SetEntityType sets the "entity_type" field.
+func (pc *PriceCreate) SetEntityType(s string) *PriceCreate {
+	pc.mutation.SetEntityType(s)
 	return pc
 }
 
-// SetNillableScope sets the "scope" field if the given value is not nil.
-func (pc *PriceCreate) SetNillableScope(pr *price.Scope) *PriceCreate {
-	if pr != nil {
-		pc.SetScope(*pr)
+// SetNillableEntityType sets the "entity_type" field if the given value is not nil.
+func (pc *PriceCreate) SetNillableEntityType(s *string) *PriceCreate {
+	if s != nil {
+		pc.SetEntityType(*s)
 	}
 	return pc
 }
 
-// SetParentPriceID sets the "parent_price_id" field.
-func (pc *PriceCreate) SetParentPriceID(s string) *PriceCreate {
-	pc.mutation.SetParentPriceID(s)
+// SetEntityID sets the "entity_id" field.
+func (pc *PriceCreate) SetEntityID(s string) *PriceCreate {
+	pc.mutation.SetEntityID(s)
 	return pc
 }
 
-// SetNillableParentPriceID sets the "parent_price_id" field if the given value is not nil.
-func (pc *PriceCreate) SetNillableParentPriceID(s *string) *PriceCreate {
+// SetNillableEntityID sets the "entity_id" field if the given value is not nil.
+func (pc *PriceCreate) SetNillableEntityID(s *string) *PriceCreate {
 	if s != nil {
-		pc.SetParentPriceID(*s)
+		pc.SetEntityID(*s)
 	}
 	return pc
 }
@@ -514,10 +508,6 @@ func (pc *PriceCreate) defaults() {
 		v := price.DefaultTrialPeriod
 		pc.mutation.SetTrialPeriod(v)
 	}
-	if _, ok := pc.mutation.Scope(); !ok {
-		v := price.DefaultScope
-		pc.mutation.SetScope(v)
-	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -566,14 +556,6 @@ func (pc *PriceCreate) check() error {
 			return &ValidationError{Name: "price_unit_type", err: fmt.Errorf(`ent: validator failed for field "Price.price_unit_type": %w`, err)}
 		}
 	}
-	if _, ok := pc.mutation.PlanID(); !ok {
-		return &ValidationError{Name: "plan_id", err: errors.New(`ent: missing required field "Price.plan_id"`)}
-	}
-	if v, ok := pc.mutation.PlanID(); ok {
-		if err := price.PlanIDValidator(v); err != nil {
-			return &ValidationError{Name: "plan_id", err: fmt.Errorf(`ent: validator failed for field "Price.plan_id": %w`, err)}
-		}
-	}
 	if _, ok := pc.mutation.GetType(); !ok {
 		return &ValidationError{Name: "type", err: errors.New(`ent: missing required field "Price.type"`)}
 	}
@@ -616,14 +598,6 @@ func (pc *PriceCreate) check() error {
 	}
 	if _, ok := pc.mutation.TrialPeriod(); !ok {
 		return &ValidationError{Name: "trial_period", err: errors.New(`ent: missing required field "Price.trial_period"`)}
-	}
-	if _, ok := pc.mutation.Scope(); !ok {
-		return &ValidationError{Name: "scope", err: errors.New(`ent: missing required field "Price.scope"`)}
-	}
-	if v, ok := pc.mutation.Scope(); ok {
-		if err := price.ScopeValidator(v); err != nil {
-			return &ValidationError{Name: "scope", err: fmt.Errorf(`ent: validator failed for field "Price.scope": %w`, err)}
-		}
 	}
 	return nil
 }
@@ -720,10 +694,6 @@ func (pc *PriceCreate) createSpec() (*Price, *sqlgraph.CreateSpec) {
 		_spec.SetField(price.FieldConversionRate, field.TypeFloat64, value)
 		_node.ConversionRate = value
 	}
-	if value, ok := pc.mutation.PlanID(); ok {
-		_spec.SetField(price.FieldPlanID, field.TypeString, value)
-		_node.PlanID = value
-	}
 	if value, ok := pc.mutation.GetType(); ok {
 		_spec.SetField(price.FieldType, field.TypeString, value)
 		_node.Type = value
@@ -788,13 +758,13 @@ func (pc *PriceCreate) createSpec() (*Price, *sqlgraph.CreateSpec) {
 		_spec.SetField(price.FieldMetadata, field.TypeJSON, value)
 		_node.Metadata = value
 	}
-	if value, ok := pc.mutation.Scope(); ok {
-		_spec.SetField(price.FieldScope, field.TypeEnum, value)
-		_node.Scope = value
+	if value, ok := pc.mutation.EntityType(); ok {
+		_spec.SetField(price.FieldEntityType, field.TypeString, value)
+		_node.EntityType = &value
 	}
-	if value, ok := pc.mutation.ParentPriceID(); ok {
-		_spec.SetField(price.FieldParentPriceID, field.TypeString, value)
-		_node.ParentPriceID = &value
+	if value, ok := pc.mutation.EntityID(); ok {
+		_spec.SetField(price.FieldEntityID, field.TypeString, value)
+		_node.EntityID = &value
 	}
 	if value, ok := pc.mutation.SubscriptionID(); ok {
 		_spec.SetField(price.FieldSubscriptionID, field.TypeString, value)

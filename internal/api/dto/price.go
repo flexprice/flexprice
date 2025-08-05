@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/flexprice/flexprice/internal/domain/price"
+	priceDomain "github.com/flexprice/flexprice/internal/domain/price"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
@@ -14,7 +15,9 @@ import (
 type CreatePriceRequest struct {
 	Amount             string                   `json:"amount,omitempty"`
 	Currency           string                   `json:"currency" validate:"required,len=3"`
-	PlanID             string                   `json:"plan_id,omitempty"`
+	PlanID             string                   `json:"plan_id,omitempty"`     // TODO: This is deprecated and will be removed in the future
+	EntityType         types.PriceEntityType    `json:"entity_type,omitempty"` // TODO: this will be required in the future as we will not allow prices to be created without an entity type
+	EntityID           string                   `json:"entity_id,omitempty"`   // TODO: this will be required in the future as we will not allow prices to be created without an entity id
 	Type               types.PriceType          `json:"type" validate:"required"`
 	PriceUnitType      types.PriceUnitType      `json:"price_unit_type" validate:"required"`
 	BillingPeriod      types.BillingPeriod      `json:"billing_period" validate:"required"`
@@ -425,10 +428,20 @@ func (r *CreatePriceRequest) Validate() error {
 		}
 	}
 
+	if err := r.EntityType.Validate(); err != nil {
+		return err
+	}
+
+	if r.EntityID == "" {
+		return ierr.NewError("entity_id is required when entity_type is provided").
+			WithHint("Please provide an entity id").
+			Mark(ierr.ErrValidation)
+	}
+
 	return nil
 }
 
-func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*price.Price, error) {
+func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, error) {
 	// Ensure price unit type is set to FIAT if not provided
 	if r.PriceUnitType == "" {
 		r.PriceUnitType = types.PRICE_UNIT_TYPE_FIAT
@@ -448,19 +461,19 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*price.Price, error) 
 		}
 	}
 
-	metadata := make(price.JSONBMetadata)
+	metadata := make(priceDomain.JSONBMetadata)
 	if r.Metadata != nil {
-		metadata = price.JSONBMetadata(r.Metadata)
+		metadata = priceDomain.JSONBMetadata(r.Metadata)
 	}
 
-	var transformQuantity price.JSONBTransformQuantity
+	var transformQuantity priceDomain.JSONBTransformQuantity
 	if r.TransformQuantity != nil {
-		transformQuantity = price.JSONBTransformQuantity(*r.TransformQuantity)
+		transformQuantity = priceDomain.JSONBTransformQuantity(*r.TransformQuantity)
 	}
 
-	var tiers price.JSONBTiers
+	var tiers priceDomain.JSONBTiers
 	if r.Tiers != nil {
-		priceTiers := make([]price.PriceTier, len(r.Tiers))
+		priceTiers := make([]priceDomain.PriceTier, len(r.Tiers))
 		for i, tier := range r.Tiers {
 			unitAmount, err := decimal.NewFromString(tier.UnitAmount)
 			if err != nil {
@@ -486,19 +499,19 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*price.Price, error) 
 				flatAmount = &parsed
 			}
 
-			priceTiers[i] = price.PriceTier{
+			priceTiers[i] = priceDomain.PriceTier{
 				UpTo:       tier.UpTo,
 				UnitAmount: unitAmount,
 				FlatAmount: flatAmount,
 			}
 		}
 
-		tiers = price.JSONBTiers(priceTiers)
+		tiers = priceDomain.JSONBTiers(priceTiers)
 	}
 
-	var priceUnitTiers price.JSONBTiers
+	var priceUnitTiers priceDomain.JSONBTiers
 	if r.PriceUnitConfig != nil && r.PriceUnitConfig.PriceUnitTiers != nil {
-		priceTiers := make([]price.PriceTier, len(r.PriceUnitConfig.PriceUnitTiers))
+		priceTiers := make([]priceDomain.PriceTier, len(r.PriceUnitConfig.PriceUnitTiers))
 		for i, tier := range r.PriceUnitConfig.PriceUnitTiers {
 			unitAmount, err := decimal.NewFromString(tier.UnitAmount)
 			if err != nil {
@@ -524,22 +537,27 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*price.Price, error) 
 				flatAmount = &parsed
 			}
 
-			priceTiers[i] = price.PriceTier{
+			priceTiers[i] = priceDomain.PriceTier{
 				UpTo:       tier.UpTo,
 				UnitAmount: unitAmount,
 				FlatAmount: flatAmount,
 			}
 		}
 
-		priceUnitTiers = price.JSONBTiers(priceTiers)
+		priceUnitTiers = priceDomain.JSONBTiers(priceTiers)
 	}
 
-	price := &price.Price{
+	// TODO: remove this
+	if r.PlanID != "" {
+		r.EntityType = types.PRICE_ENTITY_TYPE_PLAN
+		r.EntityID = r.PlanID
+	}
+
+	price := &priceDomain.Price{
 		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
 		Amount:             amount,
 		Currency:           r.Currency,
 		PriceUnitType:      r.PriceUnitType,
-		PlanID:             r.PlanID,
 		Type:               r.Type,
 		BillingPeriod:      r.BillingPeriod,
 		BillingPeriodCount: r.BillingPeriodCount,

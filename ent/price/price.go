@@ -3,7 +3,6 @@
 package price
 
 import (
-	"fmt"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -47,8 +46,6 @@ const (
 	FieldDisplayPriceUnitAmount = "display_price_unit_amount"
 	// FieldConversionRate holds the string denoting the conversion_rate field in the database.
 	FieldConversionRate = "conversion_rate"
-	// FieldPlanID holds the string denoting the plan_id field in the database.
-	FieldPlanID = "plan_id"
 	// FieldType holds the string denoting the type field in the database.
 	FieldType = "type"
 	// FieldBillingPeriod holds the string denoting the billing_period field in the database.
@@ -81,10 +78,10 @@ const (
 	FieldDescription = "description"
 	// FieldMetadata holds the string denoting the metadata field in the database.
 	FieldMetadata = "metadata"
-	// FieldScope holds the string denoting the scope field in the database.
-	FieldScope = "scope"
-	// FieldParentPriceID holds the string denoting the parent_price_id field in the database.
-	FieldParentPriceID = "parent_price_id"
+	// FieldEntityType holds the string denoting the entity_type field in the database.
+	FieldEntityType = "entity_type"
+	// FieldEntityID holds the string denoting the entity_id field in the database.
+	FieldEntityID = "entity_id"
 	// FieldSubscriptionID holds the string denoting the subscription_id field in the database.
 	FieldSubscriptionID = "subscription_id"
 	// EdgeCostsheet holds the string denoting the costsheet edge name in mutations.
@@ -128,7 +125,6 @@ var Columns = []string{
 	FieldPriceUnitAmount,
 	FieldDisplayPriceUnitAmount,
 	FieldConversionRate,
-	FieldPlanID,
 	FieldType,
 	FieldBillingPeriod,
 	FieldBillingPeriodCount,
@@ -145,15 +141,26 @@ var Columns = []string{
 	FieldLookupKey,
 	FieldDescription,
 	FieldMetadata,
-	FieldScope,
-	FieldParentPriceID,
+	FieldEntityType,
+	FieldEntityID,
 	FieldSubscriptionID,
+}
+
+// ForeignKeys holds the SQL foreign-keys that are owned by the "prices"
+// table and are not defined as standalone fields in the schema.
+var ForeignKeys = []string{
+	"addon_prices",
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
 func ValidColumn(column string) bool {
 	for i := range Columns {
 		if column == Columns[i] {
+			return true
+		}
+	}
+	for i := range ForeignKeys {
+		if column == ForeignKeys[i] {
 			return true
 		}
 	}
@@ -181,8 +188,6 @@ var (
 	DefaultPriceUnitType string
 	// PriceUnitTypeValidator is a validator for the "price_unit_type" field. It is called by the builders before save.
 	PriceUnitTypeValidator func(string) error
-	// PlanIDValidator is a validator for the "plan_id" field. It is called by the builders before save.
-	PlanIDValidator func(string) error
 	// TypeValidator is a validator for the "type" field. It is called by the builders before save.
 	TypeValidator func(string) error
 	// BillingPeriodValidator is a validator for the "billing_period" field. It is called by the builders before save.
@@ -196,32 +201,6 @@ var (
 	// DefaultTrialPeriod holds the default value on creation for the "trial_period" field.
 	DefaultTrialPeriod int
 )
-
-// Scope defines the type for the "scope" enum field.
-type Scope string
-
-// ScopePLAN is the default value of the Scope enum.
-const DefaultScope = ScopePLAN
-
-// Scope values.
-const (
-	ScopePLAN         Scope = "PLAN"
-	ScopeSUBSCRIPTION Scope = "SUBSCRIPTION"
-)
-
-func (s Scope) String() string {
-	return string(s)
-}
-
-// ScopeValidator is a validator for the "scope" field enum values. It is called by the builders before save.
-func ScopeValidator(s Scope) error {
-	switch s {
-	case ScopePLAN, ScopeSUBSCRIPTION:
-		return nil
-	default:
-		return fmt.Errorf("price: invalid enum value for scope field: %q", s)
-	}
-}
 
 // OrderOption defines the ordering options for the Price queries.
 type OrderOption func(*sql.Selector)
@@ -311,11 +290,6 @@ func ByConversionRate(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldConversionRate, opts...).ToFunc()
 }
 
-// ByPlanID orders the results by the plan_id field.
-func ByPlanID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldPlanID, opts...).ToFunc()
-}
-
 // ByType orders the results by the type field.
 func ByType(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldType, opts...).ToFunc()
@@ -371,14 +345,14 @@ func ByDescription(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDescription, opts...).ToFunc()
 }
 
-// ByScope orders the results by the scope field.
-func ByScope(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldScope, opts...).ToFunc()
+// ByEntityType orders the results by the entity_type field.
+func ByEntityType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldEntityType, opts...).ToFunc()
 }
 
-// ByParentPriceID orders the results by the parent_price_id field.
-func ByParentPriceID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldParentPriceID, opts...).ToFunc()
+// ByEntityID orders the results by the entity_id field.
+func ByEntityID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldEntityID, opts...).ToFunc()
 }
 
 // BySubscriptionID orders the results by the subscription_id field.

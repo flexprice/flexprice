@@ -180,7 +180,8 @@ func (s *BillingServiceSuite) setupTestData() {
 		ID:                 "price_api_calls",
 		Amount:             decimal.Zero,
 		Currency:           "usd",
-		PlanID:             s.testData.plan.ID,
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
 		Type:               types.PRICE_TYPE_USAGE,
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
@@ -203,7 +204,8 @@ func (s *BillingServiceSuite) setupTestData() {
 		ID:                 "price_fixed",
 		Amount:             decimal.NewFromInt(10), // Fixed amount of 10
 		Currency:           "usd",
-		PlanID:             s.testData.plan.ID,
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
 		Type:               types.PRICE_TYPE_FIXED, // Fixed price type
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
@@ -219,7 +221,8 @@ func (s *BillingServiceSuite) setupTestData() {
 		ID:                 "price_storage_archive",
 		Amount:             decimal.NewFromInt(5), // Fixed amount of 5
 		Currency:           "usd",
-		PlanID:             s.testData.plan.ID,
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
 		Type:               types.PRICE_TYPE_FIXED, // Fixed price type
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,

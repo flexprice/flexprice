@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"github.com/flexprice/flexprice/ent/addon"
 	"github.com/flexprice/flexprice/ent/auth"
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/costsheet"
@@ -37,6 +38,7 @@ import (
 	"github.com/flexprice/flexprice/ent/priceunit"
 	"github.com/flexprice/flexprice/ent/secret"
 	"github.com/flexprice/flexprice/ent/subscription"
+	"github.com/flexprice/flexprice/ent/subscriptionaddon"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
 	"github.com/flexprice/flexprice/ent/subscriptionschedule"
@@ -106,6 +108,7 @@ var (
 func checkColumn(table, column string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
+			addon.Table:                     addon.ValidColumn,
 			auth.Table:                      auth.ValidColumn,
 			billingsequence.Table:           billingsequence.ValidColumn,
 			costsheet.Table:                 costsheet.ValidColumn,
@@ -131,6 +134,7 @@ func checkColumn(table, column string) error {
 			priceunit.Table:                 priceunit.ValidColumn,
 			secret.Table:                    secret.ValidColumn,
 			subscription.Table:              subscription.ValidColumn,
+			subscriptionaddon.Table:         subscriptionaddon.ValidColumn,
 			subscriptionlineitem.Table:      subscriptionlineitem.ValidColumn,
 			subscriptionpause.Table:         subscriptionpause.ValidColumn,
 			subscriptionschedule.Table:      subscriptionschedule.ValidColumn,
