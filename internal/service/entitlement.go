@@ -260,13 +260,10 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 		}
 
 		// Add expanded plan if requested and available
-		if !filter.GetExpand().IsEmpty() && filter.GetExpand().Has(types.ExpandPlans) {
-			if e.EntityType == types.ENTITLEMENT_ENTITY_TYPE_PLAN {
+		if !filter.GetExpand().IsEmpty() && filter.GetExpand().Has(types.ExpandPlans) && e.EntityType == types.ENTITLEMENT_ENTITY_TYPE_PLAN {
 
-				if p, ok := plansByID[e.EntityID]; ok {
-					response.Items[i].Plan = &dto.PlanResponse{Plan: p}
-				}
-
+			if p, ok := plansByID[e.EntityID]; ok {
+				response.Items[i].Plan = &dto.PlanResponse{Plan: p}
 				// TODO: !REMOVE after migration
 				response.Items[i].PlanID = e.EntityID
 			}
