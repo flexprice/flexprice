@@ -43,8 +43,8 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "price", "create", map[string]interface{}{
-		"price_id":   p.ID,
-		"tenant_id":  p.TenantID,
+		"price_id":  p.ID,
+		"tenant_id": p.TenantID,
 
 		"lookup_key": p.LookupKey,
 	})
@@ -395,6 +395,8 @@ func (r *priceRepository) CreateBulk(ctx context.Context, prices []*domainPrice.
 			SetAmount(p.Amount.InexactFloat64()).
 			SetCurrency(p.Currency).
 			SetDisplayAmount(p.DisplayAmount).
+			SetEntityID(p.EntityID).
+			SetEntityType(string(p.EntityType)).
 			SetType(string(p.Type)).
 			SetBillingPeriod(string(p.BillingPeriod)).
 			SetBillingPeriodCount(p.BillingPeriodCount).

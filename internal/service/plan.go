@@ -461,6 +461,7 @@ func (s *planService) UpdatePlan(ctx context.Context, id string, req dto.UpdateP
 								Mark(ierr.ErrValidation)
 						}
 						newPrice.EntityType = types.PRICE_ENTITY_TYPE_PLAN
+						s.Logger.Infow("newPrice", "newPrice", newPrice)
 						newPrice.EntityID = plan.ID
 						// Add to both slices since this needs bulk creation
 						newPrices = append(newPrices, newPrice)
