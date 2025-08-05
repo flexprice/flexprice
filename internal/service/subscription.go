@@ -131,6 +131,11 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	prices := make([]price.Price, len(pricesResponse.Items))
 	for i, p := range pricesResponse.Items {
 		prices[i] = *p.Price
+
+		// TODO: !REMOVE after migration
+		if p.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
+			p.PlanID = p.EntityID
+		}
 	}
 
 	priceMap := make(map[string]*dto.PriceResponse, len(prices))

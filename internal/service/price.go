@@ -73,7 +73,14 @@ func (s *priceService) CreatePrice(ctx context.Context, req dto.CreatePriceReque
 		return nil, err
 	}
 
-	return &dto.PriceResponse{Price: price}, nil
+	response := &dto.PriceResponse{Price: price}
+
+	// TODO: !REMOVE after migration
+	if price.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
+		response.PlanID = price.EntityID
+	}
+
+	return response, nil
 }
 
 // createPriceWithUnitConfig- a private helper method to create a price with a price unit config
@@ -282,7 +289,14 @@ func (s *priceService) createPriceWithUnitConfig(ctx context.Context, req dto.Cr
 		return nil, err
 	}
 
-	return &dto.PriceResponse{Price: p}, nil
+	response := &dto.PriceResponse{Price: p}
+
+	// TODO: !REMOVE after migration
+	if p.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
+		response.PlanID = p.EntityID
+	}
+
+	return response, nil
 }
 
 // Helper to format display price unit amount
@@ -306,7 +320,14 @@ func (s *priceService) GetPrice(ctx context.Context, id string) (*dto.PriceRespo
 		return nil, err
 	}
 
-	return &dto.PriceResponse{Price: price}, nil
+	response := &dto.PriceResponse{Price: price}
+
+	// TODO: !REMOVE after migration
+	if price.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
+		response.PlanID = price.EntityID
+	}
+
+	return response, nil
 }
 
 func (s *priceService) GetPricesByPlanID(ctx context.Context, planID string) (*dto.ListPricesResponse, error) {
@@ -323,7 +344,12 @@ func (s *priceService) GetPricesByPlanID(ctx context.Context, planID string) (*d
 		WithEntityType(types.PRICE_ENTITY_TYPE_PLAN).
 		WithExpand(string(types.ExpandMeters))
 
-	return s.GetPrices(ctx, priceFilter)
+	response, err := s.GetPrices(ctx, priceFilter)
+	if err != nil {
+		return nil, err
+	}
+
+	return response, nil
 }
 
 // GetPricesBySubscriptionID fetches subscription-scoped prices for a specific subscription
@@ -341,7 +367,12 @@ func (s *priceService) GetPricesBySubscriptionID(ctx context.Context, subscripti
 		WithStatus(types.StatusPublished).
 		WithExpand(string(types.ExpandMeters))
 
-	return s.GetPrices(ctx, priceFilter)
+	response, err := s.GetPrices(ctx, priceFilter)
+	if err != nil {
+		return nil, err
+	}
+
+	return response, nil
 }
 
 func (s *priceService) GetPrices(ctx context.Context, filter *types.PriceFilter) (*dto.ListPricesResponse, error) {
@@ -421,7 +452,14 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 		return nil, err
 	}
 
-	return &dto.PriceResponse{Price: price}, nil
+	response := &dto.PriceResponse{Price: price}
+
+	// TODO: !REMOVE after migration
+	if price.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
+		response.PlanID = price.EntityID
+	}
+
+	return response, nil
 }
 
 func (s *priceService) DeletePrice(ctx context.Context, id string) error {
