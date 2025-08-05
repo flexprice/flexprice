@@ -508,6 +508,10 @@ func (pc *PriceCreate) defaults() {
 		v := price.DefaultTrialPeriod
 		pc.mutation.SetTrialPeriod(v)
 	}
+	if _, ok := pc.mutation.EntityType(); !ok {
+		v := price.DefaultEntityType
+		pc.mutation.SetEntityType(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.

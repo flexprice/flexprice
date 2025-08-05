@@ -200,6 +200,8 @@ var (
 	BillingCadenceValidator func(string) error
 	// DefaultTrialPeriod holds the default value on creation for the "trial_period" field.
 	DefaultTrialPeriod int
+	// DefaultEntityType holds the default value on creation for the "entity_type" field.
+	DefaultEntityType string
 )
 
 // OrderOption defines the ordering options for the Price queries.
