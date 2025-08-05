@@ -76,7 +76,7 @@ func (Entitlement) Fields() []ent.Field {
 func (Entitlement) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.To("plan", Plan.Type).
-			StorageKey(edge.Column("entity_id"), edge.Column("entity_type")).
+			StorageKey(edge.Column("entity_id")).
 			Unique(),
 	}
 }

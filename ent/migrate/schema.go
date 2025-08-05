@@ -622,7 +622,7 @@ var (
 			},
 			{
 				Symbol:     "entitlements_plans_plan",
-				Columns:    []*schema.Column{EntitlementsColumns[8]},
+				Columns:    []*schema.Column{EntitlementsColumns[9]},
 				RefColumns: []*schema.Column{PlansColumns[0]},
 				OnDelete:   schema.SetNull,
 			},

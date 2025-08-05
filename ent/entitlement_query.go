@@ -413,10 +413,10 @@ func (eq *EntitlementQuery) loadPlan(ctx context.Context, query *PlanQuery, node
 	ids := make([]string, 0, len(nodes))
 	nodeids := make(map[string][]*Entitlement)
 	for i := range nodes {
-		if nodes[i].entity_type == nil {
+		if nodes[i].entity_id == nil {
 			continue
 		}
-		fk := *nodes[i].entity_type
+		fk := *nodes[i].entity_id
 		if _, ok := nodeids[fk]; !ok {
 			ids = append(ids, fk)
 		}
@@ -433,7 +433,7 @@ func (eq *EntitlementQuery) loadPlan(ctx context.Context, query *PlanQuery, node
 	for _, n := range neighbors {
 		nodes, ok := nodeids[n.ID]
 		if !ok {
-			return fmt.Errorf(`unexpected foreign-key "entity_type" returned %v`, n.ID)
+			return fmt.Errorf(`unexpected foreign-key "entity_id" returned %v`, n.ID)
 		}
 		for i := range nodes {
 			assign(nodes[i], n)

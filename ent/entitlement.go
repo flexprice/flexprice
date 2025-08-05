@@ -54,7 +54,7 @@ type Entitlement struct {
 	// The values are being populated by the EntitlementQuery when eager-loading is set.
 	Edges              EntitlementEdges `json:"edges"`
 	addon_entitlements *string
-	entity_type        *string
+	entity_id          *string
 	selectValues       sql.SelectValues
 }
 
@@ -93,7 +93,7 @@ func (*Entitlement) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullTime)
 		case entitlement.ForeignKeys[0]: // addon_entitlements
 			values[i] = new(sql.NullString)
-		case entitlement.ForeignKeys[1]: // entity_type
+		case entitlement.ForeignKeys[1]: // entity_id
 			values[i] = new(sql.NullString)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -222,10 +222,10 @@ func (e *Entitlement) assignValues(columns []string, values []any) error {
 			}
 		case entitlement.ForeignKeys[1]:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field entity_type", values[i])
+				return fmt.Errorf("unexpected type %T for field entity_id", values[i])
 			} else if value.Valid {
-				e.entity_type = new(string)
-				*e.entity_type = value.String
+				e.entity_id = new(string)
+				*e.entity_id = value.String
 			}
 		default:
 			e.selectValues.Set(columns[i], values[i])

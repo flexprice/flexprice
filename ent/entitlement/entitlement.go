@@ -56,7 +56,7 @@ const (
 	// It exists in this package in order to avoid circular dependency with the "plan" package.
 	PlanInverseTable = "plans"
 	// PlanColumn is the table column denoting the plan relation/edge.
-	PlanColumn = "entity_type"
+	PlanColumn = "entity_id"
 )
 
 // Columns holds all SQL columns for entitlement fields.
@@ -84,7 +84,7 @@ var Columns = []string{
 // table and are not defined as standalone fields in the schema.
 var ForeignKeys = []string{
 	"addon_entitlements",
-	"entity_type",
+	"entity_id",
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
