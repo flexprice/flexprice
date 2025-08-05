@@ -75,7 +75,7 @@ func (eq *EntitlementQuery) QueryPlan() *PlanQuery {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(entitlement.Table, entitlement.FieldID, selector),
 			sqlgraph.To(plan.Table, plan.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, entitlement.PlanTable, entitlement.PlanColumn),
+			sqlgraph.Edge(sqlgraph.M2O, false, entitlement.PlanTable, entitlement.PlanColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(eq.driver.Dialect(), step)
 		return fromU, nil
@@ -376,6 +376,9 @@ func (eq *EntitlementQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*
 			eq.withPlan != nil,
 		}
 	)
+	if eq.withPlan != nil {
+		withFKs = true
+	}
 	if withFKs {
 		_spec.Node.Columns = append(_spec.Node.Columns, entitlement.ForeignKeys...)
 	}
@@ -410,7 +413,10 @@ func (eq *EntitlementQuery) loadPlan(ctx context.Context, query *PlanQuery, node
 	ids := make([]string, 0, len(nodes))
 	nodeids := make(map[string][]*Entitlement)
 	for i := range nodes {
-		fk := nodes[i].PlanID
+		if nodes[i].entity_type == nil {
+			continue
+		}
+		fk := *nodes[i].entity_type
 		if _, ok := nodeids[fk]; !ok {
 			ids = append(ids, fk)
 		}
@@ -427,7 +433,7 @@ func (eq *EntitlementQuery) loadPlan(ctx context.Context, query *PlanQuery, node
 	for _, n := range neighbors {
 		nodes, ok := nodeids[n.ID]
 		if !ok {
-			return fmt.Errorf(`unexpected foreign-key "plan_id" returned %v`, n.ID)
+			return fmt.Errorf(`unexpected foreign-key "entity_type" returned %v`, n.ID)
 		}
 		for i := range nodes {
 			assign(nodes[i], n)
@@ -460,9 +466,6 @@ func (eq *EntitlementQuery) querySpec() *sqlgraph.QuerySpec {
 			if fields[i] != entitlement.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
-		}
-		if eq.withPlan != nil {
-			_spec.Node.AddColumnOnce(entitlement.FieldPlanID)
 		}
 	}
 	if ps := eq.predicates; len(ps) > 0 {

@@ -111,9 +111,31 @@ func (ec *EntitlementCreate) SetNillableEnvironmentID(s *string) *EntitlementCre
 	return ec
 }
 
-// SetPlanID sets the "plan_id" field.
-func (ec *EntitlementCreate) SetPlanID(s string) *EntitlementCreate {
-	ec.mutation.SetPlanID(s)
+// SetEntityType sets the "entity_type" field.
+func (ec *EntitlementCreate) SetEntityType(s string) *EntitlementCreate {
+	ec.mutation.SetEntityType(s)
+	return ec
+}
+
+// SetNillableEntityType sets the "entity_type" field if the given value is not nil.
+func (ec *EntitlementCreate) SetNillableEntityType(s *string) *EntitlementCreate {
+	if s != nil {
+		ec.SetEntityType(*s)
+	}
+	return ec
+}
+
+// SetEntityID sets the "entity_id" field.
+func (ec *EntitlementCreate) SetEntityID(s string) *EntitlementCreate {
+	ec.mutation.SetEntityID(s)
+	return ec
+}
+
+// SetNillableEntityID sets the "entity_id" field if the given value is not nil.
+func (ec *EntitlementCreate) SetNillableEntityID(s *string) *EntitlementCreate {
+	if s != nil {
+		ec.SetEntityID(*s)
+	}
 	return ec
 }
 
@@ -205,6 +227,20 @@ func (ec *EntitlementCreate) SetID(s string) *EntitlementCreate {
 	return ec
 }
 
+// SetPlanID sets the "plan" edge to the Plan entity by ID.
+func (ec *EntitlementCreate) SetPlanID(id string) *EntitlementCreate {
+	ec.mutation.SetPlanID(id)
+	return ec
+}
+
+// SetNillablePlanID sets the "plan" edge to the Plan entity by ID if the given value is not nil.
+func (ec *EntitlementCreate) SetNillablePlanID(id *string) *EntitlementCreate {
+	if id != nil {
+		ec = ec.SetPlanID(*id)
+	}
+	return ec
+}
+
 // SetPlan sets the "plan" edge to the Plan entity.
 func (ec *EntitlementCreate) SetPlan(p *Plan) *EntitlementCreate {
 	return ec.SetPlanID(p.ID)
@@ -261,6 +297,10 @@ func (ec *EntitlementCreate) defaults() {
 		v := entitlement.DefaultEnvironmentID
 		ec.mutation.SetEnvironmentID(v)
 	}
+	if _, ok := ec.mutation.EntityType(); !ok {
+		v := entitlement.DefaultEntityType
+		ec.mutation.SetEntityType(v)
+	}
 	if _, ok := ec.mutation.IsEnabled(); !ok {
 		v := entitlement.DefaultIsEnabled
 		ec.mutation.SetIsEnabled(v)
@@ -290,14 +330,6 @@ func (ec *EntitlementCreate) check() error {
 	if _, ok := ec.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "Entitlement.updated_at"`)}
 	}
-	if _, ok := ec.mutation.PlanID(); !ok {
-		return &ValidationError{Name: "plan_id", err: errors.New(`ent: missing required field "Entitlement.plan_id"`)}
-	}
-	if v, ok := ec.mutation.PlanID(); ok {
-		if err := entitlement.PlanIDValidator(v); err != nil {
-			return &ValidationError{Name: "plan_id", err: fmt.Errorf(`ent: validator failed for field "Entitlement.plan_id": %w`, err)}
-		}
-	}
 	if _, ok := ec.mutation.FeatureID(); !ok {
 		return &ValidationError{Name: "feature_id", err: errors.New(`ent: missing required field "Entitlement.feature_id"`)}
 	}
@@ -324,9 +356,6 @@ func (ec *EntitlementCreate) check() error {
 		if err := entitlement.IDValidator(v); err != nil {
 			return &ValidationError{Name: "id", err: fmt.Errorf(`ent: validator failed for field "Entitlement.id": %w`, err)}
 		}
-	}
-	if len(ec.mutation.PlanIDs()) == 0 {
-		return &ValidationError{Name: "plan", err: errors.New(`ent: missing required edge "Entitlement.plan"`)}
 	}
 	return nil
 }
@@ -391,6 +420,14 @@ func (ec *EntitlementCreate) createSpec() (*Entitlement, *sqlgraph.CreateSpec) {
 		_spec.SetField(entitlement.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
 	}
+	if value, ok := ec.mutation.EntityType(); ok {
+		_spec.SetField(entitlement.FieldEntityType, field.TypeString, value)
+		_node.EntityType = value
+	}
+	if value, ok := ec.mutation.EntityID(); ok {
+		_spec.SetField(entitlement.FieldEntityID, field.TypeString, value)
+		_node.EntityID = value
+	}
 	if value, ok := ec.mutation.FeatureID(); ok {
 		_spec.SetField(entitlement.FieldFeatureID, field.TypeString, value)
 		_node.FeatureID = value
@@ -422,7 +459,7 @@ func (ec *EntitlementCreate) createSpec() (*Entitlement, *sqlgraph.CreateSpec) {
 	if nodes := ec.mutation.PlanIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
-			Inverse: true,
+			Inverse: false,
 			Table:   entitlement.PlanTable,
 			Columns: []string{entitlement.PlanColumn},
 			Bidi:    false,
@@ -433,7 +470,7 @@ func (ec *EntitlementCreate) createSpec() (*Entitlement, *sqlgraph.CreateSpec) {
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
-		_node.PlanID = nodes[0]
+		_node.entity_type = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec

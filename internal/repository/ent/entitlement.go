@@ -14,6 +14,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 type entitlementRepository struct {
@@ -37,9 +38,10 @@ func (r *entitlementRepository) Create(ctx context.Context, e *domainEntitlement
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "entitlement", "create", map[string]interface{}{
-		"plan_id":    e.PlanID,
-		"feature_id": e.FeatureID,
-		"tenant_id":  e.TenantID,
+		"entity_type": e.EntityType,
+		"entity_id":   e.EntityID,
+		"feature_id":  e.FeatureID,
+		"tenant_id":   e.TenantID,
 	})
 	defer FinishSpan(span)
 
@@ -50,7 +52,8 @@ func (r *entitlementRepository) Create(ctx context.Context, e *domainEntitlement
 
 	result, err := client.Entitlement.Create().
 		SetID(e.ID).
-		SetPlanID(e.PlanID).
+		SetEntityType(string(e.EntityType)).
+		SetEntityID(e.EntityID).
 		SetFeatureID(e.FeatureID).
 		SetFeatureType(string(e.FeatureType)).
 		SetIsEnabled(e.IsEnabled).
@@ -73,16 +76,18 @@ func (r *entitlementRepository) Create(ctx context.Context, e *domainEntitlement
 			return nil, ierr.WithError(err).
 				WithHint("An entitlement with this plan and feature already exists").
 				WithReportableDetails(map[string]interface{}{
-					"plan_id":    e.PlanID,
-					"feature_id": e.FeatureID,
+					"entity_type": e.EntityType,
+					"entity_id":   e.EntityID,
+					"feature_id":  e.FeatureID,
 				}).
 				Mark(ierr.ErrAlreadyExists)
 		}
 		return nil, ierr.WithError(err).
 			WithHint("Failed to create entitlement").
 			WithReportableDetails(map[string]interface{}{
-				"plan_id":    e.PlanID,
-				"feature_id": e.FeatureID,
+				"entity_type": e.EntityType,
+				"entity_id":   e.EntityID,
+				"feature_id":  e.FeatureID,
 			}).
 			Mark(ierr.ErrDatabase)
 	}
@@ -148,7 +153,8 @@ func (r *entitlementRepository) List(ctx context.Context, filter *types.Entitlem
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "entitlement", "list", map[string]interface{}{
 		"tenant_id":    types.GetTenantID(ctx),
-		"plan_ids":     filter.PlanIDs,
+		"entity_type":  filter.EntityType,
+		"entity_ids":   filter.EntityIDs,
 		"feature_ids":  filter.FeatureIDs,
 		"feature_type": filter.FeatureType,
 	})
@@ -174,7 +180,8 @@ func (r *entitlementRepository) List(ctx context.Context, filter *types.Entitlem
 		return nil, ierr.WithError(err).
 			WithHint("Failed to list entitlements").
 			WithReportableDetails(map[string]interface{}{
-				"plan_ids":     filter.PlanIDs,
+				"entity_type":  filter.EntityType,
+				"entity_ids":   filter.EntityIDs,
 				"feature_ids":  filter.FeatureIDs,
 				"feature_type": filter.FeatureType,
 			}).
@@ -190,7 +197,8 @@ func (r *entitlementRepository) Count(ctx context.Context, filter *types.Entitle
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "entitlement", "count", map[string]interface{}{
 		"tenant_id":    types.GetTenantID(ctx),
-		"plan_ids":     filter.PlanIDs,
+		"entity_type":  filter.EntityType,
+		"entity_ids":   filter.EntityIDs,
 		"feature_ids":  filter.FeatureIDs,
 		"feature_type": filter.FeatureType,
 	})
@@ -213,7 +221,8 @@ func (r *entitlementRepository) Count(ctx context.Context, filter *types.Entitle
 		return 0, ierr.WithError(err).
 			WithHint("Failed to count entitlements").
 			WithReportableDetails(map[string]interface{}{
-				"plan_ids":     filter.PlanIDs,
+				"entity_type":  filter.EntityType,
+				"entity_ids":   filter.EntityIDs,
 				"feature_ids":  filter.FeatureIDs,
 				"feature_type": filter.FeatureType,
 			}).
@@ -260,7 +269,8 @@ func (r *entitlementRepository) Update(ctx context.Context, e *domainEntitlement
 	span := StartRepositorySpan(ctx, "entitlement", "update", map[string]interface{}{
 		"entitlement_id": e.ID,
 		"tenant_id":      e.TenantID,
-		"plan_id":        e.PlanID,
+		"entity_type":    e.EntityType,
+		"entity_id":      e.EntityID,
 		"feature_id":     e.FeatureID,
 	})
 	defer FinishSpan(span)
@@ -270,7 +280,8 @@ func (r *entitlementRepository) Update(ctx context.Context, e *domainEntitlement
 			entitlement.TenantID(e.TenantID),
 			entitlement.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
-		SetPlanID(e.PlanID).
+		SetEntityType(string(e.EntityType)).
+		SetEntityID(e.EntityID).
 		SetFeatureID(e.FeatureID).
 		SetFeatureType(string(e.FeatureType)).
 		SetIsEnabled(e.IsEnabled).
@@ -368,7 +379,8 @@ func (r *entitlementRepository) CreateBulk(ctx context.Context, entitlements []*
 
 		builders[i] = client.Entitlement.Create().
 			SetID(e.ID).
-			SetPlanID(e.PlanID).
+			SetEntityType(string(e.EntityType)).
+			SetEntityID(e.EntityID).
 			SetFeatureID(e.FeatureID).
 			SetFeatureType(string(e.FeatureType)).
 			SetIsEnabled(e.IsEnabled).
@@ -439,8 +451,9 @@ func (r *entitlementRepository) DeleteBulk(ctx context.Context, ids []string) er
 func (r *entitlementRepository) ListByPlanIDs(ctx context.Context, planIDs []string) ([]*domainEntitlement.Entitlement, error) {
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "entitlement", "list_by_plan_ids", map[string]interface{}{
-		"plan_ids":  planIDs,
-		"tenant_id": types.GetTenantID(ctx),
+		"entity_type": types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+		"entity_ids":  planIDs,
+		"tenant_id":   types.GetTenantID(ctx),
 	})
 	defer FinishSpan(span)
 
@@ -453,7 +466,8 @@ func (r *entitlementRepository) ListByPlanIDs(ctx context.Context, planIDs []str
 	// Create a filter with plan IDs
 	filter := &types.EntitlementFilter{
 		QueryFilter: types.NewNoLimitQueryFilter(),
-		PlanIDs:     planIDs,
+		EntityType:  lo.ToPtr(types.ENTITLEMENT_ENTITY_TYPE_PLAN),
+		EntityIDs:   planIDs,
 	}
 
 	// Use the existing List method
@@ -553,8 +567,8 @@ func (o EntitlementQueryOptions) applyEntityQueryOptions(_ context.Context, f *t
 	}
 
 	// Apply plan ID filter if specified
-	if len(f.PlanIDs) > 0 {
-		query = query.Where(entitlement.PlanIDIn(f.PlanIDs...))
+	if len(f.EntityIDs) > 0 {
+		query = query.Where(entitlement.EntityIDIn(f.EntityIDs...))
 	}
 
 	// Apply feature IDs filter if specified

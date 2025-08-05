@@ -108,7 +108,7 @@ func (s *entitlementService) GetEntitlement(ctx context.Context, id string) (*dt
 	}
 	response.Feature = &dto.FeatureResponse{Feature: feature}
 
-	plan, err := s.PlanRepo.Get(ctx, result.PlanID)
+	plan, err := s.PlanRepo.Get(ctx, result.EntityID)
 	if err != nil {
 		return nil, err
 	}
@@ -204,14 +204,14 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 		}
 
 		if filter.GetExpand().Has(types.ExpandPlans) {
-			// Collect plan IDs
-			planIDs := lo.Map(entitlements, func(e *entitlement.Entitlement, _ int) string {
-				return e.PlanID
+			// Collect entity IDs for plans
+			entityIDs := lo.Map(entitlements, func(e *entitlement.Entitlement, _ int) string {
+				return e.EntityID
 			})
 
-			if len(planIDs) > 0 {
+			if len(entityIDs) > 0 {
 				planFilter := types.NewNoLimitPlanFilter()
-				planFilter.PlanIDs = planIDs
+				planFilter.EntityIDs = entityIDs
 				plans, err := s.PlanRepo.List(ctx, planFilter)
 				if err != nil {
 					return nil, err
@@ -245,7 +245,7 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 
 		// Add expanded plan if requested and available
 		if !filter.GetExpand().IsEmpty() && filter.GetExpand().Has(types.ExpandPlans) {
-			if p, ok := plansByID[e.PlanID]; ok {
+			if p, ok := plansByID[e.EntityID]; ok {
 				response.Items[i].Plan = &dto.PlanResponse{Plan: p}
 			}
 		}
@@ -323,7 +323,8 @@ func (s *entitlementService) DeleteEntitlement(ctx context.Context, id string) e
 func (s *entitlementService) GetPlanEntitlements(ctx context.Context, planID string) (*dto.ListEntitlementsResponse, error) {
 	// Create a filter for the plan's entitlements
 	filter := types.NewNoLimitEntitlementFilter()
-	filter.WithPlanIDs([]string{planID})
+	filter.WithEntityIDs([]string{planID})
+	filter.WithEntityType(types.ENTITLEMENT_ENTITY_TYPE_PLAN)
 	filter.WithStatus(types.StatusPublished)
 	filter.WithExpand(fmt.Sprintf("%s,%s", types.ExpandFeatures, types.ExpandMeters))
 
@@ -334,7 +335,7 @@ func (s *entitlementService) GetPlanEntitlements(ctx context.Context, planID str
 func (s *entitlementService) GetPlanFeatureEntitlements(ctx context.Context, planID, featureID string) (*dto.ListEntitlementsResponse, error) {
 	// Create a filter for the feature's entitlements
 	filter := types.NewNoLimitEntitlementFilter()
-	filter.WithPlanIDs([]string{planID})
+	filter.WithEntityIDs([]string{planID})
 	filter.WithFeatureID(featureID)
 	filter.WithStatus(types.StatusPublished)
 	filter.WithExpand(string(types.ExpandMeters))

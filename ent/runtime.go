@@ -595,24 +595,24 @@ func init() {
 	entitlementDescEnvironmentID := entitlementMixinFields1[0].Descriptor()
 	// entitlement.DefaultEnvironmentID holds the default value on creation for the environment_id field.
 	entitlement.DefaultEnvironmentID = entitlementDescEnvironmentID.Default.(string)
-	// entitlementDescPlanID is the schema descriptor for plan_id field.
-	entitlementDescPlanID := entitlementFields[1].Descriptor()
-	// entitlement.PlanIDValidator is a validator for the "plan_id" field. It is called by the builders before save.
-	entitlement.PlanIDValidator = entitlementDescPlanID.Validators[0].(func(string) error)
+	// entitlementDescEntityType is the schema descriptor for entity_type field.
+	entitlementDescEntityType := entitlementFields[1].Descriptor()
+	// entitlement.DefaultEntityType holds the default value on creation for the entity_type field.
+	entitlement.DefaultEntityType = entitlementDescEntityType.Default.(string)
 	// entitlementDescFeatureID is the schema descriptor for feature_id field.
-	entitlementDescFeatureID := entitlementFields[2].Descriptor()
+	entitlementDescFeatureID := entitlementFields[3].Descriptor()
 	// entitlement.FeatureIDValidator is a validator for the "feature_id" field. It is called by the builders before save.
 	entitlement.FeatureIDValidator = entitlementDescFeatureID.Validators[0].(func(string) error)
 	// entitlementDescFeatureType is the schema descriptor for feature_type field.
-	entitlementDescFeatureType := entitlementFields[3].Descriptor()
+	entitlementDescFeatureType := entitlementFields[4].Descriptor()
 	// entitlement.FeatureTypeValidator is a validator for the "feature_type" field. It is called by the builders before save.
 	entitlement.FeatureTypeValidator = entitlementDescFeatureType.Validators[0].(func(string) error)
 	// entitlementDescIsEnabled is the schema descriptor for is_enabled field.
-	entitlementDescIsEnabled := entitlementFields[4].Descriptor()
+	entitlementDescIsEnabled := entitlementFields[5].Descriptor()
 	// entitlement.DefaultIsEnabled holds the default value on creation for the is_enabled field.
 	entitlement.DefaultIsEnabled = entitlementDescIsEnabled.Default.(bool)
 	// entitlementDescIsSoftLimit is the schema descriptor for is_soft_limit field.
-	entitlementDescIsSoftLimit := entitlementFields[7].Descriptor()
+	entitlementDescIsSoftLimit := entitlementFields[8].Descriptor()
 	// entitlement.DefaultIsSoftLimit holds the default value on creation for the is_soft_limit field.
 	entitlement.DefaultIsSoftLimit = entitlementDescIsSoftLimit.Default.(bool)
 	// entitlementDescID is the schema descriptor for id field.

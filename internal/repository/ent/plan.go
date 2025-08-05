@@ -454,8 +454,8 @@ func (o PlanQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.Pl
 		return query, nil
 	}
 
-	if len(f.PlanIDs) > 0 {
-		query = query.Where(plan.IDIn(f.PlanIDs...))
+	if len(f.EntityIDs) > 0 {
+		query = query.Where(plan.IDIn(f.EntityIDs...))
 	}
 
 	if f.Filters != nil {

@@ -34,19 +34,10 @@ const (
 	FieldName = "name"
 	// FieldDescription holds the string denoting the description field in the database.
 	FieldDescription = "description"
-	// EdgeEntitlements holds the string denoting the entitlements edge name in mutations.
-	EdgeEntitlements = "entitlements"
 	// EdgeCreditGrants holds the string denoting the credit_grants edge name in mutations.
 	EdgeCreditGrants = "credit_grants"
 	// Table holds the table name of the plan in the database.
 	Table = "plans"
-	// EntitlementsTable is the table that holds the entitlements relation/edge.
-	EntitlementsTable = "entitlements"
-	// EntitlementsInverseTable is the table name for the Entitlement entity.
-	// It exists in this package in order to avoid circular dependency with the "entitlement" package.
-	EntitlementsInverseTable = "entitlements"
-	// EntitlementsColumn is the table column denoting the entitlements relation/edge.
-	EntitlementsColumn = "plan_id"
 	// CreditGrantsTable is the table that holds the credit_grants relation/edge.
 	CreditGrantsTable = "credit_grants"
 	// CreditGrantsInverseTable is the table name for the CreditGrant entity.
@@ -156,20 +147,6 @@ func ByDescription(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDescription, opts...).ToFunc()
 }
 
-// ByEntitlementsCount orders the results by entitlements count.
-func ByEntitlementsCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newEntitlementsStep(), opts...)
-	}
-}
-
-// ByEntitlements orders the results by entitlements terms.
-func ByEntitlements(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newEntitlementsStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
-
 // ByCreditGrantsCount orders the results by credit_grants count.
 func ByCreditGrantsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -182,13 +159,6 @@ func ByCreditGrants(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	return func(s *sql.Selector) {
 		sqlgraph.OrderByNeighborTerms(s, newCreditGrantsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
-}
-func newEntitlementsStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(EntitlementsInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2M, false, EntitlementsTable, EntitlementsColumn),
-	)
 }
 func newCreditGrantsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(

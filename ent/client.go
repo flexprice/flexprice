@@ -2517,7 +2517,7 @@ func (c *EntitlementClient) QueryPlan(e *Entitlement) *PlanQuery {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(entitlement.Table, entitlement.FieldID, id),
 			sqlgraph.To(plan.Table, plan.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, entitlement.PlanTable, entitlement.PlanColumn),
+			sqlgraph.Edge(sqlgraph.M2O, false, entitlement.PlanTable, entitlement.PlanColumn),
 		)
 		fromV = sqlgraph.Neighbors(e.driver.Dialect(), step)
 		return fromV, nil
@@ -3832,22 +3832,6 @@ func (c *PlanClient) GetX(ctx context.Context, id string) *Plan {
 		panic(err)
 	}
 	return obj
-}
-
-// QueryEntitlements queries the entitlements edge of a Plan.
-func (c *PlanClient) QueryEntitlements(pl *Plan) *EntitlementQuery {
-	query := (&EntitlementClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := pl.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(plan.Table, plan.FieldID, id),
-			sqlgraph.To(entitlement.Table, entitlement.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, plan.EntitlementsTable, plan.EntitlementsColumn),
-		)
-		fromV = sqlgraph.Neighbors(pl.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
 }
 
 // QueryCreditGrants queries the credit_grants edge of a Plan.

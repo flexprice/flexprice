@@ -7,6 +7,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // Entitlement holds the schema definition for the Entitlement entity.
@@ -32,11 +33,18 @@ func (Entitlement) Fields() []ent.Field {
 			NotEmpty().
 			Unique().
 			Immutable(),
-		field.String("plan_id").
+		field.String("entity_type").
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
 			}).
-			NotEmpty(),
+			Default(string(types.ENTITLEMENT_ENTITY_TYPE_PLAN)).
+			Optional(),
+
+		field.String("entity_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional(),
 		field.String("feature_id").
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
@@ -67,22 +75,20 @@ func (Entitlement) Fields() []ent.Field {
 // Edges of the Entitlement.
 func (Entitlement) Edges() []ent.Edge {
 	return []ent.Edge{
-		edge.From("plan", Plan.Type).
-			Ref("entitlements").
-			Field("plan_id").
-			Unique().
-			Required(),
+		edge.To("plan", Plan.Type).
+			StorageKey(edge.Column("entity_id"), edge.Column("entity_type")).
+			Unique(),
 	}
 }
 
 // Indexes of the Entitlement.
 func (Entitlement) Indexes() []ent.Index {
 	return []ent.Index{
-		index.Fields("tenant_id", "environment_id", "plan_id", "feature_id").
+		index.Fields("tenant_id", "environment_id", "entity_type", "entity_id", "feature_id").
 			Unique().
 			Annotations(entsql.IndexWhere("status = 'published'")),
 
-		index.Fields("tenant_id", "environment_id", "plan_id"),
+		index.Fields("tenant_id", "environment_id", "entity_type", "entity_id"),
 		index.Fields("tenant_id", "environment_id", "feature_id"),
 	}
 }

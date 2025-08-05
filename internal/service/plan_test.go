@@ -282,7 +282,7 @@ func (s *PlanServiceSuite) TestCreatePlanWithEntitlements() {
 		s.NotNil(resp)
 
 		filter := types.NewDefaultEntitlementFilter()
-		filter.PlanIDs = []string{resp.Plan.ID}
+		filter.EntityIDs = []string{resp.Plan.ID}
 		entitlements, err := s.GetStores().EntitlementRepo.List(s.GetContext(), filter)
 		s.NoError(err)
 		s.Equal(1, len(entitlements))
@@ -318,7 +318,7 @@ func (s *PlanServiceSuite) TestCreatePlanWithEntitlements() {
 		s.NotNil(resp)
 
 		filter := types.NewDefaultEntitlementFilter()
-		filter.PlanIDs = []string{resp.Plan.ID}
+		filter.EntityIDs = []string{resp.Plan.ID}
 		entitlements, err := s.GetStores().EntitlementRepo.List(s.GetContext(), filter)
 		s.NoError(err)
 		s.Equal(1, len(entitlements))
@@ -352,7 +352,7 @@ func (s *PlanServiceSuite) TestCreatePlanWithEntitlements() {
 		s.NotNil(resp)
 
 		filter := types.NewDefaultEntitlementFilter()
-		filter.PlanIDs = []string{resp.Plan.ID}
+		filter.EntityIDs = []string{resp.Plan.ID}
 		entitlements, err := s.GetStores().EntitlementRepo.List(s.GetContext(), filter)
 		s.NoError(err)
 		s.Equal(1, len(entitlements))
@@ -667,7 +667,8 @@ func (s *PlanServiceSuite) TestUpdatePlanEntitlements() {
 
 	testEntitlement := &entitlement.Entitlement{
 		ID:          "ent-1",
-		PlanID:      testPlan.ID,
+		EntityType:  types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+		EntityID:    testPlan.ID,
 		FeatureID:   testFeature.ID,
 		FeatureType: types.FeatureTypeBoolean,
 		IsEnabled:   false,

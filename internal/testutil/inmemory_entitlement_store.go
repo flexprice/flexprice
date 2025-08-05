@@ -43,11 +43,11 @@ func entitlementFilterFn(ctx context.Context, e *entitlement.Entitlement, filter
 		return false
 	}
 
-	// Filter by plan IDs
-	if len(f.PlanIDs) > 0 {
+	// Filter by entity IDs
+	if len(f.EntityIDs) > 0 {
 		found := false
-		for _, id := range f.PlanIDs {
-			if e.PlanID == id {
+		for _, id := range f.EntityIDs {
+			if e.EntityID == id {
 				found = true
 				break
 			}
@@ -118,7 +118,7 @@ func (s *InMemoryEntitlementStore) Create(ctx context.Context, e *entitlement.En
 			WithHint("Failed to create entitlement").
 			WithReportableDetails(map[string]interface{}{
 				"id":         e.ID,
-				"plan_id":    e.PlanID,
+				"entity_id":  e.EntityID,
 				"feature_id": e.FeatureID,
 			}).
 			Mark(errors.ErrDatabase)
@@ -244,10 +244,12 @@ func (s *InMemoryEntitlementStore) ListByPlanIDs(ctx context.Context, planIDs []
 		return []*entitlement.Entitlement{}, nil
 	}
 
-	// Create a filter with plan IDs
+	// Create a filter with entity IDs (for plan entitlements)
+	entityType := types.ENTITLEMENT_ENTITY_TYPE_PLAN
 	filter := &types.EntitlementFilter{
 		QueryFilter: types.NewNoLimitQueryFilter(),
-		PlanIDs:     planIDs,
+		EntityType:  &entityType,
+		EntityIDs:   planIDs,
 	}
 
 	// Use the existing List method

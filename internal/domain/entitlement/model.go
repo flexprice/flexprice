@@ -8,24 +8,30 @@ import (
 
 // Entitlement represents the benefits a customer gets from a subscription plan
 type Entitlement struct {
-	ID               string              `json:"id"`
-	PlanID           string              `json:"plan_id"`
-	FeatureID        string              `json:"feature_id"`
-	FeatureType      types.FeatureType   `json:"feature_type"`
-	IsEnabled        bool                `json:"is_enabled"`
-	UsageLimit       *int64              `json:"usage_limit"`
-	UsageResetPeriod types.BillingPeriod `json:"usage_reset_period"`
-	IsSoftLimit      bool                `json:"is_soft_limit"`
-	StaticValue      string              `json:"static_value"`
-	EnvironmentID    string              `json:"environment_id"`
+	ID               string                      `json:"id"`
+	EntityType       types.EntitlementEntityType `json:"entity_type"`
+	EntityID         string                      `json:"entity_id"`
+	FeatureID        string                      `json:"feature_id"`
+	FeatureType      types.FeatureType           `json:"feature_type"`
+	IsEnabled        bool                        `json:"is_enabled"`
+	UsageLimit       *int64                      `json:"usage_limit"`
+	UsageResetPeriod types.BillingPeriod         `json:"usage_reset_period"`
+	IsSoftLimit      bool                        `json:"is_soft_limit"`
+	StaticValue      string                      `json:"static_value"`
+	EnvironmentID    string                      `json:"environment_id"`
 	types.BaseModel
 }
 
 // Validate performs validation on the entitlement
 func (e *Entitlement) Validate() error {
-	if e.PlanID == "" {
-		return ierr.NewError("plan_id is required").
-			WithHint("Please provide a valid plan ID").
+	if e.EntityType == "" {
+		return ierr.NewError("entity_type is required").
+			WithHint("Please provide a valid entity type").
+			Mark(ierr.ErrValidation)
+	}
+	if err := e.EntityType.Validate(); err != nil {
+		return ierr.WithError(err).
+			WithHint("Invalid entity type").
 			Mark(ierr.ErrValidation)
 	}
 	if e.FeatureID == "" {
@@ -74,7 +80,8 @@ func FromEnt(e *ent.Entitlement) *Entitlement {
 
 	return &Entitlement{
 		ID:               e.ID,
-		PlanID:           e.PlanID,
+		EntityType:       types.EntitlementEntityType(e.EntityType),
+		EntityID:         e.EntityID,
 		FeatureID:        e.FeatureID,
 		FeatureType:      types.FeatureType(e.FeatureType),
 		IsEnabled:        e.IsEnabled,

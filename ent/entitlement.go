@@ -32,8 +32,10 @@ type Entitlement struct {
 	UpdatedBy string `json:"updated_by,omitempty"`
 	// EnvironmentID holds the value of the "environment_id" field.
 	EnvironmentID string `json:"environment_id,omitempty"`
-	// PlanID holds the value of the "plan_id" field.
-	PlanID string `json:"plan_id,omitempty"`
+	// EntityType holds the value of the "entity_type" field.
+	EntityType string `json:"entity_type,omitempty"`
+	// EntityID holds the value of the "entity_id" field.
+	EntityID string `json:"entity_id,omitempty"`
 	// FeatureID holds the value of the "feature_id" field.
 	FeatureID string `json:"feature_id,omitempty"`
 	// FeatureType holds the value of the "feature_type" field.
@@ -52,6 +54,7 @@ type Entitlement struct {
 	// The values are being populated by the EntitlementQuery when eager-loading is set.
 	Edges              EntitlementEdges `json:"edges"`
 	addon_entitlements *string
+	entity_type        *string
 	selectValues       sql.SelectValues
 }
 
@@ -84,11 +87,13 @@ func (*Entitlement) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case entitlement.FieldUsageLimit:
 			values[i] = new(sql.NullInt64)
-		case entitlement.FieldID, entitlement.FieldTenantID, entitlement.FieldStatus, entitlement.FieldCreatedBy, entitlement.FieldUpdatedBy, entitlement.FieldEnvironmentID, entitlement.FieldPlanID, entitlement.FieldFeatureID, entitlement.FieldFeatureType, entitlement.FieldUsageResetPeriod, entitlement.FieldStaticValue:
+		case entitlement.FieldID, entitlement.FieldTenantID, entitlement.FieldStatus, entitlement.FieldCreatedBy, entitlement.FieldUpdatedBy, entitlement.FieldEnvironmentID, entitlement.FieldEntityType, entitlement.FieldEntityID, entitlement.FieldFeatureID, entitlement.FieldFeatureType, entitlement.FieldUsageResetPeriod, entitlement.FieldStaticValue:
 			values[i] = new(sql.NullString)
 		case entitlement.FieldCreatedAt, entitlement.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
 		case entitlement.ForeignKeys[0]: // addon_entitlements
+			values[i] = new(sql.NullString)
+		case entitlement.ForeignKeys[1]: // entity_type
 			values[i] = new(sql.NullString)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -153,11 +158,17 @@ func (e *Entitlement) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				e.EnvironmentID = value.String
 			}
-		case entitlement.FieldPlanID:
+		case entitlement.FieldEntityType:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field plan_id", values[i])
+				return fmt.Errorf("unexpected type %T for field entity_type", values[i])
 			} else if value.Valid {
-				e.PlanID = value.String
+				e.EntityType = value.String
+			}
+		case entitlement.FieldEntityID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field entity_id", values[i])
+			} else if value.Valid {
+				e.EntityID = value.String
 			}
 		case entitlement.FieldFeatureID:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -208,6 +219,13 @@ func (e *Entitlement) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				e.addon_entitlements = new(string)
 				*e.addon_entitlements = value.String
+			}
+		case entitlement.ForeignKeys[1]:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field entity_type", values[i])
+			} else if value.Valid {
+				e.entity_type = new(string)
+				*e.entity_type = value.String
 			}
 		default:
 			e.selectValues.Set(columns[i], values[i])
@@ -271,8 +289,11 @@ func (e *Entitlement) String() string {
 	builder.WriteString("environment_id=")
 	builder.WriteString(e.EnvironmentID)
 	builder.WriteString(", ")
-	builder.WriteString("plan_id=")
-	builder.WriteString(e.PlanID)
+	builder.WriteString("entity_type=")
+	builder.WriteString(e.EntityType)
+	builder.WriteString(", ")
+	builder.WriteString("entity_id=")
+	builder.WriteString(e.EntityID)
 	builder.WriteString(", ")
 	builder.WriteString("feature_id=")
 	builder.WriteString(e.FeatureID)

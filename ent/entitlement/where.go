@@ -100,9 +100,14 @@ func EnvironmentID(v string) predicate.Entitlement {
 	return predicate.Entitlement(sql.FieldEQ(FieldEnvironmentID, v))
 }
 
-// PlanID applies equality check predicate on the "plan_id" field. It's identical to PlanIDEQ.
-func PlanID(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldEQ(FieldPlanID, v))
+// EntityType applies equality check predicate on the "entity_type" field. It's identical to EntityTypeEQ.
+func EntityType(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldEQ(FieldEntityType, v))
+}
+
+// EntityID applies equality check predicate on the "entity_id" field. It's identical to EntityIDEQ.
+func EntityID(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldEQ(FieldEntityID, v))
 }
 
 // FeatureID applies equality check predicate on the "feature_id" field. It's identical to FeatureIDEQ.
@@ -575,69 +580,154 @@ func EnvironmentIDContainsFold(v string) predicate.Entitlement {
 	return predicate.Entitlement(sql.FieldContainsFold(FieldEnvironmentID, v))
 }
 
-// PlanIDEQ applies the EQ predicate on the "plan_id" field.
-func PlanIDEQ(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldEQ(FieldPlanID, v))
+// EntityTypeEQ applies the EQ predicate on the "entity_type" field.
+func EntityTypeEQ(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldEQ(FieldEntityType, v))
 }
 
-// PlanIDNEQ applies the NEQ predicate on the "plan_id" field.
-func PlanIDNEQ(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldNEQ(FieldPlanID, v))
+// EntityTypeNEQ applies the NEQ predicate on the "entity_type" field.
+func EntityTypeNEQ(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldNEQ(FieldEntityType, v))
 }
 
-// PlanIDIn applies the In predicate on the "plan_id" field.
-func PlanIDIn(vs ...string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldIn(FieldPlanID, vs...))
+// EntityTypeIn applies the In predicate on the "entity_type" field.
+func EntityTypeIn(vs ...string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldIn(FieldEntityType, vs...))
 }
 
-// PlanIDNotIn applies the NotIn predicate on the "plan_id" field.
-func PlanIDNotIn(vs ...string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldNotIn(FieldPlanID, vs...))
+// EntityTypeNotIn applies the NotIn predicate on the "entity_type" field.
+func EntityTypeNotIn(vs ...string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldNotIn(FieldEntityType, vs...))
 }
 
-// PlanIDGT applies the GT predicate on the "plan_id" field.
-func PlanIDGT(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldGT(FieldPlanID, v))
+// EntityTypeGT applies the GT predicate on the "entity_type" field.
+func EntityTypeGT(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldGT(FieldEntityType, v))
 }
 
-// PlanIDGTE applies the GTE predicate on the "plan_id" field.
-func PlanIDGTE(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldGTE(FieldPlanID, v))
+// EntityTypeGTE applies the GTE predicate on the "entity_type" field.
+func EntityTypeGTE(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldGTE(FieldEntityType, v))
 }
 
-// PlanIDLT applies the LT predicate on the "plan_id" field.
-func PlanIDLT(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldLT(FieldPlanID, v))
+// EntityTypeLT applies the LT predicate on the "entity_type" field.
+func EntityTypeLT(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldLT(FieldEntityType, v))
 }
 
-// PlanIDLTE applies the LTE predicate on the "plan_id" field.
-func PlanIDLTE(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldLTE(FieldPlanID, v))
+// EntityTypeLTE applies the LTE predicate on the "entity_type" field.
+func EntityTypeLTE(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldLTE(FieldEntityType, v))
 }
 
-// PlanIDContains applies the Contains predicate on the "plan_id" field.
-func PlanIDContains(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldContains(FieldPlanID, v))
+// EntityTypeContains applies the Contains predicate on the "entity_type" field.
+func EntityTypeContains(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldContains(FieldEntityType, v))
 }
 
-// PlanIDHasPrefix applies the HasPrefix predicate on the "plan_id" field.
-func PlanIDHasPrefix(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldHasPrefix(FieldPlanID, v))
+// EntityTypeHasPrefix applies the HasPrefix predicate on the "entity_type" field.
+func EntityTypeHasPrefix(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldHasPrefix(FieldEntityType, v))
 }
 
-// PlanIDHasSuffix applies the HasSuffix predicate on the "plan_id" field.
-func PlanIDHasSuffix(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldHasSuffix(FieldPlanID, v))
+// EntityTypeHasSuffix applies the HasSuffix predicate on the "entity_type" field.
+func EntityTypeHasSuffix(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldHasSuffix(FieldEntityType, v))
 }
 
-// PlanIDEqualFold applies the EqualFold predicate on the "plan_id" field.
-func PlanIDEqualFold(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldEqualFold(FieldPlanID, v))
+// EntityTypeIsNil applies the IsNil predicate on the "entity_type" field.
+func EntityTypeIsNil() predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldIsNull(FieldEntityType))
 }
 
-// PlanIDContainsFold applies the ContainsFold predicate on the "plan_id" field.
-func PlanIDContainsFold(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldContainsFold(FieldPlanID, v))
+// EntityTypeNotNil applies the NotNil predicate on the "entity_type" field.
+func EntityTypeNotNil() predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldNotNull(FieldEntityType))
+}
+
+// EntityTypeEqualFold applies the EqualFold predicate on the "entity_type" field.
+func EntityTypeEqualFold(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldEqualFold(FieldEntityType, v))
+}
+
+// EntityTypeContainsFold applies the ContainsFold predicate on the "entity_type" field.
+func EntityTypeContainsFold(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldContainsFold(FieldEntityType, v))
+}
+
+// EntityIDEQ applies the EQ predicate on the "entity_id" field.
+func EntityIDEQ(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldEQ(FieldEntityID, v))
+}
+
+// EntityIDNEQ applies the NEQ predicate on the "entity_id" field.
+func EntityIDNEQ(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldNEQ(FieldEntityID, v))
+}
+
+// EntityIDIn applies the In predicate on the "entity_id" field.
+func EntityIDIn(vs ...string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldIn(FieldEntityID, vs...))
+}
+
+// EntityIDNotIn applies the NotIn predicate on the "entity_id" field.
+func EntityIDNotIn(vs ...string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldNotIn(FieldEntityID, vs...))
+}
+
+// EntityIDGT applies the GT predicate on the "entity_id" field.
+func EntityIDGT(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldGT(FieldEntityID, v))
+}
+
+// EntityIDGTE applies the GTE predicate on the "entity_id" field.
+func EntityIDGTE(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldGTE(FieldEntityID, v))
+}
+
+// EntityIDLT applies the LT predicate on the "entity_id" field.
+func EntityIDLT(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldLT(FieldEntityID, v))
+}
+
+// EntityIDLTE applies the LTE predicate on the "entity_id" field.
+func EntityIDLTE(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldLTE(FieldEntityID, v))
+}
+
+// EntityIDContains applies the Contains predicate on the "entity_id" field.
+func EntityIDContains(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldContains(FieldEntityID, v))
+}
+
+// EntityIDHasPrefix applies the HasPrefix predicate on the "entity_id" field.
+func EntityIDHasPrefix(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldHasPrefix(FieldEntityID, v))
+}
+
+// EntityIDHasSuffix applies the HasSuffix predicate on the "entity_id" field.
+func EntityIDHasSuffix(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldHasSuffix(FieldEntityID, v))
+}
+
+// EntityIDIsNil applies the IsNil predicate on the "entity_id" field.
+func EntityIDIsNil() predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldIsNull(FieldEntityID))
+}
+
+// EntityIDNotNil applies the NotNil predicate on the "entity_id" field.
+func EntityIDNotNil() predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldNotNull(FieldEntityID))
+}
+
+// EntityIDEqualFold applies the EqualFold predicate on the "entity_id" field.
+func EntityIDEqualFold(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldEqualFold(FieldEntityID, v))
+}
+
+// EntityIDContainsFold applies the ContainsFold predicate on the "entity_id" field.
+func EntityIDContainsFold(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldContainsFold(FieldEntityID, v))
 }
 
 // FeatureIDEQ applies the EQ predicate on the "feature_id" field.
@@ -995,7 +1085,7 @@ func HasPlan() predicate.Entitlement {
 	return predicate.Entitlement(func(s *sql.Selector) {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, PlanTable, PlanColumn),
+			sqlgraph.Edge(sqlgraph.M2O, false, PlanTable, PlanColumn),
 		)
 		sqlgraph.HasNeighbors(s, step)
 	})

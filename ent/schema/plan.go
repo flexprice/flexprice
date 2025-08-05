@@ -51,7 +51,6 @@ func (Plan) Fields() []ent.Field {
 // Edges of the Plan.
 func (Plan) Edges() []ent.Edge {
 	return []ent.Edge{
-		edge.To("entitlements", Entitlement.Type),
 		edge.To("credit_grants", CreditGrant.Type),
 	}
 }

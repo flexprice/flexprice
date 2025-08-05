@@ -296,7 +296,7 @@ func (s *planService) GetPlans(ctx context.Context, filter *types.PlanFilter) (*
 	// Fetch entitlements if requested
 	if filter.GetExpand().Has(types.ExpandEntitlements) {
 		entFilter := types.NewNoLimitEntitlementFilter().
-			WithPlanIDs(planIDs).
+			WithEntityIDs(planIDs).
 			WithStatus(types.StatusPublished)
 
 		// If features should be expanded, propagate the expansion to entitlements
@@ -310,7 +310,7 @@ func (s *planService) GetPlans(ctx context.Context, filter *types.PlanFilter) (*
 		}
 
 		for _, e := range entitlements.Items {
-			entitlementsByPlanID[e.PlanID] = append(entitlementsByPlanID[e.PlanID], e)
+			entitlementsByPlanID[e.Entitlement.EntityID] = append(entitlementsByPlanID[e.Entitlement.EntityID], e)
 		}
 	}
 
