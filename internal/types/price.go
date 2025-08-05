@@ -29,7 +29,7 @@ type PriceUnitType string
 
 // PriceEntityType is the type of the entity that the price is associated with
 // i.e. PLAN, SUBSCRIPTION, ADDON, PRICE
-// If prices is create for plan then it will have PLAN as entity type with enitiy id as plan id
+// If price is created for plan then it will have PLAN as entity type with entity id as plan id
 // If prices is create for subscription then it will have SUBSCRIPTION as entity type with enitiy id as subscription id
 // If prices is create for addon then it will have ADDON as entity type with enitiy id as addon id
 // If prices is create for price overrides in subscription creation	 then it will have PRICE as entity type with enitiy id as price id
