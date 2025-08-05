@@ -10,11 +10,11 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/flexprice/flexprice/ent/addonassociation"
 	"github.com/flexprice/flexprice/ent/couponapplication"
 	"github.com/flexprice/flexprice/ent/couponassociation"
 	"github.com/flexprice/flexprice/ent/creditgrant"
 	"github.com/flexprice/flexprice/ent/subscription"
-	"github.com/flexprice/flexprice/ent/subscriptionaddon"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
 	"github.com/flexprice/flexprice/ent/subscriptionschedule"
@@ -520,19 +520,19 @@ func (sc *SubscriptionCreate) AddCouponApplications(c ...*CouponApplication) *Su
 	return sc.AddCouponApplicationIDs(ids...)
 }
 
-// AddSubscriptionAddonIDs adds the "subscription_addons" edge to the SubscriptionAddon entity by IDs.
-func (sc *SubscriptionCreate) AddSubscriptionAddonIDs(ids ...string) *SubscriptionCreate {
-	sc.mutation.AddSubscriptionAddonIDs(ids...)
+// AddAddonAssociationIDs adds the "addon_associations" edge to the AddonAssociation entity by IDs.
+func (sc *SubscriptionCreate) AddAddonAssociationIDs(ids ...string) *SubscriptionCreate {
+	sc.mutation.AddAddonAssociationIDs(ids...)
 	return sc
 }
 
-// AddSubscriptionAddons adds the "subscription_addons" edges to the SubscriptionAddon entity.
-func (sc *SubscriptionCreate) AddSubscriptionAddons(s ...*SubscriptionAddon) *SubscriptionCreate {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
+// AddAddonAssociations adds the "addon_associations" edges to the AddonAssociation entity.
+func (sc *SubscriptionCreate) AddAddonAssociations(a ...*AddonAssociation) *SubscriptionCreate {
+	ids := make([]string, len(a))
+	for i := range a {
+		ids[i] = a[i].ID
 	}
-	return sc.AddSubscriptionAddonIDs(ids...)
+	return sc.AddAddonAssociationIDs(ids...)
 }
 
 // Mutation returns the SubscriptionMutation object of the builder.
@@ -985,15 +985,15 @@ func (sc *SubscriptionCreate) createSpec() (*Subscription, *sqlgraph.CreateSpec)
 		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
-	if nodes := sc.mutation.SubscriptionAddonsIDs(); len(nodes) > 0 {
+	if nodes := sc.mutation.AddonAssociationsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
-			Table:   subscription.SubscriptionAddonsTable,
-			Columns: []string{subscription.SubscriptionAddonsColumn},
+			Table:   subscription.AddonAssociationsTable,
+			Columns: []string{subscription.AddonAssociationsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(subscriptionaddon.FieldID, field.TypeString),
+				IDSpec: sqlgraph.NewFieldSpec(addonassociation.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

@@ -2074,21 +2074,21 @@ func HasCouponApplicationsWith(preds ...predicate.CouponApplication) predicate.S
 	})
 }
 
-// HasSubscriptionAddons applies the HasEdge predicate on the "subscription_addons" edge.
-func HasSubscriptionAddons() predicate.Subscription {
+// HasAddonAssociations applies the HasEdge predicate on the "addon_associations" edge.
+func HasAddonAssociations() predicate.Subscription {
 	return predicate.Subscription(func(s *sql.Selector) {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, SubscriptionAddonsTable, SubscriptionAddonsColumn),
+			sqlgraph.Edge(sqlgraph.O2M, false, AddonAssociationsTable, AddonAssociationsColumn),
 		)
 		sqlgraph.HasNeighbors(s, step)
 	})
 }
 
-// HasSubscriptionAddonsWith applies the HasEdge predicate on the "subscription_addons" edge with a given conditions (other predicates).
-func HasSubscriptionAddonsWith(preds ...predicate.SubscriptionAddon) predicate.Subscription {
+// HasAddonAssociationsWith applies the HasEdge predicate on the "addon_associations" edge with a given conditions (other predicates).
+func HasAddonAssociationsWith(preds ...predicate.AddonAssociation) predicate.Subscription {
 	return predicate.Subscription(func(s *sql.Selector) {
-		step := newSubscriptionAddonsStep()
+		step := newAddonAssociationsStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

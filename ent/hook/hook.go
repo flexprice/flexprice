@@ -21,6 +21,18 @@ func (f AddonFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AddonMutation", m)
 }
 
+// The AddonAssociationFunc type is an adapter to allow the use of ordinary
+// function as AddonAssociation mutator.
+type AddonAssociationFunc func(context.Context, *ent.AddonAssociationMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AddonAssociationFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AddonAssociationMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AddonAssociationMutation", m)
+}
+
 // The AuthFunc type is an adapter to allow the use of ordinary
 // function as Auth mutator.
 type AuthFunc func(context.Context, *ent.AuthMutation) (ent.Value, error)
@@ -319,18 +331,6 @@ func (f SubscriptionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SubscriptionMutation", m)
-}
-
-// The SubscriptionAddonFunc type is an adapter to allow the use of ordinary
-// function as SubscriptionAddon mutator.
-type SubscriptionAddonFunc func(context.Context, *ent.SubscriptionAddonMutation) (ent.Value, error)
-
-// Mutate calls f(ctx, m).
-func (f SubscriptionAddonFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.SubscriptionAddonMutation); ok {
-		return f(ctx, mv)
-	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SubscriptionAddonMutation", m)
 }
 
 // The SubscriptionLineItemFunc type is an adapter to allow the use of ordinary

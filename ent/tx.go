@@ -16,6 +16,8 @@ type Tx struct {
 	config
 	// Addon is the client for interacting with the Addon builders.
 	Addon *AddonClient
+	// AddonAssociation is the client for interacting with the AddonAssociation builders.
+	AddonAssociation *AddonAssociationClient
 	// Auth is the client for interacting with the Auth builders.
 	Auth *AuthClient
 	// BillingSequence is the client for interacting with the BillingSequence builders.
@@ -66,8 +68,6 @@ type Tx struct {
 	Secret *SecretClient
 	// Subscription is the client for interacting with the Subscription builders.
 	Subscription *SubscriptionClient
-	// SubscriptionAddon is the client for interacting with the SubscriptionAddon builders.
-	SubscriptionAddon *SubscriptionAddonClient
 	// SubscriptionLineItem is the client for interacting with the SubscriptionLineItem builders.
 	SubscriptionLineItem *SubscriptionLineItemClient
 	// SubscriptionPause is the client for interacting with the SubscriptionPause builders.
@@ -218,6 +218,7 @@ func (tx *Tx) Client() *Client {
 
 func (tx *Tx) init() {
 	tx.Addon = NewAddonClient(tx.config)
+	tx.AddonAssociation = NewAddonAssociationClient(tx.config)
 	tx.Auth = NewAuthClient(tx.config)
 	tx.BillingSequence = NewBillingSequenceClient(tx.config)
 	tx.Costsheet = NewCostsheetClient(tx.config)
@@ -243,7 +244,6 @@ func (tx *Tx) init() {
 	tx.PriceUnit = NewPriceUnitClient(tx.config)
 	tx.Secret = NewSecretClient(tx.config)
 	tx.Subscription = NewSubscriptionClient(tx.config)
-	tx.SubscriptionAddon = NewSubscriptionAddonClient(tx.config)
 	tx.SubscriptionLineItem = NewSubscriptionLineItemClient(tx.config)
 	tx.SubscriptionPause = NewSubscriptionPauseClient(tx.config)
 	tx.SubscriptionSchedule = NewSubscriptionScheduleClient(tx.config)

@@ -10,11 +10,11 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/flexprice/flexprice/ent/subscriptionaddon"
+	"github.com/flexprice/flexprice/ent/addonassociation"
 )
 
-// SubscriptionAddon is the model entity for the SubscriptionAddon schema.
-type SubscriptionAddon struct {
+// AddonAssociation is the model entity for the AddonAssociation schema.
+type AddonAssociation struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID string `json:"id,omitempty"`
@@ -32,8 +32,10 @@ type SubscriptionAddon struct {
 	UpdatedBy string `json:"updated_by,omitempty"`
 	// EnvironmentID holds the value of the "environment_id" field.
 	EnvironmentID string `json:"environment_id,omitempty"`
-	// SubscriptionID holds the value of the "subscription_id" field.
-	SubscriptionID string `json:"subscription_id,omitempty"`
+	// EntityID holds the value of the "entity_id" field.
+	EntityID string `json:"entity_id,omitempty"`
+	// EntityType holds the value of the "entity_type" field.
+	EntityType string `json:"entity_type,omitempty"`
 	// AddonID holds the value of the "addon_id" field.
 	AddonID string `json:"addon_id,omitempty"`
 	// StartDate holds the value of the "start_date" field.
@@ -47,23 +49,23 @@ type SubscriptionAddon struct {
 	// CancelledAt holds the value of the "cancelled_at" field.
 	CancelledAt *time.Time `json:"cancelled_at,omitempty"`
 	// Metadata holds the value of the "metadata" field.
-	Metadata                         map[string]interface{} `json:"metadata,omitempty"`
-	subscription_subscription_addons *string
-	selectValues                     sql.SelectValues
+	Metadata                        map[string]interface{} `json:"metadata,omitempty"`
+	subscription_addon_associations *string
+	selectValues                    sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
-func (*SubscriptionAddon) scanValues(columns []string) ([]any, error) {
+func (*AddonAssociation) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case subscriptionaddon.FieldMetadata:
+		case addonassociation.FieldMetadata:
 			values[i] = new([]byte)
-		case subscriptionaddon.FieldID, subscriptionaddon.FieldTenantID, subscriptionaddon.FieldStatus, subscriptionaddon.FieldCreatedBy, subscriptionaddon.FieldUpdatedBy, subscriptionaddon.FieldEnvironmentID, subscriptionaddon.FieldSubscriptionID, subscriptionaddon.FieldAddonID, subscriptionaddon.FieldAddonStatus, subscriptionaddon.FieldCancellationReason:
+		case addonassociation.FieldID, addonassociation.FieldTenantID, addonassociation.FieldStatus, addonassociation.FieldCreatedBy, addonassociation.FieldUpdatedBy, addonassociation.FieldEnvironmentID, addonassociation.FieldEntityID, addonassociation.FieldEntityType, addonassociation.FieldAddonID, addonassociation.FieldAddonStatus, addonassociation.FieldCancellationReason:
 			values[i] = new(sql.NullString)
-		case subscriptionaddon.FieldCreatedAt, subscriptionaddon.FieldUpdatedAt, subscriptionaddon.FieldStartDate, subscriptionaddon.FieldEndDate, subscriptionaddon.FieldCancelledAt:
+		case addonassociation.FieldCreatedAt, addonassociation.FieldUpdatedAt, addonassociation.FieldStartDate, addonassociation.FieldEndDate, addonassociation.FieldCancelledAt:
 			values[i] = new(sql.NullTime)
-		case subscriptionaddon.ForeignKeys[0]: // subscription_subscription_addons
+		case addonassociation.ForeignKeys[0]: // subscription_addon_associations
 			values[i] = new(sql.NullString)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -73,210 +75,219 @@ func (*SubscriptionAddon) scanValues(columns []string) ([]any, error) {
 }
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
-// to the SubscriptionAddon fields.
-func (sa *SubscriptionAddon) assignValues(columns []string, values []any) error {
+// to the AddonAssociation fields.
+func (aa *AddonAssociation) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
 	for i := range columns {
 		switch columns[i] {
-		case subscriptionaddon.FieldID:
+		case addonassociation.FieldID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				sa.ID = value.String
+				aa.ID = value.String
 			}
-		case subscriptionaddon.FieldTenantID:
+		case addonassociation.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				sa.TenantID = value.String
+				aa.TenantID = value.String
 			}
-		case subscriptionaddon.FieldStatus:
+		case addonassociation.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				sa.Status = value.String
+				aa.Status = value.String
 			}
-		case subscriptionaddon.FieldCreatedAt:
+		case addonassociation.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				sa.CreatedAt = value.Time
+				aa.CreatedAt = value.Time
 			}
-		case subscriptionaddon.FieldUpdatedAt:
+		case addonassociation.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				sa.UpdatedAt = value.Time
+				aa.UpdatedAt = value.Time
 			}
-		case subscriptionaddon.FieldCreatedBy:
+		case addonassociation.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				sa.CreatedBy = value.String
+				aa.CreatedBy = value.String
 			}
-		case subscriptionaddon.FieldUpdatedBy:
+		case addonassociation.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				sa.UpdatedBy = value.String
+				aa.UpdatedBy = value.String
 			}
-		case subscriptionaddon.FieldEnvironmentID:
+		case addonassociation.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				sa.EnvironmentID = value.String
+				aa.EnvironmentID = value.String
 			}
-		case subscriptionaddon.FieldSubscriptionID:
+		case addonassociation.FieldEntityID:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field subscription_id", values[i])
+				return fmt.Errorf("unexpected type %T for field entity_id", values[i])
 			} else if value.Valid {
-				sa.SubscriptionID = value.String
+				aa.EntityID = value.String
 			}
-		case subscriptionaddon.FieldAddonID:
+		case addonassociation.FieldEntityType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field entity_type", values[i])
+			} else if value.Valid {
+				aa.EntityType = value.String
+			}
+		case addonassociation.FieldAddonID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field addon_id", values[i])
 			} else if value.Valid {
-				sa.AddonID = value.String
+				aa.AddonID = value.String
 			}
-		case subscriptionaddon.FieldStartDate:
+		case addonassociation.FieldStartDate:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field start_date", values[i])
 			} else if value.Valid {
-				sa.StartDate = new(time.Time)
-				*sa.StartDate = value.Time
+				aa.StartDate = new(time.Time)
+				*aa.StartDate = value.Time
 			}
-		case subscriptionaddon.FieldEndDate:
+		case addonassociation.FieldEndDate:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field end_date", values[i])
 			} else if value.Valid {
-				sa.EndDate = new(time.Time)
-				*sa.EndDate = value.Time
+				aa.EndDate = new(time.Time)
+				*aa.EndDate = value.Time
 			}
-		case subscriptionaddon.FieldAddonStatus:
+		case addonassociation.FieldAddonStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field addon_status", values[i])
 			} else if value.Valid {
-				sa.AddonStatus = value.String
+				aa.AddonStatus = value.String
 			}
-		case subscriptionaddon.FieldCancellationReason:
+		case addonassociation.FieldCancellationReason:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field cancellation_reason", values[i])
 			} else if value.Valid {
-				sa.CancellationReason = value.String
+				aa.CancellationReason = value.String
 			}
-		case subscriptionaddon.FieldCancelledAt:
+		case addonassociation.FieldCancelledAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field cancelled_at", values[i])
 			} else if value.Valid {
-				sa.CancelledAt = new(time.Time)
-				*sa.CancelledAt = value.Time
+				aa.CancelledAt = new(time.Time)
+				*aa.CancelledAt = value.Time
 			}
-		case subscriptionaddon.FieldMetadata:
+		case addonassociation.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &sa.Metadata); err != nil {
+				if err := json.Unmarshal(*value, &aa.Metadata); err != nil {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
-		case subscriptionaddon.ForeignKeys[0]:
+		case addonassociation.ForeignKeys[0]:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field subscription_subscription_addons", values[i])
+				return fmt.Errorf("unexpected type %T for field subscription_addon_associations", values[i])
 			} else if value.Valid {
-				sa.subscription_subscription_addons = new(string)
-				*sa.subscription_subscription_addons = value.String
+				aa.subscription_addon_associations = new(string)
+				*aa.subscription_addon_associations = value.String
 			}
 		default:
-			sa.selectValues.Set(columns[i], values[i])
+			aa.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
 }
 
-// Value returns the ent.Value that was dynamically selected and assigned to the SubscriptionAddon.
+// Value returns the ent.Value that was dynamically selected and assigned to the AddonAssociation.
 // This includes values selected through modifiers, order, etc.
-func (sa *SubscriptionAddon) Value(name string) (ent.Value, error) {
-	return sa.selectValues.Get(name)
+func (aa *AddonAssociation) Value(name string) (ent.Value, error) {
+	return aa.selectValues.Get(name)
 }
 
-// Update returns a builder for updating this SubscriptionAddon.
-// Note that you need to call SubscriptionAddon.Unwrap() before calling this method if this SubscriptionAddon
+// Update returns a builder for updating this AddonAssociation.
+// Note that you need to call AddonAssociation.Unwrap() before calling this method if this AddonAssociation
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (sa *SubscriptionAddon) Update() *SubscriptionAddonUpdateOne {
-	return NewSubscriptionAddonClient(sa.config).UpdateOne(sa)
+func (aa *AddonAssociation) Update() *AddonAssociationUpdateOne {
+	return NewAddonAssociationClient(aa.config).UpdateOne(aa)
 }
 
-// Unwrap unwraps the SubscriptionAddon entity that was returned from a transaction after it was closed,
+// Unwrap unwraps the AddonAssociation entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (sa *SubscriptionAddon) Unwrap() *SubscriptionAddon {
-	_tx, ok := sa.config.driver.(*txDriver)
+func (aa *AddonAssociation) Unwrap() *AddonAssociation {
+	_tx, ok := aa.config.driver.(*txDriver)
 	if !ok {
-		panic("ent: SubscriptionAddon is not a transactional entity")
+		panic("ent: AddonAssociation is not a transactional entity")
 	}
-	sa.config.driver = _tx.drv
-	return sa
+	aa.config.driver = _tx.drv
+	return aa
 }
 
 // String implements the fmt.Stringer.
-func (sa *SubscriptionAddon) String() string {
+func (aa *AddonAssociation) String() string {
 	var builder strings.Builder
-	builder.WriteString("SubscriptionAddon(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", sa.ID))
+	builder.WriteString("AddonAssociation(")
+	builder.WriteString(fmt.Sprintf("id=%v, ", aa.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(sa.TenantID)
+	builder.WriteString(aa.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(sa.Status)
+	builder.WriteString(aa.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(sa.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(aa.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(sa.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(aa.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(sa.CreatedBy)
+	builder.WriteString(aa.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(sa.UpdatedBy)
+	builder.WriteString(aa.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(sa.EnvironmentID)
+	builder.WriteString(aa.EnvironmentID)
 	builder.WriteString(", ")
-	builder.WriteString("subscription_id=")
-	builder.WriteString(sa.SubscriptionID)
+	builder.WriteString("entity_id=")
+	builder.WriteString(aa.EntityID)
+	builder.WriteString(", ")
+	builder.WriteString("entity_type=")
+	builder.WriteString(aa.EntityType)
 	builder.WriteString(", ")
 	builder.WriteString("addon_id=")
-	builder.WriteString(sa.AddonID)
+	builder.WriteString(aa.AddonID)
 	builder.WriteString(", ")
-	if v := sa.StartDate; v != nil {
+	if v := aa.StartDate; v != nil {
 		builder.WriteString("start_date=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := sa.EndDate; v != nil {
+	if v := aa.EndDate; v != nil {
 		builder.WriteString("end_date=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("addon_status=")
-	builder.WriteString(sa.AddonStatus)
+	builder.WriteString(aa.AddonStatus)
 	builder.WriteString(", ")
 	builder.WriteString("cancellation_reason=")
-	builder.WriteString(sa.CancellationReason)
+	builder.WriteString(aa.CancellationReason)
 	builder.WriteString(", ")
-	if v := sa.CancelledAt; v != nil {
+	if v := aa.CancelledAt; v != nil {
 		builder.WriteString("cancelled_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
-	builder.WriteString(fmt.Sprintf("%v", sa.Metadata))
+	builder.WriteString(fmt.Sprintf("%v", aa.Metadata))
 	builder.WriteByte(')')
 	return builder.String()
 }
 
-// SubscriptionAddons is a parsable slice of SubscriptionAddon.
-type SubscriptionAddons []*SubscriptionAddon
+// AddonAssociations is a parsable slice of AddonAssociation.
+type AddonAssociations []*AddonAssociation

@@ -12,12 +12,12 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/flexprice/flexprice/ent/addonassociation"
 	"github.com/flexprice/flexprice/ent/couponapplication"
 	"github.com/flexprice/flexprice/ent/couponassociation"
 	"github.com/flexprice/flexprice/ent/creditgrant"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/subscription"
-	"github.com/flexprice/flexprice/ent/subscriptionaddon"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
 	"github.com/flexprice/flexprice/ent/subscriptionschedule"
@@ -36,7 +36,7 @@ type SubscriptionQuery struct {
 	withSchedule           *SubscriptionScheduleQuery
 	withCouponAssociations *CouponAssociationQuery
 	withCouponApplications *CouponApplicationQuery
-	withSubscriptionAddons *SubscriptionAddonQuery
+	withAddonAssociations  *AddonAssociationQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -205,9 +205,9 @@ func (sq *SubscriptionQuery) QueryCouponApplications() *CouponApplicationQuery {
 	return query
 }
 
-// QuerySubscriptionAddons chains the current query on the "subscription_addons" edge.
-func (sq *SubscriptionQuery) QuerySubscriptionAddons() *SubscriptionAddonQuery {
-	query := (&SubscriptionAddonClient{config: sq.config}).Query()
+// QueryAddonAssociations chains the current query on the "addon_associations" edge.
+func (sq *SubscriptionQuery) QueryAddonAssociations() *AddonAssociationQuery {
+	query := (&AddonAssociationClient{config: sq.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
 		if err := sq.prepareQuery(ctx); err != nil {
 			return nil, err
@@ -218,8 +218,8 @@ func (sq *SubscriptionQuery) QuerySubscriptionAddons() *SubscriptionAddonQuery {
 		}
 		step := sqlgraph.NewStep(
 			sqlgraph.From(subscription.Table, subscription.FieldID, selector),
-			sqlgraph.To(subscriptionaddon.Table, subscriptionaddon.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, subscription.SubscriptionAddonsTable, subscription.SubscriptionAddonsColumn),
+			sqlgraph.To(addonassociation.Table, addonassociation.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, subscription.AddonAssociationsTable, subscription.AddonAssociationsColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(sq.driver.Dialect(), step)
 		return fromU, nil
@@ -425,7 +425,7 @@ func (sq *SubscriptionQuery) Clone() *SubscriptionQuery {
 		withSchedule:           sq.withSchedule.Clone(),
 		withCouponAssociations: sq.withCouponAssociations.Clone(),
 		withCouponApplications: sq.withCouponApplications.Clone(),
-		withSubscriptionAddons: sq.withSubscriptionAddons.Clone(),
+		withAddonAssociations:  sq.withAddonAssociations.Clone(),
 		// clone intermediate query.
 		sql:  sq.sql.Clone(),
 		path: sq.path,
@@ -498,14 +498,14 @@ func (sq *SubscriptionQuery) WithCouponApplications(opts ...func(*CouponApplicat
 	return sq
 }
 
-// WithSubscriptionAddons tells the query-builder to eager-load the nodes that are connected to
-// the "subscription_addons" edge. The optional arguments are used to configure the query builder of the edge.
-func (sq *SubscriptionQuery) WithSubscriptionAddons(opts ...func(*SubscriptionAddonQuery)) *SubscriptionQuery {
-	query := (&SubscriptionAddonClient{config: sq.config}).Query()
+// WithAddonAssociations tells the query-builder to eager-load the nodes that are connected to
+// the "addon_associations" edge. The optional arguments are used to configure the query builder of the edge.
+func (sq *SubscriptionQuery) WithAddonAssociations(opts ...func(*AddonAssociationQuery)) *SubscriptionQuery {
+	query := (&AddonAssociationClient{config: sq.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	sq.withSubscriptionAddons = query
+	sq.withAddonAssociations = query
 	return sq
 }
 
@@ -594,7 +594,7 @@ func (sq *SubscriptionQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]
 			sq.withSchedule != nil,
 			sq.withCouponAssociations != nil,
 			sq.withCouponApplications != nil,
-			sq.withSubscriptionAddons != nil,
+			sq.withAddonAssociations != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -660,11 +660,11 @@ func (sq *SubscriptionQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]
 			return nil, err
 		}
 	}
-	if query := sq.withSubscriptionAddons; query != nil {
-		if err := sq.loadSubscriptionAddons(ctx, query, nodes,
-			func(n *Subscription) { n.Edges.SubscriptionAddons = []*SubscriptionAddon{} },
-			func(n *Subscription, e *SubscriptionAddon) {
-				n.Edges.SubscriptionAddons = append(n.Edges.SubscriptionAddons, e)
+	if query := sq.withAddonAssociations; query != nil {
+		if err := sq.loadAddonAssociations(ctx, query, nodes,
+			func(n *Subscription) { n.Edges.AddonAssociations = []*AddonAssociation{} },
+			func(n *Subscription, e *AddonAssociation) {
+				n.Edges.AddonAssociations = append(n.Edges.AddonAssociations, e)
 			}); err != nil {
 			return nil, err
 		}
@@ -855,7 +855,7 @@ func (sq *SubscriptionQuery) loadCouponApplications(ctx context.Context, query *
 	}
 	return nil
 }
-func (sq *SubscriptionQuery) loadSubscriptionAddons(ctx context.Context, query *SubscriptionAddonQuery, nodes []*Subscription, init func(*Subscription), assign func(*Subscription, *SubscriptionAddon)) error {
+func (sq *SubscriptionQuery) loadAddonAssociations(ctx context.Context, query *AddonAssociationQuery, nodes []*Subscription, init func(*Subscription), assign func(*Subscription, *AddonAssociation)) error {
 	fks := make([]driver.Value, 0, len(nodes))
 	nodeids := make(map[string]*Subscription)
 	for i := range nodes {
@@ -866,21 +866,21 @@ func (sq *SubscriptionQuery) loadSubscriptionAddons(ctx context.Context, query *
 		}
 	}
 	query.withFKs = true
-	query.Where(predicate.SubscriptionAddon(func(s *sql.Selector) {
-		s.Where(sql.InValues(s.C(subscription.SubscriptionAddonsColumn), fks...))
+	query.Where(predicate.AddonAssociation(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(subscription.AddonAssociationsColumn), fks...))
 	}))
 	neighbors, err := query.All(ctx)
 	if err != nil {
 		return err
 	}
 	for _, n := range neighbors {
-		fk := n.subscription_subscription_addons
+		fk := n.subscription_addon_associations
 		if fk == nil {
-			return fmt.Errorf(`foreign-key "subscription_subscription_addons" is nil for node %v`, n.ID)
+			return fmt.Errorf(`foreign-key "subscription_addon_associations" is nil for node %v`, n.ID)
 		}
 		node, ok := nodeids[*fk]
 		if !ok {
-			return fmt.Errorf(`unexpected referenced foreign-key "subscription_subscription_addons" returned %v for node %v`, *fk, n.ID)
+			return fmt.Errorf(`unexpected referenced foreign-key "subscription_addon_associations" returned %v for node %v`, *fk, n.ID)
 		}
 		assign(node, n)
 	}

@@ -10,21 +10,21 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
-// SubscriptionAddon holds the schema definition for the SubscriptionAddon entity.
-type SubscriptionAddon struct {
+// AddonAssociation holds the schema definition for the AddonAssociation entity.
+type AddonAssociation struct {
 	ent.Schema
 }
 
-// Mixin of the SubscriptionAddon.
-func (SubscriptionAddon) Mixin() []ent.Mixin {
+// Mixin of the AddonAssociation.
+func (AddonAssociation) Mixin() []ent.Mixin {
 	return []ent.Mixin{
 		baseMixin.BaseMixin{},
 		baseMixin.EnvironmentMixin{},
 	}
 }
 
-// Fields of the SubscriptionAddon.
-func (SubscriptionAddon) Fields() []ent.Field {
+// Fields of the AddonAssociation.
+func (AddonAssociation) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("id").
 			SchemaType(map[string]string{
@@ -33,7 +33,14 @@ func (SubscriptionAddon) Fields() []ent.Field {
 			Unique().
 			Immutable(),
 
-		field.String("subscription_id").
+		field.String("entity_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			NotEmpty().
+			Immutable(),
+
+		field.String("entity_type").
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
 			}).
@@ -82,28 +89,14 @@ func (SubscriptionAddon) Fields() []ent.Field {
 	}
 }
 
-// Edges of the SubscriptionAddon.
-func (SubscriptionAddon) Edges() []ent.Edge {
-	return []ent.Edge{
-		// edge.From("subscription", Subscription.Type).
-		// 	Ref("subscription_addons").
-		// 	Field("subscription_id").
-		// 	Immutable().
-		// 	Unique().
-		// 	Required(),
-
-		// edge.From("addon", Addon.Type).
-		// 	Ref("subscription_addons").
-		// 	Field("addon_id").
-		// 	Immutable().
-		// 	Unique().
-		// 	Required(),
-	}
+// Edges of the AddonAssociation.
+func (AddonAssociation) Edges() []ent.Edge {
+	return []ent.Edge{}
 }
 
-// Indexes of the SubscriptionAddon.
-func (SubscriptionAddon) Indexes() []ent.Index {
+// Indexes of the AddonAssociation.
+func (AddonAssociation) Indexes() []ent.Index {
 	return []ent.Index{
-		index.Fields("tenant_id", "environment_id", "subscription_id", "addon_id"),
+		index.Fields("tenant_id", "environment_id", "entity_id", "entity_type", "addon_id"),
 	}
 }
