@@ -428,14 +428,17 @@ func (r *CreatePriceRequest) Validate() error {
 		}
 	}
 
-	if err := r.EntityType.Validate(); err != nil {
-		return err
-	}
+	if r.EntityType != "" {
 
-	if r.EntityID == "" {
-		return ierr.NewError("entity_id is required when entity_type is provided").
-			WithHint("Please provide an entity id").
-			Mark(ierr.ErrValidation)
+		if err := r.EntityType.Validate(); err != nil {
+			return err
+		}
+
+		if r.EntityID == "" {
+			return ierr.NewError("entity_id is required when entity_type is provided").
+				WithHint("Please provide an entity id").
+				Mark(ierr.ErrValidation)
+		}
 	}
 
 	return nil

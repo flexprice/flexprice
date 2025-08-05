@@ -243,7 +243,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 
 	// Process price overrides if provided
 	if len(req.OverrideLineItems) > 0 {
-		err = s.processSubscriptionPriceOverrides(ctx, sub, req.OverrideLineItems, lineItems, priceMap)
+		err = s.handleSubscriptionPriceOverrides(ctx, sub, req.OverrideLineItems, lineItems, priceMap)
 		if err != nil {
 			return nil, err
 		}
@@ -350,8 +350,8 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	return response, nil
 }
 
-// processSubscriptionPriceOverrides handles creating subscription-scoped prices for overrides
-func (s *subscriptionService) processSubscriptionPriceOverrides(
+// handleSubscriptionPriceOverrides handles creating subscription-scoped prices for overrides
+func (s *subscriptionService) handleSubscriptionPriceOverrides(
 	ctx context.Context,
 	sub *subscription.Subscription,
 	overrideRequests []dto.OverrideLineItemRequest,

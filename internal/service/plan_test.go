@@ -65,6 +65,8 @@ func (s *PlanServiceSuite) TestCreatePlan() {
 					CreatePriceRequest: &dto.CreatePriceRequest{
 						Amount:             "100",
 						Currency:           "usd",
+						EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+						EntityID:           "single_price_plan",
 						Type:               types.PRICE_TYPE_USAGE,
 						BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 						BillingPeriodCount: 1,
@@ -102,6 +104,8 @@ func (s *PlanServiceSuite) TestCreatePlan() {
 					CreatePriceRequest: &dto.CreatePriceRequest{
 						Amount:             "100",
 						Currency:           "usd",
+						EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+						EntityID:           "multi_price_plan", // Will be updated during plan creation
 						Type:               types.PRICE_TYPE_FIXED,
 						BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 						BillingPeriodCount: 1,
@@ -115,6 +119,8 @@ func (s *PlanServiceSuite) TestCreatePlan() {
 					CreatePriceRequest: &dto.CreatePriceRequest{
 						Amount:             "200",
 						Currency:           "usd",
+						EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+						EntityID:           "multi_price_plan", // Will be updated during plan creation
 						Type:               types.PRICE_TYPE_USAGE,
 						BillingPeriod:      types.BILLING_PERIOD_ANNUAL,
 						BillingPeriodCount: 1,

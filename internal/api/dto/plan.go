@@ -98,7 +98,7 @@ func (r *CreatePlanRequest) validateCreditGrantForPlan(cg CreateCreditGrantReque
 			WithHint("Credit grants in plan creation should not include subscription_id").
 			WithReportableDetails(map[string]interface{}{
 				"subscription_id": *cg.SubscriptionID,
-			}).
+		}).
 			Mark(errors.ErrValidation)
 	}
 
