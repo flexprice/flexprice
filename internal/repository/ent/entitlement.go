@@ -566,7 +566,7 @@ func (o EntitlementQueryOptions) applyEntityQueryOptions(_ context.Context, f *t
 		return query, nil
 	}
 
-	// Apply plan ID filter if specified
+	// Apply entity ID filter if specified
 	if len(f.EntityIDs) > 0 {
 		query = query.Where(entitlement.EntityIDIn(f.EntityIDs...))
 	}
