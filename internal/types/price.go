@@ -286,7 +286,7 @@ func (f PriceFilter) Validate() error {
 		}
 	}
 
-	// Validate scope if provided
+	// Validate entity type if provided
 	if f.EntityType != nil {
 		if err := f.EntityType.Validate(); err != nil {
 			return err
