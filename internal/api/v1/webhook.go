@@ -51,7 +51,9 @@ func (h *WebhookHandler) GetDashboardURL(c *gin.Context) {
 			"tenant_id", tenantID,
 			"environment_id", environmentID,
 		)
-		c.Error(err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to get webhook dashboard",
+		})
 		return
 	}
 
@@ -64,7 +66,9 @@ func (h *WebhookHandler) GetDashboardURL(c *gin.Context) {
 			"environment_id", environmentID,
 			"app_id", appID,
 		)
-		c.Error(err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to get webhook dashboard",
+		})
 		return
 	}
 
