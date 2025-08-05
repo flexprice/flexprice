@@ -20,6 +20,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/pdf"
 	"github.com/flexprice/flexprice/internal/postgres"
+	"github.com/flexprice/flexprice/internal/profiling"
 	"github.com/flexprice/flexprice/internal/publisher"
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
 	"github.com/flexprice/flexprice/internal/repository"
@@ -197,6 +198,7 @@ func main() {
 			sentry.RegisterHooks,
 			startServer,
 		),
+		profiling.Module(),
 	)
 
 	app := fx.New(opts...)

@@ -24,6 +24,7 @@ type Configuration struct {
 	Logging             LoggingConfig             `validate:"required"`
 	Postgres            PostgresConfig            `validate:"required"`
 	Sentry              SentryConfig              `validate:"required"`
+	Pyroscope           PyroscopeConfig           `validate:"required"`
 	Event               EventConfig               `validate:"required"`
 	DynamoDB            DynamoDBConfig            `validate:"required"`
 	Temporal            TemporalConfig            `validate:"required"`
@@ -126,6 +127,12 @@ type SentryConfig struct {
 	DSN         string  `mapstructure:"dsn"`
 	Environment string  `mapstructure:"environment"`
 	SampleRate  float64 `mapstructure:"sample_rate" default:"1.0"`
+}
+
+type PyroscopeConfig struct {
+	Enabled       bool   `mapstructure:"enabled"`
+	ServerAddress string `mapstructure:"server_address"`
+	AppName       string `mapstructure:"app_name"` // TODO(akshat): remove this
 }
 
 type TemporalConfig struct {

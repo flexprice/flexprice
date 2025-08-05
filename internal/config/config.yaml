@@ -139,3 +139,8 @@ event_post_processing:
   topic_backfill: "events_post_processing_backfill"
   rate_limit_backfill: 1
   consumer_group_backfill: "v1_events_post_processing_backfill"
+
+pyroscope:
+  enabled: true
+  server_address: "http://localhost:4040"
+  app_name: "flexprice"

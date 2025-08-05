@@ -113,6 +113,11 @@ services:
     depends_on:
       - temporal
 
+  pyroscope:
+    image: grafana/pyroscope:weekly-f130-21136bae3
+    ports:
+      - "4040:4040"
+
   # Build stage as a separate service that other services can depend on
   flexprice-build:
     image: flexprice-app:local
