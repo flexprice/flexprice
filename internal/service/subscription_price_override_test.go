@@ -95,6 +95,7 @@ func TestCreateSubscriptionWithPriceOverrides(t *testing.T) {
 			BillingCadence:     types.BILLING_CADENCE_RECURRING,
 			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 			BillingPeriodCount: 1,
+			BillingCycle:       types.BillingCycleAnniversary,
 			OverrideLineItems: []dto.OverrideLineItemRequest{
 				{
 					PriceID: "duplicate_price",
@@ -109,7 +110,7 @@ func TestCreateSubscriptionWithPriceOverrides(t *testing.T) {
 
 		err := req.Validate()
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "duplicate price_id")
+		assert.Contains(t, err.Error(), "duplicate price_id in override line items")
 	})
 }
 
