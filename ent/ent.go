@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/flexprice/flexprice/ent/auth"
+	"github.com/flexprice/flexprice/ent/authorizationaudit"
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/costsheet"
 	"github.com/flexprice/flexprice/ent/coupon"
@@ -35,6 +36,7 @@ import (
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/priceunit"
+	"github.com/flexprice/flexprice/ent/rbacpolicy"
 	"github.com/flexprice/flexprice/ent/secret"
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
@@ -44,6 +46,7 @@ import (
 	"github.com/flexprice/flexprice/ent/task"
 	"github.com/flexprice/flexprice/ent/tenant"
 	"github.com/flexprice/flexprice/ent/user"
+	"github.com/flexprice/flexprice/ent/userrole"
 	"github.com/flexprice/flexprice/ent/wallet"
 	"github.com/flexprice/flexprice/ent/wallettransaction"
 )
@@ -107,6 +110,7 @@ func checkColumn(table, column string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
 			auth.Table:                      auth.ValidColumn,
+			authorizationaudit.Table:        authorizationaudit.ValidColumn,
 			billingsequence.Table:           billingsequence.ValidColumn,
 			costsheet.Table:                 costsheet.ValidColumn,
 			coupon.Table:                    coupon.ValidColumn,
@@ -129,6 +133,7 @@ func checkColumn(table, column string) error {
 			plan.Table:                      plan.ValidColumn,
 			price.Table:                     price.ValidColumn,
 			priceunit.Table:                 priceunit.ValidColumn,
+			rbacpolicy.Table:                rbacpolicy.ValidColumn,
 			secret.Table:                    secret.ValidColumn,
 			subscription.Table:              subscription.ValidColumn,
 			subscriptionlineitem.Table:      subscriptionlineitem.ValidColumn,
@@ -138,6 +143,7 @@ func checkColumn(table, column string) error {
 			task.Table:                      task.ValidColumn,
 			tenant.Table:                    tenant.ValidColumn,
 			user.Table:                      user.ValidColumn,
+			userrole.Table:                  userrole.ValidColumn,
 			wallet.Table:                    wallet.ValidColumn,
 			wallettransaction.Table:         wallettransaction.ValidColumn,
 		})

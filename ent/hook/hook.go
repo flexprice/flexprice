@@ -21,6 +21,18 @@ func (f AuthFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error)
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AuthMutation", m)
 }
 
+// The AuthorizationAuditFunc type is an adapter to allow the use of ordinary
+// function as AuthorizationAudit mutator.
+type AuthorizationAuditFunc func(context.Context, *ent.AuthorizationAuditMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AuthorizationAuditFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AuthorizationAuditMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AuthorizationAuditMutation", m)
+}
+
 // The BillingSequenceFunc type is an adapter to allow the use of ordinary
 // function as BillingSequence mutator.
 type BillingSequenceFunc func(context.Context, *ent.BillingSequenceMutation) (ent.Value, error)
@@ -285,6 +297,18 @@ func (f PriceUnitFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, e
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PriceUnitMutation", m)
 }
 
+// The RBACPolicyFunc type is an adapter to allow the use of ordinary
+// function as RBACPolicy mutator.
+type RBACPolicyFunc func(context.Context, *ent.RBACPolicyMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f RBACPolicyFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.RBACPolicyMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.RBACPolicyMutation", m)
+}
+
 // The SecretFunc type is an adapter to allow the use of ordinary
 // function as Secret mutator.
 type SecretFunc func(context.Context, *ent.SecretMutation) (ent.Value, error)
@@ -391,6 +415,18 @@ func (f UserFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error)
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.UserMutation", m)
+}
+
+// The UserRoleFunc type is an adapter to allow the use of ordinary
+// function as UserRole mutator.
+type UserRoleFunc func(context.Context, *ent.UserRoleMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f UserRoleFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.UserRoleMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.UserRoleMutation", m)
 }
 
 // The WalletFunc type is an adapter to allow the use of ordinary

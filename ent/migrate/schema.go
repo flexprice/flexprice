@@ -50,6 +50,51 @@ var (
 			},
 		},
 	}
+	// AuthorizationAuditsColumns holds the columns for the "authorization_audits" table.
+	AuthorizationAuditsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "user_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "resource", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "action", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "allowed", Type: field.TypeBool, Default: false},
+		{Name: "reason", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "ip_address", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(45)"}},
+		{Name: "user_agent", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+	}
+	// AuthorizationAuditsTable holds the schema information for the "authorization_audits" table.
+	AuthorizationAuditsTable = &schema.Table{
+		Name:       "authorization_audits",
+		Columns:    AuthorizationAuditsColumns,
+		PrimaryKey: []*schema.Column{AuthorizationAuditsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "idx_authorization_audit_user_tenant",
+				Unique:  false,
+				Columns: []*schema.Column{AuthorizationAuditsColumns[7], AuthorizationAuditsColumns[1]},
+			},
+			{
+				Name:    "idx_authorization_audit_resource_action",
+				Unique:  false,
+				Columns: []*schema.Column{AuthorizationAuditsColumns[8], AuthorizationAuditsColumns[9]},
+			},
+			{
+				Name:    "idx_authorization_audit_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{AuthorizationAuditsColumns[3]},
+			},
+			{
+				Name:    "idx_authorization_audit_allowed",
+				Unique:  false,
+				Columns: []*schema.Column{AuthorizationAuditsColumns[10]},
+			},
+		},
+	}
 	// BillingSequencesColumns holds the columns for the "billing_sequences" table.
 	BillingSequencesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -1170,6 +1215,43 @@ var (
 			},
 		},
 	}
+	// RbacPoliciesColumns holds the columns for the "rbac_policies" table.
+	RbacPoliciesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "role", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "resource", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "action", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "effect", Type: field.TypeString, Default: "allow", SchemaType: map[string]string{"postgres": "varchar(10)"}},
+	}
+	// RbacPoliciesTable holds the schema information for the "rbac_policies" table.
+	RbacPoliciesTable = &schema.Table{
+		Name:       "rbac_policies",
+		Columns:    RbacPoliciesColumns,
+		PrimaryKey: []*schema.Column{RbacPoliciesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "idx_rbac_policies_tenant_role",
+				Unique:  false,
+				Columns: []*schema.Column{RbacPoliciesColumns[1], RbacPoliciesColumns[7]},
+			},
+			{
+				Name:    "idx_rbac_policies_resource_action",
+				Unique:  false,
+				Columns: []*schema.Column{RbacPoliciesColumns[8], RbacPoliciesColumns[9]},
+			},
+			{
+				Name:    "idx_rbac_policies_status",
+				Unique:  false,
+				Columns: []*schema.Column{RbacPoliciesColumns[2]},
+			},
+		},
+	}
 	// SecretsColumns holds the columns for the "secrets" table.
 	SecretsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -1617,6 +1699,41 @@ var (
 			},
 		},
 	}
+	// UserRolesColumns holds the columns for the "user_roles" table.
+	UserRolesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "user_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "role", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+	}
+	// UserRolesTable holds the schema information for the "user_roles" table.
+	UserRolesTable = &schema.Table{
+		Name:       "user_roles",
+		Columns:    UserRolesColumns,
+		PrimaryKey: []*schema.Column{UserRolesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "idx_user_roles_user_tenant",
+				Unique:  false,
+				Columns: []*schema.Column{UserRolesColumns[7], UserRolesColumns[1]},
+			},
+			{
+				Name:    "idx_user_roles_role",
+				Unique:  false,
+				Columns: []*schema.Column{UserRolesColumns[8]},
+			},
+			{
+				Name:    "idx_user_roles_status",
+				Unique:  false,
+				Columns: []*schema.Column{UserRolesColumns[2]},
+			},
+		},
+	}
 	// WalletsColumns holds the columns for the "wallets" table.
 	WalletsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -1757,6 +1874,7 @@ var (
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
 		AuthsTable,
+		AuthorizationAuditsTable,
 		BillingSequencesTable,
 		CostsheetTable,
 		CouponsTable,
@@ -1779,6 +1897,7 @@ var (
 		PlansTable,
 		PricesTable,
 		PriceUnitTable,
+		RbacPoliciesTable,
 		SecretsTable,
 		SubscriptionsTable,
 		SubscriptionLineItemsTable,
@@ -1788,6 +1907,7 @@ var (
 		TasksTable,
 		TenantsTable,
 		UsersTable,
+		UserRolesTable,
 		WalletsTable,
 		WalletTransactionsTable,
 		CouponAssociationCouponApplicationsTable,
