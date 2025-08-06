@@ -16,6 +16,8 @@ type Tx struct {
 	config
 	// Auth is the client for interacting with the Auth builders.
 	Auth *AuthClient
+	// AuthorizationAudit is the client for interacting with the AuthorizationAudit builders.
+	AuthorizationAudit *AuthorizationAuditClient
 	// BillingSequence is the client for interacting with the BillingSequence builders.
 	BillingSequence *BillingSequenceClient
 	// Costsheet is the client for interacting with the Costsheet builders.
@@ -60,6 +62,8 @@ type Tx struct {
 	Price *PriceClient
 	// PriceUnit is the client for interacting with the PriceUnit builders.
 	PriceUnit *PriceUnitClient
+	// RBACPolicy is the client for interacting with the RBACPolicy builders.
+	RBACPolicy *RBACPolicyClient
 	// Secret is the client for interacting with the Secret builders.
 	Secret *SecretClient
 	// Subscription is the client for interacting with the Subscription builders.
@@ -78,6 +82,8 @@ type Tx struct {
 	Tenant *TenantClient
 	// User is the client for interacting with the User builders.
 	User *UserClient
+	// UserRole is the client for interacting with the UserRole builders.
+	UserRole *UserRoleClient
 	// Wallet is the client for interacting with the Wallet builders.
 	Wallet *WalletClient
 	// WalletTransaction is the client for interacting with the WalletTransaction builders.
@@ -214,6 +220,7 @@ func (tx *Tx) Client() *Client {
 
 func (tx *Tx) init() {
 	tx.Auth = NewAuthClient(tx.config)
+	tx.AuthorizationAudit = NewAuthorizationAuditClient(tx.config)
 	tx.BillingSequence = NewBillingSequenceClient(tx.config)
 	tx.Costsheet = NewCostsheetClient(tx.config)
 	tx.Coupon = NewCouponClient(tx.config)
@@ -236,6 +243,7 @@ func (tx *Tx) init() {
 	tx.Plan = NewPlanClient(tx.config)
 	tx.Price = NewPriceClient(tx.config)
 	tx.PriceUnit = NewPriceUnitClient(tx.config)
+	tx.RBACPolicy = NewRBACPolicyClient(tx.config)
 	tx.Secret = NewSecretClient(tx.config)
 	tx.Subscription = NewSubscriptionClient(tx.config)
 	tx.SubscriptionLineItem = NewSubscriptionLineItemClient(tx.config)
@@ -245,6 +253,7 @@ func (tx *Tx) init() {
 	tx.Task = NewTaskClient(tx.config)
 	tx.Tenant = NewTenantClient(tx.config)
 	tx.User = NewUserClient(tx.config)
+	tx.UserRole = NewUserRoleClient(tx.config)
 	tx.Wallet = NewWalletClient(tx.config)
 	tx.WalletTransaction = NewWalletTransactionClient(tx.config)
 }

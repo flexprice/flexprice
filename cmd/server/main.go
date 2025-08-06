@@ -8,9 +8,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/api"
 	"github.com/flexprice/flexprice/internal/api/cron"
 	v1 "github.com/flexprice/flexprice/internal/api/v1"
+	"github.com/flexprice/flexprice/internal/auth/rbac"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/config"
@@ -150,6 +152,9 @@ func main() {
 			// Temporal
 			provideTemporalClient,
 			provideTemporalService,
+
+			// RBAC
+			provideRBACService,
 		),
 	)
 
@@ -191,6 +196,7 @@ func main() {
 			service.NewCreditNoteService,
 			service.NewCouponService,
 			service.NewPriceUnitService,
+			repository.NewRBACRepository,
 		),
 	)
 
@@ -210,6 +216,10 @@ func main() {
 
 	app := fx.New(opts...)
 	app.Run()
+}
+
+func provideRBACService(logger *logger.Logger, repo repository.RBACRepositoryInterface, client *ent.Client) (*rbac.Service, error) {
+	return rbac.NewService(logger, repo, client)
 }
 
 func provideHandlers(
@@ -243,6 +253,7 @@ func provideHandlers(
 	priceUnitService *service.PriceUnitService,
 	svixClient *svix.Client,
 	couponService service.CouponService,
+	rbacService *rbac.Service,
 ) api.Handlers {
 	return api.Handlers{
 		Events:            v1.NewEventsHandler(eventService, eventPostProcessingService, logger),
@@ -274,11 +285,12 @@ func provideHandlers(
 		PriceUnit:         v1.NewPriceUnitHandler(priceUnitService, logger),
 		Webhook:           v1.NewWebhookHandler(cfg, svixClient, logger),
 		Coupon:            v1.NewCouponHandler(couponService, logger),
+		RBAC:              v1.NewRBACHandler(rbacService, logger),
 	}
 }
 
-func provideRouter(handlers api.Handlers, cfg *config.Configuration, logger *logger.Logger, secretService service.SecretService, envAccessService service.EnvAccessService) *gin.Engine {
-	return api.NewRouter(handlers, cfg, logger, secretService, envAccessService)
+func provideRouter(handlers api.Handlers, cfg *config.Configuration, logger *logger.Logger, secretService service.SecretService, envAccessService service.EnvAccessService, rbacService *rbac.Service) *gin.Engine {
+	return api.NewRouter(handlers, cfg, logger, secretService, envAccessService, rbacService)
 }
 
 func provideTemporalConfig(cfg *config.Configuration) *config.TemporalConfig {

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/ent/auth"
+	"github.com/flexprice/flexprice/ent/authorizationaudit"
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/costsheet"
 	"github.com/flexprice/flexprice/ent/coupon"
@@ -28,6 +29,7 @@ import (
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/priceunit"
+	"github.com/flexprice/flexprice/ent/rbacpolicy"
 	"github.com/flexprice/flexprice/ent/schema"
 	"github.com/flexprice/flexprice/ent/secret"
 	"github.com/flexprice/flexprice/ent/subscription"
@@ -38,6 +40,7 @@ import (
 	"github.com/flexprice/flexprice/ent/task"
 	"github.com/flexprice/flexprice/ent/tenant"
 	"github.com/flexprice/flexprice/ent/user"
+	"github.com/flexprice/flexprice/ent/userrole"
 	"github.com/flexprice/flexprice/ent/wallet"
 	"github.com/flexprice/flexprice/ent/wallettransaction"
 	"github.com/flexprice/flexprice/internal/types"
@@ -72,6 +75,45 @@ func init() {
 	auth.DefaultUpdatedAt = authDescUpdatedAt.Default.(func() time.Time)
 	// auth.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	auth.UpdateDefaultUpdatedAt = authDescUpdatedAt.UpdateDefault.(func() time.Time)
+	authorizationauditMixin := schema.AuthorizationAudit{}.Mixin()
+	authorizationauditMixinFields0 := authorizationauditMixin[0].Fields()
+	_ = authorizationauditMixinFields0
+	authorizationauditFields := schema.AuthorizationAudit{}.Fields()
+	_ = authorizationauditFields
+	// authorizationauditDescTenantID is the schema descriptor for tenant_id field.
+	authorizationauditDescTenantID := authorizationauditMixinFields0[0].Descriptor()
+	// authorizationaudit.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	authorizationaudit.TenantIDValidator = authorizationauditDescTenantID.Validators[0].(func(string) error)
+	// authorizationauditDescStatus is the schema descriptor for status field.
+	authorizationauditDescStatus := authorizationauditMixinFields0[1].Descriptor()
+	// authorizationaudit.DefaultStatus holds the default value on creation for the status field.
+	authorizationaudit.DefaultStatus = authorizationauditDescStatus.Default.(string)
+	// authorizationauditDescCreatedAt is the schema descriptor for created_at field.
+	authorizationauditDescCreatedAt := authorizationauditMixinFields0[2].Descriptor()
+	// authorizationaudit.DefaultCreatedAt holds the default value on creation for the created_at field.
+	authorizationaudit.DefaultCreatedAt = authorizationauditDescCreatedAt.Default.(func() time.Time)
+	// authorizationauditDescUpdatedAt is the schema descriptor for updated_at field.
+	authorizationauditDescUpdatedAt := authorizationauditMixinFields0[3].Descriptor()
+	// authorizationaudit.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	authorizationaudit.DefaultUpdatedAt = authorizationauditDescUpdatedAt.Default.(func() time.Time)
+	// authorizationaudit.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	authorizationaudit.UpdateDefaultUpdatedAt = authorizationauditDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// authorizationauditDescUserID is the schema descriptor for user_id field.
+	authorizationauditDescUserID := authorizationauditFields[1].Descriptor()
+	// authorizationaudit.UserIDValidator is a validator for the "user_id" field. It is called by the builders before save.
+	authorizationaudit.UserIDValidator = authorizationauditDescUserID.Validators[0].(func(string) error)
+	// authorizationauditDescResource is the schema descriptor for resource field.
+	authorizationauditDescResource := authorizationauditFields[2].Descriptor()
+	// authorizationaudit.ResourceValidator is a validator for the "resource" field. It is called by the builders before save.
+	authorizationaudit.ResourceValidator = authorizationauditDescResource.Validators[0].(func(string) error)
+	// authorizationauditDescAction is the schema descriptor for action field.
+	authorizationauditDescAction := authorizationauditFields[3].Descriptor()
+	// authorizationaudit.ActionValidator is a validator for the "action" field. It is called by the builders before save.
+	authorizationaudit.ActionValidator = authorizationauditDescAction.Validators[0].(func(string) error)
+	// authorizationauditDescAllowed is the schema descriptor for allowed field.
+	authorizationauditDescAllowed := authorizationauditFields[4].Descriptor()
+	// authorizationaudit.DefaultAllowed holds the default value on creation for the allowed field.
+	authorizationaudit.DefaultAllowed = authorizationauditDescAllowed.Default.(bool)
 	billingsequenceFields := schema.BillingSequence{}.Fields()
 	_ = billingsequenceFields
 	// billingsequenceDescTenantID is the schema descriptor for tenant_id field.
@@ -1124,6 +1166,45 @@ func init() {
 			return nil
 		}
 	}()
+	rbacpolicyMixin := schema.RBACPolicy{}.Mixin()
+	rbacpolicyMixinFields0 := rbacpolicyMixin[0].Fields()
+	_ = rbacpolicyMixinFields0
+	rbacpolicyFields := schema.RBACPolicy{}.Fields()
+	_ = rbacpolicyFields
+	// rbacpolicyDescTenantID is the schema descriptor for tenant_id field.
+	rbacpolicyDescTenantID := rbacpolicyMixinFields0[0].Descriptor()
+	// rbacpolicy.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	rbacpolicy.TenantIDValidator = rbacpolicyDescTenantID.Validators[0].(func(string) error)
+	// rbacpolicyDescStatus is the schema descriptor for status field.
+	rbacpolicyDescStatus := rbacpolicyMixinFields0[1].Descriptor()
+	// rbacpolicy.DefaultStatus holds the default value on creation for the status field.
+	rbacpolicy.DefaultStatus = rbacpolicyDescStatus.Default.(string)
+	// rbacpolicyDescCreatedAt is the schema descriptor for created_at field.
+	rbacpolicyDescCreatedAt := rbacpolicyMixinFields0[2].Descriptor()
+	// rbacpolicy.DefaultCreatedAt holds the default value on creation for the created_at field.
+	rbacpolicy.DefaultCreatedAt = rbacpolicyDescCreatedAt.Default.(func() time.Time)
+	// rbacpolicyDescUpdatedAt is the schema descriptor for updated_at field.
+	rbacpolicyDescUpdatedAt := rbacpolicyMixinFields0[3].Descriptor()
+	// rbacpolicy.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	rbacpolicy.DefaultUpdatedAt = rbacpolicyDescUpdatedAt.Default.(func() time.Time)
+	// rbacpolicy.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	rbacpolicy.UpdateDefaultUpdatedAt = rbacpolicyDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// rbacpolicyDescRole is the schema descriptor for role field.
+	rbacpolicyDescRole := rbacpolicyFields[1].Descriptor()
+	// rbacpolicy.RoleValidator is a validator for the "role" field. It is called by the builders before save.
+	rbacpolicy.RoleValidator = rbacpolicyDescRole.Validators[0].(func(string) error)
+	// rbacpolicyDescResource is the schema descriptor for resource field.
+	rbacpolicyDescResource := rbacpolicyFields[2].Descriptor()
+	// rbacpolicy.ResourceValidator is a validator for the "resource" field. It is called by the builders before save.
+	rbacpolicy.ResourceValidator = rbacpolicyDescResource.Validators[0].(func(string) error)
+	// rbacpolicyDescAction is the schema descriptor for action field.
+	rbacpolicyDescAction := rbacpolicyFields[3].Descriptor()
+	// rbacpolicy.ActionValidator is a validator for the "action" field. It is called by the builders before save.
+	rbacpolicy.ActionValidator = rbacpolicyDescAction.Validators[0].(func(string) error)
+	// rbacpolicyDescEffect is the schema descriptor for effect field.
+	rbacpolicyDescEffect := rbacpolicyFields[4].Descriptor()
+	// rbacpolicy.DefaultEffect holds the default value on creation for the effect field.
+	rbacpolicy.DefaultEffect = rbacpolicyDescEffect.Default.(string)
 	secretMixin := schema.Secret{}.Mixin()
 	secretMixinFields0 := secretMixin[0].Fields()
 	_ = secretMixinFields0
@@ -1578,6 +1659,37 @@ func init() {
 	userDescEmail := userFields[1].Descriptor()
 	// user.EmailValidator is a validator for the "email" field. It is called by the builders before save.
 	user.EmailValidator = userDescEmail.Validators[0].(func(string) error)
+	userroleMixin := schema.UserRole{}.Mixin()
+	userroleMixinFields0 := userroleMixin[0].Fields()
+	_ = userroleMixinFields0
+	userroleFields := schema.UserRole{}.Fields()
+	_ = userroleFields
+	// userroleDescTenantID is the schema descriptor for tenant_id field.
+	userroleDescTenantID := userroleMixinFields0[0].Descriptor()
+	// userrole.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	userrole.TenantIDValidator = userroleDescTenantID.Validators[0].(func(string) error)
+	// userroleDescStatus is the schema descriptor for status field.
+	userroleDescStatus := userroleMixinFields0[1].Descriptor()
+	// userrole.DefaultStatus holds the default value on creation for the status field.
+	userrole.DefaultStatus = userroleDescStatus.Default.(string)
+	// userroleDescCreatedAt is the schema descriptor for created_at field.
+	userroleDescCreatedAt := userroleMixinFields0[2].Descriptor()
+	// userrole.DefaultCreatedAt holds the default value on creation for the created_at field.
+	userrole.DefaultCreatedAt = userroleDescCreatedAt.Default.(func() time.Time)
+	// userroleDescUpdatedAt is the schema descriptor for updated_at field.
+	userroleDescUpdatedAt := userroleMixinFields0[3].Descriptor()
+	// userrole.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	userrole.DefaultUpdatedAt = userroleDescUpdatedAt.Default.(func() time.Time)
+	// userrole.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	userrole.UpdateDefaultUpdatedAt = userroleDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// userroleDescUserID is the schema descriptor for user_id field.
+	userroleDescUserID := userroleFields[1].Descriptor()
+	// userrole.UserIDValidator is a validator for the "user_id" field. It is called by the builders before save.
+	userrole.UserIDValidator = userroleDescUserID.Validators[0].(func(string) error)
+	// userroleDescRole is the schema descriptor for role field.
+	userroleDescRole := userroleFields[2].Descriptor()
+	// userrole.RoleValidator is a validator for the "role" field. It is called by the builders before save.
+	userrole.RoleValidator = userroleDescRole.Validators[0].(func(string) error)
 	walletMixin := schema.Wallet{}.Mixin()
 	walletMixinFields0 := walletMixin[0].Fields()
 	_ = walletMixinFields0

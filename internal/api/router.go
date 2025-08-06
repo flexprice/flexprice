@@ -4,6 +4,7 @@ import (
 	"github.com/flexprice/flexprice/docs/swagger"
 	"github.com/flexprice/flexprice/internal/api/cron"
 	v1 "github.com/flexprice/flexprice/internal/api/v1"
+	"github.com/flexprice/flexprice/internal/auth/rbac"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/rest/middleware"
@@ -41,13 +42,15 @@ type Handlers struct {
 	Webhook           *v1.WebhookHandler
 	// Portal handlers
 	Onboarding *v1.OnboardingHandler
+	// RBAC
+	RBAC *v1.RBACHandler
 	// Cron jobs : TODO: move crons out of API based architecture
 	CronSubscription *cron.SubscriptionHandler
 	CronWallet       *cron.WalletCronHandler
 	CronCreditGrant  *cron.CreditGrantCronHandler
 }
 
-func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logger, secretService service.SecretService, envAccessService service.EnvAccessService) *gin.Engine {
+func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logger, secretService service.SecretService, envAccessService service.EnvAccessService, rbacService *rbac.Service) *gin.Engine {
 	// gin.SetMode(gin.ReleaseMode)
 
 	router := gin.Default()
@@ -86,6 +89,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 
 	private := router.Group("/", middleware.AuthenticateMiddleware(cfg, secretService, logger))
 	private.Use(middleware.EnvAccessMiddleware(envAccessService, logger))
+	private.Use(middleware.AuthorizationMiddleware(rbacService, logger))
 
 	v1Private := private.Group("/v1")
 	v1Private.Use(middleware.ErrorHandler())
@@ -358,6 +362,21 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		webhookGroup := v1Private.Group("/webhooks")
 		{
 			webhookGroup.GET("/dashboard", handlers.Webhook.GetDashboardURL)
+		}
+
+		// RBAC routes
+		rbacGroup := v1Private.Group("/rbac")
+		{
+			rbacGroup.POST("/roles", handlers.RBAC.AssignRole)
+			rbacGroup.DELETE("/roles", handlers.RBAC.RemoveRole)
+			rbacGroup.GET("/users/:user_id/roles", handlers.RBAC.GetUserRoles)
+			rbacGroup.POST("/check", handlers.RBAC.CheckAuthorization)
+
+			// Dynamic role management
+			rbacGroup.POST("/roles/create", handlers.RBAC.CreateRole)
+			rbacGroup.PUT("/roles/:role_id", handlers.RBAC.UpdateRole)
+			rbacGroup.DELETE("/roles/:role_id", handlers.RBAC.DeleteRole)
+			rbacGroup.GET("/roles", handlers.RBAC.ListRoles)
 		}
 	}
 

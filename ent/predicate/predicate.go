@@ -9,6 +9,9 @@ import (
 // Auth is the predicate function for auth builders.
 type Auth func(*sql.Selector)
 
+// AuthorizationAudit is the predicate function for authorizationaudit builders.
+type AuthorizationAudit func(*sql.Selector)
+
 // BillingSequence is the predicate function for billingsequence builders.
 type BillingSequence func(*sql.Selector)
 
@@ -75,6 +78,9 @@ type Price func(*sql.Selector)
 // PriceUnit is the predicate function for priceunit builders.
 type PriceUnit func(*sql.Selector)
 
+// RBACPolicy is the predicate function for rbacpolicy builders.
+type RBACPolicy func(*sql.Selector)
+
 // Secret is the predicate function for secret builders.
 type Secret func(*sql.Selector)
 
@@ -101,6 +107,9 @@ type Tenant func(*sql.Selector)
 
 // User is the predicate function for user builders.
 type User func(*sql.Selector)
+
+// UserRole is the predicate function for userrole builders.
+type UserRole func(*sql.Selector)
 
 // Wallet is the predicate function for wallet builders.
 type Wallet func(*sql.Selector)

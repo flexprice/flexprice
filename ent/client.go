@@ -16,6 +16,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/flexprice/flexprice/ent/auth"
+	"github.com/flexprice/flexprice/ent/authorizationaudit"
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/costsheet"
 	"github.com/flexprice/flexprice/ent/coupon"
@@ -38,6 +39,7 @@ import (
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/priceunit"
+	"github.com/flexprice/flexprice/ent/rbacpolicy"
 	"github.com/flexprice/flexprice/ent/secret"
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
@@ -47,6 +49,7 @@ import (
 	"github.com/flexprice/flexprice/ent/task"
 	"github.com/flexprice/flexprice/ent/tenant"
 	"github.com/flexprice/flexprice/ent/user"
+	"github.com/flexprice/flexprice/ent/userrole"
 	"github.com/flexprice/flexprice/ent/wallet"
 	"github.com/flexprice/flexprice/ent/wallettransaction"
 
@@ -60,6 +63,8 @@ type Client struct {
 	Schema *migrate.Schema
 	// Auth is the client for interacting with the Auth builders.
 	Auth *AuthClient
+	// AuthorizationAudit is the client for interacting with the AuthorizationAudit builders.
+	AuthorizationAudit *AuthorizationAuditClient
 	// BillingSequence is the client for interacting with the BillingSequence builders.
 	BillingSequence *BillingSequenceClient
 	// Costsheet is the client for interacting with the Costsheet builders.
@@ -104,6 +109,8 @@ type Client struct {
 	Price *PriceClient
 	// PriceUnit is the client for interacting with the PriceUnit builders.
 	PriceUnit *PriceUnitClient
+	// RBACPolicy is the client for interacting with the RBACPolicy builders.
+	RBACPolicy *RBACPolicyClient
 	// Secret is the client for interacting with the Secret builders.
 	Secret *SecretClient
 	// Subscription is the client for interacting with the Subscription builders.
@@ -122,6 +129,8 @@ type Client struct {
 	Tenant *TenantClient
 	// User is the client for interacting with the User builders.
 	User *UserClient
+	// UserRole is the client for interacting with the UserRole builders.
+	UserRole *UserRoleClient
 	// Wallet is the client for interacting with the Wallet builders.
 	Wallet *WalletClient
 	// WalletTransaction is the client for interacting with the WalletTransaction builders.
@@ -138,6 +147,7 @@ func NewClient(opts ...Option) *Client {
 func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
 	c.Auth = NewAuthClient(c.config)
+	c.AuthorizationAudit = NewAuthorizationAuditClient(c.config)
 	c.BillingSequence = NewBillingSequenceClient(c.config)
 	c.Costsheet = NewCostsheetClient(c.config)
 	c.Coupon = NewCouponClient(c.config)
@@ -160,6 +170,7 @@ func (c *Client) init() {
 	c.Plan = NewPlanClient(c.config)
 	c.Price = NewPriceClient(c.config)
 	c.PriceUnit = NewPriceUnitClient(c.config)
+	c.RBACPolicy = NewRBACPolicyClient(c.config)
 	c.Secret = NewSecretClient(c.config)
 	c.Subscription = NewSubscriptionClient(c.config)
 	c.SubscriptionLineItem = NewSubscriptionLineItemClient(c.config)
@@ -169,6 +180,7 @@ func (c *Client) init() {
 	c.Task = NewTaskClient(c.config)
 	c.Tenant = NewTenantClient(c.config)
 	c.User = NewUserClient(c.config)
+	c.UserRole = NewUserRoleClient(c.config)
 	c.Wallet = NewWalletClient(c.config)
 	c.WalletTransaction = NewWalletTransactionClient(c.config)
 }
@@ -264,6 +276,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		ctx:                       ctx,
 		config:                    cfg,
 		Auth:                      NewAuthClient(cfg),
+		AuthorizationAudit:        NewAuthorizationAuditClient(cfg),
 		BillingSequence:           NewBillingSequenceClient(cfg),
 		Costsheet:                 NewCostsheetClient(cfg),
 		Coupon:                    NewCouponClient(cfg),
@@ -286,6 +299,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Plan:                      NewPlanClient(cfg),
 		Price:                     NewPriceClient(cfg),
 		PriceUnit:                 NewPriceUnitClient(cfg),
+		RBACPolicy:                NewRBACPolicyClient(cfg),
 		Secret:                    NewSecretClient(cfg),
 		Subscription:              NewSubscriptionClient(cfg),
 		SubscriptionLineItem:      NewSubscriptionLineItemClient(cfg),
@@ -295,6 +309,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Task:                      NewTaskClient(cfg),
 		Tenant:                    NewTenantClient(cfg),
 		User:                      NewUserClient(cfg),
+		UserRole:                  NewUserRoleClient(cfg),
 		Wallet:                    NewWalletClient(cfg),
 		WalletTransaction:         NewWalletTransactionClient(cfg),
 	}, nil
@@ -317,6 +332,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		ctx:                       ctx,
 		config:                    cfg,
 		Auth:                      NewAuthClient(cfg),
+		AuthorizationAudit:        NewAuthorizationAuditClient(cfg),
 		BillingSequence:           NewBillingSequenceClient(cfg),
 		Costsheet:                 NewCostsheetClient(cfg),
 		Coupon:                    NewCouponClient(cfg),
@@ -339,6 +355,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Plan:                      NewPlanClient(cfg),
 		Price:                     NewPriceClient(cfg),
 		PriceUnit:                 NewPriceUnitClient(cfg),
+		RBACPolicy:                NewRBACPolicyClient(cfg),
 		Secret:                    NewSecretClient(cfg),
 		Subscription:              NewSubscriptionClient(cfg),
 		SubscriptionLineItem:      NewSubscriptionLineItemClient(cfg),
@@ -348,6 +365,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Task:                      NewTaskClient(cfg),
 		Tenant:                    NewTenantClient(cfg),
 		User:                      NewUserClient(cfg),
+		UserRole:                  NewUserRoleClient(cfg),
 		Wallet:                    NewWalletClient(cfg),
 		WalletTransaction:         NewWalletTransactionClient(cfg),
 	}, nil
@@ -379,14 +397,14 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.Auth, c.BillingSequence, c.Costsheet, c.Coupon, c.CouponApplication,
-		c.CouponAssociation, c.CreditGrant, c.CreditGrantApplication, c.CreditNote,
-		c.CreditNoteLineItem, c.Customer, c.Entitlement, c.Environment, c.Feature,
-		c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Payment,
-		c.PaymentAttempt, c.Plan, c.Price, c.PriceUnit, c.Secret, c.Subscription,
-		c.SubscriptionLineItem, c.SubscriptionPause, c.SubscriptionSchedule,
-		c.SubscriptionSchedulePhase, c.Task, c.Tenant, c.User, c.Wallet,
-		c.WalletTransaction,
+		c.Auth, c.AuthorizationAudit, c.BillingSequence, c.Costsheet, c.Coupon,
+		c.CouponApplication, c.CouponAssociation, c.CreditGrant,
+		c.CreditGrantApplication, c.CreditNote, c.CreditNoteLineItem, c.Customer,
+		c.Entitlement, c.Environment, c.Feature, c.Invoice, c.InvoiceLineItem,
+		c.InvoiceSequence, c.Meter, c.Payment, c.PaymentAttempt, c.Plan, c.Price,
+		c.PriceUnit, c.RBACPolicy, c.Secret, c.Subscription, c.SubscriptionLineItem,
+		c.SubscriptionPause, c.SubscriptionSchedule, c.SubscriptionSchedulePhase,
+		c.Task, c.Tenant, c.User, c.UserRole, c.Wallet, c.WalletTransaction,
 	} {
 		n.Use(hooks...)
 	}
@@ -396,14 +414,14 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.Auth, c.BillingSequence, c.Costsheet, c.Coupon, c.CouponApplication,
-		c.CouponAssociation, c.CreditGrant, c.CreditGrantApplication, c.CreditNote,
-		c.CreditNoteLineItem, c.Customer, c.Entitlement, c.Environment, c.Feature,
-		c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Payment,
-		c.PaymentAttempt, c.Plan, c.Price, c.PriceUnit, c.Secret, c.Subscription,
-		c.SubscriptionLineItem, c.SubscriptionPause, c.SubscriptionSchedule,
-		c.SubscriptionSchedulePhase, c.Task, c.Tenant, c.User, c.Wallet,
-		c.WalletTransaction,
+		c.Auth, c.AuthorizationAudit, c.BillingSequence, c.Costsheet, c.Coupon,
+		c.CouponApplication, c.CouponAssociation, c.CreditGrant,
+		c.CreditGrantApplication, c.CreditNote, c.CreditNoteLineItem, c.Customer,
+		c.Entitlement, c.Environment, c.Feature, c.Invoice, c.InvoiceLineItem,
+		c.InvoiceSequence, c.Meter, c.Payment, c.PaymentAttempt, c.Plan, c.Price,
+		c.PriceUnit, c.RBACPolicy, c.Secret, c.Subscription, c.SubscriptionLineItem,
+		c.SubscriptionPause, c.SubscriptionSchedule, c.SubscriptionSchedulePhase,
+		c.Task, c.Tenant, c.User, c.UserRole, c.Wallet, c.WalletTransaction,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -414,6 +432,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 	switch m := m.(type) {
 	case *AuthMutation:
 		return c.Auth.mutate(ctx, m)
+	case *AuthorizationAuditMutation:
+		return c.AuthorizationAudit.mutate(ctx, m)
 	case *BillingSequenceMutation:
 		return c.BillingSequence.mutate(ctx, m)
 	case *CostsheetMutation:
@@ -458,6 +478,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Price.mutate(ctx, m)
 	case *PriceUnitMutation:
 		return c.PriceUnit.mutate(ctx, m)
+	case *RBACPolicyMutation:
+		return c.RBACPolicy.mutate(ctx, m)
 	case *SecretMutation:
 		return c.Secret.mutate(ctx, m)
 	case *SubscriptionMutation:
@@ -476,6 +498,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Tenant.mutate(ctx, m)
 	case *UserMutation:
 		return c.User.mutate(ctx, m)
+	case *UserRoleMutation:
+		return c.UserRole.mutate(ctx, m)
 	case *WalletMutation:
 		return c.Wallet.mutate(ctx, m)
 	case *WalletTransactionMutation:
@@ -615,6 +639,139 @@ func (c *AuthClient) mutate(ctx context.Context, m *AuthMutation) (Value, error)
 		return (&AuthDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Auth mutation op: %q", m.Op())
+	}
+}
+
+// AuthorizationAuditClient is a client for the AuthorizationAudit schema.
+type AuthorizationAuditClient struct {
+	config
+}
+
+// NewAuthorizationAuditClient returns a client for the AuthorizationAudit from the given config.
+func NewAuthorizationAuditClient(c config) *AuthorizationAuditClient {
+	return &AuthorizationAuditClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `authorizationaudit.Hooks(f(g(h())))`.
+func (c *AuthorizationAuditClient) Use(hooks ...Hook) {
+	c.hooks.AuthorizationAudit = append(c.hooks.AuthorizationAudit, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `authorizationaudit.Intercept(f(g(h())))`.
+func (c *AuthorizationAuditClient) Intercept(interceptors ...Interceptor) {
+	c.inters.AuthorizationAudit = append(c.inters.AuthorizationAudit, interceptors...)
+}
+
+// Create returns a builder for creating a AuthorizationAudit entity.
+func (c *AuthorizationAuditClient) Create() *AuthorizationAuditCreate {
+	mutation := newAuthorizationAuditMutation(c.config, OpCreate)
+	return &AuthorizationAuditCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of AuthorizationAudit entities.
+func (c *AuthorizationAuditClient) CreateBulk(builders ...*AuthorizationAuditCreate) *AuthorizationAuditCreateBulk {
+	return &AuthorizationAuditCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *AuthorizationAuditClient) MapCreateBulk(slice any, setFunc func(*AuthorizationAuditCreate, int)) *AuthorizationAuditCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &AuthorizationAuditCreateBulk{err: fmt.Errorf("calling to AuthorizationAuditClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*AuthorizationAuditCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &AuthorizationAuditCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for AuthorizationAudit.
+func (c *AuthorizationAuditClient) Update() *AuthorizationAuditUpdate {
+	mutation := newAuthorizationAuditMutation(c.config, OpUpdate)
+	return &AuthorizationAuditUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *AuthorizationAuditClient) UpdateOne(aa *AuthorizationAudit) *AuthorizationAuditUpdateOne {
+	mutation := newAuthorizationAuditMutation(c.config, OpUpdateOne, withAuthorizationAudit(aa))
+	return &AuthorizationAuditUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *AuthorizationAuditClient) UpdateOneID(id string) *AuthorizationAuditUpdateOne {
+	mutation := newAuthorizationAuditMutation(c.config, OpUpdateOne, withAuthorizationAuditID(id))
+	return &AuthorizationAuditUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for AuthorizationAudit.
+func (c *AuthorizationAuditClient) Delete() *AuthorizationAuditDelete {
+	mutation := newAuthorizationAuditMutation(c.config, OpDelete)
+	return &AuthorizationAuditDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *AuthorizationAuditClient) DeleteOne(aa *AuthorizationAudit) *AuthorizationAuditDeleteOne {
+	return c.DeleteOneID(aa.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *AuthorizationAuditClient) DeleteOneID(id string) *AuthorizationAuditDeleteOne {
+	builder := c.Delete().Where(authorizationaudit.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &AuthorizationAuditDeleteOne{builder}
+}
+
+// Query returns a query builder for AuthorizationAudit.
+func (c *AuthorizationAuditClient) Query() *AuthorizationAuditQuery {
+	return &AuthorizationAuditQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeAuthorizationAudit},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a AuthorizationAudit entity by its id.
+func (c *AuthorizationAuditClient) Get(ctx context.Context, id string) (*AuthorizationAudit, error) {
+	return c.Query().Where(authorizationaudit.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *AuthorizationAuditClient) GetX(ctx context.Context, id string) *AuthorizationAudit {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *AuthorizationAuditClient) Hooks() []Hook {
+	return c.hooks.AuthorizationAudit
+}
+
+// Interceptors returns the client interceptors.
+func (c *AuthorizationAuditClient) Interceptors() []Interceptor {
+	return c.inters.AuthorizationAudit
+}
+
+func (c *AuthorizationAuditClient) mutate(ctx context.Context, m *AuthorizationAuditMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&AuthorizationAuditCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&AuthorizationAuditUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&AuthorizationAuditUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&AuthorizationAuditDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown AuthorizationAudit mutation op: %q", m.Op())
 	}
 }
 
@@ -4024,6 +4181,139 @@ func (c *PriceUnitClient) mutate(ctx context.Context, m *PriceUnitMutation) (Val
 	}
 }
 
+// RBACPolicyClient is a client for the RBACPolicy schema.
+type RBACPolicyClient struct {
+	config
+}
+
+// NewRBACPolicyClient returns a client for the RBACPolicy from the given config.
+func NewRBACPolicyClient(c config) *RBACPolicyClient {
+	return &RBACPolicyClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `rbacpolicy.Hooks(f(g(h())))`.
+func (c *RBACPolicyClient) Use(hooks ...Hook) {
+	c.hooks.RBACPolicy = append(c.hooks.RBACPolicy, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `rbacpolicy.Intercept(f(g(h())))`.
+func (c *RBACPolicyClient) Intercept(interceptors ...Interceptor) {
+	c.inters.RBACPolicy = append(c.inters.RBACPolicy, interceptors...)
+}
+
+// Create returns a builder for creating a RBACPolicy entity.
+func (c *RBACPolicyClient) Create() *RBACPolicyCreate {
+	mutation := newRBACPolicyMutation(c.config, OpCreate)
+	return &RBACPolicyCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of RBACPolicy entities.
+func (c *RBACPolicyClient) CreateBulk(builders ...*RBACPolicyCreate) *RBACPolicyCreateBulk {
+	return &RBACPolicyCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *RBACPolicyClient) MapCreateBulk(slice any, setFunc func(*RBACPolicyCreate, int)) *RBACPolicyCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &RBACPolicyCreateBulk{err: fmt.Errorf("calling to RBACPolicyClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*RBACPolicyCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &RBACPolicyCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for RBACPolicy.
+func (c *RBACPolicyClient) Update() *RBACPolicyUpdate {
+	mutation := newRBACPolicyMutation(c.config, OpUpdate)
+	return &RBACPolicyUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *RBACPolicyClient) UpdateOne(rp *RBACPolicy) *RBACPolicyUpdateOne {
+	mutation := newRBACPolicyMutation(c.config, OpUpdateOne, withRBACPolicy(rp))
+	return &RBACPolicyUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *RBACPolicyClient) UpdateOneID(id string) *RBACPolicyUpdateOne {
+	mutation := newRBACPolicyMutation(c.config, OpUpdateOne, withRBACPolicyID(id))
+	return &RBACPolicyUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for RBACPolicy.
+func (c *RBACPolicyClient) Delete() *RBACPolicyDelete {
+	mutation := newRBACPolicyMutation(c.config, OpDelete)
+	return &RBACPolicyDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *RBACPolicyClient) DeleteOne(rp *RBACPolicy) *RBACPolicyDeleteOne {
+	return c.DeleteOneID(rp.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *RBACPolicyClient) DeleteOneID(id string) *RBACPolicyDeleteOne {
+	builder := c.Delete().Where(rbacpolicy.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &RBACPolicyDeleteOne{builder}
+}
+
+// Query returns a query builder for RBACPolicy.
+func (c *RBACPolicyClient) Query() *RBACPolicyQuery {
+	return &RBACPolicyQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeRBACPolicy},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a RBACPolicy entity by its id.
+func (c *RBACPolicyClient) Get(ctx context.Context, id string) (*RBACPolicy, error) {
+	return c.Query().Where(rbacpolicy.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *RBACPolicyClient) GetX(ctx context.Context, id string) *RBACPolicy {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *RBACPolicyClient) Hooks() []Hook {
+	return c.hooks.RBACPolicy
+}
+
+// Interceptors returns the client interceptors.
+func (c *RBACPolicyClient) Interceptors() []Interceptor {
+	return c.inters.RBACPolicy
+}
+
+func (c *RBACPolicyClient) mutate(ctx context.Context, m *RBACPolicyMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&RBACPolicyCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&RBACPolicyUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&RBACPolicyUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&RBACPolicyDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown RBACPolicy mutation op: %q", m.Op())
+	}
+}
+
 // SecretClient is a client for the Secret schema.
 type SecretClient struct {
 	config
@@ -5413,6 +5703,139 @@ func (c *UserClient) mutate(ctx context.Context, m *UserMutation) (Value, error)
 	}
 }
 
+// UserRoleClient is a client for the UserRole schema.
+type UserRoleClient struct {
+	config
+}
+
+// NewUserRoleClient returns a client for the UserRole from the given config.
+func NewUserRoleClient(c config) *UserRoleClient {
+	return &UserRoleClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `userrole.Hooks(f(g(h())))`.
+func (c *UserRoleClient) Use(hooks ...Hook) {
+	c.hooks.UserRole = append(c.hooks.UserRole, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `userrole.Intercept(f(g(h())))`.
+func (c *UserRoleClient) Intercept(interceptors ...Interceptor) {
+	c.inters.UserRole = append(c.inters.UserRole, interceptors...)
+}
+
+// Create returns a builder for creating a UserRole entity.
+func (c *UserRoleClient) Create() *UserRoleCreate {
+	mutation := newUserRoleMutation(c.config, OpCreate)
+	return &UserRoleCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of UserRole entities.
+func (c *UserRoleClient) CreateBulk(builders ...*UserRoleCreate) *UserRoleCreateBulk {
+	return &UserRoleCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *UserRoleClient) MapCreateBulk(slice any, setFunc func(*UserRoleCreate, int)) *UserRoleCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &UserRoleCreateBulk{err: fmt.Errorf("calling to UserRoleClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*UserRoleCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &UserRoleCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for UserRole.
+func (c *UserRoleClient) Update() *UserRoleUpdate {
+	mutation := newUserRoleMutation(c.config, OpUpdate)
+	return &UserRoleUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *UserRoleClient) UpdateOne(ur *UserRole) *UserRoleUpdateOne {
+	mutation := newUserRoleMutation(c.config, OpUpdateOne, withUserRole(ur))
+	return &UserRoleUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *UserRoleClient) UpdateOneID(id string) *UserRoleUpdateOne {
+	mutation := newUserRoleMutation(c.config, OpUpdateOne, withUserRoleID(id))
+	return &UserRoleUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for UserRole.
+func (c *UserRoleClient) Delete() *UserRoleDelete {
+	mutation := newUserRoleMutation(c.config, OpDelete)
+	return &UserRoleDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *UserRoleClient) DeleteOne(ur *UserRole) *UserRoleDeleteOne {
+	return c.DeleteOneID(ur.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *UserRoleClient) DeleteOneID(id string) *UserRoleDeleteOne {
+	builder := c.Delete().Where(userrole.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &UserRoleDeleteOne{builder}
+}
+
+// Query returns a query builder for UserRole.
+func (c *UserRoleClient) Query() *UserRoleQuery {
+	return &UserRoleQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeUserRole},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a UserRole entity by its id.
+func (c *UserRoleClient) Get(ctx context.Context, id string) (*UserRole, error) {
+	return c.Query().Where(userrole.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *UserRoleClient) GetX(ctx context.Context, id string) *UserRole {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *UserRoleClient) Hooks() []Hook {
+	return c.hooks.UserRole
+}
+
+// Interceptors returns the client interceptors.
+func (c *UserRoleClient) Interceptors() []Interceptor {
+	return c.inters.UserRole
+}
+
+func (c *UserRoleClient) mutate(ctx context.Context, m *UserRoleMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&UserRoleCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&UserRoleUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&UserRoleUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&UserRoleDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown UserRole mutation op: %q", m.Op())
+	}
+}
+
 // WalletClient is a client for the Wallet schema.
 type WalletClient struct {
 	config
@@ -5682,22 +6105,22 @@ func (c *WalletTransactionClient) mutate(ctx context.Context, m *WalletTransacti
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		Auth, BillingSequence, Costsheet, Coupon, CouponApplication, CouponAssociation,
-		CreditGrant, CreditGrantApplication, CreditNote, CreditNoteLineItem, Customer,
-		Entitlement, Environment, Feature, Invoice, InvoiceLineItem, InvoiceSequence,
-		Meter, Payment, PaymentAttempt, Plan, Price, PriceUnit, Secret, Subscription,
-		SubscriptionLineItem, SubscriptionPause, SubscriptionSchedule,
-		SubscriptionSchedulePhase, Task, Tenant, User, Wallet,
-		WalletTransaction []ent.Hook
+		Auth, AuthorizationAudit, BillingSequence, Costsheet, Coupon, CouponApplication,
+		CouponAssociation, CreditGrant, CreditGrantApplication, CreditNote,
+		CreditNoteLineItem, Customer, Entitlement, Environment, Feature, Invoice,
+		InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt, Plan, Price,
+		PriceUnit, RBACPolicy, Secret, Subscription, SubscriptionLineItem,
+		SubscriptionPause, SubscriptionSchedule, SubscriptionSchedulePhase, Task,
+		Tenant, User, UserRole, Wallet, WalletTransaction []ent.Hook
 	}
 	inters struct {
-		Auth, BillingSequence, Costsheet, Coupon, CouponApplication, CouponAssociation,
-		CreditGrant, CreditGrantApplication, CreditNote, CreditNoteLineItem, Customer,
-		Entitlement, Environment, Feature, Invoice, InvoiceLineItem, InvoiceSequence,
-		Meter, Payment, PaymentAttempt, Plan, Price, PriceUnit, Secret, Subscription,
-		SubscriptionLineItem, SubscriptionPause, SubscriptionSchedule,
-		SubscriptionSchedulePhase, Task, Tenant, User, Wallet,
-		WalletTransaction []ent.Interceptor
+		Auth, AuthorizationAudit, BillingSequence, Costsheet, Coupon, CouponApplication,
+		CouponAssociation, CreditGrant, CreditGrantApplication, CreditNote,
+		CreditNoteLineItem, Customer, Entitlement, Environment, Feature, Invoice,
+		InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt, Plan, Price,
+		PriceUnit, RBACPolicy, Secret, Subscription, SubscriptionLineItem,
+		SubscriptionPause, SubscriptionSchedule, SubscriptionSchedulePhase, Task,
+		Tenant, User, UserRole, Wallet, WalletTransaction []ent.Interceptor
 	}
 )
 
