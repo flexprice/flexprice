@@ -91,6 +91,8 @@ const (
 	EdgeCouponAssociations = "coupon_associations"
 	// EdgeCouponApplications holds the string denoting the coupon_applications edge name in mutations.
 	EdgeCouponApplications = "coupon_applications"
+	// EdgeAddonAssociations holds the string denoting the addon_associations edge name in mutations.
+	EdgeAddonAssociations = "addon_associations"
 	// Table holds the table name of the subscription in the database.
 	Table = "subscriptions"
 	// LineItemsTable is the table that holds the line_items relation/edge.
@@ -135,6 +137,13 @@ const (
 	CouponApplicationsInverseTable = "coupon_applications"
 	// CouponApplicationsColumn is the table column denoting the coupon_applications relation/edge.
 	CouponApplicationsColumn = "subscription_id"
+	// AddonAssociationsTable is the table that holds the addon_associations relation/edge.
+	AddonAssociationsTable = "addon_associations"
+	// AddonAssociationsInverseTable is the table name for the AddonAssociation entity.
+	// It exists in this package in order to avoid circular dependency with the "addonassociation" package.
+	AddonAssociationsInverseTable = "addon_associations"
+	// AddonAssociationsColumn is the table column denoting the addon_associations relation/edge.
+	AddonAssociationsColumn = "subscription_addon_associations"
 )
 
 // Columns holds all SQL columns for subscription fields.
@@ -472,6 +481,20 @@ func ByCouponApplications(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOptio
 		sqlgraph.OrderByNeighborTerms(s, newCouponApplicationsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
+
+// ByAddonAssociationsCount orders the results by addon_associations count.
+func ByAddonAssociationsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newAddonAssociationsStep(), opts...)
+	}
+}
+
+// ByAddonAssociations orders the results by addon_associations terms.
+func ByAddonAssociations(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newAddonAssociationsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
 func newLineItemsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -512,5 +535,12 @@ func newCouponApplicationsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(CouponApplicationsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, CouponApplicationsTable, CouponApplicationsColumn),
+	)
+}
+func newAddonAssociationsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(AddonAssociationsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, AddonAssociationsTable, AddonAssociationsColumn),
 	)
 }

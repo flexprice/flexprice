@@ -44,8 +44,8 @@ func priceFilterFn(ctx context.Context, p *price.Price, filter interface{}) bool
 	}
 
 	// Filter by plan IDs
-	if len(f.PlanIDs) > 0 {
-		if !lo.Contains(f.PlanIDs, p.PlanID) {
+	if len(f.EntityIDs) > 0 {
+		if !lo.Contains(f.EntityIDs, p.EntityID) {
 			return false
 		}
 	}
@@ -198,7 +198,7 @@ func (s *InMemoryPriceStore) ListAll(ctx context.Context, filter *types.PriceFil
 	unlimitedFilter := &types.PriceFilter{
 		QueryFilter:     types.NewNoLimitQueryFilter(),
 		TimeRangeFilter: filter.TimeRangeFilter,
-		PlanIDs:         filter.PlanIDs,
+		EntityIDs:       filter.EntityIDs,
 	}
 
 	return s.List(ctx, unlimitedFilter)

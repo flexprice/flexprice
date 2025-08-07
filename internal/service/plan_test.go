@@ -65,6 +65,8 @@ func (s *PlanServiceSuite) TestCreatePlan() {
 					CreatePriceRequest: &dto.CreatePriceRequest{
 						Amount:             "100",
 						Currency:           "usd",
+						EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+						EntityID:           "single_price_plan",
 						Type:               types.PRICE_TYPE_USAGE,
 						BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 						BillingPeriodCount: 1,
@@ -102,6 +104,8 @@ func (s *PlanServiceSuite) TestCreatePlan() {
 					CreatePriceRequest: &dto.CreatePriceRequest{
 						Amount:             "100",
 						Currency:           "usd",
+						EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+						EntityID:           "multi_price_plan", // Will be updated during plan creation
 						Type:               types.PRICE_TYPE_FIXED,
 						BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 						BillingPeriodCount: 1,
@@ -115,6 +119,8 @@ func (s *PlanServiceSuite) TestCreatePlan() {
 					CreatePriceRequest: &dto.CreatePriceRequest{
 						Amount:             "200",
 						Currency:           "usd",
+						EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+						EntityID:           "multi_price_plan", // Will be updated during plan creation
 						Type:               types.PRICE_TYPE_USAGE,
 						BillingPeriod:      types.BILLING_PERIOD_ANNUAL,
 						BillingPeriodCount: 1,
@@ -276,7 +282,7 @@ func (s *PlanServiceSuite) TestCreatePlanWithEntitlements() {
 		s.NotNil(resp)
 
 		filter := types.NewDefaultEntitlementFilter()
-		filter.PlanIDs = []string{resp.Plan.ID}
+		filter.EntityIDs = []string{resp.Plan.ID}
 		entitlements, err := s.GetStores().EntitlementRepo.List(s.GetContext(), filter)
 		s.NoError(err)
 		s.Equal(1, len(entitlements))
@@ -312,7 +318,7 @@ func (s *PlanServiceSuite) TestCreatePlanWithEntitlements() {
 		s.NotNil(resp)
 
 		filter := types.NewDefaultEntitlementFilter()
-		filter.PlanIDs = []string{resp.Plan.ID}
+		filter.EntityIDs = []string{resp.Plan.ID}
 		entitlements, err := s.GetStores().EntitlementRepo.List(s.GetContext(), filter)
 		s.NoError(err)
 		s.Equal(1, len(entitlements))
@@ -346,7 +352,7 @@ func (s *PlanServiceSuite) TestCreatePlanWithEntitlements() {
 		s.NotNil(resp)
 
 		filter := types.NewDefaultEntitlementFilter()
-		filter.PlanIDs = []string{resp.Plan.ID}
+		filter.EntityIDs = []string{resp.Plan.ID}
 		entitlements, err := s.GetStores().EntitlementRepo.List(s.GetContext(), filter)
 		s.NoError(err)
 		s.Equal(1, len(entitlements))
@@ -661,7 +667,8 @@ func (s *PlanServiceSuite) TestUpdatePlanEntitlements() {
 
 	testEntitlement := &entitlement.Entitlement{
 		ID:          "ent-1",
-		PlanID:      testPlan.ID,
+		EntityType:  types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+		EntityID:    testPlan.ID,
 		FeatureID:   testFeature.ID,
 		FeatureType: types.FeatureTypeBoolean,
 		IsEnabled:   false,

@@ -68,7 +68,7 @@ func SyncPlanPrices() error {
 	// Get all prices for the plan
 	priceFilter := types.NewNoLimitPriceFilter()
 	priceFilter = priceFilter.WithStatus(types.StatusPublished)
-	priceFilter = priceFilter.WithPlanIDs([]string{planID})
+	priceFilter = priceFilter.WithEntityIDs([]string{planID})
 
 	prices, err := script.priceRepo.List(ctx, priceFilter)
 	if err != nil {
@@ -79,7 +79,7 @@ func SyncPlanPrices() error {
 	planPrices := make([]*price.Price, 0)
 	meterMap := make(map[string]*meter.Meter)
 	for _, price := range prices {
-		if price.PlanID == planID && price.TenantID == tenantID && price.EnvironmentID == environmentID {
+		if price.EntityID == planID && price.TenantID == tenantID && price.EnvironmentID == environmentID {
 			planPrices = append(planPrices, price)
 			if price.MeterID != "" {
 				meterMap[price.MeterID] = nil

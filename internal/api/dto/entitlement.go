@@ -11,14 +11,16 @@ import (
 
 // CreateEntitlementRequest represents the request to create a new entitlement
 type CreateEntitlementRequest struct {
-	PlanID           string              `json:"plan_id,omitempty"`
-	FeatureID        string              `json:"feature_id" binding:"required"`
-	FeatureType      types.FeatureType   `json:"feature_type" binding:"required"`
-	IsEnabled        bool                `json:"is_enabled"`
-	UsageLimit       *int64              `json:"usage_limit"`
-	UsageResetPeriod types.BillingPeriod `json:"usage_reset_period"`
-	IsSoftLimit      bool                `json:"is_soft_limit"`
-	StaticValue      string              `json:"static_value"`
+	PlanID           string                      `json:"plan_id,omitempty"`
+	FeatureID        string                      `json:"feature_id" binding:"required"`
+	FeatureType      types.FeatureType           `json:"feature_type" binding:"required"`
+	IsEnabled        bool                        `json:"is_enabled"`
+	UsageLimit       *int64                      `json:"usage_limit"`
+	UsageResetPeriod types.BillingPeriod         `json:"usage_reset_period"`
+	IsSoftLimit      bool                        `json:"is_soft_limit"`
+	StaticValue      string                      `json:"static_value"`
+	EntityType       types.EntitlementEntityType `json:"entity_type"`
+	EntityID         string                      `json:"entity_id"`
 }
 
 func (r *CreateEntitlementRequest) Validate() error {
@@ -61,9 +63,17 @@ func (r *CreateEntitlementRequest) ToEntitlement(ctx context.Context) *entitleme
 		r.IsEnabled = true
 	}
 
+	// TODO: This is a temporary fix to maintain backward compatibility
+	// We need to remove this once we have a proper entitlement entity type
+	if r.PlanID != "" {
+		r.EntityType = types.ENTITLEMENT_ENTITY_TYPE_PLAN
+		r.EntityID = r.PlanID
+	}
+
 	return &entitlement.Entitlement{
 		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITLEMENT),
-		PlanID:           r.PlanID,
+		EntityType:       r.EntityType,
+		EntityID:         r.EntityID,
 		FeatureID:        r.FeatureID,
 		FeatureType:      r.FeatureType,
 		IsEnabled:        r.IsEnabled,
@@ -90,6 +100,9 @@ type EntitlementResponse struct {
 	*entitlement.Entitlement
 	Feature *FeatureResponse `json:"feature,omitempty"`
 	Plan    *PlanResponse    `json:"plan,omitempty"`
+
+	// TODO: Remove this once we have a proper entitlement entity type
+	PlanID string `json:"plan_id,omitempty"`
 }
 
 // ListEntitlementsResponse represents a paginated list of entitlements
@@ -103,6 +116,9 @@ func EntitlementToResponse(e *entitlement.Entitlement) *EntitlementResponse {
 
 	return &EntitlementResponse{
 		Entitlement: e,
+
+		// TODO: !REMOVE after migration
+		PlanID: e.EntityID,
 	}
 }
 
@@ -111,6 +127,11 @@ func EntitlementsToResponse(entitlements []*entitlement.Entitlement) []*Entitlem
 	responses := make([]*EntitlementResponse, len(entitlements))
 	for i, e := range entitlements {
 		responses[i] = EntitlementToResponse(e)
+
+		// TODO: !REMOVE after migration
+		if responses[i].EntityType == types.ENTITLEMENT_ENTITY_TYPE_PLAN {
+			responses[i].PlanID = responses[i].EntityID
+		}
 	}
 	return responses
 }

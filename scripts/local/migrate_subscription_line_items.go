@@ -116,9 +116,10 @@ func MigrateSubscriptionLineItems() error {
 
 			validPrices := make([]*price.Price, 0)
 			for _, p := range prices {
-				if p.PlanID == plan.ID &&
+				if p.EntityID == plan.ID &&
 					p.Status == types.StatusPublished &&
 					types.IsMatchingCurrency(p.Currency, sub.Currency) &&
+					p.EntityType == types.PRICE_ENTITY_TYPE_PLAN &&
 					p.BillingPeriod == sub.BillingPeriod {
 					validPrices = append(validPrices, p)
 				}

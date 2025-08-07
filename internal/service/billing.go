@@ -172,6 +172,12 @@ func (s *billingService) CalculateUsageCharges(
 		}
 
 		for _, entitlement := range entitlements.Items {
+
+			// TODO: !REMOVE after migration
+			if entitlement.EntityType == types.ENTITLEMENT_ENTITY_TYPE_PLAN {
+				entitlement.PlanID = entitlement.EntityID
+			}
+
 			if entitlement.FeatureType == types.FeatureTypeMetered {
 				if _, ok := entitlementsByPlanMeterID[planID]; !ok {
 					entitlementsByPlanMeterID[planID] = make(map[string]*dto.EntitlementResponse)
@@ -907,7 +913,7 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 
 	// 3. Get plans for the subscriptions
 	planFilter := types.NewNoLimitPlanFilter()
-	planFilter.PlanIDs = planIDs
+	planFilter.EntityIDs = planIDs
 	plans, err := s.PlanRepo.List(ctx, planFilter)
 	if err != nil {
 		return nil, err
@@ -950,10 +956,10 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 
 	for _, e := range entitlements {
 		featureIDs = append(featureIDs, e.FeatureID)
-		if _, ok := entitlementsByPlan[e.PlanID]; !ok {
-			entitlementsByPlan[e.PlanID] = make([]*entitlement.Entitlement, 0)
+		if _, ok := entitlementsByPlan[e.EntityID]; !ok {
+			entitlementsByPlan[e.EntityID] = make([]*entitlement.Entitlement, 0)
 		}
-		entitlementsByPlan[e.PlanID] = append(entitlementsByPlan[e.PlanID], e)
+		entitlementsByPlan[e.EntityID] = append(entitlementsByPlan[e.EntityID], e)
 	}
 	featureIDs = lo.Uniq(featureIDs)
 

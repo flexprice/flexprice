@@ -1,17 +1,49 @@
 package types
 
+import (
+	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/samber/lo"
+)
+
+type EntitlementEntityType string
+
+const (
+	ENTITLEMENT_ENTITY_TYPE_PLAN         EntitlementEntityType = "PLAN"
+	ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION EntitlementEntityType = "SUBSCRIPTION"
+	ENTITLEMENT_ENTITY_TYPE_ADDON        EntitlementEntityType = "ADDON"
+)
+
+func (e EntitlementEntityType) Validate() error {
+	allowed := []EntitlementEntityType{
+		ENTITLEMENT_ENTITY_TYPE_PLAN,
+		ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION,
+		ENTITLEMENT_ENTITY_TYPE_ADDON,
+	}
+	if !lo.Contains(allowed, e) {
+		return ierr.NewError("invalid entitlement entity type").
+			WithHint("Invalid entitlement entity type").
+			WithReportableDetails(map[string]interface{}{
+				"entity_type": e,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 // EntitlementFilter defines filters for querying entitlements
 type EntitlementFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
 
 	// Specific filters for entitlements
-	Filters     []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
-	Sort        []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
-	PlanIDs     []string           `form:"plan_ids" json:"plan_ids,omitempty"`
-	FeatureIDs  []string           `form:"feature_ids" json:"feature_ids,omitempty"`
-	FeatureType *FeatureType       `form:"feature_type" json:"feature_type,omitempty"`
-	IsEnabled   *bool              `form:"is_enabled" json:"is_enabled,omitempty"`
+	Filters     []*FilterCondition     `json:"filters,omitempty" form:"filters" validate:"omitempty"`
+	Sort        []*SortCondition       `json:"sort,omitempty" form:"sort" validate:"omitempty"`
+	EntityType  *EntitlementEntityType `form:"entity_type" json:"entity_type,omitempty"`
+	EntityIDs   []string               `form:"entity_ids" json:"entity_ids,omitempty"`
+	FeatureIDs  []string               `form:"feature_ids" json:"feature_ids,omitempty"`
+	FeatureType *FeatureType           `form:"feature_type" json:"feature_type,omitempty"`
+	IsEnabled   *bool                  `form:"is_enabled" json:"is_enabled,omitempty"`
+	PlanIDs     []string               `form:"plan_ids" json:"plan_ids,omitempty"`
 }
 
 // NewDefaultEntitlementFilter creates a new EntitlementFilter with default values
@@ -48,6 +80,19 @@ func (f EntitlementFilter) Validate() error {
 // WithPlanIDs adds plan IDs to the filter
 func (f *EntitlementFilter) WithPlanIDs(planIDs []string) *EntitlementFilter {
 	f.PlanIDs = planIDs
+	f.EntityType = lo.ToPtr(ENTITLEMENT_ENTITY_TYPE_PLAN)
+	return f
+}
+
+// WithEntityType adds entity type to the filter
+func (f *EntitlementFilter) WithEntityType(entityType EntitlementEntityType) *EntitlementFilter {
+	f.EntityType = &entityType
+	return f
+}
+
+// WithEntityIDs adds entity IDs to the filter
+func (f *EntitlementFilter) WithEntityIDs(entityIDs []string) *EntitlementFilter {
+	f.EntityIDs = entityIDs
 	return f
 }
 

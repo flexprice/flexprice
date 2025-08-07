@@ -195,7 +195,8 @@ func (r *CreatePlanRequest) ToPlan(ctx context.Context) *plan.Plan {
 
 func (r *CreatePlanEntitlementRequest) ToEntitlement(ctx context.Context, planID string) *entitlement.Entitlement {
 	ent := r.CreateEntitlementRequest.ToEntitlement(ctx)
-	ent.PlanID = planID
+	ent.EntityType = types.ENTITLEMENT_ENTITY_TYPE_PLAN
+	ent.EntityID = planID
 	return ent
 }
 
@@ -212,6 +213,7 @@ type CreatePlanResponse struct {
 
 type PlanResponse struct {
 	*plan.Plan
+	// TODO: Add inline addons
 	Prices       []*PriceResponse       `json:"prices,omitempty"`
 	Entitlements []*EntitlementResponse `json:"entitlements,omitempty"`
 	CreditGrants []*CreditGrantResponse `json:"credit_grants,omitempty"`

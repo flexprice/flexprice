@@ -180,7 +180,8 @@ func (s *BillingServiceSuite) setupTestData() {
 		ID:                 "price_api_calls",
 		Amount:             decimal.Zero,
 		Currency:           "usd",
-		PlanID:             s.testData.plan.ID,
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
 		Type:               types.PRICE_TYPE_USAGE,
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
@@ -203,7 +204,8 @@ func (s *BillingServiceSuite) setupTestData() {
 		ID:                 "price_fixed",
 		Amount:             decimal.NewFromInt(10), // Fixed amount of 10
 		Currency:           "usd",
-		PlanID:             s.testData.plan.ID,
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
 		Type:               types.PRICE_TYPE_FIXED, // Fixed price type
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
@@ -219,7 +221,8 @@ func (s *BillingServiceSuite) setupTestData() {
 		ID:                 "price_storage_archive",
 		Amount:             decimal.NewFromInt(5), // Fixed amount of 5
 		Currency:           "usd",
-		PlanID:             s.testData.plan.ID,
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
 		Type:               types.PRICE_TYPE_FIXED, // Fixed price type
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
@@ -1026,7 +1029,8 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithEntitlements() {
 				// Create entitlement with usage limit
 				entitlement := &entitlement.Entitlement{
 					ID:               "ent_test_1",
-					PlanID:           s.testData.plan.ID,
+					EntityType:       types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+					EntityID:         s.testData.plan.ID,
 					FeatureID:        testFeature.ID,
 					FeatureType:      types.FeatureTypeMetered,
 					IsEnabled:        true,
@@ -1060,7 +1064,8 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithEntitlements() {
 				// Create entitlement with lower usage limit
 				entitlement := &entitlement.Entitlement{
 					ID:               "ent_test_2",
-					PlanID:           s.testData.plan.ID,
+					EntityType:       types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+					EntityID:         s.testData.plan.ID,
 					FeatureID:        testFeature.ID,
 					FeatureType:      types.FeatureTypeMetered,
 					IsEnabled:        true,
@@ -1094,7 +1099,8 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithEntitlements() {
 				// Create unlimited entitlement
 				entitlement := &entitlement.Entitlement{
 					ID:               "ent_test_3",
-					PlanID:           s.testData.plan.ID,
+					EntityType:       types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+					EntityID:         s.testData.plan.ID,
 					FeatureID:        testFeature.ID,
 					FeatureType:      types.FeatureTypeMetered,
 					IsEnabled:        true,
@@ -1128,7 +1134,8 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithEntitlements() {
 				// Create soft limit entitlement
 				entitlement := &entitlement.Entitlement{
 					ID:               "ent_test_4",
-					PlanID:           s.testData.plan.ID,
+					EntityType:       types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+					EntityID:         s.testData.plan.ID,
 					FeatureID:        testFeature.ID,
 					FeatureType:      types.FeatureTypeMetered,
 					IsEnabled:        true,
@@ -1162,7 +1169,8 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithEntitlements() {
 				// Create disabled entitlement
 				entitlement := &entitlement.Entitlement{
 					ID:               "ent_test_5",
-					PlanID:           s.testData.plan.ID,
+					EntityType:       types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+					EntityID:         s.testData.plan.ID,
 					FeatureID:        testFeature.ID,
 					FeatureType:      types.FeatureTypeMetered,
 					IsEnabled:        false, // Disabled entitlement

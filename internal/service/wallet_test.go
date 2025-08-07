@@ -83,20 +83,23 @@ func (s *WalletServiceSuite) setupService() {
 		WebhookPublisher: s.GetWebhookPublisher(),
 	})
 	s.subsService = NewSubscriptionService(ServiceParams{
-		Logger:           s.GetLogger(),
-		Config:           s.GetConfig(),
-		DB:               s.GetDB(),
-		SubRepo:          stores.SubscriptionRepo,
-		PlanRepo:         stores.PlanRepo,
-		PriceRepo:        stores.PriceRepo,
-		EventRepo:        stores.EventRepo,
-		MeterRepo:        stores.MeterRepo,
-		CustomerRepo:     stores.CustomerRepo,
-		InvoiceRepo:      stores.InvoiceRepo,
-		EntitlementRepo:  stores.EntitlementRepo,
-		FeatureRepo:      stores.FeatureRepo,
-		EventPublisher:   s.GetPublisher(),
-		WebhookPublisher: s.GetWebhookPublisher(),
+		Logger:                s.GetLogger(),
+		Config:                s.GetConfig(),
+		DB:                    s.GetDB(),
+		SubRepo:               stores.SubscriptionRepo,
+		PlanRepo:              stores.PlanRepo,
+		PriceRepo:             stores.PriceRepo,
+		EventRepo:             stores.EventRepo,
+		MeterRepo:             stores.MeterRepo,
+		CustomerRepo:          stores.CustomerRepo,
+		InvoiceRepo:           stores.InvoiceRepo,
+		EntitlementRepo:       stores.EntitlementRepo,
+		FeatureRepo:           stores.FeatureRepo,
+		CouponRepo:            stores.CouponRepo,
+		CouponAssociationRepo: stores.CouponAssociationRepo,
+		CouponApplicationRepo: stores.CouponApplicationRepo,
+		EventPublisher:        s.GetPublisher(),
+		WebhookPublisher:      s.GetWebhookPublisher(),
 	})
 }
 
@@ -184,7 +187,8 @@ func (s *WalletServiceSuite) setupTestData() {
 		ID:                 "price_api_calls",
 		Amount:             decimal.Zero,
 		Currency:           "usd",
-		PlanID:             s.testData.plan.ID,
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
 		Type:               types.PRICE_TYPE_USAGE,
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
@@ -206,7 +210,8 @@ func (s *WalletServiceSuite) setupTestData() {
 		ID:                 "price_storage",
 		Amount:             decimal.NewFromFloat(0.1),
 		Currency:           "usd",
-		PlanID:             s.testData.plan.ID,
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
 		Type:               types.PRICE_TYPE_USAGE,
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
@@ -222,7 +227,8 @@ func (s *WalletServiceSuite) setupTestData() {
 		ID:                 "price_storage_archive",
 		Amount:             decimal.NewFromFloat(0.03),
 		Currency:           "usd",
-		PlanID:             s.testData.plan.ID,
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
 		Type:               types.PRICE_TYPE_USAGE,
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
@@ -1536,7 +1542,8 @@ func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
 			setupFunc: func() {
 				entitlement := &entitlement.Entitlement{
 					ID:               "ent_test_1",
-					PlanID:           s.testData.plan.ID,
+					EntityType:       types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+					EntityID:         s.testData.plan.ID,
 					FeatureID:        "feat_api_calls",
 					FeatureType:      types.FeatureTypeMetered,
 					IsEnabled:        true,
@@ -1558,7 +1565,8 @@ func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
 			setupFunc: func() {
 				entitlement := &entitlement.Entitlement{
 					ID:               "ent_test_2",
-					PlanID:           s.testData.plan.ID,
+					EntityType:       types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+					EntityID:         s.testData.plan.ID,
 					FeatureID:        "feat_api_calls",
 					FeatureType:      types.FeatureTypeMetered,
 					IsEnabled:        true,
@@ -1580,7 +1588,8 @@ func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
 			setupFunc: func() {
 				entitlement := &entitlement.Entitlement{
 					ID:               "ent_test_3",
-					PlanID:           s.testData.plan.ID,
+					EntityType:       types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+					EntityID:         s.testData.plan.ID,
 					FeatureID:        "feat_api_calls",
 					FeatureType:      types.FeatureTypeMetered,
 					IsEnabled:        true,
@@ -1602,7 +1611,8 @@ func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
 			setupFunc: func() {
 				entitlement := &entitlement.Entitlement{
 					ID:               "ent_test_4",
-					PlanID:           s.testData.plan.ID,
+					EntityType:       types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+					EntityID:         s.testData.plan.ID,
 					FeatureID:        "feat_api_calls",
 					FeatureType:      types.FeatureTypeMetered,
 					IsEnabled:        false,

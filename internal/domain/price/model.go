@@ -65,9 +65,6 @@ type Price struct {
 	// For BTC: 1 BTC = 100000000 USD
 	ConversionRate decimal.Decimal `db:"conversion_rate" json:"conversion_rate,omitempty"`
 
-	// PlanID is the id of the plan for plan based pricing
-	PlanID string `db:"plan_id" json:"plan_id"`
-
 	Type types.PriceType `db:"type" json:"type"`
 
 	BillingPeriod types.BillingPeriod `db:"billing_period" json:"billing_period"`
@@ -108,12 +105,11 @@ type Price struct {
 	// EnvironmentID is the environment identifier for the price
 	EnvironmentID string `db:"environment_id" json:"environment_id"`
 
-	// Price override fields
-	// Scope indicates if this is a plan-level or subscription-level price
-	Scope types.PriceScope `db:"scope" json:"scope"`
+	// EntityType holds the value of the "entity_type" field.
+	EntityType types.PriceEntityType `db:"entity_type" json:"entity_type,omitempty"`
 
-	// ParentPriceID references the original price (only set when scope is SUBSCRIPTION)
-	ParentPriceID string `db:"parent_price_id" json:"parent_price_id,omitempty"`
+	// EntityID holds the value of the "entity_id" field.
+	EntityID string `db:"entity_id" json:"entity_id,omitempty"`
 
 	// SubscriptionID references the subscription (only set when scope is SUBSCRIPTION)
 	SubscriptionID string `db:"subscription_id" json:"subscription_id,omitempty"`
@@ -124,16 +120,6 @@ type Price struct {
 // IsUsage returns true if the price is a usage based price
 func (p *Price) IsUsage() bool {
 	return p.Type == types.PRICE_TYPE_USAGE && p.MeterID != ""
-}
-
-// IsSubscriptionScoped returns true if the price is subscription-scoped
-func (p *Price) IsSubscriptionScoped() bool {
-	return p.Scope == types.PRICE_SCOPE_SUBSCRIPTION
-}
-
-// IsPlanScoped returns true if the price is plan-scoped
-func (p *Price) IsPlanScoped() bool {
-	return p.Scope == types.PRICE_SCOPE_PLAN
 }
 
 // GetCurrencySymbol returns the currency symbol for the price
@@ -379,7 +365,6 @@ func FromEnt(e *ent.Price) *Price {
 		Currency:               e.Currency,
 		DisplayAmount:          e.DisplayAmount,
 		PriceUnitType:          types.PriceUnitType(e.PriceUnitType),
-		PlanID:                 e.PlanID,
 		Type:                   types.PriceType(e.Type),
 		BillingPeriod:          types.BillingPeriod(e.BillingPeriod),
 		BillingPeriodCount:     e.BillingPeriodCount,
@@ -401,8 +386,8 @@ func FromEnt(e *ent.Price) *Price {
 		PriceUnitAmount:        decimal.NewFromFloat(e.PriceUnitAmount),
 		DisplayPriceUnitAmount: e.DisplayPriceUnitAmount,
 		ConversionRate:         decimal.NewFromFloat(e.ConversionRate),
-		Scope:                  types.PriceScope(e.Scope),
-		ParentPriceID:          lo.FromPtr(e.ParentPriceID),
+		EntityType:             types.PriceEntityType(lo.FromPtr(e.EntityType)),
+		EntityID:               lo.FromPtr(e.EntityID),
 		SubscriptionID:         lo.FromPtr(e.SubscriptionID),
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
@@ -487,44 +472,9 @@ func (p *Price) ValidateInvoiceCadence() error {
 	return p.InvoiceCadence.Validate()
 }
 
-// ValidateOverrideFields validates price override fields
-func (p *Price) ValidateOverrideFields() error {
-	// Validate scope
-	if err := p.Scope.Validate(); err != nil {
-		return err
-	}
-
-	// For subscription-scoped prices
-	if p.IsSubscriptionScoped() {
-		// Parent price ID is required
-		if p.ParentPriceID == "" {
-			return ierr.NewError("parent_price_id is required for subscription-scoped prices").
-				WithHint("Subscription-scoped prices must reference a parent price").
-				Mark(ierr.ErrValidation)
-		}
-
-		// Subscription ID is required
-		if p.SubscriptionID == "" {
-			return ierr.NewError("subscription_id is required for subscription-scoped prices").
-				WithHint("Subscription-scoped prices must reference a subscription").
-				Mark(ierr.ErrValidation)
-		}
-	} else {
-		// For plan-scoped prices, parent_price_id and subscription_id should be empty
-		if p.ParentPriceID != "" {
-			return ierr.NewError("parent_price_id should be empty for plan-scoped prices").
-				WithHint("Plan-scoped prices should not have a parent price").
-				Mark(ierr.ErrValidation)
-		}
-
-		if p.SubscriptionID != "" {
-			return ierr.NewError("subscription_id should be empty for plan-scoped prices").
-				WithHint("Plan-scoped prices should not reference a subscription").
-				Mark(ierr.ErrValidation)
-		}
-	}
-
-	return nil
+// ValidateEntityType checks if entity type is valid
+func (p *Price) ValidateEntityType() error {
+	return p.EntityType.Validate()
 }
 
 // Validate performs all validations on the price
@@ -541,7 +491,7 @@ func (p *Price) Validate() error {
 		return err
 	}
 
-	if err := p.ValidateOverrideFields(); err != nil {
+	if err := p.ValidateEntityType(); err != nil {
 		return err
 	}
 

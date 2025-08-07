@@ -8,10 +8,11 @@ type PlanFilter struct {
 	*TimeRangeFilter
 
 	// filters allows complex filtering based on multiple fields
-	Filters []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
-	Sort    []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
-
-	PlanIDs []string `json:"plan_ids,omitempty" form:"plan_ids" validate:"omitempty"`
+	Filters    []*FilterCondition    `json:"filters,omitempty" form:"filters" validate:"omitempty"`
+	Sort       []*SortCondition      `json:"sort,omitempty" form:"sort" validate:"omitempty"`
+	PlanIDs    []string              `json:"plan_ids,omitempty" form:"plan_ids" validate:"omitempty"`
+	EntityIDs  []string              `json:"entity_ids,omitempty" form:"entity_ids" validate:"omitempty"`
+	EntityType EntitlementEntityType `json:"entity_type,omitempty" form:"entity_type" validate:"omitempty"`
 }
 
 // NewPlanFilter creates a new plan filter with default options
@@ -41,10 +42,10 @@ func (f *PlanFilter) Validate() error {
 		}
 	}
 
-	for _, planID := range f.PlanIDs {
-		if planID == "" {
-			return ierr.NewError("plan id can not be empty").
-				WithHint("Plan info can not be empty").
+	for _, entityID := range f.EntityIDs {
+		if entityID == "" {
+			return ierr.NewError("entity id can not be empty").
+				WithHint("Entity info can not be empty").
 				Mark(ierr.ErrValidation)
 		}
 	}

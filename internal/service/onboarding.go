@@ -748,6 +748,8 @@ func (s *onboardingService) setDefaultPriceRequests(_ context.Context, plans []*
 			CreatePriceRequest: &dto.CreatePriceRequest{
 				Amount:             "0.05",
 				Currency:           "USD",
+				EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+				EntityID:           "hobby_plan", // Will be updated during plan creation
 				Type:               types.PRICE_TYPE_USAGE,
 				BillingModel:       types.BILLING_MODEL_PACKAGE,
 				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
@@ -763,6 +765,8 @@ func (s *onboardingService) setDefaultPriceRequests(_ context.Context, plans []*
 			CreatePriceRequest: &dto.CreatePriceRequest{
 				Amount:             "0.05",
 				Currency:           "USD",
+				EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+				EntityID:           "hobby_plan", // Will be updated during plan creation
 				Type:               types.PRICE_TYPE_USAGE,
 				BillingModel:       types.BILLING_MODEL_PACKAGE,
 				BillingPeriod:      types.BILLING_PERIOD_ANNUAL,
@@ -779,6 +783,8 @@ func (s *onboardingService) setDefaultPriceRequests(_ context.Context, plans []*
 			CreatePriceRequest: &dto.CreatePriceRequest{
 				Amount:             "0.1",
 				Currency:           "USD",
+				EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+				EntityID:           "hobby_plan", // Will be updated during plan creation
 				Type:               types.PRICE_TYPE_USAGE,
 				BillingModel:       types.BILLING_MODEL_PACKAGE,
 				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
@@ -795,6 +801,8 @@ func (s *onboardingService) setDefaultPriceRequests(_ context.Context, plans []*
 			CreatePriceRequest: &dto.CreatePriceRequest{
 				Amount:             "0.1",
 				Currency:           "USD",
+				EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+				EntityID:           "hobby_plan", // Will be updated during plan creation
 				Type:               types.PRICE_TYPE_USAGE,
 				BillingModel:       types.BILLING_MODEL_PACKAGE,
 				BillingPeriod:      types.BILLING_PERIOD_ANNUAL,
@@ -814,6 +822,8 @@ func (s *onboardingService) setDefaultPriceRequests(_ context.Context, plans []*
 			CreatePriceRequest: &dto.CreatePriceRequest{
 				Amount:             "0",
 				Currency:           "USD",
+				EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+				EntityID:           "hobby_plan", // Will be updated during plan creation
 				Type:               types.PRICE_TYPE_FIXED,
 				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 				BillingPeriodCount: 1,
@@ -827,6 +837,8 @@ func (s *onboardingService) setDefaultPriceRequests(_ context.Context, plans []*
 			CreatePriceRequest: &dto.CreatePriceRequest{
 				Amount:             "0",
 				Currency:           "USD",
+				EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+				EntityID:           "hobby_plan", // Will be updated during plan creation
 				Type:               types.PRICE_TYPE_FIXED,
 				BillingPeriod:      types.BILLING_PERIOD_ANNUAL,
 				BillingPeriodCount: 1,
@@ -843,6 +855,8 @@ func (s *onboardingService) setDefaultPriceRequests(_ context.Context, plans []*
 			CreatePriceRequest: &dto.CreatePriceRequest{
 				Amount:             "20",
 				Currency:           "USD",
+				EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+				EntityID:           "pro_plan", // Will be updated during plan creation
 				Type:               types.PRICE_TYPE_FIXED,
 				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 				BillingPeriodCount: 1,
@@ -855,6 +869,8 @@ func (s *onboardingService) setDefaultPriceRequests(_ context.Context, plans []*
 			CreatePriceRequest: &dto.CreatePriceRequest{
 				Amount:             "16",
 				Currency:           "USD",
+				EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+				EntityID:           "pro_plan", // Will be updated during plan creation
 				Type:               types.PRICE_TYPE_FIXED,
 				BillingPeriod:      types.BILLING_PERIOD_ANNUAL,
 				BillingPeriodCount: 1,
@@ -871,6 +887,8 @@ func (s *onboardingService) setDefaultPriceRequests(_ context.Context, plans []*
 			CreatePriceRequest: &dto.CreatePriceRequest{
 				Amount:             "40",
 				Currency:           "USD",
+				EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+				EntityID:           "business_plan", // Will be updated during plan creation
 				Type:               types.PRICE_TYPE_FIXED,
 				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 				BillingPeriodCount: 1,
@@ -883,6 +901,8 @@ func (s *onboardingService) setDefaultPriceRequests(_ context.Context, plans []*
 			CreatePriceRequest: &dto.CreatePriceRequest{
 				Amount:             "32",
 				Currency:           "USD",
+				EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+				EntityID:           "business_plan", // Will be updated during plan creation
 				Type:               types.PRICE_TYPE_FIXED,
 				BillingPeriod:      types.BILLING_PERIOD_ANNUAL,
 				BillingPeriodCount: 1,

@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/flexprice/flexprice/ent/addonassociation"
 	"github.com/flexprice/flexprice/ent/couponapplication"
 	"github.com/flexprice/flexprice/ent/couponassociation"
 	"github.com/flexprice/flexprice/ent/creditgrant"
@@ -452,6 +453,21 @@ func (su *SubscriptionUpdate) AddCouponApplications(c ...*CouponApplication) *Su
 	return su.AddCouponApplicationIDs(ids...)
 }
 
+// AddAddonAssociationIDs adds the "addon_associations" edge to the AddonAssociation entity by IDs.
+func (su *SubscriptionUpdate) AddAddonAssociationIDs(ids ...string) *SubscriptionUpdate {
+	su.mutation.AddAddonAssociationIDs(ids...)
+	return su
+}
+
+// AddAddonAssociations adds the "addon_associations" edges to the AddonAssociation entity.
+func (su *SubscriptionUpdate) AddAddonAssociations(a ...*AddonAssociation) *SubscriptionUpdate {
+	ids := make([]string, len(a))
+	for i := range a {
+		ids[i] = a[i].ID
+	}
+	return su.AddAddonAssociationIDs(ids...)
+}
+
 // Mutation returns the SubscriptionMutation object of the builder.
 func (su *SubscriptionUpdate) Mutation() *SubscriptionMutation {
 	return su.mutation
@@ -566,6 +582,27 @@ func (su *SubscriptionUpdate) RemoveCouponApplications(c ...*CouponApplication) 
 		ids[i] = c[i].ID
 	}
 	return su.RemoveCouponApplicationIDs(ids...)
+}
+
+// ClearAddonAssociations clears all "addon_associations" edges to the AddonAssociation entity.
+func (su *SubscriptionUpdate) ClearAddonAssociations() *SubscriptionUpdate {
+	su.mutation.ClearAddonAssociations()
+	return su
+}
+
+// RemoveAddonAssociationIDs removes the "addon_associations" edge to AddonAssociation entities by IDs.
+func (su *SubscriptionUpdate) RemoveAddonAssociationIDs(ids ...string) *SubscriptionUpdate {
+	su.mutation.RemoveAddonAssociationIDs(ids...)
+	return su
+}
+
+// RemoveAddonAssociations removes "addon_associations" edges to AddonAssociation entities.
+func (su *SubscriptionUpdate) RemoveAddonAssociations(a ...*AddonAssociation) *SubscriptionUpdate {
+	ids := make([]string, len(a))
+	for i := range a {
+		ids[i] = a[i].ID
+	}
+	return su.RemoveAddonAssociationIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -959,6 +996,51 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(couponapplication.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if su.mutation.AddonAssociationsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.AddonAssociationsTable,
+			Columns: []string{subscription.AddonAssociationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(addonassociation.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := su.mutation.RemovedAddonAssociationsIDs(); len(nodes) > 0 && !su.mutation.AddonAssociationsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.AddonAssociationsTable,
+			Columns: []string{subscription.AddonAssociationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(addonassociation.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := su.mutation.AddonAssociationsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.AddonAssociationsTable,
+			Columns: []string{subscription.AddonAssociationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(addonassociation.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {
@@ -1403,6 +1485,21 @@ func (suo *SubscriptionUpdateOne) AddCouponApplications(c ...*CouponApplication)
 	return suo.AddCouponApplicationIDs(ids...)
 }
 
+// AddAddonAssociationIDs adds the "addon_associations" edge to the AddonAssociation entity by IDs.
+func (suo *SubscriptionUpdateOne) AddAddonAssociationIDs(ids ...string) *SubscriptionUpdateOne {
+	suo.mutation.AddAddonAssociationIDs(ids...)
+	return suo
+}
+
+// AddAddonAssociations adds the "addon_associations" edges to the AddonAssociation entity.
+func (suo *SubscriptionUpdateOne) AddAddonAssociations(a ...*AddonAssociation) *SubscriptionUpdateOne {
+	ids := make([]string, len(a))
+	for i := range a {
+		ids[i] = a[i].ID
+	}
+	return suo.AddAddonAssociationIDs(ids...)
+}
+
 // Mutation returns the SubscriptionMutation object of the builder.
 func (suo *SubscriptionUpdateOne) Mutation() *SubscriptionMutation {
 	return suo.mutation
@@ -1517,6 +1614,27 @@ func (suo *SubscriptionUpdateOne) RemoveCouponApplications(c ...*CouponApplicati
 		ids[i] = c[i].ID
 	}
 	return suo.RemoveCouponApplicationIDs(ids...)
+}
+
+// ClearAddonAssociations clears all "addon_associations" edges to the AddonAssociation entity.
+func (suo *SubscriptionUpdateOne) ClearAddonAssociations() *SubscriptionUpdateOne {
+	suo.mutation.ClearAddonAssociations()
+	return suo
+}
+
+// RemoveAddonAssociationIDs removes the "addon_associations" edge to AddonAssociation entities by IDs.
+func (suo *SubscriptionUpdateOne) RemoveAddonAssociationIDs(ids ...string) *SubscriptionUpdateOne {
+	suo.mutation.RemoveAddonAssociationIDs(ids...)
+	return suo
+}
+
+// RemoveAddonAssociations removes "addon_associations" edges to AddonAssociation entities.
+func (suo *SubscriptionUpdateOne) RemoveAddonAssociations(a ...*AddonAssociation) *SubscriptionUpdateOne {
+	ids := make([]string, len(a))
+	for i := range a {
+		ids[i] = a[i].ID
+	}
+	return suo.RemoveAddonAssociationIDs(ids...)
 }
 
 // Where appends a list predicates to the SubscriptionUpdate builder.
@@ -1940,6 +2058,51 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(couponapplication.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if suo.mutation.AddonAssociationsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.AddonAssociationsTable,
+			Columns: []string{subscription.AddonAssociationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(addonassociation.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := suo.mutation.RemovedAddonAssociationsIDs(); len(nodes) > 0 && !suo.mutation.AddonAssociationsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.AddonAssociationsTable,
+			Columns: []string{subscription.AddonAssociationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(addonassociation.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := suo.mutation.AddonAssociationsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.AddonAssociationsTable,
+			Columns: []string{subscription.AddonAssociationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(addonassociation.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

@@ -10,6 +10,7 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/flexprice/flexprice/ent/addonassociation"
 	"github.com/flexprice/flexprice/ent/couponapplication"
 	"github.com/flexprice/flexprice/ent/couponassociation"
 	"github.com/flexprice/flexprice/ent/creditgrant"
@@ -519,6 +520,21 @@ func (sc *SubscriptionCreate) AddCouponApplications(c ...*CouponApplication) *Su
 	return sc.AddCouponApplicationIDs(ids...)
 }
 
+// AddAddonAssociationIDs adds the "addon_associations" edge to the AddonAssociation entity by IDs.
+func (sc *SubscriptionCreate) AddAddonAssociationIDs(ids ...string) *SubscriptionCreate {
+	sc.mutation.AddAddonAssociationIDs(ids...)
+	return sc
+}
+
+// AddAddonAssociations adds the "addon_associations" edges to the AddonAssociation entity.
+func (sc *SubscriptionCreate) AddAddonAssociations(a ...*AddonAssociation) *SubscriptionCreate {
+	ids := make([]string, len(a))
+	for i := range a {
+		ids[i] = a[i].ID
+	}
+	return sc.AddAddonAssociationIDs(ids...)
+}
+
 // Mutation returns the SubscriptionMutation object of the builder.
 func (sc *SubscriptionCreate) Mutation() *SubscriptionMutation {
 	return sc.mutation
@@ -962,6 +978,22 @@ func (sc *SubscriptionCreate) createSpec() (*Subscription, *sqlgraph.CreateSpec)
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(couponapplication.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := sc.mutation.AddonAssociationsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.AddonAssociationsTable,
+			Columns: []string{subscription.AddonAssociationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(addonassociation.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

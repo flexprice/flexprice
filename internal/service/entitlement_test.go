@@ -93,7 +93,8 @@ func (s *EntitlementServiceSuite) TestCreateEntitlement() {
 		resp, err := s.service.CreateEntitlement(s.GetContext(), req)
 		s.NoError(err)
 		s.NotNil(resp)
-		s.Equal(req.PlanID, resp.Entitlement.PlanID)
+		s.Equal(types.ENTITLEMENT_ENTITY_TYPE_PLAN, resp.Entitlement.EntityType)
+		s.Equal(testPlan.ID, resp.Entitlement.EntityID)
 		s.Equal(req.FeatureID, resp.Entitlement.FeatureID)
 		s.Equal(req.IsEnabled, resp.Entitlement.IsEnabled)
 	})
@@ -112,7 +113,8 @@ func (s *EntitlementServiceSuite) TestCreateEntitlement() {
 		resp, err := s.service.CreateEntitlement(s.GetContext(), req)
 		s.NoError(err)
 		s.NotNil(resp)
-		s.Equal(req.PlanID, resp.Entitlement.PlanID)
+		s.Equal(types.ENTITLEMENT_ENTITY_TYPE_PLAN, resp.Entitlement.EntityType)
+		s.Equal(testPlan.ID, resp.Entitlement.EntityID)
 		s.Equal(req.FeatureID, resp.Entitlement.FeatureID)
 		s.Equal(*req.UsageLimit, *resp.Entitlement.UsageLimit)
 		s.Equal(req.UsageResetPeriod, resp.Entitlement.UsageResetPeriod)
@@ -130,7 +132,8 @@ func (s *EntitlementServiceSuite) TestCreateEntitlement() {
 		resp, err := s.service.CreateEntitlement(s.GetContext(), req)
 		s.NoError(err)
 		s.NotNil(resp)
-		s.Equal(req.PlanID, resp.Entitlement.PlanID)
+		s.Equal(types.ENTITLEMENT_ENTITY_TYPE_PLAN, resp.Entitlement.EntityType)
+		s.Equal(testPlan.ID, resp.Entitlement.EntityID)
 		s.Equal(req.FeatureID, resp.Entitlement.FeatureID)
 		s.Equal(req.StaticValue, resp.Entitlement.StaticValue)
 	})
@@ -188,7 +191,8 @@ func (s *EntitlementServiceSuite) TestGetEntitlement() {
 	// Create an entitlement
 	ent := &entitlement.Entitlement{
 		ID:          "ent-1",
-		PlanID:      testPlan.ID,
+		EntityType:  types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+		EntityID:    testPlan.ID,
 		FeatureID:   testFeature.ID,
 		FeatureType: types.FeatureTypeBoolean,
 		IsEnabled:   true,
@@ -200,7 +204,7 @@ func (s *EntitlementServiceSuite) TestGetEntitlement() {
 	resp, err := s.service.GetEntitlement(s.GetContext(), "ent-1")
 	s.NoError(err)
 	s.NotNil(resp)
-	s.Equal(ent.PlanID, resp.Entitlement.PlanID)
+	s.Equal(ent.EntityID, resp.Entitlement.EntityID)
 
 	// Non-existent entitlement
 	resp, err = s.service.GetEntitlement(s.GetContext(), "nonexistent")
@@ -243,7 +247,8 @@ func (s *EntitlementServiceSuite) TestListEntitlements() {
 	// Create multiple entitlements
 	ent1 := &entitlement.Entitlement{
 		ID:          "ent-1",
-		PlanID:      testPlan.ID,
+		EntityType:  types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+		EntityID:    testPlan.ID,
 		FeatureID:   boolFeature.ID,
 		FeatureType: types.FeatureTypeBoolean,
 		IsEnabled:   true,
@@ -254,7 +259,8 @@ func (s *EntitlementServiceSuite) TestListEntitlements() {
 
 	ent2 := &entitlement.Entitlement{
 		ID:          "ent-2",
-		PlanID:      testPlan.ID,
+		EntityType:  types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+		EntityID:    testPlan.ID,
 		FeatureID:   meteredFeature.ID,
 		FeatureType: types.FeatureTypeMetered,
 		UsageLimit:  lo.ToPtr(int64(1000)),
@@ -271,8 +277,8 @@ func (s *EntitlementServiceSuite) TestListEntitlements() {
 	s.NotNil(resp)
 	s.Equal(2, resp.Pagination.Total)
 
-	// Test filtering by plan ID
-	filter.PlanIDs = []string{testPlan.ID}
+	// Test filtering by entity ID
+	filter.EntityIDs = []string{testPlan.ID}
 	resp, err = s.service.ListEntitlements(s.GetContext(), filter)
 	s.NoError(err)
 	s.NotNil(resp)
@@ -313,7 +319,8 @@ func (s *EntitlementServiceSuite) TestUpdateEntitlement() {
 	// Create an entitlement
 	ent := &entitlement.Entitlement{
 		ID:          "ent-1",
-		PlanID:      testPlan.ID,
+		EntityType:  types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+		EntityID:    testPlan.ID,
 		FeatureID:   testFeature.ID,
 		FeatureType: types.FeatureTypeBoolean,
 		IsEnabled:   false,
@@ -364,7 +371,8 @@ func (s *EntitlementServiceSuite) TestDeleteEntitlement() {
 	// Create an entitlement
 	ent := &entitlement.Entitlement{
 		ID:          "ent-1",
-		PlanID:      testPlan.ID,
+		EntityType:  types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+		EntityID:    testPlan.ID,
 		FeatureID:   testFeature.ID,
 		FeatureType: types.FeatureTypeBoolean,
 		IsEnabled:   true,

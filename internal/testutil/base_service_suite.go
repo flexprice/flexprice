@@ -7,6 +7,9 @@ import (
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/auth"
+	"github.com/flexprice/flexprice/internal/domain/coupon"
+	"github.com/flexprice/flexprice/internal/domain/coupon_application"
+	"github.com/flexprice/flexprice/internal/domain/coupon_association"
 	"github.com/flexprice/flexprice/internal/domain/creditgrant"
 	"github.com/flexprice/flexprice/internal/domain/creditgrantapplication"
 	"github.com/flexprice/flexprice/internal/domain/creditnote"
@@ -59,6 +62,9 @@ type Stores struct {
 	SecretRepo                 secret.Repository
 	CreditNoteRepo             creditnote.Repository
 	CreditNoteLineItemRepo     creditnote.CreditNoteLineItemRepository
+	CouponRepo                 coupon.Repository
+	CouponAssociationRepo      coupon_association.Repository
+	CouponApplicationRepo      coupon_application.Repository
 }
 
 // BaseServiceTestSuite provides common functionality for all service test suites
@@ -139,6 +145,9 @@ func (s *BaseServiceTestSuite) setupStores() {
 		CreditGrantApplicationRepo: NewInMemoryCreditGrantApplicationStore(),
 		CreditNoteRepo:             NewInMemoryCreditNoteStore(),
 		CreditNoteLineItemRepo:     NewInMemoryCreditNoteLineItemStore(),
+		CouponRepo:                 NewInMemoryCouponStore(),
+		CouponAssociationRepo:      NewInMemoryCouponAssociationStore(),
+		CouponApplicationRepo:      NewInMemoryCouponApplicationStore(),
 	}
 
 	s.db = NewMockPostgresClient(s.logger)
@@ -175,6 +184,9 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.CreditGrantApplicationRepo.(*InMemoryCreditGrantApplicationStore).Clear()
 	s.stores.CreditNoteRepo.(*InMemoryCreditNoteStore).Clear()
 	s.stores.CreditNoteLineItemRepo.(*InMemoryCreditNoteLineItemStore).Clear()
+	s.stores.CouponRepo.(*InMemoryCouponStore).Clear()
+	s.stores.CouponAssociationRepo.(*InMemoryCouponAssociationStore).Clear()
+	s.stores.CouponApplicationRepo.(*InMemoryCouponApplicationStore).Clear()
 }
 
 func (s *BaseServiceTestSuite) ClearStores() {

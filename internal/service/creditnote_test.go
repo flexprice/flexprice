@@ -73,6 +73,9 @@ func (s *CreditNoteServiceSuite) setupService() {
 		EventPublisher:             s.GetPublisher(),
 		CreditGrantRepo:            s.GetStores().CreditGrantRepo,
 		CreditGrantApplicationRepo: s.GetStores().CreditGrantApplicationRepo,
+		CouponRepo:                 s.GetStores().CouponRepo,
+		CouponAssociationRepo:      s.GetStores().CouponAssociationRepo,
+		CouponApplicationRepo:      s.GetStores().CouponApplicationRepo,
 		WebhookPublisher:           s.GetWebhookPublisher(),
 	})
 }
