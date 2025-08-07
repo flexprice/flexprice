@@ -270,7 +270,13 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 				return ierr.WithError(err).WithHint("line item creation failed").Mark(ierr.ErrDatabase)
 			}
 		}
-		*inv = *domainInvoice.FromEnt(invoice)
+
+		invoiceWithLineItems, err := r.Get(ctx, invoice.ID)
+		if err != nil {
+			r.logger.Error("failed to get invoice with line items", "error", err)
+			return err
+		}
+		*inv = *invoiceWithLineItems
 		return nil
 	})
 }

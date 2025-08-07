@@ -43,8 +43,7 @@ type SubscriptionService interface {
 
 	// Coupon-related methods
 	ApplyCouponsToSubscription(ctx context.Context, subscriptionID string, couponIDs []string) error
-	GetSubscriptionCouponAssociations(ctx context.Context, subscriptionID string) ([]*dto.CouponAssociationResponse, error)
-	RemoveCouponFromSubscription(ctx context.Context, subscriptionID string, couponID string) error
+	ApplyCouponsToSubscriptionLineItems(ctx context.Context, subscriptionID string, couponIDs map[string][]string, lineItems []*subscription.SubscriptionLineItem) error
 }
 
 type subscriptionService struct {
@@ -333,6 +332,11 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			return err
 		}
 
+		err = s.ApplyCouponsToSubscriptionLineItems(ctx, sub.ID, req.SubscriptionLineItemsCoupons, lineItems)
+		if err != nil {
+			return err
+		}
+
 		// Create invoice for the subscription (in case it has advance charges)
 		_, err = invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
 			SubscriptionID: sub.ID,
@@ -594,8 +598,8 @@ func (s *subscriptionService) GetSubscription(ctx context.Context, id string) (*
 	}
 
 	// expand coupon associations
-	couponService := NewCouponService(s.ServiceParams)
-	couponAssociations, err := couponService.GetCouponAssociationsBySubscription(ctx, id)
+	couponAssociationService := NewCouponAssociationService(s.ServiceParams)
+	couponAssociations, err := couponAssociationService.GetCouponAssociationsBySubscription(ctx, id)
 	if err != nil {
 		s.Logger.Errorw("failed to get coupon associations for subscription",
 			"subscription_id", id,
@@ -2678,10 +2682,10 @@ func (s *subscriptionService) ApplyCouponsToSubscription(ctx context.Context, su
 		"coupon_count", len(couponIDs))
 
 	// Create coupon service instance
-	couponService := NewCouponService(s.ServiceParams)
+	couponAssociationService := NewCouponAssociationService(s.ServiceParams)
 
 	// Apply coupons to subscription
-	_, err := couponService.ApplyCouponToSubscription(ctx, couponIDs, subscriptionID)
+	err := couponAssociationService.ApplyCouponToSubscription(ctx, couponIDs, subscriptionID)
 	if err != nil {
 		return ierr.WithError(err).
 			WithHint("Failed to apply coupons to subscription").
@@ -2699,54 +2703,33 @@ func (s *subscriptionService) ApplyCouponsToSubscription(ctx context.Context, su
 	return nil
 }
 
-// GetSubscriptionCouponAssociations retrieves all coupon associations for a subscription
-func (s *subscriptionService) GetSubscriptionCouponAssociations(ctx context.Context, subscriptionID string) ([]*dto.CouponAssociationResponse, error) {
-	couponService := NewCouponService(s.ServiceParams)
-	return couponService.GetCouponAssociationsBySubscription(ctx, subscriptionID)
-}
-
-// RemoveCouponFromSubscription removes a coupon association from a subscription
-func (s *subscriptionService) RemoveCouponFromSubscription(ctx context.Context, subscriptionID string, couponID string) error {
-	couponService := NewCouponService(s.ServiceParams)
-
-	// Get coupon associations for this subscription
-	associations, err := couponService.GetCouponAssociationsBySubscription(ctx, subscriptionID)
-	if err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to get coupon associations").
-			Mark(ierr.ErrInternal)
+func (s *subscriptionService) ApplyCouponsToSubscriptionLineItems(ctx context.Context, subscriptionID string, couponIDs map[string][]string, lineItems []*subscription.SubscriptionLineItem) error {
+	if len(couponIDs) == 0 {
+		return nil
 	}
 
-	// Find the association with the specified coupon ID
-	for _, association := range associations {
-		if association.CouponID == couponID {
-			// Delete the association
-			err = couponService.DeleteCouponAssociation(ctx, association.ID)
-			if err != nil {
-				return ierr.WithError(err).
-					WithHint("Failed to remove coupon from subscription").
-					WithReportableDetails(map[string]interface{}{
-						"subscription_id": subscriptionID,
-						"coupon_id":       couponID,
-						"association_id":  association.ID,
-					}).
-					Mark(ierr.ErrInternal)
-			}
+	priceIDToLineItem := make(map[string]*subscription.SubscriptionLineItem)
+	for _, lineItem := range lineItems {
+		priceIDToLineItem[lineItem.PriceID] = lineItem
+	}
 
-			s.Logger.Infow("successfully removed coupon from subscription",
-				"subscription_id", subscriptionID,
-				"coupon_id", couponID,
-				"association_id", association.ID)
+	couponAssociationService := NewCouponAssociationService(s.ServiceParams)
 
-			return nil
+	for priceID, couponIDs := range couponIDs {
+		lineItem, ok := priceIDToLineItem[priceID]
+		if !ok {
+			return ierr.NewError("line item not found").
+				WithHint("Please provide a valid price ID").
+				WithReportableDetails(map[string]interface{}{
+					"price_id": priceID,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
+		err := couponAssociationService.ApplyCouponToSubscriptionLineItem(ctx, couponIDs, subscriptionID, lineItem.ID)
+		if err != nil {
+			return err
 		}
 	}
-
-	return ierr.NewError("coupon not found in subscription").
-		WithHint("The specified coupon is not associated with this subscription").
-		WithReportableDetails(map[string]interface{}{
-			"subscription_id": subscriptionID,
-			"coupon_id":       couponID,
-		}).
-		Mark(ierr.ErrNotFound)
+	return nil
 }

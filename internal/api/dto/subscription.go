@@ -52,6 +52,8 @@ type CreateSubscriptionRequest struct {
 	Phases []SubscriptionSchedulePhaseInput `json:"phases,omitempty" validate:"omitempty,dive"`
 	// SubscriptionCoupons is a list of coupon IDs to be applied to the subscription
 	SubscriptionCoupons []string `json:"subscription_coupons,omitempty"`
+	// SubscriptionLineItemsCoupons is a list of coupon IDs to be applied to the subscription line items
+	SubscriptionLineItemsCoupons map[string][]string `json:"subscription_line_items_coupons,omitempty"`
 	// OverrideLineItems allows customizing specific prices for this subscription
 	OverrideLineItems []OverrideLineItemRequest `json:"override_line_items,omitempty" validate:"omitempty,dive"`
 }
@@ -262,6 +264,18 @@ func (r *CreateSubscriptionRequest) Validate() error {
 		}
 	}
 
+	if len(r.SubscriptionLineItemsCoupons) > 0 {
+		for priceID, couponIDs := range r.SubscriptionLineItemsCoupons {
+			if len(couponIDs) == 0 {
+				return ierr.NewError("subscription line item coupon IDs cannot be empty").
+					WithHint("All subscription line item coupon IDs must be valid").
+					WithReportableDetails(map[string]interface{}{
+						"price_id": priceID,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+		}
+	}
 	// Validate override line items if provided
 	if len(r.OverrideLineItems) > 0 {
 		priceIDsSeen := make(map[string]bool)

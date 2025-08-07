@@ -743,29 +743,169 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 			UsageCharges: make([]dto.CreateInvoiceLineItemRequest, 0),
 		}
 	}
+
+	// Apply Coupons if any - both subscription level and line item level
+	couponAssociationService := NewCouponAssociationService(s.ServiceParams)
+	couponValidationService := NewCouponValidationService(s.ServiceParams)
+	couponService := NewCouponService(s.ServiceParams)
+
+	// Get subscription-level coupons
+	couponAssociations, err := couponAssociationService.GetCouponAssociationsBySubscription(ctx, sub.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	validCoupons := make([]dto.InvoiceCoupon, 0)
+	for _, couponAssociation := range couponAssociations {
+		coupon, err := couponService.GetCoupon(ctx, couponAssociation.CouponID)
+		if err != nil {
+			s.Logger.Errorw("failed to get coupon", "error", err, "coupon_id", couponAssociation.CouponID)
+			continue
+		}
+		if err := couponValidationService.ValidateCoupon(ctx, couponAssociation.CouponID, &sub.ID); err != nil {
+			s.Logger.Errorw("failed to validate coupon", "error", err, "coupon_id", couponAssociation.CouponID)
+			continue
+		}
+		validCoupons = append(validCoupons, dto.InvoiceCoupon{
+			CouponID:            couponAssociation.CouponID,
+			CouponAssociationID: &couponAssociation.ID,
+			AmountOff:           coupon.AmountOff,
+			PercentageOff:       coupon.PercentageOff,
+			Type:                coupon.Type,
+		})
+	}
+
+	// Get line item-level coupons by collecting them from subscription line items
+	validLineItemCoupons, err := s.collectLineItemCoupons(ctx, result.FixedCharges, result.UsageCharges, couponService, couponValidationService, couponAssociationService, &sub.ID)
+	if err != nil {
+		return nil, err
+	}
+
 	// Create invoice request
 	req := &dto.CreateInvoiceRequest{
-		CustomerID:     sub.CustomerID,
-		SubscriptionID: lo.ToPtr(sub.ID),
-		InvoiceType:    types.InvoiceTypeSubscription,
-		InvoiceStatus:  lo.ToPtr(types.InvoiceStatusDraft),
-		PaymentStatus:  lo.ToPtr(types.PaymentStatusPending),
-		Currency:       sub.Currency,
-		AmountDue:      result.TotalAmount,
-		Total:          result.TotalAmount,
-		Subtotal:       result.TotalAmount,
-		Description:    description,
-		DueDate:        lo.ToPtr(invoiceDueDate),
-		BillingPeriod:  lo.ToPtr(string(sub.BillingPeriod)),
-		PeriodStart:    &periodStart,
-		PeriodEnd:      &periodEnd,
-		BillingReason:  types.InvoiceBillingReasonSubscriptionCycle,
-		EnvironmentID:  sub.EnvironmentID,
-		Metadata:       metadata,
-		LineItems:      append(result.FixedCharges, result.UsageCharges...),
+		CustomerID:      sub.CustomerID,
+		SubscriptionID:  lo.ToPtr(sub.ID),
+		InvoiceType:     types.InvoiceTypeSubscription,
+		InvoiceStatus:   lo.ToPtr(types.InvoiceStatusDraft),
+		PaymentStatus:   lo.ToPtr(types.PaymentStatusPending),
+		Currency:        sub.Currency,
+		AmountDue:       result.TotalAmount,
+		Total:           result.TotalAmount,
+		Subtotal:        result.TotalAmount,
+		Description:     description,
+		DueDate:         lo.ToPtr(invoiceDueDate),
+		BillingPeriod:   lo.ToPtr(string(sub.BillingPeriod)),
+		PeriodStart:     &periodStart,
+		PeriodEnd:       &periodEnd,
+		BillingReason:   types.InvoiceBillingReasonSubscriptionCycle,
+		EnvironmentID:   sub.EnvironmentID,
+		Metadata:        metadata,
+		LineItems:       append(result.FixedCharges, result.UsageCharges...),
+		InvoiceCoupons:  validCoupons,
+		LineItemCoupons: validLineItemCoupons,
 	}
 
 	return req, nil
+}
+
+// collectLineItemCoupons collects coupons associated with subscription line items
+func (s *billingService) collectLineItemCoupons(
+	ctx context.Context,
+	fixedCharges []dto.CreateInvoiceLineItemRequest,
+	usageCharges []dto.CreateInvoiceLineItemRequest,
+	couponService CouponService,
+	couponValidationService CouponValidationService,
+	couponAssociationService CouponAssociationService,
+	subscriptionID *string,
+) ([]dto.InvoiceLineItemCoupon, error) {
+	lineItemCoupons := make([]dto.InvoiceLineItemCoupon, 0)
+
+	// Create a combined list of all line items
+	allLineItems := append(fixedCharges, usageCharges...)
+
+	for _, lineItemReq := range allLineItems {
+		// For subscription line items, we need to find the corresponding subscription line item ID
+		// This requires looking up the subscription line item based on price_id
+		if lineItemReq.PriceID == nil {
+			continue // Skip line items without price_id
+		}
+
+		// Get subscription line item associations for this price
+		subscriptionLineItemAssociations, err := s.getSubscriptionLineItemAssociationsForPrice(ctx, *subscriptionID, *lineItemReq.PriceID, couponAssociationService)
+		if err != nil {
+			s.Logger.Errorw("failed to get line item associations", "error", err, "price_id", *lineItemReq.PriceID)
+			continue
+		}
+
+		// For each association, create a line item coupon
+		for _, association := range subscriptionLineItemAssociations {
+			coupon, err := couponService.GetCoupon(ctx, association.CouponID)
+			if err != nil {
+				s.Logger.Errorw("failed to get coupon for line item", "error", err, "coupon_id", association.CouponID)
+				continue
+			}
+
+			if err := couponValidationService.ValidateCoupon(ctx, association.CouponID, subscriptionID); err != nil {
+				s.Logger.Errorw("failed to validate line item coupon", "error", err, "coupon_id", association.CouponID)
+				continue
+			}
+
+			// Use price_id as a temporary identifier - we'll match this to actual line item IDs later
+			// The coupon application service will need to find the matching line item by price_id
+			lineItemID := *lineItemReq.PriceID // Use price_id as temporary identifier
+
+			lineItemCoupons = append(lineItemCoupons, dto.InvoiceLineItemCoupon{
+				LineItemID:          lineItemID,
+				CouponID:            association.CouponID,
+				CouponAssociationID: &association.ID,
+				AmountOff:           coupon.AmountOff,
+				PercentageOff:       coupon.PercentageOff,
+				Type:                coupon.Type,
+			})
+
+			s.Logger.Debugw("collected line item coupon",
+				"line_item_id", lineItemID,
+				"price_id", *lineItemReq.PriceID,
+				"coupon_id", association.CouponID)
+		}
+	}
+
+	s.Logger.Infow("collected line item coupons for billing",
+		"subscription_id", *subscriptionID,
+		"total_line_item_coupons", len(lineItemCoupons))
+
+	return lineItemCoupons, nil
+}
+
+// getSubscriptionLineItemAssociationsForPrice gets coupon associations for a specific subscription line item by price
+func (s *billingService) getSubscriptionLineItemAssociationsForPrice(
+	ctx context.Context,
+	subscriptionID string,
+	priceID string,
+	couponAssociationService CouponAssociationService,
+) ([]*dto.CouponAssociationResponse, error) {
+	// Get subscription with line items to find the line item ID for this price
+	_, lineItems, err := s.SubRepo.GetWithLineItems(ctx, subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Find the subscription line item with matching price ID
+	var targetLineItemID string
+	for _, lineItem := range lineItems {
+		if lineItem.PriceID == priceID {
+			targetLineItemID = lineItem.ID
+			break
+		}
+	}
+
+	if targetLineItemID == "" {
+		// No line item found for this price, return empty
+		return []*dto.CouponAssociationResponse{}, nil
+	}
+
+	// Get coupon associations for this line item
+	return couponAssociationService.GetCouponAssociationsBySubscriptionLineItem(ctx, targetLineItemID)
 }
 
 // Helper functions for aggregating entitlements

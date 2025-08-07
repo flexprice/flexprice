@@ -12,6 +12,24 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+type InvoiceCoupon struct {
+	CouponID            string           `json:"coupon_id"`
+	CouponAssociationID *string          `json:"coupon_association_id"`
+	AmountOff           *decimal.Decimal `json:"amount_off,omitempty"`
+	PercentageOff       *decimal.Decimal `json:"percentage_off,omitempty"`
+	Type                types.CouponType `json:"type"`
+}
+
+// InvoiceLineItemCoupon represents a coupon applied to a specific invoice line item
+type InvoiceLineItemCoupon struct {
+	LineItemID          string           `json:"line_item_id"` // ID of the invoice line item this coupon applies to
+	CouponID            string           `json:"coupon_id"`
+	CouponAssociationID *string          `json:"coupon_association_id"`
+	AmountOff           *decimal.Decimal `json:"amount_off,omitempty"`
+	PercentageOff       *decimal.Decimal `json:"percentage_off,omitempty"`
+	Type                types.CouponType `json:"type,"`
+}
+
 // CreateInvoiceRequest represents the request payload for creating a new invoice
 type CreateInvoiceRequest struct {
 	// invoice_number is an optional human-readable identifier for the invoice
@@ -73,6 +91,12 @@ type CreateInvoiceRequest struct {
 
 	// coupons
 	Coupons []string `json:"coupons,omitempty"`
+
+	// Invoice Coupns
+	InvoiceCoupons []InvoiceCoupon `json:"invoice_coupons,omitempty"`
+
+	// Invoice Line Item Coupons
+	LineItemCoupons []InvoiceLineItemCoupon `json:"line_item_coupons,omitempty"`
 
 	// metadata contains additional custom key-value pairs for storing extra information
 	Metadata types.Metadata `json:"metadata,omitempty"`
@@ -149,6 +173,20 @@ func (r *CreateInvoiceRequest) Validate() error {
 		}
 	}
 
+	// Validate invoice coupons if present
+	for _, coupon := range r.InvoiceCoupons {
+		if err := coupon.Validate(); err != nil {
+			return ierr.WithError(err).WithHint("invalid invoice coupon").Mark(ierr.ErrValidation)
+		}
+	}
+
+	// Validate line item coupons if present
+	for _, lineItemCoupon := range r.LineItemCoupons {
+		if err := lineItemCoupon.Validate(); err != nil {
+			return ierr.WithError(err).WithHint("invalid line item coupon").Mark(ierr.ErrValidation)
+		}
+	}
+
 	// url validation if url is provided
 	if r.InvoicePDFURL != nil {
 		if err := validator.ValidateURL(r.InvoicePDFURL); err != nil {
@@ -216,7 +254,145 @@ func (r *CreateInvoiceRequest) ToInvoice(ctx context.Context) (*invoice.Invoice,
 		}
 	}
 
+	// Apply Coupons for preview purposes (no DB operations)
+	// Note: This is for UI preview only. Actual coupon application with validation,
+	// audit trails, and persistence happens in InvoiceService.applyCouponsToInvoice()
+	if len(r.InvoiceCoupons) > 0 {
+		originalTotal := inv.Total
+		runningTotal := inv.Total
+		totalDiscountAmount := decimal.Zero
+
+		// Apply coupons sequentially to maintain proper discount calculation
+		for _, coupon := range r.InvoiceCoupons {
+			// Calculate discount based on current running total
+			discount := coupon.CalculateDiscount(runningTotal)
+			totalDiscountAmount = totalDiscountAmount.Add(discount)
+
+			// Apply discount to get new running total
+			runningTotal = coupon.ApplyDiscount(runningTotal)
+		}
+
+		// Calculate new total, ensuring it doesn't go below zero
+		newTotal := originalTotal.Sub(totalDiscountAmount)
+
+		// Ensure total doesn't go negative (preview layer protection)
+		if newTotal.LessThan(decimal.Zero) {
+			newTotal = decimal.Zero
+			// Adjust the total discount to not exceed the original total
+			totalDiscountAmount = originalTotal
+		}
+
+		// Update invoice fields for preview
+		inv.TotalDiscount = totalDiscountAmount
+		inv.Total = newTotal
+		inv.AmountDue = newTotal
+		inv.AmountRemaining = newTotal.Sub(inv.AmountPaid)
+	}
+
 	return inv, nil
+}
+
+func (i *InvoiceCoupon) Validate() error {
+	if i.Type == types.CouponTypePercentage {
+		if i.PercentageOff.IsNegative() {
+			return ierr.NewError("percentage_off must be non-negative").
+				WithHint("percentage_off must be non-negative").
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	if i.Type == types.CouponTypeFixed {
+		if i.AmountOff.IsNegative() {
+			return ierr.NewError("amount_off must be non-negative").
+				WithHint("amount_off must be non-negative").
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	return nil
+}
+
+// CalculateDiscount calculates the discount amount for a given price
+func (c *InvoiceCoupon) CalculateDiscount(originalPrice decimal.Decimal) decimal.Decimal {
+	switch c.Type {
+	case types.CouponTypeFixed:
+		return *c.AmountOff
+	case types.CouponTypePercentage:
+		return originalPrice.Mul(*c.PercentageOff).Div(decimal.NewFromInt(100))
+	default:
+		return decimal.Zero
+	}
+}
+
+// ApplyDiscount applies the discount to a given price and returns the final price
+func (c *InvoiceCoupon) ApplyDiscount(originalPrice decimal.Decimal) decimal.Decimal {
+	discount := c.CalculateDiscount(originalPrice)
+	finalPrice := originalPrice.Sub(discount)
+
+	// Ensure final price doesn't go below zero
+	if finalPrice.LessThan(decimal.Zero) {
+		return decimal.Zero
+	}
+
+	return finalPrice
+}
+
+// CalculateDiscount calculates the discount amount for a given price
+func (c *InvoiceLineItemCoupon) CalculateDiscount(originalPrice decimal.Decimal) decimal.Decimal {
+	switch c.Type {
+	case types.CouponTypeFixed:
+		return *c.AmountOff
+	case types.CouponTypePercentage:
+		return originalPrice.Mul(*c.PercentageOff).Div(decimal.NewFromInt(100))
+	default:
+		return decimal.Zero
+	}
+}
+
+// ApplyDiscount applies the discount to a given price and returns the final price
+func (c *InvoiceLineItemCoupon) ApplyDiscount(originalPrice decimal.Decimal) decimal.Decimal {
+	discount := c.CalculateDiscount(originalPrice)
+	finalPrice := originalPrice.Sub(discount)
+
+	// Ensure final price doesn't go below zero
+	if finalPrice.LessThan(decimal.Zero) {
+		return decimal.Zero
+	}
+
+	return finalPrice
+}
+
+// Validate validates the line item coupon
+func (c *InvoiceLineItemCoupon) Validate() error {
+	if c.LineItemID == "" {
+		return ierr.NewError("line_item_id is required").
+			WithHint("line_item_id is required for line item coupons").
+			Mark(ierr.ErrValidation)
+	}
+
+	if c.CouponID == "" {
+		return ierr.NewError("coupon_id is required").
+			WithHint("coupon_id is required for line item coupons").
+			Mark(ierr.ErrValidation)
+	}
+
+	if c.Type == types.CouponTypePercentage {
+		if c.PercentageOff == nil || c.PercentageOff.IsNegative() {
+			return ierr.NewError("percentage_off must be non-negative").
+				WithHint("percentage_off must be non-negative").
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	if c.Type == types.CouponTypeFixed {
+		if c.AmountOff == nil || c.AmountOff.IsNegative() {
+			return ierr.NewError("amount_off must be non-negative").
+				WithHint("amount_off must be non-negative").
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	return nil
 }
 
 // CreateInvoiceLineItemRequest represents a single line item in an invoice creation request
