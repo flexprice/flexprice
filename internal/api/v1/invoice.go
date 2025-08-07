@@ -48,7 +48,7 @@ func (h *InvoiceHandler) CreateInvoice(c *gin.Context) {
 		return
 	}
 
-	invoice, err := h.invoiceService.CreateInvoice(c.Request.Context(), req)
+	invoice, err := h.invoiceService.CreateOneOffInvoice(c.Request.Context(), req)
 	if err != nil {
 		h.logger.Errorw("failed to create invoice", "error", err)
 		c.Error(err)

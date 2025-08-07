@@ -22,6 +22,7 @@ import (
 )
 
 type InvoiceService interface {
+	CreateOneOffInvoice(ctx context.Context, req dto.CreateInvoiceRequest) (*dto.InvoiceResponse, error)
 	CreateInvoice(ctx context.Context, req dto.CreateInvoiceRequest) (*dto.InvoiceResponse, error)
 	GetInvoice(ctx context.Context, id string) (*dto.InvoiceResponse, error)
 	ListInvoices(ctx context.Context, filter *types.InvoiceFilter) (*dto.ListInvoicesResponse, error)
@@ -51,6 +52,35 @@ func NewInvoiceService(params ServiceParams) InvoiceService {
 		ServiceParams: params,
 		idempGen:      idempotency.NewGenerator(),
 	}
+}
+
+func (s *invoiceService) CreateOneOffInvoice(ctx context.Context, req dto.CreateInvoiceRequest) (*dto.InvoiceResponse, error) {
+
+	// Here we validate all the coupons and then pass them to CreateInvoice Service.
+	// This validation is here because we want to the createInvoice be independent of the coupon service.
+	couponValidationService := NewCouponValidationService(s.ServiceParams)
+	couponService := NewCouponService(s.ServiceParams)
+	validCoupons := make([]dto.InvoiceCoupon, 0)
+	for _, couponID := range req.Coupons {
+		coupon, err := couponService.GetCoupon(ctx, couponID)
+		if err != nil {
+			s.Logger.Errorw("failed to get coupon", "error", err, "coupon_id", couponID)
+			continue
+		}
+		if err := couponValidationService.ValidateCoupon(ctx, couponID, nil); err != nil {
+			s.Logger.Errorw("failed to validate coupon", "error", err, "coupon_id", couponID)
+			continue
+		}
+		validCoupons = append(validCoupons, dto.InvoiceCoupon{
+			CouponID:      couponID,
+			AmountOff:     coupon.AmountOff,
+			PercentageOff: coupon.PercentageOff,
+			Type:          coupon.Type,
+		})
+	}
+
+	req.InvoiceCoupons = validCoupons
+	return s.CreateInvoice(ctx, req)
 }
 
 func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoiceRequest) (*dto.InvoiceResponse, error) {
@@ -179,15 +209,7 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 		}
 
 		// Apply coupons if this is a subscription invoice or if coupons are provided
-		if req.SubscriptionID != nil || len(req.Coupons) > 0 {
-			s.Logger.Infow("applying coupons to invoice",
-				"invoice_id", inv.ID,
-				"subscription_id", req.SubscriptionID,
-				"customer_id", inv.CustomerID,
-				"period_start", inv.PeriodStart,
-				"period_end", inv.PeriodEnd,
-				"standalone_coupons", len(req.Coupons),
-			)
+		if len(req.InvoiceCoupons) > 0 {
 			if err := s.applyCouponsToInvoice(ctx, inv, req); err != nil {
 				return err
 			}
@@ -248,18 +270,6 @@ func (s *invoiceService) GetInvoice(ctx context.Context, id string) (*dto.Invoic
 			return nil, err
 		}
 		response.WithCustomer(&dto.CustomerResponse{Customer: customer})
-	}
-
-	// Get coupon applications for the invoice
-	couponService := NewCouponService(s.ServiceParams)
-	couponApplications, err := couponService.GetCouponApplicationsByInvoice(ctx, inv.ID)
-	if err != nil {
-		s.Logger.Errorw("failed to get coupon applications for invoice",
-			"invoice_id", inv.ID,
-			"error", err)
-		// Don't fail the entire request if coupon applications can't be retrieved
-	} else {
-		response.WithCouponApplications(couponApplications)
 	}
 
 	return response, nil
@@ -536,6 +546,38 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 	if err != nil {
 		return nil, err
 	}
+
+	// Apply coupons to the invoice
+
+	couponAssociationService := NewCouponAssociationService(s.ServiceParams)
+	couponAssociations, err := couponAssociationService.GetCouponAssociationsBySubscription(ctx, req.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	couponValidationService := NewCouponValidationService(s.ServiceParams)
+	couponService := NewCouponService(s.ServiceParams)
+	validCoupons := make([]dto.InvoiceCoupon, 0)
+	for _, couponAssociation := range couponAssociations {
+		coupon, err := couponService.GetCoupon(ctx, couponAssociation.CouponID)
+		if err != nil {
+			s.Logger.Errorw("failed to get coupon", "error", err, "coupon_id", couponAssociation.CouponID)
+			continue
+		}
+		if err := couponValidationService.ValidateCoupon(ctx, couponAssociation.CouponID, &req.SubscriptionID); err != nil {
+			s.Logger.Errorw("failed to validate coupon", "error", err, "coupon_id", couponAssociation.CouponID)
+			continue
+		}
+		validCoupons = append(validCoupons, dto.InvoiceCoupon{
+			CouponID:            couponAssociation.CouponID,
+			CouponAssociationID: &couponAssociation.ID,
+			AmountOff:           coupon.AmountOff,
+			PercentageOff:       coupon.PercentageOff,
+			Type:                coupon.Type,
+		})
+	}
+
+	invoiceReq.InvoiceCoupons = validCoupons
 
 	// Create the invoice
 	inv, err := s.CreateInvoice(ctx, *invoiceReq)
@@ -1350,16 +1392,10 @@ func (s *invoiceService) RecalculateInvoice(ctx context.Context, id string, fina
 // handleCouponOverrides handles coupon overrides for an invoice
 func (s *invoiceService) applyCouponsToInvoice(ctx context.Context, inv *invoice.Invoice, req dto.CreateInvoiceRequest) error {
 	// Use coupon service to prepare and apply coupons
-	couponService := NewCouponService(s.ServiceParams)
-
-	// Prepare coupons for the invoice
-	couponsWithAssociations, err := couponService.PrepareCouponsForInvoice(ctx, req)
-	if err != nil {
-		return err
-	}
+	couponApplicationService := NewCouponApplicationService(s.ServiceParams)
 
 	// Apply coupons to the invoice
-	couponResult, err := couponService.ApplyCouponsOnInvoice(ctx, inv, couponsWithAssociations)
+	couponResult, err := couponApplicationService.ApplyCouponsOnInvoice(ctx, inv, req.InvoiceCoupons)
 	if err != nil {
 		return err
 	}

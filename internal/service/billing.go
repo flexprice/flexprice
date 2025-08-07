@@ -743,6 +743,36 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 			UsageCharges: make([]dto.CreateInvoiceLineItemRequest, 0),
 		}
 	}
+
+	// Apply Coupons if any
+	couponAssociationService := NewCouponAssociationService(s.ServiceParams)
+	couponAssociations, err := couponAssociationService.GetCouponAssociationsBySubscription(ctx, sub.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	couponValidationService := NewCouponValidationService(s.ServiceParams)
+	couponService := NewCouponService(s.ServiceParams)
+	validCoupons := make([]dto.InvoiceCoupon, 0)
+	for _, couponAssociation := range couponAssociations {
+		coupon, err := couponService.GetCoupon(ctx, couponAssociation.CouponID)
+		if err != nil {
+			s.Logger.Errorw("failed to get coupon", "error", err, "coupon_id", couponAssociation.CouponID)
+			continue
+		}
+		if err := couponValidationService.ValidateCoupon(ctx, couponAssociation.CouponID, &sub.ID); err != nil {
+			s.Logger.Errorw("failed to validate coupon", "error", err, "coupon_id", couponAssociation.CouponID)
+			continue
+		}
+		validCoupons = append(validCoupons, dto.InvoiceCoupon{
+			CouponID:            couponAssociation.CouponID,
+			CouponAssociationID: &couponAssociation.ID,
+			AmountOff:           coupon.AmountOff,
+			PercentageOff:       coupon.PercentageOff,
+			Type:                coupon.Type,
+		})
+	}
+
 	// Create invoice request
 	req := &dto.CreateInvoiceRequest{
 		CustomerID:     sub.CustomerID,
@@ -763,6 +793,7 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 		EnvironmentID:  sub.EnvironmentID,
 		Metadata:       metadata,
 		LineItems:      append(result.FixedCharges, result.UsageCharges...),
+		InvoiceCoupons: validCoupons,
 	}
 
 	return req, nil
