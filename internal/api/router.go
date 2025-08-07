@@ -39,6 +39,7 @@ type Handlers struct {
 	Coupon            *v1.CouponHandler
 	PriceUnit         *v1.PriceUnitHandler
 	Webhook           *v1.WebhookHandler
+	Permit            *v1.PermitHandler
 	// Portal handlers
 	Onboarding *v1.OnboardingHandler
 	// Cron jobs : TODO: move crons out of API based architecture
@@ -47,7 +48,7 @@ type Handlers struct {
 	CronCreditGrant  *cron.CreditGrantCronHandler
 }
 
-func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logger, secretService service.SecretService, envAccessService service.EnvAccessService) *gin.Engine {
+func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logger, secretService service.SecretService, envAccessService service.EnvAccessService, permitService service.PermitInterface) *gin.Engine {
 	// gin.SetMode(gin.ReleaseMode)
 
 	router := gin.Default()
@@ -89,6 +90,9 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 
 	v1Private := private.Group("/v1")
 	v1Private.Use(middleware.ErrorHandler())
+
+	// Initialize permit middleware
+	permitMiddleware := middleware.NewPermitMiddleware(permitService, logger)
 	{
 		user := v1Private.Group("/users")
 		{
@@ -148,41 +152,41 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		{
 
 			// list customers by filter
-			customer.POST("/search", handlers.Customer.ListCustomersByFilter)
+			customer.POST("/search", permitMiddleware.RequirePermission("read", "customer"), handlers.Customer.ListCustomersByFilter)
 
-			customer.POST("", handlers.Customer.CreateCustomer)
-			customer.GET("", handlers.Customer.GetCustomers)
-			customer.GET("/:id", handlers.Customer.GetCustomer)
-			customer.PUT("/:id", handlers.Customer.UpdateCustomer)
-			customer.DELETE("/:id", handlers.Customer.DeleteCustomer)
-			customer.GET("/lookup/:lookup_key", handlers.Customer.GetCustomerByLookupKey)
+			customer.POST("", permitMiddleware.RequirePermission("create", "customer"), handlers.Customer.CreateCustomer)
+			customer.GET("", permitMiddleware.RequirePermission("read", "customer"), handlers.Customer.GetCustomers)
+			customer.GET("/:id", permitMiddleware.RequirePermission("read", "customer"), handlers.Customer.GetCustomer)
+			customer.PUT("/:id", permitMiddleware.RequirePermission("update", "customer"), handlers.Customer.UpdateCustomer)
+			customer.DELETE("/:id", permitMiddleware.RequirePermission("delete", "customer"), handlers.Customer.DeleteCustomer)
+			customer.GET("/lookup/:lookup_key", permitMiddleware.RequirePermission("read", "customer"), handlers.Customer.GetCustomerByLookupKey)
 
 			// New endpoints for entitlements and usage
-			customer.GET("/:id/entitlements", handlers.Customer.GetCustomerEntitlements)
-			customer.GET("/:id/usage", handlers.Customer.GetCustomerUsageSummary)
+			customer.GET("/:id/entitlements", permitMiddleware.RequirePermission("read", "customer"), handlers.Customer.GetCustomerEntitlements)
+			customer.GET("/:id/usage", permitMiddleware.RequirePermission("read", "customer"), handlers.Customer.GetCustomerUsageSummary)
 
 			// other routes for customer
-			customer.GET("/:id/wallets", handlers.Wallet.GetWalletsByCustomerID)
-			customer.GET("/:id/invoices/summary", handlers.Invoice.GetCustomerInvoiceSummary)
-			customer.GET("/wallets", handlers.Wallet.GetCustomerWallets)
+			customer.GET("/:id/wallets", permitMiddleware.RequirePermission("read", "customer"), handlers.Wallet.GetWalletsByCustomerID)
+			customer.GET("/:id/invoices/summary", permitMiddleware.RequirePermission("read", "customer"), handlers.Invoice.GetCustomerInvoiceSummary)
+			customer.GET("/wallets", permitMiddleware.RequirePermission("read", "customer"), handlers.Wallet.GetCustomerWallets)
 
 		}
 
 		plan := v1Private.Group("/plans")
 		{
 			// list plans by filter
-			plan.POST("/search", handlers.Plan.ListPlansByFilter)
+			plan.POST("/search", permitMiddleware.RequirePermission("read", "plan"), handlers.Plan.ListPlansByFilter)
 
-			plan.POST("", handlers.Plan.CreatePlan)
-			plan.GET("", handlers.Plan.GetPlans)
-			plan.GET("/:id", handlers.Plan.GetPlan)
-			plan.PUT("/:id", handlers.Plan.UpdatePlan)
-			plan.DELETE("/:id", handlers.Plan.DeletePlan)
-			plan.POST("/:id/sync/subscriptions", handlers.Plan.SyncPlanPrices)
+			plan.POST("", permitMiddleware.RequirePermission("create", "plan"), handlers.Plan.CreatePlan)
+			plan.GET("", permitMiddleware.RequirePermission("read", "plan"), handlers.Plan.GetPlans)
+			plan.GET("/:id", permitMiddleware.RequirePermission("read", "plan"), handlers.Plan.GetPlan)
+			plan.PUT("/:id", permitMiddleware.RequirePermission("update", "plan"), handlers.Plan.UpdatePlan)
+			plan.DELETE("/:id", permitMiddleware.RequirePermission("delete", "plan"), handlers.Plan.DeletePlan)
+			plan.POST("/:id/sync/subscriptions", permitMiddleware.RequirePermission("update", "plan"), handlers.Plan.SyncPlanPrices)
 
 			// entitlement routes
-			plan.GET("/:id/entitlements", handlers.Plan.GetPlanEntitlements)
-			plan.GET("/:id/creditgrants", handlers.Plan.GetPlanCreditGrants)
+			plan.GET("/:id/entitlements", permitMiddleware.RequirePermission("read", "plan"), handlers.Plan.GetPlanEntitlements)
+			plan.GET("/:id/creditgrants", permitMiddleware.RequirePermission("read", "plan"), handlers.Plan.GetPlanCreditGrants)
 		}
 
 		subscription := v1Private.Group("/subscriptions")
@@ -221,29 +225,28 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 
 		invoices := v1Private.Group("/invoices")
 		{
-			invoices.POST("/search", handlers.Invoice.ListInvoicesByFilter)
-			invoices.POST("", handlers.Invoice.CreateInvoice)
-			invoices.GET("", handlers.Invoice.ListInvoices)
-			invoices.GET("/:id", handlers.Invoice.GetInvoice)
-			invoices.PUT("/:id", handlers.Invoice.UpdateInvoice)
-			invoices.POST("/:id/finalize", handlers.Invoice.FinalizeInvoice)
-			invoices.POST("/:id/void", handlers.Invoice.VoidInvoice)
-			invoices.POST("/preview", handlers.Invoice.GetPreviewInvoice)
-			invoices.PUT("/:id/payment", handlers.Invoice.UpdatePaymentStatus)
-			invoices.POST("/:id/payment/attempt", handlers.Invoice.AttemptPayment)
-			invoices.GET("/:id/pdf", handlers.Invoice.GetInvoicePDF)
-			invoices.POST("/:id/recalculate", handlers.Invoice.RecalculateInvoice)
+			invoices.POST("/search", permitMiddleware.RequirePermission("read", "invoice"), handlers.Invoice.ListInvoicesByFilter)
+			invoices.POST("", permitMiddleware.RequirePermission("create", "invoice"), handlers.Invoice.CreateInvoice)
+			invoices.GET("", permitMiddleware.RequirePermission("read", "invoice"), handlers.Invoice.ListInvoices)
+			invoices.GET("/:id", permitMiddleware.RequirePermission("read", "invoice"), handlers.Invoice.GetInvoice)
+			invoices.PUT("/:id", permitMiddleware.RequirePermission("update", "invoice"), handlers.Invoice.UpdateInvoice)
+			invoices.POST("/:id/finalize", permitMiddleware.RequirePermission("update", "invoice"), handlers.Invoice.FinalizeInvoice)
+			invoices.POST("/:id/void", permitMiddleware.RequirePermission("update", "invoice"), handlers.Invoice.VoidInvoice)
+			invoices.POST("/preview", permitMiddleware.RequirePermission("read", "invoice"), handlers.Invoice.GetPreviewInvoice)
+			invoices.PUT("/:id/payment", permitMiddleware.RequirePermission("update", "invoice"), handlers.Invoice.UpdatePaymentStatus)
+			invoices.POST("/:id/payment/attempt", permitMiddleware.RequirePermission("update", "invoice"), handlers.Invoice.AttemptPayment)
+			invoices.GET("/:id/pdf", permitMiddleware.RequirePermission("read", "invoice"), handlers.Invoice.GetInvoicePDF)
+			invoices.POST("/:id/recalculate", permitMiddleware.RequirePermission("update", "invoice"), handlers.Invoice.RecalculateInvoice)
 		}
 
 		feature := v1Private.Group("/features")
 		{
-
-			feature.POST("", handlers.Feature.CreateFeature)
-			feature.GET("", handlers.Feature.ListFeatures)
-			feature.GET("/:id", handlers.Feature.GetFeature)
-			feature.PUT("/:id", handlers.Feature.UpdateFeature)
-			feature.DELETE("/:id", handlers.Feature.DeleteFeature)
-			feature.POST("/search", handlers.Feature.ListFeaturesByFilter)
+			feature.POST("", permitMiddleware.RequirePermission("create", "feature"), handlers.Feature.CreateFeature)
+			feature.GET("", permitMiddleware.RequirePermission("read", "feature"), handlers.Feature.ListFeatures)
+			feature.GET("/:id", permitMiddleware.RequirePermission("read", "feature"), handlers.Feature.GetFeature)
+			feature.PUT("/:id", permitMiddleware.RequirePermission("update", "feature"), handlers.Feature.UpdateFeature)
+			feature.DELETE("/:id", permitMiddleware.RequirePermission("delete", "feature"), handlers.Feature.DeleteFeature)
+			feature.POST("/search", permitMiddleware.RequirePermission("read", "feature"), handlers.Feature.ListFeaturesByFilter)
 		}
 
 		entitlement := v1Private.Group("/entitlements")
@@ -267,12 +270,12 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 
 		payments := v1Private.Group("/payments")
 		{
-			payments.POST("", handlers.Payment.CreatePayment)
-			payments.GET("", handlers.Payment.ListPayments)
-			payments.GET("/:id", handlers.Payment.GetPayment)
-			payments.PUT("/:id", handlers.Payment.UpdatePayment)
-			payments.DELETE("/:id", handlers.Payment.DeletePayment)
-			payments.POST("/:id/process", handlers.Payment.ProcessPayment)
+			payments.POST("", permitMiddleware.RequirePermission("create", "payment"), handlers.Payment.CreatePayment)
+			payments.GET("", permitMiddleware.RequirePermission("read", "payment"), handlers.Payment.ListPayments)
+			payments.GET("/:id", permitMiddleware.RequirePermission("read", "payment"), handlers.Payment.GetPayment)
+			payments.PUT("/:id", permitMiddleware.RequirePermission("update", "payment"), handlers.Payment.UpdatePayment)
+			payments.DELETE("/:id", permitMiddleware.RequirePermission("delete", "payment"), handlers.Payment.DeletePayment)
+			payments.POST("/:id/process", permitMiddleware.RequirePermission("update", "payment"), handlers.Payment.ProcessPayment)
 		}
 
 		tasks := v1Private.Group("/tasks")
@@ -329,12 +332,12 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		// Coupon routes
 		coupon := v1Private.Group("/coupons")
 		{
-			coupon.POST("", handlers.Coupon.CreateCoupon)
-			coupon.GET("", handlers.Coupon.ListCouponsByFilter)
-			coupon.GET("/:id", handlers.Coupon.GetCoupon)
-			coupon.PUT("/:id", handlers.Coupon.UpdateCoupon)
-			coupon.DELETE("/:id", handlers.Coupon.DeleteCoupon)
-			coupon.POST("/search", handlers.Coupon.ListCouponsByFilter)
+			coupon.POST("", permitMiddleware.RequirePermission("create", "coupon"), handlers.Coupon.CreateCoupon)
+			coupon.GET("", permitMiddleware.RequirePermission("read", "coupon"), handlers.Coupon.ListCouponsByFilter)
+			coupon.GET("/:id", permitMiddleware.RequirePermission("read", "coupon"), handlers.Coupon.GetCoupon)
+			coupon.PUT("/:id", permitMiddleware.RequirePermission("update", "coupon"), handlers.Coupon.UpdateCoupon)
+			coupon.DELETE("/:id", permitMiddleware.RequirePermission("delete", "coupon"), handlers.Coupon.DeleteCoupon)
+			coupon.POST("/search", permitMiddleware.RequirePermission("read", "coupon"), handlers.Coupon.ListCouponsByFilter)
 		}
 
 		// Admin routes (API Key only)
@@ -358,6 +361,17 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		webhookGroup := v1Private.Group("/webhooks")
 		{
 			webhookGroup.GET("/dashboard", handlers.Webhook.GetDashboardURL)
+		}
+
+		// Permit routes
+		permitGroup := v1Private.Group("/permit")
+		{
+			permitGroup.POST("/tenants", handlers.Permit.CreateTenant)
+			permitGroup.POST("/users/sync", handlers.Permit.SyncUser)
+			permitGroup.POST("/users/assign-role", handlers.Permit.AssignRole)
+			permitGroup.GET("/tenants/roles", handlers.Permit.GetTenantRoles)
+			permitGroup.GET("/tenants/resources", handlers.Permit.GetTenantResources)
+			permitGroup.POST("/roles", handlers.Permit.CreateRole)
 		}
 	}
 
