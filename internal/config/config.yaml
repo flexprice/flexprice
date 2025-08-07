@@ -25,7 +25,7 @@ auth:
         is_active: true
 
 permit:
-  api_key: "permit_key_bTwQKREUqPePrHLuRltXxr4MbYKCkAgPyTk0IEMTqE7YuaANUxIg005tv5m0ZWbVLwdsrxwgWKjhsil9P3pcWj" 
+  api_key: "" # Will be overridden by FLEXPRICE_PERMIT_API_KEY environment variable
   api_url: "https://api.permit.io"
   pdp_url: "https://cloudpdp.api.permit.io"
   environment: "dev"
