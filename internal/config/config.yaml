@@ -18,6 +18,19 @@ auth:
         user_id: "00000000-0000-0000-0000-000000000000"
         name: "Dev API Keys"
         is_active: true
+      "test-api-key":
+        tenant_id: "00000000-0000-0000-0000-000000000000"
+        user_id: "00000000-0000-0000-0000-000000000000"
+        name: "Test API Key"
+        is_active: true
+
+permit:
+  api_key: "permit_key_bTwQKREUqPePrHLuRltXxr4MbYKCkAgPyTk0IEMTqE7YuaANUxIg005tv5m0ZWbVLwdsrxwgWKjhsil9P3pcWj" 
+  api_url: "https://api.permit.io"
+  pdp_url: "https://cloudpdp.api.permit.io"
+  environment: "dev"
+  debug: false
+  project_id: "default"
 
 kafka:
   brokers: "localhost:29092" # For local mode

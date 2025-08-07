@@ -35,6 +35,7 @@ type Configuration struct {
 	Cache               CacheConfig               `validate:"required"`
 	EventPostProcessing EventPostProcessingConfig `mapstructure:"event_post_processing" validate:"required"`
 	EnvAccess           EnvAccessConfig           `mapstructure:"env_access" json:"env_access" validate:"omitempty"`
+	Permit              PermitConfig              `mapstructure:"permit" validate:"omitempty"`
 }
 
 type CacheConfig struct {
