@@ -142,9 +142,9 @@ func TestPriceScopeFiltering(t *testing.T) {
 	})
 }
 
-// Example of how the price override functionality would be tested in integration tests
-func ExamplePriceOverrideWorkflow() {
-	// This example shows the expected workflow for price overrides
+// TestPriceOverrideWorkflow demonstrates the expected workflow for price overrides
+func TestPriceOverrideWorkflow(t *testing.T) {
+	// This test shows the expected workflow for price overrides
 
 	// 1. Create a plan with standard prices
 	// 2. Create a subscription with override_line_items
@@ -155,4 +155,5 @@ func ExamplePriceOverrideWorkflow() {
 	// 7. Verify that subscription queries return subscription-scoped prices
 
 	// Note: Actual implementation would require full test environment setup
+	t.Skip("Integration test - requires full test environment setup")
 }
