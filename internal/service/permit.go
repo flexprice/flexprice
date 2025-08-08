@@ -63,24 +63,13 @@ func NewPermitService(cfg *config.PermitConfig, logger *logger.Logger) (PermitIn
 	}
 
 	// Create a zap logger for permit.io SDK
-	zapLogger, err := zap.NewDevelopment()
+	_, err := zap.NewDevelopment()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create zap logger: %w", err)
 	}
 
-	permitConfig := permitConfig.NewPermitConfig(
-		cfg.APIURL,
-		cfg.APIKey,
-		cfg.PDPURL,
-		cfg.Debug,
-		nil, // No context
-		zapLogger,
-	)
-
-	client := permit.NewPermit(*permitConfig)
-
-	// Set the project and environment context
-	client.Api.SetContext(context.Background(), cfg.ProjectID, cfg.Environment)
+	PermitConfig := permitConfig.NewConfigBuilder(cfg.APIKey).Build()
+	client := permit.New(PermitConfig)
 
 	return &PermitService{
 		Client: client,
