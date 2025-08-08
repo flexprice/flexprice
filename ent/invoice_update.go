@@ -221,6 +221,26 @@ func (iu *InvoiceUpdate) ClearRefundedAmount() *InvoiceUpdate {
 	return iu
 }
 
+// SetTotalTax sets the "total_tax" field.
+func (iu *InvoiceUpdate) SetTotalTax(d decimal.Decimal) *InvoiceUpdate {
+	iu.mutation.SetTotalTax(d)
+	return iu
+}
+
+// SetNillableTotalTax sets the "total_tax" field if the given value is not nil.
+func (iu *InvoiceUpdate) SetNillableTotalTax(d *decimal.Decimal) *InvoiceUpdate {
+	if d != nil {
+		iu.SetTotalTax(*d)
+	}
+	return iu
+}
+
+// ClearTotalTax clears the value of the "total_tax" field.
+func (iu *InvoiceUpdate) ClearTotalTax() *InvoiceUpdate {
+	iu.mutation.ClearTotalTax()
+	return iu
+}
+
 // SetTotalDiscount sets the "total_discount" field.
 func (iu *InvoiceUpdate) SetTotalDiscount(d decimal.Decimal) *InvoiceUpdate {
 	iu.mutation.SetTotalDiscount(d)
@@ -680,6 +700,12 @@ func (iu *InvoiceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if iu.mutation.RefundedAmountCleared() {
 		_spec.ClearField(invoice.FieldRefundedAmount, field.TypeOther)
 	}
+	if value, ok := iu.mutation.TotalTax(); ok {
+		_spec.SetField(invoice.FieldTotalTax, field.TypeOther, value)
+	}
+	if iu.mutation.TotalTaxCleared() {
+		_spec.ClearField(invoice.FieldTotalTax, field.TypeOther)
+	}
 	if value, ok := iu.mutation.TotalDiscount(); ok {
 		_spec.SetField(invoice.FieldTotalDiscount, field.TypeOther, value)
 	}
@@ -1073,6 +1099,26 @@ func (iuo *InvoiceUpdateOne) SetNillableRefundedAmount(d *decimal.Decimal) *Invo
 // ClearRefundedAmount clears the value of the "refunded_amount" field.
 func (iuo *InvoiceUpdateOne) ClearRefundedAmount() *InvoiceUpdateOne {
 	iuo.mutation.ClearRefundedAmount()
+	return iuo
+}
+
+// SetTotalTax sets the "total_tax" field.
+func (iuo *InvoiceUpdateOne) SetTotalTax(d decimal.Decimal) *InvoiceUpdateOne {
+	iuo.mutation.SetTotalTax(d)
+	return iuo
+}
+
+// SetNillableTotalTax sets the "total_tax" field if the given value is not nil.
+func (iuo *InvoiceUpdateOne) SetNillableTotalTax(d *decimal.Decimal) *InvoiceUpdateOne {
+	if d != nil {
+		iuo.SetTotalTax(*d)
+	}
+	return iuo
+}
+
+// ClearTotalTax clears the value of the "total_tax" field.
+func (iuo *InvoiceUpdateOne) ClearTotalTax() *InvoiceUpdateOne {
+	iuo.mutation.ClearTotalTax()
 	return iuo
 }
 
@@ -1564,6 +1610,12 @@ func (iuo *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err e
 	}
 	if iuo.mutation.RefundedAmountCleared() {
 		_spec.ClearField(invoice.FieldRefundedAmount, field.TypeOther)
+	}
+	if value, ok := iuo.mutation.TotalTax(); ok {
+		_spec.SetField(invoice.FieldTotalTax, field.TypeOther, value)
+	}
+	if iuo.mutation.TotalTaxCleared() {
+		_spec.ClearField(invoice.FieldTotalTax, field.TypeOther)
 	}
 	if value, ok := iuo.mutation.TotalDiscount(); ok {
 		_spec.SetField(invoice.FieldTotalDiscount, field.TypeOther, value)
