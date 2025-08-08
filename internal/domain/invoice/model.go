@@ -114,6 +114,9 @@ type Invoice struct {
 	// These are actual refunds issued to the customer.
 	RefundedAmount decimal.Decimal `json:"refunded_amount"`
 
+	// total_tax is the sum of all taxes combined at the invoice level.
+	TotalTax decimal.Decimal `json:"total_tax"`
+
 	// common fields including tenant information, creation/update timestamps, and status
 	types.BaseModel
 }
@@ -150,6 +153,7 @@ func FromEnt(e *ent.Invoice) *Invoice {
 		Subtotal:           e.Subtotal,
 		Total:              e.Total,
 		TotalDiscount:      lo.FromPtrOr(e.TotalDiscount, decimal.Zero),
+		TotalTax:           lo.FromPtrOr(e.TotalTax, decimal.Zero),
 		AmountRemaining:    e.AmountRemaining,
 		AdjustmentAmount:   e.AdjustmentAmount,
 		RefundedAmount:     e.RefundedAmount,

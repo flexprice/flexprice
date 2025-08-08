@@ -77,6 +77,9 @@ type CreateInvoiceRequest struct {
 	// metadata contains additional custom key-value pairs for storing extra information
 	Metadata types.Metadata `json:"metadata,omitempty"`
 
+	// tax_rate_overrides is the tax rate overrides to be applied to the invoice
+	TaxRateOverrides []*TaxRateOverride `json:"tax_rate_overrides,omitempty"`
+
 	// environment_id is the unique identifier of the environment this invoice belongs to
 	EnvironmentID string `json:"environment_id,omitempty"`
 
@@ -149,6 +152,21 @@ func (r *CreateInvoiceRequest) Validate() error {
 		}
 	}
 
+	// taxrate overrides validation
+	if len(r.TaxRateOverrides) > 0 {
+		for _, taxRateOverride := range r.TaxRateOverrides {
+			if err := taxRateOverride.Validate(); err != nil {
+				return ierr.NewError("invalid tax rate override").
+					WithHint("Tax rate override validation failed").
+					WithReportableDetails(map[string]interface{}{
+						"error":             err.Error(),
+						"tax_rate_override": taxRateOverride,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+		}
+	}
+
 	// url validation if url is provided
 	if r.InvoicePDFURL != nil {
 		if err := validator.ValidateURL(r.InvoicePDFURL); err != nil {
@@ -189,9 +207,7 @@ func (r *CreateInvoiceRequest) ToInvoice(ctx context.Context) (*invoice.Invoice,
 		AmountRemaining: decimal.Zero,
 	}
 
-	if r.EnvironmentID != "" {
-		inv.EnvironmentID = r.EnvironmentID
-	} else {
+	if inv.EnvironmentID == "" {
 		inv.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
 
@@ -613,6 +629,11 @@ type InvoiceResponse struct {
 	// customer contains the customer information associated with this invoice
 	Customer *CustomerResponse `json:"customer,omitempty"`
 
+	// total_tax is the total tax amount for this invoice
+	TotalTax decimal.Decimal `json:"total_tax"`
+
+	// tax_applied_records contains the tax applied records associated with this invoice
+	Taxes []*TaxAppliedResponse `json:"taxes,omitempty"`
 	// coupon_applications contains the coupon applications associated with this invoice
 	CouponApplications []*CouponApplicationResponse `json:"coupon_applications,omitempty"`
 }
@@ -651,6 +672,7 @@ func NewInvoiceResponse(inv *invoice.Invoice) *InvoiceResponse {
 		Currency:        inv.Currency,
 		AmountDue:       inv.AmountDue,
 		Total:           inv.Total,
+		TotalTax:        inv.TotalTax,
 		TotalDiscount:   inv.TotalDiscount,
 		Subtotal:        inv.Subtotal,
 		AmountPaid:      inv.AmountPaid,
@@ -705,6 +727,12 @@ func (r *InvoiceResponse) WithSubscription(sub *SubscriptionResponse) *InvoiceRe
 // WithCustomer adds customer information to the invoice response
 func (r *InvoiceResponse) WithCustomer(customer *CustomerResponse) *InvoiceResponse {
 	r.Customer = customer
+	return r
+}
+
+// WithTaxAppliedRecords adds tax applied records to the invoice response
+func (r *InvoiceResponse) WithTaxes(taxes []*TaxAppliedResponse) *InvoiceResponse {
+	r.Taxes = taxes
 	return r
 }
 

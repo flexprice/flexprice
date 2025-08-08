@@ -50,6 +50,9 @@ type CreateSubscriptionRequest struct {
 	OverageFactor *decimal.Decimal `json:"overage_factor,omitempty"`
 	// Phases represents an optional timeline of subscription phases
 	Phases []SubscriptionSchedulePhaseInput `json:"phases,omitempty" validate:"omitempty,dive"`
+
+	// tax_rate_overrides is the tax rate overrides	to be applied to the subscription
+	TaxRateOverrides []*TaxRateOverride `json:"tax_rate_overrides,omitempty"`
 	// SubscriptionCoupons is a list of coupon IDs to be applied to the subscription
 	SubscriptionCoupons []string `json:"subscription_coupons,omitempty"`
 	// OverrideLineItems allows customizing specific prices for this subscription
@@ -249,6 +252,21 @@ func (r *CreateSubscriptionRequest) Validate() error {
 						}).
 						Mark(ierr.ErrValidation)
 				}
+			}
+		}
+	}
+
+	// taxrate overrides validation
+	if len(r.TaxRateOverrides) > 0 {
+		for _, taxRateOverride := range r.TaxRateOverrides {
+			if err := taxRateOverride.Validate(); err != nil {
+				return ierr.NewError("invalid tax rate override").
+					WithHint("Tax rate override validation failed").
+					WithReportableDetails(map[string]interface{}{
+						"error":             err.Error(),
+						"tax_rate_override": taxRateOverride,
+					}).
+					Mark(ierr.ErrValidation)
 			}
 		}
 	}

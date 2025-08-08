@@ -29,19 +29,6 @@ const (
 	CouponCadenceForever CouponCadence = "forever"
 )
 
-// CouponRule represents a rule for applying coupon discounts
-type CouponRule struct {
-	Field    string      `json:"field"`    // Field to check (e.g., "customer_id", "plan_id", "amount")
-	Operator string      `json:"operator"` // Operator (e.g., "equals", "greater_than", "in")
-	Value    interface{} `json:"value"`    // Value to compare against
-}
-
-// CouponRules represents a collection of coupon discount rules
-type CouponRules struct {
-	Inclusions []CouponRule `json:"inclusions"` // All conditions must be met (AND logic)
-	Exclusions []CouponRule `json:"exclusions"` // Any exclusion prevents application (OR logic)
-}
-
 type CouponFilter struct {
 	*QueryFilter
 

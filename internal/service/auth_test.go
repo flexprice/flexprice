@@ -53,6 +53,8 @@ func (s *AuthServiceSuite) setupService() {
 		TaskRepo:                   s.GetStores().TaskRepo,
 		SecretRepo:                 s.GetStores().SecretRepo,
 		EventPublisher:             s.GetPublisher(),
+		TaxAssociationRepo:         s.GetStores().TaxAssociationRepo,
+		TaxRateRepo:                s.GetStores().TaxRateRepo,
 		WebhookPublisher:           s.GetWebhookPublisher(),
 	}, pubSub)
 }
