@@ -225,6 +225,28 @@ definitions:
       threshold:
         $ref: '#/definitions/dto.Threshold'
     type: object
+  dto.AssignRoleRequest:
+    properties:
+      role_key:
+        type: string
+      tenant_id:
+        type: string
+      user_id:
+        type: string
+    required:
+    - role_key
+    - tenant_id
+    - user_id
+    type: object
+  dto.AssignRoleResponse:
+    properties:
+      message:
+        type: string
+      role_key:
+        type: string
+      user_id:
+        type: string
+    type: object
   dto.AuthResponse:
     properties:
       tenant_id:
@@ -274,6 +296,58 @@ definitions:
         type: string
     required:
     - subscription_id
+    type: object
+  dto.CheckPermissionRequest:
+    properties:
+      action:
+        type: string
+      resource:
+        type: string
+      tenant_id:
+        type: string
+      user_id:
+        type: string
+    required:
+    - action
+    - resource
+    - tenant_id
+    - user_id
+    type: object
+  dto.CheckPermissionResponse:
+    properties:
+      action:
+        type: string
+      allowed:
+        type: boolean
+      resource:
+        type: string
+      tenant_id:
+        type: string
+      user_id:
+        type: string
+    type: object
+  dto.ConfigureRoleResponse:
+    properties:
+      actions:
+        items:
+          type: string
+        type: array
+      instructions:
+        items:
+          type: string
+        type: array
+      message:
+        type: string
+      permissions_needed:
+        items:
+          type: string
+        type: array
+      resources:
+        items:
+          type: string
+        type: array
+      tenant_id:
+        type: string
     type: object
   dto.CostBreakdownItem:
     properties:
@@ -940,6 +1014,25 @@ definitions:
     - destination_type
     - payment_method_type
     type: object
+  dto.CreatePermitTenantRequest:
+    properties:
+      name:
+        type: string
+      tenant_id:
+        type: string
+    required:
+    - name
+    - tenant_id
+    type: object
+  dto.CreatePermitTenantResponse:
+    properties:
+      message:
+        type: string
+      name:
+        type: string
+      tenant_id:
+        type: string
+    type: object
   dto.CreatePlanEntitlementRequest:
     properties:
       feature_id:
@@ -1141,6 +1234,64 @@ definitions:
     - conversion_rate
     - name
     - symbol
+    type: object
+  dto.CreateResourceAndAssignRequest:
+    properties:
+      resource_key:
+        type: string
+      role_key:
+        type: string
+      tenant_id:
+        type: string
+      user_id:
+        type: string
+    required:
+    - resource_key
+    - role_key
+    - tenant_id
+    type: object
+  dto.CreateResourceAndAssignResponse:
+    properties:
+      message:
+        type: string
+      resource_key:
+        type: string
+      role_key:
+        type: string
+      tenant_id:
+        type: string
+      user_id:
+        type: string
+    type: object
+  dto.CreateRoleRequest:
+    properties:
+      description:
+        type: string
+      name:
+        type: string
+      permissions:
+        items:
+          type: string
+        type: array
+      role_key:
+        type: string
+      tenant_id:
+        type: string
+    required:
+    - name
+    - role_key
+    - tenant_id
+    type: object
+  dto.CreateRoleResponse:
+    properties:
+      message:
+        type: string
+      name:
+        type: string
+      role_key:
+        type: string
+      tenant_id:
+        type: string
     type: object
   dto.CreateSubscriptionRequest:
     properties:
@@ -1599,6 +1750,29 @@ definitions:
       period:
         $ref: '#/definitions/dto.BillingPeriodInfo'
     type: object
+  dto.DebugUserResponse:
+    properties:
+      permissions:
+        additionalProperties:
+          type: boolean
+        type: object
+      tenant_id:
+        type: string
+      tenant_resources:
+        items:
+          type: string
+        type: array
+      tenant_roles:
+        items:
+          type: string
+        type: array
+      user_id:
+        type: string
+      user_roles:
+        items:
+          type: string
+        type: array
+    type: object
   dto.EntitlementResponse:
     properties:
       created_at:
@@ -1834,6 +2008,28 @@ definitions:
         type: string
     required:
     - subscription_id
+    type: object
+  dto.GetTenantResourcesResponse:
+    properties:
+      message:
+        type: string
+      resources:
+        items:
+          type: string
+        type: array
+      tenant_id:
+        type: string
+    type: object
+  dto.GetTenantRolesResponse:
+    properties:
+      message:
+        type: string
+      roles:
+        items:
+          type: string
+        type: array
+      tenant_id:
+        type: string
     type: object
   dto.GetUsageAnalyticsRequest:
     properties:
@@ -3254,6 +3450,35 @@ definitions:
         $ref: '#/definitions/price.Price'
       quantity:
         type: number
+    type: object
+  dto.SyncResourceResponse:
+    properties:
+      message:
+        type: string
+      resource_id:
+        type: string
+      tenant_id:
+        type: string
+    type: object
+  dto.SyncUserRequest:
+    properties:
+      email:
+        type: string
+      tenant_id:
+        type: string
+      user_id:
+        type: string
+    required:
+    - email
+    - tenant_id
+    - user_id
+    type: object
+  dto.SyncUserResponse:
+    properties:
+      message:
+        type: string
+      user_id:
+        type: string
     type: object
   dto.TaskResponse:
     properties:
@@ -8404,6 +8629,372 @@ paths:
       summary: Process a payment
       tags:
       - Payments
+  /permit/check-permission:
+    post:
+      consumes:
+      - application/json
+      description: Check if a user has permission to perform an action on a resource
+      parameters:
+      - description: Check permission request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CheckPermissionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.CheckPermissionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      summary: Check user permission
+      tags:
+      - Permit
+  /permit/configure-admin:
+    post:
+      consumes:
+      - application/json
+      description: Configure the admin role with all permissions for all resources
+      parameters:
+      - description: Tenant ID
+        in: query
+        name: tenant_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ConfigureRoleResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      summary: Configure admin role with all permissions
+      tags:
+      - Permit
+  /permit/debug-user:
+    get:
+      consumes:
+      - application/json
+      description: Get detailed information about user roles and permissions for debugging
+      parameters:
+      - description: User ID
+        in: query
+        name: user_id
+        required: true
+        type: string
+      - description: Tenant ID
+        in: query
+        name: tenant_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.DebugUserResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      summary: Debug user roles and permissions
+      tags:
+      - Permit
+  /permit/resources/create-and-assign:
+    post:
+      consumes:
+      - application/json
+      description: Create a new resource and assign it to a role with permissions
+      parameters:
+      - description: Create resource and assign request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateResourceAndAssignRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.CreateResourceAndAssignResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      summary: Create resource and assign to role
+      tags:
+      - Permit
+  /permit/resources/sync-feature:
+    post:
+      consumes:
+      - application/json
+      description: Sync the feature resource type to Permit.io for authorization
+      parameters:
+      - description: Tenant ID
+        in: query
+        name: tenant_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.SyncResourceResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      summary: Sync feature resource to Permit.io
+      tags:
+      - Permit
+  /permit/roles:
+    post:
+      consumes:
+      - application/json
+      description: Create a new role in Permit.io
+      parameters:
+      - description: Create role request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateRoleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.CreateRoleResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      summary: Create a new role
+      tags:
+      - Permit
+  /permit/tenants:
+    post:
+      consumes:
+      - application/json
+      description: Create a new tenant for authorization management
+      parameters:
+      - description: Create tenant request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreatePermitTenantRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.CreatePermitTenantResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      summary: Create a new tenant in Permit.io
+      tags:
+      - Permit
+  /permit/tenants/resources:
+    get:
+      consumes:
+      - application/json
+      description: Get all resources available in a tenant
+      parameters:
+      - description: Tenant ID
+        in: query
+        name: tenant_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.GetTenantResourcesResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      summary: Get tenant resources
+      tags:
+      - Permit
+  /permit/tenants/roles:
+    get:
+      consumes:
+      - application/json
+      description: Get all roles available in a tenant
+      parameters:
+      - description: Tenant ID
+        in: query
+        name: tenant_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.GetTenantRolesResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      summary: Get tenant roles
+      tags:
+      - Permit
+  /permit/test-permission:
+    get:
+      consumes:
+      - application/json
+      description: Test permission check for debugging
+      parameters:
+      - description: User ID
+        in: query
+        name: user_id
+        required: true
+        type: string
+      - description: Action
+        in: query
+        name: action
+        required: true
+        type: string
+      - description: Resource
+        in: query
+        name: resource
+        required: true
+        type: string
+      - description: Tenant ID
+        in: query
+        name: tenant_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.CheckPermissionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      summary: Test permission check
+      tags:
+      - Permit
+  /permit/test-permission-alternative:
+    get:
+      consumes:
+      - application/json
+      description: Test permission check using alternative method
+      parameters:
+      - description: User ID
+        in: query
+        name: user_id
+        required: true
+        type: string
+      - description: Action
+        in: query
+        name: action
+        required: true
+        type: string
+      - description: Resource
+        in: query
+        name: resource
+        required: true
+        type: string
+      - description: Tenant ID
+        in: query
+        name: tenant_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.CheckPermissionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      summary: Test permission with alternative method
+      tags:
+      - Permit
+  /permit/users/assign-role:
+    post:
+      consumes:
+      - application/json
+      description: Assign a role to a user in Permit.io
+      parameters:
+      - description: Assign role request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.AssignRoleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.AssignRoleResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      summary: Assign role to user
+      tags:
+      - Permit
+  /permit/users/sync:
+    post:
+      consumes:
+      - application/json
+      description: Sync a user to Permit.io with tenant association for authorization
+      parameters:
+      - description: Sync user request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.SyncUserRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.SyncUserResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      summary: Sync user to Permit.io
+      tags:
+      - Permit
   /plans:
     get:
       consumes:
