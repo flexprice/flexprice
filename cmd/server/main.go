@@ -191,6 +191,9 @@ func main() {
 			service.NewCreditNoteService,
 			service.NewCouponService,
 			service.NewPriceUnitService,
+			func(cfg *config.Configuration, logger *logger.Logger) (service.PermitInterface, error) {
+				return service.NewPermitService(cfg.GetPermitConfig(), logger)
+			},
 		),
 	)
 
@@ -243,6 +246,7 @@ func provideHandlers(
 	priceUnitService *service.PriceUnitService,
 	svixClient *svix.Client,
 	couponService service.CouponService,
+	permitService service.PermitInterface,
 ) api.Handlers {
 	return api.Handlers{
 		Events:            v1.NewEventsHandler(eventService, eventPostProcessingService, logger),
@@ -274,11 +278,12 @@ func provideHandlers(
 		PriceUnit:         v1.NewPriceUnitHandler(priceUnitService, logger),
 		Webhook:           v1.NewWebhookHandler(cfg, svixClient, logger),
 		Coupon:            v1.NewCouponHandler(couponService, logger),
+		Permit:            v1.NewPermitHandler(permitService),
 	}
 }
 
-func provideRouter(handlers api.Handlers, cfg *config.Configuration, logger *logger.Logger, secretService service.SecretService, envAccessService service.EnvAccessService) *gin.Engine {
-	return api.NewRouter(handlers, cfg, logger, secretService, envAccessService)
+func provideRouter(handlers api.Handlers, cfg *config.Configuration, logger *logger.Logger, secretService service.SecretService, envAccessService service.EnvAccessService, permitService service.PermitInterface) *gin.Engine {
+	return api.NewRouter(handlers, cfg, logger, secretService, envAccessService, permitService)
 }
 
 func provideTemporalConfig(cfg *config.Configuration) *config.TemporalConfig {
