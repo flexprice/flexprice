@@ -191,9 +191,7 @@ func main() {
 			service.NewCreditNoteService,
 			service.NewCouponService,
 			service.NewPriceUnitService,
-			func(cfg *config.Configuration, logger *logger.Logger) (service.PermitInterface, error) {
-				return service.NewPermitService(cfg.GetPermitConfig(), logger)
-			},
+			service.NewPermitService,
 		),
 	)
 

@@ -50,15 +50,17 @@ type PermitInterface interface {
 	GetTenant(ctx context.Context, tenantID string) (*models.TenantRead, error)
 }
 
-func NewPermitService(cfg *config.PermitConfig, logger *logger.Logger) (PermitInterface, error) {
+func NewPermitService(cfg *config.Configuration, logger *logger.Logger) (PermitInterface, error) {
+	permitCfg := cfg.GetPermitConfig()
+
 	// Validate required configuration
-	if cfg.APIKey == "" {
+	if permitCfg.APIKey == "" {
 		return nil, fmt.Errorf("permit API key is required")
 	}
-	if cfg.APIURL == "" {
+	if permitCfg.APIURL == "" {
 		return nil, fmt.Errorf("permit API URL is required")
 	}
-	if cfg.ProjectID == "" {
+	if permitCfg.ProjectID == "" {
 		return nil, fmt.Errorf("permit project ID is required")
 	}
 
@@ -68,13 +70,13 @@ func NewPermitService(cfg *config.PermitConfig, logger *logger.Logger) (PermitIn
 		return nil, fmt.Errorf("failed to create zap logger: %w", err)
 	}
 
-	PermitConfig := permitConfig.NewConfigBuilder(cfg.APIKey).Build()
-	client := permit.New(PermitConfig)
+	permitSDKConfig := permitConfig.NewConfigBuilder(permitCfg.APIKey).Build()
+	client := permit.New(permitSDKConfig)
 
 	return &PermitService{
 		Client: client,
 		logger: logger,
-		config: cfg,
+		config: permitCfg,
 	}, nil
 }
 
