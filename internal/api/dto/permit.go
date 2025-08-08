@@ -114,3 +114,17 @@ type SyncResourceResponse struct {
 	ResourceID string `json:"resource_id"`
 	TenantID   string `json:"tenant_id"`
 }
+
+// GetUserPermissionsRequest represents a request to get user permissions
+type GetUserPermissionsRequest struct {
+	UserID   string `json:"user_id" binding:"required"`
+	TenantID string `json:"tenant_id" binding:"required"`
+}
+
+// GetUserPermissionsResponse represents a response for getting user permissions
+type GetUserPermissionsResponse struct {
+	Message     string   `json:"message"`
+	UserID      string   `json:"user_id"`
+	TenantID    string   `json:"tenant_id"`
+	Permissions []string `json:"permissions"`
+}

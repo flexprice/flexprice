@@ -369,6 +369,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			permitGroup.POST("/tenants", handlers.Permit.CreateTenant)
 			permitGroup.POST("/users/sync", handlers.Permit.SyncUser)
 			permitGroup.POST("/users/assign-role", handlers.Permit.AssignRole)
+			permitGroup.POST("/users/permissions", handlers.Permit.GetUserPermissions)
 			permitGroup.GET("/tenants/roles", handlers.Permit.GetTenantRoles)
 			permitGroup.GET("/tenants/resources", handlers.Permit.GetTenantResources)
 			permitGroup.POST("/roles", handlers.Permit.CreateRole)

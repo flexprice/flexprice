@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"fmt"
+
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
@@ -44,7 +46,31 @@ func (pm *PermitMiddleware) RequirePermission(action, resource string) gin.Handl
 			return
 		}
 
-		// Check permission - this single call handles all validation internally
+		// Check if tenant has RBAC enabled
+		rbacEnabled, err := pm.permitService.IsTenantRBACEnabled(c.Request.Context(), tenantID)
+
+		fmt.Println("rbacEnabled", rbacEnabled)
+		if err != nil {
+			pm.logger.Warnw("failed to check tenant RBAC status, allowing access",
+				"tenant_id", tenantID,
+				"user_id", userID,
+				"error", err)
+			c.Next()
+			return
+		}
+
+		// If tenant doesn't have RBAC enabled, allow access
+		if !rbacEnabled {
+			pm.logger.Debugw("tenant RBAC not enabled, allowing access",
+				"tenant_id", tenantID,
+				"user_id", userID,
+				"action", action,
+				"resource", resource)
+			c.Next()
+			return
+		}
+
+		// RBAC is enabled, perform permission check
 		allowed, err := pm.permitService.CheckPermission(
 			c.Request.Context(),
 			userID,
@@ -105,10 +131,42 @@ func (pm *PermitMiddleware) RequirePermissionWithAttributes(action, resource str
 			return
 		}
 
+		tenantID := types.GetTenantID(c.Request.Context())
+		if tenantID == "" {
+			if err := c.Error(ierr.NewError("tenant not found in context").
+				Mark(ierr.ErrPermissionDenied)); err != nil {
+				pm.logger.Errorw("failed to set error in context", "error", err)
+			}
+			c.Abort()
+			return
+		}
+
+		// Check if tenant has RBAC enabled
+		rbacEnabled, err := pm.permitService.IsTenantRBACEnabled(c.Request.Context(), tenantID)
+		if err != nil {
+			pm.logger.Warnw("failed to check tenant RBAC status, allowing access",
+				"tenant_id", tenantID,
+				"user_id", userID,
+				"error", err)
+			c.Next()
+			return
+		}
+
+		// If tenant doesn't have RBAC enabled, allow access
+		if !rbacEnabled {
+			pm.logger.Debugw("tenant RBAC not enabled, allowing access",
+				"tenant_id", tenantID,
+				"user_id", userID,
+				"action", action,
+				"resource", resource)
+			c.Next()
+			return
+		}
+
 		// Extract attributes
 		attributes := attributeExtractor(c)
 
-		// Check permission with attributes
+		// RBAC is enabled, perform permission check with attributes
 		allowed, err := pm.permitService.CheckPermissionWithAttributes(
 			c.Request.Context(),
 			userID,

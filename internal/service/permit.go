@@ -5,7 +5,9 @@ import (
 	"fmt"
 
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/types"
 	permitConfig "github.com/permitio/permit-golang/pkg/config"
 	"github.com/permitio/permit-golang/pkg/enforcement"
 	"github.com/permitio/permit-golang/pkg/models"
@@ -14,9 +16,10 @@ import (
 )
 
 type PermitService struct {
-	Client *permit.Client
-	logger *logger.Logger
-	config *config.PermitConfig
+	Client     *permit.Client
+	logger     *logger.Logger
+	config     *config.PermitConfig
+	tenantRepo tenant.Repository
 }
 
 type PermitInterface interface {
@@ -31,6 +34,7 @@ type PermitInterface interface {
 	// Permission Checking
 	CheckPermission(ctx context.Context, userID, action, resource, tenantID string) (bool, error)
 	CheckPermissionWithAttributes(ctx context.Context, userID, action, resource string, attributes map[string]interface{}) (bool, error)
+	GetUserPermissions(ctx context.Context, userID, tenantID string) ([]string, error)
 
 	// Resource Management
 	SyncResource(ctx context.Context, resourceType, resourceID, tenantID string, attributes map[string]interface{}) error
@@ -48,9 +52,12 @@ type PermitInterface interface {
 	// Tenant Management
 	CreateTenant(ctx context.Context, tenantID, name string) error
 	GetTenant(ctx context.Context, tenantID string) (*models.TenantRead, error)
+
+	// RBAC Status
+	IsTenantRBACEnabled(ctx context.Context, tenantID string) (bool, error)
 }
 
-func NewPermitService(cfg *config.Configuration, logger *logger.Logger) (PermitInterface, error) {
+func NewPermitService(cfg *config.Configuration, logger *logger.Logger, tenantRepo tenant.Repository) (PermitInterface, error) {
 	permitCfg := cfg.GetPermitConfig()
 
 	// Validate required configuration
@@ -74,9 +81,10 @@ func NewPermitService(cfg *config.Configuration, logger *logger.Logger) (PermitI
 	client := permit.New(permitSDKConfig)
 
 	return &PermitService{
-		Client: client,
-		logger: logger,
-		config: permitCfg,
+		Client:     client,
+		logger:     logger,
+		config:     permitCfg,
+		tenantRepo: tenantRepo,
 	}, nil
 }
 
@@ -111,7 +119,7 @@ func (s *PermitService) SyncUser(ctx context.Context, userID, email, tenantID st
 	if tenantID != "" {
 		// Try to assign user to tenant using the Users API
 		// Note: This will fail if the role doesn't exist, but that's okay
-		_, err = s.Client.Api.Users.AssignRole(ctx, userID, "test", tenantID)
+		_, err = s.Client.Api.Users.AssignRole(ctx, userID, "admin", tenantID)
 		if err != nil {
 			s.logger.Warnw("failed to assign member role to user", "error", err, "user_id", userID, "tenant_id", tenantID)
 			s.logger.Infow("user synced but role assignment failed - user is still associated with tenant via attributes", "user_id", userID, "tenant_id", tenantID)
@@ -386,7 +394,38 @@ func (s *PermitService) CreateTenant(ctx context.Context, tenantID, name string)
 		return fmt.Errorf("failed to create tenant: %w", err)
 	}
 
+	// Update tenant metadata to include permit_rbac_enabled flag
+	if err := s.updateTenantMetadata(ctx, tenantID); err != nil {
+		s.logger.Errorw("failed to update tenant metadata", "error", err, "tenant_id", tenantID)
+		// Don't fail the permit creation, just log the error
+	}
+
 	s.logger.Infow("created tenant in permit", "tenant_id", tenantID, "name", name)
+	return nil
+}
+
+// updateTenantMetadata updates the tenant metadata to include permit_rbac_enabled flag
+func (s *PermitService) updateTenantMetadata(ctx context.Context, tenantID string) error {
+	// Get the current tenant
+	tenant, err := s.tenantRepo.GetByID(ctx, tenantID)
+	if err != nil {
+		return fmt.Errorf("failed to get tenant: %w", err)
+	}
+
+	// Initialize metadata if nil
+	if tenant.Metadata == nil {
+		tenant.Metadata = make(types.Metadata)
+	}
+
+	// Add the permit_rbac_enabled flag
+	tenant.Metadata["permit_rbac_enabled"] = "true"
+
+	// Update the tenant
+	if err := s.tenantRepo.Update(ctx, tenant); err != nil {
+		return fmt.Errorf("failed to update tenant metadata: %w", err)
+	}
+
+	s.logger.Infow("updated tenant metadata with permit_rbac_enabled", "tenant_id", tenantID)
 	return nil
 }
 
@@ -399,4 +438,49 @@ func (s *PermitService) GetTenant(ctx context.Context, tenantID string) (*models
 	}
 
 	return tenant, nil
+}
+
+// GetUserPermissions retrieves all permissions for a user within a tenant
+func (s *PermitService) GetUserPermissions(ctx context.Context, userID, tenantID string) ([]string, error) {
+	// Create user for permission check
+	user := enforcement.UserBuilder(userID).Build()
+
+	permissionsMap, err := s.Client.GetUserPermissions(user, tenantID)
+	if err != nil {
+		s.logger.Errorw("failed to get user permissions", "error", err, "user_id", userID, "tenant_id", tenantID)
+		return nil, fmt.Errorf("failed to get user permissions: %w", err)
+	}
+
+	var permissions []string
+
+	for key, value := range permissionsMap {
+		// Skip the special __tenant key
+		if key == "__tenant" {
+			continue
+		}
+
+		// The value is already the correct type, extract permissions directly
+		tenantUserPerms := value
+		permissions = append(permissions, tenantUserPerms.Permissions...)
+	}
+
+	s.logger.Infow("retrieved user permissions", "user_id", userID, "tenant_id", tenantID, "permissions_count", len(permissions))
+	return permissions, nil
+}
+
+// IsTenantRBACEnabled checks if a tenant has RBAC enabled by checking their metadata
+func (s *PermitService) IsTenantRBACEnabled(ctx context.Context, tenantID string) (bool, error) {
+	// Get the tenant from the database
+	tenant, err := s.tenantRepo.GetByID(ctx, tenantID)
+	if err != nil {
+		s.logger.Errorw("failed to get tenant for RBAC check", "error", err, "tenant_id", tenantID)
+		return false, fmt.Errorf("failed to get tenant for RBAC check: %w", err)
+	}
+
+	// Check if tenant has permit_rbac_enabled set to true
+	if tenant.Metadata == nil {
+		return false, nil
+	}
+
+	return tenant.Metadata["permit_rbac_enabled"] == "true", nil
 }

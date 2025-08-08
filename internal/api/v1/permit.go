@@ -236,3 +236,35 @@ func (h *PermitHandler) CheckPermission(c *gin.Context) {
 		Resource: req.Resource,
 	})
 }
+
+// @Summary Get user permissions
+// @Description Get all permissions for a user within a tenant
+// @Tags Permit
+// @Accept json
+// @Produce json
+// @Param request body dto.GetUserPermissionsRequest true "Get user permissions request"
+// @Success 200 {object} dto.GetUserPermissionsResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Router /permit/users/permissions [post]
+func (h *PermitHandler) GetUserPermissions(c *gin.Context) {
+	var req dto.GetUserPermissionsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Please check the request payload").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	permissions, err := h.permitService.GetUserPermissions(c.Request.Context(), req.UserID, req.TenantID)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.GetUserPermissionsResponse{
+		Message:     "User permissions retrieved successfully",
+		UserID:      req.UserID,
+		TenantID:    req.TenantID,
+		Permissions: permissions,
+	})
+}
