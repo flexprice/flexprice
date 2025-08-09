@@ -142,7 +142,6 @@ func (r *subscriptionLineItemRepository) Update(ctx context.Context, item *subsc
 	client := r.client.Querier(ctx)
 	_, err := client.SubscriptionLineItem.UpdateOneID(item.ID).
 		SetNillableEntityID(types.ToNillableString(item.EntityID)).
-		SetNillableEntityType(types.ToNillableString(string(item.EntityType))).
 		SetNillablePlanDisplayName(types.ToNillableString(item.PlanDisplayName)).
 		SetPriceID(item.PriceID).
 		SetNillablePriceType(types.ToNillableString(string(item.PriceType))).

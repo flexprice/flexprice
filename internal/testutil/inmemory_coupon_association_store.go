@@ -111,3 +111,26 @@ func (s *InMemoryCouponAssociationStore) GetBySubscription(ctx context.Context, 
 		return copyCouponAssociation(ca)
 	}), nil
 }
+
+// GetBySubscriptionForLineItems retrieves coupon associations that target specific subscription line items
+// for a given subscription. It excludes invoice-level associations (those without SubscriptionLineItemID).
+func (s *InMemoryCouponAssociationStore) GetBySubscriptionForLineItems(ctx context.Context, subscriptionID string) ([]*coupon_association.CouponAssociation, error) {
+	// Filter function: same subscription, line-item level only, correct tenant/env
+	filterFn := func(ctx context.Context, ca *coupon_association.CouponAssociation, _ interface{}) bool {
+		return ca.SubscriptionID == subscriptionID &&
+			ca.SubscriptionLineItemID != nil &&
+			ca.TenantID == types.GetTenantID(ctx) &&
+			CheckEnvironmentFilter(ctx, ca.EnvironmentID)
+	}
+
+	associations, err := s.InMemoryStore.List(ctx, nil, filterFn, nil)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list coupon associations").
+			Mark(ierr.ErrDatabase)
+	}
+
+	return lo.Map(associations, func(ca *coupon_association.CouponAssociation, _ int) *coupon_association.CouponAssociation {
+		return copyCouponAssociation(ca)
+	}), nil
+}

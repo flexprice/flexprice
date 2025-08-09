@@ -45,6 +45,9 @@ import (
 	"github.com/flexprice/flexprice/ent/subscriptionschedule"
 	"github.com/flexprice/flexprice/ent/subscriptionschedulephase"
 	"github.com/flexprice/flexprice/ent/task"
+	"github.com/flexprice/flexprice/ent/taxapplied"
+	"github.com/flexprice/flexprice/ent/taxassociation"
+	"github.com/flexprice/flexprice/ent/taxrate"
 	"github.com/flexprice/flexprice/ent/tenant"
 	"github.com/flexprice/flexprice/ent/user"
 	"github.com/flexprice/flexprice/ent/wallet"
@@ -94,6 +97,9 @@ const (
 	TypeSubscriptionSchedule      = "SubscriptionSchedule"
 	TypeSubscriptionSchedulePhase = "SubscriptionSchedulePhase"
 	TypeTask                      = "Task"
+	TypeTaxApplied                = "TaxApplied"
+	TypeTaxAssociation            = "TaxAssociation"
+	TypeTaxRate                   = "TaxRate"
 	TypeTenant                    = "Tenant"
 	TypeUser                      = "User"
 	TypeWallet                    = "Wallet"
@@ -20632,6 +20638,7 @@ type InvoiceMutation struct {
 	subtotal                   *decimal.Decimal
 	adjustment_amount          *decimal.Decimal
 	refunded_amount            *decimal.Decimal
+	total_tax                  *decimal.Decimal
 	total_discount             *decimal.Decimal
 	total                      *decimal.Decimal
 	description                *string
@@ -21540,6 +21547,55 @@ func (m *InvoiceMutation) RefundedAmountCleared() bool {
 func (m *InvoiceMutation) ResetRefundedAmount() {
 	m.refunded_amount = nil
 	delete(m.clearedFields, invoice.FieldRefundedAmount)
+}
+
+// SetTotalTax sets the "total_tax" field.
+func (m *InvoiceMutation) SetTotalTax(d decimal.Decimal) {
+	m.total_tax = &d
+}
+
+// TotalTax returns the value of the "total_tax" field in the mutation.
+func (m *InvoiceMutation) TotalTax() (r decimal.Decimal, exists bool) {
+	v := m.total_tax
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTotalTax returns the old "total_tax" field's value of the Invoice entity.
+// If the Invoice object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceMutation) OldTotalTax(ctx context.Context) (v *decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTotalTax is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTotalTax requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTotalTax: %w", err)
+	}
+	return oldValue.TotalTax, nil
+}
+
+// ClearTotalTax clears the value of the "total_tax" field.
+func (m *InvoiceMutation) ClearTotalTax() {
+	m.total_tax = nil
+	m.clearedFields[invoice.FieldTotalTax] = struct{}{}
+}
+
+// TotalTaxCleared returns if the "total_tax" field was cleared in this mutation.
+func (m *InvoiceMutation) TotalTaxCleared() bool {
+	_, ok := m.clearedFields[invoice.FieldTotalTax]
+	return ok
+}
+
+// ResetTotalTax resets all changes to the "total_tax" field.
+func (m *InvoiceMutation) ResetTotalTax() {
+	m.total_tax = nil
+	delete(m.clearedFields, invoice.FieldTotalTax)
 }
 
 // SetTotalDiscount sets the "total_discount" field.
@@ -22545,7 +22601,7 @@ func (m *InvoiceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *InvoiceMutation) Fields() []string {
-	fields := make([]string, 0, 36)
+	fields := make([]string, 0, 37)
 	if m.tenant_id != nil {
 		fields = append(fields, invoice.FieldTenantID)
 	}
@@ -22602,6 +22658,9 @@ func (m *InvoiceMutation) Fields() []string {
 	}
 	if m.refunded_amount != nil {
 		fields = append(fields, invoice.FieldRefundedAmount)
+	}
+	if m.total_tax != nil {
+		fields = append(fields, invoice.FieldTotalTax)
 	}
 	if m.total_discount != nil {
 		fields = append(fields, invoice.FieldTotalDiscount)
@@ -22700,6 +22759,8 @@ func (m *InvoiceMutation) Field(name string) (ent.Value, bool) {
 		return m.AdjustmentAmount()
 	case invoice.FieldRefundedAmount:
 		return m.RefundedAmount()
+	case invoice.FieldTotalTax:
+		return m.TotalTax()
 	case invoice.FieldTotalDiscount:
 		return m.TotalDiscount()
 	case invoice.FieldTotal:
@@ -22781,6 +22842,8 @@ func (m *InvoiceMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldAdjustmentAmount(ctx)
 	case invoice.FieldRefundedAmount:
 		return m.OldRefundedAmount(ctx)
+	case invoice.FieldTotalTax:
+		return m.OldTotalTax(ctx)
 	case invoice.FieldTotalDiscount:
 		return m.OldTotalDiscount(ctx)
 	case invoice.FieldTotal:
@@ -22956,6 +23019,13 @@ func (m *InvoiceMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetRefundedAmount(v)
+		return nil
+	case invoice.FieldTotalTax:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTotalTax(v)
 		return nil
 	case invoice.FieldTotalDiscount:
 		v, ok := value.(decimal.Decimal)
@@ -23154,6 +23224,9 @@ func (m *InvoiceMutation) ClearedFields() []string {
 	if m.FieldCleared(invoice.FieldRefundedAmount) {
 		fields = append(fields, invoice.FieldRefundedAmount)
 	}
+	if m.FieldCleared(invoice.FieldTotalTax) {
+		fields = append(fields, invoice.FieldTotalTax)
+	}
 	if m.FieldCleared(invoice.FieldTotalDiscount) {
 		fields = append(fields, invoice.FieldTotalDiscount)
 	}
@@ -23236,6 +23309,9 @@ func (m *InvoiceMutation) ClearField(name string) error {
 		return nil
 	case invoice.FieldRefundedAmount:
 		m.ClearRefundedAmount()
+		return nil
+	case invoice.FieldTotalTax:
+		m.ClearTotalTax()
 		return nil
 	case invoice.FieldTotalDiscount:
 		m.ClearTotalDiscount()
@@ -23349,6 +23425,9 @@ func (m *InvoiceMutation) ResetField(name string) error {
 		return nil
 	case invoice.FieldRefundedAmount:
 		m.ResetRefundedAmount()
+		return nil
+	case invoice.FieldTotalTax:
+		m.ResetTotalTax()
 		return nil
 	case invoice.FieldTotalDiscount:
 		m.ResetTotalDiscount()
@@ -24140,7 +24219,7 @@ func (m *InvoiceLineItemMutation) EntityType() (r string, exists bool) {
 // OldEntityType returns the old "entity_type" field's value of the InvoiceLineItem entity.
 // If the InvoiceLineItem object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *InvoiceLineItemMutation) OldEntityType(ctx context.Context) (v *string, err error) {
+func (m *InvoiceLineItemMutation) OldEntityType(ctx context.Context) (v string, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldEntityType is only allowed on UpdateOne operations")
 	}
@@ -24154,22 +24233,9 @@ func (m *InvoiceLineItemMutation) OldEntityType(ctx context.Context) (v *string,
 	return oldValue.EntityType, nil
 }
 
-// ClearEntityType clears the value of the "entity_type" field.
-func (m *InvoiceLineItemMutation) ClearEntityType() {
-	m.entity_type = nil
-	m.clearedFields[invoicelineitem.FieldEntityType] = struct{}{}
-}
-
-// EntityTypeCleared returns if the "entity_type" field was cleared in this mutation.
-func (m *InvoiceLineItemMutation) EntityTypeCleared() bool {
-	_, ok := m.clearedFields[invoicelineitem.FieldEntityType]
-	return ok
-}
-
 // ResetEntityType resets all changes to the "entity_type" field.
 func (m *InvoiceLineItemMutation) ResetEntityType() {
 	m.entity_type = nil
-	delete(m.clearedFields, invoicelineitem.FieldEntityType)
 }
 
 // SetPlanDisplayName sets the "plan_display_name" field.
@@ -25433,9 +25499,6 @@ func (m *InvoiceLineItemMutation) ClearedFields() []string {
 	if m.FieldCleared(invoicelineitem.FieldEntityID) {
 		fields = append(fields, invoicelineitem.FieldEntityID)
 	}
-	if m.FieldCleared(invoicelineitem.FieldEntityType) {
-		fields = append(fields, invoicelineitem.FieldEntityType)
-	}
 	if m.FieldCleared(invoicelineitem.FieldPlanDisplayName) {
 		fields = append(fields, invoicelineitem.FieldPlanDisplayName)
 	}
@@ -25500,9 +25563,6 @@ func (m *InvoiceLineItemMutation) ClearField(name string) error {
 		return nil
 	case invoicelineitem.FieldEntityID:
 		m.ClearEntityID()
-		return nil
-	case invoicelineitem.FieldEntityType:
-		m.ClearEntityType()
 		return nil
 	case invoicelineitem.FieldPlanDisplayName:
 		m.ClearPlanDisplayName()
@@ -40316,7 +40376,7 @@ func (m *SubscriptionLineItemMutation) EntityType() (r string, exists bool) {
 // OldEntityType returns the old "entity_type" field's value of the SubscriptionLineItem entity.
 // If the SubscriptionLineItem object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SubscriptionLineItemMutation) OldEntityType(ctx context.Context) (v *string, err error) {
+func (m *SubscriptionLineItemMutation) OldEntityType(ctx context.Context) (v string, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldEntityType is only allowed on UpdateOne operations")
 	}
@@ -40330,22 +40390,9 @@ func (m *SubscriptionLineItemMutation) OldEntityType(ctx context.Context) (v *st
 	return oldValue.EntityType, nil
 }
 
-// ClearEntityType clears the value of the "entity_type" field.
-func (m *SubscriptionLineItemMutation) ClearEntityType() {
-	m.entity_type = nil
-	m.clearedFields[subscriptionlineitem.FieldEntityType] = struct{}{}
-}
-
-// EntityTypeCleared returns if the "entity_type" field was cleared in this mutation.
-func (m *SubscriptionLineItemMutation) EntityTypeCleared() bool {
-	_, ok := m.clearedFields[subscriptionlineitem.FieldEntityType]
-	return ok
-}
-
 // ResetEntityType resets all changes to the "entity_type" field.
 func (m *SubscriptionLineItemMutation) ResetEntityType() {
 	m.entity_type = nil
-	delete(m.clearedFields, subscriptionlineitem.FieldEntityType)
 }
 
 // SetPlanDisplayName sets the "plan_display_name" field.
@@ -41664,9 +41711,6 @@ func (m *SubscriptionLineItemMutation) ClearedFields() []string {
 	if m.FieldCleared(subscriptionlineitem.FieldEntityID) {
 		fields = append(fields, subscriptionlineitem.FieldEntityID)
 	}
-	if m.FieldCleared(subscriptionlineitem.FieldEntityType) {
-		fields = append(fields, subscriptionlineitem.FieldEntityType)
-	}
 	if m.FieldCleared(subscriptionlineitem.FieldPlanDisplayName) {
 		fields = append(fields, subscriptionlineitem.FieldPlanDisplayName)
 	}
@@ -41725,9 +41769,6 @@ func (m *SubscriptionLineItemMutation) ClearField(name string) error {
 		return nil
 	case subscriptionlineitem.FieldEntityID:
 		m.ClearEntityID()
-		return nil
-	case subscriptionlineitem.FieldEntityType:
-		m.ClearEntityType()
 		return nil
 	case subscriptionlineitem.FieldPlanDisplayName:
 		m.ClearPlanDisplayName()
@@ -47883,6 +47924,3765 @@ func (m *TaskMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *TaskMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown Task edge %s", name)
+}
+
+// TaxAppliedMutation represents an operation that mutates the TaxApplied nodes in the graph.
+type TaxAppliedMutation struct {
+	config
+	op                 Op
+	typ                string
+	id                 *string
+	tenant_id          *string
+	status             *string
+	created_at         *time.Time
+	updated_at         *time.Time
+	created_by         *string
+	updated_by         *string
+	environment_id     *string
+	tax_rate_id        *string
+	entity_type        *string
+	entity_id          *string
+	tax_association_id *string
+	taxable_amount     *decimal.Decimal
+	tax_amount         *decimal.Decimal
+	currency           *string
+	applied_at         *time.Time
+	metadata           *map[string]string
+	idempotency_key    *string
+	clearedFields      map[string]struct{}
+	done               bool
+	oldValue           func(context.Context) (*TaxApplied, error)
+	predicates         []predicate.TaxApplied
+}
+
+var _ ent.Mutation = (*TaxAppliedMutation)(nil)
+
+// taxappliedOption allows management of the mutation configuration using functional options.
+type taxappliedOption func(*TaxAppliedMutation)
+
+// newTaxAppliedMutation creates new mutation for the TaxApplied entity.
+func newTaxAppliedMutation(c config, op Op, opts ...taxappliedOption) *TaxAppliedMutation {
+	m := &TaxAppliedMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeTaxApplied,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withTaxAppliedID sets the ID field of the mutation.
+func withTaxAppliedID(id string) taxappliedOption {
+	return func(m *TaxAppliedMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *TaxApplied
+		)
+		m.oldValue = func(ctx context.Context) (*TaxApplied, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().TaxApplied.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withTaxApplied sets the old TaxApplied of the mutation.
+func withTaxApplied(node *TaxApplied) taxappliedOption {
+	return func(m *TaxAppliedMutation) {
+		m.oldValue = func(context.Context) (*TaxApplied, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m TaxAppliedMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m TaxAppliedMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of TaxApplied entities.
+func (m *TaxAppliedMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *TaxAppliedMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *TaxAppliedMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().TaxApplied.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (m *TaxAppliedMutation) SetTenantID(s string) {
+	m.tenant_id = &s
+}
+
+// TenantID returns the value of the "tenant_id" field in the mutation.
+func (m *TaxAppliedMutation) TenantID() (r string, exists bool) {
+	v := m.tenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTenantID returns the old "tenant_id" field's value of the TaxApplied entity.
+// If the TaxApplied object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAppliedMutation) OldTenantID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTenantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
+	}
+	return oldValue.TenantID, nil
+}
+
+// ResetTenantID resets all changes to the "tenant_id" field.
+func (m *TaxAppliedMutation) ResetTenantID() {
+	m.tenant_id = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *TaxAppliedMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *TaxAppliedMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the TaxApplied entity.
+// If the TaxApplied object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAppliedMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *TaxAppliedMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *TaxAppliedMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *TaxAppliedMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the TaxApplied entity.
+// If the TaxApplied object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAppliedMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *TaxAppliedMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *TaxAppliedMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *TaxAppliedMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the TaxApplied entity.
+// If the TaxApplied object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAppliedMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *TaxAppliedMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *TaxAppliedMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *TaxAppliedMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the TaxApplied entity.
+// If the TaxApplied object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAppliedMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (m *TaxAppliedMutation) ClearCreatedBy() {
+	m.created_by = nil
+	m.clearedFields[taxapplied.FieldCreatedBy] = struct{}{}
+}
+
+// CreatedByCleared returns if the "created_by" field was cleared in this mutation.
+func (m *TaxAppliedMutation) CreatedByCleared() bool {
+	_, ok := m.clearedFields[taxapplied.FieldCreatedBy]
+	return ok
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *TaxAppliedMutation) ResetCreatedBy() {
+	m.created_by = nil
+	delete(m.clearedFields, taxapplied.FieldCreatedBy)
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (m *TaxAppliedMutation) SetUpdatedBy(s string) {
+	m.updated_by = &s
+}
+
+// UpdatedBy returns the value of the "updated_by" field in the mutation.
+func (m *TaxAppliedMutation) UpdatedBy() (r string, exists bool) {
+	v := m.updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedBy returns the old "updated_by" field's value of the TaxApplied entity.
+// If the TaxApplied object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAppliedMutation) OldUpdatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
+	}
+	return oldValue.UpdatedBy, nil
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (m *TaxAppliedMutation) ClearUpdatedBy() {
+	m.updated_by = nil
+	m.clearedFields[taxapplied.FieldUpdatedBy] = struct{}{}
+}
+
+// UpdatedByCleared returns if the "updated_by" field was cleared in this mutation.
+func (m *TaxAppliedMutation) UpdatedByCleared() bool {
+	_, ok := m.clearedFields[taxapplied.FieldUpdatedBy]
+	return ok
+}
+
+// ResetUpdatedBy resets all changes to the "updated_by" field.
+func (m *TaxAppliedMutation) ResetUpdatedBy() {
+	m.updated_by = nil
+	delete(m.clearedFields, taxapplied.FieldUpdatedBy)
+}
+
+// SetEnvironmentID sets the "environment_id" field.
+func (m *TaxAppliedMutation) SetEnvironmentID(s string) {
+	m.environment_id = &s
+}
+
+// EnvironmentID returns the value of the "environment_id" field in the mutation.
+func (m *TaxAppliedMutation) EnvironmentID() (r string, exists bool) {
+	v := m.environment_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnvironmentID returns the old "environment_id" field's value of the TaxApplied entity.
+// If the TaxApplied object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAppliedMutation) OldEnvironmentID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnvironmentID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnvironmentID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnvironmentID: %w", err)
+	}
+	return oldValue.EnvironmentID, nil
+}
+
+// ClearEnvironmentID clears the value of the "environment_id" field.
+func (m *TaxAppliedMutation) ClearEnvironmentID() {
+	m.environment_id = nil
+	m.clearedFields[taxapplied.FieldEnvironmentID] = struct{}{}
+}
+
+// EnvironmentIDCleared returns if the "environment_id" field was cleared in this mutation.
+func (m *TaxAppliedMutation) EnvironmentIDCleared() bool {
+	_, ok := m.clearedFields[taxapplied.FieldEnvironmentID]
+	return ok
+}
+
+// ResetEnvironmentID resets all changes to the "environment_id" field.
+func (m *TaxAppliedMutation) ResetEnvironmentID() {
+	m.environment_id = nil
+	delete(m.clearedFields, taxapplied.FieldEnvironmentID)
+}
+
+// SetTaxRateID sets the "tax_rate_id" field.
+func (m *TaxAppliedMutation) SetTaxRateID(s string) {
+	m.tax_rate_id = &s
+}
+
+// TaxRateID returns the value of the "tax_rate_id" field in the mutation.
+func (m *TaxAppliedMutation) TaxRateID() (r string, exists bool) {
+	v := m.tax_rate_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTaxRateID returns the old "tax_rate_id" field's value of the TaxApplied entity.
+// If the TaxApplied object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAppliedMutation) OldTaxRateID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTaxRateID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTaxRateID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTaxRateID: %w", err)
+	}
+	return oldValue.TaxRateID, nil
+}
+
+// ResetTaxRateID resets all changes to the "tax_rate_id" field.
+func (m *TaxAppliedMutation) ResetTaxRateID() {
+	m.tax_rate_id = nil
+}
+
+// SetEntityType sets the "entity_type" field.
+func (m *TaxAppliedMutation) SetEntityType(s string) {
+	m.entity_type = &s
+}
+
+// EntityType returns the value of the "entity_type" field in the mutation.
+func (m *TaxAppliedMutation) EntityType() (r string, exists bool) {
+	v := m.entity_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEntityType returns the old "entity_type" field's value of the TaxApplied entity.
+// If the TaxApplied object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAppliedMutation) OldEntityType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEntityType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEntityType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEntityType: %w", err)
+	}
+	return oldValue.EntityType, nil
+}
+
+// ResetEntityType resets all changes to the "entity_type" field.
+func (m *TaxAppliedMutation) ResetEntityType() {
+	m.entity_type = nil
+}
+
+// SetEntityID sets the "entity_id" field.
+func (m *TaxAppliedMutation) SetEntityID(s string) {
+	m.entity_id = &s
+}
+
+// EntityID returns the value of the "entity_id" field in the mutation.
+func (m *TaxAppliedMutation) EntityID() (r string, exists bool) {
+	v := m.entity_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEntityID returns the old "entity_id" field's value of the TaxApplied entity.
+// If the TaxApplied object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAppliedMutation) OldEntityID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEntityID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEntityID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEntityID: %w", err)
+	}
+	return oldValue.EntityID, nil
+}
+
+// ResetEntityID resets all changes to the "entity_id" field.
+func (m *TaxAppliedMutation) ResetEntityID() {
+	m.entity_id = nil
+}
+
+// SetTaxAssociationID sets the "tax_association_id" field.
+func (m *TaxAppliedMutation) SetTaxAssociationID(s string) {
+	m.tax_association_id = &s
+}
+
+// TaxAssociationID returns the value of the "tax_association_id" field in the mutation.
+func (m *TaxAppliedMutation) TaxAssociationID() (r string, exists bool) {
+	v := m.tax_association_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTaxAssociationID returns the old "tax_association_id" field's value of the TaxApplied entity.
+// If the TaxApplied object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAppliedMutation) OldTaxAssociationID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTaxAssociationID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTaxAssociationID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTaxAssociationID: %w", err)
+	}
+	return oldValue.TaxAssociationID, nil
+}
+
+// ClearTaxAssociationID clears the value of the "tax_association_id" field.
+func (m *TaxAppliedMutation) ClearTaxAssociationID() {
+	m.tax_association_id = nil
+	m.clearedFields[taxapplied.FieldTaxAssociationID] = struct{}{}
+}
+
+// TaxAssociationIDCleared returns if the "tax_association_id" field was cleared in this mutation.
+func (m *TaxAppliedMutation) TaxAssociationIDCleared() bool {
+	_, ok := m.clearedFields[taxapplied.FieldTaxAssociationID]
+	return ok
+}
+
+// ResetTaxAssociationID resets all changes to the "tax_association_id" field.
+func (m *TaxAppliedMutation) ResetTaxAssociationID() {
+	m.tax_association_id = nil
+	delete(m.clearedFields, taxapplied.FieldTaxAssociationID)
+}
+
+// SetTaxableAmount sets the "taxable_amount" field.
+func (m *TaxAppliedMutation) SetTaxableAmount(d decimal.Decimal) {
+	m.taxable_amount = &d
+}
+
+// TaxableAmount returns the value of the "taxable_amount" field in the mutation.
+func (m *TaxAppliedMutation) TaxableAmount() (r decimal.Decimal, exists bool) {
+	v := m.taxable_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTaxableAmount returns the old "taxable_amount" field's value of the TaxApplied entity.
+// If the TaxApplied object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAppliedMutation) OldTaxableAmount(ctx context.Context) (v decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTaxableAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTaxableAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTaxableAmount: %w", err)
+	}
+	return oldValue.TaxableAmount, nil
+}
+
+// ResetTaxableAmount resets all changes to the "taxable_amount" field.
+func (m *TaxAppliedMutation) ResetTaxableAmount() {
+	m.taxable_amount = nil
+}
+
+// SetTaxAmount sets the "tax_amount" field.
+func (m *TaxAppliedMutation) SetTaxAmount(d decimal.Decimal) {
+	m.tax_amount = &d
+}
+
+// TaxAmount returns the value of the "tax_amount" field in the mutation.
+func (m *TaxAppliedMutation) TaxAmount() (r decimal.Decimal, exists bool) {
+	v := m.tax_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTaxAmount returns the old "tax_amount" field's value of the TaxApplied entity.
+// If the TaxApplied object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAppliedMutation) OldTaxAmount(ctx context.Context) (v decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTaxAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTaxAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTaxAmount: %w", err)
+	}
+	return oldValue.TaxAmount, nil
+}
+
+// ResetTaxAmount resets all changes to the "tax_amount" field.
+func (m *TaxAppliedMutation) ResetTaxAmount() {
+	m.tax_amount = nil
+}
+
+// SetCurrency sets the "currency" field.
+func (m *TaxAppliedMutation) SetCurrency(s string) {
+	m.currency = &s
+}
+
+// Currency returns the value of the "currency" field in the mutation.
+func (m *TaxAppliedMutation) Currency() (r string, exists bool) {
+	v := m.currency
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCurrency returns the old "currency" field's value of the TaxApplied entity.
+// If the TaxApplied object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAppliedMutation) OldCurrency(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCurrency is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCurrency requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCurrency: %w", err)
+	}
+	return oldValue.Currency, nil
+}
+
+// ResetCurrency resets all changes to the "currency" field.
+func (m *TaxAppliedMutation) ResetCurrency() {
+	m.currency = nil
+}
+
+// SetAppliedAt sets the "applied_at" field.
+func (m *TaxAppliedMutation) SetAppliedAt(t time.Time) {
+	m.applied_at = &t
+}
+
+// AppliedAt returns the value of the "applied_at" field in the mutation.
+func (m *TaxAppliedMutation) AppliedAt() (r time.Time, exists bool) {
+	v := m.applied_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAppliedAt returns the old "applied_at" field's value of the TaxApplied entity.
+// If the TaxApplied object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAppliedMutation) OldAppliedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAppliedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAppliedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAppliedAt: %w", err)
+	}
+	return oldValue.AppliedAt, nil
+}
+
+// ResetAppliedAt resets all changes to the "applied_at" field.
+func (m *TaxAppliedMutation) ResetAppliedAt() {
+	m.applied_at = nil
+}
+
+// SetMetadata sets the "metadata" field.
+func (m *TaxAppliedMutation) SetMetadata(value map[string]string) {
+	m.metadata = &value
+}
+
+// Metadata returns the value of the "metadata" field in the mutation.
+func (m *TaxAppliedMutation) Metadata() (r map[string]string, exists bool) {
+	v := m.metadata
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMetadata returns the old "metadata" field's value of the TaxApplied entity.
+// If the TaxApplied object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAppliedMutation) OldMetadata(ctx context.Context) (v map[string]string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMetadata is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMetadata requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMetadata: %w", err)
+	}
+	return oldValue.Metadata, nil
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (m *TaxAppliedMutation) ClearMetadata() {
+	m.metadata = nil
+	m.clearedFields[taxapplied.FieldMetadata] = struct{}{}
+}
+
+// MetadataCleared returns if the "metadata" field was cleared in this mutation.
+func (m *TaxAppliedMutation) MetadataCleared() bool {
+	_, ok := m.clearedFields[taxapplied.FieldMetadata]
+	return ok
+}
+
+// ResetMetadata resets all changes to the "metadata" field.
+func (m *TaxAppliedMutation) ResetMetadata() {
+	m.metadata = nil
+	delete(m.clearedFields, taxapplied.FieldMetadata)
+}
+
+// SetIdempotencyKey sets the "idempotency_key" field.
+func (m *TaxAppliedMutation) SetIdempotencyKey(s string) {
+	m.idempotency_key = &s
+}
+
+// IdempotencyKey returns the value of the "idempotency_key" field in the mutation.
+func (m *TaxAppliedMutation) IdempotencyKey() (r string, exists bool) {
+	v := m.idempotency_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIdempotencyKey returns the old "idempotency_key" field's value of the TaxApplied entity.
+// If the TaxApplied object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAppliedMutation) OldIdempotencyKey(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIdempotencyKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIdempotencyKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIdempotencyKey: %w", err)
+	}
+	return oldValue.IdempotencyKey, nil
+}
+
+// ClearIdempotencyKey clears the value of the "idempotency_key" field.
+func (m *TaxAppliedMutation) ClearIdempotencyKey() {
+	m.idempotency_key = nil
+	m.clearedFields[taxapplied.FieldIdempotencyKey] = struct{}{}
+}
+
+// IdempotencyKeyCleared returns if the "idempotency_key" field was cleared in this mutation.
+func (m *TaxAppliedMutation) IdempotencyKeyCleared() bool {
+	_, ok := m.clearedFields[taxapplied.FieldIdempotencyKey]
+	return ok
+}
+
+// ResetIdempotencyKey resets all changes to the "idempotency_key" field.
+func (m *TaxAppliedMutation) ResetIdempotencyKey() {
+	m.idempotency_key = nil
+	delete(m.clearedFields, taxapplied.FieldIdempotencyKey)
+}
+
+// Where appends a list predicates to the TaxAppliedMutation builder.
+func (m *TaxAppliedMutation) Where(ps ...predicate.TaxApplied) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the TaxAppliedMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *TaxAppliedMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.TaxApplied, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *TaxAppliedMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *TaxAppliedMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (TaxApplied).
+func (m *TaxAppliedMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *TaxAppliedMutation) Fields() []string {
+	fields := make([]string, 0, 17)
+	if m.tenant_id != nil {
+		fields = append(fields, taxapplied.FieldTenantID)
+	}
+	if m.status != nil {
+		fields = append(fields, taxapplied.FieldStatus)
+	}
+	if m.created_at != nil {
+		fields = append(fields, taxapplied.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, taxapplied.FieldUpdatedAt)
+	}
+	if m.created_by != nil {
+		fields = append(fields, taxapplied.FieldCreatedBy)
+	}
+	if m.updated_by != nil {
+		fields = append(fields, taxapplied.FieldUpdatedBy)
+	}
+	if m.environment_id != nil {
+		fields = append(fields, taxapplied.FieldEnvironmentID)
+	}
+	if m.tax_rate_id != nil {
+		fields = append(fields, taxapplied.FieldTaxRateID)
+	}
+	if m.entity_type != nil {
+		fields = append(fields, taxapplied.FieldEntityType)
+	}
+	if m.entity_id != nil {
+		fields = append(fields, taxapplied.FieldEntityID)
+	}
+	if m.tax_association_id != nil {
+		fields = append(fields, taxapplied.FieldTaxAssociationID)
+	}
+	if m.taxable_amount != nil {
+		fields = append(fields, taxapplied.FieldTaxableAmount)
+	}
+	if m.tax_amount != nil {
+		fields = append(fields, taxapplied.FieldTaxAmount)
+	}
+	if m.currency != nil {
+		fields = append(fields, taxapplied.FieldCurrency)
+	}
+	if m.applied_at != nil {
+		fields = append(fields, taxapplied.FieldAppliedAt)
+	}
+	if m.metadata != nil {
+		fields = append(fields, taxapplied.FieldMetadata)
+	}
+	if m.idempotency_key != nil {
+		fields = append(fields, taxapplied.FieldIdempotencyKey)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *TaxAppliedMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case taxapplied.FieldTenantID:
+		return m.TenantID()
+	case taxapplied.FieldStatus:
+		return m.Status()
+	case taxapplied.FieldCreatedAt:
+		return m.CreatedAt()
+	case taxapplied.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case taxapplied.FieldCreatedBy:
+		return m.CreatedBy()
+	case taxapplied.FieldUpdatedBy:
+		return m.UpdatedBy()
+	case taxapplied.FieldEnvironmentID:
+		return m.EnvironmentID()
+	case taxapplied.FieldTaxRateID:
+		return m.TaxRateID()
+	case taxapplied.FieldEntityType:
+		return m.EntityType()
+	case taxapplied.FieldEntityID:
+		return m.EntityID()
+	case taxapplied.FieldTaxAssociationID:
+		return m.TaxAssociationID()
+	case taxapplied.FieldTaxableAmount:
+		return m.TaxableAmount()
+	case taxapplied.FieldTaxAmount:
+		return m.TaxAmount()
+	case taxapplied.FieldCurrency:
+		return m.Currency()
+	case taxapplied.FieldAppliedAt:
+		return m.AppliedAt()
+	case taxapplied.FieldMetadata:
+		return m.Metadata()
+	case taxapplied.FieldIdempotencyKey:
+		return m.IdempotencyKey()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *TaxAppliedMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case taxapplied.FieldTenantID:
+		return m.OldTenantID(ctx)
+	case taxapplied.FieldStatus:
+		return m.OldStatus(ctx)
+	case taxapplied.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case taxapplied.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case taxapplied.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case taxapplied.FieldUpdatedBy:
+		return m.OldUpdatedBy(ctx)
+	case taxapplied.FieldEnvironmentID:
+		return m.OldEnvironmentID(ctx)
+	case taxapplied.FieldTaxRateID:
+		return m.OldTaxRateID(ctx)
+	case taxapplied.FieldEntityType:
+		return m.OldEntityType(ctx)
+	case taxapplied.FieldEntityID:
+		return m.OldEntityID(ctx)
+	case taxapplied.FieldTaxAssociationID:
+		return m.OldTaxAssociationID(ctx)
+	case taxapplied.FieldTaxableAmount:
+		return m.OldTaxableAmount(ctx)
+	case taxapplied.FieldTaxAmount:
+		return m.OldTaxAmount(ctx)
+	case taxapplied.FieldCurrency:
+		return m.OldCurrency(ctx)
+	case taxapplied.FieldAppliedAt:
+		return m.OldAppliedAt(ctx)
+	case taxapplied.FieldMetadata:
+		return m.OldMetadata(ctx)
+	case taxapplied.FieldIdempotencyKey:
+		return m.OldIdempotencyKey(ctx)
+	}
+	return nil, fmt.Errorf("unknown TaxApplied field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *TaxAppliedMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case taxapplied.FieldTenantID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTenantID(v)
+		return nil
+	case taxapplied.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case taxapplied.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case taxapplied.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case taxapplied.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case taxapplied.FieldUpdatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedBy(v)
+		return nil
+	case taxapplied.FieldEnvironmentID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnvironmentID(v)
+		return nil
+	case taxapplied.FieldTaxRateID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTaxRateID(v)
+		return nil
+	case taxapplied.FieldEntityType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEntityType(v)
+		return nil
+	case taxapplied.FieldEntityID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEntityID(v)
+		return nil
+	case taxapplied.FieldTaxAssociationID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTaxAssociationID(v)
+		return nil
+	case taxapplied.FieldTaxableAmount:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTaxableAmount(v)
+		return nil
+	case taxapplied.FieldTaxAmount:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTaxAmount(v)
+		return nil
+	case taxapplied.FieldCurrency:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCurrency(v)
+		return nil
+	case taxapplied.FieldAppliedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAppliedAt(v)
+		return nil
+	case taxapplied.FieldMetadata:
+		v, ok := value.(map[string]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMetadata(v)
+		return nil
+	case taxapplied.FieldIdempotencyKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIdempotencyKey(v)
+		return nil
+	}
+	return fmt.Errorf("unknown TaxApplied field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *TaxAppliedMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *TaxAppliedMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *TaxAppliedMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown TaxApplied numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *TaxAppliedMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(taxapplied.FieldCreatedBy) {
+		fields = append(fields, taxapplied.FieldCreatedBy)
+	}
+	if m.FieldCleared(taxapplied.FieldUpdatedBy) {
+		fields = append(fields, taxapplied.FieldUpdatedBy)
+	}
+	if m.FieldCleared(taxapplied.FieldEnvironmentID) {
+		fields = append(fields, taxapplied.FieldEnvironmentID)
+	}
+	if m.FieldCleared(taxapplied.FieldTaxAssociationID) {
+		fields = append(fields, taxapplied.FieldTaxAssociationID)
+	}
+	if m.FieldCleared(taxapplied.FieldMetadata) {
+		fields = append(fields, taxapplied.FieldMetadata)
+	}
+	if m.FieldCleared(taxapplied.FieldIdempotencyKey) {
+		fields = append(fields, taxapplied.FieldIdempotencyKey)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *TaxAppliedMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *TaxAppliedMutation) ClearField(name string) error {
+	switch name {
+	case taxapplied.FieldCreatedBy:
+		m.ClearCreatedBy()
+		return nil
+	case taxapplied.FieldUpdatedBy:
+		m.ClearUpdatedBy()
+		return nil
+	case taxapplied.FieldEnvironmentID:
+		m.ClearEnvironmentID()
+		return nil
+	case taxapplied.FieldTaxAssociationID:
+		m.ClearTaxAssociationID()
+		return nil
+	case taxapplied.FieldMetadata:
+		m.ClearMetadata()
+		return nil
+	case taxapplied.FieldIdempotencyKey:
+		m.ClearIdempotencyKey()
+		return nil
+	}
+	return fmt.Errorf("unknown TaxApplied nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *TaxAppliedMutation) ResetField(name string) error {
+	switch name {
+	case taxapplied.FieldTenantID:
+		m.ResetTenantID()
+		return nil
+	case taxapplied.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case taxapplied.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case taxapplied.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case taxapplied.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case taxapplied.FieldUpdatedBy:
+		m.ResetUpdatedBy()
+		return nil
+	case taxapplied.FieldEnvironmentID:
+		m.ResetEnvironmentID()
+		return nil
+	case taxapplied.FieldTaxRateID:
+		m.ResetTaxRateID()
+		return nil
+	case taxapplied.FieldEntityType:
+		m.ResetEntityType()
+		return nil
+	case taxapplied.FieldEntityID:
+		m.ResetEntityID()
+		return nil
+	case taxapplied.FieldTaxAssociationID:
+		m.ResetTaxAssociationID()
+		return nil
+	case taxapplied.FieldTaxableAmount:
+		m.ResetTaxableAmount()
+		return nil
+	case taxapplied.FieldTaxAmount:
+		m.ResetTaxAmount()
+		return nil
+	case taxapplied.FieldCurrency:
+		m.ResetCurrency()
+		return nil
+	case taxapplied.FieldAppliedAt:
+		m.ResetAppliedAt()
+		return nil
+	case taxapplied.FieldMetadata:
+		m.ResetMetadata()
+		return nil
+	case taxapplied.FieldIdempotencyKey:
+		m.ResetIdempotencyKey()
+		return nil
+	}
+	return fmt.Errorf("unknown TaxApplied field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *TaxAppliedMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *TaxAppliedMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *TaxAppliedMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *TaxAppliedMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *TaxAppliedMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *TaxAppliedMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *TaxAppliedMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown TaxApplied unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *TaxAppliedMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown TaxApplied edge %s", name)
+}
+
+// TaxAssociationMutation represents an operation that mutates the TaxAssociation nodes in the graph.
+type TaxAssociationMutation struct {
+	config
+	op             Op
+	typ            string
+	id             *string
+	tenant_id      *string
+	status         *string
+	created_at     *time.Time
+	updated_at     *time.Time
+	created_by     *string
+	updated_by     *string
+	environment_id *string
+	tax_rate_id    *string
+	entity_type    *string
+	entity_id      *string
+	priority       *int
+	addpriority    *int
+	auto_apply     *bool
+	currency       *string
+	metadata       *map[string]string
+	clearedFields  map[string]struct{}
+	done           bool
+	oldValue       func(context.Context) (*TaxAssociation, error)
+	predicates     []predicate.TaxAssociation
+}
+
+var _ ent.Mutation = (*TaxAssociationMutation)(nil)
+
+// taxassociationOption allows management of the mutation configuration using functional options.
+type taxassociationOption func(*TaxAssociationMutation)
+
+// newTaxAssociationMutation creates new mutation for the TaxAssociation entity.
+func newTaxAssociationMutation(c config, op Op, opts ...taxassociationOption) *TaxAssociationMutation {
+	m := &TaxAssociationMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeTaxAssociation,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withTaxAssociationID sets the ID field of the mutation.
+func withTaxAssociationID(id string) taxassociationOption {
+	return func(m *TaxAssociationMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *TaxAssociation
+		)
+		m.oldValue = func(ctx context.Context) (*TaxAssociation, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().TaxAssociation.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withTaxAssociation sets the old TaxAssociation of the mutation.
+func withTaxAssociation(node *TaxAssociation) taxassociationOption {
+	return func(m *TaxAssociationMutation) {
+		m.oldValue = func(context.Context) (*TaxAssociation, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m TaxAssociationMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m TaxAssociationMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of TaxAssociation entities.
+func (m *TaxAssociationMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *TaxAssociationMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *TaxAssociationMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().TaxAssociation.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (m *TaxAssociationMutation) SetTenantID(s string) {
+	m.tenant_id = &s
+}
+
+// TenantID returns the value of the "tenant_id" field in the mutation.
+func (m *TaxAssociationMutation) TenantID() (r string, exists bool) {
+	v := m.tenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTenantID returns the old "tenant_id" field's value of the TaxAssociation entity.
+// If the TaxAssociation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAssociationMutation) OldTenantID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTenantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
+	}
+	return oldValue.TenantID, nil
+}
+
+// ResetTenantID resets all changes to the "tenant_id" field.
+func (m *TaxAssociationMutation) ResetTenantID() {
+	m.tenant_id = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *TaxAssociationMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *TaxAssociationMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the TaxAssociation entity.
+// If the TaxAssociation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAssociationMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *TaxAssociationMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *TaxAssociationMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *TaxAssociationMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the TaxAssociation entity.
+// If the TaxAssociation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAssociationMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *TaxAssociationMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *TaxAssociationMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *TaxAssociationMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the TaxAssociation entity.
+// If the TaxAssociation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAssociationMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *TaxAssociationMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *TaxAssociationMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *TaxAssociationMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the TaxAssociation entity.
+// If the TaxAssociation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAssociationMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (m *TaxAssociationMutation) ClearCreatedBy() {
+	m.created_by = nil
+	m.clearedFields[taxassociation.FieldCreatedBy] = struct{}{}
+}
+
+// CreatedByCleared returns if the "created_by" field was cleared in this mutation.
+func (m *TaxAssociationMutation) CreatedByCleared() bool {
+	_, ok := m.clearedFields[taxassociation.FieldCreatedBy]
+	return ok
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *TaxAssociationMutation) ResetCreatedBy() {
+	m.created_by = nil
+	delete(m.clearedFields, taxassociation.FieldCreatedBy)
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (m *TaxAssociationMutation) SetUpdatedBy(s string) {
+	m.updated_by = &s
+}
+
+// UpdatedBy returns the value of the "updated_by" field in the mutation.
+func (m *TaxAssociationMutation) UpdatedBy() (r string, exists bool) {
+	v := m.updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedBy returns the old "updated_by" field's value of the TaxAssociation entity.
+// If the TaxAssociation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAssociationMutation) OldUpdatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
+	}
+	return oldValue.UpdatedBy, nil
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (m *TaxAssociationMutation) ClearUpdatedBy() {
+	m.updated_by = nil
+	m.clearedFields[taxassociation.FieldUpdatedBy] = struct{}{}
+}
+
+// UpdatedByCleared returns if the "updated_by" field was cleared in this mutation.
+func (m *TaxAssociationMutation) UpdatedByCleared() bool {
+	_, ok := m.clearedFields[taxassociation.FieldUpdatedBy]
+	return ok
+}
+
+// ResetUpdatedBy resets all changes to the "updated_by" field.
+func (m *TaxAssociationMutation) ResetUpdatedBy() {
+	m.updated_by = nil
+	delete(m.clearedFields, taxassociation.FieldUpdatedBy)
+}
+
+// SetEnvironmentID sets the "environment_id" field.
+func (m *TaxAssociationMutation) SetEnvironmentID(s string) {
+	m.environment_id = &s
+}
+
+// EnvironmentID returns the value of the "environment_id" field in the mutation.
+func (m *TaxAssociationMutation) EnvironmentID() (r string, exists bool) {
+	v := m.environment_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnvironmentID returns the old "environment_id" field's value of the TaxAssociation entity.
+// If the TaxAssociation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAssociationMutation) OldEnvironmentID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnvironmentID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnvironmentID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnvironmentID: %w", err)
+	}
+	return oldValue.EnvironmentID, nil
+}
+
+// ClearEnvironmentID clears the value of the "environment_id" field.
+func (m *TaxAssociationMutation) ClearEnvironmentID() {
+	m.environment_id = nil
+	m.clearedFields[taxassociation.FieldEnvironmentID] = struct{}{}
+}
+
+// EnvironmentIDCleared returns if the "environment_id" field was cleared in this mutation.
+func (m *TaxAssociationMutation) EnvironmentIDCleared() bool {
+	_, ok := m.clearedFields[taxassociation.FieldEnvironmentID]
+	return ok
+}
+
+// ResetEnvironmentID resets all changes to the "environment_id" field.
+func (m *TaxAssociationMutation) ResetEnvironmentID() {
+	m.environment_id = nil
+	delete(m.clearedFields, taxassociation.FieldEnvironmentID)
+}
+
+// SetTaxRateID sets the "tax_rate_id" field.
+func (m *TaxAssociationMutation) SetTaxRateID(s string) {
+	m.tax_rate_id = &s
+}
+
+// TaxRateID returns the value of the "tax_rate_id" field in the mutation.
+func (m *TaxAssociationMutation) TaxRateID() (r string, exists bool) {
+	v := m.tax_rate_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTaxRateID returns the old "tax_rate_id" field's value of the TaxAssociation entity.
+// If the TaxAssociation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAssociationMutation) OldTaxRateID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTaxRateID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTaxRateID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTaxRateID: %w", err)
+	}
+	return oldValue.TaxRateID, nil
+}
+
+// ResetTaxRateID resets all changes to the "tax_rate_id" field.
+func (m *TaxAssociationMutation) ResetTaxRateID() {
+	m.tax_rate_id = nil
+}
+
+// SetEntityType sets the "entity_type" field.
+func (m *TaxAssociationMutation) SetEntityType(s string) {
+	m.entity_type = &s
+}
+
+// EntityType returns the value of the "entity_type" field in the mutation.
+func (m *TaxAssociationMutation) EntityType() (r string, exists bool) {
+	v := m.entity_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEntityType returns the old "entity_type" field's value of the TaxAssociation entity.
+// If the TaxAssociation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAssociationMutation) OldEntityType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEntityType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEntityType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEntityType: %w", err)
+	}
+	return oldValue.EntityType, nil
+}
+
+// ResetEntityType resets all changes to the "entity_type" field.
+func (m *TaxAssociationMutation) ResetEntityType() {
+	m.entity_type = nil
+}
+
+// SetEntityID sets the "entity_id" field.
+func (m *TaxAssociationMutation) SetEntityID(s string) {
+	m.entity_id = &s
+}
+
+// EntityID returns the value of the "entity_id" field in the mutation.
+func (m *TaxAssociationMutation) EntityID() (r string, exists bool) {
+	v := m.entity_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEntityID returns the old "entity_id" field's value of the TaxAssociation entity.
+// If the TaxAssociation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAssociationMutation) OldEntityID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEntityID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEntityID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEntityID: %w", err)
+	}
+	return oldValue.EntityID, nil
+}
+
+// ResetEntityID resets all changes to the "entity_id" field.
+func (m *TaxAssociationMutation) ResetEntityID() {
+	m.entity_id = nil
+}
+
+// SetPriority sets the "priority" field.
+func (m *TaxAssociationMutation) SetPriority(i int) {
+	m.priority = &i
+	m.addpriority = nil
+}
+
+// Priority returns the value of the "priority" field in the mutation.
+func (m *TaxAssociationMutation) Priority() (r int, exists bool) {
+	v := m.priority
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPriority returns the old "priority" field's value of the TaxAssociation entity.
+// If the TaxAssociation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAssociationMutation) OldPriority(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPriority is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPriority requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPriority: %w", err)
+	}
+	return oldValue.Priority, nil
+}
+
+// AddPriority adds i to the "priority" field.
+func (m *TaxAssociationMutation) AddPriority(i int) {
+	if m.addpriority != nil {
+		*m.addpriority += i
+	} else {
+		m.addpriority = &i
+	}
+}
+
+// AddedPriority returns the value that was added to the "priority" field in this mutation.
+func (m *TaxAssociationMutation) AddedPriority() (r int, exists bool) {
+	v := m.addpriority
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetPriority resets all changes to the "priority" field.
+func (m *TaxAssociationMutation) ResetPriority() {
+	m.priority = nil
+	m.addpriority = nil
+}
+
+// SetAutoApply sets the "auto_apply" field.
+func (m *TaxAssociationMutation) SetAutoApply(b bool) {
+	m.auto_apply = &b
+}
+
+// AutoApply returns the value of the "auto_apply" field in the mutation.
+func (m *TaxAssociationMutation) AutoApply() (r bool, exists bool) {
+	v := m.auto_apply
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAutoApply returns the old "auto_apply" field's value of the TaxAssociation entity.
+// If the TaxAssociation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAssociationMutation) OldAutoApply(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAutoApply is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAutoApply requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAutoApply: %w", err)
+	}
+	return oldValue.AutoApply, nil
+}
+
+// ResetAutoApply resets all changes to the "auto_apply" field.
+func (m *TaxAssociationMutation) ResetAutoApply() {
+	m.auto_apply = nil
+}
+
+// SetCurrency sets the "currency" field.
+func (m *TaxAssociationMutation) SetCurrency(s string) {
+	m.currency = &s
+}
+
+// Currency returns the value of the "currency" field in the mutation.
+func (m *TaxAssociationMutation) Currency() (r string, exists bool) {
+	v := m.currency
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCurrency returns the old "currency" field's value of the TaxAssociation entity.
+// If the TaxAssociation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAssociationMutation) OldCurrency(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCurrency is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCurrency requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCurrency: %w", err)
+	}
+	return oldValue.Currency, nil
+}
+
+// ClearCurrency clears the value of the "currency" field.
+func (m *TaxAssociationMutation) ClearCurrency() {
+	m.currency = nil
+	m.clearedFields[taxassociation.FieldCurrency] = struct{}{}
+}
+
+// CurrencyCleared returns if the "currency" field was cleared in this mutation.
+func (m *TaxAssociationMutation) CurrencyCleared() bool {
+	_, ok := m.clearedFields[taxassociation.FieldCurrency]
+	return ok
+}
+
+// ResetCurrency resets all changes to the "currency" field.
+func (m *TaxAssociationMutation) ResetCurrency() {
+	m.currency = nil
+	delete(m.clearedFields, taxassociation.FieldCurrency)
+}
+
+// SetMetadata sets the "metadata" field.
+func (m *TaxAssociationMutation) SetMetadata(value map[string]string) {
+	m.metadata = &value
+}
+
+// Metadata returns the value of the "metadata" field in the mutation.
+func (m *TaxAssociationMutation) Metadata() (r map[string]string, exists bool) {
+	v := m.metadata
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMetadata returns the old "metadata" field's value of the TaxAssociation entity.
+// If the TaxAssociation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAssociationMutation) OldMetadata(ctx context.Context) (v map[string]string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMetadata is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMetadata requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMetadata: %w", err)
+	}
+	return oldValue.Metadata, nil
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (m *TaxAssociationMutation) ClearMetadata() {
+	m.metadata = nil
+	m.clearedFields[taxassociation.FieldMetadata] = struct{}{}
+}
+
+// MetadataCleared returns if the "metadata" field was cleared in this mutation.
+func (m *TaxAssociationMutation) MetadataCleared() bool {
+	_, ok := m.clearedFields[taxassociation.FieldMetadata]
+	return ok
+}
+
+// ResetMetadata resets all changes to the "metadata" field.
+func (m *TaxAssociationMutation) ResetMetadata() {
+	m.metadata = nil
+	delete(m.clearedFields, taxassociation.FieldMetadata)
+}
+
+// Where appends a list predicates to the TaxAssociationMutation builder.
+func (m *TaxAssociationMutation) Where(ps ...predicate.TaxAssociation) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the TaxAssociationMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *TaxAssociationMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.TaxAssociation, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *TaxAssociationMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *TaxAssociationMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (TaxAssociation).
+func (m *TaxAssociationMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *TaxAssociationMutation) Fields() []string {
+	fields := make([]string, 0, 14)
+	if m.tenant_id != nil {
+		fields = append(fields, taxassociation.FieldTenantID)
+	}
+	if m.status != nil {
+		fields = append(fields, taxassociation.FieldStatus)
+	}
+	if m.created_at != nil {
+		fields = append(fields, taxassociation.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, taxassociation.FieldUpdatedAt)
+	}
+	if m.created_by != nil {
+		fields = append(fields, taxassociation.FieldCreatedBy)
+	}
+	if m.updated_by != nil {
+		fields = append(fields, taxassociation.FieldUpdatedBy)
+	}
+	if m.environment_id != nil {
+		fields = append(fields, taxassociation.FieldEnvironmentID)
+	}
+	if m.tax_rate_id != nil {
+		fields = append(fields, taxassociation.FieldTaxRateID)
+	}
+	if m.entity_type != nil {
+		fields = append(fields, taxassociation.FieldEntityType)
+	}
+	if m.entity_id != nil {
+		fields = append(fields, taxassociation.FieldEntityID)
+	}
+	if m.priority != nil {
+		fields = append(fields, taxassociation.FieldPriority)
+	}
+	if m.auto_apply != nil {
+		fields = append(fields, taxassociation.FieldAutoApply)
+	}
+	if m.currency != nil {
+		fields = append(fields, taxassociation.FieldCurrency)
+	}
+	if m.metadata != nil {
+		fields = append(fields, taxassociation.FieldMetadata)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *TaxAssociationMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case taxassociation.FieldTenantID:
+		return m.TenantID()
+	case taxassociation.FieldStatus:
+		return m.Status()
+	case taxassociation.FieldCreatedAt:
+		return m.CreatedAt()
+	case taxassociation.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case taxassociation.FieldCreatedBy:
+		return m.CreatedBy()
+	case taxassociation.FieldUpdatedBy:
+		return m.UpdatedBy()
+	case taxassociation.FieldEnvironmentID:
+		return m.EnvironmentID()
+	case taxassociation.FieldTaxRateID:
+		return m.TaxRateID()
+	case taxassociation.FieldEntityType:
+		return m.EntityType()
+	case taxassociation.FieldEntityID:
+		return m.EntityID()
+	case taxassociation.FieldPriority:
+		return m.Priority()
+	case taxassociation.FieldAutoApply:
+		return m.AutoApply()
+	case taxassociation.FieldCurrency:
+		return m.Currency()
+	case taxassociation.FieldMetadata:
+		return m.Metadata()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *TaxAssociationMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case taxassociation.FieldTenantID:
+		return m.OldTenantID(ctx)
+	case taxassociation.FieldStatus:
+		return m.OldStatus(ctx)
+	case taxassociation.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case taxassociation.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case taxassociation.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case taxassociation.FieldUpdatedBy:
+		return m.OldUpdatedBy(ctx)
+	case taxassociation.FieldEnvironmentID:
+		return m.OldEnvironmentID(ctx)
+	case taxassociation.FieldTaxRateID:
+		return m.OldTaxRateID(ctx)
+	case taxassociation.FieldEntityType:
+		return m.OldEntityType(ctx)
+	case taxassociation.FieldEntityID:
+		return m.OldEntityID(ctx)
+	case taxassociation.FieldPriority:
+		return m.OldPriority(ctx)
+	case taxassociation.FieldAutoApply:
+		return m.OldAutoApply(ctx)
+	case taxassociation.FieldCurrency:
+		return m.OldCurrency(ctx)
+	case taxassociation.FieldMetadata:
+		return m.OldMetadata(ctx)
+	}
+	return nil, fmt.Errorf("unknown TaxAssociation field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *TaxAssociationMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case taxassociation.FieldTenantID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTenantID(v)
+		return nil
+	case taxassociation.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case taxassociation.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case taxassociation.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case taxassociation.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case taxassociation.FieldUpdatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedBy(v)
+		return nil
+	case taxassociation.FieldEnvironmentID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnvironmentID(v)
+		return nil
+	case taxassociation.FieldTaxRateID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTaxRateID(v)
+		return nil
+	case taxassociation.FieldEntityType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEntityType(v)
+		return nil
+	case taxassociation.FieldEntityID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEntityID(v)
+		return nil
+	case taxassociation.FieldPriority:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPriority(v)
+		return nil
+	case taxassociation.FieldAutoApply:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAutoApply(v)
+		return nil
+	case taxassociation.FieldCurrency:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCurrency(v)
+		return nil
+	case taxassociation.FieldMetadata:
+		v, ok := value.(map[string]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMetadata(v)
+		return nil
+	}
+	return fmt.Errorf("unknown TaxAssociation field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *TaxAssociationMutation) AddedFields() []string {
+	var fields []string
+	if m.addpriority != nil {
+		fields = append(fields, taxassociation.FieldPriority)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *TaxAssociationMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case taxassociation.FieldPriority:
+		return m.AddedPriority()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *TaxAssociationMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case taxassociation.FieldPriority:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddPriority(v)
+		return nil
+	}
+	return fmt.Errorf("unknown TaxAssociation numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *TaxAssociationMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(taxassociation.FieldCreatedBy) {
+		fields = append(fields, taxassociation.FieldCreatedBy)
+	}
+	if m.FieldCleared(taxassociation.FieldUpdatedBy) {
+		fields = append(fields, taxassociation.FieldUpdatedBy)
+	}
+	if m.FieldCleared(taxassociation.FieldEnvironmentID) {
+		fields = append(fields, taxassociation.FieldEnvironmentID)
+	}
+	if m.FieldCleared(taxassociation.FieldCurrency) {
+		fields = append(fields, taxassociation.FieldCurrency)
+	}
+	if m.FieldCleared(taxassociation.FieldMetadata) {
+		fields = append(fields, taxassociation.FieldMetadata)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *TaxAssociationMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *TaxAssociationMutation) ClearField(name string) error {
+	switch name {
+	case taxassociation.FieldCreatedBy:
+		m.ClearCreatedBy()
+		return nil
+	case taxassociation.FieldUpdatedBy:
+		m.ClearUpdatedBy()
+		return nil
+	case taxassociation.FieldEnvironmentID:
+		m.ClearEnvironmentID()
+		return nil
+	case taxassociation.FieldCurrency:
+		m.ClearCurrency()
+		return nil
+	case taxassociation.FieldMetadata:
+		m.ClearMetadata()
+		return nil
+	}
+	return fmt.Errorf("unknown TaxAssociation nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *TaxAssociationMutation) ResetField(name string) error {
+	switch name {
+	case taxassociation.FieldTenantID:
+		m.ResetTenantID()
+		return nil
+	case taxassociation.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case taxassociation.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case taxassociation.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case taxassociation.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case taxassociation.FieldUpdatedBy:
+		m.ResetUpdatedBy()
+		return nil
+	case taxassociation.FieldEnvironmentID:
+		m.ResetEnvironmentID()
+		return nil
+	case taxassociation.FieldTaxRateID:
+		m.ResetTaxRateID()
+		return nil
+	case taxassociation.FieldEntityType:
+		m.ResetEntityType()
+		return nil
+	case taxassociation.FieldEntityID:
+		m.ResetEntityID()
+		return nil
+	case taxassociation.FieldPriority:
+		m.ResetPriority()
+		return nil
+	case taxassociation.FieldAutoApply:
+		m.ResetAutoApply()
+		return nil
+	case taxassociation.FieldCurrency:
+		m.ResetCurrency()
+		return nil
+	case taxassociation.FieldMetadata:
+		m.ResetMetadata()
+		return nil
+	}
+	return fmt.Errorf("unknown TaxAssociation field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *TaxAssociationMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *TaxAssociationMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *TaxAssociationMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *TaxAssociationMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *TaxAssociationMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *TaxAssociationMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *TaxAssociationMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown TaxAssociation unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *TaxAssociationMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown TaxAssociation edge %s", name)
+}
+
+// TaxRateMutation represents an operation that mutates the TaxRate nodes in the graph.
+type TaxRateMutation struct {
+	config
+	op               Op
+	typ              string
+	id               *string
+	tenant_id        *string
+	status           *string
+	created_at       *time.Time
+	updated_at       *time.Time
+	created_by       *string
+	updated_by       *string
+	environment_id   *string
+	name             *string
+	description      *string
+	code             *string
+	tax_rate_status  *string
+	tax_rate_type    *string
+	scope            *string
+	percentage_value *decimal.Decimal
+	fixed_value      *decimal.Decimal
+	metadata         *map[string]string
+	clearedFields    map[string]struct{}
+	done             bool
+	oldValue         func(context.Context) (*TaxRate, error)
+	predicates       []predicate.TaxRate
+}
+
+var _ ent.Mutation = (*TaxRateMutation)(nil)
+
+// taxrateOption allows management of the mutation configuration using functional options.
+type taxrateOption func(*TaxRateMutation)
+
+// newTaxRateMutation creates new mutation for the TaxRate entity.
+func newTaxRateMutation(c config, op Op, opts ...taxrateOption) *TaxRateMutation {
+	m := &TaxRateMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeTaxRate,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withTaxRateID sets the ID field of the mutation.
+func withTaxRateID(id string) taxrateOption {
+	return func(m *TaxRateMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *TaxRate
+		)
+		m.oldValue = func(ctx context.Context) (*TaxRate, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().TaxRate.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withTaxRate sets the old TaxRate of the mutation.
+func withTaxRate(node *TaxRate) taxrateOption {
+	return func(m *TaxRateMutation) {
+		m.oldValue = func(context.Context) (*TaxRate, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m TaxRateMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m TaxRateMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of TaxRate entities.
+func (m *TaxRateMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *TaxRateMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *TaxRateMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().TaxRate.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (m *TaxRateMutation) SetTenantID(s string) {
+	m.tenant_id = &s
+}
+
+// TenantID returns the value of the "tenant_id" field in the mutation.
+func (m *TaxRateMutation) TenantID() (r string, exists bool) {
+	v := m.tenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTenantID returns the old "tenant_id" field's value of the TaxRate entity.
+// If the TaxRate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxRateMutation) OldTenantID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTenantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
+	}
+	return oldValue.TenantID, nil
+}
+
+// ResetTenantID resets all changes to the "tenant_id" field.
+func (m *TaxRateMutation) ResetTenantID() {
+	m.tenant_id = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *TaxRateMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *TaxRateMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the TaxRate entity.
+// If the TaxRate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxRateMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *TaxRateMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *TaxRateMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *TaxRateMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the TaxRate entity.
+// If the TaxRate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxRateMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *TaxRateMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *TaxRateMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *TaxRateMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the TaxRate entity.
+// If the TaxRate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxRateMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *TaxRateMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *TaxRateMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *TaxRateMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the TaxRate entity.
+// If the TaxRate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxRateMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (m *TaxRateMutation) ClearCreatedBy() {
+	m.created_by = nil
+	m.clearedFields[taxrate.FieldCreatedBy] = struct{}{}
+}
+
+// CreatedByCleared returns if the "created_by" field was cleared in this mutation.
+func (m *TaxRateMutation) CreatedByCleared() bool {
+	_, ok := m.clearedFields[taxrate.FieldCreatedBy]
+	return ok
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *TaxRateMutation) ResetCreatedBy() {
+	m.created_by = nil
+	delete(m.clearedFields, taxrate.FieldCreatedBy)
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (m *TaxRateMutation) SetUpdatedBy(s string) {
+	m.updated_by = &s
+}
+
+// UpdatedBy returns the value of the "updated_by" field in the mutation.
+func (m *TaxRateMutation) UpdatedBy() (r string, exists bool) {
+	v := m.updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedBy returns the old "updated_by" field's value of the TaxRate entity.
+// If the TaxRate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxRateMutation) OldUpdatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
+	}
+	return oldValue.UpdatedBy, nil
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (m *TaxRateMutation) ClearUpdatedBy() {
+	m.updated_by = nil
+	m.clearedFields[taxrate.FieldUpdatedBy] = struct{}{}
+}
+
+// UpdatedByCleared returns if the "updated_by" field was cleared in this mutation.
+func (m *TaxRateMutation) UpdatedByCleared() bool {
+	_, ok := m.clearedFields[taxrate.FieldUpdatedBy]
+	return ok
+}
+
+// ResetUpdatedBy resets all changes to the "updated_by" field.
+func (m *TaxRateMutation) ResetUpdatedBy() {
+	m.updated_by = nil
+	delete(m.clearedFields, taxrate.FieldUpdatedBy)
+}
+
+// SetEnvironmentID sets the "environment_id" field.
+func (m *TaxRateMutation) SetEnvironmentID(s string) {
+	m.environment_id = &s
+}
+
+// EnvironmentID returns the value of the "environment_id" field in the mutation.
+func (m *TaxRateMutation) EnvironmentID() (r string, exists bool) {
+	v := m.environment_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnvironmentID returns the old "environment_id" field's value of the TaxRate entity.
+// If the TaxRate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxRateMutation) OldEnvironmentID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnvironmentID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnvironmentID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnvironmentID: %w", err)
+	}
+	return oldValue.EnvironmentID, nil
+}
+
+// ClearEnvironmentID clears the value of the "environment_id" field.
+func (m *TaxRateMutation) ClearEnvironmentID() {
+	m.environment_id = nil
+	m.clearedFields[taxrate.FieldEnvironmentID] = struct{}{}
+}
+
+// EnvironmentIDCleared returns if the "environment_id" field was cleared in this mutation.
+func (m *TaxRateMutation) EnvironmentIDCleared() bool {
+	_, ok := m.clearedFields[taxrate.FieldEnvironmentID]
+	return ok
+}
+
+// ResetEnvironmentID resets all changes to the "environment_id" field.
+func (m *TaxRateMutation) ResetEnvironmentID() {
+	m.environment_id = nil
+	delete(m.clearedFields, taxrate.FieldEnvironmentID)
+}
+
+// SetName sets the "name" field.
+func (m *TaxRateMutation) SetName(s string) {
+	m.name = &s
+}
+
+// Name returns the value of the "name" field in the mutation.
+func (m *TaxRateMutation) Name() (r string, exists bool) {
+	v := m.name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldName returns the old "name" field's value of the TaxRate entity.
+// If the TaxRate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxRateMutation) OldName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldName: %w", err)
+	}
+	return oldValue.Name, nil
+}
+
+// ResetName resets all changes to the "name" field.
+func (m *TaxRateMutation) ResetName() {
+	m.name = nil
+}
+
+// SetDescription sets the "description" field.
+func (m *TaxRateMutation) SetDescription(s string) {
+	m.description = &s
+}
+
+// Description returns the value of the "description" field in the mutation.
+func (m *TaxRateMutation) Description() (r string, exists bool) {
+	v := m.description
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDescription returns the old "description" field's value of the TaxRate entity.
+// If the TaxRate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxRateMutation) OldDescription(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDescription is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDescription requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDescription: %w", err)
+	}
+	return oldValue.Description, nil
+}
+
+// ClearDescription clears the value of the "description" field.
+func (m *TaxRateMutation) ClearDescription() {
+	m.description = nil
+	m.clearedFields[taxrate.FieldDescription] = struct{}{}
+}
+
+// DescriptionCleared returns if the "description" field was cleared in this mutation.
+func (m *TaxRateMutation) DescriptionCleared() bool {
+	_, ok := m.clearedFields[taxrate.FieldDescription]
+	return ok
+}
+
+// ResetDescription resets all changes to the "description" field.
+func (m *TaxRateMutation) ResetDescription() {
+	m.description = nil
+	delete(m.clearedFields, taxrate.FieldDescription)
+}
+
+// SetCode sets the "code" field.
+func (m *TaxRateMutation) SetCode(s string) {
+	m.code = &s
+}
+
+// Code returns the value of the "code" field in the mutation.
+func (m *TaxRateMutation) Code() (r string, exists bool) {
+	v := m.code
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCode returns the old "code" field's value of the TaxRate entity.
+// If the TaxRate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxRateMutation) OldCode(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCode: %w", err)
+	}
+	return oldValue.Code, nil
+}
+
+// ResetCode resets all changes to the "code" field.
+func (m *TaxRateMutation) ResetCode() {
+	m.code = nil
+}
+
+// SetTaxRateStatus sets the "tax_rate_status" field.
+func (m *TaxRateMutation) SetTaxRateStatus(s string) {
+	m.tax_rate_status = &s
+}
+
+// TaxRateStatus returns the value of the "tax_rate_status" field in the mutation.
+func (m *TaxRateMutation) TaxRateStatus() (r string, exists bool) {
+	v := m.tax_rate_status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTaxRateStatus returns the old "tax_rate_status" field's value of the TaxRate entity.
+// If the TaxRate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxRateMutation) OldTaxRateStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTaxRateStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTaxRateStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTaxRateStatus: %w", err)
+	}
+	return oldValue.TaxRateStatus, nil
+}
+
+// ResetTaxRateStatus resets all changes to the "tax_rate_status" field.
+func (m *TaxRateMutation) ResetTaxRateStatus() {
+	m.tax_rate_status = nil
+}
+
+// SetTaxRateType sets the "tax_rate_type" field.
+func (m *TaxRateMutation) SetTaxRateType(s string) {
+	m.tax_rate_type = &s
+}
+
+// TaxRateType returns the value of the "tax_rate_type" field in the mutation.
+func (m *TaxRateMutation) TaxRateType() (r string, exists bool) {
+	v := m.tax_rate_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTaxRateType returns the old "tax_rate_type" field's value of the TaxRate entity.
+// If the TaxRate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxRateMutation) OldTaxRateType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTaxRateType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTaxRateType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTaxRateType: %w", err)
+	}
+	return oldValue.TaxRateType, nil
+}
+
+// ResetTaxRateType resets all changes to the "tax_rate_type" field.
+func (m *TaxRateMutation) ResetTaxRateType() {
+	m.tax_rate_type = nil
+}
+
+// SetScope sets the "scope" field.
+func (m *TaxRateMutation) SetScope(s string) {
+	m.scope = &s
+}
+
+// Scope returns the value of the "scope" field in the mutation.
+func (m *TaxRateMutation) Scope() (r string, exists bool) {
+	v := m.scope
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldScope returns the old "scope" field's value of the TaxRate entity.
+// If the TaxRate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxRateMutation) OldScope(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldScope is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldScope requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldScope: %w", err)
+	}
+	return oldValue.Scope, nil
+}
+
+// ResetScope resets all changes to the "scope" field.
+func (m *TaxRateMutation) ResetScope() {
+	m.scope = nil
+}
+
+// SetPercentageValue sets the "percentage_value" field.
+func (m *TaxRateMutation) SetPercentageValue(d decimal.Decimal) {
+	m.percentage_value = &d
+}
+
+// PercentageValue returns the value of the "percentage_value" field in the mutation.
+func (m *TaxRateMutation) PercentageValue() (r decimal.Decimal, exists bool) {
+	v := m.percentage_value
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPercentageValue returns the old "percentage_value" field's value of the TaxRate entity.
+// If the TaxRate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxRateMutation) OldPercentageValue(ctx context.Context) (v *decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPercentageValue is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPercentageValue requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPercentageValue: %w", err)
+	}
+	return oldValue.PercentageValue, nil
+}
+
+// ClearPercentageValue clears the value of the "percentage_value" field.
+func (m *TaxRateMutation) ClearPercentageValue() {
+	m.percentage_value = nil
+	m.clearedFields[taxrate.FieldPercentageValue] = struct{}{}
+}
+
+// PercentageValueCleared returns if the "percentage_value" field was cleared in this mutation.
+func (m *TaxRateMutation) PercentageValueCleared() bool {
+	_, ok := m.clearedFields[taxrate.FieldPercentageValue]
+	return ok
+}
+
+// ResetPercentageValue resets all changes to the "percentage_value" field.
+func (m *TaxRateMutation) ResetPercentageValue() {
+	m.percentage_value = nil
+	delete(m.clearedFields, taxrate.FieldPercentageValue)
+}
+
+// SetFixedValue sets the "fixed_value" field.
+func (m *TaxRateMutation) SetFixedValue(d decimal.Decimal) {
+	m.fixed_value = &d
+}
+
+// FixedValue returns the value of the "fixed_value" field in the mutation.
+func (m *TaxRateMutation) FixedValue() (r decimal.Decimal, exists bool) {
+	v := m.fixed_value
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFixedValue returns the old "fixed_value" field's value of the TaxRate entity.
+// If the TaxRate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxRateMutation) OldFixedValue(ctx context.Context) (v *decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFixedValue is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFixedValue requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFixedValue: %w", err)
+	}
+	return oldValue.FixedValue, nil
+}
+
+// ClearFixedValue clears the value of the "fixed_value" field.
+func (m *TaxRateMutation) ClearFixedValue() {
+	m.fixed_value = nil
+	m.clearedFields[taxrate.FieldFixedValue] = struct{}{}
+}
+
+// FixedValueCleared returns if the "fixed_value" field was cleared in this mutation.
+func (m *TaxRateMutation) FixedValueCleared() bool {
+	_, ok := m.clearedFields[taxrate.FieldFixedValue]
+	return ok
+}
+
+// ResetFixedValue resets all changes to the "fixed_value" field.
+func (m *TaxRateMutation) ResetFixedValue() {
+	m.fixed_value = nil
+	delete(m.clearedFields, taxrate.FieldFixedValue)
+}
+
+// SetMetadata sets the "metadata" field.
+func (m *TaxRateMutation) SetMetadata(value map[string]string) {
+	m.metadata = &value
+}
+
+// Metadata returns the value of the "metadata" field in the mutation.
+func (m *TaxRateMutation) Metadata() (r map[string]string, exists bool) {
+	v := m.metadata
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMetadata returns the old "metadata" field's value of the TaxRate entity.
+// If the TaxRate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxRateMutation) OldMetadata(ctx context.Context) (v map[string]string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMetadata is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMetadata requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMetadata: %w", err)
+	}
+	return oldValue.Metadata, nil
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (m *TaxRateMutation) ClearMetadata() {
+	m.metadata = nil
+	m.clearedFields[taxrate.FieldMetadata] = struct{}{}
+}
+
+// MetadataCleared returns if the "metadata" field was cleared in this mutation.
+func (m *TaxRateMutation) MetadataCleared() bool {
+	_, ok := m.clearedFields[taxrate.FieldMetadata]
+	return ok
+}
+
+// ResetMetadata resets all changes to the "metadata" field.
+func (m *TaxRateMutation) ResetMetadata() {
+	m.metadata = nil
+	delete(m.clearedFields, taxrate.FieldMetadata)
+}
+
+// Where appends a list predicates to the TaxRateMutation builder.
+func (m *TaxRateMutation) Where(ps ...predicate.TaxRate) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the TaxRateMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *TaxRateMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.TaxRate, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *TaxRateMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *TaxRateMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (TaxRate).
+func (m *TaxRateMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *TaxRateMutation) Fields() []string {
+	fields := make([]string, 0, 16)
+	if m.tenant_id != nil {
+		fields = append(fields, taxrate.FieldTenantID)
+	}
+	if m.status != nil {
+		fields = append(fields, taxrate.FieldStatus)
+	}
+	if m.created_at != nil {
+		fields = append(fields, taxrate.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, taxrate.FieldUpdatedAt)
+	}
+	if m.created_by != nil {
+		fields = append(fields, taxrate.FieldCreatedBy)
+	}
+	if m.updated_by != nil {
+		fields = append(fields, taxrate.FieldUpdatedBy)
+	}
+	if m.environment_id != nil {
+		fields = append(fields, taxrate.FieldEnvironmentID)
+	}
+	if m.name != nil {
+		fields = append(fields, taxrate.FieldName)
+	}
+	if m.description != nil {
+		fields = append(fields, taxrate.FieldDescription)
+	}
+	if m.code != nil {
+		fields = append(fields, taxrate.FieldCode)
+	}
+	if m.tax_rate_status != nil {
+		fields = append(fields, taxrate.FieldTaxRateStatus)
+	}
+	if m.tax_rate_type != nil {
+		fields = append(fields, taxrate.FieldTaxRateType)
+	}
+	if m.scope != nil {
+		fields = append(fields, taxrate.FieldScope)
+	}
+	if m.percentage_value != nil {
+		fields = append(fields, taxrate.FieldPercentageValue)
+	}
+	if m.fixed_value != nil {
+		fields = append(fields, taxrate.FieldFixedValue)
+	}
+	if m.metadata != nil {
+		fields = append(fields, taxrate.FieldMetadata)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *TaxRateMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case taxrate.FieldTenantID:
+		return m.TenantID()
+	case taxrate.FieldStatus:
+		return m.Status()
+	case taxrate.FieldCreatedAt:
+		return m.CreatedAt()
+	case taxrate.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case taxrate.FieldCreatedBy:
+		return m.CreatedBy()
+	case taxrate.FieldUpdatedBy:
+		return m.UpdatedBy()
+	case taxrate.FieldEnvironmentID:
+		return m.EnvironmentID()
+	case taxrate.FieldName:
+		return m.Name()
+	case taxrate.FieldDescription:
+		return m.Description()
+	case taxrate.FieldCode:
+		return m.Code()
+	case taxrate.FieldTaxRateStatus:
+		return m.TaxRateStatus()
+	case taxrate.FieldTaxRateType:
+		return m.TaxRateType()
+	case taxrate.FieldScope:
+		return m.Scope()
+	case taxrate.FieldPercentageValue:
+		return m.PercentageValue()
+	case taxrate.FieldFixedValue:
+		return m.FixedValue()
+	case taxrate.FieldMetadata:
+		return m.Metadata()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *TaxRateMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case taxrate.FieldTenantID:
+		return m.OldTenantID(ctx)
+	case taxrate.FieldStatus:
+		return m.OldStatus(ctx)
+	case taxrate.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case taxrate.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case taxrate.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case taxrate.FieldUpdatedBy:
+		return m.OldUpdatedBy(ctx)
+	case taxrate.FieldEnvironmentID:
+		return m.OldEnvironmentID(ctx)
+	case taxrate.FieldName:
+		return m.OldName(ctx)
+	case taxrate.FieldDescription:
+		return m.OldDescription(ctx)
+	case taxrate.FieldCode:
+		return m.OldCode(ctx)
+	case taxrate.FieldTaxRateStatus:
+		return m.OldTaxRateStatus(ctx)
+	case taxrate.FieldTaxRateType:
+		return m.OldTaxRateType(ctx)
+	case taxrate.FieldScope:
+		return m.OldScope(ctx)
+	case taxrate.FieldPercentageValue:
+		return m.OldPercentageValue(ctx)
+	case taxrate.FieldFixedValue:
+		return m.OldFixedValue(ctx)
+	case taxrate.FieldMetadata:
+		return m.OldMetadata(ctx)
+	}
+	return nil, fmt.Errorf("unknown TaxRate field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *TaxRateMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case taxrate.FieldTenantID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTenantID(v)
+		return nil
+	case taxrate.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case taxrate.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case taxrate.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case taxrate.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case taxrate.FieldUpdatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedBy(v)
+		return nil
+	case taxrate.FieldEnvironmentID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnvironmentID(v)
+		return nil
+	case taxrate.FieldName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetName(v)
+		return nil
+	case taxrate.FieldDescription:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDescription(v)
+		return nil
+	case taxrate.FieldCode:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCode(v)
+		return nil
+	case taxrate.FieldTaxRateStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTaxRateStatus(v)
+		return nil
+	case taxrate.FieldTaxRateType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTaxRateType(v)
+		return nil
+	case taxrate.FieldScope:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetScope(v)
+		return nil
+	case taxrate.FieldPercentageValue:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPercentageValue(v)
+		return nil
+	case taxrate.FieldFixedValue:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFixedValue(v)
+		return nil
+	case taxrate.FieldMetadata:
+		v, ok := value.(map[string]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMetadata(v)
+		return nil
+	}
+	return fmt.Errorf("unknown TaxRate field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *TaxRateMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *TaxRateMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *TaxRateMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown TaxRate numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *TaxRateMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(taxrate.FieldCreatedBy) {
+		fields = append(fields, taxrate.FieldCreatedBy)
+	}
+	if m.FieldCleared(taxrate.FieldUpdatedBy) {
+		fields = append(fields, taxrate.FieldUpdatedBy)
+	}
+	if m.FieldCleared(taxrate.FieldEnvironmentID) {
+		fields = append(fields, taxrate.FieldEnvironmentID)
+	}
+	if m.FieldCleared(taxrate.FieldDescription) {
+		fields = append(fields, taxrate.FieldDescription)
+	}
+	if m.FieldCleared(taxrate.FieldPercentageValue) {
+		fields = append(fields, taxrate.FieldPercentageValue)
+	}
+	if m.FieldCleared(taxrate.FieldFixedValue) {
+		fields = append(fields, taxrate.FieldFixedValue)
+	}
+	if m.FieldCleared(taxrate.FieldMetadata) {
+		fields = append(fields, taxrate.FieldMetadata)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *TaxRateMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *TaxRateMutation) ClearField(name string) error {
+	switch name {
+	case taxrate.FieldCreatedBy:
+		m.ClearCreatedBy()
+		return nil
+	case taxrate.FieldUpdatedBy:
+		m.ClearUpdatedBy()
+		return nil
+	case taxrate.FieldEnvironmentID:
+		m.ClearEnvironmentID()
+		return nil
+	case taxrate.FieldDescription:
+		m.ClearDescription()
+		return nil
+	case taxrate.FieldPercentageValue:
+		m.ClearPercentageValue()
+		return nil
+	case taxrate.FieldFixedValue:
+		m.ClearFixedValue()
+		return nil
+	case taxrate.FieldMetadata:
+		m.ClearMetadata()
+		return nil
+	}
+	return fmt.Errorf("unknown TaxRate nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *TaxRateMutation) ResetField(name string) error {
+	switch name {
+	case taxrate.FieldTenantID:
+		m.ResetTenantID()
+		return nil
+	case taxrate.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case taxrate.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case taxrate.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case taxrate.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case taxrate.FieldUpdatedBy:
+		m.ResetUpdatedBy()
+		return nil
+	case taxrate.FieldEnvironmentID:
+		m.ResetEnvironmentID()
+		return nil
+	case taxrate.FieldName:
+		m.ResetName()
+		return nil
+	case taxrate.FieldDescription:
+		m.ResetDescription()
+		return nil
+	case taxrate.FieldCode:
+		m.ResetCode()
+		return nil
+	case taxrate.FieldTaxRateStatus:
+		m.ResetTaxRateStatus()
+		return nil
+	case taxrate.FieldTaxRateType:
+		m.ResetTaxRateType()
+		return nil
+	case taxrate.FieldScope:
+		m.ResetScope()
+		return nil
+	case taxrate.FieldPercentageValue:
+		m.ResetPercentageValue()
+		return nil
+	case taxrate.FieldFixedValue:
+		m.ResetFixedValue()
+		return nil
+	case taxrate.FieldMetadata:
+		m.ResetMetadata()
+		return nil
+	}
+	return fmt.Errorf("unknown TaxRate field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *TaxRateMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *TaxRateMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *TaxRateMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *TaxRateMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *TaxRateMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *TaxRateMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *TaxRateMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown TaxRate unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *TaxRateMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown TaxRate edge %s", name)
 }
 
 // TenantMutation represents an operation that mutates the Tenant nodes in the graph.

@@ -438,6 +438,10 @@ func (ilic *InvoiceLineItemCreate) defaults() {
 		v := invoicelineitem.DefaultEnvironmentID
 		ilic.mutation.SetEnvironmentID(v)
 	}
+	if _, ok := ilic.mutation.EntityType(); !ok {
+		v := invoicelineitem.DefaultEntityType
+		ilic.mutation.SetEntityType(v)
+	}
 	if _, ok := ilic.mutation.Amount(); !ok {
 		v := invoicelineitem.DefaultAmount
 		ilic.mutation.SetAmount(v)
@@ -482,6 +486,9 @@ func (ilic *InvoiceLineItemCreate) check() error {
 		if err := invoicelineitem.CustomerIDValidator(v); err != nil {
 			return &ValidationError{Name: "customer_id", err: fmt.Errorf(`ent: validator failed for field "InvoiceLineItem.customer_id": %w`, err)}
 		}
+	}
+	if _, ok := ilic.mutation.EntityType(); !ok {
+		return &ValidationError{Name: "entity_type", err: errors.New(`ent: missing required field "InvoiceLineItem.entity_type"`)}
 	}
 	if _, ok := ilic.mutation.Amount(); !ok {
 		return &ValidationError{Name: "amount", err: errors.New(`ent: missing required field "InvoiceLineItem.amount"`)}
@@ -577,7 +584,7 @@ func (ilic *InvoiceLineItemCreate) createSpec() (*InvoiceLineItem, *sqlgraph.Cre
 	}
 	if value, ok := ilic.mutation.EntityType(); ok {
 		_spec.SetField(invoicelineitem.FieldEntityType, field.TypeString, value)
-		_node.EntityType = &value
+		_node.EntityType = value
 	}
 	if value, ok := ilic.mutation.PlanDisplayName(); ok {
 		_spec.SetField(invoicelineitem.FieldPlanDisplayName, field.TypeString, value)

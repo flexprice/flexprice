@@ -50,8 +50,12 @@ type CreateSubscriptionRequest struct {
 	OverageFactor *decimal.Decimal `json:"overage_factor,omitempty"`
 	// Phases represents an optional timeline of subscription phases
 	Phases []SubscriptionSchedulePhaseInput `json:"phases,omitempty" validate:"omitempty,dive"`
+	// tax_rate_overrides is the tax rate overrides	to be applied to the subscription
+	TaxRateOverrides []*TaxRateOverride `json:"tax_rate_overrides,omitempty"`
 	// SubscriptionCoupons is a list of coupon IDs to be applied to the subscription
-	SubscriptionCoupons []string `json:"subscription_coupons,omitempty"`
+	Coupons []string `json:"coupons,omitempty"`
+	// SubscriptionLineItemsCoupons is a list of coupon IDs to be applied to the subscription line items
+	LineItemCoupons map[string][]string `json:"line_item_coupons,omitempty"`
 	// OverrideLineItems allows customizing specific prices for this subscription
 	OverrideLineItems []OverrideLineItemRequest `json:"override_line_items,omitempty" validate:"omitempty,dive"`
 	// Addons represents addons to be added to the subscription during creation
@@ -268,10 +272,25 @@ func (r *CreateSubscriptionRequest) Validate() error {
 		}
 	}
 
+	// taxrate overrides validation
+	if len(r.TaxRateOverrides) > 0 {
+		for _, taxRateOverride := range r.TaxRateOverrides {
+			if err := taxRateOverride.Validate(); err != nil {
+				return ierr.NewError("invalid tax rate override").
+					WithHint("Tax rate override validation failed").
+					WithReportableDetails(map[string]interface{}{
+						"error":             err.Error(),
+						"tax_rate_override": taxRateOverride,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+		}
+	}
+
 	// Validate subscription coupons if provided
-	if len(r.SubscriptionCoupons) > 0 {
+	if len(r.Coupons) > 0 {
 		// Validate that coupon IDs are not empty
-		for i, couponID := range r.SubscriptionCoupons {
+		for i, couponID := range r.Coupons {
 			if couponID == "" {
 				return ierr.NewError("subscription coupon ID cannot be empty").
 					WithHint("All subscription coupon IDs must be valid").
@@ -283,6 +302,18 @@ func (r *CreateSubscriptionRequest) Validate() error {
 		}
 	}
 
+	if len(r.LineItemCoupons) > 0 {
+		for priceID, couponIDs := range r.LineItemCoupons {
+			if len(couponIDs) == 0 {
+				return ierr.NewError("subscription line item coupon IDs cannot be empty").
+					WithHint("All subscription line item coupon IDs must be valid").
+					WithReportableDetails(map[string]interface{}{
+						"price_id": priceID,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+		}
+	}
 	// Validate override line items if provided
 	if len(r.OverrideLineItems) > 0 {
 		priceIDsSeen := make(map[string]bool)

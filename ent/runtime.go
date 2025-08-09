@@ -38,6 +38,9 @@ import (
 	"github.com/flexprice/flexprice/ent/subscriptionschedule"
 	"github.com/flexprice/flexprice/ent/subscriptionschedulephase"
 	"github.com/flexprice/flexprice/ent/task"
+	"github.com/flexprice/flexprice/ent/taxapplied"
+	"github.com/flexprice/flexprice/ent/taxassociation"
+	"github.com/flexprice/flexprice/ent/taxrate"
 	"github.com/flexprice/flexprice/ent/tenant"
 	"github.com/flexprice/flexprice/ent/user"
 	"github.com/flexprice/flexprice/ent/wallet"
@@ -811,16 +814,20 @@ func init() {
 	invoiceDescRefundedAmount := invoiceFields[12].Descriptor()
 	// invoice.DefaultRefundedAmount holds the default value on creation for the refunded_amount field.
 	invoice.DefaultRefundedAmount = invoiceDescRefundedAmount.Default.(decimal.Decimal)
+	// invoiceDescTotalTax is the schema descriptor for total_tax field.
+	invoiceDescTotalTax := invoiceFields[13].Descriptor()
+	// invoice.DefaultTotalTax holds the default value on creation for the total_tax field.
+	invoice.DefaultTotalTax = invoiceDescTotalTax.Default.(decimal.Decimal)
 	// invoiceDescTotalDiscount is the schema descriptor for total_discount field.
-	invoiceDescTotalDiscount := invoiceFields[13].Descriptor()
+	invoiceDescTotalDiscount := invoiceFields[14].Descriptor()
 	// invoice.DefaultTotalDiscount holds the default value on creation for the total_discount field.
 	invoice.DefaultTotalDiscount = invoiceDescTotalDiscount.Default.(decimal.Decimal)
 	// invoiceDescTotal is the schema descriptor for total field.
-	invoiceDescTotal := invoiceFields[14].Descriptor()
+	invoiceDescTotal := invoiceFields[15].Descriptor()
 	// invoice.DefaultTotal holds the default value on creation for the total field.
 	invoice.DefaultTotal = invoiceDescTotal.Default.(decimal.Decimal)
 	// invoiceDescVersion is the schema descriptor for version field.
-	invoiceDescVersion := invoiceFields[26].Descriptor()
+	invoiceDescVersion := invoiceFields[27].Descriptor()
 	// invoice.DefaultVersion holds the default value on creation for the version field.
 	invoice.DefaultVersion = invoiceDescVersion.Default.(int)
 	invoicelineitemMixin := schema.InvoiceLineItem{}.Mixin()
@@ -860,6 +867,10 @@ func init() {
 	invoicelineitemDescCustomerID := invoicelineitemFields[2].Descriptor()
 	// invoicelineitem.CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
 	invoicelineitem.CustomerIDValidator = invoicelineitemDescCustomerID.Validators[0].(func(string) error)
+	// invoicelineitemDescEntityType is the schema descriptor for entity_type field.
+	invoicelineitemDescEntityType := invoicelineitemFields[5].Descriptor()
+	// invoicelineitem.DefaultEntityType holds the default value on creation for the entity_type field.
+	invoicelineitem.DefaultEntityType = invoicelineitemDescEntityType.Default.(string)
 	// invoicelineitemDescAmount is the schema descriptor for amount field.
 	invoicelineitemDescAmount := invoicelineitemFields[15].Descriptor()
 	// invoicelineitem.DefaultAmount holds the default value on creation for the amount field.
@@ -1395,6 +1406,10 @@ func init() {
 	subscriptionlineitemDescCustomerID := subscriptionlineitemFields[2].Descriptor()
 	// subscriptionlineitem.CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
 	subscriptionlineitem.CustomerIDValidator = subscriptionlineitemDescCustomerID.Validators[0].(func(string) error)
+	// subscriptionlineitemDescEntityType is the schema descriptor for entity_type field.
+	subscriptionlineitemDescEntityType := subscriptionlineitemFields[4].Descriptor()
+	// subscriptionlineitem.DefaultEntityType holds the default value on creation for the entity_type field.
+	subscriptionlineitem.DefaultEntityType = subscriptionlineitemDescEntityType.Default.(string)
 	// subscriptionlineitemDescPriceID is the schema descriptor for price_id field.
 	subscriptionlineitemDescPriceID := subscriptionlineitemFields[6].Descriptor()
 	// subscriptionlineitem.PriceIDValidator is a validator for the "price_id" field. It is called by the builders before save.
@@ -1621,6 +1636,167 @@ func init() {
 	taskDescFailedRecords := taskFields[10].Descriptor()
 	// task.DefaultFailedRecords holds the default value on creation for the failed_records field.
 	task.DefaultFailedRecords = taskDescFailedRecords.Default.(int)
+	taxappliedMixin := schema.TaxApplied{}.Mixin()
+	taxappliedMixinFields0 := taxappliedMixin[0].Fields()
+	_ = taxappliedMixinFields0
+	taxappliedMixinFields1 := taxappliedMixin[1].Fields()
+	_ = taxappliedMixinFields1
+	taxappliedFields := schema.TaxApplied{}.Fields()
+	_ = taxappliedFields
+	// taxappliedDescTenantID is the schema descriptor for tenant_id field.
+	taxappliedDescTenantID := taxappliedMixinFields0[0].Descriptor()
+	// taxapplied.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	taxapplied.TenantIDValidator = taxappliedDescTenantID.Validators[0].(func(string) error)
+	// taxappliedDescStatus is the schema descriptor for status field.
+	taxappliedDescStatus := taxappliedMixinFields0[1].Descriptor()
+	// taxapplied.DefaultStatus holds the default value on creation for the status field.
+	taxapplied.DefaultStatus = taxappliedDescStatus.Default.(string)
+	// taxappliedDescCreatedAt is the schema descriptor for created_at field.
+	taxappliedDescCreatedAt := taxappliedMixinFields0[2].Descriptor()
+	// taxapplied.DefaultCreatedAt holds the default value on creation for the created_at field.
+	taxapplied.DefaultCreatedAt = taxappliedDescCreatedAt.Default.(func() time.Time)
+	// taxappliedDescUpdatedAt is the schema descriptor for updated_at field.
+	taxappliedDescUpdatedAt := taxappliedMixinFields0[3].Descriptor()
+	// taxapplied.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	taxapplied.DefaultUpdatedAt = taxappliedDescUpdatedAt.Default.(func() time.Time)
+	// taxapplied.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	taxapplied.UpdateDefaultUpdatedAt = taxappliedDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// taxappliedDescEnvironmentID is the schema descriptor for environment_id field.
+	taxappliedDescEnvironmentID := taxappliedMixinFields1[0].Descriptor()
+	// taxapplied.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	taxapplied.DefaultEnvironmentID = taxappliedDescEnvironmentID.Default.(string)
+	// taxappliedDescTaxRateID is the schema descriptor for tax_rate_id field.
+	taxappliedDescTaxRateID := taxappliedFields[1].Descriptor()
+	// taxapplied.TaxRateIDValidator is a validator for the "tax_rate_id" field. It is called by the builders before save.
+	taxapplied.TaxRateIDValidator = taxappliedDescTaxRateID.Validators[0].(func(string) error)
+	// taxappliedDescEntityType is the schema descriptor for entity_type field.
+	taxappliedDescEntityType := taxappliedFields[2].Descriptor()
+	// taxapplied.EntityTypeValidator is a validator for the "entity_type" field. It is called by the builders before save.
+	taxapplied.EntityTypeValidator = taxappliedDescEntityType.Validators[0].(func(string) error)
+	// taxappliedDescEntityID is the schema descriptor for entity_id field.
+	taxappliedDescEntityID := taxappliedFields[3].Descriptor()
+	// taxapplied.EntityIDValidator is a validator for the "entity_id" field. It is called by the builders before save.
+	taxapplied.EntityIDValidator = taxappliedDescEntityID.Validators[0].(func(string) error)
+	// taxappliedDescCurrency is the schema descriptor for currency field.
+	taxappliedDescCurrency := taxappliedFields[7].Descriptor()
+	// taxapplied.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
+	taxapplied.CurrencyValidator = taxappliedDescCurrency.Validators[0].(func(string) error)
+	// taxappliedDescAppliedAt is the schema descriptor for applied_at field.
+	taxappliedDescAppliedAt := taxappliedFields[8].Descriptor()
+	// taxapplied.DefaultAppliedAt holds the default value on creation for the applied_at field.
+	taxapplied.DefaultAppliedAt = taxappliedDescAppliedAt.Default.(func() time.Time)
+	taxassociationMixin := schema.TaxAssociation{}.Mixin()
+	taxassociationMixinFields0 := taxassociationMixin[0].Fields()
+	_ = taxassociationMixinFields0
+	taxassociationMixinFields1 := taxassociationMixin[1].Fields()
+	_ = taxassociationMixinFields1
+	taxassociationFields := schema.TaxAssociation{}.Fields()
+	_ = taxassociationFields
+	// taxassociationDescTenantID is the schema descriptor for tenant_id field.
+	taxassociationDescTenantID := taxassociationMixinFields0[0].Descriptor()
+	// taxassociation.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	taxassociation.TenantIDValidator = taxassociationDescTenantID.Validators[0].(func(string) error)
+	// taxassociationDescStatus is the schema descriptor for status field.
+	taxassociationDescStatus := taxassociationMixinFields0[1].Descriptor()
+	// taxassociation.DefaultStatus holds the default value on creation for the status field.
+	taxassociation.DefaultStatus = taxassociationDescStatus.Default.(string)
+	// taxassociationDescCreatedAt is the schema descriptor for created_at field.
+	taxassociationDescCreatedAt := taxassociationMixinFields0[2].Descriptor()
+	// taxassociation.DefaultCreatedAt holds the default value on creation for the created_at field.
+	taxassociation.DefaultCreatedAt = taxassociationDescCreatedAt.Default.(func() time.Time)
+	// taxassociationDescUpdatedAt is the schema descriptor for updated_at field.
+	taxassociationDescUpdatedAt := taxassociationMixinFields0[3].Descriptor()
+	// taxassociation.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	taxassociation.DefaultUpdatedAt = taxassociationDescUpdatedAt.Default.(func() time.Time)
+	// taxassociation.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	taxassociation.UpdateDefaultUpdatedAt = taxassociationDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// taxassociationDescEnvironmentID is the schema descriptor for environment_id field.
+	taxassociationDescEnvironmentID := taxassociationMixinFields1[0].Descriptor()
+	// taxassociation.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	taxassociation.DefaultEnvironmentID = taxassociationDescEnvironmentID.Default.(string)
+	// taxassociationDescTaxRateID is the schema descriptor for tax_rate_id field.
+	taxassociationDescTaxRateID := taxassociationFields[1].Descriptor()
+	// taxassociation.TaxRateIDValidator is a validator for the "tax_rate_id" field. It is called by the builders before save.
+	taxassociation.TaxRateIDValidator = taxassociationDescTaxRateID.Validators[0].(func(string) error)
+	// taxassociationDescEntityType is the schema descriptor for entity_type field.
+	taxassociationDescEntityType := taxassociationFields[2].Descriptor()
+	// taxassociation.EntityTypeValidator is a validator for the "entity_type" field. It is called by the builders before save.
+	taxassociation.EntityTypeValidator = taxassociationDescEntityType.Validators[0].(func(string) error)
+	// taxassociationDescEntityID is the schema descriptor for entity_id field.
+	taxassociationDescEntityID := taxassociationFields[3].Descriptor()
+	// taxassociation.EntityIDValidator is a validator for the "entity_id" field. It is called by the builders before save.
+	taxassociation.EntityIDValidator = taxassociationDescEntityID.Validators[0].(func(string) error)
+	// taxassociationDescPriority is the schema descriptor for priority field.
+	taxassociationDescPriority := taxassociationFields[4].Descriptor()
+	// taxassociation.DefaultPriority holds the default value on creation for the priority field.
+	taxassociation.DefaultPriority = taxassociationDescPriority.Default.(int)
+	// taxassociationDescAutoApply is the schema descriptor for auto_apply field.
+	taxassociationDescAutoApply := taxassociationFields[5].Descriptor()
+	// taxassociation.DefaultAutoApply holds the default value on creation for the auto_apply field.
+	taxassociation.DefaultAutoApply = taxassociationDescAutoApply.Default.(bool)
+	// taxassociationDescCurrency is the schema descriptor for currency field.
+	taxassociationDescCurrency := taxassociationFields[6].Descriptor()
+	// taxassociation.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
+	taxassociation.CurrencyValidator = taxassociationDescCurrency.Validators[0].(func(string) error)
+	taxrateMixin := schema.TaxRate{}.Mixin()
+	taxrateMixinFields0 := taxrateMixin[0].Fields()
+	_ = taxrateMixinFields0
+	taxrateMixinFields1 := taxrateMixin[1].Fields()
+	_ = taxrateMixinFields1
+	taxrateFields := schema.TaxRate{}.Fields()
+	_ = taxrateFields
+	// taxrateDescTenantID is the schema descriptor for tenant_id field.
+	taxrateDescTenantID := taxrateMixinFields0[0].Descriptor()
+	// taxrate.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	taxrate.TenantIDValidator = taxrateDescTenantID.Validators[0].(func(string) error)
+	// taxrateDescStatus is the schema descriptor for status field.
+	taxrateDescStatus := taxrateMixinFields0[1].Descriptor()
+	// taxrate.DefaultStatus holds the default value on creation for the status field.
+	taxrate.DefaultStatus = taxrateDescStatus.Default.(string)
+	// taxrateDescCreatedAt is the schema descriptor for created_at field.
+	taxrateDescCreatedAt := taxrateMixinFields0[2].Descriptor()
+	// taxrate.DefaultCreatedAt holds the default value on creation for the created_at field.
+	taxrate.DefaultCreatedAt = taxrateDescCreatedAt.Default.(func() time.Time)
+	// taxrateDescUpdatedAt is the schema descriptor for updated_at field.
+	taxrateDescUpdatedAt := taxrateMixinFields0[3].Descriptor()
+	// taxrate.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	taxrate.DefaultUpdatedAt = taxrateDescUpdatedAt.Default.(func() time.Time)
+	// taxrate.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	taxrate.UpdateDefaultUpdatedAt = taxrateDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// taxrateDescEnvironmentID is the schema descriptor for environment_id field.
+	taxrateDescEnvironmentID := taxrateMixinFields1[0].Descriptor()
+	// taxrate.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	taxrate.DefaultEnvironmentID = taxrateDescEnvironmentID.Default.(string)
+	// taxrateDescName is the schema descriptor for name field.
+	taxrateDescName := taxrateFields[1].Descriptor()
+	// taxrate.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	taxrate.NameValidator = taxrateDescName.Validators[0].(func(string) error)
+	// taxrateDescCode is the schema descriptor for code field.
+	taxrateDescCode := taxrateFields[3].Descriptor()
+	// taxrate.CodeValidator is a validator for the "code" field. It is called by the builders before save.
+	taxrate.CodeValidator = taxrateDescCode.Validators[0].(func(string) error)
+	// taxrateDescTaxRateStatus is the schema descriptor for tax_rate_status field.
+	taxrateDescTaxRateStatus := taxrateFields[4].Descriptor()
+	// taxrate.TaxRateStatusValidator is a validator for the "tax_rate_status" field. It is called by the builders before save.
+	taxrate.TaxRateStatusValidator = taxrateDescTaxRateStatus.Validators[0].(func(string) error)
+	// taxrateDescTaxRateType is the schema descriptor for tax_rate_type field.
+	taxrateDescTaxRateType := taxrateFields[5].Descriptor()
+	// taxrate.DefaultTaxRateType holds the default value on creation for the tax_rate_type field.
+	taxrate.DefaultTaxRateType = taxrateDescTaxRateType.Default.(string)
+	// taxrate.TaxRateTypeValidator is a validator for the "tax_rate_type" field. It is called by the builders before save.
+	taxrate.TaxRateTypeValidator = taxrateDescTaxRateType.Validators[0].(func(string) error)
+	// taxrateDescScope is the schema descriptor for scope field.
+	taxrateDescScope := taxrateFields[6].Descriptor()
+	// taxrate.ScopeValidator is a validator for the "scope" field. It is called by the builders before save.
+	taxrate.ScopeValidator = taxrateDescScope.Validators[0].(func(string) error)
+	// taxrateDescPercentageValue is the schema descriptor for percentage_value field.
+	taxrateDescPercentageValue := taxrateFields[7].Descriptor()
+	// taxrate.DefaultPercentageValue holds the default value on creation for the percentage_value field.
+	taxrate.DefaultPercentageValue = taxrateDescPercentageValue.Default.(decimal.Decimal)
+	// taxrateDescFixedValue is the schema descriptor for fixed_value field.
+	taxrateDescFixedValue := taxrateFields[8].Descriptor()
+	// taxrate.DefaultFixedValue holds the default value on creation for the fixed_value field.
+	taxrate.DefaultFixedValue = taxrateDescFixedValue.Default.(decimal.Decimal)
 	tenantFields := schema.Tenant{}.Fields()
 	_ = tenantFields
 	// tenantDescName is the schema descriptor for name field.

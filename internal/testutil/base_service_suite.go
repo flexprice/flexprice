@@ -26,6 +26,9 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/task"
+	taxrate "github.com/flexprice/flexprice/internal/domain/tax"
+	"github.com/flexprice/flexprice/internal/domain/taxapplied"
+	"github.com/flexprice/flexprice/internal/domain/taxassociation"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
@@ -62,6 +65,9 @@ type Stores struct {
 	SecretRepo                 secret.Repository
 	CreditNoteRepo             creditnote.Repository
 	CreditNoteLineItemRepo     creditnote.CreditNoteLineItemRepository
+	TaxRateRepo                taxrate.Repository
+	TaxAppliedRepo             taxapplied.Repository
+	TaxAssociationRepo         taxassociation.Repository
 	CouponRepo                 coupon.Repository
 	CouponAssociationRepo      coupon_association.Repository
 	CouponApplicationRepo      coupon_application.Repository
@@ -145,6 +151,9 @@ func (s *BaseServiceTestSuite) setupStores() {
 		CreditGrantApplicationRepo: NewInMemoryCreditGrantApplicationStore(),
 		CreditNoteRepo:             NewInMemoryCreditNoteStore(),
 		CreditNoteLineItemRepo:     NewInMemoryCreditNoteLineItemStore(),
+		TaxRateRepo:                NewInMemoryTaxRateStore(),
+		TaxAppliedRepo:             NewInMemoryTaxAppliedStore(),
+		TaxAssociationRepo:         NewInMemoryTaxAssociationStore(),
 		CouponRepo:                 NewInMemoryCouponStore(),
 		CouponAssociationRepo:      NewInMemoryCouponAssociationStore(),
 		CouponApplicationRepo:      NewInMemoryCouponApplicationStore(),
@@ -184,6 +193,9 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.CreditGrantApplicationRepo.(*InMemoryCreditGrantApplicationStore).Clear()
 	s.stores.CreditNoteRepo.(*InMemoryCreditNoteStore).Clear()
 	s.stores.CreditNoteLineItemRepo.(*InMemoryCreditNoteLineItemStore).Clear()
+	s.stores.TaxRateRepo.(*InMemoryTaxRateStore).Clear()
+	s.stores.TaxAppliedRepo.(*InMemoryTaxAppliedStore).Clear()
+	s.stores.TaxAssociationRepo.(*InMemoryTaxAssociationStore).Clear()
 	s.stores.CouponRepo.(*InMemoryCouponStore).Clear()
 	s.stores.CouponAssociationRepo.(*InMemoryCouponAssociationStore).Clear()
 	s.stores.CouponApplicationRepo.(*InMemoryCouponApplicationStore).Clear()

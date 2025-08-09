@@ -43,9 +43,7 @@ type SubscriptionService interface {
 	AddSubscriptionPhase(ctx context.Context, subscriptionID string, req *dto.AddSchedulePhaseRequest) (*dto.SubscriptionScheduleResponse, error)
 
 	// Coupon-related methods
-	ApplyCouponsToSubscription(ctx context.Context, subscriptionID string, couponIDs []string) error
-	GetSubscriptionCouponAssociations(ctx context.Context, subscriptionID string) ([]*dto.CouponAssociationResponse, error)
-	RemoveCouponFromSubscription(ctx context.Context, subscriptionID string, couponID string) error
+	ApplyCouponsToSubscriptionWithLineItems(ctx context.Context, subscriptionID string, subscriptionCoupons []string, lineItemCoupons map[string][]string, lineItems []*subscription.SubscriptionLineItem) error
 
 	ValidateAndFilterPricesForSubscription(ctx context.Context, entityID string, entityType types.PriceEntityType, subscription *subscription.Subscription) ([]*dto.PriceResponse, error)
 
@@ -73,7 +71,6 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
-	invoiceService := NewInvoiceService(s.ServiceParams)
 
 	// Get customer based on the provided IDs
 	var customer *customer.Customer
@@ -233,7 +230,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 
 	// Process price overrides if provided
 	if len(req.OverrideLineItems) > 0 {
-		err = s.handleSubscriptionPriceOverrides(ctx, sub, req.OverrideLineItems, lineItems, priceMap)
+		err = s.ProcessSubscriptionPriceOverrides(ctx, sub, req.OverrideLineItems, lineItems, priceMap)
 		if err != nil {
 			return nil, err
 		}
@@ -325,13 +322,18 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			}
 		}
 
-		// Apply coupons to the subscription
-		err = s.ApplyCouponsToSubscription(ctx, sub.ID, req.SubscriptionCoupons)
+		// handle tax rate linking
+		err = s.handleTaxRateLinking(ctx, sub, req)
 		if err != nil {
+			return err
+		}
+		// Apply coupons to the subscription
+		if err := s.ApplyCouponsToSubscriptionWithLineItems(ctx, sub.ID, req.Coupons, req.LineItemCoupons, lineItems); err != nil {
 			return err
 		}
 
 		// Create invoice for the subscription (in case it has advance charges)
+		invoiceService := NewInvoiceService(s.ServiceParams)
 		_, err = invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
 			SubscriptionID: sub.ID,
 			PeriodStart:    sub.CurrentPeriodStart,
@@ -348,8 +350,46 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	return response, nil
 }
 
-// handleSubscriptionPriceOverrides handles creating subscription-scoped prices for overrides
-func (s *subscriptionService) handleSubscriptionPriceOverrides(
+func (s *subscriptionService) handleTaxRateLinking(ctx context.Context, sub *subscription.Subscription, req dto.CreateSubscriptionRequest) error {
+	taxService := NewTaxService(s.ServiceParams)
+
+	// if tax overrides are provided, link them to the subscription
+	if len(req.TaxRateOverrides) > 0 {
+		err := taxService.LinkTaxRatesToEntity(ctx, dto.LinkTaxRateToEntityRequest{
+			EntityType:       types.TaxRateEntityTypeSubscription,
+			EntityID:         sub.ID,
+			TaxRateOverrides: req.TaxRateOverrides,
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	// If no tax rate overrides are provided, link the customer's tax association to the subscription
+	if req.TaxRateOverrides == nil {
+		filter := types.NewNoLimitTaxAssociationFilter()
+		filter.EntityType = types.TaxRateEntityTypeCustomer
+		filter.EntityID = sub.CustomerID
+		filter.AutoApply = lo.ToPtr(true)
+		tenantTaxAssociations, err := taxService.ListTaxAssociations(ctx, filter)
+		if err != nil {
+			return err
+		}
+
+		err = taxService.LinkTaxRatesToEntity(ctx, dto.LinkTaxRateToEntityRequest{
+			EntityType:              types.TaxRateEntityTypeSubscription,
+			EntityID:                sub.ID,
+			ExistingTaxAssociations: tenantTaxAssociations.Items,
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// processSubscriptionPriceOverrides handles creating subscription-scoped prices for overrides
+func (s *subscriptionService) ProcessSubscriptionPriceOverrides(
 	ctx context.Context,
 	sub *subscription.Subscription,
 	overrideRequests []dto.OverrideLineItemRequest,
@@ -591,8 +631,8 @@ func (s *subscriptionService) GetSubscription(ctx context.Context, id string) (*
 	}
 
 	// expand coupon associations
-	couponService := NewCouponService(s.ServiceParams)
-	couponAssociations, err := couponService.GetCouponAssociationsBySubscription(ctx, id)
+	couponAssociationService := NewCouponAssociationService(s.ServiceParams)
+	couponAssociations, err := couponAssociationService.GetCouponAssociationsBySubscription(ctx, id)
 	if err != nil {
 		s.Logger.Errorw("failed to get coupon associations for subscription",
 			"subscription_id", id,
@@ -2718,88 +2758,81 @@ func (s *subscriptionService) handleSubscriptionResume(ctx context.Context, subs
 	return nil
 }
 
-// ApplyCouponsToSubscription applies coupons to a subscription
-func (s *subscriptionService) ApplyCouponsToSubscription(ctx context.Context, subscriptionID string, couponIDs []string) error {
-	if len(couponIDs) == 0 {
+// ApplyCouponsToSubscriptionWithLineItems applies both subscription-level and line item-level coupons to a subscription
+func (s *subscriptionService) ApplyCouponsToSubscriptionWithLineItems(ctx context.Context, subscriptionID string, subscriptionCoupons []string, lineItemCoupons map[string][]string, lineItems []*subscription.SubscriptionLineItem) error {
+	if len(subscriptionCoupons) == 0 && len(lineItemCoupons) == 0 {
 		return nil
 	}
 
-	s.Logger.Infow("handling subscription-level coupon associations",
+	s.Logger.Infow("handling subscription and line item coupon associations",
 		"subscription_id", subscriptionID,
-		"coupon_count", len(couponIDs))
+		"subscription_coupon_count", len(subscriptionCoupons),
+		"line_item_coupon_count", len(lineItemCoupons))
 
 	// Create coupon service instance
-	couponService := NewCouponService(s.ServiceParams)
+	couponAssociationService := NewCouponAssociationService(s.ServiceParams)
 
-	// Apply coupons to subscription
-	_, err := couponService.ApplyCouponToSubscription(ctx, couponIDs, subscriptionID)
-	if err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to apply coupons to subscription").
-			WithReportableDetails(map[string]interface{}{
-				"subscription_id": subscriptionID,
-				"coupon_ids":      couponIDs,
-			}).
-			Mark(ierr.ErrInternal)
+	// Step 1: Apply subscription-level coupons
+	if len(subscriptionCoupons) > 0 {
+		err := couponAssociationService.ApplyCouponToSubscription(ctx, subscriptionCoupons, subscriptionID)
+		if err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to apply subscription-level coupons").
+				WithReportableDetails(map[string]interface{}{
+					"subscription_id": subscriptionID,
+					"coupon_ids":      subscriptionCoupons,
+				}).
+				Mark(ierr.ErrInternal)
+		}
+
+		s.Logger.Infow("successfully applied subscription-level coupons",
+			"subscription_id", subscriptionID,
+			"coupon_count", len(subscriptionCoupons))
 	}
 
-	s.Logger.Infow("successfully applied coupons to subscription",
-		"subscription_id", subscriptionID,
-		"coupon_count", len(couponIDs))
+	// Step 2: Apply line item-level coupons
+	if len(lineItemCoupons) > 0 {
+		priceIDToLineItem := make(map[string]*subscription.SubscriptionLineItem)
+		for _, lineItem := range lineItems {
+			priceIDToLineItem[lineItem.PriceID] = lineItem
+		}
 
-	return nil
-}
+		for priceID, couponIDs := range lineItemCoupons {
+			lineItem, ok := priceIDToLineItem[priceID]
+			if !ok {
+				return ierr.NewError("line item not found").
+					WithHint("Please provide a valid price ID").
+					WithReportableDetails(map[string]interface{}{
+						"price_id": priceID,
+					}).
+					Mark(ierr.ErrValidation)
+			}
 
-// GetSubscriptionCouponAssociations retrieves all coupon associations for a subscription
-func (s *subscriptionService) GetSubscriptionCouponAssociations(ctx context.Context, subscriptionID string) ([]*dto.CouponAssociationResponse, error) {
-	couponService := NewCouponService(s.ServiceParams)
-	return couponService.GetCouponAssociationsBySubscription(ctx, subscriptionID)
-}
-
-// RemoveCouponFromSubscription removes a coupon association from a subscription
-func (s *subscriptionService) RemoveCouponFromSubscription(ctx context.Context, subscriptionID string, couponID string) error {
-	couponService := NewCouponService(s.ServiceParams)
-
-	// Get coupon associations for this subscription
-	associations, err := couponService.GetCouponAssociationsBySubscription(ctx, subscriptionID)
-	if err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to get coupon associations").
-			Mark(ierr.ErrInternal)
-	}
-
-	// Find the association with the specified coupon ID
-	for _, association := range associations {
-		if association.CouponID == couponID {
-			// Delete the association
-			err = couponService.DeleteCouponAssociation(ctx, association.ID)
+			err := couponAssociationService.ApplyCouponToSubscriptionLineItem(ctx, couponIDs, subscriptionID, lineItem.ID)
 			if err != nil {
 				return ierr.WithError(err).
-					WithHint("Failed to remove coupon from subscription").
+					WithHint("Failed to apply line item coupons").
 					WithReportableDetails(map[string]interface{}{
 						"subscription_id": subscriptionID,
-						"coupon_id":       couponID,
-						"association_id":  association.ID,
+						"price_id":        priceID,
+						"line_item_id":    lineItem.ID,
+						"coupon_ids":      couponIDs,
 					}).
 					Mark(ierr.ErrInternal)
 			}
-
-			s.Logger.Infow("successfully removed coupon from subscription",
-				"subscription_id", subscriptionID,
-				"coupon_id", couponID,
-				"association_id", association.ID)
-
-			return nil
 		}
+
+		s.Logger.Infow("successfully applied line item coupons",
+			"subscription_id", subscriptionID,
+			"line_item_count", len(lineItemCoupons))
 	}
 
-	return ierr.NewError("coupon not found in subscription").
-		WithHint("The specified coupon is not associated with this subscription").
-		WithReportableDetails(map[string]interface{}{
-			"subscription_id": subscriptionID,
-			"coupon_id":       couponID,
-		}).
-		Mark(ierr.ErrNotFound)
+	s.Logger.Infow("successfully applied all coupons to subscription",
+		"subscription_id", subscriptionID,
+		"subscription_coupon_count", len(subscriptionCoupons),
+		"line_item_coupon_count", len(lineItemCoupons))
+
+	return nil
 }
 
 // handleSubscriptionAddons processes addons for a subscription

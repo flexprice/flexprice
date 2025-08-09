@@ -96,6 +96,9 @@ func (s *InvoiceServiceSuite) setupService() {
 		CreditGrantRepo:            s.GetStores().CreditGrantRepo,
 		CreditGrantApplicationRepo: s.GetStores().CreditGrantApplicationRepo,
 		CreditNoteLineItemRepo:     s.GetStores().CreditNoteLineItemRepo,
+		TaxRateRepo:                s.GetStores().TaxRateRepo,
+		TaxAppliedRepo:             s.GetStores().TaxAppliedRepo,
+		TaxAssociationRepo:         s.GetStores().TaxAssociationRepo,
 	})
 }
 

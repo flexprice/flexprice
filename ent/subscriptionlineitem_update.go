@@ -90,26 +90,6 @@ func (sliu *SubscriptionLineItemUpdate) ClearEntityID() *SubscriptionLineItemUpd
 	return sliu
 }
 
-// SetEntityType sets the "entity_type" field.
-func (sliu *SubscriptionLineItemUpdate) SetEntityType(s string) *SubscriptionLineItemUpdate {
-	sliu.mutation.SetEntityType(s)
-	return sliu
-}
-
-// SetNillableEntityType sets the "entity_type" field if the given value is not nil.
-func (sliu *SubscriptionLineItemUpdate) SetNillableEntityType(s *string) *SubscriptionLineItemUpdate {
-	if s != nil {
-		sliu.SetEntityType(*s)
-	}
-	return sliu
-}
-
-// ClearEntityType clears the value of the "entity_type" field.
-func (sliu *SubscriptionLineItemUpdate) ClearEntityType() *SubscriptionLineItemUpdate {
-	sliu.mutation.ClearEntityType()
-	return sliu
-}
-
 // SetPlanDisplayName sets the "plan_display_name" field.
 func (sliu *SubscriptionLineItemUpdate) SetPlanDisplayName(s string) *SubscriptionLineItemUpdate {
 	sliu.mutation.SetPlanDisplayName(s)
@@ -515,12 +495,6 @@ func (sliu *SubscriptionLineItemUpdate) sqlSave(ctx context.Context) (n int, err
 	if sliu.mutation.EntityIDCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldEntityID, field.TypeString)
 	}
-	if value, ok := sliu.mutation.EntityType(); ok {
-		_spec.SetField(subscriptionlineitem.FieldEntityType, field.TypeString, value)
-	}
-	if sliu.mutation.EntityTypeCleared() {
-		_spec.ClearField(subscriptionlineitem.FieldEntityType, field.TypeString)
-	}
 	if value, ok := sliu.mutation.PlanDisplayName(); ok {
 		_spec.SetField(subscriptionlineitem.FieldPlanDisplayName, field.TypeString, value)
 	}
@@ -724,26 +698,6 @@ func (sliuo *SubscriptionLineItemUpdateOne) SetNillableEntityID(s *string) *Subs
 // ClearEntityID clears the value of the "entity_id" field.
 func (sliuo *SubscriptionLineItemUpdateOne) ClearEntityID() *SubscriptionLineItemUpdateOne {
 	sliuo.mutation.ClearEntityID()
-	return sliuo
-}
-
-// SetEntityType sets the "entity_type" field.
-func (sliuo *SubscriptionLineItemUpdateOne) SetEntityType(s string) *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.SetEntityType(s)
-	return sliuo
-}
-
-// SetNillableEntityType sets the "entity_type" field if the given value is not nil.
-func (sliuo *SubscriptionLineItemUpdateOne) SetNillableEntityType(s *string) *SubscriptionLineItemUpdateOne {
-	if s != nil {
-		sliuo.SetEntityType(*s)
-	}
-	return sliuo
-}
-
-// ClearEntityType clears the value of the "entity_type" field.
-func (sliuo *SubscriptionLineItemUpdateOne) ClearEntityType() *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.ClearEntityType()
 	return sliuo
 }
 
@@ -1181,12 +1135,6 @@ func (sliuo *SubscriptionLineItemUpdateOne) sqlSave(ctx context.Context) (_node 
 	}
 	if sliuo.mutation.EntityIDCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldEntityID, field.TypeString)
-	}
-	if value, ok := sliuo.mutation.EntityType(); ok {
-		_spec.SetField(subscriptionlineitem.FieldEntityType, field.TypeString, value)
-	}
-	if sliuo.mutation.EntityTypeCleared() {
-		_spec.ClearField(subscriptionlineitem.FieldEntityType, field.TypeString)
 	}
 	if value, ok := sliuo.mutation.PlanDisplayName(); ok {
 		_spec.SetField(subscriptionlineitem.FieldPlanDisplayName, field.TypeString, value)

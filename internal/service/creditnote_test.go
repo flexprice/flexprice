@@ -72,11 +72,14 @@ func (s *CreditNoteServiceSuite) setupService() {
 		WalletRepo:                 s.GetStores().WalletRepo,
 		EventPublisher:             s.GetPublisher(),
 		CreditGrantRepo:            s.GetStores().CreditGrantRepo,
+		TaxAssociationRepo:         s.GetStores().TaxAssociationRepo,
 		CreditGrantApplicationRepo: s.GetStores().CreditGrantApplicationRepo,
 		CouponRepo:                 s.GetStores().CouponRepo,
 		CouponAssociationRepo:      s.GetStores().CouponAssociationRepo,
 		CouponApplicationRepo:      s.GetStores().CouponApplicationRepo,
 		WebhookPublisher:           s.GetWebhookPublisher(),
+		TaxRateRepo:                s.GetStores().TaxRateRepo,
+		TaxAppliedRepo:             s.GetStores().TaxAppliedRepo,
 	})
 }
 

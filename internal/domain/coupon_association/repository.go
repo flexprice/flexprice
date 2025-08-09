@@ -11,4 +11,5 @@ type Repository interface {
 	Update(ctx context.Context, couponAssociation *CouponAssociation) error
 	Delete(ctx context.Context, id string) error
 	GetBySubscription(ctx context.Context, subscriptionID string) ([]*CouponAssociation, error)
+	GetBySubscriptionForLineItems(ctx context.Context, subID string) ([]*CouponAssociation, error)
 }

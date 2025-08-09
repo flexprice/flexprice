@@ -111,7 +111,7 @@ func SubscriptionLineItemFromEnt(e *ent.SubscriptionLineItem) *SubscriptionLineI
 		SubscriptionID:   e.SubscriptionID,
 		CustomerID:       e.CustomerID,
 		EntityID:         lo.FromPtr(e.EntityID),
-		EntityType:       types.SubscriptionLineItemEntitiyType(lo.FromPtr(e.EntityType)),
+		EntityType:       types.SubscriptionLineItemEntitiyType(e.EntityType),
 		PlanDisplayName:  lo.FromPtr(e.PlanDisplayName),
 		PriceID:          e.PriceID,
 		PriceType:        types.PriceType(priceType),

@@ -29,9 +29,9 @@ func NewInvoiceHandler(invoiceService service.InvoiceService, temporalService *t
 	}
 }
 
-// CreateInvoice godoc
-// @Summary Create a new invoice
-// @Description Create a new invoice with the provided details
+// CreateOneOffInvoice godoc
+// @Summary Create a new one off invoice
+// @Description Create a new one off invoice with the provided details
 // @Tags Invoices
 // @Accept json
 // @Produce json
@@ -40,7 +40,7 @@ func NewInvoiceHandler(invoiceService service.InvoiceService, temporalService *t
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
 // @Router /invoices [post]
-func (h *InvoiceHandler) CreateInvoice(c *gin.Context) {
+func (h *InvoiceHandler) CreateOneOffInvoice(c *gin.Context) {
 	var req dto.CreateInvoiceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.Errorw("failed to bind request", "error", err)
@@ -48,7 +48,7 @@ func (h *InvoiceHandler) CreateInvoice(c *gin.Context) {
 		return
 	}
 
-	invoice, err := h.invoiceService.CreateInvoice(c.Request.Context(), req)
+	invoice, err := h.invoiceService.CreateOneOffInvoice(c.Request.Context(), req)
 	if err != nil {
 		h.logger.Errorw("failed to create invoice", "error", err)
 		c.Error(err)

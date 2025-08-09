@@ -150,6 +150,8 @@ var (
 	SubscriptionIDValidator func(string) error
 	// CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
 	CustomerIDValidator func(string) error
+	// DefaultEntityType holds the default value on creation for the "entity_type" field.
+	DefaultEntityType string
 	// PriceIDValidator is a validator for the "price_id" field. It is called by the builders before save.
 	PriceIDValidator func(string) error
 	// DefaultQuantity holds the default value on creation for the "quantity" field.

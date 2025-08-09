@@ -260,20 +260,21 @@ func (r *couponAssociationRepository) GetBySubscription(ctx context.Context, sub
 	return domainAssociations, nil
 }
 
-func (r *couponAssociationRepository) GetBySubscriptionLineItem(ctx context.Context, subscriptionLineItemID string) ([]*domainCouponAssociation.CouponAssociation, error) {
+func (r *couponAssociationRepository) GetBySubscriptionForLineItems(ctx context.Context, subscriptionID string) ([]*domainCouponAssociation.CouponAssociation, error) {
 	client := r.client.Querier(ctx)
 
-	r.log.Debugw("getting coupon associations by subscription line item", "subscription_line_item_id", subscriptionLineItemID)
+	r.log.Debugw("getting coupon associations by subscription line item", "subscription_id", subscriptionID)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "coupon_association", "get_by_subscription_line_item", map[string]interface{}{
-		"subscription_line_item_id": subscriptionLineItemID,
+		"subscription_id": subscriptionID,
 	})
 	defer FinishSpan(span)
 
 	associations, err := client.CouponAssociation.Query().
 		Where(
-			couponassociation.SubscriptionLineItemID(subscriptionLineItemID),
+			couponassociation.SubscriptionID(subscriptionID),
+			couponassociation.SubscriptionLineItemIDNotNil(),
 			couponassociation.TenantID(types.GetTenantID(ctx)),
 			couponassociation.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
@@ -283,7 +284,7 @@ func (r *couponAssociationRepository) GetBySubscriptionLineItem(ctx context.Cont
 		return nil, ierr.WithError(err).
 			WithHint("Failed to get coupon associations from database").
 			WithReportableDetails(map[string]interface{}{
-				"subscription_line_item_id": subscriptionLineItemID,
+				"subscription_id": subscriptionID,
 			}).
 			Mark(ierr.ErrDatabase)
 	}
