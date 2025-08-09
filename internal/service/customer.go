@@ -44,10 +44,52 @@ func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCust
 			Mark(ierr.ErrValidation)
 	}
 
-	if err := s.CustomerRepo.Create(ctx, cust); err != nil {
-		// No need to wrap the error as the repository already returns properly formatted errors
+	if err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		if err := s.CustomerRepo.Create(txCtx, cust); err != nil {
+			// No need to wrap the error as the repository already returns properly formatted errors
+			return err
+		}
+
+		taxService := NewTaxService(s.ServiceParams)
+
+		// Link tax rates to customer if provided
+		// If no tax rate overrides are provided, link the tenant tax rate to the customer
+		if len(req.TaxRateOverrides) > 0 {
+			err := taxService.LinkTaxRatesToEntity(txCtx, dto.LinkTaxRateToEntityRequest{
+				EntityType:       types.TaxrateEntityTypeCustomer,
+				EntityID:         cust.ID,
+				TaxRateOverrides: req.TaxRateOverrides,
+			})
+			if err != nil {
+				return err
+			}
+		}
+
+		// If no tax rate overrides are provided, link the tenant tax rate to the customer
+		if req.TaxRateOverrides == nil {
+			filter := types.NewNoLimitTaxAssociationFilter()
+			filter.EntityType = types.TaxrateEntityTypeTenant
+			filter.EntityID = types.GetTenantID(txCtx)
+			filter.AutoApply = lo.ToPtr(true)
+			tenantTaxAssociations, err := taxService.ListTaxAssociations(txCtx, filter)
+			if err != nil {
+				return err
+			}
+
+			err = taxService.LinkTaxRatesToEntity(txCtx, dto.LinkTaxRateToEntityRequest{
+				EntityType:              types.TaxrateEntityTypeCustomer,
+				EntityID:                cust.ID,
+				ExistingTaxAssociations: tenantTaxAssociations.Items,
+			})
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
 		return nil, err
 	}
+
 	s.publishWebhookEvent(ctx, types.WebhookEventCustomerCreated, cust.ID)
 	return &dto.CustomerResponse{Customer: cust}, nil
 }
