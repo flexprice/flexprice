@@ -127,12 +127,13 @@ func AssignPlanToCustomers() error {
 			continue
 		}
 
+		now := time.Now().UTC()
 		// Create subscription request
 		req := dto.CreateSubscriptionRequest{
 			CustomerID:         cust.ID,
 			PlanID:             planID,
 			Currency:           "usd", // Default currency
-			StartDate:          time.Now().UTC(),
+			StartDate:          &now,
 			BillingCadence:     types.BILLING_CADENCE_RECURRING,
 			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 			BillingPeriodCount: 1,

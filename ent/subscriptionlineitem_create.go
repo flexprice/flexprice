@@ -125,16 +125,30 @@ func (slic *SubscriptionLineItemCreate) SetCustomerID(s string) *SubscriptionLin
 	return slic
 }
 
-// SetPlanID sets the "plan_id" field.
-func (slic *SubscriptionLineItemCreate) SetPlanID(s string) *SubscriptionLineItemCreate {
-	slic.mutation.SetPlanID(s)
+// SetEntityID sets the "entity_id" field.
+func (slic *SubscriptionLineItemCreate) SetEntityID(s string) *SubscriptionLineItemCreate {
+	slic.mutation.SetEntityID(s)
 	return slic
 }
 
-// SetNillablePlanID sets the "plan_id" field if the given value is not nil.
-func (slic *SubscriptionLineItemCreate) SetNillablePlanID(s *string) *SubscriptionLineItemCreate {
+// SetNillableEntityID sets the "entity_id" field if the given value is not nil.
+func (slic *SubscriptionLineItemCreate) SetNillableEntityID(s *string) *SubscriptionLineItemCreate {
 	if s != nil {
-		slic.SetPlanID(*s)
+		slic.SetEntityID(*s)
+	}
+	return slic
+}
+
+// SetEntityType sets the "entity_type" field.
+func (slic *SubscriptionLineItemCreate) SetEntityType(s string) *SubscriptionLineItemCreate {
+	slic.mutation.SetEntityType(s)
+	return slic
+}
+
+// SetNillableEntityType sets the "entity_type" field if the given value is not nil.
+func (slic *SubscriptionLineItemCreate) SetNillableEntityType(s *string) *SubscriptionLineItemCreate {
+	if s != nil {
+		slic.SetEntityType(*s)
 	}
 	return slic
 }
@@ -553,9 +567,13 @@ func (slic *SubscriptionLineItemCreate) createSpec() (*SubscriptionLineItem, *sq
 		_spec.SetField(subscriptionlineitem.FieldCustomerID, field.TypeString, value)
 		_node.CustomerID = value
 	}
-	if value, ok := slic.mutation.PlanID(); ok {
-		_spec.SetField(subscriptionlineitem.FieldPlanID, field.TypeString, value)
-		_node.PlanID = &value
+	if value, ok := slic.mutation.EntityID(); ok {
+		_spec.SetField(subscriptionlineitem.FieldEntityID, field.TypeString, value)
+		_node.EntityID = &value
+	}
+	if value, ok := slic.mutation.EntityType(); ok {
+		_spec.SetField(subscriptionlineitem.FieldEntityType, field.TypeString, value)
+		_node.EntityType = &value
 	}
 	if value, ok := slic.mutation.PlanDisplayName(); ok {
 		_spec.SetField(subscriptionlineitem.FieldPlanDisplayName, field.TypeString, value)

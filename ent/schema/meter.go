@@ -77,8 +77,10 @@ type MeterFilter struct {
 	Values []string `json:"values"`
 }
 
+// MeterAggregation defines the aggregation configuration for a meter
 type MeterAggregation struct {
 	Type       types.AggregationType `json:"type"`
 	Field      string                `json:"field,omitempty"`
-	Multiplier decimal.Decimal       `json:"multiplier,omitempty"`
+	Multiplier *decimal.Decimal      `json:"multiplier,omitempty"`
+	BucketSize types.WindowSize      `json:"bucket_size,omitempty"`
 }

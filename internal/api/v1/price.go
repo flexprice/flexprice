@@ -50,6 +50,35 @@ func (h *PriceHandler) CreatePrice(c *gin.Context) {
 	c.JSON(http.StatusCreated, resp)
 }
 
+// @Summary Create multiple prices in bulk
+// @Description Create multiple prices with the specified configurations. Supports both regular and price unit configurations.
+// @Tags Prices
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param prices body dto.CreateBulkPriceRequest true "Bulk price configuration"
+// @Success 201 {object} dto.CreateBulkPriceResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /prices/bulk [post]
+func (h *PriceHandler) CreateBulkPrice(c *gin.Context) {
+	var req dto.CreateBulkPriceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.service.CreateBulkPrice(c.Request.Context(), req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, resp)
+}
+
 // @Summary Get a price by ID
 // @Description Get a price by ID
 // @Tags Prices

@@ -45,28 +45,17 @@ type Plan struct {
 
 // PlanEdges holds the relations/edges for other nodes in the graph.
 type PlanEdges struct {
-	// Entitlements holds the value of the entitlements edge.
-	Entitlements []*Entitlement `json:"entitlements,omitempty"`
 	// CreditGrants holds the value of the credit_grants edge.
 	CreditGrants []*CreditGrant `json:"credit_grants,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
-}
-
-// EntitlementsOrErr returns the Entitlements value or an error if the edge
-// was not loaded in eager-loading.
-func (e PlanEdges) EntitlementsOrErr() ([]*Entitlement, error) {
-	if e.loadedTypes[0] {
-		return e.Entitlements, nil
-	}
-	return nil, &NotLoadedError{edge: "entitlements"}
+	loadedTypes [1]bool
 }
 
 // CreditGrantsOrErr returns the CreditGrants value or an error if the edge
 // was not loaded in eager-loading.
 func (e PlanEdges) CreditGrantsOrErr() ([]*CreditGrant, error) {
-	if e.loadedTypes[1] {
+	if e.loadedTypes[0] {
 		return e.CreditGrants, nil
 	}
 	return nil, &NotLoadedError{edge: "credit_grants"}
@@ -173,11 +162,6 @@ func (pl *Plan) assignValues(columns []string, values []any) error {
 // This includes values selected through modifiers, order, etc.
 func (pl *Plan) Value(name string) (ent.Value, error) {
 	return pl.selectValues.Get(name)
-}
-
-// QueryEntitlements queries the "entitlements" edge of the Plan entity.
-func (pl *Plan) QueryEntitlements() *EntitlementQuery {
-	return NewPlanClient(pl.config).QueryEntitlements(pl)
 }
 
 // QueryCreditGrants queries the "credit_grants" edge of the Plan entity.

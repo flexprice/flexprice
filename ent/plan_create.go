@@ -11,7 +11,6 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/creditgrant"
-	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/ent/plan"
 )
 
@@ -150,21 +149,6 @@ func (pc *PlanCreate) SetNillableDescription(s *string) *PlanCreate {
 func (pc *PlanCreate) SetID(s string) *PlanCreate {
 	pc.mutation.SetID(s)
 	return pc
-}
-
-// AddEntitlementIDs adds the "entitlements" edge to the Entitlement entity by IDs.
-func (pc *PlanCreate) AddEntitlementIDs(ids ...string) *PlanCreate {
-	pc.mutation.AddEntitlementIDs(ids...)
-	return pc
-}
-
-// AddEntitlements adds the "entitlements" edges to the Entitlement entity.
-func (pc *PlanCreate) AddEntitlements(e ...*Entitlement) *PlanCreate {
-	ids := make([]string, len(e))
-	for i := range e {
-		ids[i] = e[i].ID
-	}
-	return pc.AddEntitlementIDs(ids...)
 }
 
 // AddCreditGrantIDs adds the "credit_grants" edge to the CreditGrant entity by IDs.
@@ -336,22 +320,6 @@ func (pc *PlanCreate) createSpec() (*Plan, *sqlgraph.CreateSpec) {
 	if value, ok := pc.mutation.Description(); ok {
 		_spec.SetField(plan.FieldDescription, field.TypeString, value)
 		_node.Description = value
-	}
-	if nodes := pc.mutation.EntitlementsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   plan.EntitlementsTable,
-			Columns: []string{plan.EntitlementsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(entitlement.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges = append(_spec.Edges, edge)
 	}
 	if nodes := pc.mutation.CreditGrantsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

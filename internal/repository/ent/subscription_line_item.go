@@ -43,7 +43,8 @@ func (r *subscriptionLineItemRepository) Create(ctx context.Context, item *subsc
 		SetID(item.ID).
 		SetSubscriptionID(item.SubscriptionID).
 		SetCustomerID(item.CustomerID).
-		SetNillablePlanID(types.ToNillableString(item.PlanID)).
+		SetNillableEntityID(types.ToNillableString(item.EntityID)).
+		SetNillableEntityType(types.ToNillableString(string(item.EntityType))).
 		SetNillablePlanDisplayName(types.ToNillableString(item.PlanDisplayName)).
 		SetPriceID(item.PriceID).
 		SetNillablePriceType(types.ToNillableString(string(item.PriceType))).
@@ -140,7 +141,8 @@ func (r *subscriptionLineItemRepository) Update(ctx context.Context, item *subsc
 
 	client := r.client.Querier(ctx)
 	_, err := client.SubscriptionLineItem.UpdateOneID(item.ID).
-		SetNillablePlanID(types.ToNillableString(item.PlanID)).
+		SetNillableEntityID(types.ToNillableString(item.EntityID)).
+		SetNillableEntityType(types.ToNillableString(string(item.EntityType))).
 		SetNillablePlanDisplayName(types.ToNillableString(item.PlanDisplayName)).
 		SetPriceID(item.PriceID).
 		SetNillablePriceType(types.ToNillableString(string(item.PriceType))).
@@ -237,7 +239,8 @@ func (r *subscriptionLineItemRepository) CreateBulk(ctx context.Context, items [
 			SetID(item.ID).
 			SetSubscriptionID(item.SubscriptionID).
 			SetCustomerID(item.CustomerID).
-			SetNillablePlanID(types.ToNillableString(item.PlanID)).
+			SetNillableEntityID(types.ToNillableString(item.EntityID)).
+			SetNillableEntityType(types.ToNillableString(string(item.EntityType))).
 			SetNillablePlanDisplayName(types.ToNillableString(item.PlanDisplayName)).
 			SetPriceID(item.PriceID).
 			SetNillablePriceType(types.ToNillableString(string(item.PriceType))).
@@ -374,8 +377,19 @@ func (r *subscriptionLineItemRepository) List(ctx context.Context, filter *types
 		if len(filter.CustomerIDs) > 0 {
 			query = query.Where(subscriptionlineitem.CustomerIDIn(filter.CustomerIDs...))
 		}
+		if len(filter.EntityIDs) > 0 {
+			query = query.Where(subscriptionlineitem.EntityIDIn(filter.EntityIDs...))
+		}
+		if filter.EntityType != nil {
+			query = query.Where(subscriptionlineitem.EntityType(string(*filter.EntityType)))
+		}
+
+		// TODO: !REMOVE after migration
 		if len(filter.PlanIDs) > 0 {
-			query = query.Where(subscriptionlineitem.PlanIDIn(filter.PlanIDs...))
+			query = query.Where(
+				subscriptionlineitem.EntityIDIn(filter.PlanIDs...),
+				subscriptionlineitem.EntityType(string(types.SubscriptionLineItemEntitiyTypePlan)),
+			) // TODO: !REMOVE after migration
 		}
 		if len(filter.PriceIDs) > 0 {
 			query = query.Where(subscriptionlineitem.PriceIDIn(filter.PriceIDs...))
@@ -442,8 +456,16 @@ func (r *subscriptionLineItemRepository) Count(ctx context.Context, filter *type
 		if len(filter.CustomerIDs) > 0 {
 			query = query.Where(subscriptionlineitem.CustomerIDIn(filter.CustomerIDs...))
 		}
+		if len(filter.EntityIDs) > 0 {
+			query = query.Where(subscriptionlineitem.EntityIDIn(filter.EntityIDs...))
+		}
+		if filter.EntityType != nil {
+			query = query.Where(subscriptionlineitem.EntityType(string(*filter.EntityType)))
+		}
+
+		// TODO: !REMOVE after migration
 		if len(filter.PlanIDs) > 0 {
-			query = query.Where(subscriptionlineitem.PlanIDIn(filter.PlanIDs...))
+			query = query.Where(subscriptionlineitem.EntityIDIn(filter.PlanIDs...), subscriptionlineitem.EntityType(string(types.SubscriptionLineItemEntitiyTypePlan)))
 		}
 		if len(filter.PriceIDs) > 0 {
 			query = query.Where(subscriptionlineitem.PriceIDIn(filter.PriceIDs...))
@@ -522,7 +544,8 @@ func (r *subscriptionLineItemRepository) GetByPlanID(ctx context.Context, planID
 
 	items, err := client.SubscriptionLineItem.Query().
 		Where(
-			subscriptionlineitem.PlanID(planID),
+			subscriptionlineitem.EntityID(planID),
+			subscriptionlineitem.EntityType(string(types.SubscriptionLineItemEntitiyTypePlan)),
 			subscriptionlineitem.TenantID(types.GetTenantID(ctx)),
 			subscriptionlineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).

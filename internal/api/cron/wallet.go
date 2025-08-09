@@ -133,7 +133,7 @@ func (h *WalletCronHandler) CheckAlerts(c *gin.Context) {
 		ctx := context.WithValue(c.Request.Context(), types.CtxTenantID, tenantID)
 
 		// fetch all environments
-		environments, err := h.environmentService.GetEnvironments(c.Request.Context(), types.GetDefaultFilter())
+		environments, err := h.environmentService.GetEnvironments(ctx, types.GetDefaultFilter())
 		if err != nil {
 			h.logger.Errorw("failed to get all environments", "error", err)
 			c.Error(err)
@@ -202,7 +202,7 @@ func (h *WalletCronHandler) CheckAlerts(c *gin.Context) {
 				}
 
 				// Get real-time balance
-				balance, err := h.walletService.GetWalletBalance(c.Request.Context(), wallet.ID)
+				balance, err := h.walletService.GetWalletBalance(ctx, wallet.ID)
 				if err != nil {
 					h.logger.Errorw("failed to get wallet balance",
 						"wallet_id", wallet.ID,
@@ -251,7 +251,7 @@ func (h *WalletCronHandler) CheckAlerts(c *gin.Context) {
 
 					// If current state is alert, update to ok (recovery)
 					if wallet.AlertState == string(types.AlertStateAlert) {
-						if err := h.walletService.UpdateWalletAlertState(c.Request.Context(), wallet.ID, types.AlertStateOk); err != nil {
+						if err := h.walletService.UpdateWalletAlertState(ctx, wallet.ID, types.AlertStateOk); err != nil {
 							h.logger.Errorw("failed to update wallet alert state",
 								"wallet_id", wallet.ID,
 								"error", err,
@@ -281,7 +281,7 @@ func (h *WalletCronHandler) CheckAlerts(c *gin.Context) {
 				)
 
 				// Update wallet state to alert
-				if err := h.walletService.UpdateWalletAlertState(c.Request.Context(), wallet.ID, types.AlertStateAlert); err != nil {
+				if err := h.walletService.UpdateWalletAlertState(ctx, wallet.ID, types.AlertStateAlert); err != nil {
 					h.logger.Errorw("failed to update wallet alert state",
 						"wallet_id", wallet.ID,
 						"error", err,
@@ -296,7 +296,7 @@ func (h *WalletCronHandler) CheckAlerts(c *gin.Context) {
 						"credit_balance", currentBalance,
 						"threshold", threshold,
 					)
-					if err := h.walletService.PublishEvent(c.Request.Context(), types.WebhookEventWalletCreditBalanceDropped, wallet); err != nil {
+					if err := h.walletService.PublishEvent(ctx, types.WebhookEventWalletCreditBalanceDropped, wallet); err != nil {
 						h.logger.Errorw("failed to publish credit balance alert",
 							"wallet_id", wallet.ID,
 							"error", err,
@@ -309,7 +309,7 @@ func (h *WalletCronHandler) CheckAlerts(c *gin.Context) {
 						"ongoing_balance", ongoingBalance,
 						"threshold", threshold,
 					)
-					if err := h.walletService.PublishEvent(c.Request.Context(), types.WebhookEventWalletOngoingBalanceDropped, wallet); err != nil {
+					if err := h.walletService.PublishEvent(ctx, types.WebhookEventWalletOngoingBalanceDropped, wallet); err != nil {
 						h.logger.Errorw("failed to publish ongoing balance alert",
 							"wallet_id", wallet.ID,
 							"error", err,

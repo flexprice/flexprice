@@ -147,7 +147,7 @@ func (s *tenantService) onboardTenantOnFreePlan(ctx context.Context, t *tenant.T
 		BillingCadence:     freePrice.BillingCadence,
 		BillingPeriod:      freePrice.BillingPeriod,
 		BillingPeriodCount: freePrice.BillingPeriodCount,
-		StartDate:          time.Now(),
+		StartDate:          lo.ToPtr(time.Now().UTC()),
 		BillingCycle:       types.BillingCycleAnniversary,
 	})
 	if err != nil {

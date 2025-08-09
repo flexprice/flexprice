@@ -40,8 +40,10 @@ type InvoiceLineItem struct {
 	CustomerID string `json:"customer_id,omitempty"`
 	// SubscriptionID holds the value of the "subscription_id" field.
 	SubscriptionID *string `json:"subscription_id,omitempty"`
-	// PlanID holds the value of the "plan_id" field.
-	PlanID *string `json:"plan_id,omitempty"`
+	// EntityID holds the value of the "entity_id" field.
+	EntityID *string `json:"entity_id,omitempty"`
+	// EntityType holds the value of the "entity_type" field.
+	EntityType *string `json:"entity_type,omitempty"`
 	// PlanDisplayName holds the value of the "plan_display_name" field.
 	PlanDisplayName *string `json:"plan_display_name,omitempty"`
 	// PriceID holds the value of the "price_id" field.
@@ -120,7 +122,7 @@ func (*InvoiceLineItem) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case invoicelineitem.FieldAmount, invoicelineitem.FieldQuantity:
 			values[i] = new(decimal.Decimal)
-		case invoicelineitem.FieldID, invoicelineitem.FieldTenantID, invoicelineitem.FieldStatus, invoicelineitem.FieldCreatedBy, invoicelineitem.FieldUpdatedBy, invoicelineitem.FieldEnvironmentID, invoicelineitem.FieldInvoiceID, invoicelineitem.FieldCustomerID, invoicelineitem.FieldSubscriptionID, invoicelineitem.FieldPlanID, invoicelineitem.FieldPlanDisplayName, invoicelineitem.FieldPriceID, invoicelineitem.FieldPriceType, invoicelineitem.FieldMeterID, invoicelineitem.FieldMeterDisplayName, invoicelineitem.FieldPriceUnitID, invoicelineitem.FieldPriceUnit, invoicelineitem.FieldDisplayName, invoicelineitem.FieldCurrency:
+		case invoicelineitem.FieldID, invoicelineitem.FieldTenantID, invoicelineitem.FieldStatus, invoicelineitem.FieldCreatedBy, invoicelineitem.FieldUpdatedBy, invoicelineitem.FieldEnvironmentID, invoicelineitem.FieldInvoiceID, invoicelineitem.FieldCustomerID, invoicelineitem.FieldSubscriptionID, invoicelineitem.FieldEntityID, invoicelineitem.FieldEntityType, invoicelineitem.FieldPlanDisplayName, invoicelineitem.FieldPriceID, invoicelineitem.FieldPriceType, invoicelineitem.FieldMeterID, invoicelineitem.FieldMeterDisplayName, invoicelineitem.FieldPriceUnitID, invoicelineitem.FieldPriceUnit, invoicelineitem.FieldDisplayName, invoicelineitem.FieldCurrency:
 			values[i] = new(sql.NullString)
 		case invoicelineitem.FieldCreatedAt, invoicelineitem.FieldUpdatedAt, invoicelineitem.FieldPeriodStart, invoicelineitem.FieldPeriodEnd:
 			values[i] = new(sql.NullTime)
@@ -206,12 +208,19 @@ func (ili *InvoiceLineItem) assignValues(columns []string, values []any) error {
 				ili.SubscriptionID = new(string)
 				*ili.SubscriptionID = value.String
 			}
-		case invoicelineitem.FieldPlanID:
+		case invoicelineitem.FieldEntityID:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field plan_id", values[i])
+				return fmt.Errorf("unexpected type %T for field entity_id", values[i])
 			} else if value.Valid {
-				ili.PlanID = new(string)
-				*ili.PlanID = value.String
+				ili.EntityID = new(string)
+				*ili.EntityID = value.String
+			}
+		case invoicelineitem.FieldEntityType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field entity_type", values[i])
+			} else if value.Valid {
+				ili.EntityType = new(string)
+				*ili.EntityType = value.String
 			}
 		case invoicelineitem.FieldPlanDisplayName:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -394,8 +403,13 @@ func (ili *InvoiceLineItem) String() string {
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := ili.PlanID; v != nil {
-		builder.WriteString("plan_id=")
+	if v := ili.EntityID; v != nil {
+		builder.WriteString("entity_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := ili.EntityType; v != nil {
+		builder.WriteString("entity_type=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")

@@ -39,6 +39,7 @@ type Handlers struct {
 	Coupon            *v1.CouponHandler
 	PriceUnit         *v1.PriceUnitHandler
 	Webhook           *v1.WebhookHandler
+	Addon             *v1.AddonHandler
 	// Portal handlers
 	Onboarding *v1.OnboardingHandler
 	// Cron jobs : TODO: move crons out of API based architecture
@@ -128,6 +129,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		price := v1Private.Group("/prices")
 		{
 			price.POST("", handlers.Price.CreatePrice)
+			price.POST("/bulk", handlers.Price.CreateBulkPrice)
 			price.GET("", handlers.Price.GetPrices)
 			price.GET("/:id", handlers.Price.GetPrice)
 			price.PUT("/:id", handlers.Price.UpdatePrice)
@@ -185,6 +187,19 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			plan.GET("/:id/creditgrants", handlers.Plan.GetPlanCreditGrants)
 		}
 
+		addon := v1Private.Group("/addons")
+		{
+			// list addons by filter
+			addon.POST("/search", handlers.Addon.ListAddonsByFilter)
+
+			addon.POST("", handlers.Addon.CreateAddon)
+			addon.GET("", handlers.Addon.GetAddons)
+			addon.GET("/:id", handlers.Addon.GetAddon)
+			addon.GET("/lookup/:lookup_key", handlers.Addon.GetAddonByLookupKey)
+			addon.PUT("/:id", handlers.Addon.UpdateAddon)
+			addon.DELETE("/:id", handlers.Addon.DeleteAddon)
+		}
+
 		subscription := v1Private.Group("/subscriptions")
 		{
 			subscription.POST("/search", handlers.Subscription.ListSubscriptionsByFilter)
@@ -198,6 +213,10 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			subscription.POST("/:id/resume", handlers.SubscriptionPause.ResumeSubscription)
 			subscription.GET("/:id/pauses", handlers.SubscriptionPause.ListPauses)
 			subscription.POST("/:id/phases", handlers.Subscription.AddSubscriptionPhase)
+
+			// Addon management for subscriptions - moved under subscription handler
+			subscription.POST("/addon", handlers.Subscription.AddAddonToSubscription)
+			subscription.DELETE("/addon", handlers.Subscription.RemoveAddonToSubscription)
 		}
 
 		wallet := v1Private.Group("/wallets")
@@ -250,6 +269,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		{
 			entitlement.POST("/search", handlers.Entitlement.ListEntitlementsByFilter)
 			entitlement.POST("", handlers.Entitlement.CreateEntitlement)
+			entitlement.POST("/bulk", handlers.Entitlement.CreateBulkEntitlement)
 			entitlement.GET("", handlers.Entitlement.ListEntitlements)
 			entitlement.GET("/:id", handlers.Entitlement.GetEntitlement)
 			entitlement.PUT("/:id", handlers.Entitlement.UpdateEntitlement)

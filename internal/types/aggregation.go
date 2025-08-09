@@ -11,12 +11,18 @@ const (
 	AggregationCountUnique       AggregationType = "COUNT_UNIQUE"
 	AggregationLatest            AggregationType = "LATEST"
 	AggregationSumWithMultiplier AggregationType = "SUM_WITH_MULTIPLIER" // Sum with a multiplier - [sum(value) * multiplier]
-
+	AggregationMax               AggregationType = "MAX"
 )
 
 func (t AggregationType) Validate() bool {
 	switch t {
-	case AggregationCount, AggregationSum, AggregationAvg, AggregationCountUnique, AggregationLatest, AggregationSumWithMultiplier:
+	case AggregationCount,
+		AggregationSum,
+		AggregationAvg,
+		AggregationCountUnique,
+		AggregationLatest,
+		AggregationSumWithMultiplier,
+		AggregationMax:
 		return true
 	default:
 		return false

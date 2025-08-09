@@ -418,7 +418,8 @@ func (s *pricingImportScript) updatePrice(ctx context.Context, row PricingRow) e
 	now := time.Now().UTC()
 	priceObj := &price.Price{
 		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
-		PlanID:             row.PlanID,
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           row.PlanID,
 		MeterID:            row.MeterID,
 		Amount:             decimal.NewFromFloat(row.PerUnitPrice),
 		Currency:           "usd", // Default to USD
@@ -452,7 +453,7 @@ func (s *pricingImportScript) updatePrice(ctx context.Context, row PricingRow) e
 		)
 	`
 	_, err := s.entClient.ExecContext(ctx, query,
-		priceObj.ID, priceObj.PlanID, priceObj.MeterID,
+		priceObj.ID, priceObj.EntityID, priceObj.MeterID,
 		priceObj.Amount, priceObj.DisplayAmount, priceObj.Currency, priceObj.Type,
 		priceObj.BillingModel, priceObj.BillingCadence, priceObj.BillingPeriod, priceObj.BillingPeriodCount, priceObj.InvoiceCadence,
 		s.tenantID, s.environmentID, priceObj.Status,

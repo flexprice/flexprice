@@ -6,20 +6,19 @@ import (
 	"sort"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
-	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/price"
-	"github.com/flexprice/flexprice/internal/domain/priceunit"
 	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
 type PriceService interface {
 	CreatePrice(ctx context.Context, req dto.CreatePriceRequest) (*dto.PriceResponse, error)
+	CreateBulkPrice(ctx context.Context, req dto.CreateBulkPriceRequest) (*dto.CreateBulkPriceResponse, error)
 	GetPrice(ctx context.Context, id string) (*dto.PriceResponse, error)
 	GetPricesByPlanID(ctx context.Context, planID string) (*dto.ListPricesResponse, error)
 	GetPricesBySubscriptionID(ctx context.Context, subscriptionID string) (*dto.ListPricesResponse, error)
+	GetPricesByAddonID(ctx context.Context, addonID string) (*dto.ListPricesResponse, error)
 	GetPrices(ctx context.Context, filter *types.PriceFilter) (*dto.ListPricesResponse, error)
 	UpdatePrice(ctx context.Context, id string, req dto.UpdatePriceRequest) (*dto.PriceResponse, error)
 	DeletePrice(ctx context.Context, id string) error
@@ -35,14 +34,11 @@ type PriceService interface {
 }
 
 type priceService struct {
-	repo          price.Repository
-	meterRepo     meter.Repository
-	logger        *logger.Logger
-	priceUnitRepo priceunit.Repository
+	ServiceParams
 }
 
-func NewPriceService(repo price.Repository, meterRepo meter.Repository, priceUnitRepo priceunit.Repository, logger *logger.Logger) PriceService {
-	return &priceService{repo: repo, logger: logger, meterRepo: meterRepo, priceUnitRepo: priceUnitRepo}
+func NewPriceService(params ServiceParams) PriceService {
+	return &priceService{ServiceParams: params}
 }
 
 func (s *priceService) CreatePrice(ctx context.Context, req dto.CreatePriceRequest) (*dto.PriceResponse, error) {
@@ -50,10 +46,32 @@ func (s *priceService) CreatePrice(ctx context.Context, req dto.CreatePriceReque
 		return nil, err
 	}
 
-	if req.PlanID == "" {
-		return nil, ierr.NewError("plan_id is required").
-			WithHint("Plan ID is required").
-			Mark(ierr.ErrValidation)
+	// Handle entity type validation
+	if req.EntityType != "" {
+		if err := req.EntityType.Validate(); err != nil {
+			return nil, err
+		}
+
+		if req.EntityID == "" {
+			return nil, ierr.NewError("entity_id is required when entity_type is provided").
+				WithHint("Please provide an entity id").
+				Mark(ierr.ErrValidation)
+		}
+
+		// Validate that the entity exists based on entity type
+		if err := s.validateEntityExists(ctx, req.EntityType, req.EntityID); err != nil {
+			return nil, err
+		}
+	} else {
+		// Legacy support for plan_id
+		if req.PlanID == "" {
+			return nil, ierr.NewError("either entity_type/entity_id or plan_id is required").
+				WithHint("Please provide entity_type and entity_id, or plan_id for backward compatibility").
+				Mark(ierr.ErrValidation)
+		}
+		// Set entity type and ID from plan_id for backward compatibility
+		req.EntityType = types.PRICE_ENTITY_TYPE_PLAN
+		req.EntityID = req.PlanID
 	}
 
 	// Handle price unit config case
@@ -69,11 +87,133 @@ func (s *priceService) CreatePrice(ctx context.Context, req dto.CreatePriceReque
 			Mark(ierr.ErrValidation)
 	}
 
-	if err := s.repo.Create(ctx, price); err != nil {
+	if err := s.PriceRepo.Create(ctx, price); err != nil {
 		return nil, err
 	}
 
-	return &dto.PriceResponse{Price: price}, nil
+	response := &dto.PriceResponse{Price: price}
+
+	// TODO: !REMOVE after migration
+	if price.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
+		response.PlanID = price.EntityID
+	}
+
+	return response, nil
+}
+
+// validateEntityExists validates that the entity exists based on the entity type
+func (s *priceService) validateEntityExists(ctx context.Context, entityType types.PriceEntityType, entityID string) error {
+	switch entityType {
+	case types.PRICE_ENTITY_TYPE_PLAN:
+		plan, err := s.PlanRepo.Get(ctx, entityID)
+		if err != nil || plan == nil {
+			return ierr.NewError("plan not found").
+				WithHint("The specified plan does not exist").
+				WithReportableDetails(map[string]interface{}{
+					"plan_id": entityID,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+	case types.PRICE_ENTITY_TYPE_ADDON:
+		addon, err := s.AddonRepo.GetByID(ctx, entityID)
+		if err != nil || addon == nil {
+			return ierr.NewError("addon not found").
+				WithHint("The specified addon does not exist").
+				WithReportableDetails(map[string]interface{}{
+					"addon_id": entityID,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+	case types.PRICE_ENTITY_TYPE_SUBSCRIPTION:
+		subscription, err := s.SubRepo.Get(ctx, entityID)
+		if err != nil || subscription == nil {
+			return ierr.NewError("subscription not found").
+				WithHint("The specified subscription does not exist").
+				WithReportableDetails(map[string]interface{}{
+					"subscription_id": entityID,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+	default:
+		return ierr.NewError("unsupported entity type").
+			WithHint("The specified entity type is not supported").
+			WithReportableDetails(map[string]interface{}{
+				"entity_type": entityType,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+func (s *priceService) CreateBulkPrice(ctx context.Context, req dto.CreateBulkPriceRequest) (*dto.CreateBulkPriceResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	var response *dto.CreateBulkPriceResponse
+
+	// Use transaction to ensure all prices are created or none
+	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		response = &dto.CreateBulkPriceResponse{
+			Items: make([]*dto.PriceResponse, 0),
+		}
+
+		// Separate prices that need price unit config handling from regular prices
+		var regularPrices []*price.Price
+		var priceUnitConfigPrices []dto.CreatePriceRequest
+
+		for _, priceReq := range req.Items {
+			if priceReq.PriceUnitConfig != nil {
+				priceUnitConfigPrices = append(priceUnitConfigPrices, priceReq)
+			} else {
+				// Handle regular prices
+				price, err := priceReq.ToPrice(txCtx)
+				if err != nil {
+					return ierr.WithError(err).
+						WithHint("Failed to create price").
+						Mark(ierr.ErrValidation)
+				}
+				regularPrices = append(regularPrices, price)
+			}
+		}
+
+		// Create regular prices in bulk if any exist
+		if len(regularPrices) > 0 {
+			if err := s.PriceRepo.CreateBulk(txCtx, regularPrices); err != nil {
+				return ierr.WithError(err).
+					WithHint("Failed to create prices in bulk").
+					Mark(ierr.ErrDatabase)
+			}
+
+			// Add successful regular prices to response
+			for _, p := range regularPrices {
+				priceResp := &dto.PriceResponse{Price: p}
+				if p.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
+					priceResp.PlanID = p.EntityID
+				}
+				response.Items = append(response.Items, priceResp)
+			}
+		}
+
+		// Handle price unit config prices individually (they need special processing)
+		for _, priceReq := range priceUnitConfigPrices {
+			priceResp, err := s.createPriceWithUnitConfig(txCtx, priceReq)
+			if err != nil {
+				return ierr.WithError(err).
+					WithHint("Failed to create price with unit config").
+					Mark(ierr.ErrValidation)
+			}
+			response.Items = append(response.Items, priceResp)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return response, nil
 }
 
 // createPriceWithUnitConfig- a private helper method to create a price with a price unit config
@@ -109,7 +249,7 @@ func (s *priceService) createPriceWithUnitConfig(ctx context.Context, req dto.Cr
 	// Fetch the price unit by code, tenant, and environment
 	tenantID := types.GetTenantID(ctx)
 	envID := types.GetEnvironmentID(ctx)
-	priceUnit, err := s.priceUnitRepo.GetByCode(ctx, req.PriceUnitConfig.PriceUnit, tenantID, envID, string(types.StatusPublished))
+	priceUnit, err := s.PriceUnitRepo.GetByCode(ctx, req.PriceUnitConfig.PriceUnit, tenantID, envID, string(types.StatusPublished))
 	if err != nil || priceUnit == nil {
 		return nil, ierr.NewError("invalid or unpublished price unit").
 			WithHint("Price unit must exist and be published").
@@ -117,7 +257,7 @@ func (s *priceService) createPriceWithUnitConfig(ctx context.Context, req dto.Cr
 	}
 
 	// Convert FROM price unit TO base currency
-	baseAmount, err := s.priceUnitRepo.ConvertToBaseCurrency(ctx, req.PriceUnitConfig.PriceUnit, tenantID, envID, priceUnitAmount)
+	baseAmount, err := s.PriceUnitRepo.ConvertToBaseCurrency(ctx, req.PriceUnitConfig.PriceUnit, tenantID, envID, priceUnitAmount)
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Failed to convert price unit amount to base currency").
@@ -164,7 +304,7 @@ func (s *priceService) createPriceWithUnitConfig(ctx context.Context, req dto.Cr
 			}
 
 			// Convert tier unit amount from price unit to base currency
-			convertedUnitAmount, err := s.priceUnitRepo.ConvertToBaseCurrency(ctx, req.PriceUnitConfig.PriceUnit, tenantID, envID, unitAmount)
+			convertedUnitAmount, err := s.PriceUnitRepo.ConvertToBaseCurrency(ctx, req.PriceUnitConfig.PriceUnit, tenantID, envID, unitAmount)
 			if err != nil {
 				return nil, ierr.WithError(err).
 					WithHint("Failed to convert tier unit amount to base currency").
@@ -193,7 +333,7 @@ func (s *priceService) createPriceWithUnitConfig(ctx context.Context, req dto.Cr
 				priceUnitTiers[i].FlatAmount = priceUnitFlatAmount
 
 				// Convert tier flat amount from price unit to base currency
-				convertedFlatAmount, err := s.priceUnitRepo.ConvertToBaseCurrency(ctx, req.PriceUnitConfig.PriceUnit, tenantID, envID, parsed)
+				convertedFlatAmount, err := s.PriceUnitRepo.ConvertToBaseCurrency(ctx, req.PriceUnitConfig.PriceUnit, tenantID, envID, parsed)
 				if err != nil {
 					return nil, ierr.WithError(err).
 						WithHint("Failed to convert tier flat amount to base currency").
@@ -250,7 +390,8 @@ func (s *priceService) createPriceWithUnitConfig(ctx context.Context, req dto.Cr
 		Amount:             baseAmount,
 		Currency:           req.Currency,
 		PriceUnitType:      req.PriceUnitType,
-		PlanID:             req.PlanID,
+		EntityType:         req.EntityType,
+		EntityID:           req.EntityID,
 		Type:               req.Type,
 		BillingPeriod:      req.BillingPeriod,
 		BillingPeriodCount: req.BillingPeriodCount,
@@ -277,11 +418,18 @@ func (s *priceService) createPriceWithUnitConfig(ctx context.Context, req dto.Cr
 	}
 	p.DisplayAmount = p.GetDisplayAmount()
 
-	if err := s.repo.Create(ctx, p); err != nil {
+	if err := s.PriceRepo.Create(ctx, p); err != nil {
 		return nil, err
 	}
 
-	return &dto.PriceResponse{Price: p}, nil
+	response := &dto.PriceResponse{Price: p}
+
+	// TODO: !REMOVE after migration
+	if p.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
+		response.PlanID = p.EntityID
+	}
+
+	return response, nil
 }
 
 // Helper to format display price unit amount
@@ -300,12 +448,23 @@ func (s *priceService) GetPrice(ctx context.Context, id string) (*dto.PriceRespo
 			Mark(ierr.ErrValidation)
 	}
 
-	price, err := s.repo.Get(ctx, id)
+	price, err := s.PriceRepo.Get(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
-	return &dto.PriceResponse{Price: price}, nil
+	response := &dto.PriceResponse{Price: price}
+
+	// Set entity information
+	response.EntityType = price.EntityType
+	response.EntityID = price.EntityID
+
+	// TODO: !REMOVE after migration
+	if price.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
+		response.PlanID = price.EntityID
+	}
+
+	return response, nil
 }
 
 func (s *priceService) GetPricesByPlanID(ctx context.Context, planID string) (*dto.ListPricesResponse, error) {
@@ -317,12 +476,17 @@ func (s *priceService) GetPricesByPlanID(ctx context.Context, planID string) (*d
 
 	// Use unlimited filter to fetch plan-scoped prices only
 	priceFilter := types.NewNoLimitPriceFilter().
-		WithPlanIDs([]string{planID}).
+		WithEntityIDs([]string{planID}).
 		WithStatus(types.StatusPublished).
-		WithScope(types.PRICE_SCOPE_PLAN).
+		WithEntityType(types.PRICE_ENTITY_TYPE_PLAN).
 		WithExpand(string(types.ExpandMeters))
 
-	return s.GetPrices(ctx, priceFilter)
+	response, err := s.GetPrices(ctx, priceFilter)
+	if err != nil {
+		return nil, err
+	}
+
+	return response, nil
 }
 
 // GetPricesBySubscriptionID fetches subscription-scoped prices for a specific subscription
@@ -336,15 +500,42 @@ func (s *priceService) GetPricesBySubscriptionID(ctx context.Context, subscripti
 	// Use unlimited filter to fetch subscription-scoped prices only
 	priceFilter := types.NewNoLimitPriceFilter().
 		WithSubscriptionID(subscriptionID).
-		WithScope(types.PRICE_SCOPE_SUBSCRIPTION).
+		WithEntityType(types.PRICE_ENTITY_TYPE_SUBSCRIPTION).
 		WithStatus(types.StatusPublished).
 		WithExpand(string(types.ExpandMeters))
 
-	return s.GetPrices(ctx, priceFilter)
+	response, err := s.GetPrices(ctx, priceFilter)
+	if err != nil {
+		return nil, err
+	}
+
+	return response, nil
+}
+
+func (s *priceService) GetPricesByAddonID(ctx context.Context, addonID string) (*dto.ListPricesResponse, error) {
+
+	if addonID == "" {
+		return nil, ierr.NewError("addon_id is required").
+			WithHint("Addon ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	priceFilter := types.NewNoLimitPriceFilter().
+		WithEntityIDs([]string{addonID}).
+		WithEntityType(types.PRICE_ENTITY_TYPE_ADDON).
+		WithStatus(types.StatusPublished).
+		WithExpand(string(types.ExpandMeters))
+
+	response, err := s.GetPrices(ctx, priceFilter)
+	if err != nil {
+		return nil, err
+	}
+
+	return response, nil
 }
 
 func (s *priceService) GetPrices(ctx context.Context, filter *types.PriceFilter) (*dto.ListPricesResponse, error) {
-	meterService := NewMeterService(s.meterRepo)
+	meterService := NewMeterService(s.MeterRepo)
 
 	// Validate expand fields
 	if err := filter.GetExpand().Validate(types.PriceExpandConfig); err != nil {
@@ -352,12 +543,12 @@ func (s *priceService) GetPrices(ctx context.Context, filter *types.PriceFilter)
 	}
 
 	// Get prices
-	prices, err := s.repo.List(ctx, filter)
+	prices, err := s.PriceRepo.List(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
 
-	priceCount, err := s.repo.Count(ctx, filter)
+	priceCount, err := s.PriceRepo.Count(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -382,7 +573,7 @@ func (s *priceService) GetPrices(ctx context.Context, filter *types.PriceFilter)
 			metersByID[m.ID] = m
 		}
 
-		s.logger.Debugw("fetched meters for prices", "count", len(metersResponse.Items))
+		s.Logger.Debugw("fetched meters for prices", "count", len(metersResponse.Items))
 	}
 
 	// Build response with expanded fields
@@ -407,7 +598,7 @@ func (s *priceService) GetPrices(ctx context.Context, filter *types.PriceFilter)
 }
 
 func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.UpdatePriceRequest) (*dto.PriceResponse, error) {
-	price, err := s.repo.Get(ctx, id)
+	price, err := s.PriceRepo.Get(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -416,15 +607,22 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 	price.Metadata = req.Metadata
 	price.LookupKey = req.LookupKey
 
-	if err := s.repo.Update(ctx, price); err != nil {
+	if err := s.PriceRepo.Update(ctx, price); err != nil {
 		return nil, err
 	}
 
-	return &dto.PriceResponse{Price: price}, nil
+	response := &dto.PriceResponse{Price: price}
+
+	// TODO: !REMOVE after migration
+	if price.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
+		response.PlanID = price.EntityID
+	}
+
+	return response, nil
 }
 
 func (s *priceService) DeletePrice(ctx context.Context, id string) error {
-	if err := s.repo.Delete(ctx, id); err != nil {
+	if err := s.PriceRepo.Delete(ctx, id); err != nil {
 		return err
 	}
 	return nil
@@ -473,7 +671,7 @@ func (s *priceService) CalculateCost(ctx context.Context, price *price.Price, qu
 func (s *priceService) calculateTieredCost(ctx context.Context, price *price.Price, quantity decimal.Decimal) decimal.Decimal {
 	cost := decimal.Zero
 	if len(price.Tiers) == 0 {
-		s.logger.WithContext(ctx).Errorf("no tiers found for price %s", price.ID)
+		s.Logger.WithContext(ctx).Errorf("no tiers found for price %s", price.ID)
 		return cost
 	}
 
@@ -502,7 +700,7 @@ func (s *priceService) calculateTieredCost(ctx context.Context, price *price.Pri
 		// Calculate tier cost with full precision and handling of flat amount
 		tierCost := selectedTier.CalculateTierAmount(quantity, price.Currency)
 
-		s.logger.WithContext(ctx).Debugf(
+		s.Logger.WithContext(ctx).Debugf(
 			"volume tier total cost for quantity %s: %s price: %s tier : %+v",
 			quantity.String(),
 			tierCost.String(),
@@ -528,7 +726,7 @@ func (s *priceService) calculateTieredCost(ctx context.Context, price *price.Pri
 			cost = cost.Add(tierCost)
 			remainingQuantity = remainingQuantity.Sub(tierQuantity)
 
-			s.logger.WithContext(ctx).Debugf(
+			s.Logger.WithContext(ctx).Debugf(
 				"slab tier total cost for quantity %s: %s price: %s tier : %+v",
 				quantity.String(),
 				tierCost.String(),
@@ -541,7 +739,7 @@ func (s *priceService) calculateTieredCost(ctx context.Context, price *price.Pri
 			}
 		}
 	default:
-		s.logger.WithContext(ctx).Errorf("invalid tier mode: %s", price.TierMode)
+		s.Logger.WithContext(ctx).Errorf("invalid tier mode: %s", price.TierMode)
 		return decimal.Zero
 	}
 
@@ -621,7 +819,7 @@ func (s *priceService) calculateTieredCostWithBreakup(ctx context.Context, price
 	}
 
 	if len(price.Tiers) == 0 {
-		s.logger.WithContext(ctx).Errorf("no tiers found for price %s", price.ID)
+		s.Logger.WithContext(ctx).Errorf("no tiers found for price %s", price.ID)
 		return result
 	}
 
@@ -659,7 +857,7 @@ func (s *priceService) calculateTieredCostWithBreakup(ctx context.Context, price
 			result.EffectiveUnitCost = decimal.Zero
 		}
 
-		s.logger.WithContext(ctx).Debugf(
+		s.Logger.WithContext(ctx).Debugf(
 			"volume tier total cost for quantity %s: %s price: %s tier : %+v",
 			quantity.String(),
 			result.FinalCost.String(),
@@ -690,7 +888,7 @@ func (s *priceService) calculateTieredCostWithBreakup(ctx context.Context, price
 
 			remainingQuantity = remainingQuantity.Sub(tierQuantity)
 
-			s.logger.WithContext(ctx).Debugf(
+			s.Logger.WithContext(ctx).Debugf(
 				"slab tier total cost for quantity %s: %s price: %s tier : %+v",
 				quantity.String(),
 				tierCost.String(),
@@ -710,7 +908,7 @@ func (s *priceService) calculateTieredCostWithBreakup(ctx context.Context, price
 			result.EffectiveUnitCost = decimal.Zero
 		}
 	default:
-		s.logger.WithContext(ctx).Errorf("invalid tier mode: %s", price.TierMode)
+		s.Logger.WithContext(ctx).Errorf("invalid tier mode: %s", price.TierMode)
 	}
 
 	return result

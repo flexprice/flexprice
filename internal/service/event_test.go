@@ -141,6 +141,7 @@ func (s *EventServiceSuite) TestGetUsage() {
 				"duration_ms": float64(100),
 				"status":      "success",
 				"region":      "us-east-1",
+				"storage_gb":  float64(10), // Added for MAX tests
 			},
 		},
 		{
@@ -152,6 +153,7 @@ func (s *EventServiceSuite) TestGetUsage() {
 				"duration_ms": float64(150),
 				"status":      "error",
 				"region":      "us-east-1",
+				"storage_gb":  float64(5), // Added for MAX tests
 			},
 		},
 		{
@@ -163,6 +165,7 @@ func (s *EventServiceSuite) TestGetUsage() {
 				"duration_ms": float64(200),
 				"status":      "success",
 				"region":      "us-west-2",
+				"storage_gb":  float64(15), // Added for MAX tests
 			},
 		},
 	}
@@ -250,6 +253,33 @@ func (s *EventServiceSuite) TestGetUsage() {
 			expectedValue: decimal.NewFromFloat(1), // Only one event in us-west-2
 			expectedError: false,
 		},
+		{
+			name: "simple_max_storage",
+			request: &dto.GetUsageRequest{
+				ExternalCustomerID: "cust-1",
+				EventName:          "api_request",
+				PropertyName:       "storage_gb",
+				AggregationType:    types.AggregationMax,
+				StartTime:          time.Now().Add(-2 * time.Hour),
+				EndTime:            time.Now(),
+			},
+			expectedValue: decimal.NewFromFloat(15), // Maximum storage value across all events
+			expectedError: false,
+		},
+		{
+			name: "windowed_max_storage",
+			request: &dto.GetUsageRequest{
+				ExternalCustomerID: "cust-1",
+				EventName:          "api_request",
+				PropertyName:       "storage_gb",
+				AggregationType:    types.AggregationMax,
+				StartTime:          time.Now().Add(-2 * time.Hour),
+				EndTime:            time.Now(),
+				BucketSize:         types.WindowSizeHour,
+			},
+			expectedValue: decimal.NewFromFloat(15), // Should still return the overall maximum
+			expectedError: false,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -260,6 +290,17 @@ func (s *EventServiceSuite) TestGetUsage() {
 			} else {
 				s.NoError(err)
 				s.Equal(tc.expectedValue.InexactFloat64(), result.Value.InexactFloat64())
+
+				// For windowed MAX, verify we get per-bucket results
+				if tc.request.AggregationType == types.AggregationMax && tc.request.BucketSize != "" {
+					s.NotEmpty(result.Results, "Windowed MAX should return per-bucket results")
+
+					// Verify each bucket has a timestamp and value
+					for _, r := range result.Results {
+						s.False(r.WindowSize.IsZero(), "Bucket timestamp should not be zero")
+						s.NotNil(r.Value, "Bucket value should not be nil")
+					}
+				}
 			}
 		})
 	}

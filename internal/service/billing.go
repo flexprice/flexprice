@@ -87,7 +87,7 @@ func (s *billingService) CalculateFixedCharges(
 	fixedCost := decimal.Zero
 	fixedCostLineItems := make([]dto.CreateInvoiceLineItemRequest, 0)
 
-	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.PriceUnitRepo, s.Logger)
+	priceService := NewPriceService(s.ServiceParams)
 
 	// Process fixed charges from line items
 	for _, item := range sub.LineItems {
@@ -117,7 +117,8 @@ func (s *billingService) CalculateFixedCharges(
 		}
 
 		fixedCostLineItems = append(fixedCostLineItems, dto.CreateInvoiceLineItemRequest{
-			PlanID:          lo.ToPtr(item.PlanID),
+			EntityID:        lo.ToPtr(item.EntityID),
+			EntityType:      lo.ToPtr(string(item.EntityType)),
 			PlanDisplayName: lo.ToPtr(item.PlanDisplayName),
 			PriceID:         lo.ToPtr(item.PriceID),
 			PriceType:       lo.ToPtr(string(item.PriceType)),
@@ -158,7 +159,7 @@ func (s *billingService) CalculateUsageCharges(
 	planIDs := make([]string, 0)
 	for _, item := range sub.LineItems {
 		if item.PriceType == types.PRICE_TYPE_USAGE {
-			planIDs = append(planIDs, item.PlanID)
+			planIDs = append(planIDs, item.EntityID)
 		}
 	}
 	planIDs = lo.Uniq(planIDs)
@@ -182,7 +183,7 @@ func (s *billingService) CalculateUsageCharges(
 	}
 
 	// Create price service once before processing charges
-	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.PriceUnitRepo, s.Logger)
+	priceService := NewPriceService(s.ServiceParams)
 
 	// Process usage charges from line items
 	for _, item := range sub.LineItems {
@@ -209,7 +210,7 @@ func (s *billingService) CalculateUsageCharges(
 		// Process each matching charge individually (normal and overage charges)
 		for _, matchingCharge := range matchingCharges {
 			quantityForCalculation := decimal.NewFromFloat(matchingCharge.Quantity)
-			matchingEntitlement, ok := entitlementsByPlanMeterID[item.PlanID][item.MeterID]
+			matchingEntitlement, ok := entitlementsByPlanMeterID[item.EntityID][item.MeterID]
 
 			// Only apply entitlement adjustments if:
 			// 1. This is not an overage charge
@@ -279,7 +280,8 @@ func (s *billingService) CalculateUsageCharges(
 			}
 
 			usageCharges = append(usageCharges, dto.CreateInvoiceLineItemRequest{
-				PlanID:           lo.ToPtr(item.PlanID),
+				EntityID:         lo.ToPtr(item.EntityID),
+				EntityType:       lo.ToPtr(string(item.EntityType)),
 				PlanDisplayName:  lo.ToPtr(item.PlanDisplayName),
 				PriceType:        lo.ToPtr(string(item.PriceType)),
 				PriceID:          lo.ToPtr(item.PriceID),
@@ -898,7 +900,7 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 		subscriptionMap[sub.ID] = sub
 		for _, li := range sub.LineItems {
 			if li.IsActive(time.Now()) {
-				planIDs = append(planIDs, li.PlanID)
+				planIDs = append(planIDs, li.EntityID)
 			}
 		}
 	}
@@ -950,10 +952,10 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 
 	for _, e := range entitlements {
 		featureIDs = append(featureIDs, e.FeatureID)
-		if _, ok := entitlementsByPlan[e.PlanID]; !ok {
-			entitlementsByPlan[e.PlanID] = make([]*entitlement.Entitlement, 0)
+		if _, ok := entitlementsByPlan[e.EntityID]; !ok {
+			entitlementsByPlan[e.EntityID] = make([]*entitlement.Entitlement, 0)
 		}
-		entitlementsByPlan[e.PlanID] = append(entitlementsByPlan[e.PlanID], e)
+		entitlementsByPlan[e.EntityID] = append(entitlementsByPlan[e.EntityID], e)
 	}
 	featureIDs = lo.Uniq(featureIDs)
 
@@ -987,13 +989,13 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 			}
 
 			// Get entitlements for this plan
-			planEntitlements, ok := entitlementsByPlan[li.PlanID]
+			planEntitlements, ok := entitlementsByPlan[li.EntityID]
 			if !ok {
 				continue
 			}
 
 			// Get the plan details
-			p, ok := planMap[li.PlanID]
+			p, ok := planMap[li.EntityID]
 			if !ok {
 				continue
 			}
@@ -1016,8 +1018,9 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 				// Create a source for this entitlement
 				source := &dto.EntitlementSource{
 					SubscriptionID: sub.ID,
-					PlanID:         p.ID,
-					PlanName:       p.Name,
+					EntityID:       p.ID,
+					EntityType:     dto.EntitlementSourceEntityTypePlan,
+					EntitiyName:    p.Name,
 					Quantity:       quantity,
 					EntitlementID:  e.ID,
 					IsEnabled:      e.IsEnabled,

@@ -765,29 +765,6 @@ func DescriptionContainsFold(v string) predicate.Plan {
 	return predicate.Plan(sql.FieldContainsFold(FieldDescription, v))
 }
 
-// HasEntitlements applies the HasEdge predicate on the "entitlements" edge.
-func HasEntitlements() predicate.Plan {
-	return predicate.Plan(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, EntitlementsTable, EntitlementsColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
-}
-
-// HasEntitlementsWith applies the HasEdge predicate on the "entitlements" edge with a given conditions (other predicates).
-func HasEntitlementsWith(preds ...predicate.Entitlement) predicate.Plan {
-	return predicate.Plan(func(s *sql.Selector) {
-		step := newEntitlementsStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
-}
-
 // HasCreditGrants applies the HasEdge predicate on the "credit_grants" edge.
 func HasCreditGrants() predicate.Plan {
 	return predicate.Plan(func(s *sql.Selector) {

@@ -65,6 +65,7 @@ func (h *InvoiceHandler) CreateInvoice(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param id path string true "Invoice ID"
+// @Param expand_by_source query bool false "Include source-level price breakdown for usage line items"
 // @Success 200 {object} dto.InvoiceResponse
 // @Failure 404 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
@@ -76,10 +77,21 @@ func (h *InvoiceHandler) GetInvoice(c *gin.Context) {
 		return
 	}
 
+	expandBySource := c.DefaultQuery("expand_by_source", "false") == "true"
+
 	invoice, err := h.invoiceService.GetInvoice(c.Request.Context(), id)
 	if err != nil {
 		c.Error(err)
 		return
+	}
+
+	if expandBySource {
+		usageAnalytics, err := h.invoiceService.CalculatePriceBreakdown(c.Request.Context(), invoice)
+		if err != nil {
+			c.Error(err)
+			return
+		}
+		invoice.WithUsageAnalytics(usageAnalytics)
 	}
 
 	c.JSON(http.StatusOK, invoice)

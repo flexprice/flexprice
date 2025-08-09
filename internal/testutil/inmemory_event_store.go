@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/events"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -107,15 +108,145 @@ func (s *InMemoryEventStore) GetUsage(ctx context.Context, params *events.UsageP
 		var sum decimal.Decimal
 		for _, event := range filteredEvents {
 			if val, ok := event.Properties[params.PropertyName]; ok {
-				if floatVal, ok := val.(float64); ok {
-					sum = sum.Add(decimal.NewFromFloat(floatVal))
+				switch v := val.(type) {
+				case float64:
+					sum = sum.Add(decimal.NewFromFloat(v))
+				case int:
+					sum = sum.Add(decimal.NewFromInt(int64(v)))
+				case int64:
+					sum = sum.Add(decimal.NewFromInt(v))
+				case string:
+					if f, err := strconv.ParseFloat(v, 64); err == nil {
+						sum = sum.Add(decimal.NewFromFloat(f))
+					}
 				}
 			}
 		}
 		result.Value = sum
+	case types.AggregationMax:
+		// If bucket size is provided, compute per-bucket maximums and overall maximum
+		if params.BucketSize != "" {
+			// Group events into buckets by bucket start time
+			buckets := make(map[time.Time]decimal.Decimal)
+			var overallMax decimal.Decimal
+
+			for _, event := range filteredEvents {
+				if val, ok := event.Properties[params.PropertyName]; ok {
+					var f float64
+					switch v := val.(type) {
+					case float64:
+						f = v
+					case int:
+						f = float64(v)
+					case int64:
+						f = float64(v)
+					case string:
+						if parsed, err := strconv.ParseFloat(v, 64); err == nil {
+							f = parsed
+						} else {
+							continue
+						}
+					default:
+						continue
+					}
+
+					bucketStart := truncateToBucket(event.Timestamp, params.BucketSize)
+					current := buckets[bucketStart]
+					if current.IsZero() || decimal.NewFromFloat(f).GreaterThan(current) {
+						buckets[bucketStart] = decimal.NewFromFloat(f)
+					}
+
+					if overallMax.IsZero() || decimal.NewFromFloat(f).GreaterThan(overallMax) {
+						overallMax = decimal.NewFromFloat(f)
+					}
+				}
+			}
+
+			// Convert buckets to sorted results
+			keys := make([]time.Time, 0, len(buckets))
+			for k := range buckets {
+				keys = append(keys, k)
+			}
+			sort.Slice(keys, func(i, j int) bool { return keys[i].Before(keys[j]) })
+
+			result.Results = make([]events.UsageResult, 0, len(keys))
+			for _, k := range keys {
+				result.Results = append(result.Results, events.UsageResult{
+					WindowSize: k,
+					Value:      buckets[k],
+				})
+			}
+			result.Value = overallMax
+		} else {
+			// Simple max across all filtered events
+			var maxVal decimal.Decimal
+			for _, event := range filteredEvents {
+				if val, ok := event.Properties[params.PropertyName]; ok {
+					var f float64
+					switch v := val.(type) {
+					case float64:
+						f = v
+					case int:
+						f = float64(v)
+					case int64:
+						f = float64(v)
+					case string:
+						if parsed, err := strconv.ParseFloat(v, 64); err == nil {
+							f = parsed
+						} else {
+							continue
+						}
+					default:
+						continue
+					}
+					if maxVal.IsZero() || decimal.NewFromFloat(f).GreaterThan(maxVal) {
+						maxVal = decimal.NewFromFloat(f)
+					}
+				}
+			}
+			result.Value = maxVal
+		}
 	}
 
 	return result, nil
+}
+
+// truncateToBucket truncates t to the start of the given bucket size in UTC.
+func truncateToBucket(t time.Time, size types.WindowSize) time.Time {
+	t = t.UTC()
+	switch size {
+	case types.WindowSizeMinute:
+		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), 0, 0, time.UTC)
+	case types.WindowSize15Min:
+		m := (t.Minute() / 15) * 15
+		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), m, 0, 0, time.UTC)
+	case types.WindowSize30Min:
+		m := (t.Minute() / 30) * 30
+		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), m, 0, 0, time.UTC)
+	case types.WindowSizeHour:
+		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), 0, 0, 0, time.UTC)
+	case types.WindowSize3Hour:
+		h := (t.Hour() / 3) * 3
+		return time.Date(t.Year(), t.Month(), t.Day(), h, 0, 0, 0, time.UTC)
+	case types.WindowSize6Hour:
+		h := (t.Hour() / 6) * 6
+		return time.Date(t.Year(), t.Month(), t.Day(), h, 0, 0, 0, time.UTC)
+	case types.WindowSize12Hour:
+		h := (t.Hour() / 12) * 12
+		return time.Date(t.Year(), t.Month(), t.Day(), h, 0, 0, 0, time.UTC)
+	case types.WindowSizeDay:
+		return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
+	case types.WindowSizeWeek:
+		// Start of week (Monday) at 00:00 UTC
+		weekday := int(t.Weekday())
+		if weekday == 0 { // Sunday
+			weekday = 7
+		}
+		start := t.AddDate(0, 0, -(weekday - 1))
+		return time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, time.UTC)
+	default:
+		return t
+	}
 }
 
 func (s *InMemoryEventStore) GetEvents(ctx context.Context, params *events.GetEventsParams) ([]*events.Event, uint64, error) {

@@ -139,16 +139,30 @@ func (ilic *InvoiceLineItemCreate) SetNillableSubscriptionID(s *string) *Invoice
 	return ilic
 }
 
-// SetPlanID sets the "plan_id" field.
-func (ilic *InvoiceLineItemCreate) SetPlanID(s string) *InvoiceLineItemCreate {
-	ilic.mutation.SetPlanID(s)
+// SetEntityID sets the "entity_id" field.
+func (ilic *InvoiceLineItemCreate) SetEntityID(s string) *InvoiceLineItemCreate {
+	ilic.mutation.SetEntityID(s)
 	return ilic
 }
 
-// SetNillablePlanID sets the "plan_id" field if the given value is not nil.
-func (ilic *InvoiceLineItemCreate) SetNillablePlanID(s *string) *InvoiceLineItemCreate {
+// SetNillableEntityID sets the "entity_id" field if the given value is not nil.
+func (ilic *InvoiceLineItemCreate) SetNillableEntityID(s *string) *InvoiceLineItemCreate {
 	if s != nil {
-		ilic.SetPlanID(*s)
+		ilic.SetEntityID(*s)
+	}
+	return ilic
+}
+
+// SetEntityType sets the "entity_type" field.
+func (ilic *InvoiceLineItemCreate) SetEntityType(s string) *InvoiceLineItemCreate {
+	ilic.mutation.SetEntityType(s)
+	return ilic
+}
+
+// SetNillableEntityType sets the "entity_type" field if the given value is not nil.
+func (ilic *InvoiceLineItemCreate) SetNillableEntityType(s *string) *InvoiceLineItemCreate {
+	if s != nil {
+		ilic.SetEntityType(*s)
 	}
 	return ilic
 }
@@ -557,9 +571,13 @@ func (ilic *InvoiceLineItemCreate) createSpec() (*InvoiceLineItem, *sqlgraph.Cre
 		_spec.SetField(invoicelineitem.FieldSubscriptionID, field.TypeString, value)
 		_node.SubscriptionID = &value
 	}
-	if value, ok := ilic.mutation.PlanID(); ok {
-		_spec.SetField(invoicelineitem.FieldPlanID, field.TypeString, value)
-		_node.PlanID = &value
+	if value, ok := ilic.mutation.EntityID(); ok {
+		_spec.SetField(invoicelineitem.FieldEntityID, field.TypeString, value)
+		_node.EntityID = &value
+	}
+	if value, ok := ilic.mutation.EntityType(); ok {
+		_spec.SetField(invoicelineitem.FieldEntityType, field.TypeString, value)
+		_node.EntityType = &value
 	}
 	if value, ok := ilic.mutation.PlanDisplayName(); ok {
 		_spec.SetField(invoicelineitem.FieldPlanDisplayName, field.TypeString, value)

@@ -3,8 +3,10 @@ package dto
 import (
 	"time"
 
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -53,16 +55,41 @@ type AggregatedEntitlement struct {
 	StaticValues     []string            `json:"static_values,omitempty"` // For static/SLA features
 }
 
+// EntitlementSourceType defines the type of entitlement source
+type EntitlementSourceEntityType string
+
+const (
+	EntitlementSourceEntityTypePlan  EntitlementSourceEntityType = "plan"
+	EntitlementSourceEntityTypeAddon EntitlementSourceEntityType = "addon"
+)
+
+func (e EntitlementSourceEntityType) Validate() error {
+
+	allowedValues := []string{
+		string(EntitlementSourceEntityTypePlan),
+		string(EntitlementSourceEntityTypeAddon),
+	}
+
+	if !lo.Contains(allowedValues, string(e)) {
+		return ierr.NewError("invalid entitlement source entity type").
+			WithHint("Please provide a valid entitlement source entity type").
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}
+
 // EntitlementSource tracks which subscription provided the entitlement
 type EntitlementSource struct {
-	SubscriptionID string `json:"subscription_id"`
-	PlanID         string `json:"plan_id"`
-	Quantity       int64  `json:"quantity"`
-	PlanName       string `json:"plan_name"`
-	EntitlementID  string `json:"entitlement_id"`
-	IsEnabled      bool   `json:"is_enabled"`
-	UsageLimit     *int64 `json:"usage_limit,omitempty"`
-	StaticValue    string `json:"static_value,omitempty"`
+	SubscriptionID string                      `json:"subscription_id"`
+	EntityID       string                      `json:"entity_id"`
+	EntityType     EntitlementSourceEntityType `json:"entity_type"`
+	Quantity       int64                       `json:"quantity"`
+	EntitiyName    string                      `json:"entity_name"`
+	EntitlementID  string                      `json:"entitlement_id"`
+	IsEnabled      bool                        `json:"is_enabled"`
+	UsageLimit     *int64                      `json:"usage_limit,omitempty"`
+	StaticValue    string                      `json:"static_value,omitempty"`
 }
 
 // GetCustomerUsageSummaryRequest represents the request for getting customer usage summary

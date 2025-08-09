@@ -50,6 +50,21 @@ func (s *MeterServiceSuite) TestCreateMeter() {
 			expectedError: false,
 		},
 		{
+			name: "successful_max_meter_with_bucket",
+			input: &dto.CreateMeterRequest{
+				Name:      "Peak Storage Usage",
+				EventName: "storage_usage",
+				Aggregation: meter.Aggregation{
+					Type:       types.AggregationMax,
+					Field:      "storage_gb",
+					BucketSize: types.WindowSizeHour,
+				},
+				Filters:    []meter.Filter{},
+				ResetUsage: types.ResetUsageBillingPeriod,
+			},
+			expectedError: false,
+		},
+		{
 			name:          "nil_meter",
 			input:         nil,
 			expectedError: true,
@@ -74,6 +89,21 @@ func (s *MeterServiceSuite) TestCreateMeter() {
 			},
 			expectedError: true,
 		},
+		{
+			name: "invalid_bucket_size_with_non_max_aggregation",
+			input: &dto.CreateMeterRequest{
+				Name:      "Invalid Bucket Usage",
+				EventName: "usage",
+				Aggregation: meter.Aggregation{
+					Type:       types.AggregationSum,
+					Field:      "value",
+					BucketSize: types.WindowSizeHour,
+				},
+				Filters:    []meter.Filter{},
+				ResetUsage: types.ResetUsageBillingPeriod,
+			},
+			expectedError: true,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -90,6 +120,7 @@ func (s *MeterServiceSuite) TestCreateMeter() {
 				s.NoError(err)
 				s.Equal(tc.input.Name, stored.Name)
 				s.Equal(tc.input.EventName, stored.EventName)
+				s.Equal(tc.input.Aggregation, stored.Aggregation)
 			}
 		})
 	}

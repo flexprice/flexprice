@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/meter"
@@ -21,12 +22,14 @@ import (
 // EntitlementService defines the interface for entitlement operations
 type EntitlementService interface {
 	CreateEntitlement(ctx context.Context, req dto.CreateEntitlementRequest) (*dto.EntitlementResponse, error)
+	CreateBulkEntitlement(ctx context.Context, req dto.CreateBulkEntitlementRequest) (*dto.CreateBulkEntitlementResponse, error)
 	GetEntitlement(ctx context.Context, id string) (*dto.EntitlementResponse, error)
 	ListEntitlements(ctx context.Context, filter *types.EntitlementFilter) (*dto.ListEntitlementsResponse, error)
 	UpdateEntitlement(ctx context.Context, id string, req dto.UpdateEntitlementRequest) (*dto.EntitlementResponse, error)
 	DeleteEntitlement(ctx context.Context, id string) error
 	GetPlanEntitlements(ctx context.Context, planID string) (*dto.ListEntitlementsResponse, error)
 	GetPlanFeatureEntitlements(ctx context.Context, planID, featureID string) (*dto.ListEntitlementsResponse, error)
+	GetAddonEntitlements(ctx context.Context, addonID string) (*dto.ListEntitlementsResponse, error)
 }
 
 type entitlementService struct {
@@ -44,15 +47,56 @@ func (s *entitlementService) CreateEntitlement(ctx context.Context, req dto.Crea
 		return nil, err
 	}
 
-	if req.PlanID == "" {
-		return nil, ierr.NewError("plan_id is required").
+	// Support both plan_id (legacy) and entity_type/entity_id
+	var entityID string
+	var entityType types.EntitlementEntityType
+
+	if req.EntityType != "" && req.EntityID != "" {
+		// New way: using entity_type and entity_id
+		entityID = req.EntityID
+		entityType = req.EntityType
+	} else if req.PlanID != "" {
+		// Legacy way: using plan_id
+		entityID = req.PlanID
+		entityType = types.ENTITLEMENT_ENTITY_TYPE_PLAN
+	} else {
+		return nil, ierr.NewError("either entity_type/entity_id or plan_id is required").
+			WithHint("Please provide entity_type and entity_id, or plan_id for backward compatibility").
 			Mark(ierr.ErrValidation)
 	}
 
-	// Validate plan exists
-	plan, err := s.PlanRepo.Get(ctx, req.PlanID)
-	if err != nil {
-		return nil, err
+	// Validate entity exists based on entity type
+	var entity interface{}
+	var err error
+
+	switch entityType {
+	case types.ENTITLEMENT_ENTITY_TYPE_PLAN:
+		entity, err = s.PlanRepo.Get(ctx, entityID)
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Plan not found").
+				WithReportableDetails(map[string]interface{}{
+					"plan_id": entityID,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+	case types.ENTITLEMENT_ENTITY_TYPE_ADDON:
+		entity, err = s.AddonRepo.GetByID(ctx, entityID)
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Addon not found").
+				WithReportableDetails(map[string]interface{}{
+					"addon_id": entityID,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+	default:
+		return nil, ierr.NewError("unsupported entity type").
+			WithHint("Only PLAN and ADDON entity types are supported").
+			WithReportableDetails(map[string]interface{}{
+				"entity_type": entityType,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	// Validate feature exists
@@ -74,6 +118,9 @@ func (s *entitlementService) CreateEntitlement(ctx context.Context, req dto.Crea
 
 	// Create entitlement
 	e := req.ToEntitlement(ctx)
+	// Ensure entity type and ID are set correctly
+	e.EntityType = entityType
+	e.EntityID = entityID
 
 	result, err := s.EntitlementRepo.Create(ctx, e)
 	if err != nil {
@@ -84,10 +131,144 @@ func (s *entitlementService) CreateEntitlement(ctx context.Context, req dto.Crea
 
 	// Add expanded fields
 	response.Feature = &dto.FeatureResponse{Feature: feature}
-	response.Plan = &dto.PlanResponse{Plan: plan}
+
+	// Add entity-specific response based on entity type
+	switch entityType {
+	case types.ENTITLEMENT_ENTITY_TYPE_PLAN:
+		response.Plan = &dto.PlanResponse{Plan: entity.(*plan.Plan)}
+		response.PlanID = entityID
+	case types.ENTITLEMENT_ENTITY_TYPE_ADDON:
+		response.Addon = &dto.AddonResponse{Addon: entity.(*addon.Addon)}
+		response.PlanID = entityID // Keep for backward compatibility
+	}
 
 	// Publish webhook event
 	s.publishWebhookEvent(ctx, types.WebhookEventEntitlementCreated, result.ID)
+
+	return response, nil
+}
+
+func (s *entitlementService) CreateBulkEntitlement(ctx context.Context, req dto.CreateBulkEntitlementRequest) (*dto.CreateBulkEntitlementResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	var response *dto.CreateBulkEntitlementResponse
+
+	// Use transaction to ensure all entitlements are created or none
+	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		response = &dto.CreateBulkEntitlementResponse{
+			Items: make([]*dto.EntitlementResponse, 0),
+		}
+
+		// Pre-validate all plans and features to ensure they exist
+		planIDs := make(map[string]bool)
+		featureIDs := make(map[string]bool)
+
+		for _, entReq := range req.Items {
+			if entReq.PlanID != "" {
+				planIDs[entReq.PlanID] = true
+			}
+			featureIDs[entReq.FeatureID] = true
+		}
+
+		// Validate all plans exist
+		for planID := range planIDs {
+			_, err := s.PlanRepo.Get(txCtx, planID)
+			if err != nil {
+				return ierr.WithError(err).
+					WithHint(fmt.Sprintf("Plan with ID %s not found", planID)).
+					WithReportableDetails(map[string]interface{}{
+						"plan_id": planID,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+		}
+
+		// Validate all features exist and get them for later use
+		featuresByID := make(map[string]*feature.Feature)
+		for featureID := range featureIDs {
+			feature, err := s.FeatureRepo.Get(txCtx, featureID)
+			if err != nil {
+				return ierr.WithError(err).
+					WithHint(fmt.Sprintf("Feature with ID %s not found", featureID)).
+					WithReportableDetails(map[string]interface{}{
+						"feature_id": featureID,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+			featuresByID[featureID] = feature
+		}
+
+		// Create entitlements in bulk
+		entitlements := make([]*entitlement.Entitlement, len(req.Items))
+		for i, entReq := range req.Items {
+			// Validate feature type matches
+			feature := featuresByID[entReq.FeatureID]
+			if feature.Type != entReq.FeatureType {
+				return ierr.NewError("feature type mismatch").
+					WithHint(fmt.Sprintf("Expected %s, got %s", feature.Type, entReq.FeatureType)).
+					WithReportableDetails(map[string]interface{}{
+						"expected":   feature.Type,
+						"actual":     entReq.FeatureType,
+						"feature_id": entReq.FeatureID,
+						"index":      i,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+
+			ent := entReq.ToEntitlement(txCtx)
+			entitlements[i] = ent
+		}
+
+		// Create entitlements in bulk
+		createdEntitlements, err := s.EntitlementRepo.CreateBulk(txCtx, entitlements)
+		if err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to create entitlements in bulk").
+				Mark(ierr.ErrDatabase)
+		}
+
+		// Build response with expanded fields
+		for _, ent := range createdEntitlements {
+			entResp := &dto.EntitlementResponse{Entitlement: ent}
+
+			// TODO: !REMOVE after migration
+			if ent.EntityType == types.ENTITLEMENT_ENTITY_TYPE_PLAN {
+				entResp.PlanID = ent.EntityID
+			}
+
+			// Add expanded feature
+			if feature, ok := featuresByID[ent.FeatureID]; ok {
+				entResp.Feature = &dto.FeatureResponse{Feature: feature}
+			}
+
+			// Add expanded plan if it's a plan entitlement
+			if ent.EntityType == types.ENTITLEMENT_ENTITY_TYPE_PLAN {
+				plan, err := s.PlanRepo.Get(txCtx, ent.EntityID)
+				if err != nil {
+					return ierr.WithError(err).
+						WithHint("Failed to fetch plan for entitlement").
+						WithReportableDetails(map[string]interface{}{
+							"plan_id": ent.EntityID,
+						}).
+						Mark(ierr.ErrDatabase)
+				}
+				entResp.Plan = &dto.PlanResponse{Plan: plan}
+			}
+
+			response.Items = append(response.Items, entResp)
+
+			// Publish webhook event for each created entitlement
+			s.publishWebhookEvent(txCtx, types.WebhookEventEntitlementCreated, ent.ID)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
 
 	return response, nil
 }
@@ -108,11 +289,19 @@ func (s *entitlementService) GetEntitlement(ctx context.Context, id string) (*dt
 	}
 	response.Feature = &dto.FeatureResponse{Feature: feature}
 
-	plan, err := s.PlanRepo.Get(ctx, result.PlanID)
-	if err != nil {
-		return nil, err
+	if result.EntityType == types.ENTITLEMENT_ENTITY_TYPE_PLAN {
+		// TODO: !REMOVE after migration
+		response.PlanID = result.EntityID
+
+		// Keep this for backwards compatibility
+		plan, err := s.PlanRepo.Get(ctx, result.EntityID)
+		if err != nil {
+			return nil, err
+		}
+		response.Plan = &dto.PlanResponse{Plan: plan}
 	}
-	response.Plan = &dto.PlanResponse{Plan: plan}
+
+	// TODO: Implement the same for addon as we have for plan
 
 	return response, nil
 }
@@ -204,14 +393,14 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 		}
 
 		if filter.GetExpand().Has(types.ExpandPlans) {
-			// Collect plan IDs
-			planIDs := lo.Map(entitlements, func(e *entitlement.Entitlement, _ int) string {
-				return e.PlanID
+			// Collect entity IDs for plans
+			entityIDs := lo.Map(entitlements, func(e *entitlement.Entitlement, _ int) string {
+				return e.EntityID
 			})
 
-			if len(planIDs) > 0 {
+			if len(entityIDs) > 0 {
 				planFilter := types.NewNoLimitPlanFilter()
-				planFilter.PlanIDs = planIDs
+				planFilter.EntityIDs = entityIDs
 				plans, err := s.PlanRepo.List(ctx, planFilter)
 				if err != nil {
 					return nil, err
@@ -230,6 +419,11 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 	for i, e := range entitlements {
 		response.Items[i] = &dto.EntitlementResponse{Entitlement: e}
 
+		// TODO: !REMOVE after migration
+		if e.EntityType == types.ENTITLEMENT_ENTITY_TYPE_PLAN {
+			response.Items[i].PlanID = e.EntityID
+		}
+
 		// Add expanded feature if requested and available
 		if !filter.GetExpand().IsEmpty() && filter.GetExpand().Has(types.ExpandFeatures) {
 			if f, ok := featuresByID[e.FeatureID]; ok {
@@ -244,10 +438,14 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 		}
 
 		// Add expanded plan if requested and available
-		if !filter.GetExpand().IsEmpty() && filter.GetExpand().Has(types.ExpandPlans) {
-			if p, ok := plansByID[e.PlanID]; ok {
+		if !filter.GetExpand().IsEmpty() && filter.GetExpand().Has(types.ExpandPlans) && e.EntityType == types.ENTITLEMENT_ENTITY_TYPE_PLAN {
+
+			if p, ok := plansByID[e.EntityID]; ok {
 				response.Items[i].Plan = &dto.PlanResponse{Plan: p}
+				// TODO: !REMOVE after migration
+				response.Items[i].PlanID = e.EntityID
 			}
+
 		}
 	}
 
@@ -301,6 +499,11 @@ func (s *entitlementService) UpdateEntitlement(ctx context.Context, id string, r
 
 	response := &dto.EntitlementResponse{Entitlement: result}
 
+	// TODO: !REMOVE after migration
+	if result.EntityType == types.ENTITLEMENT_ENTITY_TYPE_PLAN {
+		response.PlanID = result.EntityID
+	}
+
 	// Publish webhook event
 	s.publishWebhookEvent(ctx, types.WebhookEventEntitlementUpdated, result.ID)
 
@@ -323,7 +526,8 @@ func (s *entitlementService) DeleteEntitlement(ctx context.Context, id string) e
 func (s *entitlementService) GetPlanEntitlements(ctx context.Context, planID string) (*dto.ListEntitlementsResponse, error) {
 	// Create a filter for the plan's entitlements
 	filter := types.NewNoLimitEntitlementFilter()
-	filter.WithPlanIDs([]string{planID})
+	filter.WithEntityIDs([]string{planID})
+	filter.WithEntityType(types.ENTITLEMENT_ENTITY_TYPE_PLAN)
 	filter.WithStatus(types.StatusPublished)
 	filter.WithExpand(fmt.Sprintf("%s,%s", types.ExpandFeatures, types.ExpandMeters))
 
@@ -332,12 +536,25 @@ func (s *entitlementService) GetPlanEntitlements(ctx context.Context, planID str
 }
 
 func (s *entitlementService) GetPlanFeatureEntitlements(ctx context.Context, planID, featureID string) (*dto.ListEntitlementsResponse, error) {
-	// Create a filter for the feature's entitlements
+	// Create a filter for the plan's entitlements for a specific feature
 	filter := types.NewNoLimitEntitlementFilter()
-	filter.WithPlanIDs([]string{planID})
+	filter.WithEntityIDs([]string{planID})
+	filter.WithEntityType(types.ENTITLEMENT_ENTITY_TYPE_PLAN)
 	filter.WithFeatureID(featureID)
 	filter.WithStatus(types.StatusPublished)
-	filter.WithExpand(string(types.ExpandMeters))
+	filter.WithExpand(string(types.ExpandFeatures))
+
+	// Use the standard list function to get the entitlements with expansion
+	return s.ListEntitlements(ctx, filter)
+}
+
+func (s *entitlementService) GetAddonEntitlements(ctx context.Context, addonID string) (*dto.ListEntitlementsResponse, error) {
+	// Create a filter for the addon's entitlements
+	filter := types.NewNoLimitEntitlementFilter()
+	filter.WithEntityIDs([]string{addonID})
+	filter.WithEntityType(types.ENTITLEMENT_ENTITY_TYPE_ADDON)
+	filter.WithStatus(types.StatusPublished)
+	filter.WithExpand(string(types.ExpandFeatures))
 
 	// Use the standard list function to get the entitlements with expansion
 	return s.ListEntitlements(ctx, filter)

@@ -22,5 +22,6 @@ type Repository interface {
 
 	// Specific filter operations
 	ListByPlanIDs(ctx context.Context, planIDs []string) ([]*Entitlement, error)
+	ListByAddonIDs(ctx context.Context, addonIDs []string) ([]*Entitlement, error)
 	ListByFeatureIDs(ctx context.Context, featureIDs []string) ([]*Entitlement, error)
 }

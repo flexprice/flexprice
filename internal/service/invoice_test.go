@@ -88,6 +88,9 @@ func (s *InvoiceServiceSuite) setupService() {
 		WalletRepo:                 s.GetStores().WalletRepo,
 		PaymentRepo:                s.GetStores().PaymentRepo,
 		CreditNoteRepo:             s.GetStores().CreditNoteRepo,
+		CouponRepo:                 s.GetStores().CouponRepo,
+		CouponAssociationRepo:      s.GetStores().CouponAssociationRepo,
+		CouponApplicationRepo:      s.GetStores().CouponApplicationRepo,
 		EventPublisher:             s.GetPublisher(),
 		WebhookPublisher:           s.GetWebhookPublisher(),
 		CreditGrantRepo:            s.GetStores().CreditGrantRepo,
@@ -183,7 +186,8 @@ func (s *InvoiceServiceSuite) setupTestData() {
 		ID:                 "price_api_calls",
 		Amount:             decimal.Zero,
 		Currency:           "usd",
-		PlanID:             s.testData.plan.ID,
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
 		Type:               types.PRICE_TYPE_USAGE,
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
@@ -205,7 +209,8 @@ func (s *InvoiceServiceSuite) setupTestData() {
 		ID:                 "price_storage",
 		Amount:             decimal.NewFromFloat(0.1),
 		Currency:           "usd",
-		PlanID:             s.testData.plan.ID,
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
 		Type:               types.PRICE_TYPE_USAGE,
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
@@ -238,7 +243,8 @@ func (s *InvoiceServiceSuite) setupTestData() {
 			ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
 			SubscriptionID:   s.testData.subscription.ID,
 			CustomerID:       s.testData.subscription.CustomerID,
-			PlanID:           s.testData.plan.ID,
+			EntityID:         s.testData.plan.ID,
+			EntityType:       types.SubscriptionLineItemEntitiyTypePlan,
 			PlanDisplayName:  s.testData.plan.Name,
 			PriceID:          s.testData.prices.storage.ID,
 			PriceType:        s.testData.prices.storage.Type,
@@ -254,7 +260,8 @@ func (s *InvoiceServiceSuite) setupTestData() {
 			ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
 			SubscriptionID:   s.testData.subscription.ID,
 			CustomerID:       s.testData.subscription.CustomerID,
-			PlanID:           s.testData.plan.ID,
+			EntityID:         s.testData.plan.ID,
+			EntityType:       types.SubscriptionLineItemEntitiyTypePlan,
 			PlanDisplayName:  s.testData.plan.Name,
 			PriceID:          s.testData.prices.apiCalls.ID,
 			PriceType:        s.testData.prices.apiCalls.Type,
@@ -318,6 +325,7 @@ func (s *InvoiceServiceSuite) TestCreateSubscriptionInvoice() {
 		expectedError   string
 		expectedAmount  decimal.Decimal
 		expectedCharges int
+		expectNil       bool
 	}{
 		{
 			name: "period_start reference point",
@@ -327,6 +335,7 @@ func (s *InvoiceServiceSuite) TestCreateSubscriptionInvoice() {
 			referencePoint:  types.ReferencePointPeriodStart,
 			expectedAmount:  decimal.Zero, // The invoice has no remaining amount to pay after processing
 			expectedCharges: 0,            // No line items due to the way the test is set up
+			expectNil:       true,         // Zero-amount invoices should not be created
 		},
 		{
 			name: "period_end reference point - no charges to invoice",
@@ -393,6 +402,7 @@ func (s *InvoiceServiceSuite) TestCreateSubscriptionInvoice() {
 			expectedAmount:  decimal.Zero,
 			expectedCharges: 0,
 			wantErr:         false,
+			expectNil:       true, // Zero-amount invoices should not be created
 		},
 	}
 
@@ -423,6 +433,10 @@ func (s *InvoiceServiceSuite) TestCreateSubscriptionInvoice() {
 			}
 
 			s.NoError(err)
+			if tt.expectNil {
+				s.Nil(got)
+				return
+			}
 			s.NotEmpty(got.ID)
 			s.Equal(s.testData.customer.ID, got.CustomerID)
 			if got.SubscriptionID != nil {

@@ -51,6 +51,37 @@ func (h *EntitlementHandler) CreateEntitlement(c *gin.Context) {
 	c.JSON(http.StatusCreated, resp)
 }
 
+// @Summary Create multiple entitlements in bulk
+// @Description Create multiple entitlements with the specified configurations
+// @Tags Entitlements
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param entitlements body dto.CreateBulkEntitlementRequest true "Bulk entitlement configuration"
+// @Success 201 {object} dto.CreateBulkEntitlementResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /entitlements/bulk [post]
+func (h *EntitlementHandler) CreateBulkEntitlement(c *gin.Context) {
+	var req dto.CreateBulkEntitlementRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.log.Error("Failed to bind JSON", "error", err)
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.service.CreateBulkEntitlement(c.Request.Context(), req)
+	if err != nil {
+		h.log.Error("Failed to create bulk entitlements", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, resp)
+}
+
 // @Summary Get an entitlement by ID
 // @Description Get an entitlement by ID
 // @Tags Entitlements

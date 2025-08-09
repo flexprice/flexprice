@@ -6,6 +6,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -50,12 +51,18 @@ func (InvoiceLineItem) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Immutable(),
-		field.String("plan_id").
+		field.String("entity_id").
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
 			}).
 			Optional().
 			Nillable().
+			Immutable(),
+		field.String("entity_type").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Default(string(types.InvoiceLineItemEntityTypePlan)).
 			Immutable(),
 		field.String("plan_display_name").
 			Optional().

@@ -10,7 +10,6 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/entitlement"
-	"github.com/flexprice/flexprice/ent/plan"
 )
 
 // Entitlement is the model entity for the Entitlement schema.
@@ -32,8 +31,10 @@ type Entitlement struct {
 	UpdatedBy string `json:"updated_by,omitempty"`
 	// EnvironmentID holds the value of the "environment_id" field.
 	EnvironmentID string `json:"environment_id,omitempty"`
-	// PlanID holds the value of the "plan_id" field.
-	PlanID string `json:"plan_id,omitempty"`
+	// EntityType holds the value of the "entity_type" field.
+	EntityType string `json:"entity_type,omitempty"`
+	// EntityID holds the value of the "entity_id" field.
+	EntityID string `json:"entity_id,omitempty"`
 	// FeatureID holds the value of the "feature_id" field.
 	FeatureID string `json:"feature_id,omitempty"`
 	// FeatureType holds the value of the "feature_type" field.
@@ -47,31 +48,9 @@ type Entitlement struct {
 	// IsSoftLimit holds the value of the "is_soft_limit" field.
 	IsSoftLimit bool `json:"is_soft_limit,omitempty"`
 	// StaticValue holds the value of the "static_value" field.
-	StaticValue string `json:"static_value,omitempty"`
-	// Edges holds the relations/edges for other nodes in the graph.
-	// The values are being populated by the EntitlementQuery when eager-loading is set.
-	Edges        EntitlementEdges `json:"edges"`
-	selectValues sql.SelectValues
-}
-
-// EntitlementEdges holds the relations/edges for other nodes in the graph.
-type EntitlementEdges struct {
-	// Plan holds the value of the plan edge.
-	Plan *Plan `json:"plan,omitempty"`
-	// loadedTypes holds the information for reporting if a
-	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [1]bool
-}
-
-// PlanOrErr returns the Plan value or an error if the edge
-// was not loaded in eager-loading, or loaded but was not found.
-func (e EntitlementEdges) PlanOrErr() (*Plan, error) {
-	if e.Plan != nil {
-		return e.Plan, nil
-	} else if e.loadedTypes[0] {
-		return nil, &NotFoundError{label: plan.Label}
-	}
-	return nil, &NotLoadedError{edge: "plan"}
+	StaticValue        string `json:"static_value,omitempty"`
+	addon_entitlements *string
+	selectValues       sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -83,10 +62,12 @@ func (*Entitlement) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case entitlement.FieldUsageLimit:
 			values[i] = new(sql.NullInt64)
-		case entitlement.FieldID, entitlement.FieldTenantID, entitlement.FieldStatus, entitlement.FieldCreatedBy, entitlement.FieldUpdatedBy, entitlement.FieldEnvironmentID, entitlement.FieldPlanID, entitlement.FieldFeatureID, entitlement.FieldFeatureType, entitlement.FieldUsageResetPeriod, entitlement.FieldStaticValue:
+		case entitlement.FieldID, entitlement.FieldTenantID, entitlement.FieldStatus, entitlement.FieldCreatedBy, entitlement.FieldUpdatedBy, entitlement.FieldEnvironmentID, entitlement.FieldEntityType, entitlement.FieldEntityID, entitlement.FieldFeatureID, entitlement.FieldFeatureType, entitlement.FieldUsageResetPeriod, entitlement.FieldStaticValue:
 			values[i] = new(sql.NullString)
 		case entitlement.FieldCreatedAt, entitlement.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
+		case entitlement.ForeignKeys[0]: // addon_entitlements
+			values[i] = new(sql.NullString)
 		default:
 			values[i] = new(sql.UnknownType)
 		}
@@ -150,11 +131,17 @@ func (e *Entitlement) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				e.EnvironmentID = value.String
 			}
-		case entitlement.FieldPlanID:
+		case entitlement.FieldEntityType:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field plan_id", values[i])
+				return fmt.Errorf("unexpected type %T for field entity_type", values[i])
 			} else if value.Valid {
-				e.PlanID = value.String
+				e.EntityType = value.String
+			}
+		case entitlement.FieldEntityID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field entity_id", values[i])
+			} else if value.Valid {
+				e.EntityID = value.String
 			}
 		case entitlement.FieldFeatureID:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -199,6 +186,13 @@ func (e *Entitlement) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				e.StaticValue = value.String
 			}
+		case entitlement.ForeignKeys[0]:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field addon_entitlements", values[i])
+			} else if value.Valid {
+				e.addon_entitlements = new(string)
+				*e.addon_entitlements = value.String
+			}
 		default:
 			e.selectValues.Set(columns[i], values[i])
 		}
@@ -210,11 +204,6 @@ func (e *Entitlement) assignValues(columns []string, values []any) error {
 // This includes values selected through modifiers, order, etc.
 func (e *Entitlement) Value(name string) (ent.Value, error) {
 	return e.selectValues.Get(name)
-}
-
-// QueryPlan queries the "plan" edge of the Entitlement entity.
-func (e *Entitlement) QueryPlan() *PlanQuery {
-	return NewEntitlementClient(e.config).QueryPlan(e)
 }
 
 // Update returns a builder for updating this Entitlement.
@@ -261,8 +250,11 @@ func (e *Entitlement) String() string {
 	builder.WriteString("environment_id=")
 	builder.WriteString(e.EnvironmentID)
 	builder.WriteString(", ")
-	builder.WriteString("plan_id=")
-	builder.WriteString(e.PlanID)
+	builder.WriteString("entity_type=")
+	builder.WriteString(e.EntityType)
+	builder.WriteString(", ")
+	builder.WriteString("entity_id=")
+	builder.WriteString(e.EntityID)
 	builder.WriteString(", ")
 	builder.WriteString("feature_id=")
 	builder.WriteString(e.FeatureID)

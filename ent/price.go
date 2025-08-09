@@ -52,8 +52,6 @@ type Price struct {
 	DisplayPriceUnitAmount string `json:"display_price_unit_amount,omitempty"`
 	// ConversionRate holds the value of the "conversion_rate" field.
 	ConversionRate float64 `json:"conversion_rate,omitempty"`
-	// PlanID holds the value of the "plan_id" field.
-	PlanID string `json:"plan_id,omitempty"`
 	// Type holds the value of the "type" field.
 	Type string `json:"type,omitempty"`
 	// BillingPeriod holds the value of the "billing_period" field.
@@ -86,15 +84,16 @@ type Price struct {
 	Description string `json:"description,omitempty"`
 	// Metadata holds the value of the "metadata" field.
 	Metadata map[string]string `json:"metadata,omitempty"`
-	// Scope holds the value of the "scope" field.
-	Scope price.Scope `json:"scope,omitempty"`
+	// EntityType holds the value of the "entity_type" field.
+	EntityType *string `json:"entity_type,omitempty"`
+	// EntityID holds the value of the "entity_id" field.
+	EntityID *string `json:"entity_id,omitempty"`
 	// ParentPriceID holds the value of the "parent_price_id" field.
 	ParentPriceID *string `json:"parent_price_id,omitempty"`
-	// SubscriptionID holds the value of the "subscription_id" field.
-	SubscriptionID *string `json:"subscription_id,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the PriceQuery when eager-loading is set.
 	Edges        PriceEdges `json:"edges"`
+	addon_prices *string
 	selectValues sql.SelectValues
 }
 
@@ -140,10 +139,12 @@ func (*Price) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullFloat64)
 		case price.FieldBillingPeriodCount, price.FieldTrialPeriod:
 			values[i] = new(sql.NullInt64)
-		case price.FieldID, price.FieldTenantID, price.FieldStatus, price.FieldCreatedBy, price.FieldUpdatedBy, price.FieldEnvironmentID, price.FieldCurrency, price.FieldDisplayAmount, price.FieldPriceUnitType, price.FieldPriceUnitID, price.FieldPriceUnit, price.FieldDisplayPriceUnitAmount, price.FieldPlanID, price.FieldType, price.FieldBillingPeriod, price.FieldBillingModel, price.FieldBillingCadence, price.FieldInvoiceCadence, price.FieldMeterID, price.FieldTierMode, price.FieldLookupKey, price.FieldDescription, price.FieldScope, price.FieldParentPriceID, price.FieldSubscriptionID:
+		case price.FieldID, price.FieldTenantID, price.FieldStatus, price.FieldCreatedBy, price.FieldUpdatedBy, price.FieldEnvironmentID, price.FieldCurrency, price.FieldDisplayAmount, price.FieldPriceUnitType, price.FieldPriceUnitID, price.FieldPriceUnit, price.FieldDisplayPriceUnitAmount, price.FieldType, price.FieldBillingPeriod, price.FieldBillingModel, price.FieldBillingCadence, price.FieldInvoiceCadence, price.FieldMeterID, price.FieldTierMode, price.FieldLookupKey, price.FieldDescription, price.FieldEntityType, price.FieldEntityID, price.FieldParentPriceID:
 			values[i] = new(sql.NullString)
 		case price.FieldCreatedAt, price.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
+		case price.ForeignKeys[0]: // addon_prices
+			values[i] = new(sql.NullString)
 		default:
 			values[i] = new(sql.UnknownType)
 		}
@@ -261,12 +262,6 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				pr.ConversionRate = value.Float64
 			}
-		case price.FieldPlanID:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field plan_id", values[i])
-			} else if value.Valid {
-				pr.PlanID = value.String
-			}
 		case price.FieldType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field type", values[i])
@@ -375,11 +370,19 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
-		case price.FieldScope:
+		case price.FieldEntityType:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field scope", values[i])
+				return fmt.Errorf("unexpected type %T for field entity_type", values[i])
 			} else if value.Valid {
-				pr.Scope = price.Scope(value.String)
+				pr.EntityType = new(string)
+				*pr.EntityType = value.String
+			}
+		case price.FieldEntityID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field entity_id", values[i])
+			} else if value.Valid {
+				pr.EntityID = new(string)
+				*pr.EntityID = value.String
 			}
 		case price.FieldParentPriceID:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -388,12 +391,12 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 				pr.ParentPriceID = new(string)
 				*pr.ParentPriceID = value.String
 			}
-		case price.FieldSubscriptionID:
+		case price.ForeignKeys[0]:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field subscription_id", values[i])
+				return fmt.Errorf("unexpected type %T for field addon_prices", values[i])
 			} else if value.Valid {
-				pr.SubscriptionID = new(string)
-				*pr.SubscriptionID = value.String
+				pr.addon_prices = new(string)
+				*pr.addon_prices = value.String
 			}
 		default:
 			pr.selectValues.Set(columns[i], values[i])
@@ -489,9 +492,6 @@ func (pr *Price) String() string {
 	builder.WriteString("conversion_rate=")
 	builder.WriteString(fmt.Sprintf("%v", pr.ConversionRate))
 	builder.WriteString(", ")
-	builder.WriteString("plan_id=")
-	builder.WriteString(pr.PlanID)
-	builder.WriteString(", ")
 	builder.WriteString("type=")
 	builder.WriteString(pr.Type)
 	builder.WriteString(", ")
@@ -544,16 +544,18 @@ func (pr *Price) String() string {
 	builder.WriteString("metadata=")
 	builder.WriteString(fmt.Sprintf("%v", pr.Metadata))
 	builder.WriteString(", ")
-	builder.WriteString("scope=")
-	builder.WriteString(fmt.Sprintf("%v", pr.Scope))
-	builder.WriteString(", ")
-	if v := pr.ParentPriceID; v != nil {
-		builder.WriteString("parent_price_id=")
+	if v := pr.EntityType; v != nil {
+		builder.WriteString("entity_type=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := pr.SubscriptionID; v != nil {
-		builder.WriteString("subscription_id=")
+	if v := pr.EntityID; v != nil {
+		builder.WriteString("entity_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := pr.ParentPriceID; v != nil {
+		builder.WriteString("parent_price_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteByte(')')

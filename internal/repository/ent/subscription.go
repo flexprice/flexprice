@@ -635,7 +635,8 @@ func (r *subscriptionRepository) CreateWithLineItems(ctx context.Context, sub *d
 				SetID(item.ID).
 				SetSubscriptionID(item.SubscriptionID).
 				SetCustomerID(item.CustomerID).
-				SetNillablePlanID(types.ToNillableString(item.PlanID)).
+				SetNillableEntityID(types.ToNillableString(item.EntityID)).
+				SetNillableEntityType(types.ToNillableString(string(item.EntityType))).
 				SetNillablePlanDisplayName(types.ToNillableString(item.PlanDisplayName)).
 				SetPriceID(item.PriceID).
 				SetNillablePriceType(types.ToNillableString(string(item.PriceType))).
@@ -693,7 +694,9 @@ func (r *subscriptionRepository) GetWithLineItems(ctx context.Context, id string
 			subscription.Status(string(types.StatusPublished)),
 		).
 		WithLineItems(func(q *ent.SubscriptionLineItemQuery) {
-			q.Where(subscriptionlineitem.Status(string(types.StatusPublished)))
+			q.Where(
+				subscriptionlineitem.Status(string(types.StatusPublished)),
+			)
 		}).
 		Only(ctx)
 

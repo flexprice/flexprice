@@ -8,6 +8,15 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// SubscriptionLineItemEntitiyType is the type of the source of a subscription line item
+// It is optional and can be used to differentiate between plan and addon line items
+type SubscriptionLineItemEntitiyType string
+
+const (
+	SubscriptionLineItemEntitiyTypePlan  SubscriptionLineItemEntitiyType = "plan"
+	SubscriptionLineItemEntitiyTypeAddon SubscriptionLineItemEntitiyType = "addon"
+)
+
 // SubscriptionStatus is the status of a subscription
 // For now taking inspiration from Stripe's subscription statuses
 // https://stripe.com/docs/api/subscriptions/object#subscription_object-status

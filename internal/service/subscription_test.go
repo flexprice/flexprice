@@ -85,6 +85,9 @@ func (s *SubscriptionServiceSuite) setupService() {
 		PaymentRepo:                s.GetStores().PaymentRepo,
 		CreditGrantRepo:            s.GetStores().CreditGrantRepo,
 		CreditGrantApplicationRepo: s.GetStores().CreditGrantApplicationRepo,
+		CouponRepo:                 s.GetStores().CouponRepo,
+		CouponAssociationRepo:      s.GetStores().CouponAssociationRepo,
+		CouponApplicationRepo:      s.GetStores().CouponApplicationRepo,
 		EventPublisher:             s.GetPublisher(),
 		WebhookPublisher:           s.GetWebhookPublisher(),
 	})
@@ -176,7 +179,8 @@ func (s *SubscriptionServiceSuite) setupTestData() {
 		ID:                 "price_api_calls",
 		Amount:             decimal.Zero,
 		Currency:           "usd",
-		PlanID:             s.testData.plan.ID,
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
 		Type:               types.PRICE_TYPE_USAGE,
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
@@ -198,7 +202,8 @@ func (s *SubscriptionServiceSuite) setupTestData() {
 		ID:                 "price_storage",
 		Amount:             decimal.NewFromFloat(0.1),
 		Currency:           "usd",
-		PlanID:             s.testData.plan.ID,
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
 		Type:               types.PRICE_TYPE_USAGE,
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
@@ -214,7 +219,8 @@ func (s *SubscriptionServiceSuite) setupTestData() {
 		ID:                 "price_storage_archive",
 		Amount:             decimal.NewFromFloat(0.03),
 		Currency:           "usd",
-		PlanID:             s.testData.plan.ID,
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
 		Type:               types.PRICE_TYPE_USAGE,
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
@@ -232,7 +238,8 @@ func (s *SubscriptionServiceSuite) setupTestData() {
 		ID:                 "price_api_calls_annual",
 		Amount:             decimal.Zero,
 		Currency:           "usd",
-		PlanID:             s.testData.plan.ID,
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
 		Type:               types.PRICE_TYPE_USAGE,
 		BillingPeriod:      types.BILLING_PERIOD_ANNUAL,
 		BillingPeriodCount: 1,
@@ -254,7 +261,8 @@ func (s *SubscriptionServiceSuite) setupTestData() {
 		ID:                 "price_storage_annual",
 		Amount:             decimal.NewFromFloat(0.9),
 		Currency:           "usd",
-		PlanID:             s.testData.plan.ID,
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
 		Type:               types.PRICE_TYPE_USAGE,
 		BillingPeriod:      types.BILLING_PERIOD_ANNUAL,
 		BillingPeriodCount: 1,
@@ -270,7 +278,8 @@ func (s *SubscriptionServiceSuite) setupTestData() {
 		ID:                 "price_storage_archive_annual",
 		Amount:             decimal.NewFromFloat(0.25),
 		Currency:           "usd",
-		PlanID:             s.testData.plan.ID,
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
 		Type:               types.PRICE_TYPE_USAGE,
 		BillingPeriod:      types.BILLING_PERIOD_ANNUAL,
 		BillingPeriodCount: 1,
@@ -303,7 +312,8 @@ func (s *SubscriptionServiceSuite) setupTestData() {
 			ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
 			SubscriptionID:   s.testData.subscription.ID,
 			CustomerID:       s.testData.subscription.CustomerID,
-			PlanID:           s.testData.plan.ID,
+			EntityID:         s.testData.plan.ID,
+			EntityType:       types.SubscriptionLineItemEntitiyTypePlan,
 			PlanDisplayName:  s.testData.plan.Name,
 			PriceID:          s.testData.prices.storage.ID,
 			PriceType:        s.testData.prices.storage.Type,
@@ -319,7 +329,8 @@ func (s *SubscriptionServiceSuite) setupTestData() {
 			ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
 			SubscriptionID:   s.testData.subscription.ID,
 			CustomerID:       s.testData.subscription.CustomerID,
-			PlanID:           s.testData.plan.ID,
+			EntityID:         s.testData.plan.ID,
+			EntityType:       types.SubscriptionLineItemEntitiyTypePlan,
 			PlanDisplayName:  s.testData.plan.Name,
 			PriceID:          s.testData.prices.storageArchive.ID,
 			PriceType:        s.testData.prices.storageArchive.Type,
@@ -335,7 +346,8 @@ func (s *SubscriptionServiceSuite) setupTestData() {
 			ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
 			SubscriptionID:   s.testData.subscription.ID,
 			CustomerID:       s.testData.subscription.CustomerID,
-			PlanID:           s.testData.plan.ID,
+			EntityID:         s.testData.plan.ID,
+			EntityType:       types.SubscriptionLineItemEntitiyTypePlan,
 			PlanDisplayName:  s.testData.plan.Name,
 			PriceID:          s.testData.prices.apiCalls.ID,
 			PriceType:        s.testData.prices.apiCalls.Type,
@@ -566,7 +578,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 			name: "both_customer_id_and_external_id_absent",
 			input: dto.CreateSubscriptionRequest{
 				PlanID:             s.testData.plan.ID,
-				StartDate:          s.testData.now,
+				StartDate:          lo.ToPtr(s.testData.now),
 				EndDate:            lo.ToPtr(s.testData.now.Add(30 * 24 * time.Hour)),
 				Currency:           "usd",
 				BillingCadence:     types.BILLING_CADENCE_RECURRING,
@@ -583,7 +595,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 			input: dto.CreateSubscriptionRequest{
 				CustomerID:         s.testData.customer.ID,
 				PlanID:             s.testData.plan.ID,
-				StartDate:          s.testData.now,
+				StartDate:          lo.ToPtr(s.testData.now),
 				EndDate:            lo.ToPtr(s.testData.now.Add(30 * 24 * time.Hour)),
 				Currency:           "usd",
 				BillingCadence:     types.BILLING_CADENCE_RECURRING,
@@ -598,7 +610,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 			input: dto.CreateSubscriptionRequest{
 				ExternalCustomerID: s.testData.customer.ExternalID,
 				PlanID:             s.testData.plan.ID,
-				StartDate:          s.testData.now,
+				StartDate:          lo.ToPtr(s.testData.now),
 				EndDate:            lo.ToPtr(s.testData.now.Add(30 * 24 * time.Hour)),
 				Currency:           "usd",
 				BillingCadence:     types.BILLING_CADENCE_RECURRING,
@@ -614,7 +626,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 				CustomerID:         s.testData.customer.ID,
 				ExternalCustomerID: "some_other_external_id",
 				PlanID:             s.testData.plan.ID,
-				StartDate:          s.testData.now,
+				StartDate:          lo.ToPtr(s.testData.now),
 				EndDate:            lo.ToPtr(s.testData.now.Add(30 * 24 * time.Hour)),
 				Currency:           "usd",
 				BillingCadence:     types.BILLING_CADENCE_RECURRING,
@@ -629,7 +641,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 			input: dto.CreateSubscriptionRequest{
 				ExternalCustomerID: "non_existent_external_id",
 				PlanID:             s.testData.plan.ID,
-				StartDate:          s.testData.now,
+				StartDate:          lo.ToPtr(s.testData.now),
 				EndDate:            lo.ToPtr(s.testData.now.Add(30 * 24 * time.Hour)),
 				Currency:           "usd",
 				BillingCadence:     types.BILLING_CADENCE_RECURRING,
@@ -646,7 +658,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 			input: dto.CreateSubscriptionRequest{
 				CustomerID:         "invalid_id",
 				PlanID:             s.testData.plan.ID,
-				StartDate:          s.testData.now,
+				StartDate:          lo.ToPtr(s.testData.now),
 				EndDate:            lo.ToPtr(s.testData.now.Add(30 * 24 * time.Hour)),
 				Currency:           "usd",
 				BillingCadence:     types.BILLING_CADENCE_RECURRING,
@@ -663,7 +675,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 			input: dto.CreateSubscriptionRequest{
 				CustomerID:         s.testData.customer.ID,
 				PlanID:             "invalid_id",
-				StartDate:          s.testData.now,
+				StartDate:          lo.ToPtr(s.testData.now),
 				EndDate:            lo.ToPtr(s.testData.now.Add(30 * 24 * time.Hour)),
 				Currency:           "usd",
 				BillingCadence:     types.BILLING_CADENCE_RECURRING,
@@ -680,7 +692,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 			input: dto.CreateSubscriptionRequest{
 				CustomerID:         s.testData.customer.ID,
 				PlanID:             s.testData.plan.ID,
-				StartDate:          s.testData.now,
+				StartDate:          lo.ToPtr(s.testData.now),
 				EndDate:            lo.ToPtr(s.testData.now.Add(-24 * time.Hour)),
 				Currency:           "usd",
 				BillingCadence:     types.BILLING_CADENCE_RECURRING,
@@ -993,10 +1005,15 @@ func (s *SubscriptionServiceSuite) TestProcessSubscriptionPeriod() {
 	}
 	s.NoError(s.GetStores().EventRepo.InsertEvent(s.GetContext(), storageEvent))
 
+	// Reset the subscription periods for the second test
+	sub.CurrentPeriodStart = periodStart
+	sub.CurrentPeriodEnd = periodEnd
+	s.NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), sub))
+
 	// Now process the period transition again
 	// This should succeed because we have proper line items with arrear invoice cadence
 	// and usage events for the period
-	err = subService.processSubscriptionPeriod(s.GetContext(), refreshedSub, now)
+	err = subService.processSubscriptionPeriod(s.GetContext(), sub, now)
 
 	// We still expect an error because the mock repository doesn't properly update the invoice status
 	// and the payment processing fails with "invoice has no remaining amount to pay"
@@ -1084,7 +1101,7 @@ func (s *SubscriptionServiceSuite) TestSubscriptionAnchor_CalendarAndAnniversary
 			input := dto.CreateSubscriptionRequest{
 				CustomerID:         s.testData.customer.ID,
 				PlanID:             s.testData.plan.ID,
-				StartDate:          tt.startDate,
+				StartDate:          lo.ToPtr(tt.startDate),
 				Currency:           "usd",
 				BillingCadence:     types.BILLING_CADENCE_RECURRING,
 				BillingPeriod:      tt.billingPeriod,
@@ -1125,7 +1142,8 @@ func (s *SubscriptionServiceSuite) TestGetUsageBySubscriptionWithCommitment() {
 			ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
 			SubscriptionID:   commitmentSub.ID,
 			CustomerID:       commitmentSub.CustomerID,
-			PlanID:           s.testData.plan.ID,
+			EntityID:         s.testData.plan.ID,
+			EntityType:       types.SubscriptionLineItemEntitiyTypePlan,
 			PlanDisplayName:  s.testData.plan.Name,
 			PriceID:          s.testData.prices.apiCalls.ID,
 			PriceType:        s.testData.prices.apiCalls.Type,
@@ -1275,7 +1293,7 @@ func (s *SubscriptionServiceSuite) TestSubscriptionWithEndDate() {
 			input := dto.CreateSubscriptionRequest{
 				CustomerID:         s.testData.customer.ID,
 				PlanID:             s.testData.plan.ID,
-				StartDate:          tt.startDate,
+				StartDate:          lo.ToPtr(tt.startDate),
 				EndDate:            tt.endDate,
 				Currency:           "usd",
 				BillingCadence:     types.BILLING_CADENCE_RECURRING,
@@ -1349,7 +1367,8 @@ func (s *SubscriptionServiceSuite) TestFilterLineItemsWithEndDate() {
 			ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
 			SubscriptionID: sub.ID,
 			CustomerID:     sub.CustomerID,
-			PlanID:         s.testData.plan.ID,
+			EntityID:       s.testData.plan.ID,
+			EntityType:     types.SubscriptionLineItemEntitiyTypePlan,
 			PriceID:        s.testData.prices.storage.ID,
 			PriceType:      s.testData.prices.storage.Type,
 			MeterID:        s.testData.meters.storage.ID,

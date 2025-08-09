@@ -85,7 +85,7 @@ func (s *planService) CreatePlan(ctx context.Context, req dto.CreatePlanRequest)
 				// If price unit config is provided, use price unit handling logic
 				if planPriceReq.PriceUnitConfig != nil {
 					// Create a price service instance for price unit handling
-					priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.PriceUnitRepo, s.Logger)
+					priceService := NewPriceService(s.ServiceParams)
 					priceResp, err := priceService.CreatePrice(ctx, *planPriceReq.CreatePriceRequest)
 					if err != nil {
 						return ierr.WithError(err).
@@ -103,7 +103,8 @@ func (s *planService) CreatePlan(ctx context.Context, req dto.CreatePlanRequest)
 					}
 				}
 
-				price.PlanID = plan.ID
+				price.EntityType = types.PRICE_ENTITY_TYPE_PLAN
+				price.EntityID = plan.ID
 				prices[i] = price
 			}
 
@@ -183,7 +184,7 @@ func (s *planService) GetPlan(ctx context.Context, id string) (*dto.PlanResponse
 		return nil, err
 	}
 
-	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.PriceUnitRepo, s.Logger)
+	priceService := NewPriceService(s.ServiceParams)
 	entitlementService := NewEntitlementService(s.ServiceParams)
 
 	pricesResponse, err := priceService.GetPricesByPlanID(ctx, plan.ID)
@@ -266,16 +267,16 @@ func (s *planService) GetPlans(ctx context.Context, filter *types.PlanFilter) (*
 	entitlementsByPlanID := make(map[string][]*dto.EntitlementResponse)
 	creditGrantsByPlanID := make(map[string][]*dto.CreditGrantResponse)
 
-	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.PriceUnitRepo, s.Logger)
+	priceService := NewPriceService(s.ServiceParams)
 	entitlementService := NewEntitlementService(s.ServiceParams)
 
 	// If prices or entitlements expansion is requested, fetch them in bulk
 	// Fetch prices if requested
 	if filter.GetExpand().Has(types.ExpandPrices) {
 		priceFilter := types.NewNoLimitPriceFilter().
-			WithPlanIDs(planIDs).
+			WithEntityIDs(planIDs).
 			WithStatus(types.StatusPublished).
-			WithScope(types.PRICE_SCOPE_PLAN)
+			WithEntityType(types.PRICE_ENTITY_TYPE_PLAN)
 
 		// If meters should be expanded, propagate the expansion to prices
 		if filter.GetExpand().Has(types.ExpandMeters) {
@@ -288,14 +289,18 @@ func (s *planService) GetPlans(ctx context.Context, filter *types.PlanFilter) (*
 		}
 
 		for _, p := range prices.Items {
-			pricesByPlanID[p.PlanID] = append(pricesByPlanID[p.PlanID], p)
+			// TODO: !REMOVE after migration
+			if p.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
+				p.PlanID = p.EntityID
+			}
+			pricesByPlanID[p.EntityID] = append(pricesByPlanID[p.EntityID], p)
 		}
 	}
 
 	// Fetch entitlements if requested
 	if filter.GetExpand().Has(types.ExpandEntitlements) {
 		entFilter := types.NewNoLimitEntitlementFilter().
-			WithPlanIDs(planIDs).
+			WithEntityIDs(planIDs).
 			WithStatus(types.StatusPublished)
 
 		// If features should be expanded, propagate the expansion to entitlements
@@ -309,7 +314,7 @@ func (s *planService) GetPlans(ctx context.Context, filter *types.PlanFilter) (*
 		}
 
 		for _, e := range entitlements.Items {
-			entitlementsByPlanID[e.PlanID] = append(entitlementsByPlanID[e.PlanID], e)
+			entitlementsByPlanID[e.Entitlement.EntityID] = append(entitlementsByPlanID[e.Entitlement.EntityID], e)
 		}
 	}
 
@@ -431,9 +436,10 @@ func (s *planService) UpdatePlan(ctx context.Context, id string, req dto.UpdateP
 					// If price unit config is provided, handle it through the price service
 					if reqPrice.PriceUnitConfig != nil {
 						// Set plan ID before creating price
-						reqPrice.CreatePriceRequest.PlanID = plan.ID
+						reqPrice.CreatePriceRequest.EntityID = plan.ID
+						reqPrice.CreatePriceRequest.EntityType = types.PRICE_ENTITY_TYPE_PLAN
 
-						priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.PriceUnitRepo, s.Logger)
+						priceService := NewPriceService(s.ServiceParams)
 						priceResp, err := priceService.CreatePrice(ctx, *reqPrice.CreatePriceRequest)
 						if err != nil {
 							return ierr.WithError(err).
@@ -455,7 +461,8 @@ func (s *planService) UpdatePlan(ctx context.Context, id string, req dto.UpdateP
 								WithHint("Failed to create price").
 								Mark(ierr.ErrValidation)
 						}
-						newPrice.PlanID = plan.ID
+						newPrice.EntityType = types.PRICE_ENTITY_TYPE_PLAN
+						newPrice.EntityID = plan.ID
 						// Add to both slices since this needs bulk creation
 						newPrices = append(newPrices, newPrice)
 						bulkCreatePrices = append(bulkCreatePrices, newPrice)
@@ -672,8 +679,8 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*SyncPlanP
 	// Get all plan-scoped prices for the plan (don't affect subscription overrides)
 	priceFilter := types.NewNoLimitPriceFilter()
 	priceFilter = priceFilter.WithStatus(types.StatusPublished)
-	priceFilter = priceFilter.WithPlanIDs([]string{id})
-	priceFilter = priceFilter.WithScope(types.PRICE_SCOPE_PLAN)
+	priceFilter = priceFilter.WithEntityIDs([]string{id})
+	priceFilter = priceFilter.WithEntityType(types.PRICE_ENTITY_TYPE_PLAN)
 
 	prices, err := s.PriceRepo.List(ctx, priceFilter)
 	if err != nil {
@@ -686,7 +693,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*SyncPlanP
 	planPrices := make([]*price.Price, 0)
 	meterMap := make(map[string]*meter.Meter)
 	for _, price := range prices {
-		if price.PlanID == id && price.TenantID == tenantID && price.EnvironmentID == environmentID {
+		if price.EntityID == id && price.TenantID == tenantID && price.EnvironmentID == environmentID {
 			planPrices = append(planPrices, price)
 			if price.MeterID != "" {
 				meterMap[price.MeterID] = nil
@@ -771,7 +778,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*SyncPlanP
 		// Create maps for fast lookups
 		existingPriceIDs := make(map[string]*subscription.SubscriptionLineItem)
 		for _, item := range lineItems {
-			if item.PlanID == id && item.Status == types.StatusPublished {
+			if item.EntityID == id && item.Status == types.StatusPublished {
 				existingPriceIDs[item.PriceID] = item
 			}
 		}
@@ -799,7 +806,8 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*SyncPlanP
 				ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
 				SubscriptionID:  sub.ID,
 				CustomerID:      sub.CustomerID,
-				PlanID:          id,
+				EntityID:        id,
+				EntityType:      types.SubscriptionLineItemEntitiyTypePlan,
 				PlanDisplayName: p.Name,
 				PriceID:         pr.ID,
 				PriceType:       pr.Type,

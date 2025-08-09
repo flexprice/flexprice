@@ -38,8 +38,10 @@ type SubscriptionLineItem struct {
 	SubscriptionID string `json:"subscription_id,omitempty"`
 	// CustomerID holds the value of the "customer_id" field.
 	CustomerID string `json:"customer_id,omitempty"`
-	// PlanID holds the value of the "plan_id" field.
-	PlanID *string `json:"plan_id,omitempty"`
+	// EntityID holds the value of the "entity_id" field.
+	EntityID *string `json:"entity_id,omitempty"`
+	// EntityType holds the value of the "entity_type" field.
+	EntityType *string `json:"entity_type,omitempty"`
 	// PlanDisplayName holds the value of the "plan_display_name" field.
 	PlanDisplayName *string `json:"plan_display_name,omitempty"`
 	// PriceID holds the value of the "price_id" field.
@@ -120,7 +122,7 @@ func (*SubscriptionLineItem) scanValues(columns []string) ([]any, error) {
 			values[i] = new(decimal.Decimal)
 		case subscriptionlineitem.FieldTrialPeriod:
 			values[i] = new(sql.NullInt64)
-		case subscriptionlineitem.FieldID, subscriptionlineitem.FieldTenantID, subscriptionlineitem.FieldStatus, subscriptionlineitem.FieldCreatedBy, subscriptionlineitem.FieldUpdatedBy, subscriptionlineitem.FieldEnvironmentID, subscriptionlineitem.FieldSubscriptionID, subscriptionlineitem.FieldCustomerID, subscriptionlineitem.FieldPlanID, subscriptionlineitem.FieldPlanDisplayName, subscriptionlineitem.FieldPriceID, subscriptionlineitem.FieldPriceType, subscriptionlineitem.FieldMeterID, subscriptionlineitem.FieldMeterDisplayName, subscriptionlineitem.FieldPriceUnitID, subscriptionlineitem.FieldPriceUnit, subscriptionlineitem.FieldDisplayName, subscriptionlineitem.FieldCurrency, subscriptionlineitem.FieldBillingPeriod, subscriptionlineitem.FieldInvoiceCadence:
+		case subscriptionlineitem.FieldID, subscriptionlineitem.FieldTenantID, subscriptionlineitem.FieldStatus, subscriptionlineitem.FieldCreatedBy, subscriptionlineitem.FieldUpdatedBy, subscriptionlineitem.FieldEnvironmentID, subscriptionlineitem.FieldSubscriptionID, subscriptionlineitem.FieldCustomerID, subscriptionlineitem.FieldEntityID, subscriptionlineitem.FieldEntityType, subscriptionlineitem.FieldPlanDisplayName, subscriptionlineitem.FieldPriceID, subscriptionlineitem.FieldPriceType, subscriptionlineitem.FieldMeterID, subscriptionlineitem.FieldMeterDisplayName, subscriptionlineitem.FieldPriceUnitID, subscriptionlineitem.FieldPriceUnit, subscriptionlineitem.FieldDisplayName, subscriptionlineitem.FieldCurrency, subscriptionlineitem.FieldBillingPeriod, subscriptionlineitem.FieldInvoiceCadence:
 			values[i] = new(sql.NullString)
 		case subscriptionlineitem.FieldCreatedAt, subscriptionlineitem.FieldUpdatedAt, subscriptionlineitem.FieldStartDate, subscriptionlineitem.FieldEndDate:
 			values[i] = new(sql.NullTime)
@@ -199,12 +201,19 @@ func (sli *SubscriptionLineItem) assignValues(columns []string, values []any) er
 			} else if value.Valid {
 				sli.CustomerID = value.String
 			}
-		case subscriptionlineitem.FieldPlanID:
+		case subscriptionlineitem.FieldEntityID:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field plan_id", values[i])
+				return fmt.Errorf("unexpected type %T for field entity_id", values[i])
 			} else if value.Valid {
-				sli.PlanID = new(string)
-				*sli.PlanID = value.String
+				sli.EntityID = new(string)
+				*sli.EntityID = value.String
+			}
+		case subscriptionlineitem.FieldEntityType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field entity_type", values[i])
+			} else if value.Valid {
+				sli.EntityType = new(string)
+				*sli.EntityType = value.String
 			}
 		case subscriptionlineitem.FieldPlanDisplayName:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -386,8 +395,13 @@ func (sli *SubscriptionLineItem) String() string {
 	builder.WriteString("customer_id=")
 	builder.WriteString(sli.CustomerID)
 	builder.WriteString(", ")
-	if v := sli.PlanID; v != nil {
-		builder.WriteString("plan_id=")
+	if v := sli.EntityID; v != nil {
+		builder.WriteString("entity_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := sli.EntityType; v != nil {
+		builder.WriteString("entity_type=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")

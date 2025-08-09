@@ -59,7 +59,7 @@ func NewCostSheetService(params ServiceParams) CostSheetService {
 func (s *costsheetService) GetInputCostForMargin(ctx context.Context, req *dto.GetCostBreakdownRequest) (*dto.CostBreakdownResponse, error) {
 	// service instances
 	subscriptionService := NewSubscriptionService(s.ServiceParams)
-	priceService := NewPriceService(s.PriceRepo, s.MeterRepo, s.PriceUnitRepo, s.Logger)
+	priceService := NewPriceService(s.ServiceParams)
 	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config)
 
 	// Get subscription details first

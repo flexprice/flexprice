@@ -72,6 +72,7 @@ type UsageParams struct {
 	PropertyName       string                `json:"property_name" validate:"required"`
 	AggregationType    types.AggregationType `json:"aggregation_type" validate:"required"`
 	WindowSize         types.WindowSize      `json:"window_size"`
+	BucketSize         types.WindowSize      `json:"bucket_size,omitempty"` // For windowed MAX aggregation
 	StartTime          time.Time             `json:"start_time" validate:"required"`
 	EndTime            time.Time             `json:"end_time" validate:"required"`
 	Filters            map[string][]string   `json:"filters"`

@@ -38,15 +38,14 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 	r.log.Debugw("creating price",
 		"price_id", p.ID,
 		"tenant_id", p.TenantID,
-		"plan_id", p.PlanID,
 		"lookup_key", p.LookupKey,
 	)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "price", "create", map[string]interface{}{
-		"price_id":   p.ID,
-		"tenant_id":  p.TenantID,
-		"plan_id":    p.PlanID,
+		"price_id":  p.ID,
+		"tenant_id": p.TenantID,
+
 		"lookup_key": p.LookupKey,
 	})
 	defer FinishSpan(span)
@@ -64,7 +63,6 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 		SetCurrency(p.Currency).
 		SetDisplayAmount(p.DisplayAmount).
 		SetPriceUnitType(string(p.PriceUnitType)).
-		SetPlanID(p.PlanID).
 		SetType(string(p.Type)).
 		SetBillingPeriod(string(p.BillingPeriod)).
 		SetBillingPeriodCount(p.BillingPeriodCount).
@@ -87,8 +85,8 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 		SetUpdatedBy(p.UpdatedBy).
 		SetEnvironmentID(p.EnvironmentID).
 		SetNillableParentPriceID(lo.ToPtr(p.ParentPriceID)).
-		SetNillableSubscriptionID(lo.ToPtr(p.SubscriptionID)).
-		SetNillableScope(lo.ToPtr(price.Scope(string(p.Scope))))
+		SetEntityType(string(p.EntityType)).
+		SetEntityID(p.EntityID)
 
 	if p.PriceUnitID != "" {
 		priceBuilder.SetPriceUnitID(p.PriceUnitID)
@@ -397,7 +395,8 @@ func (r *priceRepository) CreateBulk(ctx context.Context, prices []*domainPrice.
 			SetAmount(p.Amount.InexactFloat64()).
 			SetCurrency(p.Currency).
 			SetDisplayAmount(p.DisplayAmount).
-			SetPlanID(p.PlanID).
+			SetEntityID(p.EntityID).
+			SetEntityType(string(p.EntityType)).
 			SetType(string(p.Type)).
 			SetBillingPeriod(string(p.BillingPeriod)).
 			SetBillingPeriodCount(p.BillingPeriodCount).
@@ -532,19 +531,19 @@ func (o PriceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.P
 		return query
 	}
 
-	// Apply plan IDs filter if specified
-	if len(f.PlanIDs) > 0 {
-		query = query.Where(price.PlanIDIn(f.PlanIDs...))
-	}
-
 	// Apply price IDs filter if specified
 	if len(f.PriceIDs) > 0 {
 		query = query.Where(price.IDIn(f.PriceIDs...))
 	}
 
-	// scope filter
-	if f.Scope != nil {
-		query = query.Where(price.ScopeEQ(price.Scope(string(*f.Scope))))
+	// entity type filter
+	if f.EntityType != nil {
+		query = query.Where(price.EntityType(string(*f.EntityType)))
+	}
+
+	// entity id filter
+	if f.EntityIDs != nil {
+		query = query.Where(price.EntityIDIn(f.EntityIDs...))
 	}
 
 	// Apply time range filters if specified

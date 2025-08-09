@@ -60,6 +60,7 @@ type GetUsageRequest struct {
 	StartTime          time.Time             `form:"start_time" json:"start_time" example:"2024-03-13T00:00:00Z"`
 	EndTime            time.Time             `form:"end_time" json:"end_time" example:"2024-03-20T00:00:00Z"`
 	WindowSize         types.WindowSize      `form:"window_size" json:"window_size"`
+	BucketSize         types.WindowSize      `form:"bucket_size" json:"bucket_size,omitempty" example:"HOUR"` // Optional, only used for MAX aggregation with windowing
 	Filters            map[string][]string   `form:"filters,omitempty" json:"filters,omitempty"`
 	PriceID            string                `form:"-" json:"-"` // this is just for internal use to store the price id
 	MeterID            string                `form:"-" json:"-"` // this is just for internal use to store the meter id
@@ -68,14 +69,15 @@ type GetUsageRequest struct {
 
 type GetUsageByMeterRequest struct {
 	MeterID            string              `form:"meter_id" json:"meter_id" binding:"required" example:"123"`
+	PriceID            string              `form:"-" json:"-"` // this is just for internal use to store the price id
 	Meter              *meter.Meter        `form:"-" json:"-"` // caller can set this in case already fetched from db to avoid extra db call
 	ExternalCustomerID string              `form:"external_customer_id" json:"external_customer_id" example:"user_5"`
 	CustomerID         string              `form:"customer_id" json:"customer_id" example:"customer456"`
 	StartTime          time.Time           `form:"start_time" json:"start_time" example:"2024-11-09T00:00:00Z"`
 	EndTime            time.Time           `form:"end_time" json:"end_time" example:"2024-12-09T00:00:00Z"`
 	WindowSize         types.WindowSize    `form:"window_size" json:"window_size"`
+	BucketSize         types.WindowSize    `form:"bucket_size" json:"bucket_size,omitempty" example:"HOUR"` // Optional, only used for MAX aggregation with windowing
 	Filters            map[string][]string `form:"filters,omitempty" json:"filters,omitempty"`
-	PriceID            string              `form:"-" json:"-"` // this is just for internal use to store the price id
 }
 
 type GetEventsRequest struct {
@@ -185,6 +187,7 @@ func (r *GetUsageRequest) ToUsageParams() *events.UsageParams {
 		StartTime:          r.StartTime,
 		EndTime:            r.EndTime,
 		WindowSize:         r.WindowSize,
+		BucketSize:         r.BucketSize,
 		Filters:            r.Filters,
 		Multiplier:         r.Multiplier,
 	}

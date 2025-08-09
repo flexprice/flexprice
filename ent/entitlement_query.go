@@ -12,7 +12,6 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/entitlement"
-	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/predicate"
 )
 
@@ -23,7 +22,7 @@ type EntitlementQuery struct {
 	order      []entitlement.OrderOption
 	inters     []Interceptor
 	predicates []predicate.Entitlement
-	withPlan   *PlanQuery
+	withFKs    bool
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -58,28 +57,6 @@ func (eq *EntitlementQuery) Unique(unique bool) *EntitlementQuery {
 func (eq *EntitlementQuery) Order(o ...entitlement.OrderOption) *EntitlementQuery {
 	eq.order = append(eq.order, o...)
 	return eq
-}
-
-// QueryPlan chains the current query on the "plan" edge.
-func (eq *EntitlementQuery) QueryPlan() *PlanQuery {
-	query := (&PlanClient{config: eq.config}).Query()
-	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := eq.prepareQuery(ctx); err != nil {
-			return nil, err
-		}
-		selector := eq.sqlQuery(ctx)
-		if err := selector.Err(); err != nil {
-			return nil, err
-		}
-		step := sqlgraph.NewStep(
-			sqlgraph.From(entitlement.Table, entitlement.FieldID, selector),
-			sqlgraph.To(plan.Table, plan.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, entitlement.PlanTable, entitlement.PlanColumn),
-		)
-		fromU = sqlgraph.SetNeighbors(eq.driver.Dialect(), step)
-		return fromU, nil
-	}
-	return query
 }
 
 // First returns the first Entitlement entity from the query.
@@ -274,22 +251,10 @@ func (eq *EntitlementQuery) Clone() *EntitlementQuery {
 		order:      append([]entitlement.OrderOption{}, eq.order...),
 		inters:     append([]Interceptor{}, eq.inters...),
 		predicates: append([]predicate.Entitlement{}, eq.predicates...),
-		withPlan:   eq.withPlan.Clone(),
 		// clone intermediate query.
 		sql:  eq.sql.Clone(),
 		path: eq.path,
 	}
-}
-
-// WithPlan tells the query-builder to eager-load the nodes that are connected to
-// the "plan" edge. The optional arguments are used to configure the query builder of the edge.
-func (eq *EntitlementQuery) WithPlan(opts ...func(*PlanQuery)) *EntitlementQuery {
-	query := (&PlanClient{config: eq.config}).Query()
-	for _, opt := range opts {
-		opt(query)
-	}
-	eq.withPlan = query
-	return eq
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -368,19 +333,19 @@ func (eq *EntitlementQuery) prepareQuery(ctx context.Context) error {
 
 func (eq *EntitlementQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Entitlement, error) {
 	var (
-		nodes       = []*Entitlement{}
-		_spec       = eq.querySpec()
-		loadedTypes = [1]bool{
-			eq.withPlan != nil,
-		}
+		nodes   = []*Entitlement{}
+		withFKs = eq.withFKs
+		_spec   = eq.querySpec()
 	)
+	if withFKs {
+		_spec.Node.Columns = append(_spec.Node.Columns, entitlement.ForeignKeys...)
+	}
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*Entitlement).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
 		node := &Entitlement{config: eq.config}
 		nodes = append(nodes, node)
-		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
@@ -392,43 +357,7 @@ func (eq *EntitlementQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
-	if query := eq.withPlan; query != nil {
-		if err := eq.loadPlan(ctx, query, nodes, nil,
-			func(n *Entitlement, e *Plan) { n.Edges.Plan = e }); err != nil {
-			return nil, err
-		}
-	}
 	return nodes, nil
-}
-
-func (eq *EntitlementQuery) loadPlan(ctx context.Context, query *PlanQuery, nodes []*Entitlement, init func(*Entitlement), assign func(*Entitlement, *Plan)) error {
-	ids := make([]string, 0, len(nodes))
-	nodeids := make(map[string][]*Entitlement)
-	for i := range nodes {
-		fk := nodes[i].PlanID
-		if _, ok := nodeids[fk]; !ok {
-			ids = append(ids, fk)
-		}
-		nodeids[fk] = append(nodeids[fk], nodes[i])
-	}
-	if len(ids) == 0 {
-		return nil
-	}
-	query.Where(plan.IDIn(ids...))
-	neighbors, err := query.All(ctx)
-	if err != nil {
-		return err
-	}
-	for _, n := range neighbors {
-		nodes, ok := nodeids[n.ID]
-		if !ok {
-			return fmt.Errorf(`unexpected foreign-key "plan_id" returned %v`, n.ID)
-		}
-		for i := range nodes {
-			assign(nodes[i], n)
-		}
-	}
-	return nil
 }
 
 func (eq *EntitlementQuery) sqlCount(ctx context.Context) (int, error) {
@@ -455,9 +384,6 @@ func (eq *EntitlementQuery) querySpec() *sqlgraph.QuerySpec {
 			if fields[i] != entitlement.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
-		}
-		if eq.withPlan != nil {
-			_spec.Node.AddColumnOnce(entitlement.FieldPlanID)
 		}
 	}
 	if ps := eq.predicates; len(ps) > 0 {

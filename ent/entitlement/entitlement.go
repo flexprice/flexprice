@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
-	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
 const (
@@ -28,8 +27,10 @@ const (
 	FieldUpdatedBy = "updated_by"
 	// FieldEnvironmentID holds the string denoting the environment_id field in the database.
 	FieldEnvironmentID = "environment_id"
-	// FieldPlanID holds the string denoting the plan_id field in the database.
-	FieldPlanID = "plan_id"
+	// FieldEntityType holds the string denoting the entity_type field in the database.
+	FieldEntityType = "entity_type"
+	// FieldEntityID holds the string denoting the entity_id field in the database.
+	FieldEntityID = "entity_id"
 	// FieldFeatureID holds the string denoting the feature_id field in the database.
 	FieldFeatureID = "feature_id"
 	// FieldFeatureType holds the string denoting the feature_type field in the database.
@@ -44,17 +45,8 @@ const (
 	FieldIsSoftLimit = "is_soft_limit"
 	// FieldStaticValue holds the string denoting the static_value field in the database.
 	FieldStaticValue = "static_value"
-	// EdgePlan holds the string denoting the plan edge name in mutations.
-	EdgePlan = "plan"
 	// Table holds the table name of the entitlement in the database.
 	Table = "entitlements"
-	// PlanTable is the table that holds the plan relation/edge.
-	PlanTable = "entitlements"
-	// PlanInverseTable is the table name for the Plan entity.
-	// It exists in this package in order to avoid circular dependency with the "plan" package.
-	PlanInverseTable = "plans"
-	// PlanColumn is the table column denoting the plan relation/edge.
-	PlanColumn = "plan_id"
 )
 
 // Columns holds all SQL columns for entitlement fields.
@@ -67,7 +59,8 @@ var Columns = []string{
 	FieldCreatedBy,
 	FieldUpdatedBy,
 	FieldEnvironmentID,
-	FieldPlanID,
+	FieldEntityType,
+	FieldEntityID,
 	FieldFeatureID,
 	FieldFeatureType,
 	FieldIsEnabled,
@@ -77,10 +70,21 @@ var Columns = []string{
 	FieldStaticValue,
 }
 
+// ForeignKeys holds the SQL foreign-keys that are owned by the "entitlements"
+// table and are not defined as standalone fields in the schema.
+var ForeignKeys = []string{
+	"addon_entitlements",
+}
+
 // ValidColumn reports if the column name is valid (part of the table columns).
 func ValidColumn(column string) bool {
 	for i := range Columns {
 		if column == Columns[i] {
+			return true
+		}
+	}
+	for i := range ForeignKeys {
+		if column == ForeignKeys[i] {
 			return true
 		}
 	}
@@ -100,8 +104,8 @@ var (
 	UpdateDefaultUpdatedAt func() time.Time
 	// DefaultEnvironmentID holds the default value on creation for the "environment_id" field.
 	DefaultEnvironmentID string
-	// PlanIDValidator is a validator for the "plan_id" field. It is called by the builders before save.
-	PlanIDValidator func(string) error
+	// DefaultEntityType holds the default value on creation for the "entity_type" field.
+	DefaultEntityType string
 	// FeatureIDValidator is a validator for the "feature_id" field. It is called by the builders before save.
 	FeatureIDValidator func(string) error
 	// FeatureTypeValidator is a validator for the "feature_type" field. It is called by the builders before save.
@@ -157,9 +161,14 @@ func ByEnvironmentID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEnvironmentID, opts...).ToFunc()
 }
 
-// ByPlanID orders the results by the plan_id field.
-func ByPlanID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldPlanID, opts...).ToFunc()
+// ByEntityType orders the results by the entity_type field.
+func ByEntityType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldEntityType, opts...).ToFunc()
+}
+
+// ByEntityID orders the results by the entity_id field.
+func ByEntityID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldEntityID, opts...).ToFunc()
 }
 
 // ByFeatureID orders the results by the feature_id field.
@@ -195,18 +204,4 @@ func ByIsSoftLimit(opts ...sql.OrderTermOption) OrderOption {
 // ByStaticValue orders the results by the static_value field.
 func ByStaticValue(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStaticValue, opts...).ToFunc()
-}
-
-// ByPlanField orders the results by plan field.
-func ByPlanField(field string, opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newPlanStep(), sql.OrderByField(field, opts...))
-	}
-}
-func newPlanStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(PlanInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2O, true, PlanTable, PlanColumn),
-	)
 }

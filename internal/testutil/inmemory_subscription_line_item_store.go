@@ -55,8 +55,11 @@ func lineItemFilterFn(ctx context.Context, item *subscription.SubscriptionLineIt
 	}
 
 	// Filter by plan IDs
-	if len(f.PlanIDs) > 0 && !lo.Contains(f.PlanIDs, item.PlanID) {
-		return false
+	if len(f.PlanIDs) > 0 {
+		// Check if the item's EntityID matches any of the plan IDs and EntityType is plan
+		if item.EntityType != types.SubscriptionLineItemEntitiyTypePlan || !lo.Contains(f.PlanIDs, item.EntityID) {
+			return false
+		}
 	}
 
 	// Filter by price IDs

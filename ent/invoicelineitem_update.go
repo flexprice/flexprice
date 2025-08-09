@@ -239,8 +239,11 @@ func (iliu *InvoiceLineItemUpdate) sqlSave(ctx context.Context) (n int, err erro
 	if iliu.mutation.SubscriptionIDCleared() {
 		_spec.ClearField(invoicelineitem.FieldSubscriptionID, field.TypeString)
 	}
-	if iliu.mutation.PlanIDCleared() {
-		_spec.ClearField(invoicelineitem.FieldPlanID, field.TypeString)
+	if iliu.mutation.EntityIDCleared() {
+		_spec.ClearField(invoicelineitem.FieldEntityID, field.TypeString)
+	}
+	if iliu.mutation.EntityTypeCleared() {
+		_spec.ClearField(invoicelineitem.FieldEntityType, field.TypeString)
 	}
 	if iliu.mutation.PlanDisplayNameCleared() {
 		_spec.ClearField(invoicelineitem.FieldPlanDisplayName, field.TypeString)
@@ -592,8 +595,11 @@ func (iliuo *InvoiceLineItemUpdateOne) sqlSave(ctx context.Context) (_node *Invo
 	if iliuo.mutation.SubscriptionIDCleared() {
 		_spec.ClearField(invoicelineitem.FieldSubscriptionID, field.TypeString)
 	}
-	if iliuo.mutation.PlanIDCleared() {
-		_spec.ClearField(invoicelineitem.FieldPlanID, field.TypeString)
+	if iliuo.mutation.EntityIDCleared() {
+		_spec.ClearField(invoicelineitem.FieldEntityID, field.TypeString)
+	}
+	if iliuo.mutation.EntityTypeCleared() {
+		_spec.ClearField(invoicelineitem.FieldEntityType, field.TypeString)
 	}
 	if iliuo.mutation.PlanDisplayNameCleared() {
 		_spec.ClearField(invoicelineitem.FieldPlanDisplayName, field.TypeString)

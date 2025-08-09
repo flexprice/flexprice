@@ -9,6 +9,30 @@ import (
 	"github.com/flexprice/flexprice/ent"
 )
 
+// The AddonFunc type is an adapter to allow the use of ordinary
+// function as Addon mutator.
+type AddonFunc func(context.Context, *ent.AddonMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AddonFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AddonMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AddonMutation", m)
+}
+
+// The AddonAssociationFunc type is an adapter to allow the use of ordinary
+// function as AddonAssociation mutator.
+type AddonAssociationFunc func(context.Context, *ent.AddonAssociationMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AddonAssociationFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AddonAssociationMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AddonAssociationMutation", m)
+}
+
 // The AuthFunc type is an adapter to allow the use of ordinary
 // function as Auth mutator.
 type AuthFunc func(context.Context, *ent.AuthMutation) (ent.Value, error)
