@@ -191,6 +191,7 @@ func main() {
 			service.NewCreditNoteService,
 			service.NewConnectionService,
 			service.NewStripeService,
+			service.NewPaddleService,
 			service.NewEntityIntegrationMappingService,
 			service.NewIntegrationService,
 		),
@@ -242,6 +243,7 @@ func provideHandlers(
 	costSheetService service.CostSheetService,
 	creditNoteService service.CreditNoteService,
 	stripeService *service.StripeService,
+	paddleService *service.PaddleService,
 	connectionService service.ConnectionService,
 	entityIntegrationMappingService service.EntityIntegrationMappingService,
 	integrationService service.IntegrationService,
@@ -277,7 +279,7 @@ func provideHandlers(
 		CronWallet:               cron.NewWalletCronHandler(logger, temporalService, walletService, tenantService),
 		CronSubscription:         cron.NewSubscriptionHandler(subscriptionService, temporalService, logger),
 		CronCreditGrant:          cron.NewCreditGrantCronHandler(creditGrantService, logger),
-		Webhook:                  v1.NewWebhookHandler(cfg, svixClient, logger, stripeService),
+		Webhook:                  v1.NewWebhookHandler(cfg, svixClient, logger, stripeService, paddleService),
 	}
 }
 

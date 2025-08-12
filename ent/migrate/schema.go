@@ -83,7 +83,7 @@ var (
 		{Name: "updated_by", Type: field.TypeString, Nullable: true},
 		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "name", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
-		{Name: "provider_type", Type: field.TypeEnum, Enums: []string{"flexprice", "stripe", "razorpay"}, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "provider_type", Type: field.TypeEnum, Enums: []string{"flexprice", "stripe", "razorpay", "paddle"}, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "encrypted_secret_data", Type: field.TypeJSON, Nullable: true},
 	}
 	// ConnectionsTable holds the schema information for the "connections" table.

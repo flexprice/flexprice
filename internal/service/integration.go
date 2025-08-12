@@ -123,6 +123,8 @@ func (s *integrationService) syncCustomerToProvider(ctx context.Context, custome
 		switch conn.ProviderType {
 		case types.SecretProviderStripe:
 			providerEntityID, metadata, err = s.syncCustomerToStripe(ctx, customer, conn)
+		case types.SecretProviderPaddle:
+			providerEntityID, metadata, err = s.syncCustomerToPaddle(ctx, customer, conn)
 		// Add more providers as needed
 		default:
 			return ierr.NewError("unsupported provider type").
@@ -241,6 +243,51 @@ func (s *integrationService) syncCustomerToStripe(ctx context.Context, customer 
 	}, nil
 }
 
+// syncCustomerToPaddle syncs a customer to Paddle
+func (s *integrationService) syncCustomerToPaddle(ctx context.Context, customer *customer.Customer, conn *connection.Connection) (string, map[string]interface{}, error) {
+	paddleService := NewPaddleService(s.ServiceParams)
+
+	// Check if customer already has Paddle ID in metadata
+	if paddleID, exists := customer.Metadata["paddle_customer_id"]; exists && paddleID != "" {
+		s.Logger.Infow("customer already has Paddle ID",
+			"customer_id", customer.ID,
+			"paddle_customer_id", paddleID)
+		return paddleID, map[string]interface{}{
+			"paddle_customer_email": customer.Email,
+			"sync_direction":        "flexprice_to_provider",
+			"created_via":           "api",
+			"found_existing":        true,
+		}, nil
+	}
+
+	// Create customer in Paddle
+	if err := paddleService.CreateCustomerInPaddle(ctx, customer.ID); err != nil {
+		return "", nil, err
+	}
+
+	// Get updated customer to get the Paddle ID
+	customerService := NewCustomerService(s.ServiceParams)
+	customerResp, err := customerService.GetCustomer(ctx, customer.ID)
+	if err != nil {
+		return "", nil, err
+	}
+
+	paddleID := customerResp.Customer.Metadata["paddle_customer_id"]
+	if paddleID == "" {
+		return "", nil, ierr.NewError("failed to get Paddle customer ID").
+			WithHint("Paddle customer ID not found in metadata").
+			Mark(ierr.ErrInternal)
+	}
+
+	return paddleID, map[string]interface{}{
+		"paddle_customer_email": customer.Email,
+		"paddle_customer_name":  customer.Name,
+		"sync_direction":        "flexprice_to_provider",
+		"created_via":           "api",
+		"synced_at":             time.Now().UTC().Format(time.RFC3339),
+	}, nil
+}
+
 // SyncCustomerFromProvider syncs a customer from a specific provider to FlexPrice
 func (s *integrationService) SyncCustomerFromProvider(ctx context.Context, providerType string, providerCustomerID string, customerData map[string]interface{}) error {
 	// Use database transaction to prevent race conditions
@@ -335,6 +382,8 @@ func (s *integrationService) SyncCustomerFromProvider(ctx context.Context, provi
 		switch providerType {
 		case string(types.SecretProviderStripe):
 			customerID, metadata, err = s.createCustomerFromStripe(ctx, providerCustomerID, customerData)
+		case string(types.SecretProviderPaddle):
+			customerID, metadata, err = s.createCustomerFromPaddle(ctx, providerCustomerID, customerData)
 		default:
 			return ierr.NewError("unsupported provider type").
 				WithHint(fmt.Sprintf("Provider type %s is not supported", providerType)).
@@ -466,6 +515,60 @@ func (s *integrationService) createCustomerFromStripe(ctx context.Context, strip
 	return createdCustomer.ID, map[string]interface{}{
 		"stripe_customer_email": customerData["email"].(string),
 		"stripe_customer_name":  customerData["name"].(string),
+		"sync_direction":        "provider_to_flexprice",
+		"created_via":           "webhook",
+		"webhook_event":         "customer.created",
+		"synced_at":             time.Now().UTC().Format(time.RFC3339),
+	}, nil
+}
+
+// createCustomerFromPaddle creates a customer in FlexPrice from Paddle webhook data
+func (s *integrationService) createCustomerFromPaddle(ctx context.Context, providerCustomerID string, customerData map[string]interface{}) (string, map[string]interface{}, error) {
+	paddleService := NewPaddleService(s.ServiceParams)
+
+	// Use the PaddleService method to create customer from Paddle data
+	err := paddleService.CreateCustomerFromPaddle(ctx, customerData, types.GetEnvironmentID(ctx))
+	if err != nil {
+		return "", nil, err
+	}
+
+	// Get the created customer by email (much more efficient than metadata search)
+	customerService := NewCustomerService(s.ServiceParams)
+	email, _ := customerData["email"].(string)
+	if email == "" {
+		return "", nil, ierr.NewError("email not found in Paddle customer data").
+			WithHint("Email is required to find created customer").
+			Mark(ierr.ErrValidation)
+	}
+
+	filter := &types.CustomerFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		Email:       email,
+	}
+
+	customers, err := customerService.GetCustomers(ctx, filter)
+	if err != nil {
+		return "", nil, err
+	}
+
+	// Should find exactly one customer with this email
+	if len(customers.Items) == 0 {
+		return "", nil, ierr.NewError("failed to find created customer").
+			WithHint("Customer was created but could not be found by email").
+			Mark(ierr.ErrInternal)
+	}
+
+	if len(customers.Items) > 1 {
+		s.Logger.Warnw("multiple customers found with same email",
+			"email", email,
+			"count", len(customers.Items))
+	}
+
+	createdCustomer := customers.Items[0].Customer
+
+	return createdCustomer.ID, map[string]interface{}{
+		"paddle_customer_email": customerData["email"],
+		"paddle_customer_name":  customerData["name"],
 		"sync_direction":        "provider_to_flexprice",
 		"created_via":           "webhook",
 		"webhook_event":         "customer.created",

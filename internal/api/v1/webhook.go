@@ -25,6 +25,7 @@ type WebhookHandler struct {
 	svixClient    *svix.Client
 	logger        *logger.Logger
 	stripeService *service.StripeService
+	paddleService *service.PaddleService
 }
 
 // NewWebhookHandler creates a new webhook handler
@@ -33,12 +34,14 @@ func NewWebhookHandler(
 	svixClient *svix.Client,
 	logger *logger.Logger,
 	stripeService *service.StripeService,
+	paddleService *service.PaddleService,
 ) *WebhookHandler {
 	return &WebhookHandler{
 		config:        cfg,
 		svixClient:    svixClient,
 		logger:        logger,
 		stripeService: stripeService,
+		paddleService: paddleService,
 	}
 }
 
@@ -1144,4 +1147,220 @@ func (h *WebhookHandler) handlePaymentIntentPaymentFailed(c *gin.Context, event 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Payment intent payment failed webhook processed successfully",
 	})
+}
+
+// @Summary Handle Paddle webhook events
+// @Description Process incoming Paddle webhook events for customer creation and payment updates
+// @Tags Webhooks
+// @Accept json
+// @Produce json
+// @Param tenant_id path string true "Tenant ID"
+// @Param environment_id path string true "Environment ID"
+// @Param Paddle-Signature header string true "Paddle webhook signature"
+// @Success 200 {object} map[string]interface{} "Webhook processed successfully"
+// @Failure 400 {object} map[string]interface{} "Bad request - missing parameters or invalid signature"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /webhooks/paddle/{tenant_id}/{environment_id} [post]
+func (h *WebhookHandler) HandlePaddleWebhook(c *gin.Context) {
+	tenantID := c.Param("tenant_id")
+	environmentID := c.Param("environment_id")
+
+	if tenantID == "" || environmentID == "" {
+		h.logger.Errorw("missing tenant_id or environment_id in webhook URL")
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "tenant_id and environment_id are required",
+		})
+		return
+	}
+
+	// Read the raw request body
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		h.logger.Errorw("failed to read request body", "error", err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Failed to read request body",
+		})
+		return
+	}
+
+	// Set context with tenant and environment IDs
+	ctx := types.SetTenantID(c.Request.Context(), tenantID)
+	ctx = types.SetEnvironmentID(ctx, environmentID)
+	c.Request = c.Request.WithContext(ctx)
+
+	// Verify webhook signature using the http.Request
+	err = h.paddleService.VerifyWebhookSignature(ctx, c.Request)
+	if err != nil {
+		h.logger.Errorw("failed to verify Paddle webhook signature", "error", err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Failed to verify webhook signature",
+		})
+		return
+	}
+
+	// Log webhook processing (without sensitive data)
+	h.logger.Debugw("processing Paddle webhook",
+		"environment_id", environmentID,
+		"tenant_id", tenantID,
+		"payload_length", len(body),
+	)
+
+	// Parse the webhook event
+	event, err := h.paddleService.ParseWebhookEvent(body)
+	if err != nil {
+		h.logger.Errorw("failed to parse Paddle webhook event", "error", err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Failed to parse webhook payload",
+		})
+		return
+	}
+
+	// Get event type
+	eventType, ok := event["event_type"].(string)
+	if !ok {
+		h.logger.Errorw("invalid or missing event_type in Paddle webhook")
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid or missing event_type",
+		})
+		return
+	}
+
+	// Handle different event types
+	switch eventType {
+	case "customer.created":
+		h.handlePaddleCustomerCreated(c, event, environmentID)
+	case "customer.updated":
+		h.handlePaddleCustomerUpdated(c, event, environmentID)
+	case "transaction.completed":
+		h.handlePaddleTransactionCompleted(c, event, environmentID)
+	case "transaction.canceled":
+		h.handlePaddleTransactionCanceled(c, event, environmentID)
+	default:
+		h.logger.Infow("unhandled Paddle webhook event type", "type", eventType)
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Event type not handled",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Webhook processed successfully",
+	})
+}
+
+func (h *WebhookHandler) handlePaddleCustomerCreated(c *gin.Context, event map[string]interface{}, environmentID string) {
+	// Extract customer data from event
+	data, ok := event["data"].(map[string]interface{})
+	if !ok {
+		h.logger.Errorw("invalid data in Paddle customer.created webhook")
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid event data",
+		})
+		return
+	}
+
+	h.logger.Infow("received customer.created webhook from Paddle",
+		"environment_id", environmentID,
+		"event_id", event["event_id"],
+		"event_type", event["event_type"],
+	)
+
+	// Use Paddle service to sync customer from webhook
+	if err := h.paddleService.CreateCustomerFromPaddle(c.Request.Context(), data, environmentID); err != nil {
+		h.logger.Errorw("failed to sync customer from Paddle",
+			"error", err,
+			"environment_id", environmentID,
+		)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to sync customer from Paddle",
+		})
+		return
+	}
+
+	h.logger.Infow("successfully synced customer from Paddle",
+		"environment_id", environmentID,
+	)
+}
+
+func (h *WebhookHandler) handlePaddleCustomerUpdated(c *gin.Context, event map[string]interface{}, environmentID string) {
+	// Extract customer data from event
+	data, ok := event["data"].(map[string]interface{})
+	if !ok {
+		h.logger.Errorw("invalid data in Paddle customer.updated webhook")
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid event data",
+		})
+		return
+	}
+
+	h.logger.Infow("received customer.updated webhook from Paddle",
+		"environment_id", environmentID,
+		"event_id", event["event_id"],
+		"event_type", event["event_type"],
+	)
+
+	// For customer updates, we can log for now or implement specific update logic
+	h.logger.Infow("Paddle customer updated - implement specific update logic if needed",
+		"paddle_customer_id", data["id"],
+		"environment_id", environmentID,
+	)
+}
+
+func (h *WebhookHandler) handlePaddleTransactionCompleted(c *gin.Context, event map[string]interface{}, environmentID string) {
+	// Extract transaction data from event
+	data, ok := event["data"].(map[string]interface{})
+	if !ok {
+		h.logger.Errorw("invalid data in Paddle transaction.completed webhook")
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid event data",
+		})
+		return
+	}
+
+	h.logger.Infow("received transaction.completed webhook from Paddle",
+		"environment_id", environmentID,
+		"event_id", event["event_id"],
+		"event_type", event["event_type"],
+		"transaction_id", data["id"],
+	)
+
+	// TODO: Implement transaction processing logic
+	// This would typically involve:
+	// 1. Finding the payment record by transaction ID
+	// 2. Updating payment status to succeeded
+	// 3. Reconciling with invoice if applicable
+
+	h.logger.Infow("Paddle transaction completed - implement payment processing logic",
+		"transaction_id", data["id"],
+		"environment_id", environmentID,
+	)
+}
+
+func (h *WebhookHandler) handlePaddleTransactionCanceled(c *gin.Context, event map[string]interface{}, environmentID string) {
+	// Extract transaction data from event
+	data, ok := event["data"].(map[string]interface{})
+	if !ok {
+		h.logger.Errorw("invalid data in Paddle transaction.canceled webhook")
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid event data",
+		})
+		return
+	}
+
+	h.logger.Infow("received transaction.canceled webhook from Paddle",
+		"environment_id", environmentID,
+		"event_id", event["event_id"],
+		"event_type", event["event_type"],
+		"transaction_id", data["id"],
+	)
+
+	// TODO: Implement transaction cancellation logic
+	// This would typically involve:
+	// 1. Finding the payment record by transaction ID
+	// 2. Updating payment status to failed/canceled
+
+	h.logger.Infow("Paddle transaction canceled - implement payment cancellation logic",
+		"transaction_id", data["id"],
+		"environment_id", environmentID,
+	)
 }

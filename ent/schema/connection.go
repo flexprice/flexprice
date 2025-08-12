@@ -35,7 +35,7 @@ func (Connection) Fields() []ent.Field {
 			}).
 			NotEmpty(),
 		field.Enum("provider_type").
-			Values("flexprice", "stripe", "razorpay").
+			Values("flexprice", "stripe", "razorpay", "paddle").
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
 			}),

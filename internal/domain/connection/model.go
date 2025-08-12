@@ -48,6 +48,34 @@ func (c *Connection) GetStripeConfig() (*StripeConnection, error) {
 	return config, nil
 }
 
+// PaddleConnection represents Paddle-specific connection metadata
+type PaddleConnection struct {
+	APIKey        string `json:"api_key"`
+	WebhookSecret string `json:"webhook_secret"`
+}
+
+// GetPaddleConfig extracts Paddle configuration from connection metadata
+func (c *Connection) GetPaddleConfig() (*PaddleConnection, error) {
+	if c.ProviderType != types.SecretProviderPaddle {
+		return nil, ierr.NewError("connection is not a Paddle connection").
+			WithHint("Connection provider type must be Paddle").
+			Mark(ierr.ErrValidation)
+	}
+
+	if c.EncryptedSecretData.Paddle == nil {
+		return nil, ierr.NewError("paddle metadata is not configured").
+			WithHint("Paddle metadata is required for Paddle connections").
+			Mark(ierr.ErrValidation)
+	}
+
+	config := &PaddleConnection{
+		APIKey:        c.EncryptedSecretData.Paddle.APIKey,
+		WebhookSecret: c.EncryptedSecretData.Paddle.WebhookSecret,
+	}
+
+	return config, nil
+}
+
 // convertMapToConnectionMetadata converts old map format to new structured format
 func convertMapToConnectionMetadata(metadata map[string]interface{}, providerType types.SecretProvider) types.ConnectionMetadata {
 	switch providerType {
@@ -67,6 +95,17 @@ func convertMapToConnectionMetadata(metadata map[string]interface{}, providerTyp
 		}
 		return types.ConnectionMetadata{
 			Stripe: stripeMetadata,
+		}
+	case types.SecretProviderPaddle:
+		paddleMetadata := &types.PaddleConnectionMetadata{}
+		if ak, ok := metadata["api_key"].(string); ok {
+			paddleMetadata.APIKey = ak
+		}
+		if ws, ok := metadata["webhook_secret"].(string); ok {
+			paddleMetadata.WebhookSecret = ws
+		}
+		return types.ConnectionMetadata{
+			Paddle: paddleMetadata,
 		}
 	default:
 		// For other providers or unknown types, use generic format

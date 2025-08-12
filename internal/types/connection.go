@@ -10,17 +10,19 @@ type ConnectionMetadataType string
 
 const (
 	ConnectionMetadataTypeStripe  ConnectionMetadataType = "stripe"
+	ConnectionMetadataTypePaddle  ConnectionMetadataType = "paddle"
 	ConnectionMetadataTypeGeneric ConnectionMetadataType = "generic"
 )
 
 func (t ConnectionMetadataType) Validate() error {
 	allowedTypes := []ConnectionMetadataType{
 		ConnectionMetadataTypeStripe,
+		ConnectionMetadataTypePaddle,
 		ConnectionMetadataTypeGeneric,
 	}
 	if !lo.Contains(allowedTypes, t) {
 		return ierr.NewError("invalid connection metadata type").
-			WithHint("Connection metadata type must be one of: stripe, generic").
+			WithHint("Connection metadata type must be one of: stripe, paddle, generic").
 			Mark(ierr.ErrValidation)
 	}
 	return nil
@@ -54,6 +56,27 @@ func (s *StripeConnectionMetadata) Validate() error {
 	return nil
 }
 
+// PaddleConnectionMetadata represents Paddle-specific connection metadata
+type PaddleConnectionMetadata struct {
+	APIKey        string `json:"api_key"`
+	WebhookSecret string `json:"webhook_secret"`
+}
+
+// Validate validates the Paddle connection metadata
+func (p *PaddleConnectionMetadata) Validate() error {
+	if p.APIKey == "" {
+		return ierr.NewError("api_key is required").
+			WithHint("Paddle API key is required").
+			Mark(ierr.ErrValidation)
+	}
+	if p.WebhookSecret == "" {
+		return ierr.NewError("webhook_secret is required").
+			WithHint("Paddle webhook secret is required").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 // GenericConnectionMetadata represents generic connection metadata
 type GenericConnectionMetadata struct {
 	Data map[string]interface{} `json:"data"`
@@ -72,6 +95,7 @@ func (g *GenericConnectionMetadata) Validate() error {
 // ConnectionMetadata represents structured connection metadata
 type ConnectionMetadata struct {
 	Stripe  *StripeConnectionMetadata  `json:"stripe,omitempty"`
+	Paddle  *PaddleConnectionMetadata  `json:"paddle,omitempty"`
 	Generic *GenericConnectionMetadata `json:"generic,omitempty"`
 }
 
@@ -85,6 +109,13 @@ func (c *ConnectionMetadata) Validate(providerType SecretProvider) error {
 				Mark(ierr.ErrValidation)
 		}
 		return c.Stripe.Validate()
+	case SecretProviderPaddle:
+		if c.Paddle == nil {
+			return ierr.NewError("paddle metadata is required").
+				WithHint("Paddle metadata is required for paddle provider").
+				Mark(ierr.ErrValidation)
+		}
+		return c.Paddle.Validate()
 	default:
 		// For other providers or unknown types, use generic format
 		if c.Generic == nil {
