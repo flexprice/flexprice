@@ -109,7 +109,7 @@ async function main() {
         }
     }
 
-    console.log("OpenAI response:", completion.choices[0]?.message?.content);
+    console.log("OpenAI response:", completion.choices?.[0]?.message?.content ?? "No response content");
     console.log(
         "Flexprice total units (last hour):",
         Number.isFinite(total_units) ? total_units : 0
