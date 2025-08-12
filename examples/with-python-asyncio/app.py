@@ -55,7 +55,7 @@ async def main() -> None:
         await asyncio.gather(post_event_async(api, e1), post_event_async(api, e2))
 
         # Summary (last 24h) via client-side aggregation
-        data = api.events_get(external_customer_id=customer_id)
+        data = await api.events_get_async(external_customer_id=customer_id)
         events = getattr(data, 'events', []) or []
         since = datetime.datetime.utcnow() - datetime.timedelta(hours=24)
         total_units = 0.0
