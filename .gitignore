@@ -48,6 +48,7 @@ scripts/hacks/*
 .flaskenv*
 !.env.project
 !.env.vault
+!.env.example
 
 # continue / cursor rules
 .continue/*

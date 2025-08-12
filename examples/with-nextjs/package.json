@@ -1,0 +1,26 @@
+{
+    "name": "flexprice-with-nextjs",
+    "version": "0.1.0",
+    "private": true,
+    "description": "Next.js example demonstrating Flexprice JavaScript SDK for a cost dashboard",
+    "scripts": {
+        "dev": "next dev",
+        "build": "next build",
+        "start": "next start",
+        "lint": "next lint"
+    },
+    "dependencies": {
+        "@flexprice/sdk": "^1.0.17",
+        "next": "14.2.5",
+        "react": "18.3.1",
+        "react-dom": "18.3.1"
+    },
+    "devDependencies": {
+        "@types/node": "^20.12.12",
+        "@types/react": "^18.2.64",
+        "@types/react-dom": "^18.2.22",
+        "eslint": "^8.57.0",
+        "eslint-config-next": "14.2.5",
+        "typescript": "^5.4.5"
+    }
+}
