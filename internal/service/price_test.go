@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/priceunit"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -490,6 +491,68 @@ func (s *PriceServiceSuite) TestCalculateCostWithBreakup_PackageScenarios() {
 				result.TierUnitAmount.String())
 		})
 	}
+}
+
+func (s *PriceServiceSuite) TestCreatePriceWithCustomUnitTiered() {
+	// Create a plan first
+	plan := &plan.Plan{
+		ID:          "plan-tiered-1",
+		Name:        "Test Plan",
+		Description: "A test plan",
+		BaseModel:   types.GetDefaultBaseModel(s.ctx),
+	}
+	_ = s.priceService.(*priceService).ServiceParams.PlanRepo.Create(s.ctx, plan)
+
+	// Create a price unit first
+	priceUnit := &priceunit.PriceUnit{
+		ID:             "pu-1",
+		Code:           "btc",
+		Symbol:         "₿",
+		ConversionRate: decimal.NewFromFloat(50000.00), // 1 BTC = 50000 USD
+		Precision:      8,
+		BaseCurrency:   "usd",
+		BaseModel:      types.GetDefaultBaseModel(s.ctx),
+	}
+	_ = s.priceUnitRepo.Create(s.ctx, priceUnit)
+
+	req := dto.CreatePriceRequest{
+		Currency:           "usd",
+		PlanID:             "plan-tiered-1",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           "plan-tiered-1",
+		Type:               types.PRICE_TYPE_USAGE,
+		MeterID:            "meter-1",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_TIERED,
+		TierMode:           types.BILLING_TIER_VOLUME,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		Description:        "Test Price with Custom Unit Tiers",
+		PriceUnitType:      types.PRICE_UNIT_TYPE_CUSTOM,
+		PriceUnitConfig: &dto.PriceUnitConfig{
+			PriceUnit: "btc",
+			PriceUnitTiers: []dto.CreatePriceTier{
+				{
+					UpTo:       lo.ToPtr(uint64(1000)),
+					UnitAmount: "0.001",
+					FlatAmount: lo.ToPtr("0.0001"),
+				},
+				{
+					UnitAmount: "0.0005",
+				},
+			},
+		},
+	}
+
+	resp, err := s.priceService.CreatePrice(s.ctx, req)
+	s.NoError(err)
+	s.NotNil(resp)
+	s.Equal(types.BILLING_MODEL_TIERED, resp.BillingModel)
+	s.Equal("btc", resp.PriceUnit)
+	s.Len(resp.Tiers, 2)
+	s.Equal(decimal.NewFromFloat(50), resp.Tiers[0].UnitAmount) // 0.001 BTC * 50000 USD/BTC = 50 USD
+	s.Equal(decimal.NewFromFloat(25), resp.Tiers[1].UnitAmount) // 0.0005 BTC * 50000 USD/BTC = 25 USD
 }
 
 func (s *PriceServiceSuite) TestCalculateCostWithBreakup_PackageRoundingModes() {

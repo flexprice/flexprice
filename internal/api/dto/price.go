@@ -337,31 +337,34 @@ func (r *CreatePriceRequest) Validate() error {
 				Mark(ierr.ErrValidation)
 		}
 
-		if r.PriceUnitConfig.Amount == "" {
-			return ierr.NewError("amount is required when price_unit_config is provided").
-				WithHint("Please provide a valid amount").
-				Mark(ierr.ErrValidation)
-		}
+		// Only validate amount if billing model is not TIERED
+		if r.BillingModel != types.BILLING_MODEL_TIERED {
+			if r.PriceUnitConfig.Amount == "" {
+				return ierr.NewError("amount is required when price_unit_config is provided and billing model is not TIERED").
+					WithHint("Please provide a valid amount").
+					Mark(ierr.ErrValidation)
+			}
 
-		// Validate price unit amount is a valid decimal
-		priceUnitAmount, err := decimal.NewFromString(r.PriceUnitConfig.Amount)
-		if err != nil {
-			return ierr.NewError("invalid price unit amount format").
-				WithHint("Price unit amount must be a valid decimal number").
-				WithReportableDetails(map[string]interface{}{
-					"amount": r.PriceUnitConfig.Amount,
-				}).
-				Mark(ierr.ErrValidation)
-		}
+			// Validate price unit amount is a valid decimal
+			priceUnitAmount, err := decimal.NewFromString(r.PriceUnitConfig.Amount)
+			if err != nil {
+				return ierr.NewError("invalid price unit amount format").
+					WithHint("Price unit amount must be a valid decimal number").
+					WithReportableDetails(map[string]interface{}{
+						"amount": r.PriceUnitConfig.Amount,
+					}).
+					Mark(ierr.ErrValidation)
+			}
 
-		// Validate price unit amount is not negative
-		if priceUnitAmount.LessThan(decimal.Zero) {
-			return ierr.NewError("price unit amount cannot be negative").
-				WithHint("Price unit amount must be zero or greater").
-				WithReportableDetails(map[string]interface{}{
-					"amount": r.PriceUnitConfig.Amount,
-				}).
-				Mark(ierr.ErrValidation)
+			// Validate price unit amount is not negative
+			if priceUnitAmount.LessThan(decimal.Zero) {
+				return ierr.NewError("price unit amount cannot be negative").
+					WithHint("Price unit amount must be zero or greater").
+					WithReportableDetails(map[string]interface{}{
+						"amount": r.PriceUnitConfig.Amount,
+					}).
+					Mark(ierr.ErrValidation)
+			}
 		}
 
 		// Validate that regular tiers and price unit tiers are not both provided

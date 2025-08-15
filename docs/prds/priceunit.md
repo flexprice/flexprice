@@ -252,7 +252,6 @@ curl -X POST http://localhost:8080/api/v1/prices/config \
     "meter_id": "meter_01K0JWYB1VERXK4PKGREF8XP7T",
     "plan_id": "plan_01K196D5RKHJG6P9GVT4XFGAZ4",
     "price_unit_config": {
-      "amount": "15.00",
       "price_unit": "gbp",
       "tiers": [
         {
@@ -265,6 +264,7 @@ curl -X POST http://localhost:8080/api/v1/prices/config \
         }
       ]
     }
+    // Note: amount is not required when using TIERED billing model
   }'
 ```
 
@@ -429,7 +429,9 @@ The price is stored with both:
 2. **Amount Validation**: Must be positive decimal number
 3. **Tier Validation**: All tier amounts must be valid decimals
 4. **Conflicting Configs**: Cannot use both regular and price unit tiers
-5. **Required Fields**: Price unit and amount required when config provided
+5. **Required Fields**: 
+   - Price unit is always required when config is provided
+   - Amount is required when config is provided, except for TIERED billing model
 
 ## Benefits
 
