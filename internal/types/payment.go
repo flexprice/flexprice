@@ -13,6 +13,7 @@ const (
 	PaymentStatusPending           PaymentStatus = "PENDING"
 	PaymentStatusProcessing        PaymentStatus = "PROCESSING"
 	PaymentStatusSucceeded         PaymentStatus = "SUCCEEDED"
+	PaymentStatusOverpaid          PaymentStatus = "OVERPAID"
 	PaymentStatusFailed            PaymentStatus = "FAILED"
 	PaymentStatusRefunded          PaymentStatus = "REFUNDED"
 	PaymentStatusPartiallyRefunded PaymentStatus = "PARTIALLY_REFUNDED"
@@ -28,6 +29,7 @@ func (s PaymentStatus) Validate() error {
 		PaymentStatusPending,
 		PaymentStatusProcessing,
 		PaymentStatusSucceeded,
+		PaymentStatusOverpaid,
 		PaymentStatusFailed,
 		PaymentStatusRefunded,
 		PaymentStatusPartiallyRefunded,

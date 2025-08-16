@@ -814,8 +814,28 @@ func (s *invoiceService) ReconcilePaymentStatus(ctx context.Context, id string, 
 		} else {
 			inv.AmountPaid = inv.AmountDue
 		}
-		inv.AmountRemaining = inv.AmountDue.Sub(inv.AmountPaid)
+
+		// Check if invoice is overpaid
+		if inv.AmountPaid.GreaterThan(inv.AmountDue) {
+			inv.PaymentStatus = types.PaymentStatusOverpaid
+			// For overpaid invoices, amount_remaining is always 0
+			inv.AmountRemaining = decimal.Zero
+		} else {
+			inv.AmountRemaining = inv.AmountDue.Sub(inv.AmountPaid)
+		}
+
 		inv.PaidAt = &now
+	case types.PaymentStatusOverpaid:
+		// Handle additional payments to an already overpaid invoice
+		if amount != nil {
+			inv.AmountPaid = inv.AmountPaid.Add(*amount)
+		}
+		// For overpaid invoices, amount_remaining is always 0
+		inv.AmountRemaining = decimal.Zero
+		// Status remains OVERPAID
+		if inv.PaidAt == nil {
+			inv.PaidAt = &now
+		}
 	case types.PaymentStatusFailed:
 		// Don't change amount_paid for failed payments
 		inv.PaidAt = nil
@@ -1066,12 +1086,21 @@ func (s *invoiceService) validatePaymentStatusTransition(from, to types.PaymentS
 		types.PaymentStatusPending: {
 			types.PaymentStatusPending,
 			types.PaymentStatusSucceeded,
+			types.PaymentStatusOverpaid,
 			types.PaymentStatusFailed,
+		},
+		types.PaymentStatusSucceeded: {
+			types.PaymentStatusSucceeded,
+			types.PaymentStatusOverpaid,
+		},
+		types.PaymentStatusOverpaid: {
+			types.PaymentStatusOverpaid,
 		},
 		types.PaymentStatusFailed: {
 			types.PaymentStatusPending,
 			types.PaymentStatusFailed,
 			types.PaymentStatusSucceeded,
+			types.PaymentStatusOverpaid,
 		},
 	}
 

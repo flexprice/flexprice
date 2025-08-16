@@ -3,12 +3,14 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stripe/stripe-go/v79"
 	"github.com/stripe/stripe-go/v79/client"
@@ -369,13 +371,69 @@ func (s *StripeService) CreatePaymentLink(ctx context.Context, req *dto.CreateSt
 	// Convert amount to cents (Stripe expects amounts in smallest currency unit)
 	amountCents := req.Amount.Mul(decimal.NewFromInt(100)).IntPart()
 
-	// Create line items for the checkout session
+	// Build comprehensive product name with all information
+	productName := fmt.Sprintf(customerResp.Customer.Name)
+
+	// Build detailed description with all invoice information
+	var descriptionParts []string
+
+	// Add invoice information
+	invoiceInfo := fmt.Sprintf("Invoice: %s", lo.FromPtrOr(invoiceResp.InvoiceNumber, req.InvoiceID))
+	descriptionParts = append(descriptionParts, invoiceInfo)
+
+	// Add invoice total
+	totalInfo := fmt.Sprintf("Invoice Total: %s %s", invoiceResp.Total.String(), invoiceResp.Currency)
+	descriptionParts = append(descriptionParts, totalInfo)
+
+	// Add items details
+	if len(invoiceResp.LineItems) > 0 {
+		var itemDetails []string
+		for _, lineItem := range invoiceResp.LineItems {
+			if lineItem.Amount.IsZero() {
+				continue // Skip zero-amount items
+			}
+
+			var entityType string
+			var itemName string
+
+			// Determine entity type and name using enums
+			if lineItem.EntityType != nil {
+				switch *lineItem.EntityType {
+				case string(types.InvoiceLineItemEntityTypePlan):
+					entityType = "Plan"
+					itemName = lo.FromPtrOr(lineItem.DisplayName, "")
+					if itemName == "" {
+						itemName = lo.FromPtrOr(lineItem.PlanDisplayName, "Plan")
+					}
+				case string(types.InvoiceLineItemEntityTypeAddon):
+					entityType = "Add-on"
+					itemName = lo.FromPtrOr(lineItem.DisplayName, "Add-on")
+				default:
+					entityType = "Item"
+					itemName = lo.FromPtrOr(lineItem.DisplayName, "Service")
+				}
+			}
+			// Format as "Entity: Name ($Amount)"
+			itemDetail := fmt.Sprintf("%s: %s ($%s)", entityType, itemName, lineItem.Amount.String())
+			itemDetails = append(itemDetails, itemDetail)
+		}
+
+		if len(itemDetails) > 0 {
+			descriptionParts = append(descriptionParts, itemDetails...)
+		}
+	}
+
+	// Join all parts with separators for better readability
+	productDescription := strings.Join(descriptionParts, " • ")
+
+	// Create a single line item for the exact payment amount requested
 	lineItems := []*stripe.CheckoutSessionLineItemParams{
 		{
 			PriceData: &stripe.CheckoutSessionLineItemPriceDataParams{
 				Currency: stripe.String(req.Currency),
 				ProductData: &stripe.CheckoutSessionLineItemPriceDataProductDataParams{
-					Name: stripe.String(fmt.Sprintf("Invoice #%s", req.InvoiceID)),
+					Name:        stripe.String(productName),
+					Description: stripe.String(productDescription),
 				},
 				UnitAmount: stripe.Int64(amountCents),
 			},
@@ -408,12 +466,13 @@ func (s *StripeService) CreatePaymentLink(ctx context.Context, req *dto.CreateSt
 
 	// Create checkout session parameters
 	params := &stripe.CheckoutSessionParams{
-		LineItems:  lineItems,
-		Mode:       stripe.String("payment"),
-		SuccessURL: stripe.String(successURL),
-		CancelURL:  stripe.String(cancelURL),
-		Metadata:   metadata,
-		Customer:   stripe.String(stripeCustomerID),
+		LineItems:           lineItems,
+		Mode:                stripe.String("payment"),
+		AllowPromotionCodes: stripe.Bool(true),
+		SuccessURL:          stripe.String(successURL),
+		CancelURL:           stripe.String(cancelURL),
+		Metadata:            metadata,
+		Customer:            stripe.String(stripeCustomerID),
 	}
 
 	// Don't create payment record here - it should be created by the main payment flow
@@ -520,8 +579,12 @@ func (s *StripeService) ReconcilePaymentWithInvoice(ctx context.Context, payment
 
 	// Determine payment status
 	var newPaymentStatus types.PaymentStatus
-	if newAmountRemaining.IsZero() || newAmountRemaining.IsNegative() {
+	if newAmountRemaining.IsZero() {
 		newPaymentStatus = types.PaymentStatusSucceeded
+	} else if newAmountRemaining.IsNegative() {
+		// Invoice is overpaid
+		newPaymentStatus = types.PaymentStatusOverpaid
+		// For overpaid invoices, amount_remaining should be 0
 		newAmountRemaining = decimal.Zero
 	} else {
 		newPaymentStatus = types.PaymentStatusPending

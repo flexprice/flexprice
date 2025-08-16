@@ -800,6 +800,9 @@ type InvoiceResponse struct {
 	// amount_remaining is the amount still outstanding on this invoice
 	AmountRemaining decimal.Decimal `json:"amount_remaining"`
 
+	// overpaid_amount is the amount overpaid if payment_status is OVERPAID (amount_paid - total)
+	OverpaidAmount *decimal.Decimal `json:"overpaid_amount,omitempty"`
+
 	// invoice_number is the optional human-readable identifier for the invoice
 	InvoiceNumber *string `json:"invoice_number,omitempty"`
 
@@ -941,6 +944,12 @@ func NewInvoiceResponse(inv *invoice.Invoice) *InvoiceResponse {
 		UpdatedAt:       inv.UpdatedAt,
 		CreatedBy:       inv.CreatedBy,
 		UpdatedBy:       inv.UpdatedBy,
+	}
+
+	// Add overpaid amount if payment status is OVERPAID
+	if inv.PaymentStatus == types.PaymentStatusOverpaid && inv.AmountPaid.GreaterThan(inv.Total) {
+		overpaidAmount := inv.AmountPaid.Sub(inv.Total)
+		resp.OverpaidAmount = &overpaidAmount
 	}
 
 	if inv.LineItems != nil {

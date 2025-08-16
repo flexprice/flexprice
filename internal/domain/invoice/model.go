@@ -202,8 +202,9 @@ func (i *Invoice) Validate() error {
 		return ierr.NewError("invoice validation failed").WithHint("amount_paid must be non negative").Mark(ierr.ErrValidation)
 	}
 
-	if i.AmountPaid.GreaterThan(i.AmountDue) {
-		return ierr.NewError("invoice validation failed").WithHint("amount_paid must be less than or equal to amount_due").Mark(ierr.ErrValidation)
+	// Allow overpayments when payment status is OVERPAID
+	if i.AmountPaid.GreaterThan(i.AmountDue) && i.PaymentStatus != types.PaymentStatusOverpaid {
+		return ierr.NewError("invoice validation failed").WithHint("amount_paid must be less than or equal to amount_due unless payment status is OVERPAID").Mark(ierr.ErrValidation)
 	}
 
 	if i.AmountRemaining.IsNegative() {
@@ -214,8 +215,16 @@ func (i *Invoice) Validate() error {
 		return ierr.NewError("invoice validation failed").WithHint("amount_remaining must be less than or equal to amount_due").Mark(ierr.ErrValidation)
 	}
 
-	if !i.AmountPaid.Add(i.AmountRemaining).Equal(i.AmountDue) {
-		return ierr.NewError("invoice validation failed").WithHint("amount_remaining must equal amount_due - amount_paid").Mark(ierr.ErrValidation)
+	// For overpaid invoices, amount_remaining should be 0
+	// For regular invoices, amount_remaining must equal amount_due - amount_paid
+	if i.PaymentStatus == types.PaymentStatusOverpaid {
+		if !i.AmountRemaining.IsZero() {
+			return ierr.NewError("invoice validation failed").WithHint("amount_remaining must be zero for overpaid invoices").Mark(ierr.ErrValidation)
+		}
+	} else {
+		if !i.AmountPaid.Add(i.AmountRemaining).Equal(i.AmountDue) {
+			return ierr.NewError("invoice validation failed").WithHint("amount_remaining must equal amount_due - amount_paid").Mark(ierr.ErrValidation)
+		}
 	}
 
 	if i.PeriodStart != nil && i.PeriodEnd != nil {

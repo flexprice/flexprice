@@ -377,16 +377,13 @@ func (h *WebhookHandler) handleCheckoutSessionCompleted(c *gin.Context, event *s
 		return
 	}
 
-	// Check if payment is already successful - prevent any updates to successful payments
+	// Check if payment is already successful - but allow processing for overpayment reconciliation
 	if payment.PaymentStatus == types.PaymentStatusSucceeded {
-		h.logger.Warnw("payment is already successful, skipping update",
+		h.logger.Infow("payment is already successful, but will proceed to check for overpayment",
 			"payment_id", payment.ID,
 			"session_id", session.ID,
 			"current_status", payment.PaymentStatus)
-		c.JSON(http.StatusOK, gin.H{
-			"message": "Payment is already successful, no update needed",
-		})
-		return
+		// Continue processing to handle potential overpayment instead of returning
 	}
 
 	// Make a separate Stripe API call to get current status
@@ -471,8 +468,9 @@ func (h *WebhookHandler) handleCheckoutSessionCompleted(c *gin.Context, event *s
 		return
 	}
 
-	// Reconcile payment with invoice if payment succeeded
-	if paymentStatus == string(types.PaymentStatusSucceeded) {
+	// Reconcile payment with invoice if payment succeeded or if payment was already succeeded
+	// This handles both new payments and duplicate payments that should result in overpayment
+	if paymentStatus == string(types.PaymentStatusSucceeded) || payment.PaymentStatus == types.PaymentStatusSucceeded {
 		if err := h.stripeService.ReconcilePaymentWithInvoice(c.Request.Context(), payment.ID, payment.Amount); err != nil {
 			h.logger.Errorw("failed to reconcile payment with invoice",
 				"error", err,
@@ -540,16 +538,13 @@ func (h *WebhookHandler) handleCheckoutSessionAsyncPaymentSucceeded(c *gin.Conte
 		return
 	}
 
-	// Check if payment is already successful - prevent any updates to successful payments
+	// Check if payment is already successful - but allow processing for overpayment reconciliation
 	if payment.PaymentStatus == types.PaymentStatusSucceeded {
-		h.logger.Warnw("payment is already successful, skipping update",
+		h.logger.Infow("payment is already successful, but will proceed to check for overpayment",
 			"payment_id", payment.ID,
 			"session_id", session.ID,
 			"current_status", payment.PaymentStatus)
-		c.JSON(http.StatusOK, gin.H{
-			"message": "Payment is already successful, no update needed",
-		})
-		return
+		// Continue processing to handle potential overpayment instead of returning
 	}
 
 	// Make a separate Stripe API call to get current status
@@ -634,18 +629,19 @@ func (h *WebhookHandler) handleCheckoutSessionAsyncPaymentSucceeded(c *gin.Conte
 		return
 	}
 
-	// // Reconcile payment with invoice if payment succeeded
-	// if paymentStatus == string(types.PaymentStatusSucceeded) {
-	// 	if err := h.stripeService.ReconcilePaymentWithInvoice(c.Request.Context(), payment.ID, payment.Amount); err != nil {
-	// 		h.logger.Errorw("failed to reconcile payment with invoice",
-	// 			"error", err,
-	// 			"payment_id", payment.ID,
-	// 			"invoice_id", payment.DestinationID,
-	// 		)
-	// 		// Don't fail the webhook if reconciliation fails, but log the error
-	// 		// The payment is still marked as succeeded
-	// 	}
-	// }
+	// Reconcile payment with invoice if payment succeeded or if payment was already succeeded
+	// This handles both new payments and duplicate payments that should result in overpayment
+	if paymentStatus == string(types.PaymentStatusSucceeded) || payment.PaymentStatus == types.PaymentStatusSucceeded {
+		if err := h.stripeService.ReconcilePaymentWithInvoice(c.Request.Context(), payment.ID, payment.Amount); err != nil {
+			h.logger.Errorw("failed to reconcile payment with invoice",
+				"error", err,
+				"payment_id", payment.ID,
+				"invoice_id", payment.DestinationID,
+			)
+			// Don't fail the webhook if reconciliation fails, but log the error
+			// The payment is still marked as succeeded
+		}
+	}
 
 	h.logger.Infow("successfully updated payment status from async webhook",
 		"payment_id", payment.ID,
