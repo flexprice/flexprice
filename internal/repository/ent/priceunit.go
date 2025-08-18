@@ -532,6 +532,11 @@ func (o PriceUnitQueryOptions) applyEntityQueryOptions(ctx context.Context, f *d
 		query = query.Where(priceunit.CodeIn(f.Codes...))
 	}
 
+	// Apply price unit IDs filter if specified
+	if len(f.PriceUnitIDs) > 0 {
+		query = query.Where(priceunit.IDIn(f.PriceUnitIDs...))
+	}
+
 	// Apply filters using the generic function
 	if f.Filters != nil {
 		query, err = dsl.ApplyFilters[PriceUnitQuery, predicate.PriceUnit](

@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	pdf "github.com/flexprice/flexprice/internal/domain/pdf"
+	"github.com/flexprice/flexprice/internal/domain/priceunit"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
@@ -931,11 +932,50 @@ func (s *invoiceService) GetPreviewInvoice(ctx context.Context, req dto.GetPrevi
 	// Create preview response
 	response := dto.NewInvoiceResponse(inv)
 
+	// Get price units for line items that have price unit IDs
+	if len(response.LineItems) > 0 {
+		// Collect unique price unit IDs
+		priceUnitIDs := make(map[string]bool)
+		for _, item := range response.LineItems {
+			if item.PriceUnitID != nil {
+				priceUnitIDs[lo.FromPtr(item.PriceUnitID)] = true
+			}
+		}
+
+		// Batch fetch price units if there are any
+		if len(priceUnitIDs) > 0 {
+			priceUnitService := NewPriceUnitService(s.ServiceParams)
+			filter := priceunit.NewNoLimitPriceUnitFilter()
+			filter.PriceUnitIDs = lo.Keys(priceUnitIDs)
+
+			priceUnits, err := priceUnitService.List(ctx, filter)
+			if err != nil {
+				return nil, err
+			}
+
+			// Create a map for quick lookup
+			priceUnitsMap := make(map[string]*dto.PriceUnitResponse)
+			for _, priceUnit := range priceUnits.Items {
+				priceUnitsMap[priceUnit.ID] = priceUnit
+			}
+
+			// Assign price units to line items
+			for _, item := range response.LineItems {
+				if item.PriceUnitID != nil {
+					if priceUnit, exists := priceUnitsMap[lo.FromPtr(item.PriceUnitID)]; exists {
+						item.PricingUnit = priceUnit
+					}
+				}
+			}
+		}
+	}
+
 	// Get customer information
 	customer, err := s.CustomerRepo.Get(ctx, inv.CustomerID)
 	if err != nil {
 		return nil, err
 	}
+
 	response.WithCustomer(&dto.CustomerResponse{Customer: customer})
 
 	return response, nil

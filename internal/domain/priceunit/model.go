@@ -147,6 +147,22 @@ type PriceUnitFilter struct {
 
 	// Status filters by price unit status
 	Status types.Status `json:"status,omitempty" form:"status"`
+
+	PriceUnitIDs []string `json:"price_unit_ids,omitempty" form:"price_unit_ids" validate:"omitempty"`
+}
+
+// NewPriceUnitFilter creates a new PriceUnitFilter with default values
+func NewPriceUnitFilter() *PriceUnitFilter {
+	return &PriceUnitFilter{
+		QueryFilter: types.NewDefaultQueryFilter(),
+	}
+}
+
+// NewNoLimitPriceUnitFilter creates a new PriceUnitFilter with no pagination limits
+func NewNoLimitPriceUnitFilter() *PriceUnitFilter {
+	return &PriceUnitFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+	}
 }
 
 // GetLimit implements BaseFilter interface

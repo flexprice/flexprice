@@ -666,6 +666,8 @@ type InvoiceLineItemResponse struct {
 
 	// usage_analytics contains usage analytics for this line item
 	UsageAnalytics []SourceUsageItem `json:"usage_analytics,omitempty"`
+
+	PricingUnit *PriceUnitResponse `json:"pricing_unit,omitempty"`
 }
 
 func NewInvoiceLineItemResponse(item *invoice.InvoiceLineItem) *InvoiceLineItemResponse {
