@@ -3,7 +3,7 @@ package dto
 import (
 	"context"
 
-	"github.com/go-playground/validator/v10"
+	"github.com/flexprice/flexprice/internal/validator"
 	"github.com/shopspring/decimal"
 
 	domainPriceUnit "github.com/flexprice/flexprice/internal/domain/priceunit"
@@ -21,7 +21,7 @@ type CreatePriceUnitRequest struct {
 }
 
 func (r *CreatePriceUnitRequest) Validate() error {
-	if err := validator.New().Struct(r); err != nil {
+	if err := validator.ValidateRequest(r); err != nil {
 		return err
 	}
 	return nil
