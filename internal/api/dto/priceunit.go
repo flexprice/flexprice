@@ -1,6 +1,9 @@
 package dto
 
 import (
+	"context"
+
+	"github.com/go-playground/validator/v10"
 	"github.com/shopspring/decimal"
 
 	domainPriceUnit "github.com/flexprice/flexprice/internal/domain/priceunit"
@@ -15,6 +18,27 @@ type CreatePriceUnitRequest struct {
 	BaseCurrency   string           `json:"base_currency" validate:"required,len=3"`
 	ConversionRate *decimal.Decimal `json:"conversion_rate" validate:"required,gt=0"`
 	Precision      int              `json:"precision" validate:"gte=0,lte=8"`
+}
+
+func (r *CreatePriceUnitRequest) Validate() error {
+	if err := validator.New().Struct(r); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *CreatePriceUnitRequest) ToPriceUnit(ctx context.Context) *domainPriceUnit.PriceUnit {
+	return &domainPriceUnit.PriceUnit{
+		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE_UNIT),
+		Name:           r.Name,
+		Code:           r.Code,
+		Symbol:         r.Symbol,
+		BaseCurrency:   r.BaseCurrency,
+		ConversionRate: *r.ConversionRate,
+		Precision:      r.Precision,
+		EnvironmentID:  types.GetEnvironmentID(ctx),
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
 }
 
 // UpdatePricingUnitRequest represents the request to update an existing pricing unit

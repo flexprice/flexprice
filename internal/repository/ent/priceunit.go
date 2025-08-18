@@ -92,6 +92,8 @@ func (r *priceUnitRepository) Create(ctx context.Context, unit *domainPriceUnit.
 		SetBaseCurrency(unit.BaseCurrency).
 		SetConversionRate(unit.ConversionRate).
 		SetPrecision(unit.Precision).
+		SetCreatedBy(unit.CreatedBy).
+		SetUpdatedBy(unit.UpdatedBy).
 		SetStatus(string(types.StatusPublished)). // Set default status to published
 		SetTenantID(tenantID).                    // Always use context tenant ID
 		SetEnvironmentID(environmentID).          // Always use context environment ID
@@ -511,6 +513,10 @@ func (o PriceUnitQueryOptions) applyEntityQueryOptions(ctx context.Context, f *d
 		if f.TimeRangeFilter.EndTime != nil {
 			query = query.Where(priceunit.CreatedAtLTE(*f.TimeRangeFilter.EndTime))
 		}
+	}
+
+	if len(f.Codes) > 0 {
+		query = query.Where(priceunit.CodeIn(f.Codes...))
 	}
 
 	// Apply filters using the generic function

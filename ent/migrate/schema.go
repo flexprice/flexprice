@@ -949,7 +949,7 @@ var (
 		{Name: "customer_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "subscription_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "entity_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "entity_type", Type: field.TypeString, Default: "plan", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "entity_type", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "plan_display_name", Type: field.TypeString, Nullable: true},
 		{Name: "price_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "price_type", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -1306,17 +1306,12 @@ var (
 		PrimaryKey: []*schema.Column{PriceUnitColumns[0]},
 		Indexes: []*schema.Index{
 			{
-				Name:    "priceunit_code_tenant_id_environment_id",
+				Name:    "priceunit_tenant_id_environment_id_code",
 				Unique:  true,
-				Columns: []*schema.Column{PriceUnitColumns[9], PriceUnitColumns[1], PriceUnitColumns[7]},
+				Columns: []*schema.Column{PriceUnitColumns[1], PriceUnitColumns[7], PriceUnitColumns[9]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "status = 'published'",
 				},
-			},
-			{
-				Name:    "priceunit_tenant_id_environment_id",
-				Unique:  false,
-				Columns: []*schema.Column{PriceUnitColumns[1], PriceUnitColumns[7]},
 			},
 		},
 	}

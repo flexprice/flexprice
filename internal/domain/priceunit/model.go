@@ -105,6 +105,7 @@ func FromEnt(e *ent.PriceUnit) *PriceUnit {
 		BaseCurrency:   e.BaseCurrency,
 		ConversionRate: e.ConversionRate,
 		Precision:      e.Precision,
+		EnvironmentID:  e.EnvironmentID,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),
@@ -142,14 +143,10 @@ type PriceUnitFilter struct {
 	// Sort allows sorting by multiple fields
 	Sort []*types.SortCondition `json:"sort,omitempty" form:"sort" validate:"omitempty"`
 
+	Codes []string `json:"codes,omitempty" form:"codes" validate:"omitempty"`
+
 	// Status filters by price unit status
 	Status types.Status `json:"status,omitempty" form:"status"`
-
-	// TenantID filters by specific tenant ID
-	TenantID string `json:"tenant_id,omitempty" form:"tenant_id"`
-
-	// EnvironmentID filters by specific environment ID
-	EnvironmentID string `json:"environment_id,omitempty" form:"environment_id"`
 }
 
 // GetLimit implements BaseFilter interface

@@ -48,16 +48,6 @@ func priceUnitFilterFn(ctx context.Context, p *priceunit.PriceUnit, filter inter
 		return false
 	}
 
-	// Apply tenant ID filter if provided
-	if f.TenantID != "" && p.TenantID != f.TenantID {
-		return false
-	}
-
-	// Apply environment ID filter if provided
-	if f.EnvironmentID != "" && p.EnvironmentID != f.EnvironmentID {
-		return false
-	}
-
 	return true
 }
 

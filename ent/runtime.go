@@ -948,10 +948,6 @@ func init() {
 	invoicelineitemDescCustomerID := invoicelineitemFields[2].Descriptor()
 	// invoicelineitem.CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
 	invoicelineitem.CustomerIDValidator = invoicelineitemDescCustomerID.Validators[0].(func(string) error)
-	// invoicelineitemDescEntityType is the schema descriptor for entity_type field.
-	invoicelineitemDescEntityType := invoicelineitemFields[5].Descriptor()
-	// invoicelineitem.DefaultEntityType holds the default value on creation for the entity_type field.
-	invoicelineitem.DefaultEntityType = invoicelineitemDescEntityType.Default.(string)
 	// invoicelineitemDescAmount is the schema descriptor for amount field.
 	invoicelineitemDescAmount := invoicelineitemFields[15].Descriptor()
 	// invoicelineitem.DefaultAmount holds the default value on creation for the amount field.

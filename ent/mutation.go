@@ -26127,7 +26127,7 @@ func (m *InvoiceLineItemMutation) EntityType() (r string, exists bool) {
 // OldEntityType returns the old "entity_type" field's value of the InvoiceLineItem entity.
 // If the InvoiceLineItem object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *InvoiceLineItemMutation) OldEntityType(ctx context.Context) (v string, err error) {
+func (m *InvoiceLineItemMutation) OldEntityType(ctx context.Context) (v *string, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldEntityType is only allowed on UpdateOne operations")
 	}
@@ -26141,9 +26141,22 @@ func (m *InvoiceLineItemMutation) OldEntityType(ctx context.Context) (v string, 
 	return oldValue.EntityType, nil
 }
 
+// ClearEntityType clears the value of the "entity_type" field.
+func (m *InvoiceLineItemMutation) ClearEntityType() {
+	m.entity_type = nil
+	m.clearedFields[invoicelineitem.FieldEntityType] = struct{}{}
+}
+
+// EntityTypeCleared returns if the "entity_type" field was cleared in this mutation.
+func (m *InvoiceLineItemMutation) EntityTypeCleared() bool {
+	_, ok := m.clearedFields[invoicelineitem.FieldEntityType]
+	return ok
+}
+
 // ResetEntityType resets all changes to the "entity_type" field.
 func (m *InvoiceLineItemMutation) ResetEntityType() {
 	m.entity_type = nil
+	delete(m.clearedFields, invoicelineitem.FieldEntityType)
 }
 
 // SetPlanDisplayName sets the "plan_display_name" field.
@@ -27407,6 +27420,9 @@ func (m *InvoiceLineItemMutation) ClearedFields() []string {
 	if m.FieldCleared(invoicelineitem.FieldEntityID) {
 		fields = append(fields, invoicelineitem.FieldEntityID)
 	}
+	if m.FieldCleared(invoicelineitem.FieldEntityType) {
+		fields = append(fields, invoicelineitem.FieldEntityType)
+	}
 	if m.FieldCleared(invoicelineitem.FieldPlanDisplayName) {
 		fields = append(fields, invoicelineitem.FieldPlanDisplayName)
 	}
@@ -27471,6 +27487,9 @@ func (m *InvoiceLineItemMutation) ClearField(name string) error {
 		return nil
 	case invoicelineitem.FieldEntityID:
 		m.ClearEntityID()
+		return nil
+	case invoicelineitem.FieldEntityType:
+		m.ClearEntityType()
 		return nil
 	case invoicelineitem.FieldPlanDisplayName:
 		m.ClearPlanDisplayName()

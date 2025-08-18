@@ -966,6 +966,16 @@ func EntityTypeHasSuffix(v string) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldHasSuffix(FieldEntityType, v))
 }
 
+// EntityTypeIsNil applies the IsNil predicate on the "entity_type" field.
+func EntityTypeIsNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldIsNull(FieldEntityType))
+}
+
+// EntityTypeNotNil applies the NotNil predicate on the "entity_type" field.
+func EntityTypeNotNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNotNull(FieldEntityType))
+}
+
 // EntityTypeEqualFold applies the EqualFold predicate on the "entity_type" field.
 func EntityTypeEqualFold(v string) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldEqualFold(FieldEntityType, v))

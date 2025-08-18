@@ -91,9 +91,8 @@ func (PriceUnit) Edges() []ent.Edge {
 // Indexes of the PriceUnit.
 func (PriceUnit) Indexes() []ent.Index {
 	return []ent.Index{
-		index.Fields("code", "tenant_id", "environment_id").
+		index.Fields("tenant_id", "environment_id", "code").
 			Unique().
 			Annotations(entsql.IndexWhere("status = 'published'")),
-		index.Fields("tenant_id", "environment_id"),
 	}
 }
