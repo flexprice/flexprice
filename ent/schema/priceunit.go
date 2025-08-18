@@ -49,25 +49,33 @@ func (PriceUnit) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(3)",
 			}).
+			Immutable().
 			NotEmpty(),
+
 		field.String("symbol").
 			SchemaType(map[string]string{
 				"postgres": "varchar(10)",
 			}).
 			NotEmpty(),
+
 		field.String("base_currency").
 			SchemaType(map[string]string{
 				"postgres": "varchar(3)",
 			}).
+			Immutable().
 			NotEmpty(),
+
 		field.Other("conversion_rate", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(10,5)",
 			}).
+			Immutable().
 			Default(decimal.NewFromInt(1)),
+
 		field.Int("precision").
 			Default(0).
 			Min(0).
+			Immutable().
 			Max(8),
 	}
 }

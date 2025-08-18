@@ -213,20 +213,6 @@ func (s *PriceUnitService) Update(ctx context.Context, id string, req *dto.Updat
 			changes["symbol"] = req.Symbol
 		}
 	}
-	if req.Precision != 0 {
-		if req.Precision != existingUnit.Precision {
-			existingUnit.Precision = req.Precision
-			hasChanges = true
-			changes["precision"] = req.Precision
-		}
-	}
-	if req.ConversionRate != nil {
-		if !req.ConversionRate.Equal(existingUnit.ConversionRate) {
-			existingUnit.ConversionRate = *req.ConversionRate
-			hasChanges = true
-			changes["conversion_rate"] = req.ConversionRate.String()
-		}
-	}
 
 	// Check if any changes were actually made
 	if !hasChanges {
@@ -234,11 +220,9 @@ func (s *PriceUnitService) Update(ctx context.Context, id string, req *dto.Updat
 			WithMessage("provided values are the same as current values").
 			WithHint("Provide different values to update the price unit").
 			WithReportableDetails(map[string]interface{}{
-				"id":              id,
-				"name":            existingUnit.Name,
-				"symbol":          existingUnit.Symbol,
-				"precision":       existingUnit.Precision,
-				"conversion_rate": existingUnit.ConversionRate,
+				"id":     id,
+				"name":   existingUnit.Name,
+				"symbol": existingUnit.Symbol,
 			}).
 			Mark(ierr.ErrValidation)
 	}

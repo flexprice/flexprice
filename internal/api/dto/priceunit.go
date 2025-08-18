@@ -19,10 +19,8 @@ type CreatePriceUnitRequest struct {
 
 // UpdatePricingUnitRequest represents the request to update an existing pricing unit
 type UpdatePriceUnitRequest struct {
-	Name           string           `json:"name,omitempty" validate:"omitempty"`
-	Symbol         string           `json:"symbol,omitempty" validate:"omitempty,max=10"`
-	Precision      int              `json:"precision,omitempty" validate:"omitempty,gte=0,lte=8"`
-	ConversionRate *decimal.Decimal `json:"conversion_rate,omitempty" validate:"omitempty,gt=0"`
+	Name   string `json:"name,omitempty" validate:"omitempty"`
+	Symbol string `json:"symbol,omitempty" validate:"omitempty,max=10"`
 }
 
 // PricingUnitResponse represents the response for pricing unit operations

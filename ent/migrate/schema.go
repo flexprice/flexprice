@@ -1383,9 +1383,9 @@ var (
 		PrimaryKey: []*schema.Column{SettingsColumns[0]},
 		Indexes: []*schema.Index{
 			{
-				Name:    "settings_tenant_id_environment_id_key",
-				Unique:  false,
-				Columns: []*schema.Column{SettingsColumns[1], SettingsColumns[7], SettingsColumns[8]},
+				Name:    "settings_tenant_id_environment_id_status_key",
+				Unique:  true,
+				Columns: []*schema.Column{SettingsColumns[1], SettingsColumns[7], SettingsColumns[2], SettingsColumns[8]},
 			},
 		},
 	}

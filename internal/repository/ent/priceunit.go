@@ -269,8 +269,6 @@ func (r *priceUnitRepository) Update(ctx context.Context, unit *domainPriceUnit.
 		).
 		SetName(unit.Name).
 		SetSymbol(unit.Symbol).
-		SetPrecision(unit.Precision).
-		SetConversionRate(unit.ConversionRate).
 		SetStatus(string(unit.Status)).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).

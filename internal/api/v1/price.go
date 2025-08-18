@@ -141,6 +141,93 @@ func (h *PriceHandler) GetPrices(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+// @Summary Get prices by plan ID
+// @Description Get all prices associated with a specific plan
+// @Tags Prices
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param plan_id path string true "Plan ID"
+// @Success 200 {object} dto.ListPricesResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /prices/plan/{plan_id} [get]
+func (h *PriceHandler) GetPricesByPlanID(c *gin.Context) {
+	planID := c.Param("plan_id")
+	if planID == "" {
+		c.Error(ierr.NewError("plan_id is required").
+			WithHint("Plan ID is required").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.service.GetPricesByPlanID(c.Request.Context(), planID)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+// @Summary Get prices by subscription ID
+// @Description Get all prices associated with a specific subscription
+// @Tags Prices
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param subscription_id path string true "Subscription ID"
+// @Success 200 {object} dto.ListPricesResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /prices/subscription/{subscription_id} [get]
+func (h *PriceHandler) GetPricesBySubscriptionID(c *gin.Context) {
+	subscriptionID := c.Param("subscription_id")
+	if subscriptionID == "" {
+		c.Error(ierr.NewError("subscription_id is required").
+			WithHint("Subscription ID is required").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.service.GetPricesBySubscriptionID(c.Request.Context(), subscriptionID)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+// @Summary Get prices by addon ID
+// @Description Get all prices associated with a specific addon
+// @Tags Prices
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param addon_id path string true "Addon ID"
+// @Success 200 {object} dto.ListPricesResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /prices/addon/{addon_id} [get]
+func (h *PriceHandler) GetPricesByAddonID(c *gin.Context) {
+	addonID := c.Param("addon_id")
+	if addonID == "" {
+		c.Error(ierr.NewError("addon_id is required").
+			WithHint("Addon ID is required").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.service.GetPricesByAddonID(c.Request.Context(), addonID)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
 // @Summary Update a price
 // @Description Update a price with the specified configuration
 // @Tags Prices

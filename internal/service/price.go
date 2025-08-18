@@ -493,7 +493,7 @@ func (s *priceService) GetPricesByPlanID(ctx context.Context, planID string) (*d
 		WithEntityIDs([]string{planID}).
 		WithStatus(types.StatusPublished).
 		WithEntityType(types.PRICE_ENTITY_TYPE_PLAN).
-		WithExpand(string(types.ExpandMeters) + "," + string(types.ExpandPriceUnit))
+		WithExpand(string(types.ExpandMeters))
 
 	response, err := s.GetPrices(ctx, priceFilter)
 	if err != nil {
@@ -516,7 +516,7 @@ func (s *priceService) GetPricesBySubscriptionID(ctx context.Context, subscripti
 		WithSubscriptionID(subscriptionID).
 		WithEntityType(types.PRICE_ENTITY_TYPE_SUBSCRIPTION).
 		WithStatus(types.StatusPublished).
-		WithExpand(string(types.ExpandMeters) + "," + string(types.ExpandPriceUnit))
+		WithExpand(string(types.ExpandMeters))
 
 	response, err := s.GetPrices(ctx, priceFilter)
 	if err != nil {
@@ -538,7 +538,7 @@ func (s *priceService) GetPricesByAddonID(ctx context.Context, addonID string) (
 		WithEntityIDs([]string{addonID}).
 		WithEntityType(types.PRICE_ENTITY_TYPE_ADDON).
 		WithStatus(types.StatusPublished).
-		WithExpand(string(types.ExpandMeters) + "," + string(types.ExpandPriceUnit))
+		WithExpand(string(types.ExpandMeters))
 
 	response, err := s.GetPrices(ctx, priceFilter)
 	if err != nil {
@@ -592,26 +592,22 @@ func (s *priceService) GetPrices(ctx context.Context, filter *types.PriceFilter)
 
 	// If price units are requested to be expanded, fetch all price units in one query
 	var priceUnitsByID map[string]*dto.PriceUnitResponse
-	if filter.GetExpand().Has(types.ExpandPriceUnit) && len(prices) > 0 {
-		// Collect unique price unit IDs
-		priceUnitIDs := make(map[string]bool)
-		for _, p := range prices {
-			if p.PriceUnitID != "" {
-				priceUnitIDs[p.PriceUnitID] = true
-			}
+	// Collect unique price unit IDs
+	priceUnitIDs := make(map[string]bool)
+	for _, p := range prices {
+		if p.PriceUnitID != "" {
+			priceUnitIDs[p.PriceUnitID] = true
 		}
+	}
 
-		priceUnitsByID = make(map[string]*dto.PriceUnitResponse)
-		for priceUnitID := range priceUnitIDs {
-			priceUnit, err := s.PriceUnitRepo.GetByID(ctx, priceUnitID)
-			if err != nil {
-				s.Logger.Warnw("failed to fetch price unit", "price_unit_id", priceUnitID, "error", err)
-				continue
-			}
-			priceUnitsByID[priceUnitID] = &dto.PriceUnitResponse{PriceUnit: priceUnit}
+	priceUnitsByID = make(map[string]*dto.PriceUnitResponse)
+	for priceUnitID := range priceUnitIDs {
+		priceUnit, err := s.PriceUnitRepo.GetByID(ctx, priceUnitID)
+		if err != nil {
+			s.Logger.Warnw("failed to fetch price unit", "price_unit_id", priceUnitID, "error", err)
+			continue
 		}
-
-		s.Logger.Debugw("fetched price units for prices", "count", len(priceUnitsByID))
+		priceUnitsByID[priceUnitID] = &dto.PriceUnitResponse{PriceUnit: priceUnit}
 	}
 
 	// Build response with expanded fields
@@ -626,7 +622,7 @@ func (s *priceService) GetPrices(ctx context.Context, filter *types.PriceFilter)
 		}
 
 		// Add price unit if requested and available
-		if filter.GetExpand().Has(types.ExpandPriceUnit) && p.PriceUnitID != "" {
+		if p.PriceUnitID != "" {
 			if pu, ok := priceUnitsByID[p.PriceUnitID]; ok {
 				response.Items[i].PricingUnit = pu
 			}

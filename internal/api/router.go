@@ -138,6 +138,9 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			price.POST("/bulk", handlers.Price.CreateBulkPrice)
 			price.GET("", handlers.Price.GetPrices)
 			price.GET("/:id", handlers.Price.GetPrice)
+			price.GET("/plan/:plan_id", handlers.Price.GetPricesByPlanID)
+			price.GET("/subscription/:subscription_id", handlers.Price.GetPricesBySubscriptionID)
+			price.GET("/addon/:addon_id", handlers.Price.GetPricesByAddonID)
 			price.PUT("/:id", handlers.Price.UpdatePrice)
 			price.DELETE("/:id", handlers.Price.DeletePrice)
 
