@@ -2,7 +2,6 @@ package ent
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
@@ -15,13 +14,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/shopspring/decimal"
-)
-
-const (
-	// Cache constants for better maintainability
-	cacheKeyPrefix = "priceunit:v1:"
-	cacheExpiry    = cache.ExpiryDefaultInMemory
 )
 
 type priceUnitRepository struct {
@@ -31,7 +23,6 @@ type priceUnitRepository struct {
 	cache     cache.Cache
 }
 
-// NewPriceUnitRepository creates a new instance of priceUnitRepository
 func NewPriceUnitRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainPriceUnit.Repository {
 	return &priceUnitRepository{
 		client:    client,
@@ -39,50 +30,6 @@ func NewPriceUnitRepository(client postgres.IClient, log *logger.Logger, cache c
 		queryOpts: PriceUnitQueryOptions{},
 		cache:     cache,
 	}
-}
-
-// validateTenantAndEnvironment validates tenant and environment isolation
-func (r *priceUnitRepository) validateTenantAndEnvironment(ctx context.Context, tenantID, environmentID string) error {
-	ctxTenantID := types.GetTenantID(ctx)
-	ctxEnvironmentID := types.GetEnvironmentID(ctx)
-
-	if tenantID != ctxTenantID {
-		return ierr.WithError(errors.New("tenant ID does not match context tenant ID")).
-			WithHint("Cannot access price unit from different tenant").
-			WithReportableDetails(map[string]any{
-				"expected_tenant_id": ctxTenantID,
-				"actual_tenant_id":   tenantID,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	if environmentID != ctxEnvironmentID {
-		return ierr.WithError(errors.New("environment ID does not match context environment ID")).
-			WithHint("Cannot access price unit from different environment").
-			WithReportableDetails(map[string]any{
-				"expected_environment_id": ctxEnvironmentID,
-				"actual_environment_id":   environmentID,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	return nil
-}
-
-// buildBaseQuery creates a base query with tenant and environment filters
-func (r *priceUnitRepository) buildBaseQuery(ctx context.Context, client *ent.Client) *ent.PriceUnitQuery {
-	return client.PriceUnit.Query().
-		Where(
-			priceunit.TenantID(types.GetTenantID(ctx)),
-			priceunit.EnvironmentID(types.GetEnvironmentID(ctx)),
-		)
-}
-
-// generateCacheKey generates a consistent cache key for price units
-func (r *priceUnitRepository) generateCacheKey(ctx context.Context, id string) string {
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	return cache.GenerateKey(cache.PrefixPriceUnit, tenantID, environmentID, id)
 }
 
 func (r *priceUnitRepository) Create(ctx context.Context, unit *domainPriceUnit.PriceUnit) error {
@@ -100,23 +47,13 @@ func (r *priceUnitRepository) Create(ctx context.Context, unit *domainPriceUnit.
 	})
 	defer FinishSpan(span)
 
-	// Get tenant and environment from context
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-
-	// Validate tenant isolation
-	if err := r.validateTenantAndEnvironment(ctx, unit.TenantID, unit.EnvironmentID); err != nil {
-		SetSpanError(span, err)
-		return err
-	}
-
 	// Set environment ID from context if not already set
 	if unit.EnvironmentID == "" {
-		unit.EnvironmentID = environmentID
+		unit.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
 
-	// Use a builder pattern for cleaner code
-	builder := client.PriceUnit.Create().
+	// Create the price unit using the standard Ent API
+	priceUnitBuilder := client.PriceUnit.Create().
 		SetID(unit.ID).
 		SetName(unit.Name).
 		SetCode(unit.Code).
@@ -127,18 +64,18 @@ func (r *priceUnitRepository) Create(ctx context.Context, unit *domainPriceUnit.
 		SetCreatedBy(unit.CreatedBy).
 		SetUpdatedBy(unit.UpdatedBy).
 		SetStatus(string(types.StatusPublished)).
-		SetTenantID(tenantID).
-		SetEnvironmentID(environmentID)
+		SetTenantID(unit.TenantID).
+		SetEnvironmentID(unit.EnvironmentID)
 
 	// Only set timestamps if they're not zero
 	if !unit.CreatedAt.IsZero() {
-		builder.SetCreatedAt(unit.CreatedAt)
+		priceUnitBuilder.SetCreatedAt(unit.CreatedAt)
 	}
 	if !unit.UpdatedAt.IsZero() {
-		builder.SetUpdatedAt(unit.UpdatedAt)
+		priceUnitBuilder.SetUpdatedAt(unit.UpdatedAt)
 	}
 
-	_, err := builder.Save(ctx)
+	_, err := priceUnitBuilder.Save(ctx)
 	if err != nil {
 		SetSpanError(span, err)
 
@@ -159,7 +96,6 @@ func (r *priceUnitRepository) Create(ctx context.Context, unit *domainPriceUnit.
 	return nil
 }
 
-// GetByID retrieves a pricing unit by ID
 func (r *priceUnitRepository) GetByID(ctx context.Context, id string) (*domainPriceUnit.PriceUnit, error) {
 	span := StartRepositorySpan(ctx, "price_unit", "get", map[string]interface{}{
 		"price_unit_id": id,
@@ -178,8 +114,12 @@ func (r *priceUnitRepository) GetByID(ctx context.Context, id string) (*domainPr
 		"tenant_id", types.GetTenantID(ctx),
 	)
 
-	unit, err := r.buildBaseQuery(ctx, client).
-		Where(priceunit.ID(id)).
+	unit, err := client.PriceUnit.Query().
+		Where(
+			priceunit.ID(id),
+			priceunit.TenantID(types.GetTenantID(ctx)),
+			priceunit.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
 		Only(ctx)
 
 	if err != nil {
@@ -293,8 +233,7 @@ func (r *priceUnitRepository) Update(ctx context.Context, unit *domainPriceUnit.
 	})
 	defer FinishSpan(span)
 
-	// Use builder pattern for cleaner update
-	builder := client.PriceUnit.Update().
+	_, err := client.PriceUnit.Update().
 		Where(
 			priceunit.ID(unit.ID),
 			priceunit.TenantID(types.GetTenantID(ctx)),
@@ -304,9 +243,9 @@ func (r *priceUnitRepository) Update(ctx context.Context, unit *domainPriceUnit.
 		SetSymbol(unit.Symbol).
 		SetStatus(string(unit.Status)).
 		SetUpdatedAt(time.Now().UTC()).
-		SetUpdatedBy(types.GetUserID(ctx))
+		SetUpdatedBy(types.GetUserID(ctx)).
+		Save(ctx)
 
-	_, err := builder.Save(ctx)
 	if err != nil {
 		SetSpanError(span, err)
 
@@ -373,26 +312,25 @@ func (r *priceUnitRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-func (r *priceUnitRepository) GetByCode(ctx context.Context, code string, tenantID string, environmentID string, status string) (*domainPriceUnit.PriceUnit, error) {
+func (r *priceUnitRepository) GetByCode(ctx context.Context, code string, status string) (*domainPriceUnit.PriceUnit, error) {
 	span := StartRepositorySpan(ctx, "price_unit", "get_by_code", map[string]interface{}{
 		"code": code,
 	})
 	defer FinishSpan(span)
 
-	// Validate tenant and environment isolation
-	if err := r.validateTenantAndEnvironment(ctx, tenantID, environmentID); err != nil {
-		SetSpanError(span, err)
-		return nil, err
-	}
-
 	client := r.client.Querier(ctx)
 
 	// Build query with base filters
-	q := r.buildBaseQuery(ctx, client).Where(priceunit.CodeEQ(code))
+	q := client.PriceUnit.Query().
+		Where(
+			priceunit.Code(code),
+			priceunit.TenantID(types.GetTenantID(ctx)),
+			priceunit.EnvironmentID(types.GetEnvironmentID(ctx)),
+		)
 
 	// Add status filter if specified
 	if status != "" {
-		q = q.Where(priceunit.StatusEQ(status))
+		q = q.Where(priceunit.Status(status))
 	}
 
 	unit, err := q.Only(ctx)
@@ -416,29 +354,6 @@ func (r *priceUnitRepository) GetByCode(ctx context.Context, code string, tenant
 	return domainPriceUnit.FromEnt(unit), nil
 }
 
-// getPublishedUnitByCode is a helper method to get published units by code
-func (r *priceUnitRepository) getPublishedUnitByCode(ctx context.Context, code string) (*domainPriceUnit.PriceUnit, error) {
-	return r.GetByCode(ctx, code, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), string(types.StatusPublished))
-}
-
-func (r *priceUnitRepository) ConvertToBaseCurrency(ctx context.Context, code string, tenantID string, environmentID string, priceUnitAmount decimal.Decimal) (decimal.Decimal, error) {
-	unit, err := r.getPublishedUnitByCode(ctx, code)
-	if err != nil {
-		return decimal.Zero, err
-	}
-	// amount in fiat currency = amount in custom currency * conversion_rate
-	return priceUnitAmount.Mul(unit.ConversionRate), nil
-}
-
-func (r *priceUnitRepository) ConvertToPriceUnit(ctx context.Context, code string, tenantID string, environmentID string, fiatAmount decimal.Decimal) (decimal.Decimal, error) {
-	unit, err := r.getPublishedUnitByCode(ctx, code)
-	if err != nil {
-		return decimal.Zero, err
-	}
-	// amount in custom currency = amount in fiat currency / conversion_rate
-	return fiatAmount.Div(unit.ConversionRate), nil
-}
-
 // PriceUnitQuery type alias for better readability
 type PriceUnitQuery = *ent.PriceUnitQuery
 
@@ -446,13 +361,13 @@ type PriceUnitQuery = *ent.PriceUnitQuery
 type PriceUnitQueryOptions struct{}
 
 func (o PriceUnitQueryOptions) ApplyTenantFilter(ctx context.Context, query PriceUnitQuery) PriceUnitQuery {
-	return query.Where(priceunit.TenantIDEQ(types.GetTenantID(ctx)))
+	return query.Where(priceunit.TenantID(types.GetTenantID(ctx)))
 }
 
 func (o PriceUnitQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query PriceUnitQuery) PriceUnitQuery {
 	environmentID := types.GetEnvironmentID(ctx)
 	if environmentID != "" {
-		return query.Where(priceunit.EnvironmentIDEQ(environmentID))
+		return query.Where(priceunit.EnvironmentID(environmentID))
 	}
 	return query
 }
@@ -465,41 +380,38 @@ func (o PriceUnitQueryOptions) ApplyStatusFilter(query PriceUnitQuery, status st
 }
 
 func (o PriceUnitQueryOptions) ApplySortFilter(query PriceUnitQuery, field string, order string) PriceUnitQuery {
-	if field != "" {
-		if order == types.OrderDesc {
-			query = query.Order(ent.Desc(o.GetFieldName(field)))
-		} else {
-			query = query.Order(ent.Asc(o.GetFieldName(field)))
-		}
+	orderFunc := ent.Desc
+	if order == "asc" {
+		orderFunc = ent.Asc
 	}
-	return query
+	return query.Order(orderFunc(o.GetFieldName(field)))
 }
 
 func (o PriceUnitQueryOptions) ApplyPaginationFilter(query PriceUnitQuery, limit int, offset int) PriceUnitQuery {
-	if limit > 0 {
-		query = query.Limit(limit)
-	}
+	query = query.Limit(limit)
 	if offset > 0 {
 		query = query.Offset(offset)
 	}
 	return query
 }
 
-// fieldMapping provides a centralized mapping for field names
-var fieldMapping = map[string]string{
-	"created_at": priceunit.FieldCreatedAt,
-	"updated_at": priceunit.FieldUpdatedAt,
-	"name":       priceunit.FieldName,
-	"code":       priceunit.FieldCode,
-	"symbol":     priceunit.FieldSymbol,
-	"status":     priceunit.FieldStatus,
-}
-
 func (o PriceUnitQueryOptions) GetFieldName(field string) string {
-	if fieldName, exists := fieldMapping[field]; exists {
-		return fieldName
+	switch field {
+	case "created_at":
+		return priceunit.FieldCreatedAt
+	case "updated_at":
+		return priceunit.FieldUpdatedAt
+	case "name":
+		return priceunit.FieldName
+	case "code":
+		return priceunit.FieldCode
+	case "symbol":
+		return priceunit.FieldSymbol
+	case "status":
+		return priceunit.FieldStatus
+	default:
+		return field
 	}
-	return ""
 }
 
 func (o PriceUnitQueryOptions) GetFieldResolver(field string) (string, error) {
@@ -566,52 +478,41 @@ func (o PriceUnitQueryOptions) applyEntityQueryOptions(ctx context.Context, f *d
 	return query, nil
 }
 
-// Cache operations with improved error handling and consistency
 func (r *priceUnitRepository) SetCache(ctx context.Context, priceUnit *domainPriceUnit.PriceUnit) {
-	if priceUnit == nil {
-		return
-	}
-
 	span := cache.StartCacheSpan(ctx, "price_unit", "set", map[string]interface{}{
 		"price_unit_id": priceUnit.ID,
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := r.generateCacheKey(ctx, priceUnit.ID)
-	r.cache.Set(ctx, cacheKey, priceUnit, cacheExpiry)
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	cacheKey := cache.GenerateKey(cache.PrefixPriceUnit, tenantID, environmentID, priceUnit.ID)
+	r.cache.Set(ctx, cacheKey, priceUnit, cache.ExpiryDefaultInMemory)
 }
 
 func (r *priceUnitRepository) GetCache(ctx context.Context, key string) *domainPriceUnit.PriceUnit {
-	if key == "" {
-		return nil
-	}
-
 	span := cache.StartCacheSpan(ctx, "price_unit", "get", map[string]interface{}{
 		"price_unit_id": key,
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := r.generateCacheKey(ctx, key)
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	cacheKey := cache.GenerateKey(cache.PrefixPriceUnit, tenantID, environmentID, key)
 	if value, found := r.cache.Get(ctx, cacheKey); found {
-		if priceUnit, ok := value.(*domainPriceUnit.PriceUnit); ok {
-			return priceUnit
-		}
-		// Invalid cache entry, remove it
-		r.cache.Delete(ctx, cacheKey)
+		return value.(*domainPriceUnit.PriceUnit)
 	}
 	return nil
 }
 
 func (r *priceUnitRepository) DeleteCache(ctx context.Context, priceUnitID string) {
-	if priceUnitID == "" {
-		return
-	}
-
 	span := cache.StartCacheSpan(ctx, "price_unit", "delete", map[string]interface{}{
 		"price_unit_id": priceUnitID,
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := r.generateCacheKey(ctx, priceUnitID)
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	cacheKey := cache.GenerateKey(cache.PrefixPriceUnit, tenantID, environmentID, priceUnitID)
 	r.cache.Delete(ctx, cacheKey)
 }

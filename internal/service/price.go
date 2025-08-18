@@ -243,9 +243,7 @@ func (s *priceService) createPriceWithUnitConfig(ctx context.Context, req dto.Cr
 	}
 
 	// Fetch the price unit by code, tenant, and environment
-	tenantID := types.GetTenantID(ctx)
-	envID := types.GetEnvironmentID(ctx)
-	priceUnit, err := s.PriceUnitRepo.GetByCode(ctx, req.PriceUnitConfig.PriceUnit, tenantID, envID, string(types.StatusPublished))
+	priceUnit, err := s.PriceUnitRepo.GetByCode(ctx, req.PriceUnitConfig.PriceUnit, string(types.StatusPublished))
 	if err != nil || priceUnit == nil {
 		return nil, ierr.NewError("invalid or unpublished price unit").
 			WithHint("Price unit must exist and be published").
@@ -253,12 +251,7 @@ func (s *priceService) createPriceWithUnitConfig(ctx context.Context, req dto.Cr
 	}
 
 	// Convert FROM price unit TO base currency
-	baseAmount, err := s.PriceUnitRepo.ConvertToBaseCurrency(ctx, req.PriceUnitConfig.PriceUnit, tenantID, envID, priceUnitAmount)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to convert price unit amount to base currency").
-			Mark(ierr.ErrInternal)
-	}
+	baseAmount := priceUnitAmount.Mul(priceUnit.ConversionRate)
 
 	// Round to the price unit's precision
 	priceUnitAmount = priceUnitAmount.Round(int32(priceUnit.Precision))
@@ -300,17 +293,7 @@ func (s *priceService) createPriceWithUnitConfig(ctx context.Context, req dto.Cr
 			}
 
 			// Convert tier unit amount from price unit to base currency
-			convertedUnitAmount, err := s.PriceUnitRepo.ConvertToBaseCurrency(ctx, req.PriceUnitConfig.PriceUnit, tenantID, envID, unitAmount)
-			if err != nil {
-				return nil, ierr.WithError(err).
-					WithHint("Failed to convert tier unit amount to base currency").
-					WithReportableDetails(map[string]interface{}{
-						"tier_index":  i,
-						"unit_amount": tier.UnitAmount,
-						"price_unit":  req.PriceUnitConfig.PriceUnit,
-					}).
-					Mark(ierr.ErrInternal)
-			}
+			convertedUnitAmount := unitAmount.Mul(priceUnit.ConversionRate)
 
 			var flatAmount *decimal.Decimal
 			var priceUnitFlatAmount *decimal.Decimal
@@ -329,17 +312,7 @@ func (s *priceService) createPriceWithUnitConfig(ctx context.Context, req dto.Cr
 				priceUnitTiers[i].FlatAmount = priceUnitFlatAmount
 
 				// Convert tier flat amount from price unit to base currency
-				convertedFlatAmount, err := s.PriceUnitRepo.ConvertToBaseCurrency(ctx, req.PriceUnitConfig.PriceUnit, tenantID, envID, parsed)
-				if err != nil {
-					return nil, ierr.WithError(err).
-						WithHint("Failed to convert tier flat amount to base currency").
-						WithReportableDetails(map[string]interface{}{
-							"tier_index":  i,
-							"flat_amount": tier.FlatAmount,
-							"price_unit":  req.PriceUnitConfig.PriceUnit,
-						}).
-						Mark(ierr.ErrInternal)
-				}
+				convertedFlatAmount := parsed.Mul(priceUnit.ConversionRate)
 				flatAmount = &convertedFlatAmount
 			}
 
@@ -403,7 +376,7 @@ func (s *priceService) createPriceWithUnitConfig(ctx context.Context, req dto.Cr
 		Tiers:              tiers,
 		PriceUnitTiers:     priceUnitTiers,
 		TransformQuantity:  transformQuantity,
-		EnvironmentID:      envID,
+		EnvironmentID:      types.GetEnvironmentID(ctx),
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 		// Price unit fields - set all from the fetched price unit
 		PriceUnit:              priceUnit.Code,

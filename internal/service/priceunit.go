@@ -84,8 +84,8 @@ func (s *PriceUnitService) GetByID(ctx context.Context, id string) (*dto.PriceUn
 	return s.toResponse(unit), nil
 }
 
-func (s *PriceUnitService) GetByCode(ctx context.Context, code, tenantID, environmentID string) (*dto.PriceUnitResponse, error) {
-	unit, err := s.PriceUnitRepo.GetByCode(ctx, strings.ToLower(code), tenantID, environmentID, string(types.StatusPublished))
+func (s *PriceUnitService) GetByCode(ctx context.Context, code string) (*dto.PriceUnitResponse, error) {
+	unit, err := s.PriceUnitRepo.GetByCode(ctx, strings.ToLower(code), string(types.StatusPublished))
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +203,7 @@ func (s *PriceUnitService) Delete(ctx context.Context, id string) error {
 
 // ConvertToBaseCurrency converts an amount from pricing unit to base currency
 // amount in fiat currency = amount in pricing unit * conversion_rate
-func (s *PriceUnitService) ConvertToBaseCurrency(ctx context.Context, code, tenantID, environmentID string, priceUnitAmount decimal.Decimal) (decimal.Decimal, error) {
+func (s *PriceUnitService) ConvertToBaseCurrency(ctx context.Context, code string, priceUnitAmount decimal.Decimal) (decimal.Decimal, error) {
 	if priceUnitAmount.IsZero() {
 		return decimal.Zero, nil
 	}
@@ -218,12 +218,18 @@ func (s *PriceUnitService) ConvertToBaseCurrency(ctx context.Context, code, tena
 			Mark(ierr.ErrValidation)
 	}
 
-	return s.PriceUnitRepo.ConvertToBaseCurrency(ctx, strings.ToLower(code), tenantID, environmentID, priceUnitAmount)
+	// Get the price unit to get the conversion rate
+	unit, err := s.PriceUnitRepo.GetByCode(ctx, strings.ToLower(code), string(types.StatusPublished))
+	if err != nil {
+		return decimal.Zero, err
+	}
+
+	return priceUnitAmount.Mul(unit.ConversionRate), nil
 }
 
 // ConvertToPriceUnit converts an amount from base currency to pricing unit
 // amount in pricing unit = amount in fiat currency / conversion_rate
-func (s *PriceUnitService) ConvertToPriceUnit(ctx context.Context, code, tenantID, environmentID string, fiatAmount decimal.Decimal) (decimal.Decimal, error) {
+func (s *PriceUnitService) ConvertToPriceUnit(ctx context.Context, code string, fiatAmount decimal.Decimal) (decimal.Decimal, error) {
 	if fiatAmount.IsZero() {
 		return decimal.Zero, nil
 	}
@@ -238,27 +244,13 @@ func (s *PriceUnitService) ConvertToPriceUnit(ctx context.Context, code, tenantI
 			Mark(ierr.ErrValidation)
 	}
 
-	return s.PriceUnitRepo.ConvertToPriceUnit(ctx, strings.ToLower(code), tenantID, environmentID, fiatAmount)
-}
-
-// checkCodeExists checks if a price unit code already exists for the given tenant and environment
-func (s *PriceUnitService) checkCodeExists(ctx context.Context, code string) (bool, error) {
-	// Create a filter to check for existing code using FilterCondition
-	filter := &domainPriceUnit.PriceUnitFilter{
-		Status:      types.StatusPublished,
-		QueryFilter: types.NewNoLimitQueryFilter(),
-		Codes:       []string{code},
-	}
-
-	count, err := s.PriceUnitRepo.Count(ctx, filter)
+	// Get the price unit to get the conversion rate
+	unit, err := s.PriceUnitRepo.GetByCode(ctx, strings.ToLower(code), string(types.StatusPublished))
 	if err != nil {
-		return false, ierr.WithError(err).
-			WithMessage("failed to check if code exists").
-			WithHint("Failed to check if code exists").
-			Mark(ierr.ErrDatabase)
+		return decimal.Zero, err
 	}
 
-	return count > 0, nil
+	return fiatAmount.Div(unit.ConversionRate), nil
 }
 
 // checkPriceUnitInUse checks if a price unit is being used by any prices

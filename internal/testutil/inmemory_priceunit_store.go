@@ -6,7 +6,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/priceunit"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/shopspring/decimal"
 )
 
 // InMemoryPriceUnitStore implements priceunit.Repository
@@ -106,9 +105,12 @@ func (s *InMemoryPriceUnitStore) GetByID(ctx context.Context, id string) (*price
 	return p, nil
 }
 
-func (s *InMemoryPriceUnitStore) GetByCode(ctx context.Context, code, tenantID, environmentID string, status string) (*priceunit.PriceUnit, error) {
+func (s *InMemoryPriceUnitStore) GetByCode(ctx context.Context, code, status string) (*priceunit.PriceUnit, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
 
 	for _, unit := range s.items {
 		if unit.Code == code && unit.TenantID == tenantID && unit.EnvironmentID == environmentID {
@@ -189,20 +191,4 @@ func (s *InMemoryPriceUnitStore) Delete(ctx context.Context, id string) error {
 			Mark(ierr.ErrDatabase)
 	}
 	return nil
-}
-
-func (s *InMemoryPriceUnitStore) ConvertToBaseCurrency(ctx context.Context, code, tenantID, environmentID string, priceUnitAmount decimal.Decimal) (decimal.Decimal, error) {
-	unit, err := s.GetByCode(ctx, code, tenantID, environmentID, string(types.StatusPublished))
-	if err != nil {
-		return decimal.Zero, err
-	}
-	return unit.ConvertToBaseCurrency(priceUnitAmount), nil
-}
-
-func (s *InMemoryPriceUnitStore) ConvertToPriceUnit(ctx context.Context, code, tenantID, environmentID string, fiatAmount decimal.Decimal) (decimal.Decimal, error) {
-	unit, err := s.GetByCode(ctx, code, tenantID, environmentID, string(types.StatusPublished))
-	if err != nil {
-		return decimal.Zero, err
-	}
-	return unit.ConvertFromBaseCurrency(fiatAmount), nil
 }

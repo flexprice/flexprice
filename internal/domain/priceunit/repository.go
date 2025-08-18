@@ -2,8 +2,6 @@ package priceunit
 
 import (
 	"context"
-
-	"github.com/shopspring/decimal"
 )
 
 // Repository defines the interface for price unit persistence
@@ -28,19 +26,9 @@ type Repository interface {
 
 	// Get operations
 
-	// GetByCode fetches a pricing unit by its code, tenant, and environment (optionally status)
-	GetByCode(ctx context.Context, code, tenantID, environmentID string, status string) (*PriceUnit, error)
+	// GetByCode fetches a pricing unit by its code and status
+	GetByCode(ctx context.Context, code, status string) (*PriceUnit, error)
 
 	// GetByID fetches a pricing unit by its ID
 	GetByID(ctx context.Context, id string) (*PriceUnit, error)
-
-	// Convert operations
-
-	// ConvertToBaseCurrency converts an amount from pricing unit to base currency
-	// amount in fiat currency = amount in pricing unit * conversion_rate
-	ConvertToBaseCurrency(ctx context.Context, code, tenantID, environmentID string, priceUnitAmount decimal.Decimal) (decimal.Decimal, error)
-
-	// ConvertToPriceUnit converts an amount from base currency to custom pricing unit
-	// amount in pricing unit = amount in fiat currency / conversion_rate
-	ConvertToPriceUnit(ctx context.Context, code, tenantID, environmentID string, fiatAmount decimal.Decimal) (decimal.Decimal, error)
 }

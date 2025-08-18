@@ -105,13 +105,14 @@ func (s *billingService) CalculateFixedCharges(
 		// Calculate price unit amount if price unit is available
 		var priceUnitAmount *decimal.Decimal
 		if item.PriceUnit != "" {
-			convertedAmount, err := s.PriceUnitRepo.ConvertToPriceUnit(ctx, item.PriceUnit, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), amount)
+			// Get the price unit to get the conversion rate
+			unit, err := s.PriceUnitRepo.GetByCode(ctx, item.PriceUnit, string(types.StatusPublished))
 			if err != nil {
-				s.Logger.Warnw("failed to convert amount to price unit",
+				s.Logger.Warnw("failed to get price unit for conversion",
 					"error", err,
-					"price_unit", item.PriceUnit,
-					"amount", amount)
+					"price_unit", item.PriceUnit)
 			} else {
+				convertedAmount := amount.Div(unit.ConversionRate)
 				priceUnitAmount = &convertedAmount
 			}
 		}
@@ -349,13 +350,14 @@ func (s *billingService) CalculateUsageCharges(
 			// Calculate price unit amount if price unit is available
 			var priceUnitAmount *decimal.Decimal
 			if item.PriceUnit != "" {
-				convertedAmount, err := s.PriceUnitRepo.ConvertToPriceUnit(ctx, item.PriceUnit, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), lineItemAmount)
+				// Get the price unit to get the conversion rate
+				unit, err := s.PriceUnitRepo.GetByCode(ctx, item.PriceUnit, string(types.StatusPublished))
 				if err != nil {
-					s.Logger.Warnw("failed to convert amount to price unit",
+					s.Logger.Warnw("failed to get price unit for conversion",
 						"error", err,
-						"price_unit", item.PriceUnit,
-						"amount", lineItemAmount)
+						"price_unit", item.PriceUnit)
 				} else {
+					convertedAmount := lineItemAmount.Div(unit.ConversionRate)
 					priceUnitAmount = &convertedAmount
 				}
 			}
