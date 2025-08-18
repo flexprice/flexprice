@@ -321,6 +321,44 @@ func (s *invoiceService) GetInvoice(ctx context.Context, id string) (*dto.Invoic
 
 	response.Taxes = appliedTaxes.Items
 
+	// Get price units for line items that have price unit IDs
+	if len(response.LineItems) > 0 {
+		// Collect unique price unit IDs
+		priceUnitCodes := make(map[string]bool)
+		for _, item := range response.LineItems {
+			if item.PriceUnit != nil {
+				priceUnitCodes[lo.FromPtr(item.PriceUnit)] = true
+			}
+		}
+
+		// Batch fetch price units if there are any
+		if len(priceUnitCodes) > 0 {
+			priceUnitService := NewPriceUnitService(s.ServiceParams)
+			filter := priceunit.NewNoLimitPriceUnitFilter()
+			filter.Codes = lo.Keys(priceUnitCodes)
+
+			priceUnits, err := priceUnitService.List(ctx, filter)
+			if err != nil {
+				return nil, err
+			}
+
+			// Create a map for quick lookup
+			priceUnitsMap := make(map[string]*dto.PriceUnitResponse)
+			for _, priceUnit := range priceUnits.Items {
+				priceUnitsMap[priceUnit.PriceUnit.Code] = priceUnit
+			}
+
+			// Assign price units to line items
+			for _, item := range response.LineItems {
+				if item.PriceUnit != nil {
+					if priceUnit, exists := priceUnitsMap[lo.FromPtr(item.PriceUnit)]; exists {
+						item.PricingUnit = priceUnit
+					}
+				}
+			}
+		}
+	}
+
 	return response, nil
 }
 
@@ -935,18 +973,18 @@ func (s *invoiceService) GetPreviewInvoice(ctx context.Context, req dto.GetPrevi
 	// Get price units for line items that have price unit IDs
 	if len(response.LineItems) > 0 {
 		// Collect unique price unit IDs
-		priceUnitIDs := make(map[string]bool)
+		priceUnitCodes := make(map[string]bool)
 		for _, item := range response.LineItems {
-			if item.PriceUnitID != nil {
-				priceUnitIDs[lo.FromPtr(item.PriceUnitID)] = true
+			if item.PriceUnit != nil {
+				priceUnitCodes[lo.FromPtr(item.PriceUnit)] = true
 			}
 		}
 
 		// Batch fetch price units if there are any
-		if len(priceUnitIDs) > 0 {
+		if len(priceUnitCodes) > 0 {
 			priceUnitService := NewPriceUnitService(s.ServiceParams)
 			filter := priceunit.NewNoLimitPriceUnitFilter()
-			filter.PriceUnitIDs = lo.Keys(priceUnitIDs)
+			filter.Codes = lo.Keys(priceUnitCodes)
 
 			priceUnits, err := priceUnitService.List(ctx, filter)
 			if err != nil {
@@ -956,13 +994,13 @@ func (s *invoiceService) GetPreviewInvoice(ctx context.Context, req dto.GetPrevi
 			// Create a map for quick lookup
 			priceUnitsMap := make(map[string]*dto.PriceUnitResponse)
 			for _, priceUnit := range priceUnits.Items {
-				priceUnitsMap[priceUnit.ID] = priceUnit
+				priceUnitsMap[priceUnit.PriceUnit.Code] = priceUnit
 			}
 
 			// Assign price units to line items
 			for _, item := range response.LineItems {
-				if item.PriceUnitID != nil {
-					if priceUnit, exists := priceUnitsMap[lo.FromPtr(item.PriceUnitID)]; exists {
+				if item.PriceUnit != nil {
+					if priceUnit, exists := priceUnitsMap[lo.FromPtr(item.PriceUnit)]; exists {
 						item.PricingUnit = priceUnit
 					}
 				}
