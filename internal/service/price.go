@@ -242,8 +242,8 @@ func (s *priceService) createPriceWithUnitConfig(ctx context.Context, req dto.Cr
 		}
 	}
 
-	// Fetch the price unit by code, tenant, and environment
-	priceUnit, err := s.PriceUnitRepo.GetByCode(ctx, req.PriceUnitConfig.PriceUnit, string(types.StatusPublished))
+	// Fetch the price unit by code
+	priceUnit, err := s.PriceUnitRepo.GetByCode(ctx, req.PriceUnitConfig.PriceUnit)
 	if err != nil || priceUnit == nil {
 		return nil, ierr.NewError("invalid or unpublished price unit").
 			WithHint("Price unit must exist and be published").
@@ -444,7 +444,7 @@ func (s *priceService) GetPrice(ctx context.Context, id string) (*dto.PriceRespo
 	}
 
 	if price.PriceUnitID != "" {
-		priceUnit, err := s.PriceUnitRepo.GetByID(ctx, price.PriceUnitID)
+		priceUnit, err := s.PriceUnitRepo.Get(ctx, price.PriceUnitID)
 		if err != nil {
 			s.Logger.Warnw("failed to fetch price unit", "price_unit_id", price.PriceUnitID, "error", err)
 			return nil, err
@@ -575,7 +575,7 @@ func (s *priceService) GetPrices(ctx context.Context, filter *types.PriceFilter)
 
 	priceUnitsByID = make(map[string]*dto.PriceUnitResponse)
 	for priceUnitID := range priceUnitIDs {
-		priceUnit, err := s.PriceUnitRepo.GetByID(ctx, priceUnitID)
+		priceUnit, err := s.PriceUnitRepo.Get(ctx, priceUnitID)
 		if err != nil {
 			s.Logger.Warnw("failed to fetch price unit", "price_unit_id", priceUnitID, "error", err)
 			continue

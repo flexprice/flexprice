@@ -26,9 +26,9 @@ type Repository interface {
 
 	// Get operations
 
-	// GetByCode fetches a pricing unit by its code and status
-	GetByCode(ctx context.Context, code, status string) (*PriceUnit, error)
+	// GetByCode fetches a pricing unit by its code
+	GetByCode(ctx context.Context, code string) (*PriceUnit, error)
 
-	// GetByID fetches a pricing unit by its ID
-	GetByID(ctx context.Context, id string) (*PriceUnit, error)
+	// Get fetches a pricing unit by its ID
+	Get(ctx context.Context, id string) (*PriceUnit, error)
 }

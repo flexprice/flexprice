@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"strings"
-	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainPriceUnit "github.com/flexprice/flexprice/internal/domain/priceunit"
@@ -76,7 +75,7 @@ func (s *PriceUnitService) List(ctx context.Context, filter *domainPriceUnit.Pri
 
 // GetByID retrieves a pricing unit by ID
 func (s *PriceUnitService) GetByID(ctx context.Context, id string) (*dto.PriceUnitResponse, error) {
-	unit, err := s.PriceUnitRepo.GetByID(ctx, id)
+	unit, err := s.PriceUnitRepo.Get(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +84,7 @@ func (s *PriceUnitService) GetByID(ctx context.Context, id string) (*dto.PriceUn
 }
 
 func (s *PriceUnitService) GetByCode(ctx context.Context, code string) (*dto.PriceUnitResponse, error) {
-	unit, err := s.PriceUnitRepo.GetByCode(ctx, strings.ToLower(code), string(types.StatusPublished))
+	unit, err := s.PriceUnitRepo.GetByCode(ctx, strings.ToLower(code))
 	if err != nil {
 		return nil, err
 	}
@@ -94,45 +93,22 @@ func (s *PriceUnitService) GetByCode(ctx context.Context, code string) (*dto.Pri
 
 func (s *PriceUnitService) Update(ctx context.Context, id string, req *dto.UpdatePriceUnitRequest) (*dto.PriceUnitResponse, error) {
 	// Get existing unit
-	existingUnit, err := s.PriceUnitRepo.GetByID(ctx, id)
+	existingUnit, err := s.PriceUnitRepo.Get(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-
-	// Track if any changes were made
-	hasChanges := false
-	changes := make(map[string]interface{})
 
 	// Update fields if provided and different from current values
 	if req.Name != "" {
 		if req.Name != existingUnit.Name {
 			existingUnit.Name = req.Name
-			hasChanges = true
-			changes["name"] = req.Name
 		}
 	}
 	if req.Symbol != "" {
 		if req.Symbol != existingUnit.Symbol {
 			existingUnit.Symbol = req.Symbol
-			hasChanges = true
-			changes["symbol"] = req.Symbol
 		}
 	}
-
-	// Check if any changes were actually made
-	if !hasChanges {
-		return nil, ierr.NewError("no changes detected").
-			WithMessage("provided values are the same as current values").
-			WithHint("Provide different values to update the price unit").
-			WithReportableDetails(map[string]interface{}{
-				"id":     id,
-				"name":   existingUnit.Name,
-				"symbol": existingUnit.Symbol,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	existingUnit.UpdatedAt = time.Now().UTC()
 
 	if err := s.PriceUnitRepo.Update(ctx, existingUnit); err != nil {
 		return nil, err
@@ -143,7 +119,7 @@ func (s *PriceUnitService) Update(ctx context.Context, id string, req *dto.Updat
 
 func (s *PriceUnitService) Delete(ctx context.Context, id string) error {
 	// Get the existing unit first
-	existingUnit, err := s.PriceUnitRepo.GetByID(ctx, id)
+	existingUnit, err := s.PriceUnitRepo.Get(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -165,7 +141,6 @@ func (s *PriceUnitService) Delete(ctx context.Context, id string) error {
 
 		// Archive the unit (set status to archived)
 		existingUnit.Status = types.StatusArchived
-		existingUnit.UpdatedAt = time.Now().UTC()
 
 		return s.PriceUnitRepo.Update(ctx, existingUnit)
 
@@ -219,7 +194,7 @@ func (s *PriceUnitService) ConvertToBaseCurrency(ctx context.Context, code strin
 	}
 
 	// Get the price unit to get the conversion rate
-	unit, err := s.PriceUnitRepo.GetByCode(ctx, strings.ToLower(code), string(types.StatusPublished))
+	unit, err := s.PriceUnitRepo.GetByCode(ctx, strings.ToLower(code))
 	if err != nil {
 		return decimal.Zero, err
 	}
@@ -245,7 +220,7 @@ func (s *PriceUnitService) ConvertToPriceUnit(ctx context.Context, code string, 
 	}
 
 	// Get the price unit to get the conversion rate
-	unit, err := s.PriceUnitRepo.GetByCode(ctx, strings.ToLower(code), string(types.StatusPublished))
+	unit, err := s.PriceUnitRepo.GetByCode(ctx, strings.ToLower(code))
 	if err != nil {
 		return decimal.Zero, err
 	}

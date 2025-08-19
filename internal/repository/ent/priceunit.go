@@ -33,7 +33,6 @@ func NewPriceUnitRepository(client postgres.IClient, log *logger.Logger, cache c
 }
 
 func (r *priceUnitRepository) Create(ctx context.Context, unit *domainPriceUnit.PriceUnit) error {
-	client := r.client.Querier(ctx)
 
 	r.log.Debugw("creating price unit",
 		"price_unit_id", unit.ID,
@@ -46,14 +45,10 @@ func (r *priceUnitRepository) Create(ctx context.Context, unit *domainPriceUnit.
 		"code":          unit.Code,
 	})
 	defer FinishSpan(span)
-
-	// Set environment ID from context if not already set
-	if unit.EnvironmentID == "" {
-		unit.EnvironmentID = types.GetEnvironmentID(ctx)
-	}
+	client := r.client.Querier(ctx)
 
 	// Create the price unit using the standard Ent API
-	priceUnitBuilder := client.PriceUnit.Create().
+	_, err := client.PriceUnit.Create().
 		SetID(unit.ID).
 		SetName(unit.Name).
 		SetCode(unit.Code).
@@ -65,17 +60,11 @@ func (r *priceUnitRepository) Create(ctx context.Context, unit *domainPriceUnit.
 		SetUpdatedBy(unit.UpdatedBy).
 		SetStatus(string(types.StatusPublished)).
 		SetTenantID(unit.TenantID).
-		SetEnvironmentID(unit.EnvironmentID)
+		SetEnvironmentID(types.GetEnvironmentID(ctx)).
+		SetCreatedAt(unit.CreatedAt).
+		SetUpdatedAt(unit.UpdatedAt).
+		Save(ctx)
 
-	// Only set timestamps if they're not zero
-	if !unit.CreatedAt.IsZero() {
-		priceUnitBuilder.SetCreatedAt(unit.CreatedAt)
-	}
-	if !unit.UpdatedAt.IsZero() {
-		priceUnitBuilder.SetUpdatedAt(unit.UpdatedAt)
-	}
-
-	_, err := priceUnitBuilder.Save(ctx)
 	if err != nil {
 		SetSpanError(span, err)
 
@@ -96,7 +85,7 @@ func (r *priceUnitRepository) Create(ctx context.Context, unit *domainPriceUnit.
 	return nil
 }
 
-func (r *priceUnitRepository) GetByID(ctx context.Context, id string) (*domainPriceUnit.PriceUnit, error) {
+func (r *priceUnitRepository) Get(ctx context.Context, id string) (*domainPriceUnit.PriceUnit, error) {
 	span := StartRepositorySpan(ctx, "price_unit", "get", map[string]interface{}{
 		"price_unit_id": id,
 	})
@@ -163,9 +152,7 @@ func (r *priceUnitRepository) List(ctx context.Context, filter *domainPriceUnit.
 	query, err := r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
 	if err != nil {
 		SetSpanError(span, err)
-		return nil, ierr.WithError(err).
-			WithHint("Failed to apply query options").
-			Mark(ierr.ErrDatabase)
+		return nil, err
 	}
 
 	// Apply common query options
@@ -200,9 +187,7 @@ func (r *priceUnitRepository) Count(ctx context.Context, filter *domainPriceUnit
 	query, err := r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
 	if err != nil {
 		SetSpanError(span, err)
-		return 0, ierr.WithError(err).
-			WithHint("Failed to apply query options").
-			Mark(ierr.ErrDatabase)
+		return 0, err
 	}
 
 	count, err := query.Count(ctx)
@@ -268,17 +253,17 @@ func (r *priceUnitRepository) Update(ctx context.Context, unit *domainPriceUnit.
 }
 
 func (r *priceUnitRepository) Delete(ctx context.Context, id string) error {
-	client := r.client.Querier(ctx)
 
 	r.log.Debugw("deleting price unit",
 		"price_unit_id", id,
 		"tenant_id", types.GetTenantID(ctx),
 	)
-
 	span := StartRepositorySpan(ctx, "price_unit", "delete", map[string]interface{}{
 		"price_unit_id": id,
 	})
 	defer FinishSpan(span)
+
+	client := r.client.Querier(ctx)
 
 	_, err := client.PriceUnit.Update().
 		Where(
@@ -312,7 +297,7 @@ func (r *priceUnitRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-func (r *priceUnitRepository) GetByCode(ctx context.Context, code string, status string) (*domainPriceUnit.PriceUnit, error) {
+func (r *priceUnitRepository) GetByCode(ctx context.Context, code string) (*domainPriceUnit.PriceUnit, error) {
 	span := StartRepositorySpan(ctx, "price_unit", "get_by_code", map[string]interface{}{
 		"code": code,
 	})
@@ -320,20 +305,13 @@ func (r *priceUnitRepository) GetByCode(ctx context.Context, code string, status
 
 	client := r.client.Querier(ctx)
 
-	// Build query with base filters
-	q := client.PriceUnit.Query().
+	unit, err := client.PriceUnit.Query().
 		Where(
 			priceunit.Code(code),
 			priceunit.TenantID(types.GetTenantID(ctx)),
 			priceunit.EnvironmentID(types.GetEnvironmentID(ctx)),
-		)
-
-	// Add status filter if specified
-	if status != "" {
-		q = q.Where(priceunit.Status(status))
-	}
-
-	unit, err := q.Only(ctx)
+			priceunit.Status(string(types.StatusPublished)),
+		).Only(ctx)
 	if err != nil {
 		SetSpanError(span, err)
 

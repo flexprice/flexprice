@@ -106,7 +106,7 @@ func (s *billingService) CalculateFixedCharges(
 		var priceUnitAmount *decimal.Decimal
 		if item.PriceUnit != "" {
 			// Get the price unit to get the conversion rate
-			unit, err := s.PriceUnitRepo.GetByCode(ctx, item.PriceUnit, string(types.StatusPublished))
+			unit, err := s.PriceUnitRepo.GetByCode(ctx, item.PriceUnit)
 			if err != nil {
 				s.Logger.Warnw("failed to get price unit for conversion",
 					"error", err,
@@ -351,7 +351,7 @@ func (s *billingService) CalculateUsageCharges(
 			var priceUnitAmount *decimal.Decimal
 			if item.PriceUnit != "" {
 				// Get the price unit to get the conversion rate
-				unit, err := s.PriceUnitRepo.GetByCode(ctx, item.PriceUnit, string(types.StatusPublished))
+				unit, err := s.PriceUnitRepo.GetByCode(ctx, item.PriceUnit)
 				if err != nil {
 					s.Logger.Warnw("failed to get price unit for conversion",
 						"error", err,

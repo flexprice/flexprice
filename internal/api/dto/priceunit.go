@@ -3,6 +3,7 @@ package dto
 import (
 	"context"
 
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/validator"
 	"github.com/shopspring/decimal"
 
@@ -16,7 +17,7 @@ type CreatePriceUnitRequest struct {
 	Code           string           `json:"code" validate:"required,len=3"`
 	Symbol         string           `json:"symbol" validate:"required,max=10"`
 	BaseCurrency   string           `json:"base_currency" validate:"required,len=3"`
-	ConversionRate *decimal.Decimal `json:"conversion_rate" validate:"required,gt=0"`
+	ConversionRate *decimal.Decimal `json:"conversion_rate"`
 	Precision      int              `json:"precision" validate:"gte=0,lte=8"`
 }
 
@@ -24,6 +25,19 @@ func (r *CreatePriceUnitRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
 	}
+
+	if r.ConversionRate == nil {
+		return ierr.NewError("conversion rate is required").
+			WithHint("Conversion rate is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.ConversionRate.IsZero() || r.ConversionRate.IsNegative() {
+		return ierr.NewError("conversion rate must be positive").
+			WithHint("Conversion rate must be positive").
+			Mark(ierr.ErrValidation)
+	}
+
 	return nil
 }
 

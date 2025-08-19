@@ -105,7 +105,7 @@ func (s *InMemoryPriceUnitStore) GetByID(ctx context.Context, id string) (*price
 	return p, nil
 }
 
-func (s *InMemoryPriceUnitStore) GetByCode(ctx context.Context, code, status string) (*priceunit.PriceUnit, error) {
+func (s *InMemoryPriceUnitStore) GetByCode(ctx context.Context, code string) (*priceunit.PriceUnit, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -113,10 +113,7 @@ func (s *InMemoryPriceUnitStore) GetByCode(ctx context.Context, code, status str
 	environmentID := types.GetEnvironmentID(ctx)
 
 	for _, unit := range s.items {
-		if unit.Code == code && unit.TenantID == tenantID && unit.EnvironmentID == environmentID {
-			if status != "" && string(unit.Status) != status {
-				continue
-			}
+		if unit.Code == code && unit.TenantID == tenantID && unit.EnvironmentID == environmentID && unit.Status == types.StatusPublished {
 			return unit, nil
 		}
 	}
