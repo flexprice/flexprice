@@ -269,12 +269,9 @@ func (h *PriceUnitHandler) GetByCode(c *gin.Context) {
 		return
 	}
 
-	tenantID := types.GetTenantID(c.Request.Context())
-	environmentID := types.GetEnvironmentID(c.Request.Context())
-
-	unit, err := h.service.GetByCode(c.Request.Context(), code, tenantID, environmentID)
+	unit, err := h.service.GetByCode(c.Request.Context(), code)
 	if err != nil {
-		h.log.Error("Failed to get price unit by code", "error", err, "code", code, "tenantID", tenantID, "environmentID", environmentID)
+		h.log.Error("Failed to get price unit by code", "error", err, "code", code)
 
 		if ierr.IsNotFound(err) {
 			c.Error(ierr.NewError("price unit not found").
