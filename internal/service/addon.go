@@ -6,6 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addon"
+	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -22,6 +23,9 @@ type AddonService interface {
 	GetAddons(ctx context.Context, filter *types.AddonFilter) (*dto.ListAddonsResponse, error)
 	UpdateAddon(ctx context.Context, id string, req dto.UpdateAddonRequest) (*dto.AddonResponse, error)
 	DeleteAddon(ctx context.Context, id string) error
+
+	// addon association operations
+	GetAddonAssociations(ctx context.Context, filter *types.AddonAssociationFilter) (*dto.ListAddonAssociationsResponse, error)
 }
 
 type addonService struct {
@@ -346,6 +350,44 @@ func (s *addonService) DeleteAddon(ctx context.Context, id string) error {
 		"addon_id", id)
 
 	return nil
+}
+
+// GetAddonAssociations lists addon associations with filtering
+func (s *addonService) GetAddonAssociations(ctx context.Context, filter *types.AddonAssociationFilter) (*dto.ListAddonAssociationsResponse, error) {
+	if filter == nil {
+		filter = types.NewAddonAssociationFilter()
+	}
+
+	if err := filter.Validate(); err != nil {
+		return nil, err
+	}
+
+	result, err := s.AddonAssociationRepo.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	count, err := s.AddonAssociationRepo.Count(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	items := lo.Map(result, func(association *addonassociation.AddonAssociation, _ int) *dto.AddonAssociationResponse {
+		return &dto.AddonAssociationResponse{
+			AddonAssociation: association,
+		}
+	})
+
+	response := &dto.ListAddonAssociationsResponse{
+		Items: items,
+		Pagination: types.NewPaginationResponse(
+			count,
+			filter.GetLimit(),
+			filter.GetOffset(),
+		),
+	}
+
+	return response, nil
 }
 
 // getPricesByAddonID fetches prices for a specific addon
