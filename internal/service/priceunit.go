@@ -260,7 +260,9 @@ func (s *priceUnitService) ConvertToBaseCurrency(ctx context.Context, code strin
 		return decimal.Zero, err
 	}
 
-	return priceUnitAmount.Mul(unit.ConversionRate), nil
+	// Convert and round to the base currency's precision (typically 2 decimal places)
+	baseAmount := priceUnitAmount.Mul(unit.ConversionRate)
+	return baseAmount.Round(2), nil
 }
 
 // ConvertToPriceUnit converts an amount from base currency to pricing unit
@@ -293,7 +295,9 @@ func (s *priceUnitService) ConvertToPriceUnit(ctx context.Context, code string, 
 		return decimal.Zero, err
 	}
 
-	return fiatAmount.Div(unit.ConversionRate), nil
+	// Convert and round to the price unit's precision
+	priceUnitAmount := fiatAmount.Div(unit.ConversionRate)
+	return priceUnitAmount.Round(int32(unit.Precision)), nil
 }
 
 // checkPriceUnitInUse checks if a price unit is being used by any prices
