@@ -1775,6 +1775,31 @@ func (s *subscriptionService) ValidateAndFilterPricesForSubscription(
 			Mark(ierr.ErrValidation)
 	}
 
+	// Track existing meter IDs
+	meterIDMap := make(map[string]bool)
+	for _, item := range subscription.LineItems {
+		if item.MeterID != "" {
+			meterIDMap[item.MeterID] = true
+		}
+	}
+
+	// Check for meter ID conflicts in new addon prices
+	for _, price := range validPrices {
+		if price.Price.MeterID != "" {
+			if meterIDMap[price.Price.MeterID] {
+				return nil, ierr.NewError("duplicate meter ID found in prices").
+					WithHint("Each feature can only have one price per subscription.").
+					WithReportableDetails(map[string]interface{}{
+						"subscription_id": subscription.ID,
+						"addon_id":        entityID,
+						"meter_id":        price.Price.MeterID,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+			meterIDMap[price.Price.MeterID] = true
+		}
+	}
+
 	return validPrices, nil
 }
 
@@ -3238,8 +3263,8 @@ func (s *subscriptionService) addAddonToSubscription(
 	for _, price := range validPrices {
 		if price.Price.MeterID != "" {
 			if meterIDMap[price.Price.MeterID] {
-				return nil, ierr.NewError("duplicate meter ID found in addon prices").
-					WithHint("Each price must have a unique meter ID across the subscription").
+				return nil, ierr.NewError("duplicate meter ID found in prices").
+					WithHint("Each feature can only have one price per subscription.").
 					WithReportableDetails(map[string]interface{}{
 						"subscription_id": sub.ID,
 						"addon_id":        req.AddonID,
