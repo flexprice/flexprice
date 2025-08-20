@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/addon"
+	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/events"
@@ -94,6 +96,8 @@ func (s *BillingServiceSuite) setupService() {
 		TaxAssociationRepo:    s.GetStores().TaxAssociationRepo,
 		TaxAppliedRepo:        s.GetStores().TaxAppliedRepo,
 		SettingsRepo:          s.GetStores().SettingsRepo,
+		AddonRepo:             s.GetStores().AddonRepo,
+		AddonAssociationRepo:  s.GetStores().AddonAssociationRepo,
 		EventPublisher:        s.GetPublisher(),
 		WebhookPublisher:      s.GetWebhookPublisher(),
 	})
@@ -1463,4 +1467,720 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithDailyReset() {
 
 	// Check metadata indicates daily reset
 	s.Equal("daily", lineItems[0].Metadata["usage_reset_period"])
+}
+
+// TestGetCustomerEntitlements_WithAddonQuantities tests that addon entitlements are properly counted
+// when the same addon is bought multiple times (multiple addon association records)
+func (s *BillingServiceSuite) TestGetCustomerEntitlements_WithAddonQuantities() {
+	// Create test data for addon quantity testing
+	ctx := s.GetContext()
+
+	// Create test customer
+	customer := &customer.Customer{
+		ID:         "cust_addon_test",
+		ExternalID: "ext_cust_addon_test",
+		Name:       "Addon Test Customer",
+		Email:      "addon@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, customer))
+
+	// Create test plan
+	plan := &plan.Plan{
+		ID:          "plan_addon_test",
+		Name:        "Addon Test Plan",
+		Description: "Test Plan for Addon Quantities",
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PlanRepo.Create(ctx, plan))
+
+	// Create test addon
+	addon := &addon.Addon{
+		ID:          "addon_addon_test",
+		LookupKey:   "test_addon",
+		Name:        "Test Addon",
+		Description: "Test Addon for Quantities",
+		Type:        types.AddonTypeMultiple, // Multiple type addon
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().AddonRepo.Create(ctx, addon))
+
+	// Create test feature
+	feature := &feature.Feature{
+		ID:          "feat_addon_test",
+		Name:        "Addon Test Feature",
+		Description: "Test Feature for Addon Quantities",
+		Type:        types.FeatureTypeMetered,
+		MeterID:     s.testData.meters.apiCalls.ID,
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().FeatureRepo.Create(ctx, feature))
+
+	// Create plan entitlement
+	planEntitlement := &entitlement.Entitlement{
+		ID:               "ent_plan_addon_test",
+		EntityType:       types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+		EntityID:         plan.ID,
+		FeatureID:        feature.ID,
+		FeatureType:      types.FeatureTypeMetered,
+		IsEnabled:        true,
+		UsageLimit:       lo.ToPtr(int64(1000)),
+		UsageResetPeriod: types.BILLING_PERIOD_MONTHLY,
+		IsSoftLimit:      false,
+		BaseModel:        types.GetDefaultBaseModel(ctx),
+	}
+	_, err := s.GetStores().EntitlementRepo.Create(ctx, planEntitlement)
+	s.NoError(err)
+
+	// Create addon entitlement
+	addonEntitlement := &entitlement.Entitlement{
+		ID:               "ent_addon_addon_test",
+		EntityType:       types.ENTITLEMENT_ENTITY_TYPE_ADDON,
+		EntityID:         addon.ID,
+		FeatureID:        feature.ID,
+		FeatureType:      types.FeatureTypeMetered,
+		IsEnabled:        true,
+		UsageLimit:       lo.ToPtr(int64(500)),
+		UsageResetPeriod: types.BILLING_PERIOD_MONTHLY,
+		IsSoftLimit:      false,
+		BaseModel:        types.GetDefaultBaseModel(ctx),
+	}
+	_, err = s.GetStores().EntitlementRepo.Create(ctx, addonEntitlement)
+	s.NoError(err)
+
+	// Create subscription
+	subscription := &subscription.Subscription{
+		ID:                 "sub_addon_test",
+		PlanID:             plan.ID,
+		CustomerID:         customer.ID,
+		StartDate:          time.Now().UTC(),
+		CurrentPeriodStart: time.Now().UTC(),
+		CurrentPeriodEnd:   time.Now().UTC().AddDate(0, 1, 0),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.Create(ctx, subscription))
+
+	// Create multiple addon associations (simulating multiple purchases of the same addon)
+	addonAssociations := []*addonassociation.AddonAssociation{
+		{
+			ID:         "addon_assoc_1",
+			EntityID:   subscription.ID,
+			EntityType: types.AddonAssociationEntityTypeSubscription,
+			AddonID:    addon.ID,
+			StartDate:  lo.ToPtr(time.Now().UTC()),
+			BaseModel:  types.GetDefaultBaseModel(ctx),
+		},
+		{
+			ID:         "addon_assoc_2",
+			EntityID:   subscription.ID,
+			EntityType: types.AddonAssociationEntityTypeSubscription,
+			AddonID:    addon.ID,
+			StartDate:  lo.ToPtr(time.Now().UTC()),
+			BaseModel:  types.GetDefaultBaseModel(ctx),
+		},
+		{
+			ID:         "addon_assoc_3",
+			EntityID:   subscription.ID,
+			EntityType: types.AddonAssociationEntityTypeSubscription,
+			AddonID:    addon.ID,
+			StartDate:  lo.ToPtr(time.Now().UTC()),
+			BaseModel:  types.GetDefaultBaseModel(ctx),
+		},
+	}
+
+	// Create addon associations
+	for _, assoc := range addonAssociations {
+		s.NoError(s.GetStores().AddonAssociationRepo.Create(ctx, assoc))
+	}
+
+	// Test GetCustomerEntitlements
+	req := &dto.GetCustomerEntitlementsRequest{
+		SubscriptionIDs: []string{subscription.ID},
+	}
+
+	response, err := s.service.GetCustomerEntitlements(ctx, customer.ID, req)
+	s.NoError(err)
+	s.NotNil(response)
+
+	// Verify the response structure
+	s.Equal(customer.ID, response.CustomerID)
+	s.Len(response.Features, 1)
+
+	// Verify the feature entitlement
+	featureEntitlement := response.Features[0]
+	s.Equal(feature.ID, featureEntitlement.Feature.ID)
+	s.Equal(feature.Name, featureEntitlement.Feature.Name)
+	s.True(featureEntitlement.Entitlement.IsEnabled)
+	s.Equal(int64(2500), featureEntitlement.Entitlement.UsageLimit) // 1000 (plan) + 500*3 (addon * 3 instances)
+	s.Equal("MONTHLY", featureEntitlement.Entitlement.UsageResetPeriod)
+
+	// Verify sources
+	s.Len(featureEntitlement.Sources, 2) // Plan + Addon
+
+	// Find plan source
+	var planSource *dto.EntitlementSource
+	var addonSource *dto.EntitlementSource
+	for _, source := range featureEntitlement.Sources {
+		if source.EntityType == "plan" {
+			planSource = source
+		} else if source.EntityType == "addon" {
+			addonSource = source
+		}
+	}
+
+	// Verify plan source
+	s.NotNil(planSource)
+	s.Equal(plan.ID, planSource.EntityID)
+	s.Equal(plan.Name, planSource.EntityName)
+	s.Equal(int64(1), planSource.Quantity)
+	s.Equal(int64(1000), planSource.UsageLimit)
+
+	// Verify addon source
+	s.NotNil(addonSource)
+	s.Equal(addon.ID, addonSource.EntityID)
+	s.Equal(addon.Name, addonSource.EntityName)
+	s.Equal(int64(3), addonSource.Quantity) // 3 instances of the addon
+	s.Equal(int64(500), addonSource.UsageLimit)
+}
+
+// TestGetCustomerEntitlements_BooleanFeatures tests boolean feature entitlements
+func (s *BillingServiceSuite) TestGetCustomerEntitlements_BooleanFeatures() {
+	ctx := s.GetContext()
+
+	// Create test customer
+	customer := &customer.Customer{
+		ID:         "cust_bool_test",
+		ExternalID: "ext_cust_bool_test",
+		Name:       "Boolean Test Customer",
+		Email:      "bool@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, customer))
+
+	// Create test plan
+	plan := &plan.Plan{
+		ID:          "plan_bool_test",
+		Name:        "Boolean Test Plan",
+		Description: "Test Plan for Boolean Features",
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PlanRepo.Create(ctx, plan))
+
+	// Create test addon
+	addon := &addon.Addon{
+		ID:          "addon_bool_test",
+		LookupKey:   "bool_addon",
+		Name:        "Boolean Test Addon",
+		Description: "Test Addon for Boolean Features",
+		Type:        types.AddonTypeMultiple,
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().AddonRepo.Create(ctx, addon))
+
+	// Create boolean feature
+	booleanFeature := &feature.Feature{
+		ID:          "feat_bool_test",
+		Name:        "Premium Support",
+		Description: "Boolean feature for premium support",
+		Type:        types.FeatureTypeBoolean,
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().FeatureRepo.Create(ctx, booleanFeature))
+
+	// Create plan entitlement (disabled)
+	planEntitlement := &entitlement.Entitlement{
+		ID:          "ent_plan_bool_test",
+		EntityType:  types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+		EntityID:    plan.ID,
+		FeatureID:   booleanFeature.ID,
+		FeatureType: types.FeatureTypeBoolean,
+		IsEnabled:   false, // Plan disables the feature
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	_, err := s.GetStores().EntitlementRepo.Create(ctx, planEntitlement)
+	s.NoError(err)
+
+	// Create addon entitlement (enabled)
+	addonEntitlement := &entitlement.Entitlement{
+		ID:          "ent_addon_bool_test",
+		EntityType:  types.ENTITLEMENT_ENTITY_TYPE_ADDON,
+		EntityID:    addon.ID,
+		FeatureID:   booleanFeature.ID,
+		FeatureType: types.FeatureTypeBoolean,
+		IsEnabled:   true, // Addon enables the feature
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	_, err = s.GetStores().EntitlementRepo.Create(ctx, addonEntitlement)
+	s.NoError(err)
+
+	// Create subscription
+	subscription := &subscription.Subscription{
+		ID:                 "sub_bool_test",
+		PlanID:             plan.ID,
+		CustomerID:         customer.ID,
+		StartDate:          time.Now().UTC(),
+		CurrentPeriodStart: time.Now().UTC(),
+		CurrentPeriodEnd:   time.Now().UTC().AddDate(0, 1, 0),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.Create(ctx, subscription))
+
+	// Create addon association
+	addonAssoc := &addonassociation.AddonAssociation{
+		ID:         "addon_assoc_bool",
+		EntityID:   subscription.ID,
+		EntityType: types.AddonAssociationEntityTypeSubscription,
+		AddonID:    addon.ID,
+		StartDate:  lo.ToPtr(time.Now().UTC()),
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().AddonAssociationRepo.Create(ctx, addonAssoc))
+
+	// Test GetCustomerEntitlements
+	req := &dto.GetCustomerEntitlementsRequest{
+		SubscriptionIDs: []string{subscription.ID},
+	}
+
+	response, err := s.service.GetCustomerEntitlements(ctx, customer.ID, req)
+	s.NoError(err)
+	s.NotNil(response)
+
+	// Verify the response structure
+	s.Equal(customer.ID, response.CustomerID)
+	s.Len(response.Features, 1)
+
+	// Verify the boolean feature entitlement
+	featureEntitlement := response.Features[0]
+	s.Equal(booleanFeature.ID, featureEntitlement.Feature.ID)
+	s.Equal(booleanFeature.Name, featureEntitlement.Feature.Name)
+	s.Equal(types.FeatureTypeBoolean, featureEntitlement.Feature.Type)
+	s.True(featureEntitlement.Entitlement.IsEnabled) // Should be enabled because addon enables it
+
+	// Verify sources (should only show the enabling source)
+	s.Len(featureEntitlement.Sources, 1)
+	source := featureEntitlement.Sources[0]
+	s.Equal(addon.ID, source.EntityID)
+	s.Equal(addon.Name, source.EntityName)
+	s.Equal("addon", source.EntityType)
+	s.True(source.IsEnabled)
+}
+
+// TestGetCustomerEntitlements_StaticFeatures tests static feature entitlements with deduplication
+func (s *BillingServiceSuite) TestGetCustomerEntitlements_StaticFeatures() {
+	ctx := s.GetContext()
+
+	// Create test customer
+	customer := &customer.Customer{
+		ID:         "cust_static_test",
+		ExternalID: "ext_cust_static_test",
+		Name:       "Static Test Customer",
+		Email:      "static@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, customer))
+
+	// Create test plan
+	plan := &plan.Plan{
+		ID:          "plan_static_test",
+		Name:        "Static Test Plan",
+		Description: "Test Plan for Static Features",
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PlanRepo.Create(ctx, plan))
+
+	// Create test addon
+	addon := &addon.Addon{
+		ID:          "addon_static_test",
+		LookupKey:   "static_addon",
+		Name:        "Static Test Addon",
+		Description: "Test Addon for Static Features",
+		Type:        types.AddonTypeMultiple,
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().AddonRepo.Create(ctx, addon))
+
+	// Create static feature
+	staticFeature := &feature.Feature{
+		ID:          "feat_static_test",
+		Name:        "Custom Domain",
+		Description: "Static feature for custom domain",
+		Type:        types.FeatureTypeStatic,
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().FeatureRepo.Create(ctx, staticFeature))
+
+	// Create plan entitlement
+	planEntitlement := &entitlement.Entitlement{
+		ID:          "ent_plan_static_test",
+		EntityType:  types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+		EntityID:    plan.ID,
+		FeatureID:   staticFeature.ID,
+		FeatureType: types.FeatureTypeStatic,
+		IsEnabled:   true,
+		StaticValue: "basic.example.com",
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	_, err := s.GetStores().EntitlementRepo.Create(ctx, planEntitlement)
+	s.NoError(err)
+
+	// Create addon entitlement with different value
+	addonEntitlement := &entitlement.Entitlement{
+		ID:          "ent_addon_static_test",
+		EntityType:  types.ENTITLEMENT_ENTITY_TYPE_ADDON,
+		EntityID:    addon.ID,
+		FeatureID:   staticFeature.ID,
+		FeatureType: types.FeatureTypeStatic,
+		IsEnabled:   true,
+		StaticValue: "premium.example.com",
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	_, err = s.GetStores().EntitlementRepo.Create(ctx, addonEntitlement)
+	s.NoError(err)
+
+	// Create subscription
+	subscription := &subscription.Subscription{
+		ID:                 "sub_static_test",
+		PlanID:             plan.ID,
+		CustomerID:         customer.ID,
+		StartDate:          time.Now().UTC(),
+		CurrentPeriodStart: time.Now().UTC(),
+		CurrentPeriodEnd:   time.Now().UTC().AddDate(0, 1, 0),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.Create(ctx, subscription))
+
+	// Create addon association
+	addonAssoc := &addonassociation.AddonAssociation{
+		ID:         "addon_assoc_static",
+		EntityID:   subscription.ID,
+		EntityType: types.AddonAssociationEntityTypeSubscription,
+		AddonID:    addon.ID,
+		StartDate:  lo.ToPtr(time.Now().UTC()),
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().AddonAssociationRepo.Create(ctx, addonAssoc))
+
+	// Test GetCustomerEntitlements
+	req := &dto.GetCustomerEntitlementsRequest{
+		SubscriptionIDs: []string{subscription.ID},
+	}
+
+	response, err := s.service.GetCustomerEntitlements(ctx, customer.ID, req)
+	s.NoError(err)
+	s.NotNil(response)
+
+	// Verify the response structure
+	s.Equal(customer.ID, response.CustomerID)
+	s.Len(response.Features, 1)
+
+	// Verify the static feature entitlement
+	featureEntitlement := response.Features[0]
+	s.Equal(staticFeature.ID, featureEntitlement.Feature.ID)
+	s.Equal(staticFeature.Name, featureEntitlement.Feature.Name)
+	s.Equal(types.FeatureTypeStatic, featureEntitlement.Feature.Type)
+	s.True(featureEntitlement.Entitlement.IsEnabled)
+
+	// Verify static values are deduplicated
+	s.Len(featureEntitlement.Entitlement.StaticValues, 2)
+	s.Contains(featureEntitlement.Entitlement.StaticValues, "basic.example.com")
+	s.Contains(featureEntitlement.Entitlement.StaticValues, "premium.example.com")
+
+	// Verify sources (should show all sources)
+	s.Len(featureEntitlement.Sources, 2)
+
+	// Find plan and addon sources
+	var planSource *dto.EntitlementSource
+	var addonSource *dto.EntitlementSource
+	for _, source := range featureEntitlement.Sources {
+		if source.EntityType == "plan" {
+			planSource = source
+		} else if source.EntityType == "addon" {
+			addonSource = source
+		}
+	}
+
+	// Verify plan source
+	s.NotNil(planSource)
+	s.Equal(plan.ID, planSource.EntityID)
+	s.Equal("basic.example.com", planSource.StaticValue)
+
+	// Verify addon source
+	s.NotNil(addonSource)
+	s.Equal(addon.ID, addonSource.EntityID)
+	s.Equal("premium.example.com", addonSource.StaticValue)
+}
+
+// TestGetCustomerEntitlements_MixedFeatureTypes tests mixed feature types in the same response
+func (s *BillingServiceSuite) TestGetCustomerEntitlements_MixedFeatureTypes() {
+	ctx := s.GetContext()
+
+	// Create test customer
+	customer := &customer.Customer{
+		ID:         "cust_mixed_test",
+		ExternalID: "ext_cust_mixed_test",
+		Name:       "Mixed Test Customer",
+		Email:      "mixed@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, customer))
+
+	// Create test plan
+	plan := &plan.Plan{
+		ID:          "plan_mixed_test",
+		Name:        "Mixed Test Plan",
+		Description: "Test Plan for Mixed Features",
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PlanRepo.Create(ctx, plan))
+
+	// Create test addon
+	addon := &addon.Addon{
+		ID:          "addon_mixed_test",
+		LookupKey:   "mixed_addon",
+		Name:        "Mixed Test Addon",
+		Description: "Test Addon for Mixed Features",
+		Type:        types.AddonTypeMultiple,
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().AddonRepo.Create(ctx, addon))
+
+	// Create metered feature
+	meteredFeature := &feature.Feature{
+		ID:          "feat_metered_mixed",
+		Name:        "API Requests",
+		Description: "Metered feature for API requests",
+		Type:        types.FeatureTypeMetered,
+		MeterID:     s.testData.meters.apiCalls.ID,
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().FeatureRepo.Create(ctx, meteredFeature))
+
+	// Create boolean feature
+	booleanFeature := &feature.Feature{
+		ID:          "feat_bool_mixed",
+		Name:        "Premium Support",
+		Description: "Boolean feature for premium support",
+		Type:        types.FeatureTypeBoolean,
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().FeatureRepo.Create(ctx, booleanFeature))
+
+	// Create static feature
+	staticFeature := &feature.Feature{
+		ID:          "feat_static_mixed",
+		Name:        "Custom Domain",
+		Description: "Static feature for custom domain",
+		Type:        types.FeatureTypeStatic,
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().FeatureRepo.Create(ctx, staticFeature))
+
+	// Create plan entitlements
+	planEntitlements := []*entitlement.Entitlement{
+		{
+			ID:               "ent_plan_metered_mixed",
+			EntityType:       types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+			EntityID:         plan.ID,
+			FeatureID:        meteredFeature.ID,
+			FeatureType:      types.FeatureTypeMetered,
+			IsEnabled:        true,
+			UsageLimit:       lo.ToPtr(int64(1000)),
+			UsageResetPeriod: types.BILLING_PERIOD_MONTHLY,
+			IsSoftLimit:      false,
+			BaseModel:        types.GetDefaultBaseModel(ctx),
+		},
+		{
+			ID:          "ent_plan_bool_mixed",
+			EntityType:  types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+			EntityID:    plan.ID,
+			FeatureID:   booleanFeature.ID,
+			FeatureType: types.FeatureTypeBoolean,
+			IsEnabled:   false, // Plan disables boolean feature
+			BaseModel:   types.GetDefaultBaseModel(ctx),
+		},
+		{
+			ID:          "ent_plan_static_mixed",
+			EntityType:  types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+			EntityID:    plan.ID,
+			FeatureID:   staticFeature.ID,
+			FeatureType: types.FeatureTypeStatic,
+			IsEnabled:   true,
+			StaticValue: "basic.example.com",
+			BaseModel:   types.GetDefaultBaseModel(ctx),
+		},
+	}
+
+	for _, ent := range planEntitlements {
+		_, err := s.GetStores().EntitlementRepo.Create(ctx, ent)
+		s.NoError(err)
+	}
+
+	// Create addon entitlements
+	addonEntitlements := []*entitlement.Entitlement{
+		{
+			ID:               "ent_addon_metered_mixed",
+			EntityType:       types.ENTITLEMENT_ENTITY_TYPE_ADDON,
+			EntityID:         addon.ID,
+			FeatureID:        meteredFeature.ID,
+			FeatureType:      types.FeatureTypeMetered,
+			IsEnabled:        true,
+			UsageLimit:       lo.ToPtr(int64(500)),
+			UsageResetPeriod: types.BILLING_PERIOD_MONTHLY,
+			IsSoftLimit:      false,
+			BaseModel:        types.GetDefaultBaseModel(ctx),
+		},
+		{
+			ID:          "ent_addon_bool_mixed",
+			EntityType:  types.ENTITLEMENT_ENTITY_TYPE_ADDON,
+			EntityID:    addon.ID,
+			FeatureID:   booleanFeature.ID,
+			FeatureType: types.FeatureTypeBoolean,
+			IsEnabled:   true, // Addon enables boolean feature
+			BaseModel:   types.GetDefaultBaseModel(ctx),
+		},
+		{
+			ID:          "ent_addon_static_mixed",
+			EntityType:  types.ENTITLEMENT_ENTITY_TYPE_ADDON,
+			EntityID:    addon.ID,
+			FeatureID:   staticFeature.ID,
+			FeatureType: types.FeatureTypeStatic,
+			IsEnabled:   true,
+			StaticValue: "premium.example.com",
+			BaseModel:   types.GetDefaultBaseModel(ctx),
+		},
+	}
+
+	for _, ent := range addonEntitlements {
+		_, err := s.GetStores().EntitlementRepo.Create(ctx, ent)
+		s.NoError(err)
+	}
+
+	// Create subscription
+	subscription := &subscription.Subscription{
+		ID:                 "sub_mixed_test",
+		PlanID:             plan.ID,
+		CustomerID:         customer.ID,
+		StartDate:          time.Now().UTC(),
+		CurrentPeriodStart: time.Now().UTC(),
+		CurrentPeriodEnd:   time.Now().UTC().AddDate(0, 1, 0),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.Create(ctx, subscription))
+
+	// Create addon association
+	addonAssoc := &addonassociation.AddonAssociation{
+		ID:         "addon_assoc_mixed",
+		EntityID:   subscription.ID,
+		EntityType: types.AddonAssociationEntityTypeSubscription,
+		AddonID:    addon.ID,
+		StartDate:  lo.ToPtr(time.Now().UTC()),
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().AddonAssociationRepo.Create(ctx, addonAssoc))
+
+	// Test GetCustomerEntitlements
+	req := &dto.GetCustomerEntitlementsRequest{
+		SubscriptionIDs: []string{subscription.ID},
+	}
+
+	response, err := s.service.GetCustomerEntitlements(ctx, customer.ID, req)
+	s.NoError(err)
+	s.NotNil(response)
+
+	// Verify the response structure
+	s.Equal(customer.ID, response.CustomerID)
+	s.Len(response.Features, 3) // Should have 3 features
+
+	// Find each feature type
+	var meteredFeatureEnt *dto.AggregatedFeature
+	var booleanFeatureEnt *dto.AggregatedFeature
+	var staticFeatureEnt *dto.AggregatedFeature
+
+	for _, feature := range response.Features {
+		switch feature.Feature.Type {
+		case types.FeatureTypeMetered:
+			meteredFeatureEnt = feature
+		case types.FeatureTypeBoolean:
+			booleanFeatureEnt = feature
+		case types.FeatureTypeStatic:
+			staticFeatureEnt = feature
+		}
+	}
+
+	// Verify metered feature
+	s.NotNil(meteredFeatureEnt)
+	s.Equal(int64(1500), meteredFeatureEnt.Entitlement.UsageLimit) // 1000 + 500
+	s.True(meteredFeatureEnt.Entitlement.IsEnabled)
+	s.Len(meteredFeatureEnt.Sources, 2) // Plan + Addon
+
+	// Verify boolean feature
+	s.NotNil(booleanFeatureEnt)
+	s.True(booleanFeatureEnt.Entitlement.IsEnabled) // Should be enabled by addon
+	s.Len(booleanFeatureEnt.Sources, 1)             // Only the enabling addon source
+
+	// Verify static feature
+	s.NotNil(staticFeatureEnt)
+	s.True(staticFeatureEnt.Entitlement.IsEnabled)
+	s.Len(staticFeatureEnt.Entitlement.StaticValues, 2) // Both values
+	s.Contains(staticFeatureEnt.Entitlement.StaticValues, "basic.example.com")
+	s.Contains(staticFeatureEnt.Entitlement.StaticValues, "premium.example.com")
+	s.Len(staticFeatureEnt.Sources, 2) // Both plan and addon sources
+}
+
+// TestGetCustomerEntitlements_Validation tests validation logic
+func (s *BillingServiceSuite) TestGetCustomerEntitlements_Validation() {
+	ctx := s.GetContext()
+
+	// Test with invalid customer ID
+	req := &dto.GetCustomerEntitlementsRequest{}
+	response, err := s.service.GetCustomerEntitlements(ctx, "invalid_customer", req)
+	s.Error(err)
+	s.Nil(response)
+
+	// Test with invalid request
+	req = &dto.GetCustomerEntitlementsRequest{
+		SubscriptionIDs: []string{"invalid_subscription"},
+	}
+	response, err = s.service.GetCustomerEntitlements(ctx, s.testData.customer.ID, req)
+	s.Error(err)
+	s.Nil(response)
+}
+
+// TestGetCustomerEntitlements_EmptyResponse tests edge cases
+func (s *BillingServiceSuite) TestGetCustomerEntitlements_EmptyResponse() {
+	ctx := s.GetContext()
+
+	// Create customer with no subscriptions
+	customer := &customer.Customer{
+		ID:         "cust_empty_test",
+		ExternalID: "ext_cust_empty_test",
+		Name:       "Empty Test Customer",
+		Email:      "empty@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, customer))
+
+	// Test GetCustomerEntitlements
+	req := &dto.GetCustomerEntitlementsRequest{}
+	response, err := s.service.GetCustomerEntitlements(ctx, customer.ID, req)
+	s.NoError(err)
+	s.NotNil(response)
+	s.Equal(customer.ID, response.CustomerID)
+	s.Len(response.Features, 0) // No features for customer with no subscriptions
 }

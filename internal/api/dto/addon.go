@@ -120,3 +120,5 @@ func (r *AddAddonToSubscriptionRequest) Validate() error {
 type AddonAssociationResponse struct {
 	*addonassociation.AddonAssociation
 }
+
+type ListAddonAssociationsResponse = types.ListResponse[*AddonAssociationResponse]
