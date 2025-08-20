@@ -251,6 +251,7 @@ type PriceFilter struct {
 	SubscriptionID *string          `json:"subscription_id,omitempty" form:"subscription_id"`
 	ParentPriceID  *string          `json:"parent_price_id,omitempty" form:"parent_price_id"`
 	MeterIDs       []string         `json:"meter_ids,omitempty" form:"meter_ids"`
+	PriceUnitIDs   []string         `json:"price_unit_ids,omitempty" form:"price_unit_ids"`
 }
 
 // NewPriceFilter creates a new PriceFilter with default values
@@ -338,6 +339,18 @@ func (f PriceFilter) Validate() error {
 			}
 		}
 	}
+
+	// Validate price unit IDs if provided
+	if len(f.PriceUnitIDs) > 0 {
+		for _, priceUnitID := range f.PriceUnitIDs {
+			if priceUnitID == "" {
+				return ierr.NewError("price unit ID can not be empty").
+					WithHint("Price unit ID cannot be empty").
+					Mark(ierr.ErrValidation)
+			}
+		}
+	}
+
 	return nil
 }
 

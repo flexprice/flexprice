@@ -230,7 +230,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 
 	// Process price overrides if provided
 	if len(req.OverrideLineItems) > 0 {
-		err = s.ProcessSubscriptionPriceOverrides(ctx, sub, req.OverrideLineItems, lineItems, priceMap)
+		err = s.ProcessSubscriptionPriceOverrides(ctx, sub, req.OverrideLineItems, lineItems)
 		if err != nil {
 			return nil, err
 		}
@@ -394,7 +394,6 @@ func (s *subscriptionService) ProcessSubscriptionPriceOverrides(
 	sub *subscription.Subscription,
 	overrideRequests []dto.OverrideLineItemRequest,
 	lineItems []*subscription.SubscriptionLineItem,
-	priceMap map[string]*dto.PriceResponse,
 ) error {
 	if len(overrideRequests) == 0 {
 		return nil
@@ -404,6 +403,10 @@ func (s *subscriptionService) ProcessSubscriptionPriceOverrides(
 		"subscription_id", sub.ID,
 		"override_count", len(overrideRequests))
 
+	// Create services for price creation and price unit conversion
+	priceService := NewPriceService(s.ServiceParams)
+	priceUnitService := NewPriceUnitService(s.ServiceParams)
+
 	// Create a map from price ID to line item for quick lookup
 	lineItemsByPriceID := make(map[string]*subscription.SubscriptionLineItem)
 	for _, item := range lineItems {
@@ -412,14 +415,27 @@ func (s *subscriptionService) ProcessSubscriptionPriceOverrides(
 
 	// Process each override request
 	for _, override := range overrideRequests {
-		// Validate that the price exists in the plan
-		originalPrice, exists := priceMap[override.PriceID]
-		if !exists {
-			return ierr.NewError("price not found in plan").
-				WithHint("Override price must be a valid price from the selected plan").
+		// Get the original price
+		originalPriceResponse, err := priceService.GetPrice(ctx, override.PriceID)
+		if err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to get original price for override").
 				WithReportableDetails(map[string]interface{}{
 					"price_id": override.PriceID,
-					"plan_id":  sub.PlanID,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
+		originalPrice := originalPriceResponse.Price
+
+		// Validate that tiered prices cannot be overridden
+		if originalPrice.BillingModel == types.BILLING_MODEL_TIERED {
+			return ierr.NewError("tiered prices cannot be overridden").
+				WithHint("Tiered pricing models are not supported for price overrides").
+				WithReportableDetails(map[string]interface{}{
+					"price_id":        override.PriceID,
+					"billing_model":   originalPrice.BillingModel,
+					"price_unit_type": originalPrice.PriceUnitType,
 				}).
 				Mark(ierr.ErrValidation)
 		}
@@ -435,49 +451,69 @@ func (s *subscriptionService) ProcessSubscriptionPriceOverrides(
 				Mark(ierr.ErrInternal)
 		}
 
-		priceUnitType := originalPrice.PriceUnitType
-		if priceUnitType == "" {
-			priceUnitType = types.PRICE_UNIT_TYPE_FIAT
+		// Create base price DTO
+		createPriceReq := dto.CreatePriceRequest{
+			Currency:           originalPrice.Currency,
+			Type:               originalPrice.Type,
+			PriceUnitType:      originalPrice.PriceUnitType,
+			BillingPeriod:      originalPrice.BillingPeriod,
+			BillingPeriodCount: originalPrice.BillingPeriodCount,
+			BillingModel:       originalPrice.BillingModel,
+			BillingCadence:     originalPrice.BillingCadence,
+			InvoiceCadence:     originalPrice.InvoiceCadence,
+			TrialPeriod:        originalPrice.TrialPeriod,
+			MeterID:            originalPrice.MeterID,
+			Description:        originalPrice.Description,
+			Metadata:           originalPrice.Metadata,
+			TierMode:           originalPrice.TierMode,
+			EntityType:         types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
+			EntityID:           sub.ID,
+			PriceUnitConfig: &dto.PriceUnitConfig{
+				Amount:    originalPrice.PriceUnitAmount.String(),
+				PriceUnit: originalPrice.PriceUnit,
+			},
+			Amount: originalPrice.Amount.String(),
 		}
 
-		// Create subscription-scoped price clone
-		overriddenPrice := &price.Price{
-			ID:                     types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
-			Amount:                 originalPrice.Amount,
-			Currency:               originalPrice.Currency,
-			DisplayAmount:          originalPrice.DisplayAmount,
-			Type:                   originalPrice.Type,
-			BillingPeriod:          originalPrice.BillingPeriod,
-			BillingPeriodCount:     originalPrice.BillingPeriodCount,
-			BillingModel:           originalPrice.BillingModel,
-			BillingCadence:         originalPrice.BillingCadence,
-			InvoiceCadence:         originalPrice.InvoiceCadence,
-			TrialPeriod:            originalPrice.TrialPeriod,
-			TierMode:               originalPrice.TierMode,
-			Tiers:                  originalPrice.Tiers,
-			MeterID:                originalPrice.MeterID,
-			LookupKey:              "",
-			Description:            originalPrice.Description,
-			PriceUnitID:            originalPrice.PriceUnitID,
-			PriceUnit:              originalPrice.PriceUnit,
-			PriceUnitType:          priceUnitType,
-			ConversionRate:         originalPrice.ConversionRate,
-			DisplayPriceUnitAmount: originalPrice.DisplayPriceUnitAmount,
-			PriceUnitAmount:        originalPrice.PriceUnitAmount,
-			PriceUnitTiers:         originalPrice.PriceUnitTiers,
-			TransformQuantity:      originalPrice.TransformQuantity,
-			Metadata:               originalPrice.Metadata,
-			EnvironmentID:          originalPrice.EnvironmentID,
-			EntityType:             types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
-			ParentPriceID:          originalPrice.ID,
-			EntityID:               sub.ID,
-			BaseModel:              types.GetDefaultBaseModel(ctx),
+		// Convert transform quantity if it exists
+		if originalPrice.TransformQuantity != (price.JSONBTransformQuantity{}) {
+			transformQuantity := price.TransformQuantity(originalPrice.TransformQuantity)
+			createPriceReq.TransformQuantity = &transformQuantity
 		}
 
-		// Apply overrides
+		// Handle amount override
 		if override.Amount != nil {
-			overriddenPrice.Amount = *override.Amount
-			overriddenPrice.DisplayAmount = overriddenPrice.GetDisplayAmount()
+			// Use override amount
+			if originalPrice.PriceUnitType == types.PRICE_UNIT_TYPE_CUSTOM && originalPrice.PriceUnit != "" {
+				// Convert fiat amount to price unit amount
+				priceUnitAmount, err := priceUnitService.ConvertToPriceUnit(ctx, originalPrice.PriceUnit, *override.Amount)
+				if err != nil {
+					return ierr.WithError(err).
+						WithHint("Failed to convert override amount to price unit").
+						WithReportableDetails(map[string]interface{}{
+							"price_unit": originalPrice.PriceUnit,
+							"amount":     override.Amount,
+						}).
+						Mark(ierr.ErrValidation)
+				}
+				createPriceReq.PriceUnitConfig = &dto.PriceUnitConfig{
+					Amount:    priceUnitAmount.String(),
+					PriceUnit: originalPrice.PriceUnit,
+				}
+			} else {
+				// For FIAT prices, use amount directly
+				createPriceReq.Amount = override.Amount.String()
+			}
+		}
+		// Create the subscription-scoped price using the price service
+		overridePriceResponse, err := priceService.CreatePrice(ctx, createPriceReq)
+		if err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to create subscription-scoped price").
+				WithReportableDetails(map[string]interface{}{
+					"original_price_id": override.PriceID,
+				}).
+				Mark(ierr.ErrDatabase)
 		}
 
 		// Update line item quantity if specified
@@ -485,35 +521,13 @@ func (s *subscriptionService) ProcessSubscriptionPriceOverrides(
 			lineItem.Quantity = *override.Quantity
 		}
 
-		// Validate the overridden price
-		if err := overriddenPrice.Validate(); err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to validate overridden price").
-				WithReportableDetails(map[string]interface{}{
-					"original_price_id": override.PriceID,
-					"override_price_id": overriddenPrice.ID,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-
-		// Create the subscription-scoped price
-		if err := s.PriceRepo.Create(ctx, overriddenPrice); err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to create subscription-scoped price").
-				WithReportableDetails(map[string]interface{}{
-					"original_price_id": override.PriceID,
-					"override_price_id": overriddenPrice.ID,
-				}).
-				Mark(ierr.ErrDatabase)
-		}
-
 		// Update the line item to reference the new subscription-scoped price
-		lineItem.PriceID = overriddenPrice.ID
+		lineItem.PriceID = overridePriceResponse.ID
 
 		s.Logger.Infow("created subscription-scoped price override",
 			"subscription_id", sub.ID,
 			"original_price_id", override.PriceID,
-			"override_price_id", overriddenPrice.ID,
+			"override_price_id", overridePriceResponse.ID,
 			"amount_override", override.Amount != nil,
 			"quantity_override", override.Quantity != nil)
 	}

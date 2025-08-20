@@ -561,6 +561,32 @@ func (o PriceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.P
 		}
 	}
 
+	// Apply price unit IDs filter if specified
+	if len(f.PriceUnitIDs) > 0 {
+		query = query.Where(price.PriceUnitIDIn(f.PriceUnitIDs...))
+	}
+
+	// Apply plan IDs filter if specified
+	if len(f.PlanIDs) > 0 {
+		query = query.Where(
+			price.EntityIDIn(f.PlanIDs...),
+			price.EntityType(string(types.PRICE_ENTITY_TYPE_PLAN)),
+		)
+	}
+
+	// Apply subscription IDs filter if specified
+	if f.SubscriptionID != nil {
+		query = query.Where(
+			price.EntityID(*f.SubscriptionID),
+			price.EntityType(string(types.PRICE_ENTITY_TYPE_SUBSCRIPTION)),
+		)
+	}
+
+	// Apply parent price ID filter if specified
+	if f.ParentPriceID != nil {
+		query = query.Where(price.ParentPriceID(*f.ParentPriceID))
+	}
+
 	return query
 }
 

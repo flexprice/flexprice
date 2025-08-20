@@ -13,11 +13,11 @@ import (
 )
 
 type PriceUnitHandler struct {
-	service *service.PriceUnitService
+	service service.PriceUnitService
 	log     *logger.Logger
 }
 
-func NewPriceUnitHandler(service *service.PriceUnitService, log *logger.Logger) *PriceUnitHandler {
+func NewPriceUnitHandler(service service.PriceUnitService, log *logger.Logger) *PriceUnitHandler {
 	return &PriceUnitHandler{
 		service: service,
 		log:     log,

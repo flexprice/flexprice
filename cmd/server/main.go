@@ -261,7 +261,7 @@ func provideHandlers(
 	connectionService service.ConnectionService,
 	entityIntegrationMappingService service.EntityIntegrationMappingService,
 	integrationService service.IntegrationService,
-	priceUnitService *service.PriceUnitService,
+	priceUnitService service.PriceUnitService,
 	svixClient *svix.Client,
 	taxService service.TaxService,
 	couponService service.CouponService,
