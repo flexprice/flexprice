@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -294,6 +295,26 @@ func (h *WebhookHandler) findPaymentBySessionID(ctx context.Context, sessionID s
 	// Filter by gateway_tracking_id (which contains session ID)
 	for _, payment := range payments.Items {
 		if payment.GatewayTrackingID != nil && *payment.GatewayTrackingID == sessionID {
+			return payment, nil
+		}
+	}
+
+	return nil, nil
+}
+
+// findPaymentByTransactionID finds a payment record by Paddle transaction ID
+func (h *WebhookHandler) findPaymentByTransactionID(ctx context.Context, transactionID string) (*dto.PaymentResponse, error) {
+	paymentService := service.NewPaymentService(h.paddleService.ServiceParams)
+	payments, err := paymentService.ListPayments(ctx, &types.PaymentFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter by gateway_tracking_id (which contains transaction ID for Paddle)
+	for _, payment := range payments.Items {
+		if payment.GatewayTrackingID != nil && *payment.GatewayTrackingID == transactionID {
 			return payment, nil
 		}
 	}
@@ -1183,6 +1204,9 @@ func (h *WebhookHandler) HandlePaddleWebhook(c *gin.Context) {
 		return
 	}
 
+	// Restore the request body for signature verification
+	c.Request.Body = io.NopCloser(bytes.NewBuffer(body))
+
 	// Set context with tenant and environment IDs
 	ctx := types.SetTenantID(c.Request.Context(), tenantID)
 	ctx = types.SetEnvironmentID(ctx, environmentID)
@@ -1231,10 +1255,24 @@ func (h *WebhookHandler) HandlePaddleWebhook(c *gin.Context) {
 		h.handlePaddleCustomerCreated(c, event, environmentID)
 	case "customer.updated":
 		h.handlePaddleCustomerUpdated(c, event, environmentID)
-	case "transaction.completed":
-		h.handlePaddleTransactionCompleted(c, event, environmentID)
+	case "transaction.billed":
+		h.handlePaddleTransactionBilled(c, event, environmentID)
 	case "transaction.canceled":
 		h.handlePaddleTransactionCanceled(c, event, environmentID)
+	case "transaction.completed":
+		h.handlePaddleTransactionCompleted(c, event, environmentID)
+	case "transaction.created":
+		h.handlePaddleTransactionCreated(c, event, environmentID)
+	case "transaction.paid":
+		h.handlePaddleTransactionPaid(c, event, environmentID)
+	case "transaction.past_due":
+		h.handlePaddleTransactionPastDue(c, event, environmentID)
+	case "transaction.payment_failed":
+		h.handlePaddleTransactionPaymentFailed(c, event, environmentID)
+	case "transaction.ready":
+		h.handlePaddleTransactionReady(c, event, environmentID)
+	case "transaction.updated":
+		h.handlePaddleTransactionUpdated(c, event, environmentID)
 	default:
 		h.logger.Infow("unhandled Paddle webhook event type", "type", eventType)
 		c.JSON(http.StatusOK, gin.H{
@@ -1317,23 +1355,102 @@ func (h *WebhookHandler) handlePaddleTransactionCompleted(c *gin.Context, event 
 		return
 	}
 
+	transactionID, _ := data["id"].(string)
+	if transactionID == "" {
+		h.logger.Errorw("missing transaction ID in Paddle webhook")
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Missing transaction ID",
+		})
+		return
+	}
+
 	h.logger.Infow("received transaction.completed webhook from Paddle",
 		"environment_id", environmentID,
 		"event_id", event["event_id"],
 		"event_type", event["event_type"],
-		"transaction_id", data["id"],
+		"transaction_id", transactionID,
 	)
 
-	// TODO: Implement transaction processing logic
-	// This would typically involve:
-	// 1. Finding the payment record by transaction ID
-	// 2. Updating payment status to succeeded
-	// 3. Reconciling with invoice if applicable
+	// Find payment record by transaction ID
+	payment, err := h.findPaymentByTransactionID(c.Request.Context(), transactionID)
+	if err != nil {
+		h.logger.Errorw("failed to find payment record", "error", err, "transaction_id", transactionID)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to find payment record",
+		})
+		return
+	}
 
-	h.logger.Infow("Paddle transaction completed - implement payment processing logic",
-		"transaction_id", data["id"],
-		"environment_id", environmentID,
+	if payment == nil {
+		h.logger.Warnw("no payment record found for transaction", "transaction_id", transactionID)
+		c.JSON(http.StatusOK, gin.H{
+			"message": "No payment record found for transaction",
+		})
+		return
+	}
+
+	// Check if payment is already successful - prevent any updates to successful payments
+	if payment.PaymentStatus == types.PaymentStatusSucceeded {
+		h.logger.Warnw("payment is already successful, skipping update",
+			"payment_id", payment.ID,
+			"transaction_id", transactionID,
+			"current_status", payment.PaymentStatus)
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Payment is already successful, no update needed",
+		})
+		return
+	}
+
+	// Get payment status from Paddle API to get latest information
+	paymentStatusResp, err := h.paddleService.GetPaymentStatus(c.Request.Context(), transactionID, environmentID)
+	if err != nil {
+		h.logger.Errorw("failed to get payment status from Paddle API",
+			"error", err,
+			"transaction_id", transactionID)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to get payment status from Paddle",
+		})
+		return
+	}
+
+	h.logger.Infow("retrieved payment status from Paddle API",
+		"transaction_id", transactionID,
+		"status", paymentStatusResp.Status,
+		"amount", paymentStatusResp.Amount.String(),
+		"currency", paymentStatusResp.Currency,
 	)
+
+	// Update payment status to succeeded
+	paymentService := service.NewPaymentService(h.paddleService.ServiceParams)
+	paymentStatus := string(types.PaymentStatusSucceeded)
+	now := time.Now()
+
+	updateReq := dto.UpdatePaymentRequest{
+		PaymentStatus: &paymentStatus,
+		SucceededAt:   &now,
+	}
+
+	// Update payment method information if available
+	if paymentStatusResp.PaymentMethod != "" {
+		updateReq.PaymentMethodID = &paymentStatusResp.PaymentMethod
+	}
+
+	_, err = paymentService.UpdatePayment(c.Request.Context(), payment.ID, updateReq)
+	if err != nil {
+		h.logger.Errorw("failed to update payment status",
+			"error", err,
+			"payment_id", payment.ID,
+			"transaction_id", transactionID)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to update payment status",
+		})
+		return
+	}
+
+	h.logger.Infow("successfully updated payment status to succeeded",
+		"payment_id", payment.ID,
+		"transaction_id", transactionID,
+		"environment_id", environmentID)
 }
 
 func (h *WebhookHandler) handlePaddleTransactionCanceled(c *gin.Context, event map[string]interface{}, environmentID string) {
@@ -1347,20 +1464,381 @@ func (h *WebhookHandler) handlePaddleTransactionCanceled(c *gin.Context, event m
 		return
 	}
 
+	transactionID, _ := data["id"].(string)
+	if transactionID == "" {
+		h.logger.Errorw("missing transaction ID in Paddle webhook")
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Missing transaction ID",
+		})
+		return
+	}
+
 	h.logger.Infow("received transaction.canceled webhook from Paddle",
 		"environment_id", environmentID,
 		"event_id", event["event_id"],
 		"event_type", event["event_type"],
-		"transaction_id", data["id"],
+		"transaction_id", transactionID,
 	)
 
-	// TODO: Implement transaction cancellation logic
-	// This would typically involve:
-	// 1. Finding the payment record by transaction ID
-	// 2. Updating payment status to failed/canceled
+	// Find payment record by transaction ID
+	payment, err := h.findPaymentByTransactionID(c.Request.Context(), transactionID)
+	if err != nil {
+		h.logger.Errorw("failed to find payment record", "error", err, "transaction_id", transactionID)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to find payment record",
+		})
+		return
+	}
 
-	h.logger.Infow("Paddle transaction canceled - implement payment cancellation logic",
-		"transaction_id", data["id"],
+	if payment == nil {
+		h.logger.Warnw("no payment record found for transaction", "transaction_id", transactionID)
+		c.JSON(http.StatusOK, gin.H{
+			"message": "No payment record found for transaction",
+		})
+		return
+	}
+
+	// Check if payment is already successful - prevent any updates to successful payments
+	if payment.PaymentStatus == types.PaymentStatusSucceeded {
+		h.logger.Warnw("payment is already successful, cannot cancel",
+			"payment_id", payment.ID,
+			"transaction_id", transactionID,
+			"current_status", payment.PaymentStatus)
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Payment is already successful, cannot cancel",
+		})
+		return
+	}
+
+	// Update payment status to failed/canceled
+	paymentService := service.NewPaymentService(h.paddleService.ServiceParams)
+	paymentStatus := string(types.PaymentStatusFailed)
+	now := time.Now()
+	errorMessage := "Transaction was canceled"
+
+	updateReq := dto.UpdatePaymentRequest{
+		PaymentStatus: &paymentStatus,
+		FailedAt:      &now,
+		ErrorMessage:  &errorMessage,
+	}
+
+	_, err = paymentService.UpdatePayment(c.Request.Context(), payment.ID, updateReq)
+	if err != nil {
+		h.logger.Errorw("failed to update payment status",
+			"error", err,
+			"payment_id", payment.ID,
+			"transaction_id", transactionID)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to update payment status",
+		})
+		return
+	}
+
+	h.logger.Infow("successfully updated payment status to failed (canceled)",
+		"payment_id", payment.ID,
+		"transaction_id", transactionID,
+		"environment_id", environmentID)
+}
+
+// handlePaddleTransactionBilled handles transaction.billed webhook
+func (h *WebhookHandler) handlePaddleTransactionBilled(c *gin.Context, event map[string]interface{}, environmentID string) {
+	data, ok := event["data"].(map[string]interface{})
+	if !ok {
+		h.logger.Errorw("invalid data in Paddle transaction.billed webhook")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid event data"})
+		return
+	}
+
+	transactionID, _ := data["id"].(string)
+	h.logger.Infow("received transaction.billed webhook from Paddle",
+		"environment_id", environmentID,
+		"event_id", event["event_id"],
+		"transaction_id", transactionID,
+	)
+
+	// For billed transactions, we typically just log the event
+	// The transaction is now awaiting payment
+	h.logger.Infow("Paddle transaction billed - awaiting payment",
+		"transaction_id", transactionID,
+		"environment_id", environmentID,
+	)
+}
+
+// handlePaddleTransactionCreated handles transaction.created webhook
+func (h *WebhookHandler) handlePaddleTransactionCreated(c *gin.Context, event map[string]interface{}, environmentID string) {
+	data, ok := event["data"].(map[string]interface{})
+	if !ok {
+		h.logger.Errorw("invalid data in Paddle transaction.created webhook")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid event data"})
+		return
+	}
+
+	transactionID, _ := data["id"].(string)
+	h.logger.Infow("received transaction.created webhook from Paddle",
+		"environment_id", environmentID,
+		"event_id", event["event_id"],
+		"transaction_id", transactionID,
+	)
+
+	// For created transactions, we typically just log the event
+	// The payment record should already exist from when we created the payment link
+	h.logger.Infow("Paddle transaction created",
+		"transaction_id", transactionID,
+		"environment_id", environmentID,
+	)
+}
+
+// handlePaddleTransactionPaid handles transaction.paid webhook
+func (h *WebhookHandler) handlePaddleTransactionPaid(c *gin.Context, event map[string]interface{}, environmentID string) {
+	data, ok := event["data"].(map[string]interface{})
+	if !ok {
+		h.logger.Errorw("invalid data in Paddle transaction.paid webhook")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid event data"})
+		return
+	}
+
+	transactionID, _ := data["id"].(string)
+	if transactionID == "" {
+		h.logger.Errorw("missing transaction ID in Paddle webhook")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing transaction ID"})
+		return
+	}
+
+	h.logger.Infow("received transaction.paid webhook from Paddle",
+		"environment_id", environmentID,
+		"event_id", event["event_id"],
+		"transaction_id", transactionID,
+	)
+
+	// Find payment record by transaction ID
+	payment, err := h.findPaymentByTransactionID(c.Request.Context(), transactionID)
+	if err != nil {
+		h.logger.Errorw("failed to find payment record", "error", err, "transaction_id", transactionID)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to find payment record"})
+		return
+	}
+
+	if payment == nil {
+		h.logger.Warnw("no payment record found for transaction", "transaction_id", transactionID)
+		c.JSON(http.StatusOK, gin.H{"message": "No payment record found for transaction"})
+		return
+	}
+
+	// Check if payment is already successful
+	if payment.PaymentStatus == types.PaymentStatusSucceeded {
+		h.logger.Warnw("payment is already successful, skipping update",
+			"payment_id", payment.ID,
+			"transaction_id", transactionID)
+		c.JSON(http.StatusOK, gin.H{"message": "Payment is already successful"})
+		return
+	}
+
+	// Update payment status to succeeded (transaction.paid means payment is successful)
+	paymentService := service.NewPaymentService(h.paddleService.ServiceParams)
+	paymentStatus := string(types.PaymentStatusSucceeded)
+	now := time.Now()
+
+	updateReq := dto.UpdatePaymentRequest{
+		PaymentStatus: &paymentStatus,
+		SucceededAt:   &now,
+	}
+
+	_, err = paymentService.UpdatePayment(c.Request.Context(), payment.ID, updateReq)
+	if err != nil {
+		h.logger.Errorw("failed to update payment status", "error", err, "payment_id", payment.ID)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update payment status"})
+		return
+	}
+
+	h.logger.Infow("successfully updated payment status to succeeded (paid)",
+		"payment_id", payment.ID,
+		"transaction_id", transactionID)
+}
+
+// handlePaddleTransactionPastDue handles transaction.past_due webhook
+func (h *WebhookHandler) handlePaddleTransactionPastDue(c *gin.Context, event map[string]interface{}, environmentID string) {
+	data, ok := event["data"].(map[string]interface{})
+	if !ok {
+		h.logger.Errorw("invalid data in Paddle transaction.past_due webhook")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid event data"})
+		return
+	}
+
+	transactionID, _ := data["id"].(string)
+	if transactionID == "" {
+		h.logger.Errorw("missing transaction ID in Paddle webhook")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing transaction ID"})
+		return
+	}
+
+	h.logger.Infow("received transaction.past_due webhook from Paddle",
+		"environment_id", environmentID,
+		"event_id", event["event_id"],
+		"transaction_id", transactionID,
+	)
+
+	// Find payment record by transaction ID
+	payment, err := h.findPaymentByTransactionID(c.Request.Context(), transactionID)
+	if err != nil {
+		h.logger.Errorw("failed to find payment record", "error", err, "transaction_id", transactionID)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to find payment record"})
+		return
+	}
+
+	if payment == nil {
+		h.logger.Warnw("no payment record found for transaction", "transaction_id", transactionID)
+		c.JSON(http.StatusOK, gin.H{"message": "No payment record found for transaction"})
+		return
+	}
+
+	// Check if payment is already successful
+	if payment.PaymentStatus == types.PaymentStatusSucceeded {
+		h.logger.Warnw("payment is already successful, cannot mark as past due",
+			"payment_id", payment.ID,
+			"transaction_id", transactionID)
+		c.JSON(http.StatusOK, gin.H{"message": "Payment is already successful"})
+		return
+	}
+
+	// Update payment status to past due (we can use pending with error message)
+	paymentService := service.NewPaymentService(h.paddleService.ServiceParams)
+	paymentStatus := string(types.PaymentStatusPending)
+	errorMessage := "Transaction is past due"
+
+	updateReq := dto.UpdatePaymentRequest{
+		PaymentStatus: &paymentStatus,
+		ErrorMessage:  &errorMessage,
+	}
+
+	_, err = paymentService.UpdatePayment(c.Request.Context(), payment.ID, updateReq)
+	if err != nil {
+		h.logger.Errorw("failed to update payment status", "error", err, "payment_id", payment.ID)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update payment status"})
+		return
+	}
+
+	h.logger.Infow("successfully updated payment status to past due",
+		"payment_id", payment.ID,
+		"transaction_id", transactionID)
+}
+
+// handlePaddleTransactionPaymentFailed handles transaction.payment_failed webhook
+func (h *WebhookHandler) handlePaddleTransactionPaymentFailed(c *gin.Context, event map[string]interface{}, environmentID string) {
+	data, ok := event["data"].(map[string]interface{})
+	if !ok {
+		h.logger.Errorw("invalid data in Paddle transaction.payment_failed webhook")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid event data"})
+		return
+	}
+
+	transactionID, _ := data["id"].(string)
+	if transactionID == "" {
+		h.logger.Errorw("missing transaction ID in Paddle webhook")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing transaction ID"})
+		return
+	}
+
+	h.logger.Infow("received transaction.payment_failed webhook from Paddle",
+		"environment_id", environmentID,
+		"event_id", event["event_id"],
+		"transaction_id", transactionID,
+	)
+
+	// Find payment record by transaction ID
+	payment, err := h.findPaymentByTransactionID(c.Request.Context(), transactionID)
+	if err != nil {
+		h.logger.Errorw("failed to find payment record", "error", err, "transaction_id", transactionID)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to find payment record"})
+		return
+	}
+
+	if payment == nil {
+		h.logger.Warnw("no payment record found for transaction", "transaction_id", transactionID)
+		c.JSON(http.StatusOK, gin.H{"message": "No payment record found for transaction"})
+		return
+	}
+
+	// Check if payment is already successful
+	if payment.PaymentStatus == types.PaymentStatusSucceeded {
+		h.logger.Warnw("payment is already successful, cannot mark as failed",
+			"payment_id", payment.ID,
+			"transaction_id", transactionID)
+		c.JSON(http.StatusOK, gin.H{"message": "Payment is already successful"})
+		return
+	}
+
+	// Update payment status to failed
+	paymentService := service.NewPaymentService(h.paddleService.ServiceParams)
+	paymentStatus := string(types.PaymentStatusFailed)
+	now := time.Now()
+	errorMessage := "Payment failed"
+
+	updateReq := dto.UpdatePaymentRequest{
+		PaymentStatus: &paymentStatus,
+		FailedAt:      &now,
+		ErrorMessage:  &errorMessage,
+	}
+
+	_, err = paymentService.UpdatePayment(c.Request.Context(), payment.ID, updateReq)
+	if err != nil {
+		h.logger.Errorw("failed to update payment status", "error", err, "payment_id", payment.ID)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update payment status"})
+		return
+	}
+
+	h.logger.Infow("successfully updated payment status to failed",
+		"payment_id", payment.ID,
+		"transaction_id", transactionID)
+}
+
+// handlePaddleTransactionReady handles transaction.ready webhook
+func (h *WebhookHandler) handlePaddleTransactionReady(c *gin.Context, event map[string]interface{}, environmentID string) {
+	data, ok := event["data"].(map[string]interface{})
+	if !ok {
+		h.logger.Errorw("invalid data in Paddle transaction.ready webhook")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid event data"})
+		return
+	}
+
+	transactionID, _ := data["id"].(string)
+	h.logger.Infow("received transaction.ready webhook from Paddle",
+		"environment_id", environmentID,
+		"event_id", event["event_id"],
+		"transaction_id", transactionID,
+	)
+
+	// For ready transactions, we typically just log the event
+	// The transaction is ready for processing
+	h.logger.Infow("Paddle transaction ready for processing",
+		"transaction_id", transactionID,
+		"environment_id", environmentID,
+	)
+}
+
+// handlePaddleTransactionUpdated handles transaction.updated webhook
+func (h *WebhookHandler) handlePaddleTransactionUpdated(c *gin.Context, event map[string]interface{}, environmentID string) {
+	data, ok := event["data"].(map[string]interface{})
+	if !ok {
+		h.logger.Errorw("invalid data in Paddle transaction.updated webhook")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid event data"})
+		return
+	}
+
+	transactionID, _ := data["id"].(string)
+	status, _ := data["status"].(string)
+
+	h.logger.Infow("received transaction.updated webhook from Paddle",
+		"environment_id", environmentID,
+		"event_id", event["event_id"],
+		"transaction_id", transactionID,
+		"status", status,
+	)
+
+	// For updated transactions, we log the event and could potentially
+	// sync the status if needed, but typically other specific events handle status changes
+	h.logger.Infow("Paddle transaction updated",
+		"transaction_id", transactionID,
+		"status", status,
 		"environment_id", environmentID,
 	)
 }

@@ -308,6 +308,10 @@ func (s *PaddleService) VerifyWebhookSignature(ctx context.Context, req *http.Re
 	// Get Paddle connection to retrieve webhook secret
 	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderPaddle)
 	if err != nil {
+		s.Logger.Errorw("failed to get Paddle connection for webhook verification",
+			"error", err,
+			"tenant_id", types.GetTenantID(ctx),
+			"environment_id", types.GetEnvironmentID(ctx))
 		return ierr.NewError("failed to get Paddle connection for webhook verification").
 			WithHint("Paddle connection not configured for this environment").
 			Mark(ierr.ErrNotFound)
@@ -315,6 +319,7 @@ func (s *PaddleService) VerifyWebhookSignature(ctx context.Context, req *http.Re
 
 	paddleConfig, err := s.GetDecryptedPaddleConfig(conn)
 	if err != nil {
+		s.Logger.Errorw("failed to get Paddle configuration", "error", err)
 		return ierr.NewError("failed to get Paddle configuration").
 			WithHint("Invalid Paddle configuration").
 			Mark(ierr.ErrValidation)
@@ -322,10 +327,20 @@ func (s *PaddleService) VerifyWebhookSignature(ctx context.Context, req *http.Re
 
 	// Verify webhook secret is configured
 	if paddleConfig.WebhookSecret == "" {
+		s.Logger.Errorw("webhook secret not configured for Paddle connection")
 		return ierr.NewError("webhook secret not configured for Paddle connection").
 			WithHint("Paddle webhook secret is required").
 			Mark(ierr.ErrValidation)
 	}
+
+	// Log webhook secret format for debugging (first 10 chars only for security)
+	secretPrefix := paddleConfig.WebhookSecret
+	if len(secretPrefix) > 10 {
+		secretPrefix = secretPrefix[:10] + "..."
+	}
+	s.Logger.Debugw("verifying Paddle webhook signature",
+		"secret_prefix", secretPrefix,
+		"signature_header", req.Header.Get("Paddle-Signature"))
 
 	// Create Paddle webhook verifier
 	verifier := paddle.NewWebhookVerifier(paddleConfig.WebhookSecret)
@@ -333,17 +348,23 @@ func (s *PaddleService) VerifyWebhookSignature(ctx context.Context, req *http.Re
 	// Verify the webhook signature
 	verified, err := verifier.Verify(req)
 	if err != nil {
+		s.Logger.Errorw("error during Paddle webhook signature verification",
+			"error", err,
+			"signature_header", req.Header.Get("Paddle-Signature"))
 		return ierr.NewError("failed to verify Paddle webhook signature").
 			WithHint("Error during webhook verification").
 			Mark(ierr.ErrValidation)
 	}
 
 	if !verified {
+		s.Logger.Errorw("Paddle webhook signature verification failed",
+			"signature_header", req.Header.Get("Paddle-Signature"))
 		return ierr.NewError("invalid Paddle webhook signature").
 			WithHint("Webhook signature verification failed").
 			Mark(ierr.ErrValidation)
 	}
 
+	s.Logger.Debugw("Paddle webhook signature verified successfully")
 	return nil
 }
 
@@ -487,10 +508,10 @@ func (s *PaddleService) CreatePaymentLink(ctx context.Context, req *dto.CreatePa
 			Description:  fmt.Sprintf("For: Invoice #%s", req.InvoiceID),
 			BillingCycle: nil, // null for one-time payments
 			UnitPrice: paddle.Money{
-				Amount:       req.Amount.String(),
+				Amount:       req.Amount.Mul(decimal.NewFromInt(100)).String(),
 				CurrencyCode: paddle.CurrencyCode(strings.ToUpper(req.Currency)),
 			},
-			TaxMode: paddle.TaxModeAccountSetting,
+			TaxMode: paddle.TaxModeExternal,
 			Quantity: paddle.PriceQuantity{
 				Minimum: 1,
 				Maximum: 1,
@@ -531,13 +552,14 @@ func (s *PaddleService) CreatePaymentLink(ctx context.Context, req *dto.CreatePa
 	// Log the transaction request for debugging
 	s.Logger.Infow("creating Paddle transaction",
 		"customer_id", paddleCustomerID,
-		"amount", req.Amount.String(),
+		"amount_dollars", req.Amount.String(),
+		"amount_cents", item.Price.UnitPrice.Amount,
 		"currency", strings.ToUpper(req.Currency),
 		"invoice_id", req.InvoiceID,
 		"item_quantity", item.Quantity,
 		"price_name", *item.Price.Name,
 		"price_description", item.Price.Description,
-		"unit_price", item.Price.UnitPrice.Amount,
+		"unit_price_cents", item.Price.UnitPrice.Amount,
 		"currency_code", item.Price.UnitPrice.CurrencyCode,
 		"tax_mode", item.Price.TaxMode,
 		"quantity_min", item.Price.Quantity.Minimum,
@@ -546,7 +568,6 @@ func (s *PaddleService) CreatePaymentLink(ctx context.Context, req *dto.CreatePa
 		"product_tax_category", item.Price.Product.TaxCategory,
 		"collection_mode", "automatic",
 		"billing_cycle", item.Price.BillingCycle,
-		"auto_status", "paddle_determined",
 	)
 
 	// Create the transaction
@@ -644,11 +665,12 @@ func (s *PaddleService) GetPaymentStatus(ctx context.Context, transactionID stri
 			Mark(ierr.ErrHTTPClient)
 	}
 
-	// Convert amount
+	// Convert amount from cents to dollars
 	amount := decimal.Zero
 	if transaction.Details.Totals.Total != "" {
 		if parsedAmount, parseErr := decimal.NewFromString(transaction.Details.Totals.Total); parseErr == nil {
-			amount = parsedAmount
+			// Paddle returns amounts in cents, so divide by 100 to get dollars
+			amount = parsedAmount.Div(decimal.NewFromInt(100))
 		}
 	}
 

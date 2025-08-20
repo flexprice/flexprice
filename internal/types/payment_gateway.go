@@ -52,13 +52,17 @@ const (
 	WebhookEventTypePaymentIntentPaymentFailed           WebhookEventType = "payment_intent.payment_failed"
 
 	// Paddle webhook events
-	WebhookEventTypeTransactionCompleted  WebhookEventType = "transaction.completed"
-	WebhookEventTypeTransactionCreated    WebhookEventType = "transaction.created"
-	WebhookEventTypeTransactionUpdated    WebhookEventType = "transaction.updated"
-	WebhookEventTypeTransactionPaid       WebhookEventType = "transaction.paid"
-	WebhookEventTypeTransactionPastDue    WebhookEventType = "transaction.past_due"
-	WebhookEventTypeTransactionCanceled   WebhookEventType = "transaction.canceled"
-	WebhookEventTypePaddleCustomerCreated WebhookEventType = "customer.created"
+	WebhookEventTypeTransactionBilled        WebhookEventType = "transaction.billed"
+	WebhookEventTypeTransactionCanceled      WebhookEventType = "transaction.canceled"
+	WebhookEventTypeTransactionCompleted     WebhookEventType = "transaction.completed"
+	WebhookEventTypeTransactionCreated       WebhookEventType = "transaction.created"
+	WebhookEventTypeTransactionPaid          WebhookEventType = "transaction.paid"
+	WebhookEventTypeTransactionPastDue       WebhookEventType = "transaction.past_due"
+	WebhookEventTypeTransactionPaymentFailed WebhookEventType = "transaction.payment_failed"
+	WebhookEventTypeTransactionReady         WebhookEventType = "transaction.ready"
+	WebhookEventTypeTransactionUpdated       WebhookEventType = "transaction.updated"
+	WebhookEventTypePaddleCustomerCreated    WebhookEventType = "customer.created"
+	WebhookEventTypePaddleCustomerUpdated    WebhookEventType = "customer.updated"
 )
 
 // Validate validates the webhook event type
