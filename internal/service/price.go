@@ -125,15 +125,7 @@ func (s *priceService) validateEntityExists(ctx context.Context, entityType type
 				Mark(ierr.ErrNotFound)
 		}
 	case types.PRICE_ENTITY_TYPE_SUBSCRIPTION:
-		subscription, err := s.SubRepo.Get(ctx, entityID)
-		if err != nil || subscription == nil {
-			return ierr.NewError("subscription not found").
-				WithHint("The specified subscription does not exist").
-				WithReportableDetails(map[string]interface{}{
-					"subscription_id": entityID,
-				}).
-				Mark(ierr.ErrNotFound)
-		}
+		return nil
 	default:
 		return ierr.NewError("unsupported entity type").
 			WithHint("The specified entity type is not supported").

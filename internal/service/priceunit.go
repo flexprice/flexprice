@@ -262,7 +262,7 @@ func (s *priceUnitService) ConvertToBaseCurrency(ctx context.Context, code strin
 
 	// Convert and round to the base currency's precision (typically 2 decimal places)
 	baseAmount := priceUnitAmount.Mul(unit.ConversionRate)
-	return baseAmount.Round(2), nil
+	return baseAmount.Round(int32(unit.Precision)), nil
 }
 
 // ConvertToPriceUnit converts an amount from base currency to pricing unit
@@ -290,7 +290,7 @@ func (s *priceUnitService) ConvertToPriceUnit(ctx context.Context, code string, 
 	}
 
 	// Get the price unit to get the conversion rate
-	unit, err := s.PriceUnitRepo.GetByCode(ctx, strings.ToLower(code))
+	unit, err := s.PriceUnitRepo.GetByCode(ctx, (code))
 	if err != nil {
 		return decimal.Zero, err
 	}

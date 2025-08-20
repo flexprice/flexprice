@@ -226,9 +226,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		if sub.EndDate != nil {
 			item.EndDate = *sub.EndDate
 		}
-	}
-
-	// Process price overrides if provided
+	} // Process price overrides if provided
 	if len(req.OverrideLineItems) > 0 {
 		err = s.ProcessSubscriptionPriceOverrides(ctx, sub, req.OverrideLineItems, lineItems)
 		if err != nil {
@@ -505,6 +503,7 @@ func (s *subscriptionService) ProcessSubscriptionPriceOverrides(
 				createPriceReq.Amount = override.Amount.String()
 			}
 		}
+
 		// Create the subscription-scoped price using the price service
 		overridePriceResponse, err := priceService.CreatePrice(ctx, createPriceReq)
 		if err != nil {
