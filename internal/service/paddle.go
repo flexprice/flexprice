@@ -6,13 +6,15 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
-	"github.com/PaddleHQ/paddle-go-sdk/v4"
+	paddle "github.com/PaddleHQ/paddle-go-sdk/v4"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // PaddleService handles Paddle integration operations
@@ -123,21 +125,14 @@ func (s *PaddleService) CreatePaddleClient(ctx context.Context) (*paddle.SDK, er
 	var clientErr error
 
 	// Handle different API key formats
-	if strings.HasPrefix(paddleConfig.APIKey, "test_") {
-		// Old sandbox format
-		client, clientErr = paddle.NewSandbox(paddleConfig.APIKey)
-	} else if strings.HasPrefix(paddleConfig.APIKey, "live_") {
-		// Old production format
-		client, clientErr = paddle.New(paddleConfig.APIKey)
-	} else if strings.HasPrefix(paddleConfig.APIKey, "pdl_s") {
-		// New sandbox format - still needs NewSandbox()
-		client, clientErr = paddle.NewSandbox(paddleConfig.APIKey)
-	} else if strings.HasPrefix(paddleConfig.APIKey, "pdl_l") {
-		// New production format
-		client, clientErr = paddle.New(paddleConfig.APIKey)
-	} else if strings.HasPrefix(paddleConfig.APIKey, "pdl_") {
-		// Other pdl_ keys - default to production
-		client, clientErr = paddle.New(paddleConfig.APIKey)
+	if strings.HasPrefix(paddleConfig.APIKey, "test_") || strings.HasPrefix(paddleConfig.APIKey, "pdl_s") {
+		// Sandbox environment
+		s.Logger.Infow("using Paddle Sandbox environment", "api_key_prefix", paddleConfig.APIKey[:5])
+		client, clientErr = paddle.New(paddleConfig.APIKey, paddle.WithBaseURL(paddle.SandboxBaseURL))
+	} else if strings.HasPrefix(paddleConfig.APIKey, "live_") || strings.HasPrefix(paddleConfig.APIKey, "pdl_l") || strings.HasPrefix(paddleConfig.APIKey, "pdl_") {
+		// Production environment
+		s.Logger.Infow("using Paddle Production environment", "api_key_prefix", paddleConfig.APIKey[:5])
+		client, clientErr = paddle.New(paddleConfig.APIKey, paddle.WithBaseURL(paddle.ProductionBaseURL))
 	} else {
 		// Debug: Log the first few characters of API key to verify decryption
 		apiKeyPrefix := "unknown"
@@ -198,13 +193,17 @@ func (s *PaddleService) CreateCustomerInPaddle(ctx context.Context, customerID s
 	}
 
 	// Add custom data if needed
-	createReq.CustomData = paddle.CustomData{
+	createReq.CustomData = map[string]interface{}{
 		"flexprice_customer_id": ourCustomer.ID,
 		"flexprice_environment": ourCustomer.EnvironmentID,
 	}
 
 	// Debug: Log the request being sent (without sensitive data)
-	fmt.Printf("DEBUG: Creating Paddle customer with email: %s, name: %v\n", createReq.Email, createReq.Name)
+	s.Logger.Infow("creating Paddle customer",
+		"email", createReq.Email,
+		"name", createReq.Name,
+		"flexprice_customer_id", ourCustomer.ID,
+	)
 
 	paddleCustomer, err := paddleClient.CreateCustomer(ctx, createReq)
 	if err != nil {
@@ -212,6 +211,15 @@ func (s *PaddleService) CreateCustomerInPaddle(ctx context.Context, customerID s
 			WithHint(fmt.Sprintf("Paddle API error: %v", err)).
 			Mark(ierr.ErrHTTPClient)
 	}
+
+	// Log the created customer details for debugging
+	s.Logger.Infow("Paddle customer created successfully",
+		"paddle_customer_id", paddleCustomer.ID,
+		"customer_email", paddleCustomer.Email,
+		"customer_name", paddleCustomer.Name,
+		"customer_status", paddleCustomer.Status,
+		"created_at", paddleCustomer.CreatedAt,
+	)
 
 	// Update our customer with Paddle ID
 	updateReq := dto.UpdateCustomerRequest{
@@ -350,4 +358,352 @@ func (s *PaddleService) ParseWebhookEvent(payload []byte) (map[string]interface{
 	}
 
 	return event, nil
+}
+
+// CreatePaymentLink creates a Paddle checkout session for payment
+func (s *PaddleService) CreatePaymentLink(ctx context.Context, req *dto.CreatePaddlePaymentLinkRequest) (*dto.PaddlePaymentLinkResponse, error) {
+	s.Logger.Infow("creating paddle payment link",
+		"invoice_id", req.InvoiceID,
+		"customer_id", req.CustomerID,
+		"amount", req.Amount.String(),
+		"currency", req.Currency,
+		"environment_id", req.EnvironmentID,
+	)
+
+	// Validate request
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Get customer to verify it exists and check for Paddle customer ID
+	customerService := NewCustomerService(s.ServiceParams)
+	customerResp, err := customerService.GetCustomer(ctx, req.CustomerID)
+	if err != nil {
+		return nil, ierr.NewError("failed to get customer").
+			WithHint("Customer not found").
+			WithReportableDetails(map[string]interface{}{
+				"customer_id": req.CustomerID,
+			}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	// Validate invoice and check payment eligibility
+	invoiceService := NewInvoiceService(s.ServiceParams)
+	invoiceResp, err := invoiceService.GetInvoice(ctx, req.InvoiceID)
+	if err != nil {
+		return nil, ierr.NewError("failed to get invoice").
+			WithHint("Invoice not found").
+			WithReportableDetails(map[string]interface{}{
+				"invoice_id": req.InvoiceID,
+			}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	// Validate invoice payment status
+	if invoiceResp.PaymentStatus == types.PaymentStatusSucceeded {
+		return nil, ierr.NewError("invoice is already paid").
+			WithHint("Cannot create payment link for an already paid invoice").
+			WithReportableDetails(map[string]interface{}{
+				"invoice_id":     req.InvoiceID,
+				"payment_status": invoiceResp.PaymentStatus,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if invoiceResp.InvoiceStatus == types.InvoiceStatusVoided {
+		return nil, ierr.NewError("invoice is voided").
+			WithHint("Cannot create payment link for a voided invoice").
+			WithReportableDetails(map[string]interface{}{
+				"invoice_id":     req.InvoiceID,
+				"invoice_status": invoiceResp.InvoiceStatus,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Create Paddle client
+	_, err = s.CreatePaddleClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Ensure customer exists in Paddle
+	paddleCustomerID := ""
+	if customerResp.Customer.Metadata != nil {
+		if id, exists := customerResp.Customer.Metadata["paddle_customer_id"]; exists && id != "" {
+			paddleCustomerID = id
+		}
+	}
+
+	// If no Paddle customer ID, create customer in Paddle
+	if paddleCustomerID == "" {
+		err := s.CreateCustomerInPaddle(ctx, req.CustomerID)
+		if err != nil {
+			return nil, ierr.NewError("failed to create customer in Paddle").
+				WithHint("Unable to sync customer with Paddle").
+				Mark(ierr.ErrHTTPClient)
+		}
+
+		// Refresh customer data to get Paddle ID
+		customerResp, err = customerService.GetCustomer(ctx, req.CustomerID)
+		if err != nil {
+			return nil, err
+		}
+
+		if customerResp.Customer.Metadata != nil {
+			if id, exists := customerResp.Customer.Metadata["paddle_customer_id"]; exists && id != "" {
+				paddleCustomerID = id
+			}
+		}
+
+		if paddleCustomerID == "" {
+			return nil, ierr.NewError("failed to get Paddle customer ID").
+				WithHint("Customer was created in Paddle but ID not found").
+				Mark(ierr.ErrSystem)
+		}
+	}
+
+	// Create Paddle client
+	paddleClient, err := s.CreatePaddleClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Provide default URLs if not provided
+	successURL := req.SuccessURL
+	if successURL == "" {
+		successURL = "https://admin-dev.flexprice.io/customer-management/invoices?page=1&status=success"
+	}
+
+	cancelURL := req.CancelURL
+	if cancelURL == "" {
+		cancelURL = "https://admin-dev.flexprice.io/customer-management/invoices?page=1&status=canceled"
+	}
+
+	// Create transaction using your exact working pattern
+	item := &paddle.TransactionItemCreateWithProduct{
+		Quantity: 1,
+		Price: paddle.TransactionPriceCreateWithProduct{
+			Name:         paddle.PtrTo("Custom Service Payment"),
+			Description:  fmt.Sprintf("For: Invoice #%s", req.InvoiceID),
+			BillingCycle: nil, // null for one-time payments
+			UnitPrice: paddle.Money{
+				Amount:       req.Amount.String(),
+				CurrencyCode: paddle.CurrencyCode(strings.ToUpper(req.Currency)),
+			},
+			TaxMode: paddle.TaxModeAccountSetting,
+			Quantity: paddle.PriceQuantity{
+				Minimum: 1,
+				Maximum: 1,
+			},
+			Product: paddle.TransactionSubscriptionProductCreate{
+				Name:        fmt.Sprintf("Flexprice Service Invoice #%s", req.InvoiceID),
+				Description: paddle.PtrTo("One-time custom service"),
+				TaxCategory: paddle.TaxCategoryStandard,
+			},
+		},
+	}
+
+	// Now wrap this in a CreateTransactionItems
+	txnItem := paddle.NewCreateTransactionItemsTransactionItemCreateWithProduct(item)
+
+	createTxnReq := &paddle.CreateTransactionRequest{
+		Items:          []paddle.CreateTransactionItems{*txnItem},
+		CustomerID:     &paddleCustomerID,
+		CollectionMode: paddle.PtrTo(paddle.CollectionModeAutomatic),                     // Explicit!
+		CurrencyCode:   paddle.PtrTo(paddle.CurrencyCode(strings.ToUpper(req.Currency))), // Explicit currency
+
+		CustomData: paddle.CustomData{
+			"invoice_id":     req.InvoiceID,
+			"customer_id":    req.CustomerID,
+			"environment_id": req.EnvironmentID,
+			"success_url":    successURL,
+			"cancel_url":     cancelURL,
+		},
+	}
+
+	// Add custom metadata if provided
+	if req.Metadata != nil {
+		for k, v := range req.Metadata {
+			createTxnReq.CustomData[k] = v
+		}
+	}
+
+	// Log the transaction request for debugging
+	s.Logger.Infow("creating Paddle transaction",
+		"customer_id", paddleCustomerID,
+		"amount", req.Amount.String(),
+		"currency", strings.ToUpper(req.Currency),
+		"invoice_id", req.InvoiceID,
+		"item_quantity", item.Quantity,
+		"price_name", *item.Price.Name,
+		"price_description", item.Price.Description,
+		"unit_price", item.Price.UnitPrice.Amount,
+		"currency_code", item.Price.UnitPrice.CurrencyCode,
+		"tax_mode", item.Price.TaxMode,
+		"quantity_min", item.Price.Quantity.Minimum,
+		"quantity_max", item.Price.Quantity.Maximum,
+		"product_name", item.Price.Product.Name,
+		"product_tax_category", item.Price.Product.TaxCategory,
+		"collection_mode", "automatic",
+		"billing_cycle", item.Price.BillingCycle,
+		"auto_status", "paddle_determined",
+	)
+
+	// Create the transaction
+	transaction, err := paddleClient.CreateTransaction(ctx, createTxnReq)
+	if err != nil {
+		s.Logger.Errorw("failed to create Paddle transaction",
+			"error", err,
+			"invoice_id", req.InvoiceID,
+			"customer_id", paddleCustomerID,
+			"amount", req.Amount.String(),
+			"currency", req.Currency)
+		return nil, ierr.NewError("failed to create payment link").
+			WithHint("Unable to create Paddle transaction").
+			WithReportableDetails(map[string]interface{}{
+				"invoice_id": req.InvoiceID,
+				"error":      err.Error(),
+			}).
+			Mark(ierr.ErrSystem)
+	}
+
+	// Log successful transaction creation
+	s.Logger.Infow("Paddle transaction created successfully",
+		"transaction_id", transaction.ID,
+		"transaction_status", transaction.Status,
+		"customer_id", transaction.CustomerID,
+		"collection_mode", transaction.CollectionMode,
+		"created_at", transaction.CreatedAt,
+		"invoice_id", req.InvoiceID,
+	)
+
+	// Get the hosted checkout URL from the response
+	checkoutURL := ""
+	if transaction.Checkout != nil && transaction.Checkout.URL != nil {
+		checkoutURL = *transaction.Checkout.URL
+		s.Logger.Infow("Paddle checkout URL generated",
+			"checkout_url", checkoutURL,
+			"transaction_id", transaction.ID,
+			"transaction_status", transaction.Status,
+		)
+	} else {
+		s.Logger.Warnw("No checkout URL in Paddle response",
+			"transaction_id", transaction.ID,
+			"transaction_status", transaction.Status,
+			"checkout_object", transaction.Checkout,
+		)
+	}
+
+	response := &dto.PaddlePaymentLinkResponse{
+		ID:            transaction.ID,
+		PaymentURL:    checkoutURL,
+		TransactionID: transaction.ID,
+		Amount:        req.Amount,
+		Currency:      req.Currency,
+		Status:        string(transaction.Status),
+		CreatedAt:     parseTimestamp(transaction.CreatedAt),
+		PaymentID:     "", // Payment ID will be set by the calling code
+	}
+
+	s.Logger.Infow("successfully created paddle payment link",
+		"payment_id", response.PaymentID,
+		"transaction_id", transaction.ID,
+		"payment_url", checkoutURL,
+		"invoice_id", req.InvoiceID,
+		"amount", req.Amount.String(),
+		"currency", req.Currency,
+	)
+
+	return response, nil
+}
+
+// GetPaymentStatus retrieves payment status from Paddle by transaction ID
+func (s *PaddleService) GetPaymentStatus(ctx context.Context, transactionID string, environmentID string) (*dto.PaddlePaymentStatusResponse, error) {
+	s.Logger.Infow("getting paddle payment status",
+		"transaction_id", transactionID,
+		"environment_id", environmentID,
+	)
+
+	// Create Paddle client
+	paddleClient, err := s.CreatePaddleClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get transaction from Paddle
+	transaction, err := paddleClient.GetTransaction(ctx, &paddle.GetTransactionRequest{
+		TransactionID: transactionID,
+	})
+	if err != nil {
+		return nil, ierr.NewError("failed to get transaction from Paddle").
+			WithHint("Unable to retrieve transaction status").
+			WithReportableDetails(map[string]interface{}{
+				"transaction_id": transactionID,
+				"error":          err.Error(),
+			}).
+			Mark(ierr.ErrHTTPClient)
+	}
+
+	// Convert amount
+	amount := decimal.Zero
+	if transaction.Details.Totals.Total != "" {
+		if parsedAmount, parseErr := decimal.NewFromString(transaction.Details.Totals.Total); parseErr == nil {
+			amount = parsedAmount
+		}
+	}
+
+	// Get currency
+	currency := string(transaction.Details.Totals.CurrencyCode)
+
+	// Get payment method and paid timestamp
+	var paymentMethod string
+	var paidAt *int64
+	if len(transaction.Payments) > 0 {
+		payment := transaction.Payments[0]
+		paymentMethod = string(payment.MethodDetails.Type)
+		if payment.CapturedAt != nil {
+			timestamp := parseTimestamp(*payment.CapturedAt)
+			paidAt = &timestamp
+		}
+	}
+
+	response := &dto.PaddlePaymentStatusResponse{
+		TransactionID: transaction.ID,
+		Status:        string(transaction.Status),
+		Amount:        amount,
+		Currency:      currency,
+		PaymentMethod: paymentMethod,
+		PaidAt:        paidAt,
+		CreatedAt:     parseTimestamp(transaction.CreatedAt),
+		UpdatedAt:     parseTimestamp(transaction.UpdatedAt),
+	}
+
+	s.Logger.Infow("retrieved paddle payment status",
+		"transaction_id", transactionID,
+		"status", response.Status,
+		"amount", response.Amount.String(),
+		"currency", response.Currency,
+	)
+
+	return response, nil
+}
+
+// parseTimestamp parses a timestamp string and returns Unix timestamp
+func parseTimestamp(timestampStr string) int64 {
+	if timestampStr == "" {
+		return 0
+	}
+
+	// Try parsing RFC3339 format first
+	if t, err := time.Parse(time.RFC3339, timestampStr); err == nil {
+		return t.Unix()
+	}
+
+	// Try parsing RFC3339Nano format
+	if t, err := time.Parse(time.RFC3339Nano, timestampStr); err == nil {
+		return t.Unix()
+	}
+
+	// If parsing fails, return 0
+	return 0
 }

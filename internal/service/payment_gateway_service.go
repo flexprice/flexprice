@@ -120,6 +120,49 @@ func (s *paymentGatewayService) CreatePaymentLink(ctx context.Context, req *dto.
 
 		return response, nil
 
+	case types.PaymentGatewayTypePaddle:
+		paddleService := gatewayService.(*PaddleService)
+
+		// Convert generic request to Paddle-specific request
+		paddleReq := &dto.CreatePaddlePaymentLinkRequest{
+			InvoiceID:  req.InvoiceID,
+			CustomerID: req.CustomerID,
+			Amount:     req.Amount,
+			Currency:   req.Currency,
+			SuccessURL: req.SuccessURL,
+			CancelURL:  req.CancelURL,
+			Metadata:   req.Metadata,
+		}
+
+		// Get environment ID from context
+		environmentID := types.GetEnvironmentID(ctx)
+		if environmentID == "" {
+			return nil, ierr.NewError("environment not found in context").
+				WithHint("Request context must contain environment_id").
+				Mark(ierr.ErrValidation)
+		}
+		paddleReq.EnvironmentID = environmentID
+
+		paddleResp, err := paddleService.CreatePaymentLink(ctx, paddleReq)
+		if err != nil {
+			return nil, err
+		}
+
+		// Convert Paddle response to generic response
+		response := &dto.PaymentLinkResponse{
+			ID:              paddleResp.ID,
+			PaymentURL:      paddleResp.PaymentURL,
+			PaymentIntentID: paddleResp.TransactionID,
+			Amount:          paddleResp.Amount,
+			Currency:        paddleResp.Currency,
+			Status:          paddleResp.Status,
+			CreatedAt:       paddleResp.CreatedAt,
+			PaymentID:       paddleResp.PaymentID,
+			Gateway:         string(types.PaymentGatewayTypePaddle),
+		}
+
+		return response, nil
+
 	default:
 		return nil, ierr.NewError("gateway not supported").
 			WithHint(fmt.Sprintf("Gateway type '%s' is not supported for payment link creation", gatewayType)).
@@ -295,6 +338,8 @@ func (s *paymentGatewayService) getGatewayDisplayName(gwType types.PaymentGatewa
 	switch gwType {
 	case types.PaymentGatewayTypeStripe:
 		return "Stripe"
+	case types.PaymentGatewayTypePaddle:
+		return "Paddle"
 	case types.PaymentGatewayTypeRazorpay:
 		return "Razorpay"
 	case types.PaymentGatewayTypeFinix:

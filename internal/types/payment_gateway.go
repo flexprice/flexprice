@@ -11,12 +11,13 @@ const (
 	PaymentGatewayTypeStripe   PaymentGatewayType = "stripe"
 	PaymentGatewayTypeRazorpay PaymentGatewayType = "razorpay"
 	PaymentGatewayTypeFinix    PaymentGatewayType = "finix"
+	PaymentGatewayTypePaddle   PaymentGatewayType = "paddle"
 )
 
 // Validate validates the payment gateway type
 func (p PaymentGatewayType) Validate() error {
 	switch p {
-	case PaymentGatewayTypeStripe, PaymentGatewayTypeRazorpay, PaymentGatewayTypeFinix:
+	case PaymentGatewayTypeStripe, PaymentGatewayTypeRazorpay, PaymentGatewayTypeFinix, PaymentGatewayTypePaddle:
 		return nil
 	default:
 		return ierr.NewError("invalid payment gateway type").
@@ -26,6 +27,7 @@ func (p PaymentGatewayType) Validate() error {
 					PaymentGatewayTypeStripe,
 					PaymentGatewayTypeRazorpay,
 					PaymentGatewayTypeFinix,
+					PaymentGatewayTypePaddle,
 				},
 			}).
 			Mark(ierr.ErrValidation)
@@ -48,6 +50,15 @@ const (
 	WebhookEventTypeCheckoutSessionExpired               WebhookEventType = "checkout.session.expired"
 	WebhookEventTypeCustomerCreated                      WebhookEventType = "customer.created"
 	WebhookEventTypePaymentIntentPaymentFailed           WebhookEventType = "payment_intent.payment_failed"
+
+	// Paddle webhook events
+	WebhookEventTypeTransactionCompleted  WebhookEventType = "transaction.completed"
+	WebhookEventTypeTransactionCreated    WebhookEventType = "transaction.created"
+	WebhookEventTypeTransactionUpdated    WebhookEventType = "transaction.updated"
+	WebhookEventTypeTransactionPaid       WebhookEventType = "transaction.paid"
+	WebhookEventTypeTransactionPastDue    WebhookEventType = "transaction.past_due"
+	WebhookEventTypeTransactionCanceled   WebhookEventType = "transaction.canceled"
+	WebhookEventTypePaddleCustomerCreated WebhookEventType = "customer.created"
 )
 
 // Validate validates the webhook event type

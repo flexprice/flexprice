@@ -25,6 +25,8 @@ func (f *PaymentGatewayFactory) GetGateway(ctx context.Context, gatewayType type
 	switch gatewayType {
 	case types.PaymentGatewayTypeStripe:
 		return NewStripeService(f.services), nil
+	case types.PaymentGatewayTypePaddle:
+		return NewPaddleService(f.services), nil
 	case types.PaymentGatewayTypeRazorpay:
 		// TODO: Implement Razorpay service
 		return nil, ierr.NewError("gateway not implemented").
@@ -62,6 +64,7 @@ func (f *PaymentGatewayFactory) GetPreferredGateway(ctx context.Context) (types.
 func (f *PaymentGatewayFactory) GetSupportedGateways() []types.PaymentGatewayType {
 	return []types.PaymentGatewayType{
 		types.PaymentGatewayTypeStripe,
+		types.PaymentGatewayTypePaddle,
 		types.PaymentGatewayTypeRazorpay,
 		types.PaymentGatewayTypeFinix,
 	}

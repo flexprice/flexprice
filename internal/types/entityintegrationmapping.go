@@ -98,11 +98,12 @@ func (f EntityIntegrationMappingFilter) Validate() error {
 			"stripe":   true,
 			"razorpay": true,
 			"paypal":   true,
+			"paddle":   true,
 		}
 		for _, pt := range f.ProviderTypes {
 			if !validProviderTypes[pt] {
 				return ierr.NewError("invalid provider_type").
-					WithHint("Provider type must be one of: stripe, razorpay, paypal").
+					WithHint("Provider type must be one of: stripe, razorpay, paypal, paddle").
 					Mark(ierr.ErrValidation)
 			}
 		}
