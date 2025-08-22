@@ -141,6 +141,8 @@ type PaymentResponse struct {
 	UpdatedAt         time.Time                    `json:"updated_at"`
 	CreatedBy         string                       `json:"created_by"`
 	UpdatedBy         string                       `json:"updated_by"`
+	// The recorded_at timestamp indicates when this payment was manually recorded (optional)
+	RecordedAt *time.Time `json:"recorded_at,omitempty"`
 }
 
 // PaymentAttemptResponse represents a payment attempt response
@@ -189,6 +191,7 @@ func NewPaymentResponse(p *payment.Payment) *PaymentResponse {
 		CreatedAt:         p.CreatedAt,
 		UpdatedAt:         p.UpdatedAt,
 		CreatedBy:         p.CreatedBy,
+		RecordedAt:        p.RecordedAt,
 		UpdatedBy:         p.UpdatedBy,
 	}
 
