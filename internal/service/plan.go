@@ -640,11 +640,49 @@ func (s *planService) DeletePlan(ctx context.Context, id string) error {
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	err = s.PlanRepo.Delete(ctx, plan)
+	// also mark all the entitlements as archived
+	entitlementFilters := types.NewNoLimitEntitlementFilter()
+	entitlementFilters = entitlementFilters.WithEntityIDs([]string{id})
+	entitlementFilters = entitlementFilters.WithEntityType(types.ENTITLEMENT_ENTITY_TYPE_PLAN)
+	entitlementFilters = entitlementFilters.WithStatus(types.StatusPublished)
+	entitlements, err := s.EntitlementRepo.List(ctx, entitlementFilters)
 	if err != nil {
 		return err
 	}
-	return nil
+
+	// mark all the prices as archived
+	priceFilters := types.NewNoLimitPriceFilter()
+	priceFilters = priceFilters.WithEntityIDs([]string{id})
+	priceFilters = priceFilters.WithEntityType(types.PRICE_ENTITY_TYPE_PLAN)
+	priceFilters = priceFilters.WithStatus(types.StatusPublished)
+	prices, err := s.PriceRepo.List(ctx, priceFilters)
+	if err != nil {
+		return err
+	}
+
+	// do it in db transaction
+	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
+
+		for _, price := range prices {
+			if err := s.PriceRepo.Delete(ctx, price.ID); err != nil {
+				return err
+			}
+		}
+
+		for _, entitlement := range entitlements {
+			if err := s.EntitlementRepo.Delete(ctx, entitlement.ID); err != nil {
+				return err
+			}
+		}
+
+		if err := s.PlanRepo.Delete(ctx, plan); err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	return err
 }
 
 func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*SyncPlanPricesResponse, error) {

@@ -252,8 +252,8 @@ func (s *featureService) DeleteFeature(ctx context.Context, id string) error {
 	}
 
 	entitlementFilter := types.NewDefaultEntitlementFilter()
-	entitlementFilter.QueryFilter.Limit = lo.ToPtr(1)
-	entitlementFilter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
+	entitlementFilter.Limit = lo.ToPtr(1)
+	entitlementFilter.Status = lo.ToPtr(types.StatusPublished)
 	entitlementFilter.FeatureIDs = []string{id}
 	entitlements, err := s.EntitlementRepo.List(ctx, entitlementFilter)
 
