@@ -40,6 +40,11 @@ func NewPaymentService(params ServiceParams) PaymentService {
 
 // CreatePayment creates a new payment
 func (s *paymentService) CreatePayment(ctx context.Context, req *dto.CreatePaymentRequest) (*dto.PaymentResponse, error) {
+
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
 	p, err := req.ToPayment(ctx)
 	if err != nil {
 		return nil, err // Already using ierr in the DTO

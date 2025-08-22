@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/validator"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
@@ -24,6 +25,79 @@ type CreatePaymentRequest struct {
 	Currency          string                       `json:"currency" binding:"required"`
 	Metadata          types.Metadata               `json:"metadata,omitempty"`
 	ProcessPayment    bool                         `json:"process_payment" default:"true"`
+
+	// The recorded_at timestamp indicates when this payment was manually recorded (optional)
+	RecordedAt *time.Time `json:"recorded_at,omitempty"`
+}
+
+func (r *CreatePaymentRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+
+	// Validate currency
+	if err := types.ValidateCurrencyCode(r.Currency); err != nil {
+		return err
+	}
+
+	if r.PaymentGateway != nil {
+		if err := r.PaymentGateway.Validate(); err != nil {
+			return err
+		}
+	}
+
+	// Validate payment method type specific rules
+	if r.PaymentMethodType == types.PaymentMethodTypeOffline {
+		if r.PaymentMethodID != "" {
+			return ierr.NewError("payment method id is not allowed for offline payment method type").
+				WithHint("Do not provide payment method ID for offline or credits payment methods").
+				WithReportableDetails(map[string]interface{}{
+					"payment_method_type": r.PaymentMethodType,
+					"payment_method_id":   r.PaymentMethodID,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		if r.PaymentGateway != nil {
+			return ierr.NewError("payment_gateway is not allowed for offline payment method type").
+				WithHint("Payment gateway is not allowed for offline payment method type").
+				WithReportableDetails(map[string]interface{}{
+					"payment_method_type": r.PaymentMethodType,
+					"payment_gateway":     r.PaymentGateway,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	} else if r.PaymentMethodType == types.PaymentMethodTypePaymentLink {
+		if r.PaymentGateway == nil {
+			return ierr.NewError("payment gateway is required for payment link method type").
+				WithHint("Payment gateway must be specified for payment link method type").
+				WithReportableDetails(map[string]interface{}{
+					"payment_method_type": r.PaymentMethodType,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	} else if r.PaymentMethodType != types.PaymentMethodTypeCredits && r.PaymentMethodType != types.PaymentMethodTypePaymentLink {
+		if r.PaymentMethodID == "" {
+			return ierr.NewError("payment method id is required for online payment method type").
+				WithHint("Payment method ID is required for online payment methods").
+				WithReportableDetails(map[string]interface{}{
+					"payment_method_type": r.PaymentMethodType,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	if r.RecordedAt != nil {
+		if r.PaymentMethodType != types.PaymentMethodTypeOffline {
+			return ierr.NewError("recorded_at is only allowed for offline payment method type").
+				WithHint("Recorded at is only allowed for offline payment method type").
+				WithReportableDetails(map[string]interface{}{
+					"payment_method_type": r.PaymentMethodType,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	return nil
 }
 
 // UpdatePaymentRequest represents a request to update a payment
@@ -153,11 +227,6 @@ func NewPaymentAttemptResponse(a *payment.PaymentAttempt) *PaymentAttemptRespons
 
 // ToPayment converts a create payment request to a payment
 func (r *CreatePaymentRequest) ToPayment(ctx context.Context) (*payment.Payment, error) {
-	// Validate currency
-	if err := types.ValidateCurrencyCode(r.Currency); err != nil {
-		return nil, err
-	}
-
 	p := &payment.Payment{
 		ID:                types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PAYMENT),
 		IdempotencyKey:    r.IdempotencyKey,
@@ -180,43 +249,24 @@ func (r *CreatePaymentRequest) ToPayment(ctx context.Context) (*payment.Payment,
 		p.PaymentGateway = lo.ToPtr(string(*r.PaymentGateway))
 	}
 
-	if r.PaymentMethodType == types.PaymentMethodTypeOffline {
+	// Configure payment based on method type
+	switch r.PaymentMethodType {
+	case types.PaymentMethodTypeOffline:
 		p.TrackAttempts = false
 		p.PaymentGateway = nil
 		p.GatewayPaymentID = nil
-		if p.PaymentMethodID != "" {
-			return nil, ierr.NewError("payment method id is not allowed for offline payment method type").
-				WithHint("Do not provide payment method ID for offline or credits payment methods").
-				WithReportableDetails(map[string]interface{}{
-					"payment_method_type": r.PaymentMethodType,
-					"payment_method_id":   r.PaymentMethodID,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-	} else if r.PaymentMethodType == types.PaymentMethodTypePaymentLink {
+		p.RecordedAt = r.RecordedAt
+	case types.PaymentMethodTypePaymentLink:
 		// For payment links, set initial status as initiated
 		p.PaymentStatus = types.PaymentStatusInitiated
 		p.TrackAttempts = true
 		p.PaymentMethodID = ""   // Set to empty string for payment links
 		p.GatewayPaymentID = nil // Should be nil for payment links initially
-		if p.PaymentGateway == nil {
-			return nil, ierr.NewError("payment gateway is required for payment link method type").
-				WithHint("Payment gateway must be specified for payment link method type").
-				WithReportableDetails(map[string]interface{}{
-					"payment_method_type": r.PaymentMethodType,
-				}).
-				Mark(ierr.ErrValidation)
+	default:
+		// For all other payment methods (online, credits, etc.)
+		if r.PaymentMethodType != types.PaymentMethodTypeCredits {
+			p.TrackAttempts = true
 		}
-	} else if r.PaymentMethodType != types.PaymentMethodTypeCredits && r.PaymentMethodType != types.PaymentMethodTypePaymentLink {
-		if p.PaymentMethodID == "" {
-			return nil, ierr.NewError("payment method id is required for online payment method type").
-				WithHint("Payment method ID is required for online payment methods").
-				WithReportableDetails(map[string]interface{}{
-					"payment_method_type": r.PaymentMethodType,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-		p.TrackAttempts = true
 	}
 
 	return p, nil
