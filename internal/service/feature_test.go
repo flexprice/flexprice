@@ -60,6 +60,7 @@ func (s *FeatureServiceSuite) setupService() {
 		FeatureRepo:      s.featureRepo,
 		MeterRepo:        s.meterRepo,
 		EntitlementRepo:  s.entitlementRepo,
+		PriceRepo:        testutil.NewInMemoryPriceStore(),
 		WebhookPublisher: s.GetWebhookPublisher(),
 	})
 }
