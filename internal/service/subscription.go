@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sort"
 	"time"
 
@@ -119,6 +120,14 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	}
 
 	sub := req.ToSubscription(ctx)
+
+	// Comprehensive validation: Check meter ID uniqueness across plan and addons before creating anything
+	if len(req.Addons) > 0 {
+		err = s.validateMeterIDUniquenessAcrossPlanAndAddons(ctx, plan.ID, req.Addons, sub)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	// Validate and filter prices for the plan using the reusable method
 	validPrices, err := s.ValidateAndFilterPricesForSubscription(
@@ -3378,6 +3387,95 @@ func (s *subscriptionService) ActivateIncompleteSubscription(ctx context.Context
 
 	// Publish webhook event for subscription activation
 	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionActivated, subscriptionID)
+
+	return nil
+}
+
+// validateMeterIDUniquenessAcrossPlanAndAddons validates that all meter IDs are unique across plan and addon prices
+func (s *subscriptionService) validateMeterIDUniquenessAcrossPlanAndAddons(
+	ctx context.Context,
+	planID string,
+	addonRequests []dto.AddAddonToSubscriptionRequest,
+	subscription *subscription.Subscription,
+) error {
+	// Track all meter IDs across plan and addons
+	meterIDMap := make(map[string]map[string]string) // meterID -> entityType:entityID mapping
+
+	// Validate plan prices first
+	planPrices, err := s.ValidateAndFilterPricesForSubscription(
+		ctx,
+		planID,
+		types.PRICE_ENTITY_TYPE_PLAN,
+		subscription,
+	)
+	if err != nil {
+		return err
+	}
+
+	// Check plan prices for meter ID conflicts
+	for _, price := range planPrices {
+		if price.Price.MeterID != "" {
+			if existing, exists := meterIDMap[price.Price.MeterID]; exists {
+				// Found duplicate meter ID
+				var conflictingEntity string
+				for entityType, entityID := range existing {
+					conflictingEntity = fmt.Sprintf("%s:%s", entityType, entityID)
+					break
+				}
+				return ierr.NewError("duplicate meter ID found across plan and addon prices").
+					WithHint("Each feature can only have one price per subscription across all plans and addons.").
+					WithReportableDetails(map[string]interface{}{
+						"meter_id":           price.Price.MeterID,
+						"conflicting_entity": conflictingEntity,
+						"plan_id":            planID,
+						"price_id":           price.Price.ID,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+			meterIDMap[price.Price.MeterID] = map[string]string{
+				"plan": planID,
+			}
+		}
+	}
+
+	// Validate addon prices
+	for _, addonReq := range addonRequests {
+		addonPrices, err := s.ValidateAndFilterPricesForSubscription(
+			ctx,
+			addonReq.AddonID,
+			types.PRICE_ENTITY_TYPE_ADDON,
+			subscription,
+		)
+		if err != nil {
+			return err
+		}
+
+		// Check addon prices for meter ID conflicts
+		for _, price := range addonPrices {
+			if price.Price.MeterID != "" {
+				if existing, exists := meterIDMap[price.Price.MeterID]; exists {
+					// Found duplicate meter ID
+					var conflictingEntity string
+					for entityType, entityID := range existing {
+						conflictingEntity = fmt.Sprintf("%s:%s", entityType, entityID)
+						break
+					}
+					return ierr.NewError("duplicate meter ID found across plan and addon prices").
+						WithHint("Each feature can only have one price per subscription across all plans and addons.").
+						WithReportableDetails(map[string]interface{}{
+							"meter_id":           price.Price.MeterID,
+							"conflicting_entity": conflictingEntity,
+							"addon_id":           addonReq.AddonID,
+							"price_id":           price.Price.ID,
+						}).
+						Mark(ierr.ErrValidation)
+				}
+				meterIDMap[price.Price.MeterID] = map[string]string{
+					"addon": addonReq.AddonID,
+				}
+			}
+		}
+	}
 
 	return nil
 }
