@@ -266,6 +266,21 @@ func (s *featureService) DeleteFeature(ctx context.Context, id string) error {
 			Mark(ierr.ErrInvalidOperation)
 	}
 
+	// check for plan charges
+	priceFilter := types.NewPriceFilter()
+	priceFilter.Limit = lo.ToPtr(1)
+	priceFilter.MeterIDs = []string{feature.MeterID}
+	priceFilter.Status = lo.ToPtr(types.StatusPublished)
+	prices, err := s.PriceRepo.List(ctx, priceFilter)
+	if err != nil {
+		return err
+	}
+	if len(prices) > 0 {
+		return ierr.NewError("feature is linked to some prices").
+			WithHint("Feature is linked to some prices, please remove the feature from the prices first").
+			Mark(ierr.ErrInvalidOperation)
+	}
+
 	if feature.Type == types.FeatureTypeMetered {
 		if err := s.MeterRepo.DisableMeter(ctx, feature.MeterID); err != nil {
 			return err
