@@ -31,6 +31,7 @@ const (
 	ExpandCouponApplications ExpandableField = "coupon_applications"
 	ExpandPriceUnit          ExpandableField = "priceunit"
 	ExpandCouponAssociations ExpandableField = "coupon_associations"
+	ExpandAddons             ExpandableField = "addons"
 )
 
 // ExpandConfig defines which fields can be expanded and their nested expansions
@@ -76,9 +77,12 @@ var (
 
 	// EntitlementExpandConfig defines what can be expanded on an entitlement
 	EntitlementExpandConfig = ExpandConfig{
-		AllowedFields: []ExpandableField{ExpandFeatures},
+		AllowedFields: []ExpandableField{ExpandFeatures, ExpandMeters, ExpandAddons, ExpandPlan},
 		NestedExpands: map[ExpandableField][]ExpandableField{
-			ExpandFeatures: {}},
+			ExpandFeatures: {ExpandMeters},
+			ExpandAddons:   {ExpandFeatures},
+			ExpandPlan:     {ExpandPrices},
+		},
 	}
 
 	// CreditNoteExpandConfig defines what can be expanded on a credit note

@@ -341,7 +341,14 @@ func (s *entitlementService) GetEntitlement(ctx context.Context, id string) (*dt
 		response.Plan = &dto.PlanResponse{Plan: plan}
 	}
 
-	// TODO: Implement the same for addon as we have for plan
+	if result.EntityType == types.ENTITLEMENT_ENTITY_TYPE_ADDON {
+		// Add expanded addon information
+		addon, err := s.AddonRepo.GetByID(ctx, result.EntityID)
+		if err != nil {
+			return nil, err
+		}
+		response.Addon = &dto.AddonResponse{Addon: addon}
+	}
 
 	return response, nil
 }
@@ -382,6 +389,7 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 	// Create maps to store expanded data
 	var featuresByID map[string]*feature.Feature
 	var plansByID map[string]*plan.Plan
+	var addonsByID map[string]*addon.Addon
 	var metersByID map[string]*meter.Meter
 
 	if !filter.GetExpand().IsEmpty() {
@@ -454,6 +462,29 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 				s.Logger.Debugw("fetched plans for entitlements", "count", len(plans))
 			}
 		}
+
+		if filter.GetExpand().Has(types.ExpandAddons) {
+			// Collect entity IDs for addons
+			entityIDs := lo.Map(entitlements, func(e *entitlement.Entitlement, _ int) string {
+				return e.EntityID
+			})
+
+			if len(entityIDs) > 0 {
+				addonFilter := types.NewNoLimitAddonFilter()
+				addonFilter.AddonIDs = entityIDs
+				addons, err := s.AddonRepo.List(ctx, addonFilter)
+				if err != nil {
+					return nil, err
+				}
+
+				addonsByID = make(map[string]*addon.Addon, len(addons))
+				for _, a := range addons {
+					addonsByID[a.ID] = a
+				}
+
+				s.Logger.Debugw("fetched addons for entitlements", "count", len(addons))
+			}
+		}
 	}
 
 	for i, e := range entitlements {
@@ -484,6 +515,15 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 				response.Items[i].Plan = &dto.PlanResponse{Plan: p}
 				// TODO: !REMOVE after migration
 				response.Items[i].PlanID = e.EntityID
+			}
+
+		}
+
+		// Add expanded addon if requested and available
+		if !filter.GetExpand().IsEmpty() && filter.GetExpand().Has(types.ExpandAddons) && e.EntityType == types.ENTITLEMENT_ENTITY_TYPE_ADDON {
+
+			if a, ok := addonsByID[e.EntityID]; ok {
+				response.Items[i].Addon = &dto.AddonResponse{Addon: a}
 			}
 
 		}
@@ -594,7 +634,7 @@ func (s *entitlementService) GetAddonEntitlements(ctx context.Context, addonID s
 	filter.WithEntityIDs([]string{addonID})
 	filter.WithEntityType(types.ENTITLEMENT_ENTITY_TYPE_ADDON)
 	filter.WithStatus(types.StatusPublished)
-	filter.WithExpand(fmt.Sprintf("%s,%s", types.ExpandFeatures, types.ExpandMeters))
+	filter.WithExpand(fmt.Sprintf("%s,%s,%s", types.ExpandFeatures, types.ExpandMeters, types.ExpandAddons))
 
 	// Use the standard list function to get the entitlements with expansion
 	return s.ListEntitlements(ctx, filter)
