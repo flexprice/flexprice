@@ -594,7 +594,7 @@ func (s *entitlementService) GetAddonEntitlements(ctx context.Context, addonID s
 	filter.WithEntityIDs([]string{addonID})
 	filter.WithEntityType(types.ENTITLEMENT_ENTITY_TYPE_ADDON)
 	filter.WithStatus(types.StatusPublished)
-	filter.WithExpand(string(types.ExpandFeatures))
+	filter.WithExpand(fmt.Sprintf("%s,%s", types.ExpandFeatures, types.ExpandMeters))
 
 	// Use the standard list function to get the entitlements with expansion
 	return s.ListEntitlements(ctx, filter)

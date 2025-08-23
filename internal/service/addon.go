@@ -93,10 +93,7 @@ func (s *addonService) GetAddon(ctx context.Context, id string) (*dto.AddonRespo
 	entitlementService := NewEntitlementService(s.ServiceParams)
 	entitlements, err := entitlementService.GetAddonEntitlements(ctx, id)
 	if err == nil && len(entitlements.Items) > 0 {
-		response.Entitlements = make([]*dto.EntitlementResponse, len(entitlements.Items))
-		for i, entitlement := range entitlements.Items {
-			response.Entitlements[i] = &dto.EntitlementResponse{Entitlement: entitlement.Entitlement}
-		}
+		response.Entitlements = entitlements.Items
 	}
 
 	return response, nil
