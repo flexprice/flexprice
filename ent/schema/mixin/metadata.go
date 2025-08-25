@@ -19,7 +19,6 @@ func (MetadataMixin) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "jsonb",
 			}).
-			Default(map[string]string{}).
 			Optional(),
 	}
 }
