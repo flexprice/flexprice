@@ -237,9 +237,9 @@ func (pc *PlanCreate) defaults() {
 		v := plan.DefaultEnvironmentID
 		pc.mutation.SetEnvironmentID(v)
 	}
-	if _, ok := pc.mutation.DisplayOrder(); !ok {
-		v := plan.DefaultDisplayOrder
-		pc.mutation.SetDisplayOrder(v)
+	if _, ok := pc.mutation.Metadata(); !ok {
+		v := plan.DefaultMetadata
+		pc.mutation.SetMetadata(v)
 	}
 }
 
