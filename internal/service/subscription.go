@@ -3,12 +3,14 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sort"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -51,6 +53,10 @@ type SubscriptionService interface {
 	// Addon management for subscriptions
 	AddAddonToSubscription(ctx context.Context, subscriptionID string, req *dto.AddAddonToSubscriptionRequest) (*addonassociation.AddonAssociation, error)
 	RemoveAddonFromSubscription(ctx context.Context, subscriptionID string, addonID string, reason string) error
+
+	// Entitlement-related methods
+	GetSubscriptionEntitlementsForBilling(ctx context.Context, subscriptionID string, featureIDs []string) (*dto.SubscriptionEntitlementsResponse, error)
+	GetSubscriptionEntitlements(ctx context.Context, subscriptionID string, featureIDs []string) ([]*dto.EntitlementResponse, error)
 }
 
 type subscriptionService struct {
@@ -119,6 +125,14 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	}
 
 	sub := req.ToSubscription(ctx)
+
+	// Comprehensive validation: Check meter ID uniqueness across plan and addons before creating anything
+	if len(req.Addons) > 0 {
+		err = s.validateMeterIDUniquenessAcrossPlanAndAddons(ctx, plan.ID, req.Addons, sub)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	// Validate and filter prices for the plan using the reusable method
 	validPrices, err := s.ValidateAndFilterPricesForSubscription(
@@ -1620,7 +1634,13 @@ func (s *subscriptionService) ValidateAndFilterPricesForSubscription(
 		return nil, err
 	}
 
+	// if no prices are found for an addon, return an empty list of prices
+	// even if there are prices for the addons we should allow the subscription to be created
 	if len(pricesResponse.Items) == 0 {
+		if entityType == types.PRICE_ENTITY_TYPE_ADDON {
+			return []*dto.PriceResponse{}, nil
+		}
+
 		return nil, ierr.NewError("no prices found for entity").
 			WithHint("The entity must have at least one price to create a subscription").
 			WithReportableDetails(map[string]interface{}{
@@ -1643,6 +1663,31 @@ func (s *subscriptionService) ValidateAndFilterPricesForSubscription(
 				"currency":        subscription.Currency,
 			}).
 			Mark(ierr.ErrValidation)
+	}
+
+	// Track existing meter IDs
+	meterIDMap := make(map[string]bool)
+	for _, item := range subscription.LineItems {
+		if item.MeterID != "" {
+			meterIDMap[item.MeterID] = true
+		}
+	}
+
+	// Check for meter ID conflicts in new addon prices
+	for _, price := range validPrices {
+		if price.Price.MeterID != "" {
+			if meterIDMap[price.Price.MeterID] {
+				return nil, ierr.NewError("duplicate meter ID found in prices").
+					WithHint("Each feature can only have one price per subscription.").
+					WithReportableDetails(map[string]interface{}{
+						"subscription_id": subscription.ID,
+						"addon_id":        entityID,
+						"meter_id":        price.Price.MeterID,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+			meterIDMap[price.Price.MeterID] = true
+		}
 	}
 
 	return validPrices, nil
@@ -2986,6 +3031,17 @@ func (s *subscriptionService) handleSubscriptionAddons(
 				Mark(ierr.ErrValidation)
 		}
 
+		// Validate usage reset period conflicts between plan and addon entitlements
+		if err := s.validateUsageResetPeriodConflicts(ctx, subscription, addonReq.AddonID); err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to validate addon entitlements").
+				WithReportableDetails(map[string]interface{}{
+					"subscription_id": subscription.ID,
+					"addon_id":        addonReq.AddonID,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
 		s.Logger.Infow("validated addon prices for subscription",
 			"subscription_id", subscription.ID,
 			"addon_id", addonReq.AddonID,
@@ -3089,11 +3145,17 @@ func (s *subscriptionService) addAddonToSubscription(
 		return nil, err
 	}
 
+	// Validate usage reset period conflicts between plan and addon entitlements
+	if err := s.validateUsageResetPeriodConflicts(ctx, sub, req.AddonID); err != nil {
+		return nil, err
+	}
+
 	// Create subscription addon
 	addonAssociation := req.ToAddonAssociation(
 		ctx,
 		sub.ID,
 		types.AddonAssociationEntityTypeSubscription,
+		sub.EndDate,
 	)
 
 	// Track existing meter IDs
@@ -3108,8 +3170,8 @@ func (s *subscriptionService) addAddonToSubscription(
 	for _, price := range validPrices {
 		if price.Price.MeterID != "" {
 			if meterIDMap[price.Price.MeterID] {
-				return nil, ierr.NewError("duplicate meter ID found in addon prices").
-					WithHint("Each price must have a unique meter ID across the subscription").
+				return nil, ierr.NewError("duplicate meter ID found in prices").
+					WithHint("Each feature can only have one price per subscription.").
 					WithReportableDetails(map[string]interface{}{
 						"subscription_id": sub.ID,
 						"addon_id":        req.AddonID,
@@ -3362,6 +3424,402 @@ func (s *subscriptionService) ActivateIncompleteSubscription(ctx context.Context
 
 	// Publish webhook event for subscription activation
 	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionActivated, subscriptionID)
+
+	return nil
+}
+
+// validateMeterIDUniquenessAcrossPlanAndAddons validates that all meter IDs are unique across plan and addon prices
+func (s *subscriptionService) validateMeterIDUniquenessAcrossPlanAndAddons(
+	ctx context.Context,
+	planID string,
+	addonRequests []dto.AddAddonToSubscriptionRequest,
+	subscription *subscription.Subscription,
+) error {
+	// Track all meter IDs across plan and addons
+	meterIDMap := make(map[string]map[string]string) // meterID -> entityType:entityID mapping
+
+	// Validate plan prices first
+	planPrices, err := s.ValidateAndFilterPricesForSubscription(
+		ctx,
+		planID,
+		types.PRICE_ENTITY_TYPE_PLAN,
+		subscription,
+	)
+	if err != nil {
+		return err
+	}
+
+	// Check plan prices for meter ID conflicts
+	for _, price := range planPrices {
+		if price.Price.MeterID != "" {
+			if existing, exists := meterIDMap[price.Price.MeterID]; exists {
+				// Found duplicate meter ID
+				var conflictingEntity string
+				for entityType, entityID := range existing {
+					conflictingEntity = fmt.Sprintf("%s:%s", entityType, entityID)
+					break
+				}
+				return ierr.NewError("duplicate meter ID found across plan and addon prices").
+					WithHint("Each feature can only have one price per subscription across all plans and addons.").
+					WithReportableDetails(map[string]interface{}{
+						"meter_id":           price.Price.MeterID,
+						"conflicting_entity": conflictingEntity,
+						"plan_id":            planID,
+						"price_id":           price.Price.ID,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+			meterIDMap[price.Price.MeterID] = map[string]string{
+				"plan": planID,
+			}
+		}
+	}
+
+	// Validate addon prices
+	for _, addonReq := range addonRequests {
+		addonPrices, err := s.ValidateAndFilterPricesForSubscription(
+			ctx,
+			addonReq.AddonID,
+			types.PRICE_ENTITY_TYPE_ADDON,
+			subscription,
+		)
+		if err != nil {
+			return err
+		}
+
+		// Check addon prices for meter ID conflicts
+		for _, price := range addonPrices {
+			if price.Price.MeterID != "" {
+				if existing, exists := meterIDMap[price.Price.MeterID]; exists {
+					// Found duplicate meter ID
+					var conflictingEntity string
+					for entityType, entityID := range existing {
+						conflictingEntity = fmt.Sprintf("%s:%s", entityType, entityID)
+						break
+					}
+					return ierr.NewError("duplicate meter ID found across plan and addon prices").
+						WithHint("Each feature can only have one price per subscription across all plans and addons.").
+						WithReportableDetails(map[string]interface{}{
+							"meter_id":           price.Price.MeterID,
+							"conflicting_entity": conflictingEntity,
+							"addon_id":           addonReq.AddonID,
+							"price_id":           price.Price.ID,
+						}).
+						Mark(ierr.ErrValidation)
+				}
+				meterIDMap[price.Price.MeterID] = map[string]string{
+					"addon": addonReq.AddonID,
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// GetSubscriptionEntitlementsForBilling retrieves entitlements for a specific subscription
+func (s *subscriptionService) GetSubscriptionEntitlementsForBilling(ctx context.Context, subscriptionID string, featureIDs []string) (*dto.SubscriptionEntitlementsResponse, error) {
+	// Get the subscription
+	sub, err := s.SubRepo.Get(ctx, subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Initialize response
+	response := &dto.SubscriptionEntitlementsResponse{
+		SubscriptionID: subscriptionID,
+		Features:       []*dto.AggregatedFeature{},
+	}
+
+	// Get all entitlements
+	allEntitlements, err := s.GetSubscriptionEntitlements(ctx, sub.ID, featureIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	// Group entitlements by feature
+	entitlementsByFeature := s.groupEntitlementsByFeature(allEntitlements)
+
+	// Build aggregated features
+	for featureID, entitlements := range entitlementsByFeature {
+		if len(entitlements) == 0 {
+			continue
+		}
+
+		// Get feature details
+		feature, err := s.FeatureRepo.Get(ctx, featureID)
+		if err != nil {
+			continue // Skip if feature not found
+		}
+
+		// Create feature response
+		featureResponse := &dto.FeatureResponse{Feature: feature}
+
+		// Aggregate entitlements based on feature type
+		aggregatedEntitlement := s.aggregateEntitlementsByFeatureType(feature.Type, entitlements)
+
+		// Create sources for this feature
+		sources := s.createEntitlementSources(subscriptionID, entitlements, ctx)
+
+		// Create aggregated feature
+		aggregatedFeature := &dto.AggregatedFeature{
+			Feature:     featureResponse,
+			Entitlement: aggregatedEntitlement,
+			Sources:     sources,
+		}
+
+		response.Features = append(response.Features, aggregatedFeature)
+	}
+
+	return response, nil
+}
+
+// getActiveAddonAssociations retrieves active addon associations for a subscription
+func (s *subscriptionService) getActiveAddonAssociations(ctx context.Context, subscriptionID string) ([]*addonassociation.AddonAssociation, error) {
+	addonAssociationFilter := types.NewNoLimitAddonAssociationFilter()
+	addonAssociationFilter.EntityIDs = []string{subscriptionID}
+	addonAssociationFilter.EntityType = lo.ToPtr(types.AddonAssociationEntityTypeSubscription)
+	addonAssociationFilter.AddonStatus = lo.ToPtr(string(types.AddonStatusActive))
+
+	// Only include addons that are currently active
+	// For start date: must be less than or equal to now (already started)
+	// For end date: must be greater than or equal to now OR null (no end date)
+	now := time.Now().UTC()
+	addonAssociationFilter.StartDateLTE = lo.ToPtr(now)
+	// Note: We don't set EndDateGTE filter here because we want to include addons with null end dates
+	// The repository layer should handle null end dates appropriately
+
+	return s.AddonAssociationRepo.List(ctx, addonAssociationFilter)
+}
+
+// getAddonEntitlements retrieves entitlements for multiple addons
+func (s *subscriptionService) getAddonEntitlements(ctx context.Context, addonAssociations []*addonassociation.AddonAssociation, entitlementService EntitlementService) ([]*dto.EntitlementResponse, error) {
+	if len(addonAssociations) == 0 {
+		return []*dto.EntitlementResponse{}, nil
+	}
+
+	var addonEntitlements []*dto.EntitlementResponse
+
+	// Extract addon IDs
+	addonIDs := lo.Map(addonAssociations, func(aa *addonassociation.AddonAssociation, _ int) string {
+		return aa.AddonID
+	})
+
+	// Get addon entitlements for each addon
+	for _, addonID := range addonIDs {
+		addonEntitlementsForAddon, err := entitlementService.GetAddonEntitlements(ctx, addonID)
+		if err != nil {
+			return nil, err
+		}
+		addonEntitlements = append(addonEntitlements, addonEntitlementsForAddon.Items...)
+	}
+
+	return addonEntitlements, nil
+}
+
+// groupEntitlementsByFeature groups entitlements by feature ID
+func (s *subscriptionService) groupEntitlementsByFeature(entitlements []*dto.EntitlementResponse) map[string][]*dto.EntitlementResponse {
+	entitlementsByFeature := make(map[string][]*dto.EntitlementResponse)
+	for _, entitlement := range entitlements {
+		featureID := entitlement.FeatureID
+		if _, ok := entitlementsByFeature[featureID]; !ok {
+			entitlementsByFeature[featureID] = make([]*dto.EntitlementResponse, 0)
+		}
+		entitlementsByFeature[featureID] = append(entitlementsByFeature[featureID], entitlement)
+	}
+	return entitlementsByFeature
+}
+
+// aggregateEntitlementsByFeatureType aggregates entitlements based on feature type
+func (s *subscriptionService) aggregateEntitlementsByFeatureType(featureType types.FeatureType, entitlements []*dto.EntitlementResponse) *dto.AggregatedEntitlement {
+	// Convert to domain entitlements for aggregation
+	domainEntitlements := lo.Map(entitlements, func(e *dto.EntitlementResponse, _ int) *entitlement.Entitlement {
+		return e.Entitlement
+	})
+
+	switch featureType {
+	case types.FeatureTypeMetered:
+		return aggregateMeteredEntitlementsForBilling(domainEntitlements)
+	case types.FeatureTypeBoolean:
+		return aggregateBooleanEntitlementsForBilling(domainEntitlements)
+	case types.FeatureTypeStatic:
+		return aggregateStaticEntitlementsForBilling(domainEntitlements)
+	default:
+		return nil
+	}
+}
+
+// createEntitlementSources creates entitlement sources for a feature
+func (s *subscriptionService) createEntitlementSources(subscriptionID string, entitlements []*dto.EntitlementResponse, ctx context.Context) []*dto.EntitlementSource {
+	sources := make([]*dto.EntitlementSource, 0, len(entitlements))
+
+	for _, e := range entitlements {
+		source := &dto.EntitlementSource{
+			SubscriptionID: subscriptionID,
+			EntityID:       e.EntityID,
+			EntityType:     dto.EntitlementSourceEntityTypePlan, // Default to plan, will be updated below
+			EntityName:     "",                                  // Will be populated below
+			Quantity:       1,                                   // Default quantity
+			EntitlementID:  e.ID,
+			IsEnabled:      e.IsEnabled,
+			UsageLimit:     e.UsageLimit,
+			StaticValue:    e.StaticValue,
+		}
+
+		// Determine entity type and name
+		switch e.EntityType {
+		case types.ENTITLEMENT_ENTITY_TYPE_PLAN:
+			source.EntityType = dto.EntitlementSourceEntityTypePlan
+			// Get plan name
+			plan, err := s.PlanRepo.Get(ctx, e.EntityID)
+			if err == nil {
+				source.EntityName = plan.Name
+			}
+		case types.ENTITLEMENT_ENTITY_TYPE_ADDON:
+			source.EntityType = dto.EntitlementSourceEntityTypeAddon
+			// Get addon name
+			addon, err := s.AddonRepo.GetByID(ctx, e.EntityID)
+			if err == nil {
+				source.EntityName = addon.Name
+			}
+		}
+
+		sources = append(sources, source)
+	}
+
+	// For boolean features, prioritize addon sources over plan sources
+	// This ensures that when both plan and addon entitlements enable a feature,
+	// only the addon source is shown (since it's the enabling source)
+	if len(sources) > 1 {
+		// Check if this is a boolean feature by looking at the first entitlement
+		if len(entitlements) > 0 && entitlements[0].Feature != nil && entitlements[0].Feature.Feature.Type == types.FeatureTypeBoolean {
+			// For boolean features, if there's an addon source, filter out plan sources
+			// This ensures only the enabling source (addon) is shown
+			filteredSources := make([]*dto.EntitlementSource, 0)
+			hasAddonSource := false
+
+			// First pass: check if there's an addon source
+			for _, source := range sources {
+				if source.EntityType == dto.EntitlementSourceEntityTypeAddon && source.IsEnabled {
+					hasAddonSource = true
+					break
+				}
+			}
+
+			// Second pass: filter sources
+			for _, source := range sources {
+				if hasAddonSource {
+					// If there's an addon source, only include addon sources
+					if source.EntityType == dto.EntitlementSourceEntityTypeAddon {
+						filteredSources = append(filteredSources, source)
+					}
+				} else {
+					// If no addon source, include all sources
+					filteredSources = append(filteredSources, source)
+				}
+			}
+
+			sources = filteredSources
+		}
+	}
+
+	return sources
+}
+
+// GetSubscriptionEntitlements retrieves a simple list of entitlements for a specific subscription
+// without aggregation or merging - just returns all entitlements from plan and addons
+func (s *subscriptionService) GetSubscriptionEntitlements(ctx context.Context, subscriptionID string, featureIDs []string) ([]*dto.EntitlementResponse, error) {
+	// Get the subscription
+	sub, err := s.SubRepo.Get(ctx, subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	entitlementService := NewEntitlementService(s.ServiceParams)
+
+	// Get plan entitlements
+	planEntitlements, err := entitlementService.GetPlanEntitlements(ctx, sub.PlanID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get addon associations
+	addonAssociations, err := s.getActiveAddonAssociations(ctx, sub.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get addon entitlements
+	addonEntitlements, err := s.getAddonEntitlements(ctx, addonAssociations, entitlementService)
+	if err != nil {
+		return nil, err
+	}
+
+	// Combine and filter all entitlements
+	allEntitlements := make([]*dto.EntitlementResponse, 0)
+
+	// Filter and add plan entitlements
+	for _, entitlement := range planEntitlements.Items {
+		if len(featureIDs) == 0 || lo.Contains(featureIDs, entitlement.FeatureID) {
+			allEntitlements = append(allEntitlements, entitlement)
+		}
+	}
+
+	// Filter and add addon entitlements
+	for _, entitlement := range addonEntitlements {
+		if len(featureIDs) == 0 || lo.Contains(featureIDs, entitlement.FeatureID) {
+			allEntitlements = append(allEntitlements, entitlement)
+		}
+	}
+
+	return allEntitlements, nil
+}
+
+// validateUsageResetPeriodConflicts validates that addon entitlements have the same usage reset period
+// as plan entitlements for the same feature
+func (s *subscriptionService) validateUsageResetPeriodConflicts(
+	ctx context.Context,
+	subscription *subscription.Subscription,
+	addonID string,
+) error {
+	// Get plan entitlements
+	entitlementService := NewEntitlementService(s.ServiceParams)
+	planEntitlements, err := entitlementService.GetPlanEntitlements(ctx, subscription.PlanID)
+	if err != nil {
+		return err
+	}
+
+	// Get addon entitlements
+	addonEntitlements, err := entitlementService.GetAddonEntitlements(ctx, addonID)
+	if err != nil {
+		return err
+	}
+
+	// Create a map of plan entitlements by feature ID
+	planEntitlementsByFeature := make(map[string]*dto.EntitlementResponse)
+	for _, entitlement := range planEntitlements.Items {
+		planEntitlementsByFeature[entitlement.FeatureID] = entitlement
+	}
+
+	// Check each addon entitlement against plan entitlements
+	for _, addonEntitlement := range addonEntitlements.Items {
+		if planEntitlement, exists := planEntitlementsByFeature[addonEntitlement.FeatureID]; exists {
+			// Both plan and addon have entitlements for the same feature
+			// Check if usage reset periods match
+			if planEntitlement.UsageResetPeriod != addonEntitlement.UsageResetPeriod {
+				return ierr.NewError("usage reset period mismatch").
+					WithHint("The reset period of this feature should be the same in plan as well as addon").
+					WithReportableDetails(map[string]interface{}{
+						"subscription_id":    subscription.ID,
+						"addon_id":           addonID,
+						"feature_id":         addonEntitlement.FeatureID,
+						"plan_reset_period":  planEntitlement.UsageResetPeriod,
+						"addon_reset_period": addonEntitlement.UsageResetPeriod,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+		}
+	}
 
 	return nil
 }

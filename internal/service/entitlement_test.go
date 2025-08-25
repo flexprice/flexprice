@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/plan"
@@ -35,6 +36,7 @@ func (s *EntitlementServiceSuite) setupService() {
 		DB:               s.GetDB(),
 		EntitlementRepo:  stores.EntitlementRepo,
 		PlanRepo:         stores.PlanRepo,
+		AddonRepo:        stores.AddonRepo,
 		FeatureRepo:      stores.FeatureRepo,
 		MeterRepo:        testutil.NewInMemoryMeterStore(),
 		WebhookPublisher: s.GetWebhookPublisher(),
@@ -294,6 +296,52 @@ func (s *EntitlementServiceSuite) TestListEntitlements() {
 	s.NoError(err)
 	s.NotNil(resp)
 	s.Equal(1, len(resp.Items))
+
+	// Test addon expansion
+	// Create test addon
+	testAddon := &addon.Addon{
+		ID:          "addon-1",
+		Name:        "Test Addon",
+		Description: "Test Addon Description",
+		Type:        types.AddonTypeOnetime,
+		BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
+	}
+	err = s.GetStores().AddonRepo.Create(s.GetContext(), testAddon)
+	s.NoError(err)
+
+	// Create addon entitlement
+	addonEnt := &entitlement.Entitlement{
+		ID:          "ent-addon-1",
+		EntityType:  types.ENTITLEMENT_ENTITY_TYPE_ADDON,
+		EntityID:    testAddon.ID,
+		FeatureID:   boolFeature.ID,
+		FeatureType: types.FeatureTypeBoolean,
+		IsEnabled:   true,
+		BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
+	}
+	_, err = s.GetStores().EntitlementRepo.Create(s.GetContext(), addonEnt)
+	s.NoError(err)
+
+	// Test listing with addon expansion
+	filter = types.NewDefaultEntitlementFilter()
+	filter.WithExpand(string(types.ExpandAddons))
+	resp, err = s.service.ListEntitlements(s.GetContext(), filter)
+	s.NoError(err)
+	s.NotNil(resp)
+
+	// Find the addon entitlement in the response
+	var addonEntitlement *dto.EntitlementResponse
+	for _, item := range resp.Items {
+		if item.Entitlement.ID == addonEnt.ID {
+			addonEntitlement = item
+			break
+		}
+	}
+
+	s.NotNil(addonEntitlement, "Addon entitlement should be found in response")
+	s.NotNil(addonEntitlement.Addon, "Addon should be expanded")
+	s.Equal(testAddon.ID, addonEntitlement.Addon.Addon.ID)
+	s.Equal(testAddon.Name, addonEntitlement.Addon.Addon.Name)
 }
 
 func (s *EntitlementServiceSuite) TestUpdateEntitlement() {
