@@ -1885,15 +1885,15 @@ func (s *BillingServiceSuite) TestGetCustomerEntitlements_WithAddonQuantities() 
 
 	// Verify plan source
 	s.NotNil(planSource)
-	s.Equal(plan.ID, planSource.EntityID)
-	s.Equal(plan.Name, planSource.EntitiyName)
+	s.Equal(plan.ID, planSource.EntiyID)
+	s.Equal(plan.Name, planSource.EntityName)
 	s.Equal(int64(1), planSource.Quantity)
 	s.Equal(int64(1000), planSource.UsageLimit)
 
 	// Verify addon source
 	s.NotNil(addonSource)
-	s.Equal(addon.ID, addonSource.EntityID)
-	s.Equal(addon.Name, addonSource.EntitiyName)
+	s.Equal(addon.ID, addonSource.EntiyID)
+	s.Equal(addon.Name, addonSource.EntityName)
 	s.Equal(int64(3), addonSource.Quantity) // 3 instances of the addon
 	s.Equal(int64(500), addonSource.UsageLimit)
 	// For now, skip the complex setup and just test with existing data
@@ -1991,14 +1991,14 @@ func (s *BillingServiceSuite) TestGetCustomerEntitlements_BooleanFeatures() {
 	// Verify sources (should only show the enabling source)
 	s.Len(featureEntitlement.Sources, 1)
 	source := featureEntitlement.Sources[0]
-	s.Equal(addon.ID, source.EntityID)
-	s.Equal(addon.Name, source.EntitiyName)
+	s.Equal(addon.ID, source.EntiyID)
+	s.Equal(addon.Name, source.EntityName)
 	s.Equal("addon", source.EntityType)
 	s.True(source.IsEnabled)
 	// TODO: Fix the test once we understand why features are not being returned
 	// The issue is likely that the entitlements are not being found due to
 	// subscription line item configuration or entitlement filtering
-	s.Equal(addon.Name, source.EntitiyName)
+	s.Equal(addon.Name, source.EntityName)
 	s.Equal(dto.EntitlementSourceEntityTypeAddon, source.EntityType)
 	s.True(source.IsEnabled)
 }
@@ -2114,12 +2114,12 @@ func (s *BillingServiceSuite) TestGetCustomerEntitlements_StaticFeatures() {
 
 	// Verify plan source
 	s.NotNil(planSource)
-	s.Equal(plan.ID, planSource.EntityID)
+	s.Equal(plan.ID, planSource.EntiyID)
 	s.Equal("basic.example.com", planSource.StaticValue)
 
 	// Verify addon source
 	s.NotNil(addonSource)
-	s.Equal(addon.ID, addonSource.EntityID)
+	s.Equal(addon.ID, addonSource.EntiyID)
 	s.Equal("premium.example.com", addonSource.StaticValue)
 }
 

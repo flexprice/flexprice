@@ -421,6 +421,46 @@ func (o AddonAssociationQueryOptions) applyEntityQueryOptions(ctx context.Contex
 		query = query.Where(addonassociation.AddonStatus(*f.AddonStatus))
 	}
 
+	// Apply start date filter if specified - include records with nil start_date or matching the filter
+	if f.StartDateGTE != nil {
+		query = query.Where(
+			addonassociation.Or(
+				addonassociation.StartDateIsNil(),
+				addonassociation.StartDateGTE(*f.StartDateGTE),
+			),
+		)
+	}
+
+	// Apply start date filter if specified - include records with nil start_date or matching the filter
+	if f.StartDateLTE != nil {
+		query = query.Where(
+			addonassociation.Or(
+				addonassociation.StartDateIsNil(),
+				addonassociation.StartDateLTE(*f.StartDateLTE),
+			),
+		)
+	}
+
+	// Apply end date filter if specified - include records with nil end_date or matching the filter
+	if f.EndDateLTE != nil {
+		query = query.Where(
+			addonassociation.Or(
+				addonassociation.EndDateIsNil(),
+				addonassociation.EndDateLTE(*f.EndDateLTE),
+			),
+		)
+	}
+
+	// Apply end date filter if specified - include records with nil end_date or matching the filter
+	if f.EndDateGTE != nil {
+		query = query.Where(
+			addonassociation.Or(
+				addonassociation.EndDateIsNil(),
+				addonassociation.EndDateGTE(*f.EndDateGTE),
+			),
+		)
+	}
+
 	// Apply time range filters if specified
 	if f.TimeRangeFilter != nil {
 		if f.StartTime != nil {

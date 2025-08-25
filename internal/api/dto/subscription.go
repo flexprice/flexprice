@@ -843,3 +843,9 @@ type SubscriptionUpdatePeriodResponseItem struct {
 	Success        bool      `json:"success"`
 	Error          string    `json:"error"`
 }
+
+// SubscriptionEntitlementsResponse represents the response for subscription entitlements
+type SubscriptionEntitlementsResponse struct {
+	SubscriptionID string               `json:"subscription_id"`
+	Features       []*AggregatedFeature `json:"features"`
+}

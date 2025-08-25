@@ -10,6 +10,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -58,6 +59,10 @@ type SubscriptionService interface {
 	// Line item management
 	AddSubscriptionLineItem(ctx context.Context, subscriptionID string, req dto.CreateSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error)
 	DeleteSubscriptionLineItem(ctx context.Context, lineItemID string, req dto.DeleteSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error)
+
+	// Entitlement-related methods
+	GetSubscriptionEntitlementsForBilling(ctx context.Context, subscriptionID string, featureIDs []string) (*dto.SubscriptionEntitlementsResponse, error)
+	GetSubscriptionEntitlements(ctx context.Context, subscriptionID string, featureIDs []string) ([]*dto.EntitlementResponse, error)
 }
 
 type subscriptionService struct {
@@ -1758,7 +1763,13 @@ func (s *subscriptionService) ValidateAndFilterPricesForSubscription(
 		return nil, err
 	}
 
+	// if no prices are found for an addon, return an empty list of prices
+	// even if there are prices for the addons we should allow the subscription to be created
 	if len(pricesResponse.Items) == 0 {
+		if entityType == types.PRICE_ENTITY_TYPE_ADDON {
+			return []*dto.PriceResponse{}, nil
+		}
+
 		return nil, ierr.NewError("no prices found for entity").
 			WithHint("The entity must have at least one price to create a subscription").
 			WithReportableDetails(map[string]interface{}{
@@ -3257,6 +3268,7 @@ func (s *subscriptionService) addAddonToSubscription(
 		ctx,
 		sub.ID,
 		types.AddonAssociationEntityTypeSubscription,
+		sub.EndDate,
 	)
 
 	// Track existing meter IDs
@@ -3919,4 +3931,262 @@ func (s *subscriptionService) generateProrationDescriptionFromResult(
 	default:
 		return fmt.Sprintf("Proration (%s)", effectiveDate.Format("2006-01-02"))
 	}
+}
+
+// GetSubscriptionEntitlementsForBilling retrieves entitlements for a specific subscription
+func (s *subscriptionService) GetSubscriptionEntitlementsForBilling(ctx context.Context, subscriptionID string, featureIDs []string) (*dto.SubscriptionEntitlementsResponse, error) {
+	// Get the subscription
+	sub, err := s.SubRepo.Get(ctx, subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Initialize response
+	response := &dto.SubscriptionEntitlementsResponse{
+		SubscriptionID: subscriptionID,
+		Features:       []*dto.AggregatedFeature{},
+	}
+
+	// Get all entitlements
+	allEntitlements, err := s.GetSubscriptionEntitlements(ctx, sub.ID, featureIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	// Group entitlements by feature
+	entitlementsByFeature := s.groupEntitlementsByFeature(allEntitlements)
+
+	// Build aggregated features
+	for featureID, entitlements := range entitlementsByFeature {
+		if len(entitlements) == 0 {
+			continue
+		}
+
+		// Get feature details
+		feature, err := s.FeatureRepo.Get(ctx, featureID)
+		if err != nil {
+			continue // Skip if feature not found
+		}
+
+		// Create feature response
+		featureResponse := &dto.FeatureResponse{Feature: feature}
+
+		// Aggregate entitlements based on feature type
+		aggregatedEntitlement := s.aggregateEntitlementsByFeatureType(feature.Type, entitlements)
+
+		// Create sources for this feature
+		sources := s.createEntitlementSources(subscriptionID, entitlements, ctx)
+
+		// Create aggregated feature
+		aggregatedFeature := &dto.AggregatedFeature{
+			Feature:     featureResponse,
+			Entitlement: aggregatedEntitlement,
+			Sources:     sources,
+		}
+
+		response.Features = append(response.Features, aggregatedFeature)
+	}
+
+	return response, nil
+}
+
+// getActiveAddonAssociations retrieves active addon associations for a subscription
+func (s *subscriptionService) getActiveAddonAssociations(ctx context.Context, subscriptionID string) ([]*addonassociation.AddonAssociation, error) {
+	addonAssociationFilter := types.NewNoLimitAddonAssociationFilter()
+	addonAssociationFilter.EntityIDs = []string{subscriptionID}
+	addonAssociationFilter.EntityType = lo.ToPtr(types.AddonAssociationEntityTypeSubscription)
+	addonAssociationFilter.AddonStatus = lo.ToPtr(string(types.AddonStatusActive))
+
+	// Only include addons that are currently active
+	// For start date: must be less than or equal to now (already started)
+	// For end date: must be greater than or equal to now OR null (no end date)
+	now := time.Now().UTC()
+	addonAssociationFilter.StartDateLTE = lo.ToPtr(now)
+	// Note: We don't set EndDateGTE filter here because we want to include addons with null end dates
+	// The repository layer should handle null end dates appropriately
+
+	return s.AddonAssociationRepo.List(ctx, addonAssociationFilter)
+}
+
+// getAddonEntitlements retrieves entitlements for multiple addons
+func (s *subscriptionService) getAddonEntitlements(ctx context.Context, addonAssociations []*addonassociation.AddonAssociation, entitlementService EntitlementService) ([]*dto.EntitlementResponse, error) {
+	if len(addonAssociations) == 0 {
+		return []*dto.EntitlementResponse{}, nil
+	}
+
+	var addonEntitlements []*dto.EntitlementResponse
+
+	// Extract addon IDs
+	addonIDs := lo.Map(addonAssociations, func(aa *addonassociation.AddonAssociation, _ int) string {
+		return aa.AddonID
+	})
+
+	// Get addon entitlements for each addon
+	for _, addonID := range addonIDs {
+		addonEntitlementsForAddon, err := entitlementService.GetAddonEntitlements(ctx, addonID)
+		if err != nil {
+			return nil, err
+		}
+		addonEntitlements = append(addonEntitlements, addonEntitlementsForAddon.Items...)
+	}
+
+	return addonEntitlements, nil
+}
+
+// groupEntitlementsByFeature groups entitlements by feature ID
+func (s *subscriptionService) groupEntitlementsByFeature(entitlements []*dto.EntitlementResponse) map[string][]*dto.EntitlementResponse {
+	entitlementsByFeature := make(map[string][]*dto.EntitlementResponse)
+	for _, entitlement := range entitlements {
+		featureID := entitlement.FeatureID
+		if _, ok := entitlementsByFeature[featureID]; !ok {
+			entitlementsByFeature[featureID] = make([]*dto.EntitlementResponse, 0)
+		}
+		entitlementsByFeature[featureID] = append(entitlementsByFeature[featureID], entitlement)
+	}
+	return entitlementsByFeature
+}
+
+// aggregateEntitlementsByFeatureType aggregates entitlements based on feature type
+func (s *subscriptionService) aggregateEntitlementsByFeatureType(featureType types.FeatureType, entitlements []*dto.EntitlementResponse) *dto.AggregatedEntitlement {
+	// Convert to domain entitlements for aggregation
+	domainEntitlements := lo.Map(entitlements, func(e *dto.EntitlementResponse, _ int) *entitlement.Entitlement {
+		return e.Entitlement
+	})
+
+	switch featureType {
+	case types.FeatureTypeMetered:
+		return aggregateMeteredEntitlementsForBilling(domainEntitlements)
+	case types.FeatureTypeBoolean:
+		return aggregateBooleanEntitlementsForBilling(domainEntitlements)
+	case types.FeatureTypeStatic:
+		return aggregateStaticEntitlementsForBilling(domainEntitlements)
+	default:
+		return nil
+	}
+}
+
+// createEntitlementSources creates entitlement sources for a feature
+func (s *subscriptionService) createEntitlementSources(subscriptionID string, entitlements []*dto.EntitlementResponse, ctx context.Context) []*dto.EntitlementSource {
+	sources := make([]*dto.EntitlementSource, 0, len(entitlements))
+
+	for _, e := range entitlements {
+		source := &dto.EntitlementSource{
+			SubscriptionID: subscriptionID,
+			EntiyID:        e.EntityID,
+			EntityType:     dto.EntitlementSourceEntityTypePlan, // Default to plan, will be updated below
+			EntityName:     "",                                  // Will be populated below
+			Quantity:       1,                                   // Default quantity
+			EntitlementID:  e.ID,
+			IsEnabled:      e.IsEnabled,
+			UsageLimit:     e.UsageLimit,
+			StaticValue:    e.StaticValue,
+		}
+
+		// Determine entity type and name
+		switch e.EntityType {
+		case types.ENTITLEMENT_ENTITY_TYPE_PLAN:
+			source.EntityType = dto.EntitlementSourceEntityTypePlan
+			// Get plan name
+			plan, err := s.PlanRepo.Get(ctx, e.EntityID)
+			if err == nil {
+				source.EntityName = plan.Name
+			}
+		case types.ENTITLEMENT_ENTITY_TYPE_ADDON:
+			source.EntityType = dto.EntitlementSourceEntityTypeAddon
+			// Get addon name
+			addon, err := s.AddonRepo.GetByID(ctx, e.EntityID)
+			if err == nil {
+				source.EntityName = addon.Name
+			}
+		}
+
+		sources = append(sources, source)
+	}
+
+	// For boolean features, prioritize addon sources over plan sources
+	// This ensures that when both plan and addon entitlements enable a feature,
+	// only the addon source is shown (since it's the enabling source)
+	if len(sources) > 1 {
+		// Check if this is a boolean feature by looking at the first entitlement
+		if len(entitlements) > 0 && entitlements[0].Feature != nil && entitlements[0].Feature.Feature.Type == types.FeatureTypeBoolean {
+			// For boolean features, if there's an addon source, filter out plan sources
+			// This ensures only the enabling source (addon) is shown
+			filteredSources := make([]*dto.EntitlementSource, 0)
+			hasAddonSource := false
+
+			// First pass: check if there's an addon source
+			for _, source := range sources {
+				if source.EntityType == dto.EntitlementSourceEntityTypeAddon && source.IsEnabled {
+					hasAddonSource = true
+					break
+				}
+			}
+
+			// Second pass: filter sources
+			for _, source := range sources {
+				if hasAddonSource {
+					// If there's an addon source, only include addon sources
+					if source.EntityType == dto.EntitlementSourceEntityTypeAddon {
+						filteredSources = append(filteredSources, source)
+					}
+				} else {
+					// If no addon source, include all sources
+					filteredSources = append(filteredSources, source)
+				}
+			}
+
+			sources = filteredSources
+		}
+	}
+
+	return sources
+}
+
+// GetSubscriptionEntitlements retrieves a simple list of entitlements for a specific subscription
+// without aggregation or merging - just returns all entitlements from plan and addons
+func (s *subscriptionService) GetSubscriptionEntitlements(ctx context.Context, subscriptionID string, featureIDs []string) ([]*dto.EntitlementResponse, error) {
+	// Get the subscription
+	sub, err := s.SubRepo.Get(ctx, subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	entitlementService := NewEntitlementService(s.ServiceParams)
+
+	// Get plan entitlements
+	planEntitlements, err := entitlementService.GetPlanEntitlements(ctx, sub.PlanID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get addon associations
+	addonAssociations, err := s.getActiveAddonAssociations(ctx, sub.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get addon entitlements
+	addonEntitlements, err := s.getAddonEntitlements(ctx, addonAssociations, entitlementService)
+	if err != nil {
+		return nil, err
+	}
+
+	// Combine and filter all entitlements
+	allEntitlements := make([]*dto.EntitlementResponse, 0)
+
+	// Filter and add plan entitlements
+	for _, entitlement := range planEntitlements.Items {
+		if len(featureIDs) == 0 || lo.Contains(featureIDs, entitlement.FeatureID) {
+			allEntitlements = append(allEntitlements, entitlement)
+		}
+	}
+
+	// Filter and add addon entitlements
+	for _, entitlement := range addonEntitlements {
+		if len(featureIDs) == 0 || lo.Contains(featureIDs, entitlement.FeatureID) {
+			allEntitlements = append(allEntitlements, entitlement)
+		}
+	}
+
+	return allEntitlements, nil
 }
