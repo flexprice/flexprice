@@ -86,13 +86,18 @@ type AddAddonToSubscriptionRequest struct {
 	Metadata  map[string]interface{} `json:"metadata"`
 }
 
-func (a *AddAddonToSubscriptionRequest) ToAddonAssociation(ctx context.Context, enitiyId string, enitityType types.AddonAssociationEntityType) *addonassociation.AddonAssociation {
+func (a *AddAddonToSubscriptionRequest) ToAddonAssociation(ctx context.Context, enitiyId string, enitityType types.AddonAssociationEntityType, endDate *time.Time) *addonassociation.AddonAssociation {
+
+	if a.EndDate == nil && endDate != nil {
+		a.EndDate = endDate
+	}
 
 	now := time.Now()
 	startDate := now
 	if a.StartDate != nil {
 		startDate = *a.StartDate
 	}
+
 	return &addonassociation.AddonAssociation{
 		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ADDON_ASSOCIATION),
 		EntityID:      enitiyId,

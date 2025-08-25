@@ -159,6 +159,32 @@ func addonAssociationFilterFn(ctx context.Context, aa *addonassociation.AddonAss
 		}
 	}
 
+	// Apply start date filters - include records with nil start_date or matching the filter
+	if f.StartDateGTE != nil {
+		if aa.StartDate != nil && aa.StartDate.Before(*f.StartDateGTE) {
+			return false
+		}
+	}
+
+	if f.StartDateLTE != nil {
+		if aa.StartDate != nil && aa.StartDate.After(*f.StartDateLTE) {
+			return false
+		}
+	}
+
+	// Apply end date filters - include records with nil end_date or matching the filter
+	if f.EndDateGTE != nil {
+		if aa.EndDate != nil && aa.EndDate.Before(*f.EndDateGTE) {
+			return false
+		}
+	}
+
+	if f.EndDateLTE != nil {
+		if aa.EndDate != nil && aa.EndDate.After(*f.EndDateLTE) {
+			return false
+		}
+	}
+
 	return true
 }
 
