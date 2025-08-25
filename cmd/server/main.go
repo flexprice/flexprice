@@ -156,6 +156,7 @@ func main() {
 			repository.NewAddonAssociationRepository,
 			repository.NewSubscriptionLineItemRepository,
 			repository.NewSettingsRepository,
+			repository.NewAlertRepository,
 
 			// PubSub
 			pubsubRouter.NewRouter,
@@ -208,6 +209,7 @@ func main() {
 			service.NewPriceUnitService,
 			service.NewAddonService,
 			service.NewSettingsService,
+			service.NewAlertService,
 		),
 	)
 
@@ -267,6 +269,7 @@ func provideHandlers(
 	couponService service.CouponService,
 	addonService service.AddonService,
 	settingsService service.SettingsService,
+	alertService service.AlertService,
 ) api.Handlers {
 	return api.Handlers{
 		Events:                   v1.NewEventsHandler(eventService, eventPostProcessingService, logger),
@@ -304,6 +307,7 @@ func provideHandlers(
 		Coupon:                   v1.NewCouponHandler(couponService, logger),
 		Addon:                    v1.NewAddonHandler(addonService, logger),
 		Settings:                 v1.NewSettingsHandler(settingsService, logger),
+		CronAlert:                cron.NewAlertCronHandler(alertService, logger),
 	}
 }
 

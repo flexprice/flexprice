@@ -12,6 +12,9 @@ type Addon func(*sql.Selector)
 // AddonAssociation is the predicate function for addonassociation builders.
 type AddonAssociation func(*sql.Selector)
 
+// Alert is the predicate function for alert builders.
+type Alert func(*sql.Selector)
+
 // Auth is the predicate function for auth builders.
 type Auth func(*sql.Selector)
 
