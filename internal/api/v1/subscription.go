@@ -317,3 +317,39 @@ func (h *SubscriptionHandler) RemoveAddonToSubscription(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "addon removed from subscription successfully"})
 }
+
+// @Summary Get subscription entitlements
+// @Description Get entitlements for a specific subscription including plan and addon entitlements
+// @Tags Subscriptions
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Subscription ID"
+// @Param feature_ids query []string false "Feature IDs to filter by"
+// @Success 200 {object} dto.SubscriptionEntitlementsResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /subscriptions/{id}/entitlements [get]
+func (h *SubscriptionHandler) GetSubscriptionEntitlements(c *gin.Context) {
+	subscriptionID := c.Param("id")
+	if subscriptionID == "" {
+		c.Error(ierr.NewError("subscription ID is required").
+			WithHint("Please provide a valid subscription ID").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	// Parse feature IDs from query parameters
+	var featureIDs []string
+	if featureIDsParam := c.QueryArray("feature_ids"); len(featureIDsParam) > 0 {
+		featureIDs = featureIDsParam
+	}
+
+	resp, err := h.service.GetSubscriptionEntitlementsForBilling(c.Request.Context(), subscriptionID, featureIDs)
+	if err != nil {
+		h.log.Error("Failed to get subscription entitlements", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
