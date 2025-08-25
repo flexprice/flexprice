@@ -764,7 +764,8 @@ func (s *priceService) calculateTieredCost(ctx context.Context, price *price.Pri
 
 	case types.BILLING_TIER_SLAB:
 		remainingQuantity := quantity
-		for _, tier := range price.Tiers {
+		tierStartQuantity := decimal.Zero
+		for i, tier := range price.Tiers {
 			var tierQuantity = remainingQuantity
 			if tier.UpTo != nil {
 				upTo := decimal.NewFromUint64(*tier.UpTo)
@@ -775,7 +776,10 @@ func (s *priceService) calculateTieredCost(ctx context.Context, price *price.Pri
 				// Edge cases: Handles decimal quantities like 1000.5, 1024.75, etc.
 				// If remainingQuantity > up_to (even by small decimals), excess goes to next tier
 				if remainingQuantity.GreaterThan(upTo) {
-					tierQuantity = upTo
+					if i > 0 {
+						tierStartQuantity = decimal.NewFromUint64(*price.Tiers[i-1].UpTo)
+					}
+					tierQuantity = upTo.Sub(tierStartQuantity)
 				}
 			}
 
