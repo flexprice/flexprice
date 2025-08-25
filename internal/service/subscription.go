@@ -3197,60 +3197,81 @@ func (s *subscriptionService) RemoveAddonFromSubscription(
 			return err
 		}
 
-		// End the corresponding line items for this addon (soft delete approach)
+		// Get subscription with all line items (including deleted ones) for addon removal
 		subscription, err := s.SubRepo.Get(ctx, subscriptionID)
 		if err != nil {
 			return err
 		}
 
-		lineItemsEnded := 0
-		for _, lineItem := range subscription.LineItems {
-			// Debug logging to understand line item matching
-			s.Logger.Infow("checking line item for addon removal",
+		// Get addon details to check its type
+		addonService := NewAddonService(s.ServiceParams)
+		addonResponse, err := addonService.GetAddon(ctx, addonID)
+		if err != nil {
+			s.Logger.Errorw("failed to get addon details for removal",
 				"subscription_id", subscriptionID,
 				"addon_id", addonID,
-				"line_item_id", lineItem.ID,
-				"line_item_metadata", lineItem.Metadata)
+				"error", err)
+			return err
+		}
 
-			// Check metadata for addon_id
-			metadataMatch := lineItem.Metadata != nil && lineItem.Metadata["addon_id"] == addonID
+		// Only remove line items for one-time addons
+		if addonResponse.Addon.Type == types.AddonTypeOnetime {
+			// Get all line items for this subscription (including deleted ones)
+			lineItems, err := s.SubscriptionLineItemRepo.ListBySubscription(ctx, subscriptionID)
+			if err != nil {
+				return err
+			}
+			subscription.LineItems = lineItems
 
-			if metadataMatch {
-				s.Logger.Infow("found matching line item for addon removal",
+			lineItemsEnded := 0
+			for _, lineItem := range subscription.LineItems {
+				// Debug logging to understand line item matching
+				s.Logger.Infow("checking line item for one-time addon removal",
 					"subscription_id", subscriptionID,
 					"addon_id", addonID,
+					"addon_type", addonResponse.Addon.Type,
 					"line_item_id", lineItem.ID,
-					"metadata_match", metadataMatch)
+					"line_item_entity_id", lineItem.EntityID,
+					"line_item_entity_type", lineItem.EntityType)
 
-				// End the line item (soft delete approach like Togai)
-				lineItem.EndDate = now
-				lineItem.Status = types.StatusDeleted
+				// Check entity_id and entity_type for addon match
+				entityMatch := lineItem.EntityID == addonID && lineItem.EntityType == types.SubscriptionLineItemEntitiyTypeAddon
 
-				// Add metadata for audit trail
-				if lineItem.Metadata == nil {
-					lineItem.Metadata = make(map[string]string)
-				}
-				lineItem.Metadata["removal_reason"] = reason
-				lineItem.Metadata["removed_at"] = now.Format(time.RFC3339)
-				lineItem.Metadata["removed_by"] = types.GetUserID(ctx)
-
-				err = s.SubscriptionLineItemRepo.Update(ctx, lineItem)
-				if err != nil {
-					s.Logger.Errorw("failed to end line item for addon",
+				if entityMatch {
+					s.Logger.Infow("found matching line item for one-time addon removal",
 						"subscription_id", subscriptionID,
 						"addon_id", addonID,
 						"line_item_id", lineItem.ID,
-						"error", err)
-					return err
+						"entity_match", entityMatch)
+
+					// Delete the line item since entity_type is immutable
+					err = s.SubscriptionLineItemRepo.Delete(ctx, lineItem.ID)
+					if err != nil {
+						s.Logger.Errorw("failed to delete line item for one-time addon",
+							"subscription_id", subscriptionID,
+							"addon_id", addonID,
+							"line_item_id", lineItem.ID,
+							"error", err)
+						return err
+					}
+					lineItemsEnded++
 				}
-				lineItemsEnded++
 			}
+
+			s.Logger.Infow("completed one-time addon line item removal",
+				"subscription_id", subscriptionID,
+				"addon_id", addonID,
+				"line_items_removed", lineItemsEnded)
+		} else {
+			s.Logger.Infow("skipping line item removal for multiple addon",
+				"subscription_id", subscriptionID,
+				"addon_id", addonID,
+				"addon_type", addonResponse.Addon.Type)
 		}
 
 		s.Logger.Infow("ended line items for addon removal",
 			"subscription_id", subscriptionID,
 			"addon_id", addonID,
-			"line_items_ended", lineItemsEnded,
 			"removal_reason", reason)
 
 		return nil

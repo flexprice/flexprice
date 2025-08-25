@@ -116,6 +116,14 @@ var (
 			ExpandCouponApplications: {ExpandCoupon},
 		},
 	}
+
+	CustomerUsageSummaryExpandConfig = ExpandConfig{
+		AllowedFields: []ExpandableField{ExpandFeatures, ExpandEntitlements},
+		NestedExpands: map[ExpandableField][]ExpandableField{
+			ExpandFeatures:     {},
+			ExpandEntitlements: {},
+		},
+	}
 )
 
 // Expand represents the expand parameter in API requests

@@ -1196,15 +1196,17 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 
 				// Create a source for this entitlement
 				source := &dto.EntitlementSource{
-					SubscriptionID: sub.ID,
-					EntityID:       p.ID,
-					EntityType:     dto.EntitlementSourceEntityTypePlan,
-					EntitiyName:    p.Name,
-					Quantity:       quantity,
-					EntitlementID:  e.ID,
-					IsEnabled:      e.IsEnabled,
-					UsageLimit:     e.UsageLimit,
-					StaticValue:    e.StaticValue,
+					SubscriptionID:   sub.ID,
+					EntityID:         p.ID,
+					EntityType:       dto.EntitlementSourceEntityTypePlan,
+					EntitiyName:      p.Name,
+					Quantity:         quantity,
+					EntitlementID:    e.ID,
+					IsEnabled:        e.IsEnabled,
+					UsageLimit:       e.UsageLimit,
+					UsageResetPeriod: e.UsageResetPeriod,
+					IsSoftLimit:      e.IsSoftLimit,
+					StaticValue:      e.StaticValue,
 				}
 
 				// Initialize feature collections if needed
