@@ -628,8 +628,6 @@ func init() {
 	_ = customerMixinFields0
 	customerMixinFields1 := customerMixin[1].Fields()
 	_ = customerMixinFields1
-	customerMixinFields2 := customerMixin[2].Fields()
-	_ = customerMixinFields2
 	customerFields := schema.Customer{}.Fields()
 	_ = customerFields
 	// customerDescTenantID is the schema descriptor for tenant_id field.
@@ -654,10 +652,6 @@ func init() {
 	customerDescEnvironmentID := customerMixinFields1[0].Descriptor()
 	// customer.DefaultEnvironmentID holds the default value on creation for the environment_id field.
 	customer.DefaultEnvironmentID = customerDescEnvironmentID.Default.(string)
-	// customerDescMetadata is the schema descriptor for metadata field.
-	customerDescMetadata := customerMixinFields2[0].Descriptor()
-	// customer.DefaultMetadata holds the default value on creation for the metadata field.
-	customer.DefaultMetadata = customerDescMetadata.Default.(map[string]string)
 	// customerDescExternalID is the schema descriptor for external_id field.
 	customerDescExternalID := customerFields[1].Descriptor()
 	// customer.ExternalIDValidator is a validator for the "external_id" field. It is called by the builders before save.
@@ -1148,8 +1142,6 @@ func init() {
 	_ = planMixinFields0
 	planMixinFields1 := planMixin[1].Fields()
 	_ = planMixinFields1
-	planMixinFields2 := planMixin[2].Fields()
-	_ = planMixinFields2
 	planFields := schema.Plan{}.Fields()
 	_ = planFields
 	// planDescTenantID is the schema descriptor for tenant_id field.
@@ -1174,10 +1166,6 @@ func init() {
 	planDescEnvironmentID := planMixinFields1[0].Descriptor()
 	// plan.DefaultEnvironmentID holds the default value on creation for the environment_id field.
 	plan.DefaultEnvironmentID = planDescEnvironmentID.Default.(string)
-	// planDescMetadata is the schema descriptor for metadata field.
-	planDescMetadata := planMixinFields2[0].Descriptor()
-	// plan.DefaultMetadata holds the default value on creation for the metadata field.
-	plan.DefaultMetadata = planDescMetadata.Default.(map[string]string)
 	// planDescName is the schema descriptor for name field.
 	planDescName := planFields[2].Descriptor()
 	// plan.NameValidator is a validator for the "name" field. It is called by the builders before save.

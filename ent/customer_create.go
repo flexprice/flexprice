@@ -283,10 +283,6 @@ func (cc *CustomerCreate) defaults() {
 		v := customer.DefaultEnvironmentID
 		cc.mutation.SetEnvironmentID(v)
 	}
-	if _, ok := cc.mutation.Metadata(); !ok {
-		v := customer.DefaultMetadata
-		cc.mutation.SetMetadata(v)
-	}
 }
 
 // check runs all checks and user-defined validators on the builder.
