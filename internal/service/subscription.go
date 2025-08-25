@@ -3160,6 +3160,17 @@ func (s *subscriptionService) handleSubscriptionAddons(
 				Mark(ierr.ErrValidation)
 		}
 
+		// Validate usage reset period conflicts between plan and addon entitlements
+		if err := s.validateUsageResetPeriodConflicts(ctx, subscription, addonReq.AddonID); err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to validate addon entitlements").
+				WithReportableDetails(map[string]interface{}{
+					"subscription_id": subscription.ID,
+					"addon_id":        addonReq.AddonID,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
 		s.Logger.Infow("validated addon prices for subscription",
 			"subscription_id", subscription.ID,
 			"addon_id", addonReq.AddonID,
@@ -3260,6 +3271,11 @@ func (s *subscriptionService) addAddonToSubscription(
 	// Validate and filter prices for the addon using the same pattern as plans
 	validPrices, err := s.ValidateAndFilterPricesForSubscription(ctx, req.AddonID, types.PRICE_ENTITY_TYPE_ADDON, sub)
 	if err != nil {
+		return nil, err
+	}
+
+	// Validate usage reset period conflicts between plan and addon entitlements
+	if err := s.validateUsageResetPeriodConflicts(ctx, sub, req.AddonID); err != nil {
 		return nil, err
 	}
 
@@ -4189,4 +4205,53 @@ func (s *subscriptionService) GetSubscriptionEntitlements(ctx context.Context, s
 	}
 
 	return allEntitlements, nil
+}
+
+// validateUsageResetPeriodConflicts validates that addon entitlements have the same usage reset period
+// as plan entitlements for the same feature
+func (s *subscriptionService) validateUsageResetPeriodConflicts(
+	ctx context.Context,
+	subscription *subscription.Subscription,
+	addonID string,
+) error {
+	// Get plan entitlements
+	entitlementService := NewEntitlementService(s.ServiceParams)
+	planEntitlements, err := entitlementService.GetPlanEntitlements(ctx, subscription.PlanID)
+	if err != nil {
+		return err
+	}
+
+	// Get addon entitlements
+	addonEntitlements, err := entitlementService.GetAddonEntitlements(ctx, addonID)
+	if err != nil {
+		return err
+	}
+
+	// Create a map of plan entitlements by feature ID
+	planEntitlementsByFeature := make(map[string]*dto.EntitlementResponse)
+	for _, entitlement := range planEntitlements.Items {
+		planEntitlementsByFeature[entitlement.FeatureID] = entitlement
+	}
+
+	// Check each addon entitlement against plan entitlements
+	for _, addonEntitlement := range addonEntitlements.Items {
+		if planEntitlement, exists := planEntitlementsByFeature[addonEntitlement.FeatureID]; exists {
+			// Both plan and addon have entitlements for the same feature
+			// Check if usage reset periods match
+			if planEntitlement.UsageResetPeriod != addonEntitlement.UsageResetPeriod {
+				return ierr.NewError("usage reset period mismatch").
+					WithHint("The reset period of this feature should be the same in plan as well as addon").
+					WithReportableDetails(map[string]interface{}{
+						"subscription_id":    subscription.ID,
+						"addon_id":           addonID,
+						"feature_id":         addonEntitlement.FeatureID,
+						"plan_reset_period":  planEntitlement.UsageResetPeriod,
+						"addon_reset_period": addonEntitlement.UsageResetPeriod,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+		}
+	}
+
+	return nil
 }
