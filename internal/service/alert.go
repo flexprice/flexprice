@@ -193,9 +193,9 @@ func (s *alertService) getEntitiesByType(ctx context.Context, tenantID, envID, e
 			return nil, nil
 		}
 
-		// Convert wallets to generic entities
-		entities := make([]*types.Entity, len(response.Items))
-		for i, w := range response.Items {
+		// Convert eligible wallets to generic entities
+		var entities []*types.Entity
+		for _, w := range response.Items {
 			// Only include wallets that have alerts enabled
 			if !w.AlertEnabled {
 				continue
@@ -209,12 +209,12 @@ func (s *alertService) getEntitiesByType(ctx context.Context, tenantID, envID, e
 				continue
 			}
 
-			entities[i] = &types.Entity{
+			entities = append(entities, &types.Entity{
 				ID:           w.ID,
 				Type:         "wallet",
 				AlertEnabled: true,
 				AlertConfig:  w.AlertConfig,
-			}
+			})
 		}
 
 		s.Logger.Infow("found wallets for monitoring",

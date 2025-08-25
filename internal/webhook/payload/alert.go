@@ -31,7 +31,7 @@ func (b *AlertPayloadBuilder) BuildPayload(ctx context.Context, eventType string
 	}
 
 	// Convert internal event to alert response
-	alert := dto.NewAlertResponse(&alert.Alert{
+	alertResp := dto.NewAlertResponse(&alert.Alert{
 		ID:            internalEvent.AlertID,
 		EntityType:    internalEvent.EntityType,
 		EntityID:      internalEvent.EntityID,
@@ -46,7 +46,7 @@ func (b *AlertPayloadBuilder) BuildPayload(ctx context.Context, eventType string
 	})
 
 	// Build webhook payload using existing constructor
-	payload := webhookDto.NewAlertWebhookPayload(alert)
+	payload := webhookDto.NewAlertWebhookPayload(alertResp)
 
 	return json.Marshal(payload)
 }
