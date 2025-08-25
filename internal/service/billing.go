@@ -173,13 +173,18 @@ func (s *billingService) CalculateUsageCharges(
 
 			entitlementResponse := &dto.EntitlementResponse{
 				Entitlement: &entitlement.Entitlement{
-					ID:          source.EntitlementID, // Use first source's entitlement ID
-					FeatureID:   feature.Feature.Feature.ID,
-					EntityID:    source.EntityID,
-					EntityType:  getEntityTypeFromSourceType(source.EntityType),
-					IsEnabled:   feature.Entitlement.IsEnabled,
-					UsageLimit:  feature.Entitlement.UsageLimit,
-					StaticValue: staticValue,
+					ID:               source.EntitlementID, // Use first source's entitlement ID
+					FeatureID:        feature.Feature.Feature.ID,
+					EntityID:         source.EntityID,
+					EntityType:       getEntityTypeFromSourceType(source.EntityType),
+					IsEnabled:        feature.Entitlement.IsEnabled,
+					UsageLimit:       feature.Entitlement.UsageLimit,
+					UsageResetPeriod: feature.Entitlement.UsageResetPeriod,
+					StaticValue:      staticValue,
+					EnvironmentID:    types.GetEnvironmentID(ctx),
+					FeatureType:      feature.Feature.Feature.Type,
+					IsSoftLimit:      feature.Entitlement.IsSoftLimit,
+					BaseModel:        sub.BaseModel,
 				},
 				Feature: feature.Feature,
 			}
