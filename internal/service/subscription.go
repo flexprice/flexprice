@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sort"
 	"time"
 
@@ -51,6 +52,9 @@ type SubscriptionService interface {
 	// Addon management for subscriptions
 	AddAddonToSubscription(ctx context.Context, subscriptionID string, req *dto.AddAddonToSubscriptionRequest) (*addonassociation.AddonAssociation, error)
 	RemoveAddonFromSubscription(ctx context.Context, subscriptionID string, addonID string, reason string) error
+
+	// Price versioning
+	CreateSubscriptionLineItemVersion(ctx context.Context, req dto.CreateSubscriptionLineItemVersionRequest) (*dto.CreateSubscriptionLineItemVersionResponse, error)
 }
 
 type subscriptionService struct {
@@ -3386,4 +3390,144 @@ func (s *subscriptionService) ActivateIncompleteSubscription(ctx context.Context
 	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionActivated, subscriptionID)
 
 	return nil
+}
+
+// CreateSubscriptionLineItemVersion creates new versions of subscription line items when a price version changes
+func (s *subscriptionService) CreateSubscriptionLineItemVersion(ctx context.Context, req dto.CreateSubscriptionLineItemVersionRequest) (*dto.CreateSubscriptionLineItemVersionResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Get the old price to validate it exists and get its details
+	_, err := s.PriceRepo.Get(ctx, req.OldPriceVersionID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get the new price to validate it exists and get its details
+	newPrice, err := s.PriceRepo.Get(ctx, req.NewPriceVersionID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Find all existing line items with the old price ID across all subscriptions
+	lineItems, err := s.SubscriptionLineItemRepo.GetByPriceID(ctx, req.OldPriceVersionID)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(lineItems) == 0 {
+		return nil, ierr.NewError("no line items found with old price version").
+			WithHint("No subscription line items found with the specified old price version ID").
+			WithReportableDetails(map[string]interface{}{
+				"old_price_version_id": req.OldPriceVersionID,
+			}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	// Validate that the new price has a start date
+	if newPrice.StartDate == nil {
+		return nil, ierr.NewError("new price version must have a start date").
+			WithHint("The new price version must have a start_date to create a line item version").
+			WithReportableDetails(map[string]interface{}{
+				"new_price_version_id": req.NewPriceVersionID,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Pre-calculate common values to avoid repeated computations
+	startDate := *newPrice.StartDate
+	endDate := startDate.Add(-time.Second)
+	versionedAt := time.Now().UTC().Format(time.RFC3339)
+
+	// Pre-allocate slice for better memory efficiency
+	updatedItems := make([]dto.SubscriptionLineItemVersionUpdate, 0, len(lineItems))
+
+	// Use transaction to ensure atomicity
+	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		// Process each line item that uses the old price version
+		for _, oldLineItem := range lineItems {
+
+			// Create a line item request DTO to reuse existing conversion logic
+			lineItemReq := &dto.SubscriptionLineItemRequest{
+				PriceID:     newPrice.ID,
+				Quantity:    oldLineItem.Quantity,
+				DisplayName: oldLineItem.DisplayName,
+				Metadata: map[string]string{
+					"versioned_from_line_item": oldLineItem.ID,
+					"versioned_from_price":     req.OldPriceVersionID,
+					"versioned_to_price":       req.NewPriceVersionID,
+					"versioned_at":             versionedAt,
+					"version_reason":           "price_version_change",
+				},
+			}
+
+			// Convert to domain object using existing DTO method
+			newLineItem := lineItemReq.ToSubscriptionLineItem(txCtx)
+
+			// Set additional fields that are specific to versioning
+			newLineItem.SubscriptionID = oldLineItem.SubscriptionID
+			newLineItem.CustomerID = oldLineItem.CustomerID
+			newLineItem.EntityID = oldLineItem.EntityID
+			newLineItem.EntityType = oldLineItem.EntityType
+			newLineItem.PlanDisplayName = oldLineItem.PlanDisplayName
+			newLineItem.PriceType = newPrice.Type
+			newLineItem.MeterID = newPrice.MeterID
+			newLineItem.MeterDisplayName = oldLineItem.MeterDisplayName
+			newLineItem.PriceUnitID = newPrice.PriceUnitID
+			newLineItem.PriceUnit = newPrice.PriceUnit
+			newLineItem.Currency = newPrice.Currency
+			newLineItem.BillingPeriod = newPrice.BillingPeriod
+			newLineItem.InvoiceCadence = newPrice.InvoiceCadence
+			newLineItem.TrialPeriod = newPrice.TrialPeriod
+			newLineItem.StartDate = startDate
+			newLineItem.EndDate = time.Time{} // Will be set when next version is created
+
+			// Create the new line item
+			if err := s.SubscriptionLineItemRepo.Create(txCtx, newLineItem); err != nil {
+				return err
+			}
+
+			// Update the end date of the old line item
+			oldLineItem.EndDate = endDate
+
+			// Ensure metadata map exists
+			if oldLineItem.Metadata == nil {
+				oldLineItem.Metadata = make(map[string]string)
+			}
+			oldLineItem.Metadata["versioned_to_line_item"] = newLineItem.ID
+			oldLineItem.Metadata["versioned_at"] = versionedAt
+
+			if err := s.SubscriptionLineItemRepo.Update(txCtx, oldLineItem); err != nil {
+				return fmt.Errorf("failed to update old line item: %w", err)
+			}
+
+			// Add to updated items list
+			updatedItems = append(updatedItems, dto.SubscriptionLineItemVersionUpdate{
+				SubscriptionID: oldLineItem.SubscriptionID,
+				OldLineItem:    &dto.SubscriptionLineItemResponse{SubscriptionLineItem: oldLineItem},
+				NewLineItem:    &dto.SubscriptionLineItemResponse{SubscriptionLineItem: newLineItem},
+			})
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Create response after successful transaction
+	response := &dto.CreateSubscriptionLineItemVersionResponse{
+		ProcessedCount: len(lineItems),
+		UpdatedItems:   updatedItems,
+	}
+
+	s.Logger.Infow("created subscription line item versions",
+		"old_price_version_id", req.OldPriceVersionID,
+		"new_price_version_id", req.NewPriceVersionID,
+		"total_line_items_found", len(lineItems),
+		"processed_count", len(updatedItems))
+
+	return response, nil
 }

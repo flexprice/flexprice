@@ -529,3 +529,40 @@ type SubscriptionUpdatePeriodResponseItem struct {
 	Success        bool      `json:"success"`
 	Error          string    `json:"error"`
 }
+
+// CreateSubscriptionLineItemVersionRequest represents a request to create new versions of subscription line items
+type CreateSubscriptionLineItemVersionRequest struct {
+	OldPriceVersionID string `json:"old_price_version_id" validate:"required"`
+	NewPriceVersionID string `json:"new_price_version_id" validate:"required"`
+}
+
+// Validate validates the subscription line item version creation request
+func (r *CreateSubscriptionLineItemVersionRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return ierr.WithError(err).
+			WithHint("Invalid subscription line item version creation request").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Validate that old and new price version IDs are different
+	if r.OldPriceVersionID == r.NewPriceVersionID {
+		return ierr.NewError("old_price_version_id and new_price_version_id must be different").
+			WithHint("Please provide different price version IDs for versioning").
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}
+
+// CreateSubscriptionLineItemVersionResponse represents the response for subscription line item version creation
+type CreateSubscriptionLineItemVersionResponse struct {
+	ProcessedCount int                                 `json:"processed_count"`
+	UpdatedItems   []SubscriptionLineItemVersionUpdate `json:"updated_items"`
+}
+
+// SubscriptionLineItemVersionUpdate represents a single line item version update
+type SubscriptionLineItemVersionUpdate struct {
+	SubscriptionID string                        `json:"subscription_id"`
+	OldLineItem    *SubscriptionLineItemResponse `json:"old_line_item"`
+	NewLineItem    *SubscriptionLineItemResponse `json:"new_line_item"`
+}

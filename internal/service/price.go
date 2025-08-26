@@ -1057,12 +1057,15 @@ func (s *priceService) CreatePriceVersion(ctx context.Context, req dto.CreatePri
 
 	// Use transaction to ensure atomicity
 	var response *dto.PriceVersionResponse
+	var newPriceID string
 	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		// Create new price version
 		newPrice, err := req.ToPrice(txCtx, existingPrice)
 		if err != nil {
 			return err
 		}
+
+		newPriceID = newPrice.ID
 
 		// Create the new price
 		if err := s.PriceRepo.Create(txCtx, newPrice); err != nil {
@@ -1092,6 +1095,19 @@ func (s *priceService) CreatePriceVersion(ctx context.Context, req dto.CreatePri
 
 	if err != nil {
 		return nil, err
+	}
+
+	// trigger subscription line item versioning
+	// TODO: Think on this
+	if req.PreviousPriceID != "" && newPriceID != "" {
+		subcriptionService := NewSubscriptionService(s.ServiceParams)
+		_, err = subcriptionService.CreateSubscriptionLineItemVersion(ctx, dto.CreateSubscriptionLineItemVersionRequest{
+			OldPriceVersionID: req.PreviousPriceID,
+			NewPriceVersionID: newPriceID,
+		})
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return response, nil

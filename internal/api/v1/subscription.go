@@ -317,3 +317,34 @@ func (h *SubscriptionHandler) RemoveAddonToSubscription(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "addon removed from subscription successfully"})
 }
+
+// @Summary Create subscription line item version
+// @Description Create new versions of subscription line items when a price version changes
+// @Tags Subscriptions
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param request body dto.CreateSubscriptionLineItemVersionRequest true "Create Line Item Version Request"
+// @Success 200 {object} dto.CreateSubscriptionLineItemVersionResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /subscriptions/line-items/versions [post]
+func (h *SubscriptionHandler) CreateSubscriptionLineItemVersion(c *gin.Context) {
+	var req dto.CreateSubscriptionLineItemVersionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.log.Error("Failed to bind JSON", "error", err)
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.service.CreateSubscriptionLineItemVersion(c.Request.Context(), req)
+	if err != nil {
+		h.log.Error("Failed to create subscription line item version", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
