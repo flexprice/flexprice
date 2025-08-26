@@ -564,6 +564,36 @@ func (o PriceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.P
 		}
 	}
 
+	// Apply start date filter if specified
+	if f.StartDate != nil {
+		query = query.Where(price.StartDateLTE(*f.StartDate))
+	}
+
+	// Apply end date filter if specified
+	if f.EndDate != nil {
+		query = query.Where(price.EndDateGTE(*f.EndDate))
+	}
+
+	// Apply date filtering to exclude expired prices unless explicitly allowed
+	if !f.AllowExpiredPrices {
+		now := time.Now().UTC()
+
+		// Filter for active prices:
+		// - Start date should be before or equal to current time (or null)
+		// - End date should be after current time (or null)
+		query = query.Where(
+			price.Or(
+				price.StartDateIsNil(),
+				price.StartDateLTE(now),
+			),
+		).Where(
+			price.Or(
+				price.EndDateIsNil(),
+				price.EndDateGT(now),
+			),
+		)
+	}
+
 	return query
 }
 

@@ -318,19 +318,19 @@ func (h *SubscriptionHandler) RemoveAddonToSubscription(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "addon removed from subscription successfully"})
 }
 
-// @Summary Create subscription line item version
-// @Description Create new versions of subscription line items when a price version changes
+// @Summary Bulk sync price changes to subscriptions
+// @Description Sync multiple price changes to all affected subscriptions in a single operation
 // @Tags Subscriptions
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Param request body dto.CreateSubscriptionLineItemVersionRequest true "Create Line Item Version Request"
-// @Success 200 {object} dto.CreateSubscriptionLineItemVersionResponse
+// @Param request body dto.SyncPriceChangesToSubscriptionsRequest true "Bulk Price Sync Request"
+// @Success 200 {object} dto.SyncPriceChangesToSubscriptionsResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
-// @Router /subscriptions/line-items/versions [post]
-func (h *SubscriptionHandler) CreateSubscriptionLineItemVersion(c *gin.Context) {
-	var req dto.CreateSubscriptionLineItemVersionRequest
+// @Router /subscriptions/sync/prices [post]
+func (h *SubscriptionHandler) BulkSyncPriceChanges(c *gin.Context) {
+	var req dto.SyncPriceChangesToSubscriptionsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.log.Error("Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
@@ -339,9 +339,9 @@ func (h *SubscriptionHandler) CreateSubscriptionLineItemVersion(c *gin.Context) 
 		return
 	}
 
-	resp, err := h.service.CreateSubscriptionLineItemVersion(c.Request.Context(), req)
+	resp, err := h.service.SyncPriceChangesToSubscriptions(c.Request.Context(), req)
 	if err != nil {
-		h.log.Error("Failed to create subscription line item version", "error", err)
+		h.log.Error("Failed to sync price changes", "error", err)
 		c.Error(err)
 		return
 	}

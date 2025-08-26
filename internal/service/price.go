@@ -1057,15 +1057,12 @@ func (s *priceService) CreatePriceVersion(ctx context.Context, req dto.CreatePri
 
 	// Use transaction to ensure atomicity
 	var response *dto.PriceVersionResponse
-	var newPriceID string
 	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		// Create new price version
 		newPrice, err := req.ToPrice(txCtx, existingPrice)
 		if err != nil {
 			return err
 		}
-
-		newPriceID = newPrice.ID
 
 		// Create the new price
 		if err := s.PriceRepo.Create(txCtx, newPrice); err != nil {
@@ -1087,7 +1084,8 @@ func (s *priceService) CreatePriceVersion(ctx context.Context, req dto.CreatePri
 		priceResponse := &dto.PriceResponse{Price: newPrice}
 
 		response = &dto.PriceVersionResponse{
-			Price: priceResponse,
+			Price:           priceResponse,
+			PreviousPriceID: existingPrice.ID,
 		}
 
 		return nil
@@ -1095,19 +1093,6 @@ func (s *priceService) CreatePriceVersion(ctx context.Context, req dto.CreatePri
 
 	if err != nil {
 		return nil, err
-	}
-
-	// trigger subscription line item versioning
-	// TODO: Think on this
-	if req.PreviousPriceID != "" && newPriceID != "" {
-		subcriptionService := NewSubscriptionService(s.ServiceParams)
-		_, err = subcriptionService.CreateSubscriptionLineItemVersion(ctx, dto.CreateSubscriptionLineItemVersionRequest{
-			OldPriceVersionID: req.PreviousPriceID,
-			NewPriceVersionID: newPriceID,
-		})
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	return response, nil
@@ -1142,6 +1127,41 @@ func (s *priceService) CreateBulkPriceVersion(ctx context.Context, req dto.Creat
 
 	if err != nil {
 		return nil, err
+	}
+
+	// Trigger bulk sync of price changes to all affected subscriptions
+	if len(response.Items) > 0 {
+		// Build price version mappings for sync
+		priceMappings := make([]dto.PriceVersionMapping, 0, len(response.Items))
+		for _, item := range response.Items {
+			if item.PreviousPriceID != "" {
+				priceMappings = append(priceMappings, dto.PriceVersionMapping{
+					OldPriceID: item.PreviousPriceID,
+					NewPriceID: item.Price.ID,
+				})
+			}
+		}
+
+		if len(priceMappings) > 0 {
+			// Create subscription service to trigger sync
+			subscriptionService := NewSubscriptionService(s.ServiceParams)
+
+			syncReq := dto.SyncPriceChangesToSubscriptionsRequest{
+				PriceVersionMappings: priceMappings,
+				BatchSize:            100,
+				DryRun:               false,
+			}
+
+			// Trigger the sync (this will update all affected subscriptions)
+			_, err := subscriptionService.SyncPriceChangesToSubscriptions(ctx, syncReq)
+			if err != nil {
+				s.Logger.Errorw("failed to sync price changes to subscriptions",
+					"error", err,
+					"price_mappings", priceMappings)
+				// Note: We don't fail the entire operation if sync fails
+				// The price versions were created successfully
+			}
+		}
 	}
 
 	return response, nil

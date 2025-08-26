@@ -566,3 +566,94 @@ type SubscriptionLineItemVersionUpdate struct {
 	OldLineItem    *SubscriptionLineItemResponse `json:"old_line_item"`
 	NewLineItem    *SubscriptionLineItemResponse `json:"new_line_item"`
 }
+
+// SyncPriceChangesToSubscriptionsRequest represents a request to sync price changes to all affected subscriptions
+type SyncPriceChangesToSubscriptionsRequest struct {
+	// PriceVersionMappings maps old price IDs to new price IDs for versioning
+	PriceVersionMappings []PriceVersionMapping `json:"price_version_mappings" validate:"required,min=1"`
+	// BatchSize is the number of subscriptions to process in each batch (default: 100)
+	BatchSize int `json:"batch_size,omitempty"`
+	// DryRun if true, will only simulate the changes without applying them
+	DryRun bool `json:"dry_run,omitempty"`
+}
+
+// PriceVersionMapping represents a mapping from old price to new price
+type PriceVersionMapping struct {
+	OldPriceID string `json:"old_price_id" validate:"required"`
+	NewPriceID string `json:"new_price_id" validate:"required"`
+}
+
+// Validate validates the sync price changes request
+func (r *SyncPriceChangesToSubscriptionsRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return ierr.WithError(err).
+			WithHint("Invalid sync price changes request").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Set default batch size if not provided
+	if r.BatchSize <= 0 {
+		r.BatchSize = 100
+	}
+
+	// Validate each price version mapping
+	for i, mapping := range r.PriceVersionMappings {
+		if err := validator.ValidateRequest(&mapping); err != nil {
+			return ierr.WithError(err).
+				WithHint(fmt.Sprintf("Invalid price version mapping at index %d", i)).
+				WithReportableDetails(map[string]interface{}{
+					"item_index":   i,
+					"old_price_id": mapping.OldPriceID,
+					"new_price_id": mapping.NewPriceID,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
+		// Validate that old and new price IDs are different
+		if mapping.OldPriceID == mapping.NewPriceID {
+			return ierr.NewError("old_price_id and new_price_id must be different").
+				WithHint(fmt.Sprintf("Price IDs must be different at index %d", i)).
+				WithReportableDetails(map[string]interface{}{
+					"item_index":   i,
+					"old_price_id": mapping.OldPriceID,
+					"new_price_id": mapping.NewPriceID,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	return nil
+}
+
+// SyncPriceChangesToSubscriptionsResponse represents the response for syncing price changes to subscriptions
+type SyncPriceChangesToSubscriptionsResponse struct {
+	TotalSubscriptionsProcessed int                            `json:"total_subscriptions_processed"`
+	TotalLineItemsUpdated       int                            `json:"total_line_items_updated"`
+	TotalSuccess                int                            `json:"total_success"`
+	TotalFailed                 int                            `json:"total_failed"`
+	BatchesProcessed            int                            `json:"batches_processed"`
+	ProcessingTime              time.Duration                  `json:"processing_time"`
+	Results                     []*SubscriptionPriceSyncResult `json:"results"`
+	Errors                      []SubscriptionPriceSyncError   `json:"errors,omitempty"`
+	DryRun                      bool                           `json:"dry_run"`
+}
+
+// SubscriptionPriceSyncResult represents the result of syncing price changes for a subscription
+type SubscriptionPriceSyncResult struct {
+	SubscriptionID   string                              `json:"subscription_id"`
+	CustomerID       string                              `json:"customer_id"`
+	LineItemsUpdated int                                 `json:"line_items_updated"`
+	LineItemUpdates  []SubscriptionLineItemVersionUpdate `json:"line_item_updates"`
+	Success          bool                                `json:"success"`
+	Error            string                              `json:"error,omitempty"`
+	ProcessingTime   time.Duration                       `json:"processing_time"`
+}
+
+// SubscriptionPriceSyncError represents an error during price sync processing
+type SubscriptionPriceSyncError struct {
+	SubscriptionID string `json:"subscription_id,omitempty"`
+	PriceID        string `json:"price_id,omitempty"`
+	Message        string `json:"message"`
+	Details        string `json:"details,omitempty"`
+	BatchIndex     int    `json:"batch_index,omitempty"`
+}

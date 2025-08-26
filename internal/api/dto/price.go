@@ -790,7 +790,8 @@ func (r *CreatePriceVersionRequest) ToPrice(ctx context.Context, existingPrice *
 }
 
 type PriceVersionResponse struct {
-	Price *PriceResponse `json:"price"`
+	PreviousPriceID string         `json:"previous_price_id"`
+	Price           *PriceResponse `json:"price"`
 }
 
 type CreateBulkPriceVersionRequest struct {

@@ -52,8 +52,8 @@ type SubscriptionService interface {
 	AddAddonToSubscription(ctx context.Context, subscriptionID string, req *dto.AddAddonToSubscriptionRequest) (*addonassociation.AddonAssociation, error)
 	RemoveAddonFromSubscription(ctx context.Context, subscriptionID string, addonID string, reason string) error
 
-	// Price versioning
-	CreateSubscriptionLineItemVersion(ctx context.Context, req dto.CreateSubscriptionLineItemVersionRequest) (*dto.CreateSubscriptionLineItemVersionResponse, error)
+	// Bulk price sync
+	SyncPriceChangesToSubscriptions(ctx context.Context, req dto.SyncPriceChangesToSubscriptionsRequest) (*dto.SyncPriceChangesToSubscriptionsResponse, error)
 }
 
 type subscriptionService struct {
@@ -3419,13 +3419,12 @@ func (s *subscriptionService) CreateSubscriptionLineItemVersion(ctx context.Cont
 	// Find all existing line items with the old price ID
 	lineItems, err := s.SubscriptionLineItemRepo.GetByPriceID(ctx, req.OldPriceVersionID)
 	if err != nil {
+
 		return nil, err
 	}
 
 	if len(lineItems) == 0 {
-		return nil, ierr.NewError("no line items found with old price version").
-			WithHint("No subscription line items found with the specified old price version ID").
-			Mark(ierr.ErrNotFound)
+		return nil, nil
 	}
 
 	// Validate that the new price has a start date
@@ -3524,4 +3523,210 @@ func (s *subscriptionService) CreateSubscriptionLineItemVersion(ctx context.Cont
 		ProcessedCount: len(lineItems),
 		UpdatedItems:   updatedItems,
 	}, nil
+}
+
+// SyncPriceChangesToSubscriptions syncs price changes to all affected subscriptions with proper batch processing
+func (s *subscriptionService) SyncPriceChangesToSubscriptions(ctx context.Context, req dto.SyncPriceChangesToSubscriptionsRequest) (*dto.SyncPriceChangesToSubscriptionsResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	startTime := time.Now()
+	response := &dto.SyncPriceChangesToSubscriptionsResponse{
+		TotalSubscriptionsProcessed: 0,
+		TotalLineItemsUpdated:       0,
+		TotalSuccess:                0,
+		TotalFailed:                 0,
+		BatchesProcessed:            0,
+		ProcessingTime:              0,
+		Results:                     make([]*dto.SubscriptionPriceSyncResult, 0),
+		Errors:                      make([]dto.SubscriptionPriceSyncError, 0),
+		DryRun:                      req.DryRun,
+	}
+
+	// Pre-allocate response slices for better memory efficiency
+	response.Results = make([]*dto.SubscriptionPriceSyncResult, 0)
+	response.Errors = make([]dto.SubscriptionPriceSyncError, 0)
+
+	// Collect all affected line items across all price mappings
+	allAffectedLineItems := make([]*subscription.SubscriptionLineItem, 0)
+	priceMappingMap := make(map[string]dto.PriceVersionMapping)
+
+	for _, mapping := range req.PriceVersionMappings {
+		priceMappingMap[mapping.OldPriceID] = mapping
+
+		// Get all line items affected by this price change
+		affectedLineItems, err := s.SubscriptionLineItemRepo.GetByPriceID(ctx, mapping.OldPriceID)
+		if err != nil {
+			s.Logger.Errorw("failed to get line items for price",
+				"old_price_id", mapping.OldPriceID,
+				"error", err)
+			return nil, err
+		}
+
+		allAffectedLineItems = append(allAffectedLineItems, affectedLineItems...)
+	}
+
+	if len(allAffectedLineItems) == 0 {
+		s.Logger.Infow("no line items found to update")
+		response.ProcessingTime = time.Since(startTime)
+		return response, nil
+	}
+
+	// Group line items by subscription
+	subscriptionGroups := make(map[string][]*subscription.SubscriptionLineItem)
+	for _, item := range allAffectedLineItems {
+		subscriptionGroups[item.SubscriptionID] = append(subscriptionGroups[item.SubscriptionID], item)
+	}
+
+	// Convert to slice for batch processing
+	subscriptionIDs := make([]string, 0, len(subscriptionGroups))
+	for subscriptionID := range subscriptionGroups {
+		subscriptionIDs = append(subscriptionIDs, subscriptionID)
+	}
+
+	// Process subscriptions in batches
+	totalSubscriptions := len(subscriptionIDs)
+	batchSize := req.BatchSize
+	if batchSize <= 0 {
+		batchSize = 100 // Default batch size
+	}
+
+	s.Logger.Infow("starting batch processing",
+		"total_subscriptions", totalSubscriptions,
+		"batch_size", batchSize,
+		"dry_run", req.DryRun)
+
+	// Process batches
+	for i := 0; i < totalSubscriptions; i += batchSize {
+		end := i + batchSize
+		if end > totalSubscriptions {
+			end = totalSubscriptions
+		}
+
+		batchSubscriptionIDs := subscriptionIDs[i:end]
+		batchStartTime := time.Now()
+
+		s.Logger.Infow("processing batch",
+			"batch_number", response.BatchesProcessed+1,
+			"batch_start", i+1,
+			"batch_end", end,
+			"batch_size", len(batchSubscriptionIDs))
+
+		// Process this batch in a transaction
+		err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+			for _, subscriptionID := range batchSubscriptionIDs {
+				lineItems := subscriptionGroups[subscriptionID]
+
+				// Process each line item in this subscription
+				for _, lineItem := range lineItems {
+					mapping, exists := priceMappingMap[lineItem.PriceID]
+					if !exists {
+						continue // Skip if this line item doesn't match any price mapping
+					}
+
+					if req.DryRun {
+						// For dry run, just simulate the changes
+						result := &dto.SubscriptionPriceSyncResult{
+							SubscriptionID:   subscriptionID,
+							CustomerID:       lineItem.CustomerID,
+							LineItemsUpdated: 1,
+							LineItemUpdates:  make([]dto.SubscriptionLineItemVersionUpdate, 0, 1),
+							Success:          true,
+							ProcessingTime:   0,
+						}
+
+						// Simulate line item update
+						result.LineItemUpdates = append(result.LineItemUpdates, dto.SubscriptionLineItemVersionUpdate{
+							SubscriptionID: lineItem.SubscriptionID,
+							OldLineItem:    &dto.SubscriptionLineItemResponse{SubscriptionLineItem: lineItem},
+							NewLineItem: &dto.SubscriptionLineItemResponse{SubscriptionLineItem: &subscription.SubscriptionLineItem{
+								ID:        "dry_run_simulation",
+								PriceID:   mapping.NewPriceID,
+								StartDate: time.Now().UTC(),
+								Metadata:  map[string]string{"dry_run": "true"},
+							}},
+						})
+
+						response.Results = append(response.Results, result)
+						response.TotalSubscriptionsProcessed++
+						response.TotalLineItemsUpdated++
+						response.TotalSuccess++
+					} else {
+						// Reuse the existing CreateSubscriptionLineItemVersion method
+						versionReq := dto.CreateSubscriptionLineItemVersionRequest{
+							OldPriceVersionID: mapping.OldPriceID,
+							NewPriceVersionID: mapping.NewPriceID,
+						}
+
+						versionResp, err := s.CreateSubscriptionLineItemVersion(txCtx, versionReq)
+						if err != nil {
+							s.Logger.Errorw("failed to create subscription line item version",
+								"old_price_id", mapping.OldPriceID,
+								"new_price_id", mapping.NewPriceID,
+								"subscription_id", subscriptionID,
+								"error", err)
+							return err
+						}
+
+						// Convert the response to our bulk sync format
+						if versionResp != nil && len(versionResp.UpdatedItems) > 0 {
+							// Find the update for this specific subscription
+							for _, update := range versionResp.UpdatedItems {
+								if update.SubscriptionID == subscriptionID {
+									result := &dto.SubscriptionPriceSyncResult{
+										SubscriptionID:   subscriptionID,
+										CustomerID:       lineItem.CustomerID,
+										LineItemsUpdated: 1,
+										LineItemUpdates:  []dto.SubscriptionLineItemVersionUpdate{update},
+										Success:          true,
+										ProcessingTime:   time.Since(batchStartTime),
+									}
+
+									response.Results = append(response.Results, result)
+									response.TotalSubscriptionsProcessed++
+									response.TotalLineItemsUpdated++
+									response.TotalSuccess++
+									break
+								}
+							}
+						}
+					}
+				}
+			}
+
+			return nil
+		})
+
+		if err != nil {
+			// Log the error but continue processing other batches
+			s.Logger.Errorw("failed to process batch",
+				"batch_number", response.BatchesProcessed+1,
+				"error", err)
+
+			// Add error to response
+			response.Errors = append(response.Errors, dto.SubscriptionPriceSyncError{
+				Message:    "Failed to process batch",
+				Details:    err.Error(),
+				BatchIndex: response.BatchesProcessed,
+			})
+
+			response.TotalFailed += len(batchSubscriptionIDs)
+		}
+
+		response.BatchesProcessed++
+	}
+
+	response.ProcessingTime = time.Since(startTime)
+
+	s.Logger.Infow("completed syncing price changes to subscriptions",
+		"total_subscriptions_processed", response.TotalSubscriptionsProcessed,
+		"total_line_items_updated", response.TotalLineItemsUpdated,
+		"total_success", response.TotalSuccess,
+		"total_failed", response.TotalFailed,
+		"batches_processed", response.BatchesProcessed,
+		"processing_time", response.ProcessingTime,
+		"dry_run", req.DryRun)
+
+	return response, nil
 }

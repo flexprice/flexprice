@@ -1,6 +1,8 @@
 package types
 
 import (
+	"time"
+
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -275,6 +277,11 @@ type PriceFilter struct {
 	SubscriptionID *string          `json:"subscription_id,omitempty" form:"subscription_id"`
 	ParentPriceID  *string          `json:"parent_price_id,omitempty" form:"parent_price_id"`
 	MeterIDs       []string         `json:"meter_ids,omitempty" form:"meter_ids"`
+
+	// start date filter
+	StartDate          *time.Time `json:"start_date,omitempty" form:"start_date" validate:"omitempty"`
+	EndDate            *time.Time `json:"end_date,omitempty" form:"end_date" validate:"omitempty"`
+	AllowExpiredPrices bool       `json:"allow_expired_prices,omitempty" form:"allow_expired_prices" validate:"omitempty" default:"true"`
 }
 
 // NewPriceFilter creates a new PriceFilter with default values
@@ -362,6 +369,13 @@ func (f PriceFilter) Validate() error {
 			}
 		}
 	}
+
+	if f.StartDate != nil && f.EndDate != nil && f.EndDate.Before(*f.StartDate) {
+		return ierr.NewError("end date must be after start date").
+			WithHint("Please provide a valid time range").
+			Mark(ierr.ErrValidation)
+	}
+
 	return nil
 }
 
