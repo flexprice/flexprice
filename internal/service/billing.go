@@ -210,10 +210,21 @@ func (s *billingService) CalculateUsageCharges(
 	}
 
 	// Process usage charges from line items
+	activeLineItems := make([]*subscription.SubscriptionLineItem, 0)
+
+	// filter out line items that are not active
 	for _, item := range sub.LineItems {
+		if item.IsActive(time.Now()) {
+			activeLineItems = append(activeLineItems, item)
+		}
+	}
+
+	for _, item := range activeLineItems {
 		if item.PriceType != types.PRICE_TYPE_USAGE {
 			continue
 		}
+
+		adjustedPeriodStart, adjustedPeriodEnd := s.GetAdjustedPeriod(periodStart, periodEnd, item)
 
 		// Find matching usage charges - may have multiple if there's overage
 		var matchingCharges []*dto.SubscriptionUsageByMetersResponse
@@ -272,8 +283,8 @@ func (s *billingService) CalculateUsageCharges(
 							MeterID:            item.MeterID,
 							PriceID:            item.PriceID,
 							ExternalCustomerID: customer.ExternalID,
-							StartTime:          periodStart,
-							EndTime:            periodEnd,
+							StartTime:          adjustedPeriodStart,
+							EndTime:            adjustedPeriodEnd,
 							WindowSize:         types.WindowSizeDay, // Use daily window size
 						}
 
@@ -444,8 +455,8 @@ func (s *billingService) CalculateUsageCharges(
 				DisplayName:      displayName,
 				Amount:           lineItemAmount,
 				Quantity:         quantityForCalculation,
-				PeriodStart:      lo.ToPtr(periodStart),
-				PeriodEnd:        lo.ToPtr(periodEnd),
+				PeriodStart:      lo.ToPtr(adjustedPeriodStart),
+				PeriodEnd:        lo.ToPtr(adjustedPeriodEnd),
 				Metadata:         metadata,
 			})
 		}
@@ -1523,4 +1534,35 @@ func (s *billingService) getUsagePercent(usage decimal.Decimal, limit *int64) de
 	}
 
 	return usage.Div(decimal.NewFromInt(*limit))
+}
+
+// GetAdjustedPeriod returns adjusted period start and end dates based on line item dates
+func (s *billingService) GetAdjustedPeriod(defaultPeriodStart, defaultPeriodEnd time.Time, lineItem *subscription.SubscriptionLineItem) (time.Time, time.Time) {
+	// Initialize with default values
+	adjustedPeriodStart := defaultPeriodStart
+	adjustedPeriodEnd := defaultPeriodEnd
+
+	// Case 1: Line item has both start date after period start and end date before period end
+	// This handles line items that fall completely within the billing period
+	if !lineItem.StartDate.IsZero() && !lineItem.EndDate.IsZero() &&
+		(lineItem.StartDate.After(defaultPeriodStart) || lineItem.StartDate.Equal(defaultPeriodStart)) &&
+		(lineItem.EndDate.Before(defaultPeriodEnd) || lineItem.EndDate.Equal(defaultPeriodEnd)) {
+		return lineItem.StartDate, lineItem.EndDate
+	}
+
+	// Case 2: Line item end date is before or equal to default period end
+	// This is for the case then new line item is created with end date before default period end
+	if !lineItem.EndDate.IsZero() && (lineItem.EndDate.Before(defaultPeriodEnd) || lineItem.EndDate.Equal(defaultPeriodEnd)) {
+		adjustedPeriodEnd = lineItem.EndDate
+		return defaultPeriodStart, adjustedPeriodEnd
+	}
+
+	// Case 3: Line item start date is after or equal to default period start
+	// This is for the case then new line item is created with start date after default period start
+	if !lineItem.StartDate.IsZero() && (lineItem.StartDate.After(defaultPeriodStart) || lineItem.StartDate.Equal(defaultPeriodStart)) {
+		adjustedPeriodStart = lineItem.StartDate
+		return adjustedPeriodStart, defaultPeriodEnd
+	}
+
+	return adjustedPeriodStart, adjustedPeriodEnd
 }
