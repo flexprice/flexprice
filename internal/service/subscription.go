@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"sort"
 	"time"
 
@@ -3410,7 +3409,14 @@ func (s *subscriptionService) CreateSubscriptionLineItemVersion(ctx context.Cont
 		return nil, err
 	}
 
-	// Find all existing line items with the old price ID across all subscriptions
+	// Validate that the new price has a start date
+	if newPrice.StartDate == nil {
+		return nil, ierr.NewError("new price version must have a start date").
+			WithHint("The new price version must have a start_date to create a line item version").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Find all existing line items with the old price ID
 	lineItems, err := s.SubscriptionLineItemRepo.GetByPriceID(ctx, req.OldPriceVersionID)
 	if err != nil {
 		return nil, err
@@ -3419,9 +3425,6 @@ func (s *subscriptionService) CreateSubscriptionLineItemVersion(ctx context.Cont
 	if len(lineItems) == 0 {
 		return nil, ierr.NewError("no line items found with old price version").
 			WithHint("No subscription line items found with the specified old price version ID").
-			WithReportableDetails(map[string]interface{}{
-				"old_price_version_id": req.OldPriceVersionID,
-			}).
 			Mark(ierr.ErrNotFound)
 	}
 
@@ -3448,11 +3451,28 @@ func (s *subscriptionService) CreateSubscriptionLineItemVersion(ctx context.Cont
 		// Process each line item that uses the old price version
 		for _, oldLineItem := range lineItems {
 
-			// Create a line item request DTO to reuse existing conversion logic
-			lineItemReq := &dto.SubscriptionLineItemRequest{
-				PriceID:     newPrice.ID,
-				Quantity:    oldLineItem.Quantity,
-				DisplayName: oldLineItem.DisplayName,
+			// Create new line item directly
+			newLineItem := &subscription.SubscriptionLineItem{
+				ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+				SubscriptionID:   oldLineItem.SubscriptionID,
+				CustomerID:       oldLineItem.CustomerID,
+				EntityID:         oldLineItem.EntityID,
+				EntityType:       oldLineItem.EntityType,
+				PlanDisplayName:  oldLineItem.PlanDisplayName,
+				PriceID:          newPrice.ID,
+				PriceType:        newPrice.Type,
+				MeterID:          newPrice.MeterID,
+				MeterDisplayName: oldLineItem.MeterDisplayName,
+				PriceUnitID:      newPrice.PriceUnitID,
+				PriceUnit:        newPrice.PriceUnit,
+				DisplayName:      oldLineItem.DisplayName,
+				Quantity:         oldLineItem.Quantity,
+				Currency:         newPrice.Currency,
+				BillingPeriod:    newPrice.BillingPeriod,
+				InvoiceCadence:   newPrice.InvoiceCadence,
+				TrialPeriod:      newPrice.TrialPeriod,
+				StartDate:        startDate,
+				EndDate:          time.Time{},
 				Metadata: map[string]string{
 					"versioned_from_line_item": oldLineItem.ID,
 					"versioned_from_price":     req.OldPriceVersionID,
@@ -3460,38 +3480,17 @@ func (s *subscriptionService) CreateSubscriptionLineItemVersion(ctx context.Cont
 					"versioned_at":             versionedAt,
 					"version_reason":           "price_version_change",
 				},
+				EnvironmentID: oldLineItem.EnvironmentID,
+				BaseModel:     types.GetDefaultBaseModel(txCtx),
 			}
 
-			// Convert to domain object using existing DTO method
-			newLineItem := lineItemReq.ToSubscriptionLineItem(txCtx)
-
-			// Set additional fields that are specific to versioning
-			newLineItem.SubscriptionID = oldLineItem.SubscriptionID
-			newLineItem.CustomerID = oldLineItem.CustomerID
-			newLineItem.EntityID = oldLineItem.EntityID
-			newLineItem.EntityType = oldLineItem.EntityType
-			newLineItem.PlanDisplayName = oldLineItem.PlanDisplayName
-			newLineItem.PriceType = newPrice.Type
-			newLineItem.MeterID = newPrice.MeterID
-			newLineItem.MeterDisplayName = oldLineItem.MeterDisplayName
-			newLineItem.PriceUnitID = newPrice.PriceUnitID
-			newLineItem.PriceUnit = newPrice.PriceUnit
-			newLineItem.Currency = newPrice.Currency
-			newLineItem.BillingPeriod = newPrice.BillingPeriod
-			newLineItem.InvoiceCadence = newPrice.InvoiceCadence
-			newLineItem.TrialPeriod = newPrice.TrialPeriod
-			newLineItem.StartDate = startDate
-			newLineItem.EndDate = time.Time{} // Will be set when next version is created
-
-			// Create the new line item
+			// Create new line item
 			if err := s.SubscriptionLineItemRepo.Create(txCtx, newLineItem); err != nil {
 				return err
 			}
 
 			// Update the end date of the old line item
 			oldLineItem.EndDate = endDate
-
-			// Ensure metadata map exists
 			if oldLineItem.Metadata == nil {
 				oldLineItem.Metadata = make(map[string]string)
 			}
@@ -3499,10 +3498,9 @@ func (s *subscriptionService) CreateSubscriptionLineItemVersion(ctx context.Cont
 			oldLineItem.Metadata["versioned_at"] = versionedAt
 
 			if err := s.SubscriptionLineItemRepo.Update(txCtx, oldLineItem); err != nil {
-				return fmt.Errorf("failed to update old line item: %w", err)
+				return err
 			}
 
-			// Add to updated items list
 			updatedItems = append(updatedItems, dto.SubscriptionLineItemVersionUpdate{
 				SubscriptionID: oldLineItem.SubscriptionID,
 				OldLineItem:    &dto.SubscriptionLineItemResponse{SubscriptionLineItem: oldLineItem},
@@ -3517,17 +3515,13 @@ func (s *subscriptionService) CreateSubscriptionLineItemVersion(ctx context.Cont
 		return nil, err
 	}
 
-	// Create response after successful transaction
-	response := &dto.CreateSubscriptionLineItemVersionResponse{
-		ProcessedCount: len(lineItems),
-		UpdatedItems:   updatedItems,
-	}
-
 	s.Logger.Infow("created subscription line item versions",
 		"old_price_version_id", req.OldPriceVersionID,
 		"new_price_version_id", req.NewPriceVersionID,
-		"total_line_items_found", len(lineItems),
 		"processed_count", len(updatedItems))
 
-	return response, nil
+	return &dto.CreateSubscriptionLineItemVersionResponse{
+		ProcessedCount: len(lineItems),
+		UpdatedItems:   updatedItems,
+	}, nil
 }
