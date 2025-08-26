@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -15,6 +16,8 @@ import (
 type PriceService interface {
 	CreatePrice(ctx context.Context, req dto.CreatePriceRequest) (*dto.PriceResponse, error)
 	CreateBulkPrice(ctx context.Context, req dto.CreateBulkPriceRequest) (*dto.CreateBulkPriceResponse, error)
+	CreatePriceVersion(ctx context.Context, req dto.CreatePriceVersionRequest) (*dto.PriceVersionResponse, error)
+	CreateBulkPriceVersion(ctx context.Context, req dto.CreateBulkPriceVersionRequest) (*dto.CreateBulkPriceVersionResponse, error)
 	GetPrice(ctx context.Context, id string) (*dto.PriceResponse, error)
 	GetPricesByPlanID(ctx context.Context, planID string) (*dto.ListPricesResponse, error)
 	GetPricesBySubscriptionID(ctx context.Context, subscriptionID string) (*dto.ListPricesResponse, error)
@@ -1027,4 +1030,103 @@ func (s *priceService) CalculateCostSheetPrice(ctx context.Context, price *price
 	// For now, we'll use the same calculation as CalculateCost
 	// In the future, we can add costsheet-specific pricing rules here
 	return s.CalculateCost(ctx, price, quantity)
+}
+
+// CreatePriceVersion creates a new version of an existing price
+func (s *priceService) CreatePriceVersion(ctx context.Context, req dto.CreatePriceVersionRequest) (*dto.PriceVersionResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Get the existing price
+	existingPrice, err := s.PriceRepo.Get(ctx, req.PreviousPriceID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Validate that the existing price is not archived
+	if existingPrice.Status == types.StatusArchived || (existingPrice.EndDate != nil && existingPrice.EndDate.Before(time.Now().UTC())) {
+		return nil, ierr.NewError("cannot create version of expired price").
+			WithHint("The existing price has been expired and cannot be versioned").
+			WithReportableDetails(map[string]interface{}{
+				"previous_price_id": req.PreviousPriceID,
+				"status":            existingPrice.Status,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Use transaction to ensure atomicity
+	var response *dto.PriceVersionResponse
+	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		// Create new price version
+		newPrice, err := req.ToPrice(txCtx, existingPrice)
+		if err != nil {
+			return err
+		}
+
+		// Create the new price
+		if err := s.PriceRepo.Create(txCtx, newPrice); err != nil {
+			return err
+		}
+
+		// Update the end date of the previous price to the start date of the new price
+		if newPrice.StartDate != nil {
+			// Set end date to 1 second before the new price starts
+			endDate := newPrice.StartDate.Add(-time.Second)
+			existingPrice.EndDate = &endDate
+
+			if err := s.PriceRepo.Update(txCtx, existingPrice); err != nil {
+				return err
+			}
+		}
+
+		// Create response
+		priceResponse := &dto.PriceResponse{Price: newPrice}
+
+		response = &dto.PriceVersionResponse{
+			Price: priceResponse,
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return response, nil
+}
+
+// CreateBulkPriceVersion creates multiple price versions in bulk
+func (s *priceService) CreateBulkPriceVersion(ctx context.Context, req dto.CreateBulkPriceVersionRequest) (*dto.CreateBulkPriceVersionResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	var response *dto.CreateBulkPriceVersionResponse
+
+	// Use transaction to ensure all price versions are created or none
+	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		response = &dto.CreateBulkPriceVersionResponse{
+			Items: make([]*dto.PriceVersionResponse, 0),
+		}
+
+		for _, versionReq := range req.Items {
+			// Reuse the existing CreatePriceVersion method
+			versionResponse, err := s.CreatePriceVersion(txCtx, versionReq)
+			if err != nil {
+				return err
+			}
+
+			response.Items = append(response.Items, versionResponse)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return response, nil
 }

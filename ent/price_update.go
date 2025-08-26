@@ -506,6 +506,46 @@ func (pu *PriceUpdate) ClearParentPriceID() *PriceUpdate {
 	return pu
 }
 
+// SetStartDate sets the "start_date" field.
+func (pu *PriceUpdate) SetStartDate(t time.Time) *PriceUpdate {
+	pu.mutation.SetStartDate(t)
+	return pu
+}
+
+// SetNillableStartDate sets the "start_date" field if the given value is not nil.
+func (pu *PriceUpdate) SetNillableStartDate(t *time.Time) *PriceUpdate {
+	if t != nil {
+		pu.SetStartDate(*t)
+	}
+	return pu
+}
+
+// ClearStartDate clears the value of the "start_date" field.
+func (pu *PriceUpdate) ClearStartDate() *PriceUpdate {
+	pu.mutation.ClearStartDate()
+	return pu
+}
+
+// SetEndDate sets the "end_date" field.
+func (pu *PriceUpdate) SetEndDate(t time.Time) *PriceUpdate {
+	pu.mutation.SetEndDate(t)
+	return pu
+}
+
+// SetNillableEndDate sets the "end_date" field if the given value is not nil.
+func (pu *PriceUpdate) SetNillableEndDate(t *time.Time) *PriceUpdate {
+	if t != nil {
+		pu.SetEndDate(*t)
+	}
+	return pu
+}
+
+// ClearEndDate clears the value of the "end_date" field.
+func (pu *PriceUpdate) ClearEndDate() *PriceUpdate {
+	pu.mutation.ClearEndDate()
+	return pu
+}
+
 // AddCostsheetIDs adds the "costsheet" edge to the Costsheet entity by IDs.
 func (pu *PriceUpdate) AddCostsheetIDs(ids ...string) *PriceUpdate {
 	pu.mutation.AddCostsheetIDs(ids...)
@@ -824,6 +864,18 @@ func (pu *PriceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if pu.mutation.ParentPriceIDCleared() {
 		_spec.ClearField(price.FieldParentPriceID, field.TypeString)
+	}
+	if value, ok := pu.mutation.StartDate(); ok {
+		_spec.SetField(price.FieldStartDate, field.TypeTime, value)
+	}
+	if pu.mutation.StartDateCleared() {
+		_spec.ClearField(price.FieldStartDate, field.TypeTime)
+	}
+	if value, ok := pu.mutation.EndDate(); ok {
+		_spec.SetField(price.FieldEndDate, field.TypeTime, value)
+	}
+	if pu.mutation.EndDateCleared() {
+		_spec.ClearField(price.FieldEndDate, field.TypeTime)
 	}
 	if pu.mutation.CostsheetCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1393,6 +1445,46 @@ func (puo *PriceUpdateOne) ClearParentPriceID() *PriceUpdateOne {
 	return puo
 }
 
+// SetStartDate sets the "start_date" field.
+func (puo *PriceUpdateOne) SetStartDate(t time.Time) *PriceUpdateOne {
+	puo.mutation.SetStartDate(t)
+	return puo
+}
+
+// SetNillableStartDate sets the "start_date" field if the given value is not nil.
+func (puo *PriceUpdateOne) SetNillableStartDate(t *time.Time) *PriceUpdateOne {
+	if t != nil {
+		puo.SetStartDate(*t)
+	}
+	return puo
+}
+
+// ClearStartDate clears the value of the "start_date" field.
+func (puo *PriceUpdateOne) ClearStartDate() *PriceUpdateOne {
+	puo.mutation.ClearStartDate()
+	return puo
+}
+
+// SetEndDate sets the "end_date" field.
+func (puo *PriceUpdateOne) SetEndDate(t time.Time) *PriceUpdateOne {
+	puo.mutation.SetEndDate(t)
+	return puo
+}
+
+// SetNillableEndDate sets the "end_date" field if the given value is not nil.
+func (puo *PriceUpdateOne) SetNillableEndDate(t *time.Time) *PriceUpdateOne {
+	if t != nil {
+		puo.SetEndDate(*t)
+	}
+	return puo
+}
+
+// ClearEndDate clears the value of the "end_date" field.
+func (puo *PriceUpdateOne) ClearEndDate() *PriceUpdateOne {
+	puo.mutation.ClearEndDate()
+	return puo
+}
+
 // AddCostsheetIDs adds the "costsheet" edge to the Costsheet entity by IDs.
 func (puo *PriceUpdateOne) AddCostsheetIDs(ids ...string) *PriceUpdateOne {
 	puo.mutation.AddCostsheetIDs(ids...)
@@ -1741,6 +1833,18 @@ func (puo *PriceUpdateOne) sqlSave(ctx context.Context) (_node *Price, err error
 	}
 	if puo.mutation.ParentPriceIDCleared() {
 		_spec.ClearField(price.FieldParentPriceID, field.TypeString)
+	}
+	if value, ok := puo.mutation.StartDate(); ok {
+		_spec.SetField(price.FieldStartDate, field.TypeTime, value)
+	}
+	if puo.mutation.StartDateCleared() {
+		_spec.ClearField(price.FieldStartDate, field.TypeTime)
+	}
+	if value, ok := puo.mutation.EndDate(); ok {
+		_spec.SetField(price.FieldEndDate, field.TypeTime, value)
+	}
+	if puo.mutation.EndDateCleared() {
+		_spec.ClearField(price.FieldEndDate, field.TypeTime)
 	}
 	if puo.mutation.CostsheetCleared() {
 		edge := &sqlgraph.EdgeSpec{

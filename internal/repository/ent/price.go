@@ -75,6 +75,8 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 		SetPriceUnitTiers(p.ToPriceUnitTiers()).
 		SetTransformQuantity(types.TransformQuantity(p.TransformQuantity)).
 		SetLookupKey(p.LookupKey).
+		SetNillableStartDate(p.StartDate).
+		SetNillableEndDate(p.EndDate).
 		SetDescription(p.Description).
 		SetMetadata(map[string]string(p.Metadata)).
 		SetStatus(string(p.Status)).
@@ -279,6 +281,8 @@ func (r *priceRepository) Update(ctx context.Context, p *domainPrice.Price) erro
 		).
 		SetAmount(p.Amount.InexactFloat64()).
 		SetDisplayAmount(p.DisplayAmount).
+		SetNillableStartDate(p.StartDate).
+		SetNillableEndDate(p.EndDate).
 		SetPriceUnitType(string(p.PriceUnitType)).
 		SetType(string(p.Type)).
 		SetBillingPeriod(string(p.BillingPeriod)).

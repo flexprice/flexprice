@@ -191,6 +191,16 @@ func (Price) Fields() []ent.Field {
 			}).
 			Optional().
 			Nillable(),
+
+		// start_date is the start date of the price
+		field.Time("start_date").
+			Optional().
+			Nillable(),
+
+		// end_date is the end date of the price
+		field.Time("end_date").
+			Optional().
+			Nillable(),
 	}
 }
 

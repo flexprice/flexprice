@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/price"
 	priceDomain "github.com/flexprice/flexprice/internal/domain/price"
@@ -36,6 +37,8 @@ type CreatePriceRequest struct {
 	Tiers              []CreatePriceTier        `json:"tiers,omitempty"`
 	TransformQuantity  *price.TransformQuantity `json:"transform_quantity,omitempty"`
 	PriceUnitConfig    *PriceUnitConfig         `json:"price_unit_config,omitempty"`
+	StartDate          *time.Time               `json:"start_date,omitempty"`
+	EndDate            *time.Time               `json:"end_date,omitempty"`
 }
 
 type PriceUnitConfig struct {
@@ -569,6 +572,11 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 		r.EntityID = r.PlanID
 	}
 
+	if r.StartDate == nil {
+		now := time.Now().UTC()
+		r.StartDate = &now
+	}
+
 	price := &priceDomain.Price{
 		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
 		Amount:             amount,
@@ -591,6 +599,8 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 		TransformQuantity:  transformQuantity,
 		EntityType:         r.EntityType,
 		EntityID:           r.EntityID,
+		StartDate:          r.StartDate,
+		EndDate:            r.EndDate,
 		EnvironmentID:      types.GetEnvironmentID(ctx),
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
@@ -667,4 +677,161 @@ type CostBreakup struct {
 	TierUnitAmount decimal.Decimal
 	// FinalCost is the total cost for the quantity
 	FinalCost decimal.Decimal
+}
+
+// CreatePriceVersionRequest represents a request to create a new version of a price
+type CreatePriceVersionRequest struct {
+	PreviousPriceID string            `json:"previous_price_id" validate:"required"`
+	Amount          string            `json:"amount,omitempty"`
+	Tiers           []CreatePriceTier `json:"tiers,omitempty"`
+	StartDate       *time.Time        `json:"start_date,omitempty"`
+	EndDate         *time.Time        `json:"end_date,omitempty"`
+	Metadata        map[string]string `json:"metadata,omitempty"`
+}
+
+// Validate validates the price version creation request
+func (r *CreatePriceVersionRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return ierr.WithError(err).
+			WithHint("Invalid price version creation request").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Validate that either Amount or Tiers is provided, but not both
+	hasAmount := r.Amount != ""
+	hasTiers := len(r.Tiers) > 0
+
+	if !hasAmount && !hasTiers {
+		return ierr.NewError("either amount or tiers must be provided").
+			WithHint("Please provide either a flat amount or tiered pricing structure").
+			Mark(ierr.ErrValidation)
+	}
+
+	if hasAmount && hasTiers {
+		return ierr.NewError("cannot provide both amount and tiers").
+			WithHint("Use either flat pricing (amount) or tiered pricing (tiers), not both").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Validate start date is not in the past (allow current time for immediate activation)
+	if r.StartDate != nil && r.StartDate.Before(time.Now().Add(-time.Minute)) {
+		return ierr.NewError("start_date cannot be in the past").
+			WithHint("Start date must be current time or in the future").
+			WithReportableDetails(map[string]interface{}{
+				"start_date": r.StartDate,
+				"now":        time.Now(),
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Validate end date is after start date if provided
+	if r.EndDate != nil && r.StartDate != nil && !r.EndDate.After(*r.StartDate) {
+		return ierr.NewError("end_date must be after start_date").
+			WithHint("End date must be after the start date").
+			WithReportableDetails(map[string]interface{}{
+				"start_date": r.StartDate,
+				"end_date":   r.EndDate,
+			}).
+			Mark(ierr.ErrValidation)
+	} else if r.EndDate != nil && r.StartDate == nil {
+		return ierr.NewError("start_date is required when end_date is provided").
+			WithHint("Start date must be provided when end date is provided").
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}
+
+// ToPrice converts the CreatePriceVersionRequest to a domain Price
+// It converts existing price to CreatePriceRequest, merges changes, and validates
+func (r *CreatePriceVersionRequest) ToPrice(ctx context.Context, existingPrice *priceDomain.Price) (*priceDomain.Price, error) {
+	// Validate that existing price is provided
+	if existingPrice == nil {
+		return nil, ierr.NewError("existing price is required for versioning").
+			WithHint("Please provide the existing price to create a new version").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Convert existing price to CreatePriceRequest DTO
+	createPriceReq := &CreatePriceRequest{
+		Amount:             r.Amount,
+		Tiers:              r.Tiers,
+		Currency:           existingPrice.Currency,
+		Type:               existingPrice.Type,
+		PriceUnitType:      existingPrice.PriceUnitType,
+		BillingPeriod:      existingPrice.BillingPeriod,
+		BillingPeriodCount: existingPrice.BillingPeriodCount,
+		BillingModel:       existingPrice.BillingModel,
+		BillingCadence:     existingPrice.BillingCadence,
+		InvoiceCadence:     existingPrice.InvoiceCadence,
+		TrialPeriod:        existingPrice.TrialPeriod,
+		TierMode:           existingPrice.TierMode,
+		MeterID:            existingPrice.MeterID,
+		// Don't copy LookupKey for price versions to avoid constraint violations
+		// LookupKey:          existingPrice.LookupKey,
+		Description: existingPrice.Description,
+		EntityType:  existingPrice.EntityType,
+		EntityID:    existingPrice.EntityID,
+		Metadata:    map[string]string(existingPrice.Metadata),
+		StartDate:   r.StartDate,
+		EndDate:     r.EndDate,
+	}
+
+	if err := createPriceReq.Validate(); err != nil {
+		return nil, err
+	}
+
+	price, err := createPriceReq.ToPrice(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return price, nil
+}
+
+type PriceVersionResponse struct {
+	Price *PriceResponse `json:"price"`
+}
+
+type CreateBulkPriceVersionRequest struct {
+	Items []CreatePriceVersionRequest `json:"items" validate:"required,min=1,max=100"`
+}
+
+func (r *CreateBulkPriceVersionRequest) Validate() error {
+	if len(r.Items) == 0 {
+		return ierr.NewError("at least one price version is required").
+			WithHint("Please provide at least one price version to create").
+			Mark(ierr.ErrValidation)
+	}
+
+	if len(r.Items) > 100 {
+		return ierr.NewError("too many price versions in bulk request").
+			WithHint("Maximum 100 price versions allowed per bulk request").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Validate each individual price version
+	for i, priceVersion := range r.Items {
+		if err := priceVersion.Validate(); err != nil {
+			return ierr.WithError(err).
+				WithHint(fmt.Sprintf("Price version at index %d is invalid", i)).
+				WithReportableDetails(map[string]interface{}{
+					"index":             i,
+					"price_version":     priceVersion,
+					"previous_price_id": priceVersion.PreviousPriceID,
+					"start_date":        priceVersion.StartDate,
+					"end_date":          priceVersion.EndDate,
+					"amount":            priceVersion.Amount,
+					"tiers":             priceVersion.Tiers,
+					"metadata":          priceVersion.Metadata,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	return nil
+}
+
+type CreateBulkPriceVersionResponse struct {
+	Items []*PriceVersionResponse `json:"items"`
 }

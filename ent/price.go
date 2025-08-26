@@ -90,6 +90,10 @@ type Price struct {
 	EntityID *string `json:"entity_id,omitempty"`
 	// ParentPriceID holds the value of the "parent_price_id" field.
 	ParentPriceID *string `json:"parent_price_id,omitempty"`
+	// StartDate holds the value of the "start_date" field.
+	StartDate *time.Time `json:"start_date,omitempty"`
+	// EndDate holds the value of the "end_date" field.
+	EndDate *time.Time `json:"end_date,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the PriceQuery when eager-loading is set.
 	Edges        PriceEdges `json:"edges"`
@@ -141,7 +145,7 @@ func (*Price) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullInt64)
 		case price.FieldID, price.FieldTenantID, price.FieldStatus, price.FieldCreatedBy, price.FieldUpdatedBy, price.FieldEnvironmentID, price.FieldCurrency, price.FieldDisplayAmount, price.FieldPriceUnitType, price.FieldPriceUnitID, price.FieldPriceUnit, price.FieldDisplayPriceUnitAmount, price.FieldType, price.FieldBillingPeriod, price.FieldBillingModel, price.FieldBillingCadence, price.FieldInvoiceCadence, price.FieldMeterID, price.FieldTierMode, price.FieldLookupKey, price.FieldDescription, price.FieldEntityType, price.FieldEntityID, price.FieldParentPriceID:
 			values[i] = new(sql.NullString)
-		case price.FieldCreatedAt, price.FieldUpdatedAt:
+		case price.FieldCreatedAt, price.FieldUpdatedAt, price.FieldStartDate, price.FieldEndDate:
 			values[i] = new(sql.NullTime)
 		case price.ForeignKeys[0]: // addon_prices
 			values[i] = new(sql.NullString)
@@ -391,6 +395,20 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 				pr.ParentPriceID = new(string)
 				*pr.ParentPriceID = value.String
 			}
+		case price.FieldStartDate:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field start_date", values[i])
+			} else if value.Valid {
+				pr.StartDate = new(time.Time)
+				*pr.StartDate = value.Time
+			}
+		case price.FieldEndDate:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field end_date", values[i])
+			} else if value.Valid {
+				pr.EndDate = new(time.Time)
+				*pr.EndDate = value.Time
+			}
 		case price.ForeignKeys[0]:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field addon_prices", values[i])
@@ -557,6 +575,16 @@ func (pr *Price) String() string {
 	if v := pr.ParentPriceID; v != nil {
 		builder.WriteString("parent_price_id=")
 		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := pr.StartDate; v != nil {
+		builder.WriteString("start_date=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := pr.EndDate; v != nil {
+		builder.WriteString("end_date=")
+		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteByte(')')
 	return builder.String()

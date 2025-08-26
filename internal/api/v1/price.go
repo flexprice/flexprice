@@ -206,3 +206,61 @@ func (h *PriceHandler) DeletePrice(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "price deleted successfully"})
 }
+
+// @Summary Create a new price version
+// @Description Create a new version of an existing price with updated pricing
+// @Tags Prices
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param version body dto.CreatePriceVersionRequest true "Price version configuration"
+// @Success 201 {object} dto.PriceVersionResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /prices/versions [post]
+func (h *PriceHandler) CreatePriceVersion(c *gin.Context) {
+	var req dto.CreatePriceVersionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.service.CreatePriceVersion(c.Request.Context(), req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, resp)
+}
+
+// @Summary Create multiple price versions in bulk
+// @Description Create multiple price versions with the specified configurations
+// @Tags Prices
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param versions body dto.CreateBulkPriceVersionRequest true "Bulk price version configuration"
+// @Success 201 {object} dto.CreateBulkPriceVersionResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /prices/versions/bulk [post]
+func (h *PriceHandler) CreateBulkPriceVersion(c *gin.Context) {
+	var req dto.CreateBulkPriceVersionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.service.CreateBulkPriceVersion(c.Request.Context(), req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, resp)
+}
