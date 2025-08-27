@@ -534,6 +534,7 @@ type SubscriptionUpdatePeriodResponseItem struct {
 type CreateSubscriptionLineItemVersionRequest struct {
 	OldPriceVersionID string `json:"old_price_version_id" validate:"required"`
 	NewPriceVersionID string `json:"new_price_version_id" validate:"required"`
+	DryRun            bool   `json:"dry_run,omitempty"`
 }
 
 // Validate validates the subscription line item version creation request

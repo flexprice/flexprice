@@ -3439,7 +3439,7 @@ func (s *subscriptionService) CreateSubscriptionLineItemVersion(ctx context.Cont
 
 	// Pre-calculate common values to avoid repeated computations
 	startDate := *newPrice.StartDate
-	endDate := startDate.Add(-time.Second)
+	endDate := startDate
 	versionedAt := time.Now().UTC().Format(time.RFC3339)
 
 	// Pre-allocate slice for better memory efficiency
@@ -3525,44 +3525,6 @@ func (s *subscriptionService) CreateSubscriptionLineItemVersion(ctx context.Cont
 	}, nil
 }
 
-// processVersionUpdate handles a single price version update
-func (s *subscriptionService) processVersionUpdate(ctx context.Context, mapping dto.PriceVersionMapping, isDryRun bool) error {
-	if !isDryRun {
-		_, err := s.CreateSubscriptionLineItemVersion(ctx, dto.CreateSubscriptionLineItemVersionRequest{
-			OldPriceVersionID: mapping.OldPriceID,
-			NewPriceVersionID: mapping.NewPriceID,
-		})
-		if err != nil {
-			s.Logger.Errorw("failed to create subscription line item version",
-				"old_price_id", mapping.OldPriceID,
-				"new_price_id", mapping.NewPriceID,
-				"error", err)
-			return err
-		}
-	}
-	return nil
-}
-
-// The function implements a streamlined price update process:
-//
-//  1. Validation Phase:
-//     - Validates input parameters
-//     - Initializes response structure
-//
-//  2. Discovery Phase:
-//     - Identifies all affected subscription line items
-//     - Maps old price IDs to their new versions
-//
-//  3. Processing Phase:
-//     - Processes line items in configurable batch sizes
-//     - Each batch runs in its own transaction for data consistency
-//     - Supports both actual updates and dry-run simulation
-//     - Direct processing without unnecessary grouping
-//
-//  4. Monitoring:
-//     - Tracks success/failure counts per line item
-//     - Measures processing time
-//     - Provides detailed logging for observability
 func (s *subscriptionService) SyncPriceChangesToSubscriptions(ctx context.Context, req dto.SyncPriceChangesToSubscriptionsRequest) (*dto.SyncPriceChangesToSubscriptionsResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
@@ -3592,9 +3554,21 @@ func (s *subscriptionService) SyncPriceChangesToSubscriptions(ctx context.Contex
 		}
 
 		batchMappings := req.PriceVersionMappings[i:end]
+
 		err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+
 			for _, mapping := range batchMappings {
-				if err := s.processVersionUpdate(txCtx, mapping, req.DryRun); err != nil {
+				_, err := s.CreateSubscriptionLineItemVersion(txCtx, dto.CreateSubscriptionLineItemVersionRequest{
+					OldPriceVersionID: mapping.OldPriceID,
+					NewPriceVersionID: mapping.NewPriceID,
+					DryRun:            req.DryRun,
+				})
+
+				if err != nil {
+					s.Logger.Errorw("failed to create subscription line item version",
+						"old_price_id", mapping.OldPriceID,
+						"new_price_id", mapping.NewPriceID,
+						"error", err)
 					return err
 				}
 				response.TotalSuccess++
