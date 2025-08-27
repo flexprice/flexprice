@@ -772,7 +772,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*SyncPlanP
 		}
 
 		// Get existing line items for the subscription
-		lineItems, err := lineItemRepo.ListBySubscription(ctx, sub.ID)
+		lineItems, err := lineItemRepo.ListBySubscription(ctx, sub)
 		if err != nil {
 			s.Logger.Infow("Failed to get line items for subscription", "subscription_id", sub.ID, "error", err)
 			continue

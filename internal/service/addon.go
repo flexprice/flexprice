@@ -82,9 +82,7 @@ func (s *addonService) GetAddon(ctx context.Context, id string) (*dto.AddonRespo
 
 	if len(prices.Items) > 0 {
 		response.Prices = make([]*dto.PriceResponse, len(prices.Items))
-		for i, price := range prices.Items {
-			response.Prices[i] = price
-		}
+		copy(response.Prices, prices.Items)
 	}
 
 	// Get entitlements for this addon
