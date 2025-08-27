@@ -3525,92 +3525,22 @@ func (s *subscriptionService) CreateSubscriptionLineItemVersion(ctx context.Cont
 	}, nil
 }
 
-// The function performs the following steps:
-//  1. Creates a map of old price IDs to their new version information
-//  2. For each price mapping, fetches all subscription line items using that price
-//  3. Aggregates all affected line items into a single slice
-func (s *subscriptionService) collectAffectedLineItems(ctx context.Context, mappings []dto.PriceVersionMapping) ([]*subscription.SubscriptionLineItem, map[string]dto.PriceVersionMapping, error) {
-	allAffectedLineItems := make([]*subscription.SubscriptionLineItem, 0)
-	priceMappingMap := make(map[string]dto.PriceVersionMapping)
-
-	for _, mapping := range mappings {
-		priceMappingMap[mapping.OldPriceID] = mapping
-
-		affectedLineItems, err := s.SubscriptionLineItemRepo.GetByPriceID(ctx, mapping.OldPriceID)
+// processVersionUpdate handles a single price version update
+func (s *subscriptionService) processVersionUpdate(ctx context.Context, mapping dto.PriceVersionMapping, isDryRun bool) error {
+	if !isDryRun {
+		_, err := s.CreateSubscriptionLineItemVersion(ctx, dto.CreateSubscriptionLineItemVersionRequest{
+			OldPriceVersionID: mapping.OldPriceID,
+			NewPriceVersionID: mapping.NewPriceID,
+		})
 		if err != nil {
-			s.Logger.Errorw("failed to get line items for price",
+			s.Logger.Errorw("failed to create subscription line item version",
 				"old_price_id", mapping.OldPriceID,
+				"new_price_id", mapping.NewPriceID,
 				"error", err)
-			return nil, nil, err
-		}
-
-		allAffectedLineItems = append(allAffectedLineItems, affectedLineItems...)
-	}
-
-	return allAffectedLineItems, priceMappingMap, nil
-}
-
-// createDryRunResult creates a simulated result for price change without making actual changes
-func (s *subscriptionService) createDryRunResult(lineItem *subscription.SubscriptionLineItem, newPriceID string) *dto.SubscriptionPriceSyncResult {
-	return &dto.SubscriptionPriceSyncResult{
-		SubscriptionID:   lineItem.SubscriptionID,
-		CustomerID:       lineItem.CustomerID,
-		LineItemsUpdated: 1,
-		LineItemUpdates: []dto.SubscriptionLineItemVersionUpdate{{
-			SubscriptionID: lineItem.SubscriptionID,
-			OldLineItem:    &dto.SubscriptionLineItemResponse{SubscriptionLineItem: lineItem},
-			NewLineItem: &dto.SubscriptionLineItemResponse{SubscriptionLineItem: &subscription.SubscriptionLineItem{
-				ID:        "dry_run_simulation",
-				PriceID:   newPriceID,
-				StartDate: time.Now().UTC(),
-				Metadata:  map[string]string{"dry_run": "true"},
-			}},
-		}},
-		Success: true,
-	}
-}
-
-// createSuccessResult creates a result for successful price change
-func (s *subscriptionService) createSuccessResult(lineItem *subscription.SubscriptionLineItem, update dto.SubscriptionLineItemVersionUpdate) *dto.SubscriptionPriceSyncResult {
-	return &dto.SubscriptionPriceSyncResult{
-		SubscriptionID:   lineItem.SubscriptionID,
-		CustomerID:       lineItem.CustomerID,
-		LineItemsUpdated: 1,
-		LineItemUpdates:  []dto.SubscriptionLineItemVersionUpdate{update},
-		Success:          true,
-	}
-}
-
-// processLineItem handles the price change for a single subscription line item
-func (s *subscriptionService) processLineItem(ctx context.Context, lineItem *subscription.SubscriptionLineItem, mapping dto.PriceVersionMapping,
-	subscriptionID string, isDryRun bool) (*dto.SubscriptionPriceSyncResult, error) {
-	if isDryRun {
-		return s.createDryRunResult(lineItem, mapping.NewPriceID), nil
-	}
-
-	versionResp, err := s.CreateSubscriptionLineItemVersion(ctx, dto.CreateSubscriptionLineItemVersionRequest{
-		OldPriceVersionID: mapping.OldPriceID,
-		NewPriceVersionID: mapping.NewPriceID,
-	})
-	if err != nil {
-		s.Logger.Errorw("failed to create subscription line item version",
-			"old_price_id", mapping.OldPriceID,
-			"new_price_id", mapping.NewPriceID,
-			"subscription_id", subscriptionID,
-			"error", err)
-		return nil, err
-	}
-
-	// Find and return the update for this specific subscription
-	if versionResp != nil {
-		for _, update := range versionResp.UpdatedItems {
-			if update.SubscriptionID == subscriptionID {
-				return s.createSuccessResult(lineItem, update), nil
-			}
+			return err
 		}
 	}
-
-	return nil, nil
+	return nil
 }
 
 // The function implements a streamlined price update process:
@@ -3639,88 +3569,49 @@ func (s *subscriptionService) SyncPriceChangesToSubscriptions(ctx context.Contex
 	}
 
 	response := &dto.SyncPriceChangesToSubscriptionsResponse{
-		TotalSubscriptionsProcessed: 0,
-		TotalLineItemsUpdated:       0,
-		TotalSuccess:                0,
-		TotalFailed:                 0,
-		BatchesProcessed:            0,
-		Results:                     make([]*dto.SubscriptionPriceSyncResult, 0),
-		Errors:                      make([]dto.SubscriptionPriceSyncError, 0),
-		DryRun:                      req.DryRun,
-	}
-	allAffectedLineItems, priceMappingMap, err := s.collectAffectedLineItems(ctx, req.PriceVersionMappings)
-	if err != nil {
-		return nil, err
+		TotalSuccess: 0,
+		TotalFailed:  0,
+		DryRun:       req.DryRun,
 	}
 
-	if len(allAffectedLineItems) == 0 {
-		s.Logger.Infow("no line items found to update")
-		return response, nil
-	}
-
-	totalLineItems := len(allAffectedLineItems)
 	batchSize := req.BatchSize
 	if batchSize <= 0 {
 		batchSize = 100 // Default batch size
 	}
 
-	s.Logger.Infow("starting batch processing",
-		"total_line_items", totalLineItems,
+	totalMappings := len(req.PriceVersionMappings)
+	s.Logger.Infow("starting price version updates",
+		"total_mappings", totalMappings,
 		"batch_size", batchSize,
 		"dry_run", req.DryRun)
 
-	for i := 0; i < totalLineItems; i += batchSize {
+	for i := 0; i < totalMappings; i += batchSize {
 		end := i + batchSize
-		if end > totalLineItems {
-			end = totalLineItems
+		if end > totalMappings {
+			end = totalMappings
 		}
 
-		batchLineItems := allAffectedLineItems[i:end]
+		batchMappings := req.PriceVersionMappings[i:end]
 		err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
-			for _, lineItem := range batchLineItems {
-				mapping, exists := priceMappingMap[lineItem.PriceID]
-				if !exists {
-					continue
-				}
-
-				result, err := s.processLineItem(txCtx, lineItem, mapping, lineItem.SubscriptionID, req.DryRun)
-				if err != nil {
+			for _, mapping := range batchMappings {
+				if err := s.processVersionUpdate(txCtx, mapping, req.DryRun); err != nil {
 					return err
 				}
-
-				if result != nil {
-					response.Results = append(response.Results, result)
-					response.TotalSubscriptionsProcessed++
-					response.TotalLineItemsUpdated++
-					response.TotalSuccess++
-				}
+				response.TotalSuccess++
 			}
 			return nil
 		})
 
 		if err != nil {
-			s.Logger.Errorw("failed to process batch",
-				"batch_number", response.BatchesProcessed+1,
+			s.Logger.Errorw("failed to process version updates",
 				"error", err)
-
-			response.Errors = append(response.Errors, dto.SubscriptionPriceSyncError{
-				Message:    "Failed to process batch",
-				Details:    err.Error(),
-				BatchIndex: response.BatchesProcessed,
-			})
-
-			response.TotalFailed += len(batchLineItems)
+			response.TotalFailed += len(batchMappings)
 		}
-
-		response.BatchesProcessed++
 	}
 
-	s.Logger.Infow("completed syncing price changes to subscriptions",
-		"total_subscriptions_processed", response.TotalSubscriptionsProcessed,
-		"total_line_items_updated", response.TotalLineItemsUpdated,
+	s.Logger.Infow("completed syncing price changes",
 		"total_success", response.TotalSuccess,
 		"total_failed", response.TotalFailed,
-		"batches_processed", response.BatchesProcessed,
 		"dry_run", req.DryRun)
 
 	return response, nil
