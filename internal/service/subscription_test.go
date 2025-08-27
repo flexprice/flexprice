@@ -1448,6 +1448,154 @@ func (s *SubscriptionServiceSuite) TestGetUsageBySubscriptionWithCommitment() {
 	})
 }
 
+func (s *SubscriptionServiceSuite) TestGetWithLineItems() {
+	// Create a test subscription with line items having different end dates
+	now := time.Now().UTC()
+	testSub := &subscription.Subscription{
+		ID:                 "sub_test_line_items",
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		StartDate:          now.Add(-30 * 24 * time.Hour),
+		CurrentPeriodStart: now.Add(-5 * 24 * time.Hour),
+		CurrentPeriodEnd:   now.Add(25 * 24 * time.Hour),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
+	}
+
+	// Create line items with different end dates
+	lineItems := []*subscription.SubscriptionLineItem{
+		{
+			// Line item with no end date (should be included)
+			ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+			SubscriptionID: testSub.ID,
+			CustomerID:     testSub.CustomerID,
+			EntityID:       s.testData.plan.ID,
+			EntityType:     types.SubscriptionLineItemEntitiyTypePlan,
+			PriceID:        s.testData.prices.apiCalls.ID,
+			PriceType:      s.testData.prices.apiCalls.Type,
+			MeterID:        s.testData.meters.apiCalls.ID,
+			DisplayName:    "Active Line Item - No End Date",
+			Currency:       testSub.Currency,
+			BillingPeriod:  testSub.BillingPeriod,
+			BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
+		},
+		{
+			// Line item with end date after current period start (should be included)
+			ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+			SubscriptionID: testSub.ID,
+			CustomerID:     testSub.CustomerID,
+			EntityID:       s.testData.plan.ID,
+			EntityType:     types.SubscriptionLineItemEntitiyTypePlan,
+			PriceID:        s.testData.prices.storage.ID,
+			PriceType:      s.testData.prices.storage.Type,
+			MeterID:        s.testData.meters.storage.ID,
+			DisplayName:    "Active Line Item - Future End Date",
+			Currency:       testSub.Currency,
+			BillingPeriod:  testSub.BillingPeriod,
+			EndDate:        now.Add(10 * 24 * time.Hour),
+			BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
+		},
+		{
+			// Line item with end date before current period start (should NOT be included)
+			ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+			SubscriptionID: testSub.ID,
+			CustomerID:     testSub.CustomerID,
+			EntityID:       s.testData.plan.ID,
+			EntityType:     types.SubscriptionLineItemEntitiyTypePlan,
+			PriceID:        s.testData.prices.storageArchive.ID,
+			PriceType:      s.testData.prices.storageArchive.Type,
+			MeterID:        s.testData.meters.storageArchive.ID,
+			DisplayName:    "Inactive Line Item - Past End Date",
+			Currency:       testSub.Currency,
+			BillingPeriod:  testSub.BillingPeriod,
+			EndDate:        now.Add(-10 * 24 * time.Hour),
+			BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
+		},
+	}
+
+	// Create subscription with line items
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(s.GetContext(), testSub, lineItems))
+
+	// Test cases
+	tests := []struct {
+		name           string
+		subscriptionID string
+		wantLineItems  int
+		wantErr        bool
+		description    string
+	}{
+		{
+			name:           "get_subscription_with_filtered_line_items",
+			subscriptionID: testSub.ID,
+			wantLineItems:  2, // Only the first two line items should be included
+			wantErr:        false,
+			description:    "Should return only line items with no end date or end date after current period start",
+		},
+		{
+			name:           "get_non_existent_subscription",
+			subscriptionID: "non_existent",
+			wantLineItems:  0,
+			wantErr:        true,
+			description:    "Should return error for non-existent subscription",
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			sub, items, err := s.GetStores().SubscriptionRepo.GetWithLineItems(s.GetContext(), tt.subscriptionID)
+			if tt.wantErr {
+				s.Error(err)
+				s.Nil(sub)
+				s.Nil(items)
+				return
+			}
+
+			s.NoError(err)
+			s.NotNil(sub)
+			s.NotNil(items)
+			s.Len(items, tt.wantLineItems, "Expected %d line items, got %d", tt.wantLineItems, len(items))
+
+			// Verify that only the correct line items are included
+			if tt.wantLineItems > 0 {
+				// Check that no expired line items are included
+				for _, item := range items {
+					if !item.EndDate.IsZero() {
+						s.True(item.EndDate.After(sub.CurrentPeriodStart),
+							"Line item end date should be after subscription period start")
+					}
+				}
+
+				// Verify specific line items by checking their display names
+				foundNoEndDate := false
+				foundFutureEndDate := false
+				foundPastEndDate := false
+
+				for _, item := range items {
+					switch item.DisplayName {
+					case "Active Line Item - No End Date":
+						foundNoEndDate = true
+					case "Active Line Item - Future End Date":
+						foundFutureEndDate = true
+					case "Inactive Line Item - Past End Date":
+						foundPastEndDate = true
+					}
+				}
+
+				s.True(foundNoEndDate, "Should include line item with no end date")
+				s.True(foundFutureEndDate, "Should include line item with future end date")
+				s.False(foundPastEndDate, "Should not include line item with past end date")
+			}
+
+			// Log test results
+			s.T().Logf("Test: %s - Found %d line items, Description: %s",
+				tt.name, len(items), tt.description)
+		})
+	}
+}
+
 func (s *SubscriptionServiceSuite) TestSubscriptionWithEndDate() {
 	tests := []struct {
 		name        string
