@@ -310,9 +310,19 @@ func (s *InMemorySubscriptionStore) GetWithLineItems(ctx context.Context, id str
 	if err != nil {
 		return nil, nil, err
 	}
-	items := s.lineItems[id]
-	sub.LineItems = items
-	return sub, items, nil
+
+	// Get all line items for this subscription
+	allItems := s.lineItems[id]
+
+	// Filter line items based on end date criteria:
+	// - Include items with no end date
+	// - Include items with end date after subscription's current period start
+	filteredItems := lo.Filter(allItems, func(item *subscription.SubscriptionLineItem, _ int) bool {
+		return item.EndDate.IsZero() || item.EndDate.After(sub.CurrentPeriodStart)
+	})
+
+	sub.LineItems = filteredItems
+	return sub, filteredItems, nil
 }
 
 // CreatePause creates a new subscription pause
