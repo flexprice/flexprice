@@ -136,8 +136,8 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		{
 			price.POST("", handlers.Price.CreatePrice)
 			price.POST("/bulk", handlers.Price.CreateBulkPrice)
-			price.POST("/versions", handlers.Price.CreatePriceVersion)
-			price.POST("/versions/bulk", handlers.Price.CreateBulkPriceVersion)
+			price.POST("/update", handlers.Price.CreatePriceVersion)
+			price.POST("/update/bulk", handlers.Price.CreateBulkPriceVersion)
 			price.GET("", handlers.Price.GetPrices)
 			price.GET("/:id", handlers.Price.GetPrice)
 			price.PUT("/:id", handlers.Price.UpdatePrice)

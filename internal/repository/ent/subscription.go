@@ -693,18 +693,39 @@ func (r *subscriptionRepository) GetWithLineItems(ctx context.Context, id string
 			subscription.TenantID(types.GetTenantID(ctx)),
 			subscription.Status(string(types.StatusPublished)),
 		).
-		WithLineItems(func(q *ent.SubscriptionLineItemQuery) {
-			q.Where(
-				subscriptionlineitem.Status(string(types.StatusPublished)),
-			)
-		}).
 		Only(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
 		if ent.IsNotFound(err) {
 			return nil, nil, ierr.NewError("subscription not found").
-				WithHint("Subscription not found").
+				WithHintf("Subscription %s not found", id).
+				Mark(ierr.ErrNotFound)
+		}
+		return nil, nil, ierr.WithError(err).
+			WithHint("Failed to get subscription").
+			Mark(ierr.ErrDatabase)
+	}
+
+	subLineItems, err := client.SubscriptionLineItem.Query().
+		Where(
+			subscriptionlineitem.SubscriptionID(id),
+			subscriptionlineitem.Status(string(types.StatusPublished)),
+			subscriptionlineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
+			subscriptionlineitem.TenantID(types.GetTenantID(ctx)),
+
+			// end date filters 
+			subscriptionlineitem.Or(
+				subscriptionlineitem.EndDateGT(sub.CurrentPeriodStart),
+				subscriptionlineitem.EndDateIsNil(),
+			),
+		).All(ctx)
+
+	if err != nil {
+		SetSpanError(span, err)
+		if ent.IsNotFound(err) {
+			return nil, nil, ierr.NewError("subscription line items not found").
+				WithHintf("Subscription line items for subscription %s not found", id).
 				Mark(ierr.ErrNotFound)
 		}
 		return nil, nil, ierr.WithError(err).
@@ -712,8 +733,10 @@ func (r *subscriptionRepository) GetWithLineItems(ctx context.Context, id string
 			Mark(ierr.ErrDatabase)
 	}
 
+	lineItems := domainSub.GetLineItemFromEntList(subLineItems)
+
 	s := domainSub.GetSubscriptionFromEnt(sub)
-	s.LineItems = domainSub.GetLineItemFromEntList(sub.Edges.LineItems)
+	s.LineItems = lineItems
 
 	SetSpanSuccess(span)
 	return s, s.LineItems, nil

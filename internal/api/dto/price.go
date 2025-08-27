@@ -681,7 +681,7 @@ type CostBreakup struct {
 
 // CreatePriceVersionRequest represents a request to create a new version of a price
 type CreatePriceVersionRequest struct {
-	PreviousPriceID string            `json:"previous_price_id" validate:"required"`
+	ExistingPriceId string            `json:"existing_price_id" validate:"required"`
 	Amount          string            `json:"amount,omitempty"`
 	Tiers           []CreatePriceTier `json:"tiers,omitempty"`
 	StartDate       *time.Time        `json:"start_date,omitempty"`
@@ -819,7 +819,7 @@ func (r *CreateBulkPriceVersionRequest) Validate() error {
 				WithReportableDetails(map[string]interface{}{
 					"index":             i,
 					"price_version":     priceVersion,
-					"previous_price_id": priceVersion.PreviousPriceID,
+					"previous_price_id": priceVersion.ExistingPriceId,
 					"start_date":        priceVersion.StartDate,
 					"end_date":          priceVersion.EndDate,
 					"amount":            priceVersion.Amount,

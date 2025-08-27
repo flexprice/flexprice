@@ -1039,7 +1039,7 @@ func (s *priceService) CreatePriceVersion(ctx context.Context, req dto.CreatePri
 	}
 
 	// Get the existing price
-	existingPrice, err := s.PriceRepo.Get(ctx, req.PreviousPriceID)
+	existingPrice, err := s.PriceRepo.Get(ctx, req.ExistingPriceId)
 	if err != nil {
 		return nil, err
 	}
@@ -1049,7 +1049,7 @@ func (s *priceService) CreatePriceVersion(ctx context.Context, req dto.CreatePri
 		return nil, ierr.NewError("cannot create version of expired price").
 			WithHint("The existing price has been expired and cannot be versioned").
 			WithReportableDetails(map[string]interface{}{
-				"previous_price_id": req.PreviousPriceID,
+				"previous_price_id": req.ExistingPriceId,
 				"status":            existingPrice.Status,
 			}).
 			Mark(ierr.ErrValidation)
