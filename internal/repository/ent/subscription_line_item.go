@@ -282,10 +282,10 @@ func (r *subscriptionLineItemRepository) CreateBulk(ctx context.Context, items [
 }
 
 // ListBySubscription retrieves all line items for a subscription
-func (r *subscriptionLineItemRepository) ListBySubscription(ctx context.Context, subscriptionID string) ([]*subscription.SubscriptionLineItem, error) {
+func (r *subscriptionLineItemRepository) ListBySubscription(ctx context.Context, sub *subscription.Subscription) ([]*subscription.SubscriptionLineItem, error) {
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "subscription_line_item", "list_by_subscription", map[string]interface{}{
-		"subscription_id": subscriptionID,
+		"subscription_id": sub.ID,
 	})
 	defer FinishSpan(span)
 
@@ -293,9 +293,13 @@ func (r *subscriptionLineItemRepository) ListBySubscription(ctx context.Context,
 
 	items, err := client.SubscriptionLineItem.Query().
 		Where(
-			subscriptionlineitem.SubscriptionID(subscriptionID),
+			subscriptionlineitem.SubscriptionID(sub.ID),
 			subscriptionlineitem.TenantID(types.GetTenantID(ctx)),
 			subscriptionlineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
+			subscriptionlineitem.Or(
+				subscriptionlineitem.EndDateGT(sub.CurrentPeriodStart),
+				subscriptionlineitem.EndDateIsNil(),
+			),
 		).
 		All(ctx)
 
@@ -304,7 +308,7 @@ func (r *subscriptionLineItemRepository) ListBySubscription(ctx context.Context,
 		return nil, ierr.WithError(err).
 			WithHint("Failed to list subscription line items").
 			WithReportableDetails(map[string]interface{}{
-				"subscription_id": subscriptionID,
+				"subscription_id": sub.ID,
 			}).
 			Mark(ierr.ErrDatabase)
 	}
