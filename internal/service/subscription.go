@@ -3440,7 +3440,6 @@ func (s *subscriptionService) CreateSubscriptionLineItemVersion(ctx context.Cont
 	// Pre-calculate common values to avoid repeated computations
 	startDate := *newPrice.StartDate
 	endDate := startDate
-	versionedAt := time.Now().UTC().Format(time.RFC3339)
 
 	// Pre-allocate slice for better memory efficiency
 	updatedItems := make([]dto.SubscriptionLineItemVersionUpdate, 0, len(lineItems))
@@ -3476,16 +3475,10 @@ func (s *subscriptionService) CreateSubscriptionLineItemVersion(ctx context.Cont
 					"versioned_from_line_item": oldLineItem.ID,
 					"versioned_from_price":     req.OldPriceVersionID,
 					"versioned_to_price":       req.NewPriceVersionID,
-					"versioned_at":             versionedAt,
 					"version_reason":           "price_version_change",
 				},
 				EnvironmentID: oldLineItem.EnvironmentID,
 				BaseModel:     types.GetDefaultBaseModel(txCtx),
-			}
-
-			// Create new line item
-			if err := s.SubscriptionLineItemRepo.Create(txCtx, newLineItem); err != nil {
-				return err
 			}
 
 			// Update the end date of the old line item
@@ -3494,10 +3487,17 @@ func (s *subscriptionService) CreateSubscriptionLineItemVersion(ctx context.Cont
 				oldLineItem.Metadata = make(map[string]string)
 			}
 			oldLineItem.Metadata["versioned_to_line_item"] = newLineItem.ID
-			oldLineItem.Metadata["versioned_at"] = versionedAt
 
-			if err := s.SubscriptionLineItemRepo.Update(txCtx, oldLineItem); err != nil {
-				return err
+			if !req.DryRun {
+				// only create new line item if not in dry run mode
+				if err := s.SubscriptionLineItemRepo.Create(txCtx, newLineItem); err != nil {
+					return err
+				}
+
+				// only update old line item if not in dry run mode
+				if err := s.SubscriptionLineItemRepo.Update(txCtx, oldLineItem); err != nil {
+					return err
+				}
 			}
 
 			updatedItems = append(updatedItems, dto.SubscriptionLineItemVersionUpdate{
