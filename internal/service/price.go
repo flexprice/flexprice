@@ -10,21 +10,21 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/price"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
 type PriceService interface {
 	CreatePrice(ctx context.Context, req dto.CreatePriceRequest) (*dto.PriceResponse, error)
 	CreateBulkPrice(ctx context.Context, req dto.CreateBulkPriceRequest) (*dto.CreateBulkPriceResponse, error)
-	CreatePriceVersion(ctx context.Context, req dto.CreatePriceVersionRequest) (*dto.PriceVersionResponse, error)
-	CreateBulkPriceVersion(ctx context.Context, req dto.CreateBulkPriceVersionRequest) (*dto.CreateBulkPriceVersionResponse, error)
+
 	GetPrice(ctx context.Context, id string) (*dto.PriceResponse, error)
 	GetPricesByPlanID(ctx context.Context, planID string) (*dto.ListPricesResponse, error)
 	GetPricesBySubscriptionID(ctx context.Context, subscriptionID string) (*dto.ListPricesResponse, error)
 	GetPricesByAddonID(ctx context.Context, addonID string) (*dto.ListPricesResponse, error)
 	GetPrices(ctx context.Context, filter *types.PriceFilter) (*dto.ListPricesResponse, error)
 	UpdatePrice(ctx context.Context, id string, req dto.UpdatePriceRequest) (*dto.PriceResponse, error)
-	DeletePrice(ctx context.Context, id string) error
+	DeletePrice(ctx context.Context, id string, req *dto.DeletePriceRequest) error
 	CalculateCost(ctx context.Context, price *price.Price, quantity decimal.Decimal) decimal.Decimal
 
 	// CalculateBucketedCost calculates cost for bucketed max values where each value represents max in its time bucket
@@ -648,32 +648,93 @@ func (s *priceService) GetPrices(ctx context.Context, filter *types.PriceFilter)
 	return response, nil
 }
 
+// UpdatePrice handles price updates with automatic versioning for critical changes.
+// Critical changes (amount, tiers, billing model, dates) create new price versions.
+// Non-critical changes (description, metadata, lookup key) update the existing price.
+// The method uses transactions to ensure data consistency during versioning.
 func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.UpdatePriceRequest) (*dto.PriceResponse, error) {
-	price, err := s.PriceRepo.Get(ctx, id)
+	p, err := s.PriceRepo.Get(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
-	price.Description = req.Description
-	price.Metadata = req.Metadata
-	price.LookupKey = req.LookupKey
-
-	if err := s.PriceRepo.Update(ctx, price); err != nil {
+	if err := req.Validate(p); err != nil {
 		return nil, err
 	}
 
-	response := &dto.PriceResponse{Price: price}
+	// Early return for non-critical updates (most common case)
+	if !hasCriticalUpdates(req) {
+		// Apply non-critical updates
+		if req.Description != nil {
+			p.Description = *req.Description
+		}
+		if req.Metadata != nil {
+			p.Metadata = req.Metadata
+		}
+		if req.LookupKey != nil {
+			p.LookupKey = *req.LookupKey
+		}
 
-	// TODO: !REMOVE after migration
-	if price.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
-		response.PlanID = price.EntityID
+		if err := s.PriceRepo.Update(ctx, p); err != nil {
+			return nil, err
+		}
+
+		return &dto.PriceResponse{Price: p}, nil
 	}
 
-	return response, nil
+	// Handle critical updates with versioning
+	createReq := req.ToCreatePriceRequest(p)
+
+	var newPrice *dto.PriceResponse
+	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		newPrice, err = s.CreatePrice(txCtx, createReq)
+		if err != nil {
+			return err
+		}
+
+		// Update existing price end date if needed
+		if p.EndDate == nil && req.StartDate != nil {
+			p.EndDate = req.StartDate
+			if err := s.PriceRepo.Update(txCtx, p); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return newPrice, nil
 }
 
-func (s *priceService) DeletePrice(ctx context.Context, id string) error {
-	if err := s.PriceRepo.Delete(ctx, id); err != nil {
+// hasCriticalUpdates checks if the request contains critical field updates
+func hasCriticalUpdates(req dto.UpdatePriceRequest) bool {
+	return req.Amount != nil || len(req.Tiers) > 0 || req.BillingModel != nil || req.StartDate != nil || req.EndDate != nil
+}
+
+// DeletePrice performs a soft delete of a price by setting its end date.
+// If no end date is provided, it defaults to the current time.
+// The method validates that the price is not already archived.
+func (s *priceService) DeletePrice(ctx context.Context, id string, req *dto.DeletePriceRequest) error {
+
+	p, err := s.PriceRepo.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	if err := req.Validate(p); err != nil {
+		return err
+	}
+
+	p.EndDate = req.EndDate
+	if p.EndDate == nil {
+		p.EndDate = lo.ToPtr(time.Now().UTC())
+	}
+
+	if err := s.PriceRepo.Update(ctx, p); err != nil {
 		return err
 	}
 	return nil
@@ -1030,139 +1091,4 @@ func (s *priceService) CalculateCostSheetPrice(ctx context.Context, price *price
 	// For now, we'll use the same calculation as CalculateCost
 	// In the future, we can add costsheet-specific pricing rules here
 	return s.CalculateCost(ctx, price, quantity)
-}
-
-// CreatePriceVersion creates a new version of an existing price
-func (s *priceService) CreatePriceVersion(ctx context.Context, req dto.CreatePriceVersionRequest) (*dto.PriceVersionResponse, error) {
-	if err := req.Validate(); err != nil {
-		return nil, err
-	}
-
-	// Get the existing price
-	existingPrice, err := s.PriceRepo.Get(ctx, req.ExistingPriceId)
-	if err != nil {
-		return nil, err
-	}
-
-	// Validate that the existing price is not archived
-	if existingPrice.Status == types.StatusArchived || (existingPrice.EndDate != nil && existingPrice.EndDate.Before(time.Now().UTC())) {
-		return nil, ierr.NewError("cannot create version of expired price").
-			WithHint("The existing price has been expired and cannot be versioned").
-			WithReportableDetails(map[string]interface{}{
-				"previous_price_id": req.ExistingPriceId,
-				"status":            existingPrice.Status,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	// Use transaction to ensure atomicity
-	var response *dto.PriceVersionResponse
-	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		// Create new price version
-		newPrice, err := req.ToPrice(txCtx, existingPrice)
-		if err != nil {
-			return err
-		}
-
-		// Create the new price
-		if err := s.PriceRepo.Create(txCtx, newPrice); err != nil {
-			return err
-		}
-
-		// Update the end date of the previous price to the start date of the new price
-		if newPrice.StartDate != nil {
-			// Set end date to 1 second before the new price starts
-			endDate := newPrice.StartDate.Add(-time.Second)
-			existingPrice.EndDate = &endDate
-
-			if err := s.PriceRepo.Update(txCtx, existingPrice); err != nil {
-				return err
-			}
-		}
-
-		// Create response
-		priceResponse := &dto.PriceResponse{Price: newPrice}
-
-		response = &dto.PriceVersionResponse{
-			Price:           priceResponse,
-			PreviousPriceID: existingPrice.ID,
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return response, nil
-}
-
-// CreateBulkPriceVersion creates multiple price versions in bulk
-func (s *priceService) CreateBulkPriceVersion(ctx context.Context, req dto.CreateBulkPriceVersionRequest) (*dto.CreateBulkPriceVersionResponse, error) {
-	if err := req.Validate(); err != nil {
-		return nil, err
-	}
-
-	var response *dto.CreateBulkPriceVersionResponse
-
-	// Use transaction to ensure all price versions are created or none
-	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		response = &dto.CreateBulkPriceVersionResponse{
-			Items: make([]*dto.PriceVersionResponse, 0),
-		}
-
-		for _, versionReq := range req.Items {
-			// Reuse the existing CreatePriceVersion method
-			versionResponse, err := s.CreatePriceVersion(txCtx, versionReq)
-			if err != nil {
-				return err
-			}
-
-			response.Items = append(response.Items, versionResponse)
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	// Trigger bulk sync of price changes to all affected subscriptions
-	if len(response.Items) > 0 {
-		// Build price version mappings for sync
-		priceMappings := make([]dto.PriceVersionMapping, 0, len(response.Items))
-		for _, item := range response.Items {
-			if item.PreviousPriceID != "" {
-				priceMappings = append(priceMappings, dto.PriceVersionMapping{
-					OldPriceID: item.PreviousPriceID,
-					NewPriceID: item.Price.ID,
-				})
-			}
-		}
-
-		if len(priceMappings) > 0 {
-			// Create subscription service to trigger sync
-			subscriptionService := NewSubscriptionService(s.ServiceParams)
-
-			syncReq := dto.SyncPriceChangesToSubscriptionsRequest{
-				PriceVersionMappings: priceMappings,
-				BatchSize:            100,
-				DryRun:               false,
-			}
-
-			// Trigger the sync (this will update all affected subscriptions)
-			_, err := subscriptionService.SyncPriceChangesToSubscriptions(ctx, syncReq)
-			if err != nil {
-				s.Logger.Errorw("failed to sync price changes to subscriptions",
-					"error", err,
-					"price_mappings", priceMappings)
-				// Note: We don't fail the entire operation if sync fails
-				// The price versions were created successfully
-			}
-		}
-	}
-
-	return response, nil
 }

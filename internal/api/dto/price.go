@@ -11,6 +11,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -610,9 +611,35 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 }
 
 type UpdatePriceRequest struct {
-	LookupKey   string            `json:"lookup_key"`
-	Description string            `json:"description"`
-	Metadata    map[string]string `json:"metadata,omitempty"`
+	Metadata     map[string]string   `json:"metadata,omitempty"`
+	LookupKey    *string             `json:"lookup_key,omitempty"`
+	Description  *string             `json:"description,omitempty"`
+	Amount       *string             `json:"amount,omitempty"`
+	Tiers        []CreatePriceTier   `json:"tiers,omitempty"`
+	BillingModel *types.BillingModel `json:"billing_model,omitempty"`
+	StartDate    *time.Time          `json:"start_date,omitempty"`
+	EndDate      *time.Time          `json:"end_date,omitempty"`
+}
+
+func (r *UpdatePriceRequest) Validate(p *price.Price) error {
+
+	if r.StartDate != nil && r.EndDate != nil && r.StartDate.After(*r.EndDate) {
+		return ierr.NewError("start_date must be before end_date").
+			WithHint("Start date must be before end date").
+			Mark(ierr.ErrValidation)
+	}
+
+	if p != nil {
+		// Check if critical fields are being updated
+		if r.BillingModel != nil && *r.BillingModel == types.BILLING_MODEL_FLAT_FEE {
+			return ierr.NewError("billing_model cannot be changed").
+				WithHint("Prices with billing model FLAT_FEE cannot be updated").
+				Mark(ierr.ErrValidation)
+		}
+
+	}
+
+	return nil
 }
 
 type PriceResponse struct {
@@ -679,160 +706,110 @@ type CostBreakup struct {
 	FinalCost decimal.Decimal
 }
 
-// CreatePriceVersionRequest represents a request to create a new version of a price
-type CreatePriceVersionRequest struct {
-	ExistingPriceId string            `json:"existing_price_id" validate:"required"`
-	Amount          string            `json:"amount,omitempty"`
-	Tiers           []CreatePriceTier `json:"tiers,omitempty"`
-	StartDate       *time.Time        `json:"start_date,omitempty"`
-	EndDate         *time.Time        `json:"end_date,omitempty"`
-	Metadata        map[string]string `json:"metadata,omitempty"`
-}
-
-// Validate validates the price version creation request
-func (r *CreatePriceVersionRequest) Validate() error {
-	if err := validator.ValidateRequest(r); err != nil {
-		return ierr.WithError(err).
-			WithHint("Invalid price version creation request").
-			Mark(ierr.ErrValidation)
-	}
-
-	// Validate that either Amount or Tiers is provided, but not both
-	hasAmount := r.Amount != ""
-	hasTiers := len(r.Tiers) > 0
-
-	if !hasAmount && !hasTiers {
-		return ierr.NewError("either amount or tiers must be provided").
-			WithHint("Please provide either a flat amount or tiered pricing structure").
-			Mark(ierr.ErrValidation)
-	}
-
-	if hasAmount && hasTiers {
-		return ierr.NewError("cannot provide both amount and tiers").
-			WithHint("Use either flat pricing (amount) or tiered pricing (tiers), not both").
-			Mark(ierr.ErrValidation)
-	}
-
-	// Validate start date is not in the past (allow current time for immediate activation)
-	if r.StartDate != nil && r.StartDate.Before(time.Now().Add(-time.Minute)) {
-		return ierr.NewError("start_date cannot be in the past").
-			WithHint("Start date must be current time or in the future").
-			WithReportableDetails(map[string]interface{}{
-				"start_date": r.StartDate,
-				"now":        time.Now(),
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	// Validate end date is after start date if provided
-	if r.EndDate != nil && r.StartDate != nil && !r.EndDate.After(*r.StartDate) {
-		return ierr.NewError("end_date must be after start_date").
-			WithHint("End date must be after the start date").
-			WithReportableDetails(map[string]interface{}{
-				"start_date": r.StartDate,
-				"end_date":   r.EndDate,
-			}).
-			Mark(ierr.ErrValidation)
-	} else if r.EndDate != nil && r.StartDate == nil {
-		return ierr.NewError("start_date is required when end_date is provided").
-			WithHint("Start date must be provided when end date is provided").
-			Mark(ierr.ErrValidation)
-	}
-
-	return nil
-}
-
-// ToPrice converts the CreatePriceVersionRequest to a domain Price
-// It converts existing price to CreatePriceRequest, merges changes, and validates
-func (r *CreatePriceVersionRequest) ToPrice(ctx context.Context, existingPrice *priceDomain.Price) (*priceDomain.Price, error) {
-	// Validate that existing price is provided
-	if existingPrice == nil {
-		return nil, ierr.NewError("existing price is required for versioning").
-			WithHint("Please provide the existing price to create a new version").
-			Mark(ierr.ErrValidation)
-	}
-
-	// Convert existing price to CreatePriceRequest DTO
-	createPriceReq := &CreatePriceRequest{
-		Amount:             r.Amount,
-		Tiers:              r.Tiers,
-		Currency:           existingPrice.Currency,
-		Type:               existingPrice.Type,
-		PriceUnitType:      existingPrice.PriceUnitType,
-		BillingPeriod:      existingPrice.BillingPeriod,
-		BillingPeriodCount: existingPrice.BillingPeriodCount,
-		BillingModel:       existingPrice.BillingModel,
-		BillingCadence:     existingPrice.BillingCadence,
-		InvoiceCadence:     existingPrice.InvoiceCadence,
-		TrialPeriod:        existingPrice.TrialPeriod,
-		TierMode:           existingPrice.TierMode,
-		MeterID:            existingPrice.MeterID,
-		// Don't copy LookupKey for price versions to avoid constraint violations
-		// LookupKey:          existingPrice.LookupKey,
-		Description: existingPrice.Description,
-		EntityType:  existingPrice.EntityType,
-		EntityID:    existingPrice.EntityID,
-		Metadata:    map[string]string(existingPrice.Metadata),
-		StartDate:   r.StartDate,
-		EndDate:     r.EndDate,
-	}
-
-	if err := createPriceReq.Validate(); err != nil {
-		return nil, err
-	}
-
-	price, err := createPriceReq.ToPrice(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return price, nil
-}
-
-type PriceVersionResponse struct {
-	PreviousPriceID string         `json:"previous_price_id"`
-	Price           *PriceResponse `json:"price"`
-}
-
-type CreateBulkPriceVersionRequest struct {
-	Items []CreatePriceVersionRequest `json:"items" validate:"required,min=1,max=100"`
-}
-
-func (r *CreateBulkPriceVersionRequest) Validate() error {
-	if len(r.Items) == 0 {
-		return ierr.NewError("at least one price version is required").
-			WithHint("Please provide at least one price version to create").
-			Mark(ierr.ErrValidation)
-	}
-
-	if len(r.Items) > 100 {
-		return ierr.NewError("too many price versions in bulk request").
-			WithHint("Maximum 100 price versions allowed per bulk request").
-			Mark(ierr.ErrValidation)
-	}
-
-	// Validate each individual price version
-	for i, priceVersion := range r.Items {
-		if err := priceVersion.Validate(); err != nil {
-			return ierr.WithError(err).
-				WithHint(fmt.Sprintf("Price version at index %d is invalid", i)).
-				WithReportableDetails(map[string]interface{}{
-					"index":             i,
-					"price_version":     priceVersion,
-					"previous_price_id": priceVersion.ExistingPriceId,
-					"start_date":        priceVersion.StartDate,
-					"end_date":          priceVersion.EndDate,
-					"amount":            priceVersion.Amount,
-					"tiers":             priceVersion.Tiers,
-					"metadata":          priceVersion.Metadata,
-				}).
-				Mark(ierr.ErrValidation)
+// ConvertTiersToCreateFormat converts existing tiers to CreatePriceTier format
+func ConvertTiersToCreateFormat(tiers []price.PriceTier) []CreatePriceTier {
+	createTiers := make([]CreatePriceTier, 0, len(tiers))
+	for _, tier := range tiers {
+		createTier := CreatePriceTier{
+			UnitAmount: tier.UnitAmount.String(),
 		}
+
+		if tier.FlatAmount != nil {
+			createTier.FlatAmount = lo.ToPtr(tier.FlatAmount.String())
+		}
+		if tier.UpTo != nil {
+			createTier.UpTo = lo.ToPtr(uint64(*tier.UpTo))
+		}
+
+		createTiers = append(createTiers, createTier)
+	}
+	return createTiers
+}
+
+// ToCreatePriceRequest builds a CreatePriceRequest from existing price and update request
+func (r *UpdatePriceRequest) ToCreatePriceRequest(p *price.Price) CreatePriceRequest {
+	createReq := CreatePriceRequest{
+		Currency:           p.Currency,
+		EntityType:         p.EntityType,
+		EntityID:           p.EntityID,
+		Type:               p.Type,
+		PriceUnitType:      p.PriceUnitType,
+		BillingPeriod:      p.BillingPeriod,
+		BillingPeriodCount: p.BillingPeriodCount,
+		BillingCadence:     p.BillingCadence,
+		InvoiceCadence:     p.InvoiceCadence,
+		TrialPeriod:        p.TrialPeriod,
+		MeterID:            p.MeterID,
+		Description:        p.Description,
+		Metadata:           p.Metadata,
+		TierMode:           p.TierMode,
+		TransformQuantity:  func() *price.TransformQuantity {
+			if p.TransformQuantity != (price.JSONBTransformQuantity{}) {
+				return (*price.TransformQuantity)(&p.TransformQuantity)
+			}
+			return nil
+		}(),
+		StartDate:          r.StartDate,
+		EndDate:            r.EndDate,
+	}
+
+	// Handle description and metadata
+	if r.Description != nil {
+		createReq.Description = *r.Description
+	}
+	if r.Metadata != nil {
+		createReq.Metadata = r.Metadata
+	}
+
+	// Handle amount
+	if r.Amount != nil {
+		createReq.Amount = *r.Amount
+	} else {
+		createReq.Amount = p.Amount.String()
+	}
+
+	// Handle tiers
+	if len(r.Tiers) > 0 {
+		createReq.Tiers = r.Tiers
+	} else if p.Tiers != nil {
+		createReq.Tiers = ConvertTiersToCreateFormat(p.Tiers)
+	}
+
+	// Handle billing model
+	if r.BillingModel != nil {
+		createReq.BillingModel = *r.BillingModel
+	} else {
+		createReq.BillingModel = p.BillingModel
+	}
+
+	return createReq
+}
+
+type DeletePriceRequest struct {
+	EndDate *time.Time `json:"end_date,omitempty"`
+}
+
+func (r *DeletePriceRequest) Validate(p *price.Price) error {
+	if p.Status == types.StatusArchived {
+		return ierr.NewError("price is already archived").
+			WithHint("Cannot delete an already archived price").
+			WithReportableDetails(map[string]interface{}{
+				"status":   p.Status,
+				"price_id": p.ID,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.EndDate != nil && r.EndDate.Before(time.Now().UTC()) {
+		return ierr.NewError("end_date must be in the future").
+			WithHint("End date must be in the future").
+			WithReportableDetails(map[string]interface{}{
+				"end_date": r.EndDate,
+				"status":   p.Status,
+				"price_id": p.ID,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	return nil
-}
-
-type CreateBulkPriceVersionResponse struct {
-	Items []*PriceVersionResponse `json:"items"`
 }

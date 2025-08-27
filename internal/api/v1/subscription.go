@@ -317,34 +317,3 @@ func (h *SubscriptionHandler) RemoveAddonToSubscription(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "addon removed from subscription successfully"})
 }
-
-// @Summary Bulk sync price changes to subscriptions
-// @Description Sync multiple price changes to all affected subscriptions in a single operation
-// @Tags Subscriptions
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param request body dto.SyncPriceChangesToSubscriptionsRequest true "Bulk Price Sync Request"
-// @Success 200 {object} dto.SyncPriceChangesToSubscriptionsResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /subscriptions/sync/prices [post]
-func (h *SubscriptionHandler) BulkSyncPriceChanges(c *gin.Context) {
-	var req dto.SyncPriceChangesToSubscriptionsRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
-		c.Error(ierr.WithError(err).
-			WithHint("Invalid request format").
-			Mark(ierr.ErrValidation))
-		return
-	}
-
-	resp, err := h.service.SyncPriceChangesToSubscriptions(c.Request.Context(), req)
-	if err != nil {
-		h.log.Error("Failed to sync price changes", "error", err)
-		c.Error(err)
-		return
-	}
-
-	c.JSON(http.StatusOK, resp)
-}

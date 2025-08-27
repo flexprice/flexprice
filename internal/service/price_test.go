@@ -184,7 +184,7 @@ func (s *PriceServiceSuite) TestUpdatePrice() {
 	_ = s.priceRepo.Create(s.ctx, price)
 
 	req := dto.UpdatePriceRequest{
-		Description: "Updated Description",
+		Description: lo.ToPtr("Updated Description"),
 		Metadata:    map[string]string{"updated": "true"},
 	}
 
@@ -200,7 +200,7 @@ func (s *PriceServiceSuite) TestDeletePrice() {
 	price := &price.Price{ID: "price-1", Amount: decimal.NewFromInt(100), Currency: "usd"}
 	_ = s.priceRepo.Create(s.ctx, price)
 
-	err := s.priceService.DeletePrice(s.ctx, "price-1")
+	err := s.priceService.DeletePrice(s.ctx, "price-1", nil)
 	s.NoError(err)
 
 	// Ensure the price no longer exists
