@@ -122,8 +122,8 @@ func (s *costsheetService) GetInputCostForMargin(ctx context.Context, req *dto.G
 			usageRequests = append(usageRequests, &dto.GetUsageByMeterRequest{
 				MeterID:   item.MeterID,
 				PriceID:   item.PriceID,
-				StartTime: startTime,
-				EndTime:   endTime,
+				StartTime: item.GetPeriodStart(startTime),
+				EndTime:   item.GetPeriodEnd(endTime),
 			})
 		}
 	}
