@@ -378,6 +378,12 @@ func (f *PriceFilter) WithStatus(status Status) *PriceFilter {
 	return f
 }
 
+// WithAllowExpiredPrices sets the allow expired prices flag on the filter
+func (f *PriceFilter) WithAllowExpiredPrices(allowExpiredPrices bool) *PriceFilter {
+	f.AllowExpiredPrices = allowExpiredPrices
+	return f
+}
+
 // WithEntityType sets the entity type on the filter
 func (f *PriceFilter) WithEntityType(entityType PriceEntityType) *PriceFilter {
 	f.EntityType = &entityType
