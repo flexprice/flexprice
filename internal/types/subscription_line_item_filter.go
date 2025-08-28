@@ -18,7 +18,7 @@ type SubscriptionLineItemFilter struct {
 	EntityType      *SubscriptionLineItemEntitiyType `json:"entity_type,omitempty" form:"entity_type"`
 
 	// Active filtering
-	ActiveFilter       bool       `json:"active_filter,omitempty" form:"active_filter"`
+	ActiveFilter       bool       `json:"active_filter,omitempty" form:"active_filter" default:"true"`
 	CurrentPeriodStart *time.Time `json:"current_period_start,omitempty" form:"current_period_start"`
 }
 
