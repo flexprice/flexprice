@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/creditgrant"
@@ -738,14 +739,13 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*SyncPlanP
 		// Create line item map with price ID as key
 		lineItemMap := make(map[string]*subscription.SubscriptionLineItem)
 		for _, item := range lineItems {
-			if item.Status != types.StatusPublished {
+			if !item.IsActive(time.Now()) {
 				continue
 			}
+			lineItemMap[item.PriceID] = item
 
 			if parentPriceID, isOverride := overridePriceMap[item.PriceID]; isOverride {
 				lineItemMap[parentPriceID] = item
-			} else {
-				lineItemMap[item.PriceID] = item
 			}
 		}
 
