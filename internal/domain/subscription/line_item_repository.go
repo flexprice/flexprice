@@ -18,14 +18,9 @@ type LineItemRepository interface {
 	CreateBulk(ctx context.Context, items []*SubscriptionLineItem) error
 
 	// Query operations
-	ListBySubscription(ctx context.Context, subscriptionID string) ([]*SubscriptionLineItem, error)
-	ListByCustomer(ctx context.Context, customerID string) ([]*SubscriptionLineItem, error)
+	ListBySubscription(ctx context.Context, sub *Subscription) ([]*SubscriptionLineItem, error)
 
 	// Filter based operations
 	List(ctx context.Context, filter *types.SubscriptionLineItemFilter) ([]*SubscriptionLineItem, error)
 	Count(ctx context.Context, filter *types.SubscriptionLineItemFilter) (int, error)
-
-	// Future extensibility
-	GetByPriceID(ctx context.Context, priceID string) ([]*SubscriptionLineItem, error)
-	GetByPlanID(ctx context.Context, planID string) ([]*SubscriptionLineItem, error)
 }

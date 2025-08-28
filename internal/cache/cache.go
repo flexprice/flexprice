@@ -56,6 +56,7 @@ const (
 	PrefixEntityIntegrationMapping = "entity_integration_mapping:v1:"
 	PrefixConnection               = "connection:v1:"
 	PrefixSettings                 = "settings:v1:"
+	PrefixSubscriptionLineItem     = "subscription_line_item:v1:"
 )
 
 // GenerateKey creates a cache key from a prefix and a set of parameters

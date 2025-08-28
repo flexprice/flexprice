@@ -153,7 +153,7 @@ func SyncPlanPrices() error {
 		}
 
 		// Get existing line items for the subscription
-		lineItems, err := script.lineItemRepo.ListBySubscription(ctx, sub.ID)
+		lineItems, err := script.lineItemRepo.ListBySubscription(ctx, sub)
 		if err != nil {
 			log.Printf("Warning: Failed to get line items for subscription %s: %v\n", sub.ID, err)
 			continue
@@ -295,6 +295,6 @@ func newSyncScript() (*syncScript, error) {
 		priceRepo:        entRepo.NewPriceRepository(client, log, cacheClient),
 		meterRepo:        entRepo.NewMeterRepository(client, log, cacheClient),
 		subscriptionRepo: entRepo.NewSubscriptionRepository(client, log, cacheClient),
-		lineItemRepo:     entRepo.NewSubscriptionLineItemRepository(client),
+		lineItemRepo:     entRepo.NewSubscriptionLineItemRepository(client, log, cacheClient),
 	}, nil
 }

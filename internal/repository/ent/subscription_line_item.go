@@ -6,21 +6,44 @@ import (
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
+	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
 type subscriptionLineItemRepository struct {
-	client postgres.IClient
+	client    postgres.IClient
+	log       *logger.Logger
+	queryOpts SubscriptionLineItemQueryOptions
+	cache     cache.Cache
 }
 
 // NewSubscriptionLineItemRepository creates a new subscription line item repository
-func NewSubscriptionLineItemRepository(client postgres.IClient) subscription.LineItemRepository {
+func NewSubscriptionLineItemRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) subscription.LineItemRepository {
 	return &subscriptionLineItemRepository{
-		client: client,
+		client:    client,
+		log:       log,
+		queryOpts: SubscriptionLineItemQueryOptions{},
+		cache:     cache,
 	}
+}
+
+// applyActiveLineItemFilter applies the filter to ensure only active subscription line items are returned
+// Active line items are those where EndDate > currentPeriodStart or EndDate is nil
+func (o *SubscriptionLineItemQueryOptions) applyActiveLineItemFilter(query *ent.SubscriptionLineItemQuery, currentPeriodStart *time.Time) *ent.SubscriptionLineItemQuery {
+	if currentPeriodStart == nil {
+		return query
+	}
+
+	return query.Where(
+		subscriptionlineitem.Or(
+			subscriptionlineitem.EndDateGT(*currentPeriodStart),
+			subscriptionlineitem.EndDateIsNil(),
+		),
+	)
 }
 
 // Create creates a new subscription line item
@@ -31,8 +54,16 @@ func (r *subscriptionLineItemRepository) Create(ctx context.Context, item *subsc
 	span := StartRepositorySpan(ctx, "subscription_line_item", "create", map[string]interface{}{
 		"subscription_id": item.SubscriptionID,
 		"price_id":        item.PriceID,
+		"tenant_id":       item.TenantID,
 	})
 	defer FinishSpan(span)
+
+	r.log.Debugw("creating subscription line item",
+		"line_item_id", item.ID,
+		"subscription_id", item.SubscriptionID,
+		"price_id", item.PriceID,
+		"tenant_id", item.TenantID,
+	)
 
 	// Set environment ID from context if not already set
 	if item.EnvironmentID == "" {
@@ -72,6 +103,16 @@ func (r *subscriptionLineItemRepository) Create(ctx context.Context, item *subsc
 
 	if err != nil {
 		SetSpanError(span, err)
+		if ent.IsConstraintError(err) {
+			return ierr.WithError(err).
+				WithHintf("A subscription line item with ID %s already exists", item.ID).
+				WithReportableDetails(map[string]interface{}{
+					"line_item_id":    item.ID,
+					"subscription_id": item.SubscriptionID,
+					"price_id":        item.PriceID,
+				}).
+				Mark(ierr.ErrAlreadyExists)
+		}
 		return ierr.WithError(err).
 			WithHint("Failed to create subscription line item").
 			WithReportableDetails(map[string]interface{}{
@@ -90,8 +131,14 @@ func (r *subscriptionLineItemRepository) Get(ctx context.Context, id string) (*s
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "subscription_line_item", "get", map[string]interface{}{
 		"line_item_id": id,
+		"tenant_id":    types.GetTenantID(ctx),
 	})
 	defer FinishSpan(span)
+
+	// Try to get from cache first
+	if cachedItem := r.GetCache(ctx, id); cachedItem != nil {
+		return cachedItem, nil
+	}
 
 	client := r.client.Querier(ctx)
 	if client == nil {
@@ -102,10 +149,16 @@ func (r *subscriptionLineItemRepository) Get(ctx context.Context, id string) (*s
 		return nil, err
 	}
 
+	r.log.Debugw("getting subscription line item",
+		"line_item_id", id,
+		"tenant_id", types.GetTenantID(ctx),
+	)
+
 	item, err := client.SubscriptionLineItem.Query().
 		Where(
 			subscriptionlineitem.ID(id),
 			subscriptionlineitem.TenantID(types.GetTenantID(ctx)),
+			subscriptionlineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		Only(ctx)
 
@@ -113,7 +166,7 @@ func (r *subscriptionLineItemRepository) Get(ctx context.Context, id string) (*s
 		SetSpanError(span, err)
 		if ent.IsNotFound(err) {
 			return nil, ierr.WithError(err).
-				WithHint("Subscription line item not found").
+				WithHintf("Subscription line item with ID %s not found", id).
 				WithReportableDetails(map[string]interface{}{
 					"line_item_id": id,
 				}).
@@ -127,8 +180,10 @@ func (r *subscriptionLineItemRepository) Get(ctx context.Context, id string) (*s
 			Mark(ierr.ErrDatabase)
 	}
 
+	lineItemData := subscription.SubscriptionLineItemFromEnt(item)
+	r.SetCache(ctx, lineItemData)
 	SetSpanSuccess(span)
-	return subscription.SubscriptionLineItemFromEnt(item), nil
+	return lineItemData, nil
 }
 
 // Update updates a subscription line item
@@ -136,8 +191,14 @@ func (r *subscriptionLineItemRepository) Update(ctx context.Context, item *subsc
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "subscription_line_item", "update", map[string]interface{}{
 		"line_item_id": item.ID,
+		"tenant_id":    item.TenantID,
 	})
 	defer FinishSpan(span)
+
+	r.log.Debugw("updating subscription line item",
+		"line_item_id", item.ID,
+		"tenant_id", item.TenantID,
+	)
 
 	client := r.client.Querier(ctx)
 	_, err := client.SubscriptionLineItem.UpdateOneID(item.ID).
@@ -179,6 +240,8 @@ func (r *subscriptionLineItemRepository) Update(ctx context.Context, item *subsc
 			Mark(ierr.ErrDatabase)
 	}
 
+	// Invalidate cache after update
+	r.DeleteCache(ctx, item.ID)
 	SetSpanSuccess(span)
 	return nil
 }
@@ -188,8 +251,14 @@ func (r *subscriptionLineItemRepository) Delete(ctx context.Context, id string) 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "subscription_line_item", "delete", map[string]interface{}{
 		"line_item_id": id,
+		"tenant_id":    types.GetTenantID(ctx),
 	})
 	defer FinishSpan(span)
+
+	r.log.Debugw("deleting subscription line item",
+		"line_item_id", id,
+		"tenant_id", types.GetTenantID(ctx),
+	)
 
 	client := r.client.Querier(ctx)
 	_, err := client.SubscriptionLineItem.Delete().
@@ -209,6 +278,8 @@ func (r *subscriptionLineItemRepository) Delete(ctx context.Context, id string) 
 			Mark(ierr.ErrDatabase)
 	}
 
+	// Invalidate cache after delete
+	r.DeleteCache(ctx, id)
 	SetSpanSuccess(span)
 	return nil
 }
@@ -224,6 +295,11 @@ func (r *subscriptionLineItemRepository) CreateBulk(ctx context.Context, items [
 		"item_count": len(items),
 	})
 	defer FinishSpan(span)
+
+	r.log.Debugw("creating subscription line items in bulk",
+		"item_count", len(items),
+		"tenant_id", types.GetTenantID(ctx),
+	)
 
 	client := r.client.Querier(ctx)
 
@@ -281,62 +357,41 @@ func (r *subscriptionLineItemRepository) CreateBulk(ctx context.Context, items [
 	return nil
 }
 
-// ListBySubscription retrieves all line items for a subscription
-func (r *subscriptionLineItemRepository) ListBySubscription(ctx context.Context, subscriptionID string) ([]*subscription.SubscriptionLineItem, error) {
+// ListBySubscription retrieves all line items for a subscription.
+// This is the source of truth for fetching subscription line items and should be used
+// whenever possible instead of implementing custom line item queries. This ensures
+// consistent behavior across the codebase, including proper caching and filtering.
+func (r *subscriptionLineItemRepository) ListBySubscription(ctx context.Context, sub *subscription.Subscription) ([]*subscription.SubscriptionLineItem, error) {
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "subscription_line_item", "list_by_subscription", map[string]interface{}{
-		"subscription_id": subscriptionID,
+		"subscription_id": sub.ID,
+		"tenant_id":       types.GetTenantID(ctx),
 	})
 	defer FinishSpan(span)
 
+	r.log.Debugw("listing subscription line items by subscription",
+		"subscription_id", sub.ID,
+		"tenant_id", types.GetTenantID(ctx),
+	)
+
 	client := r.client.Querier(ctx)
 
-	items, err := client.SubscriptionLineItem.Query().
+	query := client.SubscriptionLineItem.Query().
 		Where(
-			subscriptionlineitem.SubscriptionID(subscriptionID),
+			subscriptionlineitem.SubscriptionID(sub.ID),
 			subscriptionlineitem.TenantID(types.GetTenantID(ctx)),
 			subscriptionlineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
-		).
-		All(ctx)
+		)
 
+	query = r.queryOpts.applyActiveLineItemFilter(query, &sub.CurrentPeriodStart)
+
+	items, err := query.All(ctx)
 	if err != nil {
 		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to list subscription line items").
 			WithReportableDetails(map[string]interface{}{
-				"subscription_id": subscriptionID,
-			}).
-			Mark(ierr.ErrDatabase)
-	}
-
-	SetSpanSuccess(span)
-	return subscription.GetLineItemFromEntList(items), nil
-}
-
-// ListByCustomer retrieves all line items for a customer
-func (r *subscriptionLineItemRepository) ListByCustomer(ctx context.Context, customerID string) ([]*subscription.SubscriptionLineItem, error) {
-	// Start a span for this repository operation
-	span := StartRepositorySpan(ctx, "subscription_line_item", "list_by_customer", map[string]interface{}{
-		"customer_id": customerID,
-	})
-	defer FinishSpan(span)
-
-	client := r.client.Querier(ctx)
-
-	items, err := client.SubscriptionLineItem.Query().
-		Where(
-			subscriptionlineitem.CustomerID(customerID),
-			subscriptionlineitem.TenantID(types.GetTenantID(ctx)),
-			subscriptionlineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
-		).
-		All(ctx)
-
-	if err != nil {
-		SetSpanError(span, err)
-		return nil, ierr.WithError(err).
-			WithHint("Failed to list customer subscription line items").
-			WithReportableDetails(map[string]interface{}{
-				"customer_id": customerID,
+				"subscription_id": sub.ID,
 			}).
 			Mark(ierr.ErrDatabase)
 	}
@@ -347,70 +402,48 @@ func (r *subscriptionLineItemRepository) ListByCustomer(ctx context.Context, cus
 
 // List retrieves subscription line items based on filter
 func (r *subscriptionLineItemRepository) List(ctx context.Context, filter *types.SubscriptionLineItemFilter) ([]*subscription.SubscriptionLineItem, error) {
-	// Start a span for this repository operation
-	span := StartRepositorySpan(ctx, "subscription_line_item", "list", map[string]interface{}{
-		"filter": filter,
-	})
-	defer FinishSpan(span)
+	if filter == nil {
+		filter = &types.SubscriptionLineItemFilter{
+			QueryFilter: types.NewDefaultQueryFilter(),
+		}
+	}
+
+	if err := filter.Validate(); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Invalid filter parameters").
+			Mark(ierr.ErrValidation)
+	}
 
 	client := r.client.Querier(ctx)
 	if client == nil {
 		err := ierr.NewError("failed to get database client").
 			WithHint("Database client is not available").
 			Mark(ierr.ErrDatabase)
-		SetSpanError(span, err)
 		return nil, err
 	}
 
-	query := client.SubscriptionLineItem.Query().
-		Where(
-			subscriptionlineitem.TenantID(types.GetTenantID(ctx)),
-			subscriptionlineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
-		)
+	// Start a span for this repository operation
+	span := StartRepositorySpan(ctx, "subscription_line_item", "list", map[string]interface{}{
+		"tenant_id":        types.GetTenantID(ctx),
+		"subscription_ids": filter.SubscriptionIDs,
+		"entity_ids":       filter.EntityIDs,
+		"price_ids":        filter.PriceIDs,
+	})
+	defer FinishSpan(span)
 
-	// Apply filters
-	if filter != nil {
-		if len(filter.SubscriptionIDs) > 0 {
-			query = query.Where(subscriptionlineitem.SubscriptionIDIn(filter.SubscriptionIDs...))
-		}
-		if len(filter.CustomerIDs) > 0 {
-			query = query.Where(subscriptionlineitem.CustomerIDIn(filter.CustomerIDs...))
-		}
-		if len(filter.EntityIDs) > 0 {
-			query = query.Where(subscriptionlineitem.EntityIDIn(filter.EntityIDs...))
-		}
-		if filter.EntityType != nil {
-			query = query.Where(subscriptionlineitem.EntityType(string(*filter.EntityType)))
-		}
+	query := client.SubscriptionLineItem.Query()
 
-		// TODO: !REMOVE after migration
-		if len(filter.PlanIDs) > 0 {
-			query = query.Where(
-				subscriptionlineitem.EntityIDIn(filter.PlanIDs...),
-				subscriptionlineitem.EntityType(string(types.SubscriptionLineItemEntitiyTypePlan)),
-			) // TODO: !REMOVE after migration
-		}
-		if len(filter.PriceIDs) > 0 {
-			query = query.Where(subscriptionlineitem.PriceIDIn(filter.PriceIDs...))
-		}
-		if len(filter.MeterIDs) > 0 {
-			query = query.Where(subscriptionlineitem.MeterIDIn(filter.MeterIDs...))
-		}
-		if len(filter.Currencies) > 0 {
-			query = query.Where(subscriptionlineitem.CurrencyIn(filter.Currencies...))
-		}
-		if len(filter.BillingPeriods) > 0 {
-			query = query.Where(subscriptionlineitem.BillingPeriodIn(filter.BillingPeriods...))
-		}
-
-		// Apply pagination
-		if filter.Limit != nil {
-			query = query.Limit(*filter.Limit)
-		}
-		if filter.Offset != nil {
-			query = query.Offset(*filter.Offset)
-		}
+	// Apply entity-specific filters
+	query, err := r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to apply query options").
+			Mark(ierr.ErrDatabase)
 	}
+
+	// Apply common query options
+	query = ApplyQueryOptions(ctx, query, filter.QueryFilter, r.queryOpts)
 
 	items, err := query.All(ctx)
 	if err != nil {
@@ -426,59 +459,48 @@ func (r *subscriptionLineItemRepository) List(ctx context.Context, filter *types
 
 // Count counts subscription line items based on filter
 func (r *subscriptionLineItemRepository) Count(ctx context.Context, filter *types.SubscriptionLineItemFilter) (int, error) {
-	// Start a span for this repository operation
-	span := StartRepositorySpan(ctx, "subscription_line_item", "count", map[string]interface{}{
-		"filter": filter,
-	})
-	defer FinishSpan(span)
+	if filter == nil {
+		filter = &types.SubscriptionLineItemFilter{
+			QueryFilter: types.NewDefaultQueryFilter(),
+		}
+	}
+
+	if err := filter.Validate(); err != nil {
+		return 0, ierr.WithError(err).
+			WithHint("Invalid filter parameters").
+			Mark(ierr.ErrValidation)
+	}
 
 	client := r.client.Querier(ctx)
 	if client == nil {
 		err := ierr.NewError("failed to get database client").
 			WithHint("Database client is not available").
 			Mark(ierr.ErrDatabase)
-		SetSpanError(span, err)
 		return 0, err
 	}
 
-	query := client.SubscriptionLineItem.Query().
-		Where(
-			subscriptionlineitem.TenantID(types.GetTenantID(ctx)),
-			subscriptionlineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
-		)
+	// Start a span for this repository operation
+	span := StartRepositorySpan(ctx, "subscription_line_item", "count", map[string]interface{}{
+		"tenant_id":        types.GetTenantID(ctx),
+		"subscription_ids": filter.SubscriptionIDs,
+		"entity_ids":       filter.EntityIDs,
+		"price_ids":        filter.PriceIDs,
+	})
+	defer FinishSpan(span)
 
-	// Apply filters
-	if filter != nil {
-		if len(filter.SubscriptionIDs) > 0 {
-			query = query.Where(subscriptionlineitem.SubscriptionIDIn(filter.SubscriptionIDs...))
-		}
-		if len(filter.CustomerIDs) > 0 {
-			query = query.Where(subscriptionlineitem.CustomerIDIn(filter.CustomerIDs...))
-		}
-		if len(filter.EntityIDs) > 0 {
-			query = query.Where(subscriptionlineitem.EntityIDIn(filter.EntityIDs...))
-		}
-		if filter.EntityType != nil {
-			query = query.Where(subscriptionlineitem.EntityType(string(*filter.EntityType)))
-		}
+	query := client.SubscriptionLineItem.Query()
 
-		// TODO: !REMOVE after migration
-		if len(filter.PlanIDs) > 0 {
-			query = query.Where(subscriptionlineitem.EntityIDIn(filter.PlanIDs...), subscriptionlineitem.EntityType(string(types.SubscriptionLineItemEntitiyTypePlan)))
-		}
-		if len(filter.PriceIDs) > 0 {
-			query = query.Where(subscriptionlineitem.PriceIDIn(filter.PriceIDs...))
-		}
-		if len(filter.MeterIDs) > 0 {
-			query = query.Where(subscriptionlineitem.MeterIDIn(filter.MeterIDs...))
-		}
-		if len(filter.Currencies) > 0 {
-			query = query.Where(subscriptionlineitem.CurrencyIn(filter.Currencies...))
-		}
-		if len(filter.BillingPeriods) > 0 {
-			query = query.Where(subscriptionlineitem.BillingPeriodIn(filter.BillingPeriods...))
-		}
+	// Apply entity-specific filters
+	query, err := r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
+	if err != nil {
+		SetSpanError(span, err)
+		return 0, ierr.WithError(err).
+			WithHint("Failed to apply query options").
+			Mark(ierr.ErrDatabase)
 	}
+
+	// Apply common query options
+	query = ApplyQueryOptions(ctx, query, filter.QueryFilter, r.queryOpts)
 
 	count, err := query.Count(ctx)
 	if err != nil {
@@ -492,74 +514,145 @@ func (r *subscriptionLineItemRepository) Count(ctx context.Context, filter *type
 	return count, nil
 }
 
-// GetByPriceID retrieves all line items for a price
-func (r *subscriptionLineItemRepository) GetByPriceID(ctx context.Context, priceID string) ([]*subscription.SubscriptionLineItem, error) {
-	// Start a span for this repository operation
-	span := StartRepositorySpan(ctx, "subscription_line_item", "get_by_price_id", map[string]interface{}{
-		"price_id": priceID,
-	})
-	defer FinishSpan(span)
+// SubscriptionLineItemQuery type alias for better readability
+type SubscriptionLineItemQuery = *ent.SubscriptionLineItemQuery
 
-	client := r.client.Querier(ctx)
+// SubscriptionLineItemQueryOptions implements BaseQueryOptions for subscription line item queries
+type SubscriptionLineItemQueryOptions struct{}
 
-	items, err := client.SubscriptionLineItem.Query().
-		Where(
-			subscriptionlineitem.PriceID(priceID),
-			subscriptionlineitem.TenantID(types.GetTenantID(ctx)),
-			subscriptionlineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
-		).
-		All(ctx)
-
-	if err != nil {
-		SetSpanError(span, err)
-		return nil, ierr.WithError(err).
-			WithHint("Failed to get subscription line items by price").
-			WithReportableDetails(map[string]interface{}{
-				"price_id": priceID,
-			}).
-			Mark(ierr.ErrDatabase)
-	}
-
-	SetSpanSuccess(span)
-	return subscription.GetLineItemFromEntList(items), nil
+func (o SubscriptionLineItemQueryOptions) ApplyTenantFilter(ctx context.Context, query SubscriptionLineItemQuery) SubscriptionLineItemQuery {
+	return query.Where(subscriptionlineitem.TenantID(types.GetTenantID(ctx)))
 }
 
-// GetByPlanID retrieves all line items for a plan
-func (r *subscriptionLineItemRepository) GetByPlanID(ctx context.Context, planID string) ([]*subscription.SubscriptionLineItem, error) {
-	// Start a span for this repository operation
-	span := StartRepositorySpan(ctx, "subscription_line_item", "get_by_plan_id", map[string]interface{}{
-		"plan_id": planID,
+func (o SubscriptionLineItemQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query SubscriptionLineItemQuery) SubscriptionLineItemQuery {
+	return query.Where(subscriptionlineitem.EnvironmentID(types.GetEnvironmentID(ctx)))
+}
+
+func (o SubscriptionLineItemQueryOptions) ApplyStatusFilter(query SubscriptionLineItemQuery, status string) SubscriptionLineItemQuery {
+	if status != "" {
+		return query.Where(subscriptionlineitem.Status(status))
+	}
+	return query
+}
+
+func (o SubscriptionLineItemQueryOptions) ApplySortFilter(query SubscriptionLineItemQuery, field string, order string) SubscriptionLineItemQuery {
+	if field != "" {
+		if order == "desc" {
+			query = query.Order(ent.Desc(o.GetFieldName(field)))
+		} else {
+			query = query.Order(ent.Asc(o.GetFieldName(field)))
+		}
+	}
+	return query
+}
+
+func (o SubscriptionLineItemQueryOptions) ApplyPaginationFilter(query SubscriptionLineItemQuery, limit int, offset int) SubscriptionLineItemQuery {
+	return query.Limit(limit).Offset(offset)
+}
+
+func (o SubscriptionLineItemQueryOptions) GetFieldName(field string) string {
+	switch field {
+	case "created_at":
+		return subscriptionlineitem.FieldCreatedAt
+	case "updated_at":
+		return subscriptionlineitem.FieldUpdatedAt
+	case "start_date":
+		return subscriptionlineitem.FieldStartDate
+	case "end_date":
+		return subscriptionlineitem.FieldEndDate
+	case "status":
+		return subscriptionlineitem.FieldStatus
+	case "subscription_id":
+		return subscriptionlineitem.FieldSubscriptionID
+	case "price_id":
+		return subscriptionlineitem.FieldPriceID
+	case "entity_id":
+		return subscriptionlineitem.FieldEntityID
+	case "entity_type":
+		return subscriptionlineitem.FieldEntityType
+	case "meter_id":
+		return subscriptionlineitem.FieldMeterID
+	case "currency":
+		return subscriptionlineitem.FieldCurrency
+	case "billing_period":
+		return subscriptionlineitem.FieldBillingPeriod
+	default:
+		return field
+	}
+}
+
+// applyEntityQueryOptions applies subscription line item-specific filters to the query
+func (o *SubscriptionLineItemQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.SubscriptionLineItemFilter, query SubscriptionLineItemQuery) (SubscriptionLineItemQuery, error) {
+	// Apply subscription IDs filter if specified
+	if len(f.SubscriptionIDs) > 0 {
+		query = query.Where(subscriptionlineitem.SubscriptionIDIn(f.SubscriptionIDs...))
+	}
+
+	// Apply entity IDs filter if specified
+	if len(f.EntityIDs) > 0 {
+		query = query.Where(subscriptionlineitem.EntityIDIn(f.EntityIDs...))
+	}
+	if f.EntityType != nil {
+		query = query.Where(subscriptionlineitem.EntityType(string(*f.EntityType)))
+	}
+
+	// Apply price IDs filter if specified
+	if len(f.PriceIDs) > 0 {
+		query = query.Where(subscriptionlineitem.PriceIDIn(f.PriceIDs...))
+	}
+	if len(f.MeterIDs) > 0 {
+		query = query.Where(subscriptionlineitem.MeterIDIn(f.MeterIDs...))
+	}
+	if len(f.Currencies) > 0 {
+		query = query.Where(subscriptionlineitem.CurrencyIn(f.Currencies...))
+	}
+	if len(f.BillingPeriods) > 0 {
+		query = query.Where(subscriptionlineitem.BillingPeriodIn(f.BillingPeriods...))
+	}
+
+	if f.ActiveFilter {
+		query = o.applyActiveLineItemFilter(query, f.CurrentPeriodStart)
+	}
+
+	return query, nil
+}
+
+// Cache operations
+func (r *subscriptionLineItemRepository) SetCache(ctx context.Context, lineItem *subscription.SubscriptionLineItem) {
+	span := cache.StartCacheSpan(ctx, "subscription_line_item", "set", map[string]interface{}{
+		"line_item_id": lineItem.ID,
 	})
-	defer FinishSpan(span)
+	defer cache.FinishSpan(span)
 
-	client := r.client.Querier(ctx)
-	if client == nil {
-		err := ierr.NewError("failed to get database client").
-			WithHint("Database client is not available").
-			Mark(ierr.ErrDatabase)
-		SetSpanError(span, err)
-		return nil, err
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	cacheKey := cache.GenerateKey(cache.PrefixSubscriptionLineItem, tenantID, environmentID, lineItem.ID)
+	r.cache.Set(ctx, cacheKey, lineItem, cache.ExpiryDefaultInMemory)
+}
+
+func (r *subscriptionLineItemRepository) GetCache(ctx context.Context, key string) *subscription.SubscriptionLineItem {
+	span := cache.StartCacheSpan(ctx, "subscription_line_item", "get", map[string]interface{}{
+		"line_item_id": key,
+	})
+	defer cache.FinishSpan(span)
+
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	cacheKey := cache.GenerateKey(cache.PrefixSubscriptionLineItem, tenantID, environmentID, key)
+	if value, found := r.cache.Get(ctx, cacheKey); found {
+		return value.(*subscription.SubscriptionLineItem)
 	}
+	return nil
+}
 
-	items, err := client.SubscriptionLineItem.Query().
-		Where(
-			subscriptionlineitem.EntityID(planID),
-			subscriptionlineitem.EntityType(string(types.SubscriptionLineItemEntitiyTypePlan)),
-			subscriptionlineitem.TenantID(types.GetTenantID(ctx)),
-			subscriptionlineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
-		).
-		All(ctx)
+func (r *subscriptionLineItemRepository) DeleteCache(ctx context.Context, lineItemID string) {
+	span := cache.StartCacheSpan(ctx, "subscription_line_item", "delete", map[string]interface{}{
+		"line_item_id": lineItemID,
+	})
+	defer cache.FinishSpan(span)
 
-	if err != nil {
-		SetSpanError(span, err)
-		return nil, ierr.WithError(err).
-			WithHint("Failed to get subscription line items by plan").
-			WithReportableDetails(map[string]interface{}{
-				"plan_id": planID,
-			}).
-			Mark(ierr.ErrDatabase)
-	}
-
-	SetSpanSuccess(span)
-	return subscription.GetLineItemFromEntList(items), nil
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	cacheKey := cache.GenerateKey(cache.PrefixSubscriptionLineItem, tenantID, environmentID, lineItemID)
+	r.cache.Delete(ctx, cacheKey)
 }

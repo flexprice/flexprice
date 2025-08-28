@@ -139,3 +139,37 @@ func SubscriptionLineItemFromEnt(e *ent.SubscriptionLineItem) *SubscriptionLineI
 		},
 	}
 }
+
+// GetPeriod returns period start and end dates based on line item dates
+func (li *SubscriptionLineItem) GetPeriod(defaultPeriodStart, defaultPeriodEnd time.Time) (time.Time, time.Time) {
+	return li.GetPeriodStart(defaultPeriodStart), li.GetPeriodEnd(defaultPeriodEnd)
+}
+
+// GetPeriodStart returns the period start date based on line item dates
+func (li *SubscriptionLineItem) GetPeriodStart(defaultPeriodStart time.Time) time.Time {
+	// If line item has a start date after default period start, use line item start date
+	if !li.StartDate.IsZero() && (li.StartDate.After(defaultPeriodStart) || li.StartDate.Equal(defaultPeriodStart)) {
+		return li.StartDate
+	}
+	return defaultPeriodStart
+}
+
+// GetPeriodEnd returns the period end date based on line item dates
+func (li *SubscriptionLineItem) GetPeriodEnd(defaultPeriodEnd time.Time) time.Time {
+	// If line item has an end date before default period end, use line item end date
+	if !li.EndDate.IsZero() && (li.EndDate.Before(defaultPeriodEnd) || li.EndDate.Equal(defaultPeriodEnd)) {
+		return li.EndDate
+	}
+	return defaultPeriodEnd
+}
+
+// IsWithinPeriod checks if the line item is active within the given period
+func (li *SubscriptionLineItem) IsWithinPeriod(periodStart, periodEnd time.Time) bool {
+	// If line item has no end date, it's always active
+	if li.EndDate.IsZero() {
+		return true
+	}
+
+	// If line item has an end date, it's active if the end date is after period start
+	return li.EndDate.After(periodStart)
+}
