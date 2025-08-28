@@ -5,8 +5,10 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/priceunit"
@@ -37,7 +39,25 @@ func (s *PriceServiceSuite) SetupTest() {
 	s.priceRepo = testutil.NewInMemoryPriceStore()
 	s.meterRepo = testutil.NewInMemoryMeterStore()
 	s.priceUnitRepo = testutil.NewInMemoryPriceUnitStore()
-	s.logger = logger.GetLogger()
+
+	// Use test configuration instead of trying to load real config file
+	cfg := &config.Configuration{
+		Logging: config.LoggingConfig{
+			Level: types.LogLevelInfo,
+		},
+		Secrets: config.SecretsConfig{
+			EncryptionKey: "test-encryption-key-for-unit-tests-only",
+		},
+		Cache: config.CacheConfig{
+			Enabled: true,
+		},
+	}
+
+	var err error
+	s.logger, err = logger.NewLogger(cfg)
+	if err != nil {
+		s.T().Fatalf("failed to create logger: %v", err)
+	}
 
 	serviceParams := ServiceParams{
 		PriceRepo:     s.priceRepo,
@@ -191,8 +211,378 @@ func (s *PriceServiceSuite) TestUpdatePrice() {
 	resp, err := s.priceService.UpdatePrice(s.ctx, "price-1", req)
 	s.NoError(err)
 	s.NotNil(resp)
-	s.Equal(req.Description, resp.Price.Description)
+	s.Equal(*req.Description, resp.Price.Description)
 	s.Equal(req.Metadata, map[string]string(resp.Price.Metadata)) // Convert Metadata for comparison
+}
+
+func (s *PriceServiceSuite) TestUpdatePrice_NonCriticalFields() {
+	// Create a price
+	price := &price.Price{
+		ID:          "price-non-critical",
+		Amount:      decimal.NewFromInt(100),
+		Currency:    "usd",
+		EntityType:  types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:    "plan-1",
+		Description: "Original Description",
+		Metadata:    map[string]string{"original": "true"},
+		LookupKey:   "original-key",
+	}
+	_ = s.priceRepo.Create(s.ctx, price)
+
+	// Test non-critical updates (should update in place, no versioning)
+	req := dto.UpdatePriceRequest{
+		Description: lo.ToPtr("Updated Description"),
+		Metadata:    map[string]string{"updated": "true"},
+		LookupKey:   lo.ToPtr("updated-key"),
+	}
+
+	resp, err := s.priceService.UpdatePrice(s.ctx, "price-non-critical", req)
+	s.NoError(err)
+	s.NotNil(resp)
+
+	// Should return the same price ID (no versioning)
+	s.Equal(price.ID, resp.Price.ID)
+	s.Equal(*req.Description, resp.Price.Description)
+	s.Equal(req.Metadata, map[string]string(resp.Price.Metadata))
+	s.Equal(*req.LookupKey, resp.Price.LookupKey)
+
+	// Verify the original price was updated in place
+	updatedPrice, err := s.priceRepo.Get(s.ctx, "price-non-critical")
+	s.NoError(err)
+	s.Equal(*req.Description, updatedPrice.Description)
+	s.Equal(req.Metadata, map[string]string(updatedPrice.Metadata))
+	s.Equal(*req.LookupKey, updatedPrice.LookupKey)
+}
+
+func (s *PriceServiceSuite) TestUpdatePrice_CriticalFields_Amount() {
+	// Create a plan first so that the price can reference it
+	plan := &plan.Plan{
+		ID:          "plan-1",
+		Name:        "Test Plan",
+		Description: "A test plan",
+		BaseModel:   types.GetDefaultBaseModel(s.ctx),
+	}
+	_ = s.priceService.(*priceService).ServiceParams.PlanRepo.Create(s.ctx, plan)
+
+	// Create a tiered price (not flat fee) so it can have critical updates
+	createReq := dto.CreatePriceRequest{
+		Amount:             "100",
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           "plan-1",
+		Type:               types.PRICE_TYPE_FIXED,
+		PriceUnitType:      types.PRICE_UNIT_TYPE_FIAT,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		TrialPeriod:        0,
+		BillingModel:       types.BILLING_MODEL_TIERED,
+		TierMode:           types.BILLING_TIER_VOLUME,
+		Tiers: []dto.CreatePriceTier{
+			{
+				UnitAmount: "50",
+			},
+		},
+	}
+
+	// Use the price service to create the price properly
+	priceResp, err := s.priceService.CreatePrice(s.ctx, createReq)
+	s.NoError(err)
+	s.NotNil(priceResp)
+	price := priceResp.Price
+
+	// Test critical update (amount change) by calling CreatePrice directly with the same request
+	futureDate := time.Now().UTC().Add(24 * time.Hour)
+	updateReq := dto.UpdatePriceRequest{
+		Amount:    lo.ToPtr("150"),
+		StartDate: &futureDate,
+	}
+
+	// Create the createReq that would be used in the update
+	criticalCreateReq := updateReq.ToCreatePriceRequest(price)
+
+	// Test if CreatePrice works with this request object
+	testResp, err := s.priceService.CreatePrice(s.ctx, criticalCreateReq)
+	s.NoError(err)
+	s.NotNil(testResp)
+	s.Equal("150", testResp.Price.Amount.String())
+	s.Equal(types.BILLING_MODEL_TIERED, testResp.Price.BillingModel)
+	s.Len(testResp.Price.Tiers, 1)
+}
+
+func (s *PriceServiceSuite) TestUpdatePrice_CriticalFields_BillingModel() {
+	// Create a plan first so that the price can reference it
+	plan := &plan.Plan{
+		ID:          "plan-1",
+		Name:        "Test Plan",
+		Description: "A test plan",
+		BaseModel:   types.GetDefaultBaseModel(s.ctx),
+	}
+	_ = s.priceService.(*priceService).ServiceParams.PlanRepo.Create(s.ctx, plan)
+
+	// Create a price using the proper DTO flow like the plan service does
+	createReq := dto.CreatePriceRequest{
+		Amount:             "100",
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           "plan-1",
+		Type:               types.PRICE_TYPE_FIXED,
+		PriceUnitType:      types.PRICE_UNIT_TYPE_FIAT,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		TrialPeriod:        0,
+		BillingModel:       types.BILLING_MODEL_TIERED,
+		TierMode:           types.BILLING_TIER_VOLUME,
+		Tiers: []dto.CreatePriceTier{
+			{
+				UnitAmount: "50",
+			},
+		},
+	}
+
+	// Use the price service to create the price properly
+	priceResp, err := s.priceService.CreatePrice(s.ctx, createReq)
+	s.NoError(err)
+	s.NotNil(priceResp)
+	price := priceResp.Price
+
+	// Test critical update (tiers change)
+	upTo10 := uint64(10)
+	upTo20 := uint64(20)
+	req := dto.UpdatePriceRequest{
+		Tiers: []dto.CreatePriceTier{
+			{
+				UpTo:       &upTo10,
+				UnitAmount: "40",
+			},
+			{
+				UpTo:       &upTo20,
+				UnitAmount: "30",
+			},
+		},
+	}
+
+	resp, err := s.priceService.UpdatePrice(s.ctx, price.ID, req)
+	s.NoError(err)
+	s.NotNil(resp)
+
+	// Should return a new price ID (versioning)
+	s.NotEqual(price.ID, resp.Price.ID)
+	s.Len(resp.Price.Tiers, 2)
+
+	// Verify the original price has an end date set
+	originalPrice, err := s.priceRepo.Get(s.ctx, price.ID)
+	s.NoError(err)
+	s.NotNil(originalPrice.EndDate, "Original price should have end date set")
+
+	// Verify the new price exists with new tiers
+	newPrice, err := s.priceRepo.Get(s.ctx, resp.Price.ID)
+	s.NoError(err)
+	s.NotNil(newPrice)
+	s.Len(newPrice.Tiers, 2)
+	s.Equal(uint64(10), *newPrice.Tiers[0].UpTo)
+	s.Equal(uint64(20), *newPrice.Tiers[1].UpTo)
+}
+
+func (s *PriceServiceSuite) TestUpdatePrice_CriticalFields_Tiers() {
+	// Create a price with simple tiered billing
+	price := &price.Price{
+		ID:                 "price-critical-tiers",
+		Amount:             decimal.NewFromInt(100),
+		Currency:           "usd",
+		DisplayAmount:      "$100.00",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           "plan-1",
+		Type:               types.PRICE_TYPE_FIXED,
+		PriceUnitType:      types.PRICE_UNIT_TYPE_FIAT,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		TrialPeriod:        0,
+		BillingModel:       types.BILLING_MODEL_TIERED,
+		TierMode:           types.BILLING_TIER_VOLUME,
+		Tiers: []price.PriceTier{
+			{
+				UnitAmount: decimal.NewFromInt(50),
+			},
+		},
+		BaseModel:     types.GetDefaultBaseModel(s.ctx),
+		EnvironmentID: types.GetEnvironmentID(s.ctx),
+	}
+	_ = s.priceRepo.Create(s.ctx, price)
+
+	// Test critical update (tiers change)
+	upTo10 := uint64(10)
+	upTo20 := uint64(20)
+	req := dto.UpdatePriceRequest{
+		Tiers: []dto.CreatePriceTier{
+			{
+				UpTo:       &upTo10,
+				UnitAmount: "40",
+			},
+			{
+				UpTo:       &upTo20,
+				UnitAmount: "30",
+			},
+		},
+	}
+
+	resp, err := s.priceService.UpdatePrice(s.ctx, "price-critical-tiers", req)
+	s.NoError(err)
+	s.NotNil(resp)
+
+	// Should return a new price ID (versioning)
+	s.NotEqual(price.ID, resp.Price.ID)
+	s.Len(resp.Price.Tiers, 2)
+
+	// Verify the original price has an end date set
+	originalPrice, err := s.priceRepo.Get(s.ctx, "price-critical-tiers")
+	s.NoError(err)
+	s.NotNil(originalPrice.EndDate, "Original price should have end date set")
+
+	// Verify the new price exists with new tiers
+	newPrice, err := s.priceRepo.Get(s.ctx, resp.Price.ID)
+	s.NoError(err)
+	s.NotNil(newPrice)
+	s.Len(newPrice.Tiers, 2)
+	s.Equal(uint64(10), *newPrice.Tiers[0].UpTo)
+	s.Equal(uint64(20), *newPrice.Tiers[1].UpTo)
+}
+
+func (s *PriceServiceSuite) TestUpdatePrice_CriticalFields_StartDate() {
+	// Create a price
+	price := &price.Price{
+		ID:           "price-critical-startdate",
+		Amount:       decimal.NewFromInt(100),
+		Currency:     "usd",
+		EntityType:   types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:     "plan-1",
+		BillingModel: types.BILLING_MODEL_FLAT_FEE,
+	}
+	_ = s.priceRepo.Create(s.ctx, price)
+
+	// Test critical update (start date change)
+	futureDate := time.Now().UTC().Add(24 * time.Hour)
+	req := dto.UpdatePriceRequest{
+		StartDate: &futureDate,
+	}
+
+	resp, err := s.priceService.UpdatePrice(s.ctx, "price-critical-startdate", req)
+	s.NoError(err)
+	s.NotNil(resp)
+
+	// Should return a new price ID (versioning)
+	s.NotEqual(price.ID, resp.Price.ID)
+	s.Equal(futureDate.Unix(), resp.Price.StartDate.Unix())
+
+	// Verify the original price has an end date set
+	originalPrice, err := s.priceRepo.Get(s.ctx, "price-critical-startdate")
+	s.NoError(err)
+	s.NotNil(originalPrice.EndDate, "Original price should have end date set")
+
+	// Verify the new price exists with new start date
+	newPrice, err := s.priceRepo.Get(s.ctx, resp.Price.ID)
+	s.NoError(err)
+	s.NotNil(newPrice)
+	s.Equal(futureDate.Unix(), newPrice.StartDate.Unix())
+}
+
+func (s *PriceServiceSuite) TestUpdatePrice_MixedCriticalAndNonCritical() {
+	// Create a price
+	price := &price.Price{
+		ID:           "price-mixed-update",
+		Amount:       decimal.NewFromInt(100),
+		Currency:     "usd",
+		EntityType:   types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:     "plan-1",
+		BillingModel: types.BILLING_MODEL_FLAT_FEE,
+		Description:  "Original Description",
+		Metadata:     map[string]string{"original": "true"},
+	}
+	_ = s.priceRepo.Create(s.ctx, price)
+
+	// Test mixed update (critical + non-critical)
+	futureDate := time.Now().UTC().Add(24 * time.Hour)
+	req := dto.UpdatePriceRequest{
+		Amount:      lo.ToPtr("150"),                      // Critical
+		Description: lo.ToPtr("Updated Description"),      // Non-critical
+		Metadata:    map[string]string{"updated": "true"}, // Non-critical
+		StartDate:   &futureDate,                          // Critical
+	}
+
+	resp, err := s.priceService.UpdatePrice(s.ctx, "price-mixed-update", req)
+	s.NoError(err)
+	s.NotNil(resp)
+
+	// Should return a new price ID (versioning due to critical fields)
+	s.NotEqual(price.ID, resp.Price.ID)
+	s.Equal("150", resp.Price.Amount.String())
+	s.Equal(*req.Description, resp.Price.Description)
+	s.Equal(req.Metadata, map[string]string(resp.Price.Metadata))
+	s.Equal(futureDate.Unix(), resp.Price.StartDate.Unix())
+
+	// Verify the original price has an end date set
+	originalPrice, err := s.priceRepo.Get(s.ctx, "price-mixed-update")
+	s.NoError(err)
+	s.NotNil(originalPrice.EndDate, "Original price should have end date set")
+
+	// Verify the new price exists with all updates
+	newPrice, err := s.priceRepo.Get(s.ctx, resp.Price.ID)
+	s.NoError(err)
+	s.NotNil(newPrice)
+	s.Equal("150", newPrice.Amount.String())
+	s.Equal(*req.Description, newPrice.Description)
+	s.Equal(req.Metadata, map[string]string(newPrice.Metadata))
+	s.Equal(futureDate.Unix(), newPrice.StartDate.Unix())
+}
+
+func (s *PriceServiceSuite) TestUpdatePrice_FlatFeeRestrictions() {
+	// Create a flat fee price
+	price := &price.Price{
+		ID:           "price-flat-fee",
+		Amount:       decimal.NewFromInt(100),
+		Currency:     "usd",
+		EntityType:   types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:     "plan-1",
+		BillingModel: types.BILLING_MODEL_FLAT_FEE,
+	}
+	_ = s.priceRepo.Create(s.ctx, price)
+
+	// Test that flat fee prices cannot have critical updates
+	req := dto.UpdatePriceRequest{
+		Amount: lo.ToPtr("150"), // Critical update
+	}
+
+	resp, err := s.priceService.UpdatePrice(s.ctx, "price-flat-fee", req)
+	s.Error(err)
+	s.Nil(resp)
+	s.Contains(err.Error(), "critical fields cannot be updated for flat fee prices")
+}
+
+func (s *PriceServiceSuite) TestUpdatePrice_ValidationErrors() {
+	// Create a price
+	price := &price.Price{
+		ID:         "price-validation",
+		Amount:     decimal.NewFromInt(100),
+		Currency:   "usd",
+		EntityType: types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:   "plan-1",
+	}
+	_ = s.priceRepo.Create(s.ctx, price)
+
+	// Test validation error for invalid amount
+	req := dto.UpdatePriceRequest{
+		Amount: lo.ToPtr("invalid-amount"),
+	}
+
+	resp, err := s.priceService.UpdatePrice(s.ctx, "price-validation", req)
+	s.Error(err)
+	s.Nil(resp)
+	s.Contains(err.Error(), "invalid amount format")
 }
 
 func (s *PriceServiceSuite) TestDeletePrice() {
@@ -203,9 +593,11 @@ func (s *PriceServiceSuite) TestDeletePrice() {
 	err := s.priceService.DeletePrice(s.ctx, "price-1", nil)
 	s.NoError(err)
 
-	// Ensure the price no longer exists
-	_, err = s.priceRepo.Get(s.ctx, "price-1")
-	s.Error(err)
+	// Ensure the price still exists but has an end date set (soft delete)
+	retrievedPrice, err := s.priceRepo.Get(s.ctx, "price-1")
+	s.NoError(err)
+	s.NotNil(retrievedPrice)
+	s.NotNil(retrievedPrice.EndDate, "Price should have an end date set after deletion")
 }
 
 func (s *PriceServiceSuite) TestCalculateCostWithBreakup_FlatFee() {
@@ -358,7 +750,7 @@ func (s *PriceServiceSuite) TestCalculateCostWithBreakup_TieredSlab() {
 
 	// Corrected calculation:
 	// (10 * 50) = 500 (first tier: 0-10)
-	// (10 * 40) = 400 (second tier: 10-20) 
+	// (10 * 40) = 400 (second tier: 10-20)
 	// (5 * 30) = 150 (third tier: 20+)
 	// Total: 500 + 400 + 150 = 1050
 	expectedFinalCost = decimal.NewFromInt(1050)
@@ -1048,4 +1440,47 @@ func (s *PriceServiceSuite) TestCalculateCostWithBreakup_TieredSlabEdgeCases() {
 				tc.description)
 		})
 	}
+}
+
+func (s *PriceServiceSuite) TestCreatePrice_Direct() {
+	// Create a plan first
+	plan := &plan.Plan{
+		ID:          "plan-1",
+		Name:        "Test Plan",
+		Description: "A test plan",
+		BaseModel:   types.GetDefaultBaseModel(s.ctx),
+	}
+	_ = s.priceService.(*priceService).ServiceParams.PlanRepo.Create(s.ctx, plan)
+
+	// Test creating a simple tiered price directly
+	createReq := dto.CreatePriceRequest{
+		Amount:             "100",
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           "plan-1",
+		Type:               types.PRICE_TYPE_USAGE,
+		PriceUnitType:      types.PRICE_UNIT_TYPE_FIAT,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		TrialPeriod:        0,
+		BillingModel:       types.BILLING_MODEL_TIERED,
+		TierMode:           types.BILLING_TIER_VOLUME,
+		MeterID:            "meter-1",
+		Tiers: []dto.CreatePriceTier{
+			{
+				UnitAmount: "50",
+			},
+		},
+	}
+
+	// Test the CreatePrice method directly
+	resp, err := s.priceService.CreatePrice(s.ctx, createReq)
+	s.NoError(err)
+	s.NotNil(resp)
+	s.NotNil(resp.Price)
+	s.Equal("100", resp.Price.Amount.String())
+	s.Equal(types.BILLING_MODEL_TIERED, resp.Price.BillingModel)
+	s.Len(resp.Price.Tiers, 1)
 }

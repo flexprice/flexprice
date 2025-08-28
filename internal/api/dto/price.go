@@ -793,6 +793,7 @@ func (r *UpdatePriceRequest) ToCreatePriceRequest(p *price.Price) CreatePriceReq
 		PriceUnitType:      p.PriceUnitType,
 		BillingPeriod:      p.BillingPeriod,
 		BillingPeriodCount: p.BillingPeriodCount,
+		BillingModel:       p.BillingModel,
 		BillingCadence:     p.BillingCadence,
 		InvoiceCadence:     p.InvoiceCadence,
 		TrialPeriod:        p.TrialPeriod,
@@ -800,6 +801,7 @@ func (r *UpdatePriceRequest) ToCreatePriceRequest(p *price.Price) CreatePriceReq
 		Description:        p.Description,
 		Metadata:           p.Metadata,
 		TierMode:           p.TierMode,
+		LookupKey:          p.LookupKey,
 		TransformQuantity: func() *price.TransformQuantity {
 			if p.TransformQuantity != (price.JSONBTransformQuantity{}) {
 				return (*price.TransformQuantity)(&p.TransformQuantity)

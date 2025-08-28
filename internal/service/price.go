@@ -726,11 +726,14 @@ func (s *priceService) DeletePrice(ctx context.Context, id string, req *dto.Dele
 		return err
 	}
 
-	if err := req.Validate(p); err != nil {
-		return err
+	// Handle nil request case
+	if req != nil {
+		if err := req.Validate(p); err != nil {
+			return err
+		}
+		p.EndDate = req.EndDate
 	}
 
-	p.EndDate = req.EndDate
 	if p.EndDate == nil {
 		p.EndDate = lo.ToPtr(time.Now().UTC())
 	}
