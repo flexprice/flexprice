@@ -12,7 +12,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/repository/ent"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -750,8 +749,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*SyncPlanP
 	totalRemoved := 0
 	totalSkipped := 0
 
-	// Get line item repository from ent package
-	lineItemRepo := ent.NewSubscriptionLineItemRepository(s.DB)
+	// Get line item repository
 
 	// Iterate through each subscription
 	for _, sub := range subs {
@@ -772,7 +770,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*SyncPlanP
 		}
 
 		// Get existing line items for the subscription
-		lineItems, err := lineItemRepo.ListBySubscription(ctx, sub)
+		lineItems, err := s.SubscriptionLineItemRepo.ListBySubscription(ctx, sub)
 		if err != nil {
 			s.Logger.Infow("Failed to get line items for subscription", "subscription_id", sub.ID, "error", err)
 			continue
@@ -844,7 +842,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*SyncPlanP
 				newLineItem.Quantity = decimal.NewFromInt(1)
 			}
 
-			err = lineItemRepo.Create(ctx, newLineItem)
+			err = s.SubscriptionLineItemRepo.Create(ctx, newLineItem)
 			if err != nil {
 				s.Logger.Infow("Failed to create line item for subscription", "subscription_id", sub.ID, "error", err)
 				continue
@@ -861,7 +859,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*SyncPlanP
 				item.Status = types.StatusDeleted
 				item.UpdatedAt = time.Now()
 
-				err = lineItemRepo.Update(ctx, item)
+				err = s.SubscriptionLineItemRepo.Update(ctx, item)
 				if err != nil {
 					s.Logger.Infow("Failed to delete line item for subscription", "subscription_id", sub.ID, "error", err)
 					continue

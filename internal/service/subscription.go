@@ -52,8 +52,10 @@ type SubscriptionService interface {
 	AddAddonToSubscription(ctx context.Context, subscriptionID string, req *dto.AddAddonToSubscriptionRequest) (*addonassociation.AddonAssociation, error)
 	RemoveAddonFromSubscription(ctx context.Context, subscriptionID string, addonID string, reason string) error
 
-	// Bulk price sync
-
+	// line item related methods
+	// NOTE: this should not be exposed as api
+	DeleteSubscriptionLineItem(ctx context.Context, id string, req *dto.DeleteSubscriptionLineItemRequest) error
+	CreateSubscriptionLineItem(ctx context.Context, subscriptionID string, req *dto.CreateSubscriptionLineItemRequest) (*subscription.SubscriptionLineItem, error)
 }
 
 type subscriptionService struct {
@@ -3304,44 +3306,149 @@ func (s *subscriptionService) RemoveAddonFromSubscription(
 
 // createLineItemFromPrice creates a subscription line item from a price for addon additions
 func (s *subscriptionService) createLineItemFromPrice(ctx context.Context, priceResponse *dto.PriceResponse, sub *subscription.Subscription, addonID, addonName string) *subscription.SubscriptionLineItem {
-	price := priceResponse.Price
-
-	lineItem := &subscription.SubscriptionLineItem{
-		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
-		SubscriptionID: sub.ID,
-		CustomerID:     sub.CustomerID,
-		EntityID:       addonID,
-		EntityType:     types.SubscriptionLineItemEntitiyTypeAddon,
-		PriceID:        price.ID,
-		PriceType:      price.Type,
-		Currency:       sub.Currency,
-		BillingPeriod:  price.BillingPeriod,
-		InvoiceCadence: price.InvoiceCadence,
-		TrialPeriod:    0,
-		StartDate:      time.Now(),
-		EndDate:        time.Time{},
+	// Use the generic DTO to create the line item
+	createReq := &dto.CreateSubscriptionLineItemRequest{
+		EntityID:          addonID,
+		EntityType:        types.SubscriptionLineItemEntitiyTypeAddon,
+		PriceID:           priceResponse.Price.ID,
+		Quantity:          decimal.NewFromInt(1),
+		DisplayName:       addonName,
+		EntityDisplayName: addonName,
+		StartDate:         lo.ToPtr(time.Now().UTC()),
 		Metadata: map[string]string{
 			"addon_id":        addonID,
 			"subscription_id": sub.ID,
 			"addon_quantity":  "1",
 			"addon_status":    string(types.AddonStatusActive),
 		},
-		EnvironmentID: sub.EnvironmentID,
-		BaseModel:     types.GetDefaultBaseModel(ctx),
 	}
 
-	// Set price-related fields
-	if price.Type == types.PRICE_TYPE_USAGE && price.MeterID != "" && priceResponse.Meter != nil {
-		lineItem.MeterID = price.MeterID
-		lineItem.MeterDisplayName = priceResponse.Meter.Name
-		lineItem.DisplayName = priceResponse.Meter.Name
-		lineItem.Quantity = decimal.Zero
-	} else {
-		lineItem.DisplayName = addonName
-		lineItem.Quantity = decimal.NewFromInt(1)
+	// Set quantity to zero for usage prices
+	if priceResponse.Type == types.PRICE_TYPE_USAGE && priceResponse.MeterID != "" && priceResponse.Meter != nil {
+		createReq.Quantity = decimal.Zero
+		createReq.DisplayName = priceResponse.Meter.Name
 	}
+
+	// Convert to domain object
+	lineItem := createReq.ToSubscriptionLineItem(ctx, sub, priceResponse)
+
+	// Set additional fields that might not be handled by the generic DTO
+	lineItem.PriceUnitID = priceResponse.PriceUnitID
+	lineItem.PriceUnit = priceResponse.PriceUnit
 
 	return lineItem
+}
+
+// CreateSubscriptionLineItem creates a subscription line item using the generic DTO
+func (s *subscriptionService) CreateSubscriptionLineItem(ctx context.Context, subscriptionID string, req *dto.CreateSubscriptionLineItemRequest) (*subscription.SubscriptionLineItem, error) {
+	s.Logger.Infow("creating subscription line item",
+		"subscription_id", subscriptionID,
+		"entity_id", req.EntityID,
+		"entity_type", req.EntityType,
+		"price_id", req.PriceID)
+
+	// Validate the request
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Get the subscription to validate it exists and is active
+	subscription, err := s.SubRepo.Get(ctx, subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Validate subscription is active
+	if subscription.SubscriptionStatus != types.SubscriptionStatusActive {
+		return nil, ierr.NewError("subscription is not active").
+			WithHint("Cannot add line items to inactive subscription").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_id": subscriptionID,
+				"status":          subscription.SubscriptionStatus,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Get the price to validate it exists and is valid
+	priceService := NewPriceService(s.ServiceParams)
+	price, err := priceService.GetPrice(ctx, req.PriceID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Validate price is active
+	if price.Status != types.StatusPublished {
+		return nil, ierr.NewError("price is not active").
+			WithHint("Cannot use inactive price for line item").
+			WithReportableDetails(map[string]interface{}{
+				"price_id": req.PriceID,
+				"status":   price.Status,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Validate currency matches subscription
+	if !types.IsMatchingCurrency(price.Currency, subscription.Currency) {
+		return nil, ierr.NewError("currency mismatch").
+			WithHint("Price currency must match subscription currency").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_currency": subscription.Currency,
+				"price_currency":        price.Currency,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Validate billing period matches subscription
+	if price.BillingPeriod != subscription.BillingPeriod {
+		return nil, ierr.NewError("billing period mismatch").
+			WithHint("Price billing period must match subscription billing period").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_billing_period": subscription.BillingPeriod,
+				"price_billing_period":        price.BillingPeriod,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	lineItem := req.ToSubscriptionLineItem(ctx, subscription, price)
+
+	err = s.SubscriptionLineItemRepo.Create(ctx, lineItem)
+	if err != nil {
+		return nil, err
+	}
+
+	s.Logger.Infow("successfully created subscription line item",
+		"subscription_id", subscriptionID,
+		"line_item_id", lineItem.ID,
+		"entity_id", req.EntityID,
+		"entity_type", req.EntityType,
+		"price_id", req.PriceID)
+
+	return lineItem, nil
+}
+
+// DeleteSubscriptionLineItem deletes a subscription line item
+func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, id string, req *dto.DeleteSubscriptionLineItemRequest) error {
+	s.Logger.Infow("deleting subscription line item", "line_item_id", id)
+
+	// Get subscription line item
+	lineItem, err := s.SubscriptionLineItemRepo.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	// Delete subscription line item
+	if req.EndDate != nil {
+		lineItem.EndDate = *req.EndDate
+	} else {
+		lineItem.EndDate = time.Now().UTC()
+	}
+
+	err = s.SubscriptionLineItemRepo.Update(ctx, lineItem)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // ActivateIncompleteSubscription activates a subscription that is in incomplete status

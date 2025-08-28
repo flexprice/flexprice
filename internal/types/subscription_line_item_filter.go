@@ -1,5 +1,7 @@
 package types
 
+import "time"
+
 // SubscriptionLineItemFilter defines filters for querying subscription line items
 type SubscriptionLineItemFilter struct {
 	*QueryFilter
@@ -15,8 +17,9 @@ type SubscriptionLineItemFilter struct {
 	EntityIDs       []string                         `json:"entity_ids,omitempty" form:"entity_ids"`
 	EntityType      *SubscriptionLineItemEntitiyType `json:"entity_type,omitempty" form:"entity_type"`
 
-	// TODO: !REMOVE after migration
-	PlanIDs []string `json:"plan_ids,omitempty" form:"plan_ids"`
+	// Active filtering
+	ActiveFilter       bool       `json:"active_filter,omitempty" form:"active_filter"`
+	CurrentPeriodStart *time.Time `json:"current_period_start,omitempty" form:"current_period_start"`
 }
 
 // NewSubscriptionLineItemFilter creates a new subscription line item filter with default options
@@ -31,6 +34,37 @@ func NewNoLimitSubscriptionLineItemFilter() *SubscriptionLineItemFilter {
 	return &SubscriptionLineItemFilter{
 		QueryFilter: NewNoLimitQueryFilter(),
 	}
+}
+
+// NewActiveSubscriptionLineItemFilter creates a new subscription line item filter with active filtering enabled
+// This ensures only active subscription line items are returned (where EndDate > CurrentPeriodStart or EndDate is nil)
+func NewActiveSubscriptionLineItemFilter(currentPeriodStart time.Time) *SubscriptionLineItemFilter {
+	return &SubscriptionLineItemFilter{
+		QueryFilter:        NewDefaultQueryFilter(),
+		ActiveFilter:       true,
+		CurrentPeriodStart: &currentPeriodStart,
+	}
+}
+
+// NewNoLimitActiveSubscriptionLineItemFilter creates a new subscription line item filter with active filtering enabled and no pagination
+func NewNoLimitActiveSubscriptionLineItemFilter(currentPeriodStart time.Time) *SubscriptionLineItemFilter {
+	return &SubscriptionLineItemFilter{
+		QueryFilter:        NewNoLimitQueryFilter(),
+		ActiveFilter:       true,
+		CurrentPeriodStart: &currentPeriodStart,
+	}
+}
+
+// EnableActiveFilter enables active filtering for this filter
+func (f *SubscriptionLineItemFilter) EnableActiveFilter(currentPeriodStart time.Time) {
+	f.ActiveFilter = true
+	f.CurrentPeriodStart = &currentPeriodStart
+}
+
+// DisableActiveFilter disables active filtering for this filter
+func (f *SubscriptionLineItemFilter) DisableActiveFilter() {
+	f.ActiveFilter = false
+	f.CurrentPeriodStart = nil
 }
 
 // Validate validates the subscription line item filter

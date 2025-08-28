@@ -55,12 +55,6 @@ func lineItemFilterFn(ctx context.Context, item *subscription.SubscriptionLineIt
 	}
 
 	// Filter by plan IDs
-	if len(f.PlanIDs) > 0 {
-		// Check if the item's EntityID matches any of the plan IDs and EntityType is plan
-		if item.EntityType != types.SubscriptionLineItemEntitiyTypePlan || !lo.Contains(f.PlanIDs, item.EntityID) {
-			return false
-		}
-	}
 
 	// Filter by price IDs
 	if len(f.PriceIDs) > 0 && !lo.Contains(f.PriceIDs, item.PriceID) {
@@ -258,14 +252,6 @@ func (s *InMemorySubscriptionLineItemStore) Count(ctx context.Context, filter *t
 func (s *InMemorySubscriptionLineItemStore) GetByPriceID(ctx context.Context, priceID string) ([]*subscription.SubscriptionLineItem, error) {
 	filter := &types.SubscriptionLineItemFilter{
 		PriceIDs: []string{priceID},
-	}
-	return s.List(ctx, filter)
-}
-
-// GetByPlanID retrieves all line items for a plan
-func (s *InMemorySubscriptionLineItemStore) GetByPlanID(ctx context.Context, planID string) ([]*subscription.SubscriptionLineItem, error) {
-	filter := &types.SubscriptionLineItemFilter{
-		PlanIDs: []string{planID},
 	}
 	return s.List(ctx, filter)
 }
