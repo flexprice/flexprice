@@ -1279,9 +1279,9 @@ var (
 				},
 			},
 			{
-				Name:    "price_tenant_id_environment_id",
+				Name:    "price_tenant_id_environment_id_start_date_end_date",
 				Unique:  false,
-				Columns: []*schema.Column{PricesColumns[1], PricesColumns[7]},
+				Columns: []*schema.Column{PricesColumns[1], PricesColumns[7], PricesColumns[35], PricesColumns[36]},
 			},
 		},
 	}
