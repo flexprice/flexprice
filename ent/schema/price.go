@@ -195,8 +195,9 @@ func (Price) Fields() []ent.Field {
 			Nillable(),
 
 		field.Time("start_date").
-			Default(time.Now).
 			Nillable().
+			Default(time.Now).
+			Optional().
 			Immutable(),
 
 		field.Time("end_date").

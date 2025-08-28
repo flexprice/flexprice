@@ -845,6 +845,9 @@ func (pu *PriceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if pu.mutation.ParentPriceIDCleared() {
 		_spec.ClearField(price.FieldParentPriceID, field.TypeString)
 	}
+	if pu.mutation.StartDateCleared() {
+		_spec.ClearField(price.FieldStartDate, field.TypeTime)
+	}
 	if value, ok := pu.mutation.EndDate(); ok {
 		_spec.SetField(price.FieldEndDate, field.TypeTime, value)
 	}
@@ -1787,6 +1790,9 @@ func (puo *PriceUpdateOne) sqlSave(ctx context.Context) (_node *Price, err error
 	}
 	if puo.mutation.ParentPriceIDCleared() {
 		_spec.ClearField(price.FieldParentPriceID, field.TypeString)
+	}
+	if puo.mutation.StartDateCleared() {
+		_spec.ClearField(price.FieldStartDate, field.TypeTime)
 	}
 	if value, ok := puo.mutation.EndDate(); ok {
 		_spec.SetField(price.FieldEndDate, field.TypeTime, value)

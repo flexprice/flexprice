@@ -635,9 +635,6 @@ func (pc *PriceCreate) check() error {
 	if _, ok := pc.mutation.TrialPeriod(); !ok {
 		return &ValidationError{Name: "trial_period", err: errors.New(`ent: missing required field "Price.trial_period"`)}
 	}
-	if _, ok := pc.mutation.StartDate(); !ok {
-		return &ValidationError{Name: "start_date", err: errors.New(`ent: missing required field "Price.start_date"`)}
-	}
 	return nil
 }
 

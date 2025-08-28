@@ -35646,9 +35646,22 @@ func (m *PriceMutation) OldStartDate(ctx context.Context) (v *time.Time, err err
 	return oldValue.StartDate, nil
 }
 
+// ClearStartDate clears the value of the "start_date" field.
+func (m *PriceMutation) ClearStartDate() {
+	m.start_date = nil
+	m.clearedFields[price.FieldStartDate] = struct{}{}
+}
+
+// StartDateCleared returns if the "start_date" field was cleared in this mutation.
+func (m *PriceMutation) StartDateCleared() bool {
+	_, ok := m.clearedFields[price.FieldStartDate]
+	return ok
+}
+
 // ResetStartDate resets all changes to the "start_date" field.
 func (m *PriceMutation) ResetStartDate() {
 	m.start_date = nil
+	delete(m.clearedFields, price.FieldStartDate)
 }
 
 // SetEndDate sets the "end_date" field.
@@ -36529,6 +36542,9 @@ func (m *PriceMutation) ClearedFields() []string {
 	if m.FieldCleared(price.FieldParentPriceID) {
 		fields = append(fields, price.FieldParentPriceID)
 	}
+	if m.FieldCleared(price.FieldStartDate) {
+		fields = append(fields, price.FieldStartDate)
+	}
 	if m.FieldCleared(price.FieldEndDate) {
 		fields = append(fields, price.FieldEndDate)
 	}
@@ -36608,6 +36624,9 @@ func (m *PriceMutation) ClearField(name string) error {
 		return nil
 	case price.FieldParentPriceID:
 		m.ClearParentPriceID()
+		return nil
+	case price.FieldStartDate:
+		m.ClearStartDate()
 		return nil
 	case price.FieldEndDate:
 		m.ClearEndDate()
