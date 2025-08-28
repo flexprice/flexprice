@@ -1245,6 +1245,8 @@ var (
 		{Name: "entity_type", Type: field.TypeString, Nullable: true, Default: "PLAN", SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "entity_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "parent_price_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "start_date", Type: field.TypeTime},
+		{Name: "end_date", Type: field.TypeTime, Nullable: true},
 		{Name: "addon_prices", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "price_unit_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
@@ -1256,13 +1258,13 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "prices_addons_prices",
-				Columns:    []*schema.Column{PricesColumns[35]},
+				Columns:    []*schema.Column{PricesColumns[37]},
 				RefColumns: []*schema.Column{AddonsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "prices_price_unit_price_unit_edge",
-				Columns:    []*schema.Column{PricesColumns[36]},
+				Columns:    []*schema.Column{PricesColumns[38]},
 				RefColumns: []*schema.Column{PriceUnitColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -1280,6 +1282,11 @@ var (
 				Name:    "price_tenant_id_environment_id",
 				Unique:  false,
 				Columns: []*schema.Column{PricesColumns[1], PricesColumns[7]},
+			},
+			{
+				Name:    "price_start_date_end_date",
+				Unique:  false,
+				Columns: []*schema.Column{PricesColumns[35], PricesColumns[36]},
 			},
 		},
 	}

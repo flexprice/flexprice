@@ -84,6 +84,10 @@ const (
 	FieldEntityID = "entity_id"
 	// FieldParentPriceID holds the string denoting the parent_price_id field in the database.
 	FieldParentPriceID = "parent_price_id"
+	// FieldStartDate holds the string denoting the start_date field in the database.
+	FieldStartDate = "start_date"
+	// FieldEndDate holds the string denoting the end_date field in the database.
+	FieldEndDate = "end_date"
 	// EdgeCostsheet holds the string denoting the costsheet edge name in mutations.
 	EdgeCostsheet = "costsheet"
 	// EdgePriceUnitEdge holds the string denoting the price_unit_edge edge name in mutations.
@@ -144,6 +148,8 @@ var Columns = []string{
 	FieldEntityType,
 	FieldEntityID,
 	FieldParentPriceID,
+	FieldStartDate,
+	FieldEndDate,
 }
 
 // ForeignKeys holds the SQL foreign-keys that are owned by the "prices"
@@ -202,6 +208,8 @@ var (
 	DefaultTrialPeriod int
 	// DefaultEntityType holds the default value on creation for the "entity_type" field.
 	DefaultEntityType string
+	// DefaultStartDate holds the default value on creation for the "start_date" field.
+	DefaultStartDate func() time.Time
 )
 
 // OrderOption defines the ordering options for the Price queries.
@@ -360,6 +368,16 @@ func ByEntityID(opts ...sql.OrderTermOption) OrderOption {
 // ByParentPriceID orders the results by the parent_price_id field.
 func ByParentPriceID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldParentPriceID, opts...).ToFunc()
+}
+
+// ByStartDate orders the results by the start_date field.
+func ByStartDate(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldStartDate, opts...).ToFunc()
+}
+
+// ByEndDate orders the results by the end_date field.
+func ByEndDate(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldEndDate, opts...).ToFunc()
 }
 
 // ByCostsheetCount orders the results by costsheet count.
