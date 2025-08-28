@@ -389,6 +389,15 @@ func (s *PriceServiceSuite) TestUpdatePrice_CriticalFields_BillingModel() {
 }
 
 func (s *PriceServiceSuite) TestUpdatePrice_CriticalFields_Tiers() {
+	// Create a plan first so that the price can reference it
+	plan := &plan.Plan{
+		ID:          "plan-1",
+		Name:        "Test Plan",
+		Description: "A test plan",
+		BaseModel:   types.GetDefaultBaseModel(s.ctx),
+	}
+	_ = s.priceService.(*priceService).ServiceParams.PlanRepo.Create(s.ctx, plan)
+
 	// Create a price with simple tiered billing
 	price := &price.Price{
 		ID:                 "price-critical-tiers",
@@ -455,14 +464,38 @@ func (s *PriceServiceSuite) TestUpdatePrice_CriticalFields_Tiers() {
 }
 
 func (s *PriceServiceSuite) TestUpdatePrice_CriticalFields_StartDate() {
-	// Create a price
+	// Create a plan first so that the price can reference it
+	plan := &plan.Plan{
+		ID:          "plan-1",
+		Name:        "Test Plan",
+		Description: "A test plan",
+		BaseModel:   types.GetDefaultBaseModel(s.ctx),
+	}
+	_ = s.priceService.(*priceService).ServiceParams.PlanRepo.Create(s.ctx, plan)
+
+	// Create a tiered price (not flat fee) so it can have critical updates
 	price := &price.Price{
-		ID:           "price-critical-startdate",
-		Amount:       decimal.NewFromInt(100),
-		Currency:     "usd",
-		EntityType:   types.PRICE_ENTITY_TYPE_PLAN,
-		EntityID:     "plan-1",
-		BillingModel: types.BILLING_MODEL_FLAT_FEE,
+		ID:                 "price-critical-startdate",
+		Amount:             decimal.NewFromInt(100),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           "plan-1",
+		Type:               types.PRICE_TYPE_FIXED,
+		PriceUnitType:      types.PRICE_UNIT_TYPE_FIAT,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		TrialPeriod:        0,
+		BillingModel:       types.BILLING_MODEL_TIERED,
+		TierMode:           types.BILLING_TIER_VOLUME,
+		Tiers: []price.PriceTier{
+			{
+				UnitAmount: decimal.NewFromInt(50),
+			},
+		},
+		BaseModel:     types.GetDefaultBaseModel(s.ctx),
+		EnvironmentID: types.GetEnvironmentID(s.ctx),
 	}
 	_ = s.priceRepo.Create(s.ctx, price)
 
@@ -493,16 +526,40 @@ func (s *PriceServiceSuite) TestUpdatePrice_CriticalFields_StartDate() {
 }
 
 func (s *PriceServiceSuite) TestUpdatePrice_MixedCriticalAndNonCritical() {
-	// Create a price
+	// Create a plan first so that the price can reference it
+	plan := &plan.Plan{
+		ID:          "plan-1",
+		Name:        "Test Plan",
+		Description: "A test plan",
+		BaseModel:   types.GetDefaultBaseModel(s.ctx),
+	}
+	_ = s.priceService.(*priceService).ServiceParams.PlanRepo.Create(s.ctx, plan)
+
+	// Create a tiered price (not flat fee) so it can have critical updates
 	price := &price.Price{
-		ID:           "price-mixed-update",
-		Amount:       decimal.NewFromInt(100),
-		Currency:     "usd",
-		EntityType:   types.PRICE_ENTITY_TYPE_PLAN,
-		EntityID:     "plan-1",
-		BillingModel: types.BILLING_MODEL_FLAT_FEE,
-		Description:  "Original Description",
-		Metadata:     map[string]string{"original": "true"},
+		ID:                 "price-mixed-update",
+		Amount:             decimal.NewFromInt(100),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           "plan-1",
+		Type:               types.PRICE_TYPE_FIXED,
+		PriceUnitType:      types.PRICE_UNIT_TYPE_FIAT,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		TrialPeriod:        0,
+		BillingModel:       types.BILLING_MODEL_TIERED,
+		TierMode:           types.BILLING_TIER_VOLUME,
+		Tiers: []price.PriceTier{
+			{
+				UnitAmount: decimal.NewFromInt(50),
+			},
+		},
+		Description:   "Original Description",
+		Metadata:      map[string]string{"original": "true"},
+		BaseModel:     types.GetDefaultBaseModel(s.ctx),
+		EnvironmentID: types.GetEnvironmentID(s.ctx),
 	}
 	_ = s.priceRepo.Create(s.ctx, price)
 
