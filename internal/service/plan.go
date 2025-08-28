@@ -739,7 +739,8 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*SyncPlanP
 		// Create line item map with price ID as key
 		lineItemMap := make(map[string]*subscription.SubscriptionLineItem)
 		for _, item := range lineItems {
-			if !item.IsActive(time.Now()) {
+			// Skip if line item is not active or is not a plan line item
+			if !item.IsActive(time.Now()) || item.EntityType != types.SubscriptionLineItemEntitiyTypePlan {
 				continue
 			}
 			lineItemMap[item.PriceID] = item
