@@ -405,6 +405,8 @@ func (r *priceRepository) CreateBulk(ctx context.Context, prices []*domainPrice.
 			SetBillingModel(string(p.BillingModel)).
 			SetBillingCadence(string(p.BillingCadence)).
 			SetInvoiceCadence(string(p.InvoiceCadence)).
+			SetNillableStartDate(p.StartDate).
+			SetNillableEndDate(p.EndDate).
 			SetTrialPeriod(p.TrialPeriod).
 			SetNillableMeterID(lo.ToPtr(p.MeterID)).
 			SetNillableTierMode(lo.ToPtr(string(p.TierMode))).
@@ -561,6 +563,26 @@ func (o PriceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.P
 		if f.EndTime != nil {
 			query = query.Where(price.CreatedAtLTE(*f.EndTime))
 		}
+	}
+
+	if !f.AllowExpiredPrices {
+		now := time.Now().UTC()
+
+		// Filter for active prices:
+		// - Start date should be before or equal to current time (or null)
+		// - End date should be after current time (or null)
+		query = query.Where(
+			price.Or(
+				price.StartDateIsNil(),
+				price.StartDateLTE(now),
+				price.StartDateEQ(now),
+			),
+			price.Or(
+				price.EndDateIsNil(),
+				price.EndDateGT(now),
+				price.EndDateEQ(now),
+			),
+		)
 	}
 
 	return query
