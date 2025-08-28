@@ -200,3 +200,4 @@ func NewAddonAssociationRepository(p RepositoryParams) addonassociation.Reposito
 func NewSettingsRepository(p RepositoryParams) settings.Repository {
 	return entRepo.NewSettingsRepository(p.EntClient, p.Logger, p.Cache)
 }
+
