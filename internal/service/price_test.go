@@ -65,6 +65,7 @@ func (s *PriceServiceSuite) SetupTest() {
 		PriceUnitRepo: s.priceUnitRepo,
 		PlanRepo:      testutil.NewInMemoryPlanStore(),
 		Logger:        s.logger,
+		DB:            testutil.NewMockPostgresClient(s.logger),
 	}
 	s.priceService = NewPriceService(serviceParams)
 }
