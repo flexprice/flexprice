@@ -15,25 +15,13 @@ import (
 	"github.com/samber/lo"
 )
 
-type SyncPlanPricesResponse struct {
-	Message                string `json:"message"`
-	PlanID                 string `json:"plan_id"`
-	PlanName               string `json:"plan_name"`
-	SynchronizationSummary struct {
-		SubscriptionsProcessed int `json:"subscriptions_processed"`
-		PricesAdded            int `json:"prices_added"`
-		PricesRemoved          int `json:"prices_removed"`
-		PricesSkipped          int `json:"prices_skipped"`
-	} `json:"synchronization_summary"`
-}
-
 type PlanService interface {
 	CreatePlan(ctx context.Context, req dto.CreatePlanRequest) (*dto.CreatePlanResponse, error)
 	GetPlan(ctx context.Context, id string) (*dto.PlanResponse, error)
 	GetPlans(ctx context.Context, filter *types.PlanFilter) (*dto.ListPlansResponse, error)
 	UpdatePlan(ctx context.Context, id string, req dto.UpdatePlanRequest) (*dto.PlanResponse, error)
 	DeletePlan(ctx context.Context, id string) error
-	SyncPlanPrices(ctx context.Context, id string) (*SyncPlanPricesResponse, error)
+	SyncPlanPrices(ctx context.Context, id string) (*dto.SyncPlanPricesResponse, error)
 }
 
 type planService struct {
@@ -647,7 +635,7 @@ func (s *planService) DeletePlan(ctx context.Context, id string) error {
 	return nil
 }
 
-func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*SyncPlanPricesResponse, error) {
+func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*dto.SyncPlanPricesResponse, error) {
 	if id == "" {
 		return nil, ierr.NewError("plan ID is required").
 			WithHint("Plan ID is required").
@@ -859,7 +847,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*SyncPlanP
 	}
 
 	// Update response with final statistics
-	response := &SyncPlanPricesResponse{
+	response := &dto.SyncPlanPricesResponse{
 		Message:  "Plan prices synchronized successfully",
 		PlanID:   id,
 		PlanName: plan.Name,

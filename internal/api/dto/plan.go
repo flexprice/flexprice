@@ -295,3 +295,15 @@ type UpdatePlanCreditGrantRequest struct {
 
 // ListPlansResponse represents the response for listing plans with prices, entitlements, and credit grants
 type ListPlansResponse = types.ListResponse[*PlanResponse]
+
+type SyncPlanPricesResponse struct {
+	Message                string `json:"message"`
+	PlanID                 string `json:"plan_id"`
+	PlanName               string `json:"plan_name"`
+	SynchronizationSummary struct {
+		SubscriptionsProcessed int `json:"subscriptions_processed"`
+		PricesAdded            int `json:"prices_added"`
+		PricesRemoved          int `json:"prices_removed"`
+		PricesSkipped          int `json:"prices_skipped"`
+	} `json:"synchronization_summary"`
+}
