@@ -659,7 +659,7 @@ func (r *UpdatePriceRequest) Validate(p *price.Price) error {
 	}
 
 	// Flat fee price restrictions
-	if p.BillingModel == types.BILLING_MODEL_FLAT_FEE && r.HasCriticalUpdates() {
+	if p.Type == types.PRICE_TYPE_FIXED && r.HasCriticalUpdates() {
 		return ierr.NewError("critical fields cannot be updated for flat fee prices").
 			WithHint("Flat fee prices cannot have critical fields (amount, billing_model, tiers, start_date, end_date) updated. This would affect existing subscriptions. Please create a new price instead.").
 			WithReportableDetails(map[string]interface{}{
@@ -667,33 +667,6 @@ func (r *UpdatePriceRequest) Validate(p *price.Price) error {
 				"billing_model": p.BillingModel,
 			}).
 			Mark(ierr.ErrValidation)
-	}
-
-	// Billing model change validation
-	if r.BillingModel != nil && *r.BillingModel != p.BillingModel {
-		// Prevent FLAT_FEE to other model changes
-		if p.BillingModel == types.BILLING_MODEL_FLAT_FEE {
-			return ierr.NewError("invalid billing model change").
-				WithHint("Cannot change from FLAT_FEE to other billing models. This would affect existing subscriptions.").
-				WithReportableDetails(map[string]interface{}{
-					"price_id":        p.ID,
-					"current_model":   p.BillingModel,
-					"requested_model": *r.BillingModel,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-
-		// Prevent TIERED to FLAT_FEE changes
-		if p.BillingModel == types.BILLING_MODEL_TIERED && *r.BillingModel == types.BILLING_MODEL_FLAT_FEE {
-			return ierr.NewError("invalid billing model change").
-				WithHint("Cannot change from TIERED to FLAT_FEE. This would remove tiered pricing structure.").
-				WithReportableDetails(map[string]interface{}{
-					"price_id":        p.ID,
-					"current_model":   p.BillingModel,
-					"requested_model": *r.BillingModel,
-				}).
-				Mark(ierr.ErrValidation)
-		}
 	}
 
 	return nil
