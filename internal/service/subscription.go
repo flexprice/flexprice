@@ -55,7 +55,7 @@ type SubscriptionService interface {
 	// line item related methods
 	// NOTE: this should not be exposed as api
 	DeleteSubscriptionLineItem(ctx context.Context, id string, req *dto.DeleteSubscriptionLineItemRequest) error
-	CreateSubscriptionLineItem(ctx context.Context, subscriptionID string, req *dto.CreateSubscriptionLineItemRequest) (*subscription.SubscriptionLineItem, error)
+	CreateSubscriptionLineItem(ctx context.Context, subscriptionID string, req dto.CreateSubscriptionLineItemRequest) (*subscription.SubscriptionLineItem, error)
 }
 
 type subscriptionService struct {
@@ -3306,15 +3306,21 @@ func (s *subscriptionService) RemoveAddonFromSubscription(
 
 // createLineItemFromPrice creates a subscription line item from a price for addon additions
 func (s *subscriptionService) createLineItemFromPrice(ctx context.Context, priceResponse *dto.PriceResponse, sub *subscription.Subscription, addonID, addonName string) *subscription.SubscriptionLineItem {
-	// Use the generic DTO to create the line item
-	createReq := &dto.CreateSubscriptionLineItemRequest{
-		EntityID:          addonID,
-		EntityType:        types.SubscriptionLineItemEntitiyTypeAddon,
-		PriceID:           priceResponse.Price.ID,
-		Quantity:          decimal.NewFromInt(1),
-		DisplayName:       addonName,
-		EntityDisplayName: addonName,
-		StartDate:         lo.ToPtr(time.Now().UTC()),
+	// Use the simplified DTO to create the line item
+	quantity := lo.ToPtr(decimal.NewFromInt(1))
+	displayName := addonName
+
+	// Set quantity to zero for usage prices
+	if priceResponse.Type == types.PRICE_TYPE_USAGE && priceResponse.MeterID != "" && priceResponse.Meter != nil {
+		quantity = lo.ToPtr(priceResponse.GetDefaultQuantity())
+		displayName = priceResponse.GetDisplayName(addonName, priceResponse.Meter.Name)
+	}
+
+	createReq := dto.CreateSubscriptionLineItemRequest{
+		PriceID:     priceResponse.ID,
+		Quantity:    quantity,
+		DisplayName: displayName,
+		StartDate:   lo.ToPtr(time.Now().UTC()),
 		Metadata: map[string]string{
 			"addon_id":        addonID,
 			"subscription_id": sub.ID,
@@ -3323,14 +3329,13 @@ func (s *subscriptionService) createLineItemFromPrice(ctx context.Context, price
 		},
 	}
 
-	// Set quantity to zero for usage prices
-	if priceResponse.Type == types.PRICE_TYPE_USAGE && priceResponse.MeterID != "" && priceResponse.Meter != nil {
-		createReq.Quantity = decimal.Zero
-		createReq.DisplayName = priceResponse.Meter.Name
-	}
-
 	// Convert to domain object
 	lineItem := createReq.ToSubscriptionLineItem(ctx, sub, priceResponse)
+
+	// Set entity-specific fields
+	lineItem.EntityID = addonID
+	lineItem.EntityType = types.SubscriptionLineItemEntitiyTypeAddon
+	lineItem.PlanDisplayName = addonName
 
 	// Set additional fields that might not be handled by the generic DTO
 	lineItem.PriceUnitID = priceResponse.PriceUnitID
@@ -3339,15 +3344,13 @@ func (s *subscriptionService) createLineItemFromPrice(ctx context.Context, price
 	return lineItem
 }
 
-// CreateSubscriptionLineItem creates a subscription line item using the generic DTO
-func (s *subscriptionService) CreateSubscriptionLineItem(ctx context.Context, subscriptionID string, req *dto.CreateSubscriptionLineItemRequest) (*subscription.SubscriptionLineItem, error) {
-	s.Logger.Infow("creating subscription line item",
-		"subscription_id", subscriptionID,
-		"entity_id", req.EntityID,
-		"entity_type", req.EntityType,
-		"price_id", req.PriceID)
+// CreateSubscriptionLineItem creates a subscription line item following the same pattern as CreateSubscription
+func (s *subscriptionService) CreateSubscriptionLineItem(ctx context.Context, subscriptionID string, req dto.CreateSubscriptionLineItemRequest) (*subscription.SubscriptionLineItem, error) {
+	// Handle default values
+	if req.Quantity == nil {
+		// Default quantity will be set in ToSubscriptionLineItem based on price type
+	}
 
-	// Validate the request
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
@@ -3355,7 +3358,9 @@ func (s *subscriptionService) CreateSubscriptionLineItem(ctx context.Context, su
 	// Get the subscription to validate it exists and is active
 	subscription, err := s.SubRepo.Get(ctx, subscriptionID)
 	if err != nil {
-		return nil, err
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get subscription").
+			Mark(ierr.ErrDatabase)
 	}
 
 	// Validate subscription is active
@@ -3373,7 +3378,12 @@ func (s *subscriptionService) CreateSubscriptionLineItem(ctx context.Context, su
 	priceService := NewPriceService(s.ServiceParams)
 	price, err := priceService.GetPrice(ctx, req.PriceID)
 	if err != nil {
-		return nil, err
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get price").
+			WithReportableDetails(map[string]interface{}{
+				"price_id": req.PriceID,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	// Validate price is active
@@ -3409,21 +3419,97 @@ func (s *subscriptionService) CreateSubscriptionLineItem(ctx context.Context, su
 			Mark(ierr.ErrValidation)
 	}
 
-	lineItem := req.ToSubscriptionLineItem(ctx, subscription, price)
-
-	err = s.SubscriptionLineItemRepo.Create(ctx, lineItem)
+	// Auto-compute entity information based on price
+	entityID, entityType, entityDisplayName, err := s.resolveEntityFromPrice(ctx, price)
 	if err != nil {
 		return nil, err
+	}
+
+	// Create the line item
+	lineItem := req.ToSubscriptionLineItem(ctx, subscription, price)
+
+	// Set auto-computed fields
+	lineItem.EntityID = entityID
+	lineItem.EntityType = entityType
+	lineItem.PlanDisplayName = entityDisplayName
+
+	// Auto-compute display name if not provided
+	if lineItem.DisplayName == "" {
+		lineItem.DisplayName = entityDisplayName
+	}
+
+	s.Logger.Infow("creating subscription line item",
+		"subscription_id", subscriptionID,
+		"price_id", req.PriceID,
+		"entity_id", entityID,
+		"entity_type", entityType,
+		"quantity", lineItem.Quantity)
+
+	// Create the line item in database
+	err = s.SubscriptionLineItemRepo.Create(ctx, lineItem)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to create subscription line item").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_id": subscriptionID,
+				"price_id":        req.PriceID,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	s.Logger.Infow("successfully created subscription line item",
 		"subscription_id", subscriptionID,
 		"line_item_id", lineItem.ID,
-		"entity_id", req.EntityID,
-		"entity_type", req.EntityType,
-		"price_id", req.PriceID)
+		"price_id", req.PriceID,
+		"entity_id", entityID,
+		"entity_type", entityType)
 
 	return lineItem, nil
+}
+
+// resolveEntityFromPrice determines the entity information from a price
+func (s *subscriptionService) resolveEntityFromPrice(ctx context.Context, price *dto.PriceResponse) (string, types.SubscriptionLineItemEntitiyType, string, error) {
+	switch price.EntityType {
+	case types.PRICE_ENTITY_TYPE_PLAN:
+		// Get plan information
+		planService := NewPlanService(s.ServiceParams)
+		plan, err := planService.GetPlan(ctx, price.EntityID)
+		if err != nil {
+			return "", "", "", ierr.WithError(err).
+				WithHint("Failed to get plan for price").
+				WithReportableDetails(map[string]interface{}{
+					"price_id":  price.ID,
+					"entity_id": price.EntityID,
+				}).
+				Mark(ierr.ErrDatabase)
+		}
+		return plan.Plan.ID, types.SubscriptionLineItemEntitiyTypePlan, plan.Plan.Name, nil
+
+	case types.PRICE_ENTITY_TYPE_ADDON:
+		// Get addon information
+		addonService := NewAddonService(s.ServiceParams)
+		addon, err := addonService.GetAddon(ctx, price.EntityID)
+		if err != nil {
+			return "", "", "", ierr.WithError(err).
+				WithHint("Failed to get addon for price").
+				WithReportableDetails(map[string]interface{}{
+					"price_id":  price.ID,
+					"entity_id": price.EntityID,
+				}).
+				Mark(ierr.ErrDatabase)
+		}
+		return addon.Addon.ID, types.SubscriptionLineItemEntitiyTypeAddon, addon.Addon.Name, nil
+
+	default:
+		return "", "", "", ierr.NewError("unsupported price entity type").
+			WithHint("Price must be associated with a plan or addon").
+			WithReportableDetails(map[string]interface{}{
+				"price_id":    price.ID,
+				"entity_type": price.EntityType,
+				"entity_id":   price.EntityID,
+			}).
+			Mark(ierr.ErrValidation)
+	}
 }
 
 // DeleteSubscriptionLineItem deletes a subscription line item

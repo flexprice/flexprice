@@ -790,11 +790,13 @@ type DeletePriceRequest struct {
 }
 
 func (r *DeletePriceRequest) Validate(p *price.Price) error {
-	if p.Status == types.StatusArchived {
+	// Check if price is already archived (has an end date or status is archived)
+	if p.Status == types.StatusArchived || p.EndDate != nil {
 		return ierr.NewError("price is already archived").
 			WithHint("Cannot delete an already archived price").
 			WithReportableDetails(map[string]interface{}{
 				"status":   p.Status,
+				"end_date": p.EndDate,
 				"price_id": p.ID,
 			}).
 			Mark(ierr.ErrValidation)

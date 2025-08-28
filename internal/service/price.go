@@ -685,6 +685,12 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 	// Handle critical updates with versioning
 	createReq := req.ToCreatePriceRequest(p)
 
+	// Set start date to current time if not provided
+	if createReq.StartDate == nil {
+		now := time.Now().UTC()
+		createReq.StartDate = &now
+	}
+
 	var newPrice *dto.PriceResponse
 	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		newPrice, err = s.CreatePrice(txCtx, createReq)
@@ -692,9 +698,9 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 			return err
 		}
 
-		// Update existing price end date if needed
-		if p.EndDate == nil && req.StartDate != nil {
-			p.EndDate = req.StartDate
+		// Update existing price end date to the start date of the new price
+		if p.EndDate == nil {
+			p.EndDate = createReq.StartDate
 			if err := s.PriceRepo.Update(txCtx, p); err != nil {
 				return err
 			}

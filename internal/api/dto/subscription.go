@@ -415,26 +415,18 @@ type SubscriptionLineItemRequest struct {
 	Metadata    map[string]string `json:"metadata,omitempty"`
 }
 
-// CreateSubscriptionLineItemRequest represents a generic request to create a subscription line item
-// that can handle different entity types (plans, addons, etc.)
+// CreateSubscriptionLineItemRequest represents a simplified request to create a subscription line item
+// that follows the same pattern as CreateSubscriptionRequest with auto-computed fields
 type CreateSubscriptionLineItemRequest struct {
-	// EntityID is the ID of the entity (plan, addon, etc.) this line item is associated with
-	EntityID string `json:"entity_id" validate:"required"`
-
-	// EntityType is the type of entity (plan, addon, etc.)
-	EntityType types.SubscriptionLineItemEntitiyType `json:"entity_type" validate:"required"`
-
 	// PriceID is the ID of the price to use for this line item
 	PriceID string `json:"price_id" validate:"required"`
 
-	// Quantity is the quantity for this line item
-	Quantity decimal.Decimal `json:"quantity" validate:"required"`
+	// Quantity is the quantity for this line item (optional, defaults to 1 for fixed prices, 0 for usage)
+	Quantity *decimal.Decimal `json:"quantity,omitempty"`
 
 	// DisplayName is an optional custom display name for this line item
+	// If not provided, will be auto-computed from price/meter/entity
 	DisplayName string `json:"display_name,omitempty"`
-
-	// EntityDisplayName is the display name of the entity (plan name, addon name, etc.)
-	EntityDisplayName string `json:"entity_display_name,omitempty"`
 
 	// StartDate is the start date for this line item (optional, defaults to now)
 	StartDate *time.Time `json:"start_date,omitempty"`
@@ -448,19 +440,13 @@ type CreateSubscriptionLineItemRequest struct {
 
 // Validate validates the create subscription line item request
 func (r *CreateSubscriptionLineItemRequest) Validate() error {
-	if r.EntityID == "" {
-		return ierr.NewError("entity_id is required").
-			WithHint("Entity ID must be specified").
-			Mark(ierr.ErrValidation)
-	}
-
 	if r.PriceID == "" {
 		return ierr.NewError("price_id is required").
 			WithHint("Price ID must be specified").
 			Mark(ierr.ErrValidation)
 	}
 
-	if r.Quantity.IsNegative() {
+	if r.Quantity != nil && r.Quantity.IsNegative() {
 		return ierr.NewError("quantity must be non-negative").
 			WithHint("Quantity cannot be negative").
 			WithReportableDetails(map[string]interface{}{
@@ -479,13 +465,20 @@ func (r *CreateSubscriptionLineItemRequest) Validate() error {
 }
 
 // ToSubscriptionLineItem converts the request to a domain subscription line item
+// This method is now simplified and expects the service layer to handle entity-specific logic
 func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.Context, sub *subscription.Subscription, price *PriceResponse) *subscription.SubscriptionLineItem {
+	// Determine quantity - default to 1 for fixed prices, 0 for usage
+	quantity := decimal.NewFromInt(1)
+	if r.Quantity != nil {
+		quantity = *r.Quantity
+	} else if price.Type == types.PRICE_TYPE_USAGE {
+		quantity = decimal.Zero
+	}
+
 	lineItem := &subscription.SubscriptionLineItem{
 		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
 		SubscriptionID: sub.ID,
 		CustomerID:     sub.CustomerID,
-		EntityID:       r.EntityID,
-		EntityType:     r.EntityType,
 		PriceID:        r.PriceID,
 		PriceType:      price.Type,
 		Currency:       sub.Currency,
@@ -494,7 +487,7 @@ func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 		TrialPeriod:    price.TrialPeriod,
 		PriceUnitID:    price.PriceUnitID,
 		PriceUnit:      price.PriceUnit,
-		Quantity:       r.Quantity,
+		Quantity:       quantity,
 		DisplayName:    r.DisplayName,
 		Metadata:       r.Metadata,
 		EnvironmentID:  sub.EnvironmentID,
@@ -511,16 +504,6 @@ func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 	// Set end date
 	if r.EndDate != nil {
 		lineItem.EndDate = *r.EndDate
-	}
-
-	switch r.EntityType {
-	case types.SubscriptionLineItemEntitiyTypePlan:
-		lineItem.PlanDisplayName = r.EntityDisplayName
-		lineItem.DisplayName = r.EntityDisplayName
-	case types.SubscriptionLineItemEntitiyTypeAddon:
-		if lineItem.DisplayName == "" {
-			lineItem.DisplayName = r.EntityDisplayName
-		}
 	}
 
 	// Set meter-related fields if this is a usage price
