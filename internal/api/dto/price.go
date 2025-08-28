@@ -697,12 +697,10 @@ type DeletePriceRequest struct {
 }
 
 func (r *DeletePriceRequest) Validate() error {
-	if r.EndDate != nil {
-		if r.EndDate.Before(time.Now().UTC()) {
-			return ierr.NewError("end date must be in the future").
-				WithHint("End date must be in the future").
-				Mark(ierr.ErrValidation)
-		}
+	if r.EndDate != nil && r.EndDate.Before(time.Now().UTC()) {
+		return ierr.NewError("end date must be in the future").
+			WithHint("End date must be in the future").
+			Mark(ierr.ErrValidation)
 	}
 
 	return nil
