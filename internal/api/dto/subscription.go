@@ -94,6 +94,8 @@ type SubscriptionResponse struct {
 	Schedule *SubscriptionScheduleResponse `json:"schedule,omitempty"`
 	// CouponAssociations are the coupon associations for this subscription
 	CouponAssociations []*CouponAssociationResponse `json:"coupon_associations,omitempty"`
+	// LineItems are the line items for this subscription
+	LineItems []*SubscriptionLineItemResponse `json:"line_items,omitempty"`
 }
 
 // ListSubscriptionsResponse represents the response for listing subscriptions

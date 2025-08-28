@@ -436,7 +436,7 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 				continue
 			}
 
-			subLineItemMap[item.PriceID] = item
+			subLineItemMap[item.PriceID] = item.SubscriptionLineItem
 		}
 
 		for _, item := range sub.Plan.Prices {
@@ -498,7 +498,7 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 		}
 
 		// Get active usage-based line items
-		subscriptionLineItems := lo.Filter(sub.LineItems, func(item *subscription.SubscriptionLineItem, _ int) bool {
+		subscriptionLineItems := lo.Filter(sub.LineItems, func(item *dto.SubscriptionLineItemResponse, _ int) bool {
 			return item.IsUsage() && item.IsActive(event.Timestamp)
 		})
 

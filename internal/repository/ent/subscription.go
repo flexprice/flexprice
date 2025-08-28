@@ -972,3 +972,23 @@ func (r *subscriptionRepository) DeleteCache(ctx context.Context, subID string) 
 	cacheKey := cache.GenerateKey(cache.PrefixSubscription, tenantID, environmentID, subID)
 	r.cache.Delete(ctx, cacheKey)
 }
+
+// ListByCustomerID retrieves all active subscriptions for a customer and includes line items
+func (r *subscriptionRepository) ListByCustomerID(ctx context.Context, customerID string) ([]*domainSub.Subscription, error) {
+	r.logger.Debugw("listing subscriptions by customer ID",
+		"customer_id", customerID)
+
+	// Create a filter with customer ID
+	filter := &types.SubscriptionFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		CustomerID:  customerID,
+		SubscriptionStatus: []types.SubscriptionStatus{
+			types.SubscriptionStatusActive,
+			types.SubscriptionStatusTrialing,
+		},
+		WithLineItems: true,
+	}
+
+	// Use the existing List method
+	return r.List(ctx, filter)
+}
