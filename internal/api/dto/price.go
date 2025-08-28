@@ -691,3 +691,19 @@ type CostBreakup struct {
 	// FinalCost is the total cost for the quantity
 	FinalCost decimal.Decimal
 }
+
+type DeletePriceRequest struct {
+	EndDate *time.Time `json:"end_date,omitempty"`
+}
+
+func (r *DeletePriceRequest) Validate() error {
+	if r.EndDate != nil {
+		if r.EndDate.Before(time.Now().UTC()) {
+			return ierr.NewError("end date must be in the future").
+				WithHint("End date must be in the future").
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	return nil
+}

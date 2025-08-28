@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/plan"
@@ -200,7 +201,11 @@ func (s *PriceServiceSuite) TestDeletePrice() {
 	price := &price.Price{ID: "price-1", Amount: decimal.NewFromInt(100), Currency: "usd"}
 	_ = s.priceRepo.Create(s.ctx, price)
 
-	err := s.priceService.DeletePrice(s.ctx, "price-1")
+	req := dto.DeletePriceRequest{
+		EndDate: lo.ToPtr(time.Now().UTC().AddDate(0, 0, 1)),
+	}
+
+	err := s.priceService.DeletePrice(s.ctx, "price-1", req)
 	s.NoError(err)
 
 	// Ensure the price no longer exists
@@ -358,7 +363,7 @@ func (s *PriceServiceSuite) TestCalculateCostWithBreakup_TieredSlab() {
 
 	// Corrected calculation:
 	// (10 * 50) = 500 (first tier: 0-10)
-	// (10 * 40) = 400 (second tier: 10-20) 
+	// (10 * 40) = 400 (second tier: 10-20)
 	// (5 * 30) = 150 (third tier: 20+)
 	// Total: 500 + 400 + 150 = 1050
 	expectedFinalCost = decimal.NewFromInt(1050)
