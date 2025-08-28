@@ -876,12 +876,12 @@ func (s *priceService) calculateTieredCost(ctx context.Context, price *price.Pri
 			if tier.UpTo != nil {
 				upTo := decimal.NewFromUint64(*tier.UpTo)
 				tierCapacity := upTo.Sub(tierStartQuantity)
-				
+
 				// Use the minimum of remaining quantity and tier capacity
 				if remainingQuantity.GreaterThan(tierCapacity) {
 					tierQuantity = tierCapacity
 				}
-				
+
 				// Update tier start for next iteration
 				tierStartQuantity = upTo
 			}
@@ -1042,12 +1042,12 @@ func (s *priceService) calculateTieredCostWithBreakup(ctx context.Context, price
 			if tier.UpTo != nil {
 				upTo := decimal.NewFromUint64(*tier.UpTo)
 				tierCapacity := upTo.Sub(tierStartQuantity)
-				
+
 				// Use the minimum of remaining quantity and tier capacity
 				if remainingQuantity.GreaterThan(tierCapacity) {
 					tierQuantity = tierCapacity
 				}
-				
+
 				// Update tier start for next iteration
 				tierStartQuantity = upTo
 			}

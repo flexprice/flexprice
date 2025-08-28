@@ -629,14 +629,17 @@ func (r *UpdatePriceRequest) Validate(p *price.Price) error {
 			Mark(ierr.ErrValidation)
 	}
 
-	if p != nil {
-		// Check if critical fields are being updated
-		if r.BillingModel != nil && p.BillingModel == types.BILLING_MODEL_FLAT_FEE {
-			return ierr.NewError("billing_model cannot be changed").
-				WithHint("Prices with billing model FLAT_FEE cannot be updated").
-				Mark(ierr.ErrValidation)
-		}
+	if p != nil && p.BillingModel == types.BILLING_MODEL_FLAT_FEE {
+		return ierr.NewError("billing_model cannot be changed").
+			WithHint("Prices with billing model FLAT_FEE cannot be updated").
+			Mark(ierr.ErrValidation)
 
+	}
+
+	if r.BillingModel != nil && p.BillingModel == types.BILLING_MODEL_FLAT_FEE {
+		return ierr.NewError("billing_model cannot be changed").
+			WithHint("Prices with billing model FLAT_FEE cannot be updated").
+			Mark(ierr.ErrValidation)
 	}
 
 	return nil
