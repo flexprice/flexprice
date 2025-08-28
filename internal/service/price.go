@@ -663,7 +663,7 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 	}
 
 	// Early return for non-critical updates (most common case)
-	if !hasCriticalUpdates(req) {
+	if !req.HasCriticalUpdates() {
 		// Apply non-critical updates
 		if req.Description != nil {
 			p.Description = *req.Description
@@ -714,11 +714,6 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 	}
 
 	return newPrice, nil
-}
-
-// hasCriticalUpdates checks if the request contains critical field updates
-func hasCriticalUpdates(req dto.UpdatePriceRequest) bool {
-	return req.Amount != nil || len(req.Tiers) > 0 || req.BillingModel != nil || req.StartDate != nil || req.EndDate != nil
 }
 
 // DeletePrice performs a soft delete of a price by setting its end date.

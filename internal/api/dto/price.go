@@ -622,24 +622,78 @@ type UpdatePriceRequest struct {
 }
 
 func (r *UpdatePriceRequest) Validate(p *price.Price) error {
-
+	// Early validation for date consistency
 	if r.StartDate != nil && r.EndDate != nil && r.StartDate.After(*r.EndDate) {
 		return ierr.NewError("start_date must be before end_date").
-			WithHint("Start date must be before end date").
+			WithHint("Start date must be before end_date").
+			Mark(ierr.ErrValidation)
+	}
+	// Early validation for future start date
+	if r.StartDate != nil && !r.StartDate.After(time.Now().UTC()) {
+		return ierr.NewError("start_date must be in the future").
+			WithHint("New price versions must start in the future to avoid affecting existing billing periods.").
+			WithReportableDetails(map[string]interface{}{
+				"price_id":     p.ID,
+				"start_date":   r.StartDate,
+				"current_time": time.Now().UTC(),
+			}).
 			Mark(ierr.ErrValidation)
 	}
 
-	if p != nil && p.BillingModel == types.BILLING_MODEL_FLAT_FEE {
-		return ierr.NewError("billing_model cannot be changed").
-			WithHint("Prices with billing model FLAT_FEE cannot be updated").
-			Mark(ierr.ErrValidation)
-
+	// Validate amount format if provided
+	if r.Amount != nil {
+		if _, err := decimal.NewFromString(*r.Amount); err != nil {
+			return ierr.NewError("invalid amount format").
+				WithHint("Amount must be a valid decimal number (e.g., '29.99')").
+				WithReportableDetails(map[string]interface{}{
+					"price_id": p.ID,
+					"amount":   *r.Amount,
+				}).
+				Mark(ierr.ErrValidation)
+		}
 	}
 
-	if r.BillingModel != nil && p.BillingModel == types.BILLING_MODEL_FLAT_FEE {
-		return ierr.NewError("billing_model cannot be changed").
-			WithHint("Prices with billing model FLAT_FEE cannot be updated").
+	// If no existing price, basic validation is sufficient
+	if p == nil {
+		return nil
+	}
+
+	// Flat fee price restrictions
+	if p.BillingModel == types.BILLING_MODEL_FLAT_FEE && r.HasCriticalUpdates() {
+		return ierr.NewError("critical fields cannot be updated for flat fee prices").
+			WithHint("Flat fee prices cannot have critical fields (amount, billing_model, tiers, start_date, end_date) updated. This would affect existing subscriptions. Please create a new price instead.").
+			WithReportableDetails(map[string]interface{}{
+				"price_id":      p.ID,
+				"billing_model": p.BillingModel,
+			}).
 			Mark(ierr.ErrValidation)
+	}
+
+	// Billing model change validation
+	if r.BillingModel != nil && *r.BillingModel != p.BillingModel {
+		// Prevent FLAT_FEE to other model changes
+		if p.BillingModel == types.BILLING_MODEL_FLAT_FEE {
+			return ierr.NewError("invalid billing model change").
+				WithHint("Cannot change from FLAT_FEE to other billing models. This would affect existing subscriptions.").
+				WithReportableDetails(map[string]interface{}{
+					"price_id":        p.ID,
+					"current_model":   p.BillingModel,
+					"requested_model": *r.BillingModel,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
+		// Prevent TIERED to FLAT_FEE changes
+		if p.BillingModel == types.BILLING_MODEL_TIERED && *r.BillingModel == types.BILLING_MODEL_FLAT_FEE {
+			return ierr.NewError("invalid billing model change").
+				WithHint("Cannot change from TIERED to FLAT_FEE. This would remove tiered pricing structure.").
+				WithReportableDetails(map[string]interface{}{
+					"price_id":        p.ID,
+					"current_model":   p.BillingModel,
+					"requested_model": *r.BillingModel,
+				}).
+				Mark(ierr.ErrValidation)
+		}
 	}
 
 	return nil
@@ -756,7 +810,6 @@ func (r *UpdatePriceRequest) ToCreatePriceRequest(p *price.Price) CreatePriceReq
 		EndDate:   r.EndDate,
 	}
 
-	// Handle description and metadata
 	if r.Description != nil {
 		createReq.Description = *r.Description
 	}
@@ -771,14 +824,12 @@ func (r *UpdatePriceRequest) ToCreatePriceRequest(p *price.Price) CreatePriceReq
 		createReq.Amount = p.Amount.String()
 	}
 
-	// Handle tiers
 	if len(r.Tiers) > 0 {
 		createReq.Tiers = r.Tiers
 	} else if p.Tiers != nil {
 		createReq.Tiers = ConvertTiersToCreateFormat(p.Tiers)
 	}
 
-	// Handle billing model
 	if r.BillingModel != nil {
 		createReq.BillingModel = *r.BillingModel
 	} else {
@@ -793,7 +844,6 @@ type DeletePriceRequest struct {
 }
 
 func (r *DeletePriceRequest) Validate(p *price.Price) error {
-	// Check if price is already archived (has an end date or status is archived)
 	if p.Status == types.StatusArchived || p.EndDate != nil {
 		return ierr.NewError("price is already archived").
 			WithHint("Cannot delete an already archived price").
@@ -817,4 +867,8 @@ func (r *DeletePriceRequest) Validate(p *price.Price) error {
 	}
 
 	return nil
+}
+
+func (r *UpdatePriceRequest) HasCriticalUpdates() bool {
+	return r.Amount != nil || len(r.Tiers) > 0 || r.BillingModel != nil || r.StartDate != nil || r.EndDate != nil
 }
