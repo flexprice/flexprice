@@ -215,8 +215,6 @@ func (s *billingService) CalculateUsageCharges(
 			continue
 		}
 
-		adjustedPeriodStart, adjustedPeriodEnd := item.GetPeriod(periodStart, periodEnd)
-
 		// Find matching usage charges - may have multiple if there's overage
 		var matchingCharges []*dto.SubscriptionUsageByMetersResponse
 		for _, charge := range usage.Charges {
@@ -274,8 +272,8 @@ func (s *billingService) CalculateUsageCharges(
 							MeterID:            item.MeterID,
 							PriceID:            item.PriceID,
 							ExternalCustomerID: customer.ExternalID,
-							StartTime:          adjustedPeriodStart,
-							EndTime:            adjustedPeriodEnd,
+							StartTime:          item.GetPeriodStart(periodStart),
+							EndTime:            item.GetPeriodEnd(periodEnd),
 							WindowSize:         types.WindowSizeDay, // Use daily window size
 						}
 
@@ -345,8 +343,8 @@ func (s *billingService) CalculateUsageCharges(
 								MeterID:            item.MeterID,
 								PriceID:            item.PriceID,
 								ExternalCustomerID: customer.ExternalID,
-								StartTime:          periodStart,
-								EndTime:            periodEnd,
+								StartTime:          item.GetPeriodStart(periodStart),
+								EndTime:            item.GetPeriodEnd(periodEnd),
 							}
 
 							// Get usage data with buckets
@@ -446,8 +444,8 @@ func (s *billingService) CalculateUsageCharges(
 				DisplayName:      displayName,
 				Amount:           lineItemAmount,
 				Quantity:         quantityForCalculation,
-				PeriodStart:      lo.ToPtr(adjustedPeriodStart),
-				PeriodEnd:        lo.ToPtr(adjustedPeriodEnd),
+				PeriodStart:      lo.ToPtr(item.GetPeriodStart(periodStart)),
+				PeriodEnd:        lo.ToPtr(item.GetPeriodEnd(periodEnd)),
 				Metadata:         metadata,
 			})
 		}
@@ -1427,7 +1425,7 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 						ExternalCustomerID: customer.ExternalID,
 						StartTime:          sub.CurrentPeriodStart,
 						EndTime:            sub.CurrentPeriodEnd,
-						WindowSize:         types.WindowSizeDay, // Use daily window size
+						WindowSize:         types.WindowSizeDay,
 					}
 
 					// Get usage data with daily windows
