@@ -631,7 +631,7 @@ func (r *UpdatePriceRequest) Validate(p *price.Price) error {
 
 	if p != nil {
 		// Check if critical fields are being updated
-		if r.BillingModel != nil && *r.BillingModel == types.BILLING_MODEL_FLAT_FEE {
+		if r.BillingModel != nil && p.BillingModel == types.BILLING_MODEL_FLAT_FEE {
 			return ierr.NewError("billing_model cannot be changed").
 				WithHint("Prices with billing model FLAT_FEE cannot be updated").
 				Mark(ierr.ErrValidation)
@@ -743,14 +743,14 @@ func (r *UpdatePriceRequest) ToCreatePriceRequest(p *price.Price) CreatePriceReq
 		Description:        p.Description,
 		Metadata:           p.Metadata,
 		TierMode:           p.TierMode,
-		TransformQuantity:  func() *price.TransformQuantity {
+		TransformQuantity: func() *price.TransformQuantity {
 			if p.TransformQuantity != (price.JSONBTransformQuantity{}) {
 				return (*price.TransformQuantity)(&p.TransformQuantity)
 			}
 			return nil
 		}(),
-		StartDate:          r.StartDate,
-		EndDate:            r.EndDate,
+		StartDate: r.StartDate,
+		EndDate:   r.EndDate,
 	}
 
 	// Handle description and metadata
