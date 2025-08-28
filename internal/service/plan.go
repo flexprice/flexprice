@@ -660,7 +660,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*SyncPlanP
 
 	s.Logger.Infow("Starting plan price synchronization", "plan_id", id)
 
-	// Get the plan to be synced (tenant/environment filtering handled by repo)
+	// Get the plan to be synced
 	p, err := s.PlanRepo.Get(ctx, id)
 	if err != nil {
 		return nil, err
@@ -803,8 +803,6 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*SyncPlanP
 	return response, nil
 }
 
-// syncSubscriptionLineItems synchronizes line items for a single subscription
-// This is the core logic that determines what to add, remove, or keep
 func (s *planService) syncSubscriptionLineItems(
 	ctx context.Context,
 	sub *subscription.Subscription,
@@ -825,7 +823,7 @@ func (s *planService) syncSubscriptionLineItems(
 		return 0, 0, 0, err
 	}
 
-	// STEP 3: Build comprehensive data structures for efficient lookups
+	// STEP 3: Build maps for efficient lookups
 	existingLineItems := make(map[string]*subscription.SubscriptionLineItem)
 	parentPriceToLineItem := make(map[string]*subscription.SubscriptionLineItem)
 
@@ -838,43 +836,61 @@ func (s *planService) syncSubscriptionLineItems(
 		}
 	}
 
-	// Process override prices to map parent price IDs to line items
+	// Process override prices to map parent price relationships
 	for _, overridePrice := range overridePrices {
-		if overridePrice.ParentPriceID != "" {
-			// Find the line item for this override
-			for _, item := range lineItems {
-				if item.PriceID == overridePrice.ID && item.Status == types.StatusPublished {
-					parentPriceToLineItem[overridePrice.ParentPriceID] = item
-				}
+		for _, item := range lineItems {
+			if item.PriceID == overridePrice.ID && item.Status == types.StatusPublished {
+				parentPriceToLineItem[overridePrice.ParentPriceID] = item
 			}
 		}
 	}
 
-	eligibleActivePrices := make([]*price.Price, 0, len(activePrices))
-
+	// STEP 4: Process active prices - identify what to add
+	toAdd := make([]*price.Price, 0)
 	for _, price := range activePrices {
-		if s.isPriceEligibleForSubscription(price, sub) {
-			eligibleActivePrices = append(eligibleActivePrices, price)
+		if !s.isPriceEligibleForSubscription(price, sub) {
+			skipped++
+			continue
+		}
+
+		// Skip if line item already exists
+		if existingLineItems[price.ID] != nil {
+			skipped++
+			continue
+		}
+
+		// Check if subscription has an override for this price
+		if parentPriceToLineItem[price.ID] != nil {
+			skipped++
+			continue
+		}
+
+		// No line item and no override, add to list
+		toAdd = append(toAdd, price)
+	}
+
+	// STEP 5: Process expired prices - identify what to terminate
+	toTerminate := make([]*subscription.SubscriptionLineItem, 0)
+	expiredPricesMap := make(map[string]*price.Price)
+
+	for _, price := range expiredPrices {
+		expiredPricesMap[price.ID] = price
+		// Check if there's an active line item for this expired price
+		if lineItem, exists := existingLineItems[price.ID]; exists {
+			toTerminate = append(toTerminate, lineItem)
 		}
 	}
 
-	// STEP 4: Analyze active plan prices and identify what to add
-	toAdd := s.identifyPricesToAdd(eligibleActivePrices, existingLineItems, parentPriceToLineItem)
-
-	// STEP 5: Analyze expired plan prices and identify what to terminate
-	toTerminate := s.identifyLineItemsToTerminate(expiredPrices, existingLineItems)
-
 	// STEP 6: Execute changes
-	removed = s.executeTerminations(ctx, toTerminate, sub.ID)
-	added = s.executeAdditions(ctx, toAdd, sub, plan)
-	skipped = s.calculateSkippedItems(lineItems, toTerminate)
+	removed = s.terminateExpiredLineItems(ctx, toTerminate, expiredPricesMap, sub.ID)
+	added = s.createNewLineItems(ctx, toAdd, sub, plan)
 
 	s.Logger.Infow("Subscription sync completed",
 		"subscription_id", sub.ID,
 		"added", added,
 		"removed", removed,
 		"skipped", skipped,
-		"active_prices", len(eligibleActivePrices))
+	)
 
 	return added, removed, skipped, nil
 }
@@ -888,70 +904,16 @@ func (s *planService) getSubscriptionOverridePrices(ctx context.Context, subscri
 	return s.PriceRepo.List(ctx, overridePriceFilter)
 }
 
-// identifyPricesToAdd determines which prices need new line items
-func (s *planService) identifyPricesToAdd(
-	eligiblePrices []*price.Price,
-	existingLineItems map[string]*subscription.SubscriptionLineItem,
-	parentPriceToLineItem map[string]*subscription.SubscriptionLineItem,
-) []*price.Price {
-
-	var toAdd []*price.Price
-
-	for _, price := range eligiblePrices {
-		// Check if line item already exists for this price
-		if existingLineItems[price.ID] != nil {
-			continue
-		}
-
-		// Check if subscription has an override for this price
-		if parentPriceToLineItem[price.ID] != nil {
-			continue
-		}
-
-		// No line item and no override, add to list
-		toAdd = append(toAdd, price)
-	}
-
-	return toAdd
-}
-
-// identifyLineItemsToTerminate determines which line items should be terminated
-func (s *planService) identifyLineItemsToTerminate(
-	eligibleExpiredPrices []*price.Price,
-	existingLineItems map[string]*subscription.SubscriptionLineItem,
-) []*subscription.SubscriptionLineItem {
-
-	var toTerminate []*subscription.SubscriptionLineItem
-
-	for _, price := range eligibleExpiredPrices {
-		// Check if there's an active line item for this expired price
-		if lineItem, exists := existingLineItems[price.ID]; exists {
-			// Set termination metadata
-			lineItem.Metadata = lo.Assign(lineItem.Metadata, map[string]string{
-				"termination_reason": "price_expired",
-				"price_end_date":     price.EndDate.Format(time.RFC3339),
-			})
-			toTerminate = append(toTerminate, lineItem)
-		}
-	}
-
-	return toTerminate
-}
-
-// executeTerminations terminates the specified line items
-func (s *planService) executeTerminations(ctx context.Context, toTerminate []*subscription.SubscriptionLineItem, subscriptionID string) int {
+// terminateExpiredLineItems terminates the specified line items
+func (s *planService) terminateExpiredLineItems(ctx context.Context, toTerminate []*subscription.SubscriptionLineItem, expiredPricesMap map[string]*price.Price, subscriptionID string) int {
 	removed := 0
 
 	for _, item := range toTerminate {
 		endDate := time.Now().UTC()
 
-		// Use price end date if available
-		if item.Metadata != nil {
-			if priceEndDateStr, exists := item.Metadata["price_end_date"]; exists {
-				if priceEndDate, err := time.Parse(time.RFC3339, priceEndDateStr); err == nil {
-					endDate = priceEndDate
-				}
-			}
+		// Use price end date if available from the price map
+		if price, exists := expiredPricesMap[item.PriceID]; exists && price.EndDate != nil {
+			endDate = *price.EndDate
 		}
 
 		deleteReq := &dto.DeleteSubscriptionLineItemRequest{
@@ -979,8 +941,8 @@ func (s *planService) executeTerminations(ctx context.Context, toTerminate []*su
 	return removed
 }
 
-// executeAdditions creates new line items for the specified prices
-func (s *planService) executeAdditions(
+// createNewLineItems creates new line items for the specified prices
+func (s *planService) createNewLineItems(
 	ctx context.Context,
 	toAdd []*price.Price,
 	sub *subscription.Subscription,
@@ -1018,30 +980,6 @@ func (s *planService) executeAdditions(
 	}
 
 	return added
-}
-
-// calculateSkippedItems calculates how many items were skipped
-func (s *planService) calculateSkippedItems(
-	lineItems []*subscription.SubscriptionLineItem,
-	toTerminate []*subscription.SubscriptionLineItem,
-) int {
-
-	skipped := 0
-	terminatedIDs := make(map[string]bool, len(toTerminate))
-
-	// Build set of terminated item IDs for efficient lookup
-	for _, item := range toTerminate {
-		terminatedIDs[item.ID] = true
-	}
-
-	// Count items that were neither removed nor updated
-	for _, item := range lineItems {
-		if item.Status == types.StatusPublished && !terminatedIDs[item.ID] {
-			skipped++
-		}
-	}
-
-	return skipped
 }
 
 // isPriceEligibleForSubscription provides enhanced eligibility checking beyond basic currency/billing period matching
