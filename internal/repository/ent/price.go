@@ -67,6 +67,8 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 		SetBillingPeriodCount(p.BillingPeriodCount).
 		SetBillingModel(string(p.BillingModel)).
 		SetBillingCadence(string(p.BillingCadence)).
+		SetNillableStartDate(p.StartDate).
+		SetNillableEndDate(p.EndDate).
 		SetNillableMeterID(lo.ToPtr(p.MeterID)).
 		SetInvoiceCadence(string(p.InvoiceCadence)).
 		SetTrialPeriod(p.TrialPeriod).
@@ -291,6 +293,7 @@ func (r *priceRepository) Update(ctx context.Context, p *domainPrice.Price) erro
 		SetPriceUnitTiers(p.ToPriceUnitTiers()).
 		SetTransformQuantity(types.TransformQuantity(p.TransformQuantity)).
 		SetLookupKey(p.LookupKey).
+		SetNillableEndDate(p.EndDate).
 		SetDescription(p.Description).
 		SetMetadata(map[string]string(p.Metadata)).
 		SetUpdatedAt(time.Now().UTC()).

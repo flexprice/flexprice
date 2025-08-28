@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"time"
 
 	"github.com/flexprice/flexprice/ent"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -112,6 +113,12 @@ type Price struct {
 
 	// ParentPriceID references the parent price (only set when scope is SUBSCRIPTION)
 	ParentPriceID string `db:"parent_price_id" json:"parent_price_id,omitempty"`
+
+	// StartDate is the start date of the price
+	StartDate *time.Time `db:"start_date" json:"start_date,omitempty"`
+
+	// EndDate is the end date of the price
+	EndDate *time.Time `db:"end_date" json:"end_date,omitempty"`
 
 	types.BaseModel
 }
@@ -394,6 +401,8 @@ func FromEnt(e *ent.Price) *Price {
 		EntityType:             types.PriceEntityType(lo.FromPtr(e.EntityType)),
 		EntityID:               lo.FromPtr(e.EntityID),
 		ParentPriceID:          lo.FromPtr(e.ParentPriceID),
+		StartDate:              e.StartDate,
+		EndDate:                e.EndDate,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),
