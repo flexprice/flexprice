@@ -11,4 +11,5 @@ func RegisterWorkflowsAndActivities(w worker.Worker) {
 	w.RegisterWorkflow(workflows.CronBillingWorkflow)
 	w.RegisterWorkflow(workflows.CalculateChargesWorkflow)
 	w.RegisterActivity(&activities.BillingActivities{})
+	w.RegisterActivity(&activities.PlanActivities{})
 }

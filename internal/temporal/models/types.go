@@ -2,6 +2,8 @@ package models
 
 import (
 	"time"
+
+	"github.com/flexprice/flexprice/internal/service"
 )
 
 // BillingWorkflowInput represents the input for a billing workflow
@@ -44,4 +46,10 @@ type CalculatePriceRequest struct {
 	CustomerID     string      `json:"customer_id"`
 	SubscriptionID string      `json:"subscription_id"`
 	UsageData      interface{} `json:"usage_data"`
+}
+
+// PriceSyncWorkflowInput represents input for the price sync workflow
+type PriceSyncWorkflowInput struct {
+	PlanID       string              `json:"plan_id"`
+	PriceService service.PlanService `json:"-"`
 }

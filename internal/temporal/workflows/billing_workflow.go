@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/temporal/models"
+	"github.com/flexprice/flexprice/internal/types"
 	temporalsdk "go.temporal.io/sdk/temporal"
 
 	"go.temporal.io/sdk/workflow"
@@ -35,7 +36,7 @@ func CronBillingWorkflow(ctx workflow.Context, input models.BillingWorkflowInput
 	childCtx := workflow.WithChildOptions(ctx, childWorkflowOptions)
 
 	var result models.BillingWorkflowResult
-	future := workflow.ExecuteChildWorkflow(childCtx, CalculateChargesWorkflow, input)
+	future := workflow.ExecuteChildWorkflow(childCtx, types.CalculationWorkflow.String(), input)
 	if err := future.Get(ctx, &result); err != nil {
 		logger.Error("Child workflow failed", "error", err)
 		return nil, err
