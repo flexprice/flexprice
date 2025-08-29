@@ -25,6 +25,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/priceunit"
+	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -98,6 +99,9 @@ type ServiceParams struct {
 
 	// http client
 	Client httpclient.Client
+
+	// Proration
+	ProrationCalculator proration.Calculator
 }
 
 // Common service params
@@ -147,6 +151,7 @@ func NewServiceParams(
 	connectionRepo connection.Repository,
 	entityIntegrationMappingRepo entityintegrationmapping.Repository,
 	settingsRepo settings.Repository,
+	prorationCalculator proration.Calculator,
 ) ServiceParams {
 	return ServiceParams{
 		Logger:                       logger,
@@ -194,5 +199,6 @@ func NewServiceParams(
 		ConnectionRepo:               connectionRepo,
 		EntityIntegrationMappingRepo: entityIntegrationMappingRepo,
 		SettingsRepo:                 settingsRepo,
+		ProrationCalculator:          prorationCalculator,
 	}
 }

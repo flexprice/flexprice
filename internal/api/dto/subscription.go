@@ -65,6 +65,16 @@ type CreateSubscriptionRequest struct {
 	// "default_incomplete" - subscription waits for payment confirmation before activation
 	// "send_invoice" - subscription activates immediately, invoice is sent for payment
 	CollectionMethod *types.CollectionMethod `json:"collection_method,omitempty"`
+
+	// ProrationMode is the mode for proration.
+	// If not set, the default value is none. Possible values are active and none.
+	// Active proration means the proration will be calculated based on the usage.
+	// None proration means the proration will not be calculated.
+	// This is IGNORED when the billing cycle is anniversary.
+	ProrationMode types.ProrationMode `json:"proration_mode"`
+	// Timezone of the customer.
+	// If not set, the default value is UTC.
+	CustomerTimezone string `json:"customer_timezone" validate:"omitempty,timezone"`
 }
 
 // AddAddonRequest is used by body-based endpoint /subscriptions/addon
@@ -150,6 +160,20 @@ func (r *CreateSubscriptionRequest) Validate() error {
 				"end_date":   *r.EndDate,
 			}).
 			Mark(ierr.ErrValidation)
+	}
+	// If proration mode is not set, set it to none
+	if r.ProrationMode == "" {
+		r.ProrationMode = types.ProrationModeNone
+	}
+
+	if err := r.ProrationMode.Validate(); err != nil {
+		return err
+	}
+
+	if r.ProrationMode == types.ProrationModeActive {
+		if err := r.validateShouldAllowProrationOnStartDate(*r.StartDate, time.Now().UTC()); err != nil {
+			return err
+		}
 	}
 
 	if r.BillingPeriodCount < 1 {
@@ -357,6 +381,32 @@ func (r *CreateSubscriptionRequest) Validate() error {
 	return nil
 }
 
+func (r *CreateSubscriptionRequest) validateShouldAllowProrationOnStartDate(startDate, now time.Time) error {
+	// Calculate one month back from current date
+	oneMonthAgo := now.AddDate(0, -1, 0)
+
+	// For edge case handling (e.g., Jan 31 -> Feb 28)
+	if oneMonthAgo.Day() != now.Day() {
+		// Adjust to the last day of the previous month if needed
+		oneMonthAgo = time.Date(oneMonthAgo.Year(), oneMonthAgo.Month()+1, 0,
+			now.Hour(), now.Minute(), now.Second(), now.Nanosecond(), now.Location())
+	}
+
+	if startDate.Before(oneMonthAgo) {
+		return ierr.NewError("start date cannot be more than 1 calendar month in the past when proration is active").
+			WithHint("When proration is active, subscriptions can only be backdated up to 1 calendar month").
+			WithReportableDetails(map[string]interface{}{
+				"start_date":            startDate,
+				"current_date":          now,
+				"earliest_allowed_date": oneMonthAgo,
+				"proration_mode":        r.ProrationMode,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}
+
 func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscription.Subscription {
 	// Determine initial subscription status based on collection method and payment behavior
 	initialStatus := types.SubscriptionStatusActive
@@ -370,6 +420,10 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 			// send_invoice: activate immediately, invoice is sent for payment
 			initialStatus = types.SubscriptionStatusActive
 		}
+	}
+
+	if r.CustomerTimezone == "" {
+		r.CustomerTimezone = "UTC"
 	}
 
 	sub := &subscription.Subscription{
@@ -391,6 +445,8 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		EnvironmentID:      types.GetEnvironmentID(ctx),
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 		BillingCycle:       r.BillingCycle,
+		CustomerTimezone:   r.CustomerTimezone,
+		ProrationMode:      r.ProrationMode,
 	}
 
 	// Set commitment amount and overage factor if provided

@@ -40,6 +40,7 @@ import (
 	ginadapter "github.com/awslabs/aws-lambda-go-api-proxy/gin"
 	_ "github.com/flexprice/flexprice/docs/swagger"
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/gin-gonic/gin"
 )
@@ -163,6 +164,9 @@ func main() {
 			// Temporal
 			provideTemporalClient,
 			provideTemporalService,
+
+			// Proration
+			proration.NewCalculator,
 		),
 	)
 

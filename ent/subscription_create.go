@@ -419,6 +419,34 @@ func (sc *SubscriptionCreate) SetNillableOverageFactor(d *decimal.Decimal) *Subs
 	return sc
 }
 
+// SetCustomerTimezone sets the "customer_timezone" field.
+func (sc *SubscriptionCreate) SetCustomerTimezone(s string) *SubscriptionCreate {
+	sc.mutation.SetCustomerTimezone(s)
+	return sc
+}
+
+// SetNillableCustomerTimezone sets the "customer_timezone" field if the given value is not nil.
+func (sc *SubscriptionCreate) SetNillableCustomerTimezone(s *string) *SubscriptionCreate {
+	if s != nil {
+		sc.SetCustomerTimezone(*s)
+	}
+	return sc
+}
+
+// SetProrationMode sets the "proration_mode" field.
+func (sc *SubscriptionCreate) SetProrationMode(s string) *SubscriptionCreate {
+	sc.mutation.SetProrationMode(s)
+	return sc
+}
+
+// SetNillableProrationMode sets the "proration_mode" field if the given value is not nil.
+func (sc *SubscriptionCreate) SetNillableProrationMode(s *string) *SubscriptionCreate {
+	if s != nil {
+		sc.SetProrationMode(*s)
+	}
+	return sc
+}
+
 // SetID sets the "id" field.
 func (sc *SubscriptionCreate) SetID(s string) *SubscriptionCreate {
 	sc.mutation.SetID(s)
@@ -614,6 +642,14 @@ func (sc *SubscriptionCreate) defaults() {
 		v := subscription.DefaultOverageFactor
 		sc.mutation.SetOverageFactor(v)
 	}
+	if _, ok := sc.mutation.CustomerTimezone(); !ok {
+		v := subscription.DefaultCustomerTimezone
+		sc.mutation.SetCustomerTimezone(v)
+	}
+	if _, ok := sc.mutation.ProrationMode(); !ok {
+		v := subscription.DefaultProrationMode
+		sc.mutation.SetProrationMode(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -708,6 +744,17 @@ func (sc *SubscriptionCreate) check() error {
 	if v, ok := sc.mutation.BillingCycle(); ok {
 		if err := subscription.BillingCycleValidator(v); err != nil {
 			return &ValidationError{Name: "billing_cycle", err: fmt.Errorf(`ent: validator failed for field "Subscription.billing_cycle": %w`, err)}
+		}
+	}
+	if _, ok := sc.mutation.CustomerTimezone(); !ok {
+		return &ValidationError{Name: "customer_timezone", err: errors.New(`ent: missing required field "Subscription.customer_timezone"`)}
+	}
+	if _, ok := sc.mutation.ProrationMode(); !ok {
+		return &ValidationError{Name: "proration_mode", err: errors.New(`ent: missing required field "Subscription.proration_mode"`)}
+	}
+	if v, ok := sc.mutation.ProrationMode(); ok {
+		if err := subscription.ProrationModeValidator(v); err != nil {
+			return &ValidationError{Name: "proration_mode", err: fmt.Errorf(`ent: validator failed for field "Subscription.proration_mode": %w`, err)}
 		}
 	}
 	return nil
@@ -872,6 +919,14 @@ func (sc *SubscriptionCreate) createSpec() (*Subscription, *sqlgraph.CreateSpec)
 	if value, ok := sc.mutation.OverageFactor(); ok {
 		_spec.SetField(subscription.FieldOverageFactor, field.TypeOther, value)
 		_node.OverageFactor = &value
+	}
+	if value, ok := sc.mutation.CustomerTimezone(); ok {
+		_spec.SetField(subscription.FieldCustomerTimezone, field.TypeString, value)
+		_node.CustomerTimezone = value
+	}
+	if value, ok := sc.mutation.ProrationMode(); ok {
+		_spec.SetField(subscription.FieldProrationMode, field.TypeString, value)
+		_node.ProrationMode = value
 	}
 	if nodes := sc.mutation.LineItemsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

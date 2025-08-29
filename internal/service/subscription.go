@@ -152,6 +152,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		sub.StartDate = sub.StartDate.UTC()
 	}
 
+	// TODO: handle customer timezone here
 	if sub.BillingCycle == types.BillingCycleCalendar {
 		sub.BillingAnchor = types.CalculateCalendarBillingAnchor(sub.StartDate, sub.BillingPeriod)
 	} else {
@@ -176,7 +177,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	lineItems := make([]*subscription.SubscriptionLineItem, 0, len(validPrices))
 	for _, price := range validPrices {
 		lineItems = append(lineItems, &subscription.SubscriptionLineItem{
-			PriceID:       price.ID,
+			PriceID:       price.Price.ID,
 			EnvironmentID: types.GetEnvironmentID(ctx),
 			BaseModel:     types.GetDefaultBaseModel(ctx),
 		})
@@ -194,7 +195,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 				Mark(ierr.ErrDatabase)
 		}
 
-		if price.Type == types.PRICE_TYPE_USAGE && price.Meter != nil {
+		if price.Price.Type == types.PRICE_TYPE_USAGE && price.Meter != nil {
 			item.MeterID = price.Meter.ID
 			item.MeterDisplayName = price.Meter.Name
 			item.DisplayName = price.Meter.Name

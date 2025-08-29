@@ -221,6 +221,16 @@ func OverageFactor(v decimal.Decimal) predicate.Subscription {
 	return predicate.Subscription(sql.FieldEQ(FieldOverageFactor, v))
 }
 
+// CustomerTimezone applies equality check predicate on the "customer_timezone" field. It's identical to CustomerTimezoneEQ.
+func CustomerTimezone(v string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldEQ(FieldCustomerTimezone, v))
+}
+
+// ProrationMode applies equality check predicate on the "proration_mode" field. It's identical to ProrationModeEQ.
+func ProrationMode(v string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldEQ(FieldProrationMode, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.Subscription {
 	return predicate.Subscription(sql.FieldEQ(FieldTenantID, v))
@@ -1934,6 +1944,136 @@ func OverageFactorIsNil() predicate.Subscription {
 // OverageFactorNotNil applies the NotNil predicate on the "overage_factor" field.
 func OverageFactorNotNil() predicate.Subscription {
 	return predicate.Subscription(sql.FieldNotNull(FieldOverageFactor))
+}
+
+// CustomerTimezoneEQ applies the EQ predicate on the "customer_timezone" field.
+func CustomerTimezoneEQ(v string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldEQ(FieldCustomerTimezone, v))
+}
+
+// CustomerTimezoneNEQ applies the NEQ predicate on the "customer_timezone" field.
+func CustomerTimezoneNEQ(v string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldNEQ(FieldCustomerTimezone, v))
+}
+
+// CustomerTimezoneIn applies the In predicate on the "customer_timezone" field.
+func CustomerTimezoneIn(vs ...string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldIn(FieldCustomerTimezone, vs...))
+}
+
+// CustomerTimezoneNotIn applies the NotIn predicate on the "customer_timezone" field.
+func CustomerTimezoneNotIn(vs ...string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldNotIn(FieldCustomerTimezone, vs...))
+}
+
+// CustomerTimezoneGT applies the GT predicate on the "customer_timezone" field.
+func CustomerTimezoneGT(v string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldGT(FieldCustomerTimezone, v))
+}
+
+// CustomerTimezoneGTE applies the GTE predicate on the "customer_timezone" field.
+func CustomerTimezoneGTE(v string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldGTE(FieldCustomerTimezone, v))
+}
+
+// CustomerTimezoneLT applies the LT predicate on the "customer_timezone" field.
+func CustomerTimezoneLT(v string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldLT(FieldCustomerTimezone, v))
+}
+
+// CustomerTimezoneLTE applies the LTE predicate on the "customer_timezone" field.
+func CustomerTimezoneLTE(v string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldLTE(FieldCustomerTimezone, v))
+}
+
+// CustomerTimezoneContains applies the Contains predicate on the "customer_timezone" field.
+func CustomerTimezoneContains(v string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldContains(FieldCustomerTimezone, v))
+}
+
+// CustomerTimezoneHasPrefix applies the HasPrefix predicate on the "customer_timezone" field.
+func CustomerTimezoneHasPrefix(v string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldHasPrefix(FieldCustomerTimezone, v))
+}
+
+// CustomerTimezoneHasSuffix applies the HasSuffix predicate on the "customer_timezone" field.
+func CustomerTimezoneHasSuffix(v string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldHasSuffix(FieldCustomerTimezone, v))
+}
+
+// CustomerTimezoneEqualFold applies the EqualFold predicate on the "customer_timezone" field.
+func CustomerTimezoneEqualFold(v string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldEqualFold(FieldCustomerTimezone, v))
+}
+
+// CustomerTimezoneContainsFold applies the ContainsFold predicate on the "customer_timezone" field.
+func CustomerTimezoneContainsFold(v string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldContainsFold(FieldCustomerTimezone, v))
+}
+
+// ProrationModeEQ applies the EQ predicate on the "proration_mode" field.
+func ProrationModeEQ(v string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldEQ(FieldProrationMode, v))
+}
+
+// ProrationModeNEQ applies the NEQ predicate on the "proration_mode" field.
+func ProrationModeNEQ(v string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldNEQ(FieldProrationMode, v))
+}
+
+// ProrationModeIn applies the In predicate on the "proration_mode" field.
+func ProrationModeIn(vs ...string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldIn(FieldProrationMode, vs...))
+}
+
+// ProrationModeNotIn applies the NotIn predicate on the "proration_mode" field.
+func ProrationModeNotIn(vs ...string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldNotIn(FieldProrationMode, vs...))
+}
+
+// ProrationModeGT applies the GT predicate on the "proration_mode" field.
+func ProrationModeGT(v string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldGT(FieldProrationMode, v))
+}
+
+// ProrationModeGTE applies the GTE predicate on the "proration_mode" field.
+func ProrationModeGTE(v string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldGTE(FieldProrationMode, v))
+}
+
+// ProrationModeLT applies the LT predicate on the "proration_mode" field.
+func ProrationModeLT(v string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldLT(FieldProrationMode, v))
+}
+
+// ProrationModeLTE applies the LTE predicate on the "proration_mode" field.
+func ProrationModeLTE(v string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldLTE(FieldProrationMode, v))
+}
+
+// ProrationModeContains applies the Contains predicate on the "proration_mode" field.
+func ProrationModeContains(v string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldContains(FieldProrationMode, v))
+}
+
+// ProrationModeHasPrefix applies the HasPrefix predicate on the "proration_mode" field.
+func ProrationModeHasPrefix(v string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldHasPrefix(FieldProrationMode, v))
+}
+
+// ProrationModeHasSuffix applies the HasSuffix predicate on the "proration_mode" field.
+func ProrationModeHasSuffix(v string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldHasSuffix(FieldProrationMode, v))
+}
+
+// ProrationModeEqualFold applies the EqualFold predicate on the "proration_mode" field.
+func ProrationModeEqualFold(v string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldEqualFold(FieldProrationMode, v))
+}
+
+// ProrationModeContainsFold applies the ContainsFold predicate on the "proration_mode" field.
+func ProrationModeContainsFold(v string) predicate.Subscription {
+	return predicate.Subscription(sql.FieldContainsFold(FieldProrationMode, v))
 }
 
 // HasLineItems applies the HasEdge predicate on the "line_items" edge.

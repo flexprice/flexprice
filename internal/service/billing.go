@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
+	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -102,6 +103,18 @@ func (s *billingService) CalculateFixedCharges(
 		}
 
 		amount := priceService.CalculateCost(ctx, price.Price, item.Quantity)
+
+		// Apply proration if applicable
+		proratedAmount, err := s.applyProrationToLineItem(ctx, sub, item, price.Price, amount)
+		if err != nil {
+			s.Logger.Warnw("failed to apply proration to line item, using original amount",
+				"error", err,
+				"subscription_id", sub.ID,
+				"line_item_id", item.ID,
+				"price_id", item.PriceID)
+			proratedAmount = amount
+		}
+		amount = proratedAmount
 
 		// Calculate price unit amount if price unit is available
 		var priceUnitAmount *decimal.Decimal
@@ -1018,6 +1031,49 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 	}
 
 	return req, nil
+}
+
+// applyProrationToLineItem applies proration calculation to a line item amount if proration is enabled
+func (s *billingService) applyProrationToLineItem(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	item *subscription.SubscriptionLineItem,
+	priceData *price.Price,
+	originalAmount decimal.Decimal,
+) (decimal.Decimal, error) {
+
+	prorationService := NewProrationService(s.ServiceParams)
+	// Check if proration should be applied
+	if sub.BillingCycle != types.BillingCycleCalendar || sub.ProrationMode != types.ProrationModeActive {
+		// No proration needed
+		return originalAmount, nil
+	}
+
+	// If it's a usage charge, don't apply proration (usage is typically calculated for actual usage in the period)
+	if item.PriceType == types.PRICE_TYPE_USAGE {
+		return originalAmount, nil
+	}
+
+	action := types.ProrationActionAddItem
+	if sub.SubscriptionStatus == types.SubscriptionStatusCancelled {
+		action = types.ProrationActionCancellation
+	}
+	prorationParams, err := prorationService.CreateProrationParamsForLineItem(
+		sub,
+		item,
+		priceData,
+		action,
+		types.ProrationBehaviorCreateProrations,
+	)
+	if err != nil {
+		return originalAmount, err
+	}
+
+	prorationResult, err := prorationService.CalculateProration(ctx, prorationParams)
+	if err != nil {
+		return decimal.Zero, err
+	}
+	return prorationResult.NetAmount, nil
 }
 
 // Helper functions for aggregating entitlements

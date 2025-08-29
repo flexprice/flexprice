@@ -25,6 +25,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -82,15 +83,16 @@ type Stores struct {
 // BaseServiceTestSuite provides common functionality for all service test suites
 type BaseServiceTestSuite struct {
 	suite.Suite
-	ctx              context.Context
-	stores           Stores
-	publisher        publisher.EventPublisher
-	webhookPublisher webhookPublisher.WebhookPublisher
-	db               postgres.IClient
-	logger           *logger.Logger
-	config           *config.Configuration
-	now              time.Time
-	pdfGenerator     pdf.Generator
+	ctx                 context.Context
+	stores              Stores
+	publisher           publisher.EventPublisher
+	webhookPublisher    webhookPublisher.WebhookPublisher
+	db                  postgres.IClient
+	logger              *logger.Logger
+	config              *config.Configuration
+	now                 time.Time
+	pdfGenerator        pdf.Generator
+	prorationCalculator proration.Calculator
 }
 
 // SetupSuite is called once before running the tests in the suite
@@ -118,11 +120,25 @@ func (s *BaseServiceTestSuite) SetupSuite() {
 	cache.Initialize(s.logger)
 }
 
+func (s *BaseServiceTestSuite) setupDependencies() {
+	s.now = time.Now().UTC()
+	s.prorationCalculator = proration.NewCalculator(s.logger)
+	s.pdfGenerator = NewMockPDFGenerator(s.logger)
+	eventStore := s.stores.EventRepo.(*InMemoryEventStore)
+	s.publisher = NewInMemoryEventPublisher(eventStore)
+	pubsub := NewInMemoryPubSub()
+	webhookPublisher, err := webhookPublisher.NewPublisher(pubsub, s.config, s.logger)
+	if err != nil {
+		s.T().Fatalf("failed to create webhook publisher: %v", err)
+	}
+	s.webhookPublisher = webhookPublisher
+}
+
 // SetupTest is called before each test
 func (s *BaseServiceTestSuite) SetupTest() {
 	s.setupContext()
 	s.setupStores()
-	s.now = time.Now().UTC()
+	s.setupDependencies()
 }
 
 // TearDownTest is called after each test
@@ -268,4 +284,8 @@ func (s *BaseServiceTestSuite) GetNow() time.Time {
 // GetUUID returns a new UUID string
 func (s *BaseServiceTestSuite) GetUUID() string {
 	return types.GenerateUUID()
+}
+
+func (s *BaseServiceTestSuite) GetCalculator() proration.Calculator {
+	return s.prorationCalculator
 }
