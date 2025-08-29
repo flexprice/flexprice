@@ -1195,7 +1195,7 @@ func (s *walletService) CheckBalanceThresholds(ctx context.Context, w *wallet.Wa
 		)
 
 		// If current state is alert, update to ok (recovery)
-		if w.AlertState == string(types.AlertStateAlert) {
+		if w.AlertState == string(types.AlertStateInAlarm) {
 			if err := s.UpdateWalletAlertState(ctx, w.ID, types.AlertStateOk); err != nil {
 				s.Logger.Errorw("failed to update wallet alert state",
 					"wallet_id", w.ID,
@@ -1212,7 +1212,7 @@ func (s *walletService) CheckBalanceThresholds(ctx context.Context, w *wallet.Wa
 	}
 
 	// Skip if already in alert state
-	if w.AlertState == string(types.AlertStateAlert) {
+	if w.AlertState == string(types.AlertStateInAlarm) {
 		s.Logger.Infow("skipping alert - already in alert state",
 			"wallet_id", w.ID,
 		)
@@ -1227,7 +1227,7 @@ func (s *walletService) CheckBalanceThresholds(ctx context.Context, w *wallet.Wa
 	)
 
 	// Update wallet state to alert
-	if err := s.UpdateWalletAlertState(ctx, w.ID, types.AlertStateAlert); err != nil {
+	if err := s.UpdateWalletAlertState(ctx, w.ID, types.AlertStateInAlarm); err != nil {
 		s.Logger.Errorw("failed to update wallet alert state",
 			"wallet_id", w.ID,
 			"error", err,
