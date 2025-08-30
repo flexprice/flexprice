@@ -243,7 +243,7 @@ type GetUsageAnalyticsRequest struct {
 	Sources            []string         `json:"sources,omitempty"`
 	StartTime          time.Time        `json:"start_time,omitempty"`
 	EndTime            time.Time        `json:"end_time,omitempty"`
-	GroupBy            []string         `json:"group_by,omitempty"` // allowed values: "source", "feature_id"
+	GroupBy            []string         `json:"group_by,omitempty"` // allowed values: "source", "feature_id", "properties.<field_name>"
 	WindowSize         types.WindowSize `json:"window_size,omitempty"`
 	// Property filters to filter the events by the keys in `properties` field of the event
 	PropertyFilters map[string][]string `json:"property_filters,omitempty"`
@@ -268,7 +268,8 @@ type UsageAnalyticItem struct {
 	TotalUsage      decimal.Decimal       `json:"total_usage"`
 	TotalCost       decimal.Decimal       `json:"total_cost"`
 	Currency        string                `json:"currency,omitempty"`
-	EventCount      uint64                `json:"event_count"` // Number of events that contributed to this aggregation
+	EventCount      uint64                `json:"event_count"`          // Number of events that contributed to this aggregation
+	Properties      map[string]string     `json:"properties,omitempty"` // Stores property values for flexible grouping (e.g., org_id -> "org123")
 	Points          []UsageAnalyticPoint  `json:"points,omitempty"`
 }
 
