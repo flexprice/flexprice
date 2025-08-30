@@ -120,20 +120,20 @@ func BuildPredicates(filters []*types.FilterCondition, resolve FieldResolver) ([
 func BuildOrders(sort []*types.SortCondition, resolve FieldResolver) ([]OrderFunc, error) {
 	out := make([]OrderFunc, 0, len(sort))
 
+	// Apply sorts in the exact order provided by the user
 	for _, s := range sort {
-		if s == nil {
-			continue
-		}
 		fi, err := resolve(s.Field)
 		if err != nil {
 			return nil, err
 		}
 		var of OrderFunc
+
 		switch s.Direction {
-		case types.SortDirectionAsc:
-			of = func(sel *sql.Selector) { sel.OrderBy(sql.Asc(fi)) }
 		case types.SortDirectionDesc:
 			of = func(sel *sql.Selector) { sel.OrderBy(sql.Desc(fi)) }
+		default:
+			// Default to ASC if direction not specified
+			of = func(sel *sql.Selector) { sel.OrderBy(sql.Asc(fi)) }
 		}
 		if of != nil {
 			out = append(out, of)

@@ -68,6 +68,8 @@ func (Entitlement) Fields() []ent.Field {
 			Default(false),
 		field.String("static_value").
 			Optional(),
+		field.Int("display_order").
+			Default(0),
 	}
 }
 

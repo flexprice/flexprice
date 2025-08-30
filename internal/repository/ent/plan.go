@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/predicate"
@@ -411,6 +412,25 @@ func (o PlanQueryOptions) ApplyStatusFilter(query PlanQuery, status string) Plan
 
 func (o PlanQueryOptions) ApplySortFilter(query PlanQuery, field string, order string) PlanQuery {
 	field = o.GetFieldName(field)
+
+	// Special handling for display_order
+	if field == plan.FieldDisplayOrder {
+		// Custom SQL to handle the ordering:
+		// 1. First show records WITH display_order (sorted by display_order asc/desc)
+		// 2. Then show records with display_order = NULL (sorted by created_at desc)
+		query = query.Order(func(s *sql.Selector) {
+			if order == types.OrderDesc {
+				// For DESC: NOT NULL first in DESC order, then NULLs by created_at
+				s.OrderBy("CASE WHEN " + field + " IS NULL THEN 2 ELSE 1 END, " + field + " DESC NULLS LAST, " + plan.FieldCreatedAt + " DESC")
+			} else {
+				// For ASC: NOT NULL first in ASC order, then NULLs by created_at
+				s.OrderBy("CASE WHEN " + field + " IS NULL THEN 2 ELSE 1 END, " + field + " ASC NULLS LAST, " + plan.FieldCreatedAt + " DESC")
+			}
+		})
+		return query
+	}
+
+	// Normal sorting for other fields
 	if order == types.OrderDesc {
 		return query.Order(ent.Desc(field))
 	}
@@ -435,6 +455,8 @@ func (o PlanQueryOptions) GetFieldName(field string) string {
 		return plan.FieldDescription
 	case "status":
 		return plan.FieldStatus
+	case "display_order":
+		return plan.FieldDisplayOrder
 	default:
 		// unknown field
 		return ""

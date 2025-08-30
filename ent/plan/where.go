@@ -115,6 +115,11 @@ func Description(v string) predicate.Plan {
 	return predicate.Plan(sql.FieldEQ(FieldDescription, v))
 }
 
+// DisplayOrder applies equality check predicate on the "display_order" field. It's identical to DisplayOrderEQ.
+func DisplayOrder(v int) predicate.Plan {
+	return predicate.Plan(sql.FieldEQ(FieldDisplayOrder, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.Plan {
 	return predicate.Plan(sql.FieldEQ(FieldTenantID, v))
@@ -773,6 +778,46 @@ func DescriptionEqualFold(v string) predicate.Plan {
 // DescriptionContainsFold applies the ContainsFold predicate on the "description" field.
 func DescriptionContainsFold(v string) predicate.Plan {
 	return predicate.Plan(sql.FieldContainsFold(FieldDescription, v))
+}
+
+// DisplayOrderEQ applies the EQ predicate on the "display_order" field.
+func DisplayOrderEQ(v int) predicate.Plan {
+	return predicate.Plan(sql.FieldEQ(FieldDisplayOrder, v))
+}
+
+// DisplayOrderNEQ applies the NEQ predicate on the "display_order" field.
+func DisplayOrderNEQ(v int) predicate.Plan {
+	return predicate.Plan(sql.FieldNEQ(FieldDisplayOrder, v))
+}
+
+// DisplayOrderIn applies the In predicate on the "display_order" field.
+func DisplayOrderIn(vs ...int) predicate.Plan {
+	return predicate.Plan(sql.FieldIn(FieldDisplayOrder, vs...))
+}
+
+// DisplayOrderNotIn applies the NotIn predicate on the "display_order" field.
+func DisplayOrderNotIn(vs ...int) predicate.Plan {
+	return predicate.Plan(sql.FieldNotIn(FieldDisplayOrder, vs...))
+}
+
+// DisplayOrderGT applies the GT predicate on the "display_order" field.
+func DisplayOrderGT(v int) predicate.Plan {
+	return predicate.Plan(sql.FieldGT(FieldDisplayOrder, v))
+}
+
+// DisplayOrderGTE applies the GTE predicate on the "display_order" field.
+func DisplayOrderGTE(v int) predicate.Plan {
+	return predicate.Plan(sql.FieldGTE(FieldDisplayOrder, v))
+}
+
+// DisplayOrderLT applies the LT predicate on the "display_order" field.
+func DisplayOrderLT(v int) predicate.Plan {
+	return predicate.Plan(sql.FieldLT(FieldDisplayOrder, v))
+}
+
+// DisplayOrderLTE applies the LTE predicate on the "display_order" field.
+func DisplayOrderLTE(v int) predicate.Plan {
+	return predicate.Plan(sql.FieldLTE(FieldDisplayOrder, v))
 }
 
 // HasCreditGrants applies the HasEdge predicate on the "credit_grants" edge.

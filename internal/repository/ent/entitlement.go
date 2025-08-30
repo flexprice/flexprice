@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/ent/predicate"
@@ -552,11 +553,30 @@ func (o EntitlementQueryOptions) ApplyStatusFilter(query EntitlementQuery, statu
 }
 
 func (o EntitlementQueryOptions) ApplySortFilter(query EntitlementQuery, field string, order string) EntitlementQuery {
-	orderFunc := ent.Desc
-	if order == "asc" {
-		orderFunc = ent.Asc
+	field = o.GetFieldName(field)
+
+	// Special handling for display_order
+	if field == entitlement.FieldDisplayOrder {
+		// Custom SQL to handle the ordering:
+		// 1. First show records WITH display_order (sorted by display_order asc/desc)
+		// 2. Then show records with display_order = NULL (sorted by created_at desc)
+		query = query.Order(func(s *sql.Selector) {
+			if order == types.OrderDesc {
+				// For DESC: NOT NULL first in DESC order, then NULLs by created_at
+				s.OrderBy("CASE WHEN " + field + " IS NULL THEN 2 ELSE 1 END, " + field + " DESC NULLS LAST, " + entitlement.FieldCreatedAt + " DESC")
+			} else {
+				// For ASC: NOT NULL first in ASC order, then NULLs by created_at
+				s.OrderBy("CASE WHEN " + field + " IS NULL THEN 2 ELSE 1 END, " + field + " ASC NULLS LAST, " + entitlement.FieldCreatedAt + " DESC")
+			}
+		})
+		return query
 	}
-	return query.Order(orderFunc(o.GetFieldName(field)))
+
+	// Normal sorting for other fields
+	if order == types.OrderDesc {
+		return query.Order(ent.Desc(field))
+	}
+	return query.Order(ent.Asc(field))
 }
 
 func (o EntitlementQueryOptions) ApplyPaginationFilter(query EntitlementQuery, limit int, offset int) EntitlementQuery {
@@ -573,6 +593,8 @@ func (o EntitlementQueryOptions) GetFieldName(field string) string {
 		return entitlement.FieldCreatedAt
 	case "updated_at":
 		return entitlement.FieldUpdatedAt
+	case "display_order":
+		return entitlement.FieldDisplayOrder
 	default:
 		return field
 	}

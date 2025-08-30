@@ -220,6 +220,20 @@ func (ec *EntitlementCreate) SetNillableStaticValue(s *string) *EntitlementCreat
 	return ec
 }
 
+// SetDisplayOrder sets the "display_order" field.
+func (ec *EntitlementCreate) SetDisplayOrder(i int) *EntitlementCreate {
+	ec.mutation.SetDisplayOrder(i)
+	return ec
+}
+
+// SetNillableDisplayOrder sets the "display_order" field if the given value is not nil.
+func (ec *EntitlementCreate) SetNillableDisplayOrder(i *int) *EntitlementCreate {
+	if i != nil {
+		ec.SetDisplayOrder(*i)
+	}
+	return ec
+}
+
 // SetID sets the "id" field.
 func (ec *EntitlementCreate) SetID(s string) *EntitlementCreate {
 	ec.mutation.SetID(s)
@@ -289,6 +303,10 @@ func (ec *EntitlementCreate) defaults() {
 		v := entitlement.DefaultIsSoftLimit
 		ec.mutation.SetIsSoftLimit(v)
 	}
+	if _, ok := ec.mutation.DisplayOrder(); !ok {
+		v := entitlement.DefaultDisplayOrder
+		ec.mutation.SetDisplayOrder(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -331,6 +349,9 @@ func (ec *EntitlementCreate) check() error {
 	}
 	if _, ok := ec.mutation.IsSoftLimit(); !ok {
 		return &ValidationError{Name: "is_soft_limit", err: errors.New(`ent: missing required field "Entitlement.is_soft_limit"`)}
+	}
+	if _, ok := ec.mutation.DisplayOrder(); !ok {
+		return &ValidationError{Name: "display_order", err: errors.New(`ent: missing required field "Entitlement.display_order"`)}
 	}
 	if v, ok := ec.mutation.ID(); ok {
 		if err := entitlement.IDValidator(v); err != nil {
@@ -435,6 +456,10 @@ func (ec *EntitlementCreate) createSpec() (*Entitlement, *sqlgraph.CreateSpec) {
 	if value, ok := ec.mutation.StaticValue(); ok {
 		_spec.SetField(entitlement.FieldStaticValue, field.TypeString, value)
 		_node.StaticValue = value
+	}
+	if value, ok := ec.mutation.DisplayOrder(); ok {
+		_spec.SetField(entitlement.FieldDisplayOrder, field.TypeInt, value)
+		_node.DisplayOrder = value
 	}
 	return _node, _spec
 }

@@ -709,6 +709,10 @@ func init() {
 	entitlementDescIsSoftLimit := entitlementFields[8].Descriptor()
 	// entitlement.DefaultIsSoftLimit holds the default value on creation for the is_soft_limit field.
 	entitlement.DefaultIsSoftLimit = entitlementDescIsSoftLimit.Default.(bool)
+	// entitlementDescDisplayOrder is the schema descriptor for display_order field.
+	entitlementDescDisplayOrder := entitlementFields[10].Descriptor()
+	// entitlement.DefaultDisplayOrder holds the default value on creation for the display_order field.
+	entitlement.DefaultDisplayOrder = entitlementDescDisplayOrder.Default.(int)
 	// entitlementDescID is the schema descriptor for id field.
 	entitlementDescID := entitlementFields[0].Descriptor()
 	// entitlement.IDValidator is a validator for the "id" field. It is called by the builders before save.
@@ -1170,6 +1174,10 @@ func init() {
 	planDescName := planFields[2].Descriptor()
 	// plan.NameValidator is a validator for the "name" field. It is called by the builders before save.
 	plan.NameValidator = planDescName.Validators[0].(func(string) error)
+	// planDescDisplayOrder is the schema descriptor for display_order field.
+	planDescDisplayOrder := planFields[4].Descriptor()
+	// plan.DefaultDisplayOrder holds the default value on creation for the display_order field.
+	plan.DefaultDisplayOrder = planDescDisplayOrder.Default.(int)
 	priceMixin := schema.Price{}.Mixin()
 	priceMixinFields0 := priceMixin[0].Fields()
 	_ = priceMixinFields0

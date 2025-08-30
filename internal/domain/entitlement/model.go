@@ -19,6 +19,7 @@ type Entitlement struct {
 	IsSoftLimit      bool                        `json:"is_soft_limit"`
 	StaticValue      string                      `json:"static_value"`
 	EnvironmentID    string                      `json:"environment_id"`
+	DisplayOrder     int                         `json:"display_order"`
 	types.BaseModel
 }
 
@@ -90,6 +91,7 @@ func FromEnt(e *ent.Entitlement) *Entitlement {
 		IsSoftLimit:      e.IsSoftLimit,
 		StaticValue:      e.StaticValue,
 		EnvironmentID:    e.EnvironmentID,
+		DisplayOrder:     e.DisplayOrder,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

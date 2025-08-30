@@ -292,6 +292,30 @@ func (s *planService) GetPlans(ctx context.Context, filter *types.PlanFilter) (*
 			entFilter = entFilter.WithExpand(string(types.ExpandFeatures))
 		}
 
+		// Apply the same sort order as plans
+		if filter.Sort != nil {
+			// First add display_order if present
+			for _, sort := range filter.Sort {
+				if sort.Field == "display_order" {
+					entFilter.Sort = append(entFilter.Sort, &types.SortCondition{
+						Field:     "display_order",
+						Direction: sort.Direction,
+					})
+					break
+				}
+			}
+
+			// Then add other sort conditions
+			for _, sort := range filter.Sort {
+				if sort.Field != "display_order" {
+					entFilter.Sort = append(entFilter.Sort, &types.SortCondition{
+						Field:     sort.Field,
+						Direction: sort.Direction,
+					})
+				}
+			}
+		}
+
 		entitlements, err := entitlementService.ListEntitlements(ctx, entFilter)
 		if err != nil {
 			return nil, err
