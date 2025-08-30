@@ -449,6 +449,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		{
 			subscriptionGroup.POST("/update-periods", handlers.CronSubscription.UpdateBillingPeriods)
 			subscriptionGroup.POST("/generate-invoice", handlers.CronSubscription.GenerateInvoice)
+			subscriptionGroup.POST("/process_auto_cancellation", handlers.CronSubscription.ProcessAutoCancellationSubscriptions)
 		}
 
 		// Wallet related cron jobs

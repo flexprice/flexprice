@@ -51,6 +51,9 @@ type SubscriptionService interface {
 	// Addon management for subscriptions
 	AddAddonToSubscription(ctx context.Context, subscriptionID string, req *dto.AddAddonToSubscriptionRequest) (*addonassociation.AddonAssociation, error)
 	RemoveAddonFromSubscription(ctx context.Context, subscriptionID string, addonID string, reason string) error
+
+	// Auto-cancellation methods
+	ProcessAutoCancellationSubscriptions(ctx context.Context) error
 }
 
 type subscriptionService struct {
@@ -3386,6 +3389,229 @@ func (s *subscriptionService) ActivateIncompleteSubscription(ctx context.Context
 
 	// Publish webhook event for subscription activation
 	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionActivated, subscriptionID)
+
+	return nil
+}
+
+// SubscriptionConfig represents the configuration for subscription auto-cancellation
+type SubscriptionConfig struct {
+	GracePeriodDays         int  `json:"grace_period_days"`
+	AutoCancellationEnabled bool `json:"auto_cancellation_enabled"`
+}
+
+// GetSubscriptionConfig retrieves the subscription configuration from settings
+func (s *subscriptionService) GetSubscriptionConfig(ctx context.Context) (*SubscriptionConfig, error) {
+	setting, err := s.SettingsRepo.GetByKey(ctx, "subscription_config")
+	if err != nil {
+		// If setting not found, return default
+		if ierr.IsNotFound(err) {
+			s.Logger.Infow("subscription config not found, returning default",
+				"tenant_id", types.GetTenantID(ctx), "environment_id", types.GetEnvironmentID(ctx))
+			return &SubscriptionConfig{
+				GracePeriodDays:         1,
+				AutoCancellationEnabled: false,
+			}, nil
+		}
+		return nil, err
+	}
+
+	// Extract configuration from the setting value
+	config := &SubscriptionConfig{
+		GracePeriodDays:         3,
+		AutoCancellationEnabled: false,
+	}
+
+	// Extract grace_period_days
+	if gracePeriodDaysRaw, exists := setting.Value["grace_period_days"]; exists {
+		switch v := gracePeriodDaysRaw.(type) {
+		case float64:
+			config.GracePeriodDays = int(v)
+		case int:
+			config.GracePeriodDays = v
+		}
+	}
+
+	// Extract auto_cancellation_enabled
+	if autoCancellationEnabledRaw, exists := setting.Value["auto_cancellation_enabled"]; exists {
+		if autoCancellationEnabled, ok := autoCancellationEnabledRaw.(bool); ok {
+			config.AutoCancellationEnabled = autoCancellationEnabled
+		}
+	}
+
+	return config, nil
+}
+
+// isEligibleForAutoCancellation checks if an active subscription is eligible for auto-cancellation
+func (s *subscriptionService) isEligibleForAutoCancellation(ctx context.Context, sub *subscription.Subscription, config *SubscriptionConfig) bool {
+	// Check if subscription is active
+	if sub.SubscriptionStatus != types.SubscriptionStatusActive {
+		return false
+	}
+
+	now := time.Now().UTC()
+
+	// Query for unpaid invoices
+	filter := &types.InvoiceFilter{
+		SubscriptionID: sub.ID,
+		PaymentStatus: []types.PaymentStatus{
+			types.PaymentStatusPending,
+			types.PaymentStatusFailed,
+		},
+	}
+
+	s.Logger.Debugw("fetching unpaid invoices for auto-cancellation eligibility",
+		"subscription_id", sub.ID,
+		"payment_statuses", filter.PaymentStatus)
+
+	invoices, err := s.InvoiceRepo.List(ctx, filter)
+	if err != nil {
+		s.Logger.Errorw("failed to fetch invoices for auto-cancellation",
+			"subscription_id", sub.ID,
+			"error", err)
+		return false
+	}
+
+	s.Logger.Debugw("found invoices for subscription",
+		"subscription_id", sub.ID,
+		"invoice_count", len(invoices))
+
+	// Check each invoice for eligibility criteria
+	for _, inv := range invoices {
+		// Skip invalid due dates
+		if inv.DueDate == nil {
+			s.Logger.Warnw("invoice has invalid due date, skipping",
+				"subscription_id", sub.ID,
+				"invoice_id", inv.ID)
+			continue
+		}
+
+		// Check amount_remaining (must have outstanding amount)
+		if !inv.AmountRemaining.GreaterThan(decimal.Zero) {
+			s.Logger.Debugw("invoice has no remaining amount, skipping",
+				"subscription_id", sub.ID,
+				"invoice_id", inv.ID,
+				"amount_remaining", inv.AmountRemaining)
+			continue
+		}
+
+		// Calculate grace period end time: due_date + grace_period_days
+		gracePeriodEndTime := inv.DueDate.AddDate(0, 0, config.GracePeriodDays)
+
+		s.Logger.Debugw("evaluating invoice for auto-cancellation",
+			"subscription_id", sub.ID,
+			"invoice_id", inv.ID,
+			"due_date", inv.DueDate,
+			"amount_remaining", inv.AmountRemaining,
+			"grace_period_days", config.GracePeriodDays,
+			"grace_period_end_time", gracePeriodEndTime,
+			"current_time", now,
+			"is_past_grace_period", now.After(gracePeriodEndTime))
+
+		// Check if current time is past grace period end
+		if now.After(gracePeriodEndTime) {
+			s.Logger.Infow("subscription eligible for auto-cancellation",
+				"subscription_id", sub.ID,
+				"invoice_id", inv.ID,
+				"amount_remaining", inv.AmountRemaining,
+				"due_date", inv.DueDate,
+				"grace_period_end_time", gracePeriodEndTime,
+				"current_time", now,
+				"payment_status", inv.PaymentStatus)
+			return true
+		} else {
+			s.Logger.Debugw("invoice not past grace period yet",
+				"subscription_id", sub.ID,
+				"invoice_id", inv.ID,
+				"due_date", inv.DueDate,
+				"grace_period_end_time", gracePeriodEndTime,
+				"days_until_grace_expires", gracePeriodEndTime.Sub(now).Hours()/24)
+		}
+	}
+
+	s.Logger.Debugw("subscription not eligible for auto-cancellation",
+		"subscription_id", sub.ID,
+		"reason", "no invoices past grace period")
+
+	return false
+}
+
+// ProcessAutoCancellationSubscriptions processes subscriptions that are eligible for auto-cancellation
+func (s *subscriptionService) ProcessAutoCancellationSubscriptions(ctx context.Context) error {
+	s.Logger.Infow("starting auto-cancellation processing")
+
+	// Get subscription configuration
+	config, err := s.GetSubscriptionConfig(ctx)
+	if err != nil {
+		s.Logger.Errorw("failed to get subscription config", "error", err)
+		return err
+	}
+
+	// Early return if auto-cancellation is disabled at tenant level
+	if !config.AutoCancellationEnabled {
+		s.Logger.Infow("auto-cancellation is disabled for tenant, skipping",
+			"tenant_id", types.GetTenantID(ctx),
+			"environment_id", types.GetEnvironmentID(ctx))
+		return nil
+	}
+
+	// Get ONLY ACTIVE subscriptions (skip cancelled, paused, trialing, etc.)
+	filter := &types.SubscriptionFilter{
+		SubscriptionStatus: []types.SubscriptionStatus{types.SubscriptionStatusActive},
+	}
+
+	s.Logger.Infow("fetching ONLY ACTIVE subscriptions for auto-cancellation",
+		"subscription_status_filter", "ACTIVE")
+
+	subscriptions, err := s.SubRepo.List(ctx, filter)
+	if err != nil {
+		s.Logger.Errorw("failed to get subscriptions for auto-cancellation", "error", err)
+		return err
+	}
+
+	s.Logger.Infow("found subscriptions for auto-cancellation check",
+		"total_subscriptions", len(subscriptions))
+
+	// Log subscription count for monitoring
+	s.Logger.Infow("found subscriptions for auto-cancellation processing",
+		"total_subscriptions", len(subscriptions))
+
+	canceledCount := 0
+	failedCount := 0
+
+	// Process each subscription
+	for _, sub := range subscriptions {
+
+		if s.isEligibleForAutoCancellation(ctx, sub, config) {
+			s.Logger.Infow("auto-cancelling subscription",
+				"subscription_id", sub.ID,
+				"grace_period_days", config.GracePeriodDays)
+
+			// Cancel the subscription
+			if err := s.CancelSubscription(ctx, sub.ID, false); err != nil {
+				s.Logger.Errorw("failed to auto-cancel subscription",
+					"subscription_id", sub.ID,
+					"error", err)
+				failedCount++
+				continue
+			}
+
+			canceledCount++
+
+			// Log audit trail
+			s.Logger.Infow("successfully auto-canceled subscription",
+				"subscription_id", sub.ID,
+				"reason", "grace_period_expired",
+				"grace_period_days", config.GracePeriodDays,
+				"canceled_by", "auto_cancellation_system",
+				"tenant_id", sub.TenantID,
+				"environment_id", sub.EnvironmentID)
+		}
+	}
+
+	s.Logger.Infow("completed auto-cancellation processing",
+		"total_subscriptions", len(subscriptions),
+		"canceled_count", canceledCount,
+		"failed_count", failedCount)
 
 	return nil
 }

@@ -10,7 +10,8 @@ import (
 type SettingKey string
 
 const (
-	SettingKeyInvoiceConfig SettingKey = "invoice_config"
+	SettingKeyInvoiceConfig      SettingKey = "invoice_config"
+	SettingKeySubscriptionConfig SettingKey = "subscription_config"
 )
 
 func (s SettingKey) String() string {
@@ -41,6 +42,15 @@ func GetDefaultSettings() map[SettingKey]DefaultSettingValue {
 			Description: "Default configuration for invoice generation and management",
 			Required:    true,
 		},
+		SettingKeySubscriptionConfig: {
+			Key: SettingKeySubscriptionConfig,
+			DefaultValue: map[string]interface{}{
+				"grace_period_days":         3,
+				"auto_cancellation_enabled": false,
+			},
+			Description: "Default configuration for subscription auto-cancellation (grace period and enabled flag)",
+			Required:    true,
+		},
 	}
 }
 
@@ -59,6 +69,8 @@ func ValidateSettingValue(key string, value map[string]interface{}) error {
 	switch SettingKey(key) {
 	case SettingKeyInvoiceConfig:
 		return ValidateInvoiceConfig(value)
+	case SettingKeySubscriptionConfig:
+		return ValidateSubscriptionConfig(value)
 	default:
 		return fmt.Errorf("unknown setting key: %s", key)
 	}
@@ -186,6 +198,52 @@ func ValidateInvoiceConfig(value map[string]interface{}) error {
 
 	if suffixLength < 1 || suffixLength > 10 {
 		return errors.New("invoice_config: 'suffix_length' must be between 1 and 10")
+	}
+
+	return nil
+}
+
+func ValidateSubscriptionConfig(value map[string]interface{}) error {
+	if value == nil {
+		return errors.New("subscription_config value cannot be nil")
+	}
+
+	// Validate grace_period_days
+	gracePeriodDaysRaw, exists := value["grace_period_days"]
+	if !exists {
+		return errors.New("subscription_config: 'grace_period_days' is required")
+	}
+
+	var gracePeriodDays int
+	switch v := gracePeriodDaysRaw.(type) {
+	case int:
+		gracePeriodDays = v
+	case float64:
+		if v != float64(int(v)) {
+			return errors.New("subscription_config: 'grace_period_days' must be a whole number")
+		}
+		gracePeriodDays = int(v)
+	default:
+		return fmt.Errorf("subscription_config: 'grace_period_days' must be an integer, got %T", gracePeriodDaysRaw)
+	}
+
+	if gracePeriodDays < 1 {
+		return errors.New("subscription_config: 'grace_period_days' must be greater than or equal to 1")
+	}
+
+	// Validate auto_cancellation_enabled (optional)
+	if autoCancellationEnabledRaw, exists := value["auto_cancellation_enabled"]; exists {
+		autoCancellationEnabled, ok := autoCancellationEnabledRaw.(bool)
+		if !ok {
+			return fmt.Errorf("subscription_config: 'auto_cancellation_enabled' must be a boolean, got %T", autoCancellationEnabledRaw)
+		}
+		// Store the validated value back for consistency
+		value["auto_cancellation_enabled"] = autoCancellationEnabled
+	} else {
+		// If auto_cancellation_enabled doesn't exist in existing value, set it to false
+		if _, exists := value["auto_cancellation_enabled"]; !exists {
+			value["auto_cancellation_enabled"] = false
+		}
 	}
 
 	return nil

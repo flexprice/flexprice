@@ -87,3 +87,19 @@ func (h *SubscriptionHandler) GenerateInvoice(c *gin.Context) {
 
 	c.JSON(http.StatusOK, result)
 }
+
+// ProcessAutoCancellationSubscriptions processes subscriptions that are eligible for auto-cancellation
+// We need to get all unpaid invoices and check if the grace period has expired
+func (h *SubscriptionHandler) ProcessAutoCancellationSubscriptions(c *gin.Context) {
+	h.logger.Infow("starting auto-cancellation processing cron job")
+
+	if err := h.subscriptionService.ProcessAutoCancellationSubscriptions(c.Request.Context()); err != nil {
+		h.logger.Errorw("failed to process auto-cancellation subscriptions",
+			"error", err)
+		c.Error(err)
+		return
+	}
+
+	h.logger.Infow("completed auto-cancellation processing cron job")
+	c.JSON(http.StatusOK, gin.H{"status": "completed"})
+}
