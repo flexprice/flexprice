@@ -60,13 +60,54 @@ func (s SubscriptionStatus) Validate() error {
 	return nil
 }
 
+// PaymentBehavior determines how subscription payments are handled
+type PaymentBehavior string
+
+const (
+	// PaymentBehaviorAllowIncomplete - Immediately attempts payment. If fails, subscription becomes incomplete
+	PaymentBehaviorAllowIncomplete PaymentBehavior = "allow_incomplete"
+
+	// PaymentBehaviorDefaultIncomplete - Always creates incomplete subscription if payment required
+	PaymentBehaviorDefaultIncomplete PaymentBehavior = "default_incomplete"
+
+	// PaymentBehaviorErrorIfIncomplete - Fails subscription creation if payment fails
+	PaymentBehaviorErrorIfIncomplete PaymentBehavior = "error_if_incomplete"
+
+	// PaymentBehaviorDefaultActive - Creates active subscription without payment attempt
+	PaymentBehaviorDefaultActive PaymentBehavior = "default_active"
+)
+
+func (p PaymentBehavior) String() string {
+	return string(p)
+}
+
+func (p PaymentBehavior) Validate() error {
+	allowed := []PaymentBehavior{
+		PaymentBehaviorAllowIncomplete,
+		PaymentBehaviorDefaultIncomplete,
+		PaymentBehaviorErrorIfIncomplete,
+		PaymentBehaviorDefaultActive,
+	}
+	if !lo.Contains(allowed, p) {
+		return ierr.NewError("invalid payment behavior").
+			WithHint("Invalid payment behavior").
+			WithReportableDetails(map[string]any{
+				"payment_behavior": p,
+				"allowed_values":   allowed,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 // CollectionMethod determines how invoices are collected for subscriptions
 type CollectionMethod string
 
 const (
-	// default_incomplete waits for payment confirmation before activation
-	CollectionMethodDefaultIncomplete CollectionMethod = "default_incomplete"
-	// send_invoice activates subscription immediately, invoice is sent for payment
+	// CollectionMethodChargeAutomatically - Automatically charge payment method
+	CollectionMethodChargeAutomatically CollectionMethod = "charge_automatically"
+
+	// CollectionMethodSendInvoice - Send invoice to customer for manual payment
 	CollectionMethodSendInvoice CollectionMethod = "send_invoice"
 )
 
@@ -76,7 +117,7 @@ func (c CollectionMethod) String() string {
 
 func (c CollectionMethod) Validate() error {
 	allowed := []CollectionMethod{
-		CollectionMethodDefaultIncomplete,
+		CollectionMethodChargeAutomatically,
 		CollectionMethodSendInvoice,
 	}
 	if !lo.Contains(allowed, c) {

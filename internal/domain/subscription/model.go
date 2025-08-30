@@ -98,6 +98,18 @@ type Subscription struct {
 	// OverageFactor is a multiplier applied to usage beyond the commitment amount
 	OverageFactor *decimal.Decimal `db:"overage_factor" json:"overage_factor,omitempty"`
 
+	// PaymentBehavior determines how subscription payments are handled
+	PaymentBehavior string `db:"payment_behavior" json:"payment_behavior"`
+
+	// CollectionMethod determines how invoices are collected
+	CollectionMethod string `db:"collection_method" json:"collection_method"`
+
+	// PaymentMethodID is the payment method ID for this subscription
+	PaymentMethodID *string `db:"payment_method_id" json:"payment_method_id,omitempty"`
+
+	// PendingUpdatesExpiresAt is when pending updates expire
+	PendingUpdatesExpiresAt *time.Time `db:"pending_updates_expires_at" json:"pending_updates_expires_at,omitempty"`
+
 	LineItems []*SubscriptionLineItem `json:"line_items,omitempty"`
 
 	Pauses []*SubscriptionPause `json:"pauses,omitempty"`
@@ -160,9 +172,18 @@ func GetSubscriptionFromEnt(sub *ent.Subscription) *Subscription {
 		ActivePauseID:      sub.ActivePauseID,
 		CommitmentAmount:   sub.CommitmentAmount,
 		OverageFactor:      sub.OverageFactor,
-		LineItems:          lineItems,
-		CouponAssociations: couponAssociations,
-		Pauses:             pauses,
+		PaymentBehavior:    string(sub.PaymentBehavior),
+		CollectionMethod:   string(sub.CollectionMethod),
+		PaymentMethodID: func() *string {
+			if sub.PaymentMethodID == "" {
+				return nil
+			}
+			return &sub.PaymentMethodID
+		}(),
+		PendingUpdatesExpiresAt: sub.PendingUpdatesExpiresAt,
+		LineItems:               lineItems,
+		CouponAssociations:      couponAssociations,
+		Pauses:                  pauses,
 		BaseModel: types.BaseModel{
 			TenantID:  sub.TenantID,
 			Status:    types.Status(sub.Status),

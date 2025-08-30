@@ -61,10 +61,10 @@ type CreateSubscriptionRequest struct {
 	// Addons represents addons to be added to the subscription during creation
 	Addons []AddAddonToSubscriptionRequest `json:"addons,omitempty" validate:"omitempty,dive"`
 
-	// collection_method determines how invoices are collected
-	// "default_incomplete" - subscription waits for payment confirmation before activation
-	// "send_invoice" - subscription activates immediately, invoice is sent for payment
+	// Payment behavior configuration
+	PaymentBehavior  *types.PaymentBehavior  `json:"payment_behavior,omitempty"`
 	CollectionMethod *types.CollectionMethod `json:"collection_method,omitempty"`
+	PaymentMethodID  *string                 `json:"payment_method_id,omitempty"`
 }
 
 // AddAddonRequest is used by body-based endpoint /subscriptions/addon
@@ -94,6 +94,9 @@ type SubscriptionResponse struct {
 	Schedule *SubscriptionScheduleResponse `json:"schedule,omitempty"`
 	// CouponAssociations are the coupon associations for this subscription
 	CouponAssociations []*CouponAssociationResponse `json:"coupon_associations,omitempty"`
+
+	// Latest invoice information for incomplete subscriptions
+	LatestInvoice *InvoiceResponse `json:"latest_invoice,omitempty"`
 }
 
 // ListSubscriptionsResponse represents the response for listing subscriptions
@@ -358,19 +361,20 @@ func (r *CreateSubscriptionRequest) Validate() error {
 }
 
 func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscription.Subscription {
-	// Determine initial subscription status based on collection method and payment behavior
-	initialStatus := types.SubscriptionStatusActive
-
-	// Set status based on collection method
-	if r.CollectionMethod != nil {
-		if *r.CollectionMethod == types.CollectionMethodDefaultIncomplete {
-			// default_incomplete: wait for payment confirmation before activation
-			initialStatus = types.SubscriptionStatusIncomplete
-		} else if *r.CollectionMethod == types.CollectionMethodSendInvoice {
-			// send_invoice: activate immediately, invoice is sent for payment
-			initialStatus = types.SubscriptionStatusActive
-		}
+	// Set defaults for payment behavior and collection method
+	paymentBehavior := types.PaymentBehaviorDefaultActive
+	if r.PaymentBehavior != nil {
+		paymentBehavior = *r.PaymentBehavior
 	}
+
+	collectionMethod := types.CollectionMethodSendInvoice
+	if r.CollectionMethod != nil {
+		collectionMethod = *r.CollectionMethod
+	}
+
+	// Initial status will be determined by payment processor based on payment behavior
+	// For now, set to incomplete - the payment processor will update it
+	initialStatus := types.SubscriptionStatusIncomplete
 
 	sub := &subscription.Subscription{
 		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
@@ -391,6 +395,11 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		EnvironmentID:      types.GetEnvironmentID(ctx),
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 		BillingCycle:       r.BillingCycle,
+
+		// New payment behavior fields
+		PaymentBehavior:  string(paymentBehavior),
+		CollectionMethod: string(collectionMethod),
+		PaymentMethodID:  r.PaymentMethodID,
 	}
 
 	// Set commitment amount and overage factor if provided

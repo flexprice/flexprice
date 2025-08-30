@@ -419,6 +419,62 @@ func (sc *SubscriptionCreate) SetNillableOverageFactor(d *decimal.Decimal) *Subs
 	return sc
 }
 
+// SetPaymentBehavior sets the "payment_behavior" field.
+func (sc *SubscriptionCreate) SetPaymentBehavior(sb subscription.PaymentBehavior) *SubscriptionCreate {
+	sc.mutation.SetPaymentBehavior(sb)
+	return sc
+}
+
+// SetNillablePaymentBehavior sets the "payment_behavior" field if the given value is not nil.
+func (sc *SubscriptionCreate) SetNillablePaymentBehavior(sb *subscription.PaymentBehavior) *SubscriptionCreate {
+	if sb != nil {
+		sc.SetPaymentBehavior(*sb)
+	}
+	return sc
+}
+
+// SetCollectionMethod sets the "collection_method" field.
+func (sc *SubscriptionCreate) SetCollectionMethod(sm subscription.CollectionMethod) *SubscriptionCreate {
+	sc.mutation.SetCollectionMethod(sm)
+	return sc
+}
+
+// SetNillableCollectionMethod sets the "collection_method" field if the given value is not nil.
+func (sc *SubscriptionCreate) SetNillableCollectionMethod(sm *subscription.CollectionMethod) *SubscriptionCreate {
+	if sm != nil {
+		sc.SetCollectionMethod(*sm)
+	}
+	return sc
+}
+
+// SetPaymentMethodID sets the "payment_method_id" field.
+func (sc *SubscriptionCreate) SetPaymentMethodID(s string) *SubscriptionCreate {
+	sc.mutation.SetPaymentMethodID(s)
+	return sc
+}
+
+// SetNillablePaymentMethodID sets the "payment_method_id" field if the given value is not nil.
+func (sc *SubscriptionCreate) SetNillablePaymentMethodID(s *string) *SubscriptionCreate {
+	if s != nil {
+		sc.SetPaymentMethodID(*s)
+	}
+	return sc
+}
+
+// SetPendingUpdatesExpiresAt sets the "pending_updates_expires_at" field.
+func (sc *SubscriptionCreate) SetPendingUpdatesExpiresAt(t time.Time) *SubscriptionCreate {
+	sc.mutation.SetPendingUpdatesExpiresAt(t)
+	return sc
+}
+
+// SetNillablePendingUpdatesExpiresAt sets the "pending_updates_expires_at" field if the given value is not nil.
+func (sc *SubscriptionCreate) SetNillablePendingUpdatesExpiresAt(t *time.Time) *SubscriptionCreate {
+	if t != nil {
+		sc.SetPendingUpdatesExpiresAt(*t)
+	}
+	return sc
+}
+
 // SetID sets the "id" field.
 func (sc *SubscriptionCreate) SetID(s string) *SubscriptionCreate {
 	sc.mutation.SetID(s)
@@ -614,6 +670,14 @@ func (sc *SubscriptionCreate) defaults() {
 		v := subscription.DefaultOverageFactor
 		sc.mutation.SetOverageFactor(v)
 	}
+	if _, ok := sc.mutation.PaymentBehavior(); !ok {
+		v := subscription.DefaultPaymentBehavior
+		sc.mutation.SetPaymentBehavior(v)
+	}
+	if _, ok := sc.mutation.CollectionMethod(); !ok {
+		v := subscription.DefaultCollectionMethod
+		sc.mutation.SetCollectionMethod(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -708,6 +772,22 @@ func (sc *SubscriptionCreate) check() error {
 	if v, ok := sc.mutation.BillingCycle(); ok {
 		if err := subscription.BillingCycleValidator(v); err != nil {
 			return &ValidationError{Name: "billing_cycle", err: fmt.Errorf(`ent: validator failed for field "Subscription.billing_cycle": %w`, err)}
+		}
+	}
+	if _, ok := sc.mutation.PaymentBehavior(); !ok {
+		return &ValidationError{Name: "payment_behavior", err: errors.New(`ent: missing required field "Subscription.payment_behavior"`)}
+	}
+	if v, ok := sc.mutation.PaymentBehavior(); ok {
+		if err := subscription.PaymentBehaviorValidator(v); err != nil {
+			return &ValidationError{Name: "payment_behavior", err: fmt.Errorf(`ent: validator failed for field "Subscription.payment_behavior": %w`, err)}
+		}
+	}
+	if _, ok := sc.mutation.CollectionMethod(); !ok {
+		return &ValidationError{Name: "collection_method", err: errors.New(`ent: missing required field "Subscription.collection_method"`)}
+	}
+	if v, ok := sc.mutation.CollectionMethod(); ok {
+		if err := subscription.CollectionMethodValidator(v); err != nil {
+			return &ValidationError{Name: "collection_method", err: fmt.Errorf(`ent: validator failed for field "Subscription.collection_method": %w`, err)}
 		}
 	}
 	return nil
@@ -872,6 +952,22 @@ func (sc *SubscriptionCreate) createSpec() (*Subscription, *sqlgraph.CreateSpec)
 	if value, ok := sc.mutation.OverageFactor(); ok {
 		_spec.SetField(subscription.FieldOverageFactor, field.TypeOther, value)
 		_node.OverageFactor = &value
+	}
+	if value, ok := sc.mutation.PaymentBehavior(); ok {
+		_spec.SetField(subscription.FieldPaymentBehavior, field.TypeEnum, value)
+		_node.PaymentBehavior = value
+	}
+	if value, ok := sc.mutation.CollectionMethod(); ok {
+		_spec.SetField(subscription.FieldCollectionMethod, field.TypeEnum, value)
+		_node.CollectionMethod = value
+	}
+	if value, ok := sc.mutation.PaymentMethodID(); ok {
+		_spec.SetField(subscription.FieldPaymentMethodID, field.TypeString, value)
+		_node.PaymentMethodID = value
+	}
+	if value, ok := sc.mutation.PendingUpdatesExpiresAt(); ok {
+		_spec.SetField(subscription.FieldPendingUpdatesExpiresAt, field.TypeTime, value)
+		_node.PendingUpdatesExpiresAt = &value
 	}
 	if nodes := sc.mutation.LineItemsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -335,31 +336,42 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		}
 
 		// Create invoice for the subscription (in case it has advance charges)
-		invoice, err = invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
+		paymentParams := dto.NewPaymentParametersFromSubscription(sub.CollectionMethod, sub.PaymentBehavior, sub.PaymentMethodID)
+		_, err := invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
 			SubscriptionID: sub.ID,
 			PeriodStart:    sub.CurrentPeriodStart,
 			PeriodEnd:      sub.CurrentPeriodEnd,
 			ReferencePoint: types.ReferencePointPeriodStart,
-		})
+		}, paymentParams)
+		if err != nil {
+			return err
+		}
 
-		return err
+		// Payment processing and subscription activation is now handled in ProcessDraftInvoice
+
+		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	// if the subscription is created with incomplete status, but it doesn't create an invoice, we need to mark it as active
-	// This applies regardless of collection method - if there's no invoice to pay, the subscription should be active
-	if sub.SubscriptionStatus == types.SubscriptionStatusIncomplete && (invoice == nil || invoice.PaymentStatus == types.PaymentStatusSucceeded) {
-		sub.SubscriptionStatus = types.SubscriptionStatusActive
-		err = s.SubRepo.Update(ctx, sub)
-		if err != nil {
-			return nil, err
-		}
+	// Refresh subscription to get the latest status after payment processing
+	refreshedSub, err := s.SubRepo.Get(ctx, sub.ID)
+	if err != nil {
+		s.Logger.Errorw("failed to refresh subscription after creation",
+			"error", err,
+			"subscription_id", sub.ID)
+		// Continue with original subscription if refresh fails
+		refreshedSub = sub
 	}
 
 	// Update response to ensure it has the latest subscription data
-	response.Subscription = sub
+	response.Subscription = refreshedSub
+
+	// Include latest invoice if created
+	if invoice != nil {
+		response.LatestInvoice = invoice
+	}
 
 	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionCreated, sub.ID)
 	return response, nil
@@ -1492,12 +1504,13 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 			period := periods[i]
 
 			// Create a single invoice for both arrear and advance charges at period end
+			paymentParams := dto.NewPaymentParametersFromSubscription(sub.CollectionMethod, sub.PaymentBehavior, sub.PaymentMethodID)
 			inv, err := invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
 				SubscriptionID: sub.ID,
 				PeriodStart:    period.start,
 				PeriodEnd:      period.end,
 				ReferencePoint: types.ReferencePointPeriodEnd,
-			})
+			}, paymentParams)
 			if err != nil {
 				return err
 			}

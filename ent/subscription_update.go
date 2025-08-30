@@ -358,6 +358,74 @@ func (su *SubscriptionUpdate) ClearOverageFactor() *SubscriptionUpdate {
 	return su
 }
 
+// SetPaymentBehavior sets the "payment_behavior" field.
+func (su *SubscriptionUpdate) SetPaymentBehavior(sb subscription.PaymentBehavior) *SubscriptionUpdate {
+	su.mutation.SetPaymentBehavior(sb)
+	return su
+}
+
+// SetNillablePaymentBehavior sets the "payment_behavior" field if the given value is not nil.
+func (su *SubscriptionUpdate) SetNillablePaymentBehavior(sb *subscription.PaymentBehavior) *SubscriptionUpdate {
+	if sb != nil {
+		su.SetPaymentBehavior(*sb)
+	}
+	return su
+}
+
+// SetCollectionMethod sets the "collection_method" field.
+func (su *SubscriptionUpdate) SetCollectionMethod(sm subscription.CollectionMethod) *SubscriptionUpdate {
+	su.mutation.SetCollectionMethod(sm)
+	return su
+}
+
+// SetNillableCollectionMethod sets the "collection_method" field if the given value is not nil.
+func (su *SubscriptionUpdate) SetNillableCollectionMethod(sm *subscription.CollectionMethod) *SubscriptionUpdate {
+	if sm != nil {
+		su.SetCollectionMethod(*sm)
+	}
+	return su
+}
+
+// SetPaymentMethodID sets the "payment_method_id" field.
+func (su *SubscriptionUpdate) SetPaymentMethodID(s string) *SubscriptionUpdate {
+	su.mutation.SetPaymentMethodID(s)
+	return su
+}
+
+// SetNillablePaymentMethodID sets the "payment_method_id" field if the given value is not nil.
+func (su *SubscriptionUpdate) SetNillablePaymentMethodID(s *string) *SubscriptionUpdate {
+	if s != nil {
+		su.SetPaymentMethodID(*s)
+	}
+	return su
+}
+
+// ClearPaymentMethodID clears the value of the "payment_method_id" field.
+func (su *SubscriptionUpdate) ClearPaymentMethodID() *SubscriptionUpdate {
+	su.mutation.ClearPaymentMethodID()
+	return su
+}
+
+// SetPendingUpdatesExpiresAt sets the "pending_updates_expires_at" field.
+func (su *SubscriptionUpdate) SetPendingUpdatesExpiresAt(t time.Time) *SubscriptionUpdate {
+	su.mutation.SetPendingUpdatesExpiresAt(t)
+	return su
+}
+
+// SetNillablePendingUpdatesExpiresAt sets the "pending_updates_expires_at" field if the given value is not nil.
+func (su *SubscriptionUpdate) SetNillablePendingUpdatesExpiresAt(t *time.Time) *SubscriptionUpdate {
+	if t != nil {
+		su.SetPendingUpdatesExpiresAt(*t)
+	}
+	return su
+}
+
+// ClearPendingUpdatesExpiresAt clears the value of the "pending_updates_expires_at" field.
+func (su *SubscriptionUpdate) ClearPendingUpdatesExpiresAt() *SubscriptionUpdate {
+	su.mutation.ClearPendingUpdatesExpiresAt()
+	return su
+}
+
 // AddLineItemIDs adds the "line_items" edge to the SubscriptionLineItem entity by IDs.
 func (su *SubscriptionUpdate) AddLineItemIDs(ids ...string) *SubscriptionUpdate {
 	su.mutation.AddLineItemIDs(ids...)
@@ -604,7 +672,25 @@ func (su *SubscriptionUpdate) defaults() {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (su *SubscriptionUpdate) check() error {
+	if v, ok := su.mutation.PaymentBehavior(); ok {
+		if err := subscription.PaymentBehaviorValidator(v); err != nil {
+			return &ValidationError{Name: "payment_behavior", err: fmt.Errorf(`ent: validator failed for field "Subscription.payment_behavior": %w`, err)}
+		}
+	}
+	if v, ok := su.mutation.CollectionMethod(); ok {
+		if err := subscription.CollectionMethodValidator(v); err != nil {
+			return &ValidationError{Name: "collection_method", err: fmt.Errorf(`ent: validator failed for field "Subscription.collection_method": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
+	if err := su.check(); err != nil {
+		return n, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(subscription.Table, subscription.Columns, sqlgraph.NewFieldSpec(subscription.FieldID, field.TypeString))
 	if ps := su.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
@@ -711,6 +797,24 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if su.mutation.OverageFactorCleared() {
 		_spec.ClearField(subscription.FieldOverageFactor, field.TypeOther)
+	}
+	if value, ok := su.mutation.PaymentBehavior(); ok {
+		_spec.SetField(subscription.FieldPaymentBehavior, field.TypeEnum, value)
+	}
+	if value, ok := su.mutation.CollectionMethod(); ok {
+		_spec.SetField(subscription.FieldCollectionMethod, field.TypeEnum, value)
+	}
+	if value, ok := su.mutation.PaymentMethodID(); ok {
+		_spec.SetField(subscription.FieldPaymentMethodID, field.TypeString, value)
+	}
+	if su.mutation.PaymentMethodIDCleared() {
+		_spec.ClearField(subscription.FieldPaymentMethodID, field.TypeString)
+	}
+	if value, ok := su.mutation.PendingUpdatesExpiresAt(); ok {
+		_spec.SetField(subscription.FieldPendingUpdatesExpiresAt, field.TypeTime, value)
+	}
+	if su.mutation.PendingUpdatesExpiresAtCleared() {
+		_spec.ClearField(subscription.FieldPendingUpdatesExpiresAt, field.TypeTime)
 	}
 	if su.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1309,6 +1413,74 @@ func (suo *SubscriptionUpdateOne) ClearOverageFactor() *SubscriptionUpdateOne {
 	return suo
 }
 
+// SetPaymentBehavior sets the "payment_behavior" field.
+func (suo *SubscriptionUpdateOne) SetPaymentBehavior(sb subscription.PaymentBehavior) *SubscriptionUpdateOne {
+	suo.mutation.SetPaymentBehavior(sb)
+	return suo
+}
+
+// SetNillablePaymentBehavior sets the "payment_behavior" field if the given value is not nil.
+func (suo *SubscriptionUpdateOne) SetNillablePaymentBehavior(sb *subscription.PaymentBehavior) *SubscriptionUpdateOne {
+	if sb != nil {
+		suo.SetPaymentBehavior(*sb)
+	}
+	return suo
+}
+
+// SetCollectionMethod sets the "collection_method" field.
+func (suo *SubscriptionUpdateOne) SetCollectionMethod(sm subscription.CollectionMethod) *SubscriptionUpdateOne {
+	suo.mutation.SetCollectionMethod(sm)
+	return suo
+}
+
+// SetNillableCollectionMethod sets the "collection_method" field if the given value is not nil.
+func (suo *SubscriptionUpdateOne) SetNillableCollectionMethod(sm *subscription.CollectionMethod) *SubscriptionUpdateOne {
+	if sm != nil {
+		suo.SetCollectionMethod(*sm)
+	}
+	return suo
+}
+
+// SetPaymentMethodID sets the "payment_method_id" field.
+func (suo *SubscriptionUpdateOne) SetPaymentMethodID(s string) *SubscriptionUpdateOne {
+	suo.mutation.SetPaymentMethodID(s)
+	return suo
+}
+
+// SetNillablePaymentMethodID sets the "payment_method_id" field if the given value is not nil.
+func (suo *SubscriptionUpdateOne) SetNillablePaymentMethodID(s *string) *SubscriptionUpdateOne {
+	if s != nil {
+		suo.SetPaymentMethodID(*s)
+	}
+	return suo
+}
+
+// ClearPaymentMethodID clears the value of the "payment_method_id" field.
+func (suo *SubscriptionUpdateOne) ClearPaymentMethodID() *SubscriptionUpdateOne {
+	suo.mutation.ClearPaymentMethodID()
+	return suo
+}
+
+// SetPendingUpdatesExpiresAt sets the "pending_updates_expires_at" field.
+func (suo *SubscriptionUpdateOne) SetPendingUpdatesExpiresAt(t time.Time) *SubscriptionUpdateOne {
+	suo.mutation.SetPendingUpdatesExpiresAt(t)
+	return suo
+}
+
+// SetNillablePendingUpdatesExpiresAt sets the "pending_updates_expires_at" field if the given value is not nil.
+func (suo *SubscriptionUpdateOne) SetNillablePendingUpdatesExpiresAt(t *time.Time) *SubscriptionUpdateOne {
+	if t != nil {
+		suo.SetPendingUpdatesExpiresAt(*t)
+	}
+	return suo
+}
+
+// ClearPendingUpdatesExpiresAt clears the value of the "pending_updates_expires_at" field.
+func (suo *SubscriptionUpdateOne) ClearPendingUpdatesExpiresAt() *SubscriptionUpdateOne {
+	suo.mutation.ClearPendingUpdatesExpiresAt()
+	return suo
+}
+
 // AddLineItemIDs adds the "line_items" edge to the SubscriptionLineItem entity by IDs.
 func (suo *SubscriptionUpdateOne) AddLineItemIDs(ids ...string) *SubscriptionUpdateOne {
 	suo.mutation.AddLineItemIDs(ids...)
@@ -1568,7 +1740,25 @@ func (suo *SubscriptionUpdateOne) defaults() {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (suo *SubscriptionUpdateOne) check() error {
+	if v, ok := suo.mutation.PaymentBehavior(); ok {
+		if err := subscription.PaymentBehaviorValidator(v); err != nil {
+			return &ValidationError{Name: "payment_behavior", err: fmt.Errorf(`ent: validator failed for field "Subscription.payment_behavior": %w`, err)}
+		}
+	}
+	if v, ok := suo.mutation.CollectionMethod(); ok {
+		if err := subscription.CollectionMethodValidator(v); err != nil {
+			return &ValidationError{Name: "collection_method", err: fmt.Errorf(`ent: validator failed for field "Subscription.collection_method": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscription, err error) {
+	if err := suo.check(); err != nil {
+		return _node, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(subscription.Table, subscription.Columns, sqlgraph.NewFieldSpec(subscription.FieldID, field.TypeString))
 	id, ok := suo.mutation.ID()
 	if !ok {
@@ -1692,6 +1882,24 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 	}
 	if suo.mutation.OverageFactorCleared() {
 		_spec.ClearField(subscription.FieldOverageFactor, field.TypeOther)
+	}
+	if value, ok := suo.mutation.PaymentBehavior(); ok {
+		_spec.SetField(subscription.FieldPaymentBehavior, field.TypeEnum, value)
+	}
+	if value, ok := suo.mutation.CollectionMethod(); ok {
+		_spec.SetField(subscription.FieldCollectionMethod, field.TypeEnum, value)
+	}
+	if value, ok := suo.mutation.PaymentMethodID(); ok {
+		_spec.SetField(subscription.FieldPaymentMethodID, field.TypeString, value)
+	}
+	if suo.mutation.PaymentMethodIDCleared() {
+		_spec.ClearField(subscription.FieldPaymentMethodID, field.TypeString)
+	}
+	if value, ok := suo.mutation.PendingUpdatesExpiresAt(); ok {
+		_spec.SetField(subscription.FieldPendingUpdatesExpiresAt, field.TypeTime, value)
+	}
+	if suo.mutation.PendingUpdatesExpiresAtCleared() {
+		_spec.ClearField(subscription.FieldPendingUpdatesExpiresAt, field.TypeTime)
 	}
 	if suo.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{

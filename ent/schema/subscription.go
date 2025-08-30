@@ -131,6 +131,25 @@ func (Subscription) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "decimal(10,6)",
 			}),
+		// Payment behavior and collection method fields
+		field.Enum("payment_behavior").
+			Values("allow_incomplete", "default_incomplete", "error_if_incomplete", "default_active").
+			Default("default_active").
+			Comment("Determines how subscription payments are handled"),
+		field.Enum("collection_method").
+			Values("charge_automatically", "send_invoice").
+			Default("send_invoice").
+			Comment("Determines how invoices are collected"),
+		field.String("payment_method_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(255)",
+			}).
+			Optional().
+			Comment("Payment method ID for this subscription"),
+		field.Time("pending_updates_expires_at").
+			Optional().
+			Nillable().
+			Comment("When pending updates expire (23 hours from creation)"),
 	}
 }
 
@@ -162,5 +181,14 @@ func (Subscription) Indexes() []ent.Index {
 		// For pause-related queries
 		index.Fields("tenant_id", "environment_id", "pause_status", "status"),
 		index.Fields("tenant_id", "environment_id", "active_pause_id", "status"),
+		// For payment behavior queries
+		index.Fields("tenant_id", "environment_id", "payment_behavior", "status"),
+		index.Fields("tenant_id", "environment_id", "collection_method", "status"),
+		// For pending updates queries
+		index.Fields("tenant_id", "environment_id", "pending_updates_expires_at", "status").
+			Annotations(entsql.IndexWhere("pending_updates_expires_at IS NOT NULL")),
+		// For incomplete subscription queries
+		index.Fields("tenant_id", "environment_id", "subscription_status", "collection_method", "status").
+			Annotations(entsql.IndexWhere("subscription_status IN ('incomplete', 'past_due')")),
 	}
 }

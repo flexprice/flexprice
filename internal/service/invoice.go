@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	pdf "github.com/flexprice/flexprice/internal/domain/pdf"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
@@ -28,10 +29,10 @@ type InvoiceService interface {
 	ListInvoices(ctx context.Context, filter *types.InvoiceFilter) (*dto.ListInvoicesResponse, error)
 	FinalizeInvoice(ctx context.Context, id string) error
 	VoidInvoice(ctx context.Context, id string) error
-	ProcessDraftInvoice(ctx context.Context, id string) error
+	ProcessDraftInvoice(ctx context.Context, id string, paymentParams *dto.PaymentParameters) error
 	UpdatePaymentStatus(ctx context.Context, id string, status types.PaymentStatus, amount *decimal.Decimal) error
 	ReconcilePaymentStatus(ctx context.Context, id string, status types.PaymentStatus, amount *decimal.Decimal) error
-	CreateSubscriptionInvoice(ctx context.Context, req *dto.CreateSubscriptionInvoiceRequest) (*dto.InvoiceResponse, error)
+	CreateSubscriptionInvoice(ctx context.Context, req *dto.CreateSubscriptionInvoiceRequest, paymentParams *dto.PaymentParameters) (*dto.InvoiceResponse, error)
 	GetPreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error)
 	GetCustomerInvoiceSummary(ctx context.Context, customerID string, currency string) (*dto.CustomerInvoiceSummary, error)
 	GetUnpaidInvoicesToBePaid(ctx context.Context, customerID string, currency string) ([]*dto.InvoiceResponse, decimal.Decimal, error)
@@ -679,7 +680,7 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string) error {
 	return nil
 }
 
-func (s *invoiceService) ProcessDraftInvoice(ctx context.Context, id string) error {
+func (s *invoiceService) ProcessDraftInvoice(ctx context.Context, id string, paymentParams *dto.PaymentParameters) error {
 	inv, err := s.InvoiceRepo.Get(ctx, id)
 	if err != nil {
 		return err
@@ -694,12 +695,30 @@ func (s *invoiceService) ProcessDraftInvoice(ctx context.Context, id string) err
 		return err
 	}
 
-	// try to process payment for the invoice and log any errors
-	// this is not a blocker for the invoice to be processed
-	if err := s.performPaymentAttemptActions(ctx, inv); err != nil {
+	// try to process payment for the invoice based on behavior and log any errors
+	if err := s.attemptPaymentForSubscriptionInvoice(ctx, inv, paymentParams); err != nil {
 		s.Logger.Errorw("failed to process payment for invoice",
 			"error", err.Error(),
 			"invoice_id", inv.ID)
+
+		// For error_if_incomplete behavior, payment failure should block invoice processing
+		shouldReturnError := false
+		if paymentParams != nil && paymentParams.PaymentBehavior != nil &&
+			*paymentParams.PaymentBehavior == types.PaymentBehaviorErrorIfIncomplete {
+			shouldReturnError = true
+		} else if inv.SubscriptionID != nil {
+			// Check subscription's payment behavior if no explicit paymentParams
+			sub, subErr := s.SubRepo.Get(ctx, *inv.SubscriptionID)
+			if subErr == nil && sub.PaymentBehavior == string(types.PaymentBehaviorErrorIfIncomplete) {
+				shouldReturnError = true
+			}
+		}
+
+		if shouldReturnError {
+			return err
+		}
+
+		// For other behaviors, payment failure is not a blocker
 	}
 
 	return nil
@@ -891,7 +910,7 @@ func (s *invoiceService) ReconcilePaymentStatus(ctx context.Context, id string, 
 	return nil
 }
 
-func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto.CreateSubscriptionInvoiceRequest) (*dto.InvoiceResponse, error) {
+func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto.CreateSubscriptionInvoiceRequest, paymentParams *dto.PaymentParameters) (*dto.InvoiceResponse, error) {
 	s.Logger.Infow("creating subscription invoice",
 		"subscription_id", req.SubscriptionID,
 		"period_start", req.PeriodStart,
@@ -932,8 +951,8 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 		return nil, err
 	}
 
-	// Process the invoice
-	if err := s.ProcessDraftInvoice(ctx, inv.ID); err != nil {
+	// Process the invoice with payment behavior
+	if err := s.ProcessDraftInvoice(ctx, inv.ID, paymentParams); err != nil {
 		return nil, err
 	}
 
@@ -1209,7 +1228,8 @@ func (s *invoiceService) AttemptPayment(ctx context.Context, id string) error {
 		return err
 	}
 
-	return s.performPaymentAttemptActions(ctx, inv)
+	// Use the new payment function with nil parameters to use subscription defaults
+	return s.attemptPaymentForSubscriptionInvoice(ctx, inv, nil)
 }
 
 func (s *invoiceService) performPaymentAttemptActions(ctx context.Context, inv *invoice.Invoice) error {
@@ -1267,6 +1287,114 @@ func (s *invoiceService) performPaymentAttemptActions(ctx context.Context, inv *
 			"invoice_id", inv.ID,
 			"amount_paid", amountPaid,
 			"amount_remaining", inv.AmountRemaining.Sub(amountPaid))
+	}
+
+	return nil
+}
+
+func (s *invoiceService) attemptPaymentForSubscriptionInvoice(ctx context.Context, inv *invoice.Invoice, paymentParams *dto.PaymentParameters) error {
+	// Get subscription to access payment settings
+	var sub *subscription.Subscription
+	if inv.SubscriptionID != nil {
+		var err error
+		sub, err = s.SubRepo.Get(ctx, *inv.SubscriptionID)
+		if err != nil {
+			s.Logger.Errorw("failed to get subscription for payment processing",
+				"error", err,
+				"subscription_id", *inv.SubscriptionID,
+				"invoice_id", inv.ID)
+			return err
+		}
+	}
+
+	// Use parameters if provided, otherwise get from subscription
+	var finalCollectionMethod types.CollectionMethod
+	var finalPaymentBehavior types.PaymentBehavior
+
+	if paymentParams != nil && paymentParams.CollectionMethod != nil {
+		finalCollectionMethod = *paymentParams.CollectionMethod
+	} else if sub != nil {
+		finalCollectionMethod = types.CollectionMethod(sub.CollectionMethod)
+	} else {
+		finalCollectionMethod = types.CollectionMethodChargeAutomatically // default
+	}
+
+	if paymentParams != nil && paymentParams.PaymentBehavior != nil {
+		finalPaymentBehavior = *paymentParams.PaymentBehavior
+	} else if sub != nil {
+		finalPaymentBehavior = types.PaymentBehavior(sub.PaymentBehavior)
+	} else {
+		finalPaymentBehavior = types.PaymentBehaviorDefaultActive // default
+	}
+
+	// Handle payment based on collection method and payment behavior
+	if finalCollectionMethod == types.CollectionMethodSendInvoice || finalPaymentBehavior == types.PaymentBehaviorDefaultActive {
+		// Send invoice mode or default_active behavior - activate subscription immediately, no automatic payment processing needed
+		if sub != nil {
+			sub.SubscriptionStatus = types.SubscriptionStatusActive
+			if err := s.SubRepo.Update(ctx, sub); err != nil {
+				s.Logger.Errorw("failed to activate subscription",
+					"error", err,
+					"subscription_id", sub.ID,
+					"invoice_id", inv.ID)
+				return err
+			}
+		}
+		s.Logger.Infow("skipping automatic payment processing and activated subscription",
+			"invoice_id", inv.ID,
+			"subscription_id", func() string {
+				if sub != nil {
+					return sub.ID
+				} else {
+					return "none"
+				}
+			}(),
+			"collection_method", finalCollectionMethod,
+			"payment_behavior", finalPaymentBehavior)
+		return nil
+	} else if inv.AmountDue.GreaterThan(decimal.Zero) {
+		// Charge automatically mode - process payment
+		if sub != nil {
+			paymentProcessor := NewSubscriptionPaymentProcessor(&s.ServiceParams)
+
+			// Create invoice response for payment processing
+			invoiceResponse := &dto.InvoiceResponse{
+				ID:              inv.ID,
+				AmountDue:       inv.AmountDue,
+				AmountRemaining: inv.AmountRemaining,
+				CustomerID:      inv.CustomerID,
+				Currency:        inv.Currency,
+			}
+
+			err := paymentProcessor.HandlePaymentBehavior(ctx, sub, invoiceResponse, finalPaymentBehavior)
+			if err != nil {
+				return err
+			}
+		} else {
+			// For non-subscription invoices, use the existing wallet payment logic
+			if err := s.performPaymentAttemptActions(ctx, inv); err != nil {
+				s.Logger.Errorw("wallet payment failed for non-subscription invoice",
+					"error", err,
+					"invoice_id", inv.ID)
+				return err
+			}
+		}
+	} else {
+		// No payment required (amount due is zero or negative) - activate subscription
+		if sub != nil {
+			sub.SubscriptionStatus = types.SubscriptionStatusActive
+			if err := s.SubRepo.Update(ctx, sub); err != nil {
+				s.Logger.Errorw("failed to activate subscription for zero amount invoice",
+					"error", err,
+					"subscription_id", sub.ID,
+					"invoice_id", inv.ID)
+				return err
+			}
+			s.Logger.Infow("activated subscription for zero amount invoice",
+				"invoice_id", inv.ID,
+				"subscription_id", sub.ID,
+				"amount_due", inv.AmountDue)
+		}
 	}
 
 	return nil
