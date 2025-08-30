@@ -17,7 +17,7 @@ type UsageAnalyticsParams struct {
 	Sources            []string
 	StartTime          time.Time
 	EndTime            time.Time
-	GroupBy            []string // Allowed values: "source", "feature_id"
+	GroupBy            []string // Allowed values: "source", "feature_id", "properties.<field_name>"
 	WindowSize         types.WindowSize
 	PropertyFilters    map[string][]string
 }
@@ -35,7 +35,8 @@ type DetailedUsageAnalytic struct {
 	TotalUsage      decimal.Decimal
 	TotalCost       decimal.Decimal
 	Currency        string
-	EventCount      uint64 // Number of events that contributed to this aggregation
+	EventCount      uint64            // Number of events that contributed to this aggregation
+	Properties      map[string]string // Stores property values for flexible grouping (e.g., org_id -> "org123")
 	Points          []UsageAnalyticPoint
 }
 
