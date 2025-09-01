@@ -71,6 +71,10 @@ func (w *Wallet) ApplyConversionRate(rate decimal.Decimal) *Wallet {
 	return w
 }
 
+func (w *Wallet) IsUsageRestricted() bool {
+	return w.Config.AllowedPriceTypes != nil && !lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeAll)
+}
+
 // FromEnt converts an ent wallet to a domain wallet
 func FromEnt(e *ent.Wallet) *Wallet {
 	if e == nil {
