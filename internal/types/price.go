@@ -230,6 +230,10 @@ func (p PriceType) Validate() error {
 	return nil
 }
 
+func (p PriceType) String() string {
+	return string(p)
+}
+
 func (p PriceScope) Validate() error {
 	allowed := []PriceScope{
 		PRICE_SCOPE_PLAN,

@@ -285,7 +285,6 @@ type WalletConfigPriceType string
 const (
 	WalletConfigPriceTypeAll   WalletConfigPriceType = "ALL"
 	WalletConfigPriceTypeUsage WalletConfigPriceType = WalletConfigPriceType(PRICE_TYPE_USAGE)
-	WalletConfigPriceTypeFixed WalletConfigPriceType = WalletConfigPriceType(PRICE_TYPE_FIXED)
 )
 
 // WalletConfig represents configuration constraints for a wallet
@@ -305,7 +304,6 @@ func (c WalletConfig) Validate() error {
 	allowedPriceTypes := []string{
 		string(WalletConfigPriceTypeAll),
 		string(WalletConfigPriceTypeUsage),
-		string(WalletConfigPriceTypeFixed),
 	}
 
 	if c.AllowedPriceTypes != nil {

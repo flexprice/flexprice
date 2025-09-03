@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -94,6 +95,51 @@ func (s *walletPaymentService) ProcessInvoicePaymentWithWallets(
 	}
 
 	// Process payments using wallets
+	// calculate usage only amounts from the invoice
+	usageOnlyAmount := decimal.Zero
+	for _, lineItem := range inv.LineItems {
+		if lo.FromPtr(lineItem.PriceType) == types.PRICE_TYPE_USAGE.String() {
+			usageOnlyAmount = usageOnlyAmount.Add(lineItem.Amount)
+		}
+	}
+
+	// total paid via credits already
+	totalPaidViaCredits := decimal.Zero
+	eligibleUsageAmountRemainingToBePaidViaCredits := usageOnlyAmount
+
+	// check if there is any wallet with restrictions imposed on price types
+	walletsWithRestrictions := make([]*wallet.Wallet, 0)
+	for _, w := range wallets {
+		if w.IsUsageRestricted() {
+			walletsWithRestrictions = append(walletsWithRestrictions, w)
+		}
+	}
+
+	hasUsageRestrictedWallets := len(walletsWithRestrictions) > 0
+	if hasUsageRestrictedWallets {
+		paymentFilter := &types.PaymentFilter{
+			DestinationType:   lo.ToPtr(types.PaymentDestinationTypeInvoice.String()),
+			DestinationID:     lo.ToPtr(inv.ID),
+			PaymentMethodType: lo.ToPtr(types.PaymentMethodTypeCredits.String()),
+			PaymentStatus:     lo.ToPtr(types.PaymentStatusSucceeded.String()),
+		}
+
+		payments, err := s.PaymentRepo.List(ctx, paymentFilter)
+		if err != nil {
+			return decimal.Zero, err
+		}
+
+		for _, payment := range payments {
+			totalPaidViaCredits = totalPaidViaCredits.Add(payment.Amount)
+		}
+
+		eligibleUsageAmountRemainingToBePaidViaCredits = usageOnlyAmount.Sub(totalPaidViaCredits)
+
+		// sort wallets such that the usage restricted wallets are attempted first
+		// but preserve the strategy ordering within each group
+		s.sortWalletsWithUsageRestrictionsFirst(wallets, options.Strategy)
+	}
+
 	remainingAmount := inv.AmountRemaining
 	initialAmount := inv.AmountRemaining
 	paymentService := NewPaymentService(s.ServiceParams)
@@ -112,6 +158,28 @@ func (s *walletPaymentService) ProcessInvoicePaymentWithWallets(
 		paymentAmount := decimal.Min(remainingAmount, w.Balance)
 		if paymentAmount.IsZero() {
 			continue
+		}
+
+		// CRITICAL FIX: For usage-restricted wallets, check if there's any eligible usage amount
+		// If not, they cannot pay anything
+		if w.IsUsageRestricted() {
+			if !eligibleUsageAmountRemainingToBePaidViaCredits.IsPositive() {
+				// No usage amount available for restricted wallets
+				continue
+			}
+			// Limit payment to eligible usage amount for restricted wallets
+			paymentAmount = decimal.Min(eligibleUsageAmountRemainingToBePaidViaCredits, w.Balance)
+
+			if remainingAmount.Sub(paymentAmount).LessThan(decimal.Zero) {
+				// ideally this should not happen, but if it does, we should not pay anything
+				s.Logger.Errorw("usage only amount is greater than the remaining amount",
+					"invoice_id", inv.ID,
+					"usage_only_amount", usageOnlyAmount,
+					"remaining_amount", remainingAmount,
+					"wallet_id", w.ID,
+					"wallet_type", w.WalletType)
+				continue
+			}
 		}
 
 		// Create payment request
@@ -147,6 +215,21 @@ func (s *walletPaymentService) ProcessInvoicePaymentWithWallets(
 		}
 
 		remainingAmount = remainingAmount.Sub(paymentAmount)
+
+		// Update tracking for usage-restricted wallets
+		// Any payment (restricted or unrestricted) reduces the remaining amount that future restricted wallets can pay
+		if hasUsageRestrictedWallets {
+			// For restricted wallets, their payment directly reduces the eligible usage amount
+			if w.IsUsageRestricted() {
+				eligibleUsageAmountRemainingToBePaidViaCredits = eligibleUsageAmountRemainingToBePaidViaCredits.Sub(paymentAmount)
+			} else {
+				// For unrestricted wallets, we need to determine how much of their payment went towards usage vs fixed
+				// We assume payments go towards usage first (this matches typical billing logic)
+				usagePaymentPortion := decimal.Min(paymentAmount, eligibleUsageAmountRemainingToBePaidViaCredits)
+				eligibleUsageAmountRemainingToBePaidViaCredits = eligibleUsageAmountRemainingToBePaidViaCredits.Sub(usagePaymentPortion)
+			}
+			totalPaidViaCredits = totalPaidViaCredits.Add(paymentAmount)
+		}
 	}
 
 	amountPaid := initialAmount.Sub(remainingAmount)
@@ -163,6 +246,25 @@ func (s *walletPaymentService) ProcessInvoicePaymentWithWallets(
 	}
 
 	return amountPaid, nil
+}
+
+// sortWalletsWithUsageRestrictionsFirst sorts wallets to prioritize usage-restricted wallets first,
+// while preserving the strategy ordering within each group (restricted vs unrestricted)
+func (s *walletPaymentService) sortWalletsWithUsageRestrictionsFirst(wallets []*wallet.Wallet, strategy WalletPaymentStrategy) {
+	// Use stable sort to preserve existing order within groups
+	sort.SliceStable(wallets, func(i, j int) bool {
+		// First, prioritize usage-restricted wallets
+		iRestricted := wallets[i].IsUsageRestricted()
+		jRestricted := wallets[j].IsUsageRestricted()
+
+		if iRestricted != jRestricted {
+			return iRestricted // restricted wallets come first
+		}
+
+		// If both have the same restriction status, preserve original strategy order
+		// (no additional sorting needed here since strategy was already applied)
+		return false
+	})
 }
 
 // GetWalletsForPayment retrieves and filters wallets suitable for payment
