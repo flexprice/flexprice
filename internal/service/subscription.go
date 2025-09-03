@@ -212,7 +212,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 				WithReportableDetails(map[string]interface{}{
 					"price_id": item.PriceID,
 				}).
-				Mark(ierr.ErrDatabase)
+				Mark(ierr.ErrNotFound)
 		}
 
 		if price.Price.Type == types.PRICE_TYPE_USAGE && price.Meter != nil {
@@ -285,9 +285,11 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 
 		// Priority 2: Addons (depends on subscription existing)
 		if len(req.Addons) > 0 {
-			err = s.handleSubscriptionAddons(ctx, sub, req.Addons)
-			if err != nil {
-				return err
+			for _, addonReq := range req.Addons {
+				_, err := s.addAddonToSubscription(ctx, sub, lo.ToPtr(addonReq))
+				if err != nil {
+					return err
+				}
 			}
 		}
 
@@ -3090,114 +3092,6 @@ func (s *subscriptionService) ApplyCouponsToSubscriptionWithLineItems(ctx contex
 		"subscription_id", subscriptionID,
 		"subscription_coupon_count", len(subscriptionCoupons),
 		"line_item_coupon_count", len(lineItemCoupons))
-
-	return nil
-}
-
-// handleSubscriptionAddons processes addons for a subscription
-func (s *subscriptionService) handleSubscriptionAddons(
-	ctx context.Context,
-	subscription *subscription.Subscription,
-	addonRequests []dto.AddAddonToSubscriptionRequest,
-) error {
-	if len(addonRequests) == 0 {
-		return nil
-	}
-
-	s.Logger.Infow("processing addons for subscription",
-		"subscription_id", subscription.ID,
-		"addons_count", len(addonRequests))
-
-	// Validate and create subscription addons
-	for _, addonReq := range addonRequests {
-		// Validate the addon request
-		if err := addonReq.Validate(); err != nil {
-			return ierr.WithError(err).
-				WithHint("Invalid addon request").
-				WithReportableDetails(map[string]interface{}{
-					"subscription_id": subscription.ID,
-					"addon_id":        addonReq.AddonID,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-
-		// Get addon to ensure it's valid and active
-		addonService := NewAddonService(s.ServiceParams)
-		addonResponse, err := addonService.GetAddon(ctx, addonReq.AddonID)
-		if err != nil {
-			return ierr.WithError(err).
-				WithHint("Addon not found").
-				WithReportableDetails(map[string]interface{}{
-					"subscription_id": subscription.ID,
-					"addon_id":        addonReq.AddonID,
-				}).
-				Mark(ierr.ErrNotFound)
-		}
-
-		if addonResponse.Addon.Status != types.StatusPublished {
-			return ierr.NewError("addon is not active").
-				WithHint("The addon must be active to add to a subscription").
-				WithReportableDetails(map[string]interface{}{
-					"subscription_id": subscription.ID,
-					"addon_id":        addonReq.AddonID,
-					"status":          addonResponse.Addon.Status,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-
-		// Validate and filter prices for the addon using the same pattern as plans
-		validPrices, err := s.ValidateAndFilterPricesForSubscription(
-			ctx,
-			addonReq.AddonID,
-			types.PRICE_ENTITY_TYPE_ADDON,
-			subscription,
-		)
-		if err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to validate addon prices").
-				WithReportableDetails(map[string]interface{}{
-					"subscription_id": subscription.ID,
-					"addon_id":        addonReq.AddonID,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-
-		// Validate usage reset period conflicts between plan and addon entitlements
-		if err := s.validateUsageResetPeriodConflicts(ctx, subscription, addonReq.AddonID); err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to validate addon entitlements").
-				WithReportableDetails(map[string]interface{}{
-					"subscription_id": subscription.ID,
-					"addon_id":        addonReq.AddonID,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-
-		s.Logger.Infow("validated addon prices for subscription",
-			"subscription_id", subscription.ID,
-			"addon_id", addonReq.AddonID,
-			"valid_prices_count", len(validPrices))
-
-		// Create subscription addon using the validated prices
-		subscriptionAddon, err := s.addAddonToSubscription(ctx, subscription, lo.ToPtr(addonReq))
-		if err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to add addon to subscription").
-				WithReportableDetails(map[string]interface{}{
-					"subscription_id": subscription.ID,
-					"addon_id":        addonReq.AddonID,
-				}).
-				Mark(ierr.ErrNotFound)
-		}
-
-		s.Logger.Infow("created subscription addon",
-			"subscription_id", subscription.ID,
-			"addon_id", subscriptionAddon.AddonID,
-			"subscription_addon_id", subscriptionAddon.ID,
-			"start_date", subscriptionAddon.StartDate,
-			"end_date", subscriptionAddon.EndDate,
-		)
-	}
 
 	return nil
 }
