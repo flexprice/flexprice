@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
@@ -3119,117 +3120,74 @@ func (s *subscriptionService) addAddonToSubscription(
 	sub *subscription.Subscription,
 	req *dto.AddAddonToSubscriptionRequest,
 ) (*addonassociation.AddonAssociation, error) {
-	// Validate request
+	// Validate request and get addon
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
 
-	// Get addon via addon service to reuse validations
 	addonService := NewAddonService(s.ServiceParams)
 	a, err := addonService.GetAddon(ctx, req.AddonID)
 	if err != nil {
 		return nil, err
 	}
 
-	if a.Addon.Status != types.StatusPublished {
-		return nil, ierr.NewError("addon is not published").
-			WithHint("Cannot add inactive addon to subscription").
-			Mark(ierr.ErrValidation)
+	// Validate addon and subscription status
+	if err := s.validateAddonAndSubscription(a.Addon, sub); err != nil {
+		return nil, err
 	}
 
-	// Check if sub exists and is active
-	if sub.SubscriptionStatus != types.SubscriptionStatusActive {
-		return nil, ierr.NewError("subscription is not active").
-			WithHint("Cannot add addon to inactive subscription").
-			Mark(ierr.ErrValidation)
+	// Check for existing addon instances and conflicts
+	if err := s.checkAddonConflicts(ctx, a.Addon, sub, req.AddonID); err != nil {
+		return nil, err
 	}
 
-	// Check if addon is already added to subscription only for single instance addons
-	if a.Addon.Type == types.AddonTypeOnetime {
-		filter := types.NewAddonAssociationFilter()
-		filter.AddonIDs = []string{req.AddonID}
-		filter.EntityIDs = []string{sub.ID}
-		filter.EntityType = lo.ToPtr(types.AddonAssociationEntityTypeSubscription)
-		filter.Limit = lo.ToPtr(1)
-
-		existingAddons, err := s.AddonAssociationRepo.List(ctx, filter)
-		if err != nil {
-			return nil, err
-		}
-
-		if len(existingAddons) > 0 {
-			return nil, ierr.NewError("addon is already added to subscription").
-				WithHint("Cannot add addon to subscription that already has an active instance").
-				Mark(ierr.ErrValidation)
-		}
-	}
-
-	// Validate and filter prices for the addon using the same pattern as plans
+	// Validate and filter prices
 	validPrices, err := s.ValidateAndFilterPricesForSubscription(ctx, req.AddonID, types.PRICE_ENTITY_TYPE_ADDON, sub)
 	if err != nil {
 		return nil, err
 	}
 
-	// Validate usage reset period conflicts between plan and addon entitlements
+	// Validate usage reset period conflicts
 	if err := s.validateUsageResetPeriodConflicts(ctx, sub, req.AddonID); err != nil {
 		return nil, err
 	}
 
-	// Create subscription addon
-	addonAssociation := req.ToAddonAssociation(
-		ctx,
-		sub.ID,
-		types.AddonAssociationEntityTypeSubscription,
-		sub.EndDate,
-	)
-
-	// Track existing meter IDs
-	meterIDMap := make(map[string]bool)
-	for _, item := range sub.LineItems {
-		if item.MeterID != "" {
-			meterIDMap[item.MeterID] = true
-		}
-	}
-
-	// Check for meter ID conflicts in new addon prices
-	for _, price := range validPrices {
-		if price.Price.MeterID != "" {
-			if meterIDMap[price.Price.MeterID] {
-				return nil, ierr.NewError("duplicate meter ID found in prices").
-					WithHint("Each feature can only have one price per subscription.").
-					WithReportableDetails(map[string]interface{}{
-						"subscription_id": sub.ID,
-						"addon_id":        req.AddonID,
-						"meter_id":        price.Price.MeterID,
-					}).
-					Mark(ierr.ErrValidation)
-			}
-			meterIDMap[price.Price.MeterID] = true
-		}
-	}
-
-	// Create line items for the addon using validated prices
-	lineItems := make([]*subscription.SubscriptionLineItem, 0, len(validPrices))
-	for _, priceResponse := range validPrices {
-		lineItem := s.createLineItemFromPrice(ctx, priceResponse, sub, req.AddonID, a.Addon.Name)
-		lineItems = append(lineItems, lineItem)
-	}
+	// Create addon association
+	addonAssociation := req.ToAddonAssociation(ctx, sub.ID, types.AddonAssociationEntityTypeSubscription, sub.EndDate)
 
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
-		// Create subscription addon
-		err = s.AddonAssociationRepo.Create(ctx, addonAssociation)
-		if err != nil {
+
+		// Save addon association to database
+		if err := s.AddonAssociationRepo.Create(ctx, addonAssociation); err != nil {
 			return err
 		}
 
-		// Create line items for the addon
-		for _, lineItem := range lineItems {
-			err = s.SubscriptionLineItemRepo.Create(ctx, lineItem)
+		// Create and save line items using the existing AddSubscriptionLineItem method
+		for _, priceResponse := range validPrices {
+			lineItemReq := dto.CreateSubscriptionLineItemRequest{
+				PriceID:     priceResponse.Price.ID,
+				Quantity:    decimal.NewFromInt(1),
+				StartDate:   lo.ToPtr(time.Now()),
+				DisplayName: a.Addon.Name,
+				Metadata: map[string]string{
+					"addon_id":        req.AddonID,
+					"subscription_id": sub.ID,
+					"addon_quantity":  "1",
+					"addon_status":    string(types.AddonStatusActive),
+				},
+			}
+
+			// Use the existing AddSubscriptionLineItem method which handles all the database operations
+			_, err := s.AddSubscriptionLineItem(ctx, sub.ID, lineItemReq)
 			if err != nil {
+				s.Logger.Errorw("failed to create line item for addon",
+					"subscription_id", sub.ID,
+					"addon_id", req.AddonID,
+					"price_id", priceResponse.Price.ID,
+					"error", err)
 				return err
 			}
 		}
-
 		return nil
 	})
 
@@ -3241,10 +3199,86 @@ func (s *subscriptionService) addAddonToSubscription(
 		"subscription_id", sub.ID,
 		"addon_id", req.AddonID,
 		"prices_count", len(validPrices),
-		"line_items_count", len(lineItems),
 	)
 
 	return addonAssociation, nil
+}
+
+// validateAddonAndSubscription validates addon and subscription status
+func (s *subscriptionService) validateAddonAndSubscription(addon *addon.Addon, sub *subscription.Subscription) error {
+	if addon.Status != types.StatusPublished {
+		return ierr.NewError("addon is not published").
+			WithHint("Cannot add inactive addon to subscription").
+			Mark(ierr.ErrValidation)
+	}
+
+	if sub.SubscriptionStatus != types.SubscriptionStatusActive {
+		return ierr.NewError("subscription is not active").
+			WithHint("Cannot add addon to inactive subscription").
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}
+
+// checkAddonConflicts checks for existing addon instances and meter ID conflicts
+func (s *subscriptionService) checkAddonConflicts(ctx context.Context, addon *addon.Addon, sub *subscription.Subscription, addonID string) error {
+	filter := types.NewAddonAssociationFilter()
+	filter.AddonIDs = []string{addonID}
+	filter.EntityIDs = []string{sub.ID}
+	filter.EntityType = lo.ToPtr(types.AddonAssociationEntityTypeSubscription)
+
+	existingAddons, err := s.AddonAssociationRepo.List(ctx, filter)
+	if err != nil {
+		return err
+	}
+
+	// For onetime addons, prevent duplicates
+	if addon.Type == types.AddonTypeOnetime && len(existingAddons) > 0 {
+		return ierr.NewError("addon is already added to subscription").
+			WithHint("Cannot add addon to subscription that already has an active instance").
+			Mark(ierr.ErrValidation)
+	}
+
+	// For multiple addons, check meter ID conflicts
+	if addon.Type == types.AddonTypeMultiple && len(existingAddons) > 0 {
+		return s.checkMeterIDConflicts(ctx, addonID, sub, existingAddons)
+	}
+
+	return nil
+}
+
+// checkMeterIDConflicts checks for meter ID conflicts in multiple addon instances
+func (s *subscriptionService) checkMeterIDConflicts(ctx context.Context, addonID string, sub *subscription.Subscription, existingAddons []*addonassociation.AddonAssociation) error {
+	addonPrices, err := s.ValidateAndFilterPricesForSubscription(ctx, addonID, types.PRICE_ENTITY_TYPE_ADDON, sub)
+	if err != nil {
+		return err
+	}
+
+	// Build meter ID map from existing line items
+	meterIDMap := make(map[string]bool)
+	for _, lineItem := range sub.LineItems {
+		if lineItem.MeterID != "" {
+			meterIDMap[lineItem.MeterID] = true
+		}
+	}
+
+	// Check for conflicts in new addon prices
+	for _, priceResponse := range addonPrices {
+		if priceResponse.Price.MeterID != "" && meterIDMap[priceResponse.Price.MeterID] {
+			return ierr.NewError("cannot add multiple instances of addon with conflicting meter IDs").
+				WithHint("Multiple instances of the same addon cannot have prices for the same meter/feature.").
+				WithReportableDetails(map[string]interface{}{
+					"subscription_id":    sub.ID,
+					"addon_id":           addonID,
+					"meter_id":           priceResponse.Price.MeterID,
+					"existing_instances": len(existingAddons),
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	return nil
 }
 
 // RemoveAddonFromSubscription removes an addon from a subscription
@@ -3362,48 +3396,6 @@ func (s *subscriptionService) RemoveAddonFromSubscription(
 	)
 
 	return nil
-}
-
-// createLineItemFromPrice creates a subscription line item from a price for addon additions
-func (s *subscriptionService) createLineItemFromPrice(ctx context.Context, priceResponse *dto.PriceResponse, sub *subscription.Subscription, addonID, addonName string) *subscription.SubscriptionLineItem {
-	price := priceResponse.Price
-
-	lineItem := &subscription.SubscriptionLineItem{
-		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
-		SubscriptionID: sub.ID,
-		CustomerID:     sub.CustomerID,
-		EntityID:       addonID,
-		EntityType:     types.SubscriptionLineItemEntityTypeAddon,
-		PriceID:        price.ID,
-		PriceType:      price.Type,
-		Currency:       sub.Currency,
-		BillingPeriod:  price.BillingPeriod,
-		InvoiceCadence: price.InvoiceCadence,
-		TrialPeriod:    0,
-		StartDate:      time.Now(),
-		EndDate:        time.Time{},
-		Metadata: map[string]string{
-			"addon_id":        addonID,
-			"subscription_id": sub.ID,
-			"addon_quantity":  "1",
-			"addon_status":    string(types.AddonStatusActive),
-		},
-		EnvironmentID: sub.EnvironmentID,
-		BaseModel:     types.GetDefaultBaseModel(ctx),
-	}
-
-	// Set price-related fields
-	if price.Type == types.PRICE_TYPE_USAGE && price.MeterID != "" && priceResponse.Meter != nil {
-		lineItem.MeterID = price.MeterID
-		lineItem.MeterDisplayName = priceResponse.Meter.Name
-		lineItem.DisplayName = priceResponse.Meter.Name
-		lineItem.Quantity = decimal.Zero
-	} else {
-		lineItem.DisplayName = addonName
-		lineItem.Quantity = decimal.NewFromInt(1)
-	}
-
-	return lineItem
 }
 
 // ActivateIncompleteSubscription activates a subscription that is in incomplete status
