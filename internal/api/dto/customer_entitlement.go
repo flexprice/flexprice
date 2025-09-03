@@ -82,10 +82,10 @@ func (e EntitlementSourceEntityType) Validate() error {
 // EntitlementSource tracks which subscription provided the entitlement
 type EntitlementSource struct {
 	SubscriptionID   string                      `json:"subscription_id"`
-	EntityID         string                      `json:"entity_id"`
+	EntiyID          string                      `json:"entity_id"`
 	EntityType       EntitlementSourceEntityType `json:"entity_type"`
 	Quantity         int64                       `json:"quantity"`
-	EntitiyName      string                      `json:"entity_name"`
+	EntityName       string                      `json:"entity_name"`
 	EntitlementID    string                      `json:"entitlement_id"`
 	IsEnabled        bool                        `json:"is_enabled"`
 	UsageLimit       *int64                      `json:"usage_limit,omitempty"`

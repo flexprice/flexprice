@@ -230,6 +230,8 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			subscription.POST("/:id/change/preview", handlers.SubscriptionChange.PreviewSubscriptionChange)
 			subscription.POST("/:id/change/execute", handlers.SubscriptionChange.ExecuteSubscriptionChange)
 
+			// Entitlements
+			subscription.GET("/:id/entitlements", handlers.Subscription.GetSubscriptionEntitlements)
 		}
 
 		wallet := v1Private.Group("/wallets")

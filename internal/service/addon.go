@@ -2,15 +2,13 @@ package service
 
 import (
 	"context"
-	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addon"
-	"github.com/flexprice/flexprice/internal/domain/subscription"
+	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // AddonService interface defines the business logic for addon management
@@ -22,6 +20,9 @@ type AddonService interface {
 	GetAddons(ctx context.Context, filter *types.AddonFilter) (*dto.ListAddonsResponse, error)
 	UpdateAddon(ctx context.Context, id string, req dto.UpdateAddonRequest) (*dto.AddonResponse, error)
 	DeleteAddon(ctx context.Context, id string) error
+
+	// addon association operations
+	GetAddonAssociations(ctx context.Context, filter *types.AddonAssociationFilter) (*dto.ListAddonAssociationsResponse, error)
 }
 
 type addonService struct {
@@ -88,11 +89,13 @@ func (s *addonService) GetAddon(ctx context.Context, id string) (*dto.AddonRespo
 	// Get entitlements for this addon
 	entitlementService := NewEntitlementService(s.ServiceParams)
 	entitlements, err := entitlementService.GetAddonEntitlements(ctx, id)
-	if err == nil && len(entitlements.Items) > 0 {
-		response.Entitlements = make([]*dto.EntitlementResponse, len(entitlements.Items))
-		for i, entitlement := range entitlements.Items {
-			response.Entitlements[i] = &dto.EntitlementResponse{Entitlement: entitlement.Entitlement}
-		}
+	if err != nil {
+		s.Logger.Errorw("failed to fetch entitlements for addon", "addon_id", id, "error", err)
+		return nil, err
+	}
+
+	if len(entitlements.Items) > 0 {
+		response.Entitlements = entitlements.Items
 	}
 
 	return response, nil
@@ -114,13 +117,13 @@ func (s *addonService) GetAddonByLookupKey(ctx context.Context, lookupKey string
 	priceService := NewPriceService(s.ServiceParams)
 	entitlementService := NewEntitlementService(s.ServiceParams)
 
-	pricesResponse, err := s.getPricesByAddonID(ctx, priceService, domainAddon.ID)
+	pricesResponse, err := priceService.GetPricesByAddonID(ctx, domainAddon.ID)
 	if err != nil {
 		s.Logger.Errorw("failed to fetch prices for addon", "addon_id", domainAddon.ID, "error", err)
 		return nil, err
 	}
 
-	entitlements, err := s.getAddonEntitlements(ctx, entitlementService, domainAddon.ID)
+	entitlements, err := entitlementService.GetAddonEntitlements(ctx, domainAddon.ID)
 	if err != nil {
 		s.Logger.Errorw("failed to fetch entitlements for addon", "addon_id", domainAddon.ID, "error", err)
 		return nil, err
@@ -348,90 +351,40 @@ func (s *addonService) DeleteAddon(ctx context.Context, id string) error {
 	return nil
 }
 
-// getPricesByAddonID fetches prices for a specific addon
-func (s *addonService) getPricesByAddonID(ctx context.Context, priceService PriceService, addonID string) (*dto.ListPricesResponse, error) {
-	if addonID == "" {
-		return nil, ierr.NewError("addon_id is required").
-			WithHint("Addon ID is required").
-			Mark(ierr.ErrValidation)
+// GetAddonAssociations lists addon associations with filtering
+func (s *addonService) GetAddonAssociations(ctx context.Context, filter *types.AddonAssociationFilter) (*dto.ListAddonAssociationsResponse, error) {
+	if filter == nil {
+		filter = types.NewAddonAssociationFilter()
 	}
 
-	// Use unlimited filter to fetch addon-scoped prices only
-	priceFilter := types.NewNoLimitPriceFilter().
-		WithEntityIDs([]string{addonID}).
-		WithEntityType(types.PRICE_ENTITY_TYPE_ADDON).
-		WithStatus(types.StatusPublished).
-		WithExpand(string(types.ExpandMeters))
+	if err := filter.Validate(); err != nil {
+		return nil, err
+	}
 
-	response, err := priceService.GetPrices(ctx, priceFilter)
+	result, err := s.AddonAssociationRepo.List(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
 
-	return response, nil
-}
-
-// getAddonEntitlements fetches entitlements for a specific addon
-func (s *addonService) getAddonEntitlements(ctx context.Context, entitlementService EntitlementService, addonID string) (*dto.ListEntitlementsResponse, error) {
-	if addonID == "" {
-		return nil, ierr.NewError("addon_id is required").
-			WithHint("Addon ID is required").
-			Mark(ierr.ErrValidation)
-	}
-
-	// Use unlimited filter to fetch addon-scoped entitlements only
-	entFilter := types.NewNoLimitEntitlementFilter().
-		WithEntityIDs([]string{addonID}).
-		WithEntityType(types.ENTITLEMENT_ENTITY_TYPE_ADDON).
-		WithStatus(types.StatusPublished).
-		WithExpand(string(types.ExpandFeatures))
-
-	response, err := entitlementService.ListEntitlements(ctx, entFilter)
+	count, err := s.AddonAssociationRepo.Count(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
 
+	items := lo.Map(result, func(association *addonassociation.AddonAssociation, _ int) *dto.AddonAssociationResponse {
+		return &dto.AddonAssociationResponse{
+			AddonAssociation: association,
+		}
+	})
+
+	response := &dto.ListAddonAssociationsResponse{
+		Items: items,
+		Pagination: types.NewPaginationResponse(
+			count,
+			filter.GetLimit(),
+			filter.GetOffset(),
+		),
+	}
+
 	return response, nil
-}
-
-// createLineItemFromPrice creates a subscription line item from a price
-func (s *addonService) createLineItemFromPrice(ctx context.Context, priceResponse *dto.PriceResponse, sub *subscription.Subscription, addonID, addonName string) *subscription.SubscriptionLineItem {
-	price := priceResponse.Price
-
-	lineItem := &subscription.SubscriptionLineItem{
-		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
-		SubscriptionID: sub.ID,
-		CustomerID:     sub.CustomerID,
-		EntityID:       addonID,
-		EntityType:     types.SubscriptionLineItemEntityTypeAddon,
-		PriceID:        price.ID,
-		PriceType:      price.Type,
-		Currency:       sub.Currency,
-		BillingPeriod:  price.BillingPeriod,
-		InvoiceCadence: price.InvoiceCadence,
-		TrialPeriod:    0,
-		StartDate:      time.Now(),
-		EndDate:        time.Time{},
-		Metadata: map[string]string{
-			"addon_id":        addonID,
-			"subscription_id": sub.ID,
-			"addon_quantity":  "1",
-			"addon_status":    string(types.AddonStatusActive),
-		},
-		EnvironmentID: sub.EnvironmentID,
-		BaseModel:     types.GetDefaultBaseModel(ctx),
-	}
-
-	// Set price-related fields
-	if price.Type == types.PRICE_TYPE_USAGE && price.MeterID != "" && priceResponse.Meter != nil {
-		lineItem.MeterID = price.MeterID
-		lineItem.MeterDisplayName = priceResponse.Meter.Name
-		lineItem.DisplayName = priceResponse.Meter.Name
-		lineItem.Quantity = decimal.Zero
-	} else {
-		lineItem.DisplayName = addonName
-		lineItem.Quantity = decimal.NewFromInt(1)
-	}
-
-	return lineItem
 }
