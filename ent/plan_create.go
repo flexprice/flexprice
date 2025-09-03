@@ -237,6 +237,10 @@ func (pc *PlanCreate) defaults() {
 		v := plan.DefaultEnvironmentID
 		pc.mutation.SetEnvironmentID(v)
 	}
+	if _, ok := pc.mutation.DisplayOrder(); !ok {
+		v := plan.DefaultDisplayOrder
+		pc.mutation.SetDisplayOrder(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
