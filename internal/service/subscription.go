@@ -277,13 +277,13 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	var invoice *dto.InvoiceResponse
 
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
-
-		// Create subscription with line items
+		// Priority 1: Core subscription creation (must be first - everything else depends on this)
 		err = s.SubRepo.CreateWithLineItems(ctx, sub, sub.LineItems)
 		if err != nil {
 			return err
 		}
-		// Handle addons if provided
+
+		// Priority 2: Addons (depends on subscription existing)
 		if len(req.Addons) > 0 {
 			err = s.handleSubscriptionAddons(ctx, sub, req.Addons)
 			if err != nil {
@@ -291,6 +291,13 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			}
 		}
 
+		// Priority 3: Tax rate linking (should be done early as it affects billing)
+		err = s.handleTaxRateLinking(ctx, sub, req)
+		if err != nil {
+			return err
+		}
+
+		// Priority 4: Credit grants setup (affects billing calculations)
 		creditGrantRequests := make([]dto.CreateCreditGrantRequest, 0)
 
 		// check if user has overidden the plan credit grants, if so add them to the request
@@ -333,7 +340,12 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			return err
 		}
 
-		// Create subscription schedule if phases are provided
+		// Priority 5: Coupons (affects billing calculations, should be before invoice creation)
+		if err := s.ApplyCouponsToSubscriptionWithLineItems(ctx, sub.ID, req.Coupons, req.LineItemCoupons, lineItems); err != nil {
+			return err
+		}
+
+		// Priority 6: Subscription schedule (affects future billing, should be before invoice creation)
 		if len(req.Phases) > 0 {
 			schedule, err := s.createScheduleFromPhases(ctx, sub, req.Phases)
 			if err != nil {
@@ -346,17 +358,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			}
 		}
 
-		// handle tax rate linking
-		err = s.handleTaxRateLinking(ctx, sub, req)
-		if err != nil {
-			return err
-		}
-		// Apply coupons to the subscription
-		if err := s.ApplyCouponsToSubscriptionWithLineItems(ctx, sub.ID, req.Coupons, req.LineItemCoupons, lineItems); err != nil {
-			return err
-		}
-
-		// Create invoice for the subscription (in case it has advance charges)
+		// Priority 7: Invoice creation (should be last as it depends on all billing-related setup)
 		invoice, err = invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
 			SubscriptionID: sub.ID,
 			PeriodStart:    sub.CurrentPeriodStart,
