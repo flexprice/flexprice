@@ -17,14 +17,14 @@ type Worker struct {
 }
 
 // NewWorker creates a new Temporal worker and registers workflows and activities.
-func NewWorker(client *TemporalClient, cfg config.TemporalConfig, log *logger.Logger, params service.ServiceParams) *Worker {
+func NewWorker(client *TemporalClient, cfg config.TemporalConfig, params service.ServiceParams) *Worker {
 	w := worker.New(client.Client, cfg.TaskQueue, worker.Options{})
 
 	RegisterWorkflowsAndActivities(w, params)
 
 	return &Worker{
 		worker: w,
-		log:    log,
+		log:    params.Logger,
 	}
 }
 

@@ -360,13 +360,13 @@ func startServer(
 		startConsumer(lc, consumer, eventRepo, cfg, log, sentryService, eventPostProcessingSvc)
 		startMessageRouter(lc, router, webhookService, onboardingService, log)
 		startPostProcessingConsumer(lc, router, eventPostProcessingSvc, cfg, log)
-		startTemporalWorker(lc, temporalClient, &cfg.Temporal, log, params)
+		startTemporalWorker(lc, temporalClient, &cfg.Temporal, params)
 	case types.ModeAPI:
 		startAPIServer(lc, r, cfg, log)
 		startMessageRouter(lc, router, webhookService, onboardingService, log)
 
 	case types.ModeTemporalWorker:
-		startTemporalWorker(lc, temporalClient, &cfg.Temporal, log, params)
+		startTemporalWorker(lc, temporalClient, &cfg.Temporal, params)
 	case types.ModeConsumer:
 		if consumer == nil {
 			log.Fatal("Kafka consumer required for consumer mode")
@@ -387,10 +387,9 @@ func startTemporalWorker(
 	lc fx.Lifecycle,
 	temporalClient *temporal.TemporalClient,
 	cfg *config.TemporalConfig,
-	log *logger.Logger,
 	params service.ServiceParams,
 ) {
-	worker := temporal.NewWorker(temporalClient, *cfg, log, params)
+	worker := temporal.NewWorker(temporalClient, *cfg, params)
 	worker.RegisterWithLifecycle(lc)
 }
 
