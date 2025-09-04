@@ -12,12 +12,10 @@ import (
 type WorkflowType string
 
 const (
-	// BillingWorkflow represents the billing workflow
-	BillingWorkflow WorkflowType = "BillingWorkflow"
-	// CalculationWorkflow represents the calculation workflow
-	CalculationWorkflow WorkflowType = "CalculationWorkflow"
-	// PriceSyncWorkflow represents the price sync workflow
-	PriceSyncWorkflow WorkflowType = "PriceSyncWorkflow"
+	// Workflow Types - using clean aliases for registration
+	BillingWorkflow     WorkflowType = "CronBillingWorkflow"
+	CalculationWorkflow WorkflowType = "CalculateChargesWorkflow"
+	PriceSyncWorkflow   WorkflowType = "PriceSyncWorkflow"
 )
 
 // String returns the string representation of the workflow type
@@ -28,9 +26,9 @@ func (w WorkflowType) String() string {
 // Validate validates the workflow type
 func (w WorkflowType) Validate() error {
 	allowedWorkflows := []WorkflowType{
-		BillingWorkflow,
-		CalculationWorkflow,
-		PriceSyncWorkflow,
+		BillingWorkflow,     // "CronBillingWorkflow"
+		CalculationWorkflow, // "CalculateChargesWorkflow"
+		PriceSyncWorkflow,   // "PriceSyncWorkflow"
 	}
 	if lo.Contains(allowedWorkflows, w) {
 		return nil

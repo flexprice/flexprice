@@ -48,5 +48,7 @@ type CalculatePriceRequest struct {
 
 // PriceSyncWorkflowInput represents input for the price sync workflow
 type PriceSyncWorkflowInput struct {
-	PlanID string `json:"plan_id"`
+	PlanID        string `json:"plan_id"`
+	TenantID      string `json:"tenant_id"`
+	EnvironmentID string `json:"environment_id"`
 }

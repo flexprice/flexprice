@@ -8,10 +8,20 @@ import (
 type ActivityType string
 
 const (
-	// Activity Types
+	// Activity Types - must match the method names in activity structs
 	ActivitySyncPlanPrices ActivityType = "SyncPlanPrices"
 	ActivityFetchData      ActivityType = "FetchData"
 	ActivityCalculate      ActivityType = "Calculate"
+)
+
+// Activity Names - using clean aliases for Temporal registration
+const (
+	// Plan Activities
+	PlanActivitySyncPlanPrices = "PlanActivities.SyncPlanPrices"
+
+	// Billing Activities
+	BillingActivityFetchData = "BillingActivities.FetchDataActivity"
+	BillingActivityCalculate = "BillingActivities.CalculateActivity"
 )
 
 // ActivityInfo holds information about an activity

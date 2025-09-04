@@ -272,7 +272,9 @@ func (h *PlanHandler) GetPlanCreditGrants(c *gin.Context) {
 // @Failure 500 {object} ierr.ErrorResponse
 // @Router /plans/{id}/sync/subscriptions [post]
 func (h *PlanHandler) SyncPlanPrices(c *gin.Context) {
+
 	id := c.Param("id")
+
 	if id == "" {
 		c.Error(ierr.NewError("plan ID is required").
 			WithHint("Plan ID is required").
