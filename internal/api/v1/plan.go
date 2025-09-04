@@ -281,22 +281,22 @@ func (h *PlanHandler) SyncPlanPrices(c *gin.Context) {
 	}
 
 	// Use temporal workflow instead of direct service call
-	// result, err := h.temporalService.StartPlanPriceSync(c.Request.Context(), id)
-	// if err != nil {
-	// 	c.Error(ierr.WithError(err).
-	// 		WithHint("Failed to sync plan prices").
-	// 		Mark(ierr.ErrInternal))
-	// 	return
-	// }
-
-	// Call the service directly without Temporal
-	result, err := h.service.SyncPlanPrices(c.Request.Context(), id)
+	result, err := h.temporalService.StartPlanPriceSync(c.Request.Context(), id)
 	if err != nil {
 		c.Error(ierr.WithError(err).
 			WithHint("Failed to sync plan prices").
 			Mark(ierr.ErrInternal))
 		return
 	}
+
+	// Call the service directly without Temporal (commented out)
+	// result, err := h.service.SyncPlanPrices(c.Request.Context(), id)
+	// if err != nil {
+	// 	c.Error(ierr.WithError(err).
+	// 		WithHint("Failed to sync plan prices").
+	// 		Mark(ierr.ErrInternal))
+	// 	return
+	// }
 
 	c.JSON(http.StatusOK, result)
 }

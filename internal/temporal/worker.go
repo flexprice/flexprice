@@ -5,6 +5,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/service"
 	"go.temporal.io/sdk/worker"
 	"go.uber.org/fx"
 )
@@ -16,10 +17,10 @@ type Worker struct {
 }
 
 // NewWorker creates a new Temporal worker and registers workflows and activities.
-func NewWorker(client *TemporalClient, cfg config.TemporalConfig, log *logger.Logger) *Worker {
+func NewWorker(client *TemporalClient, cfg config.TemporalConfig, log *logger.Logger, params service.ServiceParams) *Worker {
 	w := worker.New(client.Client, cfg.TaskQueue, worker.Options{})
 
-	RegisterWorkflowsAndActivities(w)
+	RegisterWorkflowsAndActivities(w, params)
 
 	return &Worker{
 		worker: w,

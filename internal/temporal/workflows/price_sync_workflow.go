@@ -1,3 +1,4 @@
+// internal/temporal/workflows/price_sync.go
 package workflows
 
 import (
@@ -5,32 +6,34 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/temporal/models"
-	temporalsdk "go.temporal.io/sdk/temporal"
+	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
 
-// PriceSyncWorkflow represents a workflow that syncs plan prices
-func PriceSyncWorkflow(ctx workflow.Context, input models.PriceSyncWorkflowInput) (*dto.SyncPlanPricesResponse, error) {
-	logger := workflow.GetLogger(ctx)
-	logger.Info("Starting price sync workflow", "planID", input.PlanID)
+const (
+	// Use the full method name if you register the whole struct:
+	ActivitySyncPlanPrices = "PlanActivities.SyncPlanPrices"
+)
 
-	activityOptions := workflow.ActivityOptions{
-		StartToCloseTimeout: time.Minute * 5,
-		RetryPolicy: &temporalsdk.RetryPolicy{
+func PriceSyncWorkflow(ctx workflow.Context, in models.PriceSyncWorkflowInput) (*dto.SyncPlanPricesResponse, error) {
+	log := workflow.GetLogger(ctx)
+	log.Info("Starting price sync workflow", "planID", in.PlanID)
+
+	ao := workflow.ActivityOptions{
+		StartToCloseTimeout: 5 * time.Minute,
+		RetryPolicy: &temporal.RetryPolicy{
 			InitialInterval:    time.Second,
 			BackoffCoefficient: 2.0,
 			MaximumInterval:    time.Minute,
 			MaximumAttempts:    3,
 		},
 	}
-	ctx = workflow.WithActivityOptions(ctx, activityOptions)
+	ctx = workflow.WithActivityOptions(ctx, ao)
 
-	// Execute the sync activity using the correct activity name
-	var result dto.SyncPlanPricesResponse
-	if err := workflow.ExecuteActivity(ctx, "SyncPlanPrices", input.PlanID).Get(ctx, &result); err != nil {
-		logger.Error("Price sync failed", "planID", input.PlanID, "error", err)
+	var out dto.SyncPlanPricesResponse
+	if err := workflow.ExecuteActivity(ctx, ActivitySyncPlanPrices, in.PlanID).Get(ctx, &out); err != nil {
+		log.Error("Price sync failed", "planID", in.PlanID, "error", err)
 		return nil, err
 	}
-
-	return &result, nil
+	return &out, nil
 }

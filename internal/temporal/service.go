@@ -65,10 +65,8 @@ func (s *Service) StartPlanPriceSync(ctx context.Context, planID string) (*dto.S
 		TaskQueue: s.cfg.TaskQueue,
 	}
 
-	planService := service.NewPlanService(s.ServiceParams)
 	we, err := s.client.Client.ExecuteWorkflow(ctx, workflowOptions, "PriceSyncWorkflow", models.PriceSyncWorkflowInput{
-		PlanID:       planID,
-		PriceService: planService,
+		PlanID: planID,
 	})
 	if err != nil {
 		s.log.Error("Failed to start price sync workflow", "error", err)
