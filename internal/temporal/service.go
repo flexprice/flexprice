@@ -7,7 +7,6 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
-	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/temporal/models"
@@ -65,13 +64,6 @@ func (s *Service) StartPlanPriceSync(ctx context.Context, planID string) (*dto.S
 	// Extract tenant and environment from context using proper type assertion
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
-
-	// Validate that tenant ID is present (environment ID can be empty for some cases)
-	if tenantID == "" || environmentID == "" {
-		return nil, ierr.NewError("tenant ID and environment ID are required but not found in context").
-			WithHint("Tenant ID and environment ID are required but not found in context").
-			Mark(ierr.ErrValidation)
-	}
 
 	workflowID := fmt.Sprintf("price-sync-%s-%d", planID, time.Now().Unix())
 

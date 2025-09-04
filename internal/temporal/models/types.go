@@ -2,6 +2,8 @@ package models
 
 import (
 	"time"
+
+	ierr "github.com/flexprice/flexprice/internal/errors"
 )
 
 // BillingWorkflowInput represents the input for a billing workflow
@@ -51,4 +53,20 @@ type PriceSyncWorkflowInput struct {
 	PlanID        string `json:"plan_id"`
 	TenantID      string `json:"tenant_id"`
 	EnvironmentID string `json:"environment_id"`
+}
+
+func (p *PriceSyncWorkflowInput) Validate() error {
+	if p.PlanID == "" {
+		return ierr.NewError("plan ID is required").
+			WithHint("Plan ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	if p.TenantID == "" || p.EnvironmentID == "" {
+		return ierr.NewError("tenant ID and environment ID are required").
+			WithHint("Tenant ID and environment ID are required").
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
 }

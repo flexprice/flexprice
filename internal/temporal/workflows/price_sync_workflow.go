@@ -19,6 +19,10 @@ const (
 
 func PriceSyncWorkflow(ctx workflow.Context, in models.PriceSyncWorkflowInput) (*dto.SyncPlanPricesResponse, error) {
 
+	if err := in.Validate(); err != nil {
+		return nil, err
+	}
+
 	// Create activity input with context
 	activityInput := struct {
 		PlanID        string `json:"plan_id"`
