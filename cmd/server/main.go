@@ -364,7 +364,6 @@ func startServer(
 	case types.ModeAPI:
 		startAPIServer(lc, r, cfg, log)
 		startMessageRouter(lc, router, webhookService, onboardingService, log)
-		startTemporalWorker(lc, temporalClient, &cfg.Temporal, log, params)
 
 	case types.ModeTemporalWorker:
 		startTemporalWorker(lc, temporalClient, &cfg.Temporal, log, params)
