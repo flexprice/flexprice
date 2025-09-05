@@ -159,6 +159,63 @@ func (s *InMemoryEventStore) GetUsage(ctx context.Context, params *events.UsageP
 		return result, nil
 	}
 
+	// Handle window size for monthly aggregation
+	if params.WindowSize == types.WindowSizeMonth {
+		// Group events by month
+		monthlyBuckets := make(map[time.Time][]*events.Event)
+		for _, event := range filteredEvents {
+			monthStart := truncateToBucket(event.Timestamp, types.WindowSizeMonth)
+			monthlyBuckets[monthStart] = append(monthlyBuckets[monthStart], event)
+		}
+
+		// Sort months
+		months := make([]time.Time, 0, len(monthlyBuckets))
+		for month := range monthlyBuckets {
+			months = append(months, month)
+		}
+		sort.Slice(months, func(i, j int) bool { return months[i].Before(months[j]) })
+
+		// Calculate aggregation for each month
+		result.Results = make([]events.UsageResult, 0, len(months))
+		var totalValue decimal.Decimal
+
+		for _, month := range months {
+			monthEvents := monthlyBuckets[month]
+			var monthValue decimal.Decimal
+
+			switch params.AggregationType {
+			case types.AggregationCount:
+				monthValue = decimal.NewFromInt(int64(len(monthEvents)))
+			case types.AggregationSum:
+				for _, event := range monthEvents {
+					if val, ok := event.Properties[params.PropertyName]; ok {
+						switch v := val.(type) {
+						case float64:
+							monthValue = monthValue.Add(decimal.NewFromFloat(v))
+						case int:
+							monthValue = monthValue.Add(decimal.NewFromInt(int64(v)))
+						case int64:
+							monthValue = monthValue.Add(decimal.NewFromInt(v))
+						case string:
+							if f, err := strconv.ParseFloat(v, 64); err == nil {
+								monthValue = monthValue.Add(decimal.NewFromFloat(f))
+							}
+						}
+					}
+				}
+			}
+
+			result.Results = append(result.Results, events.UsageResult{
+				WindowSize: month,
+				Value:      monthValue,
+			})
+			totalValue = totalValue.Add(monthValue)
+		}
+
+		result.Value = totalValue
+		return result, nil
+	}
+
 	// Handle bucket size for MAX aggregation (existing logic)
 	if params.AggregationType == types.AggregationMax && params.BucketSize != "" {
 		// Group events into buckets by bucket start time
@@ -304,6 +361,9 @@ func truncateToBucket(t time.Time, size types.WindowSize) time.Time {
 		}
 		start := t.AddDate(0, 0, -(weekday - 1))
 		return time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, time.UTC)
+	case types.WindowSizeMonth:
+		// Start of month at 00:00 UTC
+		return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC)
 	default:
 		return t
 	}

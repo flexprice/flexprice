@@ -791,6 +791,8 @@ func (r *ProcessedEventRepository) getAnalyticsPoints(
 		timeWindowExpr = "toStartOfInterval(timestamp, INTERVAL 3 HOUR)"
 	case types.WindowSize6Hour:
 		timeWindowExpr = "toStartOfInterval(timestamp, INTERVAL 6 HOUR)"
+	case types.WindowSizeMonth:
+		timeWindowExpr = "toStartOfMonth(timestamp)"
 	default:
 		// Default to hourly for unknown window sizes
 		timeWindowExpr = "toStartOfHour(timestamp)"

@@ -18,6 +18,7 @@ const (
 	WindowSize12Hour WindowSize = "12HOUR"
 	WindowSizeDay    WindowSize = "DAY"
 	WindowSizeWeek   WindowSize = "WEEK"
+	WindowSizeMonth  WindowSize = "MONTH"
 )
 
 func (w WindowSize) Validate() error {
@@ -35,6 +36,7 @@ func (w WindowSize) Validate() error {
 		WindowSize12Hour,
 		WindowSizeDay,
 		WindowSizeWeek,
+		WindowSizeMonth,
 	}, w) {
 		return ierr.NewError("invalid window size").
 			WithHint("Invalid window size").
