@@ -18,6 +18,8 @@ const (
 	TemporalActivityCalculate            TemporalActivityType = "Calculate"
 	TemporalActivitySubscriptionChange   TemporalActivityType = "SubscriptionChange"
 	TemporalActivitySubscriptionCreation TemporalActivityType = "SubscriptionCreation"
+	TemporalActivityProcessTask          TemporalActivityType = "ProcessTask"
+	TemporalActivityUpdateTaskProgress   TemporalActivityType = "UpdateTaskProgress"
 )
 
 // ActivityInfo holds information about an activity
@@ -39,6 +41,8 @@ func (a TemporalActivityType) Validate() error {
 		string(TemporalActivityCalculate),
 		string(TemporalActivitySubscriptionChange),
 		string(TemporalActivitySubscriptionCreation),
+		string(TemporalActivityProcessTask),
+		string(TemporalActivityUpdateTaskProgress),
 	}
 	if !lo.Contains(allowedValues, string(a)) {
 		return ierr.NewError("invalid activity type").
@@ -64,12 +68,13 @@ type TemporalWorkflowType string
 
 const (
 	// Workflow Types - using clean aliases for registration
-	TemporalBillingWorkflow              TemporalWorkflowType = "CronBillingWorkflow"
-	TemporalCalculationWorkflow          TemporalWorkflowType = "CalculateChargesWorkflow"
-	TemporalPriceSyncWorkflow            TemporalWorkflowType = "PriceSyncWorkflow"
-	TemporalSubscriptionChangeWorkflow   TemporalWorkflowType = "SubscriptionChangeWorkflow"
-	TemporalSubscriptionCreationWorkflow TemporalWorkflowType = "SubscriptionCreationWorkflow"
-	
+	TemporalBillingWorkflow                    TemporalWorkflowType = "CronBillingWorkflow"
+	TemporalCalculationWorkflow                TemporalWorkflowType = "CalculateChargesWorkflow"
+	TemporalPriceSyncWorkflow                  TemporalWorkflowType = "PriceSyncWorkflow"
+	TemporalSubscriptionChangeWorkflow         TemporalWorkflowType = "SubscriptionChangeWorkflow"
+	TemporalSubscriptionCreationWorkflow       TemporalWorkflowType = "SubscriptionCreationWorkflow"
+	TemporalTaskProcessingWorkflow             TemporalWorkflowType = "TaskProcessingWorkflow"
+	TemporalTaskProcessingWithProgressWorkflow TemporalWorkflowType = "TaskProcessingWithProgressWorkflow"
 )
 
 // String returns the string representation of the workflow type
@@ -80,11 +85,13 @@ func (w TemporalWorkflowType) String() string {
 // Validate validates the workflow type
 func (w TemporalWorkflowType) Validate() error {
 	allowedWorkflows := []TemporalWorkflowType{
-		TemporalBillingWorkflow,              // "CronBillingWorkflow"
-		TemporalCalculationWorkflow,          // "CalculateChargesWorkflow"
-		TemporalPriceSyncWorkflow,            // "PriceSyncWorkflow"
-		TemporalSubscriptionChangeWorkflow,   // "SubscriptionChangeWorkflow"
-		TemporalSubscriptionCreationWorkflow, // "SubscriptionCreationWorkflow"
+		TemporalBillingWorkflow,                    // "CronBillingWorkflow"
+		TemporalCalculationWorkflow,                // "CalculateChargesWorkflow"
+		TemporalPriceSyncWorkflow,                  // "PriceSyncWorkflow"
+		TemporalSubscriptionChangeWorkflow,         // "SubscriptionChangeWorkflow"
+		TemporalSubscriptionCreationWorkflow,       // "SubscriptionCreationWorkflow"
+		TemporalTaskProcessingWorkflow,             // "TaskProcessingWorkflow"
+		TemporalTaskProcessingWithProgressWorkflow, // "TaskProcessingWithProgressWorkflow"
 	}
 	if lo.Contains(allowedWorkflows, w) {
 		return nil
