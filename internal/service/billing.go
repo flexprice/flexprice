@@ -265,7 +265,7 @@ func (s *billingService) CalculateUsageCharges(
 				if matchingEntitlement.UsageLimit != nil {
 
 					// consider the usage reset period
-					// TODO: Suppport other reset periods i.e. weekly, monthly, yearly
+					// TODO: Support other reset periods i.e. weekly, yearly
 					// usage limit is set, so we decrement the usage quantity by the already entitled usage
 
 					// case 1 : when the usage reset period is billing period
@@ -326,6 +326,62 @@ func (s *billingService) CalculateUsageCharges(
 									"daily_usage", dailyUsage,
 									"daily_limit", dailyLimit,
 									"daily_overage", dailyOverage)
+							}
+						}
+
+						// Use the total billable quantity for calculation
+						quantityForCalculation = totalBillableQuantity
+					} else if matchingEntitlement.UsageResetPeriod == types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY {
+
+						// case 3 : when the usage reset period is monthly
+						// For monthly reset periods, we need to fetch usage with monthly window size
+						// and calculate overage per month, then sum the total overage
+
+						// Create usage request with monthly window size
+						usageRequest := &dto.GetUsageByMeterRequest{
+							MeterID:            item.MeterID,
+							PriceID:            item.PriceID,
+							ExternalCustomerID: customer.ExternalID,
+							StartTime:          item.GetPeriodStart(periodStart),
+							EndTime:            item.GetPeriodEnd(periodEnd),
+							WindowSize:         types.WindowSizeMonth, // Use monthly window size
+						}
+
+						// Get usage data with monthly windows
+						usageResult, err := eventService.GetUsageByMeter(ctx, usageRequest)
+						if err != nil {
+							return nil, decimal.Zero, err
+						}
+
+						// Calculate monthly limit
+						monthlyLimit := decimal.NewFromFloat(float64(*matchingEntitlement.UsageLimit))
+						totalBillableQuantity := decimal.Zero
+
+						s.Logger.Debugw("calculating monthly usage charges",
+							"subscription_id", sub.ID,
+							"line_item_id", item.ID,
+							"meter_id", item.MeterID,
+							"monthly_limit", monthlyLimit,
+							"num_monthly_windows", len(usageResult.Results))
+
+						// Process each monthly window
+						for _, monthlyResult := range usageResult.Results {
+							monthlyUsage := monthlyResult.Value
+
+							// Calculate overage for this month: max(0, monthly_usage - monthly_limit)
+							monthlyOverage := decimal.Max(decimal.Zero, monthlyUsage.Sub(monthlyLimit))
+
+							if monthlyOverage.GreaterThan(decimal.Zero) {
+								// Add to total billable quantity
+								totalBillableQuantity = totalBillableQuantity.Add(monthlyOverage)
+
+								s.Logger.Debugw("monthly overage calculated",
+									"subscription_id", sub.ID,
+									"line_item_id", item.ID,
+									"month", monthlyResult.WindowSize,
+									"monthly_usage", monthlyUsage,
+									"monthly_limit", monthlyLimit,
+									"monthly_overage", monthlyOverage)
 							}
 						}
 
@@ -425,11 +481,13 @@ func (s *billingService) CalculateUsageCharges(
 				displayName = lo.ToPtr(fmt.Sprintf("%s (Overage)", item.DisplayName))
 			}
 
-			// Add usage reset period metadata if entitlement has daily or never reset
+			// Add usage reset period metadata if entitlement has daily, monthly, or never reset
 			if !matchingCharge.IsOverage && ok && matchingEntitlement.IsEnabled {
 				switch matchingEntitlement.UsageResetPeriod {
 				case types.ENTITLEMENT_USAGE_RESET_PERIOD_DAILY:
 					metadata["usage_reset_period"] = "daily"
+				case types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY:
+					metadata["usage_reset_period"] = "monthly"
 				case types.ENTITLEMENT_USAGE_RESET_PERIOD_NEVER:
 					metadata["usage_reset_period"] = "never"
 				}
@@ -1578,6 +1636,64 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 							"total_daily_windows", len(usageResult.Results))
 					}
 					usageByFeature[featureID] = dailyUsage
+				} else if resetPeriod == types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY {
+					// Handle monthly reset features: get current month's usage from monthly windows
+					meterID := featureMeterMap[featureID]
+
+					// Calculate current month start and end
+					now := time.Now().In(sub.CurrentPeriodStart.Location())
+					monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+					monthEnd := monthStart.AddDate(0, 1, 0)
+
+					// Ensure we don't exceed the subscription period
+					if monthEnd.After(sub.CurrentPeriodEnd) {
+						monthEnd = sub.CurrentPeriodEnd
+					}
+
+					// Create usage request for current month with monthly window size
+					usageRequest := &dto.GetUsageByMeterRequest{
+						MeterID:            meterID,
+						ExternalCustomerID: customer.ExternalID,
+						StartTime:          monthStart,
+						EndTime:            monthEnd,
+						WindowSize:         types.WindowSizeMonth,
+					}
+
+					// Get usage data for current month
+					usageResult, err := eventService.GetUsageByMeter(ctx, usageRequest)
+					if err != nil {
+						s.Logger.Warnw("failed to get monthly usage for feature",
+							"feature_id", featureID,
+							"meter_id", meterID,
+							"subscription_id", subscriptionID,
+							"error", err)
+						continue
+					}
+
+					// Get the current month's usage (last bucket if available)
+					monthlyUsage := decimal.Zero
+					if len(usageResult.Results) > 0 {
+						// Find the current month's bucket
+						for _, result := range usageResult.Results {
+							if result.WindowSize.Equal(monthStart) ||
+								(result.WindowSize.After(monthStart) && result.WindowSize.Before(monthEnd)) {
+								monthlyUsage = result.Value
+								break
+							}
+						}
+					}
+
+					s.Logger.Debugw("using monthly usage for feature summary",
+						"customer_id", customerID,
+						"external_customer_id", customer.ExternalID,
+						"feature_id", featureID,
+						"meter_id", meterID,
+						"subscription_id", subscriptionID,
+						"month_start", monthStart,
+						"month_end", monthEnd,
+						"monthly_usage", monthlyUsage)
+
+					usageByFeature[featureID] = monthlyUsage
 				} else if resetPeriod == types.ENTITLEMENT_USAGE_RESET_PERIOD_NEVER {
 					// Handle never reset features: get cumulative usage from subscription start
 					meterID := featureMeterMap[featureID]
