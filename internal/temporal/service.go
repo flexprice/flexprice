@@ -86,6 +86,62 @@ func (s *Service) StartPlanPriceSync(ctx context.Context, planID string) (*model
 	}, nil
 }
 
+// StartTaskProcessingWorkflow starts a task processing workflow
+func (s *Service) StartTaskProcessingWorkflow(ctx context.Context, taskID string) (*models.TaskProcessingWorkflowResult, error) {
+	// Extract tenant and environment from context
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
+	workflowID := fmt.Sprintf("task-processing-%s-%d", taskID, time.Now().Unix())
+
+	workflowOptions := client.StartWorkflowOptions{
+		ID:        workflowID,
+		TaskQueue: s.cfg.TaskQueue,
+	}
+
+	// Create the workflow input with extracted context values
+	input := models.TaskProcessingWorkflowInput{
+		TaskID:        taskID,
+		TenantID:      tenantID,
+		EnvironmentID: environmentID,
+	}
+
+	we, err := s.client.Client.ExecuteWorkflow(ctx, workflowOptions, "TaskProcessingWorkflow", input)
+	if err != nil {
+		s.log.Error("Failed to start task processing workflow", "error", err, "task_id", taskID)
+		return nil, err
+	}
+
+	s.log.Info("Successfully started task processing workflow",
+		"workflowID", workflowID,
+		"runID", we.GetRunID(),
+		"task_id", taskID)
+
+	return &models.TaskProcessingWorkflowResult{
+		TaskID: taskID,
+		Status: "started",
+		Metadata: map[string]interface{}{
+			"workflow_id": we.GetID(),
+			"run_id":      we.GetRunID(),
+		},
+	}, nil
+}
+
+// GetTaskProcessingWorkflowResult gets the result of a task processing workflow
+func (s *Service) GetTaskProcessingWorkflowResult(ctx context.Context, workflowID string) (*models.TaskProcessingWorkflowResult, error) {
+	// Get workflow execution
+	we := s.client.Client.GetWorkflow(ctx, workflowID, "")
+
+	var result models.TaskProcessingWorkflowResult
+	err := we.Get(ctx, &result)
+	if err != nil {
+		s.log.Error("Failed to get task processing workflow result", "error", err, "workflow_id", workflowID)
+		return nil, err
+	}
+
+	return &result, nil
+}
+
 // Close closes the temporal client
 func (s *Service) Close() {
 	if s.client != nil {
