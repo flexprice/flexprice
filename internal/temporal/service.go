@@ -31,35 +31,8 @@ func NewService(client *TemporalClient, cfg *config.TemporalConfig, log *logger.
 	}, nil
 }
 
-// StartBillingWorkflow starts a billing workflow
-func (s *Service) StartBillingWorkflow(ctx context.Context, input models.BillingWorkflowInput) (*models.BillingWorkflowResult, error) {
-	workflowID := fmt.Sprintf("billing-%s-%s", input.CustomerID, input.SubscriptionID)
-	workflowOptions := client.StartWorkflowOptions{
-		ID:           workflowID,
-		TaskQueue:    s.cfg.TaskQueue,
-		CronSchedule: "*/5 * * * *", // Runs every 5 minutes
-	}
-
-	we, err := s.client.Client.ExecuteWorkflow(ctx, workflowOptions, "CronBillingWorkflow", input)
-	if err != nil {
-		s.log.Error("Failed to start workflow", "error", err)
-		return nil, err
-	}
-
-	// For cron workflows, return immediately with scheduled status
-	s.log.Info("Successfully scheduled billing workflow",
-		"workflowID", workflowID,
-		"runID", we.GetRunID())
-
-	return &models.BillingWorkflowResult{
-		InvoiceID: workflowID,
-		Status:    "scheduled",
-	}, nil
-}
-
 // StartPlanPriceSync starts a price sync workflow for a plan
 func (s *Service) StartPlanPriceSync(ctx context.Context, planID string) (*models.TemporalWorkflowResult, error) {
-
 	// Extract tenant and environment from context using proper type assertion
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
