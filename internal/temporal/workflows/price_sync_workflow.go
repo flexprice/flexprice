@@ -1,36 +1,50 @@
+// internal/temporal/workflows/price_sync.go
 package workflows
 
 import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/temporal/activities"
 	"github.com/flexprice/flexprice/internal/temporal/models"
-	temporalsdk "go.temporal.io/sdk/temporal"
+	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
 
-// PriceSyncWorkflow represents a workflow that syncs plan prices
-func PriceSyncWorkflow(ctx workflow.Context, input models.PriceSyncWorkflowInput) (*dto.SyncPlanPricesResponse, error) {
-	logger := workflow.GetLogger(ctx)
-	logger.Info("Starting price sync workflow", "planID", input.PlanID)
+const (
+	// Workflow name - must match the function name
+	WorkflowPriceSync = "PriceSyncWorkflow"
+	// Activity name - must match the registered method name (just "SyncPlanPrices")
+	ActivitySyncPlanPrices = "SyncPlanPrices"
+)
 
-	activityOptions := workflow.ActivityOptions{
-		StartToCloseTimeout: time.Minute * 5,
-		RetryPolicy: &temporalsdk.RetryPolicy{
-			InitialInterval:    time.Second,
-			BackoffCoefficient: 2.0,
-			MaximumInterval:    time.Minute,
-			MaximumAttempts:    3,
-		},
-	}
-	ctx = workflow.WithActivityOptions(ctx, activityOptions)
+func PriceSyncWorkflow(ctx workflow.Context, in models.PriceSyncWorkflowInput) (*dto.SyncPlanPricesResponse, error) {
 
-	// Execute the sync activity using the correct activity name
-	var result dto.SyncPlanPricesResponse
-	if err := workflow.ExecuteActivity(ctx, "SyncPlanPrices", input.PlanID).Get(ctx, &result); err != nil {
-		logger.Error("Price sync failed", "planID", input.PlanID, "error", err)
+	if err := in.Validate(); err != nil {
 		return nil, err
 	}
 
-	return &result, nil
+	// Create activity input with context
+	activityInput := activities.SyncPlanPricesInput{
+		PlanID:        in.PlanID,
+		TenantID:      in.TenantID,
+		EnvironmentID: in.EnvironmentID,
+	}
+
+	ao := workflow.ActivityOptions{
+		StartToCloseTimeout: time.Minute * 30,
+		RetryPolicy: &temporal.RetryPolicy{
+			InitialInterval:    time.Second,
+			BackoffCoefficient: 2.0,
+			MaximumInterval:    time.Minute * 5,
+			MaximumAttempts:    3,
+		},
+	}
+	ctx = workflow.WithActivityOptions(ctx, ao)
+	var out dto.SyncPlanPricesResponse
+	if err := workflow.ExecuteActivity(ctx, ActivitySyncPlanPrices, activityInput).Get(ctx, &out); err != nil {
+		return nil, err
+	}
+
+	return &out, nil
 }

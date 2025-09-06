@@ -1060,6 +1060,49 @@ func (s *StripeService) HasSavedPaymentMethods(ctx context.Context, customerID s
 	return len(paymentMethods) > 0, nil
 }
 
+// HasCustomerStripeMapping checks if the customer has a Stripe entity mapping
+func (s *StripeService) HasCustomerStripeMapping(ctx context.Context, customerID string) bool {
+	entityMappingService := NewEntityIntegrationMappingService(s.ServiceParams)
+
+	filter := &types.EntityIntegrationMappingFilter{
+		EntityID:      customerID,
+		EntityType:    types.IntegrationEntityTypeCustomer,
+		ProviderTypes: []string{string(types.SecretProviderStripe)},
+	}
+
+	mappings, err := entityMappingService.GetEntityIntegrationMappings(ctx, filter)
+	if err != nil {
+		s.Logger.Debugw("failed to check customer Stripe mapping",
+			"customer_id", customerID,
+			"error", err,
+		)
+		return false
+	}
+
+	if mappings == nil || len(mappings.Items) == 0 {
+		s.Logger.Debugw("no Stripe mapping found for customer",
+			"customer_id", customerID,
+		)
+		return false
+	}
+
+	// Check if any mapping has a valid provider entity ID
+	for _, mapping := range mappings.Items {
+		if mapping.ProviderEntityID != "" {
+			s.Logger.Debugw("customer has Stripe mapping",
+				"customer_id", customerID,
+				"provider_entity_id", mapping.ProviderEntityID,
+			)
+			return true
+		}
+	}
+
+	s.Logger.Debugw("customer Stripe mapping found but no provider entity ID",
+		"customer_id", customerID,
+	)
+	return false
+}
+
 // ReconcilePaymentWithInvoice updates the invoice payment status and amounts when a payment succeeds
 func (s *StripeService) ReconcilePaymentWithInvoice(ctx context.Context, paymentID string, paymentAmount decimal.Decimal) error {
 	s.Logger.Infow("starting payment reconciliation with invoice",

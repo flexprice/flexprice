@@ -31,12 +31,11 @@ func CronBillingWorkflow(ctx workflow.Context, input models.BillingWorkflowInput
 	childWorkflowOptions := workflow.ChildWorkflowOptions{
 		WorkflowID:         childWorkflowID,
 		WorkflowRunTimeout: time.Minute * 5,
-		TaskQueue:          workflow.GetInfo(ctx).TaskQueueName,
 	}
 	childCtx := workflow.WithChildOptions(ctx, childWorkflowOptions)
 
 	var result models.BillingWorkflowResult
-	future := workflow.ExecuteChildWorkflow(childCtx, types.CalculationWorkflow.String(), input)
+	future := workflow.ExecuteChildWorkflow(childCtx, types.TemporalCalculationWorkflow.String(), input)
 	if err := future.Get(ctx, &result); err != nil {
 		logger.Error("Child workflow failed", "error", err)
 		return nil, err

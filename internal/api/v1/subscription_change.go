@@ -35,7 +35,7 @@ func NewSubscriptionChangeHandler(
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Subscription ID"
-// @Param request body dto.SubscriptionChangePreviewRequest true "Subscription change preview request"
+// @Param request body dto.SubscriptionChangeRequest true "Subscription change preview request"
 // @Success 200 {object} dto.SubscriptionChangePreviewResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 404 {object} ierr.ErrorResponse

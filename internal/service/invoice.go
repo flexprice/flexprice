@@ -700,7 +700,6 @@ func (s *invoiceService) ProcessDraftInvoice(ctx context.Context, id string, pay
 	// Pass the subscription object to avoid extra DB call
 	// Error handling logic is properly handled in attemptPaymentForSubscriptionInvoice
 	if err := s.attemptPaymentForSubscriptionInvoice(ctx, inv, paymentParams, sub, flowType); err != nil {
-		// Error handling is done in attemptPaymentForSubscriptionInvoice
 		// Only return error if it's a blocking error (e.g., subscription creation with error_if_incomplete)
 		return err
 	}
@@ -1220,66 +1219,6 @@ func (s *invoiceService) AttemptPayment(ctx context.Context, id string) error {
 
 	// Use the new payment function with nil parameters to use subscription defaults
 	return s.attemptPaymentForSubscriptionInvoice(ctx, inv, nil, nil, types.InvoiceFlowManual)
-}
-
-func (s *invoiceService) performPaymentAttemptActions(ctx context.Context, inv *invoice.Invoice) error {
-	// Validate invoice status
-	if inv.InvoiceStatus != types.InvoiceStatusFinalized {
-		return ierr.NewError("invoice must be finalized").
-			WithHint("Invoice must be finalized before attempting payment").
-			Mark(ierr.ErrValidation)
-	}
-
-	// Validate payment status
-	if inv.PaymentStatus == types.PaymentStatusSucceeded {
-		return ierr.NewError("invoice is already paid by payment status").
-			WithHint("Invoice is already paid").
-			WithReportableDetails(map[string]any{
-				"invoice_id":     inv.ID,
-				"payment_status": inv.PaymentStatus,
-			}).
-			Mark(ierr.ErrInvalidOperation)
-	}
-
-	// Check if there's any amount remaining to pay
-	if inv.AmountRemaining.LessThanOrEqual(decimal.Zero) {
-		return ierr.NewError("invoice has no remaining amount to pay").
-			WithHint("Invoice has no remaining amount to pay").
-			Mark(ierr.ErrValidation)
-	}
-
-	// Use the wallet payment service to process the payment
-	walletPaymentService := NewWalletPaymentService(s.ServiceParams)
-
-	// Use default options (promotional wallets first, then prepaid)
-	options := DefaultWalletPaymentOptions()
-
-	// Add any additional metadata specific to this payment attempt
-	options.AdditionalMetadata = types.Metadata{
-		"payment_source": "automatic_attempt",
-	}
-
-	amountPaid, err := walletPaymentService.ProcessInvoicePaymentWithWallets(ctx, inv, options)
-	if err != nil {
-		return err
-	}
-
-	if amountPaid.IsZero() {
-		s.Logger.Infow("no payments processed for invoice",
-			"invoice_id", inv.ID,
-			"amount_remaining", inv.AmountRemaining)
-	} else if amountPaid.Equal(inv.AmountRemaining) {
-		s.Logger.Infow("invoice fully paid with wallets",
-			"invoice_id", inv.ID,
-			"amount_paid", amountPaid)
-	} else {
-		s.Logger.Infow("invoice partially paid with wallets",
-			"invoice_id", inv.ID,
-			"amount_paid", amountPaid,
-			"amount_remaining", inv.AmountRemaining.Sub(amountPaid))
-	}
-
-	return nil
 }
 
 func (s *invoiceService) attemptPaymentForSubscriptionInvoice(ctx context.Context, inv *invoice.Invoice, paymentParams *dto.PaymentParameters, sub *subscription.Subscription, flowType types.InvoiceFlowType) error {

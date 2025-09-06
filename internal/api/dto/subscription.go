@@ -84,7 +84,7 @@ type CreateSubscriptionRequest struct {
 	BillingAnchor *time.Time `json:"-"`
 
 	// Workflow
-	Workflow *types.WorkflowType `json:"-"`
+	Workflow *types.TemporalWorkflowType `json:"-"`
 }
 
 // AddAddonRequest is used by body-based endpoint /subscriptions/addon
@@ -272,7 +272,7 @@ func (r *CreateSubscriptionRequest) Validate() error {
 		r.ProrationBehavior = types.ProrationBehaviorNone
 	}
 	if r.Workflow == nil {
-		r.Workflow = lo.ToPtr(types.SubscriptionCreationWorkflow)
+		r.Workflow = lo.ToPtr(types.TemporalSubscriptionCreationWorkflow)
 	}
 
 	if r.ProrationBehavior != "" && r.ProrationBehavior == types.ProrationBehaviorCreateProrations {
@@ -539,7 +539,7 @@ func (r *CreateSubscriptionRequest) validateShouldAllowProrationOnStartDate(requ
 	// If the start date is before the current date and proration mode is active, return an error
 	// This prevents creating subscriptions with backdated start dates that would trigger proration
 
-	if request.Workflow == lo.ToPtr(types.SubscriptionChangeWorkflow) {
+	if request.Workflow == lo.ToPtr(types.TemporalSubscriptionCreationWorkflow) {
 		return nil
 	}
 

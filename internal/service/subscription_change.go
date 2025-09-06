@@ -607,7 +607,7 @@ func (s *subscriptionChangeService) createNewSubscription(
 		CustomerTimezone:   currentSub.CustomerTimezone,
 		CommitmentAmount:   currentSub.CommitmentAmount,
 		OverageFactor:      currentSub.OverageFactor,
-		Workflow:           lo.ToPtr(types.SubscriptionChangeWorkflow),
+		Workflow:           lo.ToPtr(types.TemporalSubscriptionCreationWorkflow),
 	}
 
 	// Use the existing subscription service to create the new subscription

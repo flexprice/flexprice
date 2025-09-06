@@ -63,18 +63,35 @@ func (s *subscriptionPaymentProcessor) HandlePaymentBehavior(
 		"payment_behavior", behavior,
 	)
 
-	// For manual flows, just attempt payment without changing subscription status
+	// For manual flows, attempt payment and update subscription status based on result
 	if flowType == types.InvoiceFlowManual {
-		s.Logger.Infow("manual flow - attempting payment without subscription status change",
+		s.Logger.Infow("manual flow - attempting payment",
 			"subscription_id", sub.ID,
 			"invoice_id", inv.ID,
 			"amount_due", inv.AmountDue,
 		)
-		// Just attempt payment, don't change subscription status
-		result := s.processPayment(ctx, sub, inv)
+
+		result := s.processPayment(ctx, sub, inv, behavior, flowType)
 		s.Logger.Infow("manual flow payment result",
 			"subscription_id", sub.ID,
 			"success", result.Success,
+			"amount_paid", result.AmountPaid,
+		)
+
+		// If payment succeeded completely, mark subscription as active
+		if result.Success {
+			s.Logger.Infow("manual flow payment successful - activating subscription",
+				"subscription_id", sub.ID,
+				"amount_paid", result.AmountPaid,
+			)
+			sub.SubscriptionStatus = types.SubscriptionStatusActive
+			return s.SubRepo.Update(ctx, sub)
+		}
+
+		// If payment failed or partial, keep subscription status unchanged
+		s.Logger.Infow("manual flow payment failed or partial - keeping subscription status unchanged",
+			"subscription_id", sub.ID,
+			"current_status", sub.SubscriptionStatus,
 			"amount_paid", result.AmountPaid,
 		)
 		return nil
@@ -149,13 +166,13 @@ func (s *subscriptionPaymentProcessor) handleChargeAutomaticallyMethod(
 ) error {
 	switch behavior {
 	case types.PaymentBehaviorAllowIncomplete:
-		return s.attemptPaymentAllowIncomplete(ctx, sub, inv)
+		return s.attemptPaymentAllowIncomplete(ctx, sub, inv, flowType)
 
 	case types.PaymentBehaviorErrorIfIncomplete:
 		return s.attemptPaymentErrorIfIncomplete(ctx, sub, inv, flowType)
 
 	case types.PaymentBehaviorDefaultActive:
-		return s.attemptPaymentDefaultActive(ctx, sub, inv)
+		return s.attemptPaymentDefaultActive(ctx, sub, inv, flowType)
 
 	default:
 		return ierr.NewError("unsupported payment behavior for charge_automatically").
@@ -178,8 +195,9 @@ func (s *subscriptionPaymentProcessor) attemptPaymentAllowIncomplete(
 	ctx context.Context,
 	sub *subscription.Subscription,
 	inv *dto.InvoiceResponse,
+	flowType types.InvoiceFlowType,
 ) error {
-	result := s.processPayment(ctx, sub, inv)
+	result := s.processPayment(ctx, sub, inv, types.PaymentBehaviorAllowIncomplete, flowType)
 
 	// Get the latest subscription status to check if it was already activated
 	// by payment reconciliation (this can happen when payment succeeds and
@@ -239,7 +257,7 @@ func (s *subscriptionPaymentProcessor) attemptPaymentErrorIfIncomplete(
 	inv *dto.InvoiceResponse,
 	flowType types.InvoiceFlowType,
 ) error {
-	result := s.processPayment(ctx, sub, inv)
+	result := s.processPayment(ctx, sub, inv, types.PaymentBehaviorErrorIfIncomplete, flowType)
 
 	if result.Success {
 		// Don't update subscription status here - let the payment processor handle it
@@ -278,8 +296,9 @@ func (s *subscriptionPaymentProcessor) attemptPaymentDefaultActive(
 	ctx context.Context,
 	sub *subscription.Subscription,
 	inv *dto.InvoiceResponse,
+	flowType types.InvoiceFlowType,
 ) error {
-	result := s.processPayment(ctx, sub, inv)
+	result := s.processPayment(ctx, sub, inv, types.PaymentBehaviorDefaultActive, flowType)
 
 	// Get the latest subscription status to check if it was already activated
 	// by payment reconciliation (this can happen when payment succeeds and
@@ -328,6 +347,8 @@ func (s *subscriptionPaymentProcessor) processPayment(
 	ctx context.Context,
 	sub *subscription.Subscription,
 	inv *dto.InvoiceResponse,
+	behavior types.PaymentBehavior,
+	flowType types.InvoiceFlowType,
 ) *PaymentResult {
 	// Use AmountRemaining instead of AmountDue to account for any existing payments
 	remainingAmount := inv.AmountRemaining
@@ -420,16 +441,37 @@ func (s *subscriptionPaymentProcessor) processPayment(
 				"remaining_amount", result.RemainingAmount,
 			)
 		} else {
-			// Card payment failed - do not attempt wallet payment
-			// The invoice cannot be fully paid, so we stop here
-			s.Logger.Warnw("card payment failed, not attempting wallet payment",
-				"subscription_id", sub.ID,
-				"attempted_card_amount", cardAmount,
-				"wallet_amount_available", walletAmount,
+			// Card payment failed - check if we should allow partial wallet payment
+			allowPartialWallet := s.shouldAllowPartialWalletPayment(
+				behavior,
+				flowType,
 			)
 
-			result.Success = false
-			return result
+			if !allowPartialWallet {
+				// Card payment failed - do not attempt wallet payment
+				// The invoice cannot be fully paid, so we stop here
+				s.Logger.Warnw("card payment failed, not attempting wallet payment",
+					"subscription_id", sub.ID,
+					"attempted_card_amount", cardAmount,
+					"wallet_amount_available", walletAmount,
+					"collection_method", sub.CollectionMethod,
+					"behavior", behavior,
+					"flow_type", flowType,
+				)
+
+				result.Success = false
+				return result
+			} else {
+				// Card payment failed but we allow partial wallet payment
+				s.Logger.Warnw("card payment failed, but allowing partial wallet payment",
+					"subscription_id", sub.ID,
+					"attempted_card_amount", cardAmount,
+					"wallet_amount_available", walletAmount,
+					"collection_method", sub.CollectionMethod,
+					"behavior", behavior,
+					"flow_type", flowType,
+				)
+			}
 		}
 	}
 
@@ -465,7 +507,7 @@ func (s *subscriptionPaymentProcessor) processPayment(
 	// Step 5: Determine final success
 	result.Success = result.RemainingAmount.IsZero()
 
-	s.Logger.Infow("card-first payment processing completed",
+	s.Logger.Infow("payment processing completed",
 		"subscription_id", sub.ID,
 		"success", result.Success,
 		"total_paid", result.AmountPaid,
@@ -660,6 +702,16 @@ func (s *subscriptionPaymentProcessor) processPaymentMethodCharge(
 		return decimal.Zero
 	}
 
+	// Check if customer has Stripe entity mapping
+	stripeService := NewStripeService(*s.ServiceParams)
+	if !stripeService.HasCustomerStripeMapping(ctx, sub.CustomerID) {
+		s.Logger.Warnw("no Stripe entity mapping found for customer",
+			"subscription_id", sub.ID,
+			"customer_id", sub.CustomerID,
+		)
+		return decimal.Zero
+	}
+
 	// Get payment method ID
 	paymentMethodID := s.getPaymentMethodID(ctx, sub)
 	if paymentMethodID == "" {
@@ -783,6 +835,25 @@ func (s *subscriptionPaymentProcessor) hasStripeConnection(ctx context.Context) 
 	)
 
 	return true
+}
+
+// shouldAllowPartialWalletPayment determines if partial wallet payment should be allowed
+// when card payment fails based on behavior and flow type
+func (s *subscriptionPaymentProcessor) shouldAllowPartialWalletPayment(
+	behavior types.PaymentBehavior,
+	flowType types.InvoiceFlowType,
+) bool {
+	switch flowType {
+	case types.InvoiceFlowSubscriptionCreation:
+		// For subscription_creation flow, only allow if behavior is default_active
+		return behavior == types.PaymentBehaviorDefaultActive
+	case types.InvoiceFlowRenewal, types.InvoiceFlowManual, types.InvoiceFlowCancel:
+		// For renewal, manual, or cancel flows, always allow partial wallet payment
+		return true
+	default:
+		// Default: don't allow partial wallet payment
+		return false
+	}
 }
 
 // checkAvailableCredits checks how much credits are available without consuming them
