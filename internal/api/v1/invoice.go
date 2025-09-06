@@ -9,7 +9,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/temporal"
-	"github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
@@ -316,29 +315,6 @@ func (h *InvoiceHandler) GetCustomerInvoiceSummary(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, resp)
-}
-
-// GenerateInvoice handles manual invoice generation requests
-func (h *InvoiceHandler) GenerateInvoice(c *gin.Context) {
-	ctx := c.Request.Context()
-
-	var req models.BillingWorkflowInput
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(ierr.WithError(err).WithHint("failed to bind request body").Mark(ierr.ErrValidation))
-		return
-	}
-
-	result, err := h.temporalService.StartBillingWorkflow(ctx, req)
-	if err != nil {
-		h.logger.Errorw("failed to start billing workflow",
-			"error", err,
-			"customer_id", req.CustomerID,
-			"subscription_id", req.SubscriptionID)
-		c.Error(err)
-		return
-	}
-
-	c.JSON(http.StatusOK, result)
 }
 
 // AttemptPayment godoc
