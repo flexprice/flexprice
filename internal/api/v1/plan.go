@@ -18,7 +18,7 @@ type PlanHandler struct {
 	service            service.PlanService
 	entitlementService service.EntitlementService
 	creditGrantService service.CreditGrantService
-	temporalService    *temporalclient.Service
+	temporalService    *temporalclient.TemporalService
 	log                *logger.Logger
 }
 
@@ -26,7 +26,7 @@ func NewPlanHandler(
 	service service.PlanService,
 	entitlementService service.EntitlementService,
 	creditGrantService service.CreditGrantService,
-	temporalService *temporalclient.Service,
+	temporalService *temporalclient.TemporalService,
 	log *logger.Logger,
 ) *PlanHandler {
 	return &PlanHandler{

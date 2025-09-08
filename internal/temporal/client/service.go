@@ -23,10 +23,10 @@ const (
 	MaxRetryAttempts        = 10
 )
 
-// Service provides a centralized interface for all Temporal operations
-type Service struct {
+// TemporalService provides a centralized interface for all Temporal operations
+type TemporalService struct {
 	client        *temporal.TemporalClient
-	workerManager *WorkerManager
+	workerManager *TemporalWorkerManager
 	logger        *logger.Logger
 	serviceParams service.ServiceParams
 	initialized   bool
@@ -34,13 +34,13 @@ type Service struct {
 }
 
 var (
-	globalService     *Service
+	globalService     *TemporalService
 	globalServiceOnce sync.Once
 	globalServiceMux  sync.RWMutex
 )
 
-// GetService returns the global temporal service instance
-func GetService() *Service {
+// GetTemporalService returns the global temporal service instance
+func GetTemporalService() *TemporalService {
 	globalServiceMux.RLock()
 	if globalService != nil {
 		defer globalServiceMux.RUnlock()
@@ -50,8 +50,8 @@ func GetService() *Service {
 	return nil
 }
 
-// InitService initializes the global temporal service
-func InitService(cfg *config.TemporalConfig, log *logger.Logger, params service.ServiceParams) (*Service, error) {
+// InitTemporalService initializes the global temporal service
+func InitTemporalService(cfg *config.TemporalConfig, log *logger.Logger, params service.ServiceParams) (*TemporalService, error) {
 	var err error
 	globalServiceOnce.Do(func() {
 		// Get or create client
@@ -65,9 +65,9 @@ func InitService(cfg *config.TemporalConfig, log *logger.Logger, params service.
 		}
 
 		// Initialize worker manager
-		workerManager := NewWorkerManager(client, log)
+		workerManager := NewTemporalWorkerManager(client, log)
 
-		globalService = &Service{
+		globalService = &TemporalService{
 			client:        client,
 			workerManager: workerManager,
 			logger:        log,
@@ -78,92 +78,54 @@ func InitService(cfg *config.TemporalConfig, log *logger.Logger, params service.
 	return globalService, err
 }
 
-// WorkflowExecutionOptions contains all possible options for workflow execution
-type WorkflowExecutionOptions struct {
-	// Basic options
+// TemporalWorkflowOptions contains options for workflow execution
+type TemporalWorkflowOptions struct {
 	TaskQueue        string
 	ExecutionTimeout time.Duration
 	WorkflowID       string
-
-	// Retry options
-	MaxRetries int
-	RetryDelay time.Duration
-
-	// Advanced options
-	RetryPolicy  *RetryPolicy
-	CronSchedule string
+	RetryPolicy      *TemporalRetryPolicy
+	CronSchedule     string
 }
 
-// DefaultWorkflowExecutionOptions returns default options for workflow execution
-func DefaultWorkflowExecutionOptions() *WorkflowExecutionOptions {
-	return &WorkflowExecutionOptions{
-		ExecutionTimeout: DefaultExecutionTimeout,
-		MaxRetries:       0, // No retries by default
-		RetryDelay:       DefaultRetryDelay,
-		RetryPolicy:      DefaultRetryPolicy(),
-	}
-}
-
-// ExecuteWorkflow executes a workflow with comprehensive options
-func (s *Service) ExecuteWorkflow(ctx context.Context, workflowName types.TemporalWorkflowType, input interface{}, opts ...*WorkflowExecutionOptions) (client.WorkflowRun, error) {
-	if err := s.ValidateServiceState(); err != nil {
+// ExecuteWorkflow executes a workflow with optional configuration
+func (s *TemporalService) ExecuteWorkflow(ctx context.Context, workflowName types.TemporalWorkflowType, input interface{}, opts ...*TemporalWorkflowOptions) (client.WorkflowRun, error) {
+	if err := validateService(s.isInitialized()); err != nil {
 		return nil, err
 	}
-
-	// Validate workflow name using the type's built-in validation
 	if err := workflowName.Validate(); err != nil {
 		return nil, err
 	}
-
-	// Basic input validation
 	if input == nil {
-		return nil, ierr.NewError("input is required").
-			WithHint("Provide valid input parameters").
-			Mark(ierr.ErrValidation)
+		return nil, ierr.NewError("workflow input is required").Mark(ierr.ErrValidation)
 	}
 
-	// Merge options with defaults
-	options := DefaultWorkflowExecutionOptions()
+	// Set up options
+	var options *TemporalWorkflowOptions
 	if len(opts) > 0 && opts[0] != nil {
 		options = opts[0]
+	} else {
+		options = &TemporalWorkflowOptions{}
 	}
 
-	// Set default task queue if not provided
+	// Set defaults
 	if options.TaskQueue == "" {
 		options.TaskQueue = workflowName.TaskQueueName()
 	}
-
-	// Validate options
-	if options.TaskQueue == "" {
-		return nil, ierr.NewError("task queue is required").
-			WithHint("Provide a valid task queue name").
-			Mark(ierr.ErrValidation)
-	}
-
 	if options.ExecutionTimeout <= 0 {
 		options.ExecutionTimeout = DefaultExecutionTimeout
 	}
-
-	// Handle retry logic if maxRetries > 0
-	if options.MaxRetries > 0 {
-		return s.executeWorkflowWithRetry(ctx, workflowName, input, options)
+	if options.WorkflowID == "" {
+		options.WorkflowID = s.generateWorkflowID(workflowName, ctx)
 	}
 
-	// Execute workflow with options
-	return s.executeWorkflowOnce(ctx, workflowName, input, options)
+	return s.executeWorkflow(ctx, workflowName, input, options)
 }
 
-// executeWorkflowOnce executes a workflow once without retry logic
-func (s *Service) executeWorkflowOnce(ctx context.Context, workflowName types.TemporalWorkflowType, input interface{}, options *WorkflowExecutionOptions) (client.WorkflowRun, error) {
-	// Generate workflow ID if not provided
-	workflowID := options.WorkflowID
-	if workflowID == "" {
-		workflowID = s.generateWorkflowID(workflowName, ctx)
-	}
-
+// executeWorkflow executes a workflow with the given options
+func (s *TemporalService) executeWorkflow(ctx context.Context, workflowName types.TemporalWorkflowType, input interface{}, options *TemporalWorkflowOptions) (client.WorkflowRun, error) {
 	// Build workflow options
 	workflowOptions := client.StartWorkflowOptions{
-		ID:                 workflowID,
+		ID:                 options.WorkflowID,
 		TaskQueue:          options.TaskQueue,
 		WorkflowRunTimeout: options.ExecutionTimeout,
 	}
@@ -184,59 +146,28 @@ func (s *Service) executeWorkflowOnce(ctx context.Context, workflowName types.Te
 		workflowOptions.CronSchedule = options.CronSchedule
 	}
 
-	// Handle different workflow types internally for special input processing
+	// Process input based on workflow type
 	processedInput := s.processWorkflowInput(workflowName, input, ctx)
 
 	we, err := s.client.Client.ExecuteWorkflow(ctx, workflowOptions, string(workflowName), processedInput)
 	if err != nil {
 		return nil, ierr.WithError(err).
-			WithHint("Failed to execute workflow").
-			WithReportableDetails(map[string]any{"workflow_name": workflowName, "input": input, "options": options}).
+			WithHint("Failed to execute temporal workflow - check temporal server connectivity, workflow registration, and task queue configuration").
+			WithReportableDetails(map[string]any{
+				"workflow_name":     workflowName,
+				"workflow_id":       options.WorkflowID,
+				"task_queue":        options.TaskQueue,
+				"execution_timeout": options.ExecutionTimeout,
+			}).
 			Mark(ierr.ErrInternal)
 	}
 
-	s.logger.Info("Successfully started workflow",
-		"workflowID", workflowID,
-		"runID", we.GetRunID(),
-		"workflow_name", workflowName)
-
+	s.logger.Info("Successfully started workflow", "workflowID", options.WorkflowID, "runID", we.GetRunID(), "workflow_name", workflowName)
 	return we, nil
 }
 
-// executeWorkflowWithRetry executes a workflow with retry logic
-func (s *Service) executeWorkflowWithRetry(ctx context.Context, workflowName types.TemporalWorkflowType, input interface{}, options *WorkflowExecutionOptions) (client.WorkflowRun, error) {
-	// Validate retry attempts
-	if options.MaxRetries < 0 || options.MaxRetries > MaxRetryAttempts {
-		return nil, ierr.NewError("invalid retry attempts").
-			WithHint("Retry attempts must be between 0 and 10").
-			Mark(ierr.ErrValidation)
-	}
-
-	var lastErr error
-	for i := 0; i < options.MaxRetries; i++ {
-		// Create a copy of options for this attempt
-		retryOptions := *options
-		retryOptions.WorkflowID = fmt.Sprintf("%s-retry-%d-%d", workflowName, i, time.Now().Unix())
-
-		run, err := s.executeWorkflowOnce(ctx, workflowName, input, &retryOptions)
-		if err == nil {
-			return run, nil
-		}
-
-		lastErr = err
-		if i < options.MaxRetries-1 { // Don't sleep after the last attempt
-			time.Sleep(time.Duration(i+1) * options.RetryDelay) // Exponential backoff
-		}
-	}
-
-	return nil, ierr.WithError(lastErr).
-		WithHint("Workflow execution failed after retries").
-		WithReportableDetails(map[string]any{"workflow_name": workflowName, "input": input, "max_retries": options.MaxRetries}).
-		Mark(ierr.ErrInternal)
-}
-
 // processWorkflowInput processes input based on workflow type
-func (s *Service) processWorkflowInput(workflowName types.TemporalWorkflowType, input interface{}, ctx context.Context) interface{} {
+func (s *TemporalService) processWorkflowInput(workflowName types.TemporalWorkflowType, input interface{}, ctx context.Context) interface{} {
 	// Extract tenant and environment from context
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
@@ -267,7 +198,7 @@ func (s *Service) processWorkflowInput(workflowName types.TemporalWorkflowType, 
 }
 
 // generateWorkflowID generates a unique workflow ID
-func (s *Service) generateWorkflowID(workflowName types.TemporalWorkflowType, ctx context.Context) string {
+func (s *TemporalService) generateWorkflowID(workflowName types.TemporalWorkflowType, ctx context.Context) string {
 	tenantID := types.GetTenantID(ctx)
 	if tenantID == "" {
 		tenantID = "unknown"
@@ -276,204 +207,96 @@ func (s *Service) generateWorkflowID(workflowName types.TemporalWorkflowType, ct
 }
 
 // RegisterWorkflow registers a workflow with a specific task queue
-func (s *Service) RegisterWorkflow(taskQueue string, workflow interface{}) error {
-	if err := s.ValidateServiceState(); err != nil {
+func (s *TemporalService) RegisterWorkflow(taskQueue string, workflow interface{}) error {
+	if err := validateService(s.isInitialized()); err != nil {
 		return err
 	}
-
 	if taskQueue == "" {
-		return ierr.NewError("task queue is required").
-			WithHint("Provide a valid task queue name").
-			Mark(ierr.ErrValidation)
+		return ierr.NewError("task queue is required").Mark(ierr.ErrValidation)
 	}
-
 	if workflow == nil {
-		return ierr.NewError("workflow is required").
-			WithHint("Provide a valid workflow function").
-			Mark(ierr.ErrValidation)
+		return ierr.NewError("workflow function is required").Mark(ierr.ErrValidation)
 	}
-
-	err := s.workerManager.RegisterWorkflow(taskQueue, workflow)
-	if err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to register workflow").
-			WithReportableDetails(map[string]any{"task_queue": taskQueue, "workflow": workflow}).
-			Mark(ierr.ErrInternal)
-	}
-
-	return nil
+	return s.workerManager.RegisterWorkflow(taskQueue, workflow)
 }
 
 // RegisterActivity registers an activity with a specific task queue
-func (s *Service) RegisterActivity(taskQueue string, activity interface{}) error {
-	if err := s.ValidateServiceState(); err != nil {
+func (s *TemporalService) RegisterActivity(taskQueue string, activity interface{}) error {
+	if err := validateService(s.isInitialized()); err != nil {
 		return err
 	}
-
 	if taskQueue == "" {
-		return ierr.NewError("task queue is required").
-			WithHint("Provide a valid task queue name").
-			Mark(ierr.ErrValidation)
+		return ierr.NewError("task queue is required").Mark(ierr.ErrValidation)
 	}
-
 	if activity == nil {
-		return ierr.NewError("activity is required").
-			WithHint("Provide a valid activity function").
-			Mark(ierr.ErrValidation)
+		return ierr.NewError("activity function is required").Mark(ierr.ErrValidation)
 	}
-
-	err := s.workerManager.RegisterActivity(taskQueue, activity)
-	if err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to register activity").
-			WithReportableDetails(map[string]any{"task_queue": taskQueue, "activity": activity}).
-			Mark(ierr.ErrInternal)
-	}
-
-	return nil
+	return s.workerManager.RegisterActivity(taskQueue, activity)
 }
 
 // StartWorker starts a worker for the given task queue
-func (s *Service) StartWorker(taskQueue string) error {
-	if err := s.ValidateServiceState(); err != nil {
+func (s *TemporalService) StartWorker(taskQueue string) error {
+	if err := validateService(s.isInitialized()); err != nil {
 		return err
 	}
-
 	if taskQueue == "" {
-		return ierr.NewError("task queue is required").
-			WithHint("Provide a valid task queue name").
-			Mark(ierr.ErrValidation)
+		return ierr.NewError("task queue is required").Mark(ierr.ErrValidation)
 	}
-
-	err := s.workerManager.StartWorker(taskQueue)
-	if err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to start worker").
-			WithReportableDetails(map[string]any{"task_queue": taskQueue}).
-			Mark(ierr.ErrInternal)
-	}
-
-	return nil
+	return s.workerManager.StartWorker(taskQueue)
 }
 
 // StopWorker stops a worker for the given task queue
-func (s *Service) StopWorker(taskQueue string) error {
-	if err := s.ValidateServiceState(); err != nil {
+func (s *TemporalService) StopWorker(taskQueue string) error {
+	if err := validateService(s.isInitialized()); err != nil {
 		return err
 	}
-
 	if taskQueue == "" {
-		return ierr.NewError("task queue is required").
-			WithHint("Provide a valid task queue name").
-			Mark(ierr.ErrValidation)
+		return ierr.NewError("task queue is required").Mark(ierr.ErrValidation)
 	}
-
-	err := s.workerManager.StopWorker(taskQueue)
-	if err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to stop worker").
-			WithReportableDetails(map[string]any{"task_queue": taskQueue}).
-			Mark(ierr.ErrInternal)
-	}
-
-	return nil
+	return s.workerManager.StopWorker(taskQueue)
 }
 
 // StopAllWorkers stops all workers
-func (s *Service) StopAllWorkers() error {
-	if err := s.ValidateServiceState(); err != nil {
+func (s *TemporalService) StopAllWorkers() error {
+	if err := validateService(s.isInitialized()); err != nil {
 		return err
 	}
-
-	err := s.workerManager.StopAllWorkers()
-	if err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to stop all workers").
-			WithReportableDetails(map[string]any{"task_queues": s.workerManager.GetWorkerStatus()}).
-			Mark(ierr.ErrInternal)
-	}
-
-	return nil
+	return s.workerManager.StopAllWorkers()
 }
 
 // GetWorkerStatus returns the status of all workers
-func (s *Service) GetWorkerStatus() map[string]bool {
+func (s *TemporalService) GetWorkerStatus() map[string]bool {
 	if !s.isInitialized() {
 		return make(map[string]bool)
 	}
 	return s.workerManager.GetWorkerStatus()
 }
 
-// HealthCheck performs a health check on the temporal system
-func (s *Service) HealthCheck() error {
-	if err := s.ValidateServiceState(); err != nil {
-		return err
-	}
-
-	status := s.GetWorkerStatus()
-	var unhealthyWorkers []string
-	for taskQueue, isStarted := range status {
-		if !isStarted {
-			unhealthyWorkers = append(unhealthyWorkers, taskQueue)
-		}
-	}
-
-	if len(unhealthyWorkers) > 0 {
-		return ierr.NewError("unhealthy workers detected").
-			WithHint("Check worker status and restart if necessary").
-			Mark(ierr.ErrSystem)
-	}
-
-	return nil
-}
-
 // GetWorkflowResult gets the result of a workflow execution
-func (s *Service) GetWorkflowResult(ctx context.Context, workflowID string, result interface{}) error {
-	if err := s.ValidateServiceState(); err != nil {
+func (s *TemporalService) GetWorkflowResult(ctx context.Context, workflowID string, result interface{}) error {
+	if err := validateService(s.isInitialized()); err != nil {
 		return err
 	}
-
 	if workflowID == "" {
-		return ierr.NewError("workflow ID is required").
-			WithHint("Provide a valid workflow ID").
-			Mark(ierr.ErrValidation)
+		return ierr.NewError("workflow ID is required").Mark(ierr.ErrValidation)
 	}
-
 	if result == nil {
-		return ierr.NewError("result parameter is required").
-			WithHint("Provide a valid result pointer").
-			Mark(ierr.ErrValidation)
+		return ierr.NewError("result pointer is required").Mark(ierr.ErrValidation)
 	}
 
 	we := s.client.Client.GetWorkflow(ctx, workflowID, "")
 	err := we.Get(ctx, result)
 	if err != nil {
 		return ierr.WithError(err).
-			WithHint("Failed to get workflow result").
-			WithReportableDetails(map[string]any{"workflow_id": workflowID, "result": result}).
+			WithHint("Failed to get workflow result - check if workflow exists and has completed successfully").
+			WithReportableDetails(map[string]any{"workflow_id": workflowID}).
 			Mark(ierr.ErrInternal)
 	}
-
 	return nil
 }
 
-// GetWorkflowResultWithTimeout gets the result of a workflow execution with timeout
-func (s *Service) GetWorkflowResultWithTimeout(ctx context.Context, workflowID string, result interface{}, timeout time.Duration) error {
-	if timeout <= 0 {
-		return ierr.NewError("timeout must be positive").
-			WithHint("Provide a valid timeout duration").
-			Mark(ierr.ErrValidation)
-	}
-
-	// Create a context with timeout and delegate to the main method
-	timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	return s.GetWorkflowResult(timeoutCtx, workflowID, result)
-}
-
 // Close closes the temporal service
-func (s *Service) Close() error {
+func (s *TemporalService) Close() error {
 	if !s.isInitialized() {
 		return nil
 	}
@@ -493,27 +316,16 @@ func (s *Service) Close() error {
 }
 
 // isInitialized checks if the service is initialized
-func (s *Service) isInitialized() bool {
+func (s *TemporalService) isInitialized() bool {
 	s.initMux.RLock()
 	defer s.initMux.RUnlock()
 	return s.initialized
 }
 
 // GetWorkerManager returns the worker manager instance
-func (s *Service) GetWorkerManager() *WorkerManager {
+func (s *TemporalService) GetWorkerManager() *TemporalWorkerManager {
 	if !s.isInitialized() {
 		return nil
 	}
 	return s.workerManager
-}
-
-// ValidateServiceState validates that the service is properly initialized
-func (s *Service) ValidateServiceState() error {
-	if !s.isInitialized() {
-		return ierr.NewError("temporal service not initialized").
-			WithHint("Service must be initialized before use").
-			WithReportableDetails(map[string]any{"initialized": s.initialized}).
-			Mark(ierr.ErrInternal)
-	}
-	return nil
 }

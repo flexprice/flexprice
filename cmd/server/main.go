@@ -251,7 +251,7 @@ func provideHandlers(
 	walletService service.WalletService,
 	tenantService service.TenantService,
 	invoiceService service.InvoiceService,
-	temporalService *temporalclient.Service,
+	temporalService *temporalclient.TemporalService,
 	featureService service.FeatureService,
 	entitlementService service.EntitlementService,
 	paymentService service.PaymentService,
@@ -327,8 +327,8 @@ func provideTemporalClient(cfg *config.TemporalConfig, log *logger.Logger) (*tem
 	return temporal.NewTemporalClient(cfg, log)
 }
 
-func provideTemporalService(cfg *config.TemporalConfig, log *logger.Logger, params service.ServiceParams) (*temporalclient.Service, error) {
-	return temporalclient.InitService(cfg, log, params)
+func provideTemporalService(cfg *config.TemporalConfig, log *logger.Logger, params service.ServiceParams) (*temporalclient.TemporalService, error) {
+	return temporalclient.InitTemporalService(cfg, log, params)
 }
 
 func startServer(
@@ -338,7 +338,7 @@ func startServer(
 	consumer kafka.MessageConsumer,
 	eventRepo events.Repository,
 	temporalClient *temporal.TemporalClient,
-	temporalService *temporalclient.Service,
+	temporalService *temporalclient.TemporalService,
 	webhookService *webhook.WebhookService,
 	router *pubsubRouter.Router,
 	onboardingService service.OnboardingService,
@@ -386,7 +386,7 @@ func startServer(
 
 func startTemporalWorker(
 	lc fx.Lifecycle,
-	temporalService *temporalclient.Service,
+	temporalService *temporalclient.TemporalService,
 ) {
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
