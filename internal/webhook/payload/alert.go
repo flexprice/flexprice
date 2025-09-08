@@ -37,8 +37,7 @@ func (b *AlertPayloadBuilder) BuildPayload(ctx context.Context, eventType string
 		EntityID:      internalEvent.EntityID,
 		AlertMetric:   internalEvent.AlertMetric,
 		AlertState:    types.AlertState(internalEvent.AlertState),
-		AlertEnabled:  internalEvent.AlertEnabled,
-		AlertData:     internalEvent.AlertData,
+		AlertInfo:     internalEvent.AlertInfo,
 		EnvironmentID: internalEvent.EnvironmentID,
 		BaseModel: types.BaseModel{
 			TenantID: internalEvent.TenantID,

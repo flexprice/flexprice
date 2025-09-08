@@ -1,7 +1,5 @@
-We have to make an alert system whihc is generic and will be scaled later 
-
-there will be an alerts table 
-whenever we are creating a new entry in alert table, we will fire the relevant webhook (which is basically notification channel)
+there is an alerts table 
+when a new entry is created in alerts table, we will fire the relevant webhook (which is basically notification channel)
 
 alerts table will hold-
 id  // alerts table id
@@ -12,7 +10,7 @@ entity_id // entity id (wallet id, entitlement id, etc) (optional)
 alert_metric // alert metric (credit_balance, ongoing_balance, etc)
 alert_state // alert state (ok, in_alarm, etc)
 alert_enabled // alert enabled (true, false)
-alert_data // alert data (jsonb) // this will hold the alert information like threshold, value_at_time, etc
+alert_info // alert info (jsonb) // this will hold the alert information like threshold, value_at_time, etc
 created_at // created at
 updated_at // updated at
 
@@ -20,11 +18,14 @@ each enitity for now will hold the following fields-
 alert_enabled // alert enabled (true, false)
 alert_config // alert config (jsonb) // this will hold the alert configuration basically  threshold
 
-Note: no alert_state in entity table, it will be in alerts table
-only alert_enabled will be in entity table
-
+Note: 
+1. no alert_state in entity table, entity will have alert_enabled field and alert_config field
+2. alert_state will be in alerts table against each alert
+3. only alert_enabled will be in entity table (this is just to track if alert is enabled for the entity)
+4. no alert_enabled will be in alerts table
 
 so the cron will be setup as 
+
 
 request body for cron job will be like this-
 tenant_ids[] // tenant ids
@@ -34,10 +35,9 @@ alert_metric // alert metric (credit_balance, ongoing_balance, etc)
 entity_ids[] // entity ids (wallet id, entitlement id, etc) (optional to check for only specific entity ids)
 threshold // threshold (jsonb) // this will hold the threshold against which we will check the alert_metric value
 
-it will be called every XX minutes and will check for alerts 
-
 Note: If threshold is provided in the cron request, use that
 If no threshold in request, fall back to the entity's own threshold configuration
+
 
 now for each tenant x environemet(i.e tenant[0] x environment[0], tenant[1] x environment[1], etc)
 we will fetch all the valid entities of the given entity type for the given tenant and environment
@@ -54,6 +54,7 @@ we will fetch all the valid entities of the given entity type for the given tena
     else if breach is restored i.e determined alert status i.e alert_state = ok is not same as existing db alert status which is in_alarm
         then we will update the alert_state in the alerts table to ok
         then we will fire the relevant webhook which is basically notification channel
+
 
 ## Visuals
 

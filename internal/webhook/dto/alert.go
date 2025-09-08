@@ -12,8 +12,7 @@ type InternalAlertEvent struct {
 	EntityID      string                 `json:"entity_id,omitempty"`
 	AlertMetric   string                 `json:"alert_metric"`
 	AlertState    string                 `json:"alert_state"`
-	AlertEnabled  bool                   `json:"alert_enabled"`
-	AlertData     map[string]interface{} `json:"alert_data,omitempty"`
+	AlertInfo     map[string]interface{} `json:"alert_info,omitempty"`
 }
 
 type AlertWebhookPayload struct {

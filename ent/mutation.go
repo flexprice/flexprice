@@ -2628,8 +2628,7 @@ type AlertMutation struct {
 	entity_id      *string
 	alert_metric   *string
 	alert_state    *string
-	alert_enabled  *bool
-	alert_data     *map[string]interface{}
+	alert_info     *map[string]interface{}
 	clearedFields  map[string]struct{}
 	done           bool
 	oldValue       func(context.Context) (*Alert, error)
@@ -3188,89 +3187,53 @@ func (m *AlertMutation) ResetAlertState() {
 	m.alert_state = nil
 }
 
-// SetAlertEnabled sets the "alert_enabled" field.
-func (m *AlertMutation) SetAlertEnabled(b bool) {
-	m.alert_enabled = &b
+// SetAlertInfo sets the "alert_info" field.
+func (m *AlertMutation) SetAlertInfo(value map[string]interface{}) {
+	m.alert_info = &value
 }
 
-// AlertEnabled returns the value of the "alert_enabled" field in the mutation.
-func (m *AlertMutation) AlertEnabled() (r bool, exists bool) {
-	v := m.alert_enabled
+// AlertInfo returns the value of the "alert_info" field in the mutation.
+func (m *AlertMutation) AlertInfo() (r map[string]interface{}, exists bool) {
+	v := m.alert_info
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldAlertEnabled returns the old "alert_enabled" field's value of the Alert entity.
+// OldAlertInfo returns the old "alert_info" field's value of the Alert entity.
 // If the Alert object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *AlertMutation) OldAlertEnabled(ctx context.Context) (v bool, err error) {
+func (m *AlertMutation) OldAlertInfo(ctx context.Context) (v map[string]interface{}, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldAlertEnabled is only allowed on UpdateOne operations")
+		return v, errors.New("OldAlertInfo is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldAlertEnabled requires an ID field in the mutation")
+		return v, errors.New("OldAlertInfo requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldAlertEnabled: %w", err)
+		return v, fmt.Errorf("querying old value for OldAlertInfo: %w", err)
 	}
-	return oldValue.AlertEnabled, nil
+	return oldValue.AlertInfo, nil
 }
 
-// ResetAlertEnabled resets all changes to the "alert_enabled" field.
-func (m *AlertMutation) ResetAlertEnabled() {
-	m.alert_enabled = nil
+// ClearAlertInfo clears the value of the "alert_info" field.
+func (m *AlertMutation) ClearAlertInfo() {
+	m.alert_info = nil
+	m.clearedFields[alert.FieldAlertInfo] = struct{}{}
 }
 
-// SetAlertData sets the "alert_data" field.
-func (m *AlertMutation) SetAlertData(value map[string]interface{}) {
-	m.alert_data = &value
-}
-
-// AlertData returns the value of the "alert_data" field in the mutation.
-func (m *AlertMutation) AlertData() (r map[string]interface{}, exists bool) {
-	v := m.alert_data
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldAlertData returns the old "alert_data" field's value of the Alert entity.
-// If the Alert object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *AlertMutation) OldAlertData(ctx context.Context) (v map[string]interface{}, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldAlertData is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldAlertData requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldAlertData: %w", err)
-	}
-	return oldValue.AlertData, nil
-}
-
-// ClearAlertData clears the value of the "alert_data" field.
-func (m *AlertMutation) ClearAlertData() {
-	m.alert_data = nil
-	m.clearedFields[alert.FieldAlertData] = struct{}{}
-}
-
-// AlertDataCleared returns if the "alert_data" field was cleared in this mutation.
-func (m *AlertMutation) AlertDataCleared() bool {
-	_, ok := m.clearedFields[alert.FieldAlertData]
+// AlertInfoCleared returns if the "alert_info" field was cleared in this mutation.
+func (m *AlertMutation) AlertInfoCleared() bool {
+	_, ok := m.clearedFields[alert.FieldAlertInfo]
 	return ok
 }
 
-// ResetAlertData resets all changes to the "alert_data" field.
-func (m *AlertMutation) ResetAlertData() {
-	m.alert_data = nil
-	delete(m.clearedFields, alert.FieldAlertData)
+// ResetAlertInfo resets all changes to the "alert_info" field.
+func (m *AlertMutation) ResetAlertInfo() {
+	m.alert_info = nil
+	delete(m.clearedFields, alert.FieldAlertInfo)
 }
 
 // Where appends a list predicates to the AlertMutation builder.
@@ -3307,7 +3270,7 @@ func (m *AlertMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AlertMutation) Fields() []string {
-	fields := make([]string, 0, 13)
+	fields := make([]string, 0, 12)
 	if m.tenant_id != nil {
 		fields = append(fields, alert.FieldTenantID)
 	}
@@ -3341,11 +3304,8 @@ func (m *AlertMutation) Fields() []string {
 	if m.alert_state != nil {
 		fields = append(fields, alert.FieldAlertState)
 	}
-	if m.alert_enabled != nil {
-		fields = append(fields, alert.FieldAlertEnabled)
-	}
-	if m.alert_data != nil {
-		fields = append(fields, alert.FieldAlertData)
+	if m.alert_info != nil {
+		fields = append(fields, alert.FieldAlertInfo)
 	}
 	return fields
 }
@@ -3377,10 +3337,8 @@ func (m *AlertMutation) Field(name string) (ent.Value, bool) {
 		return m.AlertMetric()
 	case alert.FieldAlertState:
 		return m.AlertState()
-	case alert.FieldAlertEnabled:
-		return m.AlertEnabled()
-	case alert.FieldAlertData:
-		return m.AlertData()
+	case alert.FieldAlertInfo:
+		return m.AlertInfo()
 	}
 	return nil, false
 }
@@ -3412,10 +3370,8 @@ func (m *AlertMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldAlertMetric(ctx)
 	case alert.FieldAlertState:
 		return m.OldAlertState(ctx)
-	case alert.FieldAlertEnabled:
-		return m.OldAlertEnabled(ctx)
-	case alert.FieldAlertData:
-		return m.OldAlertData(ctx)
+	case alert.FieldAlertInfo:
+		return m.OldAlertInfo(ctx)
 	}
 	return nil, fmt.Errorf("unknown Alert field %s", name)
 }
@@ -3502,19 +3458,12 @@ func (m *AlertMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetAlertState(v)
 		return nil
-	case alert.FieldAlertEnabled:
-		v, ok := value.(bool)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetAlertEnabled(v)
-		return nil
-	case alert.FieldAlertData:
+	case alert.FieldAlertInfo:
 		v, ok := value.(map[string]interface{})
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetAlertData(v)
+		m.SetAlertInfo(v)
 		return nil
 	}
 	return fmt.Errorf("unknown Alert field %s", name)
@@ -3558,8 +3507,8 @@ func (m *AlertMutation) ClearedFields() []string {
 	if m.FieldCleared(alert.FieldEntityID) {
 		fields = append(fields, alert.FieldEntityID)
 	}
-	if m.FieldCleared(alert.FieldAlertData) {
-		fields = append(fields, alert.FieldAlertData)
+	if m.FieldCleared(alert.FieldAlertInfo) {
+		fields = append(fields, alert.FieldAlertInfo)
 	}
 	return fields
 }
@@ -3587,8 +3536,8 @@ func (m *AlertMutation) ClearField(name string) error {
 	case alert.FieldEntityID:
 		m.ClearEntityID()
 		return nil
-	case alert.FieldAlertData:
-		m.ClearAlertData()
+	case alert.FieldAlertInfo:
+		m.ClearAlertInfo()
 		return nil
 	}
 	return fmt.Errorf("unknown Alert nullable field %s", name)
@@ -3631,11 +3580,8 @@ func (m *AlertMutation) ResetField(name string) error {
 	case alert.FieldAlertState:
 		m.ResetAlertState()
 		return nil
-	case alert.FieldAlertEnabled:
-		m.ResetAlertEnabled()
-		return nil
-	case alert.FieldAlertData:
-		m.ResetAlertData()
+	case alert.FieldAlertInfo:
+		m.ResetAlertInfo()
 		return nil
 	}
 	return fmt.Errorf("unknown Alert field %s", name)

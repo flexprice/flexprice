@@ -192,10 +192,6 @@ func init() {
 	alert.DefaultAlertState = alertDescAlertState.Default.(string)
 	// alert.AlertStateValidator is a validator for the "alert_state" field. It is called by the builders before save.
 	alert.AlertStateValidator = alertDescAlertState.Validators[0].(func(string) error)
-	// alertDescAlertEnabled is the schema descriptor for alert_enabled field.
-	alertDescAlertEnabled := alertFields[5].Descriptor()
-	// alert.DefaultAlertEnabled holds the default value on creation for the alert_enabled field.
-	alert.DefaultAlertEnabled = alertDescAlertEnabled.Default.(bool)
 	authFields := schema.Auth{}.Fields()
 	_ = authFields
 	// authDescProvider is the schema descriptor for provider field.

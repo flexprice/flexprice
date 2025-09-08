@@ -118,15 +118,14 @@ func (s *alertService) publishWebhookEvent(ctx context.Context, eventName string
 
 	// Create internal event
 	internalEvent := &webhookDto.InternalAlertEvent{
-		EventType:    eventName,
-		AlertID:      a.ID,
-		TenantID:     a.TenantID,
-		EntityType:   a.EntityType,
-		EntityID:     a.EntityID,
-		AlertMetric:  a.AlertMetric,
-		AlertState:   string(a.AlertState),
-		AlertEnabled: a.AlertEnabled,
-		AlertData:    a.AlertData,
+		EventType:   eventName,
+		AlertID:     a.ID,
+		TenantID:    a.TenantID,
+		EntityType:  a.EntityType,
+		EntityID:    a.EntityID,
+		AlertMetric: a.AlertMetric,
+		AlertState:  string(a.AlertState),
+		AlertInfo:   a.AlertInfo,
 	}
 
 	// Convert to JSON
@@ -363,13 +362,12 @@ func (s *alertService) handleAlertStateChange(ctx context.Context, entity *types
 	if latestAlert == nil || latestAlert.AlertState != newState {
 		// Create new alert
 		newAlert := &alert.Alert{
-			ID:           types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ALERT),
-			EntityType:   entity.Type,
-			EntityID:     entity.ID,
-			AlertMetric:  alertMetric,
-			AlertState:   newState,
-			AlertEnabled: true,
-			AlertData: map[string]interface{}{
+			ID:          types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ALERT),
+			EntityType:  entity.Type,
+			EntityID:    entity.ID,
+			AlertMetric: alertMetric,
+			AlertState:  newState,
+			AlertInfo: map[string]interface{}{
 				"threshold":     threshold,
 				"current_value": currentValue,
 				"timestamp":     time.Now().UTC(),

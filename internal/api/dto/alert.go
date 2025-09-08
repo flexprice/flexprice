@@ -11,11 +11,10 @@ import (
 
 // CreateAlertRequest represents the request to create a new alert
 type CreateAlertRequest struct {
-	EntityType   string                 `json:"entity_type" validate:"required"`
-	EntityID     string                 `json:"entity_id"`
-	AlertMetric  string                 `json:"alert_metric" validate:"required"`
-	AlertEnabled bool                   `json:"alert_enabled"`
-	AlertData    map[string]interface{} `json:"alert_data,omitempty"`
+	EntityType  string                 `json:"entity_type" validate:"required"`
+	EntityID    string                 `json:"entity_id"`
+	AlertMetric string                 `json:"alert_metric" validate:"required"`
+	AlertInfo   map[string]interface{} `json:"alert_info,omitempty"`
 }
 
 // Validate validates the create alert request
@@ -42,8 +41,7 @@ func (r *CreateAlertRequest) ToAlert(ctx context.Context) *alert.Alert {
 		EntityID:      r.EntityID,
 		AlertMetric:   r.AlertMetric,
 		AlertState:    types.AlertStateOk,
-		AlertEnabled:  r.AlertEnabled,
-		AlertData:     r.AlertData,
+		AlertInfo:     r.AlertInfo,
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		BaseModel: types.BaseModel{
 			TenantID:  types.GetTenantID(ctx),
@@ -56,30 +54,6 @@ func (r *CreateAlertRequest) ToAlert(ctx context.Context) *alert.Alert {
 	}
 }
 
-// UpdateAlertRequest represents the request to update an alert
-type UpdateAlertRequest struct {
-	AlertEnabled *bool                  `json:"alert_enabled,omitempty"`
-	AlertData    map[string]interface{} `json:"alert_data,omitempty"`
-}
-
-// Validate validates the update alert request
-func (r *UpdateAlertRequest) Validate() error {
-	return nil
-}
-
-// UpdateAlert updates an existing alert with the request data
-func (r *UpdateAlertRequest) UpdateAlert(ctx context.Context, a *alert.Alert) *alert.Alert {
-	if r.AlertEnabled != nil {
-		a.AlertEnabled = *r.AlertEnabled
-	}
-	if r.AlertData != nil {
-		a.AlertData = r.AlertData
-	}
-	a.UpdatedAt = time.Now().UTC()
-	a.UpdatedBy = types.GetUserID(ctx)
-	return a
-}
-
 // AlertResponse represents the response for alert operations
 type AlertResponse struct {
 	ID            string                 `json:"id"`
@@ -87,8 +61,7 @@ type AlertResponse struct {
 	EntityID      string                 `json:"entity_id,omitempty"`
 	AlertMetric   string                 `json:"alert_metric"`
 	AlertState    string                 `json:"alert_state"`
-	AlertEnabled  bool                   `json:"alert_enabled"`
-	AlertData     map[string]interface{} `json:"alert_data,omitempty"`
+	AlertInfo     map[string]interface{} `json:"alert_info,omitempty"`
 	TenantID      string                 `json:"tenant_id"`
 	EnvironmentID string                 `json:"environment_id"`
 	Status        string                 `json:"status"`
@@ -109,8 +82,7 @@ func NewAlertResponse(a *alert.Alert) *AlertResponse {
 		EntityID:      a.EntityID,
 		AlertMetric:   a.AlertMetric,
 		AlertState:    string(a.AlertState),
-		AlertEnabled:  a.AlertEnabled,
-		AlertData:     a.AlertData,
+		AlertInfo:     a.AlertInfo,
 		TenantID:      a.TenantID,
 		EnvironmentID: a.EnvironmentID,
 		Status:        string(a.Status),

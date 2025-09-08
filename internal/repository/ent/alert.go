@@ -44,8 +44,7 @@ func (r *alertRepository) Create(ctx context.Context, alert *domainAlert.Alert) 
 		SetNillableEntityID(&alert.EntityID).
 		SetAlertMetric(alert.AlertMetric).
 		SetAlertState(string(alert.AlertState)).
-		SetAlertEnabled(alert.AlertEnabled).
-		SetAlertData(alert.AlertData).
+		SetAlertInfo(alert.AlertInfo).
 		SetTenantID(alert.TenantID).
 		SetEnvironmentID(alert.EnvironmentID).
 		SetStatus(string(alert.Status)).

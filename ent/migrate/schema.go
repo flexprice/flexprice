@@ -88,8 +88,7 @@ var (
 		{Name: "entity_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "alert_metric", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "alert_state", Type: field.TypeString, Default: "ok", SchemaType: map[string]string{"postgres": "varchar(20)"}},
-		{Name: "alert_enabled", Type: field.TypeBool, Default: true},
-		{Name: "alert_data", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "alert_info", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 	}
 	// AlertsTable holds the schema information for the "alerts" table.
 	AlertsTable = &schema.Table{
@@ -106,11 +105,6 @@ var (
 				Name:    "idx_alerts_tenant_environment_state",
 				Unique:  false,
 				Columns: []*schema.Column{AlertsColumns[1], AlertsColumns[7], AlertsColumns[11]},
-			},
-			{
-				Name:    "idx_alerts_tenant_environment_enabled",
-				Unique:  false,
-				Columns: []*schema.Column{AlertsColumns[1], AlertsColumns[7], AlertsColumns[12]},
 			},
 			{
 				Name:    "idx_alerts_tenant_env_entity_metric_state",
