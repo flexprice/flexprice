@@ -1,16 +1,14 @@
-package client
+package service
 
 import (
 	"context"
 
 	"github.com/flexprice/flexprice/internal/temporal/models"
-	"go.temporal.io/api/workflowservice/v1"
-	"go.temporal.io/sdk/client"
 )
 
-// TemporalClient is the interface for interacting with Temporal service
-type TemporalClient interface {
-	// Core client operations
+// TemporalService is the main entry point for temporal operations
+type TemporalService interface {
+	// Core operations
 	Start(ctx context.Context) error
 	Stop(ctx context.Context) error
 	IsHealthy(ctx context.Context) bool
@@ -26,16 +24,14 @@ type TemporalClient interface {
 	CompleteActivity(ctx context.Context, taskToken []byte, result interface{}, err error) error
 	RecordActivityHeartbeat(ctx context.Context, taskToken []byte, details ...interface{}) error
 
+	// Worker operations
+	RegisterWorkflow(taskQueue string, workflow interface{}) error
+	RegisterActivity(taskQueue string, activity interface{}) error
+	StartWorker(taskQueue string) error
+	StopWorker(taskQueue string) error
+	StopAllWorkers() error
+
 	// Utility operations
-	GetWorkflowHistory(ctx context.Context, workflowID, runID string) (client.HistoryEventIterator, error)
-	DescribeWorkflowExecution(ctx context.Context, workflowID, runID string) (*workflowservice.DescribeWorkflowExecutionResponse, error)
-
-	// Raw client access (for advanced use cases)
-	GetRawClient() client.Client
-}
-
-// TemporalClientFactory creates new instances of TemporalClient
-type TemporalClientFactory interface {
-	// CreateClient creates a new TemporalClient instance
-	CreateClient(options *models.ClientOptions) (TemporalClient, error)
+	GetWorkflowHistory(ctx context.Context, workflowID, runID string) (interface{}, error)
+	DescribeWorkflowExecution(ctx context.Context, workflowID, runID string) (interface{}, error)
 }

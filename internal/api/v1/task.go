@@ -1,14 +1,16 @@
 package v1
 
 import (
+	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
-	temporalclient "github.com/flexprice/flexprice/internal/temporal/client"
 	"github.com/flexprice/flexprice/internal/temporal/models"
+	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
@@ -16,13 +18,13 @@ import (
 
 type TaskHandler struct {
 	service         service.TaskService
-	temporalService *temporalclient.TemporalService
+	temporalService temporalservice.TemporalService
 	log             *logger.Logger
 }
 
 func NewTaskHandler(
 	service service.TaskService,
-	temporalService *temporalclient.TemporalService,
+	temporalService temporalservice.TemporalService,
 	log *logger.Logger,
 ) *TaskHandler {
 	return &TaskHandler{
@@ -59,7 +61,11 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 	}
 
 	// Start the temporal workflow for async processing
-	_, err = h.temporalService.ExecuteWorkflow(c.Request.Context(), types.TemporalTaskProcessingWorkflow, resp.ID)
+	_, err = h.temporalService.StartWorkflow(c.Request.Context(), models.StartWorkflowOptions{
+		ID:        fmt.Sprintf("task-processing-%s-%d", resp.ID, time.Now().Unix()),
+		TaskQueue: types.TemporalTaskProcessingWorkflow.TaskQueueName(),
+	}, types.TemporalTaskProcessingWorkflow.String(), resp.ID)
+
 	if err != nil {
 		h.log.Error("failed to start temporal workflow", "error", err, "task_id", resp.ID)
 		// Don't fail the request, just log the error
@@ -223,12 +229,15 @@ func (h *TaskHandler) GetTaskProcessingResult(c *gin.Context) {
 		return
 	}
 
-	var result models.TaskProcessingWorkflowResult
-	err := h.temporalService.GetWorkflowResult(c.Request.Context(), workflowID, &result)
+	// Get workflow execution details
+	workflowDetails, err := h.temporalService.DescribeWorkflowExecution(c.Request.Context(), workflowID, "")
 	if err != nil {
 		c.Error(err)
 		return
 	}
 
-	c.JSON(http.StatusOK, &result)
+	c.JSON(http.StatusOK, gin.H{
+		"workflow_id": workflowID,
+		"details":     workflowDetails,
+	})
 }
