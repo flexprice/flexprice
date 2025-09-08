@@ -23,6 +23,7 @@ type TemporalClient interface {
 // WorkflowRun represents a running workflow instance
 type WorkflowRun interface {
 	GetID() string
+	GetRunID() string
 	Get(ctx context.Context, valuePtr interface{}) error
 	GetWithTimeout(ctx context.Context, timeout time.Duration, valuePtr interface{}) error
 }

@@ -7,7 +7,8 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
-	"github.com/flexprice/flexprice/internal/temporal"
+	temporalclient "github.com/flexprice/flexprice/internal/temporal/client"
+	"github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
@@ -15,13 +16,13 @@ import (
 
 type TaskHandler struct {
 	service         service.TaskService
-	temporalService *temporal.Service
+	temporalService *temporalclient.Service
 	log             *logger.Logger
 }
 
 func NewTaskHandler(
 	service service.TaskService,
-	temporalService *temporal.Service,
+	temporalService *temporalclient.Service,
 	log *logger.Logger,
 ) *TaskHandler {
 	return &TaskHandler{
@@ -58,7 +59,7 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 	}
 
 	// Start the temporal workflow for async processing
-	_, err = h.temporalService.StartTaskProcessingWorkflow(c.Request.Context(), resp.ID)
+	_, err = h.temporalService.ExecuteWorkflow(c.Request.Context(), types.TemporalTaskProcessingWorkflow, resp.ID)
 	if err != nil {
 		h.log.Error("failed to start temporal workflow", "error", err, "task_id", resp.ID)
 		// Don't fail the request, just log the error
@@ -222,11 +223,12 @@ func (h *TaskHandler) GetTaskProcessingResult(c *gin.Context) {
 		return
 	}
 
-	result, err := h.temporalService.GetTaskProcessingWorkflowResult(c.Request.Context(), workflowID)
+	var result models.TaskProcessingWorkflowResult
+	err := h.temporalService.GetWorkflowResult(c.Request.Context(), workflowID, &result)
 	if err != nil {
 		c.Error(err)
 		return
 	}
 
-	c.JSON(http.StatusOK, result)
+	c.JSON(http.StatusOK, &result)
 }
