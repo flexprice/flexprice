@@ -164,7 +164,6 @@ func main() {
 
 			// Temporal
 			provideTemporalClient,
-			provideTemporalService,
 
 			// Proration
 			proration.NewCalculator,
@@ -220,6 +219,7 @@ func main() {
 	// API and Temporal
 	opts = append(opts,
 		fx.Provide(
+			provideTemporalService,
 			provideHandlers,
 			provideRouter,
 			provideTemporalConfig,
@@ -361,13 +361,13 @@ func startServer(
 		startConsumer(lc, consumer, eventRepo, cfg, log, sentryService, eventPostProcessingSvc)
 		startMessageRouter(lc, router, webhookService, onboardingService, log)
 		startPostProcessingConsumer(lc, router, eventPostProcessingSvc, cfg, log)
-		startTemporalWorker(lc, temporalService, &cfg.Temporal, params)
+		startTemporalWorker(lc, temporalService)
 	case types.ModeAPI:
 		startAPIServer(lc, r, cfg, log)
 		startMessageRouter(lc, router, webhookService, onboardingService, log)
 
 	case types.ModeTemporalWorker:
-		startTemporalWorker(lc, temporalService, &cfg.Temporal, params)
+		startTemporalWorker(lc, temporalService)
 	case types.ModeConsumer:
 		if consumer == nil {
 			log.Fatal("Kafka consumer required for consumer mode")
@@ -387,8 +387,6 @@ func startServer(
 func startTemporalWorker(
 	lc fx.Lifecycle,
 	temporalService *temporalclient.Service,
-	cfg *config.TemporalConfig,
-	params service.ServiceParams,
 ) {
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
