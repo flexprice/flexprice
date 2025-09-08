@@ -361,13 +361,13 @@ func startServer(
 		startConsumer(lc, consumer, eventRepo, cfg, log, sentryService, eventPostProcessingSvc)
 		startMessageRouter(lc, router, webhookService, onboardingService, log)
 		startPostProcessingConsumer(lc, router, eventPostProcessingSvc, cfg, log)
-		startTemporalWorker(lc, temporalService)
+		startTemporalWorker(lc, temporalService, params)
 	case types.ModeAPI:
 		startAPIServer(lc, r, cfg, log)
 		startMessageRouter(lc, router, webhookService, onboardingService, log)
 
 	case types.ModeTemporalWorker:
-		startTemporalWorker(lc, temporalService)
+		startTemporalWorker(lc, temporalService, params)
 	case types.ModeConsumer:
 		if consumer == nil {
 			log.Fatal("Kafka consumer required for consumer mode")
@@ -387,10 +387,11 @@ func startServer(
 func startTemporalWorker(
 	lc fx.Lifecycle,
 	temporalService *temporalclient.TemporalService,
+	params service.ServiceParams,
 ) {
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			// Start workers for all workflow types
+			// Start workers for all workflow types first
 			workflowTypes := []types.TemporalWorkflowType{
 				types.TemporalTaskProcessingWorkflow,
 				types.TemporalPriceSyncWorkflow,
@@ -402,6 +403,12 @@ func startTemporalWorker(
 					return fmt.Errorf("failed to start worker for %s: %w", workflowType, err)
 				}
 			}
+
+			// Register workflows and activities after workers are created
+			if err := temporal.RegisterWorkflowsAndActivities(temporalService, params); err != nil {
+				return fmt.Errorf("failed to register workflows and activities: %w", err)
+			}
+
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {
