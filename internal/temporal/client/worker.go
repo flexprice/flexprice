@@ -11,85 +11,76 @@ import (
 	"go.uber.org/fx"
 )
 
-// WorkerManager manages global workers for different task queues
-type WorkerManager struct {
+// TemporalWorkerManager manages workers for different task queues
+type TemporalWorkerManager struct {
 	client  *temporal.TemporalClient
 	logger  *logger.Logger
-	workers map[string]*Worker
+	workers map[string]*TemporalWorker
 	mux     sync.RWMutex
 }
 
-// Worker wraps a temporal worker with additional functionality
-type Worker struct {
+// TemporalWorker wraps a temporal worker
+type TemporalWorker struct {
 	worker    worker.Worker
-	logger    *logger.Logger
 	taskQueue string
 	started   bool
 	mux       sync.RWMutex
+	logger    *logger.Logger
 }
 
-// NewWorkerManager creates a new worker manager instance
-func NewWorkerManager(client *temporal.TemporalClient, logger *logger.Logger) *WorkerManager {
-	return &WorkerManager{
+// NewTemporalWorkerManager creates a new worker manager instance
+func NewTemporalWorkerManager(client *temporal.TemporalClient, logger *logger.Logger) *TemporalWorkerManager {
+	return &TemporalWorkerManager{
 		client:  client,
 		logger:  logger,
-		workers: make(map[string]*Worker),
+		workers: make(map[string]*TemporalWorker),
 	}
 }
 
-// GetOrCreateWorker gets an existing worker or creates a new one for the task queue
-func (wm *WorkerManager) GetOrCreateWorker(taskQueue string) (*Worker, error) {
+// getOrCreateWorker gets an existing worker or creates a new one
+func (wm *TemporalWorkerManager) getOrCreateWorker(taskQueue string) (*TemporalWorker, error) {
 	if taskQueue == "" {
 		return nil, fmt.Errorf("task queue is required")
 	}
 
-	// Check if worker exists
-	wm.mux.RLock()
-	if w, exists := wm.workers[taskQueue]; exists {
-		wm.mux.RUnlock()
-		return w, nil
-	}
-	wm.mux.RUnlock()
-
-	// Create new worker
 	wm.mux.Lock()
 	defer wm.mux.Unlock()
 
-	// Double-check after acquiring write lock
 	if w, exists := wm.workers[taskQueue]; exists {
 		return w, nil
 	}
 
-	// Create worker with simple options
 	w := worker.New(wm.client.Client, taskQueue, worker.Options{})
-	workerInstance := &Worker{
+	workerInstance := &TemporalWorker{
 		worker:    w,
-		logger:    wm.logger,
 		taskQueue: taskQueue,
-		started:   false,
+		logger:    wm.logger,
 	}
 
 	wm.workers[taskQueue] = workerInstance
-	wm.logger.Info("Created worker for task queue", "task_queue", taskQueue)
+	wm.logger.Info("Created worker", "task_queue", taskQueue)
 	return workerInstance, nil
 }
 
 // StartWorker starts a worker for the given task queue
-func (wm *WorkerManager) StartWorker(taskQueue string) error {
-	worker, err := wm.GetOrCreateWorker(taskQueue)
+func (wm *TemporalWorkerManager) StartWorker(taskQueue string) error {
+	if taskQueue == "" {
+		return fmt.Errorf("task queue is required")
+	}
+	w, err := wm.getOrCreateWorker(taskQueue)
 	if err != nil {
 		return err
 	}
-	return worker.Start()
+	return w.Start()
 }
 
 // StopWorker stops a worker for the given task queue
-func (wm *WorkerManager) StopWorker(taskQueue string) error {
+func (wm *TemporalWorkerManager) StopWorker(taskQueue string) error {
 	wm.mux.Lock()
 	defer wm.mux.Unlock()
 
-	if worker, exists := wm.workers[taskQueue]; exists {
-		_ = worker.Stop() // Ignore error for simplicity
+	if w, exists := wm.workers[taskQueue]; exists {
+		w.Stop()
 		delete(wm.workers, taskQueue)
 		wm.logger.Info("Stopped worker", "task_queue", taskQueue)
 	}
@@ -97,40 +88,54 @@ func (wm *WorkerManager) StopWorker(taskQueue string) error {
 }
 
 // StopAllWorkers stops all workers
-func (wm *WorkerManager) StopAllWorkers() error {
+func (wm *TemporalWorkerManager) StopAllWorkers() error {
 	wm.mux.Lock()
 	defer wm.mux.Unlock()
 
-	for taskQueue, worker := range wm.workers {
-		_ = worker.Stop() // Ignore error for simplicity
+	for taskQueue, w := range wm.workers {
+		w.Stop()
 		wm.logger.Info("Stopped worker", "task_queue", taskQueue)
 	}
-	wm.workers = make(map[string]*Worker)
+	wm.workers = make(map[string]*TemporalWorker)
 	return nil
 }
 
 // RegisterWorkflow registers a workflow with a specific task queue worker
-func (wm *WorkerManager) RegisterWorkflow(taskQueue string, workflow interface{}) error {
-	worker, err := wm.GetOrCreateWorker(taskQueue)
+func (wm *TemporalWorkerManager) RegisterWorkflow(taskQueue string, workflow interface{}) error {
+	if taskQueue == "" {
+		return fmt.Errorf("task queue is required")
+	}
+	if workflow == nil {
+		return fmt.Errorf("workflow function is required")
+	}
+	w, err := wm.getOrCreateWorker(taskQueue)
 	if err != nil {
 		return err
 	}
-	worker.RegisterWorkflow(workflow)
+	w.worker.RegisterWorkflow(workflow)
+	wm.logger.Info("Registered workflow", "task_queue", taskQueue)
 	return nil
 }
 
 // RegisterActivity registers an activity with a specific task queue worker
-func (wm *WorkerManager) RegisterActivity(taskQueue string, activity interface{}) error {
-	worker, err := wm.GetOrCreateWorker(taskQueue)
+func (wm *TemporalWorkerManager) RegisterActivity(taskQueue string, activity interface{}) error {
+	if taskQueue == "" {
+		return fmt.Errorf("task queue is required")
+	}
+	if activity == nil {
+		return fmt.Errorf("activity function is required")
+	}
+	w, err := wm.getOrCreateWorker(taskQueue)
 	if err != nil {
 		return err
 	}
-	worker.RegisterActivity(activity)
+	w.worker.RegisterActivity(activity)
+	wm.logger.Info("Registered activity", "task_queue", taskQueue)
 	return nil
 }
 
 // GetWorkerStatus returns the status of all workers
-func (wm *WorkerManager) GetWorkerStatus() map[string]bool {
+func (wm *TemporalWorkerManager) GetWorkerStatus() map[string]bool {
 	wm.mux.RLock()
 	defer wm.mux.RUnlock()
 
@@ -142,7 +147,7 @@ func (wm *WorkerManager) GetWorkerStatus() map[string]bool {
 }
 
 // Start starts the worker
-func (w *Worker) Start() error {
+func (w *TemporalWorker) Start() error {
 	w.mux.Lock()
 	defer w.mux.Unlock()
 
@@ -150,12 +155,10 @@ func (w *Worker) Start() error {
 		return nil
 	}
 
-	w.logger.Info("Starting worker", "task_queue", w.taskQueue)
-
-	// Start worker in goroutine
 	go func() {
 		if err := w.worker.Start(); err != nil {
-			w.logger.Error("Worker failed", "task_queue", w.taskQueue, "error", err)
+			w.logger.Errorf("Failed to start worker: %v", err)
+			// Worker failed - this is expected during shutdown
 		}
 	}()
 
@@ -164,46 +167,32 @@ func (w *Worker) Start() error {
 }
 
 // Stop stops the worker
-func (w *Worker) Stop() error {
+func (w *TemporalWorker) Stop() {
 	w.mux.Lock()
 	defer w.mux.Unlock()
 
-	if !w.started {
-		return nil
+	if w.started {
+		w.worker.Stop()
+		w.started = false
 	}
-
-	w.logger.Info("Stopping worker", "task_queue", w.taskQueue)
-	w.worker.Stop()
-	w.started = false
-	return nil
 }
 
 // IsStarted returns whether the worker is started
-func (w *Worker) IsStarted() bool {
+func (w *TemporalWorker) IsStarted() bool {
 	w.mux.RLock()
 	defer w.mux.RUnlock()
 	return w.started
 }
 
-// RegisterWorkflow registers a workflow with the worker
-func (w *Worker) RegisterWorkflow(workflow interface{}) {
-	w.worker.RegisterWorkflow(workflow)
-}
-
-// RegisterActivity registers an activity with the worker
-func (w *Worker) RegisterActivity(activity interface{}) {
-	w.worker.RegisterActivity(activity)
-}
-
 // RegisterWithLifecycle registers the worker manager with fx lifecycle
-func (wm *WorkerManager) RegisterWithLifecycle(lc fx.Lifecycle) {
+func (wm *TemporalWorkerManager) RegisterWithLifecycle(lc fx.Lifecycle) {
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			wm.logger.Info("Worker manager started")
+			wm.logger.Info("Temporal worker manager started")
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {
-			wm.logger.Info("Worker manager stopping")
+			wm.logger.Info("Temporal worker manager stopping")
 			return wm.StopAllWorkers()
 		},
 	})

@@ -13,17 +13,17 @@ const (
 	defaultExecutionTimeout   = time.Hour
 )
 
-// DefaultWorkflowOptions returns default workflow options
-func DefaultWorkflowOptions() *WorkflowOptions {
-	return &WorkflowOptions{
+// DefaultTemporalWorkflowOptions returns default workflow options
+func DefaultTemporalWorkflowOptions() *TemporalWorkflowExecutionOptions {
+	return &TemporalWorkflowExecutionOptions{
 		ExecutionTimeout: defaultExecutionTimeout,
-		RetryPolicy:      DefaultRetryPolicy(),
+		RetryPolicy:      DefaultTemporalRetryPolicy(),
 	}
 }
 
-// DefaultRetryPolicy returns default retry policy
-func DefaultRetryPolicy() *RetryPolicy {
-	return &RetryPolicy{
+// DefaultTemporalRetryPolicy returns default retry policy
+func DefaultTemporalRetryPolicy() *TemporalRetryPolicy {
+	return &TemporalRetryPolicy{
 		InitialInterval:    defaultInitialInterval,
 		BackoffCoefficient: defaultBackoffCoefficient,
 		MaximumInterval:    defaultMaximumInterval,
@@ -31,28 +31,28 @@ func DefaultRetryPolicy() *RetryPolicy {
 	}
 }
 
-// DefaultStartWorkflowOptions returns default start workflow options
-func DefaultStartWorkflowOptions() *StartWorkflowOptions {
-	return &StartWorkflowOptions{
+// DefaultTemporalStartWorkflowOptions returns default start workflow options
+func DefaultTemporalStartWorkflowOptions() *TemporalStartWorkflowOptions {
+	return &TemporalStartWorkflowOptions{
 		ExecutionTimeout: defaultExecutionTimeout,
-		RetryPolicy:      DefaultRetryPolicy(),
+		RetryPolicy:      DefaultTemporalRetryPolicy(),
 	}
 }
 
-// NewWorkflowOptions creates a new workflow options with custom settings
-func NewWorkflowOptions(taskQueue string, timeout time.Duration) *WorkflowOptions {
+// NewTemporalWorkflowOptions creates a new workflow options with custom settings
+func NewTemporalWorkflowOptions(taskQueue string, timeout time.Duration) *TemporalWorkflowExecutionOptions {
 	if timeout <= 0 {
 		timeout = defaultExecutionTimeout
 	}
-	return &WorkflowOptions{
+	return &TemporalWorkflowExecutionOptions{
 		TaskQueue:        taskQueue,
 		ExecutionTimeout: timeout,
-		RetryPolicy:      DefaultRetryPolicy(),
+		RetryPolicy:      DefaultTemporalRetryPolicy(),
 	}
 }
 
-// NewRetryPolicy creates a new retry policy with custom settings
-func NewRetryPolicy(initialInterval time.Duration, backoffCoefficient float64, maxInterval time.Duration, maxAttempts int32) *RetryPolicy {
+// NewTemporalRetryPolicy creates a new retry policy with custom settings
+func NewTemporalRetryPolicy(initialInterval time.Duration, backoffCoefficient float64, maxInterval time.Duration, maxAttempts int32) *TemporalRetryPolicy {
 	if initialInterval <= 0 {
 		initialInterval = defaultInitialInterval
 	}
@@ -66,7 +66,7 @@ func NewRetryPolicy(initialInterval time.Duration, backoffCoefficient float64, m
 		maxAttempts = defaultMaximumAttempts
 	}
 
-	return &RetryPolicy{
+	return &TemporalRetryPolicy{
 		InitialInterval:    initialInterval,
 		BackoffCoefficient: backoffCoefficient,
 		MaximumInterval:    maxInterval,
@@ -75,13 +75,13 @@ func NewRetryPolicy(initialInterval time.Duration, backoffCoefficient float64, m
 }
 
 // WithNonRetryableErrors adds non-retryable error types to the retry policy
-func (rp *RetryPolicy) WithNonRetryableErrors(errorTypes ...string) *RetryPolicy {
+func (rp *TemporalRetryPolicy) WithNonRetryableErrors(errorTypes ...string) *TemporalRetryPolicy {
 	rp.NonRetryableErrorTypes = append(rp.NonRetryableErrorTypes, errorTypes...)
 	return rp
 }
 
 // Validate validates the retry policy
-func (rp *RetryPolicy) Validate() error {
+func (rp *TemporalRetryPolicy) Validate() error {
 	if rp.InitialInterval <= 0 {
 		return fmt.Errorf("initial interval must be positive")
 	}

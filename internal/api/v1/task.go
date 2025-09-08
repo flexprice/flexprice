@@ -16,13 +16,13 @@ import (
 
 type TaskHandler struct {
 	service         service.TaskService
-	temporalService *temporalclient.Service
+	temporalService *temporalclient.TemporalService
 	log             *logger.Logger
 }
 
 func NewTaskHandler(
 	service service.TaskService,
-	temporalService *temporalclient.Service,
+	temporalService *temporalclient.TemporalService,
 	log *logger.Logger,
 ) *TaskHandler {
 	return &TaskHandler{
