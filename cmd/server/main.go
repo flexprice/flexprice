@@ -29,6 +29,7 @@ import (
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/svix"
 	"github.com/flexprice/flexprice/internal/temporal"
+	temporalclient "github.com/flexprice/flexprice/internal/temporal/client"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/typst"
 	"github.com/flexprice/flexprice/internal/validator"
@@ -250,7 +251,7 @@ func provideHandlers(
 	walletService service.WalletService,
 	tenantService service.TenantService,
 	invoiceService service.InvoiceService,
-	temporalService *temporal.Service,
+	temporalService *temporalclient.Service,
 	featureService service.FeatureService,
 	entitlementService service.EntitlementService,
 	paymentService service.PaymentService,
@@ -289,7 +290,7 @@ func provideHandlers(
 		SubscriptionChange:       v1.NewSubscriptionChangeHandler(subscriptionChangeService, logger),
 		Wallet:                   v1.NewWalletHandler(walletService, logger),
 		Tenant:                   v1.NewTenantHandler(tenantService, logger),
-		Invoice:                  v1.NewInvoiceHandler(invoiceService, temporalService, logger),
+		Invoice:                  v1.NewInvoiceHandler(invoiceService, logger),
 		Feature:                  v1.NewFeatureHandler(featureService, logger),
 		Entitlement:              v1.NewEntitlementHandler(entitlementService, logger),
 		Payment:                  v1.NewPaymentHandler(paymentService, paymentProcessorService, logger),
@@ -297,8 +298,8 @@ func provideHandlers(
 		Secret:                   v1.NewSecretHandler(secretService, logger),
 		Tax:                      v1.NewTaxHandler(taxService, logger),
 		Onboarding:               v1.NewOnboardingHandler(onboardingService, logger),
-		CronSubscription:         cron.NewSubscriptionHandler(subscriptionService, temporalService, logger),
-		CronWallet:               cron.NewWalletCronHandler(logger, temporalService, walletService, tenantService, environmentService),
+		CronSubscription:         cron.NewSubscriptionHandler(subscriptionService, logger),
+		CronWallet:               cron.NewWalletCronHandler(logger, walletService, tenantService, environmentService),
 		CreditGrant:              v1.NewCreditGrantHandler(creditGrantService, logger),
 		CostSheet:                v1.NewCostSheetHandler(costSheetService, logger),
 		CronCreditGrant:          cron.NewCreditGrantCronHandler(creditGrantService, logger),
@@ -326,8 +327,8 @@ func provideTemporalClient(cfg *config.TemporalConfig, log *logger.Logger) (*tem
 	return temporal.NewTemporalClient(cfg, log)
 }
 
-func provideTemporalService(temporalClient *temporal.TemporalClient, cfg *config.TemporalConfig, log *logger.Logger, params service.ServiceParams) (*temporal.Service, error) {
-	return temporal.NewService(temporalClient, cfg, log, params)
+func provideTemporalService(cfg *config.TemporalConfig, log *logger.Logger, params service.ServiceParams) (*temporalclient.Service, error) {
+	return temporalclient.InitService(cfg, log, params)
 }
 
 func startServer(
@@ -337,7 +338,7 @@ func startServer(
 	consumer kafka.MessageConsumer,
 	eventRepo events.Repository,
 	temporalClient *temporal.TemporalClient,
-	temporalService *temporal.Service,
+	temporalService *temporalclient.Service,
 	webhookService *webhook.WebhookService,
 	router *pubsubRouter.Router,
 	onboardingService service.OnboardingService,
@@ -360,13 +361,13 @@ func startServer(
 		startConsumer(lc, consumer, eventRepo, cfg, log, sentryService, eventPostProcessingSvc)
 		startMessageRouter(lc, router, webhookService, onboardingService, log)
 		startPostProcessingConsumer(lc, router, eventPostProcessingSvc, cfg, log)
-		startTemporalWorker(lc, temporalClient, &cfg.Temporal, params)
+		startTemporalWorker(lc, temporalService, &cfg.Temporal, params)
 	case types.ModeAPI:
 		startAPIServer(lc, r, cfg, log)
 		startMessageRouter(lc, router, webhookService, onboardingService, log)
 
 	case types.ModeTemporalWorker:
-		startTemporalWorker(lc, temporalClient, &cfg.Temporal, params)
+		startTemporalWorker(lc, temporalService, &cfg.Temporal, params)
 	case types.ModeConsumer:
 		if consumer == nil {
 			log.Fatal("Kafka consumer required for consumer mode")
@@ -385,12 +386,30 @@ func startServer(
 
 func startTemporalWorker(
 	lc fx.Lifecycle,
-	temporalClient *temporal.TemporalClient,
+	temporalService *temporalclient.Service,
 	cfg *config.TemporalConfig,
 	params service.ServiceParams,
 ) {
-	worker := temporal.NewWorker(temporalClient, *cfg, params)
-	worker.RegisterWithLifecycle(lc)
+	lc.Append(fx.Hook{
+		OnStart: func(ctx context.Context) error {
+			// Start workers for all workflow types
+			workflowTypes := []types.TemporalWorkflowType{
+				types.TemporalTaskProcessingWorkflow,
+				types.TemporalPriceSyncWorkflow,
+				types.TemporalBillingWorkflow,
+			}
+
+			for _, workflowType := range workflowTypes {
+				if err := temporalService.StartWorker(workflowType.TaskQueueName()); err != nil {
+					return fmt.Errorf("failed to start worker for %s: %w", workflowType, err)
+				}
+			}
+			return nil
+		},
+		OnStop: func(ctx context.Context) error {
+			return temporalService.StopAllWorkers()
+		},
+	})
 }
 
 func startAPIServer(

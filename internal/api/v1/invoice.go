@@ -8,7 +8,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
-	"github.com/flexprice/flexprice/internal/temporal"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
@@ -16,14 +15,12 @@ import (
 
 type InvoiceHandler struct {
 	invoiceService  service.InvoiceService
-	temporalService *temporal.Service
 	logger          *logger.Logger
 }
 
-func NewInvoiceHandler(invoiceService service.InvoiceService, temporalService *temporal.Service, logger *logger.Logger) *InvoiceHandler {
+func NewInvoiceHandler(invoiceService service.InvoiceService, logger *logger.Logger) *InvoiceHandler {
 	return &InvoiceHandler{
 		invoiceService:  invoiceService,
-		temporalService: temporalService,
 		logger:          logger,
 	}
 }

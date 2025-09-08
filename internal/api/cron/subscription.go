@@ -5,26 +5,22 @@ import (
 
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
-	"github.com/flexprice/flexprice/internal/temporal"
 	"github.com/gin-gonic/gin"
 )
 
 // SubscriptionHandler handles subscription related cron jobs
 type SubscriptionHandler struct {
 	subscriptionService service.SubscriptionService
-	temporalService     *temporal.Service
 	logger              *logger.Logger
 }
 
 // NewSubscriptionHandler creates a new subscription handler
 func NewSubscriptionHandler(
 	subscriptionService service.SubscriptionService,
-	temporalService *temporal.Service,
 	logger *logger.Logger,
 ) *SubscriptionHandler {
 	return &SubscriptionHandler{
 		subscriptionService: subscriptionService,
-		temporalService:     temporalService,
 		logger:              logger,
 	}
 }

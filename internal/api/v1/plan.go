@@ -7,7 +7,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
-	"github.com/flexprice/flexprice/internal/temporal"
+	temporalclient "github.com/flexprice/flexprice/internal/temporal/client"
 	_ "github.com/flexprice/flexprice/internal/temporal/models" // Used in Swagger documentation
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
@@ -18,7 +18,7 @@ type PlanHandler struct {
 	service            service.PlanService
 	entitlementService service.EntitlementService
 	creditGrantService service.CreditGrantService
-	temporalService    *temporal.Service
+	temporalService    *temporalclient.Service
 	log                *logger.Logger
 }
 
@@ -26,7 +26,7 @@ func NewPlanHandler(
 	service service.PlanService,
 	entitlementService service.EntitlementService,
 	creditGrantService service.CreditGrantService,
-	temporalService *temporal.Service,
+	temporalService *temporalclient.Service,
 	log *logger.Logger,
 ) *PlanHandler {
 	return &PlanHandler{
@@ -283,13 +283,13 @@ func (h *PlanHandler) SyncPlanPrices(c *gin.Context) {
 		return
 	}
 
-	result, err := h.temporalService.StartPlanPriceSync(c.Request.Context(), id)
+	_, err := h.temporalService.ExecuteWorkflow(c.Request.Context(), types.TemporalPriceSyncWorkflow, id)
 	if err != nil {
 		c.Error(err)
 		return
 	}
 
-	c.JSON(http.StatusOK, result)
+	c.JSON(http.StatusOK, gin.H{"message": "price sync workflow started successfully"})
 }
 
 // @Summary List plans by filter
