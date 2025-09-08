@@ -7,6 +7,30 @@ import (
 	"go.temporal.io/sdk/client"
 )
 
+// SimpleTemporalClient - Ultra-simple interface for external dependencies
+type SimpleTemporalClient interface {
+	// Execute a workflow - that's it!
+	ExecuteWorkflow(ctx context.Context, workflowName string, input interface{}) (WorkflowResult, error)
+
+	// Get workflow result
+	GetResult(ctx context.Context, workflowID string, result interface{}) error
+
+	// Close the client
+	Close() error
+}
+
+// WorkflowResult - Simple result interface
+type WorkflowResult interface {
+	GetID() string
+	GetRunID() string
+}
+
+// WorkflowOptions - Simple options for advanced users
+type WorkflowOptions struct {
+	Timeout    time.Duration `json:"timeout,omitempty"`
+	MaxRetries int           `json:"max_retries,omitempty"`
+}
+
 // TemporalClientInterface defines the interface for interacting with Temporal
 type TemporalClientInterface interface {
 	// Core workflow execution methods

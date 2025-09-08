@@ -36,57 +36,56 @@ func GetTemporalClient(cfg *config.TemporalConfig, log *logger.Logger) (*tempora
 	return globalClient, err
 }
 
-// ExecuteTemporalWorkflow executes a workflow with default options
-func ExecuteTemporalWorkflow(c *temporal.TemporalClient, ctx context.Context, workflowName string, input interface{}) (client.WorkflowRun, error) {
-	return ExecuteTemporalWorkflowWithOptions(c, ctx, workflowName, input, DefaultTemporalStartWorkflowOptions())
-}
-
-// ExecuteTemporalWorkflowWithOptions executes a workflow with custom options
-func ExecuteTemporalWorkflowWithOptions(c *temporal.TemporalClient, ctx context.Context, workflowName string, input interface{}, options *TemporalStartWorkflowOptions) (client.WorkflowRun, error) {
-	if options == nil {
-		options = DefaultTemporalStartWorkflowOptions()
+// ExecuteWorkflow executes a temporal workflow with optional configuration
+func ExecuteWorkflow(c *temporal.TemporalClient, ctx context.Context, workflowName string, input interface{}, options ...*TemporalStartWorkflowOptions) (client.WorkflowRun, error) {
+	// Set default options if none provided
+	var opts *TemporalStartWorkflowOptions
+	if len(options) > 0 && options[0] != nil {
+		opts = options[0]
+	} else {
+		opts = DefaultTemporalStartWorkflowOptions()
 	}
 
-	// Validate workflow name
+	// Validate inputs
 	if workflowName == "" {
-		return nil, fmt.Errorf("workflow name cannot be empty - provide a valid workflow name")
+		return nil, fmt.Errorf("workflow name is required")
 	}
-
-	// Validate input
 	if input == nil {
-		return nil, fmt.Errorf("workflow input cannot be nil - provide valid input data")
+		return nil, fmt.Errorf("workflow input is required")
 	}
 
-	// Generate workflow ID if not provided
+	// Generate workflow ID
 	workflowID := generateTemporalWorkflowID(workflowName, ctx)
 
-	// Validate required fields
-	if options.ExecutionTimeout <= 0 {
-		options.ExecutionTimeout = time.Hour // Default timeout
+	// Set default timeout if not provided
+	if opts.ExecutionTimeout <= 0 {
+		opts.ExecutionTimeout = time.Hour
 	}
 
+	// Build temporal workflow options
 	temporalOptions := &client.StartWorkflowOptions{
 		ID:                 workflowID,
-		WorkflowRunTimeout: options.ExecutionTimeout,
+		WorkflowRunTimeout: opts.ExecutionTimeout,
 	}
 
 	// Add retry policy if provided
-	if options.RetryPolicy != nil {
-		if err := options.RetryPolicy.Validate(); err != nil {
-			return nil, fmt.Errorf("invalid retry policy: %w - check retry policy configuration", err)
+	if opts.RetryPolicy != nil {
+		if err := opts.RetryPolicy.Validate(); err != nil {
+			return nil, fmt.Errorf("invalid retry policy: %w", err)
 		}
 		temporalOptions.RetryPolicy = &temporalsdk.RetryPolicy{
-			InitialInterval:        options.RetryPolicy.InitialInterval,
-			BackoffCoefficient:     options.RetryPolicy.BackoffCoefficient,
-			MaximumInterval:        options.RetryPolicy.MaximumInterval,
-			MaximumAttempts:        options.RetryPolicy.MaximumAttempts,
-			NonRetryableErrorTypes: options.RetryPolicy.NonRetryableErrorTypes,
+			InitialInterval:        opts.RetryPolicy.InitialInterval,
+			BackoffCoefficient:     opts.RetryPolicy.BackoffCoefficient,
+			MaximumInterval:        opts.RetryPolicy.MaximumInterval,
+			MaximumAttempts:        opts.RetryPolicy.MaximumAttempts,
+			NonRetryableErrorTypes: opts.RetryPolicy.NonRetryableErrorTypes,
 		}
 	}
 
+	// Execute the workflow
 	run, err := c.Client.ExecuteWorkflow(ctx, *temporalOptions, workflowName, input)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute temporal workflow '%s' with ID '%s': %w - check temporal server connectivity and workflow registration", workflowName, workflowID, err)
+		return nil, fmt.Errorf("failed to execute workflow '%s': %w", workflowName, err)
 	}
 
 	return run, nil
