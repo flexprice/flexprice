@@ -29,7 +29,10 @@ import (
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/svix"
 	"github.com/flexprice/flexprice/internal/temporal"
-	temporalclient "github.com/flexprice/flexprice/internal/temporal/client"
+	"github.com/flexprice/flexprice/internal/temporal/client"
+	"github.com/flexprice/flexprice/internal/temporal/models"
+	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
+	"github.com/flexprice/flexprice/internal/temporal/worker"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/typst"
 	"github.com/flexprice/flexprice/internal/validator"
@@ -162,8 +165,10 @@ func main() {
 			// PubSub
 			pubsubRouter.NewRouter,
 
-			// Temporal
+			// Temporal components
 			provideTemporalClient,
+			provideTemporalWorkerManager,
+			provideTemporalService,
 
 			// Proration
 			proration.NewCalculator,
@@ -216,10 +221,9 @@ func main() {
 		),
 	)
 
-	// API and Temporal
+	// API layer
 	opts = append(opts,
 		fx.Provide(
-			provideTemporalService,
 			provideHandlers,
 			provideRouter,
 			provideTemporalConfig,
@@ -251,7 +255,7 @@ func provideHandlers(
 	walletService service.WalletService,
 	tenantService service.TenantService,
 	invoiceService service.InvoiceService,
-	temporalService *temporalclient.TemporalService,
+	temporalService temporalservice.TemporalService,
 	featureService service.FeatureService,
 	entitlementService service.EntitlementService,
 	paymentService service.PaymentService,
@@ -323,12 +327,40 @@ func provideTemporalConfig(cfg *config.Configuration) *config.TemporalConfig {
 	return &cfg.Temporal
 }
 
-func provideTemporalClient(cfg *config.TemporalConfig, log *logger.Logger) (*temporal.TemporalClient, error) {
-	return temporal.NewTemporalClient(cfg, log)
+func provideTemporalClient(cfg *config.TemporalConfig, log *logger.Logger) (client.TemporalClient, error) {
+	log.Info("Initializing Temporal client", "address", cfg.Address, "namespace", cfg.Namespace)
+
+	// Use default options and merge with config
+	options := models.DefaultClientOptions()
+	if cfg.Address != "" {
+		options.Address = cfg.Address
+	}
+	if cfg.Namespace != "" {
+		options.Namespace = cfg.Namespace
+	}
+	if cfg.APIKey != "" {
+		options.APIKey = cfg.APIKey
+	}
+	options.TLS = cfg.TLS
+
+	// Create client factory and client
+	factory := client.NewTemporalClientFactory(log)
+	temporalClient, err := factory.CreateClient(options)
+	if err != nil {
+		log.Error("Failed to create Temporal client", "error", err)
+		return nil, fmt.Errorf("failed to create temporal client: %w", err)
+	}
+
+	log.Info("Temporal client created successfully")
+	return temporalClient, nil
 }
 
-func provideTemporalService(cfg *config.TemporalConfig, log *logger.Logger, params service.ServiceParams) (*temporalclient.TemporalService, error) {
-	return temporalclient.InitTemporalService(cfg, log, params)
+func provideTemporalWorkerManager(temporalClient client.TemporalClient, log *logger.Logger) worker.TemporalWorkerManager {
+	return worker.NewTemporalWorkerManager(temporalClient, log)
+}
+
+func provideTemporalService(temporalClient client.TemporalClient, workerManager worker.TemporalWorkerManager, log *logger.Logger) temporalservice.TemporalService {
+	return temporalservice.NewTemporalService(temporalClient, workerManager, log)
 }
 
 func startServer(
@@ -337,8 +369,8 @@ func startServer(
 	r *gin.Engine,
 	consumer kafka.MessageConsumer,
 	eventRepo events.Repository,
-	temporalClient *temporal.TemporalClient,
-	temporalService *temporalclient.TemporalService,
+	temporalClient client.TemporalClient,
+	temporalService temporalservice.TemporalService,
 	webhookService *webhook.WebhookService,
 	router *pubsubRouter.Router,
 	onboardingService service.OnboardingService,
@@ -386,25 +418,29 @@ func startServer(
 
 func startTemporalWorker(
 	lc fx.Lifecycle,
-	temporalService *temporalclient.TemporalService,
+	temporalService temporalservice.TemporalService,
 	params service.ServiceParams,
 ) {
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			// Start workers for all workflow types first
+			// Define workflow types to initialize
 			workflowTypes := []types.TemporalWorkflowType{
 				types.TemporalTaskProcessingWorkflow,
 				types.TemporalPriceSyncWorkflow,
 				types.TemporalBillingWorkflow,
 			}
 
+			// Start workers and register workflows/activities for each type
 			for _, workflowType := range workflowTypes {
-				if err := temporalService.StartWorker(workflowType.TaskQueueName()); err != nil {
+				taskQueueName := workflowType.TaskQueueName()
+
+				// Start worker for this task queue
+				if err := temporalService.StartWorker(taskQueueName); err != nil {
 					return fmt.Errorf("failed to start worker for %s: %w", workflowType, err)
 				}
 			}
 
-			// Register workflows and activities after workers are created
+			// Register workflows and activities using existing registration function
 			if err := temporal.RegisterWorkflowsAndActivities(temporalService, params); err != nil {
 				return fmt.Errorf("failed to register workflows and activities: %w", err)
 			}

@@ -2,113 +2,170 @@ package client
 
 import (
 	"context"
-	"fmt"
+	"crypto/tls"
 	"sync"
-	"time"
 
-	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/temporal"
-	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/temporal/models"
+	"go.temporal.io/api/enums/v1"
+	"go.temporal.io/api/workflowservice/v1"
 	"go.temporal.io/sdk/client"
-	temporalsdk "go.temporal.io/sdk/temporal"
 )
 
-var (
-	globalClient     *temporal.TemporalClient
-	globalClientOnce sync.Once
-	globalClientMux  sync.RWMutex
-)
-
-// GetTemporalClient returns the global temporal client instance, creating it if necessary
-func GetTemporalClient(cfg *config.TemporalConfig, log *logger.Logger) (*temporal.TemporalClient, error) {
-	globalClientMux.RLock()
-	if globalClient != nil {
-		defer globalClientMux.RUnlock()
-		return globalClient, nil
-	}
-	globalClientMux.RUnlock()
-
-	var err error
-	globalClientOnce.Do(func() {
-		globalClient, err = temporal.NewTemporalClient(cfg, log)
-	})
-	return globalClient, err
+// temporalClientImpl implements the TemporalClient interface
+type temporalClientImpl struct {
+	client     client.Client
+	logger     *logger.Logger
+	isStarted  bool
+	startMutex sync.Mutex
 }
 
-// ExecuteWorkflow executes a temporal workflow with optional configuration
-func ExecuteWorkflow(c *temporal.TemporalClient, ctx context.Context, workflowName string, input interface{}, options ...*TemporalStartWorkflowOptions) (client.WorkflowRun, error) {
-	// Set default options if none provided
-	var opts *TemporalStartWorkflowOptions
-	if len(options) > 0 && options[0] != nil {
-		opts = options[0]
-	} else {
-		opts = DefaultTemporalStartWorkflowOptions()
+// temporalClientFactory implements the TemporalClientFactory interface
+type temporalClientFactory struct {
+	logger *logger.Logger
+}
+
+// NewTemporalClientFactory creates a new factory for temporal clients
+func NewTemporalClientFactory(logger *logger.Logger) TemporalClientFactory {
+	return &temporalClientFactory{
+		logger: logger,
+	}
+}
+
+// CreateClient implements TemporalClientFactory
+func (f *temporalClientFactory) CreateClient(options *models.ClientOptions) (TemporalClient, error) {
+	f.logger.Info("Creating new temporal client", "namespace", options.Namespace)
+
+	// Convert our options to SDK options
+	sdkOptions := client.Options{
+		HostPort:      options.Address,
+		Namespace:     options.Namespace,
+		DataConverter: options.DataConverter,
+		HeadersProvider: &models.APIKeyProvider{
+			APIKey:    options.APIKey,
+			Namespace: options.Namespace,
+		},
 	}
 
-	// Validate inputs
-	if workflowName == "" {
-		return nil, fmt.Errorf("workflow name is required")
-	}
-	if input == nil {
-		return nil, fmt.Errorf("workflow input is required")
+	// Configure TLS if enabled
+	if options.TLS {
+		sdkOptions.ConnectionOptions.TLS = &tls.Config{}
 	}
 
-	// Generate workflow ID
-	workflowID := generateTemporalWorkflowID(workflowName, ctx)
-
-	// Set default timeout if not provided
-	if opts.ExecutionTimeout <= 0 {
-		opts.ExecutionTimeout = time.Hour
-	}
-
-	// Build temporal workflow options
-	temporalOptions := &client.StartWorkflowOptions{
-		ID:                 workflowID,
-		WorkflowRunTimeout: opts.ExecutionTimeout,
-	}
-
-	// Add retry policy if provided
-	if opts.RetryPolicy != nil {
-		if err := opts.RetryPolicy.Validate(); err != nil {
-			return nil, fmt.Errorf("invalid retry policy: %w", err)
-		}
-		temporalOptions.RetryPolicy = &temporalsdk.RetryPolicy{
-			InitialInterval:        opts.RetryPolicy.InitialInterval,
-			BackoffCoefficient:     opts.RetryPolicy.BackoffCoefficient,
-			MaximumInterval:        opts.RetryPolicy.MaximumInterval,
-			MaximumAttempts:        opts.RetryPolicy.MaximumAttempts,
-			NonRetryableErrorTypes: opts.RetryPolicy.NonRetryableErrorTypes,
-		}
-	}
-
-	// Execute the workflow
-	run, err := c.Client.ExecuteWorkflow(ctx, *temporalOptions, workflowName, input)
+	// Create the temporal client
+	c, err := client.Dial(sdkOptions)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute workflow '%s': %w", workflowName, err)
+		f.logger.Error("Failed to create temporal client", "error", err)
+		return nil, err
 	}
 
-	return run, nil
+	return &temporalClientImpl{
+		client: c,
+		logger: f.logger,
+	}, nil
 }
 
-// generateTemporalWorkflowID generates a unique workflow ID for temporal workflows
-func generateTemporalWorkflowID(workflowName string, ctx context.Context) string {
-	tenantID := types.GetTenantID(ctx)
-	if tenantID == "" {
-		tenantID = "unknown"
-	}
-	return fmt.Sprintf("%s-%s-%d", workflowName, tenantID, time.Now().Unix())
-}
+// Start implements TemporalClient
+func (c *temporalClientImpl) Start(ctx context.Context) error {
+	c.startMutex.Lock()
+	defer c.startMutex.Unlock()
 
-// Validate validates the temporal start workflow options
-func (o *TemporalStartWorkflowOptions) Validate() error {
-	if o.ExecutionTimeout <= 0 {
-		return fmt.Errorf("execution timeout must be positive - provide a valid timeout duration")
+	if c.isStarted {
+		return nil
 	}
-	if o.RetryPolicy != nil {
-		if err := o.RetryPolicy.Validate(); err != nil {
-			return fmt.Errorf("retry policy validation failed: %w", err)
-		}
+
+	// Check health to ensure connection is working
+	if _, err := c.client.CheckHealth(ctx, &client.CheckHealthRequest{}); err != nil {
+		c.logger.Error("Failed to check client health during start", "error", err)
+		return err
 	}
+
+	c.isStarted = true
+	c.logger.Info("Temporal client started successfully")
 	return nil
+}
+
+// Stop implements TemporalClient
+func (c *temporalClientImpl) Stop(ctx context.Context) error {
+	c.startMutex.Lock()
+	defer c.startMutex.Unlock()
+
+	if !c.isStarted {
+		return nil
+	}
+
+	c.client.Close()
+	c.isStarted = false
+	c.logger.Info("Temporal client stopped successfully")
+	return nil
+}
+
+// IsHealthy implements TemporalClient
+func (c *temporalClientImpl) IsHealthy(ctx context.Context) bool {
+	_, err := c.client.CheckHealth(ctx, &client.CheckHealthRequest{})
+	return err == nil
+}
+
+// StartWorkflow implements TemporalClient
+func (c *temporalClientImpl) StartWorkflow(ctx context.Context, options models.StartWorkflowOptions, workflow interface{}, args ...interface{}) (models.WorkflowRun, error) {
+	run, err := c.client.ExecuteWorkflow(ctx, options.ToSDKOptions(), workflow, args...)
+	if err != nil {
+		return nil, err
+	}
+	return models.NewWorkflowRun(run), nil
+}
+
+// SignalWorkflow implements TemporalClient
+func (c *temporalClientImpl) SignalWorkflow(ctx context.Context, workflowID, runID, signalName string, arg interface{}) error {
+	return c.client.SignalWorkflow(ctx, workflowID, runID, signalName, arg)
+}
+
+// QueryWorkflow implements TemporalClient
+func (c *temporalClientImpl) QueryWorkflow(ctx context.Context, workflowID, runID, queryType string, args ...interface{}) (interface{}, error) {
+	response, err := c.client.QueryWorkflow(ctx, workflowID, runID, queryType, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	var result interface{}
+	if err := response.Get(&result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// CancelWorkflow implements TemporalClient
+func (c *temporalClientImpl) CancelWorkflow(ctx context.Context, workflowID, runID string) error {
+	return c.client.CancelWorkflow(ctx, workflowID, runID)
+}
+
+// TerminateWorkflow implements TemporalClient
+func (c *temporalClientImpl) TerminateWorkflow(ctx context.Context, workflowID, runID, reason string, details ...interface{}) error {
+	return c.client.TerminateWorkflow(ctx, workflowID, runID, reason, details...)
+}
+
+// CompleteActivity implements TemporalClient
+func (c *temporalClientImpl) CompleteActivity(ctx context.Context, taskToken []byte, result interface{}, err error) error {
+	return c.client.CompleteActivity(ctx, taskToken, result, err)
+}
+
+// RecordActivityHeartbeat implements TemporalClient
+func (c *temporalClientImpl) RecordActivityHeartbeat(ctx context.Context, taskToken []byte, details ...interface{}) error {
+	return c.client.RecordActivityHeartbeat(ctx, taskToken, details...)
+}
+
+// GetWorkflowHistory implements TemporalClient
+func (c *temporalClientImpl) GetWorkflowHistory(ctx context.Context, workflowID, runID string) (client.HistoryEventIterator, error) {
+	iter := c.client.GetWorkflowHistory(ctx, workflowID, runID, true, enums.HISTORY_EVENT_FILTER_TYPE_ALL_EVENT)
+	return iter, nil
+}
+
+// DescribeWorkflowExecution implements TemporalClient
+func (c *temporalClientImpl) DescribeWorkflowExecution(ctx context.Context, workflowID, runID string) (*workflowservice.DescribeWorkflowExecutionResponse, error) {
+	return c.client.DescribeWorkflowExecution(ctx, workflowID, runID)
+}
+
+// GetRawClient implements TemporalClient
+func (c *temporalClientImpl) GetRawClient() client.Client {
+	return c.client
 }

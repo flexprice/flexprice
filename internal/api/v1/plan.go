@@ -1,14 +1,16 @@
 package v1
 
 import (
+	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
-	temporalclient "github.com/flexprice/flexprice/internal/temporal/client"
-	_ "github.com/flexprice/flexprice/internal/temporal/models" // Used in Swagger documentation
+	"github.com/flexprice/flexprice/internal/temporal/models"
+	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
@@ -18,7 +20,7 @@ type PlanHandler struct {
 	service            service.PlanService
 	entitlementService service.EntitlementService
 	creditGrantService service.CreditGrantService
-	temporalService    *temporalclient.TemporalService
+	temporalService    temporalservice.TemporalService
 	log                *logger.Logger
 }
 
@@ -26,7 +28,7 @@ func NewPlanHandler(
 	service service.PlanService,
 	entitlementService service.EntitlementService,
 	creditGrantService service.CreditGrantService,
-	temporalService *temporalclient.TemporalService,
+	temporalService temporalservice.TemporalService,
 	log *logger.Logger,
 ) *PlanHandler {
 	return &PlanHandler{
@@ -283,13 +285,24 @@ func (h *PlanHandler) SyncPlanPrices(c *gin.Context) {
 		return
 	}
 
-	_, err := h.temporalService.ExecuteWorkflow(c.Request.Context(), types.TemporalPriceSyncWorkflow, id)
+	// Create workflow options
+	workflowOptions := models.StartWorkflowOptions{
+		ID:        fmt.Sprintf("price-sync-%s-%d", id, time.Now().Unix()),
+		TaskQueue: types.TemporalPriceSyncWorkflow.TaskQueueName(),
+	}
+
+	// Start the price sync workflow
+	workflowRun, err := h.temporalService.StartWorkflow(c.Request.Context(), workflowOptions, types.TemporalPriceSyncWorkflow.String(), id)
 	if err != nil {
 		c.Error(err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "price sync workflow started successfully"})
+	c.JSON(http.StatusOK, gin.H{
+		"message":     "price sync workflow started successfully",
+		"workflow_id": workflowRun.GetID(),
+		"run_id":      workflowRun.GetRunID(),
+	})
 }
 
 // @Summary List plans by filter
