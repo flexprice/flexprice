@@ -65,7 +65,7 @@ func InitService(cfg *config.TemporalConfig, log *logger.Logger, params service.
 		}
 
 		// Initialize worker manager
-		workerManager := InitWorkerManager(client, log)
+		workerManager := NewWorkerManager(client, log)
 
 		globalService = &Service{
 			client:        client,
@@ -497,6 +497,14 @@ func (s *Service) isInitialized() bool {
 	s.initMux.RLock()
 	defer s.initMux.RUnlock()
 	return s.initialized
+}
+
+// GetWorkerManager returns the worker manager instance
+func (s *Service) GetWorkerManager() *WorkerManager {
+	if !s.isInitialized() {
+		return nil
+	}
+	return s.workerManager
 }
 
 // ValidateServiceState validates that the service is properly initialized

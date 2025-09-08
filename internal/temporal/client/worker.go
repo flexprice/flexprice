@@ -11,11 +11,6 @@ import (
 	"go.uber.org/fx"
 )
 
-var (
-	globalWorkerManager *WorkerManager
-	workerManagerOnce   sync.Once
-)
-
 // WorkerManager manages global workers for different task queues
 type WorkerManager struct {
 	client  *temporal.TemporalClient
@@ -33,21 +28,13 @@ type Worker struct {
 	mux       sync.RWMutex
 }
 
-// GetWorkerManager returns the global worker manager instance
-func GetWorkerManager() *WorkerManager {
-	return globalWorkerManager
-}
-
-// InitWorkerManager initializes the global worker manager
-func InitWorkerManager(client *temporal.TemporalClient, logger *logger.Logger) *WorkerManager {
-	workerManagerOnce.Do(func() {
-		globalWorkerManager = &WorkerManager{
-			client:  client,
-			logger:  logger,
-			workers: make(map[string]*Worker),
-		}
-	})
-	return globalWorkerManager
+// NewWorkerManager creates a new worker manager instance
+func NewWorkerManager(client *temporal.TemporalClient, logger *logger.Logger) *WorkerManager {
+	return &WorkerManager{
+		client:  client,
+		logger:  logger,
+		workers: make(map[string]*Worker),
+	}
 }
 
 // GetOrCreateWorker gets an existing worker or creates a new one for the task queue
