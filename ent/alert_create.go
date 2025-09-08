@@ -150,23 +150,9 @@ func (ac *AlertCreate) SetNillableAlertState(s *string) *AlertCreate {
 	return ac
 }
 
-// SetAlertEnabled sets the "alert_enabled" field.
-func (ac *AlertCreate) SetAlertEnabled(b bool) *AlertCreate {
-	ac.mutation.SetAlertEnabled(b)
-	return ac
-}
-
-// SetNillableAlertEnabled sets the "alert_enabled" field if the given value is not nil.
-func (ac *AlertCreate) SetNillableAlertEnabled(b *bool) *AlertCreate {
-	if b != nil {
-		ac.SetAlertEnabled(*b)
-	}
-	return ac
-}
-
-// SetAlertData sets the "alert_data" field.
-func (ac *AlertCreate) SetAlertData(m map[string]interface{}) *AlertCreate {
-	ac.mutation.SetAlertData(m)
+// SetAlertInfo sets the "alert_info" field.
+func (ac *AlertCreate) SetAlertInfo(m map[string]interface{}) *AlertCreate {
+	ac.mutation.SetAlertInfo(m)
 	return ac
 }
 
@@ -231,10 +217,6 @@ func (ac *AlertCreate) defaults() {
 		v := alert.DefaultAlertState
 		ac.mutation.SetAlertState(v)
 	}
-	if _, ok := ac.mutation.AlertEnabled(); !ok {
-		v := alert.DefaultAlertEnabled
-		ac.mutation.SetAlertEnabled(v)
-	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -279,9 +261,6 @@ func (ac *AlertCreate) check() error {
 		if err := alert.AlertStateValidator(v); err != nil {
 			return &ValidationError{Name: "alert_state", err: fmt.Errorf(`ent: validator failed for field "Alert.alert_state": %w`, err)}
 		}
-	}
-	if _, ok := ac.mutation.AlertEnabled(); !ok {
-		return &ValidationError{Name: "alert_enabled", err: errors.New(`ent: missing required field "Alert.alert_enabled"`)}
 	}
 	return nil
 }
@@ -362,13 +341,9 @@ func (ac *AlertCreate) createSpec() (*Alert, *sqlgraph.CreateSpec) {
 		_spec.SetField(alert.FieldAlertState, field.TypeString, value)
 		_node.AlertState = value
 	}
-	if value, ok := ac.mutation.AlertEnabled(); ok {
-		_spec.SetField(alert.FieldAlertEnabled, field.TypeBool, value)
-		_node.AlertEnabled = value
-	}
-	if value, ok := ac.mutation.AlertData(); ok {
-		_spec.SetField(alert.FieldAlertData, field.TypeJSON, value)
-		_node.AlertData = value
+	if value, ok := ac.mutation.AlertInfo(); ok {
+		_spec.SetField(alert.FieldAlertInfo, field.TypeJSON, value)
+		_node.AlertInfo = value
 	}
 	return _node, _spec
 }

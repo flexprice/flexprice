@@ -68,94 +68,6 @@ func (au *AlertUpdate) ClearUpdatedBy() *AlertUpdate {
 	return au
 }
 
-// SetEntityType sets the "entity_type" field.
-func (au *AlertUpdate) SetEntityType(s string) *AlertUpdate {
-	au.mutation.SetEntityType(s)
-	return au
-}
-
-// SetNillableEntityType sets the "entity_type" field if the given value is not nil.
-func (au *AlertUpdate) SetNillableEntityType(s *string) *AlertUpdate {
-	if s != nil {
-		au.SetEntityType(*s)
-	}
-	return au
-}
-
-// SetEntityID sets the "entity_id" field.
-func (au *AlertUpdate) SetEntityID(s string) *AlertUpdate {
-	au.mutation.SetEntityID(s)
-	return au
-}
-
-// SetNillableEntityID sets the "entity_id" field if the given value is not nil.
-func (au *AlertUpdate) SetNillableEntityID(s *string) *AlertUpdate {
-	if s != nil {
-		au.SetEntityID(*s)
-	}
-	return au
-}
-
-// ClearEntityID clears the value of the "entity_id" field.
-func (au *AlertUpdate) ClearEntityID() *AlertUpdate {
-	au.mutation.ClearEntityID()
-	return au
-}
-
-// SetAlertMetric sets the "alert_metric" field.
-func (au *AlertUpdate) SetAlertMetric(s string) *AlertUpdate {
-	au.mutation.SetAlertMetric(s)
-	return au
-}
-
-// SetNillableAlertMetric sets the "alert_metric" field if the given value is not nil.
-func (au *AlertUpdate) SetNillableAlertMetric(s *string) *AlertUpdate {
-	if s != nil {
-		au.SetAlertMetric(*s)
-	}
-	return au
-}
-
-// SetAlertState sets the "alert_state" field.
-func (au *AlertUpdate) SetAlertState(s string) *AlertUpdate {
-	au.mutation.SetAlertState(s)
-	return au
-}
-
-// SetNillableAlertState sets the "alert_state" field if the given value is not nil.
-func (au *AlertUpdate) SetNillableAlertState(s *string) *AlertUpdate {
-	if s != nil {
-		au.SetAlertState(*s)
-	}
-	return au
-}
-
-// SetAlertEnabled sets the "alert_enabled" field.
-func (au *AlertUpdate) SetAlertEnabled(b bool) *AlertUpdate {
-	au.mutation.SetAlertEnabled(b)
-	return au
-}
-
-// SetNillableAlertEnabled sets the "alert_enabled" field if the given value is not nil.
-func (au *AlertUpdate) SetNillableAlertEnabled(b *bool) *AlertUpdate {
-	if b != nil {
-		au.SetAlertEnabled(*b)
-	}
-	return au
-}
-
-// SetAlertData sets the "alert_data" field.
-func (au *AlertUpdate) SetAlertData(m map[string]interface{}) *AlertUpdate {
-	au.mutation.SetAlertData(m)
-	return au
-}
-
-// ClearAlertData clears the value of the "alert_data" field.
-func (au *AlertUpdate) ClearAlertData() *AlertUpdate {
-	au.mutation.ClearAlertData()
-	return au
-}
-
 // Mutation returns the AlertMutation object of the builder.
 func (au *AlertUpdate) Mutation() *AlertMutation {
 	return au.mutation
@@ -197,30 +109,7 @@ func (au *AlertUpdate) defaults() {
 	}
 }
 
-// check runs all checks and user-defined validators on the builder.
-func (au *AlertUpdate) check() error {
-	if v, ok := au.mutation.EntityType(); ok {
-		if err := alert.EntityTypeValidator(v); err != nil {
-			return &ValidationError{Name: "entity_type", err: fmt.Errorf(`ent: validator failed for field "Alert.entity_type": %w`, err)}
-		}
-	}
-	if v, ok := au.mutation.AlertMetric(); ok {
-		if err := alert.AlertMetricValidator(v); err != nil {
-			return &ValidationError{Name: "alert_metric", err: fmt.Errorf(`ent: validator failed for field "Alert.alert_metric": %w`, err)}
-		}
-	}
-	if v, ok := au.mutation.AlertState(); ok {
-		if err := alert.AlertStateValidator(v); err != nil {
-			return &ValidationError{Name: "alert_state", err: fmt.Errorf(`ent: validator failed for field "Alert.alert_state": %w`, err)}
-		}
-	}
-	return nil
-}
-
 func (au *AlertUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	if err := au.check(); err != nil {
-		return n, err
-	}
 	_spec := sqlgraph.NewUpdateSpec(alert.Table, alert.Columns, sqlgraph.NewFieldSpec(alert.FieldID, field.TypeString))
 	if ps := au.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
@@ -247,29 +136,11 @@ func (au *AlertUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if au.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(alert.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := au.mutation.EntityType(); ok {
-		_spec.SetField(alert.FieldEntityType, field.TypeString, value)
-	}
-	if value, ok := au.mutation.EntityID(); ok {
-		_spec.SetField(alert.FieldEntityID, field.TypeString, value)
-	}
 	if au.mutation.EntityIDCleared() {
 		_spec.ClearField(alert.FieldEntityID, field.TypeString)
 	}
-	if value, ok := au.mutation.AlertMetric(); ok {
-		_spec.SetField(alert.FieldAlertMetric, field.TypeString, value)
-	}
-	if value, ok := au.mutation.AlertState(); ok {
-		_spec.SetField(alert.FieldAlertState, field.TypeString, value)
-	}
-	if value, ok := au.mutation.AlertEnabled(); ok {
-		_spec.SetField(alert.FieldAlertEnabled, field.TypeBool, value)
-	}
-	if value, ok := au.mutation.AlertData(); ok {
-		_spec.SetField(alert.FieldAlertData, field.TypeJSON, value)
-	}
-	if au.mutation.AlertDataCleared() {
-		_spec.ClearField(alert.FieldAlertData, field.TypeJSON)
+	if au.mutation.AlertInfoCleared() {
+		_spec.ClearField(alert.FieldAlertInfo, field.TypeJSON)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, au.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -331,94 +202,6 @@ func (auo *AlertUpdateOne) ClearUpdatedBy() *AlertUpdateOne {
 	return auo
 }
 
-// SetEntityType sets the "entity_type" field.
-func (auo *AlertUpdateOne) SetEntityType(s string) *AlertUpdateOne {
-	auo.mutation.SetEntityType(s)
-	return auo
-}
-
-// SetNillableEntityType sets the "entity_type" field if the given value is not nil.
-func (auo *AlertUpdateOne) SetNillableEntityType(s *string) *AlertUpdateOne {
-	if s != nil {
-		auo.SetEntityType(*s)
-	}
-	return auo
-}
-
-// SetEntityID sets the "entity_id" field.
-func (auo *AlertUpdateOne) SetEntityID(s string) *AlertUpdateOne {
-	auo.mutation.SetEntityID(s)
-	return auo
-}
-
-// SetNillableEntityID sets the "entity_id" field if the given value is not nil.
-func (auo *AlertUpdateOne) SetNillableEntityID(s *string) *AlertUpdateOne {
-	if s != nil {
-		auo.SetEntityID(*s)
-	}
-	return auo
-}
-
-// ClearEntityID clears the value of the "entity_id" field.
-func (auo *AlertUpdateOne) ClearEntityID() *AlertUpdateOne {
-	auo.mutation.ClearEntityID()
-	return auo
-}
-
-// SetAlertMetric sets the "alert_metric" field.
-func (auo *AlertUpdateOne) SetAlertMetric(s string) *AlertUpdateOne {
-	auo.mutation.SetAlertMetric(s)
-	return auo
-}
-
-// SetNillableAlertMetric sets the "alert_metric" field if the given value is not nil.
-func (auo *AlertUpdateOne) SetNillableAlertMetric(s *string) *AlertUpdateOne {
-	if s != nil {
-		auo.SetAlertMetric(*s)
-	}
-	return auo
-}
-
-// SetAlertState sets the "alert_state" field.
-func (auo *AlertUpdateOne) SetAlertState(s string) *AlertUpdateOne {
-	auo.mutation.SetAlertState(s)
-	return auo
-}
-
-// SetNillableAlertState sets the "alert_state" field if the given value is not nil.
-func (auo *AlertUpdateOne) SetNillableAlertState(s *string) *AlertUpdateOne {
-	if s != nil {
-		auo.SetAlertState(*s)
-	}
-	return auo
-}
-
-// SetAlertEnabled sets the "alert_enabled" field.
-func (auo *AlertUpdateOne) SetAlertEnabled(b bool) *AlertUpdateOne {
-	auo.mutation.SetAlertEnabled(b)
-	return auo
-}
-
-// SetNillableAlertEnabled sets the "alert_enabled" field if the given value is not nil.
-func (auo *AlertUpdateOne) SetNillableAlertEnabled(b *bool) *AlertUpdateOne {
-	if b != nil {
-		auo.SetAlertEnabled(*b)
-	}
-	return auo
-}
-
-// SetAlertData sets the "alert_data" field.
-func (auo *AlertUpdateOne) SetAlertData(m map[string]interface{}) *AlertUpdateOne {
-	auo.mutation.SetAlertData(m)
-	return auo
-}
-
-// ClearAlertData clears the value of the "alert_data" field.
-func (auo *AlertUpdateOne) ClearAlertData() *AlertUpdateOne {
-	auo.mutation.ClearAlertData()
-	return auo
-}
-
 // Mutation returns the AlertMutation object of the builder.
 func (auo *AlertUpdateOne) Mutation() *AlertMutation {
 	return auo.mutation
@@ -473,30 +256,7 @@ func (auo *AlertUpdateOne) defaults() {
 	}
 }
 
-// check runs all checks and user-defined validators on the builder.
-func (auo *AlertUpdateOne) check() error {
-	if v, ok := auo.mutation.EntityType(); ok {
-		if err := alert.EntityTypeValidator(v); err != nil {
-			return &ValidationError{Name: "entity_type", err: fmt.Errorf(`ent: validator failed for field "Alert.entity_type": %w`, err)}
-		}
-	}
-	if v, ok := auo.mutation.AlertMetric(); ok {
-		if err := alert.AlertMetricValidator(v); err != nil {
-			return &ValidationError{Name: "alert_metric", err: fmt.Errorf(`ent: validator failed for field "Alert.alert_metric": %w`, err)}
-		}
-	}
-	if v, ok := auo.mutation.AlertState(); ok {
-		if err := alert.AlertStateValidator(v); err != nil {
-			return &ValidationError{Name: "alert_state", err: fmt.Errorf(`ent: validator failed for field "Alert.alert_state": %w`, err)}
-		}
-	}
-	return nil
-}
-
 func (auo *AlertUpdateOne) sqlSave(ctx context.Context) (_node *Alert, err error) {
-	if err := auo.check(); err != nil {
-		return _node, err
-	}
 	_spec := sqlgraph.NewUpdateSpec(alert.Table, alert.Columns, sqlgraph.NewFieldSpec(alert.FieldID, field.TypeString))
 	id, ok := auo.mutation.ID()
 	if !ok {
@@ -540,29 +300,11 @@ func (auo *AlertUpdateOne) sqlSave(ctx context.Context) (_node *Alert, err error
 	if auo.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(alert.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := auo.mutation.EntityType(); ok {
-		_spec.SetField(alert.FieldEntityType, field.TypeString, value)
-	}
-	if value, ok := auo.mutation.EntityID(); ok {
-		_spec.SetField(alert.FieldEntityID, field.TypeString, value)
-	}
 	if auo.mutation.EntityIDCleared() {
 		_spec.ClearField(alert.FieldEntityID, field.TypeString)
 	}
-	if value, ok := auo.mutation.AlertMetric(); ok {
-		_spec.SetField(alert.FieldAlertMetric, field.TypeString, value)
-	}
-	if value, ok := auo.mutation.AlertState(); ok {
-		_spec.SetField(alert.FieldAlertState, field.TypeString, value)
-	}
-	if value, ok := auo.mutation.AlertEnabled(); ok {
-		_spec.SetField(alert.FieldAlertEnabled, field.TypeBool, value)
-	}
-	if value, ok := auo.mutation.AlertData(); ok {
-		_spec.SetField(alert.FieldAlertData, field.TypeJSON, value)
-	}
-	if auo.mutation.AlertDataCleared() {
-		_spec.ClearField(alert.FieldAlertData, field.TypeJSON)
+	if auo.mutation.AlertInfoCleared() {
+		_spec.ClearField(alert.FieldAlertInfo, field.TypeJSON)
 	}
 	_node = &Alert{config: auo.config}
 	_spec.Assign = _node.assignValues

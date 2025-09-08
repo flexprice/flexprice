@@ -14,8 +14,7 @@ type Alert struct {
 	EntityID      string                 `json:"entity_id,omitempty"`
 	AlertMetric   string                 `json:"alert_metric"`
 	AlertState    types.AlertState       `json:"alert_state"`
-	AlertEnabled  bool                   `json:"alert_enabled"`
-	AlertData     map[string]interface{} `json:"alert_data,omitempty"`
+	AlertInfo     map[string]interface{} `json:"alert_info,omitempty"`
 	EnvironmentID string                 `json:"environment_id"`
 	types.BaseModel
 }
@@ -32,8 +31,7 @@ func FromEnt(a *ent.Alert) *Alert {
 		EntityID:      lo.FromPtr(a.EntityID),
 		AlertMetric:   a.AlertMetric,
 		AlertState:    types.AlertState(a.AlertState),
-		AlertEnabled:  a.AlertEnabled,
-		AlertData:     a.AlertData,
+		AlertInfo:     a.AlertInfo,
 		EnvironmentID: a.EnvironmentID,
 		BaseModel: types.BaseModel{
 			TenantID:  a.TenantID,

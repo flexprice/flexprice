@@ -35,10 +35,8 @@ const (
 	FieldAlertMetric = "alert_metric"
 	// FieldAlertState holds the string denoting the alert_state field in the database.
 	FieldAlertState = "alert_state"
-	// FieldAlertEnabled holds the string denoting the alert_enabled field in the database.
-	FieldAlertEnabled = "alert_enabled"
-	// FieldAlertData holds the string denoting the alert_data field in the database.
-	FieldAlertData = "alert_data"
+	// FieldAlertInfo holds the string denoting the alert_info field in the database.
+	FieldAlertInfo = "alert_info"
 	// Table holds the table name of the alert in the database.
 	Table = "alerts"
 )
@@ -57,8 +55,7 @@ var Columns = []string{
 	FieldEntityID,
 	FieldAlertMetric,
 	FieldAlertState,
-	FieldAlertEnabled,
-	FieldAlertData,
+	FieldAlertInfo,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -92,8 +89,6 @@ var (
 	DefaultAlertState string
 	// AlertStateValidator is a validator for the "alert_state" field. It is called by the builders before save.
 	AlertStateValidator func(string) error
-	// DefaultAlertEnabled holds the default value on creation for the "alert_enabled" field.
-	DefaultAlertEnabled bool
 )
 
 // OrderOption defines the ordering options for the Alert queries.
@@ -157,9 +152,4 @@ func ByAlertMetric(opts ...sql.OrderTermOption) OrderOption {
 // ByAlertState orders the results by the alert_state field.
 func ByAlertState(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAlertState, opts...).ToFunc()
-}
-
-// ByAlertEnabled orders the results by the alert_enabled field.
-func ByAlertEnabled(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldAlertEnabled, opts...).ToFunc()
 }

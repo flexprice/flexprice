@@ -119,11 +119,6 @@ func AlertState(v string) predicate.Alert {
 	return predicate.Alert(sql.FieldEQ(FieldAlertState, v))
 }
 
-// AlertEnabled applies equality check predicate on the "alert_enabled" field. It's identical to AlertEnabledEQ.
-func AlertEnabled(v bool) predicate.Alert {
-	return predicate.Alert(sql.FieldEQ(FieldAlertEnabled, v))
-}
-
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.Alert {
 	return predicate.Alert(sql.FieldEQ(FieldTenantID, v))
@@ -829,24 +824,14 @@ func AlertStateContainsFold(v string) predicate.Alert {
 	return predicate.Alert(sql.FieldContainsFold(FieldAlertState, v))
 }
 
-// AlertEnabledEQ applies the EQ predicate on the "alert_enabled" field.
-func AlertEnabledEQ(v bool) predicate.Alert {
-	return predicate.Alert(sql.FieldEQ(FieldAlertEnabled, v))
+// AlertInfoIsNil applies the IsNil predicate on the "alert_info" field.
+func AlertInfoIsNil() predicate.Alert {
+	return predicate.Alert(sql.FieldIsNull(FieldAlertInfo))
 }
 
-// AlertEnabledNEQ applies the NEQ predicate on the "alert_enabled" field.
-func AlertEnabledNEQ(v bool) predicate.Alert {
-	return predicate.Alert(sql.FieldNEQ(FieldAlertEnabled, v))
-}
-
-// AlertDataIsNil applies the IsNil predicate on the "alert_data" field.
-func AlertDataIsNil() predicate.Alert {
-	return predicate.Alert(sql.FieldIsNull(FieldAlertData))
-}
-
-// AlertDataNotNil applies the NotNil predicate on the "alert_data" field.
-func AlertDataNotNil() predicate.Alert {
-	return predicate.Alert(sql.FieldNotNull(FieldAlertData))
+// AlertInfoNotNil applies the NotNil predicate on the "alert_info" field.
+func AlertInfoNotNil() predicate.Alert {
+	return predicate.Alert(sql.FieldNotNull(FieldAlertInfo))
 }
 
 // And groups predicates with the AND operator between them.

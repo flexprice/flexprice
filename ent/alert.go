@@ -40,10 +40,8 @@ type Alert struct {
 	AlertMetric string `json:"alert_metric,omitempty"`
 	// AlertState holds the value of the "alert_state" field.
 	AlertState string `json:"alert_state,omitempty"`
-	// AlertEnabled holds the value of the "alert_enabled" field.
-	AlertEnabled bool `json:"alert_enabled,omitempty"`
-	// AlertData holds the value of the "alert_data" field.
-	AlertData    map[string]interface{} `json:"alert_data,omitempty"`
+	// AlertInfo holds the value of the "alert_info" field.
+	AlertInfo    map[string]interface{} `json:"alert_info,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -52,10 +50,8 @@ func (*Alert) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case alert.FieldAlertData:
+		case alert.FieldAlertInfo:
 			values[i] = new([]byte)
-		case alert.FieldAlertEnabled:
-			values[i] = new(sql.NullBool)
 		case alert.FieldID, alert.FieldTenantID, alert.FieldStatus, alert.FieldCreatedBy, alert.FieldUpdatedBy, alert.FieldEnvironmentID, alert.FieldEntityType, alert.FieldEntityID, alert.FieldAlertMetric, alert.FieldAlertState:
 			values[i] = new(sql.NullString)
 		case alert.FieldCreatedAt, alert.FieldUpdatedAt:
@@ -148,18 +144,12 @@ func (a *Alert) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				a.AlertState = value.String
 			}
-		case alert.FieldAlertEnabled:
-			if value, ok := values[i].(*sql.NullBool); !ok {
-				return fmt.Errorf("unexpected type %T for field alert_enabled", values[i])
-			} else if value.Valid {
-				a.AlertEnabled = value.Bool
-			}
-		case alert.FieldAlertData:
+		case alert.FieldAlertInfo:
 			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field alert_data", values[i])
+				return fmt.Errorf("unexpected type %T for field alert_info", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &a.AlertData); err != nil {
-					return fmt.Errorf("unmarshal field alert_data: %w", err)
+				if err := json.Unmarshal(*value, &a.AlertInfo); err != nil {
+					return fmt.Errorf("unmarshal field alert_info: %w", err)
 				}
 			}
 		default:
@@ -233,11 +223,8 @@ func (a *Alert) String() string {
 	builder.WriteString("alert_state=")
 	builder.WriteString(a.AlertState)
 	builder.WriteString(", ")
-	builder.WriteString("alert_enabled=")
-	builder.WriteString(fmt.Sprintf("%v", a.AlertEnabled))
-	builder.WriteString(", ")
-	builder.WriteString("alert_data=")
-	builder.WriteString(fmt.Sprintf("%v", a.AlertData))
+	builder.WriteString("alert_info=")
+	builder.WriteString(fmt.Sprintf("%v", a.AlertInfo))
 	builder.WriteByte(')')
 	return builder.String()
 }
