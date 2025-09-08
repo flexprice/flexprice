@@ -25,45 +25,39 @@ func RegisterWorkflowsAndActivities(temporalService interface{}, params service.
 	taskService := service.NewTaskService(params)
 	taskActivities := activities.NewTaskActivities(taskService)
 
-	// Define worker configurations for each task queue
-	workerConfigs := []WorkerConfig{
-		{
-			TaskQueue: types.TemporalTaskProcessingWorkflow.TaskQueueName(),
-			Workflows: []interface{}{
-				workflows.TaskProcessingWorkflow,
-			},
-			Activities: []interface{}{
-				taskActivities.ProcessTask,
-			},
-		},
-		{
-			TaskQueue: types.TemporalPriceSyncWorkflow.TaskQueueName(),
-			Workflows: []interface{}{
-				workflows.PriceSyncWorkflow,
-			},
-			Activities: []interface{}{
-				planActivities.SyncPlanPrices,
-			},
-		},
-		{
-			TaskQueue: types.TemporalBillingWorkflow.TaskQueueName(),
-			Workflows: []interface{}{
-				// Add billing workflows here when available
-			},
-			Activities: []interface{}{
-				// Add billing activities here when available
-			},
-		},
-	}
-
-	// Register workflows and activities for each worker configuration
-	for _, config := range workerConfigs {
+	// Get all task queues and register workflows/activities for each
+	for _, taskQueue := range types.GetAllTaskQueues() {
+		config := buildWorkerConfig(taskQueue, planActivities, taskActivities)
 		if err := registerWorker(temporalService, config); err != nil {
-			return fmt.Errorf("failed to register worker for task queue %s: %w", config.TaskQueue, err)
+			return fmt.Errorf("failed to register worker for task queue %s: %w", taskQueue, err)
 		}
 	}
 
 	return nil
+}
+
+// buildWorkerConfig creates a worker configuration for a specific task queue
+func buildWorkerConfig(taskQueue types.TemporalTaskQueue, planActivities *activities.PlanActivities, taskActivities *activities.TaskActivities) WorkerConfig {
+	workflowsList := []interface{}{}
+	activitiesList := []interface{}{}
+
+	switch taskQueue {
+	case types.TemporalTaskQueueTask:
+		workflowsList = append(workflowsList, workflows.TaskProcessingWorkflow)
+		activitiesList = append(activitiesList, taskActivities.ProcessTask)
+
+	case types.TemporalTaskQueuePrice:
+		workflowsList = append(workflowsList, workflows.PriceSyncWorkflow)
+		activitiesList = append(activitiesList, planActivities.SyncPlanPrices)
+
+		// Other task queues will be added when workflows are implemented
+	}
+
+	return WorkerConfig{
+		TaskQueue:  taskQueue.String(),
+		Workflows:  workflowsList,
+		Activities: activitiesList,
+	}
 }
 
 // registerWorker registers workflows and activities for a specific task queue
