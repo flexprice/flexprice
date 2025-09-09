@@ -7,6 +7,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/temporal/models"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
@@ -58,16 +59,19 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 	}
 
 	// Start the temporal workflow for async processing using the unified method
-	_, err = h.temporalService.ExecuteWorkflow(c.Request.Context(), types.TemporalTaskProcessingWorkflow, resp.ID)
+	workflowRun, err := h.temporalService.ExecuteWorkflow(c.Request.Context(), types.TemporalTaskProcessingWorkflow, resp.ID)
 
 	if err != nil {
 		h.log.Error("failed to start temporal workflow", "error", err, "task_id", resp.ID)
-		// Don't fail the request, just log the error
-		// The task will remain in PENDING status and can be retried
+		c.Error(err)
+		return
 	}
 
-	// Return 202 Accepted for async processing
-	c.JSON(http.StatusAccepted, resp)
+	c.JSON(http.StatusOK, models.TemporalWorkflowResult{
+		Message:    "task processing workflow started successfully",
+		WorkflowID: workflowRun.GetID(),
+		RunID:      workflowRun.GetRunID(),
+	})
 }
 
 // @Summary Get a task

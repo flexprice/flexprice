@@ -109,3 +109,9 @@ func (p *RetryPolicy) ToSDKRetryPolicy() *temporal.RetryPolicy {
 		NonRetryableErrorTypes: p.NonRetryableErrorTypes,
 	}
 }
+
+type TemporalWorkflowResult struct {
+	Message    string `json:"message"`
+	WorkflowID string `json:"workflow_id"`
+	RunID      string `json:"run_id"`
+}

@@ -27,8 +27,3 @@ func (p *PriceSyncWorkflowInput) Validate() error {
 
 	return nil
 }
-
-type TemporalWorkflowResult struct {
-	WorkflowID string `json:"workflow_id"`
-	RunID      string `json:"run_id"`
-}

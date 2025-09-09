@@ -2,7 +2,6 @@ package dto
 
 import (
 	"context"
-	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/task"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -57,28 +56,7 @@ func (r *CreateTaskRequest) ToTask(ctx context.Context) *task.Task {
 
 // TaskResponse represents a task in responses
 type TaskResponse struct {
-	ID                string                 `json:"id"`
-	TaskType          types.TaskType         `json:"task_type"`
-	EntityType        types.EntityType       `json:"entity_type"`
-	FileURL           string                 `json:"file_url"`
-	FileName          *string                `json:"file_name,omitempty"`
-	FileType          types.FileType         `json:"file_type"`
-	TaskStatus        types.TaskStatus       `json:"task_status"`
-	TotalRecords      *int                   `json:"total_records,omitempty"`
-	ProcessedRecords  int                    `json:"processed_records"`
-	SuccessfulRecords int                    `json:"successful_records"`
-	FailedRecords     int                    `json:"failed_records"`
-	ErrorSummary      *string                `json:"error_summary,omitempty"`
-	Metadata          map[string]interface{} `json:"metadata,omitempty"`
-	StartedAt         *time.Time             `json:"started_at,omitempty"`
-	CompletedAt       *time.Time             `json:"completed_at,omitempty"`
-	FailedAt          *time.Time             `json:"failed_at,omitempty"`
-	TenantID          string                 `json:"tenant_id"`
-	Status            string                 `json:"status"`
-	CreatedAt         time.Time              `json:"created_at"`
-	UpdatedAt         time.Time              `json:"updated_at"`
-	CreatedBy         string                 `json:"created_by,omitempty"`
-	UpdatedBy         string                 `json:"updated_by,omitempty"`
+	task.Task
 }
 
 // NewTaskResponse creates a new task response from a domain task
@@ -88,28 +66,25 @@ func NewTaskResponse(t *task.Task) *TaskResponse {
 	}
 
 	return &TaskResponse{
-		ID:                t.ID,
-		TaskType:          t.TaskType,
-		EntityType:        t.EntityType,
-		FileURL:           t.FileURL,
-		FileName:          t.FileName,
-		FileType:          t.FileType,
-		TaskStatus:        t.TaskStatus,
-		TotalRecords:      t.TotalRecords,
-		ProcessedRecords:  t.ProcessedRecords,
-		SuccessfulRecords: t.SuccessfulRecords,
-		FailedRecords:     t.FailedRecords,
-		ErrorSummary:      t.ErrorSummary,
-		Metadata:          t.Metadata,
-		StartedAt:         t.StartedAt,
-		CompletedAt:       t.CompletedAt,
-		FailedAt:          t.FailedAt,
-		TenantID:          t.TenantID,
-		Status:            string(t.Status),
-		CreatedAt:         t.CreatedAt,
-		UpdatedAt:         t.UpdatedAt,
-		CreatedBy:         t.CreatedBy,
-		UpdatedBy:         t.UpdatedBy,
+		Task: task.Task{
+			ID:                t.ID,
+			TaskType:          t.TaskType,
+			EntityType:        t.EntityType,
+			FileURL:           t.FileURL,
+			FileName:          t.FileName,
+			FileType:          t.FileType,
+			TaskStatus:        t.TaskStatus,
+			TotalRecords:      t.TotalRecords,
+			ProcessedRecords:  t.ProcessedRecords,
+			SuccessfulRecords: t.SuccessfulRecords,
+			FailedRecords:     t.FailedRecords,
+			ErrorSummary:      t.ErrorSummary,
+			Metadata:          t.Metadata,
+			StartedAt:         t.StartedAt,
+			CompletedAt:       t.CompletedAt,
+			FailedAt:          t.FailedAt,
+			BaseModel:         t.BaseModel,
+		},
 	}
 }
 

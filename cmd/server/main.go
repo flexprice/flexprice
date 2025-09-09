@@ -401,6 +401,8 @@ func startServer(
 		startAPIServer(lc, r, cfg, log)
 		startMessageRouter(lc, router, webhookService, onboardingService, log)
 		startTemporalWorker(lc, temporalService, params)
+		startConsumer(lc, consumer, eventRepo, cfg, log, sentryService, eventPostProcessingSvc)
+		startPostProcessingConsumer(lc, router, eventPostProcessingSvc, cfg, log)
 
 	case types.ModeTemporalWorker:
 		startTemporalWorker(lc, temporalService, params)
