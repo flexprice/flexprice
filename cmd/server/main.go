@@ -423,16 +423,16 @@ func startTemporalWorker(
 ) {
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			// Register workflows and activities first
-			if err := temporal.RegisterWorkflowsAndActivities(temporalService, params); err != nil {
-				return fmt.Errorf("failed to register workflows and activities: %w", err)
-			}
 
 			// Start workers for all task queues
 			for _, taskQueue := range types.GetAllTaskQueues() {
 				if err := temporalService.StartWorker(taskQueue.String()); err != nil {
 					return fmt.Errorf("failed to start worker for task queue %s: %w", taskQueue, err)
 				}
+			}
+			// Register workflows and activities first
+			if err := temporal.RegisterWorkflowsAndActivities(temporalService, params); err != nil {
+				return fmt.Errorf("failed to register workflows and activities: %w", err)
 			}
 
 			return nil
