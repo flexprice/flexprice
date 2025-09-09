@@ -5,6 +5,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/temporal/activities"
+	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/temporal/workflows"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -17,7 +18,7 @@ type WorkerConfig struct {
 }
 
 // RegisterWorkflowsAndActivities registers all workflows and activities with the temporal service
-func RegisterWorkflowsAndActivities(temporalService interface{}, params service.ServiceParams) error {
+func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalService, params service.ServiceParams) error {
 	// Create activity instances with dependencies
 	planService := service.NewPlanService(params)
 	planActivities := activities.NewPlanActivities(planService)
@@ -61,7 +62,7 @@ func buildWorkerConfig(taskQueue types.TemporalTaskQueue, planActivities *activi
 }
 
 // registerWorker registers workflows and activities for a specific task queue
-func registerWorker(temporalService interface{}, config WorkerConfig) error {
+func registerWorker(temporalService temporalService.TemporalService, config WorkerConfig) error {
 	// Type assertion to get the temporal service
 	service, ok := temporalService.(interface {
 		RegisterWorkflow(taskQueue string, workflow interface{}) error
