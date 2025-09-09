@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/temporal/client"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/temporal/worker"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // temporalService implements TemporalService
@@ -28,11 +30,6 @@ func NewTemporalService(client client.TemporalClient, workerManager worker.Tempo
 
 // Start implements TemporalService
 func (s *temporalService) Start(ctx context.Context) error {
-	// Validate context
-	if err := s.validateTenantContext(ctx); err != nil {
-		return err
-	}
-
 	// Start client
 	if err := s.client.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start temporal client: %w", err)
@@ -64,13 +61,15 @@ func (s *temporalService) IsHealthy(ctx context.Context) bool {
 }
 
 // StartWorkflow implements TemporalService
-func (s *temporalService) StartWorkflow(ctx context.Context, options models.StartWorkflowOptions, workflow interface{}, args ...interface{}) (models.WorkflowRun, error) {
+func (s *temporalService) StartWorkflow(ctx context.Context, options models.StartWorkflowOptions, workflow types.TemporalWorkflowType, args ...interface{}) (models.WorkflowRun, error) {
 	// Validate context and inputs
 	if err := s.validateTenantContext(ctx); err != nil {
 		return nil, err
 	}
-	if workflow == nil {
-		return nil, fmt.Errorf("workflow is required")
+	if err := workflow.Validate(); err != nil {
+		return nil, errors.WithError(err).
+			WithHint("Invalid workflow type provided").
+			Mark(errors.ErrValidation)
 	}
 
 	return s.client.StartWorkflow(ctx, options, workflow, args...)
@@ -83,10 +82,14 @@ func (s *temporalService) SignalWorkflow(ctx context.Context, workflowID, runID,
 		return err
 	}
 	if workflowID == "" {
-		return fmt.Errorf("workflow ID is required")
+		return errors.NewError("workflow ID is required").
+			WithHint("Workflow ID cannot be empty").
+			Mark(errors.ErrValidation)
 	}
 	if signalName == "" {
-		return fmt.Errorf("signal name is required")
+		return errors.NewError("signal name is required").
+			WithHint("Signal name cannot be empty").
+			Mark(errors.ErrValidation)
 	}
 
 	return s.client.SignalWorkflow(ctx, workflowID, runID, signalName, arg)
@@ -99,10 +102,14 @@ func (s *temporalService) QueryWorkflow(ctx context.Context, workflowID, runID, 
 		return nil, err
 	}
 	if workflowID == "" {
-		return nil, fmt.Errorf("workflow ID is required")
+		return nil, errors.NewError("workflow ID is required").
+			WithHint("Workflow ID cannot be empty").
+			Mark(errors.ErrValidation)
 	}
 	if queryType == "" {
-		return nil, fmt.Errorf("query type is required")
+		return nil, errors.NewError("query type is required").
+			WithHint("Query type cannot be empty").
+			Mark(errors.ErrValidation)
 	}
 
 	return s.client.QueryWorkflow(ctx, workflowID, runID, queryType, args...)
@@ -115,7 +122,9 @@ func (s *temporalService) CancelWorkflow(ctx context.Context, workflowID, runID 
 		return err
 	}
 	if workflowID == "" {
-		return fmt.Errorf("workflow ID is required")
+		return errors.NewError("workflow ID is required").
+			WithHint("Workflow ID cannot be empty").
+			Mark(errors.ErrValidation)
 	}
 
 	return s.client.CancelWorkflow(ctx, workflowID, runID)
@@ -128,7 +137,9 @@ func (s *temporalService) TerminateWorkflow(ctx context.Context, workflowID, run
 		return err
 	}
 	if workflowID == "" {
-		return fmt.Errorf("workflow ID is required")
+		return errors.NewError("workflow ID is required").
+			WithHint("Workflow ID cannot be empty").
+			Mark(errors.ErrValidation)
 	}
 
 	return s.client.TerminateWorkflow(ctx, workflowID, runID, reason, details...)
@@ -141,7 +152,9 @@ func (s *temporalService) CompleteActivity(ctx context.Context, taskToken []byte
 		return err
 	}
 	if len(taskToken) == 0 {
-		return fmt.Errorf("task token is required")
+		return errors.NewError("task token is required").
+			WithHint("Task token cannot be empty").
+			Mark(errors.ErrValidation)
 	}
 
 	return s.client.CompleteActivity(ctx, taskToken, result, err)
@@ -154,59 +167,77 @@ func (s *temporalService) RecordActivityHeartbeat(ctx context.Context, taskToken
 		return err
 	}
 	if len(taskToken) == 0 {
-		return fmt.Errorf("task token is required")
+		return errors.NewError("task token is required").
+			WithHint("Task token cannot be empty").
+			Mark(errors.ErrValidation)
 	}
 
 	return s.client.RecordActivityHeartbeat(ctx, taskToken, details...)
 }
 
 // RegisterWorkflow implements TemporalService
-func (s *temporalService) RegisterWorkflow(taskQueue string, workflow interface{}) error {
-	if taskQueue == "" {
-		return fmt.Errorf("task queue is required")
+func (s *temporalService) RegisterWorkflow(taskQueue types.TemporalTaskQueue, workflow types.TemporalWorkflowType) error {
+	if err := taskQueue.Validate(); err != nil {
+		return errors.WithError(err).
+			WithHint("Invalid task queue provided").
+			Mark(errors.ErrValidation)
 	}
-	if workflow == nil {
-		return fmt.Errorf("workflow is required")
+	if err := workflow.Validate(); err != nil {
+		return errors.WithError(err).
+			WithHint("Invalid workflow type provided").
+			Mark(errors.ErrValidation)
 	}
 
 	w, err := s.workerManager.GetOrCreateWorker(taskQueue, models.DefaultWorkerOptions())
 	if err != nil {
-		return err
+		return errors.WithError(err).
+			WithHint("Failed to create or get worker for task queue").
+			Mark(errors.ErrInternal)
 	}
 
 	return w.RegisterWorkflow(workflow)
 }
 
 // RegisterActivity implements TemporalService
-func (s *temporalService) RegisterActivity(taskQueue string, activity interface{}) error {
-	if taskQueue == "" {
-		return fmt.Errorf("task queue is required")
+func (s *temporalService) RegisterActivity(taskQueue types.TemporalTaskQueue, activity interface{}) error {
+	if err := taskQueue.Validate(); err != nil {
+		return errors.WithError(err).
+			WithHint("Invalid task queue provided").
+			Mark(errors.ErrValidation)
 	}
 	if activity == nil {
-		return fmt.Errorf("activity is required")
+		return errors.NewError("activity is required").
+			WithHint("Activity parameter cannot be nil").
+			Mark(errors.ErrValidation)
 	}
 
 	w, err := s.workerManager.GetOrCreateWorker(taskQueue, models.DefaultWorkerOptions())
 	if err != nil {
-		return err
+		return errors.WithError(err).
+			WithHint("Failed to create or get worker for task queue").
+			Mark(errors.ErrInternal)
 	}
 
 	return w.RegisterActivity(activity)
 }
 
 // StartWorker implements TemporalService
-func (s *temporalService) StartWorker(taskQueue string) error {
-	if taskQueue == "" {
-		return fmt.Errorf("task queue is required")
+func (s *temporalService) StartWorker(taskQueue types.TemporalTaskQueue) error {
+	if err := taskQueue.Validate(); err != nil {
+		return errors.WithError(err).
+			WithHint("Invalid task queue provided").
+			Mark(errors.ErrValidation)
 	}
 
 	return s.workerManager.StartWorker(taskQueue)
 }
 
 // StopWorker implements TemporalService
-func (s *temporalService) StopWorker(taskQueue string) error {
-	if taskQueue == "" {
-		return fmt.Errorf("task queue is required")
+func (s *temporalService) StopWorker(taskQueue types.TemporalTaskQueue) error {
+	if err := taskQueue.Validate(); err != nil {
+		return errors.WithError(err).
+			WithHint("Invalid task queue provided").
+			Mark(errors.ErrValidation)
 	}
 
 	return s.workerManager.StopWorker(taskQueue)
@@ -224,7 +255,9 @@ func (s *temporalService) GetWorkflowHistory(ctx context.Context, workflowID, ru
 		return nil, err
 	}
 	if workflowID == "" {
-		return nil, fmt.Errorf("workflow ID is required")
+		return nil, errors.NewError("workflow ID is required").
+			WithHint("Workflow ID cannot be empty").
+			Mark(errors.ErrValidation)
 	}
 
 	return s.client.GetWorkflowHistory(ctx, workflowID, runID)
@@ -237,7 +270,9 @@ func (s *temporalService) DescribeWorkflowExecution(ctx context.Context, workflo
 		return nil, err
 	}
 	if workflowID == "" {
-		return nil, fmt.Errorf("workflow ID is required")
+		return nil, errors.NewError("workflow ID is required").
+			WithHint("Workflow ID cannot be empty").
+			Mark(errors.ErrValidation)
 	}
 
 	return s.client.DescribeWorkflowExecution(ctx, workflowID, runID)

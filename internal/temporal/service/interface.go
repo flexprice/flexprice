@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/flexprice/flexprice/internal/temporal/models"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // TemporalService is the main entry point for temporal operations
@@ -14,7 +15,7 @@ type TemporalService interface {
 	IsHealthy(ctx context.Context) bool
 
 	// Workflow operations
-	StartWorkflow(ctx context.Context, options models.StartWorkflowOptions, workflow interface{}, args ...interface{}) (models.WorkflowRun, error)
+	StartWorkflow(ctx context.Context, options models.StartWorkflowOptions, workflow types.TemporalWorkflowType, args ...interface{}) (models.WorkflowRun, error)
 	SignalWorkflow(ctx context.Context, workflowID, runID, signalName string, arg interface{}) error
 	QueryWorkflow(ctx context.Context, workflowID, runID, queryType string, args ...interface{}) (interface{}, error)
 	CancelWorkflow(ctx context.Context, workflowID, runID string) error
@@ -25,10 +26,10 @@ type TemporalService interface {
 	RecordActivityHeartbeat(ctx context.Context, taskToken []byte, details ...interface{}) error
 
 	// Worker operations
-	RegisterWorkflow(taskQueue string, workflow interface{}) error
-	RegisterActivity(taskQueue string, activity interface{}) error
-	StartWorker(taskQueue string) error
-	StopWorker(taskQueue string) error
+	RegisterWorkflow(taskQueue types.TemporalTaskQueue, workflow types.TemporalWorkflowType) error
+	RegisterActivity(taskQueue types.TemporalTaskQueue, activity interface{}) error
+	StartWorker(taskQueue types.TemporalTaskQueue) error
+	StopWorker(taskQueue types.TemporalTaskQueue) error
 	StopAllWorkers() error
 
 	// Utility operations

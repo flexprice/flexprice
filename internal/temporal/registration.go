@@ -6,14 +6,13 @@ import (
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/temporal/activities"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
-	"github.com/flexprice/flexprice/internal/temporal/workflows"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
 // WorkerConfig defines the configuration for a specific task queue worker
 type WorkerConfig struct {
-	TaskQueue  string
-	Workflows  []interface{}
+	TaskQueue  types.TemporalTaskQueue
+	Workflows  []types.TemporalWorkflowType
 	Activities []interface{}
 }
 
@@ -39,23 +38,23 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 
 // buildWorkerConfig creates a worker configuration for a specific task queue
 func buildWorkerConfig(taskQueue types.TemporalTaskQueue, planActivities *activities.PlanActivities, taskActivities *activities.TaskActivities) WorkerConfig {
-	workflowsList := []interface{}{}
+	workflowsList := []types.TemporalWorkflowType{}
 	activitiesList := []interface{}{}
 
 	switch taskQueue {
 	case types.TemporalTaskQueueTask:
-		workflowsList = append(workflowsList, workflows.TaskProcessingWorkflow)
+		workflowsList = append(workflowsList, types.TemporalTaskProcessingWorkflow)
 		activitiesList = append(activitiesList, taskActivities.ProcessTask)
 
 	case types.TemporalTaskQueuePrice:
-		workflowsList = append(workflowsList, workflows.PriceSyncWorkflow)
+		workflowsList = append(workflowsList, types.TemporalPriceSyncWorkflow)
 		activitiesList = append(activitiesList, planActivities.SyncPlanPrices)
 
 		// Other task queues will be added when workflows are implemented
 	}
 
 	return WorkerConfig{
-		TaskQueue:  taskQueue.String(),
+		TaskQueue:  taskQueue,
 		Workflows:  workflowsList,
 		Activities: activitiesList,
 	}
@@ -63,26 +62,17 @@ func buildWorkerConfig(taskQueue types.TemporalTaskQueue, planActivities *activi
 
 // registerWorker registers workflows and activities for a specific task queue
 func registerWorker(temporalService temporalService.TemporalService, config WorkerConfig) error {
-	// Type assertion to get the temporal service
-	service, ok := temporalService.(interface {
-		RegisterWorkflow(taskQueue string, workflow interface{}) error
-		RegisterActivity(taskQueue string, activity interface{}) error
-	})
-	if !ok {
-		return fmt.Errorf("temporal service does not implement required registration methods")
-	}
-
 	// Register workflows
 	for i, workflow := range config.Workflows {
-		if err := service.RegisterWorkflow(config.TaskQueue, workflow); err != nil {
-			return fmt.Errorf("failed to register workflow %d for task queue %s: %w", i, config.TaskQueue, err)
+		if err := temporalService.RegisterWorkflow(config.TaskQueue, workflow); err != nil {
+			return fmt.Errorf("failed to register workflow %d for task queue %s: %w", i, config.TaskQueue.String(), err)
 		}
 	}
 
 	// Register activities
 	for i, activity := range config.Activities {
-		if err := service.RegisterActivity(config.TaskQueue, activity); err != nil {
-			return fmt.Errorf("failed to register activity %d for task queue %s: %w", i, config.TaskQueue, err)
+		if err := temporalService.RegisterActivity(config.TaskQueue, activity); err != nil {
+			return fmt.Errorf("failed to register activity %d for task queue %s: %w", i, config.TaskQueue.String(), err)
 		}
 	}
 

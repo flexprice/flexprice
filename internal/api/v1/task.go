@@ -64,7 +64,7 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 	_, err = h.temporalService.StartWorkflow(c.Request.Context(), models.StartWorkflowOptions{
 		ID:        fmt.Sprintf("task-processing-%s-%d", resp.ID, time.Now().Unix()),
 		TaskQueue: types.TemporalTaskProcessingWorkflow.TaskQueueName(),
-	}, types.TemporalTaskProcessingWorkflow.String(), resp.ID)
+	}, types.TemporalTaskProcessingWorkflow, resp.ID)
 
 	if err != nil {
 		h.log.Error("failed to start temporal workflow", "error", err, "task_id", resp.ID)
