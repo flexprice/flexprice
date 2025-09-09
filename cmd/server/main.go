@@ -429,8 +429,8 @@ func startTemporalWorker(
 
 			// Start workers for all task queues
 			for _, taskQueue := range types.GetAllTaskQueues() {
-				if err := temporalService.StartWorker(taskQueue.String()); err != nil {
-					return fmt.Errorf("failed to start worker for task queue %s: %w", taskQueue, err)
+				if err := temporalService.StartWorker(taskQueue); err != nil {
+					return fmt.Errorf("failed to start worker for task queue %s: %w", taskQueue.String(), err)
 				}
 			}
 			// Register workflows and activities first
