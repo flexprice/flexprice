@@ -46,6 +46,8 @@ func (Plan) Fields() []ent.Field {
 			NotEmpty(),
 		field.Text("description").
 			Optional(),
+		field.Int("display_order").
+			Default(0),
 	}
 }
 

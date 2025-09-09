@@ -5133,6 +5133,12 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "type": "boolean",
+                        "description": "SkipLineItems if true, will not include line items in the response",
+                        "name": "skip_line_items",
+                        "in": "query"
+                    },
+                    {
                         "type": "string",
                         "name": "start_time",
                         "in": "query"
@@ -6763,7 +6769,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/service.SyncPlanPricesResponse"
+                            "$ref": "#/definitions/dto.SyncPlanPricesResponse"
                         }
                     },
                     "400": {
@@ -6812,6 +6818,12 @@ const docTemplate = `{
                 ],
                 "summary": "Get prices",
                 "parameters": [
+                    {
+                        "type": "boolean",
+                        "default": false,
+                        "name": "allow_expired_prices",
+                        "in": "query"
+                    },
                     {
                         "type": "string",
                         "name": "end_time",
@@ -11748,6 +11760,13 @@ const docTemplate = `{
                     "description": "external_id is the unique identifier from your system to reference this customer (required)",
                     "type": "string"
                 },
+                "integration_entity_mapping": {
+                    "description": "integration_entity_mapping contains provider integration mappings for this customer",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.IntegrationEntityMapping"
+                    }
+                },
                 "metadata": {
                     "description": "metadata contains additional key-value pairs for storing extra information",
                     "type": "object",
@@ -12199,12 +12218,6 @@ const docTemplate = `{
                 "cancel_url": {
                     "type": "string"
                 },
-                "connection_id": {
-                    "type": "string"
-                },
-                "connection_name": {
-                    "type": "string"
-                },
                 "currency": {
                     "type": "string"
                 },
@@ -12232,6 +12245,10 @@ const docTemplate = `{
                 "process_payment": {
                     "type": "boolean",
                     "default": true
+                },
+                "save_card_and_make_default": {
+                    "type": "boolean",
+                    "default": false
                 },
                 "success_url": {
                     "type": "string"
@@ -12312,6 +12329,9 @@ const docTemplate = `{
                 "description": {
                     "type": "string"
                 },
+                "end_date": {
+                    "type": "string"
+                },
                 "entity_id": {
                     "description": "TODO: this will be required in the future as we will not allow prices to be created without an entity id",
                     "type": "string"
@@ -12357,6 +12377,9 @@ const docTemplate = `{
                 },
                 "price_unit_type": {
                     "$ref": "#/definitions/types.PriceUnitType"
+                },
+                "start_date": {
+                    "type": "string"
                 },
                 "tier_mode": {
                     "$ref": "#/definitions/types.BillingTier"
@@ -12451,6 +12474,9 @@ const docTemplate = `{
                 "description": {
                     "type": "string"
                 },
+                "end_date": {
+                    "type": "string"
+                },
                 "entity_id": {
                     "description": "TODO: this will be required in the future as we will not allow prices to be created without an entity id",
                     "type": "string"
@@ -12496,6 +12522,9 @@ const docTemplate = `{
                 },
                 "price_unit_type": {
                     "$ref": "#/definitions/types.PriceUnitType"
+                },
+                "start_date": {
+                    "type": "string"
                 },
                 "tier_mode": {
                     "$ref": "#/definitions/types.BillingTier"
@@ -13387,6 +13416,9 @@ const docTemplate = `{
                 },
                 "usage_limit": {
                     "type": "integer"
+                },
+                "usage_reset_period": {
+                    "$ref": "#/definitions/types.BillingPeriod"
                 }
             }
         },
@@ -13996,6 +14028,29 @@ const docTemplate = `{
                     "description": "Handled separately due to parsing",
                     "type": "string",
                     "example": "2024-03-20T15:04:05Z"
+                }
+            }
+        },
+        "dto.IntegrationEntityMapping": {
+            "description": "Integration entity mapping for external provider systems",
+            "type": "object",
+            "required": [
+                "id",
+                "provider"
+            ],
+            "properties": {
+                "id": {
+                    "description": "id is the external entity ID from the provider",
+                    "type": "string"
+                },
+                "provider": {
+                    "description": "provider is the integration provider name (e.g., \"stripe\", \"razorpay\")",
+                    "type": "string",
+                    "enum": [
+                        "stripe",
+                        "razorpay",
+                        "paypal"
+                    ]
                 }
             }
         },
@@ -14782,6 +14837,9 @@ const docTemplate = `{
                     "description": "Amount is the new price amount that overrides the original price (optional)",
                     "type": "number"
                 },
+                "billing_model": {
+                    "$ref": "#/definitions/types.BillingModel"
+                },
                 "price_id": {
                     "description": "PriceID references the plan price to override",
                     "type": "string"
@@ -14789,6 +14847,29 @@ const docTemplate = `{
                 "quantity": {
                     "description": "Quantity for this line item (optional)",
                     "type": "number"
+                },
+                "tier_mode": {
+                    "description": "TierMode determines how to calculate the price for a given quantity",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.BillingTier"
+                        }
+                    ]
+                },
+                "tiers": {
+                    "description": "Tiers determines the pricing tiers for this line item",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.CreatePriceTier"
+                    }
+                },
+                "transform_quantity": {
+                    "description": "TransformQuantity determines how to transform the quantity for this line item",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/price.TransformQuantity"
+                        }
+                    ]
                 }
             }
         },
@@ -14944,6 +15025,9 @@ const docTemplate = `{
                 "refunded_at": {
                     "type": "string"
                 },
+                "save_card_and_make_default": {
+                    "type": "boolean"
+                },
                 "succeeded_at": {
                     "type": "string"
                 },
@@ -15067,6 +15151,10 @@ const docTemplate = `{
                     "description": "DisplayPriceUnitAmount is the formatted amount with price unit symbol\nFor BTC: 0.00000001 BTC",
                     "type": "string"
                 },
+                "end_date": {
+                    "description": "EndDate is the end date of the price",
+                    "type": "string"
+                },
                 "entity_id": {
                     "description": "EntityID holds the value of the \"entity_id\" field.",
                     "type": "string"
@@ -15141,6 +15229,10 @@ const docTemplate = `{
                 },
                 "pricing_unit": {
                     "$ref": "#/definitions/dto.PriceUnitResponse"
+                },
+                "start_date": {
+                    "description": "StartDate is the start date of the price",
+                    "type": "string"
                 },
                 "status": {
                     "$ref": "#/definitions/types.Status"
@@ -15464,7 +15556,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "entity_type": {
-                    "$ref": "#/definitions/types.SubscriptionLineItemEntitiyType"
+                    "$ref": "#/definitions/types.SubscriptionLineItemEntityType"
                 },
                 "environment_id": {
                     "type": "string"
@@ -15690,9 +15782,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "line_items": {
+                    "description": "LineItems are the line items for this subscription",
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/subscription.SubscriptionLineItem"
+                        "$ref": "#/definitions/dto.SubscriptionLineItemResponse"
                     }
                 },
                 "lookup_key": {
@@ -15917,6 +16010,37 @@ const docTemplate = `{
                 },
                 "quantity": {
                     "type": "number"
+                }
+            }
+        },
+        "dto.SyncPlanPricesResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "plan_id": {
+                    "type": "string"
+                },
+                "plan_name": {
+                    "type": "string"
+                },
+                "synchronization_summary": {
+                    "type": "object",
+                    "properties": {
+                        "prices_added": {
+                            "type": "integer"
+                        },
+                        "prices_removed": {
+                            "type": "integer"
+                        },
+                        "prices_skipped": {
+                            "type": "integer"
+                        },
+                        "subscriptions_processed": {
+                            "type": "integer"
+                        }
+                    }
                 }
             }
         },
@@ -16439,6 +16563,13 @@ const docTemplate = `{
                     "description": "external_id is the updated external identifier for the customer",
                     "type": "string"
                 },
+                "integration_entity_mapping": {
+                    "description": "integration_entity_mapping contains provider integration mappings for this customer",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.IntegrationEntityMapping"
+                    }
+                },
                 "metadata": {
                     "description": "metadata contains updated key-value pairs that will replace existing metadata",
                     "type": "object",
@@ -16699,6 +16830,9 @@ const docTemplate = `{
                 "description": {
                     "type": "string"
                 },
+                "end_date": {
+                    "type": "string"
+                },
                 "entity_id": {
                     "description": "TODO: this will be required in the future as we will not allow prices to be created without an entity id",
                     "type": "string"
@@ -16748,6 +16882,9 @@ const docTemplate = `{
                 },
                 "price_unit_type": {
                     "$ref": "#/definitions/types.PriceUnitType"
+                },
+                "start_date": {
+                    "type": "string"
                 },
                 "tier_mode": {
                     "$ref": "#/definitions/types.BillingTier"
@@ -17404,6 +17541,10 @@ const docTemplate = `{
                     "description": "DisplayPriceUnitAmount is the formatted amount with price unit symbol\nFor BTC: 0.00000001 BTC",
                     "type": "string"
                 },
+                "end_date": {
+                    "description": "EndDate is the end date of the price",
+                    "type": "string"
+                },
                 "entity_id": {
                     "description": "EntityID holds the value of the \"entity_id\" field.",
                     "type": "string"
@@ -17468,6 +17609,10 @@ const docTemplate = `{
                             "$ref": "#/definitions/types.PriceUnitType"
                         }
                     ]
+                },
+                "start_date": {
+                    "description": "StartDate is the start date of the price",
+                    "type": "string"
                 },
                 "status": {
                     "$ref": "#/definitions/types.Status"
@@ -17583,37 +17728,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.SyncPlanPricesResponse": {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string"
-                },
-                "plan_id": {
-                    "type": "string"
-                },
-                "plan_name": {
-                    "type": "string"
-                },
-                "synchronization_summary": {
-                    "type": "object",
-                    "properties": {
-                        "prices_added": {
-                            "type": "integer"
-                        },
-                        "prices_removed": {
-                            "type": "integer"
-                        },
-                        "prices_skipped": {
-                            "type": "integer"
-                        },
-                        "subscriptions_processed": {
-                            "type": "integer"
-                        }
-                    }
-                }
-            }
-        },
         "subscription.SubscriptionLineItem": {
             "type": "object",
             "properties": {
@@ -17642,7 +17756,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "entity_type": {
-                    "$ref": "#/definitions/types.SubscriptionLineItemEntitiyType"
+                    "$ref": "#/definitions/types.SubscriptionLineItemEntityType"
                 },
                 "environment_id": {
                     "type": "string"
@@ -18654,6 +18768,10 @@ const docTemplate = `{
                         "$ref": "#/definitions/types.PaymentStatus"
                     }
                 },
+                "skip_line_items": {
+                    "description": "SkipLineItems if true, will not include line items in the response",
+                    "type": "boolean"
+                },
                 "sort": {
                     "type": "array",
                     "items": {
@@ -19139,15 +19257,15 @@ const docTemplate = `{
                 }
             }
         },
-        "types.SubscriptionLineItemEntitiyType": {
+        "types.SubscriptionLineItemEntityType": {
             "type": "string",
             "enum": [
                 "plan",
                 "addon"
             ],
             "x-enum-varnames": [
-                "SubscriptionLineItemEntitiyTypePlan",
-                "SubscriptionLineItemEntitiyTypeAddon"
+                "SubscriptionLineItemEntityTypePlan",
+                "SubscriptionLineItemEntityTypeAddon"
             ]
         },
         "types.SubscriptionScheduleStatus": {

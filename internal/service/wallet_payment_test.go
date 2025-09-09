@@ -220,93 +220,52 @@ func (s *WalletPaymentServiceSuite) setupWallet() {
 	s.NoError(s.GetStores().WalletRepo.CreateWallet(s.GetContext(), s.testData.wallets.inactive))
 }
 
-func (s *WalletPaymentServiceSuite) TestGetWalletsForPaymentWithDifferentStrategies() {
-	tests := []struct {
-		name            string
-		strategy        WalletPaymentStrategy
-		expectedWallets []string
-	}{
-		{
-			name:     "PromotionalFirstStrategy",
-			strategy: PromotionalFirstStrategy,
-			// Expect promotional wallets first (in order of largest balance first), then prepaid
-			expectedWallets: []string{"wallet_promotional", "wallet_small_balance", "wallet_prepaid"},
-		},
-		{
-			name:     "PrepaidFirstStrategy",
-			strategy: PrepaidFirstStrategy,
-			// Expect prepaid wallets first, then promotional
-			expectedWallets: []string{"wallet_prepaid", "wallet_small_balance", "wallet_promotional"},
-		},
-		{
-			name:     "BalanceOptimizedStrategy",
-			strategy: BalanceOptimizedStrategy,
-			// Expect wallets ordered by balance (smallest first)
-			expectedWallets: []string{"wallet_small_balance", "wallet_promotional", "wallet_prepaid"},
-		},
+func (s *WalletPaymentServiceSuite) TestGetWalletsForPayment() {
+	// Test that wallets are returned in the correct order based on price type restrictions and balance
+	options := WalletPaymentOptions{
+		Strategy: PromotionalFirstStrategy, // Strategy no longer affects ordering
 	}
 
-	for _, tc := range tests {
-		s.Run(tc.name, func() {
-			options := WalletPaymentOptions{
-				Strategy: tc.strategy,
-			}
+	wallets, err := s.service.GetWalletsForPayment(s.GetContext(), s.testData.customer.ID, "usd", options)
+	s.NoError(err)
 
-			wallets, err := s.service.GetWalletsForPayment(s.GetContext(), s.testData.customer.ID, "usd", options)
-			s.NoError(err)
-			s.Equal(len(tc.expectedWallets), len(wallets), "Wrong number of wallets returned")
+	// All wallets are categorized as "all" (no price type restrictions),
+	// sorted by balance (highest first): prepaid(200) > promotional(50) > small_balance(10)
+	expectedWallets := []string{"wallet_prepaid", "wallet_promotional", "wallet_small_balance"}
+	s.Equal(len(expectedWallets), len(wallets), "Wrong number of wallets returned")
 
-			// Verify wallets are in expected order
-			for i, expectedID := range tc.expectedWallets {
-				s.Equal(expectedID, wallets[i].ID, "Wallet at position %d incorrect", i)
-			}
+	// Verify wallets are in expected order
+	for i, expectedID := range expectedWallets {
+		s.Equal(expectedID, wallets[i].ID, "Wallet at position %d incorrect", i)
+	}
 
-			// Verify that inactive and different currency wallets are excluded
-			for _, w := range wallets {
-				s.NotEqual("wallet_inactive", w.ID, "Inactive wallet should not be included")
-				s.NotEqual("wallet_different_currency", w.ID, "Different currency wallet should not be included")
-			}
-		})
+	// Verify that inactive and different currency wallets are excluded
+	for _, w := range wallets {
+		s.NotEqual("wallet_inactive", w.ID, "Inactive wallet should not be included")
+		s.NotEqual("wallet_different_currency", w.ID, "Different currency wallet should not be included")
 	}
 }
 
 func (s *WalletPaymentServiceSuite) TestProcessInvoicePaymentWithWallets() {
 	tests := []struct {
 		name                string
-		strategy            WalletPaymentStrategy
 		maxWalletsToUse     int
 		additionalMetadata  types.Metadata
 		expectedAmountPaid  decimal.Decimal
 		expectedWalletsUsed int
 	}{
 		{
-			name:                "Full payment with promotional first strategy",
-			strategy:            PromotionalFirstStrategy,
+			name:                "Full payment",
 			maxWalletsToUse:     0, // No limit
 			additionalMetadata:  types.Metadata{"test_key": "test_value"},
-			expectedAmountPaid:  decimal.NewFromFloat(150), // 50 + 10 + 90
-			expectedWalletsUsed: 3,                         // 3 wallets used (promotional, small balance, prepaid)
+			expectedAmountPaid:  decimal.NewFromFloat(150), // 150 from prepaid wallet (highest balance, can pay full amount)
+			expectedWalletsUsed: 1,                         // 1 wallet used (prepaid has enough balance)
 		},
 		{
 			name:                "Limited number of wallets",
-			strategy:            PromotionalFirstStrategy,
-			maxWalletsToUse:     1,                        // Only use one wallet
-			expectedAmountPaid:  decimal.NewFromFloat(50), // Only 50 from the first wallet
+			maxWalletsToUse:     1,                         // Only use one wallet
+			expectedAmountPaid:  decimal.NewFromFloat(150), // 150 from prepaid wallet (highest balance)
 			expectedWalletsUsed: 1,
-		},
-		{
-			name:                "PrepaidFirst strategy",
-			strategy:            PrepaidFirstStrategy,
-			maxWalletsToUse:     0,                         // No limit
-			expectedAmountPaid:  decimal.NewFromFloat(150), // 150 from prepaid wallet (of 200 total)
-			expectedWalletsUsed: 1,
-		},
-		{
-			name:                "BalanceOptimized strategy",
-			strategy:            BalanceOptimizedStrategy,
-			maxWalletsToUse:     0,                         // No limit
-			expectedAmountPaid:  decimal.NewFromFloat(150), // 10 + 50 + 90 (from small, promotional, prepaid)
-			expectedWalletsUsed: 3,
 		},
 	}
 
@@ -339,8 +298,9 @@ func (s *WalletPaymentServiceSuite) TestProcessInvoicePaymentWithWallets() {
 
 			// Create options for this test
 			options := WalletPaymentOptions{
-				Strategy:        tc.strategy,
-				MaxWalletsToUse: tc.maxWalletsToUse,
+				Strategy:           PromotionalFirstStrategy, // Strategy no longer affects behavior
+				MaxWalletsToUse:    tc.maxWalletsToUse,
+				AdditionalMetadata: tc.additionalMetadata,
 			}
 
 			// Process payment with the fresh invoice
@@ -444,7 +404,7 @@ func (s *WalletPaymentServiceSuite) TestProcessInvoicePaymentWithInsufficientBal
 
 	// Verify results - should pay partial amount
 	s.NoError(err)
-	expectedAmount := decimal.NewFromFloat(260) // 50 + 10 + 200 (all wallets combined)
+	expectedAmount := decimal.NewFromFloat(260) // 200 + 50 + 10 (all wallets combined, sorted by balance desc)
 	s.True(expectedAmount.Equal(amountPaid),
 		"Amount paid mismatch: expected %s, got %s", expectedAmount, amountPaid)
 

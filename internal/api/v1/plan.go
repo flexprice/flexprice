@@ -7,6 +7,8 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/temporal"
+	_ "github.com/flexprice/flexprice/internal/temporal/models" // Used in Swagger documentation
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
@@ -16,6 +18,7 @@ type PlanHandler struct {
 	service            service.PlanService
 	entitlementService service.EntitlementService
 	creditGrantService service.CreditGrantService
+	temporalService    *temporal.Service
 	log                *logger.Logger
 }
 
@@ -23,12 +26,14 @@ func NewPlanHandler(
 	service service.PlanService,
 	entitlementService service.EntitlementService,
 	creditGrantService service.CreditGrantService,
+	temporalService *temporal.Service,
 	log *logger.Logger,
 ) *PlanHandler {
 	return &PlanHandler{
 		service:            service,
 		entitlementService: entitlementService,
 		creditGrantService: creditGrantService,
+		temporalService:    temporalService,
 		log:                log,
 	}
 }
@@ -261,14 +266,16 @@ func (h *PlanHandler) GetPlanCreditGrants(c *gin.Context) {
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Plan ID"
-// @Success 200 {object} service.SyncPlanPricesResponse
+// @Success 200 {object} models.TemporalWorkflowResult
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 404 {object} ierr.ErrorResponse
 // @Failure 422 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
 // @Router /plans/{id}/sync/subscriptions [post]
 func (h *PlanHandler) SyncPlanPrices(c *gin.Context) {
+
 	id := c.Param("id")
+
 	if id == "" {
 		c.Error(ierr.NewError("plan ID is required").
 			WithHint("Plan ID is required").
@@ -276,16 +283,13 @@ func (h *PlanHandler) SyncPlanPrices(c *gin.Context) {
 		return
 	}
 
-	ctx := c.Request.Context()
-	resp, err := h.service.SyncPlanPrices(ctx, id)
+	result, err := h.temporalService.StartPlanPriceSync(c.Request.Context(), id)
 	if err != nil {
-		c.Error(ierr.NewError("failed to sync plan prices").
-			WithHint("failed to sync plan prices").
-			Mark(ierr.ErrInternal))
+		c.Error(err)
 		return
 	}
 
-	c.JSON(http.StatusOK, resp)
+	c.JSON(http.StatusOK, result)
 }
 
 // @Summary List plans by filter

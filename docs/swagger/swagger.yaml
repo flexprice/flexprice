@@ -882,6 +882,12 @@ definitions:
         description: external_id is the unique identifier from your system to reference
           this customer (required)
         type: string
+      integration_entity_mapping:
+        description: integration_entity_mapping contains provider integration mappings
+          for this customer
+        items:
+          $ref: '#/definitions/dto.IntegrationEntityMapping'
+        type: array
       metadata:
         additionalProperties:
           type: string
@@ -1225,10 +1231,6 @@ definitions:
         type: number
       cancel_url:
         type: string
-      connection_id:
-        type: string
-      connection_name:
-        type: string
       currency:
         type: string
       destination_id:
@@ -1247,6 +1249,9 @@ definitions:
         $ref: '#/definitions/types.PaymentMethodType'
       process_payment:
         default: true
+        type: boolean
+      save_card_and_make_default:
+        default: false
         type: boolean
       success_url:
         type: string
@@ -1300,6 +1305,8 @@ definitions:
         type: string
       description:
         type: string
+      end_date:
+        type: string
       entity_id:
         description: 'TODO: this will be required in the future as we will not allow
           prices to be created without an entity id'
@@ -1332,6 +1339,8 @@ definitions:
         $ref: '#/definitions/dto.PriceUnitConfig'
       price_unit_type:
         $ref: '#/definitions/types.PriceUnitType'
+      start_date:
+        type: string
       tier_mode:
         $ref: '#/definitions/types.BillingTier'
       tiers:
@@ -1396,6 +1405,8 @@ definitions:
         type: string
       description:
         type: string
+      end_date:
+        type: string
       entity_id:
         description: 'TODO: this will be required in the future as we will not allow
           prices to be created without an entity id'
@@ -1428,6 +1439,8 @@ definitions:
         $ref: '#/definitions/dto.PriceUnitConfig'
       price_unit_type:
         $ref: '#/definitions/types.PriceUnitType'
+      start_date:
+        type: string
       tier_mode:
         $ref: '#/definitions/types.BillingTier'
       tiers:
@@ -2107,6 +2120,8 @@ definitions:
         type: string
       usage_limit:
         type: integer
+      usage_reset_period:
+        $ref: '#/definitions/types.BillingPeriod'
     type: object
   dto.EntitlementSourceEntityType:
     enum:
@@ -2533,6 +2548,23 @@ definitions:
     required:
     - event_name
     - external_customer_id
+    type: object
+  dto.IntegrationEntityMapping:
+    description: Integration entity mapping for external provider systems
+    properties:
+      id:
+        description: id is the external entity ID from the provider
+        type: string
+      provider:
+        description: provider is the integration provider name (e.g., "stripe", "razorpay")
+        enum:
+        - stripe
+        - razorpay
+        - paypal
+        type: string
+    required:
+    - id
+    - provider
     type: object
   dto.InvoiceCoupon:
     properties:
@@ -3110,12 +3142,28 @@ definitions:
         description: Amount is the new price amount that overrides the original price
           (optional)
         type: number
+      billing_model:
+        $ref: '#/definitions/types.BillingModel'
       price_id:
         description: PriceID references the plan price to override
         type: string
       quantity:
         description: Quantity for this line item (optional)
         type: number
+      tier_mode:
+        allOf:
+        - $ref: '#/definitions/types.BillingTier'
+        description: TierMode determines how to calculate the price for a given quantity
+      tiers:
+        description: Tiers determines the pricing tiers for this line item
+        items:
+          $ref: '#/definitions/dto.CreatePriceTier'
+        type: array
+      transform_quantity:
+        allOf:
+        - $ref: '#/definitions/price.TransformQuantity'
+        description: TransformQuantity determines how to transform the quantity for
+          this line item
     required:
     - price_id
     type: object
@@ -3243,6 +3291,8 @@ definitions:
         type: string
       refunded_at:
         type: string
+      save_card_and_make_default:
+        type: boolean
       succeeded_at:
         type: string
       tenant_id:
@@ -3337,6 +3387,9 @@ definitions:
           DisplayPriceUnitAmount is the formatted amount with price unit symbol
           For BTC: 0.00000001 BTC
         type: string
+      end_date:
+        description: EndDate is the end date of the price
+        type: string
       entity_id:
         description: EntityID holds the value of the "entity_id" field.
         type: string
@@ -3393,6 +3446,9 @@ definitions:
         description: PriceUnitType is the type of the price unit- Fiat, Custom, Crypto
       pricing_unit:
         $ref: '#/definitions/dto.PriceUnitResponse'
+      start_date:
+        description: StartDate is the start date of the price
+        type: string
       status:
         $ref: '#/definitions/types.Status'
       tenant_id:
@@ -3622,7 +3678,7 @@ definitions:
       entity_id:
         type: string
       entity_type:
-        $ref: '#/definitions/types.SubscriptionLineItemEntitiyType'
+        $ref: '#/definitions/types.SubscriptionLineItemEntityType'
       environment_id:
         type: string
       id:
@@ -3800,8 +3856,9 @@ definitions:
         description: ID is the unique identifier for the subscription
         type: string
       line_items:
+        description: LineItems are the line items for this subscription
         items:
-          $ref: '#/definitions/subscription.SubscriptionLineItem'
+          $ref: '#/definitions/dto.SubscriptionLineItemResponse'
         type: array
       lookup_key:
         description: LookupKey is the key used to lookup the subscription in our system
@@ -3953,6 +4010,26 @@ definitions:
         $ref: '#/definitions/price.Price'
       quantity:
         type: number
+    type: object
+  dto.SyncPlanPricesResponse:
+    properties:
+      message:
+        type: string
+      plan_id:
+        type: string
+      plan_name:
+        type: string
+      synchronization_summary:
+        properties:
+          prices_added:
+            type: integer
+          prices_removed:
+            type: integer
+          prices_skipped:
+            type: integer
+          subscriptions_processed:
+            type: integer
+        type: object
     type: object
   dto.TaskResponse:
     properties:
@@ -4322,6 +4399,12 @@ definitions:
       external_id:
         description: external_id is the updated external identifier for the customer
         type: string
+      integration_entity_mapping:
+        description: integration_entity_mapping contains provider integration mappings
+          for this customer
+        items:
+          $ref: '#/definitions/dto.IntegrationEntityMapping'
+        type: array
       metadata:
         additionalProperties:
           type: string
@@ -4493,6 +4576,8 @@ definitions:
         type: string
       description:
         type: string
+      end_date:
+        type: string
       entity_id:
         description: 'TODO: this will be required in the future as we will not allow
           prices to be created without an entity id'
@@ -4529,6 +4614,8 @@ definitions:
         $ref: '#/definitions/dto.PriceUnitConfig'
       price_unit_type:
         $ref: '#/definitions/types.PriceUnitType'
+      start_date:
+        type: string
       tier_mode:
         $ref: '#/definitions/types.BillingTier'
       tiers:
@@ -4997,6 +5084,9 @@ definitions:
           DisplayPriceUnitAmount is the formatted amount with price unit symbol
           For BTC: 0.00000001 BTC
         type: string
+      end_date:
+        description: EndDate is the end date of the price
+        type: string
       entity_id:
         description: EntityID holds the value of the "entity_id" field.
         type: string
@@ -5046,6 +5136,9 @@ definitions:
         allOf:
         - $ref: '#/definitions/types.PriceUnitType'
         description: PriceUnitType is the type of the price unit- Fiat, Custom, Crypto
+      start_date:
+        description: StartDate is the start date of the price
+        type: string
       status:
         $ref: '#/definitions/types.Status'
       tenant_id:
@@ -5128,26 +5221,6 @@ definitions:
         - $ref: '#/definitions/types.TimeRangeFilter'
         description: TimeRangeFilter allows filtering by time periods
     type: object
-  service.SyncPlanPricesResponse:
-    properties:
-      message:
-        type: string
-      plan_id:
-        type: string
-      plan_name:
-        type: string
-      synchronization_summary:
-        properties:
-          prices_added:
-            type: integer
-          prices_removed:
-            type: integer
-          prices_skipped:
-            type: integer
-          subscriptions_processed:
-            type: integer
-        type: object
-    type: object
   subscription.SubscriptionLineItem:
     properties:
       billing_period:
@@ -5167,7 +5240,7 @@ definitions:
       entity_id:
         type: string
       entity_type:
-        $ref: '#/definitions/types.SubscriptionLineItemEntitiyType'
+        $ref: '#/definitions/types.SubscriptionLineItemEntityType'
       environment_id:
         type: string
       id:
@@ -5920,6 +5993,9 @@ definitions:
         items:
           $ref: '#/definitions/types.PaymentStatus'
         type: array
+      skip_line_items:
+        description: SkipLineItems if true, will not include line items in the response
+        type: boolean
       sort:
         items:
           $ref: '#/definitions/types.SortCondition'
@@ -6276,14 +6352,14 @@ definitions:
         description: WithLineItems includes line items in the response
         type: boolean
     type: object
-  types.SubscriptionLineItemEntitiyType:
+  types.SubscriptionLineItemEntityType:
     enum:
     - plan
     - addon
     type: string
     x-enum-varnames:
-    - SubscriptionLineItemEntitiyTypePlan
-    - SubscriptionLineItemEntitiyTypeAddon
+    - SubscriptionLineItemEntityTypePlan
+    - SubscriptionLineItemEntityTypeAddon
   types.SubscriptionScheduleStatus:
     enum:
     - ACTIVE
@@ -9830,6 +9906,10 @@ paths:
           type: string
         name: payment_status
         type: array
+      - description: SkipLineItems if true, will not include line items in the response
+        in: query
+        name: skip_line_items
+        type: boolean
       - in: query
         name: start_time
         type: string
@@ -10848,7 +10928,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/service.SyncPlanPricesResponse'
+            $ref: '#/definitions/dto.SyncPlanPricesResponse'
         "400":
           description: Bad Request
           schema:
@@ -10908,6 +10988,10 @@ paths:
       - application/json
       description: Get prices with the specified filter
       parameters:
+      - default: false
+        in: query
+        name: allow_expired_prices
+        type: boolean
       - in: query
         name: end_time
         type: string

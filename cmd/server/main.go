@@ -40,6 +40,7 @@ import (
 	ginadapter "github.com/awslabs/aws-lambda-go-api-proxy/gin"
 	_ "github.com/flexprice/flexprice/docs/swagger"
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/gin-gonic/gin"
 )
@@ -164,6 +165,9 @@ func main() {
 			// Temporal
 			provideTemporalClient,
 			provideTemporalService,
+
+			// Proration
+			proration.NewCalculator,
 		),
 	)
 
@@ -210,6 +214,7 @@ func main() {
 			service.NewAddonService,
 			service.NewSettingsService,
 			service.NewAlertService,
+			service.NewSubscriptionChangeService,
 		),
 	)
 
@@ -270,6 +275,7 @@ func provideHandlers(
 	addonService service.AddonService,
 	settingsService service.SettingsService,
 	alertService service.AlertService,
+	subscriptionChangeService service.SubscriptionChangeService,
 ) api.Handlers {
 	return api.Handlers{
 		Events:                   v1.NewEventsHandler(eventService, eventPostProcessingService, logger),
@@ -280,9 +286,10 @@ func provideHandlers(
 		Health:                   v1.NewHealthHandler(logger),
 		Price:                    v1.NewPriceHandler(priceService, logger),
 		Customer:                 v1.NewCustomerHandler(customerService, billingService, logger),
-		Plan:                     v1.NewPlanHandler(planService, entitlementService, creditGrantService, logger),
+		Plan:                     v1.NewPlanHandler(planService, entitlementService, creditGrantService, temporalService, logger),
 		Subscription:             v1.NewSubscriptionHandler(subscriptionService, logger),
 		SubscriptionPause:        v1.NewSubscriptionPauseHandler(subscriptionService, logger),
+		SubscriptionChange:       v1.NewSubscriptionChangeHandler(subscriptionChangeService, logger),
 		Wallet:                   v1.NewWalletHandler(walletService, logger),
 		Tenant:                   v1.NewTenantHandler(tenantService, logger),
 		Invoice:                  v1.NewInvoiceHandler(invoiceService, temporalService, logger),
@@ -323,8 +330,8 @@ func provideTemporalClient(cfg *config.TemporalConfig, log *logger.Logger) (*tem
 	return temporal.NewTemporalClient(cfg, log)
 }
 
-func provideTemporalService(temporalClient *temporal.TemporalClient, cfg *config.TemporalConfig, log *logger.Logger) (*temporal.Service, error) {
-	return temporal.NewService(temporalClient, cfg, log)
+func provideTemporalService(temporalClient *temporal.TemporalClient, cfg *config.TemporalConfig, log *logger.Logger, params service.ServiceParams) (*temporal.Service, error) {
+	return temporal.NewService(temporalClient, cfg, log, params)
 }
 
 func startServer(
@@ -341,6 +348,7 @@ func startServer(
 	log *logger.Logger,
 	sentryService *sentry.Service,
 	eventPostProcessingSvc service.EventPostProcessingService,
+	params service.ServiceParams,
 ) {
 	mode := cfg.Deployment.Mode
 	if mode == "" {
@@ -356,13 +364,13 @@ func startServer(
 		startConsumer(lc, consumer, eventRepo, cfg, log, sentryService, eventPostProcessingSvc)
 		startMessageRouter(lc, router, webhookService, onboardingService, log)
 		startPostProcessingConsumer(lc, router, eventPostProcessingSvc, cfg, log)
-		startTemporalWorker(lc, temporalClient, &cfg.Temporal, log)
+		startTemporalWorker(lc, temporalClient, &cfg.Temporal, params)
 	case types.ModeAPI:
 		startAPIServer(lc, r, cfg, log)
 		startMessageRouter(lc, router, webhookService, onboardingService, log)
 
 	case types.ModeTemporalWorker:
-		startTemporalWorker(lc, temporalClient, &cfg.Temporal, log)
+		startTemporalWorker(lc, temporalClient, &cfg.Temporal, params)
 	case types.ModeConsumer:
 		if consumer == nil {
 			log.Fatal("Kafka consumer required for consumer mode")
@@ -383,9 +391,9 @@ func startTemporalWorker(
 	lc fx.Lifecycle,
 	temporalClient *temporal.TemporalClient,
 	cfg *config.TemporalConfig,
-	log *logger.Logger,
+	params service.ServiceParams,
 ) {
-	worker := temporal.NewWorker(temporalClient, *cfg, log)
+	worker := temporal.NewWorker(temporalClient, *cfg, params)
 	worker.RegisterWithLifecycle(lc)
 }
 
@@ -560,20 +568,20 @@ func handleEventConsumption(ctx context.Context, cfg *config.Configuration, log 
 	log.Debugf("Starting to process event: %+v", event)
 
 	// Start an event processing span
-	eventSpan, ctx := sentryService.MonitorEventProcessing(
-		ctx,
-		event.EventName,
-		event.Timestamp,
-		map[string]interface{}{
-			"event_id":       event.ID,
-			"tenant_id":      event.TenantID,
-			"source":         event.Source,
-			"environment_id": event.EnvironmentID,
-		},
-	)
-	if eventSpan != nil {
-		defer eventSpan.Finish()
-	}
+	// eventSpan, ctx := sentryService.MonitorEventProcessing(
+	// 	ctx,
+	// 	event.EventName,
+	// 	event.Timestamp,
+	// 	map[string]interface{}{
+	// 		"event_id":       event.ID,
+	// 		"tenant_id":      event.TenantID,
+	// 		"source":         event.Source,
+	// 		"environment_id": event.EnvironmentID,
+	// 	},
+	// )
+	// if eventSpan != nil {
+	// 	defer eventSpan.Finish()
+	// }
 
 	eventsToInsert := []*events.Event{&event}
 

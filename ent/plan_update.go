@@ -135,6 +135,27 @@ func (pu *PlanUpdate) ClearDescription() *PlanUpdate {
 	return pu
 }
 
+// SetDisplayOrder sets the "display_order" field.
+func (pu *PlanUpdate) SetDisplayOrder(i int) *PlanUpdate {
+	pu.mutation.ResetDisplayOrder()
+	pu.mutation.SetDisplayOrder(i)
+	return pu
+}
+
+// SetNillableDisplayOrder sets the "display_order" field if the given value is not nil.
+func (pu *PlanUpdate) SetNillableDisplayOrder(i *int) *PlanUpdate {
+	if i != nil {
+		pu.SetDisplayOrder(*i)
+	}
+	return pu
+}
+
+// AddDisplayOrder adds i to the "display_order" field.
+func (pu *PlanUpdate) AddDisplayOrder(i int) *PlanUpdate {
+	pu.mutation.AddDisplayOrder(i)
+	return pu
+}
+
 // AddCreditGrantIDs adds the "credit_grants" edge to the CreditGrant entity by IDs.
 func (pu *PlanUpdate) AddCreditGrantIDs(ids ...string) *PlanUpdate {
 	pu.mutation.AddCreditGrantIDs(ids...)
@@ -272,6 +293,12 @@ func (pu *PlanUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if pu.mutation.DescriptionCleared() {
 		_spec.ClearField(plan.FieldDescription, field.TypeString)
+	}
+	if value, ok := pu.mutation.DisplayOrder(); ok {
+		_spec.SetField(plan.FieldDisplayOrder, field.TypeInt, value)
+	}
+	if value, ok := pu.mutation.AddedDisplayOrder(); ok {
+		_spec.AddField(plan.FieldDisplayOrder, field.TypeInt, value)
 	}
 	if pu.mutation.CreditGrantsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -444,6 +471,27 @@ func (puo *PlanUpdateOne) ClearDescription() *PlanUpdateOne {
 	return puo
 }
 
+// SetDisplayOrder sets the "display_order" field.
+func (puo *PlanUpdateOne) SetDisplayOrder(i int) *PlanUpdateOne {
+	puo.mutation.ResetDisplayOrder()
+	puo.mutation.SetDisplayOrder(i)
+	return puo
+}
+
+// SetNillableDisplayOrder sets the "display_order" field if the given value is not nil.
+func (puo *PlanUpdateOne) SetNillableDisplayOrder(i *int) *PlanUpdateOne {
+	if i != nil {
+		puo.SetDisplayOrder(*i)
+	}
+	return puo
+}
+
+// AddDisplayOrder adds i to the "display_order" field.
+func (puo *PlanUpdateOne) AddDisplayOrder(i int) *PlanUpdateOne {
+	puo.mutation.AddDisplayOrder(i)
+	return puo
+}
+
 // AddCreditGrantIDs adds the "credit_grants" edge to the CreditGrant entity by IDs.
 func (puo *PlanUpdateOne) AddCreditGrantIDs(ids ...string) *PlanUpdateOne {
 	puo.mutation.AddCreditGrantIDs(ids...)
@@ -611,6 +659,12 @@ func (puo *PlanUpdateOne) sqlSave(ctx context.Context) (_node *Plan, err error) 
 	}
 	if puo.mutation.DescriptionCleared() {
 		_spec.ClearField(plan.FieldDescription, field.TypeString)
+	}
+	if value, ok := puo.mutation.DisplayOrder(); ok {
+		_spec.SetField(plan.FieldDisplayOrder, field.TypeInt, value)
+	}
+	if value, ok := puo.mutation.AddedDisplayOrder(); ok {
+		_spec.AddField(plan.FieldDisplayOrder, field.TypeInt, value)
 	}
 	if puo.mutation.CreditGrantsCleared() {
 		edge := &sqlgraph.EdgeSpec{

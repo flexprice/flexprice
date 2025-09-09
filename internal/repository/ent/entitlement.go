@@ -552,11 +552,15 @@ func (o EntitlementQueryOptions) ApplyStatusFilter(query EntitlementQuery, statu
 }
 
 func (o EntitlementQueryOptions) ApplySortFilter(query EntitlementQuery, field string, order string) EntitlementQuery {
-	orderFunc := ent.Desc
-	if order == "asc" {
-		orderFunc = ent.Asc
+	field = o.GetFieldName(field)
+
+	// Apply standard ordering for all fields
+	if order == types.OrderDesc {
+		query = query.Order(ent.Desc(field))
+	} else {
+		query = query.Order(ent.Asc(field))
 	}
-	return query.Order(orderFunc(o.GetFieldName(field)))
+	return query
 }
 
 func (o EntitlementQueryOptions) ApplyPaginationFilter(query EntitlementQuery, limit int, offset int) EntitlementQuery {
@@ -573,6 +577,8 @@ func (o EntitlementQueryOptions) GetFieldName(field string) string {
 		return entitlement.FieldCreatedAt
 	case "updated_at":
 		return entitlement.FieldUpdatedAt
+	case "display_order":
+		return entitlement.FieldDisplayOrder
 	default:
 		return field
 	}

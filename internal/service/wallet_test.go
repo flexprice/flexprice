@@ -293,7 +293,7 @@ func (s *WalletServiceSuite) setupTestData() {
 			{
 				CustomerID:       s.testData.customer.ID,
 				EntityID:         s.testData.plan.ID,
-				EntityType:       types.SubscriptionLineItemEntitiyTypePlan,
+				EntityType:       types.SubscriptionLineItemEntityTypePlan,
 				PlanDisplayName:  s.testData.plan.Name,
 				PriceID:          s.testData.prices.storage.ID,
 				PriceType:        types.PRICE_TYPE_USAGE,
@@ -310,7 +310,7 @@ func (s *WalletServiceSuite) setupTestData() {
 			{
 				CustomerID:       s.testData.customer.ID,
 				EntityID:         s.testData.plan.ID,
-				EntityType:       types.SubscriptionLineItemEntitiyTypePlan,
+				EntityType:       types.SubscriptionLineItemEntityTypePlan,
 				PlanDisplayName:  s.testData.plan.Name,
 				PriceID:          s.testData.prices.storageArchive.ID,
 				PriceType:        types.PRICE_TYPE_USAGE,
@@ -327,7 +327,7 @@ func (s *WalletServiceSuite) setupTestData() {
 			{
 				CustomerID:       s.testData.customer.ID,
 				EntityID:         s.testData.plan.ID,
-				EntityType:       types.SubscriptionLineItemEntitiyTypePlan,
+				EntityType:       types.SubscriptionLineItemEntityTypePlan,
 				PlanDisplayName:  s.testData.plan.Name,
 				PriceID:          s.testData.prices.apiCalls.ID,
 				PriceType:        types.PRICE_TYPE_USAGE,
@@ -429,7 +429,7 @@ func (s *WalletServiceSuite) setupTestData() {
 		{
 			CustomerID:       s.testData.customer.ID,
 			EntityID:         s.testData.plan.ID,
-			EntityType:       types.SubscriptionLineItemEntitiyTypePlan,
+			EntityType:       types.SubscriptionLineItemEntityTypePlan,
 			PlanDisplayName:  s.testData.plan.Name,
 			PriceID:          s.testData.prices.storage.ID,
 			PriceType:        types.PRICE_TYPE_USAGE,
@@ -446,7 +446,7 @@ func (s *WalletServiceSuite) setupTestData() {
 		{
 			CustomerID:       s.testData.customer.ID,
 			EntityID:         s.testData.plan.ID,
-			EntityType:       types.SubscriptionLineItemEntitiyTypePlan,
+			EntityType:       types.SubscriptionLineItemEntityTypePlan,
 			PlanDisplayName:  s.testData.plan.Name,
 			PriceID:          s.testData.prices.storageArchive.ID,
 			PriceType:        types.PRICE_TYPE_USAGE,
@@ -463,7 +463,7 @@ func (s *WalletServiceSuite) setupTestData() {
 		{
 			CustomerID:       s.testData.customer.ID,
 			EntityID:         s.testData.plan.ID,
-			EntityType:       types.SubscriptionLineItemEntitiyTypePlan,
+			EntityType:       types.SubscriptionLineItemEntityTypePlan,
 			PlanDisplayName:  s.testData.plan.Name,
 			PriceID:          s.testData.prices.apiCalls.ID,
 			PriceType:        types.PRICE_TYPE_USAGE,
@@ -1558,7 +1558,7 @@ func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
 					FeatureType:      types.FeatureTypeMetered,
 					IsEnabled:        true,
 					UsageLimit:       lo.ToPtr(int64(2000)),
-					UsageResetPeriod: types.BILLING_PERIOD_MONTHLY,
+					UsageResetPeriod: types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY,
 					IsSoftLimit:      false,
 					BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
 				}
@@ -1583,7 +1583,7 @@ func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
 					FeatureType:      types.FeatureTypeMetered,
 					IsEnabled:        true,
 					UsageLimit:       lo.ToPtr(int64(1000)),
-					UsageResetPeriod: types.BILLING_PERIOD_MONTHLY,
+					UsageResetPeriod: types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY,
 					IsSoftLimit:      false,
 					BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
 				}
@@ -1606,7 +1606,7 @@ func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
 					FeatureType:      types.FeatureTypeMetered,
 					IsEnabled:        true,
 					UsageLimit:       nil,
-					UsageResetPeriod: types.BILLING_PERIOD_MONTHLY,
+					UsageResetPeriod: types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY,
 					IsSoftLimit:      false,
 					BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
 				}
@@ -1629,7 +1629,7 @@ func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
 					FeatureType:      types.FeatureTypeMetered,
 					IsEnabled:        false,
 					UsageLimit:       lo.ToPtr(int64(2000)),
-					UsageResetPeriod: types.BILLING_PERIOD_MONTHLY,
+					UsageResetPeriod: types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY,
 					IsSoftLimit:      false,
 					BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
 				}

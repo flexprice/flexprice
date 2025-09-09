@@ -536,11 +536,11 @@ func (r *ProcessedEventRepository) GetDetailedUsageAnalytics(ctx context.Context
 		params.GroupBy = []string{"feature_id"}
 	}
 
-	// Validate group by values
+	// Validate group by values - now supports properties.* fields
 	for _, groupBy := range params.GroupBy {
-		if groupBy != "feature_id" && groupBy != "source" {
+		if groupBy != "feature_id" && groupBy != "source" && !strings.HasPrefix(groupBy, "properties.") {
 			return nil, ierr.NewError("invalid group_by value").
-				WithHint("Valid group_by values are 'feature_id' and 'source'").
+				WithHint("Valid group_by values are 'feature_id', 'source', or 'properties.<field_name>'").
 				WithReportableDetails(map[string]interface{}{
 					"group_by": params.GroupBy,
 				}).
@@ -560,22 +560,43 @@ func (r *ProcessedEventRepository) GetDetailedUsageAnalytics(ctx context.Context
 
 	// Add group by columns based on params.GroupBy
 	groupByColumns := []string{}
+	groupByColumnAliases := []string{}             // for SELECT clause
+	groupByFieldMapping := make(map[string]string) // maps original field to column alias
+
 	for _, groupBy := range params.GroupBy {
-		switch groupBy {
-		case "feature_id":
+		switch {
+		case groupBy == "feature_id":
 			groupByColumns = append(groupByColumns, "feature_id")
-		case "source":
+			groupByColumnAliases = append(groupByColumnAliases, "feature_id")
+			groupByFieldMapping["feature_id"] = "feature_id"
+		case groupBy == "source":
 			groupByColumns = append(groupByColumns, "source")
+			groupByColumnAliases = append(groupByColumnAliases, "source")
+			groupByFieldMapping["source"] = "source"
+		case strings.HasPrefix(groupBy, "properties."):
+			// Extract property name from "properties.field_name"
+			propertyName := strings.TrimPrefix(groupBy, "properties.")
+			if propertyName != "" {
+				// Create alias like "prop_org_id" for "properties.org_id"
+				alias := "prop_" + strings.ReplaceAll(propertyName, ".", "_")
+				sqlExpression := fmt.Sprintf("JSONExtractString(properties, '%s') AS %s", propertyName, alias)
+				groupByColumns = append(groupByColumns, fmt.Sprintf("JSONExtractString(properties, '%s')", propertyName))
+				groupByColumnAliases = append(groupByColumnAliases, sqlExpression)
+				groupByFieldMapping[groupBy] = alias
+			}
 		}
 	}
 
 	// Base query for aggregates - always include event count
-	selectColumns := []string{
-		strings.Join(groupByColumns, ", "), // group by columns
+	selectColumns := []string{}
+	if len(groupByColumnAliases) > 0 {
+		selectColumns = append(selectColumns, strings.Join(groupByColumnAliases, ", ")) // group by columns with aliases
+	}
+	selectColumns = append(selectColumns,
 		"SUM(qty_billable * sign) AS total_usage",
 		"SUM(cost * sign) AS total_cost",
 		"COUNT(DISTINCT id) AS event_count", // Count distinct event IDs, not rows
-	}
+	)
 
 	aggregateQuery := fmt.Sprintf(`
 		SELECT 
@@ -637,7 +658,9 @@ func (r *ProcessedEventRepository) GetDetailedUsageAnalytics(ctx context.Context
 	queryParams = append(queryParams, filterParams...)
 
 	// Add group by clause
-	aggregateQuery += " GROUP BY " + strings.Join(groupByColumns, ", ")
+	if len(groupByColumns) > 0 {
+		aggregateQuery += " GROUP BY " + strings.Join(groupByColumns, ", ")
+	}
 
 	r.logger.Debugw("executing detailed usage analytics query",
 		"query", aggregateQuery,
@@ -668,22 +691,23 @@ func (r *ProcessedEventRepository) GetDetailedUsageAnalytics(ctx context.Context
 			Points: []events.UsageAnalyticPoint{},
 		}
 
+		// Initialize properties map
+		analytics.Properties = make(map[string]string)
+
 		// Scan the row based on group by columns
-		expectedColumns := len(groupByColumns) + 3 // +3 for total_usage, total_cost, event_count
+		expectedColumns := len(params.GroupBy) + 3 // +3 for total_usage, total_cost, event_count
 		scanArgs := make([]interface{}, expectedColumns)
-		for i, groupBy := range groupByColumns {
-			switch groupBy {
-			case "feature_id":
-				scanArgs[i] = &analytics.FeatureID
-			case "source":
-				scanArgs[i] = &analytics.Source
-			}
+
+		// Prepare scan targets for each group by field
+		scanTargets := make([]string, len(params.GroupBy)) // to store scanned string values
+		for i := range params.GroupBy {
+			scanArgs[i] = &scanTargets[i]
 		}
 
 		// Scan the aggregate values
-		scanArgs[len(groupByColumns)] = &analytics.TotalUsage
-		scanArgs[len(groupByColumns)+1] = &analytics.TotalCost
-		scanArgs[len(groupByColumns)+2] = &analytics.EventCount
+		scanArgs[len(params.GroupBy)] = &analytics.TotalUsage
+		scanArgs[len(params.GroupBy)+1] = &analytics.TotalCost
+		scanArgs[len(params.GroupBy)+2] = &analytics.EventCount
 
 		if err := rows.Scan(scanArgs...); err != nil {
 			SetSpanError(span, err)
@@ -693,6 +717,23 @@ func (r *ProcessedEventRepository) GetDetailedUsageAnalytics(ctx context.Context
 					"customer_id": params.CustomerID,
 				}).
 				Mark(ierr.ErrDatabase)
+		}
+
+		// Populate analytics fields and grouped values based on scanned results
+		for i, groupBy := range params.GroupBy {
+			value := scanTargets[i]
+			switch groupBy {
+			case "feature_id":
+				analytics.FeatureID = value
+			case "source":
+				analytics.Source = value
+			default:
+				// For properties fields, store in Properties map with simplified key
+				if strings.HasPrefix(groupBy, "properties.") {
+					propertyName := strings.TrimPrefix(groupBy, "properties.")
+					analytics.Properties[propertyName] = value
+				}
+			}
 		}
 
 		// If we need time-series data and a window size is specified, fetch the points
@@ -795,6 +836,16 @@ func (r *ProcessedEventRepository) getAnalyticsPoints(
 	if analytics.Source != "" {
 		query += " AND source = ?"
 		queryParams = append(queryParams, analytics.Source)
+	}
+
+	// Add filters for grouped properties values
+	if analytics.Properties != nil {
+		for propertyName, value := range analytics.Properties {
+			if value != "" {
+				query += " AND JSONExtractString(properties, ?) = ?"
+				queryParams = append(queryParams, propertyName, value)
+			}
+		}
 	}
 
 	// Add property filters

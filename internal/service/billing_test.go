@@ -96,6 +96,7 @@ func (s *BillingServiceSuite) setupService() {
 		SettingsRepo:          s.GetStores().SettingsRepo,
 		EventPublisher:        s.GetPublisher(),
 		WebhookPublisher:      s.GetWebhookPublisher(),
+		ProrationCalculator:   s.GetCalculator(),
 	})
 }
 
@@ -263,7 +264,7 @@ func (s *BillingServiceSuite) setupTestData() {
 			SubscriptionID:  s.testData.subscription.ID,
 			CustomerID:      s.testData.subscription.CustomerID,
 			EntityID:        s.testData.plan.ID,
-			EntityType:      types.SubscriptionLineItemEntitiyTypePlan,
+			EntityType:      types.SubscriptionLineItemEntityTypePlan,
 			PlanDisplayName: s.testData.plan.Name,
 			PriceID:         s.testData.prices.fixed.ID,
 			PriceType:       s.testData.prices.fixed.Type,
@@ -280,7 +281,7 @@ func (s *BillingServiceSuite) setupTestData() {
 			SubscriptionID:   s.testData.subscription.ID,
 			CustomerID:       s.testData.subscription.CustomerID,
 			EntityID:         s.testData.plan.ID,
-			EntityType:       types.SubscriptionLineItemEntitiyTypePlan,
+			EntityType:       types.SubscriptionLineItemEntityTypePlan,
 			PlanDisplayName:  s.testData.plan.Name,
 			PriceID:          s.testData.prices.apiCalls.ID,
 			PriceType:        s.testData.prices.apiCalls.Type,
@@ -299,7 +300,7 @@ func (s *BillingServiceSuite) setupTestData() {
 			SubscriptionID:   s.testData.subscription.ID,
 			CustomerID:       s.testData.subscription.CustomerID,
 			EntityID:         s.testData.plan.ID,
-			EntityType:       types.SubscriptionLineItemEntitiyTypePlan,
+			EntityType:       types.SubscriptionLineItemEntityTypePlan,
 			PlanDisplayName:  s.testData.plan.Name,
 			PriceID:          s.testData.prices.storageArchive.ID,
 			PriceType:        s.testData.prices.storageArchive.Type,
@@ -434,7 +435,7 @@ func (s *BillingServiceSuite) TestPrepareSubscriptionInvoiceRequest() {
 							CustomerID:     s.testData.customer.ID,
 							SubscriptionID: lo.ToPtr(s.testData.subscription.ID),
 							EntityID:       lo.ToPtr(s.testData.plan.ID),
-							EntityType:     lo.ToPtr(string(types.SubscriptionLineItemEntitiyTypePlan)),
+							EntityType:     lo.ToPtr(string(types.SubscriptionLineItemEntityTypePlan)),
 							PriceID:        lo.ToPtr(s.testData.prices.fixed.ID),
 							Amount:         decimal.NewFromInt(10),
 							Quantity:       decimal.NewFromInt(1),
@@ -482,7 +483,7 @@ func (s *BillingServiceSuite) TestPrepareSubscriptionInvoiceRequest() {
 							CustomerID:     s.testData.customer.ID,
 							SubscriptionID: lo.ToPtr(s.testData.subscription.ID),
 							EntityID:       lo.ToPtr(s.testData.plan.ID),
-							EntityType:     lo.ToPtr(string(types.SubscriptionLineItemEntitiyTypePlan)),
+							EntityType:     lo.ToPtr(string(types.SubscriptionLineItemEntityTypePlan)),
 							PriceID:        lo.ToPtr(s.testData.prices.apiCalls.ID),
 							Amount:         decimal.NewFromInt(10),
 							Quantity:       decimal.NewFromInt(500),
@@ -497,7 +498,7 @@ func (s *BillingServiceSuite) TestPrepareSubscriptionInvoiceRequest() {
 							CustomerID:     s.testData.customer.ID,
 							SubscriptionID: lo.ToPtr(s.testData.subscription.ID),
 							EntityID:       lo.ToPtr(s.testData.plan.ID),
-							EntityType:     lo.ToPtr(string(types.SubscriptionLineItemEntitiyTypePlan)),
+							EntityType:     lo.ToPtr(string(types.SubscriptionLineItemEntityTypePlan)),
 							PriceID:        lo.ToPtr(s.testData.prices.storageArchive.ID),
 							Amount:         decimal.NewFromInt(5),
 							Quantity:       decimal.NewFromInt(1),
@@ -711,7 +712,7 @@ func (s *BillingServiceSuite) TestFilterLineItemsToBeInvoiced() {
 							CustomerID:     s.testData.customer.ID,
 							SubscriptionID: lo.ToPtr(s.testData.subscription.ID),
 							EntityID:       lo.ToPtr(s.testData.plan.ID),
-							EntityType:     lo.ToPtr(string(types.SubscriptionLineItemEntitiyTypePlan)),
+							EntityType:     lo.ToPtr(string(types.SubscriptionLineItemEntityTypePlan)),
 							PriceID:        lo.ToPtr(s.testData.prices.fixed.ID), // Fixed charge with advance cadence
 							Amount:         decimal.NewFromInt(10),
 							Quantity:       decimal.NewFromInt(1),
@@ -755,7 +756,7 @@ func (s *BillingServiceSuite) TestFilterLineItemsToBeInvoiced() {
 							CustomerID:     s.testData.customer.ID,
 							SubscriptionID: lo.ToPtr(s.testData.subscription.ID),
 							EntityID:       lo.ToPtr(s.testData.plan.ID),
-							EntityType:     lo.ToPtr(string(types.SubscriptionLineItemEntitiyTypePlan)),
+							EntityType:     lo.ToPtr(string(types.SubscriptionLineItemEntityTypePlan)),
 							PriceID:        lo.ToPtr(s.testData.prices.apiCalls.ID), // Usage charge with arrear cadence
 							Amount:         decimal.NewFromInt(10),
 							Quantity:       decimal.NewFromInt(500),
@@ -770,7 +771,7 @@ func (s *BillingServiceSuite) TestFilterLineItemsToBeInvoiced() {
 							CustomerID:     s.testData.customer.ID,
 							SubscriptionID: lo.ToPtr(s.testData.subscription.ID),
 							EntityID:       lo.ToPtr(s.testData.plan.ID),
-							EntityType:     lo.ToPtr(string(types.SubscriptionLineItemEntitiyTypePlan)),
+							EntityType:     lo.ToPtr(string(types.SubscriptionLineItemEntityTypePlan)),
 							PriceID:        lo.ToPtr(s.testData.prices.storageArchive.ID), // Fixed charge with arrear cadence
 							Amount:         decimal.NewFromInt(5),
 							Quantity:       decimal.NewFromInt(1),
@@ -814,7 +815,7 @@ func (s *BillingServiceSuite) TestFilterLineItemsToBeInvoiced() {
 							CustomerID:     s.testData.customer.ID,
 							SubscriptionID: lo.ToPtr(s.testData.subscription.ID),
 							EntityID:       lo.ToPtr(s.testData.plan.ID),
-							EntityType:     lo.ToPtr(string(types.SubscriptionLineItemEntitiyTypePlan)),
+							EntityType:     lo.ToPtr(string(types.SubscriptionLineItemEntityTypePlan)),
 							PriceID:        lo.ToPtr(s.testData.prices.fixed.ID), // Fixed charge with advance cadence
 							Amount:         decimal.NewFromInt(10),
 							Quantity:       decimal.NewFromInt(1),
@@ -829,7 +830,7 @@ func (s *BillingServiceSuite) TestFilterLineItemsToBeInvoiced() {
 							CustomerID:     s.testData.customer.ID,
 							SubscriptionID: lo.ToPtr(s.testData.subscription.ID),
 							EntityID:       lo.ToPtr(s.testData.plan.ID),
-							EntityType:     lo.ToPtr(string(types.SubscriptionLineItemEntitiyTypePlan)),
+							EntityType:     lo.ToPtr(string(types.SubscriptionLineItemEntityTypePlan)),
 							PriceID:        lo.ToPtr(s.testData.prices.apiCalls.ID), // Usage charge with arrear cadence
 							Amount:         decimal.NewFromInt(10),
 							Quantity:       decimal.NewFromInt(500),
@@ -844,7 +845,7 @@ func (s *BillingServiceSuite) TestFilterLineItemsToBeInvoiced() {
 							CustomerID:     s.testData.customer.ID,
 							SubscriptionID: lo.ToPtr(s.testData.subscription.ID),
 							EntityID:       lo.ToPtr(s.testData.plan.ID),
-							EntityType:     lo.ToPtr(string(types.SubscriptionLineItemEntitiyTypePlan)),
+							EntityType:     lo.ToPtr(string(types.SubscriptionLineItemEntityTypePlan)),
 							PriceID:        lo.ToPtr(s.testData.prices.storageArchive.ID), // Fixed charge with arrear cadence
 							Amount:         decimal.NewFromInt(5),
 							Quantity:       decimal.NewFromInt(1),
@@ -1002,25 +1003,26 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithEntitlements() {
 
 	// Initialize billing service
 	s.service = NewBillingService(ServiceParams{
-		Logger:          s.GetLogger(),
-		Config:          s.GetConfig(),
-		DB:              s.GetDB(),
-		SubRepo:         s.GetStores().SubscriptionRepo,
-		PlanRepo:        s.GetStores().PlanRepo,
-		PriceRepo:       s.GetStores().PriceRepo,
-		EventRepo:       s.GetStores().EventRepo,
-		MeterRepo:       s.GetStores().MeterRepo,
-		CustomerRepo:    s.GetStores().CustomerRepo,
-		InvoiceRepo:     s.GetStores().InvoiceRepo,
-		EntitlementRepo: s.GetStores().EntitlementRepo,
-		EnvironmentRepo: s.GetStores().EnvironmentRepo,
-		FeatureRepo:     s.GetStores().FeatureRepo,
-		TenantRepo:      s.GetStores().TenantRepo,
-		UserRepo:        s.GetStores().UserRepo,
-		AuthRepo:        s.GetStores().AuthRepo,
-		WalletRepo:      s.GetStores().WalletRepo,
-		PaymentRepo:     s.GetStores().PaymentRepo,
-		EventPublisher:  s.GetPublisher(),
+		Logger:              s.GetLogger(),
+		Config:              s.GetConfig(),
+		DB:                  s.GetDB(),
+		SubRepo:             s.GetStores().SubscriptionRepo,
+		PlanRepo:            s.GetStores().PlanRepo,
+		PriceRepo:           s.GetStores().PriceRepo,
+		EventRepo:           s.GetStores().EventRepo,
+		MeterRepo:           s.GetStores().MeterRepo,
+		CustomerRepo:        s.GetStores().CustomerRepo,
+		InvoiceRepo:         s.GetStores().InvoiceRepo,
+		EntitlementRepo:     s.GetStores().EntitlementRepo,
+		EnvironmentRepo:     s.GetStores().EnvironmentRepo,
+		FeatureRepo:         s.GetStores().FeatureRepo,
+		TenantRepo:          s.GetStores().TenantRepo,
+		UserRepo:            s.GetStores().UserRepo,
+		AuthRepo:            s.GetStores().AuthRepo,
+		WalletRepo:          s.GetStores().WalletRepo,
+		PaymentRepo:         s.GetStores().PaymentRepo,
+		EventPublisher:      s.GetPublisher(),
+		ProrationCalculator: s.GetCalculator(),
 	})
 
 	tests := []struct {
@@ -1054,7 +1056,7 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithEntitlements() {
 					FeatureType:      types.FeatureTypeMetered,
 					IsEnabled:        true,
 					UsageLimit:       lo.ToPtr(int64(1000)), // Allow 1000 units
-					UsageResetPeriod: types.BILLING_PERIOD_MONTHLY,
+					UsageResetPeriod: types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY,
 					IsSoftLimit:      false,
 					BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
 				}
@@ -1089,7 +1091,7 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithEntitlements() {
 					FeatureType:      types.FeatureTypeMetered,
 					IsEnabled:        true,
 					UsageLimit:       lo.ToPtr(int64(100)), // Only allow 100 units
-					UsageResetPeriod: types.BILLING_PERIOD_MONTHLY,
+					UsageResetPeriod: types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY,
 					IsSoftLimit:      false,
 					BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
 				}
@@ -1124,7 +1126,7 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithEntitlements() {
 					FeatureType:      types.FeatureTypeMetered,
 					IsEnabled:        true,
 					UsageLimit:       nil, // Unlimited usage
-					UsageResetPeriod: types.BILLING_PERIOD_MONTHLY,
+					UsageResetPeriod: types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY,
 					IsSoftLimit:      false,
 					BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
 				}
@@ -1159,7 +1161,7 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithEntitlements() {
 					FeatureType:      types.FeatureTypeMetered,
 					IsEnabled:        true,
 					UsageLimit:       lo.ToPtr(int64(100)), // Soft limit of 100 units
-					UsageResetPeriod: types.BILLING_PERIOD_MONTHLY,
+					UsageResetPeriod: types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY,
 					IsSoftLimit:      true,
 					BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
 				}
@@ -1194,7 +1196,7 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithEntitlements() {
 					FeatureType:      types.FeatureTypeMetered,
 					IsEnabled:        false, // Disabled entitlement
 					UsageLimit:       lo.ToPtr(int64(1000)),
-					UsageResetPeriod: types.BILLING_PERIOD_MONTHLY,
+					UsageResetPeriod: types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY,
 					IsSoftLimit:      false,
 					BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
 				}
@@ -1230,7 +1232,7 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithEntitlements() {
 						SubscriptionID:   s.testData.subscription.ID,
 						CustomerID:       s.testData.subscription.CustomerID,
 						EntityID:         s.testData.plan.ID,
-						EntityType:       types.SubscriptionLineItemEntitiyTypePlan,
+						EntityType:       types.SubscriptionLineItemEntityTypePlan,
 						PlanDisplayName:  s.testData.plan.Name,
 						PriceID:          s.testData.prices.apiCalls.ID,
 						PriceType:        s.testData.prices.apiCalls.Type,
@@ -1377,7 +1379,7 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithDailyReset() {
 		FeatureType:      types.FeatureTypeMetered,
 		IsEnabled:        true,
 		UsageLimit:       lo.ToPtr(int64(10)), // 10 requests per day
-		UsageResetPeriod: types.BILLING_PERIOD_DAILY,
+		UsageResetPeriod: types.ENTITLEMENT_USAGE_RESET_PERIOD_DAILY,
 		IsSoftLimit:      false,
 		BaseModel:        types.GetDefaultBaseModel(ctx),
 	}
@@ -1463,4 +1465,512 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithDailyReset() {
 
 	// Check metadata indicates daily reset
 	s.Equal("daily", lineItems[0].Metadata["usage_reset_period"])
+}
+
+func (s *BillingServiceSuite) TestCalculateUsageChargesWithBucketedMaxAggregation() {
+	ctx := s.GetContext()
+
+	tests := []struct {
+		name             string
+		billingModel     types.BillingModel
+		setupPrice       func() *price.Price
+		bucketValues     []decimal.Decimal // Max values per bucket
+		expectedAmount   decimal.Decimal
+		expectedQuantity decimal.Decimal
+		description      string
+	}{
+		{
+			name:         "bucketed_max_flat_fee",
+			billingModel: types.BILLING_MODEL_FLAT_FEE,
+			setupPrice: func() *price.Price {
+				return &price.Price{
+					ID:                 "price_bucketed_flat",
+					Amount:             decimal.NewFromFloat(0.10), // $0.10 per unit
+					Currency:           "usd",
+					EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+					EntityID:           s.testData.plan.ID,
+					Type:               types.PRICE_TYPE_USAGE,
+					BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+					BillingPeriodCount: 1,
+					BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+					BillingCadence:     types.BILLING_CADENCE_RECURRING,
+					InvoiceCadence:     types.InvoiceCadenceArrear,
+					MeterID:            s.testData.meters.apiCalls.ID,
+					BaseModel:          types.GetDefaultBaseModel(ctx),
+				}
+			},
+			bucketValues:     []decimal.Decimal{decimal.NewFromInt(9), decimal.NewFromInt(10)}, // Bucket 1: max(2,5,6,9)=9, Bucket 2: max(10)=10
+			expectedAmount:   decimal.NewFromFloat(1.9),                                        // (9 * 0.10) + (10 * 0.10) = $1.90
+			expectedQuantity: decimal.NewFromInt(19),                                           // 9 + 10 = 19
+			description:      "Flat fee: Bucket1[2,5,6,9]→max=9, Bucket2[10]→max=10, Total: 9*$0.10 + 10*$0.10 = $1.90",
+		},
+		{
+			name:         "bucketed_max_package",
+			billingModel: types.BILLING_MODEL_PACKAGE,
+			setupPrice: func() *price.Price {
+				return &price.Price{
+					ID:                 "price_bucketed_package",
+					Amount:             decimal.NewFromInt(1), // $1 per package
+					Currency:           "usd",
+					EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+					EntityID:           s.testData.plan.ID,
+					Type:               types.PRICE_TYPE_USAGE,
+					BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+					BillingPeriodCount: 1,
+					BillingModel:       types.BILLING_MODEL_PACKAGE,
+					BillingCadence:     types.BILLING_CADENCE_RECURRING,
+					InvoiceCadence:     types.InvoiceCadenceArrear,
+					MeterID:            s.testData.meters.apiCalls.ID,
+					TransformQuantity: price.JSONBTransformQuantity{
+						DivideBy: 10,   // 10 units per package
+						Round:    "up", // Round up
+					},
+					BaseModel: types.GetDefaultBaseModel(ctx),
+				}
+			},
+			bucketValues:     []decimal.Decimal{decimal.NewFromInt(9), decimal.NewFromInt(10)}, // Bucket 1: max(2,5,6,9)=9, Bucket 2: max(10)=10
+			expectedAmount:   decimal.NewFromInt(2),                                            // Bucket 1: ceil(9/10) = 1 package, Bucket 2: ceil(10/10) = 1 package = $2
+			expectedQuantity: decimal.NewFromInt(19),                                           // 9 + 10 = 19
+			description:      "Package: Bucket1[2,5,6,9]→max=9→ceil(9/10)=1pkg, Bucket2[10]→max=10→ceil(10/10)=1pkg, Total: 1*$1 + 1*$1 = $2",
+		},
+		{
+			name:         "bucketed_max_tiered_slab",
+			billingModel: types.BILLING_MODEL_TIERED,
+			setupPrice: func() *price.Price {
+				upTo10 := uint64(10)
+				upTo20 := uint64(20)
+				return &price.Price{
+					ID:                 "price_bucketed_tiered_slab",
+					Amount:             decimal.Zero,
+					Currency:           "usd",
+					EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+					EntityID:           s.testData.plan.ID,
+					Type:               types.PRICE_TYPE_USAGE,
+					BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+					BillingPeriodCount: 1,
+					BillingModel:       types.BILLING_MODEL_TIERED,
+					BillingCadence:     types.BILLING_CADENCE_RECURRING,
+					InvoiceCadence:     types.InvoiceCadenceArrear,
+					TierMode:           types.BILLING_TIER_SLAB,
+					MeterID:            s.testData.meters.apiCalls.ID,
+					Tiers: []price.PriceTier{
+						{UpTo: &upTo10, UnitAmount: decimal.NewFromFloat(0.10)}, // 0-10: $0.10/unit
+						{UpTo: &upTo20, UnitAmount: decimal.NewFromFloat(0.05)}, // 11-20: $0.05/unit
+						{UpTo: nil, UnitAmount: decimal.NewFromFloat(0.02)},     // 21+: $0.02/unit
+					},
+					BaseModel: types.GetDefaultBaseModel(ctx),
+				}
+			},
+			bucketValues:     []decimal.Decimal{decimal.NewFromInt(9), decimal.NewFromInt(15)}, // Bucket 1: max(2,5,6,9)=9, Bucket 2: max(10,15)=15
+			expectedAmount:   decimal.NewFromFloat(1.65),                                       // Bucket 1: 9*0.10=$0.90, Bucket 2: 10*0.10+5*0.05=$1.25, Total=$1.65
+			expectedQuantity: decimal.NewFromInt(24),                                           // 9 + 15 = 24
+			description:      "Tiered slab: Bucket1[2,5,6,9]→max=9→9*$0.10=$0.90, Bucket2[10,15]→max=15→10*$0.10+5*$0.05=$1.25, Total=$1.65",
+		},
+		{
+			name:         "bucketed_max_tiered_volume",
+			billingModel: types.BILLING_MODEL_TIERED,
+			setupPrice: func() *price.Price {
+				upTo10 := uint64(10)
+				upTo20 := uint64(20)
+				return &price.Price{
+					ID:                 "price_bucketed_tiered_volume",
+					Amount:             decimal.Zero,
+					Currency:           "usd",
+					EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+					EntityID:           s.testData.plan.ID,
+					Type:               types.PRICE_TYPE_USAGE,
+					BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+					BillingPeriodCount: 1,
+					BillingModel:       types.BILLING_MODEL_TIERED,
+					BillingCadence:     types.BILLING_CADENCE_RECURRING,
+					InvoiceCadence:     types.InvoiceCadenceArrear,
+					TierMode:           types.BILLING_TIER_VOLUME,
+					MeterID:            s.testData.meters.apiCalls.ID,
+					Tiers: []price.PriceTier{
+						{UpTo: &upTo10, UnitAmount: decimal.NewFromFloat(0.10)}, // 0-10: $0.10/unit
+						{UpTo: &upTo20, UnitAmount: decimal.NewFromFloat(0.05)}, // 11-20: $0.05/unit
+						{UpTo: nil, UnitAmount: decimal.NewFromFloat(0.02)},     // 21+: $0.02/unit
+					},
+					BaseModel: types.GetDefaultBaseModel(ctx),
+				}
+			},
+			bucketValues:     []decimal.Decimal{decimal.NewFromInt(9), decimal.NewFromInt(15)}, // Bucket 1: max(2,5,6,9)=9, Bucket 2: max(10,15)=15
+			expectedAmount:   decimal.NewFromFloat(1.65),                                       // Bucket 1: 9*0.10=$0.90, Bucket 2: 15*0.05=$0.75, Total=$1.65
+			expectedQuantity: decimal.NewFromInt(24),                                           // 9 + 15 = 24
+			description:      "Tiered volume: Bucket1[2,5,6,9]→max=9→9*$0.10=$0.90, Bucket2[10,15]→max=15→15*$0.05=$0.75, Total=$1.65",
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			// Clear stores for clean test
+			s.BaseServiceTestSuite.ClearStores()
+			s.setupTestData()
+
+			// Create bucketed max meter
+			bucketedMaxMeter := &meter.Meter{
+				ID:        "meter_bucketed_max",
+				Name:      "Bucketed Max Meter",
+				EventName: "bucketed_event",
+				Aggregation: meter.Aggregation{
+					Type:       types.AggregationMax,
+					Field:      "value",
+					BucketSize: "minute", // Minute-level buckets
+				},
+				BaseModel: types.GetDefaultBaseModel(ctx),
+			}
+			s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, bucketedMaxMeter))
+
+			// Create price with specific billing model
+			testPrice := tt.setupPrice()
+			testPrice.MeterID = bucketedMaxMeter.ID
+			s.NoError(s.GetStores().PriceRepo.Create(ctx, testPrice))
+
+			// Create subscription line item for this price
+			lineItem := &subscription.SubscriptionLineItem{
+				ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+				SubscriptionID:   s.testData.subscription.ID,
+				CustomerID:       s.testData.subscription.CustomerID,
+				EntityID:         s.testData.plan.ID,
+				EntityType:       types.SubscriptionLineItemEntityTypePlan,
+				PlanDisplayName:  s.testData.plan.Name,
+				PriceID:          testPrice.ID,
+				PriceType:        testPrice.Type,
+				MeterID:          bucketedMaxMeter.ID,
+				MeterDisplayName: bucketedMaxMeter.Name,
+				DisplayName:      "Bucketed Max Test",
+				Quantity:         decimal.Zero,
+				Currency:         s.testData.subscription.Currency,
+				BillingPeriod:    s.testData.subscription.BillingPeriod,
+				InvoiceCadence:   types.InvoiceCadenceArrear,
+				StartDate:        s.testData.subscription.StartDate,
+				BaseModel:        types.GetDefaultBaseModel(ctx),
+			}
+
+			// Update subscription with new line item
+			s.testData.subscription.LineItems = append(s.testData.subscription.LineItems, lineItem)
+			s.NoError(s.GetStores().SubscriptionRepo.Update(ctx, s.testData.subscription))
+
+			// Create mock usage data with bucketed results
+			usage := &dto.GetUsageBySubscriptionResponse{
+				StartTime: s.testData.subscription.CurrentPeriodStart,
+				EndTime:   s.testData.subscription.CurrentPeriodEnd,
+				Currency:  s.testData.subscription.Currency,
+				Charges: []*dto.SubscriptionUsageByMetersResponse{
+					{
+						Price:     testPrice,
+						Quantity:  tt.expectedQuantity.InexactFloat64(), // Sum of bucket values
+						Amount:    tt.expectedAmount.InexactFloat64(),   // Will be recalculated
+						IsOverage: false,
+						MeterID:   bucketedMaxMeter.ID,
+					},
+				},
+			}
+
+			// Calculate charges
+			lineItems, totalAmount, err := s.service.CalculateUsageCharges(
+				ctx,
+				s.testData.subscription,
+				usage,
+				s.testData.subscription.CurrentPeriodStart,
+				s.testData.subscription.CurrentPeriodEnd,
+			)
+
+			s.NoError(err, "Should not error for %s", tt.name)
+			s.Len(lineItems, 1, "Should have one line item for %s", tt.name)
+
+			s.True(tt.expectedAmount.Equal(totalAmount),
+				"Expected amount %s, got %s for %s", tt.expectedAmount, totalAmount, tt.name)
+
+			s.True(tt.expectedQuantity.Equal(lineItems[0].Quantity),
+				"Expected quantity %s, got %s for %s", tt.expectedQuantity, lineItems[0].Quantity, tt.name)
+
+			s.T().Logf("✅ %s: %s", tt.name, tt.description)
+			s.T().Logf("   Bucket values: %v", tt.bucketValues)
+			s.T().Logf("   Expected: Quantity=%s, Amount=%s", tt.expectedQuantity, tt.expectedAmount)
+			s.T().Logf("   Actual:   Quantity=%s, Amount=%s", lineItems[0].Quantity, totalAmount)
+		})
+	}
+}
+
+func (s *BillingServiceSuite) TestCalculateNeverResetUsage() {
+	ctx := s.GetContext()
+
+	// Test scenario from user discussion:
+	// Subscription start: 1/1/2025
+	// L1: start = 1/1/2025, end = 15/2/2025
+	// L2: start = 15/2/2025, end = nil
+	// Period start: 1/2/2025, Period end: 1/3/2025
+	// Usage allowed: 100
+
+	tests := []struct {
+		name              string
+		description       string
+		subscriptionStart time.Time
+		lineItemStart     time.Time
+		lineItemEnd       *time.Time
+		periodStart       time.Time
+		periodEnd         time.Time
+		usageAllowed      decimal.Decimal
+		totalUsageEvents  []struct {
+			timestamp time.Time
+			value     decimal.Decimal
+		}
+		expectedBillableQuantity decimal.Decimal
+		shouldSkip               bool
+	}{
+		{
+			name:              "L1: Line item active during billing period",
+			description:       "Line item L1 from 1/1 to 15/2, billing period 1/2 to 1/3",
+			subscriptionStart: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+			lineItemStart:     time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+			lineItemEnd:       lo.ToPtr(time.Date(2025, 2, 15, 0, 0, 0, 0, time.UTC)),
+			periodStart:       time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC),
+			periodEnd:         time.Date(2025, 3, 1, 0, 0, 0, 0, time.UTC),
+			usageAllowed:      decimal.NewFromInt(100),
+			totalUsageEvents: []struct {
+				timestamp time.Time
+				value     decimal.Decimal
+			}{
+				{time.Date(2025, 1, 15, 0, 0, 0, 0, time.UTC), decimal.NewFromInt(50)}, // Before period start
+				{time.Date(2025, 2, 5, 0, 0, 0, 0, time.UTC), decimal.NewFromInt(75)},  // During period
+				{time.Date(2025, 2, 10, 0, 0, 0, 0, time.UTC), decimal.NewFromInt(25)}, // During period
+			},
+			expectedBillableQuantity: decimal.NewFromInt(0), // totalUsage(150) - previousPeriodUsage(50) - usageAllowed(100) = max(0, 100-100) = 0
+			shouldSkip:               false,
+		},
+		{
+			name:              "L2: Line item starts during billing period",
+			description:       "Line item L2 from 15/2 to nil, billing period 1/2 to 1/3",
+			subscriptionStart: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+			lineItemStart:     time.Date(2025, 2, 15, 0, 0, 0, 0, time.UTC),
+			lineItemEnd:       nil,
+			periodStart:       time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC),
+			periodEnd:         time.Date(2025, 3, 1, 0, 0, 0, 0, time.UTC),
+			usageAllowed:      decimal.NewFromInt(100),
+			totalUsageEvents: []struct {
+				timestamp time.Time
+				value     decimal.Decimal
+			}{
+				{time.Date(2025, 1, 15, 0, 0, 0, 0, time.UTC), decimal.NewFromInt(50)}, // Before line item start
+				{time.Date(2025, 2, 20, 0, 0, 0, 0, time.UTC), decimal.NewFromInt(75)}, // During line item period
+				{time.Date(2025, 2, 25, 0, 0, 0, 0, time.UTC), decimal.NewFromInt(25)}, // During line item period
+			},
+			expectedBillableQuantity: decimal.NewFromInt(0), // totalUsage(100) - previousPeriodUsage(100) - usageAllowed(100) = max(0, 0-100) = 0
+			shouldSkip:               false,
+		},
+		{
+			name:              "Line item not active during billing period",
+			description:       "Line item ends before billing period starts",
+			subscriptionStart: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+			lineItemStart:     time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+			lineItemEnd:       lo.ToPtr(time.Date(2025, 1, 15, 0, 0, 0, 0, time.UTC)),
+			periodStart:       time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC),
+			periodEnd:         time.Date(2025, 3, 1, 0, 0, 0, 0, time.UTC),
+			usageAllowed:      decimal.NewFromInt(100),
+			totalUsageEvents: []struct {
+				timestamp time.Time
+				value     decimal.Decimal
+			}{},
+			expectedBillableQuantity: decimal.Zero,
+			shouldSkip:               true, // Should be skipped as line item is not active
+		},
+		{
+			name:              "Zero usage scenario",
+			description:       "No usage events during the period",
+			subscriptionStart: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+			lineItemStart:     time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+			lineItemEnd:       nil,
+			periodStart:       time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC),
+			periodEnd:         time.Date(2025, 3, 1, 0, 0, 0, 0, time.UTC),
+			usageAllowed:      decimal.NewFromInt(100),
+			totalUsageEvents: []struct {
+				timestamp time.Time
+				value     decimal.Decimal
+			}{},
+			expectedBillableQuantity: decimal.Zero, // totalUsage(0) - previousPeriodUsage(0) - usageAllowed(100) = max(0, 0-0-100) = 0
+			shouldSkip:               false,
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			// Clear stores for clean test
+			s.BaseServiceTestSuite.ClearStores()
+			s.setupTestData()
+
+			// Create test meter
+			testMeter := &meter.Meter{
+				ID:        "meter_never_reset_test",
+				Name:      "Never Reset Test Meter",
+				EventName: "never_reset_event",
+				Aggregation: meter.Aggregation{
+					Type:  types.AggregationSum,
+					Field: "value",
+				},
+				BaseModel: types.GetDefaultBaseModel(ctx),
+			}
+			s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, testMeter))
+
+			// Create test price
+			testPrice := &price.Price{
+				ID:        "price_never_reset_test",
+				MeterID:   testMeter.ID,
+				Type:      types.PRICE_TYPE_USAGE,
+				BaseModel: types.GetDefaultBaseModel(ctx),
+			}
+			s.NoError(s.GetStores().PriceRepo.Create(ctx, testPrice))
+
+			// Create subscription with specific start date
+			testSubscription := &subscription.Subscription{
+				ID:                 "sub_never_reset_test",
+				CustomerID:         s.testData.customer.ID,
+				PlanID:             s.testData.plan.ID,
+				SubscriptionStatus: types.SubscriptionStatusActive,
+				Currency:           "usd",
+				BillingAnchor:      tt.subscriptionStart,
+				BillingCycle:       types.BillingCycleAnniversary,
+				StartDate:          tt.subscriptionStart,
+				CurrentPeriodStart: tt.periodStart,
+				CurrentPeriodEnd:   tt.periodEnd,
+				BillingCadence:     types.BILLING_CADENCE_RECURRING,
+				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+				BillingPeriodCount: 1,
+				Version:            1,
+				BaseModel:          types.GetDefaultBaseModel(ctx),
+			}
+			s.NoError(s.GetStores().SubscriptionRepo.Create(ctx, testSubscription))
+
+			// Create line item with specific dates
+			lineItem := &subscription.SubscriptionLineItem{
+				ID:               "line_item_never_reset_test",
+				SubscriptionID:   testSubscription.ID,
+				CustomerID:       s.testData.customer.ID,
+				EntityID:         s.testData.plan.ID,
+				EntityType:       types.SubscriptionLineItemEntityTypePlan,
+				PlanDisplayName:  s.testData.plan.Name,
+				PriceID:          testPrice.ID,
+				PriceType:        testPrice.Type,
+				MeterID:          testMeter.ID,
+				MeterDisplayName: testMeter.Name,
+				DisplayName:      "Never Reset Test Line Item",
+				Quantity:         decimal.Zero,
+				Currency:         testSubscription.Currency,
+				BillingPeriod:    testSubscription.BillingPeriod,
+				InvoiceCadence:   types.InvoiceCadenceArrear,
+				StartDate:        tt.lineItemStart,
+				BaseModel:        types.GetDefaultBaseModel(ctx),
+			}
+
+			if tt.lineItemEnd != nil {
+				lineItem.EndDate = *tt.lineItemEnd
+			}
+
+			// Calculate expected usage periods for logging
+			lineItemPeriodStart := lineItem.GetPeriodStart(tt.periodStart)
+			lineItemPeriodEnd := lineItem.GetPeriodEnd(tt.periodEnd)
+
+			// Calculate expected totals for verification
+			totalUsage := decimal.Zero
+			for _, event := range tt.totalUsageEvents {
+				if (event.timestamp.After(tt.subscriptionStart) || event.timestamp.Equal(tt.subscriptionStart)) &&
+					(event.timestamp.Before(lineItemPeriodEnd) || event.timestamp.Equal(lineItemPeriodEnd)) {
+					totalUsage = totalUsage.Add(event.value)
+				}
+			}
+
+			previousUsage := decimal.Zero
+			for _, event := range tt.totalUsageEvents {
+				if (event.timestamp.After(tt.subscriptionStart) || event.timestamp.Equal(tt.subscriptionStart)) &&
+					(event.timestamp.Before(lineItemPeriodStart) || event.timestamp.Equal(lineItemPeriodStart)) {
+					previousUsage = previousUsage.Add(event.value)
+				}
+			}
+
+			// Call the function under test using the real event service
+			eventService := NewEventService(s.GetStores().EventRepo, s.GetStores().MeterRepo, s.GetPublisher(), s.GetLogger(), s.GetConfig())
+
+			// Create mock events in the event store for our test data
+			for _, event := range tt.totalUsageEvents {
+				testEvent := &events.Event{
+					ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_EVENT),
+					TenantID:           types.GetTenantID(ctx),
+					EnvironmentID:      types.GetEnvironmentID(ctx),
+					ExternalCustomerID: s.testData.customer.ExternalID,
+					EventName:          testMeter.EventName,
+					Timestamp:          event.timestamp,
+					Properties: map[string]interface{}{
+						"value": event.value.InexactFloat64(),
+					},
+				}
+				s.NoError(s.GetStores().EventRepo.InsertEvent(ctx, testEvent))
+			}
+
+			s.T().Logf("DEBUG: Inserted %d events for meter %s, customer %s", len(tt.totalUsageEvents), testMeter.ID, s.testData.customer.ExternalID)
+
+			// Debug: Test the event service directly to see what it returns
+			totalUsageRequest := &dto.GetUsageByMeterRequest{
+				MeterID:            testMeter.ID,
+				PriceID:            testPrice.ID,
+				ExternalCustomerID: s.testData.customer.ExternalID,
+				StartTime:          tt.subscriptionStart,
+				EndTime:            lineItemPeriodEnd,
+			}
+			s.T().Logf("DEBUG: Total usage request - MeterID: %s, PriceID: %s, Customer: %s, Start: %s, End: %s",
+				totalUsageRequest.MeterID, totalUsageRequest.PriceID, totalUsageRequest.ExternalCustomerID,
+				totalUsageRequest.StartTime, totalUsageRequest.EndTime)
+			totalUsageResponse, err := eventService.GetUsageByMeter(ctx, totalUsageRequest)
+			s.NoError(err)
+
+			actualTotalUsage := decimal.Zero
+			for _, result := range totalUsageResponse.Results {
+				actualTotalUsage = actualTotalUsage.Add(result.Value)
+			}
+
+			previousUsageRequest := &dto.GetUsageByMeterRequest{
+				MeterID:            testMeter.ID,
+				PriceID:            testPrice.ID,
+				ExternalCustomerID: s.testData.customer.ExternalID,
+				StartTime:          tt.subscriptionStart,
+				EndTime:            lineItemPeriodStart,
+			}
+			previousUsageResponse, err := eventService.GetUsageByMeter(ctx, previousUsageRequest)
+			s.NoError(err)
+
+			actualPreviousUsage := decimal.Zero
+			for _, result := range previousUsageResponse.Results {
+				actualPreviousUsage = actualPreviousUsage.Add(result.Value)
+			}
+
+			s.T().Logf("DEBUG: Event service returned - Total: %s, Previous: %s", actualTotalUsage, actualPreviousUsage)
+
+			result, err := s.service.(*billingService).calculateNeverResetUsage(
+				ctx,
+				testSubscription,
+				lineItem,
+				s.testData.customer,
+				eventService,
+				tt.periodStart,
+				tt.periodEnd,
+				tt.usageAllowed,
+			)
+
+			if tt.shouldSkip {
+				s.NoError(err)
+				s.True(result.Equal(decimal.Zero), "Should return zero for skipped line item")
+				s.T().Logf("✅ %s: Correctly skipped inactive line item", tt.name)
+				return
+			}
+
+			s.NoError(err, "Should not error for %s", tt.name)
+			s.True(tt.expectedBillableQuantity.Equal(result),
+				"Expected billable quantity %s, got %s for %s", tt.expectedBillableQuantity, result, tt.name)
+
+			s.T().Logf("✅ %s: %s", tt.name, tt.description)
+			s.T().Logf("   Subscription start: %s", tt.subscriptionStart.Format("2006-01-02"))
+			s.T().Logf("   Line item period: %s to %s", lineItemPeriodStart.Format("2006-01-02"), lineItemPeriodEnd.Format("2006-01-02"))
+			s.T().Logf("   Total usage: %s, Previous usage: %s", totalUsage, previousUsage)
+			s.T().Logf("   Usage allowed: %s, Billable quantity: %s", tt.usageAllowed, result)
+		})
+	}
 }

@@ -11,6 +11,7 @@ type Repository interface {
 	// Core operations
 	Create(ctx context.Context, price *Price) error
 	Get(ctx context.Context, id string) (*Price, error)
+	GetByPlanID(ctx context.Context, planID string) ([]*Price, error)
 	List(ctx context.Context, filter *types.PriceFilter) ([]*Price, error)
 	Count(ctx context.Context, filter *types.PriceFilter) (int, error)
 	ListAll(ctx context.Context, filter *types.PriceFilter) ([]*Price, error)

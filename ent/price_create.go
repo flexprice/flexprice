@@ -409,6 +409,34 @@ func (pc *PriceCreate) SetNillableParentPriceID(s *string) *PriceCreate {
 	return pc
 }
 
+// SetStartDate sets the "start_date" field.
+func (pc *PriceCreate) SetStartDate(t time.Time) *PriceCreate {
+	pc.mutation.SetStartDate(t)
+	return pc
+}
+
+// SetNillableStartDate sets the "start_date" field if the given value is not nil.
+func (pc *PriceCreate) SetNillableStartDate(t *time.Time) *PriceCreate {
+	if t != nil {
+		pc.SetStartDate(*t)
+	}
+	return pc
+}
+
+// SetEndDate sets the "end_date" field.
+func (pc *PriceCreate) SetEndDate(t time.Time) *PriceCreate {
+	pc.mutation.SetEndDate(t)
+	return pc
+}
+
+// SetNillableEndDate sets the "end_date" field if the given value is not nil.
+func (pc *PriceCreate) SetNillableEndDate(t *time.Time) *PriceCreate {
+	if t != nil {
+		pc.SetEndDate(*t)
+	}
+	return pc
+}
+
 // SetID sets the "id" field.
 func (pc *PriceCreate) SetID(s string) *PriceCreate {
 	pc.mutation.SetID(s)
@@ -511,6 +539,10 @@ func (pc *PriceCreate) defaults() {
 	if _, ok := pc.mutation.EntityType(); !ok {
 		v := price.DefaultEntityType
 		pc.mutation.SetEntityType(v)
+	}
+	if _, ok := pc.mutation.StartDate(); !ok {
+		v := price.DefaultStartDate()
+		pc.mutation.SetStartDate(v)
 	}
 }
 
@@ -773,6 +805,14 @@ func (pc *PriceCreate) createSpec() (*Price, *sqlgraph.CreateSpec) {
 	if value, ok := pc.mutation.ParentPriceID(); ok {
 		_spec.SetField(price.FieldParentPriceID, field.TypeString, value)
 		_node.ParentPriceID = &value
+	}
+	if value, ok := pc.mutation.StartDate(); ok {
+		_spec.SetField(price.FieldStartDate, field.TypeTime, value)
+		_node.StartDate = &value
+	}
+	if value, ok := pc.mutation.EndDate(); ok {
+		_spec.SetField(price.FieldEndDate, field.TypeTime, value)
+		_node.EndDate = &value
 	}
 	if nodes := pc.mutation.CostsheetIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

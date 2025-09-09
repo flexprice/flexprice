@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -21,8 +23,11 @@ type PriceService interface {
 	GetPricesByAddonID(ctx context.Context, addonID string) (*dto.ListPricesResponse, error)
 	GetPrices(ctx context.Context, filter *types.PriceFilter) (*dto.ListPricesResponse, error)
 	UpdatePrice(ctx context.Context, id string, req dto.UpdatePriceRequest) (*dto.PriceResponse, error)
-	DeletePrice(ctx context.Context, id string) error
+	DeletePrice(ctx context.Context, id string, req dto.DeletePriceRequest) error
 	CalculateCost(ctx context.Context, price *price.Price, quantity decimal.Decimal) decimal.Decimal
+
+	// CalculateBucketedCost calculates cost for bucketed max values where each value represents max in its time bucket
+	CalculateBucketedCost(ctx context.Context, price *price.Price, bucketedValues []decimal.Decimal) decimal.Decimal
 
 	// CalculateCostWithBreakup calculates the cost for a given price and quantity
 	// and returns detailed information about the calculation
@@ -59,8 +64,10 @@ func (s *priceService) CreatePrice(ctx context.Context, req dto.CreatePriceReque
 		}
 
 		// Validate that the entity exists based on entity type
-		if err := s.validateEntityExists(ctx, req.EntityType, req.EntityID); err != nil {
-			return nil, err
+		if !req.SkipEntityValidation {
+			if err := s.validateEntityExists(ctx, req.EntityType, req.EntityID); err != nil {
+				return nil, err
+			}
 		}
 	} else {
 		// Legacy support for plan_id
@@ -666,16 +673,55 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 	return response, nil
 }
 
-func (s *priceService) DeletePrice(ctx context.Context, id string) error {
-	if err := s.PriceRepo.Delete(ctx, id); err != nil {
+func (s *priceService) DeletePrice(ctx context.Context, id string, req dto.DeletePriceRequest) error {
+	if err := req.Validate(); err != nil {
 		return err
 	}
+
+	price, err := s.PriceRepo.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	if req.EndDate != nil {
+		price.EndDate = req.EndDate
+	} else {
+		price.EndDate = lo.ToPtr(time.Now().UTC())
+	}
+
+	if err := s.PriceRepo.Update(ctx, price); err != nil {
+		return err
+	}
+
 	return nil
 }
 
-// CalculateCost calculates the cost for a given price and quantity
-// returns the cost in main currency units (e.g., 1.00 = $1.00)
-func (s *priceService) CalculateCost(ctx context.Context, price *price.Price, quantity decimal.Decimal) decimal.Decimal {
+// calculateBucketedMaxCost calculates cost for bucketed max values
+// Each value in the array represents max usage in its time bucket
+func (s *priceService) calculateBucketedMaxCost(ctx context.Context, price *price.Price, bucketedValues []decimal.Decimal) decimal.Decimal {
+	totalCost := decimal.Zero
+
+	// For tiered pricing, handle each bucket's max value according to tier mode
+	if price.BillingModel == types.BILLING_MODEL_TIERED {
+		// Process each bucket's max value independently through its appropriate tier
+		for _, maxValue := range bucketedValues {
+			bucketCost := s.calculateTieredCost(ctx, price, maxValue)
+			totalCost = totalCost.Add(bucketCost)
+		}
+	} else {
+		// For non-tiered pricing (flat fee, package), process each bucket independently
+		for _, maxValue := range bucketedValues {
+			bucketCost := s.calculateSingletonCost(ctx, price, maxValue)
+			totalCost = totalCost.Add(bucketCost)
+		}
+	}
+
+	return totalCost.Round(types.GetCurrencyPrecision(price.Currency))
+}
+
+// calculateSingletonCost calculates cost for a single value
+// This is used both for regular values and individual bucket values
+func (s *priceService) calculateSingletonCost(ctx context.Context, price *price.Price, quantity decimal.Decimal) decimal.Decimal {
 	cost := decimal.Zero
 	if quantity.IsZero() {
 		return cost
@@ -708,8 +754,18 @@ func (s *priceService) CalculateCost(ctx context.Context, price *price.Price, qu
 		cost = s.calculateTieredCost(ctx, price, quantity)
 	}
 
-	finalCost := cost.Round(types.GetCurrencyPrecision(price.Currency))
-	return finalCost
+	return cost
+}
+
+// CalculateCost calculates the cost for a given price and quantity
+// returns the cost in main currency units (e.g., 1.00 = $1.00)
+func (s *priceService) CalculateCost(ctx context.Context, price *price.Price, quantity decimal.Decimal) decimal.Decimal {
+	return s.calculateSingletonCost(ctx, price, quantity)
+}
+
+// CalculateBucketedCost calculates cost for bucketed max values where each value represents max in its time bucket
+func (s *priceService) CalculateBucketedCost(ctx context.Context, price *price.Price, bucketedValues []decimal.Decimal) decimal.Decimal {
+	return s.calculateBucketedMaxCost(ctx, price, bucketedValues)
 }
 
 // calculateTieredCost calculates cost for tiered pricing
@@ -764,19 +820,20 @@ func (s *priceService) calculateTieredCost(ctx context.Context, price *price.Pri
 
 	case types.BILLING_TIER_SLAB:
 		remainingQuantity := quantity
+		tierStartQuantity := decimal.Zero
 		for _, tier := range price.Tiers {
 			var tierQuantity = remainingQuantity
 			if tier.UpTo != nil {
 				upTo := decimal.NewFromUint64(*tier.UpTo)
-				// Use GreaterThan to make up_to INCLUSIVE
-				// If remainingQuantity > upTo, then tierQuantity = upTo (inclusive)
-				// If remainingQuantity <= upTo, then tierQuantity = remainingQuantity
-				// Note: Quantity is already decimal, up_to is converted to decimal for comparison
-				// Edge cases: Handles decimal quantities like 1000.5, 1024.75, etc.
-				// If remainingQuantity > up_to (even by small decimals), excess goes to next tier
-				if remainingQuantity.GreaterThan(upTo) {
-					tierQuantity = upTo
+				tierCapacity := upTo.Sub(tierStartQuantity)
+
+				// Use the minimum of remaining quantity and tier capacity
+				if remainingQuantity.GreaterThan(tierCapacity) {
+					tierQuantity = tierCapacity
 				}
+
+				// Update tier start for next iteration
+				tierStartQuantity = upTo
 			}
 
 			// Calculate tier cost with full precision and handling of flat amount
@@ -929,19 +986,20 @@ func (s *priceService) calculateTieredCostWithBreakup(ctx context.Context, price
 
 	case types.BILLING_TIER_SLAB:
 		remainingQuantity := quantity
+		tierStartQuantity := decimal.Zero
 		for i, tier := range price.Tiers {
 			var tierQuantity = remainingQuantity
 			if tier.UpTo != nil {
 				upTo := decimal.NewFromUint64(*tier.UpTo)
-				// Use GreaterThan to make up_to INCLUSIVE
-				// If remainingQuantity > upTo, then tierQuantity = upTo (inclusive)
-				// If remainingQuantity <= upTo, then tierQuantity = remainingQuantity
-				// Note: Quantity is already decimal, up_to is converted to decimal for comparison
-				// Edge cases: Handles decimal quantities like 1000.5, 1024.75, etc.
-				// If remainingQuantity > up_to (even by small decimals), excess goes to next tier
-				if remainingQuantity.GreaterThan(upTo) {
-					tierQuantity = upTo
+				tierCapacity := upTo.Sub(tierStartQuantity)
+
+				// Use the minimum of remaining quantity and tier capacity
+				if remainingQuantity.GreaterThan(tierCapacity) {
+					tierQuantity = tierCapacity
 				}
+
+				// Update tier start for next iteration
+				tierStartQuantity = upTo
 			}
 
 			// Calculate tier cost with full precision and handling of flat amount

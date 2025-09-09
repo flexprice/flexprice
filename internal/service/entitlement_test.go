@@ -6,6 +6,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/feature"
+	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -53,11 +54,26 @@ func (s *EntitlementServiceSuite) TestCreateEntitlement() {
 	err := s.GetStores().FeatureRepo.Create(s.GetContext(), boolFeature)
 	s.NoError(err)
 
+	// Create a regular meter for the metered feature
+	regularMeter := &meter.Meter{
+		ID:        "meter-regular",
+		Name:      "Regular Meter",
+		EventName: "api_calls",
+		Aggregation: meter.Aggregation{
+			Type: types.AggregationSum,
+		},
+		BaseModel: types.GetDefaultBaseModel(s.GetContext()),
+	}
+	meterStore := s.service.(*entitlementService).MeterRepo.(*testutil.InMemoryMeterStore)
+	err = meterStore.CreateMeter(s.GetContext(), regularMeter)
+	s.NoError(err)
+
 	meteredFeature := &feature.Feature{
 		ID:          "feat-metered",
 		Name:        "Metered Feature",
 		Description: "Test Metered Feature",
 		Type:        types.FeatureTypeMetered,
+		MeterID:     regularMeter.ID,
 		BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
 	}
 	err = s.GetStores().FeatureRepo.Create(s.GetContext(), meteredFeature)
@@ -108,7 +124,7 @@ func (s *EntitlementServiceSuite) TestCreateEntitlement() {
 			FeatureID:        meteredFeature.ID,
 			FeatureType:      types.FeatureTypeMetered,
 			UsageLimit:       lo.ToPtr(int64(1000)),
-			UsageResetPeriod: types.BILLING_PERIOD_MONTHLY,
+			UsageResetPeriod: types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY,
 			IsSoftLimit:      true,
 		}
 
@@ -226,11 +242,26 @@ func (s *EntitlementServiceSuite) TestListEntitlements() {
 	err := s.GetStores().FeatureRepo.Create(s.GetContext(), boolFeature)
 	s.NoError(err)
 
+	// Create a regular meter for the metered feature
+	regularMeterList := &meter.Meter{
+		ID:        "meter-regular-list",
+		Name:      "Regular Meter List",
+		EventName: "api_calls_list",
+		Aggregation: meter.Aggregation{
+			Type: types.AggregationSum,
+		},
+		BaseModel: types.GetDefaultBaseModel(s.GetContext()),
+	}
+	meterStore := s.service.(*entitlementService).MeterRepo.(*testutil.InMemoryMeterStore)
+	err = meterStore.CreateMeter(s.GetContext(), regularMeterList)
+	s.NoError(err)
+
 	meteredFeature := &feature.Feature{
 		ID:          "feat-2",
 		Name:        "Metered Feature",
 		Description: "Test Metered Feature",
 		Type:        types.FeatureTypeMetered,
+		MeterID:     regularMeterList.ID,
 		BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
 	}
 	err = s.GetStores().FeatureRepo.Create(s.GetContext(), meteredFeature)
@@ -392,6 +423,183 @@ func (s *EntitlementServiceSuite) TestDeleteEntitlement() {
 	s.Error(err)
 }
 
+func (s *EntitlementServiceSuite) TestCreateEntitlementWithBucketedMaxMeter() {
+	// Create a bucketed max meter
+	bucketedMaxMeter := &meter.Meter{
+		ID:        "meter-bucketed-max",
+		Name:      "Bucketed Max Meter",
+		EventName: "api_calls_bucketed",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationMax,
+			BucketSize: "hour", // This makes it a bucketed max meter
+		},
+		BaseModel: types.GetDefaultBaseModel(s.GetContext()),
+	}
+	meterStore := s.service.(*entitlementService).MeterRepo.(*testutil.InMemoryMeterStore)
+	err := meterStore.CreateMeter(s.GetContext(), bucketedMaxMeter)
+	s.NoError(err)
+
+	// Create a regular max meter (without bucket size)
+	regularMaxMeter := &meter.Meter{
+		ID:        "meter-regular-max",
+		Name:      "Regular Max Meter",
+		EventName: "api_calls_regular",
+		Aggregation: meter.Aggregation{
+			Type: types.AggregationMax,
+			// No BucketSize - this is a regular max meter
+		},
+		BaseModel: types.GetDefaultBaseModel(s.GetContext()),
+	}
+	err = meterStore.CreateMeter(s.GetContext(), regularMaxMeter)
+	s.NoError(err)
+
+	// Create metered features
+	bucketedMaxFeature := &feature.Feature{
+		ID:          "feat-bucketed-max",
+		Name:        "Bucketed Max Feature",
+		Description: "Feature with bucketed max meter",
+		Type:        types.FeatureTypeMetered,
+		MeterID:     bucketedMaxMeter.ID,
+		BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
+	}
+	err = s.GetStores().FeatureRepo.Create(s.GetContext(), bucketedMaxFeature)
+	s.NoError(err)
+
+	regularMaxFeature := &feature.Feature{
+		ID:          "feat-regular-max",
+		Name:        "Regular Max Feature",
+		Description: "Feature with regular max meter",
+		Type:        types.FeatureTypeMetered,
+		MeterID:     regularMaxMeter.ID,
+		BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
+	}
+	err = s.GetStores().FeatureRepo.Create(s.GetContext(), regularMaxFeature)
+	s.NoError(err)
+
+	// Create test plan
+	testPlan := &plan.Plan{
+		ID:          "plan-bucketed-test",
+		Name:        "Test Plan for Bucketed Max",
+		Description: "Test Plan Description",
+		BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
+	}
+	err = s.GetStores().PlanRepo.Create(s.GetContext(), testPlan)
+	s.NoError(err)
+
+	// Test case: Should reject entitlement for bucketed max meter
+	s.Run("Reject Entitlement for Bucketed Max Meter", func() {
+		req := dto.CreateEntitlementRequest{
+			PlanID:           testPlan.ID,
+			FeatureID:        bucketedMaxFeature.ID,
+			FeatureType:      types.FeatureTypeMetered,
+			UsageLimit:       lo.ToPtr(int64(1000)),
+			UsageResetPeriod: types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY,
+			IsSoftLimit:      true,
+		}
+
+		resp, err := s.service.CreateEntitlement(s.GetContext(), req)
+		s.Error(err)
+		s.Nil(resp)
+		s.Contains(err.Error(), "entitlements not supported for bucketed max meters")
+	})
+
+	// Test case: Should allow entitlement for regular max meter
+	s.Run("Allow Entitlement for Regular Max Meter", func() {
+		req := dto.CreateEntitlementRequest{
+			PlanID:           testPlan.ID,
+			FeatureID:        regularMaxFeature.ID,
+			FeatureType:      types.FeatureTypeMetered,
+			UsageLimit:       lo.ToPtr(int64(1000)),
+			UsageResetPeriod: types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY,
+			IsSoftLimit:      true,
+		}
+
+		resp, err := s.service.CreateEntitlement(s.GetContext(), req)
+		s.NoError(err)
+		s.NotNil(resp)
+		s.Equal(testPlan.ID, resp.Entitlement.EntityID)
+		s.Equal(regularMaxFeature.ID, resp.Entitlement.FeatureID)
+		s.Equal(int64(1000), *resp.Entitlement.UsageLimit)
+	})
+}
+
+func (s *EntitlementServiceSuite) TestCreateBulkEntitlementWithBucketedMaxMeter() {
+	// Create a bucketed max meter
+	bucketedMaxMeter := &meter.Meter{
+		ID:        "meter-bucketed-max-bulk",
+		Name:      "Bucketed Max Meter Bulk",
+		EventName: "api_calls_bucketed_bulk",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationMax,
+			BucketSize: "minute", // This makes it a bucketed max meter
+		},
+		BaseModel: types.GetDefaultBaseModel(s.GetContext()),
+	}
+	meterStore := s.service.(*entitlementService).MeterRepo.(*testutil.InMemoryMeterStore)
+	err := meterStore.CreateMeter(s.GetContext(), bucketedMaxMeter)
+	s.NoError(err)
+
+	// Create metered feature with bucketed max meter
+	bucketedMaxFeature := &feature.Feature{
+		ID:          "feat-bucketed-max-bulk",
+		Name:        "Bucketed Max Feature Bulk",
+		Description: "Feature with bucketed max meter for bulk test",
+		Type:        types.FeatureTypeMetered,
+		MeterID:     bucketedMaxMeter.ID,
+		BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
+	}
+	err = s.GetStores().FeatureRepo.Create(s.GetContext(), bucketedMaxFeature)
+	s.NoError(err)
+
+	// Create boolean feature for comparison
+	boolFeature := &feature.Feature{
+		ID:          "feat-bool-bulk-bucketed",
+		Name:        "Boolean Feature Bulk Bucketed",
+		Description: "Test Boolean Feature for Bulk with Bucketed",
+		Type:        types.FeatureTypeBoolean,
+		BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
+	}
+	err = s.GetStores().FeatureRepo.Create(s.GetContext(), boolFeature)
+	s.NoError(err)
+
+	// Create test plan
+	testPlan := &plan.Plan{
+		ID:          "plan-bulk-bucketed",
+		Name:        "Test Plan Bulk Bucketed",
+		Description: "Test Plan Description for Bucketed Bulk",
+		BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
+	}
+	err = s.GetStores().PlanRepo.Create(s.GetContext(), testPlan)
+	s.NoError(err)
+
+	// Test case: Should reject bulk entitlement when one feature has bucketed max meter
+	s.Run("Reject Bulk Entitlement with Bucketed Max Meter", func() {
+		req := dto.CreateBulkEntitlementRequest{
+			Items: []dto.CreateEntitlementRequest{
+				{
+					PlanID:      testPlan.ID,
+					FeatureID:   boolFeature.ID,
+					FeatureType: types.FeatureTypeBoolean,
+					IsEnabled:   true,
+				},
+				{
+					PlanID:           testPlan.ID,
+					FeatureID:        bucketedMaxFeature.ID,
+					FeatureType:      types.FeatureTypeMetered,
+					UsageLimit:       lo.ToPtr(int64(1000)),
+					UsageResetPeriod: types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY,
+					IsSoftLimit:      true,
+				},
+			},
+		}
+
+		resp, err := s.service.CreateBulkEntitlement(s.GetContext(), req)
+		s.Error(err)
+		s.Nil(resp)
+		s.Contains(err.Error(), "entitlements not supported for bucketed max meters")
+	})
+}
+
 func (s *EntitlementServiceSuite) TestCreateBulkEntitlement() {
 	// Setup test features with different types
 	boolFeature := &feature.Feature{
@@ -404,11 +612,26 @@ func (s *EntitlementServiceSuite) TestCreateBulkEntitlement() {
 	err := s.GetStores().FeatureRepo.Create(s.GetContext(), boolFeature)
 	s.NoError(err)
 
+	// Create a regular meter for the metered feature
+	regularMeterBulk := &meter.Meter{
+		ID:        "meter-regular-bulk",
+		Name:      "Regular Meter Bulk",
+		EventName: "api_calls_bulk",
+		Aggregation: meter.Aggregation{
+			Type: types.AggregationSum,
+		},
+		BaseModel: types.GetDefaultBaseModel(s.GetContext()),
+	}
+	meterStore := s.service.(*entitlementService).MeterRepo.(*testutil.InMemoryMeterStore)
+	err = meterStore.CreateMeter(s.GetContext(), regularMeterBulk)
+	s.NoError(err)
+
 	meteredFeature := &feature.Feature{
 		ID:          "feat-metered-bulk",
 		Name:        "Metered Feature Bulk",
 		Description: "Test Metered Feature for Bulk",
 		Type:        types.FeatureTypeMetered,
+		MeterID:     regularMeterBulk.ID,
 		BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
 	}
 	err = s.GetStores().FeatureRepo.Create(s.GetContext(), meteredFeature)
@@ -457,7 +680,7 @@ func (s *EntitlementServiceSuite) TestCreateBulkEntitlement() {
 					FeatureID:        meteredFeature.ID,
 					FeatureType:      types.FeatureTypeMetered,
 					UsageLimit:       lo.ToPtr(int64(1000)),
-					UsageResetPeriod: types.BILLING_PERIOD_MONTHLY,
+					UsageResetPeriod: types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY,
 					IsSoftLimit:      true,
 				},
 				{
@@ -493,7 +716,7 @@ func (s *EntitlementServiceSuite) TestCreateBulkEntitlement() {
 		s.Equal(meteredFeature.ID, ent2.Entitlement.FeatureID)
 		s.Equal(types.FeatureTypeMetered, ent2.Entitlement.FeatureType)
 		s.Equal(int64(1000), *ent2.Entitlement.UsageLimit)
-		s.Equal(types.BILLING_PERIOD_MONTHLY, ent2.Entitlement.UsageResetPeriod)
+		s.Equal(types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY, ent2.Entitlement.UsageResetPeriod)
 		s.True(ent2.Entitlement.IsSoftLimit)
 		s.NotNil(ent2.Feature)
 		s.Equal(meteredFeature.ID, ent2.Feature.Feature.ID)

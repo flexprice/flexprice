@@ -47,6 +47,42 @@ func (c InvoiceCadence) Validate() error {
 	return nil
 }
 
+// InvoiceFlowType represents the type of invoice flow for payment behavior handling
+type InvoiceFlowType string
+
+const (
+	// InvoiceFlowSubscriptionCreation represents subscription creation flow - applies full payment behavior logic
+	InvoiceFlowSubscriptionCreation InvoiceFlowType = "subscription_creation"
+	// InvoiceFlowRenewal represents renewal/periodic billing flow - always creates invoices, marks as pending on failure
+	InvoiceFlowRenewal InvoiceFlowType = "renewal"
+	// InvoiceFlowManual represents manual invoice creation flow - default behavior
+	InvoiceFlowManual InvoiceFlowType = "manual"
+	// InvoiceFlowCancel represents subscription cancellation flow - uses subscription's payment method and behavior but doesn't error on manual+renewal
+	InvoiceFlowCancel InvoiceFlowType = "cancel"
+)
+
+func (f InvoiceFlowType) String() string {
+	return string(f)
+}
+
+func (f InvoiceFlowType) Validate() error {
+	allowed := []InvoiceFlowType{
+		InvoiceFlowSubscriptionCreation,
+		InvoiceFlowRenewal,
+		InvoiceFlowManual,
+		InvoiceFlowCancel,
+	}
+	if !lo.Contains(allowed, f) {
+		return ierr.NewError("invalid invoice flow type").
+			WithHint("Please provide a valid invoice flow type").
+			WithReportableDetails(map[string]any{
+				"allowed": allowed,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 // InvoiceType categorizes the purpose and nature of the invoice
 type InvoiceType string
 
@@ -123,6 +159,8 @@ const (
 	InvoiceBillingReasonSubscriptionCycle InvoiceBillingReason = "SUBSCRIPTION_CYCLE"
 	// InvoiceBillingReasonSubscriptionUpdate indicates invoice is for subscription changes (upgrades, downgrades)
 	InvoiceBillingReasonSubscriptionUpdate InvoiceBillingReason = "SUBSCRIPTION_UPDATE"
+	// InvoiceBillingReasonProration indicates invoice is for proration credits/charges (cancellations, plan changes)
+	InvoiceBillingReasonProration InvoiceBillingReason = "PRORATION"
 	// InvoiceBillingReasonManual indicates invoice was created manually by an administrator
 	InvoiceBillingReasonManual InvoiceBillingReason = "MANUAL"
 )
@@ -136,6 +174,7 @@ func (r InvoiceBillingReason) Validate() error {
 		InvoiceBillingReasonSubscriptionCreate,
 		InvoiceBillingReasonSubscriptionCycle,
 		InvoiceBillingReasonSubscriptionUpdate,
+		InvoiceBillingReasonProration,
 		InvoiceBillingReasonManual,
 	}
 	if !lo.Contains(allowed, r) {
@@ -209,12 +248,13 @@ const (
 //
 // Note: Sequences reset monthly and are tenant-environment-scoped for isolation.
 type InvoiceConfig struct {
-	InvoiceNumberPrefix        string              `json:"prefix"`
-	InvoiceNumberFormat        InvoiceNumberFormat `json:"format"`
-	InvoiceNumberStartSequence int                 `json:"start_sequence"`
-	InvoiceNumberTimezone      string              `json:"timezone"`
-	InvoiceNumberSeparator     string              `json:"separator"`
-	InvoiceNumberSuffixLength  int                 `json:"suffix_length"`
+	InvoiceNumberPrefix        string              `json:"prefix,omitempty"`
+	InvoiceNumberFormat        InvoiceNumberFormat `json:"format,omitempty"`
+	InvoiceNumberStartSequence int                 `json:"start_sequence,omitempty"`
+	InvoiceNumberTimezone      string              `json:"timezone,omitempty"`
+	InvoiceNumberSeparator     string              `json:"separator,omitempty"`
+	InvoiceNumberSuffixLength  int                 `json:"suffix_length,omitempty"`
+	DueDateDays                *int                `json:"due_date_days,omitempty"` // Number of days after period end when payment is due
 }
 
 // InvoiceFilter represents the filter options for listing invoices

@@ -25,33 +25,41 @@ type SettingResponse struct {
 
 func ConvertToInvoiceConfig(value map[string]interface{}) (*types.InvoiceConfig, error) {
 
-	var startSeq int
-	switch v := value["start_sequence"].(type) {
-	case int:
-		startSeq = v
-	case int64:
-		startSeq = int(v)
-	case float64:
-		startSeq = int(v)
+	invoiceConfig := &types.InvoiceConfig{}
+	if dueDateDaysRaw, exists := value["due_date_days"]; exists {
+		switch v := dueDateDaysRaw.(type) {
+		case int:
+			dueDateDays := v
+			invoiceConfig.DueDateDays = &dueDateDays
+		case float64:
+			dueDateDays := int(v)
+			invoiceConfig.DueDateDays = &dueDateDays
+		}
+	} else {
+		// Get default value and convert to pointer
+		defaultDays := types.GetDefaultSettings()[types.SettingKeyInvoiceConfig].DefaultValue["due_date_days"].(int)
+		invoiceConfig.DueDateDays = &defaultDays
 	}
 
-	var suffixLength int
-	switch v := value["suffix_length"].(type) {
-	case int:
-		suffixLength = v
-	case int64:
-		suffixLength = int(v)
-	case float64:
-		suffixLength = int(v)
+	if invoiceNumberPrefix, ok := value["prefix"].(string); ok {
+		invoiceConfig.InvoiceNumberPrefix = invoiceNumberPrefix
+	}
+	if invoiceNumberFormat, ok := value["format"].(string); ok {
+		invoiceConfig.InvoiceNumberFormat = types.InvoiceNumberFormat(invoiceNumberFormat)
 	}
 
-	invoiceConfig := &types.InvoiceConfig{
-		InvoiceNumberPrefix:        value["prefix"].(string),
-		InvoiceNumberFormat:        types.InvoiceNumberFormat(value["format"].(string)),
-		InvoiceNumberTimezone:      value["timezone"].(string),
-		InvoiceNumberStartSequence: startSeq,
-		InvoiceNumberSeparator:     value["separator"].(string),
-		InvoiceNumberSuffixLength:  suffixLength,
+	if invoiceNumberTimezone, ok := value["timezone"].(string); ok {
+		invoiceConfig.InvoiceNumberTimezone = invoiceNumberTimezone
+	}
+	if invoiceNumberStartSequence, ok := value["start_sequence"].(int); ok {
+		invoiceConfig.InvoiceNumberStartSequence = invoiceNumberStartSequence
+	}
+
+	if invoiceNumberSeparator, ok := value["separator"].(string); ok {
+		invoiceConfig.InvoiceNumberSeparator = invoiceNumberSeparator
+	}
+	if invoiceNumberSuffixLength, ok := value["suffix_length"].(int); ok {
+		invoiceConfig.InvoiceNumberSuffixLength = invoiceNumberSuffixLength
 	}
 
 	return invoiceConfig, nil

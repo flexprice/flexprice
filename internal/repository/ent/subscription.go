@@ -81,7 +81,12 @@ func (r *subscriptionRepository) Create(ctx context.Context, sub *domainSub.Subs
 		SetCreatedBy(sub.CreatedBy).
 		SetUpdatedBy(sub.UpdatedBy).
 		SetEnvironmentID(sub.EnvironmentID).
+		SetCustomerTimezone(sub.CustomerTimezone).
+		SetProrationBehavior(string(sub.ProrationBehavior)).
 		SetVersion(1).
+		SetPaymentBehavior(subscription.PaymentBehavior(sub.PaymentBehavior)).
+		SetCollectionMethod(subscription.CollectionMethod(sub.CollectionMethod)).
+		SetNillableGatewayPaymentMethodID(sub.GatewayPaymentMethodID).
 		Save(ctx)
 
 	if err != nil {
@@ -168,6 +173,9 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 		SetNillableCancelAt(sub.CancelAt).
 		SetPauseStatus(string(sub.PauseStatus)).
 		SetCancelAtPeriodEnd(sub.CancelAtPeriodEnd).
+		SetPaymentBehavior(subscription.PaymentBehavior(sub.PaymentBehavior)).
+		SetCollectionMethod(subscription.CollectionMethod(sub.CollectionMethod)).
+		SetNillableGatewayPaymentMethodID(sub.GatewayPaymentMethodID).
 		SetUpdatedAt(now).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		AddVersion(1) // Increment version atomically
@@ -325,6 +333,40 @@ func (r *subscriptionRepository) List(ctx context.Context, filter *types.Subscri
 	}
 
 	SetSpanSuccess(span)
+	return result, nil
+}
+
+// ListActiveSubscriptionsDueForRenewal retrieves all active subscriptions that are due for renewal in 24 hours
+func (r *subscriptionRepository) ListSubscriptionsDueForRenewal(ctx context.Context) ([]*domainSub.Subscription, error) {
+	now := time.Now().UTC()
+	targetTime := now.Add(24 * time.Hour)
+
+	// Create a 5-minute window around the target time
+	windowStart := targetTime.Add(-1 * time.Hour)
+	windowEnd := targetTime.Add(1 * time.Hour)
+
+	// Find subscriptions ending exactly at the target time
+	subs, err := r.client.Querier(ctx).Subscription.Query().
+		Where(
+			subscription.And(
+				subscription.SubscriptionStatusEQ(string(types.SubscriptionStatusActive)),
+				subscription.StatusEQ(string(types.StatusPublished)),
+				subscription.CurrentPeriodEndGTE(windowStart),
+				subscription.CurrentPeriodEndLTE(windowEnd),
+				subscription.CancelAtPeriodEndEQ(false),
+			),
+		).All(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert to domain model
+	result := make([]*domainSub.Subscription, len(subs))
+	for i, sub := range subs {
+		result[i] = domainSub.GetSubscriptionFromEnt(sub)
+	}
+
 	return result, nil
 }
 
@@ -693,11 +735,6 @@ func (r *subscriptionRepository) GetWithLineItems(ctx context.Context, id string
 			subscription.TenantID(types.GetTenantID(ctx)),
 			subscription.Status(string(types.StatusPublished)),
 		).
-		WithLineItems(func(q *ent.SubscriptionLineItemQuery) {
-			q.Where(
-				subscriptionlineitem.Status(string(types.StatusPublished)),
-			)
-		}).
 		Only(ctx)
 
 	if err != nil {
@@ -708,13 +745,23 @@ func (r *subscriptionRepository) GetWithLineItems(ctx context.Context, id string
 				Mark(ierr.ErrNotFound)
 		}
 		return nil, nil, ierr.WithError(err).
-			WithHint("Failed to get subscription with line items").
+			WithHint("Failed to get subscription").
 			Mark(ierr.ErrDatabase)
 	}
 
 	s := domainSub.GetSubscriptionFromEnt(sub)
-	s.LineItems = domainSub.GetLineItemFromEntList(sub.Edges.LineItems)
 
+	// Use ListBySubscription as the source of truth for line items
+	lineItemRepo := NewSubscriptionLineItemRepository(r.client, r.logger, r.cache)
+	lineItems, err := lineItemRepo.ListBySubscription(ctx, s)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, nil, ierr.WithError(err).
+			WithHint("Failed to get subscription line items").
+			Mark(ierr.ErrDatabase)
+	}
+
+	s.LineItems = lineItems
 	SetSpanSuccess(span)
 	return s, s.LineItems, nil
 }
@@ -929,78 +976,6 @@ func (r *subscriptionRepository) GetWithPauses(ctx context.Context, id string) (
 	return subscription, pauses, nil
 }
 
-// ListByCustomerID retrieves all active subscriptions for a customer and includes line items
-func (r *subscriptionRepository) ListByCustomerID(ctx context.Context, customerID string) ([]*domainSub.Subscription, error) {
-	r.logger.Debugw("listing subscriptions by customer ID",
-		"customer_id", customerID)
-
-	// Create a filter with customer ID
-	filter := &types.SubscriptionFilter{
-		QueryFilter: types.NewNoLimitQueryFilter(),
-		CustomerID:  customerID,
-		SubscriptionStatus: []types.SubscriptionStatus{
-			types.SubscriptionStatusActive,
-			types.SubscriptionStatusTrialing,
-		},
-		WithLineItems: true,
-	}
-
-	// Use the existing List method
-	return r.List(ctx, filter)
-}
-
-// ListByIDs retrieves subscriptions by their IDs and includes line items
-func (r *subscriptionRepository) ListByIDs(ctx context.Context, subscriptionIDs []string) ([]*domainSub.Subscription, error) {
-	if len(subscriptionIDs) == 0 {
-		return []*domainSub.Subscription{}, nil
-	}
-
-	r.logger.Debugw("listing subscriptions by IDs", "subscription_ids", subscriptionIDs)
-
-	// Start a span for this repository operation
-	span := StartRepositorySpan(ctx, "subscription", "list_by_ids", map[string]interface{}{
-		"subscription_ids": subscriptionIDs,
-	})
-	defer FinishSpan(span)
-
-	// Since SubscriptionFilter doesn't have a SubscriptionIDs field,
-	// we need to use a direct query instead of the List method
-	client := r.client.Querier(ctx)
-	query := client.Subscription.Query().
-		WithLineItems(func(q *ent.SubscriptionLineItemQuery) {
-			q.Where(subscriptionlineitem.Status(string(types.StatusPublished)))
-		}).
-		Where(
-			subscription.IDIn(subscriptionIDs...),
-			subscription.TenantID(types.GetTenantID(ctx)),
-			subscription.EnvironmentID(types.GetEnvironmentID(ctx)),
-			subscription.Status(string(types.StatusPublished)),
-		)
-
-	// Order by created date descending
-	query = query.Order(ent.Desc(subscription.FieldCreatedAt))
-
-	subs, err := query.All(ctx)
-	if err != nil {
-		SetSpanError(span, err)
-		return nil, ierr.WithError(err).
-			WithHint("Failed to list subscriptions by IDs").
-			WithReportableDetails(map[string]interface{}{
-				"subscription_ids": subscriptionIDs,
-			}).
-			Mark(ierr.ErrDatabase)
-	}
-
-	// Convert to domain model
-	result := make([]*domainSub.Subscription, len(subs))
-	for i, sub := range subs {
-		result[i] = domainSub.GetSubscriptionFromEnt(sub)
-	}
-
-	SetSpanSuccess(span)
-	return result, nil
-}
-
 func (r *subscriptionRepository) SetCache(ctx context.Context, sub *domainSub.Subscription) {
 	span := cache.StartCacheSpan(ctx, "subscription", "set", map[string]interface{}{
 		"subscription_id": sub.ID,
@@ -1038,4 +1013,24 @@ func (r *subscriptionRepository) DeleteCache(ctx context.Context, subID string) 
 	environmentID := types.GetEnvironmentID(ctx)
 	cacheKey := cache.GenerateKey(cache.PrefixSubscription, tenantID, environmentID, subID)
 	r.cache.Delete(ctx, cacheKey)
+}
+
+// ListByCustomerID retrieves all active subscriptions for a customer and includes line items
+func (r *subscriptionRepository) ListByCustomerID(ctx context.Context, customerID string) ([]*domainSub.Subscription, error) {
+	r.logger.Debugw("listing subscriptions by customer ID",
+		"customer_id", customerID)
+
+	// Create a filter with customer ID
+	filter := &types.SubscriptionFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		CustomerID:  customerID,
+		SubscriptionStatus: []types.SubscriptionStatus{
+			types.SubscriptionStatusActive,
+			types.SubscriptionStatusTrialing,
+		},
+		WithLineItems: true,
+	}
+
+	// Use the existing List method
+	return r.List(ctx, filter)
 }

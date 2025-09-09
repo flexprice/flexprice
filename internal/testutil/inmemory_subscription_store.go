@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -399,4 +400,33 @@ func (s *InMemorySubscriptionStore) GetWithPauses(ctx context.Context, id string
 	pauses := s.pauses[id]
 	sub.Pauses = pauses
 	return sub, pauses, nil
+}
+
+// ListSubscriptionsDueForRenewal retrieves all active subscriptions that are due for renewal in 24 hours
+func (s *InMemorySubscriptionStore) ListSubscriptionsDueForRenewal(ctx context.Context) ([]*subscription.Subscription, error) {
+	// Create a filter for active subscriptions
+	filter := &types.SubscriptionFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		SubscriptionStatus: []types.SubscriptionStatus{
+			types.SubscriptionStatusActive,
+		},
+		TimeRangeFilter: &types.TimeRangeFilter{
+			EndTime: lo.ToPtr(time.Now().UTC().Add(24 * time.Hour)),
+		},
+	}
+
+	return s.ListAll(ctx, filter)
+}
+
+// Clear removes all data from the store
+func (s *InMemorySubscriptionStore) Clear() {
+	// Clear the base subscription store
+	s.InMemoryStore.Clear()
+
+	// Clear line items
+	s.lineItems = make(map[string][]*subscription.SubscriptionLineItem)
+
+	// Clear pauses
+	s.pauses = make(map[string][]*subscription.SubscriptionPause)
+	s.pauseByID = make(map[string]*subscription.SubscriptionPause)
 }

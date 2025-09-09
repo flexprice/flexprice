@@ -7,10 +7,13 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
+	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -102,6 +105,18 @@ func (s *billingService) CalculateFixedCharges(
 
 		amount := priceService.CalculateCost(ctx, price.Price, item.Quantity)
 
+		// Apply proration if applicable
+		proratedAmount, err := s.applyProrationToLineItem(ctx, sub, item, price.Price, amount, &periodStart, &periodEnd)
+		if err != nil {
+			s.Logger.Warnw("failed to apply proration to line item, using original amount",
+				"error", err,
+				"subscription_id", sub.ID,
+				"line_item_id", item.ID,
+				"price_id", item.PriceID)
+			proratedAmount = amount
+		}
+		amount = proratedAmount
+
 		// Calculate price unit amount if price unit is available
 		var priceUnitAmount *decimal.Decimal
 		if item.PriceUnit != "" {
@@ -185,7 +200,30 @@ func (s *billingService) CalculateUsageCharges(
 	// Create price service once before processing charges
 	priceService := NewPriceService(s.ServiceParams)
 
-	// Process usage charges from line items
+	// First collect all meter IDs from line items and charges
+	meterIDs := make([]string, 0)
+	for _, item := range sub.LineItems {
+		if item.PriceType == types.PRICE_TYPE_USAGE && item.MeterID != "" {
+			meterIDs = append(meterIDs, item.MeterID)
+		}
+	}
+	meterIDs = lo.Uniq(meterIDs)
+
+	// Fetch all meters at once
+	meterFilter := types.NewNoLimitMeterFilter()
+	meterFilter.MeterIDs = meterIDs
+	meters, err := s.MeterRepo.List(ctx, meterFilter)
+	if err != nil {
+		return nil, decimal.Zero, err
+	}
+
+	// Create meter lookup map
+	meterMap := make(map[string]*meter.Meter)
+	for _, m := range meters {
+		meterMap[m.ID] = m
+	}
+
+	// filter out line items that are not active
 	for _, item := range sub.LineItems {
 		if item.PriceType != types.PRICE_TYPE_USAGE {
 			continue
@@ -231,13 +269,13 @@ func (s *billingService) CalculateUsageCharges(
 					// usage limit is set, so we decrement the usage quantity by the already entitled usage
 
 					// case 1 : when the usage reset period is billing period
-					if matchingEntitlement.UsageResetPeriod == sub.BillingPeriod {
+					if (matchingEntitlement.UsageResetPeriod) == types.EntitlementUsageResetPeriod(sub.BillingPeriod) {
 
 						usageAllowed := decimal.NewFromFloat(float64(*matchingEntitlement.UsageLimit))
 						adjustedQuantity := decimal.NewFromFloat(matchingCharge.Quantity).Sub(usageAllowed)
 						quantityForCalculation = decimal.Max(adjustedQuantity, decimal.Zero)
 
-					} else if matchingEntitlement.UsageResetPeriod == types.BILLING_PERIOD_DAILY {
+					} else if matchingEntitlement.UsageResetPeriod == types.ENTITLEMENT_USAGE_RESET_PERIOD_DAILY {
 
 						// case 2 : when the usage reset period is daily
 						// For daily reset periods, we need to fetch usage with daily window size
@@ -248,8 +286,8 @@ func (s *billingService) CalculateUsageCharges(
 							MeterID:            item.MeterID,
 							PriceID:            item.PriceID,
 							ExternalCustomerID: customer.ExternalID,
-							StartTime:          periodStart,
-							EndTime:            periodEnd,
+							StartTime:          item.GetPeriodStart(periodStart),
+							EndTime:            item.GetPeriodEnd(periodEnd),
 							WindowSize:         types.WindowSizeDay, // Use daily window size
 						}
 
@@ -293,6 +331,13 @@ func (s *billingService) CalculateUsageCharges(
 
 						// Use the total billable quantity for calculation
 						quantityForCalculation = totalBillableQuantity
+					} else if matchingEntitlement.UsageResetPeriod == types.ENTITLEMENT_USAGE_RESET_PERIOD_NEVER {
+						// Calculate usage for never reset entitlements using helper function
+						usageAllowed := decimal.NewFromFloat(float64(*matchingEntitlement.UsageLimit))
+						quantityForCalculation, err = s.calculateNeverResetUsage(ctx, sub, item, customer, eventService, periodStart, periodEnd, usageAllowed)
+						if err != nil {
+							return nil, decimal.Zero, err
+						}
 					} else {
 						usageAllowed := decimal.NewFromFloat(float64(*matchingEntitlement.UsageLimit))
 						adjustedQuantity := decimal.NewFromFloat(matchingCharge.Quantity).Sub(usageAllowed)
@@ -301,9 +346,56 @@ func (s *billingService) CalculateUsageCharges(
 
 					// Recalculate the amount based on the adjusted quantity
 					if matchingCharge.Price != nil {
-						// For tiered pricing, we need to use the price service to calculate the cost
-						adjustedAmount := priceService.CalculateCost(ctx, matchingCharge.Price, quantityForCalculation)
-						matchingCharge.Amount = adjustedAmount.InexactFloat64()
+						// Get meter from pre-fetched map
+						meter, ok := meterMap[item.MeterID]
+						if !ok {
+							return nil, decimal.Zero, ierr.NewError("meter not found").
+								WithHint(fmt.Sprintf("Meter with ID %s not found", item.MeterID)).
+								WithReportableDetails(map[string]interface{}{
+									"meter_id": item.MeterID,
+								}).
+								Mark(ierr.ErrNotFound)
+						}
+
+						// For bucketed max, we need to process each bucket's max value
+						if meter.IsBucketedMaxMeter() {
+							// Get usage with bucketed values
+							usageRequest := &dto.GetUsageByMeterRequest{
+								MeterID:            item.MeterID,
+								PriceID:            item.PriceID,
+								ExternalCustomerID: customer.ExternalID,
+								StartTime:          item.GetPeriodStart(periodStart),
+								EndTime:            item.GetPeriodEnd(periodEnd),
+							}
+
+							// Get usage data with buckets
+							usageResult, err := eventService.GetUsageByMeter(ctx, usageRequest)
+							if err != nil {
+								return nil, decimal.Zero, err
+							}
+
+							// Extract bucket values
+							bucketedValues := make([]decimal.Decimal, len(usageResult.Results))
+							for i, result := range usageResult.Results {
+								bucketedValues[i] = result.Value
+							}
+
+							// Calculate cost using bucketed values
+							adjustedAmount := priceService.CalculateBucketedCost(ctx, matchingCharge.Price, bucketedValues)
+							matchingCharge.Amount = adjustedAmount.InexactFloat64()
+
+							// Update quantity to reflect the sum of all bucket maxes
+							totalBucketQuantity := decimal.Zero
+							for _, bucketValue := range bucketedValues {
+								totalBucketQuantity = totalBucketQuantity.Add(bucketValue)
+							}
+							matchingCharge.Quantity = totalBucketQuantity.InexactFloat64()
+							quantityForCalculation = totalBucketQuantity
+						} else {
+							// For regular pricing, use standard cost calculation
+							adjustedAmount := priceService.CalculateCost(ctx, matchingCharge.Price, quantityForCalculation)
+							matchingCharge.Amount = adjustedAmount.InexactFloat64()
+						}
 					}
 				} else {
 					// unlimited usage allowed, so we set the usage quantity for calculation to 0
@@ -333,9 +425,14 @@ func (s *billingService) CalculateUsageCharges(
 				displayName = lo.ToPtr(fmt.Sprintf("%s (Overage)", item.DisplayName))
 			}
 
-			// Add usage reset period metadata if entitlement has daily reset
-			if !matchingCharge.IsOverage && ok && matchingEntitlement.IsEnabled && matchingEntitlement.UsageResetPeriod == types.BILLING_PERIOD_DAILY {
-				metadata["usage_reset_period"] = "daily"
+			// Add usage reset period metadata if entitlement has daily or never reset
+			if !matchingCharge.IsOverage && ok && matchingEntitlement.IsEnabled {
+				switch matchingEntitlement.UsageResetPeriod {
+				case types.ENTITLEMENT_USAGE_RESET_PERIOD_DAILY:
+					metadata["usage_reset_period"] = "daily"
+				case types.ENTITLEMENT_USAGE_RESET_PERIOD_NEVER:
+					metadata["usage_reset_period"] = "never"
+				}
 			}
 
 			s.Logger.Debugw("usage charges for line item",
@@ -373,8 +470,8 @@ func (s *billingService) CalculateUsageCharges(
 				DisplayName:      displayName,
 				Amount:           lineItemAmount,
 				Quantity:         quantityForCalculation,
-				PeriodStart:      lo.ToPtr(periodStart),
-				PeriodEnd:        lo.ToPtr(periodEnd),
+				PeriodStart:      lo.ToPtr(item.GetPeriodStart(periodStart)),
+				PeriodEnd:        lo.ToPtr(item.GetPeriodEnd(periodEnd)),
 				Metadata:         metadata,
 			})
 		}
@@ -581,6 +678,34 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 
 		description = fmt.Sprintf("Preview invoice for subscription %s", sub.ID)
 		metadata["is_preview"] = "true"
+	case types.ReferencePointCancel:
+		// for cancel, include arrer line items only
+		arrearLineItems, err := s.FilterLineItemsToBeInvoiced(ctx, sub, periodStart, periodEnd, classification.CurrentPeriodArrear)
+		if err != nil {
+			return nil, err
+		}
+
+		// For current period arrear charges
+		arrearResult, err := s.CalculateCharges(
+			ctx,
+			sub,
+			arrearLineItems,
+			periodStart,
+			periodEnd,
+			true, // Include usage for arrear
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		calculationResult = &BillingCalculationResult{
+			FixedCharges: arrearResult.FixedCharges,
+			UsageCharges: arrearResult.UsageCharges, // Only arrear has usage
+			TotalAmount:  arrearResult.TotalAmount,
+			Currency:     sub.Currency,
+		}
+
+		description = fmt.Sprintf("Invoice for subscription %s", sub.ID)
 
 	default:
 		return nil, ierr.NewError("invalid reference point").
@@ -814,8 +939,23 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 	description string, // mark optional
 	metadata types.Metadata, // mark optional
 ) (*dto.CreateInvoiceRequest, error) {
-	// Prepare invoice due date
-	invoiceDueDate := periodEnd.Add(24 * time.Hour * types.InvoiceDefaultDueDays)
+	// Get invoice config for tenant
+	settingsService := NewSettingsService(s.ServiceParams)
+	invoiceConfigResponse, err := settingsService.GetSettingByKey(ctx, types.SettingKeyInvoiceConfig.String())
+	if err != nil {
+		return nil, err
+	}
+
+	// Use the safe conversion function
+	invoiceConfig, err := dto.ConvertToInvoiceConfig(invoiceConfigResponse.Value)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to parse invoice configuration").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Prepare invoice due date using tenant's configuration
+	invoiceDueDate := periodEnd.Add(24 * time.Hour * time.Duration(*invoiceConfig.DueDateDays))
 
 	if result == nil {
 		// prepare result for zero amount invoice
@@ -949,13 +1089,66 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 	return req, nil
 }
 
+// applyProrationToLineItem applies proration calculation to a line item amount if proration is enabled
+func (s *billingService) applyProrationToLineItem(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	item *subscription.SubscriptionLineItem,
+	priceData *price.Price,
+	originalAmount decimal.Decimal,
+	periodStart *time.Time,
+	periodEnd *time.Time,
+) (decimal.Decimal, error) {
+
+	prorationService := NewProrationService(s.ServiceParams)
+	// Check if proration should be applied
+	if sub.ProrationBehavior == types.ProrationBehaviorNone {
+		// No proration needed
+		return originalAmount, nil
+	}
+
+	// Check if period dates match subscription's current period
+	if periodStart != nil && periodEnd != nil {
+		if !periodStart.Equal(sub.CurrentPeriodStart) || !periodEnd.Equal(sub.CurrentPeriodEnd) {
+			// Period doesn't match subscription's current period, don't apply proration
+			return originalAmount, nil
+		}
+	}
+
+	// If it's a usage charge, don't apply proration (usage is typically calculated for actual usage in the period)
+	if item.PriceType == types.PRICE_TYPE_USAGE {
+		return originalAmount, nil
+	}
+
+	action := types.ProrationActionAddItem
+	if sub.SubscriptionStatus == types.SubscriptionStatusCancelled {
+		action = types.ProrationActionCancellation
+	}
+	prorationParams, err := prorationService.CreateProrationParamsForLineItem(
+		sub,
+		item,
+		priceData,
+		action,
+		sub.ProrationBehavior,
+	)
+	if err != nil {
+		return originalAmount, err
+	}
+
+	prorationResult, err := prorationService.CalculateProration(ctx, prorationParams)
+	if err != nil {
+		return decimal.Zero, err
+	}
+	return prorationResult.NetAmount, nil
+}
+
 // Helper functions for aggregating entitlements
 func aggregateMeteredEntitlementsForBilling(entitlements []*entitlement.Entitlement) *dto.AggregatedEntitlement {
 	hasUnlimitedEntitlement := false
 	isSoftLimit := false
 	var totalLimit int64 = 0
-	var usageResetPeriod types.BillingPeriod
-	resetPeriodCounts := make(map[types.BillingPeriod]int)
+	var usageResetPeriod types.EntitlementUsageResetPeriod
+	resetPeriodCounts := make(map[types.EntitlementUsageResetPeriod]int)
 
 	for _, e := range entitlements {
 		if !e.IsEnabled {
@@ -1274,6 +1467,12 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 
 func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID string, req *dto.GetCustomerUsageSummaryRequest) (*dto.CustomerUsageSummaryResponse, error) {
 	subscriptionService := NewSubscriptionService(s.ServiceParams)
+	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config)
+	// get customer
+	customer, err := s.CustomerRepo.Get(ctx, customerID)
+	if err != nil {
+		return nil, err
+	}
 	// 1. Get customer entitlements first
 	entitlementsReq := &dto.GetCustomerEntitlementsRequest{
 		SubscriptionIDs: req.SubscriptionIDs,
@@ -1307,10 +1506,14 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 	// 3. Create a map to track usage by feature ID
 	usageByFeature := make(map[string]decimal.Decimal)
 	meterFeatureMap := make(map[string]string)
+	featureMeterMap := make(map[string]string)
+	featureUsageResetPeriodMap := make(map[string]types.EntitlementUsageResetPeriod)
 
 	for _, feature := range entitlements.Features {
 		usageByFeature[feature.Feature.ID] = decimal.Zero
 		meterFeatureMap[feature.Feature.MeterID] = feature.Feature.ID
+		featureMeterMap[feature.Feature.ID] = feature.Feature.MeterID
+		featureUsageResetPeriodMap[feature.Feature.ID] = feature.Entitlement.UsageResetPeriod
 	}
 
 	// 4. Get usage for each subscription
@@ -1324,11 +1527,106 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 			return nil, err
 		}
 
+		sub, err := s.SubRepo.Get(ctx, subscriptionID)
+		if err != nil {
+			return nil, err
+		}
+
 		// Add usage if found for this feature
 		for _, charge := range usage.Charges {
 			if featureID, ok := meterFeatureMap[charge.MeterID]; ok {
-				currentUsage := usageByFeature[featureID]
-				usageByFeature[featureID] = currentUsage.Add(decimal.NewFromFloat(charge.Quantity))
+				// currentUsage := usageByFeature[featureID]
+				// usageByFeature[featureID] = currentUsage.Add(decimal.NewFromFloat(charge.Quantity))
+				resetPeriod := featureUsageResetPeriodMap[featureID]
+				if resetPeriod == types.ENTITLEMENT_USAGE_RESET_PERIOD_DAILY {
+					// Handle daily reset features: get today's usage from daily windows
+					meterID := featureMeterMap[featureID]
+					// Create usage request with daily window size for current billing period
+					usageRequest := &dto.GetUsageByMeterRequest{
+						MeterID:            meterID,
+						ExternalCustomerID: customer.ExternalID,
+						StartTime:          sub.CurrentPeriodStart,
+						EndTime:            sub.CurrentPeriodEnd,
+						WindowSize:         types.WindowSizeDay,
+					}
+
+					// Get usage data with daily windows
+					usageResult, err := eventService.GetUsageByMeter(ctx, usageRequest)
+					if err != nil {
+						s.Logger.Warnw("failed to get daily usage for feature",
+							"feature_id", featureID,
+							"meter_id", meterID,
+							"subscription_id", subscriptionID,
+							"error", err)
+						continue
+					}
+
+					// Pick the last bucket (today's usage) if available
+					dailyUsage := decimal.Zero
+					today := time.Now().In(sub.CurrentPeriodStart.Location())
+					todayStart := time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, today.Location())
+
+					todayEnd := todayStart.AddDate(0, 0, 1)
+					if len(usageResult.Results) > 0 {
+						lastBucket := usageResult.Results[len(usageResult.Results)-1]
+						// check if last bucket is today's usage
+						if (lastBucket.WindowSize.After(todayStart) || lastBucket.WindowSize.Equal(todayStart)) && lastBucket.WindowSize.Before(todayEnd) {
+							dailyUsage = lastBucket.Value
+						}
+
+						s.Logger.Debugw("using daily usage for feature summary",
+							"customer_id", customerID,
+							"external_customer_id", customer.ExternalID,
+							"feature_id", featureID,
+							"meter_id", meterID,
+							"subscription_id", subscriptionID,
+							"today_usage", dailyUsage,
+							"today_start", todayStart,
+							"today_end", todayEnd,
+							"last_bucket", lastBucket.WindowSize,
+							"last_bucket_value", lastBucket.Value,
+							"total_daily_windows", len(usageResult.Results))
+					}
+					usageByFeature[featureID] = dailyUsage
+				} else if resetPeriod == types.ENTITLEMENT_USAGE_RESET_PERIOD_NEVER {
+					// Handle never reset features: get cumulative usage from subscription start
+					meterID := featureMeterMap[featureID]
+
+					// For never reset features, calculate cumulative usage from subscription start to current period end
+					// This maintains consistency with the billing logic
+					totalUsageRequest := &dto.GetUsageByMeterRequest{
+						MeterID:            meterID,
+						ExternalCustomerID: customer.ExternalID,
+						StartTime:          sub.StartDate,
+						EndTime:            sub.CurrentPeriodEnd,
+					}
+
+					totalUsageResult, err := eventService.GetUsageByMeter(ctx, totalUsageRequest)
+					if err != nil {
+						s.Logger.Warnw("failed to get total usage for never reset feature",
+							"feature_id", featureID,
+							"meter_id", meterID,
+							"subscription_id", subscriptionID,
+							"error", err)
+						continue
+					}
+
+					// Calculate total cumulative usage from subscription start
+					usageByFeature[featureID] = totalUsageResult.Value
+
+					s.Logger.Debugw("using cumulative usage for never reset feature summary",
+						"customer_id", customerID,
+						"external_customer_id", customer.ExternalID,
+						"feature_id", featureID,
+						"meter_id", meterID,
+						"subscription_id", subscriptionID,
+						"subscription_start", sub.StartDate,
+						"current_period_end", sub.CurrentPeriodEnd,
+						"total_cumulative_usage", totalUsageResult.Value)
+				} else {
+					currentUsage := usageByFeature[featureID]
+					usageByFeature[featureID] = currentUsage.Add(decimal.NewFromFloat(charge.Quantity))
+				}
 			}
 		}
 	}
@@ -1382,4 +1680,92 @@ func (s *billingService) getUsagePercent(usage decimal.Decimal, limit *int64) de
 	}
 
 	return usage.Div(decimal.NewFromInt(*limit))
+}
+
+// calculateNeverResetUsage calculates billable usage for never reset entitlements with line item lifecycle awareness
+// This function is optimized for period-end billing scenarios where we need to calculate cumulative usage
+// that respects line item boundaries and lifecycle states.
+//
+// Never Reset Entitlement Logic:
+// - Usage accumulates from subscription start date and never resets
+// - Respects line item lifecycle: active, expired, or future states
+// - Only bills for the intersection of line item active period and billing period
+// - Handles line item transitions gracefully (similar to plan sync logic)
+//
+// Calculation Method:
+// - totalUsage: From subscription start to line item period end
+// - previousPeriodUsage: From subscription start to line item period start
+// - billableQuantity: totalUsage - previousPeriodUsage - usageAllowed
+// - Ensures billable quantity is never negative (max with zero)
+func (s *billingService) calculateNeverResetUsage(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	item *subscription.SubscriptionLineItem,
+	customer *customer.Customer,
+	eventService EventService,
+	periodStart,
+	periodEnd time.Time,
+	usageAllowed decimal.Decimal,
+) (decimal.Decimal, error) {
+
+	// Calculate line item period boundaries
+	lineItemPeriodStart := item.GetPeriodStart(periodStart)
+	lineItemPeriodEnd := item.GetPeriodEnd(periodEnd)
+
+	// For never reset entitlements, calculate cumulative usage from subscription start
+	// This maintains the "never reset" behavior while respecting line item boundaries
+
+	// Get total cumulative usage from subscription start to line item period end
+	totalUsageRequest := &dto.GetUsageByMeterRequest{
+		MeterID:            item.MeterID,
+		PriceID:            item.PriceID,
+		ExternalCustomerID: customer.ExternalID,
+		StartTime:          sub.StartDate,
+		EndTime:            lineItemPeriodEnd,
+	}
+
+	totalUsageResult, err := eventService.GetUsageByMeter(ctx, totalUsageRequest)
+	if err != nil {
+		return decimal.Zero, err
+	}
+
+	// Get cumulative usage from subscription start to line item period start
+	// This represents usage that was already billed in previous periods
+	previousPeriodUsageRequest := &dto.GetUsageByMeterRequest{
+		MeterID:            item.MeterID,
+		PriceID:            item.PriceID,
+		ExternalCustomerID: customer.ExternalID,
+		StartTime:          sub.StartDate,
+		EndTime:            lineItemPeriodStart,
+	}
+
+	previousPeriodUsageResult, err := eventService.GetUsageByMeter(ctx, previousPeriodUsageRequest)
+	if err != nil {
+		return decimal.Zero, err
+	}
+
+	// Calculate cumulative usage totals
+	totalUsage := totalUsageResult.Value
+	previousPeriodUsage := previousPeriodUsageResult.Value
+
+	// Calculate billable quantity = totalUsage - previousPeriodUsage - usageAllowed
+	periodUsage := totalUsage.Sub(previousPeriodUsage)
+	billableQuantity := totalUsage.Sub(previousPeriodUsage).Sub(usageAllowed)
+
+	// Ensure billable quantity is not negative
+	billableQuantity = decimal.Max(billableQuantity, decimal.Zero)
+
+	s.Logger.Debugw("calculated never reset usage for line item",
+		"line_item_id", item.ID,
+		"meter_id", item.MeterID,
+		"subscription_start", sub.StartDate,
+		"line_item_period_start", lineItemPeriodStart,
+		"line_item_period_end", lineItemPeriodEnd,
+		"total_cumulative_usage", totalUsage,
+		"previous_period_usage", previousPeriodUsage,
+		"period_usage", periodUsage,
+		"usage_allowed", usageAllowed,
+		"billable_quantity", billableQuantity)
+
+	return billableQuantity, nil
 }

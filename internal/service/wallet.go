@@ -73,6 +73,9 @@ type WalletService interface {
 
 	// CheckBalanceThresholds checks if wallet balance is below threshold and triggers alerts
 	CheckBalanceThresholds(ctx context.Context, w *wallet.Wallet, balance *dto.WalletBalanceResponse) error
+
+	// TopUpWalletForProratedCharge tops up a wallet for proration credits from subscription changes
+	TopUpWalletForProratedCharge(ctx context.Context, customerID string, amount decimal.Decimal, currency string) error
 }
 
 type walletService struct {
@@ -355,9 +358,12 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 	var paymentID string
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
 		// Create invoice for credit purchase
+		amount := s.GetCurrencyAmountFromCredits(req.CreditsToAdd, w.ConversionRate)
 		invoice, err := invoiceService.CreateInvoice(ctx, dto.CreateInvoiceRequest{
 			CustomerID:     w.CustomerID,
-			AmountDue:      s.GetCurrencyAmountFromCredits(req.CreditsToAdd, w.ConversionRate),
+			AmountDue:      amount,
+			Subtotal:       amount,
+			Total:          amount,
 			Currency:       w.Currency,
 			InvoiceType:    types.InvoiceTypeCredit,
 			DueDate:        lo.ToPtr(time.Now().UTC()),
@@ -365,7 +371,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 			InvoiceStatus:  lo.ToPtr(types.InvoiceStatusFinalized),
 			LineItems: []dto.CreateInvoiceLineItemRequest{
 				{
-					Amount:      s.GetCurrencyAmountFromCredits(req.CreditsToAdd, w.ConversionRate),
+					Amount:      amount,
 					Quantity:    decimal.NewFromInt(1),
 					DisplayName: lo.ToPtr("Purchased Credits"),
 				},
@@ -1266,5 +1272,120 @@ func (s *walletService) CheckBalanceThresholds(ctx context.Context, w *wallet.Wa
 	if len(errs) > 0 {
 		return errs[0] // Return first error
 	}
+	return nil
+}
+
+func (s *walletService) TopUpWalletForProratedCharge(ctx context.Context, customerID string, amount decimal.Decimal, currency string) error {
+	if customerID == "" {
+		return ierr.NewError("customer_id is required").
+			WithHint("Customer ID is required for wallet top-up").
+			Mark(ierr.ErrValidation)
+	}
+
+	if amount.LessThanOrEqual(decimal.Zero) {
+		return ierr.NewError("amount must be positive").
+			WithHint("Top-up amount must be greater than zero").
+			Mark(ierr.ErrValidation)
+	}
+
+	if currency == "" {
+		currency = "usd" // Default to USD if no currency provided
+	}
+
+	// Get customer to validate existence
+	_, err := s.CustomerRepo.Get(ctx, customerID)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to get customer").
+			WithReportableDetails(map[string]interface{}{
+				"customer_id": customerID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	// Get existing wallets for the customer
+	existingWallets, err := s.GetWalletsByCustomerID(ctx, customerID)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to get existing wallets").
+			WithReportableDetails(map[string]interface{}{
+				"customer_id": customerID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	// Find or create a suitable wallet for the proration credit
+
+	var selectedWallet *dto.WalletResponse
+	for _, w := range existingWallets {
+		if w.WalletStatus == types.WalletStatusActive &&
+			types.IsMatchingCurrency(w.Currency, currency) &&
+			w.WalletType == types.WalletTypePrePaid {
+			selectedWallet = w
+			break
+		}
+	}
+
+	// Create a new wallet if none exists
+	if selectedWallet == nil {
+		s.Logger.Infow("creating new wallet for proration credit",
+			"customer_id", customerID,
+			"currency", currency,
+			"amount", amount.String())
+
+		walletReq := &dto.CreateWalletRequest{
+			Name:           "Proration Credit Wallet",
+			CustomerID:     customerID,
+			Currency:       currency,
+			ConversionRate: decimal.NewFromInt(1), // 1:1 conversion rate for credits
+			WalletType:     types.WalletTypePrePaid,
+			Metadata: types.Metadata{
+				"created_for": "proration_credit",
+				"source":      "subscription_change",
+			},
+		}
+
+		selectedWallet, err = s.CreateWallet(ctx, walletReq)
+		if err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to create wallet for proration credit").
+				WithReportableDetails(map[string]interface{}{
+					"customer_id": customerID,
+					"currency":    currency,
+				}).
+				Mark(ierr.ErrDatabase)
+		}
+	}
+
+	// Top up the wallet with the proration credit
+	topUpReq := &dto.TopUpWalletRequest{
+		Amount:            amount,
+		TransactionReason: types.TransactionReasonSubscriptionCredit,
+		Description:       "Proration credit from subscription change",
+		Metadata: types.Metadata{
+			"source":      "subscription_change_proration",
+			"customer_id": customerID,
+		},
+		IdempotencyKey: lo.ToPtr(fmt.Sprintf("proration_credit_%s_%s", customerID, time.Now().Format("20060102150405"))),
+	}
+
+	_, err = s.TopUpWallet(ctx, selectedWallet.ID, topUpReq)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to top up wallet with proration credit").
+			WithReportableDetails(map[string]interface{}{
+				"customer_id": customerID,
+				"wallet_id":   selectedWallet.ID,
+				"amount":      amount.String(),
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	s.Logger.Infow("successfully topped up wallet for proration credit",
+		"customer_id", customerID,
+		"wallet_id", selectedWallet.ID,
+		"amount", amount.String(),
+		"currency", currency)
+
 	return nil
 }

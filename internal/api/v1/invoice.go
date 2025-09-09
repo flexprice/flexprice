@@ -67,7 +67,8 @@ func (h *InvoiceHandler) CreateOneOffInvoice(c *gin.Context) {
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Invoice ID"
-// @Param expand_by_source query bool false "Include source-level price breakdown for usage line items"
+// @Param expand_by_source query bool false "Include source-level price breakdown for usage line items (legacy)"
+// @Param group_by query []string false "Group usage breakdown by specified fields (e.g., source, feature_id, properties.org_id)"
 // @Success 200 {object} dto.InvoiceResponse
 // @Failure 404 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
@@ -80,6 +81,7 @@ func (h *InvoiceHandler) GetInvoice(c *gin.Context) {
 	}
 
 	expandBySource := c.DefaultQuery("expand_by_source", "false") == "true"
+	groupByParams := c.QueryArray("group_by")
 
 	invoice, err := h.invoiceService.GetInvoice(c.Request.Context(), id)
 	if err != nil {
@@ -87,7 +89,17 @@ func (h *InvoiceHandler) GetInvoice(c *gin.Context) {
 		return
 	}
 
-	if expandBySource {
+	// Handle usage breakdown - prioritize group_by over expand_by_source for flexibility
+	if len(groupByParams) > 0 {
+		// Use flexible grouping
+		usageBreakdown, err := h.invoiceService.CalculateUsageBreakdown(c.Request.Context(), invoice, groupByParams)
+		if err != nil {
+			c.Error(err)
+			return
+		}
+		invoice.WithUsageBreakdown(usageBreakdown)
+	} else if expandBySource {
+		// Legacy source-only breakdown for backward compatibility
 		usageAnalytics, err := h.invoiceService.CalculatePriceBreakdown(c.Request.Context(), invoice)
 		if err != nil {
 			c.Error(err)
@@ -438,7 +450,8 @@ func (h *InvoiceHandler) RecalculateInvoice(c *gin.Context) {
 
 // UpdateInvoice godoc
 // @Summary Update an invoice
-// @Description Update invoice details like PDF URL
+// @Description Update invoice details like PDF URL and due date.
+// Only works for draft or finalized invoices that haven't been paid.
 // @Tags Invoices
 // @Accept json
 // @Produce json

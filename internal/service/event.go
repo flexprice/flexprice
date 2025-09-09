@@ -138,7 +138,7 @@ func (s *eventService) GetUsageByMeter(ctx context.Context, req *dto.GetUsageByM
 	}
 
 	// Pass the bucket_size from meter configuration if it's a MAX aggregation with bucket_size set
-	if m.Aggregation.Type == types.AggregationMax && m.Aggregation.BucketSize != "" {
+	if m.IsBucketedMaxMeter() {
 		getUsageRequest.BucketSize = m.Aggregation.BucketSize
 	}
 

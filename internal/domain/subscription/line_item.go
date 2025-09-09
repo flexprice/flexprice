@@ -11,28 +11,28 @@ import (
 
 // SubscriptionLineItem represents a line item in a subscription
 type SubscriptionLineItem struct {
-	ID               string                                `db:"id" json:"id"`
-	SubscriptionID   string                                `db:"subscription_id" json:"subscription_id"`
-	CustomerID       string                                `db:"customer_id" json:"customer_id"`
-	EntityID         string                                `db:"entity_id" json:"entity_id,omitempty"`
-	EntityType       types.SubscriptionLineItemEntitiyType `db:"entity_type" json:"entity_type,omitempty"`
-	PlanDisplayName  string                                `db:"plan_display_name" json:"plan_display_name,omitempty"`
-	PriceID          string                                `db:"price_id" json:"price_id"`
-	PriceType        types.PriceType                       `db:"price_type" json:"price_type,omitempty"`
-	MeterID          string                                `db:"meter_id" json:"meter_id,omitempty"`
-	MeterDisplayName string                                `db:"meter_display_name" json:"meter_display_name,omitempty"`
-	PriceUnitID      string                                `db:"price_unit_id" json:"price_unit_id"`
-	PriceUnit        string                                `db:"price_unit" json:"price_unit"`
-	DisplayName      string                                `db:"display_name" json:"display_name,omitempty"`
-	Quantity         decimal.Decimal                       `db:"quantity" json:"quantity"`
-	Currency         string                                `db:"currency" json:"currency"`
-	BillingPeriod    types.BillingPeriod                   `db:"billing_period" json:"billing_period"`
-	InvoiceCadence   types.InvoiceCadence                  `db:"invoice_cadence" json:"invoice_cadence"`
-	TrialPeriod      int                                   `db:"trial_period" json:"trial_period"`
-	StartDate        time.Time                             `db:"start_date" json:"start_date,omitempty"`
-	EndDate          time.Time                             `db:"end_date" json:"end_date,omitempty"`
-	Metadata         map[string]string                     `db:"metadata" json:"metadata,omitempty"`
-	EnvironmentID    string                                `db:"environment_id" json:"environment_id"`
+	ID               string                               `db:"id" json:"id"`
+	SubscriptionID   string                               `db:"subscription_id" json:"subscription_id"`
+	CustomerID       string                               `db:"customer_id" json:"customer_id"`
+	EntityID         string                               `db:"entity_id" json:"entity_id,omitempty"`
+	EntityType       types.SubscriptionLineItemEntityType `db:"entity_type" json:"entity_type,omitempty"`
+	PlanDisplayName  string                               `db:"plan_display_name" json:"plan_display_name,omitempty"`
+	PriceID          string                               `db:"price_id" json:"price_id"`
+	PriceType        types.PriceType                      `db:"price_type" json:"price_type,omitempty"`
+	MeterID          string                               `db:"meter_id" json:"meter_id,omitempty"`
+	MeterDisplayName string                               `db:"meter_display_name" json:"meter_display_name,omitempty"`
+	PriceUnitID      string                               `db:"price_unit_id" json:"price_unit_id"`
+	PriceUnit        string                               `db:"price_unit" json:"price_unit"`
+	DisplayName      string                               `db:"display_name" json:"display_name,omitempty"`
+	Quantity         decimal.Decimal                      `db:"quantity" json:"quantity"`
+	Currency         string                               `db:"currency" json:"currency"`
+	BillingPeriod    types.BillingPeriod                  `db:"billing_period" json:"billing_period"`
+	InvoiceCadence   types.InvoiceCadence                 `db:"invoice_cadence" json:"invoice_cadence"`
+	TrialPeriod      int                                  `db:"trial_period" json:"trial_period"`
+	StartDate        time.Time                            `db:"start_date" json:"start_date,omitempty"`
+	EndDate          time.Time                            `db:"end_date" json:"end_date,omitempty"`
+	Metadata         map[string]string                    `db:"metadata" json:"metadata,omitempty"`
+	EnvironmentID    string                               `db:"environment_id" json:"environment_id"`
 	types.BaseModel
 }
 
@@ -111,7 +111,7 @@ func SubscriptionLineItemFromEnt(e *ent.SubscriptionLineItem) *SubscriptionLineI
 		SubscriptionID:   e.SubscriptionID,
 		CustomerID:       e.CustomerID,
 		EntityID:         lo.FromPtr(e.EntityID),
-		EntityType:       types.SubscriptionLineItemEntitiyType(e.EntityType),
+		EntityType:       types.SubscriptionLineItemEntityType(e.EntityType),
 		PlanDisplayName:  lo.FromPtr(e.PlanDisplayName),
 		PriceID:          e.PriceID,
 		PriceType:        types.PriceType(priceType),
@@ -138,4 +138,27 @@ func SubscriptionLineItemFromEnt(e *ent.SubscriptionLineItem) *SubscriptionLineI
 			UpdatedAt: e.UpdatedAt,
 		},
 	}
+}
+
+// GetPeriod returns period start and end dates based on line item dates
+func (li *SubscriptionLineItem) GetPeriod(defaultPeriodStart, defaultPeriodEnd time.Time) (time.Time, time.Time) {
+	return li.GetPeriodStart(defaultPeriodStart), li.GetPeriodEnd(defaultPeriodEnd)
+}
+
+// GetPeriodStart returns the period start date based on line item dates
+func (li *SubscriptionLineItem) GetPeriodStart(defaultPeriodStart time.Time) time.Time {
+	// If line item has a start date after default period start, use line item start date
+	if !li.StartDate.IsZero() && (li.StartDate.After(defaultPeriodStart) || li.StartDate.Equal(defaultPeriodStart)) {
+		return li.StartDate
+	}
+	return defaultPeriodStart
+}
+
+// GetPeriodEnd returns the period end date based on line item dates
+func (li *SubscriptionLineItem) GetPeriodEnd(defaultPeriodEnd time.Time) time.Time {
+	// If line item has an end date before default period end, use line item end date
+	if !li.EndDate.IsZero() && (li.EndDate.Before(defaultPeriodEnd) || li.EndDate.Equal(defaultPeriodEnd)) {
+		return li.EndDate
+	}
+	return defaultPeriodEnd
 }

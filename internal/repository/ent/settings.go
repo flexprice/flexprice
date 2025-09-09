@@ -2,6 +2,7 @@ package ent
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -327,4 +328,108 @@ func (r *settingsRepository) DeleteCache(ctx context.Context, setting *domainSet
 	r.cache.Delete(ctx, idKey)
 	r.cache.Delete(ctx, keyKey)
 	r.log.Debugw("cache deleted", "id_key", idKey, "key_key", keyKey)
+}
+
+// ListAllTenantEnvSettingsByKey returns all settings for a given key across all tenants and environments
+func (r *settingsRepository) ListAllTenantEnvSettingsByKey(ctx context.Context, key string) ([]*types.TenantEnvConfig, error) {
+	if !types.IsValidSettingKey(key) {
+		return nil, ierr.WithError(errors.New("invalid setting key")).
+			WithHintf("Invalid setting key: %s", key).
+			Mark(ierr.ErrValidation)
+	}
+
+	client := r.client.Querier(ctx)
+
+	// Query all settings for the given key
+	settings, err := client.Settings.Query().
+		Where(
+			settings.Key(key),
+			settings.Status(string(types.StatusPublished)),
+		).All(ctx)
+
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHintf("Failed to list settings for key %s", key).
+			Mark(ierr.ErrDatabase)
+	}
+
+	// Return basic config map for all settings
+	configs := make([]*types.TenantEnvConfig, 0, len(settings))
+	for _, setting := range settings {
+		config := &types.TenantEnvConfig{
+			TenantID:      setting.TenantID,
+			EnvironmentID: setting.EnvironmentID,
+			Config:        setting.Value,
+		}
+		configs = append(configs, config)
+	}
+
+	return configs, nil
+}
+
+// ListSubscriptionConfigs returns all subscription configs across all tenants and environments
+func (r *settingsRepository) GetAllTenantEnvSubscriptionSettings(ctx context.Context) ([]*types.TenantEnvSubscriptionConfig, error) {
+	// Get all configs for subscription key
+	configs, err := r.ListAllTenantEnvSettingsByKey(ctx, types.SettingKeySubscriptionConfig.String())
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert to subscription configs and apply subscription-specific logic
+	subscriptionConfigs := make([]*types.TenantEnvSubscriptionConfig, 0, len(configs))
+	for _, config := range configs {
+		subscriptionConfig := &types.TenantEnvSubscriptionConfig{
+			TenantID:           config.TenantID,
+			EnvironmentID:      config.EnvironmentID,
+			SubscriptionConfig: extractSubscriptionConfig(config.Config),
+		}
+
+		r.log.Debugw("processing subscription config",
+			"tenant_id", config.TenantID,
+			"environment_id", config.EnvironmentID,
+			"auto_cancellation_enabled", subscriptionConfig.AutoCancellationEnabled,
+			"grace_period_days", subscriptionConfig.GracePeriodDays)
+
+		// Only include if auto-cancellation is enabled
+		if subscriptionConfig.AutoCancellationEnabled {
+			subscriptionConfigs = append(subscriptionConfigs, subscriptionConfig)
+		} else {
+			r.log.Infow("skipping subscription config - auto-cancellation disabled",
+				"tenant_id", config.TenantID,
+				"environment_id", config.EnvironmentID)
+		}
+	}
+
+	return subscriptionConfigs, nil
+}
+
+// Helper function to extract subscription config from setting value
+func extractSubscriptionConfig(value map[string]interface{}) *types.SubscriptionConfig {
+	// Get default values from central defaults
+	defaultSettings := types.GetDefaultSettings()
+	defaultConfig := defaultSettings[types.SettingKeySubscriptionConfig].DefaultValue
+
+	config := &types.SubscriptionConfig{
+		GracePeriodDays:         defaultConfig["grace_period_days"].(int),
+		AutoCancellationEnabled: defaultConfig["auto_cancellation_enabled"].(bool),
+	}
+
+	// Extract grace_period_days
+	if gracePeriodDaysRaw, exists := value["grace_period_days"]; exists {
+		switch v := gracePeriodDaysRaw.(type) {
+		case float64:
+			config.GracePeriodDays = int(v)
+		case int:
+			config.GracePeriodDays = v
+		}
+	}
+
+	// Extract auto_cancellation_enabled
+	if autoCancellationEnabledRaw, exists := value["auto_cancellation_enabled"]; exists {
+		if autoCancellationEnabled, ok := autoCancellationEnabledRaw.(bool); ok {
+			config.AutoCancellationEnabled = autoCancellationEnabled
+		}
+	}
+
+	return config
 }

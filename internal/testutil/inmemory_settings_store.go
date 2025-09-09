@@ -105,3 +105,47 @@ func (s *InMemorySettingsStore) Clear() {
 	defer s.mu.Unlock()
 	s.items = make(map[string]*domainSettings.Setting)
 }
+
+// ListAllTenantEnvSettingsByKey returns all settings for a given key across all tenants and environments
+func (s *InMemorySettingsStore) ListAllTenantEnvSettingsByKey(ctx context.Context, key string) ([]*types.TenantEnvConfig, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var configs []*types.TenantEnvConfig
+
+	for _, setting := range s.items {
+		if setting.Key == key && setting.Status == types.StatusPublished {
+			config := &types.TenantEnvConfig{
+				TenantID:      setting.TenantID,
+				EnvironmentID: setting.EnvironmentID,
+				Config:        setting.Value,
+			}
+			configs = append(configs, config)
+		}
+	}
+
+	return configs, nil
+}
+
+// GetAllTenantEnvSubscriptionSettings returns all subscription configs across all tenants and environments
+func (s *InMemorySettingsStore) GetAllTenantEnvSubscriptionSettings(ctx context.Context) ([]*types.TenantEnvSubscriptionConfig, error) {
+	configs, err := s.ListAllTenantEnvSettingsByKey(ctx, types.SettingKeySubscriptionConfig.String())
+	if err != nil {
+		return nil, err
+	}
+
+	var subscriptionConfigs []*types.TenantEnvSubscriptionConfig
+	for _, config := range configs {
+		subscriptionConfig := &types.TenantEnvSubscriptionConfig{
+			TenantID:      config.TenantID,
+			EnvironmentID: config.EnvironmentID,
+			SubscriptionConfig: &types.SubscriptionConfig{
+				GracePeriodDays:         config.Config["grace_period_days"].(int),
+				AutoCancellationEnabled: config.Config["auto_cancellation_enabled"].(bool),
+			},
+		}
+		subscriptionConfigs = append(subscriptionConfigs, subscriptionConfig)
+	}
+
+	return subscriptionConfigs, nil
+}

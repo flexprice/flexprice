@@ -579,7 +579,7 @@ func (a *MaxAggregator) getNonWindowedQuery(ctx context.Context, params *events.
 }
 
 func (a *MaxAggregator) getWindowedQuery(ctx context.Context, params *events.UsageParams) string {
-	bucketWindow := fmt.Sprintf("toStartOfInterval(timestamp, INTERVAL 1 %s)", strings.ToUpper(string(params.BucketSize)))
+	bucketWindow := formatWindowSize(params.BucketSize)
 
 	externalCustomerFilter := ""
 	if params.ExternalCustomerID != "" {

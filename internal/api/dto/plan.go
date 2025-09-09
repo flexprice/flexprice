@@ -17,6 +17,7 @@ type CreatePlanRequest struct {
 	Name         string                         `json:"name" validate:"required"`
 	LookupKey    string                         `json:"lookup_key"`
 	Description  string                         `json:"description"`
+	DisplayOrder *int                           `json:"display_order,omitempty"`
 	Prices       []CreatePlanPriceRequest       `json:"prices"`
 	Entitlements []CreatePlanEntitlementRequest `json:"entitlements"`
 	CreditGrants []CreateCreditGrantRequest     `json:"credit_grants"`
@@ -233,6 +234,10 @@ func (r *CreatePlanRequest) ToPlan(ctx context.Context) *plan.Plan {
 		Metadata:      r.Metadata,
 		BaseModel:     types.GetDefaultBaseModel(ctx),
 	}
+	if r.DisplayOrder != nil {
+		plan.DisplayOrder = r.DisplayOrder
+	}
+
 	return plan
 }
 
@@ -266,6 +271,7 @@ type UpdatePlanRequest struct {
 	Name         *string                        `json:"name,omitempty"`
 	LookupKey    *string                        `json:"lookup_key,omitempty"`
 	Description  *string                        `json:"description,omitempty"`
+	DisplayOrder *int                           `json:"display_order,omitempty"`
 	Prices       []UpdatePlanPriceRequest       `json:"prices,omitempty"`
 	Entitlements []UpdatePlanEntitlementRequest `json:"entitlements,omitempty"`
 	CreditGrants []UpdatePlanCreditGrantRequest `json:"credit_grants,omitempty"`
@@ -295,3 +301,15 @@ type UpdatePlanCreditGrantRequest struct {
 
 // ListPlansResponse represents the response for listing plans with prices, entitlements, and credit grants
 type ListPlansResponse = types.ListResponse[*PlanResponse]
+
+type SyncPlanPricesResponse struct {
+	Message                string `json:"message"`
+	PlanID                 string `json:"plan_id"`
+	PlanName               string `json:"plan_name"`
+	SynchronizationSummary struct {
+		SubscriptionsProcessed int `json:"subscriptions_processed"`
+		PricesAdded            int `json:"prices_added"`
+		PricesRemoved          int `json:"prices_removed"`
+		PricesSkipped          int `json:"prices_skipped"`
+	} `json:"synchronization_summary"`
+}

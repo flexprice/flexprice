@@ -16,6 +16,11 @@ type CreateEntityIntegrationMappingRequest struct {
 	Metadata         map[string]interface{}      `json:"metadata,omitempty"`
 }
 
+type UpdateEntityIntegrationMappingRequest struct {
+	ProviderEntityID *string                `json:"provider_entity_id,omitempty" validate:"omitempty,max=255"`
+	Metadata         map[string]interface{} `json:"metadata,omitempty"`
+}
+
 type EntityIntegrationMappingResponse struct {
 	ID               string                      `json:"id"`
 	EntityID         string                      `json:"entity_id"`
@@ -35,6 +40,10 @@ type EntityIntegrationMappingResponse struct {
 type ListEntityIntegrationMappingsResponse = types.ListResponse[*EntityIntegrationMappingResponse]
 
 func (r *CreateEntityIntegrationMappingRequest) Validate() error {
+	return validator.ValidateRequest(r)
+}
+
+func (r *UpdateEntityIntegrationMappingRequest) Validate() error {
 	return validator.ValidateRequest(r)
 }
 

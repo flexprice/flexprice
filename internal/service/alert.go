@@ -98,7 +98,7 @@ func (s *alertService) CheckAlerts(ctx context.Context, req *dto.CheckAlertsRequ
 				}
 
 				// Handle alert state changes
-				if err := s.handleAlertStateChange(ctx, entity, latestAlert, alertState, currentValue, req.Threshold, req.AlertMetric); err != nil {
+				if err := s.handleAlertStateChange(ctx, entity, latestAlert, alertState, currentValue, threshold, req.AlertMetric); err != nil {
 					s.Logger.Error("failed to handle alert state change", "error", err, "entity_id", entity.ID)
 					continue
 				}

@@ -3,25 +3,29 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sort"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
+	"go.uber.org/zap"
 )
 
 type SubscriptionService interface {
 	CreateSubscription(ctx context.Context, req dto.CreateSubscriptionRequest) (*dto.SubscriptionResponse, error)
 	GetSubscription(ctx context.Context, id string) (*dto.SubscriptionResponse, error)
-	CancelSubscription(ctx context.Context, id string, cancelAtPeriodEnd bool) error
+	CancelSubscription(ctx context.Context, subscriptionID string, req *dto.CancelSubscriptionRequest) (*dto.CancelSubscriptionResponse, error)
 	ActivateIncompleteSubscription(ctx context.Context, subscriptionID string) error
 	ListSubscriptions(ctx context.Context, filter *types.SubscriptionFilter) (*dto.ListSubscriptionsResponse, error)
 	GetUsageBySubscription(ctx context.Context, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error)
@@ -51,6 +55,15 @@ type SubscriptionService interface {
 	// Addon management for subscriptions
 	AddAddonToSubscription(ctx context.Context, subscriptionID string, req *dto.AddAddonToSubscriptionRequest) (*addonassociation.AddonAssociation, error)
 	RemoveAddonFromSubscription(ctx context.Context, subscriptionID string, addonID string, reason string) error
+
+	// Line item management
+	AddSubscriptionLineItem(ctx context.Context, subscriptionID string, req dto.CreateSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error)
+	DeleteSubscriptionLineItem(ctx context.Context, lineItemID string, req dto.DeleteSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error)
+
+	// Auto-cancellation methods
+	ProcessAutoCancellationSubscriptions(ctx context.Context) error
+	// Renewal due alert methods
+	ProcessSubscriptionRenewalDueAlert(ctx context.Context) error
 }
 
 type subscriptionService struct {
@@ -152,7 +165,10 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		sub.StartDate = sub.StartDate.UTC()
 	}
 
-	if sub.BillingCycle == types.BillingCycleCalendar {
+	// TODO: handle customer timezone here
+	if req.BillingAnchor != nil {
+		sub.BillingAnchor = *req.BillingAnchor
+	} else if sub.BillingCycle == types.BillingCycleCalendar {
 		sub.BillingAnchor = types.CalculateCalendarBillingAnchor(sub.StartDate, sub.BillingPeriod)
 	} else {
 		// default to start date for anniversary billing
@@ -176,7 +192,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	lineItems := make([]*subscription.SubscriptionLineItem, 0, len(validPrices))
 	for _, price := range validPrices {
 		lineItems = append(lineItems, &subscription.SubscriptionLineItem{
-			PriceID:       price.ID,
+			PriceID:       price.Price.ID,
 			EnvironmentID: types.GetEnvironmentID(ctx),
 			BaseModel:     types.GetDefaultBaseModel(ctx),
 		})
@@ -194,7 +210,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 				Mark(ierr.ErrDatabase)
 		}
 
-		if price.Type == types.PRICE_TYPE_USAGE && price.Meter != nil {
+		if price.Price.Type == types.PRICE_TYPE_USAGE && price.Meter != nil {
 			item.MeterID = price.Meter.ID
 			item.MeterDisplayName = price.Meter.Name
 			item.DisplayName = price.Meter.Name
@@ -213,7 +229,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		item.SubscriptionID = sub.ID
 		item.PriceType = price.Type
 		item.EntityID = plan.ID
-		item.EntityType = types.SubscriptionLineItemEntitiyTypePlan
+		item.EntityType = types.SubscriptionLineItemEntityTypePlan
 		item.PlanDisplayName = plan.Name
 		item.CustomerID = sub.CustomerID
 		item.Currency = sub.Currency
@@ -254,13 +270,14 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 
 	invoiceService := NewInvoiceService(s.ServiceParams)
 	var invoice *dto.InvoiceResponse
+	var updatedSub *subscription.Subscription
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
+
 		// Create subscription with line items
 		err = s.SubRepo.CreateWithLineItems(ctx, sub, sub.LineItems)
 		if err != nil {
 			return err
 		}
-
 		// Handle addons if provided
 		if len(req.Addons) > 0 {
 			err = s.handleSubscriptionAddons(ctx, sub, req.Addons)
@@ -335,31 +352,47 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		}
 
 		// Create invoice for the subscription (in case it has advance charges)
-		invoice, err = invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
+		paymentParams := dto.NewPaymentParametersFromSubscription(sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID)
+		// Apply backward compatibility normalization
+		paymentParams = paymentParams.NormalizePaymentParameters()
+		invoice, updatedSub, err = invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
 			SubscriptionID: sub.ID,
 			PeriodStart:    sub.CurrentPeriodStart,
 			PeriodEnd:      sub.CurrentPeriodEnd,
 			ReferencePoint: types.ReferencePointPeriodStart,
-		})
+		}, paymentParams, types.InvoiceFlowSubscriptionCreation)
+		if err != nil {
+			return err
+		}
 
-		return err
+		// Use the updated subscription from CreateSubscriptionInvoice to avoid extra DB call
+		if updatedSub != nil {
+			sub = updatedSub
+		}
+
+		// if the subscription is created with incomplete status, but it doesn't create an invoice, we need to mark it as active
+		// This applies regardless of collection method - if there's no invoice to pay, the subscription should be active
+		if sub.SubscriptionStatus == types.SubscriptionStatusIncomplete && (invoice == nil || invoice.PaymentStatus == types.PaymentStatusSucceeded) {
+			sub.SubscriptionStatus = types.SubscriptionStatusActive
+			err = s.SubRepo.Update(ctx, sub)
+			if err != nil {
+				return err
+			}
+		}
+
+		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	// if the subscription is created with incomplete status, but it doesn't create an invoice, we need to mark it as active
-	// This applies regardless of collection method - if there's no invoice to pay, the subscription should be active
-	if sub.SubscriptionStatus == types.SubscriptionStatusIncomplete && (invoice == nil || invoice.PaymentStatus == types.PaymentStatusSucceeded) {
-		sub.SubscriptionStatus = types.SubscriptionStatusActive
-		err = s.SubRepo.Update(ctx, sub)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	// Update response to ensure it has the latest subscription data
 	response.Subscription = sub
+
+	// Include latest invoice if created
+	if invoice != nil {
+		response.LatestInvoice = invoice
+	}
 
 	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionCreated, sub.ID)
 	return response, nil
@@ -425,74 +458,93 @@ func (s *subscriptionService) ProcessSubscriptionPriceOverrides(
 		lineItemsByPriceID[item.PriceID] = item
 	}
 
+	// Create price service instance
+	priceService := NewPriceService(s.ServiceParams)
+
 	// Process each override request
 	for _, override := range overrideRequests {
-		// Validate that the price exists in the plan
-		originalPrice, exists := priceMap[override.PriceID]
-		if !exists {
-			return ierr.NewError("price not found in plan").
-				WithHint("Override price must be a valid price from the selected plan").
-				WithReportableDetails(map[string]interface{}{
-					"price_id": override.PriceID,
-					"plan_id":  sub.PlanID,
-				}).
-				Mark(ierr.ErrValidation)
+		// Validate the override request with context
+		if err := override.Validate(priceMap, lineItemsByPriceID, sub.PlanID); err != nil {
+			return err
 		}
 
-		// Find the corresponding line item
-		lineItem, exists := lineItemsByPriceID[override.PriceID]
-		if !exists {
-			return ierr.NewError("line item not found for price").
-				WithHint("Could not find line item for the specified price").
-				WithReportableDetails(map[string]interface{}{
-					"price_id": override.PriceID,
-				}).
-				Mark(ierr.ErrInternal)
+		// Get the original price and line item
+		originalPrice := priceMap[override.PriceID]
+		lineItem := lineItemsByPriceID[override.PriceID]
+
+		// Create subscription-scoped price using price service
+		createPriceReq := dto.CreatePriceRequest{
+			Amount:               originalPrice.Amount.String(),
+			Currency:             originalPrice.Currency,
+			EntityType:           types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
+			EntityID:             sub.ID,
+			Type:                 originalPrice.Type,
+			PriceUnitType:        originalPrice.PriceUnitType,
+			BillingPeriod:        originalPrice.BillingPeriod,
+			BillingPeriodCount:   originalPrice.BillingPeriodCount,
+			BillingModel:         originalPrice.BillingModel,
+			BillingCadence:       originalPrice.BillingCadence,
+			InvoiceCadence:       originalPrice.InvoiceCadence,
+			TrialPeriod:          originalPrice.TrialPeriod,
+			TierMode:             originalPrice.TierMode,
+			MeterID:              originalPrice.MeterID,
+			Description:          originalPrice.Description,
+			Metadata:             originalPrice.Metadata,
+			SkipEntityValidation: true,
 		}
 
-		priceUnitType := originalPrice.PriceUnitType
-		if priceUnitType == "" {
-			priceUnitType = types.PRICE_UNIT_TYPE_FIAT
+		// Convert tiers if they exist
+		if len(originalPrice.Tiers) > 0 {
+			createPriceReq.Tiers = make([]dto.CreatePriceTier, len(originalPrice.Tiers))
+			for i, tier := range originalPrice.Tiers {
+				createPriceReq.Tiers[i] = dto.CreatePriceTier{
+					UpTo:       tier.UpTo,
+					UnitAmount: tier.UnitAmount.String(),
+				}
+				if tier.FlatAmount != nil {
+					flatAmountStr := tier.FlatAmount.String()
+					createPriceReq.Tiers[i].FlatAmount = &flatAmountStr
+				}
+			}
 		}
 
-		// Create subscription-scoped price clone
-		overriddenPrice := &price.Price{
-			ID:                     types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
-			Amount:                 originalPrice.Amount,
-			Currency:               originalPrice.Currency,
-			DisplayAmount:          originalPrice.DisplayAmount,
-			Type:                   originalPrice.Type,
-			BillingPeriod:          originalPrice.BillingPeriod,
-			BillingPeriodCount:     originalPrice.BillingPeriodCount,
-			BillingModel:           originalPrice.BillingModel,
-			BillingCadence:         originalPrice.BillingCadence,
-			InvoiceCadence:         originalPrice.InvoiceCadence,
-			TrialPeriod:            originalPrice.TrialPeriod,
-			TierMode:               originalPrice.TierMode,
-			Tiers:                  originalPrice.Tiers,
-			MeterID:                originalPrice.MeterID,
-			LookupKey:              "",
-			Description:            originalPrice.Description,
-			PriceUnitID:            originalPrice.PriceUnitID,
-			PriceUnit:              originalPrice.PriceUnit,
-			PriceUnitType:          priceUnitType,
-			ConversionRate:         originalPrice.ConversionRate,
-			DisplayPriceUnitAmount: originalPrice.DisplayPriceUnitAmount,
-			PriceUnitAmount:        originalPrice.PriceUnitAmount,
-			PriceUnitTiers:         originalPrice.PriceUnitTiers,
-			TransformQuantity:      originalPrice.TransformQuantity,
-			Metadata:               originalPrice.Metadata,
-			EnvironmentID:          originalPrice.EnvironmentID,
-			EntityType:             types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
-			ParentPriceID:          originalPrice.ID,
-			EntityID:               sub.ID,
-			BaseModel:              types.GetDefaultBaseModel(ctx),
+		// Convert transform quantity if it exists
+		if originalPrice.TransformQuantity != (price.JSONBTransformQuantity{}) {
+			transformQuantity := price.TransformQuantity(originalPrice.TransformQuantity)
+			createPriceReq.TransformQuantity = &transformQuantity
 		}
 
-		// Apply overrides
+		// Apply overrides - handle all override fields
+
+		// Amount override
 		if override.Amount != nil {
-			overriddenPrice.Amount = *override.Amount
-			overriddenPrice.DisplayAmount = overriddenPrice.GetDisplayAmount()
+			createPriceReq.Amount = override.Amount.String()
+		}
+
+		// Billing model override
+		if override.BillingModel != "" {
+			createPriceReq.BillingModel = override.BillingModel
+		}
+
+		// Tier mode override
+		if override.TierMode != "" {
+			createPriceReq.TierMode = override.TierMode
+		}
+
+		// Tiers override - if provided, replace the original tiers
+		if len(override.Tiers) > 0 {
+			createPriceReq.Tiers = override.Tiers
+		}
+
+		// Transform quantity override - if provided, replace the original transform quantity
+		if override.TransformQuantity != nil {
+			createPriceReq.TransformQuantity = override.TransformQuantity
+		}
+
+		// Create the subscription-scoped price using price service
+		overriddenPriceResp, err := priceService.CreatePrice(ctx, createPriceReq)
+		if err != nil {
+			return err
 		}
 
 		// Update line item quantity if specified
@@ -500,37 +552,19 @@ func (s *subscriptionService) ProcessSubscriptionPriceOverrides(
 			lineItem.Quantity = *override.Quantity
 		}
 
-		// Validate the overridden price
-		if err := overriddenPrice.Validate(); err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to validate overridden price").
-				WithReportableDetails(map[string]interface{}{
-					"original_price_id": override.PriceID,
-					"override_price_id": overriddenPrice.ID,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-
-		// Create the subscription-scoped price
-		if err := s.PriceRepo.Create(ctx, overriddenPrice); err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to create subscription-scoped price").
-				WithReportableDetails(map[string]interface{}{
-					"original_price_id": override.PriceID,
-					"override_price_id": overriddenPrice.ID,
-				}).
-				Mark(ierr.ErrDatabase)
-		}
-
 		// Update the line item to reference the new subscription-scoped price
-		lineItem.PriceID = overriddenPrice.ID
+		lineItem.PriceID = overriddenPriceResp.ID
 
 		s.Logger.Infow("created subscription-scoped price override",
 			"subscription_id", sub.ID,
 			"original_price_id", override.PriceID,
-			"override_price_id", overriddenPrice.ID,
+			"override_price_id", overriddenPriceResp.ID,
 			"amount_override", override.Amount != nil,
-			"quantity_override", override.Quantity != nil)
+			"quantity_override", override.Quantity != nil,
+			"billing_model_override", override.BillingModel != "",
+			"tier_mode_override", override.TierMode != "",
+			"tiers_override", len(override.Tiers) > 0,
+			"transform_quantity_override", override.TransformQuantity != nil)
 	}
 
 	return nil
@@ -659,53 +693,152 @@ func (s *subscriptionService) GetSubscription(ctx context.Context, id string) (*
 	return response, nil
 }
 
-func (s *subscriptionService) CancelSubscription(ctx context.Context, id string, cancelAtPeriodEnd bool) error {
-	subscription, _, err := s.SubRepo.GetWithLineItems(ctx, id)
-	if err != nil {
-		return err
+// CancelSubscription provides enhanced cancellation with proration support
+func (s *subscriptionService) CancelSubscription(
+	ctx context.Context,
+	subscriptionID string,
+	req *dto.CancelSubscriptionRequest,
+) (*dto.CancelSubscriptionResponse, error) {
+	logger := s.Logger.With(
+		zap.String("subscription_id", subscriptionID),
+		zap.String("cancellation_type", string(req.CancellationType)),
+		zap.String("reason", req.Reason),
+	)
+
+	logger.Info("processing enhanced subscription cancellation")
+
+	// Step 1: Validate request
+	if err := req.Validate(); err != nil {
+		return nil, err
 	}
 
+	// Step 2: Get subscription with line items
+	subscription, lineItems, err := s.SubRepo.GetWithLineItems(ctx, subscriptionID)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve subscription").
+			Mark(ierr.ErrDatabase)
+	}
+
+	// Step 3: Validate subscription state
 	if subscription.SubscriptionStatus == types.SubscriptionStatusCancelled {
-		return ierr.NewError("subscription is already cancelled").
+		return nil, ierr.NewError("subscription is already cancelled").
 			WithHint("The subscription is already cancelled").
 			WithReportableDetails(map[string]interface{}{
-				"subscription_id": id,
+				"subscription_id": subscriptionID,
 			}).
 			Mark(ierr.ErrValidation)
 	}
 
-	now := time.Now().UTC()
-	subscription.CancelledAt = &now
-	if cancelAtPeriodEnd {
-		subscription.CancelAtPeriodEnd = cancelAtPeriodEnd
-		subscription.CancelAt = lo.ToPtr(subscription.CurrentPeriodEnd)
-	} else {
-		subscription.SubscriptionStatus = types.SubscriptionStatusCancelled
-		subscription.CancelAt = nil
+	// Step 4: Determine effective cancellation date
+	effectiveDate, err := s.determineEffectiveDate(subscription, req.CancellationType)
+	if err != nil {
+		return nil, err
 	}
 
+	// Step 5: Validate cancellation timing
+	if err := s.validateCancellationTiming(subscription, req.CancellationType, effectiveDate); err != nil {
+		return nil, err
+	}
+
+	var prorationDetails []dto.ProrationDetail
+	totalCreditAmount := decimal.Zero
+
+	// Step 6: Execute in transaction
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
 
-		// cancel future credit grant applications
+		// Step 7: Calculate proration using unified function
+		if req.ProrationBehavior == types.ProrationBehaviorCreateProrations {
+			prorationService := NewProrationService(s.ServiceParams)
+			prorationResult, err := prorationService.CalculateSubscriptionCancellationProration(
+				ctx, subscription, lineItems, req.CancellationType, effectiveDate, req.Reason, req.ProrationBehavior)
+			if err != nil {
+				return err
+			}
+
+			// Convert proration result to response format
+			prorationDetails, totalCreditAmount = s.convertProrationResultToDetails(prorationResult)
+		}
+
+		if req.CancellationType != types.CancellationTypeEndOfPeriod {
+			invoiceService := NewInvoiceService(s.ServiceParams)
+			paymentParams := dto.NewPaymentParametersFromSubscription(subscription.CollectionMethod, subscription.PaymentBehavior, subscription.GatewayPaymentMethodID)
+			paymentParams = paymentParams.NormalizePaymentParameters()
+			inv, _, err := invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
+				SubscriptionID: subscription.ID,
+				PeriodStart:    subscription.CurrentPeriodStart,
+				PeriodEnd:      effectiveDate,
+				ReferencePoint: types.ReferencePointCancel,
+			}, paymentParams, types.InvoiceFlowCancel)
+			if err != nil {
+				return err
+			}
+
+			if inv != nil {
+				s.Logger.Infow("created invoice for subscription",
+					"subscription_id", subscription.ID,
+					"invoice_id", inv.ID)
+			}
+
+		}
+		// Step 8: Update subscription status
+		err = s.updateSubscriptionForCancellation(ctx, subscription, req.CancellationType, effectiveDate, req.Reason)
+		if err != nil {
+			return err
+		}
+
+		// Step 9: Cancel future credit grants
 		creditGrantService := NewCreditGrantService(s.ServiceParams)
 		err = creditGrantService.CancelFutureCreditGrantsOfSubscription(ctx, subscription.ID)
 		if err != nil {
 			return err
 		}
 
-		err = s.SubRepo.Update(ctx, subscription)
-		if err != nil {
-			return err
+		// Step 10: Top up wallet for proration credit (only if there's a credit amount)
+		if totalCreditAmount.GreaterThan(decimal.Zero) {
+			walletService := NewWalletService(s.ServiceParams)
+			err = walletService.TopUpWalletForProratedCharge(ctx, subscription.CustomerID, totalCreditAmount.Abs(), subscription.Currency)
+			if err != nil {
+				return err
+			}
 		}
 
 		return nil
 	})
 
-	// Publish webhook event
-	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionUpdated, subscription.ID)
-	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionCancelled, subscription.ID)
+	if err != nil {
+		logger.Errorw("failed to process cancellation", "error", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to process subscription cancellation").
+			Mark(ierr.ErrDatabase)
+	}
 
-	return nil
+	// Step 10: Publish events
+	s.publishCancellationEvents(ctx, subscription)
+
+	// Step 11: Build response
+	response := &dto.CancelSubscriptionResponse{
+		SubscriptionID:    subscription.ID,
+		CancellationType:  req.CancellationType,
+		EffectiveDate:     effectiveDate,
+		Status:            subscription.SubscriptionStatus,
+		Reason:            req.Reason,
+		ProrationDetails:  prorationDetails,
+		TotalCreditAmount: totalCreditAmount,
+		ProcessedAt:       time.Now().UTC(),
+	}
+
+	// Note: Proration invoice is no longer created during cancellation
+
+	// Generate user-friendly message
+	response.Message = s.generateCancellationMessage(req.CancellationType, effectiveDate, totalCreditAmount)
+
+	logger.Infow("subscription cancellation completed successfully",
+		"effective_date", effectiveDate,
+		"total_credit_amount", totalCreditAmount.String(),
+		"proration_items", len(prorationDetails))
+
+	return response, nil
 }
 
 func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *types.SubscriptionFilter) (*dto.ListSubscriptionsResponse, error) {
@@ -863,6 +996,7 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 	priceFilter := types.NewNoLimitPriceFilter()
 	priceFilter.PriceIDs = priceIDs
 	priceFilter.Expand = lo.ToPtr(string(types.ExpandMeters))
+	priceFilter.AllowExpiredPrices = true
 	pricesList, err := priceService.GetPrices(ctx, priceFilter)
 	if err != nil {
 		return nil, err
@@ -961,8 +1095,8 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 			PriceID:            lineItem.PriceID,
 			Meter:              meter.ToMeter(),
 			ExternalCustomerID: customer.ExternalID,
-			StartTime:          usageStartTime,
-			EndTime:            usageEndTime,
+			StartTime:          lineItem.GetPeriodStart(usageStartTime),
+			EndTime:            lineItem.GetPeriodEnd(usageEndTime),
 			Filters:            make(map[string][]string),
 		}
 
@@ -1027,8 +1161,30 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 			meterDisplayName = meter
 		}
 
-		quantity := usage.Value
-		cost := priceService.CalculateCost(ctx, priceObj, quantity)
+		// For bucketed max, we need to handle array of values
+		var cost decimal.Decimal
+		var quantity decimal.Decimal
+
+		// Get meter info
+		meterInfo := meterMap[meterID]
+		if priceObj.MeterID != "" && meterInfo != nil && meterInfo.ToMeter().IsBucketedMaxMeter() {
+			// For bucketed max, use the array of values
+			bucketedValues := make([]decimal.Decimal, len(usage.Results))
+			for i, result := range usage.Results {
+				bucketedValues[i] = result.Value
+			}
+			cost = priceService.CalculateBucketedCost(ctx, priceObj, bucketedValues)
+
+			// Calculate quantity as sum of all bucket maxes
+			quantity = decimal.Zero
+			for _, bucketValue := range bucketedValues {
+				quantity = quantity.Add(bucketValue)
+			}
+		} else {
+			// For all other cases, use the single value
+			quantity = usage.Value
+			cost = priceService.CalculateCost(ctx, priceObj, quantity)
+		}
 
 		s.Logger.Debugw("calculated usage for meter",
 			"meter_id", meterID,
@@ -1470,14 +1626,22 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 			period := periods[i]
 
 			// Create a single invoice for both arrear and advance charges at period end
-			inv, err := invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
+			paymentParams := dto.NewPaymentParametersFromSubscription(sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID)
+			// Apply backward compatibility normalization
+			paymentParams = paymentParams.NormalizePaymentParameters()
+			inv, updatedSub, err := invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
 				SubscriptionID: sub.ID,
 				PeriodStart:    period.start,
 				PeriodEnd:      period.end,
 				ReferencePoint: types.ReferencePointPeriodEnd,
-			})
+			}, paymentParams, types.InvoiceFlowRenewal)
 			if err != nil {
 				return err
+			}
+
+			// Use the updated subscription from CreateSubscriptionInvoice to avoid extra DB call
+			if updatedSub != nil {
+				sub = updatedSub
 			}
 
 			s.Logger.Infow("created invoice for period",
@@ -1504,6 +1668,22 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 					"end_date", *sub.EndDate)
 				break
 			}
+
+			if inv == nil {
+				s.Logger.Errorw("skipping period as no invoice was created",
+					"subscription_id", sub.ID,
+					"period_start", period.start,
+					"period_end", period.end,
+					"period_index", i)
+				continue
+			}
+
+			s.Logger.Infow("created invoice for period",
+				"subscription_id", sub.ID,
+				"invoice_id", inv.ID,
+				"period_start", period.start,
+				"period_end", period.end,
+				"period_index", i)
 		}
 
 		// Update to the new current period (last period)
@@ -2827,6 +3007,28 @@ func (s *subscriptionService) handleSubscriptionPause(ctx context.Context, subsc
 	return nil
 }
 
+// ProcessSubscriptionRenewalDueAlert processes subscriptions that are due for renewal in 24 hours
+func (s *subscriptionService) ProcessSubscriptionRenewalDueAlert(ctx context.Context) error {
+	subscriptions, err := s.SubRepo.ListSubscriptionsDueForRenewal(ctx)
+	if err != nil {
+		s.Logger.Errorw("failed to list subscriptions due for renewal", "error", err)
+		return err
+	}
+
+	if len(subscriptions) == 0 {
+		s.Logger.Infow("no subscriptions due for renewal found")
+		return nil
+	}
+
+	s.Logger.Infow("found subscriptions due for renewal", "count", len(subscriptions))
+
+	for _, sub := range subscriptions {
+		s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionRenewalDue, sub.ID)
+	}
+
+	return nil
+}
+
 func (s *subscriptionService) handleSubscriptionResume(ctx context.Context, subscriptionID string) error {
 	// Process any missed recurring grants
 	return nil
@@ -3277,7 +3479,7 @@ func (s *subscriptionService) createLineItemFromPrice(ctx context.Context, price
 		SubscriptionID: sub.ID,
 		CustomerID:     sub.CustomerID,
 		EntityID:       addonID,
-		EntityType:     types.SubscriptionLineItemEntitiyTypeAddon,
+		EntityType:     types.SubscriptionLineItemEntityTypeAddon,
 		PriceID:        price.ID,
 		PriceType:      price.Type,
 		Currency:       sub.Currency,
@@ -3355,4 +3557,518 @@ func (s *subscriptionService) ActivateIncompleteSubscription(ctx context.Context
 	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionActivated, subscriptionID)
 
 	return nil
+}
+
+// GetSubscriptionConfig retrieves the subscription configuration from settings
+
+// isEligibleForAutoCancellation checks if an active subscription is eligible for auto-cancellation
+func (s *subscriptionService) isEligibleForAutoCancellation(ctx context.Context, sub *subscription.Subscription, config *types.SubscriptionConfig) bool {
+	// First check if auto-cancellation is enabled
+	if !config.AutoCancellationEnabled {
+		s.Logger.Debugw("auto-cancellation not enabled for subscription",
+			"subscription_id", sub.ID)
+		return false
+	}
+
+	// Check if subscription is active
+	if sub.SubscriptionStatus != types.SubscriptionStatusActive {
+		return false
+	}
+
+	now := time.Now().UTC()
+
+	// Query for unpaid invoices
+	filter := &types.InvoiceFilter{
+		SubscriptionID: sub.ID,
+		PaymentStatus: []types.PaymentStatus{
+			types.PaymentStatusPending,
+			types.PaymentStatusFailed,
+		},
+	}
+
+	s.Logger.Debugw("fetching unpaid invoices for auto-cancellation eligibility",
+		"subscription_id", sub.ID,
+		"payment_statuses", filter.PaymentStatus)
+
+	invoices, err := s.InvoiceRepo.List(ctx, filter)
+	if err != nil {
+		s.Logger.Errorw("failed to fetch invoices for auto-cancellation",
+			"subscription_id", sub.ID,
+			"error", err)
+		return false
+	}
+
+	s.Logger.Debugw("found invoices for subscription",
+		"subscription_id", sub.ID,
+		"invoice_count", len(invoices))
+
+	// Check each invoice for eligibility criteria
+	for _, inv := range invoices {
+		// Skip invalid due dates
+		if inv.DueDate == nil {
+			s.Logger.Warnw("invoice has invalid due date, skipping",
+				"subscription_id", sub.ID,
+				"invoice_id", inv.ID)
+			continue
+		}
+
+		// Check amount_remaining (must have outstanding amount)
+		if !inv.AmountRemaining.GreaterThan(decimal.Zero) {
+			s.Logger.Debugw("invoice has no remaining amount, skipping",
+				"subscription_id", sub.ID,
+				"invoice_id", inv.ID,
+				"amount_remaining", inv.AmountRemaining)
+			continue
+		}
+
+		// Calculate grace period end time: due_date + grace_period_days
+		gracePeriodEndTime := inv.DueDate.AddDate(0, 0, config.GracePeriodDays)
+
+		s.Logger.Debugw("evaluating invoice for auto-cancellation",
+			"subscription_id", sub.ID,
+			"invoice_id", inv.ID,
+			"due_date", inv.DueDate,
+			"amount_remaining", inv.AmountRemaining,
+			"grace_period_days", config.GracePeriodDays,
+			"grace_period_end_time", gracePeriodEndTime,
+			"current_time", now,
+			"is_past_grace_period", now.After(gracePeriodEndTime))
+
+		// Check if current time is past grace period end
+		if now.After(gracePeriodEndTime) {
+			s.Logger.Infow("subscription eligible for auto-cancellation",
+				"subscription_id", sub.ID,
+				"invoice_id", inv.ID,
+				"amount_remaining", inv.AmountRemaining,
+				"due_date", inv.DueDate,
+				"grace_period_end_time", gracePeriodEndTime,
+				"current_time", now,
+				"payment_status", inv.PaymentStatus)
+			return true
+		} else {
+			s.Logger.Debugw("invoice not past grace period yet",
+				"subscription_id", sub.ID,
+				"invoice_id", inv.ID,
+				"due_date", inv.DueDate,
+				"grace_period_end_time", gracePeriodEndTime,
+				"days_until_grace_expires", gracePeriodEndTime.Sub(now).Hours()/24)
+		}
+	}
+
+	s.Logger.Debugw("subscription not eligible for auto-cancellation",
+		"subscription_id", sub.ID,
+		"reason", "no invoices past grace period")
+
+	return false
+}
+
+// ProcessAutoCancellationSubscriptions processes subscriptions that are eligible for auto-cancellation
+func (s *subscriptionService) ProcessAutoCancellationSubscriptions(ctx context.Context) error {
+	s.Logger.Infow("starting auto-cancellation processing")
+
+	// Get all tenant x environment combinations that have auto-cancellation enabled
+	enabledConfigs, err := s.SettingsRepo.GetAllTenantEnvSubscriptionSettings(ctx)
+	if err != nil {
+		s.Logger.Errorw("failed to list subscription configs", "error", err)
+		return err
+	}
+
+	if len(enabledConfigs) == 0 {
+		s.Logger.Infow("no tenants have auto-cancellation enabled, skipping processing")
+		return nil
+	}
+
+	s.Logger.Infow("found tenants with auto-cancellation enabled",
+		"tenant_count", len(enabledConfigs))
+
+	totalCanceledCount := 0
+	totalFailedCount := 0
+
+	// Process each tenant x environment combination
+	for _, tenantConfig := range enabledConfigs {
+		// Create a new context with tenant and environment IDs
+		tenantCtx := context.WithValue(ctx, types.CtxTenantID, tenantConfig.TenantID)
+		tenantCtx = context.WithValue(tenantCtx, types.CtxEnvironmentID, tenantConfig.EnvironmentID)
+
+		s.Logger.Infow("processing tenant",
+			"tenant_id", tenantConfig.TenantID,
+			"environment_id", tenantConfig.EnvironmentID,
+			"grace_period_days", tenantConfig.GracePeriodDays)
+
+		// Get ONLY ACTIVE subscriptions for this tenant x environment
+		filter := &types.SubscriptionFilter{
+			SubscriptionStatus: []types.SubscriptionStatus{types.SubscriptionStatusActive},
+		}
+
+		subscriptions, err := s.SubRepo.List(tenantCtx, filter)
+		if err != nil {
+			s.Logger.Errorw("failed to get subscriptions for tenant",
+				"tenant_id", tenantConfig.TenantID,
+				"environment_id", tenantConfig.EnvironmentID,
+				"error", err)
+			continue // Skip this tenant but continue with others
+		}
+
+		s.Logger.Infow("found subscriptions for tenant",
+			"tenant_id", tenantConfig.TenantID,
+			"environment_id", tenantConfig.EnvironmentID,
+			"subscription_count", len(subscriptions))
+
+		canceledCount := 0
+		failedCount := 0
+
+		// Process each subscription for this tenant
+		for _, sub := range subscriptions {
+			if s.isEligibleForAutoCancellation(tenantCtx, sub, tenantConfig.SubscriptionConfig) {
+				s.Logger.Infow("auto-cancelling subscription",
+					"subscription_id", sub.ID,
+					"tenant_id", tenantConfig.TenantID,
+					"environment_id", tenantConfig.EnvironmentID,
+					"grace_period_days", tenantConfig.GracePeriodDays)
+
+				// Cancel the subscription
+				if _, err := s.CancelSubscription(tenantCtx, sub.ID, &dto.CancelSubscriptionRequest{
+					CancellationType: types.CancellationTypeImmediate,
+				}); err != nil {
+					s.Logger.Errorw("failed to auto-cancel subscription",
+						"subscription_id", sub.ID,
+						"tenant_id", tenantConfig.TenantID,
+						"environment_id", tenantConfig.EnvironmentID,
+						"error", err)
+					failedCount++
+					continue
+				}
+
+				canceledCount++
+
+				// Log audit trail
+				s.Logger.Infow("successfully auto-canceled subscription",
+					"subscription_id", sub.ID,
+					"reason", "grace_period_expired",
+					"grace_period_days", tenantConfig.GracePeriodDays,
+					"canceled_by", "auto_cancellation_system",
+					"tenant_id", tenantConfig.TenantID,
+					"environment_id", tenantConfig.EnvironmentID)
+			}
+		}
+
+		s.Logger.Infow("completed processing for tenant",
+			"tenant_id", tenantConfig.TenantID,
+			"environment_id", tenantConfig.EnvironmentID,
+			"total_subscriptions", len(subscriptions),
+			"canceled_count", canceledCount,
+			"failed_count", failedCount)
+
+		totalCanceledCount += canceledCount
+		totalFailedCount += failedCount
+	}
+
+	s.Logger.Infow("completed auto-cancellation processing for all tenants",
+		"total_tenants_processed", len(enabledConfigs),
+		"total_canceled", totalCanceledCount,
+		"total_failed", totalFailedCount)
+
+	return nil
+}
+
+// Helper functions for enhanced cancellation
+
+// determineEffectiveDate calculates the actual effective date based on cancellation type
+func (s *subscriptionService) determineEffectiveDate(
+	subscription *subscription.Subscription,
+	cancellationType types.CancellationType,
+) (time.Time, error) {
+	now := time.Now().UTC()
+
+	switch cancellationType {
+	case types.CancellationTypeImmediate:
+		return now, nil
+
+	case types.CancellationTypeEndOfPeriod:
+		return subscription.CurrentPeriodEnd, nil
+	default:
+		return time.Time{}, ierr.NewError("invalid cancellation type").
+			WithHintf("Unsupported cancellation type: %s", cancellationType).
+			Mark(ierr.ErrValidation)
+	}
+}
+
+// validateCancellationTiming ensures the cancellation timing is valid
+func (s *subscriptionService) validateCancellationTiming(
+	subscription *subscription.Subscription,
+	cancellationType types.CancellationType,
+	effectiveDate time.Time,
+) error {
+	switch cancellationType {
+	case types.CancellationTypeImmediate:
+		// Immediate cancellation should be within current period for proration
+		if effectiveDate.After(subscription.CurrentPeriodEnd) {
+			return ierr.NewError("immediate cancellation date is after current period end").
+				WithHintf("Current period ends at %s, cancellation date is %s",
+					subscription.CurrentPeriodEnd.Format("2006-01-02"),
+					effectiveDate.Format("2006-01-02")).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	return nil
+}
+
+// convertProrationResultToDetails converts SubscriptionProrationResult to response format
+func (s *subscriptionService) convertProrationResultToDetails(
+	result *proration.SubscriptionProrationResult,
+) ([]dto.ProrationDetail, decimal.Decimal) {
+	var prorationDetails []dto.ProrationDetail
+	totalCreditAmount := decimal.Zero
+
+	for lineItemID, lineResult := range result.LineItemResults {
+		// Calculate amounts for this line item
+		creditAmount := s.calculateCreditAmount(lineResult.CreditItems)
+		chargeAmount := s.calculateChargeAmount(lineResult.ChargeItems)
+		totalCreditAmount = totalCreditAmount.Add(creditAmount)
+
+		// Calculate proration days
+		prorationDays := s.calculateProrationDaysFromResult(lineResult)
+
+		// Generate description
+		description := s.generateProrationDescriptionFromResult(lineResult, creditAmount)
+
+		// Get original amount from line items (we'll need to fetch this)
+		originalAmount := decimal.Zero
+		planName := ""
+		priceID := ""
+
+		// Extract from credit/charge items if available
+		if len(lineResult.CreditItems) > 0 {
+			priceID = lineResult.CreditItems[0].PriceID
+			originalAmount = lineResult.CreditItems[0].Amount.Abs()
+		} else if len(lineResult.ChargeItems) > 0 {
+			priceID = lineResult.ChargeItems[0].PriceID
+			originalAmount = lineResult.ChargeItems[0].Amount
+		}
+
+		prorationDetails = append(prorationDetails, dto.ProrationDetail{
+			LineItemID:     lineItemID,
+			PriceID:        priceID,
+			PlanName:       planName, // TODO: Get from line item
+			OriginalAmount: originalAmount,
+			CreditAmount:   creditAmount,
+			ChargeAmount:   chargeAmount,
+			ProrationDays:  prorationDays,
+			Description:    description,
+		})
+	}
+
+	return prorationDetails, totalCreditAmount
+}
+
+// convertDomainProrationResultToDTO converts domain proration result to DTO format for invoice creation
+func (s *subscriptionService) convertDomainProrationResultToDTO(
+	domainResult *proration.SubscriptionProrationResult,
+) *dto.ProrationResult {
+	dtoResult := &dto.ProrationResult{
+		TotalProrationAmount: domainResult.TotalProrationAmount,
+		Currency:             domainResult.Currency,
+		LineItemResults:      make(map[string]*dto.ProrationLineItemResult),
+	}
+
+	for lineItemID, lineResult := range domainResult.LineItemResults {
+		// Convert credit items
+		var creditItems []dto.ProrationLineItem
+		for _, credit := range lineResult.CreditItems {
+			creditItems = append(creditItems, dto.ProrationLineItem{
+				Description: credit.Description,
+				Amount:      credit.Amount,
+				StartDate:   credit.StartDate,
+				EndDate:     credit.EndDate,
+				Quantity:    credit.Quantity,
+				PriceID:     credit.PriceID,
+				IsCredit:    credit.IsCredit,
+			})
+		}
+
+		// Convert charge items
+		var chargeItems []dto.ProrationLineItem
+		for _, charge := range lineResult.ChargeItems {
+			chargeItems = append(chargeItems, dto.ProrationLineItem{
+				Description: charge.Description,
+				Amount:      charge.Amount,
+				StartDate:   charge.StartDate,
+				EndDate:     charge.EndDate,
+				Quantity:    charge.Quantity,
+				PriceID:     charge.PriceID,
+				IsCredit:    charge.IsCredit,
+			})
+		}
+
+		dtoResult.LineItemResults[lineItemID] = &dto.ProrationLineItemResult{
+			CreditItems:   creditItems,
+			ChargeItems:   chargeItems,
+			NetAmount:     lineResult.NetAmount,
+			ProrationDate: lineResult.ProrationDate,
+			LineItemID:    lineResult.LineItemID,
+		}
+	}
+
+	return dtoResult
+}
+
+// updateSubscriptionForCancellation updates the subscription with cancellation details
+func (s *subscriptionService) updateSubscriptionForCancellation(
+	ctx context.Context,
+	subscription *subscription.Subscription,
+	cancellationType types.CancellationType,
+	effectiveDate time.Time,
+	reason string,
+) error {
+	now := time.Now().UTC()
+
+	// Update cancellation fields
+	subscription.CancelledAt = &now
+	subscription.UpdatedAt = now
+	subscription.UpdatedBy = types.GetUserID(ctx)
+
+	// Add cancellation metadata
+	if subscription.Metadata == nil {
+		subscription.Metadata = make(map[string]string)
+	}
+	subscription.Metadata["cancellation_type"] = string(cancellationType)
+	subscription.Metadata["cancellation_reason"] = reason
+	subscription.Metadata["effective_date"] = effectiveDate.Format(time.RFC3339)
+
+	// Set status and dates based on cancellation type
+	switch cancellationType {
+	case types.CancellationTypeImmediate:
+		subscription.SubscriptionStatus = types.SubscriptionStatusCancelled
+		subscription.CancelAt = &effectiveDate
+		subscription.CancelAtPeriodEnd = false
+
+	case types.CancellationTypeEndOfPeriod:
+		// Don't change status immediately - will be cancelled at period end
+		subscription.CancelAtPeriodEnd = true
+		subscription.CancelAt = &effectiveDate
+	default:
+		return ierr.NewError("invalid cancellation type").
+			WithHintf("Unsupported cancellation type: %s", cancellationType).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Update subscription in database
+	err := s.SubRepo.Update(ctx, subscription)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to update subscription with cancellation details").
+			Mark(ierr.ErrDatabase)
+	}
+
+	return nil
+}
+
+// publishCancellationEvents publishes webhook events for cancellation
+func (s *subscriptionService) publishCancellationEvents(
+	ctx context.Context,
+	subscription *subscription.Subscription,
+) {
+	// Publish standard subscription events
+	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionUpdated, subscription.ID)
+	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionCancelled, subscription.ID)
+
+	s.Logger.Debugw("subscription cancellation events published",
+		"subscription_id", subscription.ID)
+}
+
+// generateCancellationMessage creates a user-friendly message for the response
+func (s *subscriptionService) generateCancellationMessage(
+	cancellationType types.CancellationType,
+	effectiveDate time.Time,
+	totalCreditAmount decimal.Decimal,
+) string {
+	switch cancellationType {
+	case types.CancellationTypeImmediate:
+		if totalCreditAmount.IsNegative() {
+			return fmt.Sprintf("Subscription cancelled immediately with %s credit for unused time",
+				totalCreditAmount.Abs().String())
+		}
+		return "Subscription cancelled immediately"
+
+	case types.CancellationTypeEndOfPeriod:
+		return fmt.Sprintf("Subscription will be cancelled at the end of the current period (%s)",
+			effectiveDate.Format("2006-01-02"))
+
+	default:
+		return "Subscription cancelled successfully"
+	}
+}
+
+// Helper functions for proration calculations
+
+func (s *subscriptionService) calculateCreditAmount(creditItems []proration.ProrationLineItem) decimal.Decimal {
+	total := decimal.Zero
+	for _, item := range creditItems {
+		if item.IsCredit {
+			total = total.Add(item.Amount.Abs())
+		}
+	}
+	return total
+}
+
+func (s *subscriptionService) calculateChargeAmount(chargeItems []proration.ProrationLineItem) decimal.Decimal {
+	total := decimal.Zero
+	for _, item := range chargeItems {
+		if !item.IsCredit {
+			total = total.Add(item.Amount)
+		}
+	}
+	return total
+}
+
+func (s *subscriptionService) calculateProrationDaysFromResult(result *proration.ProrationResult) int {
+	if result.ProrationDate.After(result.CurrentPeriodEnd) {
+		return 0
+	}
+
+	totalDays := int(result.CurrentPeriodEnd.Sub(result.CurrentPeriodStart).Hours() / 24)
+	usedDays := int(result.ProrationDate.Sub(result.CurrentPeriodStart).Hours() / 24)
+	remainingDays := totalDays - usedDays
+
+	if remainingDays < 0 {
+		return 0
+	}
+	return remainingDays
+}
+
+func (s *subscriptionService) generateProrationDescription(
+	cancellationType types.CancellationType,
+	effectiveDate time.Time,
+	creditAmount decimal.Decimal,
+) string {
+	switch cancellationType {
+	case types.CancellationTypeImmediate:
+		if creditAmount.IsNegative() {
+			return fmt.Sprintf("Credit for unused time (cancelled %s)", effectiveDate.Format("2006-01-02"))
+		}
+		return fmt.Sprintf("Immediate cancellation (%s)", effectiveDate.Format("2006-01-02"))
+
+	case types.CancellationTypeEndOfPeriod:
+		return fmt.Sprintf("End of period cancellation (%s)", effectiveDate.Format("2006-01-02"))
+	default:
+		return "Cancellation proration"
+	}
+}
+
+func (s *subscriptionService) generateProrationDescriptionFromResult(
+	result *proration.ProrationResult,
+	creditAmount decimal.Decimal,
+) string {
+	effectiveDate := result.ProrationDate
+
+	switch result.Action {
+	case types.ProrationActionCancellation:
+		if creditAmount.IsNegative() {
+			return fmt.Sprintf("Credit for unused time (cancelled %s)", effectiveDate.Format("2006-01-02"))
+		}
+		return fmt.Sprintf("Cancellation (%s)", effectiveDate.Format("2006-01-02"))
+	default:
+		return fmt.Sprintf("Proration (%s)", effectiveDate.Format("2006-01-02"))
+	}
 }

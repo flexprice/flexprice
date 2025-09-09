@@ -74,8 +74,8 @@ const (
 	WebhookEventInvoiceUpdateFinalized = "invoice.update.finalized"
 	WebhookEventInvoiceUpdatePayment   = "invoice.update.payment"
 	WebhookEventInvoiceUpdateVoided    = "invoice.update.voided"
-
-	WebhookEventInvoicePaymentOverdue = "invoice.payment.overdue"
+	WebhookEventInvoiceUpdate          = "invoice.update"
+	WebhookEventInvoicePaymentOverdue  = "invoice.payment.overdue"
 )
 
 // alert event names
@@ -86,6 +86,9 @@ const (
 	// Entity-specific alert events
 	WebhookEventWalletCreditBalanceDropped  = "wallet.credit_balance.dropped"
 	WebhookEventWalletOngoingBalanceDropped = "wallet.ongoing_balance.dropped"
+
+	// cron driven webhook event names
+	WebhookEventSubscriptionRenewalDue = "subscription.renewal.due"
 )
 
 // communication event names

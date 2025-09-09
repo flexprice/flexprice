@@ -228,6 +228,10 @@ func (s *InMemoryPriceStore) DeleteBulk(ctx context.Context, ids []string) error
 	return nil
 }
 
+func (s *InMemoryPriceStore) GetByPlanID(ctx context.Context, planID string) ([]*price.Price, error) {
+	return s.InMemoryStore.List(ctx, types.NewPriceFilter().WithEntityIDs([]string{planID}), priceFilterFn, priceSortFn)
+}
+
 // Clear clears the price store
 func (s *InMemoryPriceStore) Clear() {
 	s.InMemoryStore.Clear()

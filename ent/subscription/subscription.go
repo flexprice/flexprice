@@ -3,6 +3,7 @@
 package subscription
 
 import (
+	"fmt"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -79,6 +80,16 @@ const (
 	FieldCommitmentAmount = "commitment_amount"
 	// FieldOverageFactor holds the string denoting the overage_factor field in the database.
 	FieldOverageFactor = "overage_factor"
+	// FieldPaymentBehavior holds the string denoting the payment_behavior field in the database.
+	FieldPaymentBehavior = "payment_behavior"
+	// FieldCollectionMethod holds the string denoting the collection_method field in the database.
+	FieldCollectionMethod = "collection_method"
+	// FieldGatewayPaymentMethodID holds the string denoting the gateway_payment_method_id field in the database.
+	FieldGatewayPaymentMethodID = "gateway_payment_method_id"
+	// FieldCustomerTimezone holds the string denoting the customer_timezone field in the database.
+	FieldCustomerTimezone = "customer_timezone"
+	// FieldProrationBehavior holds the string denoting the proration_behavior field in the database.
+	FieldProrationBehavior = "proration_behavior"
 	// EdgeLineItems holds the string denoting the line_items edge name in mutations.
 	EdgeLineItems = "line_items"
 	// EdgePauses holds the string denoting the pauses edge name in mutations.
@@ -172,6 +183,11 @@ var Columns = []string{
 	FieldBillingCycle,
 	FieldCommitmentAmount,
 	FieldOverageFactor,
+	FieldPaymentBehavior,
+	FieldCollectionMethod,
+	FieldGatewayPaymentMethodID,
+	FieldCustomerTimezone,
+	FieldProrationBehavior,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -231,7 +247,67 @@ var (
 	BillingCycleValidator func(string) error
 	// DefaultOverageFactor holds the default value on creation for the "overage_factor" field.
 	DefaultOverageFactor decimal.Decimal
+	// DefaultCustomerTimezone holds the default value on creation for the "customer_timezone" field.
+	DefaultCustomerTimezone string
+	// DefaultProrationBehavior holds the default value on creation for the "proration_behavior" field.
+	DefaultProrationBehavior string
+	// ProrationBehaviorValidator is a validator for the "proration_behavior" field. It is called by the builders before save.
+	ProrationBehaviorValidator func(string) error
 )
+
+// PaymentBehavior defines the type for the "payment_behavior" enum field.
+type PaymentBehavior string
+
+// PaymentBehaviorDefaultActive is the default value of the PaymentBehavior enum.
+const DefaultPaymentBehavior = PaymentBehaviorDefaultActive
+
+// PaymentBehavior values.
+const (
+	PaymentBehaviorAllowIncomplete   PaymentBehavior = "allow_incomplete"
+	PaymentBehaviorDefaultIncomplete PaymentBehavior = "default_incomplete"
+	PaymentBehaviorErrorIfIncomplete PaymentBehavior = "error_if_incomplete"
+	PaymentBehaviorDefaultActive     PaymentBehavior = "default_active"
+)
+
+func (pb PaymentBehavior) String() string {
+	return string(pb)
+}
+
+// PaymentBehaviorValidator is a validator for the "payment_behavior" field enum values. It is called by the builders before save.
+func PaymentBehaviorValidator(pb PaymentBehavior) error {
+	switch pb {
+	case PaymentBehaviorAllowIncomplete, PaymentBehaviorDefaultIncomplete, PaymentBehaviorErrorIfIncomplete, PaymentBehaviorDefaultActive:
+		return nil
+	default:
+		return fmt.Errorf("subscription: invalid enum value for payment_behavior field: %q", pb)
+	}
+}
+
+// CollectionMethod defines the type for the "collection_method" enum field.
+type CollectionMethod string
+
+// CollectionMethodChargeAutomatically is the default value of the CollectionMethod enum.
+const DefaultCollectionMethod = CollectionMethodChargeAutomatically
+
+// CollectionMethod values.
+const (
+	CollectionMethodChargeAutomatically CollectionMethod = "charge_automatically"
+	CollectionMethodSendInvoice         CollectionMethod = "send_invoice"
+)
+
+func (cm CollectionMethod) String() string {
+	return string(cm)
+}
+
+// CollectionMethodValidator is a validator for the "collection_method" field enum values. It is called by the builders before save.
+func CollectionMethodValidator(cm CollectionMethod) error {
+	switch cm {
+	case CollectionMethodChargeAutomatically, CollectionMethodSendInvoice:
+		return nil
+	default:
+		return fmt.Errorf("subscription: invalid enum value for collection_method field: %q", cm)
+	}
+}
 
 // OrderOption defines the ordering options for the Subscription queries.
 type OrderOption func(*sql.Selector)
@@ -394,6 +470,31 @@ func ByCommitmentAmount(opts ...sql.OrderTermOption) OrderOption {
 // ByOverageFactor orders the results by the overage_factor field.
 func ByOverageFactor(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldOverageFactor, opts...).ToFunc()
+}
+
+// ByPaymentBehavior orders the results by the payment_behavior field.
+func ByPaymentBehavior(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPaymentBehavior, opts...).ToFunc()
+}
+
+// ByCollectionMethod orders the results by the collection_method field.
+func ByCollectionMethod(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCollectionMethod, opts...).ToFunc()
+}
+
+// ByGatewayPaymentMethodID orders the results by the gateway_payment_method_id field.
+func ByGatewayPaymentMethodID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldGatewayPaymentMethodID, opts...).ToFunc()
+}
+
+// ByCustomerTimezone orders the results by the customer_timezone field.
+func ByCustomerTimezone(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCustomerTimezone, opts...).ToFunc()
+}
+
+// ByProrationBehavior orders the results by the proration_behavior field.
+func ByProrationBehavior(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldProrationBehavior, opts...).ToFunc()
 }
 
 // ByLineItemsCount orders the results by line_items count.

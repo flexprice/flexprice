@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
@@ -13,6 +14,7 @@ type EntityIntegrationMappingService interface {
 	CreateEntityIntegrationMapping(ctx context.Context, req dto.CreateEntityIntegrationMappingRequest) (*dto.EntityIntegrationMappingResponse, error)
 	GetEntityIntegrationMapping(ctx context.Context, id string) (*dto.EntityIntegrationMappingResponse, error)
 	GetEntityIntegrationMappings(ctx context.Context, filter *types.EntityIntegrationMappingFilter) (*dto.ListEntityIntegrationMappingsResponse, error)
+	UpdateEntityIntegrationMapping(ctx context.Context, id string, req dto.UpdateEntityIntegrationMappingRequest) (*dto.EntityIntegrationMappingResponse, error)
 	DeleteEntityIntegrationMapping(ctx context.Context, id string) error
 }
 
@@ -136,6 +138,63 @@ func (s *entityIntegrationMappingService) GetEntityIntegrationMappings(ctx conte
 	return &dto.ListEntityIntegrationMappingsResponse{
 		Items:      response,
 		Pagination: types.NewPaginationResponse(total, filter.GetLimit(), filter.GetOffset()),
+	}, nil
+}
+
+func (s *entityIntegrationMappingService) UpdateEntityIntegrationMapping(ctx context.Context, id string, req dto.UpdateEntityIntegrationMappingRequest) (*dto.EntityIntegrationMappingResponse, error) {
+	if id == "" {
+		return nil, ierr.NewError("entity integration mapping ID is required").
+			WithHint("Entity integration mapping ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Get existing mapping
+	mapping, err := s.EntityIntegrationMappingRepo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Update fields if provided
+	if req.ProviderEntityID != nil {
+		mapping.ProviderEntityID = *req.ProviderEntityID
+	}
+
+	if req.Metadata != nil {
+		mapping.Metadata = req.Metadata
+	}
+
+	// Update timestamps
+	mapping.UpdatedAt = time.Now().UTC()
+	mapping.UpdatedBy = types.GetUserID(ctx)
+
+	// Validate the updated mapping
+	if err := entityintegrationmapping.Validate(mapping); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Invalid entity integration mapping data").
+			Mark(ierr.ErrValidation)
+	}
+
+	if err := s.EntityIntegrationMappingRepo.Update(ctx, mapping); err != nil {
+		return nil, err
+	}
+
+	return &dto.EntityIntegrationMappingResponse{
+		ID:               mapping.ID,
+		EntityID:         mapping.EntityID,
+		EntityType:       mapping.EntityType,
+		ProviderType:     mapping.ProviderType,
+		ProviderEntityID: mapping.ProviderEntityID,
+		EnvironmentID:    mapping.EnvironmentID,
+		TenantID:         mapping.TenantID,
+		Status:           mapping.Status,
+		CreatedAt:        mapping.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:        mapping.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		CreatedBy:        mapping.CreatedBy,
+		UpdatedBy:        mapping.UpdatedBy,
 	}, nil
 }
 

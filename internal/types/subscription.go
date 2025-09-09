@@ -8,13 +8,13 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// SubscriptionLineItemEntitiyType is the type of the source of a subscription line item
+// SubscriptionLineItemEntityType is the type of the source of a subscription line item
 // It is optional and can be used to differentiate between plan and addon line items
-type SubscriptionLineItemEntitiyType string
+type SubscriptionLineItemEntityType string
 
 const (
-	SubscriptionLineItemEntitiyTypePlan  SubscriptionLineItemEntitiyType = "plan"
-	SubscriptionLineItemEntitiyTypeAddon SubscriptionLineItemEntitiyType = "addon"
+	SubscriptionLineItemEntityTypePlan  SubscriptionLineItemEntityType = "plan"
+	SubscriptionLineItemEntityTypeAddon SubscriptionLineItemEntityType = "addon"
 )
 
 // SubscriptionStatus is the status of a subscription
@@ -60,13 +60,54 @@ func (s SubscriptionStatus) Validate() error {
 	return nil
 }
 
+// PaymentBehavior determines how subscription payments are handled
+type PaymentBehavior string
+
+const (
+	// PaymentBehaviorAllowIncomplete - Immediately attempts payment. If fails, subscription becomes incomplete
+	PaymentBehaviorAllowIncomplete PaymentBehavior = "allow_incomplete"
+
+	// PaymentBehaviorDefaultIncomplete - Always creates incomplete subscription if payment required
+	PaymentBehaviorDefaultIncomplete PaymentBehavior = "default_incomplete"
+
+	// PaymentBehaviorErrorIfIncomplete - Fails subscription creation if payment fails
+	PaymentBehaviorErrorIfIncomplete PaymentBehavior = "error_if_incomplete"
+
+	// PaymentBehaviorDefaultActive - Creates active subscription without payment attempt
+	PaymentBehaviorDefaultActive PaymentBehavior = "default_active"
+)
+
+func (p PaymentBehavior) String() string {
+	return string(p)
+}
+
+func (p PaymentBehavior) Validate() error {
+	allowed := []PaymentBehavior{
+		PaymentBehaviorAllowIncomplete,
+		PaymentBehaviorDefaultIncomplete,
+		PaymentBehaviorErrorIfIncomplete,
+		PaymentBehaviorDefaultActive,
+	}
+	if !lo.Contains(allowed, p) {
+		return ierr.NewError("invalid payment behavior").
+			WithHint("Invalid payment behavior").
+			WithReportableDetails(map[string]any{
+				"payment_behavior": p,
+				"allowed_values":   allowed,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 // CollectionMethod determines how invoices are collected for subscriptions
 type CollectionMethod string
 
 const (
-	// default_incomplete waits for payment confirmation before activation
-	CollectionMethodDefaultIncomplete CollectionMethod = "default_incomplete"
-	// send_invoice activates subscription immediately, invoice is sent for payment
+	// CollectionMethodChargeAutomatically - Automatically charge payment method
+	CollectionMethodChargeAutomatically CollectionMethod = "charge_automatically"
+
+	// CollectionMethodSendInvoice - Send invoice to customer for manual payment
 	CollectionMethodSendInvoice CollectionMethod = "send_invoice"
 )
 
@@ -76,7 +117,7 @@ func (c CollectionMethod) String() string {
 
 func (c CollectionMethod) Validate() error {
 	allowed := []CollectionMethod{
-		CollectionMethodDefaultIncomplete,
+		CollectionMethodChargeAutomatically,
 		CollectionMethodSendInvoice,
 	}
 	if !lo.Contains(allowed, c) {
@@ -314,4 +355,36 @@ type SchedulePhaseCreditGrant struct {
 	ExpirationDurationUnit *CreditGrantExpiryDurationUnit `json:"expiration_duration_unit,omitempty"`
 	Priority               *int                           `json:"priority,omitempty"`
 	Metadata               Metadata                       `json:"metadata,omitempty"`
+}
+
+// SubscriptionChangeType defines the type of subscription change
+type SubscriptionChangeType string
+
+const (
+	SubscriptionChangeTypeUpgrade   SubscriptionChangeType = "upgrade"
+	SubscriptionChangeTypeDowngrade SubscriptionChangeType = "downgrade"
+	SubscriptionChangeTypeLateral   SubscriptionChangeType = "lateral"
+)
+
+var SubscriptionChangeTypeValues = []SubscriptionChangeType{
+	SubscriptionChangeTypeUpgrade,
+	SubscriptionChangeTypeDowngrade,
+	SubscriptionChangeTypeLateral,
+}
+
+func (s SubscriptionChangeType) String() string {
+	return string(s)
+}
+
+func (s SubscriptionChangeType) Validate() error {
+	if !lo.Contains(SubscriptionChangeTypeValues, s) {
+		return ierr.NewError("invalid subscription change type").
+			WithHint("Subscription change type must be upgrade, downgrade, or lateral").
+			WithReportableDetails(map[string]any{
+				"allowed_values": SubscriptionChangeTypeValues,
+				"provided_value": s,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
 }

@@ -5,6 +5,39 @@ import (
 	"github.com/samber/lo"
 )
 
+type EntitlementUsageResetPeriod string
+
+const (
+	// For BILLING_CADENCE_RECURRING
+	ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY   EntitlementUsageResetPeriod = "MONTHLY"
+	ENTITLEMENT_USAGE_RESET_PERIOD_ANNUAL    EntitlementUsageResetPeriod = "ANNUAL"
+	ENTITLEMENT_USAGE_RESET_PERIOD_WEEKLY    EntitlementUsageResetPeriod = "WEEKLY"
+	ENTITLEMENT_USAGE_RESET_PERIOD_DAILY     EntitlementUsageResetPeriod = "DAILY"
+	ENTITLEMENT_USAGE_RESET_PERIOD_QUARTER   EntitlementUsageResetPeriod = "QUARTERLY"
+	ENTITLEMENT_USAGE_RESET_PERIOD_HALF_YEAR EntitlementUsageResetPeriod = "HALF_YEARLY"
+	ENTITLEMENT_USAGE_RESET_PERIOD_NEVER     EntitlementUsageResetPeriod = "NEVER"
+)
+
+func (e EntitlementUsageResetPeriod) Validate() error {
+
+	allowed := []EntitlementUsageResetPeriod{
+		ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY,
+		ENTITLEMENT_USAGE_RESET_PERIOD_ANNUAL,
+		ENTITLEMENT_USAGE_RESET_PERIOD_WEEKLY,
+		ENTITLEMENT_USAGE_RESET_PERIOD_DAILY,
+		ENTITLEMENT_USAGE_RESET_PERIOD_QUARTER,
+		ENTITLEMENT_USAGE_RESET_PERIOD_HALF_YEAR,
+		ENTITLEMENT_USAGE_RESET_PERIOD_NEVER,
+	}
+
+	if !lo.Contains(allowed, e) {
+		return ierr.NewError("invalid entitlement usage reset period").
+			WithHint("Invalid entitlement usage reset period").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 type EntitlementEntityType string
 
 const (

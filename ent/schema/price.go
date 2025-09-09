@@ -1,6 +1,8 @@
 package schema
 
 import (
+	"time"
+
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/edge"
@@ -191,6 +193,16 @@ func (Price) Fields() []ent.Field {
 			}).
 			Optional().
 			Nillable(),
+
+		field.Time("start_date").
+			Nillable().
+			Default(time.Now).
+			Optional().
+			Immutable(),
+
+		field.Time("end_date").
+			Optional().
+			Nillable(),
 	}
 }
 
@@ -211,5 +223,6 @@ func (Price) Indexes() []ent.Index {
 			Unique().
 			Annotations(entsql.IndexWhere("status = 'published' AND lookup_key IS NOT NULL AND lookup_key != ''")),
 		index.Fields("tenant_id", "environment_id"),
+		index.Fields("start_date", "end_date"),
 	}
 }

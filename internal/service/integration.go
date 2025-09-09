@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/stripe/stripe-go/v79"
+	"github.com/stripe/stripe-go/v79/client"
 )
 
 // IntegrationService handles generic integration operations with multiple providers
@@ -24,6 +25,12 @@ type IntegrationService interface {
 
 	// GetAvailableProviders returns all available providers for the current tenant
 	GetAvailableProviders(ctx context.Context) ([]*connection.Connection, error)
+
+	// ValidateIntegrationEntityMappings validates that the provided integration entity mappings exist in their respective providers
+	ValidateIntegrationEntityMappings(ctx context.Context, mappings []*dto.IntegrationEntityMapping) error
+
+	// UpdateProviderCustomerMetadata updates the customer metadata in the external provider
+	UpdateProviderCustomerMetadata(ctx context.Context, provider, providerCustomerID string, cust *customer.Customer) error
 }
 
 type integrationService struct {
@@ -536,4 +543,151 @@ func (s *integrationService) findCustomerByEmail(ctx context.Context, email stri
 	}
 
 	return nil, nil // No customer found
+}
+
+// ValidateIntegrationEntityMappings validates that the provided integration entity mappings exist in their respective providers
+func (s *integrationService) ValidateIntegrationEntityMappings(ctx context.Context, mappings []*dto.IntegrationEntityMapping) error {
+	if len(mappings) == 0 {
+		return nil
+	}
+
+	// Get all available connections for this tenant
+	connections, err := s.getAvailableConnections(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Create a map of provider types to connections for quick lookup
+	providerConnections := make(map[string]*connection.Connection)
+	for _, conn := range connections {
+		providerConnections[string(conn.ProviderType)] = conn
+	}
+
+	// Validate each mapping
+	for _, mapping := range mappings {
+		conn, exists := providerConnections[mapping.Provider]
+		if !exists {
+			return ierr.NewError("provider not configured").
+				WithHint(fmt.Sprintf("Provider %s is not configured for this environment", mapping.Provider)).
+				WithReportableDetails(map[string]interface{}{
+					"provider": mapping.Provider,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
+		// Check if the provider entity ID already exists in our system
+		filter := &types.EntityIntegrationMappingFilter{
+			ProviderTypes:     []string{mapping.Provider},
+			ProviderEntityIDs: []string{mapping.ID},
+		}
+		existingMappings, err := s.EntityIntegrationMappingRepo.List(ctx, filter)
+		if err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to check for existing provider entity mapping").
+				Mark(ierr.ErrInternal)
+		}
+
+		// If any mapping exists, return error with details
+		if len(existingMappings) > 0 {
+			existingMapping := existingMappings[0]
+			return ierr.NewError("provider entity mapping already exists").
+				WithHint(fmt.Sprintf("The provider entity ID '%s' for provider '%s' is already mapped to another entity", mapping.ID, mapping.Provider)).
+				WithReportableDetails(map[string]interface{}{
+					"provider":             mapping.Provider,
+					"provider_entity_id":   mapping.ID,
+					"existing_entity_id":   existingMapping.EntityID,
+					"existing_entity_type": existingMapping.EntityType,
+					"existing_mapping_id":  existingMapping.ID,
+					"existing_environment": existingMapping.EnvironmentID,
+					"existing_tenant":      existingMapping.TenantID,
+				}).
+				Mark(ierr.ErrAlreadyExists)
+		}
+
+		// Validate based on provider type
+		switch mapping.Provider {
+		case "stripe":
+			if err := s.validateStripeCustomer(ctx, conn, mapping.ID); err != nil {
+				return err
+			}
+		case "razorpay":
+			// TODO: Implement Razorpay validation when needed
+			return ierr.NewError("razorpay validation not implemented").
+				WithHint("Razorpay customer validation is not yet implemented").
+				Mark(ierr.ErrNotFound)
+		default:
+			return ierr.NewError("unsupported provider").
+				WithHint(fmt.Sprintf("Provider %s is not supported", mapping.Provider)).
+				WithReportableDetails(map[string]interface{}{
+					"provider": mapping.Provider,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	return nil
+}
+
+// validateStripeCustomer validates that a customer exists in Stripe
+func (s *integrationService) validateStripeCustomer(ctx context.Context, conn *connection.Connection, customerID string) error {
+	stripeService := NewStripeService(s.ServiceParams)
+
+	// Get Stripe configuration
+	stripeConfig, err := stripeService.GetDecryptedStripeConfig(conn)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to get Stripe configuration").
+			Mark(ierr.ErrInternal)
+	}
+
+	// Initialize Stripe client with the secret key
+	// Use dedicated client instance to avoid race conditions
+	sc := &client.API{}
+	sc.Init(stripeConfig.SecretKey, nil)
+
+	// Validate that the customer exists in Stripe
+	cust, err := sc.Customers.Get(customerID, nil)
+	if err != nil {
+		s.Logger.Errorw("failed to validate Stripe customer",
+			"customer_id", customerID,
+			"error", err)
+
+		return ierr.WithError(err).
+			WithHint(fmt.Sprintf("Customer with ID %s does not exist in Stripe or is not accessible", customerID)).
+			WithReportableDetails(map[string]interface{}{
+				"stripe_customer_id": customerID,
+			}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	if cust == nil {
+		return ierr.NewError("stripe customer not found").
+			WithHint(fmt.Sprintf("Customer with ID %s was not found in Stripe", customerID)).
+			WithReportableDetails(map[string]interface{}{
+				"stripe_customer_id": customerID,
+			}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	s.Logger.Infow("stripe customer validation successful",
+		"customer_id", customerID,
+		"stripe_customer_email", cust.Email)
+
+	return nil
+}
+
+// UpdateProviderCustomerMetadata updates the customer metadata in the external provider
+func (s *integrationService) UpdateProviderCustomerMetadata(ctx context.Context, provider, providerCustomerID string, cust *customer.Customer) error {
+	switch provider {
+	case "stripe":
+		stripeService := NewStripeService(s.ServiceParams)
+		return stripeService.UpdateStripeCustomerMetadata(ctx, providerCustomerID, cust)
+	case "razorpay":
+		// TODO: Implement Razorpay metadata update when needed
+		s.Logger.Infow("razorpay metadata update not implemented", "provider_customer_id", providerCustomerID)
+		return nil
+	default:
+		s.Logger.Infow("metadata update not supported for provider", "provider", provider)
+		return nil
+	}
 }

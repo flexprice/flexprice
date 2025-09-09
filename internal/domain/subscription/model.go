@@ -98,11 +98,24 @@ type Subscription struct {
 	// OverageFactor is a multiplier applied to usage beyond the commitment amount
 	OverageFactor *decimal.Decimal `db:"overage_factor" json:"overage_factor,omitempty"`
 
+	// PaymentBehavior determines how subscription payments are handled
+	PaymentBehavior string `db:"payment_behavior" json:"payment_behavior"`
+
+	// CollectionMethod determines how invoices are collected
+	CollectionMethod string `db:"collection_method" json:"collection_method"`
+
+	// GatewayPaymentMethodID is the gateway payment method ID for this subscription
+	GatewayPaymentMethodID *string `db:"gateway_payment_method_id" json:"gateway_payment_method_id,omitempty"`
+
 	LineItems []*SubscriptionLineItem `json:"line_items,omitempty"`
 
 	Pauses []*SubscriptionPause `json:"pauses,omitempty"`
 
 	CouponAssociations []*coupon_association.CouponAssociation `json:"coupon_associations,omitempty"`
+
+	CustomerTimezone string `json:"customer_timezone"`
+
+	ProrationBehavior types.ProrationBehavior `json:"proration_behavior"`
 
 	types.BaseModel
 }
@@ -133,36 +146,42 @@ func GetSubscriptionFromEnt(sub *ent.Subscription) *Subscription {
 	}
 
 	return &Subscription{
-		ID:                 sub.ID,
-		LookupKey:          sub.LookupKey,
-		CustomerID:         sub.CustomerID,
-		PlanID:             sub.PlanID,
-		SubscriptionStatus: types.SubscriptionStatus(sub.SubscriptionStatus),
-		Currency:           sub.Currency,
-		BillingAnchor:      sub.BillingAnchor,
-		StartDate:          sub.StartDate,
-		EndDate:            sub.EndDate,
-		CurrentPeriodStart: sub.CurrentPeriodStart,
-		CurrentPeriodEnd:   sub.CurrentPeriodEnd,
-		CancelledAt:        sub.CancelledAt,
-		CancelAt:           sub.CancelAt,
-		CancelAtPeriodEnd:  sub.CancelAtPeriodEnd,
-		TrialStart:         sub.TrialStart,
-		TrialEnd:           sub.TrialEnd,
-		BillingCadence:     types.BillingCadence(sub.BillingCadence),
-		BillingPeriod:      types.BillingPeriod(sub.BillingPeriod),
-		BillingPeriodCount: sub.BillingPeriodCount,
-		BillingCycle:       types.BillingCycle(sub.BillingCycle),
-		Version:            sub.Version,
-		Metadata:           sub.Metadata,
-		EnvironmentID:      sub.EnvironmentID,
-		PauseStatus:        types.PauseStatus(sub.PauseStatus),
-		ActivePauseID:      sub.ActivePauseID,
-		CommitmentAmount:   sub.CommitmentAmount,
-		OverageFactor:      sub.OverageFactor,
+		ID:                     sub.ID,
+		LookupKey:              sub.LookupKey,
+		CustomerID:             sub.CustomerID,
+		PlanID:                 sub.PlanID,
+		SubscriptionStatus:     types.SubscriptionStatus(sub.SubscriptionStatus),
+		Currency:               sub.Currency,
+		BillingAnchor:          sub.BillingAnchor,
+		StartDate:              sub.StartDate,
+		EndDate:                sub.EndDate,
+		CurrentPeriodStart:     sub.CurrentPeriodStart,
+		CurrentPeriodEnd:       sub.CurrentPeriodEnd,
+		CancelledAt:            sub.CancelledAt,
+		CancelAt:               sub.CancelAt,
+		CancelAtPeriodEnd:      sub.CancelAtPeriodEnd,
+		TrialStart:             sub.TrialStart,
+		TrialEnd:               sub.TrialEnd,
+		BillingCadence:         types.BillingCadence(sub.BillingCadence),
+		BillingPeriod:          types.BillingPeriod(sub.BillingPeriod),
+		BillingPeriodCount:     sub.BillingPeriodCount,
+		BillingCycle:           types.BillingCycle(sub.BillingCycle),
+		Version:                sub.Version,
+		Metadata:               sub.Metadata,
+		EnvironmentID:          sub.EnvironmentID,
+		PauseStatus:            types.PauseStatus(sub.PauseStatus),
+		ActivePauseID:          sub.ActivePauseID,
+		CommitmentAmount:       sub.CommitmentAmount,
+		OverageFactor:          sub.OverageFactor,
+		PaymentBehavior:        string(sub.PaymentBehavior),
+		CollectionMethod:       string(sub.CollectionMethod),
+		GatewayPaymentMethodID: lo.ToPtr(sub.GatewayPaymentMethodID),
+
 		LineItems:          lineItems,
 		CouponAssociations: couponAssociations,
 		Pauses:             pauses,
+		CustomerTimezone:   sub.CustomerTimezone,
+		ProrationBehavior:  types.ProrationBehavior(sub.ProrationBehavior),
 		BaseModel: types.BaseModel{
 			TenantID:  sub.TenantID,
 			Status:    types.Status(sub.Status),

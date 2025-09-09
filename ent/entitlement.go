@@ -48,7 +48,9 @@ type Entitlement struct {
 	// IsSoftLimit holds the value of the "is_soft_limit" field.
 	IsSoftLimit bool `json:"is_soft_limit,omitempty"`
 	// StaticValue holds the value of the "static_value" field.
-	StaticValue        string `json:"static_value,omitempty"`
+	StaticValue string `json:"static_value,omitempty"`
+	// DisplayOrder holds the value of the "display_order" field.
+	DisplayOrder       int `json:"display_order,omitempty"`
 	addon_entitlements *string
 	selectValues       sql.SelectValues
 }
@@ -60,7 +62,7 @@ func (*Entitlement) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case entitlement.FieldIsEnabled, entitlement.FieldIsSoftLimit:
 			values[i] = new(sql.NullBool)
-		case entitlement.FieldUsageLimit:
+		case entitlement.FieldUsageLimit, entitlement.FieldDisplayOrder:
 			values[i] = new(sql.NullInt64)
 		case entitlement.FieldID, entitlement.FieldTenantID, entitlement.FieldStatus, entitlement.FieldCreatedBy, entitlement.FieldUpdatedBy, entitlement.FieldEnvironmentID, entitlement.FieldEntityType, entitlement.FieldEntityID, entitlement.FieldFeatureID, entitlement.FieldFeatureType, entitlement.FieldUsageResetPeriod, entitlement.FieldStaticValue:
 			values[i] = new(sql.NullString)
@@ -186,6 +188,12 @@ func (e *Entitlement) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				e.StaticValue = value.String
 			}
+		case entitlement.FieldDisplayOrder:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field display_order", values[i])
+			} else if value.Valid {
+				e.DisplayOrder = int(value.Int64)
+			}
 		case entitlement.ForeignKeys[0]:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field addon_entitlements", values[i])
@@ -278,6 +286,9 @@ func (e *Entitlement) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("static_value=")
 	builder.WriteString(e.StaticValue)
+	builder.WriteString(", ")
+	builder.WriteString("display_order=")
+	builder.WriteString(fmt.Sprintf("%v", e.DisplayOrder))
 	builder.WriteByte(')')
 	return builder.String()
 }

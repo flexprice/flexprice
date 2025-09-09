@@ -1260,6 +1260,7 @@ func (s *eventPostProcessingService) ToGetUsageAnalyticsResponseDTO(ctx context.
 			TotalCost:       analytic.TotalCost,
 			Currency:        analytic.Currency,
 			EventCount:      analytic.EventCount,
+			Properties:      analytic.Properties,
 			Points:          make([]dto.UsageAnalyticPoint, 0, len(analytic.Points)),
 		}
 

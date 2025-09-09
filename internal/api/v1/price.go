@@ -199,7 +199,15 @@ func (h *PriceHandler) DeletePrice(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.DeletePrice(c.Request.Context(), id); err != nil {
+	var req dto.DeletePriceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	if err := h.service.DeletePrice(c.Request.Context(), id, req); err != nil {
 		c.Error(err)
 		return
 	}

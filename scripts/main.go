@@ -93,6 +93,11 @@ var commands = []Command{
 		Description: "Migrate invoice sequences to include environment isolation",
 		Run:         internal.MigrateInvoiceSequences,
 	},
+	{
+		Name:        "migrate-to-addon",
+		Description: "Migrate to addon",
+		Run:         internal.CopyPlanChargesToAddons,
+	},
 }
 
 // runBulkReprocessEventsCommand wraps the bulk reprocess events with command line parameters

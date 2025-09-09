@@ -46,6 +46,8 @@ const (
 	ReferencePointPeriodEnd InvoiceReferencePoint = "period_end"
 	// ReferencePointPreview indicates a preview invoice that should include all charges
 	ReferencePointPreview InvoiceReferencePoint = "preview"
+	// ReferencePointCancel indicates invoice creation at the end of a period (for arrear charges)
+	ReferencePointCancel InvoiceReferencePoint = "cancel"
 )
 
 func (r InvoiceReferencePoint) String() string {
@@ -57,6 +59,7 @@ func (r InvoiceReferencePoint) Validate() error {
 		ReferencePointPeriodStart,
 		ReferencePointPeriodEnd,
 		ReferencePointPreview,
+		ReferencePointCancel,
 	}
 
 	if !lo.Contains(allowedValues, r) {

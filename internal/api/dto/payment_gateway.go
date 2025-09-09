@@ -7,15 +7,16 @@ import (
 
 // CreatePaymentLinkRequest represents a generic payment link creation request
 type CreatePaymentLinkRequest struct {
-	InvoiceID   string                    `json:"invoice_id" binding:"required"`
-	CustomerID  string                    `json:"customer_id" binding:"required"`
-	Amount      decimal.Decimal           `json:"amount" binding:"required"`
-	Currency    string                    `json:"currency" binding:"required"`
-	Gateway     *types.PaymentGatewayType `json:"gateway,omitempty"` // Optional, will use preferred if not specified
-	SuccessURL  string                    `json:"success_url,omitempty"`
-	CancelURL   string                    `json:"cancel_url,omitempty"`
-	Metadata    types.Metadata            `json:"metadata,omitempty"`
-	Description string                    `json:"description,omitempty"`
+	InvoiceID              string                    `json:"invoice_id" binding:"required"`
+	CustomerID             string                    `json:"customer_id" binding:"required"`
+	Amount                 decimal.Decimal           `json:"amount" binding:"required"`
+	Currency               string                    `json:"currency" binding:"required"`
+	Gateway                *types.PaymentGatewayType `json:"gateway,omitempty"` // Optional, will use preferred if not specified
+	SuccessURL             string                    `json:"success_url,omitempty"`
+	CancelURL              string                    `json:"cancel_url,omitempty"`
+	Metadata               types.Metadata            `json:"metadata,omitempty"`
+	Description            string                    `json:"description,omitempty"`
+	SaveCardAndMakeDefault bool                      `json:"save_card_and_make_default" default:"false"`
 }
 
 // Validate validates the payment link request

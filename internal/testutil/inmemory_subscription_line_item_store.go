@@ -49,15 +49,10 @@ func lineItemFilterFn(ctx context.Context, item *subscription.SubscriptionLineIt
 		return false
 	}
 
-	// Filter by customer IDs
-	if len(f.CustomerIDs) > 0 && !lo.Contains(f.CustomerIDs, item.CustomerID) {
-		return false
-	}
-
-	// Filter by plan IDs
-	if len(f.PlanIDs) > 0 {
+	// Filter by entity IDs
+	if len(f.EntityIDs) > 0 {
 		// Check if the item's EntityID matches any of the plan IDs and EntityType is plan
-		if item.EntityType != types.SubscriptionLineItemEntitiyTypePlan || !lo.Contains(f.PlanIDs, item.EntityID) {
+		if item.EntityType != types.SubscriptionLineItemEntityTypePlan || !lo.Contains(f.EntityIDs, item.EntityID) {
 			return false
 		}
 	}
@@ -217,17 +212,9 @@ func (s *InMemorySubscriptionLineItemStore) CreateBulk(ctx context.Context, item
 }
 
 // ListBySubscription retrieves all line items for a subscription
-func (s *InMemorySubscriptionLineItemStore) ListBySubscription(ctx context.Context, subscriptionID string) ([]*subscription.SubscriptionLineItem, error) {
+func (s *InMemorySubscriptionLineItemStore) ListBySubscription(ctx context.Context, sub *subscription.Subscription) ([]*subscription.SubscriptionLineItem, error) {
 	filter := &types.SubscriptionLineItemFilter{
-		SubscriptionIDs: []string{subscriptionID},
-	}
-	return s.List(ctx, filter)
-}
-
-// ListByCustomer retrieves all line items for a customer
-func (s *InMemorySubscriptionLineItemStore) ListByCustomer(ctx context.Context, customerID string) ([]*subscription.SubscriptionLineItem, error) {
-	filter := &types.SubscriptionLineItemFilter{
-		CustomerIDs: []string{customerID},
+		SubscriptionIDs: []string{sub.ID},
 	}
 	return s.List(ctx, filter)
 }
@@ -254,6 +241,19 @@ func (s *InMemorySubscriptionLineItemStore) Count(ctx context.Context, filter *t
 	return count, nil
 }
 
+// Clear clears all subscription line items from the store
+func (s *InMemorySubscriptionLineItemStore) Clear() {
+	s.InMemoryStore.Clear()
+}
+
+// ListByCustomer retrieves all line items for a customer
+func (s *InMemorySubscriptionLineItemStore) ListByCustomer(ctx context.Context, customerID string) ([]*subscription.SubscriptionLineItem, error) {
+	filter := &types.SubscriptionLineItemFilter{
+		EntityIDs: []string{customerID},
+	}
+	return s.List(ctx, filter)
+}
+
 // GetByPriceID retrieves all line items for a price
 func (s *InMemorySubscriptionLineItemStore) GetByPriceID(ctx context.Context, priceID string) ([]*subscription.SubscriptionLineItem, error) {
 	filter := &types.SubscriptionLineItemFilter{
@@ -265,7 +265,7 @@ func (s *InMemorySubscriptionLineItemStore) GetByPriceID(ctx context.Context, pr
 // GetByPlanID retrieves all line items for a plan
 func (s *InMemorySubscriptionLineItemStore) GetByPlanID(ctx context.Context, planID string) ([]*subscription.SubscriptionLineItem, error) {
 	filter := &types.SubscriptionLineItemFilter{
-		PlanIDs: []string{planID},
+		EntityIDs: []string{planID},
 	}
 	return s.List(ctx, filter)
 }

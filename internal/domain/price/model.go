@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"time"
 
 	"github.com/flexprice/flexprice/ent"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -112,6 +113,12 @@ type Price struct {
 
 	// ParentPriceID references the parent price (only set when scope is SUBSCRIPTION)
 	ParentPriceID string `db:"parent_price_id" json:"parent_price_id,omitempty"`
+
+	// StartDate is the start date of the price
+	StartDate *time.Time `db:"start_date" json:"start_date,omitempty"`
+
+	// EndDate is the end date of the price
+	EndDate *time.Time `db:"end_date" json:"end_date,omitempty"`
 
 	types.BaseModel
 }
@@ -394,6 +401,8 @@ func FromEnt(e *ent.Price) *Price {
 		EntityType:             types.PriceEntityType(lo.FromPtr(e.EntityType)),
 		EntityID:               lo.FromPtr(e.EntityID),
 		ParentPriceID:          lo.FromPtr(e.ParentPriceID),
+		StartDate:              e.StartDate,
+		EndDate:                e.EndDate,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),
@@ -501,4 +510,92 @@ func (p *Price) Validate() error {
 	}
 
 	return nil
+}
+
+// GetDefaultQuantity returns the default quantity for a price
+// - Usage prices: 0 (since usage is tracked separately)
+// - Fixed prices: 1 (one unit by default)
+func (p *Price) GetDefaultQuantity() decimal.Decimal {
+	if p.Type == types.PRICE_TYPE_USAGE && p.MeterID != "" {
+		return decimal.Zero
+	}
+	return decimal.NewFromInt(1)
+}
+
+// GetDisplayName returns the display name for a price
+// - Usage prices: Use meter name if available
+// - Fixed prices: Use entity name (plan/addon name)
+// - Falls back to entity name if meter name is not available
+func (p *Price) GetDisplayName(entityName string, meterName string) string {
+	if p.Type == types.PRICE_TYPE_USAGE && p.MeterID != "" && meterName != "" {
+		return meterName
+	}
+	return entityName
+}
+
+// IsEligibleForSubscription checks if this price is compatible with a subscription
+// based on currency and billing period matching
+func (p *Price) IsEligibleForSubscription(subscriptionCurrency string, subscriptionBillingPeriod types.BillingPeriod, subscriptionBillingPeriodCount int) bool {
+	return types.IsMatchingCurrency(p.Currency, subscriptionCurrency) &&
+		p.BillingPeriod == subscriptionBillingPeriod &&
+		p.BillingPeriodCount == subscriptionBillingPeriodCount
+}
+
+// IsPlanScoped checks if this price is scoped to a plan
+func (p *Price) IsPlanScoped() bool {
+	return p.EntityType == types.PRICE_ENTITY_TYPE_PLAN
+}
+
+// IsAddonScoped checks if this price is scoped to an addon
+func (p *Price) IsAddonScoped() bool {
+	return p.EntityType == types.PRICE_ENTITY_TYPE_ADDON
+}
+
+// IsSubscriptionScoped checks if this price is scoped to a subscription (override)
+func (p *Price) IsSubscriptionScoped() bool {
+	return p.EntityType == types.PRICE_ENTITY_TYPE_SUBSCRIPTION
+}
+
+// HasParentPrice checks if this price has a parent price (for overrides)
+func (p *Price) HasParentPrice() bool {
+	return p.ParentPriceID != ""
+}
+
+// IsOverride checks if this price is an override of another price
+func (p *Price) IsOverride() bool {
+	return p.HasParentPrice()
+}
+
+// GetEffectivePriceID returns the effective price ID for comparison
+// For overrides, returns the parent price ID
+// For regular prices, returns the price ID itself
+func (p *Price) GetEffectivePriceID() string {
+	if p.HasParentPrice() {
+		return p.ParentPriceID
+	}
+	return p.ID
+}
+
+// IsActive checks if the price is currently active based on status and dates
+func (p *Price) IsActive(currentTime *time.Time) bool {
+	if currentTime == nil {
+		currentTime = lo.ToPtr(time.Now().UTC())
+	}
+
+	// Check if price is published
+	if p.Status != types.StatusPublished {
+		return false
+	}
+
+	// Check start date
+	if p.StartDate != nil && currentTime.Before(*p.StartDate) {
+		return false
+	}
+
+	// Check end date
+	if p.EndDate != nil && currentTime.After(*p.EndDate) {
+		return false
+	}
+
+	return true
 }

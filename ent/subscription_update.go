@@ -358,6 +358,68 @@ func (su *SubscriptionUpdate) ClearOverageFactor() *SubscriptionUpdate {
 	return su
 }
 
+// SetPaymentBehavior sets the "payment_behavior" field.
+func (su *SubscriptionUpdate) SetPaymentBehavior(sb subscription.PaymentBehavior) *SubscriptionUpdate {
+	su.mutation.SetPaymentBehavior(sb)
+	return su
+}
+
+// SetNillablePaymentBehavior sets the "payment_behavior" field if the given value is not nil.
+func (su *SubscriptionUpdate) SetNillablePaymentBehavior(sb *subscription.PaymentBehavior) *SubscriptionUpdate {
+	if sb != nil {
+		su.SetPaymentBehavior(*sb)
+	}
+	return su
+}
+
+// SetCollectionMethod sets the "collection_method" field.
+func (su *SubscriptionUpdate) SetCollectionMethod(sm subscription.CollectionMethod) *SubscriptionUpdate {
+	su.mutation.SetCollectionMethod(sm)
+	return su
+}
+
+// SetNillableCollectionMethod sets the "collection_method" field if the given value is not nil.
+func (su *SubscriptionUpdate) SetNillableCollectionMethod(sm *subscription.CollectionMethod) *SubscriptionUpdate {
+	if sm != nil {
+		su.SetCollectionMethod(*sm)
+	}
+	return su
+}
+
+// SetGatewayPaymentMethodID sets the "gateway_payment_method_id" field.
+func (su *SubscriptionUpdate) SetGatewayPaymentMethodID(s string) *SubscriptionUpdate {
+	su.mutation.SetGatewayPaymentMethodID(s)
+	return su
+}
+
+// SetNillableGatewayPaymentMethodID sets the "gateway_payment_method_id" field if the given value is not nil.
+func (su *SubscriptionUpdate) SetNillableGatewayPaymentMethodID(s *string) *SubscriptionUpdate {
+	if s != nil {
+		su.SetGatewayPaymentMethodID(*s)
+	}
+	return su
+}
+
+// ClearGatewayPaymentMethodID clears the value of the "gateway_payment_method_id" field.
+func (su *SubscriptionUpdate) ClearGatewayPaymentMethodID() *SubscriptionUpdate {
+	su.mutation.ClearGatewayPaymentMethodID()
+	return su
+}
+
+// SetCustomerTimezone sets the "customer_timezone" field.
+func (su *SubscriptionUpdate) SetCustomerTimezone(s string) *SubscriptionUpdate {
+	su.mutation.SetCustomerTimezone(s)
+	return su
+}
+
+// SetNillableCustomerTimezone sets the "customer_timezone" field if the given value is not nil.
+func (su *SubscriptionUpdate) SetNillableCustomerTimezone(s *string) *SubscriptionUpdate {
+	if s != nil {
+		su.SetCustomerTimezone(*s)
+	}
+	return su
+}
+
 // AddLineItemIDs adds the "line_items" edge to the SubscriptionLineItem entity by IDs.
 func (su *SubscriptionUpdate) AddLineItemIDs(ids ...string) *SubscriptionUpdate {
 	su.mutation.AddLineItemIDs(ids...)
@@ -604,7 +666,25 @@ func (su *SubscriptionUpdate) defaults() {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (su *SubscriptionUpdate) check() error {
+	if v, ok := su.mutation.PaymentBehavior(); ok {
+		if err := subscription.PaymentBehaviorValidator(v); err != nil {
+			return &ValidationError{Name: "payment_behavior", err: fmt.Errorf(`ent: validator failed for field "Subscription.payment_behavior": %w`, err)}
+		}
+	}
+	if v, ok := su.mutation.CollectionMethod(); ok {
+		if err := subscription.CollectionMethodValidator(v); err != nil {
+			return &ValidationError{Name: "collection_method", err: fmt.Errorf(`ent: validator failed for field "Subscription.collection_method": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
+	if err := su.check(); err != nil {
+		return n, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(subscription.Table, subscription.Columns, sqlgraph.NewFieldSpec(subscription.FieldID, field.TypeString))
 	if ps := su.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
@@ -711,6 +791,21 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if su.mutation.OverageFactorCleared() {
 		_spec.ClearField(subscription.FieldOverageFactor, field.TypeOther)
+	}
+	if value, ok := su.mutation.PaymentBehavior(); ok {
+		_spec.SetField(subscription.FieldPaymentBehavior, field.TypeEnum, value)
+	}
+	if value, ok := su.mutation.CollectionMethod(); ok {
+		_spec.SetField(subscription.FieldCollectionMethod, field.TypeEnum, value)
+	}
+	if value, ok := su.mutation.GatewayPaymentMethodID(); ok {
+		_spec.SetField(subscription.FieldGatewayPaymentMethodID, field.TypeString, value)
+	}
+	if su.mutation.GatewayPaymentMethodIDCleared() {
+		_spec.ClearField(subscription.FieldGatewayPaymentMethodID, field.TypeString)
+	}
+	if value, ok := su.mutation.CustomerTimezone(); ok {
+		_spec.SetField(subscription.FieldCustomerTimezone, field.TypeString, value)
 	}
 	if su.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1309,6 +1404,68 @@ func (suo *SubscriptionUpdateOne) ClearOverageFactor() *SubscriptionUpdateOne {
 	return suo
 }
 
+// SetPaymentBehavior sets the "payment_behavior" field.
+func (suo *SubscriptionUpdateOne) SetPaymentBehavior(sb subscription.PaymentBehavior) *SubscriptionUpdateOne {
+	suo.mutation.SetPaymentBehavior(sb)
+	return suo
+}
+
+// SetNillablePaymentBehavior sets the "payment_behavior" field if the given value is not nil.
+func (suo *SubscriptionUpdateOne) SetNillablePaymentBehavior(sb *subscription.PaymentBehavior) *SubscriptionUpdateOne {
+	if sb != nil {
+		suo.SetPaymentBehavior(*sb)
+	}
+	return suo
+}
+
+// SetCollectionMethod sets the "collection_method" field.
+func (suo *SubscriptionUpdateOne) SetCollectionMethod(sm subscription.CollectionMethod) *SubscriptionUpdateOne {
+	suo.mutation.SetCollectionMethod(sm)
+	return suo
+}
+
+// SetNillableCollectionMethod sets the "collection_method" field if the given value is not nil.
+func (suo *SubscriptionUpdateOne) SetNillableCollectionMethod(sm *subscription.CollectionMethod) *SubscriptionUpdateOne {
+	if sm != nil {
+		suo.SetCollectionMethod(*sm)
+	}
+	return suo
+}
+
+// SetGatewayPaymentMethodID sets the "gateway_payment_method_id" field.
+func (suo *SubscriptionUpdateOne) SetGatewayPaymentMethodID(s string) *SubscriptionUpdateOne {
+	suo.mutation.SetGatewayPaymentMethodID(s)
+	return suo
+}
+
+// SetNillableGatewayPaymentMethodID sets the "gateway_payment_method_id" field if the given value is not nil.
+func (suo *SubscriptionUpdateOne) SetNillableGatewayPaymentMethodID(s *string) *SubscriptionUpdateOne {
+	if s != nil {
+		suo.SetGatewayPaymentMethodID(*s)
+	}
+	return suo
+}
+
+// ClearGatewayPaymentMethodID clears the value of the "gateway_payment_method_id" field.
+func (suo *SubscriptionUpdateOne) ClearGatewayPaymentMethodID() *SubscriptionUpdateOne {
+	suo.mutation.ClearGatewayPaymentMethodID()
+	return suo
+}
+
+// SetCustomerTimezone sets the "customer_timezone" field.
+func (suo *SubscriptionUpdateOne) SetCustomerTimezone(s string) *SubscriptionUpdateOne {
+	suo.mutation.SetCustomerTimezone(s)
+	return suo
+}
+
+// SetNillableCustomerTimezone sets the "customer_timezone" field if the given value is not nil.
+func (suo *SubscriptionUpdateOne) SetNillableCustomerTimezone(s *string) *SubscriptionUpdateOne {
+	if s != nil {
+		suo.SetCustomerTimezone(*s)
+	}
+	return suo
+}
+
 // AddLineItemIDs adds the "line_items" edge to the SubscriptionLineItem entity by IDs.
 func (suo *SubscriptionUpdateOne) AddLineItemIDs(ids ...string) *SubscriptionUpdateOne {
 	suo.mutation.AddLineItemIDs(ids...)
@@ -1568,7 +1725,25 @@ func (suo *SubscriptionUpdateOne) defaults() {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (suo *SubscriptionUpdateOne) check() error {
+	if v, ok := suo.mutation.PaymentBehavior(); ok {
+		if err := subscription.PaymentBehaviorValidator(v); err != nil {
+			return &ValidationError{Name: "payment_behavior", err: fmt.Errorf(`ent: validator failed for field "Subscription.payment_behavior": %w`, err)}
+		}
+	}
+	if v, ok := suo.mutation.CollectionMethod(); ok {
+		if err := subscription.CollectionMethodValidator(v); err != nil {
+			return &ValidationError{Name: "collection_method", err: fmt.Errorf(`ent: validator failed for field "Subscription.collection_method": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscription, err error) {
+	if err := suo.check(); err != nil {
+		return _node, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(subscription.Table, subscription.Columns, sqlgraph.NewFieldSpec(subscription.FieldID, field.TypeString))
 	id, ok := suo.mutation.ID()
 	if !ok {
@@ -1692,6 +1867,21 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 	}
 	if suo.mutation.OverageFactorCleared() {
 		_spec.ClearField(subscription.FieldOverageFactor, field.TypeOther)
+	}
+	if value, ok := suo.mutation.PaymentBehavior(); ok {
+		_spec.SetField(subscription.FieldPaymentBehavior, field.TypeEnum, value)
+	}
+	if value, ok := suo.mutation.CollectionMethod(); ok {
+		_spec.SetField(subscription.FieldCollectionMethod, field.TypeEnum, value)
+	}
+	if value, ok := suo.mutation.GatewayPaymentMethodID(); ok {
+		_spec.SetField(subscription.FieldGatewayPaymentMethodID, field.TypeString, value)
+	}
+	if suo.mutation.GatewayPaymentMethodIDCleared() {
+		_spec.ClearField(subscription.FieldGatewayPaymentMethodID, field.TypeString)
+	}
+	if value, ok := suo.mutation.CustomerTimezone(); ok {
+		_spec.SetField(subscription.FieldCustomerTimezone, field.TypeString, value)
 	}
 	if suo.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{

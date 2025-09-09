@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/price"
 	priceDomain "github.com/flexprice/flexprice/internal/domain/price"
@@ -36,6 +37,13 @@ type CreatePriceRequest struct {
 	Tiers              []CreatePriceTier        `json:"tiers,omitempty"`
 	TransformQuantity  *price.TransformQuantity `json:"transform_quantity,omitempty"`
 	PriceUnitConfig    *PriceUnitConfig         `json:"price_unit_config,omitempty"`
+	StartDate          *time.Time               `json:"start_date,omitempty"`
+	EndDate            *time.Time               `json:"end_date,omitempty"`
+
+	// SkipEntityValidation is used to skip entity validation when creating a price from a subscription i.e. override price workflow
+	// This is used when creating a subscription-scoped price
+	// NOTE: This is not a public field and is used internally should be used with caution
+	SkipEntityValidation bool `json:"-"`
 }
 
 type PriceUnitConfig struct {
@@ -454,6 +462,15 @@ func (r *CreatePriceRequest) Validate() error {
 		}
 	}
 
+	// validate the start and end date if present
+	if r.StartDate != nil && r.EndDate != nil {
+		if r.StartDate.After(*r.EndDate) {
+			return ierr.NewError("start date must be before end date").
+				WithHint("Start date must be before end date").
+				Mark(ierr.ErrValidation)
+		}
+	}
+
 	return nil
 }
 
@@ -475,6 +492,15 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 				}).
 				Mark(ierr.ErrValidation)
 		}
+	}
+
+	// set the start date from either the request or the current time
+	var startDate *time.Time
+	if r.StartDate != nil {
+		startDate = r.StartDate
+	} else {
+		now := time.Now().UTC()
+		startDate = &now
 	}
 
 	metadata := make(priceDomain.JSONBMetadata)
@@ -591,6 +617,8 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 		TransformQuantity:  transformQuantity,
 		EntityType:         r.EntityType,
 		EntityID:           r.EntityID,
+		StartDate:          startDate,
+		EndDate:            r.EndDate,
 		EnvironmentID:      types.GetEnvironmentID(ctx),
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
@@ -667,4 +695,18 @@ type CostBreakup struct {
 	TierUnitAmount decimal.Decimal
 	// FinalCost is the total cost for the quantity
 	FinalCost decimal.Decimal
+}
+
+type DeletePriceRequest struct {
+	EndDate *time.Time `json:"end_date,omitempty"`
+}
+
+func (r *DeletePriceRequest) Validate() error {
+	if r.EndDate != nil && r.EndDate.Before(time.Now().UTC()) {
+		return ierr.NewError("end date must be in the future").
+			WithHint("End date must be in the future").
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
 }

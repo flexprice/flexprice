@@ -95,7 +95,15 @@ func (s *settingsService) UpdateSettingByKey(ctx context.Context, key string, re
 		return nil, err
 	}
 
-	setting.Value = req.Value
+	// Merge request values with existing values (don't replace completely)
+	if setting.Value == nil {
+		setting.Value = make(map[string]interface{})
+	}
+
+	// Merge the request values into existing values
+	for key, value := range req.Value {
+		setting.Value[key] = value
+	}
 	return s.updateSetting(ctx, setting)
 }
 

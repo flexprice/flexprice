@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	pdf "github.com/flexprice/flexprice/internal/domain/pdf"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
@@ -28,10 +29,10 @@ type InvoiceService interface {
 	ListInvoices(ctx context.Context, filter *types.InvoiceFilter) (*dto.ListInvoicesResponse, error)
 	FinalizeInvoice(ctx context.Context, id string) error
 	VoidInvoice(ctx context.Context, id string) error
-	ProcessDraftInvoice(ctx context.Context, id string) error
+	ProcessDraftInvoice(ctx context.Context, id string, paymentParams *dto.PaymentParameters, sub *subscription.Subscription, flowType types.InvoiceFlowType) error
 	UpdatePaymentStatus(ctx context.Context, id string, status types.PaymentStatus, amount *decimal.Decimal) error
 	ReconcilePaymentStatus(ctx context.Context, id string, status types.PaymentStatus, amount *decimal.Decimal) error
-	CreateSubscriptionInvoice(ctx context.Context, req *dto.CreateSubscriptionInvoiceRequest) (*dto.InvoiceResponse, error)
+	CreateSubscriptionInvoice(ctx context.Context, req *dto.CreateSubscriptionInvoiceRequest, paymentParams *dto.PaymentParameters, flowType types.InvoiceFlowType) (*dto.InvoiceResponse, *subscription.Subscription, error)
 	GetPreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error)
 	GetCustomerInvoiceSummary(ctx context.Context, customerID string, currency string) (*dto.CustomerInvoiceSummary, error)
 	GetUnpaidInvoicesToBePaid(ctx context.Context, customerID string, currency string) ([]*dto.InvoiceResponse, decimal.Decimal, error)
@@ -43,6 +44,7 @@ type InvoiceService interface {
 	RecalculateInvoiceAmounts(ctx context.Context, invoiceID string) error
 	UpdateInvoice(ctx context.Context, id string, req dto.UpdateInvoiceRequest) (*dto.InvoiceResponse, error)
 	CalculatePriceBreakdown(ctx context.Context, inv *dto.InvoiceResponse) (map[string][]dto.SourceUsageItem, error)
+	CalculateUsageBreakdown(ctx context.Context, inv *dto.InvoiceResponse, groupBy []string) (map[string][]dto.UsageBreakdownItem, error)
 	TriggerCommunication(ctx context.Context, id string) error
 	HandleIncompleteSubscriptionPayment(ctx context.Context, invoice *invoice.Invoice) error
 }
@@ -679,7 +681,7 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string) error {
 	return nil
 }
 
-func (s *invoiceService) ProcessDraftInvoice(ctx context.Context, id string) error {
+func (s *invoiceService) ProcessDraftInvoice(ctx context.Context, id string, paymentParams *dto.PaymentParameters, sub *subscription.Subscription, flowType types.InvoiceFlowType) error {
 	inv, err := s.InvoiceRepo.Get(ctx, id)
 	if err != nil {
 		return err
@@ -694,12 +696,12 @@ func (s *invoiceService) ProcessDraftInvoice(ctx context.Context, id string) err
 		return err
 	}
 
-	// try to process payment for the invoice and log any errors
-	// this is not a blocker for the invoice to be processed
-	if err := s.performPaymentAttemptActions(ctx, inv); err != nil {
-		s.Logger.Errorw("failed to process payment for invoice",
-			"error", err.Error(),
-			"invoice_id", inv.ID)
+	// try to process payment for the invoice based on behavior and log any errors
+	// Pass the subscription object to avoid extra DB call
+	// Error handling logic is properly handled in attemptPaymentForSubscriptionInvoice
+	if err := s.attemptPaymentForSubscriptionInvoice(ctx, inv, paymentParams, sub, flowType); err != nil {
+		// Only return error if it's a blocking error (e.g., subscription creation with error_if_incomplete)
+		return err
 	}
 
 	return nil
@@ -891,7 +893,7 @@ func (s *invoiceService) ReconcilePaymentStatus(ctx context.Context, id string, 
 	return nil
 }
 
-func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto.CreateSubscriptionInvoiceRequest) (*dto.InvoiceResponse, error) {
+func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto.CreateSubscriptionInvoiceRequest, paymentParams *dto.PaymentParameters, flowType types.InvoiceFlowType) (*dto.InvoiceResponse, *subscription.Subscription, error) {
 	s.Logger.Infow("creating subscription invoice",
 		"subscription_id", req.SubscriptionID,
 		"period_start", req.PeriodStart,
@@ -899,7 +901,7 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 		"reference_point", req.ReferencePoint)
 
 	if err := req.Validate(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	billingService := NewBillingService(s.ServiceParams)
@@ -907,7 +909,7 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 	// Get subscription with line items
 	subscription, _, err := s.SubRepo.GetWithLineItems(ctx, req.SubscriptionID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Prepare invoice request using billing service
@@ -918,26 +920,29 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 		req.ReferencePoint,
 	)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Check if the invoice is zeroAmountInvoice
 	if invoiceReq.Subtotal.IsZero() {
-		return nil, nil
+		return nil, subscription, nil
 	}
+
+	s.Logger.Infow("prepared invoice request for subscription",
+		"invoice_request", invoiceReq)
 
 	// Create the invoice
 	inv, err := s.CreateInvoice(ctx, *invoiceReq)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	// Process the invoice
-	if err := s.ProcessDraftInvoice(ctx, inv.ID); err != nil {
-		return nil, err
+	// Process the invoice with payment behavior, passing subscription to avoid extra DB call
+	if err := s.ProcessDraftInvoice(ctx, inv.ID, paymentParams, subscription, flowType); err != nil {
+		return nil, nil, err
 	}
 
-	return inv, nil
+	return inv, subscription, nil
 }
 
 func (s *invoiceService) GetPreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error) {
@@ -962,6 +967,9 @@ func (s *invoiceService) GetPreviewInvoice(ctx context.Context, req dto.GetPrevi
 	if err != nil {
 		return nil, err
 	}
+
+	s.Logger.Infow("prepared invoice request for preview",
+		"invoice_request", invReq)
 
 	// Create a draft invoice object for preview; ToInvoice applies preview discounts and taxes
 	inv, err := invReq.ToInvoice(ctx)
@@ -1209,64 +1217,132 @@ func (s *invoiceService) AttemptPayment(ctx context.Context, id string) error {
 		return err
 	}
 
-	return s.performPaymentAttemptActions(ctx, inv)
+	// Use the new payment function with nil parameters to use subscription defaults
+	return s.attemptPaymentForSubscriptionInvoice(ctx, inv, nil, nil, types.InvoiceFlowManual)
 }
 
-func (s *invoiceService) performPaymentAttemptActions(ctx context.Context, inv *invoice.Invoice) error {
-	// Validate invoice status
-	if inv.InvoiceStatus != types.InvoiceStatusFinalized {
-		return ierr.NewError("invoice must be finalized").
-			WithHint("Invoice must be finalized before attempting payment").
-			Mark(ierr.ErrValidation)
+func (s *invoiceService) attemptPaymentForSubscriptionInvoice(ctx context.Context, inv *invoice.Invoice, paymentParams *dto.PaymentParameters, sub *subscription.Subscription, flowType types.InvoiceFlowType) error {
+	// Get subscription to access payment settings if not provided
+	if sub == nil && inv.SubscriptionID != nil {
+		var err error
+		sub, err = s.SubRepo.Get(ctx, *inv.SubscriptionID)
+		if err != nil {
+			s.Logger.Errorw("failed to get subscription for payment processing",
+				"error", err,
+				"subscription_id", *inv.SubscriptionID,
+				"invoice_id", inv.ID)
+			return err
+		}
 	}
 
-	// Validate payment status
-	if inv.PaymentStatus == types.PaymentStatusSucceeded {
-		return ierr.NewError("invoice is already paid by payment status").
-			WithHint("Invoice is already paid").
-			WithReportableDetails(map[string]any{
-				"invoice_id":     inv.ID,
-				"payment_status": inv.PaymentStatus,
-			}).
-			Mark(ierr.ErrInvalidOperation)
-	}
+	// Use parameters if provided, otherwise get from subscription
+	var finalPaymentBehavior types.PaymentBehavior
 
-	// Check if there's any amount remaining to pay
-	if inv.AmountRemaining.LessThanOrEqual(decimal.Zero) {
-		return ierr.NewError("invoice has no remaining amount to pay").
-			WithHint("Invoice has no remaining amount to pay").
-			Mark(ierr.ErrValidation)
-	}
-
-	// Use the wallet payment service to process the payment
-	walletPaymentService := NewWalletPaymentService(s.ServiceParams)
-
-	// Use default options (promotional wallets first, then prepaid)
-	options := DefaultWalletPaymentOptions()
-
-	// Add any additional metadata specific to this payment attempt
-	options.AdditionalMetadata = types.Metadata{
-		"payment_source": "automatic_attempt",
-	}
-
-	amountPaid, err := walletPaymentService.ProcessInvoicePaymentWithWallets(ctx, inv, options)
-	if err != nil {
-		return err
-	}
-
-	if amountPaid.IsZero() {
-		s.Logger.Infow("no payments processed for invoice",
-			"invoice_id", inv.ID,
-			"amount_remaining", inv.AmountRemaining)
-	} else if amountPaid.Equal(inv.AmountRemaining) {
-		s.Logger.Infow("invoice fully paid with wallets",
-			"invoice_id", inv.ID,
-			"amount_paid", amountPaid)
+	if paymentParams != nil && paymentParams.PaymentBehavior != nil {
+		finalPaymentBehavior = *paymentParams.PaymentBehavior
+	} else if sub != nil {
+		finalPaymentBehavior = types.PaymentBehavior(sub.PaymentBehavior)
 	} else {
-		s.Logger.Infow("invoice partially paid with wallets",
-			"invoice_id", inv.ID,
-			"amount_paid", amountPaid,
-			"amount_remaining", inv.AmountRemaining.Sub(amountPaid))
+		finalPaymentBehavior = types.PaymentBehaviorDefaultActive // default
+	}
+
+	// Handle payment based on collection method and payment behavior
+	if sub != nil {
+		paymentProcessor := NewSubscriptionPaymentProcessor(&s.ServiceParams)
+
+		// Create invoice response for payment processing
+		invoiceResponse := &dto.InvoiceResponse{
+			ID:              inv.ID,
+			AmountDue:       inv.AmountDue,
+			AmountRemaining: inv.AmountRemaining,
+			CustomerID:      inv.CustomerID,
+			Currency:        inv.Currency,
+			PaymentStatus:   inv.PaymentStatus,
+		}
+
+		// Delegate all payment behavior handling to the payment processor
+		err := paymentProcessor.HandlePaymentBehavior(ctx, sub, invoiceResponse, finalPaymentBehavior, flowType)
+		if err != nil {
+			s.Logger.Errorw("failed to process payment for subscription invoice",
+				"error", err.Error(),
+				"invoice_id", inv.ID,
+				"subscription_id", sub.ID,
+				"flow_type", flowType)
+
+			// For subscription creation flow, apply full payment behavior logic
+			if flowType == types.InvoiceFlowSubscriptionCreation {
+				// For error_if_incomplete behavior, payment failure should block invoice processing
+				shouldReturnError := false
+				if paymentParams != nil && paymentParams.PaymentBehavior != nil &&
+					*paymentParams.PaymentBehavior == types.PaymentBehaviorErrorIfIncomplete {
+					shouldReturnError = true
+				} else if sub.PaymentBehavior == string(types.PaymentBehaviorErrorIfIncomplete) {
+					shouldReturnError = true
+				}
+
+				if shouldReturnError {
+					return err
+				}
+			}
+
+			// For renewal flows (InvoiceFlowRenewal), manual flows, or cancel flows, payment failure is not a blocker
+			// The invoice will remain in pending state and can be retried later
+			s.Logger.Infow("payment failed but continuing with invoice processing for flow type",
+				"invoice_id", inv.ID,
+				"subscription_id", sub.ID,
+				"flow_type", flowType,
+				"error", err.Error())
+		}
+	} else if inv.AmountDue.GreaterThan(decimal.Zero) {
+		// For non-subscription invoices, validate and use credits payment logic
+		// Validate invoice status
+		if inv.InvoiceStatus != types.InvoiceStatusFinalized {
+			return ierr.NewError("invoice must be finalized").
+				WithHint("Invoice must be finalized before attempting payment").
+				Mark(ierr.ErrValidation)
+		}
+
+		// Validate payment status
+		if inv.PaymentStatus == types.PaymentStatusSucceeded {
+			return ierr.NewError("invoice is already paid by payment status").
+				WithHint("Invoice is already paid").
+				WithReportableDetails(map[string]any{
+					"invoice_id":     inv.ID,
+					"payment_status": inv.PaymentStatus,
+				}).
+				Mark(ierr.ErrInvalidOperation)
+		}
+
+		// Check if there's any amount remaining to pay
+		if inv.AmountRemaining.LessThanOrEqual(decimal.Zero) {
+			return ierr.NewError("invoice has no remaining amount to pay").
+				WithHint("Invoice has no remaining amount to pay").
+				Mark(ierr.ErrValidation)
+		}
+
+		// Use credits payment logic
+		paymentProcessor := NewSubscriptionPaymentProcessor(&s.ServiceParams)
+
+		// Create invoice response for payment processing
+		invoiceResponse := &dto.InvoiceResponse{
+			ID:              inv.ID,
+			AmountDue:       inv.AmountDue,
+			AmountRemaining: inv.AmountRemaining,
+			CustomerID:      inv.CustomerID,
+			Currency:        inv.Currency,
+			PaymentStatus:   inv.PaymentStatus,
+		}
+
+		amountPaid := paymentProcessor.ProcessCreditsPaymentForInvoice(ctx, invoiceResponse, nil)
+		if amountPaid.GreaterThan(decimal.Zero) {
+			s.Logger.Infow("credits payment successful for non-subscription invoice",
+				"invoice_id", inv.ID,
+				"amount_paid", amountPaid)
+		} else {
+			s.Logger.Infow("no credits payment made for non-subscription invoice",
+				"invoice_id", inv.ID,
+				"amount_due", inv.AmountDue)
+		}
 	}
 
 	return nil
@@ -1610,9 +1686,29 @@ func (s *invoiceService) publishInternalWebhookEvent(ctx context.Context, eventN
 		Timestamp:     time.Now().UTC(),
 		Payload:       json.RawMessage(webhookPayload),
 	}
+	s.Logger.Infow("attempting to publish webhook event",
+		"webhook_id", webhookEvent.ID,
+		"event_name", eventName,
+		"invoice_id", invoiceID,
+		"tenant_id", webhookEvent.TenantID,
+		"environment_id", webhookEvent.EnvironmentID,
+	)
+
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-		s.Logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
+		s.Logger.Errorw("failed to publish webhook event",
+			"error", err,
+			"webhook_id", webhookEvent.ID,
+			"event_name", eventName,
+			"invoice_id", invoiceID,
+		)
+		return
 	}
+
+	s.Logger.Infow("webhook event published successfully",
+		"webhook_id", webhookEvent.ID,
+		"event_name", eventName,
+		"invoice_id", invoiceID,
+	)
 }
 
 func (s *invoiceService) RecalculateInvoice(ctx context.Context, id string, finalize bool) (*dto.InvoiceResponse, error) {
@@ -1942,16 +2038,46 @@ func (s *invoiceService) UpdateInvoice(ctx context.Context, id string, req dto.U
 		return nil, err
 	}
 
-	// Update only the fields that are provided in the request
-	// For now, we only support updating the PDF URL
+	// Only allow updates for draft or finalized invoices
+	if inv.InvoiceStatus != types.InvoiceStatusDraft && inv.InvoiceStatus != types.InvoiceStatusFinalized {
+		return nil, ierr.NewError("cannot update invoice in current status").
+			WithHint("Invoice can only be updated when in draft or finalized status").
+			WithReportableDetails(map[string]any{
+				"invoice_id":     id,
+				"current_status": inv.InvoiceStatus,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Don't allow updates for paid invoices
+	if inv.PaymentStatus == types.PaymentStatusSucceeded {
+		return nil, ierr.NewError("cannot update paid invoice").
+			WithHint("Invoice cannot be updated after it has been paid").
+			WithReportableDetails(map[string]any{
+				"invoice_id":     id,
+				"payment_status": inv.PaymentStatus,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Update invoice PDF URL if provided
 	if req.InvoicePDFURL != nil {
 		inv.InvoicePDFURL = req.InvoicePDFURL
+	}
+
+	// Update due date if provided
+	if req.DueDate != nil {
+		inv.DueDate = req.DueDate
+		inv.UpdatedAt = time.Now().UTC()
 	}
 
 	// Update the invoice in the repository
 	if err := s.InvoiceRepo.Update(ctx, inv); err != nil {
 		return nil, err
 	}
+
+	// Publish webhook event for invoice update
+	s.publishInternalWebhookEvent(ctx, types.WebhookEventInvoiceUpdate, id)
 
 	// Return the updated invoice
 	return s.GetInvoice(ctx, id)
@@ -2007,4 +2133,407 @@ func (s *invoiceService) HandleIncompleteSubscriptionPayment(ctx context.Context
 		"subscription_id", *invoice.SubscriptionID)
 
 	return nil
+}
+
+// convertProrationToLineItems converts proration results to invoice line items
+func (s *invoiceService) convertProrationToLineItems(prorationResult *dto.ProrationResult) ([]dto.CreateInvoiceLineItemRequest, error) {
+	var lineItems []dto.CreateInvoiceLineItemRequest
+
+	for lineItemID, result := range prorationResult.LineItemResults {
+		// Process credit items
+		for _, creditItem := range result.CreditItems {
+			lineItem := dto.CreateInvoiceLineItemRequest{
+				EntityID:    &lineItemID,
+				EntityType:  lo.ToPtr("subscription_line_item"),
+				PriceID:     &creditItem.PriceID,
+				DisplayName: &creditItem.Description,
+				Amount:      creditItem.Amount, // Already negative for credits
+				Quantity:    creditItem.Quantity,
+				PeriodStart: &creditItem.StartDate,
+				PeriodEnd:   &creditItem.EndDate,
+				Metadata: types.Metadata{
+					"proration_type":    "credit",
+					"line_item_id":      lineItemID,
+					"original_price_id": creditItem.PriceID,
+				},
+			}
+			lineItems = append(lineItems, lineItem)
+		}
+
+		// Process charge items
+		for _, chargeItem := range result.ChargeItems {
+			lineItem := dto.CreateInvoiceLineItemRequest{
+				EntityID:    &lineItemID,
+				EntityType:  lo.ToPtr("subscription_line_item"),
+				PriceID:     &chargeItem.PriceID,
+				DisplayName: &chargeItem.Description,
+				Amount:      chargeItem.Amount, // Positive for charges
+				Quantity:    chargeItem.Quantity,
+				PeriodStart: &chargeItem.StartDate,
+				PeriodEnd:   &chargeItem.EndDate,
+				Metadata: types.Metadata{
+					"proration_type":    "charge",
+					"line_item_id":      lineItemID,
+					"original_price_id": chargeItem.PriceID,
+				},
+			}
+			lineItems = append(lineItems, lineItem)
+		}
+	}
+
+	return lineItems, nil
+}
+
+// generateProrationInvoiceDescription creates a description for proration invoices
+func (s *invoiceService) generateProrationInvoiceDescription(cancellationType, cancellationReason string, totalAmount decimal.Decimal) string {
+	if totalAmount.IsNegative() {
+		// Credit invoice
+		switch cancellationType {
+		case "immediate":
+			return fmt.Sprintf("Credit for unused time - immediate cancellation (%s)", cancellationReason)
+		case "specific_date":
+			return fmt.Sprintf("Credit for unused time - scheduled cancellation (%s)", cancellationReason)
+		default:
+			return fmt.Sprintf("Cancellation credit (%s)", cancellationReason)
+		}
+	} else {
+		// Charge invoice (rare for cancellations, but possible)
+		return fmt.Sprintf("Proration charges - cancellation (%s)", cancellationReason)
+	}
+}
+
+// CalculateUsageBreakdown provides flexible usage breakdown with custom grouping
+func (s *invoiceService) CalculateUsageBreakdown(ctx context.Context, inv *dto.InvoiceResponse, groupBy []string) (map[string][]dto.UsageBreakdownItem, error) {
+	s.Logger.Infow("calculating usage breakdown for invoice",
+		"invoice_id", inv.ID,
+		"period_start", inv.PeriodStart,
+		"period_end", inv.PeriodEnd,
+		"line_items_count", len(inv.LineItems),
+		"group_by", groupBy)
+
+	// Validate groupBy parameter
+	if len(groupBy) == 0 {
+		return make(map[string][]dto.UsageBreakdownItem), nil
+	}
+
+	// Step 1: Get the line items which are metered (usage-based)
+	usageBasedLineItems := make([]*dto.InvoiceLineItemResponse, 0)
+	for _, lineItem := range inv.LineItems {
+		if lineItem.PriceType != nil && *lineItem.PriceType == string(types.PRICE_TYPE_USAGE) {
+			usageBasedLineItems = append(usageBasedLineItems, lineItem)
+		}
+	}
+
+	s.Logger.Infow("found usage-based line items",
+		"total_line_items", len(inv.LineItems),
+		"usage_based_line_items", len(usageBasedLineItems))
+
+	if len(usageBasedLineItems) == 0 {
+		// No usage-based line items, return empty analytics
+		return make(map[string][]dto.UsageBreakdownItem), nil
+	}
+
+	// Use flexible grouping analytics call
+	return s.getFlexibleUsageBreakdownForInvoice(ctx, usageBasedLineItems, inv, groupBy)
+}
+
+// getFlexibleUsageBreakdownForInvoice gets usage breakdown with flexible grouping for invoice line items
+// Groups line items by their billing periods for efficient analytics queries
+func (s *invoiceService) getFlexibleUsageBreakdownForInvoice(ctx context.Context, usageBasedLineItems []*dto.InvoiceLineItemResponse, inv *dto.InvoiceResponse, groupBy []string) (map[string][]dto.UsageBreakdownItem, error) {
+	// Step 1: Get customer external ID first
+	customer, err := s.CustomerRepo.Get(ctx, inv.CustomerID)
+	if err != nil {
+		s.Logger.Errorw("failed to get customer for flexible usage breakdown",
+			"customer_id", inv.CustomerID,
+			"error", err)
+		return nil, err
+	}
+
+	// Step 2: Batch feature retrieval for all line items
+	meterIDs := make([]string, 0, len(usageBasedLineItems))
+	meterToLineItemMap := make(map[string][]*dto.InvoiceLineItemResponse) // meterID -> list of line items using this meter
+	lineItemMetadata := make(map[string]*dto.InvoiceLineItemResponse)     // lineItemID -> lineItem
+
+	// First pass: collect all unique meter IDs and build mappings
+	for _, lineItem := range usageBasedLineItems {
+		// Skip if essential fields are missing
+		if lineItem.PriceID == nil || lineItem.MeterID == nil {
+			s.Logger.Warnw("skipping line item with missing price_id or meter_id",
+				"line_item_id", lineItem.ID,
+				"price_id", lineItem.PriceID,
+				"meter_id", lineItem.MeterID)
+			continue
+		}
+
+		meterID := *lineItem.MeterID
+		lineItemMetadata[lineItem.ID] = lineItem
+
+		// Add to meter mapping
+		if meterToLineItemMap[meterID] == nil {
+			meterToLineItemMap[meterID] = make([]*dto.InvoiceLineItemResponse, 0)
+			meterIDs = append(meterIDs, meterID) // Only add unique meter IDs
+		}
+		meterToLineItemMap[meterID] = append(meterToLineItemMap[meterID], lineItem)
+	}
+
+	if len(meterIDs) == 0 {
+		s.Logger.Warnw("no valid meter IDs found")
+		return make(map[string][]dto.UsageBreakdownItem), nil
+	}
+
+	// Batch feature retrieval for all meters at once
+	featureFilter := types.NewNoLimitFeatureFilter()
+	featureFilter.MeterIDs = meterIDs
+	features, err := s.FeatureRepo.List(ctx, featureFilter)
+	if err != nil {
+		s.Logger.Errorw("failed to get features for meters",
+			"meter_ids_count", len(meterIDs),
+			"error", err)
+		return nil, err
+	}
+
+	// Build meterID -> featureID mapping
+	meterToFeatureMap := make(map[string]string) // meterID -> featureID
+	for _, feature := range features {
+		meterToFeatureMap[feature.MeterID] = feature.ID
+	}
+
+	s.Logger.Infow("batched feature retrieval",
+		"invoice_id", inv.ID,
+		"total_meters", len(meterIDs),
+		"features_found", len(features))
+
+	// Step 3: Group line items by their billing periods using feature mapping
+	type PeriodKey struct {
+		Start time.Time
+		End   time.Time
+	}
+
+	periodGroups := make(map[PeriodKey][]*dto.InvoiceLineItemResponse)
+	lineItemToFeatureMap := make(map[string]string) // lineItemID -> featureID
+
+	for _, lineItem := range usageBasedLineItems {
+		// Skip if no meter ID or feature mapping not found
+		if lineItem.MeterID == nil {
+			continue
+		}
+
+		featureID, exists := meterToFeatureMap[*lineItem.MeterID]
+		if !exists {
+			s.Logger.Warnw("no feature found for meter",
+				"meter_id", *lineItem.MeterID,
+				"line_item_id", lineItem.ID)
+			continue
+		}
+
+		lineItemToFeatureMap[lineItem.ID] = featureID
+
+		// Determine the billing period for this line item
+		var periodStart, periodEnd time.Time
+
+		if lineItem.PeriodStart != nil && lineItem.PeriodEnd != nil {
+			// Use line item specific period
+			periodStart = *lineItem.PeriodStart
+			periodEnd = *lineItem.PeriodEnd
+		} else if inv.PeriodStart != nil && inv.PeriodEnd != nil {
+			// Fall back to invoice period
+			periodStart = *inv.PeriodStart
+			periodEnd = *inv.PeriodEnd
+		} else {
+			s.Logger.Warnw("missing period information for line item",
+				"line_item_id", lineItem.ID,
+				"invoice_id", inv.ID)
+			continue
+		}
+
+		periodKey := PeriodKey{Start: periodStart, End: periodEnd}
+		if periodGroups[periodKey] == nil {
+			periodGroups[periodKey] = make([]*dto.InvoiceLineItemResponse, 0)
+		}
+		periodGroups[periodKey] = append(periodGroups[periodKey], lineItem)
+	}
+
+	if len(periodGroups) == 0 {
+		s.Logger.Warnw("no valid line items found with periods")
+		return make(map[string][]dto.UsageBreakdownItem), nil
+	}
+
+	s.Logger.Infow("grouped line items by periods",
+		"invoice_id", inv.ID,
+		"period_groups_count", len(periodGroups),
+		"total_line_items", len(usageBasedLineItems))
+
+	// Step 3: Make analytics requests for each period group
+	allAnalyticsItems := make([]dto.UsageAnalyticItem, 0)
+	eventPostProcessingService := NewEventPostProcessingService(s.ServiceParams, s.EventRepo, s.ProcessedEventRepo)
+
+	for periodKey, lineItemsInPeriod := range periodGroups {
+		// Collect feature IDs for this period
+		featureIDsForPeriod := make([]string, 0, len(lineItemsInPeriod))
+		for _, lineItem := range lineItemsInPeriod {
+			if featureID, exists := lineItemToFeatureMap[lineItem.ID]; exists {
+				featureIDsForPeriod = append(featureIDsForPeriod, featureID)
+			}
+		}
+
+		if len(featureIDsForPeriod) == 0 {
+			continue
+		}
+
+		// Make analytics request for this period
+		analyticsReq := &dto.GetUsageAnalyticsRequest{
+			ExternalCustomerID: customer.ExternalID,
+			FeatureIDs:         featureIDsForPeriod,
+			StartTime:          periodKey.Start,
+			EndTime:            periodKey.End,
+			GroupBy:            groupBy,
+		}
+
+		s.Logger.Infow("making period-specific analytics request",
+			"invoice_id", inv.ID,
+			"period_start", periodKey.Start.Format(time.RFC3339),
+			"period_end", periodKey.End.Format(time.RFC3339),
+			"feature_ids_count", len(featureIDsForPeriod),
+			"line_items_count", len(lineItemsInPeriod),
+			"group_by", groupBy)
+
+		analyticsResponse, err := eventPostProcessingService.GetDetailedUsageAnalytics(ctx, analyticsReq)
+		if err != nil {
+			s.Logger.Errorw("failed to get period-specific usage analytics",
+				"invoice_id", inv.ID,
+				"period_start", periodKey.Start.Format(time.RFC3339),
+				"period_end", periodKey.End.Format(time.RFC3339),
+				"error", err)
+			return nil, err
+		}
+
+		// Collect all analytics items
+		allAnalyticsItems = append(allAnalyticsItems, analyticsResponse.Items...)
+
+		s.Logger.Debugw("retrieved period-specific analytics",
+			"invoice_id", inv.ID,
+			"period_start", periodKey.Start.Format(time.RFC3339),
+			"period_end", periodKey.End.Format(time.RFC3339),
+			"analytics_items_count", len(analyticsResponse.Items))
+	}
+
+	// Step 4: Create combined response and map to line items
+	combinedResponse := &dto.GetUsageAnalyticsResponse{
+		Items: allAnalyticsItems,
+	}
+
+	s.Logger.Infow("combined all period analytics",
+		"invoice_id", inv.ID,
+		"total_analytics_items", len(allAnalyticsItems))
+
+	// Step 5: Map results back to line items with flexible grouping
+	return s.mapFlexibleAnalyticsToLineItems(ctx, combinedResponse, lineItemToFeatureMap, lineItemMetadata, groupBy)
+}
+
+// mapFlexibleAnalyticsToLineItems maps analytics response to line items with flexible grouping
+func (s *invoiceService) mapFlexibleAnalyticsToLineItems(ctx context.Context, analyticsResponse *dto.GetUsageAnalyticsResponse, lineItemToFeatureMap map[string]string, lineItemMetadata map[string]*dto.InvoiceLineItemResponse, groupBy []string) (map[string][]dto.UsageBreakdownItem, error) {
+	usageBreakdownResponse := make(map[string][]dto.UsageBreakdownItem)
+
+	// Step 1: Group analytics by feature_id for line item mapping
+	featureAnalyticsMap := make(map[string][]dto.UsageAnalyticItem) // featureID -> list of analytics items
+
+	for _, analyticsItem := range analyticsResponse.Items {
+		if featureAnalyticsMap[analyticsItem.FeatureID] == nil {
+			featureAnalyticsMap[analyticsItem.FeatureID] = make([]dto.UsageAnalyticItem, 0)
+		}
+		featureAnalyticsMap[analyticsItem.FeatureID] = append(featureAnalyticsMap[analyticsItem.FeatureID], analyticsItem)
+	}
+
+	// Step 2: Process each line item
+	for lineItemID, featureID := range lineItemToFeatureMap {
+		lineItem := lineItemMetadata[lineItemID]
+		analyticsItems, exists := featureAnalyticsMap[featureID]
+
+		if !exists || len(analyticsItems) == 0 {
+			// No usage data for this line item
+			s.Logger.Debugw("no usage analytics found for line item",
+				"line_item_id", lineItemID,
+				"feature_id", featureID)
+			usageBreakdownResponse[lineItemID] = []dto.UsageBreakdownItem{}
+			continue
+		}
+
+		// Step 3: Calculate total usage for this line item across all groups
+		totalUsageForLineItem := decimal.Zero
+		for _, analyticsItem := range analyticsItems {
+			totalUsageForLineItem = totalUsageForLineItem.Add(analyticsItem.TotalUsage)
+		}
+
+		// Step 4: Calculate proportional costs for each group
+		lineItemUsageBreakdown := make([]dto.UsageBreakdownItem, 0, len(analyticsItems))
+		totalLineItemCost := lineItem.Amount
+
+		for _, analyticsItem := range analyticsItems {
+			// Calculate proportional cost based on usage
+			var cost string
+			if !totalLineItemCost.IsZero() && !totalUsageForLineItem.IsZero() {
+				proportionalCost := analyticsItem.TotalUsage.Div(totalUsageForLineItem).Mul(totalLineItemCost)
+				cost = proportionalCost.StringFixed(2)
+			} else {
+				cost = "0"
+			}
+
+			// Calculate percentage
+			var percentage string
+			if !totalUsageForLineItem.IsZero() {
+				pct := analyticsItem.TotalUsage.Div(totalUsageForLineItem).Mul(decimal.NewFromInt(100))
+				percentage = pct.StringFixed(2)
+			} else {
+				percentage = "0"
+			}
+
+			// Build grouped_by map from the analytics item
+			groupedBy := make(map[string]string)
+			if analyticsItem.FeatureID != "" {
+				groupedBy["feature_id"] = analyticsItem.FeatureID
+			}
+			if analyticsItem.Source != "" {
+				groupedBy["source"] = analyticsItem.Source
+			}
+			// Add properties from the analytics item
+			if analyticsItem.Properties != nil {
+				for key, value := range analyticsItem.Properties {
+					groupedBy[key] = value
+				}
+			}
+
+			// Create usage breakdown item
+			breakdownItem := dto.UsageBreakdownItem{
+				Cost:      cost,
+				GroupedBy: groupedBy,
+			}
+
+			// Add optional fields
+			if !analyticsItem.TotalUsage.IsZero() {
+				usageStr := analyticsItem.TotalUsage.StringFixed(2)
+				breakdownItem.Usage = &usageStr
+			}
+
+			if percentage != "0" {
+				breakdownItem.Percentage = &percentage
+			}
+
+			if analyticsItem.EventCount > 0 {
+				eventCount := int(analyticsItem.EventCount)
+				breakdownItem.EventCount = &eventCount
+			}
+
+			lineItemUsageBreakdown = append(lineItemUsageBreakdown, breakdownItem)
+		}
+
+		usageBreakdownResponse[lineItemID] = lineItemUsageBreakdown
+
+		s.Logger.Debugw("mapped flexible usage breakdown for line item",
+			"line_item_id", lineItemID,
+			"feature_id", featureID,
+			"groups_count", len(lineItemUsageBreakdown),
+			"total_usage", totalUsageForLineItem.StringFixed(2))
+	}
+
+	return usageBreakdownResponse, nil
 }

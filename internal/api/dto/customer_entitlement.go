@@ -48,11 +48,11 @@ type AggregatedFeature struct {
 
 // AggregatedEntitlement contains the final calculated entitlement values
 type AggregatedEntitlement struct {
-	IsEnabled        bool                `json:"is_enabled"`
-	UsageLimit       *int64              `json:"usage_limit,omitempty"`
-	IsSoftLimit      bool                `json:"is_soft_limit"`
-	UsageResetPeriod types.BillingPeriod `json:"usage_reset_period,omitempty"`
-	StaticValues     []string            `json:"static_values,omitempty"` // For static/SLA features
+	IsEnabled        bool                              `json:"is_enabled"`
+	UsageLimit       *int64                            `json:"usage_limit,omitempty"`
+	IsSoftLimit      bool                              `json:"is_soft_limit"`
+	UsageResetPeriod types.EntitlementUsageResetPeriod `json:"usage_reset_period,omitempty"`
+	StaticValues     []string                          `json:"static_values,omitempty"` // For static/SLA features
 }
 
 // EntitlementSourceType defines the type of entitlement source
@@ -81,15 +81,16 @@ func (e EntitlementSourceEntityType) Validate() error {
 
 // EntitlementSource tracks which subscription provided the entitlement
 type EntitlementSource struct {
-	SubscriptionID string                      `json:"subscription_id"`
-	EntityID       string                      `json:"entity_id"`
-	EntityType     EntitlementSourceEntityType `json:"entity_type"`
-	Quantity       int64                       `json:"quantity"`
-	EntitiyName    string                      `json:"entity_name"`
-	EntitlementID  string                      `json:"entitlement_id"`
-	IsEnabled      bool                        `json:"is_enabled"`
-	UsageLimit     *int64                      `json:"usage_limit,omitempty"`
-	StaticValue    string                      `json:"static_value,omitempty"`
+	SubscriptionID   string                      `json:"subscription_id"`
+	EntityID         string                      `json:"entity_id"`
+	EntityType       EntitlementSourceEntityType `json:"entity_type"`
+	Quantity         int64                       `json:"quantity"`
+	EntitiyName      string                      `json:"entity_name"`
+	EntitlementID    string                      `json:"entitlement_id"`
+	IsEnabled        bool                        `json:"is_enabled"`
+	UsageLimit       *int64                      `json:"usage_limit,omitempty"`
+	StaticValue      string                      `json:"static_value,omitempty"`
+	UsageResetPeriod types.BillingPeriod         `json:"usage_reset_period,omitempty"`
 }
 
 // GetCustomerUsageSummaryRequest represents the request for getting customer usage summary

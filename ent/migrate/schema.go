@@ -713,6 +713,7 @@ var (
 		{Name: "usage_reset_period", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "is_soft_limit", Type: field.TypeBool, Default: false},
 		{Name: "static_value", Type: field.TypeString, Nullable: true},
+		{Name: "display_order", Type: field.TypeInt, Default: 0},
 		{Name: "addon_entitlements", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// EntitlementsTable holds the schema information for the "entitlements" table.
@@ -723,7 +724,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "entitlements_addons_entitlements",
-				Columns:    []*schema.Column{EntitlementsColumns[17]},
+				Columns:    []*schema.Column{EntitlementsColumns[18]},
 				RefColumns: []*schema.Column{AddonsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -1225,6 +1226,7 @@ var (
 		{Name: "lookup_key", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "name", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "description", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "display_order", Type: field.TypeInt, Default: 0},
 	}
 	// PlansTable holds the schema information for the "plans" table.
 	PlansTable = &schema.Table{
@@ -1284,6 +1286,8 @@ var (
 		{Name: "entity_type", Type: field.TypeString, Nullable: true, Default: "PLAN", SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "entity_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "parent_price_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "start_date", Type: field.TypeTime, Nullable: true},
+		{Name: "end_date", Type: field.TypeTime, Nullable: true},
 		{Name: "addon_prices", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "price_unit_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
@@ -1295,13 +1299,13 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "prices_addons_prices",
-				Columns:    []*schema.Column{PricesColumns[35]},
+				Columns:    []*schema.Column{PricesColumns[37]},
 				RefColumns: []*schema.Column{AddonsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "prices_price_unit_price_unit_edge",
-				Columns:    []*schema.Column{PricesColumns[36]},
+				Columns:    []*schema.Column{PricesColumns[38]},
 				RefColumns: []*schema.Column{PriceUnitColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -1319,6 +1323,11 @@ var (
 				Name:    "price_tenant_id_environment_id",
 				Unique:  false,
 				Columns: []*schema.Column{PricesColumns[1], PricesColumns[7]},
+			},
+			{
+				Name:    "price_start_date_end_date",
+				Unique:  false,
+				Columns: []*schema.Column{PricesColumns[35], PricesColumns[36]},
 			},
 		},
 	}
@@ -1464,6 +1473,11 @@ var (
 		{Name: "billing_cycle", Type: field.TypeString, Default: "anniversary"},
 		{Name: "commitment_amount", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,6)"}},
 		{Name: "overage_factor", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(10,6)"}},
+		{Name: "payment_behavior", Type: field.TypeEnum, Enums: []string{"allow_incomplete", "default_incomplete", "error_if_incomplete", "default_active"}, Default: "default_active"},
+		{Name: "collection_method", Type: field.TypeEnum, Enums: []string{"charge_automatically", "send_invoice"}, Default: "charge_automatically"},
+		{Name: "gateway_payment_method_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "customer_timezone", Type: field.TypeString, Default: "UTC"},
+		{Name: "proration_behavior", Type: field.TypeString, Default: "none"},
 	}
 	// SubscriptionsTable holds the schema information for the "subscriptions" table.
 	SubscriptionsTable = &schema.Table{
@@ -1503,6 +1517,24 @@ var (
 				Name:    "subscription_tenant_id_environment_id_active_pause_id_status",
 				Unique:  false,
 				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7], SubscriptionsColumns[29], SubscriptionsColumns[2]},
+			},
+			{
+				Name:    "subscription_tenant_id_environment_id_payment_behavior_status",
+				Unique:  false,
+				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7], SubscriptionsColumns[33], SubscriptionsColumns[2]},
+			},
+			{
+				Name:    "subscription_tenant_id_environment_id_collection_method_status",
+				Unique:  false,
+				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7], SubscriptionsColumns[34], SubscriptionsColumns[2]},
+			},
+			{
+				Name:    "subscription_tenant_id_environment_id_subscription_status_collection_method_status",
+				Unique:  false,
+				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7], SubscriptionsColumns[11], SubscriptionsColumns[34], SubscriptionsColumns[2]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "subscription_status IN ('incomplete', 'past_due')",
+				},
 			},
 		},
 	}

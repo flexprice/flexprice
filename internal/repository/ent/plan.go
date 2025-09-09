@@ -67,6 +67,7 @@ func (r *planRepository) Create(ctx context.Context, p *domainPlan.Plan) error {
 		SetUpdatedBy(p.UpdatedBy).
 		SetEnvironmentID(p.EnvironmentID).
 		SetMetadata(p.Metadata).
+		SetNillableDisplayOrder(p.DisplayOrder).
 		Save(ctx)
 
 	if err != nil {
@@ -298,6 +299,7 @@ func (r *planRepository) Update(ctx context.Context, p *domainPlan.Plan) error {
 		SetName(p.Name).
 		SetDescription(p.Description).
 		SetMetadata(p.Metadata).
+		SetNillableDisplayOrder(p.DisplayOrder).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
@@ -411,10 +413,14 @@ func (o PlanQueryOptions) ApplyStatusFilter(query PlanQuery, status string) Plan
 
 func (o PlanQueryOptions) ApplySortFilter(query PlanQuery, field string, order string) PlanQuery {
 	field = o.GetFieldName(field)
+
+	// Apply standard ordering for all fields
 	if order == types.OrderDesc {
-		return query.Order(ent.Desc(field))
+		query = query.Order(ent.Desc(field))
+	} else {
+		query = query.Order(ent.Asc(field))
 	}
-	return query.Order(ent.Asc(field))
+	return query
 }
 
 func (o PlanQueryOptions) ApplyPaginationFilter(query PlanQuery, limit int, offset int) PlanQuery {
@@ -435,6 +441,8 @@ func (o PlanQueryOptions) GetFieldName(field string) string {
 		return plan.FieldDescription
 	case "status":
 		return plan.FieldStatus
+	case "display_order":
+		return plan.FieldDisplayOrder
 	default:
 		// unknown field
 		return ""

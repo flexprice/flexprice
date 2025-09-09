@@ -419,6 +419,76 @@ func (sc *SubscriptionCreate) SetNillableOverageFactor(d *decimal.Decimal) *Subs
 	return sc
 }
 
+// SetPaymentBehavior sets the "payment_behavior" field.
+func (sc *SubscriptionCreate) SetPaymentBehavior(sb subscription.PaymentBehavior) *SubscriptionCreate {
+	sc.mutation.SetPaymentBehavior(sb)
+	return sc
+}
+
+// SetNillablePaymentBehavior sets the "payment_behavior" field if the given value is not nil.
+func (sc *SubscriptionCreate) SetNillablePaymentBehavior(sb *subscription.PaymentBehavior) *SubscriptionCreate {
+	if sb != nil {
+		sc.SetPaymentBehavior(*sb)
+	}
+	return sc
+}
+
+// SetCollectionMethod sets the "collection_method" field.
+func (sc *SubscriptionCreate) SetCollectionMethod(sm subscription.CollectionMethod) *SubscriptionCreate {
+	sc.mutation.SetCollectionMethod(sm)
+	return sc
+}
+
+// SetNillableCollectionMethod sets the "collection_method" field if the given value is not nil.
+func (sc *SubscriptionCreate) SetNillableCollectionMethod(sm *subscription.CollectionMethod) *SubscriptionCreate {
+	if sm != nil {
+		sc.SetCollectionMethod(*sm)
+	}
+	return sc
+}
+
+// SetGatewayPaymentMethodID sets the "gateway_payment_method_id" field.
+func (sc *SubscriptionCreate) SetGatewayPaymentMethodID(s string) *SubscriptionCreate {
+	sc.mutation.SetGatewayPaymentMethodID(s)
+	return sc
+}
+
+// SetNillableGatewayPaymentMethodID sets the "gateway_payment_method_id" field if the given value is not nil.
+func (sc *SubscriptionCreate) SetNillableGatewayPaymentMethodID(s *string) *SubscriptionCreate {
+	if s != nil {
+		sc.SetGatewayPaymentMethodID(*s)
+	}
+	return sc
+}
+
+// SetCustomerTimezone sets the "customer_timezone" field.
+func (sc *SubscriptionCreate) SetCustomerTimezone(s string) *SubscriptionCreate {
+	sc.mutation.SetCustomerTimezone(s)
+	return sc
+}
+
+// SetNillableCustomerTimezone sets the "customer_timezone" field if the given value is not nil.
+func (sc *SubscriptionCreate) SetNillableCustomerTimezone(s *string) *SubscriptionCreate {
+	if s != nil {
+		sc.SetCustomerTimezone(*s)
+	}
+	return sc
+}
+
+// SetProrationBehavior sets the "proration_behavior" field.
+func (sc *SubscriptionCreate) SetProrationBehavior(s string) *SubscriptionCreate {
+	sc.mutation.SetProrationBehavior(s)
+	return sc
+}
+
+// SetNillableProrationBehavior sets the "proration_behavior" field if the given value is not nil.
+func (sc *SubscriptionCreate) SetNillableProrationBehavior(s *string) *SubscriptionCreate {
+	if s != nil {
+		sc.SetProrationBehavior(*s)
+	}
+	return sc
+}
+
 // SetID sets the "id" field.
 func (sc *SubscriptionCreate) SetID(s string) *SubscriptionCreate {
 	sc.mutation.SetID(s)
@@ -614,6 +684,22 @@ func (sc *SubscriptionCreate) defaults() {
 		v := subscription.DefaultOverageFactor
 		sc.mutation.SetOverageFactor(v)
 	}
+	if _, ok := sc.mutation.PaymentBehavior(); !ok {
+		v := subscription.DefaultPaymentBehavior
+		sc.mutation.SetPaymentBehavior(v)
+	}
+	if _, ok := sc.mutation.CollectionMethod(); !ok {
+		v := subscription.DefaultCollectionMethod
+		sc.mutation.SetCollectionMethod(v)
+	}
+	if _, ok := sc.mutation.CustomerTimezone(); !ok {
+		v := subscription.DefaultCustomerTimezone
+		sc.mutation.SetCustomerTimezone(v)
+	}
+	if _, ok := sc.mutation.ProrationBehavior(); !ok {
+		v := subscription.DefaultProrationBehavior
+		sc.mutation.SetProrationBehavior(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -708,6 +794,33 @@ func (sc *SubscriptionCreate) check() error {
 	if v, ok := sc.mutation.BillingCycle(); ok {
 		if err := subscription.BillingCycleValidator(v); err != nil {
 			return &ValidationError{Name: "billing_cycle", err: fmt.Errorf(`ent: validator failed for field "Subscription.billing_cycle": %w`, err)}
+		}
+	}
+	if _, ok := sc.mutation.PaymentBehavior(); !ok {
+		return &ValidationError{Name: "payment_behavior", err: errors.New(`ent: missing required field "Subscription.payment_behavior"`)}
+	}
+	if v, ok := sc.mutation.PaymentBehavior(); ok {
+		if err := subscription.PaymentBehaviorValidator(v); err != nil {
+			return &ValidationError{Name: "payment_behavior", err: fmt.Errorf(`ent: validator failed for field "Subscription.payment_behavior": %w`, err)}
+		}
+	}
+	if _, ok := sc.mutation.CollectionMethod(); !ok {
+		return &ValidationError{Name: "collection_method", err: errors.New(`ent: missing required field "Subscription.collection_method"`)}
+	}
+	if v, ok := sc.mutation.CollectionMethod(); ok {
+		if err := subscription.CollectionMethodValidator(v); err != nil {
+			return &ValidationError{Name: "collection_method", err: fmt.Errorf(`ent: validator failed for field "Subscription.collection_method": %w`, err)}
+		}
+	}
+	if _, ok := sc.mutation.CustomerTimezone(); !ok {
+		return &ValidationError{Name: "customer_timezone", err: errors.New(`ent: missing required field "Subscription.customer_timezone"`)}
+	}
+	if _, ok := sc.mutation.ProrationBehavior(); !ok {
+		return &ValidationError{Name: "proration_behavior", err: errors.New(`ent: missing required field "Subscription.proration_behavior"`)}
+	}
+	if v, ok := sc.mutation.ProrationBehavior(); ok {
+		if err := subscription.ProrationBehaviorValidator(v); err != nil {
+			return &ValidationError{Name: "proration_behavior", err: fmt.Errorf(`ent: validator failed for field "Subscription.proration_behavior": %w`, err)}
 		}
 	}
 	return nil
@@ -872,6 +985,26 @@ func (sc *SubscriptionCreate) createSpec() (*Subscription, *sqlgraph.CreateSpec)
 	if value, ok := sc.mutation.OverageFactor(); ok {
 		_spec.SetField(subscription.FieldOverageFactor, field.TypeOther, value)
 		_node.OverageFactor = &value
+	}
+	if value, ok := sc.mutation.PaymentBehavior(); ok {
+		_spec.SetField(subscription.FieldPaymentBehavior, field.TypeEnum, value)
+		_node.PaymentBehavior = value
+	}
+	if value, ok := sc.mutation.CollectionMethod(); ok {
+		_spec.SetField(subscription.FieldCollectionMethod, field.TypeEnum, value)
+		_node.CollectionMethod = value
+	}
+	if value, ok := sc.mutation.GatewayPaymentMethodID(); ok {
+		_spec.SetField(subscription.FieldGatewayPaymentMethodID, field.TypeString, value)
+		_node.GatewayPaymentMethodID = value
+	}
+	if value, ok := sc.mutation.CustomerTimezone(); ok {
+		_spec.SetField(subscription.FieldCustomerTimezone, field.TypeString, value)
+		_node.CustomerTimezone = value
+	}
+	if value, ok := sc.mutation.ProrationBehavior(); ok {
+		_spec.SetField(subscription.FieldProrationBehavior, field.TypeString, value)
+		_node.ProrationBehavior = value
 	}
 	if nodes := sc.mutation.LineItemsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

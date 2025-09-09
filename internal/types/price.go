@@ -269,25 +269,28 @@ type PriceFilter struct {
 	*TimeRangeFilter
 	PriceIDs []string `json:"price_ids,omitempty" form:"price_ids"`
 	// Price override filtering fields
-	PlanIDs        []string         `json:"plan_ids,omitempty" form:"plan_ids"`
-	EntityType     *PriceEntityType `json:"entity_type,omitempty" form:"entity_type"`
-	EntityIDs      []string         `json:"entity_ids,omitempty" form:"entity_ids"`
-	SubscriptionID *string          `json:"subscription_id,omitempty" form:"subscription_id"`
-	ParentPriceID  *string          `json:"parent_price_id,omitempty" form:"parent_price_id"`
-	MeterIDs       []string         `json:"meter_ids,omitempty" form:"meter_ids"`
+	PlanIDs            []string         `json:"plan_ids,omitempty" form:"plan_ids"`
+	EntityType         *PriceEntityType `json:"entity_type,omitempty" form:"entity_type"`
+	EntityIDs          []string         `json:"entity_ids,omitempty" form:"entity_ids"`
+	SubscriptionID     *string          `json:"subscription_id,omitempty" form:"subscription_id"`
+	ParentPriceID      *string          `json:"parent_price_id,omitempty" form:"parent_price_id"`
+	MeterIDs           []string         `json:"meter_ids,omitempty" form:"meter_ids"`
+	AllowExpiredPrices bool             `json:"allow_expired_prices,omitempty" form:"allow_expired_prices" default:"false"`
 }
 
 // NewPriceFilter creates a new PriceFilter with default values
 func NewPriceFilter() *PriceFilter {
 	return &PriceFilter{
-		QueryFilter: NewDefaultQueryFilter(),
+		QueryFilter:        NewDefaultQueryFilter(),
+		AllowExpiredPrices: false,
 	}
 }
 
 // NewNoLimitPriceFilter creates a new PriceFilter with no pagination limits
 func NewNoLimitPriceFilter() *PriceFilter {
 	return &PriceFilter{
-		QueryFilter: NewNoLimitQueryFilter(),
+		QueryFilter:        NewNoLimitQueryFilter(),
+		AllowExpiredPrices: false,
 	}
 }
 
@@ -374,6 +377,12 @@ func (f *PriceFilter) WithPriceIDs(priceIDs []string) *PriceFilter {
 // WithStatus sets the status on the filter
 func (f *PriceFilter) WithStatus(status Status) *PriceFilter {
 	f.Status = &status
+	return f
+}
+
+// WithAllowExpiredPrices sets the allow expired prices flag on the filter
+func (f *PriceFilter) WithAllowExpiredPrices(allowExpiredPrices bool) *PriceFilter {
+	f.AllowExpiredPrices = allowExpiredPrices
 	return f
 }
 

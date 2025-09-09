@@ -111,14 +111,14 @@ func (h *SubscriptionHandler) GetSubscriptions(c *gin.Context) {
 }
 
 // @Summary Cancel subscription
-// @Description Cancel a subscription
+// @Description Cancel a subscription with enhanced proration support
 // @Tags Subscriptions
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Subscription ID"
-// @Param cancel_at_period_end query bool false "Cancel at period end"
-// @Success 200 {object} gin.H
+// @Param request body dto.CancelSubscriptionRequest true "Cancel Subscription Request"
+// @Success 200 {object} dto.CancelSubscriptionResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
 // @Router /subscriptions/{id}/cancel [post]
@@ -131,15 +131,25 @@ func (h *SubscriptionHandler) CancelSubscription(c *gin.Context) {
 		return
 	}
 
-	cancelAtPeriodEnd := c.DefaultQuery("cancel_at_period_end", "false") == "true"
+	var req dto.CancelSubscriptionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.log.Error("Failed to bind JSON", "error", err)
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
 
-	if err := h.service.CancelSubscription(c.Request.Context(), id, cancelAtPeriodEnd); err != nil {
+	// Always use the enhanced cancellation method with proration support
+	response, err := h.service.CancelSubscription(c.Request.Context(), id, &req)
+	if err != nil {
 		h.log.Error("Failed to cancel subscription", "error", err)
 		c.Error(err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "subscription cancelled successfully"})
+	c.JSON(http.StatusOK, response)
+
 }
 
 // @Summary Get usage by subscription

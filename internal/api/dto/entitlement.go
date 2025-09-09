@@ -12,16 +12,16 @@ import (
 
 // CreateEntitlementRequest represents the request to create a new entitlement
 type CreateEntitlementRequest struct {
-	PlanID           string                      `json:"plan_id,omitempty"`
-	FeatureID        string                      `json:"feature_id" binding:"required"`
-	FeatureType      types.FeatureType           `json:"feature_type" binding:"required"`
-	IsEnabled        bool                        `json:"is_enabled"`
-	UsageLimit       *int64                      `json:"usage_limit"`
-	UsageResetPeriod types.BillingPeriod         `json:"usage_reset_period"`
-	IsSoftLimit      bool                        `json:"is_soft_limit"`
-	StaticValue      string                      `json:"static_value"`
-	EntityType       types.EntitlementEntityType `json:"entity_type"`
-	EntityID         string                      `json:"entity_id"`
+	PlanID           string                            `json:"plan_id,omitempty"`
+	FeatureID        string                            `json:"feature_id" binding:"required"`
+	FeatureType      types.FeatureType                 `json:"feature_type" binding:"required"`
+	IsEnabled        bool                              `json:"is_enabled"`
+	UsageLimit       *int64                            `json:"usage_limit"`
+	UsageResetPeriod types.EntitlementUsageResetPeriod `json:"usage_reset_period"`
+	IsSoftLimit      bool                              `json:"is_soft_limit"`
+	StaticValue      string                            `json:"static_value"`
+	EntityType       types.EntitlementEntityType       `json:"entity_type"`
+	EntityID         string                            `json:"entity_id"`
 }
 
 func (r *CreateEntitlementRequest) Validate() error {
@@ -101,11 +101,11 @@ func (r *CreateEntitlementRequest) ToEntitlement(ctx context.Context) *entitleme
 
 // UpdateEntitlementRequest represents the request to update an existing entitlement
 type UpdateEntitlementRequest struct {
-	IsEnabled        *bool               `json:"is_enabled"`
-	UsageLimit       *int64              `json:"usage_limit"`
-	UsageResetPeriod types.BillingPeriod `json:"usage_reset_period"`
-	IsSoftLimit      *bool               `json:"is_soft_limit"`
-	StaticValue      string              `json:"static_value"`
+	IsEnabled        *bool                             `json:"is_enabled"`
+	UsageLimit       *int64                            `json:"usage_limit"`
+	UsageResetPeriod types.EntitlementUsageResetPeriod `json:"usage_reset_period"`
+	IsSoftLimit      *bool                             `json:"is_soft_limit"`
+	StaticValue      string                            `json:"static_value"`
 }
 
 // EntitlementResponse represents the response for an entitlement

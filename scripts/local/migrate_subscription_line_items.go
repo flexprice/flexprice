@@ -49,7 +49,7 @@ func MigrateSubscriptionLineItems() error {
 
 	// Initialize repositories
 	subscriptionRepo := entRepo.NewSubscriptionRepository(client, logger, cache)
-	subscriptionLineItemRepo := entRepo.NewSubscriptionLineItemRepository(client)
+	subscriptionLineItemRepo := entRepo.NewSubscriptionLineItemRepository(client, logger, cache)
 	planRepo := entRepo.NewPlanRepository(client, logger, cache)
 	priceRepo := entRepo.NewPriceRepository(client, logger, cache)
 	meterRepo := entRepo.NewMeterRepository(client, logger, cache)
@@ -138,7 +138,7 @@ func MigrateSubscriptionLineItems() error {
 					SubscriptionID:  sub.ID,
 					CustomerID:      sub.CustomerID,
 					EntityID:        plan.ID,
-					EntityType:      types.SubscriptionLineItemEntitiyTypePlan,
+					EntityType:      types.SubscriptionLineItemEntityTypePlan,
 					PriceID:         price.ID,
 					PriceType:       price.Type,
 					MeterID:         price.MeterID,

@@ -82,13 +82,14 @@ func (s *paymentGatewayService) CreatePaymentLink(ctx context.Context, req *dto.
 
 		// Convert generic request to Stripe-specific request
 		stripeReq := &dto.CreateStripePaymentLinkRequest{
-			InvoiceID:  req.InvoiceID,
-			CustomerID: req.CustomerID,
-			Amount:     req.Amount,
-			Currency:   req.Currency,
-			SuccessURL: req.SuccessURL,
-			CancelURL:  req.CancelURL,
-			Metadata:   req.Metadata,
+			InvoiceID:              req.InvoiceID,
+			CustomerID:             req.CustomerID,
+			Amount:                 req.Amount,
+			Currency:               req.Currency,
+			SuccessURL:             req.SuccessURL,
+			CancelURL:              req.CancelURL,
+			Metadata:               req.Metadata,
+			SaveCardAndMakeDefault: req.SaveCardAndMakeDefault,
 		}
 
 		// Get environment ID from context

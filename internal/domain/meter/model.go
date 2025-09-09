@@ -204,7 +204,7 @@ func (m *Meter) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 	// If bucket_size is provided for MAX aggregation, validate it's a valid window size
-	if m.Aggregation.Type == types.AggregationMax && m.Aggregation.BucketSize != "" {
+	if m.IsBucketedMaxMeter() {
 		if err := m.Aggregation.BucketSize.Validate(); err != nil {
 			return ierr.NewError("invalid bucket_size").
 				WithHint("Please provide a valid window size for bucket_size").
@@ -231,6 +231,16 @@ func (m *Meter) Validate() error {
 		}
 	}
 	return nil
+}
+
+// IsBucketedMaxMeter returns true if this is a max aggregation meter with bucket size
+func (m *Meter) IsBucketedMaxMeter() bool {
+	return m.Aggregation.Type == types.AggregationMax && m.Aggregation.BucketSize != ""
+}
+
+// HasBucketSize returns true if this meter has a bucket size configured
+func (m *Meter) HasBucketSize() bool {
+	return m.Aggregation.BucketSize != ""
 }
 
 // Constructor for creating new meters with defaults

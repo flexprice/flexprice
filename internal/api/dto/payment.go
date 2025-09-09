@@ -14,20 +14,19 @@ import (
 
 // CreatePaymentRequest represents a request to create a payment
 type CreatePaymentRequest struct {
-	IdempotencyKey    string                       `json:"idempotency_key,omitempty"`
-	DestinationType   types.PaymentDestinationType `json:"destination_type" binding:"required"`
-	DestinationID     string                       `json:"destination_id" binding:"required"`
-	PaymentMethodType types.PaymentMethodType      `json:"payment_method_type" binding:"required"`
-	PaymentMethodID   string                       `json:"payment_method_id"`
-	PaymentGateway    *types.PaymentGatewayType    `json:"payment_gateway,omitempty"`
-	Amount            decimal.Decimal              `json:"amount" binding:"required"`
-	Currency          string                       `json:"currency" binding:"required"`
-	SuccessURL        string                       `json:"success_url,omitempty"`
-	CancelURL         string                       `json:"cancel_url,omitempty"`
-	ConnectionID      string                       `json:"connection_id,omitempty"`
-	ConnectionName    string                       `json:"connection_name,omitempty"`
-	Metadata          types.Metadata               `json:"metadata,omitempty"`
-	ProcessPayment    bool                         `json:"process_payment" default:"true"`
+	IdempotencyKey         string                       `json:"idempotency_key,omitempty"`
+	DestinationType        types.PaymentDestinationType `json:"destination_type" binding:"required"`
+	DestinationID          string                       `json:"destination_id" binding:"required"`
+	PaymentMethodType      types.PaymentMethodType      `json:"payment_method_type" binding:"required"`
+	PaymentMethodID        string                       `json:"payment_method_id"`
+	PaymentGateway         *types.PaymentGatewayType    `json:"payment_gateway,omitempty"`
+	Amount                 decimal.Decimal              `json:"amount" binding:"required"`
+	Currency               string                       `json:"currency" binding:"required"`
+	SuccessURL             string                       `json:"success_url,omitempty"`
+	CancelURL              string                       `json:"cancel_url,omitempty"`
+	Metadata               types.Metadata               `json:"metadata,omitempty"`
+	ProcessPayment         bool                         `json:"process_payment" default:"true"`
+	SaveCardAndMakeDefault bool                         `json:"save_card_and_make_default" default:"false"`
 }
 
 // UpdatePaymentRequest represents a request to update a payment
@@ -44,33 +43,34 @@ type UpdatePaymentRequest struct {
 
 // PaymentResponse represents a payment response
 type PaymentResponse struct {
-	ID                string                       `json:"id"`
-	IdempotencyKey    string                       `json:"idempotency_key"`
-	DestinationType   types.PaymentDestinationType `json:"destination_type"`
-	DestinationID     string                       `json:"destination_id"`
-	PaymentMethodType types.PaymentMethodType      `json:"payment_method_type"`
-	PaymentMethodID   string                       `json:"payment_method_id"`
-	Amount            decimal.Decimal              `json:"amount"`
-	Currency          string                       `json:"currency"`
-	PaymentStatus     types.PaymentStatus          `json:"payment_status"`
-	TrackAttempts     bool                         `json:"track_attempts"`
-	PaymentGateway    *string                      `json:"payment_gateway,omitempty"`
-	GatewayPaymentID  *string                      `json:"gateway_payment_id,omitempty"`
-	GatewayTrackingID *string                      `json:"gateway_tracking_id,omitempty"`
-	GatewayMetadata   types.Metadata               `json:"gateway_metadata,omitempty"`
-	PaymentURL        *string                      `json:"payment_url,omitempty"`
-	Metadata          types.Metadata               `json:"metadata,omitempty"`
-	SucceededAt       *time.Time                   `json:"succeeded_at,omitempty"`
-	FailedAt          *time.Time                   `json:"failed_at,omitempty"`
-	RefundedAt        *time.Time                   `json:"refunded_at,omitempty"`
-	ErrorMessage      *string                      `json:"error_message,omitempty"`
-	Attempts          []*PaymentAttemptResponse    `json:"attempts,omitempty"`
-	InvoiceNumber     *string                      `json:"invoice_number,omitempty"`
-	TenantID          string                       `json:"tenant_id"`
-	CreatedAt         time.Time                    `json:"created_at"`
-	UpdatedAt         time.Time                    `json:"updated_at"`
-	CreatedBy         string                       `json:"created_by"`
-	UpdatedBy         string                       `json:"updated_by"`
+	ID                     string                       `json:"id"`
+	IdempotencyKey         string                       `json:"idempotency_key"`
+	DestinationType        types.PaymentDestinationType `json:"destination_type"`
+	DestinationID          string                       `json:"destination_id"`
+	PaymentMethodType      types.PaymentMethodType      `json:"payment_method_type"`
+	PaymentMethodID        string                       `json:"payment_method_id"`
+	Amount                 decimal.Decimal              `json:"amount"`
+	Currency               string                       `json:"currency"`
+	PaymentStatus          types.PaymentStatus          `json:"payment_status"`
+	TrackAttempts          bool                         `json:"track_attempts"`
+	PaymentGateway         *string                      `json:"payment_gateway,omitempty"`
+	GatewayPaymentID       *string                      `json:"gateway_payment_id,omitempty"`
+	GatewayTrackingID      *string                      `json:"gateway_tracking_id,omitempty"`
+	GatewayMetadata        types.Metadata               `json:"gateway_metadata,omitempty"`
+	PaymentURL             *string                      `json:"payment_url,omitempty"`
+	Metadata               types.Metadata               `json:"metadata,omitempty"`
+	SucceededAt            *time.Time                   `json:"succeeded_at,omitempty"`
+	FailedAt               *time.Time                   `json:"failed_at,omitempty"`
+	RefundedAt             *time.Time                   `json:"refunded_at,omitempty"`
+	ErrorMessage           *string                      `json:"error_message,omitempty"`
+	Attempts               []*PaymentAttemptResponse    `json:"attempts,omitempty"`
+	InvoiceNumber          *string                      `json:"invoice_number,omitempty"`
+	TenantID               string                       `json:"tenant_id"`
+	SaveCardAndMakeDefault bool                         `json:"save_card_and_make_default"`
+	CreatedAt              time.Time                    `json:"created_at"`
+	UpdatedAt              time.Time                    `json:"updated_at"`
+	CreatedBy              string                       `json:"created_by"`
+	UpdatedBy              string                       `json:"updated_by"`
 }
 
 // PaymentAttemptResponse represents a payment attempt response
@@ -129,6 +129,13 @@ func NewPaymentResponse(p *payment.Payment) *PaymentResponse {
 		}
 	}
 
+	// Extract SaveCardAndMakeDefault from gateway metadata
+	if p.GatewayMetadata != nil {
+		if saveCardStr, exists := p.GatewayMetadata["save_card_and_make_default"]; exists {
+			resp.SaveCardAndMakeDefault = saveCardStr == "true"
+		}
+	}
+
 	if p.Attempts != nil {
 		resp.Attempts = make([]*PaymentAttemptResponse, len(p.Attempts))
 		for i, a := range p.Attempts {
@@ -165,18 +172,15 @@ func (r *CreatePaymentRequest) ToPayment(ctx context.Context) (*payment.Payment,
 	// Initialize gateway metadata for storing payment link related fields
 	gatewayMetadata := types.Metadata{}
 
-	// Store SuccessURL, CancelURL, ConnectionID, and ConnectionName in gateway metadata if provided
+	// Store SuccessURL and CancelURL in gateway metadata if provided
 	if r.SuccessURL != "" {
 		gatewayMetadata["success_url"] = r.SuccessURL
 	}
 	if r.CancelURL != "" {
 		gatewayMetadata["cancel_url"] = r.CancelURL
 	}
-	if r.ConnectionID != "" {
-		gatewayMetadata["connection_id"] = r.ConnectionID
-	}
-	if r.ConnectionName != "" {
-		gatewayMetadata["connection_name"] = r.ConnectionName
+	if r.SaveCardAndMakeDefault {
+		gatewayMetadata["save_card_and_make_default"] = "true"
 	}
 
 	p := &payment.Payment{
@@ -229,7 +233,7 @@ func (r *CreatePaymentRequest) ToPayment(ctx context.Context) (*payment.Payment,
 				}).
 				Mark(ierr.ErrValidation)
 		}
-	} else if r.PaymentMethodType != types.PaymentMethodTypeCredits && r.PaymentMethodType != types.PaymentMethodTypePaymentLink {
+	} else if r.PaymentMethodType != types.PaymentMethodTypeCredits && r.PaymentMethodType != types.PaymentMethodTypePaymentLink && r.PaymentMethodType != types.PaymentMethodTypeCard {
 		if p.PaymentMethodID == "" {
 			return nil, ierr.NewError("payment method id is required for online payment method type").
 				WithHint("Payment method ID is required for online payment methods").
@@ -239,7 +243,66 @@ func (r *CreatePaymentRequest) ToPayment(ctx context.Context) (*payment.Payment,
 				Mark(ierr.ErrValidation)
 		}
 		p.TrackAttempts = true
+	} else if r.PaymentMethodType == types.PaymentMethodTypeCard {
+		// For CARD payments, we'll automatically fetch the customer's saved payment method
+		// So payment_method_id is optional - it will be populated during processing
+		p.TrackAttempts = true
 	}
 
 	return p, nil
+}
+
+// GetCustomerPaymentMethodsRequest represents a request to get customer payment methods
+type GetCustomerPaymentMethodsRequest struct {
+	CustomerID string `json:"customer_id" binding:"required"`
+}
+
+// PaymentMethodResponse represents a payment method response
+type PaymentMethodResponse struct {
+	ID       string                 `json:"id"`
+	Type     string                 `json:"type"`
+	Customer string                 `json:"customer"`
+	Created  int64                  `json:"created"`
+	Card     *CardDetails           `json:"card,omitempty"`
+	Metadata map[string]interface{} `json:"metadata"`
+}
+
+// CardDetails represents card details in a payment method
+type CardDetails struct {
+	Brand       string `json:"brand"`
+	Last4       string `json:"last4"`
+	ExpMonth    int    `json:"exp_month"`
+	ExpYear     int    `json:"exp_year"`
+	Fingerprint string `json:"fingerprint"`
+}
+
+// ChargeSavedPaymentMethodRequest represents a request to charge a saved payment method
+type ChargeSavedPaymentMethodRequest struct {
+	CustomerID      string          `json:"customer_id" binding:"required"`
+	PaymentMethodID string          `json:"payment_method_id" binding:"required"`
+	Amount          decimal.Decimal `json:"amount" binding:"required"`
+	Currency        string          `json:"currency" binding:"required"`
+	InvoiceID       string          `json:"invoice_id,omitempty"`
+}
+
+// PaymentIntentResponse represents a payment intent response
+type PaymentIntentResponse struct {
+	ID            string          `json:"id"`
+	Status        string          `json:"status"`
+	Amount        decimal.Decimal `json:"amount"`
+	Currency      string          `json:"currency"`
+	CustomerID    string          `json:"customer_id"`
+	PaymentMethod string          `json:"payment_method"`
+	CreatedAt     int64           `json:"created_at"`
+}
+
+// SetDefaultPaymentMethodRequest represents a request to set default payment method
+type SetDefaultPaymentMethodRequest struct {
+	CustomerID      string `json:"customer_id" binding:"required"`
+	PaymentMethodID string `json:"payment_method_id" binding:"required"`
+}
+
+// GetDefaultPaymentMethodRequest represents a request to get default payment method
+type GetDefaultPaymentMethodRequest struct {
+	CustomerID string `json:"customer_id" binding:"required"`
 }

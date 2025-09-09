@@ -47,7 +47,7 @@ func TestCreateSubscriptionWithPriceOverrides(t *testing.T) {
 		assert.Equal(t, overrideQuantity, *req.OverrideLineItems[0].Quantity)
 
 		// Validate override line item validation
-		err := req.OverrideLineItems[0].Validate()
+		err := req.OverrideLineItems[0].Validate(nil, nil, "test_plan_456")
 		require.NoError(t, err)
 
 		// Test validation logic
@@ -61,7 +61,7 @@ func TestCreateSubscriptionWithPriceOverrides(t *testing.T) {
 			PriceID: "",
 			Amount:  &decimal.Decimal{},
 		}
-		err := override.Validate()
+		err := override.Validate(nil, nil, "")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "price_id is required")
 
@@ -71,7 +71,7 @@ func TestCreateSubscriptionWithPriceOverrides(t *testing.T) {
 			PriceID: "test_price",
 			Amount:  &negativeAmount,
 		}
-		err = override.Validate()
+		err = override.Validate(nil, nil, "")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "amount must be non-negative")
 
@@ -79,7 +79,7 @@ func TestCreateSubscriptionWithPriceOverrides(t *testing.T) {
 		override = dto.OverrideLineItemRequest{
 			PriceID: "test_price",
 		}
-		err = override.Validate()
+		err = override.Validate(nil, nil, "")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "at least one override field")
 	})

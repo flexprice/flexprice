@@ -26,6 +26,7 @@ type Handlers struct {
 	Plan                     *v1.PlanHandler
 	Subscription             *v1.SubscriptionHandler
 	SubscriptionPause        *v1.SubscriptionPauseHandler
+	SubscriptionChange       *v1.SubscriptionChangeHandler
 	Wallet                   *v1.WalletHandler
 	Tenant                   *v1.TenantHandler
 	Invoice                  *v1.InvoiceHandler
@@ -225,6 +226,11 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			// Addon management for subscriptions - moved under subscription handler
 			subscription.POST("/addon", handlers.Subscription.AddAddonToSubscription)
 			subscription.DELETE("/addon", handlers.Subscription.RemoveAddonToSubscription)
+
+			// Subscription plan changes (upgrade/downgrade)
+			subscription.POST("/:id/change/preview", handlers.SubscriptionChange.PreviewSubscriptionChange)
+			subscription.POST("/:id/change/execute", handlers.SubscriptionChange.ExecuteSubscriptionChange)
+
 		}
 
 		wallet := v1Private.Group("/wallets")
@@ -450,6 +456,8 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		{
 			subscriptionGroup.POST("/update-periods", handlers.CronSubscription.UpdateBillingPeriods)
 			subscriptionGroup.POST("/generate-invoice", handlers.CronSubscription.GenerateInvoice)
+			subscriptionGroup.POST("/process-auto-cancellation", handlers.CronSubscription.ProcessAutoCancellationSubscriptions)
+			subscriptionGroup.POST("/renewal-due-alerts", handlers.CronSubscription.ProcessSubscriptionRenewalDueAlerts)
 		}
 
 		// Wallet related cron jobs
