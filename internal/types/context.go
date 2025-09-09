@@ -1,6 +1,9 @@
 package types
 
-import "context"
+import (
+	"context"
+	"fmt"
+)
 
 // ContextKey is a type for the keys of values stored in the context
 type ContextKey string
@@ -66,4 +69,18 @@ func SetEnvironmentID(ctx context.Context, environmentID string) context.Context
 // SetUserID sets the user ID in the context
 func SetUserID(ctx context.Context, userID string) context.Context {
 	return context.WithValue(ctx, CtxUserID, userID)
+}
+
+// ValidateTenantContext validates that the required tenant context fields are present
+func ValidateTenantContext(ctx context.Context) error {
+	if ctx == nil {
+		return fmt.Errorf("context is nil")
+	}
+
+	tenantID := GetTenantID(ctx)
+	if tenantID == "" {
+		return fmt.Errorf("no tenant context found in context")
+	}
+
+	return nil
 }

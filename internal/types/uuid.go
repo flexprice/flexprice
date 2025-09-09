@@ -106,8 +106,43 @@ const (
 	UUID_PREFIX_ADDON_ASSOCIATION           = "addon_assoc"
 	UUID_PREFIX_WEBHOOK_EVENT               = "webhook"
 	UUID_PREFIX_SETTING                     = "setting"
+
+	// Temporal workflow prefixes
+	UUID_PREFIX_WORKFLOW = "wf"
+	UUID_PREFIX_RUN      = "run"
 )
 
 const (
 	SHORT_ID_PREFIX_CREDIT_NOTE = "CN-"
 )
+
+// GenerateWorkflowID generates a unique workflow ID with workflow prefix
+func GenerateWorkflowID() string {
+	return GenerateUUIDWithPrefix(UUID_PREFIX_WORKFLOW)
+}
+
+// GenerateWorkflowIDForType generates a workflow ID with both workflow prefix and type
+// Example: "wf_PriceSyncWorkflow_01HQXYZ123ABC"
+func GenerateWorkflowIDForType(workflowType string) string {
+	if workflowType == "" {
+		return GenerateWorkflowID()
+	}
+	return fmt.Sprintf("%s_%s_%s", UUID_PREFIX_WORKFLOW, workflowType, GenerateUUID())
+}
+
+// GenerateTemporalRunID generates a unique run ID for temporal workflows
+func GenerateTemporalRunID() string {
+	return GenerateUUIDWithPrefix(UUID_PREFIX_RUN)
+}
+
+// GenerateWorkflowIDWithContext generates a contextual workflow ID
+// Example: "wf_PriceSyncWorkflow_plan123_01HQXYZ123ABC"
+func GenerateWorkflowIDWithContext(workflowType, contextID string) string {
+	if workflowType == "" {
+		return GenerateWorkflowID()
+	}
+	if contextID == "" {
+		return GenerateWorkflowIDForType(workflowType)
+	}
+	return fmt.Sprintf("%s_%s_%s_%s", UUID_PREFIX_WORKFLOW, workflowType, contextID, GenerateUUID())
+}

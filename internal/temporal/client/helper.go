@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/flexprice/flexprice/internal/temporal/models"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // WaitForHealthy waits for the client to become healthy with a timeout
@@ -30,25 +30,7 @@ func WaitForHealthy(ctx context.Context, client TemporalClient, timeout time.Dur
 
 // WithTenantContext adds tenant context to the context for temporal operations
 func WithTenantContext(ctx context.Context, tenantID, userID string) context.Context {
-	tc := models.NewTenantContext(tenantID, userID, "", "")
-	return models.WithTenantContext(ctx, tc)
-}
-
-// GetTenantContext extracts tenant context from the context
-func GetTenantContext(ctx context.Context) (*models.TenantContext, error) {
-	return models.FromContext(ctx)
-}
-
-// ValidateTenantContext validates that the required tenant context fields are present
-func ValidateTenantContext(ctx context.Context) error {
-	tc, err := GetTenantContext(ctx)
-	if err != nil {
-		return err
-	}
-
-	if tc.TenantID == "" {
-		return models.ErrInvalidTenantContext
-	}
-
-	return nil
+	ctx = types.SetTenantID(ctx, tenantID)
+	ctx = types.SetUserID(ctx, userID)
+	return ctx
 }
