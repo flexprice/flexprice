@@ -42,6 +42,7 @@ internal/temporal/
 ### **Key Components Analysis**
 
 #### 1. **TemporalService** (`internal/temporal/client/service.go`)
+
 - **Purpose**: Centralized interface for all Temporal operations
 - **Singleton Pattern**: Uses `globalService` with `sync.Once` for thread-safe initialization
 - **Key Methods**:
@@ -51,6 +52,7 @@ internal/temporal/
   - `StartWorker()` / `StopWorker()` - Manages worker lifecycle
 
 #### 2. **TemporalWorkerManager** (`internal/temporal/client/worker.go`)
+
 - **Purpose**: Manages workers for different task queues
 - **Key Features**:
   - Maps task queues to workers
@@ -58,6 +60,7 @@ internal/temporal/
   - Worker status tracking
 
 #### 3. **Registration System** (`internal/temporal/registration.go`)
+
 - **Purpose**: Centralized workflow and activity registration
 - **Pattern**: Uses `WorkerConfig` struct to define task queue configurations
 - **Key Features**:
@@ -665,6 +668,7 @@ workflowTypes := []types.TemporalWorkflowType{
 ### **Why This Architecture?**
 
 #### 1. **Singleton Pattern for TemporalService**
+
 ```go
 var (
     globalService     *TemporalService
@@ -672,39 +676,48 @@ var (
     globalServiceMux  sync.RWMutex
 )
 ```
+
 **Decision**: Use singleton pattern for TemporalService
-**Why**: 
+**Why**:
+
 - Ensures only one instance of the temporal service across the application
 - Thread-safe initialization with `sync.Once`
 - Prevents resource conflicts and ensures consistent state
 - Follows the pattern used throughout the codebase
 
 #### 2. **Context Propagation Pattern**
+
 ```go
 ctx = context.WithValue(ctx, types.CtxTenantID, input.TenantID)
 ctx = context.WithValue(ctx, types.CtxEnvironmentID, input.EnvironmentID)
 ```
+
 **Decision**: Use context to propagate tenant and environment information
 **Why**:
+
 - Ensures multi-tenancy is maintained throughout the workflow execution
 - Follows the existing pattern in the codebase
 - Allows business services to access tenant context without parameter passing
 - Maintains consistency with the existing service layer
 
 #### 3. **Error Handling with ierr Package**
+
 ```go
 return nil, ierr.NewError("user ID is required").
     WithHint("User ID is required").
     Mark(ierr.ErrValidation)
 ```
+
 **Decision**: Use the `ierr` package for all error handling
 **Why**:
+
 - Provides structured error information with hints
 - Enables proper error categorization (validation, internal, etc.)
 - Maintains consistency with the existing codebase
 - Provides better debugging information
 
 #### 4. **Workflow-Activity Separation**
+
 ```go
 // Workflow: Orchestrates the process
 func UserExportWorkflow(ctx workflow.Context, input models.UserExportWorkflowInput) (*models.UserExportWorkflowResult, error) {
@@ -721,14 +734,17 @@ func (a *UserExportActivities) ExportUserData(ctx context.Context, input models.
     // Return result
 }
 ```
+
 **Decision**: Separate workflows and activities
 **Why**:
+
 - Workflows handle orchestration and retry logic
 - Activities contain the actual business logic
 - Follows Temporal best practices
 - Maintains consistency with existing patterns
 
 #### 5. **Registration System Design**
+
 ```go
 type WorkerConfig struct {
     TaskQueue  string
@@ -736,8 +752,10 @@ type WorkerConfig struct {
     Activities []interface{}
 }
 ```
+
 **Decision**: Use `WorkerConfig` struct for registration
 **Why**:
+
 - Provides type-safe configuration
 - Easy to extend with new workflows
 - Centralized registration logic
@@ -746,6 +764,7 @@ type WorkerConfig struct {
 ### **Why These Specific Patterns?**
 
 #### 1. **API Handler Pattern**
+
 ```go
 func (h *UserHandler) ExportUserData(c *gin.Context) {
     id := c.Param("id")
@@ -763,13 +782,16 @@ func (h *UserHandler) ExportUserData(c *gin.Context) {
     c.JSON(http.StatusOK, gin.H{"message": "user export workflow started successfully"})
 }
 ```
-**Why**: 
+
+**Why**:
+
 - Follows the exact pattern from `plan.go` and `task.go`
 - Consistent error handling and response format
 - Simple and clean API interface
 - Maintains consistency with existing handlers
 
 #### 2. **Service Layer Pattern**
+
 ```go
 func (s *userService) ExportUserData(ctx context.Context, userID string) (*dto.UserExportResult, error) {
     if userID == "" {
@@ -781,13 +803,16 @@ func (s *userService) ExportUserData(ctx context.Context, userID string) (*dto.U
     return &dto.UserExportResult{...}, nil
 }
 ```
+
 **Why**:
+
 - Follows the exact pattern from `plan.go` SyncPlanPrices method
 - Consistent validation and error handling
 - Clean separation of concerns
 - Maintains consistency with existing services
 
 #### 3. **Model Validation Pattern**
+
 ```go
 func (i *UserExportWorkflowInput) Validate() error {
     if i.UserID == "" {
@@ -799,7 +824,9 @@ func (i *UserExportWorkflowInput) Validate() error {
     return nil
 }
 ```
+
 **Why**:
+
 - Follows the exact pattern from `task_models.go`
 - Consistent validation across all models
 - Provides clear error messages with hints
@@ -819,7 +846,7 @@ func (s *UserServiceSuite) TestExportUserData_Comprehensive() {
         result, err := s.service.ExportUserData(s.GetContext(), "")
         s.Error(err)
         s.Nil(result)
-        
+
         // Check for the hint in the error
         hints := errors.GetAllHints(err)
         s.Contains(hints, "User ID is required")
@@ -834,16 +861,16 @@ func (s *UserServiceSuite) TestExportUserData_Comprehensive() {
             CreatedAt: time.Now(),
             LastLogin: time.Now(),
         }
-        
+
         // Mock repository
         s.UserRepo.On("GetByID", mock.Anything, "user-123").Return(testUser, nil)
-        
+
         // Mock S3 service
         s.S3Service.On("UploadFile", mock.Anything, mock.Anything, mock.Anything).Return("s3://bucket/file.csv", nil)
-        
+
         // Execute
         result, err := s.service.ExportUserData(s.GetContext(), "user-123")
-        
+
         // Assertions
         s.NoError(err)
         s.NotNil(result)
@@ -861,13 +888,16 @@ func (s *UserServiceSuite) TestExportUserData_Comprehensive() {
 ### **Common Issues and Solutions**
 
 #### 1. **Workflow Not Starting**
+
 **Symptoms**: API returns 200 but workflow doesn't execute
 **Causes**:
+
 - Workflow not registered in `registration.go`
 - Task queue not started in `main.go`
 - Temporal server not running
 
 **Solutions**:
+
 ```bash
 # Check if workflow is registered
 grep -r "UserExportWorkflow" internal/temporal/registration.go
@@ -880,36 +910,42 @@ docker logs temporal-server
 ```
 
 #### 2. **Activity Failing**
+
 **Symptoms**: Workflow starts but activity fails
 **Causes**:
+
 - Activity not registered
 - Service dependency not injected
 - Context not properly set
 
 **Solutions**:
+
 ```go
 // Check activity registration
 func (a *UserExportActivities) ExportUserData(ctx context.Context, input models.ExportUserDataActivityInput) (*models.ExportUserDataActivityResult, error) {
     // Add logging
     a.logger.Info("Starting ExportUserData activity", "input", input)
-    
+
     // Check context
     tenantID := types.GetTenantID(ctx)
     if tenantID == "" {
         return nil, fmt.Errorf("tenant ID not found in context")
     }
-    
+
     // Rest of the logic
 }
 ```
 
 #### 3. **Type Errors**
+
 **Symptoms**: Compilation errors or runtime type errors
 **Causes**:
+
 - Input/output types don't match between workflow and activity
 - JSON serialization issues
 
 **Solutions**:
+
 ```go
 // Ensure types match exactly
 type UserExportWorkflowInput struct {
@@ -991,6 +1027,67 @@ sequenceDiagram
 
 ---
 
+## 🔧 Simple Workflow Execution Pattern
+
+### **ExecuteWorkflow - The Primary Focus**
+
+The main pattern developers should focus on is the simple `ExecuteWorkflow` approach:
+
+```go
+// Simple workflow execution in API handlers
+func (h *UserHandler) ExportUserData(c *gin.Context) {
+    // Extract parameters
+    userID := c.Param("id")
+
+    // Execute workflow - simple one-liner
+    _, err := h.temporalService.ExecuteWorkflow(c.Request.Context(),
+        types.TemporalUserExportWorkflow,
+        models.UserExportWorkflowInput{
+            UserID:        userID,
+            TenantID:      types.GetTenantID(c.Request.Context()),
+            EnvironmentID: types.GetEnvironmentID(c.Request.Context()),
+        })
+
+    if err != nil {
+        c.Error(err)
+        return
+    }
+
+    c.JSON(http.StatusAccepted, gin.H{"message": "Workflow started"})
+}
+```
+
+**Why This Pattern is Preferred:**
+
+- ✅ **One-Line Execution**: Simple `ExecuteWorkflow()` call
+- ✅ **Automatic Context**: Handles tenant/environment context automatically
+- ✅ **Error Handling**: Built-in error propagation
+- ✅ **Non-blocking**: Returns immediately, workflow runs asynchronously
+- ✅ **Consistent**: Same pattern used across all handlers
+
+### **TLS Configuration**
+
+For production deployments, use secure TLS configuration:
+
+```go
+// Configure TLS if enabled
+if options.TLS {
+	sdkOptions.ConnectionOptions.TLS = &tls.Config{
+		MinVersion: tls.VersionTLS12,
+		// Use system's root CA certificates for verification
+		// ServerName will be automatically set from the connection address
+	}
+}
+```
+
+**Security Features:**
+
+- ✅ **Minimum TLS 1.2**: Enforces secure protocol version
+- ✅ **Certificate Verification**: Uses system root CAs
+- ✅ **Auto ServerName**: Automatically extracted from connection address
+
+---
+
 ## 🎯 Key Takeaways
 
 1. **Follow Existing Patterns**: Every decision is based on existing patterns in the codebase
@@ -999,6 +1096,7 @@ sequenceDiagram
 4. **Validation**: Validate inputs at every layer
 5. **Logging**: Add comprehensive logging throughout
 6. **Testing**: Follow existing test patterns and conventions
+7. **Worker Management**: Use simple, reliable worker startup patterns
+8. **Security**: Implement proper TLS configuration for production
 
 This implementation follows the **exact patterns** used in the existing codebase and provides a **complete, working example** that developers can use as a reference for implementing new workflows! 🚀
-
