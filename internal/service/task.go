@@ -201,8 +201,8 @@ func (s *taskService) prepareCSVReader(fileContent []byte) (*csv.Reader, error) 
 	return s.fileProcessor.PrepareCSVReader(fileContent)
 }
 
-// processCSVFile is a generic function to process a CSV file with a custom row processor
-func (s *taskService) processCSVFile(
+// processFile is a generic function to process a file (CSV or JSON) with a custom row processor
+func (s *taskService) processFile(
 	ctx context.Context,
 	t *task.Task,
 	tracker task.ProgressTracker,
@@ -216,82 +216,158 @@ func (s *taskService) processCSVFile(
 		return err
 	}
 
-	// Prepare CSV reader
-	reader, err := s.prepareCSVReader(fileContent)
-	if err != nil {
-		return err
-	}
-
-	// Read headers
-	headers, err := reader.Read()
-	if err != nil {
-		previewLen := 200
-		if len(fileContent) < previewLen {
-			previewLen = len(fileContent)
-		}
-		s.Logger.Error("failed to read CSV headers",
-			"error", err,
-			"content_preview", string(fileContent[:previewLen]))
-		errorSummary := fmt.Sprintf("Failed to read CSV headers: %v", err)
-		t.ErrorSummary = &errorSummary
-		return ierr.NewError("failed to read CSV headers").
-			WithHint("Failed to read CSV headers").
-			WithReportableDetails(map[string]interface{}{
-				"error": err,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	s.Logger.Debugw("parsed CSV headers", "headers", headers)
-
-	// Process headers with the provided function
-	standardHeaders, specialColumns, err := processHeadersFunc(headers)
-	if err != nil {
-		errorSummary := fmt.Sprintf("Failed to process headers: %v", err)
-		t.ErrorSummary = &errorSummary
-		return err
-	}
-
-	// Debug: Print processed headers
-	s.Logger.Debug("DEBUG: Processed standard headers: %#v\n", standardHeaders)
-	s.Logger.Debug("DEBUG: Special columns: %#v\n", specialColumns)
-
-	// Validate required columns
-	if err := validateHeaders(standardHeaders); err != nil {
-		errorSummary := fmt.Sprintf("Invalid CSV format: %v", err)
-		t.ErrorSummary = &errorSummary
-		return err
-	}
-
-	// Process rows
-	lineNum := 1 // Start after headers
+	var headers []string
+	var standardHeaders []string
+	var specialColumns map[int]string
+	var lineNum int
 	var failureCount int
 	var errorLines []string // Track line numbers with errors
 
-	for {
-		lineNum++
-		record, err := reader.Read()
-		if err == io.EOF {
-			break
-		}
+	switch t.FileType {
+	case types.FileTypeCSV:
+		// Prepare CSV reader
+		reader, err := s.fileProcessor.PrepareCSVReader(fileContent)
 		if err != nil {
-			s.Logger.Error("failed to read CSV line", "line", lineNum, "error", err)
-			errorLines = append(errorLines, fmt.Sprintf("Line %d: Failed to read - %v", lineNum, err))
-			tracker.Increment(false, err)
-			failureCount++
-			continue
+			return err
 		}
 
-		// Process the row with the provided function
-		success, err := processRowFunc(lineNum, record, standardHeaders, specialColumns)
-		if !success {
-			errorLines = append(errorLines, fmt.Sprintf("Line %d: %v", lineNum, err))
-			tracker.Increment(false, err)
-			failureCount++
-			continue
+		// Read headers
+		headers, err = reader.Read()
+		if err != nil {
+			previewLen := 200
+			if len(fileContent) < previewLen {
+				previewLen = len(fileContent)
+			}
+			s.Logger.Error("failed to read CSV headers",
+				"error", err,
+				"content_preview", string(fileContent[:previewLen]))
+			errorSummary := fmt.Sprintf("Failed to read CSV headers: %v", err)
+			t.ErrorSummary = &errorSummary
+			return ierr.NewError("failed to read CSV headers").
+				WithHint("Failed to read CSV headers").
+				WithReportableDetails(map[string]interface{}{
+					"error": err,
+				}).
+				Mark(ierr.ErrValidation)
 		}
 
-		tracker.Increment(true, nil)
+		// Process headers with the provided function
+		standardHeaders, specialColumns, err = processHeadersFunc(headers)
+		if err != nil {
+			errorSummary := fmt.Sprintf("Failed to process headers: %v", err)
+			t.ErrorSummary = &errorSummary
+			return err
+		}
+
+		// Validate required columns
+		if err := validateHeaders(standardHeaders); err != nil {
+			errorSummary := fmt.Sprintf("Invalid CSV format: %v", err)
+			t.ErrorSummary = &errorSummary
+			return err
+		}
+
+		// Process rows
+		lineNum = 1 // Start after headers
+		for {
+			lineNum++
+			record, err := reader.Read()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				s.Logger.Error("failed to read CSV line", "line", lineNum, "error", err)
+				errorLines = append(errorLines, fmt.Sprintf("Line %d: Failed to read - %v", lineNum, err))
+				tracker.Increment(false, err)
+				failureCount++
+				continue
+			}
+
+			// Process the row with the provided function
+			success, err := processRowFunc(lineNum, record, standardHeaders, specialColumns)
+			if !success {
+				errorLines = append(errorLines, fmt.Sprintf("Line %d: %v", lineNum, err))
+				tracker.Increment(false, err)
+				failureCount++
+				continue
+			}
+
+			tracker.Increment(true, nil)
+		}
+
+	case types.FileTypeJSON:
+		// Prepare JSON reader
+		decoder, err := s.fileProcessor.PrepareJSONReader(fileContent)
+		if err != nil {
+			return err
+		}
+
+		// Extract headers from first object
+		headers, err = s.fileProcessor.JSONProcessor.ExtractHeaders(decoder)
+		if err != nil {
+			errorSummary := fmt.Sprintf("Failed to extract JSON headers: %v", err)
+			t.ErrorSummary = &errorSummary
+			return err
+		}
+
+		// Process headers with the provided function
+		standardHeaders, specialColumns, err = processHeadersFunc(headers)
+		if err != nil {
+			errorSummary := fmt.Sprintf("Failed to process headers: %v", err)
+			t.ErrorSummary = &errorSummary
+			return err
+		}
+
+		// Validate required columns
+		if err := validateHeaders(standardHeaders); err != nil {
+			errorSummary := fmt.Sprintf("Invalid JSON format: %v", err)
+			t.ErrorSummary = &errorSummary
+			return err
+		}
+
+		// Reset decoder for processing
+		decoder, err = s.fileProcessor.PrepareJSONReader(fileContent)
+		if err != nil {
+			return err
+		}
+
+		// Skip array start token
+		_, err = decoder.Token()
+		if err != nil {
+			return err
+		}
+
+		// Process objects
+		lineNum = 0
+		for decoder.More() {
+			lineNum++
+			var obj map[string]interface{}
+			if err := decoder.Decode(&obj); err != nil {
+				s.Logger.Error("failed to decode JSON object", "line", lineNum, "error", err)
+				errorLines = append(errorLines, fmt.Sprintf("Line %d: Failed to decode - %v", lineNum, err))
+				tracker.Increment(false, err)
+				failureCount++
+				continue
+			}
+
+			// Convert object to string array matching CSV format
+			record := make([]string, len(headers))
+			for i, header := range headers {
+				if val, ok := obj[header]; ok {
+					record[i] = fmt.Sprintf("%v", val)
+				}
+			}
+
+			// Process the row with the provided function
+			success, err := processRowFunc(lineNum, record, standardHeaders, specialColumns)
+			if !success {
+				errorLines = append(errorLines, fmt.Sprintf("Line %d: %v", lineNum, err))
+				tracker.Increment(false, err)
+				failureCount++
+				continue
+			}
+
+			tracker.Increment(true, nil)
+		}
 	}
 
 	// Return error if any rows failed
@@ -409,8 +485,8 @@ func (s *taskService) processEvents(ctx context.Context, t *task.Task, tracker t
 		return true, nil
 	}
 
-	// Process the CSV file with the event-specific processors
-	return s.processCSVFile(
+	// Process the file with the event-specific processors
+	return s.processFile(
 		ctx,
 		t,
 		tracker,
@@ -579,8 +655,8 @@ func (s *taskService) processCustomers(ctx context.Context, t *task.Task, tracke
 		return true, nil
 	}
 
-	// Process the CSV file with the customer-specific processors
-	return s.processCSVFile(
+	// Process the file with the customer-specific processors
+	return s.processFile(
 		ctx,
 		t,
 		tracker,

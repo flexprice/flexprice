@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // StreamingProcessor handles streaming processing of large files
@@ -22,6 +24,8 @@ type StreamingProcessor struct {
 	Client           httpclient.Client
 	Logger           *logger.Logger
 	ProviderRegistry *FileProviderRegistry
+	CSVProcessor     *CSVProcessor
+	JSONProcessor    *JSONProcessor
 }
 
 // NewStreamingProcessor creates a new streaming processor
@@ -66,6 +70,28 @@ func DefaultStreamingConfig() *StreamingConfig {
 	}
 }
 
+// detectFileType attempts to determine if the file is CSV or JSON
+func (sp *StreamingProcessor) detectFileType(content []byte) FileType {
+	// Skip BOM if present
+	if len(content) >= 3 && content[0] == 0xEF && content[1] == 0xBB && content[2] == 0xBF {
+		content = content[3:]
+	}
+
+	// Trim whitespace
+	trimmed := bytes.TrimSpace(content)
+	if len(trimmed) == 0 {
+		return FileTypeCSV // Default to CSV for empty files
+	}
+
+	// Check if content starts with [ for JSON array
+	if trimmed[0] == '[' {
+		return FileTypeJSON
+	}
+
+	// Default to CSV
+	return FileTypeCSV
+}
+
 // ProcessFileStream processes a file in streaming fashion
 func (sp *StreamingProcessor) ProcessFileStream(
 	ctx context.Context,
@@ -84,15 +110,39 @@ func (sp *StreamingProcessor) ProcessFileStream(
 	}
 	defer stream.Close()
 
+	// Use the file type from the task
+	switch t.FileType {
+	case types.FileTypeCSV:
+		return sp.processCSVStream(ctx, t, processor, config, stream)
+	case types.FileTypeJSON:
+		return sp.processJSONStream(ctx, t, processor, config, stream)
+	default:
+		return ierr.NewErrorf("unsupported file type: %s", t.FileType).
+			WithHint("Unsupported file type").
+			WithReportableDetails(map[string]interface{}{
+				"file_type": t.FileType,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+}
+
+// processCSVStream processes a CSV file in streaming fashion
+func (sp *StreamingProcessor) processCSVStream(
+	ctx context.Context,
+	t *task.Task,
+	processor ChunkProcessor,
+	config *StreamingConfig,
+	reader io.Reader,
+) error {
 	// Create CSV reader with buffering
-	reader := csv.NewReader(bufio.NewReaderSize(stream, config.BufferSize))
-	reader.LazyQuotes = true
-	reader.FieldsPerRecord = -1
-	reader.ReuseRecord = true
-	reader.TrimLeadingSpace = true
+	csvReader := csv.NewReader(bufio.NewReaderSize(reader, config.BufferSize))
+	csvReader.LazyQuotes = true
+	csvReader.FieldsPerRecord = -1
+	csvReader.ReuseRecord = true
+	csvReader.TrimLeadingSpace = true
 
 	// Read headers
-	headers, err := reader.Read()
+	headers, err := csvReader.Read()
 	if err != nil {
 		sp.Logger.Error("failed to read CSV headers", "error", err)
 		return ierr.NewError("failed to read CSV headers").
@@ -114,7 +164,7 @@ func (sp *StreamingProcessor) ProcessFileStream(
 	var allErrors []string
 
 	for {
-		record, err := reader.Read()
+		record, err := csvReader.Read()
 		if err == io.EOF {
 			break
 		}
@@ -162,6 +212,117 @@ func (sp *StreamingProcessor) ProcessFileStream(
 		}
 	}
 
+	return sp.finalizeProcessing(t, totalProcessed, totalSuccessful, totalFailed, allErrors, chunkIndex)
+}
+
+// processJSONStream processes a JSON file in streaming fashion
+func (sp *StreamingProcessor) processJSONStream(
+	ctx context.Context,
+	t *task.Task,
+	processor ChunkProcessor,
+	config *StreamingConfig,
+	reader io.Reader,
+) error {
+	decoder := json.NewDecoder(bufio.NewReaderSize(reader, config.BufferSize))
+
+	// Read opening bracket
+	token, err := decoder.Token()
+	if err != nil {
+		return ierr.NewErrorf("invalid JSON content: %v", err).
+			WithHint("Invalid JSON content").
+			WithReportableDetails(map[string]interface{}{
+				"error": err.Error(),
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	if delim, ok := token.(json.Delim); !ok || delim != '[' {
+		return ierr.NewError("JSON content must start with an array").
+			WithHint("Invalid JSON format").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Extract headers from first object
+	headers, err := sp.JSONProcessor.ExtractHeaders(decoder)
+	if err != nil {
+		return err
+	}
+
+	sp.Logger.Debugw("parsed JSON headers", "headers", headers)
+
+	// Process objects in chunks
+	var chunk [][]string
+	chunkIndex := 0
+	totalProcessed := 0
+	totalSuccessful := 0
+	totalFailed := 0
+	var allErrors []string
+
+	for decoder.More() {
+		var obj map[string]interface{}
+		if err := decoder.Decode(&obj); err != nil {
+			sp.Logger.Error("failed to decode JSON object", "error", err)
+			allErrors = append(allErrors, fmt.Sprintf("JSON decode error: %v", err))
+			continue
+		}
+
+		// Convert object to string array matching CSV format
+		record := make([]string, len(headers))
+		for i, header := range headers {
+			if val, ok := obj[header]; ok {
+				record[i] = fmt.Sprintf("%v", val)
+			}
+		}
+
+		chunk = append(chunk, record)
+
+		// Process chunk when it reaches the configured size
+		if len(chunk) >= config.ChunkSize {
+			result, err := sp.processChunkWithRetry(ctx, processor, chunk, headers, chunkIndex, config)
+			if err != nil {
+				sp.Logger.Error("failed to process chunk", "chunk_index", chunkIndex, "error", err)
+				allErrors = append(allErrors, fmt.Sprintf("Chunk %d: %v", chunkIndex, err))
+			} else {
+				totalProcessed += result.ProcessedRecords
+				totalSuccessful += result.SuccessfulRecords
+				totalFailed += result.FailedRecords
+				if result.ErrorSummary != nil {
+					allErrors = append(allErrors, *result.ErrorSummary)
+				}
+			}
+
+			chunk = nil // Reset chunk
+			chunkIndex++
+		}
+	}
+
+	// Process remaining records in the last chunk
+	if len(chunk) > 0 {
+		result, err := sp.processChunkWithRetry(ctx, processor, chunk, headers, chunkIndex, config)
+		if err != nil {
+			sp.Logger.Error("failed to process final chunk", "chunk_index", chunkIndex, "error", err)
+			allErrors = append(allErrors, fmt.Sprintf("Final chunk %d: %v", chunkIndex, err))
+		} else {
+			totalProcessed += result.ProcessedRecords
+			totalSuccessful += result.SuccessfulRecords
+			totalFailed += result.FailedRecords
+			if result.ErrorSummary != nil {
+				allErrors = append(allErrors, *result.ErrorSummary)
+			}
+		}
+	}
+
+	return sp.finalizeProcessing(t, totalProcessed, totalSuccessful, totalFailed, allErrors, chunkIndex)
+}
+
+// finalizeProcessing updates the task with final processing results
+func (sp *StreamingProcessor) finalizeProcessing(
+	t *task.Task,
+	totalProcessed int,
+	totalSuccessful int,
+	totalFailed int,
+	allErrors []string,
+	chunkIndex int,
+) error {
 	// Update final task status
 	t.ProcessedRecords = totalProcessed
 	t.SuccessfulRecords = totalSuccessful

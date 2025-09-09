@@ -29,6 +29,8 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+
+	ierr "github.com/flexprice/flexprice/internal/errors"
 )
 
 // FileProvider defines the interface for different file providers
@@ -57,7 +59,9 @@ func (p *DirectURLProvider) GetDownloadURL(ctx context.Context, fileURL string) 
 	// Validate URL
 	_, err := url.Parse(fileURL)
 	if err != nil {
-		return "", fmt.Errorf("invalid URL: %w", err)
+		return "", ierr.WithError(err).
+			WithHint("Invalid URL").
+			Mark(ierr.ErrValidation)
 	}
 	return fileURL, nil
 }
@@ -88,7 +92,9 @@ func (p *GoogleDriveProvider) GetDownloadURL(ctx context.Context, fileURL string
 		}
 	}
 
-	return "", fmt.Errorf("invalid Google Drive URL: %s", fileURL)
+	return "", ierr.NewErrorf("invalid Google Drive URL: %s", fileURL).
+		WithHint("Invalid Google Drive URL").
+		Mark(ierr.ErrValidation)
 }
 
 func (p *GoogleDriveProvider) GetProviderName() FileProviderType {
@@ -103,7 +109,9 @@ func (p *S3Provider) GetDownloadURL(ctx context.Context, fileURL string) (string
 	// but we can add presigned URL logic here if needed
 	_, err := url.Parse(fileURL)
 	if err != nil {
-		return "", fmt.Errorf("invalid S3 URL: %w", err)
+		return "", ierr.WithError(err).
+			WithHint("Invalid S3 URL").
+			Mark(ierr.ErrValidation)
 	}
 	return fileURL, nil
 }
@@ -119,7 +127,9 @@ func (p *OneDriveProvider) GetDownloadURL(ctx context.Context, fileURL string) (
 	// Extract file ID from OneDrive URL
 	fileID := extractOneDriveFileID(fileURL)
 	if fileID == "" {
-		return "", fmt.Errorf("invalid OneDrive URL: %s", fileURL)
+		return "", ierr.NewErrorf("invalid OneDrive URL: %s", fileURL).
+			WithHint("Invalid OneDrive URL").
+			Mark(ierr.ErrValidation)
 	}
 	return fmt.Sprintf("https://api.onedrive.com/v1.0/shares/u!%s/root/content", fileID), nil
 }
@@ -143,7 +153,9 @@ func (p *DropboxProvider) GetDownloadURL(ctx context.Context, fileURL string) (s
 
 	_, err := url.Parse(fileURL)
 	if err != nil {
-		return "", fmt.Errorf("invalid Dropbox URL: %w", err)
+		return "", ierr.WithError(err).
+			WithHint("Invalid Dropbox URL").
+			Mark(ierr.ErrValidation)
 	}
 	return fileURL, nil
 }
@@ -166,7 +178,9 @@ func (p *GitHubProvider) GetDownloadURL(ctx context.Context, fileURL string) (st
 
 	_, err := url.Parse(fileURL)
 	if err != nil {
-		return "", fmt.Errorf("invalid GitHub URL: %w", err)
+		return "", ierr.WithError(err).
+			WithHint("Invalid GitHub URL").
+			Mark(ierr.ErrValidation)
 	}
 	return fileURL, nil
 }
