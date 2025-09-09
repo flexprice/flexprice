@@ -1,15 +1,12 @@
 package v1
 
 import (
-	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
-	"github.com/flexprice/flexprice/internal/temporal/models"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
@@ -285,19 +282,8 @@ func (h *PlanHandler) SyncPlanPrices(c *gin.Context) {
 		return
 	}
 
-	// Create workflow options
-	workflowOptions := models.StartWorkflowOptions{
-		ID:        fmt.Sprintf("price-sync-%s-%d", id, time.Now().Unix()),
-		TaskQueue: types.TemporalPriceSyncWorkflow.TaskQueueName(),
-	}
-
-	// Start the price sync workflow
-	workflowInput := models.PriceSyncWorkflowInput{
-		PlanID:        id,
-		TenantID:      types.GetTenantID(c.Request.Context()),
-		EnvironmentID: types.GetEnvironmentID(c.Request.Context()),
-	}
-	workflowRun, err := h.temporalService.StartWorkflow(c.Request.Context(), workflowOptions, types.TemporalPriceSyncWorkflow, workflowInput)
+	// Start the price sync workflow using the unified method
+	workflowRun, err := h.temporalService.ExecuteWorkflow(c.Request.Context(), types.TemporalPriceSyncWorkflow, id)
 	if err != nil {
 		c.Error(err)
 		return

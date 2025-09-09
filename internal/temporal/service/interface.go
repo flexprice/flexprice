@@ -35,4 +35,7 @@ type TemporalService interface {
 	// Utility operations
 	GetWorkflowHistory(ctx context.Context, workflowID, runID string) (interface{}, error)
 	DescribeWorkflowExecution(ctx context.Context, workflowID, runID string) (interface{}, error)
+
+	// Unified workflow execution - handles everything internally
+	ExecuteWorkflow(ctx context.Context, workflowType types.TemporalWorkflowType, params interface{}) (models.WorkflowRun, error)
 }

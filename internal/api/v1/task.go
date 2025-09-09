@@ -1,15 +1,12 @@
 package v1
 
 import (
-	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
-	"github.com/flexprice/flexprice/internal/temporal/models"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
@@ -60,16 +57,8 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 		return
 	}
 
-	// Start the temporal workflow for async processing
-	workflowInput := models.TaskProcessingWorkflowInput{
-		TaskID:        resp.ID,
-		TenantID:      types.GetTenantID(c.Request.Context()),
-		EnvironmentID: types.GetEnvironmentID(c.Request.Context()),
-	}
-	_, err = h.temporalService.StartWorkflow(c.Request.Context(), models.StartWorkflowOptions{
-		ID:        fmt.Sprintf("task-processing-%s-%d", resp.ID, time.Now().Unix()),
-		TaskQueue: types.TemporalTaskProcessingWorkflow.TaskQueueName(),
-	}, types.TemporalTaskProcessingWorkflow, workflowInput)
+	// Start the temporal workflow for async processing using the unified method
+	_, err = h.temporalService.ExecuteWorkflow(c.Request.Context(), types.TemporalTaskProcessingWorkflow, resp.ID)
 
 	if err != nil {
 		h.log.Error("failed to start temporal workflow", "error", err, "task_id", resp.ID)
@@ -234,7 +223,7 @@ func (h *TaskHandler) GetTaskProcessingResult(c *gin.Context) {
 		return
 	}
 
-	// Get workflow execution details
+	// Get workflow execution details using temporal service
 	workflowDetails, err := h.temporalService.DescribeWorkflowExecution(c.Request.Context(), workflowID, "")
 	if err != nil {
 		c.Error(err)

@@ -7,13 +7,28 @@ import (
 
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/temporal/models"
+	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/api/enums/v1"
 	"go.temporal.io/api/workflowservice/v1"
 	"go.temporal.io/sdk/client"
 )
 
-// temporalClientImpl implements the TemporalClient interface
-type temporalClientImpl struct {
+// APIKeyProvider provides headers for API key authentication
+type APIKeyProvider struct {
+	APIKey    string
+	Namespace string
+}
+
+// GetHeaders implements client.HeadersProvider using existing constants
+func (a *APIKeyProvider) GetHeaders(_ context.Context) (map[string]string, error) {
+	return map[string]string{
+		types.HeaderAuthorization: "Bearer " + a.APIKey,
+		"temporal-namespace":      a.Namespace,
+	}, nil
+}
+
+// temporalClient implements the TemporalClient interface
+type temporalClient struct {
 	client     client.Client
 	logger     *logger.Logger
 	isStarted  bool
@@ -41,7 +56,7 @@ func (f *temporalClientFactory) CreateClient(options *models.ClientOptions) (Tem
 		HostPort:      options.Address,
 		Namespace:     options.Namespace,
 		DataConverter: options.DataConverter,
-		HeadersProvider: &models.APIKeyProvider{
+		HeadersProvider: &APIKeyProvider{
 			APIKey:    options.APIKey,
 			Namespace: options.Namespace,
 		},
@@ -59,14 +74,14 @@ func (f *temporalClientFactory) CreateClient(options *models.ClientOptions) (Tem
 		return nil, err
 	}
 
-	return &temporalClientImpl{
+	return &temporalClient{
 		client: c,
 		logger: f.logger,
 	}, nil
 }
 
 // Start implements TemporalClient
-func (c *temporalClientImpl) Start(ctx context.Context) error {
+func (c *temporalClient) Start(ctx context.Context) error {
 	c.startMutex.Lock()
 	defer c.startMutex.Unlock()
 
@@ -86,7 +101,7 @@ func (c *temporalClientImpl) Start(ctx context.Context) error {
 }
 
 // Stop implements TemporalClient
-func (c *temporalClientImpl) Stop(ctx context.Context) error {
+func (c *temporalClient) Stop(ctx context.Context) error {
 	c.startMutex.Lock()
 	defer c.startMutex.Unlock()
 
@@ -101,13 +116,13 @@ func (c *temporalClientImpl) Stop(ctx context.Context) error {
 }
 
 // IsHealthy implements TemporalClient
-func (c *temporalClientImpl) IsHealthy(ctx context.Context) bool {
+func (c *temporalClient) IsHealthy(ctx context.Context) bool {
 	_, err := c.client.CheckHealth(ctx, &client.CheckHealthRequest{})
 	return err == nil
 }
 
 // StartWorkflow implements TemporalClient
-func (c *temporalClientImpl) StartWorkflow(ctx context.Context, options models.StartWorkflowOptions, workflow interface{}, args ...interface{}) (models.WorkflowRun, error) {
+func (c *temporalClient) StartWorkflow(ctx context.Context, options models.StartWorkflowOptions, workflow interface{}, args ...interface{}) (models.WorkflowRun, error) {
 	run, err := c.client.ExecuteWorkflow(ctx, options.ToSDKOptions(), workflow, args...)
 	if err != nil {
 		return nil, err
@@ -116,12 +131,12 @@ func (c *temporalClientImpl) StartWorkflow(ctx context.Context, options models.S
 }
 
 // SignalWorkflow implements TemporalClient
-func (c *temporalClientImpl) SignalWorkflow(ctx context.Context, workflowID, runID, signalName string, arg interface{}) error {
+func (c *temporalClient) SignalWorkflow(ctx context.Context, workflowID, runID, signalName string, arg interface{}) error {
 	return c.client.SignalWorkflow(ctx, workflowID, runID, signalName, arg)
 }
 
 // QueryWorkflow implements TemporalClient
-func (c *temporalClientImpl) QueryWorkflow(ctx context.Context, workflowID, runID, queryType string, args ...interface{}) (interface{}, error) {
+func (c *temporalClient) QueryWorkflow(ctx context.Context, workflowID, runID, queryType string, args ...interface{}) (interface{}, error) {
 	response, err := c.client.QueryWorkflow(ctx, workflowID, runID, queryType, args...)
 	if err != nil {
 		return nil, err
@@ -135,37 +150,37 @@ func (c *temporalClientImpl) QueryWorkflow(ctx context.Context, workflowID, runI
 }
 
 // CancelWorkflow implements TemporalClient
-func (c *temporalClientImpl) CancelWorkflow(ctx context.Context, workflowID, runID string) error {
+func (c *temporalClient) CancelWorkflow(ctx context.Context, workflowID, runID string) error {
 	return c.client.CancelWorkflow(ctx, workflowID, runID)
 }
 
 // TerminateWorkflow implements TemporalClient
-func (c *temporalClientImpl) TerminateWorkflow(ctx context.Context, workflowID, runID, reason string, details ...interface{}) error {
+func (c *temporalClient) TerminateWorkflow(ctx context.Context, workflowID, runID, reason string, details ...interface{}) error {
 	return c.client.TerminateWorkflow(ctx, workflowID, runID, reason, details...)
 }
 
 // CompleteActivity implements TemporalClient
-func (c *temporalClientImpl) CompleteActivity(ctx context.Context, taskToken []byte, result interface{}, err error) error {
+func (c *temporalClient) CompleteActivity(ctx context.Context, taskToken []byte, result interface{}, err error) error {
 	return c.client.CompleteActivity(ctx, taskToken, result, err)
 }
 
 // RecordActivityHeartbeat implements TemporalClient
-func (c *temporalClientImpl) RecordActivityHeartbeat(ctx context.Context, taskToken []byte, details ...interface{}) error {
+func (c *temporalClient) RecordActivityHeartbeat(ctx context.Context, taskToken []byte, details ...interface{}) error {
 	return c.client.RecordActivityHeartbeat(ctx, taskToken, details...)
 }
 
 // GetWorkflowHistory implements TemporalClient
-func (c *temporalClientImpl) GetWorkflowHistory(ctx context.Context, workflowID, runID string) (client.HistoryEventIterator, error) {
+func (c *temporalClient) GetWorkflowHistory(ctx context.Context, workflowID, runID string) (client.HistoryEventIterator, error) {
 	iter := c.client.GetWorkflowHistory(ctx, workflowID, runID, true, enums.HISTORY_EVENT_FILTER_TYPE_ALL_EVENT)
 	return iter, nil
 }
 
 // DescribeWorkflowExecution implements TemporalClient
-func (c *temporalClientImpl) DescribeWorkflowExecution(ctx context.Context, workflowID, runID string) (*workflowservice.DescribeWorkflowExecutionResponse, error) {
+func (c *temporalClient) DescribeWorkflowExecution(ctx context.Context, workflowID, runID string) (*workflowservice.DescribeWorkflowExecutionResponse, error) {
 	return c.client.DescribeWorkflowExecution(ctx, workflowID, runID)
 }
 
 // GetRawClient implements TemporalClient
-func (c *temporalClientImpl) GetRawClient() client.Client {
+func (c *temporalClient) GetRawClient() client.Client {
 	return c.client
 }

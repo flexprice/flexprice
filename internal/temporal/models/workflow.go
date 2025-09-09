@@ -86,6 +86,16 @@ type RetryPolicy struct {
 	NonRetryableErrorTypes []string
 }
 
+// WorkflowTimeout defines timeout settings for workflow execution
+type WorkflowTimeout struct {
+	// ExecutionTimeout is the timeout for the entire workflow execution
+	ExecutionTimeout time.Duration
+	// RunTimeout is the timeout for a single workflow run
+	RunTimeout time.Duration
+	// TaskTimeout is the timeout for processing workflow task
+	TaskTimeout time.Duration
+}
+
 // ToSDKRetryPolicy converts RetryPolicy to Temporal SDK temporal.RetryPolicy
 func (p *RetryPolicy) ToSDKRetryPolicy() *temporal.RetryPolicy {
 	if p == nil {

@@ -278,16 +278,108 @@ func (s *temporalService) DescribeWorkflowExecution(ctx context.Context, workflo
 	return s.client.DescribeWorkflowExecution(ctx, workflowID, runID)
 }
 
+// ExecuteWorkflow implements the unified workflow execution method
+func (s *temporalService) ExecuteWorkflow(ctx context.Context, workflowType types.TemporalWorkflowType, params interface{}) (models.WorkflowRun, error) {
+	// Build input with context validation
+	input, err := s.buildWorkflowInput(ctx, workflowType, params)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create workflow options with centralized ID generation
+	options := models.StartWorkflowOptions{
+		ID:        types.GenerateWorkflowIDForType(workflowType.String()),
+		TaskQueue: workflowType.TaskQueueName(),
+	}
+
+	// Execute workflow using existing StartWorkflow method
+	return s.StartWorkflow(ctx, options, workflowType, input)
+}
+
+// buildWorkflowInput builds the appropriate input for the workflow type
+func (s *temporalService) buildWorkflowInput(ctx context.Context, workflowType types.TemporalWorkflowType, params interface{}) (interface{}, error) {
+	// Validate context and workflow type
+	if err := s.validateTenantContext(ctx); err != nil {
+		return nil, err
+	}
+
+	if err := workflowType.Validate(); err != nil {
+		return nil, errors.WithError(err).
+			WithHint("Invalid workflow type provided").
+			Mark(errors.ErrValidation)
+	}
+
+	// Extract context values
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
+	// Handle different workflow types
+	switch workflowType {
+	case types.TemporalPriceSyncWorkflow:
+		return s.buildPriceSyncInput(tenantID, environmentID, params)
+	case types.TemporalTaskProcessingWorkflow:
+		return s.buildTaskProcessingInput(tenantID, environmentID, params)
+	default:
+		return nil, errors.NewError("unsupported workflow type").
+			WithHintf("Workflow type %s is not supported", workflowType.String()).
+			Mark(errors.ErrValidation)
+	}
+}
+
+// buildPriceSyncInput builds input for price sync workflow
+func (s *temporalService) buildPriceSyncInput(tenantID, environmentID string, params interface{}) (interface{}, error) {
+	// If already correct type, just ensure context is set
+	if input, ok := params.(models.PriceSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return input, nil
+	}
+
+	// Handle string input (plan ID)
+	planID, ok := params.(string)
+	if !ok || planID == "" {
+		return nil, errors.NewError("plan ID is required").
+			WithHint("Provide plan ID as string or PriceSyncWorkflowInput").
+			Mark(errors.ErrValidation)
+	}
+
+	return models.PriceSyncWorkflowInput{
+		PlanID:        planID,
+		TenantID:      tenantID,
+		EnvironmentID: environmentID,
+	}, nil
+}
+
+// buildTaskProcessingInput builds input for task processing workflow
+func (s *temporalService) buildTaskProcessingInput(tenantID, environmentID string, params interface{}) (interface{}, error) {
+	// If already correct type, just ensure context is set
+	if input, ok := params.(models.TaskProcessingWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return input, nil
+	}
+
+	// Handle string input (task ID)
+	taskID, ok := params.(string)
+	if !ok || taskID == "" {
+		return nil, errors.NewError("task ID is required").
+			WithHint("Provide task ID as string or TaskProcessingWorkflowInput").
+			Mark(errors.ErrValidation)
+	}
+
+	return models.TaskProcessingWorkflowInput{
+		TaskID:        taskID,
+		TenantID:      tenantID,
+		EnvironmentID: environmentID,
+	}, nil
+}
+
 // validateTenantContext validates that the required tenant context fields are present
 func (s *temporalService) validateTenantContext(ctx context.Context) error {
-	tc, err := models.FromContext(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get tenant context: %w", err)
+	if err := types.ValidateTenantContext(ctx); err != nil {
+		return errors.WithError(err).
+			WithHint("Ensure the request context contains tenant information").
+			Mark(errors.ErrValidation)
 	}
-
-	if tc.TenantID == "" {
-		return models.ErrInvalidTenantContext
-	}
-
 	return nil
 }
