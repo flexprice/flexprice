@@ -50,7 +50,7 @@ func (wm *temporalWorkerManagerImpl) GetOrCreateWorker(taskQueue types.TemporalT
 	defer wm.mux.Unlock()
 
 	if w, exists := wm.workers[taskQueue]; exists {
-		return w, nil
+		return w, nil 
 	}
 
 	// Create new worker with options
@@ -180,14 +180,14 @@ func (w *temporalWorkerImpl) IsStarted() bool {
 }
 
 // RegisterWorkflow implements TemporalWorker
-func (w *temporalWorkerImpl) RegisterWorkflow(workflow types.TemporalWorkflowType) error {
-	if err := workflow.Validate(); err != nil {
-		return errors.WithError(err).
-			WithHint("Invalid workflow type provided").
+func (w *temporalWorkerImpl) RegisterWorkflow(workflow interface{}) error {
+	if workflow == nil {
+		return errors.NewError("workflow is required").
+			WithHint("Workflow parameter cannot be nil").
 			Mark(errors.ErrValidation)
 	}
 	w.worker.RegisterWorkflow(workflow)
-	w.logger.Info("Registered workflow", "task_queue", w.taskQueue.String(), "workflow", workflow.String())
+	w.logger.Info("Registered workflow", "task_queue", w.taskQueue.String())
 	return nil
 }
 

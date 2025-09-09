@@ -61,10 +61,15 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 	}
 
 	// Start the temporal workflow for async processing
+	workflowInput := models.TaskProcessingWorkflowInput{
+		TaskID:        resp.ID,
+		TenantID:      types.GetTenantID(c.Request.Context()),
+		EnvironmentID: types.GetEnvironmentID(c.Request.Context()),
+	}
 	_, err = h.temporalService.StartWorkflow(c.Request.Context(), models.StartWorkflowOptions{
 		ID:        fmt.Sprintf("task-processing-%s-%d", resp.ID, time.Now().Unix()),
 		TaskQueue: types.TemporalTaskProcessingWorkflow.TaskQueueName(),
-	}, types.TemporalTaskProcessingWorkflow, resp.ID)
+	}, types.TemporalTaskProcessingWorkflow, workflowInput)
 
 	if err != nil {
 		h.log.Error("failed to start temporal workflow", "error", err, "task_id", resp.ID)

@@ -6,13 +6,14 @@ import (
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/temporal/activities"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
+	"github.com/flexprice/flexprice/internal/temporal/workflows"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
 // WorkerConfig defines the configuration for a specific task queue worker
 type WorkerConfig struct {
 	TaskQueue  types.TemporalTaskQueue
-	Workflows  []types.TemporalWorkflowType
+	Workflows  []interface{}
 	Activities []interface{}
 }
 
@@ -38,16 +39,16 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 
 // buildWorkerConfig creates a worker configuration for a specific task queue
 func buildWorkerConfig(taskQueue types.TemporalTaskQueue, planActivities *activities.PlanActivities, taskActivities *activities.TaskActivities) WorkerConfig {
-	workflowsList := []types.TemporalWorkflowType{}
+	workflowsList := []interface{}{}
 	activitiesList := []interface{}{}
 
 	switch taskQueue {
 	case types.TemporalTaskQueueTask:
-		workflowsList = append(workflowsList, types.TemporalTaskProcessingWorkflow)
+		workflowsList = append(workflowsList, workflows.TaskProcessingWorkflow)
 		activitiesList = append(activitiesList, taskActivities.ProcessTask)
 
 	case types.TemporalTaskQueuePrice:
-		workflowsList = append(workflowsList, types.TemporalPriceSyncWorkflow)
+		workflowsList = append(workflowsList, workflows.PriceSyncWorkflow)
 		activitiesList = append(activitiesList, planActivities.SyncPlanPrices)
 
 		// Other task queues will be added when workflows are implemented

@@ -400,6 +400,7 @@ func startServer(
 	case types.ModeAPI:
 		startAPIServer(lc, r, cfg, log)
 		startMessageRouter(lc, router, webhookService, onboardingService, log)
+		startTemporalWorker(lc, temporalService, params)
 
 	case types.ModeTemporalWorker:
 		startTemporalWorker(lc, temporalService, params)
@@ -426,16 +427,16 @@ func startTemporalWorker(
 ) {
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
+			// Register workflows and activities first (this creates the workers)
+			if err := temporal.RegisterWorkflowsAndActivities(temporalService, params); err != nil {
+				return fmt.Errorf("failed to register workflows and activities: %w", err)
+			}
 
 			// Start workers for all task queues
 			for _, taskQueue := range types.GetAllTaskQueues() {
 				if err := temporalService.StartWorker(taskQueue); err != nil {
 					return fmt.Errorf("failed to start worker for task queue %s: %w", taskQueue.String(), err)
 				}
-			}
-			// Register workflows and activities first
-			if err := temporal.RegisterWorkflowsAndActivities(temporalService, params); err != nil {
-				return fmt.Errorf("failed to register workflows and activities: %w", err)
 			}
 
 			return nil
