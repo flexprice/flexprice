@@ -2626,7 +2626,7 @@ type AlertMutation struct {
 	environment_id *string
 	entity_type    *string
 	entity_id      *string
-	alert_metric   *string
+	alert_metric   *types.AlertMetric
 	alert_state    *string
 	alert_info     *map[string]interface{}
 	clearedFields  map[string]struct{}
@@ -3116,12 +3116,12 @@ func (m *AlertMutation) ResetEntityID() {
 }
 
 // SetAlertMetric sets the "alert_metric" field.
-func (m *AlertMutation) SetAlertMetric(s string) {
-	m.alert_metric = &s
+func (m *AlertMutation) SetAlertMetric(tm types.AlertMetric) {
+	m.alert_metric = &tm
 }
 
 // AlertMetric returns the value of the "alert_metric" field in the mutation.
-func (m *AlertMutation) AlertMetric() (r string, exists bool) {
+func (m *AlertMutation) AlertMetric() (r types.AlertMetric, exists bool) {
 	v := m.alert_metric
 	if v == nil {
 		return
@@ -3132,7 +3132,7 @@ func (m *AlertMutation) AlertMetric() (r string, exists bool) {
 // OldAlertMetric returns the old "alert_metric" field's value of the Alert entity.
 // If the Alert object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *AlertMutation) OldAlertMetric(ctx context.Context) (v string, err error) {
+func (m *AlertMutation) OldAlertMetric(ctx context.Context) (v types.AlertMetric, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldAlertMetric is only allowed on UpdateOne operations")
 	}
@@ -3445,7 +3445,7 @@ func (m *AlertMutation) SetField(name string, value ent.Value) error {
 		m.SetEntityID(v)
 		return nil
 	case alert.FieldAlertMetric:
-		v, ok := value.(string)
+		v, ok := value.(types.AlertMetric)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}

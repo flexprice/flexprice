@@ -12,7 +12,7 @@ type Alert struct {
 	ID            string                 `json:"id"`
 	EntityType    string                 `json:"entity_type"`
 	EntityID      string                 `json:"entity_id,omitempty"`
-	AlertMetric   string                 `json:"alert_metric"`
+	AlertMetric   types.AlertMetric      `json:"alert_metric"`
 	AlertState    types.AlertState       `json:"alert_state"`
 	AlertInfo     map[string]interface{} `json:"alert_info,omitempty"`
 	EnvironmentID string                 `json:"environment_id"`
@@ -58,7 +58,7 @@ func (a *Alert) Validate() error {
 	if a.EntityType == "" {
 		return ierr.NewError("entity_type is required").Mark(ierr.ErrValidation)
 	}
-	if a.AlertMetric == "" {
+	if string(a.AlertMetric) == "" {
 		return ierr.NewError("alert_metric is required").Mark(ierr.ErrValidation)
 	}
 	return nil

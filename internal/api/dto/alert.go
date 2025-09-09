@@ -13,7 +13,7 @@ import (
 type CreateAlertRequest struct {
 	EntityType  string                 `json:"entity_type" validate:"required"`
 	EntityID    string                 `json:"entity_id"`
-	AlertMetric string                 `json:"alert_metric" validate:"required"`
+	AlertMetric types.AlertMetric      `json:"alert_metric" validate:"required"`
 	AlertInfo   map[string]interface{} `json:"alert_info,omitempty"`
 }
 
@@ -24,9 +24,19 @@ func (r *CreateAlertRequest) Validate() error {
 			WithHint("Entity type is required").
 			Mark(ierr.ErrValidation)
 	}
-	if r.AlertMetric == "" {
+	if string(r.AlertMetric) == "" {
 		return ierr.NewError("alert_metric is required").
 			WithHint("Alert metric is required").
+			Mark(ierr.ErrValidation)
+	}
+	// Validate that alert metric is one of the allowed values
+	switch r.AlertMetric {
+	case types.AlertMetricCreditBalance,
+		types.AlertMetricOngoingBalance:
+		// Valid metric
+	default:
+		return ierr.NewError("invalid alert_metric").
+			WithHint("Alert metric must be one of: credit_balance, ongoing_balance").
 			Mark(ierr.ErrValidation)
 	}
 	return nil
@@ -36,7 +46,7 @@ func (r *CreateAlertRequest) Validate() error {
 func (r *CreateAlertRequest) ToAlert(ctx context.Context) *alert.Alert {
 	now := time.Now().UTC()
 	return &alert.Alert{
-		ID:            types.GenerateUUIDWithPrefix("alert"),
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ALERT),
 		EntityType:    r.EntityType,
 		EntityID:      r.EntityID,
 		AlertMetric:   r.AlertMetric,
@@ -59,7 +69,7 @@ type AlertResponse struct {
 	ID            string                 `json:"id"`
 	EntityType    string                 `json:"entity_type"`
 	EntityID      string                 `json:"entity_id,omitempty"`
-	AlertMetric   string                 `json:"alert_metric"`
+	AlertMetric   types.AlertMetric      `json:"alert_metric"`
 	AlertState    string                 `json:"alert_state"`
 	AlertInfo     map[string]interface{} `json:"alert_info,omitempty"`
 	TenantID      string                 `json:"tenant_id"`
@@ -115,7 +125,7 @@ type CheckAlertsRequest struct {
 	EnvIDs      []string              `json:"env_ids" validate:"required"`
 	EntityType  string                `json:"entity_type" validate:"required"`
 	EntityIDs   []string              `json:"entity_ids,omitempty"`
-	AlertMetric string                `json:"alert_metric" validate:"required"`
+	AlertMetric types.AlertMetric     `json:"alert_metric" validate:"required"`
 	Threshold   *types.AlertThreshold `json:"threshold,omitempty"`
 }
 
@@ -136,9 +146,19 @@ func (r *CheckAlertsRequest) Validate() error {
 			WithHint("Entity type is required").
 			Mark(ierr.ErrValidation)
 	}
-	if r.AlertMetric == "" {
+	if string(r.AlertMetric) == "" {
 		return ierr.NewError("alert_metric is required").
 			WithHint("Alert metric is required").
+			Mark(ierr.ErrValidation)
+	}
+	// Validate that alert metric is one of the allowed values
+	switch r.AlertMetric {
+	case types.AlertMetricCreditBalance,
+		types.AlertMetricOngoingBalance:
+		// Valid metric
+	default:
+		return ierr.NewError("invalid alert_metric").
+			WithHint("Alert metric must be one of: credit_balance, ongoing_balance").
 			Mark(ierr.ErrValidation)
 	}
 	// Threshold is optional - if not provided, entity's own threshold will be used

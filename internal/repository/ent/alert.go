@@ -9,6 +9,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 type alertRepository struct {
@@ -96,7 +97,7 @@ func (r *alertRepository) GetLatestByEntity(ctx context.Context, tenantID, envir
 			entAlert.EnvironmentID(environmentID),
 			entAlert.EntityType(entityType),
 			entAlert.EntityID(entityID),
-			entAlert.AlertMetric(alertMetric),
+			entAlert.AlertMetric(types.AlertMetric(alertMetric)),
 		).
 		Order(ent.Desc(entAlert.FieldCreatedAt)).
 		First(ctx)
