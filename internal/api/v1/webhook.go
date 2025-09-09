@@ -16,8 +16,7 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
-	"github.com/stripe/stripe-go/v79"
-	"github.com/stripe/stripe-go/v79/client"
+	"github.com/stripe/stripe-go/v82"
 )
 
 // WebhookHandler handles webhook-related endpoints
@@ -310,8 +309,7 @@ func (h *WebhookHandler) getSessionIDFromPaymentIntent(ctx context.Context, paym
 	}
 
 	// Initialize Stripe client
-	stripeClient := &client.API{}
-	stripeClient.Init(stripeConfig.SecretKey, nil)
+	stripeClient := stripe.NewClient(stripeConfig.SecretKey, nil)
 
 	// List checkout sessions with the payment intent ID
 	params := &stripe.CheckoutSessionListParams{
@@ -319,17 +317,22 @@ func (h *WebhookHandler) getSessionIDFromPaymentIntent(ctx context.Context, paym
 	}
 	params.Limit = stripe.Int64(1)
 
-	iter := stripeClient.CheckoutSessions.List(params)
-	if iter.Err() != nil {
-		return "", iter.Err()
+	iter := stripeClient.V1CheckoutSessions.List(context.Background(), params)
+	var sessionID string
+
+	iter(func(session *stripe.CheckoutSession, err error) bool {
+		if err != nil {
+			return false // Stop iteration on error
+		}
+		sessionID = session.ID
+		return false // Stop after first result
+	})
+
+	if sessionID == "" {
+		return "", fmt.Errorf("no checkout session found for payment intent %s", paymentIntentID)
 	}
 
-	if iter.Next() {
-		session := iter.CheckoutSession()
-		return session.ID, nil
-	}
-
-	return "", fmt.Errorf("no checkout session found for payment intent %s", paymentIntentID)
+	return sessionID, nil
 }
 
 // handleCheckoutSessionCompleted handles checkout.session.completed webhook
