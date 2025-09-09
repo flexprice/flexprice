@@ -176,15 +176,15 @@ func (s *temporalService) RecordActivityHeartbeat(ctx context.Context, taskToken
 }
 
 // RegisterWorkflow implements TemporalService
-func (s *temporalService) RegisterWorkflow(taskQueue types.TemporalTaskQueue, workflow types.TemporalWorkflowType) error {
+func (s *temporalService) RegisterWorkflow(taskQueue types.TemporalTaskQueue, workflow interface{}) error {
 	if err := taskQueue.Validate(); err != nil {
 		return errors.WithError(err).
 			WithHint("Invalid task queue provided").
 			Mark(errors.ErrValidation)
 	}
-	if err := workflow.Validate(); err != nil {
-		return errors.WithError(err).
-			WithHint("Invalid workflow type provided").
+	if workflow == nil {
+		return errors.NewError("workflow is required").
+			WithHint("Workflow parameter cannot be nil").
 			Mark(errors.ErrValidation)
 	}
 

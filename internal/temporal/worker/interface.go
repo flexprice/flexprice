@@ -16,7 +16,7 @@ type TemporalWorker interface {
 	// IsStarted returns whether the worker is started
 	IsStarted() bool
 	// RegisterWorkflow registers a workflow with this worker
-	RegisterWorkflow(workflow types.TemporalWorkflowType) error
+	RegisterWorkflow(workflow interface{}) error
 	// RegisterActivity registers an activity with this worker
 	RegisterActivity(activity interface{}) error
 }

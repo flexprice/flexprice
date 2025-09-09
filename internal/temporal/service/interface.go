@@ -26,7 +26,7 @@ type TemporalService interface {
 	RecordActivityHeartbeat(ctx context.Context, taskToken []byte, details ...interface{}) error
 
 	// Worker operations
-	RegisterWorkflow(taskQueue types.TemporalTaskQueue, workflow types.TemporalWorkflowType) error
+	RegisterWorkflow(taskQueue types.TemporalTaskQueue, workflow interface{}) error
 	RegisterActivity(taskQueue types.TemporalTaskQueue, activity interface{}) error
 	StartWorker(taskQueue types.TemporalTaskQueue) error
 	StopWorker(taskQueue types.TemporalTaskQueue) error

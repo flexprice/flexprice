@@ -292,7 +292,12 @@ func (h *PlanHandler) SyncPlanPrices(c *gin.Context) {
 	}
 
 	// Start the price sync workflow
-	workflowRun, err := h.temporalService.StartWorkflow(c.Request.Context(), workflowOptions, types.TemporalPriceSyncWorkflow, id)
+	workflowInput := models.PriceSyncWorkflowInput{
+		PlanID:        id,
+		TenantID:      types.GetTenantID(c.Request.Context()),
+		EnvironmentID: types.GetEnvironmentID(c.Request.Context()),
+	}
+	workflowRun, err := h.temporalService.StartWorkflow(c.Request.Context(), workflowOptions, types.TemporalPriceSyncWorkflow, workflowInput)
 	if err != nil {
 		c.Error(err)
 		return
