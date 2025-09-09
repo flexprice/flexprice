@@ -50,7 +50,7 @@ func (wm *temporalWorkerManagerImpl) GetOrCreateWorker(taskQueue types.TemporalT
 	defer wm.mux.Unlock()
 
 	if w, exists := wm.workers[taskQueue]; exists {
-		return w, nil 
+		return w, nil
 	}
 
 	// Create new worker with options
@@ -146,14 +146,13 @@ func (w *temporalWorkerImpl) Start(ctx context.Context) error {
 		return nil
 	}
 
-	go func() {
-		if err := w.worker.Start(); err != nil {
-			w.logger.Error("Failed to start worker", "task_queue", w.taskQueue.String(), "error", err)
-		}
-	}()
+	// Start the worker in background and immediately return
+	if err := w.worker.Start(); err != nil {
+		w.logger.Error("Worker failed", "task_queue", w.taskQueue.String(), "error", err)
+	}
 
 	w.started = true
-	w.logger.Info("Started worker", "task_queue", w.taskQueue.String())
+	w.logger.Info("Worker started", "task_queue", w.taskQueue.String())
 	return nil
 }
 
