@@ -30,9 +30,9 @@ func (a *TaskActivities) ProcessTask(ctx context.Context, input models.ProcessTa
 		return nil, err
 	}
 
-	// Set context values
-	ctx = context.WithValue(ctx, types.CtxTenantID, input.TenantID)
-	ctx = context.WithValue(ctx, types.CtxEnvironmentID, input.EnvironmentID)
+	// Set context values using centralized utilities
+	ctx = types.SetTenantID(ctx, input.TenantID)
+	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
 
 	// Call the service method to process the task
 	// This contains all the business logic

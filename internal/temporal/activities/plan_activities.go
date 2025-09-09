@@ -48,8 +48,9 @@ func (a *PlanActivities) SyncPlanPrices(ctx context.Context, input SyncPlanPrice
 			Mark(ierr.ErrValidation)
 	}
 
-	ctx = context.WithValue(ctx, types.CtxTenantID, input.TenantID)
-	ctx = context.WithValue(ctx, types.CtxEnvironmentID, input.EnvironmentID)
+	// Set context values using centralized utilities
+	ctx = types.SetTenantID(ctx, input.TenantID)
+	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
 
 	result, err := a.planService.SyncPlanPrices(ctx, input.PlanID)
 	if err != nil {
