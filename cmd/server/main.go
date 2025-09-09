@@ -168,7 +168,6 @@ func main() {
 			// Temporal components
 			provideTemporalClient,
 			provideTemporalWorkerManager,
-			provideTemporalService,
 
 			// Proration
 			proration.NewCalculator,
@@ -227,6 +226,7 @@ func main() {
 			provideHandlers,
 			provideRouter,
 			provideTemporalConfig,
+			provideTemporalService,
 		),
 		fx.Invoke(
 			sentry.RegisterHooks,
