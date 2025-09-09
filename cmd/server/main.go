@@ -361,7 +361,9 @@ func provideTemporalWorkerManager(temporalClient client.TemporalClient, log *log
 }
 
 func provideTemporalService(temporalClient client.TemporalClient, workerManager worker.TemporalWorkerManager, log *logger.Logger) temporalservice.TemporalService {
-	return temporalservice.NewTemporalService(temporalClient, workerManager, log)
+	service := temporalservice.NewTemporalService(temporalClient, workerManager, log)
+	service.Start(context.Background())
+	return service
 }
 
 func startServer(
