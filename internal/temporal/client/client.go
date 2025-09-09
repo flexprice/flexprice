@@ -64,7 +64,11 @@ func (f *temporalClientFactory) CreateClient(options *models.ClientOptions) (Tem
 
 	// Configure TLS if enabled
 	if options.TLS {
-		sdkOptions.ConnectionOptions.TLS = &tls.Config{}
+		sdkOptions.ConnectionOptions.TLS = &tls.Config{
+			MinVersion: tls.VersionTLS12,
+			// Use system's root CA certificates for verification
+			// ServerName will be automatically set from the connection address
+		}
 	}
 
 	// Create the temporal client
