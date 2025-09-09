@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/alert"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // Alert is the model entity for the Alert schema.
@@ -37,7 +38,7 @@ type Alert struct {
 	// EntityID holds the value of the "entity_id" field.
 	EntityID *string `json:"entity_id,omitempty"`
 	// AlertMetric holds the value of the "alert_metric" field.
-	AlertMetric string `json:"alert_metric,omitempty"`
+	AlertMetric types.AlertMetric `json:"alert_metric,omitempty"`
 	// AlertState holds the value of the "alert_state" field.
 	AlertState string `json:"alert_state,omitempty"`
 	// AlertInfo holds the value of the "alert_info" field.
@@ -136,7 +137,7 @@ func (a *Alert) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field alert_metric", values[i])
 			} else if value.Valid {
-				a.AlertMetric = value.String
+				a.AlertMetric = types.AlertMetric(value.String)
 			}
 		case alert.FieldAlertState:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -218,7 +219,7 @@ func (a *Alert) String() string {
 	}
 	builder.WriteString(", ")
 	builder.WriteString("alert_metric=")
-	builder.WriteString(a.AlertMetric)
+	builder.WriteString(fmt.Sprintf("%v", a.AlertMetric))
 	builder.WriteString(", ")
 	builder.WriteString("alert_state=")
 	builder.WriteString(a.AlertState)

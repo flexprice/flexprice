@@ -91,7 +91,7 @@ func (s *alertService) CheckAlerts(ctx context.Context, req *dto.CheckAlertsRequ
 					"alert_state", alertState)
 
 				// Get latest alert for this entity
-				latestAlert, err := s.AlertRepo.GetLatestByEntity(ctx, tenantID, envID, req.EntityType, entity.ID, req.AlertMetric)
+				latestAlert, err := s.AlertRepo.GetLatestByEntity(ctx, tenantID, envID, req.EntityType, entity.ID, string(req.AlertMetric))
 				if err != nil {
 					s.Logger.Error("failed to get latest alert", "error", err, "entity_id", entity.ID)
 					continue
@@ -123,7 +123,7 @@ func (s *alertService) publishWebhookEvent(ctx context.Context, eventName string
 		TenantID:    a.TenantID,
 		EntityType:  a.EntityType,
 		EntityID:    a.EntityID,
-		AlertMetric: a.AlertMetric,
+		AlertMetric: types.AlertMetric(a.AlertMetric),
 		AlertState:  string(a.AlertState),
 		AlertInfo:   a.AlertInfo,
 	}
@@ -243,7 +243,7 @@ func (s *alertService) getEntityThreshold(ctx context.Context, entity *types.Ent
 }
 
 // getMetricValue retrieves the current value for a metric
-func (s *alertService) getMetricValue(ctx context.Context, entity *types.Entity, metric string) (float64, error) {
+func (s *alertService) getMetricValue(ctx context.Context, entity *types.Entity, metric types.AlertMetric) (float64, error) {
 	switch entity.Type {
 	case "wallet":
 		// Initialize wallet service with required dependencies
@@ -261,7 +261,7 @@ func (s *alertService) getMetricValue(ctx context.Context, entity *types.Entity,
 		}
 
 		switch metric {
-		case "credit_balance":
+		case types.AlertMetricCreditBalance:
 			// For credit balance, we can directly use the wallet's credit balance
 			if wallet.CreditBalance.IsZero() {
 				s.Logger.Warnw("wallet has zero credit balance",
@@ -270,7 +270,7 @@ func (s *alertService) getMetricValue(ctx context.Context, entity *types.Entity,
 			}
 			return wallet.CreditBalance.InexactFloat64(), nil
 
-		case "ongoing_balance":
+		case types.AlertMetricOngoingBalance:
 			// For ongoing balance, we need to calculate real-time balance including:
 			// - Current wallet balance
 			// - Unpaid invoices
@@ -349,7 +349,7 @@ func (s *alertService) determineAlertState(currentValue float64, threshold *type
 }
 
 // handleAlertStateChange handles changes in alert state
-func (s *alertService) handleAlertStateChange(ctx context.Context, entity *types.Entity, latestAlert *alert.Alert, newState types.AlertState, currentValue float64, threshold *types.AlertThreshold, alertMetric string) error {
+func (s *alertService) handleAlertStateChange(ctx context.Context, entity *types.Entity, latestAlert *alert.Alert, newState types.AlertState, currentValue float64, threshold *types.AlertThreshold, alertMetric types.AlertMetric) error {
 
 	// If no previous alert exists or state has changed
 	s.Logger.Infow("checking if new alert needed",

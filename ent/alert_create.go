@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/alert"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // AlertCreate is the builder for creating a Alert entity.
@@ -131,8 +132,8 @@ func (ac *AlertCreate) SetNillableEntityID(s *string) *AlertCreate {
 }
 
 // SetAlertMetric sets the "alert_metric" field.
-func (ac *AlertCreate) SetAlertMetric(s string) *AlertCreate {
-	ac.mutation.SetAlertMetric(s)
+func (ac *AlertCreate) SetAlertMetric(tm types.AlertMetric) *AlertCreate {
+	ac.mutation.SetAlertMetric(tm)
 	return ac
 }
 
@@ -250,7 +251,7 @@ func (ac *AlertCreate) check() error {
 		return &ValidationError{Name: "alert_metric", err: errors.New(`ent: missing required field "Alert.alert_metric"`)}
 	}
 	if v, ok := ac.mutation.AlertMetric(); ok {
-		if err := alert.AlertMetricValidator(v); err != nil {
+		if err := alert.AlertMetricValidator(string(v)); err != nil {
 			return &ValidationError{Name: "alert_metric", err: fmt.Errorf(`ent: validator failed for field "Alert.alert_metric": %w`, err)}
 		}
 	}

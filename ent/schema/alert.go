@@ -57,7 +57,8 @@ func (Alert) Fields() []ent.Field {
 				"postgres": "varchar(50)",
 			}).
 			NotEmpty().
-			Immutable(),
+			Immutable().
+			GoType(types.AlertMetric("")),
 
 		// Current state of the alert (ok, in_alarm)
 		field.String("alert_state").

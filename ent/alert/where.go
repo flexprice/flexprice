@@ -7,6 +7,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // ID filters vertices based on their ID field.
@@ -110,8 +111,9 @@ func EntityID(v string) predicate.Alert {
 }
 
 // AlertMetric applies equality check predicate on the "alert_metric" field. It's identical to AlertMetricEQ.
-func AlertMetric(v string) predicate.Alert {
-	return predicate.Alert(sql.FieldEQ(FieldAlertMetric, v))
+func AlertMetric(v types.AlertMetric) predicate.Alert {
+	vc := string(v)
+	return predicate.Alert(sql.FieldEQ(FieldAlertMetric, vc))
 }
 
 // AlertState applies equality check predicate on the "alert_state" field. It's identical to AlertStateEQ.
@@ -695,68 +697,87 @@ func EntityIDContainsFold(v string) predicate.Alert {
 }
 
 // AlertMetricEQ applies the EQ predicate on the "alert_metric" field.
-func AlertMetricEQ(v string) predicate.Alert {
-	return predicate.Alert(sql.FieldEQ(FieldAlertMetric, v))
+func AlertMetricEQ(v types.AlertMetric) predicate.Alert {
+	vc := string(v)
+	return predicate.Alert(sql.FieldEQ(FieldAlertMetric, vc))
 }
 
 // AlertMetricNEQ applies the NEQ predicate on the "alert_metric" field.
-func AlertMetricNEQ(v string) predicate.Alert {
-	return predicate.Alert(sql.FieldNEQ(FieldAlertMetric, v))
+func AlertMetricNEQ(v types.AlertMetric) predicate.Alert {
+	vc := string(v)
+	return predicate.Alert(sql.FieldNEQ(FieldAlertMetric, vc))
 }
 
 // AlertMetricIn applies the In predicate on the "alert_metric" field.
-func AlertMetricIn(vs ...string) predicate.Alert {
-	return predicate.Alert(sql.FieldIn(FieldAlertMetric, vs...))
+func AlertMetricIn(vs ...types.AlertMetric) predicate.Alert {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Alert(sql.FieldIn(FieldAlertMetric, v...))
 }
 
 // AlertMetricNotIn applies the NotIn predicate on the "alert_metric" field.
-func AlertMetricNotIn(vs ...string) predicate.Alert {
-	return predicate.Alert(sql.FieldNotIn(FieldAlertMetric, vs...))
+func AlertMetricNotIn(vs ...types.AlertMetric) predicate.Alert {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Alert(sql.FieldNotIn(FieldAlertMetric, v...))
 }
 
 // AlertMetricGT applies the GT predicate on the "alert_metric" field.
-func AlertMetricGT(v string) predicate.Alert {
-	return predicate.Alert(sql.FieldGT(FieldAlertMetric, v))
+func AlertMetricGT(v types.AlertMetric) predicate.Alert {
+	vc := string(v)
+	return predicate.Alert(sql.FieldGT(FieldAlertMetric, vc))
 }
 
 // AlertMetricGTE applies the GTE predicate on the "alert_metric" field.
-func AlertMetricGTE(v string) predicate.Alert {
-	return predicate.Alert(sql.FieldGTE(FieldAlertMetric, v))
+func AlertMetricGTE(v types.AlertMetric) predicate.Alert {
+	vc := string(v)
+	return predicate.Alert(sql.FieldGTE(FieldAlertMetric, vc))
 }
 
 // AlertMetricLT applies the LT predicate on the "alert_metric" field.
-func AlertMetricLT(v string) predicate.Alert {
-	return predicate.Alert(sql.FieldLT(FieldAlertMetric, v))
+func AlertMetricLT(v types.AlertMetric) predicate.Alert {
+	vc := string(v)
+	return predicate.Alert(sql.FieldLT(FieldAlertMetric, vc))
 }
 
 // AlertMetricLTE applies the LTE predicate on the "alert_metric" field.
-func AlertMetricLTE(v string) predicate.Alert {
-	return predicate.Alert(sql.FieldLTE(FieldAlertMetric, v))
+func AlertMetricLTE(v types.AlertMetric) predicate.Alert {
+	vc := string(v)
+	return predicate.Alert(sql.FieldLTE(FieldAlertMetric, vc))
 }
 
 // AlertMetricContains applies the Contains predicate on the "alert_metric" field.
-func AlertMetricContains(v string) predicate.Alert {
-	return predicate.Alert(sql.FieldContains(FieldAlertMetric, v))
+func AlertMetricContains(v types.AlertMetric) predicate.Alert {
+	vc := string(v)
+	return predicate.Alert(sql.FieldContains(FieldAlertMetric, vc))
 }
 
 // AlertMetricHasPrefix applies the HasPrefix predicate on the "alert_metric" field.
-func AlertMetricHasPrefix(v string) predicate.Alert {
-	return predicate.Alert(sql.FieldHasPrefix(FieldAlertMetric, v))
+func AlertMetricHasPrefix(v types.AlertMetric) predicate.Alert {
+	vc := string(v)
+	return predicate.Alert(sql.FieldHasPrefix(FieldAlertMetric, vc))
 }
 
 // AlertMetricHasSuffix applies the HasSuffix predicate on the "alert_metric" field.
-func AlertMetricHasSuffix(v string) predicate.Alert {
-	return predicate.Alert(sql.FieldHasSuffix(FieldAlertMetric, v))
+func AlertMetricHasSuffix(v types.AlertMetric) predicate.Alert {
+	vc := string(v)
+	return predicate.Alert(sql.FieldHasSuffix(FieldAlertMetric, vc))
 }
 
 // AlertMetricEqualFold applies the EqualFold predicate on the "alert_metric" field.
-func AlertMetricEqualFold(v string) predicate.Alert {
-	return predicate.Alert(sql.FieldEqualFold(FieldAlertMetric, v))
+func AlertMetricEqualFold(v types.AlertMetric) predicate.Alert {
+	vc := string(v)
+	return predicate.Alert(sql.FieldEqualFold(FieldAlertMetric, vc))
 }
 
 // AlertMetricContainsFold applies the ContainsFold predicate on the "alert_metric" field.
-func AlertMetricContainsFold(v string) predicate.Alert {
-	return predicate.Alert(sql.FieldContainsFold(FieldAlertMetric, v))
+func AlertMetricContainsFold(v types.AlertMetric) predicate.Alert {
+	vc := string(v)
+	return predicate.Alert(sql.FieldContainsFold(FieldAlertMetric, vc))
 }
 
 // AlertStateEQ applies the EQ predicate on the "alert_state" field.

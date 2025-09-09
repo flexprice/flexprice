@@ -1,6 +1,9 @@
 package webhookDto
 
-import "github.com/flexprice/flexprice/internal/api/dto"
+import (
+	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/types"
+)
 
 // InternalAlertEvent represents the internal event structure for alert webhooks
 type InternalAlertEvent struct {
@@ -10,7 +13,7 @@ type InternalAlertEvent struct {
 	AlertID       string                 `json:"alert_id"`
 	EntityType    string                 `json:"entity_type"`
 	EntityID      string                 `json:"entity_id,omitempty"`
-	AlertMetric   string                 `json:"alert_metric"`
+	AlertMetric   types.AlertMetric      `json:"alert_metric"`
 	AlertState    string                 `json:"alert_state"`
 	AlertInfo     map[string]interface{} `json:"alert_info,omitempty"`
 }
