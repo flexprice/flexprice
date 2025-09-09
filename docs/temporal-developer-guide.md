@@ -404,8 +404,8 @@ func (h *BillingHandler) ProcessInvoice(c *gin.Context) {
         return
     }
 
-    // Start workflow
-    workflowID := fmt.Sprintf("billing-workflow-%s", req.InvoiceID)
+    // Start workflow using centralized ID generation
+    workflowID := types.GenerateWorkflowIDWithContext("BillingWorkflow", req.InvoiceID)
     _, err := h.temporalService.StartWorkflow(c.Request.Context(), models.StartWorkflowOptions{
         ID:        workflowID,
         TaskQueue: types.TemporalTaskQueueBilling.String(),
