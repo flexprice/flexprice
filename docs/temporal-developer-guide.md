@@ -815,6 +815,86 @@ func TaskProcessingWorkflow(ctx workflow.Context, input models.TaskProcessingWor
 
 ---
 
+## 🔧 Simple Workflow Execution Pattern
+
+### **ExecuteWorkflow - The Primary Focus**
+
+The main pattern developers should focus on is the simple `ExecuteWorkflow` approach:
+
+```go
+// Simple workflow execution in API handlers
+func (h *UserHandler) ExportUserData(c *gin.Context) {
+    // Extract parameters
+    userID := c.Param("id")
+
+    // Execute workflow - simple one-liner
+    _, err := h.temporalService.ExecuteWorkflow(c.Request.Context(),
+        types.TemporalUserExportWorkflow,
+        models.UserExportWorkflowInput{
+            UserID:        userID,
+            TenantID:      types.GetTenantID(c.Request.Context()),
+            EnvironmentID: types.GetEnvironmentID(c.Request.Context()),
+        })
+
+    if err != nil {
+        c.Error(err)
+        return
+    }
+
+    c.JSON(http.StatusAccepted, gin.H{"message": "Workflow started"})
+}
+```
+
+**Why This Pattern is Preferred:**
+
+- ✅ **One-Line Execution**: Simple `ExecuteWorkflow()` call
+- ✅ **Automatic Context**: Handles tenant/environment context automatically
+- ✅ **Error Handling**: Built-in error propagation
+- ✅ **Non-blocking**: Returns immediately, workflow runs asynchronously
+- ✅ **Consistent**: Same pattern used across all handlers
+
+### **TLS Configuration**
+
+For secure connections to Temporal Cloud or production servers:
+
+```go
+// Configure TLS if enabled
+if options.TLS {
+	sdkOptions.ConnectionOptions.TLS = &tls.Config{
+		MinVersion: tls.VersionTLS12,
+		// Use system's root CA certificates for verification
+		// ServerName will be automatically set from the connection address
+	}
+}
+```
+
+**Security Benefits:**
+
+- ✅ **TLS 1.2+**: Enforces secure protocol
+- ✅ **Certificate Verification**: Uses system CAs
+- ✅ **Production Ready**: Suitable for production deployments
+
+### **Worker Lifecycle Management**
+
+```go
+// Stop implements TemporalWorker
+func (w *temporalWorkerImpl) Stop(ctx context.Context) error {
+	w.mux.Lock()
+	defer w.mux.Unlock()
+
+	if !w.started {
+		return nil
+	}
+
+	w.worker.Stop()
+	w.started = false
+	w.logger.Info("Worker stopped", "task_queue", w.taskQueue.String())
+	return nil
+}
+```
+
+---
+
 ## 📚 Additional Resources
 
 - [Temporal Go SDK Documentation](https://docs.temporal.io/dev-guide/go)
