@@ -8,6 +8,7 @@ type InternalSubscriptionEvent struct {
 	EventType      string `json:"event_type"`
 	SubscriptionID string `json:"subscription_id"`
 	TenantID       string `json:"tenant_id"`
+	EnvironmentID  string `json:"environment_id"`
 }
 
 // SubscriptionWebhookPayload represents the detailed payload for subscription payment webhooks

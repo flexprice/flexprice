@@ -6,6 +6,7 @@ import (
 	"github.com/flexprice/flexprice/internal/pubsub"
 	"github.com/flexprice/flexprice/internal/pubsub/kafka"
 	"github.com/flexprice/flexprice/internal/pubsub/memory"
+	"github.com/flexprice/flexprice/internal/sentry"
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/webhook/handler"
@@ -50,6 +51,7 @@ func providePayloadBuilderFactory(
 	customerService service.CustomerService,
 	paymentService service.PaymentService,
 	alertService service.AlertService,
+	sentry *sentry.Service,
 ) payload.PayloadBuilderFactory {
 	services := payload.NewServices(
 		invoiceService,
@@ -62,6 +64,7 @@ func providePayloadBuilderFactory(
 		customerService,
 		paymentService,
 		alertService,
+		sentry,
 	)
 	return payload.NewPayloadBuilderFactory(services)
 }
@@ -84,11 +87,3 @@ func providePubSub(
 	}
 	return nil
 }
-
-// // provideSvixService creates a new Svix service with error handling
-// func provideSvixService(
-// 	cfg *config.Configuration,
-// 	logger *logger.Logger,
-// ) (service.SvixService, error) {
-// 	return service.NewSvixService(cfg, logger)
-// }

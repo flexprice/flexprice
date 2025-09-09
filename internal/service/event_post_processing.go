@@ -425,6 +425,7 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 	featureMeterMap := make(map[string]*feature.Feature)                  // Map meter_id -> feature
 	subLineItemMap := make(map[string]*subscription.SubscriptionLineItem) // Map price_id -> line item
 
+	addonIDs := make([]string, 0) // Collects addon EntityIDs for bulk price fetching
 	// Extract meters, prices and line items from subscriptions
 	for _, sub := range subscriptions {
 		if sub.Plan == nil || sub.Plan.Prices == nil {
@@ -437,6 +438,9 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 			}
 
 			subLineItemMap[item.PriceID] = item
+			if item.EntityType == types.SubscriptionLineItemEntityTypeAddon {
+				addonIDs = append(addonIDs, item.EntityID)
+			}
 		}
 
 		for _, item := range sub.Plan.Prices {
@@ -448,6 +452,37 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 
 			if item.MeterID != "" && item.Meter != nil {
 				meterMap[item.MeterID] = item.Meter.ToMeter()
+			}
+		}
+	}
+
+	// Fetch addon prices in bulk if we have addon IDs
+	addonIDs = lo.Uniq(addonIDs)
+	if len(addonIDs) > 0 {
+		priceService := NewPriceService(s.ServiceParams)
+		priceFilter := types.NewNoLimitPriceFilter().
+			WithEntityIDs(addonIDs).
+			WithEntityType(types.PRICE_ENTITY_TYPE_ADDON).
+			WithStatus(types.StatusPublished).
+			WithExpand(string(types.ExpandMeters))
+
+		prices, err := priceService.GetPrices(ctx, priceFilter)
+		if err != nil {
+			s.Logger.Errorw("failed to get addon prices",
+				"error", err,
+				"event_id", event.ID,
+				"addon_count", len(addonIDs),
+			)
+			return results, err
+		}
+
+		for _, priceItem := range prices.Items {
+			if !priceItem.IsUsage() {
+				continue
+			}
+			priceMap[priceItem.ID] = priceItem.Price
+			if priceItem.MeterID != "" && priceItem.Meter != nil {
+				meterMap[priceItem.MeterID] = priceItem.Meter.ToMeter()
 			}
 		}
 	}

@@ -1,6 +1,9 @@
 package payload
 
-import "github.com/flexprice/flexprice/internal/service"
+import (
+	"github.com/flexprice/flexprice/internal/sentry"
+	"github.com/flexprice/flexprice/internal/service"
+)
 
 // Services container for all services needed by payload builders
 type Services struct {
@@ -14,6 +17,7 @@ type Services struct {
 	CustomerService     service.CustomerService
 	PaymentService      service.PaymentService
 	AlertService        service.AlertService
+	Sentry              *sentry.Service
 }
 
 // NewServices creates a new Services container
@@ -28,6 +32,7 @@ func NewServices(
 	customerService service.CustomerService,
 	paymentService service.PaymentService,
 	alertService service.AlertService,
+	sentry *sentry.Service,
 ) *Services {
 	return &Services{
 		InvoiceService:      invoiceService,
@@ -40,5 +45,6 @@ func NewServices(
 		CustomerService:     customerService,
 		PaymentService:      paymentService,
 		AlertService:        alertService,
+		Sentry:              sentry,
 	}
 }

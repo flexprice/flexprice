@@ -3023,6 +3023,8 @@ func (s *subscriptionService) ProcessSubscriptionRenewalDueAlert(ctx context.Con
 	s.Logger.Infow("found subscriptions due for renewal", "count", len(subscriptions))
 
 	for _, sub := range subscriptions {
+		ctx = context.WithValue(ctx, types.CtxTenantID, sub.TenantID)
+		ctx = context.WithValue(ctx, types.CtxEnvironmentID, sub.EnvironmentID)
 		s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionRenewalDue, sub.ID)
 	}
 
