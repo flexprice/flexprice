@@ -165,10 +165,6 @@ func main() {
 			// PubSub
 			pubsubRouter.NewRouter,
 
-			// Temporal components
-			provideTemporalClient,
-			provideTemporalWorkerManager,
-
 			// Proration
 			proration.NewCalculator,
 		),
@@ -223,10 +219,15 @@ func main() {
 	// API layer
 	opts = append(opts,
 		fx.Provide(
+			// Temporal components
+			provideTemporalConfig,
+			provideTemporalClient,
+			provideTemporalWorkerManager,
+			provideTemporalService,
+
+			// API components
 			provideHandlers,
 			provideRouter,
-			provideTemporalConfig,
-			provideTemporalService,
 		),
 		fx.Invoke(
 			sentry.RegisterHooks,

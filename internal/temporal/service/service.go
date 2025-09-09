@@ -10,8 +10,8 @@ import (
 	"github.com/flexprice/flexprice/internal/temporal/worker"
 )
 
-// temporalServiceImpl implements TemporalService
-type temporalServiceImpl struct {
+// temporalService implements TemporalService
+type temporalService struct {
 	client        client.TemporalClient
 	workerManager worker.TemporalWorkerManager
 	logger        *logger.Logger
@@ -19,7 +19,7 @@ type temporalServiceImpl struct {
 
 // NewTemporalService creates a new temporal service instance
 func NewTemporalService(client client.TemporalClient, workerManager worker.TemporalWorkerManager, logger *logger.Logger) TemporalService {
-	return &temporalServiceImpl{
+	return &temporalService{
 		client:        client,
 		workerManager: workerManager,
 		logger:        logger,
@@ -27,7 +27,7 @@ func NewTemporalService(client client.TemporalClient, workerManager worker.Tempo
 }
 
 // Start implements TemporalService
-func (s *temporalServiceImpl) Start(ctx context.Context) error {
+func (s *temporalService) Start(ctx context.Context) error {
 	// Validate context
 	if err := s.validateTenantContext(ctx); err != nil {
 		return err
@@ -43,7 +43,7 @@ func (s *temporalServiceImpl) Start(ctx context.Context) error {
 }
 
 // Stop implements TemporalService
-func (s *temporalServiceImpl) Stop(ctx context.Context) error {
+func (s *temporalService) Stop(ctx context.Context) error {
 	// Stop all workers first
 	if err := s.workerManager.StopAllWorkers(); err != nil {
 		s.logger.Error("Failed to stop all workers", "error", err)
@@ -59,12 +59,12 @@ func (s *temporalServiceImpl) Stop(ctx context.Context) error {
 }
 
 // IsHealthy implements TemporalService
-func (s *temporalServiceImpl) IsHealthy(ctx context.Context) bool {
+func (s *temporalService) IsHealthy(ctx context.Context) bool {
 	return s.client.IsHealthy(ctx)
 }
 
 // StartWorkflow implements TemporalService
-func (s *temporalServiceImpl) StartWorkflow(ctx context.Context, options models.StartWorkflowOptions, workflow interface{}, args ...interface{}) (models.WorkflowRun, error) {
+func (s *temporalService) StartWorkflow(ctx context.Context, options models.StartWorkflowOptions, workflow interface{}, args ...interface{}) (models.WorkflowRun, error) {
 	// Validate context and inputs
 	if err := s.validateTenantContext(ctx); err != nil {
 		return nil, err
@@ -77,7 +77,7 @@ func (s *temporalServiceImpl) StartWorkflow(ctx context.Context, options models.
 }
 
 // SignalWorkflow implements TemporalService
-func (s *temporalServiceImpl) SignalWorkflow(ctx context.Context, workflowID, runID, signalName string, arg interface{}) error {
+func (s *temporalService) SignalWorkflow(ctx context.Context, workflowID, runID, signalName string, arg interface{}) error {
 	// Validate context and inputs
 	if err := s.validateTenantContext(ctx); err != nil {
 		return err
@@ -93,7 +93,7 @@ func (s *temporalServiceImpl) SignalWorkflow(ctx context.Context, workflowID, ru
 }
 
 // QueryWorkflow implements TemporalService
-func (s *temporalServiceImpl) QueryWorkflow(ctx context.Context, workflowID, runID, queryType string, args ...interface{}) (interface{}, error) {
+func (s *temporalService) QueryWorkflow(ctx context.Context, workflowID, runID, queryType string, args ...interface{}) (interface{}, error) {
 	// Validate context and inputs
 	if err := s.validateTenantContext(ctx); err != nil {
 		return nil, err
@@ -109,7 +109,7 @@ func (s *temporalServiceImpl) QueryWorkflow(ctx context.Context, workflowID, run
 }
 
 // CancelWorkflow implements TemporalService
-func (s *temporalServiceImpl) CancelWorkflow(ctx context.Context, workflowID, runID string) error {
+func (s *temporalService) CancelWorkflow(ctx context.Context, workflowID, runID string) error {
 	// Validate context and inputs
 	if err := s.validateTenantContext(ctx); err != nil {
 		return err
@@ -122,7 +122,7 @@ func (s *temporalServiceImpl) CancelWorkflow(ctx context.Context, workflowID, ru
 }
 
 // TerminateWorkflow implements TemporalService
-func (s *temporalServiceImpl) TerminateWorkflow(ctx context.Context, workflowID, runID, reason string, details ...interface{}) error {
+func (s *temporalService) TerminateWorkflow(ctx context.Context, workflowID, runID, reason string, details ...interface{}) error {
 	// Validate context and inputs
 	if err := s.validateTenantContext(ctx); err != nil {
 		return err
@@ -135,7 +135,7 @@ func (s *temporalServiceImpl) TerminateWorkflow(ctx context.Context, workflowID,
 }
 
 // CompleteActivity implements TemporalService
-func (s *temporalServiceImpl) CompleteActivity(ctx context.Context, taskToken []byte, result interface{}, err error) error {
+func (s *temporalService) CompleteActivity(ctx context.Context, taskToken []byte, result interface{}, err error) error {
 	// Validate context and inputs
 	if err := s.validateTenantContext(ctx); err != nil {
 		return err
@@ -148,7 +148,7 @@ func (s *temporalServiceImpl) CompleteActivity(ctx context.Context, taskToken []
 }
 
 // RecordActivityHeartbeat implements TemporalService
-func (s *temporalServiceImpl) RecordActivityHeartbeat(ctx context.Context, taskToken []byte, details ...interface{}) error {
+func (s *temporalService) RecordActivityHeartbeat(ctx context.Context, taskToken []byte, details ...interface{}) error {
 	// Validate context and inputs
 	if err := s.validateTenantContext(ctx); err != nil {
 		return err
@@ -161,7 +161,7 @@ func (s *temporalServiceImpl) RecordActivityHeartbeat(ctx context.Context, taskT
 }
 
 // RegisterWorkflow implements TemporalService
-func (s *temporalServiceImpl) RegisterWorkflow(taskQueue string, workflow interface{}) error {
+func (s *temporalService) RegisterWorkflow(taskQueue string, workflow interface{}) error {
 	if taskQueue == "" {
 		return fmt.Errorf("task queue is required")
 	}
@@ -178,7 +178,7 @@ func (s *temporalServiceImpl) RegisterWorkflow(taskQueue string, workflow interf
 }
 
 // RegisterActivity implements TemporalService
-func (s *temporalServiceImpl) RegisterActivity(taskQueue string, activity interface{}) error {
+func (s *temporalService) RegisterActivity(taskQueue string, activity interface{}) error {
 	if taskQueue == "" {
 		return fmt.Errorf("task queue is required")
 	}
@@ -195,7 +195,7 @@ func (s *temporalServiceImpl) RegisterActivity(taskQueue string, activity interf
 }
 
 // StartWorker implements TemporalService
-func (s *temporalServiceImpl) StartWorker(taskQueue string) error {
+func (s *temporalService) StartWorker(taskQueue string) error {
 	if taskQueue == "" {
 		return fmt.Errorf("task queue is required")
 	}
@@ -204,7 +204,7 @@ func (s *temporalServiceImpl) StartWorker(taskQueue string) error {
 }
 
 // StopWorker implements TemporalService
-func (s *temporalServiceImpl) StopWorker(taskQueue string) error {
+func (s *temporalService) StopWorker(taskQueue string) error {
 	if taskQueue == "" {
 		return fmt.Errorf("task queue is required")
 	}
@@ -213,12 +213,12 @@ func (s *temporalServiceImpl) StopWorker(taskQueue string) error {
 }
 
 // StopAllWorkers implements TemporalService
-func (s *temporalServiceImpl) StopAllWorkers() error {
+func (s *temporalService) StopAllWorkers() error {
 	return s.workerManager.StopAllWorkers()
 }
 
 // GetWorkflowHistory implements TemporalService
-func (s *temporalServiceImpl) GetWorkflowHistory(ctx context.Context, workflowID, runID string) (interface{}, error) {
+func (s *temporalService) GetWorkflowHistory(ctx context.Context, workflowID, runID string) (interface{}, error) {
 	// Validate context and inputs
 	if err := s.validateTenantContext(ctx); err != nil {
 		return nil, err
@@ -231,7 +231,7 @@ func (s *temporalServiceImpl) GetWorkflowHistory(ctx context.Context, workflowID
 }
 
 // DescribeWorkflowExecution implements TemporalService
-func (s *temporalServiceImpl) DescribeWorkflowExecution(ctx context.Context, workflowID, runID string) (interface{}, error) {
+func (s *temporalService) DescribeWorkflowExecution(ctx context.Context, workflowID, runID string) (interface{}, error) {
 	// Validate context and inputs
 	if err := s.validateTenantContext(ctx); err != nil {
 		return nil, err
@@ -244,7 +244,7 @@ func (s *temporalServiceImpl) DescribeWorkflowExecution(ctx context.Context, wor
 }
 
 // validateTenantContext validates that the required tenant context fields are present
-func (s *temporalServiceImpl) validateTenantContext(ctx context.Context) error {
+func (s *temporalService) validateTenantContext(ctx context.Context) error {
 	tc, err := models.FromContext(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get tenant context: %w", err)
