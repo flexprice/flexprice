@@ -14,6 +14,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stripe/stripe-go/v82"
+	"github.com/stripe/stripe-go/v82/product"
 	"github.com/stripe/stripe-go/v82/webhook"
 )
 
@@ -1521,4 +1522,155 @@ func (s *StripeService) UpdateStripeCustomerMetadata(ctx context.Context, stripe
 		"flexprice_customer_id", customerID)
 
 	return nil
+}
+
+// CreateMeterInStripe creates a meter in Stripe and returns the Stripe meter ID
+func (s *StripeService) CreateMeterInStripe(ctx context.Context, meterID string) (string, error) {
+	// Get our meter
+	meterService := NewMeterService(s.MeterRepo)
+	ourMeter, err := meterService.GetMeter(ctx, meterID)
+	if err != nil {
+		return "", err
+	}
+
+	// Get Stripe connection for this environment
+	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderStripe)
+	if err != nil {
+		return "", ierr.NewError("failed to get Stripe connection").
+			WithHint("Stripe connection not configured for this environment").
+			Mark(ierr.ErrNotFound)
+	}
+
+	stripeConfig, err := s.GetDecryptedStripeConfig(conn)
+	if err != nil {
+		return "", ierr.NewError("failed to get Stripe configuration").
+			WithHint("Invalid Stripe configuration").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Initialize Stripe client
+	sc := stripe.NewClient(stripeConfig.SecretKey, nil)
+
+	// Map FlexPrice aggregation to Stripe formula
+	var stripeFormula string
+	switch ourMeter.Aggregation.Type {
+	case types.AggregationSum:
+		stripeFormula = "sum"
+	case types.AggregationCount:
+		stripeFormula = "count"
+	case types.AggregationMax:
+		stripeFormula = "last" // Stripe doesn't have max, use last as closest
+	default:
+		stripeFormula = "sum" // Default to sum
+	}
+
+	// Create meter in Stripe
+	params := &stripe.BillingMeterCreateParams{
+		DisplayName: stripe.String(ourMeter.Name),
+		EventName:   stripe.String(ourMeter.EventName),
+		DefaultAggregation: &stripe.BillingMeterCreateDefaultAggregationParams{
+			Formula: stripe.String(stripeFormula),
+		},
+	}
+
+	// Add value settings if aggregation has a field (for sum aggregation)
+	if ourMeter.Aggregation.Field != "" && ourMeter.Aggregation.Type == types.AggregationSum {
+		params.ValueSettings = &stripe.BillingMeterCreateValueSettingsParams{
+			EventPayloadKey: stripe.String(ourMeter.Aggregation.Field),
+		}
+	}
+
+	// Add customer mapping - standard mapping by customer ID
+	params.CustomerMapping = &stripe.BillingMeterCreateCustomerMappingParams{
+		Type:            stripe.String("by_id"),
+		EventPayloadKey: stripe.String("customer_id"),
+	}
+
+	stripeMeter, err := sc.V1BillingMeters.Create(context.Background(), params)
+	if err != nil {
+		return "", ierr.NewError("failed to create meter in Stripe").
+			WithHint("Stripe API error").
+			WithReportableDetails(map[string]interface{}{
+				"meter_id":     meterID,
+				"event_name":   ourMeter.EventName,
+				"display_name": ourMeter.Name,
+			}).
+			Mark(ierr.ErrHTTPClient)
+	}
+
+	s.Logger.Infow("successfully created meter in Stripe",
+		"meter_id", meterID,
+		"stripe_meter_id", stripeMeter.ID,
+		"event_name", ourMeter.EventName,
+		"display_name", ourMeter.Name,
+	)
+
+	return stripeMeter.ID, nil
+}
+
+// CreateProductInStripe creates a product in Stripe and returns the Stripe product ID
+func (s *StripeService) CreateProductInStripe(ctx context.Context, planID string) (string, error) {
+	// Get our plan
+	ourPlan, err := s.PlanRepo.Get(ctx, planID)
+	if err != nil {
+		return "", err
+	}
+
+	// Get Stripe connection for this environment
+	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderStripe)
+	if err != nil {
+		return "", ierr.NewError("failed to get Stripe connection").
+			WithHint("Stripe connection not configured for this environment").
+			Mark(ierr.ErrNotFound)
+	}
+
+	stripeConfig, err := s.GetDecryptedStripeConfig(conn)
+	if err != nil {
+		return "", ierr.NewError("failed to get Stripe configuration").
+			WithHint("Invalid Stripe configuration").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Set Stripe API key
+	stripe.Key = stripeConfig.SecretKey
+
+	// Create product in Stripe
+	params := &stripe.ProductParams{
+		Name: stripe.String(ourPlan.Name),
+	}
+
+	// Add description if available
+	if ourPlan.Description != "" {
+		params.Description = stripe.String(ourPlan.Description)
+	}
+
+	// Add metadata if lookup key is available
+	if ourPlan.LookupKey != "" {
+		params.Metadata = map[string]string{
+			"flexprice_plan_id":     ourPlan.ID,
+			"flexprice_lookup_key":  ourPlan.LookupKey,
+			"flexprice_tenant_id":   types.GetTenantID(ctx),
+			"flexprice_environment": types.GetEnvironmentID(ctx),
+		}
+		// Note: Stripe doesn't have a direct lookup_key for products like it does for prices
+		// We store the original lookup_key in metadata for reference
+	}
+
+	// Set product as active
+	params.Active = stripe.Bool(true)
+
+	stripeProduct, err := product.New(params)
+	if err != nil {
+		return "", ierr.NewError("failed to create product in Stripe").
+			WithHint("Stripe API error").
+			Mark(ierr.ErrHTTPClient)
+	}
+
+	s.Logger.Infow("successfully created product in Stripe",
+		"plan_id", planID,
+		"stripe_product_id", stripeProduct.ID,
+		"name", ourPlan.Name,
+		"lookup_key", ourPlan.LookupKey)
+
+	return stripeProduct.ID, nil
 }

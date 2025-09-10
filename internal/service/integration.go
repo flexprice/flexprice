@@ -8,6 +8,8 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/domain/plan"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -58,14 +60,19 @@ func (s *integrationService) SyncEntityToProviders(ctx context.Context, entityTy
 		return nil
 	}
 
-	// Only support customer sync for now
-	if entityType != types.IntegrationEntityTypeCustomer {
+	// Support customer, meter, and plan sync
+	switch entityType {
+	case types.IntegrationEntityTypeCustomer:
+		return s.syncCustomerToProviders(ctx, entityID, connections)
+	case types.IntegrationEntityTypeMeter:
+		return s.syncMeterToProviders(ctx, entityID, connections)
+	case types.IntegrationEntityTypePlan:
+		return s.syncPlanToProviders(ctx, entityID, connections)
+	default:
 		return ierr.NewError("unsupported entity type").
 			WithHint(fmt.Sprintf("Entity type %s is not supported for sync", entityType)).
 			Mark(ierr.ErrValidation)
 	}
-
-	return s.syncCustomerToProviders(ctx, entityID, connections)
 }
 
 // syncCustomerToProviders syncs a customer to all available providers for the tenant
@@ -244,6 +251,207 @@ func (s *integrationService) syncCustomerToStripe(ctx context.Context, customer 
 		"sync_direction":        "flexprice_to_provider",
 		"created_via":           "api",
 		"synced_at":             time.Now().UTC().Format(time.RFC3339),
+	}, nil
+}
+
+// syncMeterToProviders syncs a meter to all available providers for the tenant
+func (s *integrationService) syncMeterToProviders(ctx context.Context, meterID string, connections []*connection.Connection) error {
+	// Get the meter
+	meterService := NewMeterService(s.MeterRepo)
+	meter, err := meterService.GetMeter(ctx, meterID)
+	if err != nil {
+		return err
+	}
+
+	// Sync to each provider synchronously (caller already runs this in a goroutine)
+	for _, conn := range connections {
+		if err := s.syncMeterToProvider(ctx, meter, conn); err != nil {
+			s.Logger.Errorw("failed to sync meter to provider",
+				"meter_id", meterID,
+				"provider_type", conn.ProviderType,
+				"error", err)
+			// Continue syncing other providers even if one fails
+			continue
+		}
+		s.Logger.Infow("meter synced to provider successfully",
+			"meter_id", meterID,
+			"provider_type", conn.ProviderType)
+	}
+
+	return nil
+}
+
+// syncMeterToProvider syncs a meter to a specific provider
+func (s *integrationService) syncMeterToProvider(ctx context.Context, meter *meter.Meter, conn *connection.Connection) error {
+	// Use database transaction to prevent race conditions
+	return s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		// Check if mapping already exists for this meter_id, provider, tenant, and environment
+		// This check is now within the transaction, preventing race conditions
+		entityMappingService := NewEntityIntegrationMappingService(s.ServiceParams)
+
+		// Use standard list/search pattern instead of specific endpoint
+		filter := &types.EntityIntegrationMappingFilter{
+			EntityID:      meter.ID,
+			EntityType:    types.IntegrationEntityTypeMeter,
+			ProviderTypes: []string{string(conn.ProviderType)},
+		}
+
+		existingMappings, err := entityMappingService.GetEntityIntegrationMappings(txCtx, filter)
+		if err == nil && existingMappings != nil && len(existingMappings.Items) > 0 {
+			existingMapping := existingMappings.Items[0]
+			// Mapping exists, meter already synced
+			s.Logger.Infow("meter already mapped to provider",
+				"meter_id", meter.ID,
+				"provider_type", conn.ProviderType,
+				"provider_entity_id", existingMapping.ProviderEntityID)
+			return nil
+		}
+
+		// Sync based on provider type (API calls outside transaction to avoid long-running transactions)
+		var providerEntityID string
+		var metadata map[string]interface{}
+
+		switch conn.ProviderType {
+		case types.SecretProviderStripe:
+			providerEntityID, metadata, err = s.syncMeterToStripe(ctx, meter, conn)
+		// Add more providers as needed
+		default:
+			return ierr.NewError("unsupported provider type").
+				WithHint(fmt.Sprintf("Provider type %s is not supported", conn.ProviderType)).
+				Mark(ierr.ErrValidation)
+		}
+
+		if err != nil {
+			return err
+		}
+
+		// Create entity mapping (within transaction)
+		mappingReq := dto.CreateEntityIntegrationMappingRequest{
+			EntityID:         meter.ID,
+			EntityType:       types.IntegrationEntityTypeMeter,
+			ProviderType:     string(conn.ProviderType),
+			ProviderEntityID: providerEntityID,
+			Metadata:         metadata,
+		}
+
+		_, err = entityMappingService.CreateEntityIntegrationMapping(txCtx, mappingReq)
+		if err != nil {
+			s.Logger.Errorw("failed to create entity mapping",
+				"meter_id", meter.ID,
+				"provider_type", conn.ProviderType,
+				"provider_entity_id", providerEntityID,
+				"error", err)
+			return err
+		}
+
+		s.Logger.Infow("meter synced to provider successfully",
+			"meter_id", meter.ID,
+			"provider_type", conn.ProviderType,
+			"provider_entity_id", providerEntityID)
+
+		return nil
+	})
+}
+
+// syncMeterToStripe syncs a meter to Stripe
+func (s *integrationService) syncMeterToStripe(ctx context.Context, meter *meter.Meter, conn *connection.Connection) (string, map[string]interface{}, error) {
+	stripeService := NewStripeService(s.ServiceParams)
+
+	// Create meter in Stripe
+	stripeMeterID, err := stripeService.CreateMeterInStripe(ctx, meter.ID)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return stripeMeterID, map[string]interface{}{
+		"stripe_meter_name":       meter.Name,
+		"stripe_meter_event_name": meter.EventName,
+		"sync_direction":          "flexprice_to_provider",
+		"created_via":             "api",
+		"synced_at":               time.Now().UTC().Format(time.RFC3339),
+	}, nil
+}
+
+// syncPlanToProviders syncs a plan to all available providers for the tenant
+func (s *integrationService) syncPlanToProviders(ctx context.Context, planID string, connections []*connection.Connection) error {
+	// Get the plan
+	plan, err := s.PlanRepo.Get(ctx, planID)
+	if err != nil {
+		return err
+	}
+
+	// Sync to each provider
+	for _, conn := range connections {
+		if err := s.syncPlanToProvider(ctx, plan, conn); err != nil {
+			s.Logger.Errorw("failed to sync plan to provider",
+				"plan_id", planID,
+				"provider_type", conn.ProviderType,
+				"error", err)
+			// Continue with other providers even if one fails
+			continue
+		}
+		s.Logger.Infow("plan synced to provider successfully",
+			"plan_id", planID,
+			"provider_type", conn.ProviderType)
+	}
+
+	return nil
+}
+
+// syncPlanToProvider syncs a plan to a specific provider
+func (s *integrationService) syncPlanToProvider(ctx context.Context, plan *plan.Plan, conn *connection.Connection) error {
+	return s.DB.WithTx(ctx, func(ctx context.Context) error {
+		switch types.SecretProvider(conn.ProviderType) {
+		case types.SecretProviderStripe:
+			providerEntityID, metadata, err := s.syncPlanToStripe(ctx, plan, conn)
+			if err != nil {
+				return err
+			}
+
+			// Create integration mapping
+			entityMappingService := NewEntityIntegrationMappingService(s.ServiceParams)
+			_, err = entityMappingService.CreateEntityIntegrationMapping(ctx, dto.CreateEntityIntegrationMappingRequest{
+				EntityID:         plan.ID,
+				EntityType:       types.IntegrationEntityTypePlan,
+				ProviderType:     string(conn.ProviderType),
+				ProviderEntityID: providerEntityID,
+				Metadata:         metadata,
+			})
+			if err != nil {
+				return err
+			}
+
+			s.Logger.Infow("plan synced to provider successfully",
+				"plan_id", plan.ID,
+				"provider_type", conn.ProviderType,
+				"provider_entity_id", providerEntityID)
+
+			return nil
+		default:
+			return ierr.NewError("unsupported provider type").
+				WithHint(fmt.Sprintf("Provider type %s is not supported", conn.ProviderType)).
+				Mark(ierr.ErrValidation)
+		}
+	})
+}
+
+// syncPlanToStripe syncs a plan to Stripe
+func (s *integrationService) syncPlanToStripe(ctx context.Context, plan *plan.Plan, conn *connection.Connection) (string, map[string]interface{}, error) {
+	stripeService := NewStripeService(s.ServiceParams)
+
+	// Create product in Stripe
+	stripeProductID, err := stripeService.CreateProductInStripe(ctx, plan.ID)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return stripeProductID, map[string]interface{}{
+		"stripe_product_name":        plan.Name,
+		"stripe_product_lookup_key":  plan.LookupKey,
+		"stripe_product_description": plan.Description,
+		"sync_direction":             "flexprice_to_provider",
+		"created_via":                "api",
+		"synced_at":                  time.Now().UTC().Format(time.RFC3339),
 	}, nil
 }
 
