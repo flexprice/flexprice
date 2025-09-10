@@ -890,9 +890,25 @@ func (s *taskService) ProcessTaskWithStreaming(ctx context.Context, id string) e
 	var processor ChunkProcessor
 	switch t.EntityType {
 	case types.EntityTypeEvents:
-		processor = &EventsChunkProcessor{}
+		// Create event service for chunk processor
+		eventSvc := NewEventService(
+			s.EventRepo,
+			s.MeterRepo,
+			s.EventPublisher,
+			s.Logger,
+			s.Config,
+		)
+		processor = &EventsChunkProcessor{
+			eventService: eventSvc,
+			logger:       s.Logger,
+		}
 	case types.EntityTypeCustomers:
-		processor = &CustomersChunkProcessor{}
+		// Create customer service for chunk processor
+		customerSvc := NewCustomerService(s.ServiceParams)
+		processor = &CustomersChunkProcessor{
+			customerService: customerSvc,
+			logger:          s.Logger,
+		}
 	default:
 		return ierr.NewError("unsupported entity type").
 			WithHint("Unsupported entity type").
@@ -924,7 +940,8 @@ func (s *taskService) ProcessTaskWithStreaming(ctx context.Context, id string) e
 
 // EventsChunkProcessor processes chunks of event data
 type EventsChunkProcessor struct {
-	// Add any dependencies needed for event processing
+	eventService EventService
+	logger       *logger.Logger
 }
 
 // ProcessChunk processes a chunk of event records
@@ -934,7 +951,10 @@ func (p *EventsChunkProcessor) ProcessChunk(ctx context.Context, chunk [][]strin
 	failedRecords := 0
 	var errors []string
 
-	// Process each record in the chunk
+	// Batch process events for better performance
+	var eventRequests []*dto.IngestEventRequest
+
+	// Parse all records in the chunk
 	for i, record := range chunk {
 		processedRecords++
 
@@ -981,9 +1001,34 @@ func (p *EventsChunkProcessor) ProcessChunk(ctx context.Context, chunk [][]strin
 			continue
 		}
 
-		// TODO: Process the event (create it in the system)
-		// For now, we'll just count it as successful
-		successfulRecords++
+		// Parse timestamp
+		if err := p.parseTimestamp(eventReq); err != nil {
+			errors = append(errors, fmt.Sprintf("Record %d: timestamp error: %v", i, err))
+			failedRecords++
+			continue
+		}
+
+		eventRequests = append(eventRequests, eventReq)
+	}
+
+	// Batch create events
+	if len(eventRequests) > 0 {
+		successCount, err := p.batchCreateEvents(ctx, eventRequests)
+		if err != nil {
+			// If batch creation fails, try individual creation
+			p.logger.Warn("batch event creation failed, falling back to individual creation", "error", err)
+			for _, eventReq := range eventRequests {
+				if err := p.eventService.CreateEvent(ctx, eventReq); err != nil {
+					errors = append(errors, fmt.Sprintf("Event creation failed: %v", err))
+					failedRecords++
+				} else {
+					successfulRecords++
+				}
+			}
+		} else {
+			successfulRecords += successCount
+			failedRecords += len(eventRequests) - successCount
+		}
 	}
 
 	// Create error summary if there are errors
@@ -1001,9 +1046,37 @@ func (p *EventsChunkProcessor) ProcessChunk(ctx context.Context, chunk [][]strin
 	}, nil
 }
 
+// parseTimestamp parses the timestamp string
+func (p *EventsChunkProcessor) parseTimestamp(eventReq *dto.IngestEventRequest) error {
+	if eventReq.TimestampStr != "" {
+		timestamp, err := time.Parse(time.RFC3339, eventReq.TimestampStr)
+		if err != nil {
+			return fmt.Errorf("invalid timestamp format: %w", err)
+		}
+		eventReq.Timestamp = timestamp
+	} else {
+		eventReq.Timestamp = time.Now()
+	}
+	return nil
+}
+
+// batchCreateEvents creates multiple events in a batch
+func (p *EventsChunkProcessor) batchCreateEvents(ctx context.Context, events []*dto.IngestEventRequest) (int, error) {
+	successCount := 0
+	for _, eventReq := range events {
+		if err := p.eventService.CreateEvent(ctx, eventReq); err != nil {
+			p.logger.Error("failed to create event in batch", "error", err)
+			continue
+		}
+		successCount++
+	}
+	return successCount, nil
+}
+
 // CustomersChunkProcessor processes chunks of customer data
 type CustomersChunkProcessor struct {
-	// Add any dependencies needed for customer processing
+	customerService CustomerService
+	logger          *logger.Logger
 }
 
 // ProcessChunk processes a chunk of customer records
@@ -1068,8 +1141,13 @@ func (p *CustomersChunkProcessor) ProcessChunk(ctx context.Context, chunk [][]st
 			continue
 		}
 
-		// TODO: Process the customer (create/update it in the system)
-		// For now, we'll just count it as successful
+		// Process the customer (create or update)
+		if err := p.processCustomer(ctx, customerReq); err != nil {
+			errors = append(errors, fmt.Sprintf("Record %d: %v", i, err))
+			failedRecords++
+			continue
+		}
+
 		successfulRecords++
 	}
 
@@ -1086,4 +1164,79 @@ func (p *CustomersChunkProcessor) ProcessChunk(ctx context.Context, chunk [][]st
 		FailedRecords:     failedRecords,
 		ErrorSummary:      errorSummary,
 	}, nil
+}
+
+// processCustomer processes a single customer (create or update)
+func (p *CustomersChunkProcessor) processCustomer(ctx context.Context, customerReq *dto.CreateCustomerRequest) error {
+	// Check if customer with this external ID already exists
+	if customerReq.ExternalID != "" {
+		customer, err := p.customerService.GetCustomer(ctx, customerReq.ExternalID)
+		if err != nil {
+			p.logger.Error("failed to search for existing customer", "external_id", customerReq.ExternalID, "error", err)
+			return fmt.Errorf("failed to search for existing customer: %w", err)
+		}
+
+		// If customer exists, update it
+		if customer != nil && customer.Status == types.StatusPublished {
+			existingCustomer := customer
+
+			// Create update request from create request
+			updateReq := dto.UpdateCustomerRequest{}
+
+			// Only update fields that are different
+			if existingCustomer.ExternalID != customerReq.ExternalID {
+				updateReq.ExternalID = &customerReq.ExternalID
+			}
+			if existingCustomer.Email != customerReq.Email {
+				updateReq.Email = &customerReq.Email
+			}
+			if existingCustomer.Name != customerReq.Name {
+				updateReq.Name = &customerReq.Name
+			}
+			if existingCustomer.AddressLine1 != customerReq.AddressLine1 {
+				updateReq.AddressLine1 = &customerReq.AddressLine1
+			}
+			if existingCustomer.AddressLine2 != customerReq.AddressLine2 {
+				updateReq.AddressLine2 = &customerReq.AddressLine2
+			}
+			if existingCustomer.AddressCity != customerReq.AddressCity {
+				updateReq.AddressCity = &customerReq.AddressCity
+			}
+			if existingCustomer.AddressState != customerReq.AddressState {
+				updateReq.AddressState = &customerReq.AddressState
+			}
+			if existingCustomer.AddressPostalCode != customerReq.AddressPostalCode {
+				updateReq.AddressPostalCode = &customerReq.AddressPostalCode
+			}
+			if existingCustomer.AddressCountry != customerReq.AddressCountry {
+				updateReq.AddressCountry = &customerReq.AddressCountry
+			}
+
+			// Merge metadata
+			mergedMetadata := make(map[string]string)
+			maps.Copy(mergedMetadata, existingCustomer.Metadata)
+			maps.Copy(mergedMetadata, customerReq.Metadata)
+			updateReq.Metadata = mergedMetadata
+
+			// Update the customer
+			_, err := p.customerService.UpdateCustomer(ctx, existingCustomer.ID, updateReq)
+			if err != nil {
+				p.logger.Error("failed to update customer", "customer_id", existingCustomer.ID, "error", err)
+				return fmt.Errorf("failed to update customer: %w", err)
+			}
+
+			p.logger.Info("updated existing customer", "customer_id", existingCustomer.ID, "external_id", customerReq.ExternalID)
+			return nil
+		}
+	}
+
+	// If no existing customer found, create a new one
+	_, err := p.customerService.CreateCustomer(ctx, *customerReq)
+	if err != nil {
+		p.logger.Error("failed to create customer", "error", err)
+		return fmt.Errorf("failed to create customer: %w", err)
+	}
+
+	p.logger.Info("created new customer", "external_id", customerReq.ExternalID)
+	return nil
 }
