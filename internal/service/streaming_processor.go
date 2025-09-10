@@ -526,8 +526,10 @@ func (sp *StreamingProcessor) downloadFileStream(ctx context.Context, t *task.Ta
 		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
 	}
 
-	// Make the request
-	httpClient := &http.Client{}
+	// Make the request with extended timeout for large file downloads
+	httpClient := &http.Client{
+		Timeout: 10 * time.Minute, // Extended timeout for large file downloads
+	}
 	resp, err := httpClient.Do(httpReq)
 	if err != nil {
 		sp.Logger.Error("failed to download file", "error", err, "url", downloadURL, "provider", provider.GetProviderName())

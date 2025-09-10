@@ -25,25 +25,29 @@ func TaskProcessingWorkflow(ctx workflow.Context, input models.TaskProcessingWor
 	logger := workflow.GetLogger(ctx)
 	logger.Info("Starting task processing workflow", "task_id", input.TaskID)
 
-	// Define activity options
+	// Define activity options with extended timeouts for large file processing
 	ao := workflow.ActivityOptions{
-		StartToCloseTimeout: time.Hour * 2, // Allow up to 2 hours for task processing
+		StartToCloseTimeout:    time.Hour * 4,   // Extended to 4 hours for very large files
+		ScheduleToCloseTimeout: time.Hour * 4,   // Total time from scheduling to completion
+		ScheduleToStartTimeout: time.Minute * 5, // Time to wait for activity to start
+		HeartbeatTimeout:       time.Minute * 2, // Heartbeat timeout for long-running activities
 		RetryPolicy: &temporal.RetryPolicy{
-			InitialInterval:    time.Second * 5,
+			InitialInterval:    time.Second * 10,
 			BackoffCoefficient: 2.0,
-			MaximumInterval:    time.Minute * 5,
-			MaximumAttempts:    3,
+			MaximumInterval:    time.Minute * 10,
+			MaximumAttempts:    5, // Increased retry attempts
 		},
 	}
 	ctx = workflow.WithActivityOptions(ctx, ao)
 
 	// Execute the main task processing activity
 	var result models.ProcessTaskActivityResult
-	err := workflow.ExecuteActivity(ctx, ActivityProcessTask, models.ProcessTaskActivityInput{
+	activityInput := models.ProcessTaskActivityInput{
 		TaskID:        input.TaskID,
 		TenantID:      input.TenantID,
 		EnvironmentID: input.EnvironmentID,
-	}).Get(ctx, &result)
+	}
+	err := workflow.ExecuteActivity(ctx, ActivityProcessTask, activityInput).Get(ctx, &result)
 
 	if err != nil {
 		logger.Error("Task processing failed", "task_id", input.TaskID, "error", err)

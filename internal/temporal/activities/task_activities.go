@@ -2,6 +2,7 @@ package activities
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -47,8 +48,22 @@ func (a *TaskActivities) ProcessTask(ctx context.Context, input models.ProcessTa
 	// For now, use regular processing - streaming can be added later if needed
 	err := a.taskService.ProcessTask(ctx, input.TaskID)
 	if err != nil {
+		// Check if it's a timeout error and provide better context
+		if isTimeoutError(err) {
+			return nil, ierr.WithError(err).
+				WithHint("Task processing timed out. This may be due to a large file or network issues. Consider using streaming processing for very large files.").
+				WithReportableDetails(map[string]interface{}{
+					"task_id":    input.TaskID,
+					"error_type": "timeout",
+				}).
+				Mark(ierr.ErrHTTPClient)
+		}
+
 		return nil, ierr.WithError(err).
 			WithHint("Failed to process task").
+			WithReportableDetails(map[string]interface{}{
+				"task_id": input.TaskID,
+			}).
 			Mark(ierr.ErrValidation)
 	}
 
@@ -88,4 +103,16 @@ func (a *TaskActivities) sendHeartbeats(ctx context.Context, taskID string) {
 			})
 		}
 	}
+}
+
+// isTimeoutError checks if the error is related to timeouts
+func isTimeoutError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	errStr := err.Error()
+	return strings.Contains(errStr, "timeout") ||
+		strings.Contains(errStr, "deadline exceeded") ||
+		strings.Contains(errStr, "context deadline exceeded")
 }

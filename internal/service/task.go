@@ -151,16 +151,21 @@ func (s *taskService) ProcessTask(ctx context.Context, id string) error {
 			Mark(ierr.ErrValidation)
 	}
 
-	// Create progress tracker with the task object
-	tracker := newProgressTracker(ctx, t, 100, 30*time.Second, s.TaskRepo, s.Logger)
+	// Create a context with extended timeout for file processing
+	// This ensures we have enough time for large file downloads and processing
+	processingCtx, cancel := context.WithTimeout(ctx, 30*time.Minute)
+	defer cancel()
 
-	// Process based on entity type
+	// Create progress tracker with the extended context
+	tracker := newProgressTracker(processingCtx, t, 100, 30*time.Second, s.TaskRepo, s.Logger)
+
+	// Process based on entity type using the extended context
 	var processErr error
 	switch t.EntityType {
 	case types.EntityTypeEvents:
-		processErr = s.processEvents(ctx, t, tracker)
+		processErr = s.processEvents(processingCtx, t, tracker)
 	case types.EntityTypeCustomers:
-		processErr = s.processCustomers(ctx, t, tracker)
+		processErr = s.processCustomers(processingCtx, t, tracker)
 	default:
 		processErr = ierr.NewError("unsupported entity type").
 			WithHint("Unsupported entity type").
@@ -193,7 +198,53 @@ func (s *taskService) ProcessTask(ctx context.Context, id string) error {
 
 // downloadFile downloads a file from the given URL and returns the response body
 func (s *taskService) downloadFile(ctx context.Context, t *task.Task) ([]byte, error) {
-	return s.fileProcessor.DownloadFile(ctx, t)
+	// Add retry logic for file downloads with exponential backoff
+	maxRetries := 3
+	var lastErr error
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			// Exponential backoff: 1s, 2s, 4s
+			backoff := time.Duration(1<<uint(attempt)) * time.Second
+			s.Logger.Info("retrying file download", "attempt", attempt+1, "backoff", backoff, "url", t.FileURL)
+
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(backoff):
+			}
+		}
+
+		content, err := s.fileProcessor.DownloadFile(ctx, t)
+		if err == nil {
+			return content, nil
+		}
+
+		lastErr = err
+		s.Logger.Warn("file download failed", "attempt", attempt+1, "error", err, "url", t.FileURL)
+
+		// Check if it's a timeout error and we should retry
+		if isTimeoutError(err) && attempt < maxRetries-1 {
+			continue
+		}
+
+		// For non-timeout errors or final attempt, return immediately
+		break
+	}
+
+	return nil, lastErr
+}
+
+// isTimeoutError checks if the error is related to timeouts
+func isTimeoutError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	errStr := err.Error()
+	return strings.Contains(errStr, "timeout") ||
+		strings.Contains(errStr, "deadline exceeded") ||
+		strings.Contains(errStr, "context deadline exceeded")
 }
 
 // prepareCSVReader creates a configured CSV reader from the file content
@@ -883,6 +934,11 @@ func (s *taskService) ProcessTaskWithStreaming(ctx context.Context, id string) e
 			Mark(ierr.ErrValidation)
 	}
 
+	// Create a context with extended timeout for streaming file processing
+	// This ensures we have enough time for large file downloads and processing
+	processingCtx, cancel := context.WithTimeout(ctx, 30*time.Minute)
+	defer cancel()
+
 	// Use the file processor for streaming
 	streamingProcessor := s.fileProcessor.StreamingProcessor
 
@@ -918,9 +974,9 @@ func (s *taskService) ProcessTaskWithStreaming(ctx context.Context, id string) e
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	// Process file with streaming
+	// Process file with streaming using the extended context
 	config := DefaultStreamingConfig()
-	err = streamingProcessor.ProcessFileStream(ctx, t, processor, config)
+	err = streamingProcessor.ProcessFileStream(processingCtx, t, processor, config)
 	if err != nil {
 		// Update task status to failed
 		if updateErr := s.UpdateTaskStatus(ctx, id, types.TaskStatusFailed); updateErr != nil {
