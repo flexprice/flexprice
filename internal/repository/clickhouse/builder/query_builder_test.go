@@ -290,8 +290,8 @@ func TestParameterizedQueryValidation(t *testing.T) {
 	// Verify parameter count matches
 	assert.Equal(t, expectedParams, len(args), "Parameter count should match expected")
 
-	// Verify query uses proper placeholders (?1, ?2, etc.)
-	placeholderRegex := regexp.MustCompile(`\?\d+`)
+	// Verify query uses proper placeholders (?1, ?2, etc., and simple ?)
+	placeholderRegex := regexp.MustCompile(`\?\d+|\?`)
 	placeholders := placeholderRegex.FindAllString(query, -1)
 
 	// Should have at least as many placeholders as parameters
@@ -386,7 +386,7 @@ func TestTimeConditionsParameterization(t *testing.T) {
 
 			// Verify time conditions are generated correctly
 			if !tc.startTime.IsZero() {
-				assert.Contains(t, conditions, "timestamp >= toDateTime64(?%d, 3)")
+				assert.Contains(t, conditions, "timestamp >= toDateTime64(?, 3)")
 				// Verify the time argument is a formatted string
 				found := false
 				for _, arg := range timeArgs {
@@ -401,7 +401,7 @@ func TestTimeConditionsParameterization(t *testing.T) {
 			}
 
 			if !tc.endTime.IsZero() {
-				assert.Contains(t, conditions, "timestamp < toDateTime64(?%d, 3)")
+				assert.Contains(t, conditions, "timestamp < toDateTime64(?, 3)")
 			}
 
 			// Verify no raw time values appear in query

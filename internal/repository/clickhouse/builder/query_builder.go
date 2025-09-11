@@ -73,11 +73,9 @@ func (qb *QueryBuilder) WithBaseFilters(ctx context.Context, params *events.Usag
 
 	// Time conditions (now parameterized)
 	timeConditions, timeArgs := qb.parseTimeConditions(params)
-	for _, cond := range timeConditions {
-		conditions = append(conditions, fmt.Sprintf(cond, argIndex))
-		argIndex++
-	}
+	conditions = append(conditions, timeConditions...)
 	args = append(args, timeArgs...)
+	argIndex += len(timeArgs)
 
 	// Customer ID parameters
 	if params.ExternalCustomerID != "" {
@@ -334,12 +332,12 @@ func (qb *QueryBuilder) parseTimeConditions(params *events.UsageParams) ([]strin
 	var args []interface{}
 
 	if !params.StartTime.IsZero() {
-		conditions = append(conditions, "timestamp >= toDateTime64(?%d, 3)")
+		conditions = append(conditions, "timestamp >= toDateTime64(?, 3)")
 		args = append(args, formatClickHouseDateTime(params.StartTime))
 	}
 
 	if !params.EndTime.IsZero() {
-		conditions = append(conditions, "timestamp < toDateTime64(?%d, 3)")
+		conditions = append(conditions, "timestamp < toDateTime64(?, 3)")
 		args = append(args, formatClickHouseDateTime(params.EndTime))
 	}
 
