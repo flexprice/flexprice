@@ -614,18 +614,18 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 				continue
 			}
 
+			// Change: commenting this out to support all types of pricing models and aggregation.
 			// Check if we can process this price/meter combination
-			canProcess := s.isSupportedAggregationForPostProcessing(match.Meter.Aggregation.Type, match.Price.BillingModel)
-
-			if !canProcess {
-				s.Logger.Debugw("unsupported aggregation type or billing model, skipping",
-					"event_id", event.ID,
-					"meter_id", match.Meter.ID,
-					"aggregation_type", match.Meter.Aggregation.Type,
-					"billing_model", match.Price.BillingModel,
-				)
-				continue
-			}
+			// canProcess := s.isSupportedAggregationForPostProcessing(match.Meter.Aggregation.Type, match.Price.BillingModel)
+			// if !canProcess {
+			// 	s.Logger.Debugw("unsupported aggregation type or billing model, skipping",
+			// 		"event_id", event.ID,
+			// 		"meter_id", match.Meter.ID,
+			// 		"aggregation_type", match.Meter.Aggregation.Type,
+			// 		"billing_model", match.Price.BillingModel,
+			// 	)
+			// 	continue
+			// }
 
 			// Extract quantity based on meter aggregation
 			quantity, _ := s.extractQuantityFromEvent(event, match.Meter)
@@ -655,14 +655,15 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 			tierSnapshot := decimal.Zero
 			processedEventCopy.TierSnapshot = tierSnapshot
 
+			// Change: commenting this out to as this values won't be used further.
 			// Calculate cost details using the price service
 			// since per event price can be very small, we don't round the cost
-			priceService := NewPriceService(s.ServiceParams)
-			costDetails := priceService.CalculateCostWithBreakup(ctx, match.Price, billableQty, false)
+			// priceService := NewPriceService(s.ServiceParams)
+			// costDetails := priceService.CalculateCostWithBreakup(ctx, match.Price, billableQty, false)
 
 			// Set cost details on the processed event
-			processedEventCopy.UnitCost = costDetails.EffectiveUnitCost
-			processedEventCopy.Cost = costDetails.FinalCost
+			processedEventCopy.UnitCost = decimal.Zero
+			processedEventCopy.Cost = decimal.Zero
 			processedEventCopy.Currency = match.Price.Currency
 
 			processedEventsPerSub = append(processedEventsPerSub, processedEventCopy)
