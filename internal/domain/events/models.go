@@ -47,3 +47,14 @@ type UsageAnalyticPoint struct {
 	Cost       decimal.Decimal
 	EventCount uint64 // Number of events in this time window
 }
+
+// UsageByFeatureResult represents aggregated usage data for a feature
+type UsageByFeatureResult struct {
+	FeatureID        string
+	MeterID          string
+	SumTotal         decimal.Decimal
+	MaxTotal         decimal.Decimal
+	CountDistinctIDs uint64
+	CountUniqueQty   uint64
+	LatestQty        decimal.Decimal
+}

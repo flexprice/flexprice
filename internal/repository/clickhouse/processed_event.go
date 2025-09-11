@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -920,4 +921,93 @@ func (r *ProcessedEventRepository) getAnalyticsPoints(
 	}
 
 	return points, nil
+}
+
+// GetUsageBySubscriptionV2 gets usage data for a subscription using a single optimized query
+func (r *ProcessedEventRepository) GetUsageBySubscriptionV2(ctx context.Context, subscriptionID, externalCustomerID, environmentID, tenantID string, startTime, endTime time.Time) (map[string]*events.UsageByFeatureResult, error) {
+	// Start a span for this repository operation
+	span := StartRepositorySpan(ctx, "processed_event", "get_usage_by_subscription_v2", map[string]interface{}{
+		"subscription_id":      subscriptionID,
+		"external_customer_id": externalCustomerID,
+		"environment_id":       environmentID,
+		"tenant_id":            tenantID,
+		"start_time":           startTime,
+		"end_time":             endTime,
+	})
+	defer FinishSpan(span)
+
+	query := `
+		SELECT 
+			feature_id,
+			meter_id,
+			sum(qty_total)                     AS sum_total,
+			max(qty_total)                     AS max_total,
+			count(DISTINCT id)                 AS count_distinct_ids,
+			count(DISTINCT unique_hash)        AS count_unique_qty,
+			argMax(qty_total, "timestamp")     AS latest_qty
+		FROM events_processed
+		WHERE 
+			subscription_id = ?
+			AND external_customer_id = ?
+			AND environment_id = ?
+			AND tenant_id = ?
+			AND "timestamp" >= ?
+			AND "timestamp" < ?
+		GROUP BY feature_id, meter_id
+	`
+
+	log.Printf("Executing query: %s", query)
+	log.Printf("Params: %v", []interface{}{subscriptionID, externalCustomerID, environmentID, tenantID, startTime, endTime})
+
+	rows, err := r.store.GetConn().Query(ctx, query, subscriptionID, externalCustomerID, environmentID, tenantID, startTime, endTime)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to execute optimized subscription usage query").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_id":      subscriptionID,
+				"external_customer_id": externalCustomerID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	results := make(map[string]*events.UsageByFeatureResult)
+	for rows.Next() {
+		var featureID, meterID string
+		var sumTotal, maxTotal, latestQty decimal.Decimal
+		var countDistinctIDs, countUniqueQty uint64
+
+		err := rows.Scan(&featureID, &meterID, &sumTotal, &maxTotal, &countDistinctIDs, &countUniqueQty, &latestQty)
+		if err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to scan usage result").
+				Mark(ierr.ErrDatabase)
+		}
+
+		results[featureID] = &events.UsageByFeatureResult{
+			FeatureID:        featureID,
+			MeterID:          meterID,
+			SumTotal:         sumTotal,
+			MaxTotal:         maxTotal,
+			CountDistinctIDs: countDistinctIDs,
+			CountUniqueQty:   countUniqueQty,
+			LatestQty:        latestQty,
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Error iterating usage results").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	r.logger.Debugw("optimized subscription usage query completed",
+		"subscription_id", subscriptionID,
+		"feature_count", len(results))
+
+	return results, nil
 }
