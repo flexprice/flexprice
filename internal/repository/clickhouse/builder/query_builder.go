@@ -10,19 +10,33 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
+type ParameterizedQuery struct {
+	Query string
+	Args  []interface{}
+}
+
+type CTEComponent struct {
+	Name  string
+	Query string
+	Args  []interface{}
+}
+
 type QueryBuilder struct {
-	baseQuery    string
-	filterQuery  string
-	matchedQuery string
-	finalQuery   string
-	args         map[string]interface{}
-	filterGroups []events.FilterGroup
-	params       *events.UsageParams
+	baseQuery     *ParameterizedQuery
+	filterQuery   *ParameterizedQuery
+	matchedQuery  *ParameterizedQuery
+	finalQuery    *ParameterizedQuery
+	cteComponents []CTEComponent
+	params        *events.UsageParams
 }
 
 func NewQueryBuilder() *QueryBuilder {
 	return &QueryBuilder{
-		args: make(map[string]interface{}),
+		baseQuery:     &ParameterizedQuery{},
+		filterQuery:   &ParameterizedQuery{},
+		matchedQuery:  &ParameterizedQuery{},
+		finalQuery:    &ParameterizedQuery{},
+		cteComponents: make([]CTEComponent, 0),
 	}
 }
 
@@ -32,46 +46,72 @@ func (qb *QueryBuilder) getDeduplicationKey() string {
 }
 
 func (qb *QueryBuilder) WithBaseFilters(ctx context.Context, params *events.UsageParams) *QueryBuilder {
-	conditions := []string{
-		fmt.Sprintf("event_name = '%s'", params.EventName),
-	}
+	var conditions []string
+	var args []interface{}
+	argIndex := 1
 
+	// Event name parameter
+	conditions = append(conditions, fmt.Sprintf("event_name = ?%d", argIndex))
+	args = append(args, params.EventName)
+	argIndex++
+
+	// Tenant ID parameter
 	tenantID := types.GetTenantID(ctx)
 	if tenantID != "" {
-		conditions = append(conditions, fmt.Sprintf("tenant_id = '%s'", tenantID))
+		conditions = append(conditions, fmt.Sprintf("tenant_id = ?%d", argIndex))
+		args = append(args, tenantID)
+		argIndex++
 	}
 
-	// Add environment_id filter if present in context
+	// Environment ID parameter
 	environmentID := types.GetEnvironmentID(ctx)
 	if environmentID != "" {
-		conditions = append(conditions, fmt.Sprintf("environment_id = '%s'", environmentID))
+		conditions = append(conditions, fmt.Sprintf("environment_id = ?%d", argIndex))
+		args = append(args, environmentID)
+		argIndex++
 	}
 
-	conditions = append(conditions, parseTimeConditions(params)...)
+	// Time conditions (now parameterized)
+	timeConditions, timeArgs := qb.parseTimeConditions(params)
+	for _, cond := range timeConditions {
+		conditions = append(conditions, fmt.Sprintf(cond, argIndex))
+		argIndex++
+	}
+	args = append(args, timeArgs...)
 
+	// Customer ID parameters
 	if params.ExternalCustomerID != "" {
-		conditions = append(conditions, fmt.Sprintf("external_customer_id = '%s'", params.ExternalCustomerID))
+		conditions = append(conditions, fmt.Sprintf("external_customer_id = ?%d", argIndex))
+		args = append(args, params.ExternalCustomerID)
+		argIndex++
 	}
 	if params.CustomerID != "" {
-		conditions = append(conditions, fmt.Sprintf("customer_id = '%s'", params.CustomerID))
+		conditions = append(conditions, fmt.Sprintf("customer_id = ?%d", argIndex))
+		args = append(args, params.CustomerID)
+		argIndex++
 	}
 
+	// Filter parameters
 	if params.Filters != nil {
 		for property, values := range params.Filters {
 			if len(values) > 0 {
 				var condition string
 				if len(values) == 1 {
-					condition = fmt.Sprintf("JSONExtractString(properties, '%s') = '%s'", property, values[0])
+					condition = fmt.Sprintf("JSONExtractString(properties, '%s') = ?%d", property, argIndex)
+					args = append(args, values[0])
+					argIndex++
 				} else {
-					quotedValues := make([]string, len(values))
-					for i, v := range values {
-						quotedValues[i] = fmt.Sprintf("'%s'", v)
+					placeholders := make([]string, len(values))
+					for i := range values {
+						placeholders[i] = fmt.Sprintf("?%d", argIndex+i)
+						args = append(args, values[i])
 					}
 					condition = fmt.Sprintf(
 						"JSONExtractString(properties, '%s') IN (%s)",
 						property,
-						strings.Join(quotedValues, ","),
+						strings.Join(placeholders, ","),
 					)
+					argIndex += len(values)
 				}
 				conditions = append(conditions, condition)
 			}
@@ -79,15 +119,28 @@ func (qb *QueryBuilder) WithBaseFilters(ctx context.Context, params *events.Usag
 	}
 
 	qb.params = params
-	qb.baseQuery = fmt.Sprintf(`base_events AS (
+
+	whereClause := strings.Join(conditions, " AND ")
+	query := fmt.Sprintf(`base_events AS (
 			SELECT * FROM (
 				SELECT DISTINCT ON (%s) * FROM events WHERE %s ORDER BY %s DESC
 			)
 		)`,
 		qb.getDeduplicationKey(),
-		strings.Join(conditions, " AND "),
+		whereClause,
 		qb.getDeduplicationKey(),
 	)
+
+	qb.baseQuery = &ParameterizedQuery{
+		Query: query,
+		Args:  args,
+	}
+
+	qb.cteComponents = append(qb.cteComponents, CTEComponent{
+		Name:  "base_events",
+		Query: query,
+		Args:  args,
+	})
 
 	return qb
 }
@@ -98,28 +151,41 @@ func (qb *QueryBuilder) WithFilterGroups(ctx context.Context, groups []events.Fi
 	}
 
 	var filterConditions []string
+	var allArgs []interface{}
+	argIndex := 1
+
 	for _, group := range groups {
 		var conditions []string
+		var groupArgs []interface{}
+		localArgIndex := argIndex
+
 		for property, values := range group.Filters {
 			if len(values) == 0 {
 				continue
 			}
 			var condition string
 			if len(values) == 1 {
-				condition = fmt.Sprintf("JSONExtractString(properties, '%s') = '%s'", property, values[0])
+				condition = fmt.Sprintf("JSONExtractString(properties, '%s') = ?%d", property, localArgIndex)
+				groupArgs = append(groupArgs, values[0])
+				localArgIndex++
 			} else {
-				quotedValues := make([]string, len(values))
-				for i, v := range values {
-					quotedValues[i] = fmt.Sprintf("'%s'", v)
+				placeholders := make([]string, len(values))
+				for i := range values {
+					placeholders[i] = fmt.Sprintf("?%d", localArgIndex+i)
+					groupArgs = append(groupArgs, values[i])
 				}
 				condition = fmt.Sprintf(
 					"JSONExtractString(properties, '%s') IN (%s)",
 					property,
-					strings.Join(quotedValues, ","),
+					strings.Join(placeholders, ","),
 				)
+				localArgIndex += len(values)
 			}
 			conditions = append(conditions, condition)
 		}
+
+		// Update the global argument index
+		argIndex = localArgIndex
 
 		// Only add the filter group if it has conditions
 		if len(conditions) > 0 {
@@ -129,6 +195,7 @@ func (qb *QueryBuilder) WithFilterGroups(ctx context.Context, groups []events.Fi
 				group.Priority,
 				strings.Join(conditions, " AND "),
 			))
+			allArgs = append(allArgs, groupArgs...)
 		} else {
 			// For empty filter groups, use a constant true condition
 			filterConditions = append(filterConditions, fmt.Sprintf(
@@ -139,7 +206,7 @@ func (qb *QueryBuilder) WithFilterGroups(ctx context.Context, groups []events.Fi
 		}
 	}
 
-	qb.filterQuery = fmt.Sprintf(`filter_matches AS (
+	query := fmt.Sprintf(`filter_matches AS (
 		SELECT 
 			id,
 			timestamp,
@@ -152,7 +219,18 @@ func (qb *QueryBuilder) WithFilterGroups(ctx context.Context, groups []events.Fi
 		FROM base_events
 	)`, strings.Join(filterConditions, ",\n\t\t\t"))
 
-	qb.matchedQuery = `matched_events AS (
+	qb.filterQuery = &ParameterizedQuery{
+		Query: query,
+		Args:  allArgs,
+	}
+
+	qb.cteComponents = append(qb.cteComponents, CTEComponent{
+		Name:  "filter_matches",
+		Query: query,
+		Args:  allArgs,
+	})
+
+	matchedQuery := `matched_events AS (
 		SELECT
 			id,
 			timestamp,
@@ -173,74 +251,99 @@ func (qb *QueryBuilder) WithFilterGroups(ctx context.Context, groups []events.Fi
 		GROUP BY id, properties
 	)`
 
-	qb.filterGroups = groups
+	qb.matchedQuery = &ParameterizedQuery{
+		Query: matchedQuery,
+		Args:  []interface{}{},
+	}
+
+	// Split matched query into CTE components
+	matchedCTEs := strings.Split(matchedQuery, ",")
+	for i, cte := range matchedCTEs {
+		cte = strings.TrimSpace(cte)
+		if cte != "" {
+			if i == 0 {
+				cte = strings.TrimPrefix(cte, "matched_events AS (")
+			} else {
+				cte = strings.TrimSpace(cte)
+			}
+			qb.cteComponents = append(qb.cteComponents, CTEComponent{
+				Name:  fmt.Sprintf("matched_cte_%d", i),
+				Query: cte,
+				Args:  []interface{}{},
+			})
+		}
+	}
 
 	return qb
 }
 
 func (qb *QueryBuilder) WithAggregation(ctx context.Context, aggType types.AggregationType, propertyName string) *QueryBuilder {
 	var aggClause string
+	var args []interface{}
+	argIndex := 1
+
 	switch aggType {
 	case types.AggregationCount:
 		aggClause = "COUNT(*)"
 	case types.AggregationSum:
-		aggClause = fmt.Sprintf("SUM(CAST(JSONExtractString(properties, '%s') AS Float64))", propertyName)
+		aggClause = fmt.Sprintf("SUM(CAST(JSONExtractString(properties, ?%d) AS Float64))", argIndex)
+		args = append(args, propertyName)
+		argIndex++
 	case types.AggregationAvg:
-		aggClause = fmt.Sprintf("AVG(CAST(JSONExtractString(properties, '%s') AS Float64))", propertyName)
+		aggClause = fmt.Sprintf("AVG(CAST(JSONExtractString(properties, ?%d) AS Float64))", argIndex)
+		args = append(args, propertyName)
+		argIndex++
 	case types.AggregationCountUnique:
-		aggClause = fmt.Sprintf("COUNT(DISTINCT JSONExtractString(properties, '%s'))", propertyName)
+		aggClause = fmt.Sprintf("COUNT(DISTINCT JSONExtractString(properties, ?%d))", argIndex)
+		args = append(args, propertyName)
+		argIndex++
 	}
 
-	qb.finalQuery = fmt.Sprintf("SELECT best_match_group as filter_group_id, %s as value FROM best_matches GROUP BY best_match_group ORDER BY best_match_group", aggClause)
+	query := fmt.Sprintf("SELECT best_match_group as filter_group_id, %s as value FROM best_matches GROUP BY best_match_group ORDER BY best_match_group", aggClause)
+
+	qb.finalQuery = &ParameterizedQuery{
+		Query: query,
+		Args:  args,
+	}
 
 	return qb
 }
 
-func (qb *QueryBuilder) Build() (string, map[string]interface{}) {
-	var ctes []string
+func (qb *QueryBuilder) Build() (string, []interface{}) {
+	var cteParts []string
+	var allArgs []interface{}
 
-	// Add base query without WITH
-	if qb.baseQuery != "" {
-		ctes = append(ctes, strings.TrimPrefix(qb.baseQuery, "WITH "))
-	}
-
-	// Add filter query without WITH
-	if qb.filterQuery != "" {
-		ctes = append(ctes, strings.TrimPrefix(qb.filterQuery, "WITH "))
-	}
-
-	// Add matched query without WITH
-	if qb.matchedQuery != "" {
-		// Split the matched query into individual CTEs
-		matchedCTEs := strings.Split(strings.TrimPrefix(qb.matchedQuery, "WITH "), ",")
-		ctes = append(ctes, matchedCTEs...)
+	// Collect all CTE components
+	for _, component := range qb.cteComponents {
+		cteParts = append(cteParts, fmt.Sprintf("%s AS (%s)", component.Name, component.Query))
+		allArgs = append(allArgs, component.Args...)
 	}
 
 	// Join CTEs with commas
-	ctePart := strings.Join(ctes, ",\n")
+	ctePart := strings.Join(cteParts, ",\n")
 
 	// Combine CTEs with final query
-	query := fmt.Sprintf("WITH %s\n%s", ctePart, qb.finalQuery)
+	finalQuery := fmt.Sprintf("WITH %s\n%s", ctePart, qb.finalQuery.Query)
+	allArgs = append(allArgs, qb.finalQuery.Args...)
 
-	return query, qb.args
+	return finalQuery, allArgs
 }
 
-func parseTimeConditions(params *events.UsageParams) []string {
+func (qb *QueryBuilder) parseTimeConditions(params *events.UsageParams) ([]string, []interface{}) {
 	var conditions []string
+	var args []interface{}
 
 	if !params.StartTime.IsZero() {
-		conditions = append(conditions,
-			fmt.Sprintf("timestamp >= toDateTime64('%s', 3)",
-				formatClickHouseDateTime(params.StartTime)))
+		conditions = append(conditions, "timestamp >= toDateTime64(?%d, 3)")
+		args = append(args, formatClickHouseDateTime(params.StartTime))
 	}
 
 	if !params.EndTime.IsZero() {
-		conditions = append(conditions,
-			fmt.Sprintf("timestamp < toDateTime64('%s', 3)",
-				formatClickHouseDateTime(params.EndTime)))
+		conditions = append(conditions, "timestamp < toDateTime64(?%d, 3)")
+		args = append(args, formatClickHouseDateTime(params.EndTime))
 	}
 
-	return conditions
+	return conditions, args
 }
 
 func formatClickHouseDateTime(t time.Time) string {
