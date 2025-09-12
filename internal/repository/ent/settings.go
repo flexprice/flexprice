@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"encoding/json"
+
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/settings"
 	"github.com/flexprice/flexprice/internal/cache"
@@ -407,29 +409,59 @@ func (r *settingsRepository) GetAllTenantEnvSubscriptionSettings(ctx context.Con
 func extractSubscriptionConfig(value map[string]interface{}) *types.SubscriptionConfig {
 	// Get default values from central defaults
 	defaultSettings := types.GetDefaultSettings()
-	defaultConfig := defaultSettings[types.SettingKeySubscriptionConfig].DefaultValue
+	defaults := defaultSettings[types.SettingKeySubscriptionConfig].DefaultValue
 
-	config := &types.SubscriptionConfig{
-		GracePeriodDays:         defaultConfig["grace_period_days"].(int),
-		AutoCancellationEnabled: defaultConfig["auto_cancellation_enabled"].(bool),
-	}
+	var config types.SubscriptionConfig
 
-	// Extract grace_period_days
-	if gracePeriodDaysRaw, exists := value["grace_period_days"]; exists {
-		switch v := gracePeriodDaysRaw.(type) {
-		case float64:
-			config.GracePeriodDays = int(v)
-		case int:
-			config.GracePeriodDays = v
+	// Use the new conversion approach with defaults
+	err := convertMapToStructWithDefaults(value, &config, defaults)
+	if err != nil {
+		// If conversion fails, fall back to defaults
+		config = types.SubscriptionConfig{
+			GracePeriodDays:         defaults["grace_period_days"].(int),
+			AutoCancellationEnabled: defaults["auto_cancellation_enabled"].(bool),
 		}
 	}
 
-	// Extract auto_cancellation_enabled
-	if autoCancellationEnabledRaw, exists := value["auto_cancellation_enabled"]; exists {
-		if autoCancellationEnabled, ok := autoCancellationEnabledRaw.(bool); ok {
-			config.AutoCancellationEnabled = autoCancellationEnabled
-		}
+	return &config
+}
+
+// convertMapToStructWithDefaults is a local helper function for this repository
+// This is similar to the one in dto package but kept local to avoid circular dependencies
+func convertMapToStructWithDefaults(value map[string]interface{}, target interface{}, defaults map[string]interface{}) error {
+	if value == nil {
+		return ierr.NewError("value map is nil").
+			Mark(ierr.ErrValidation)
 	}
 
-	return config
+	// Merge defaults with actual values (actual values take precedence)
+	mergedValue := make(map[string]interface{})
+
+	// First, copy defaults
+	for k, v := range defaults {
+		mergedValue[k] = v
+	}
+
+	// Then, override with actual values
+	for k, v := range value {
+		mergedValue[k] = v
+	}
+
+	// Marshal the merged map to JSON
+	jsonBytes, err := json.Marshal(mergedValue)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("failed to marshal merged value to JSON").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Unmarshal JSON into target struct
+	err = json.Unmarshal(jsonBytes, target)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("failed to unmarshal JSON to target type").
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
 }
