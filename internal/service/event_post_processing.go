@@ -589,8 +589,6 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 			// Create a unique hash for deduplication
 			uniqueHash := s.generateUniqueHash(event, match.Meter)
 
-			// TODO: Check for duplicate events also maybe just call for COUNT_UNIQUE and not all cases
-
 			// Create a new processed event for each match
 			processedEventCopy := &events.ProcessedEvent{
 				Event:          *event,
@@ -614,19 +612,7 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 				continue
 			}
 
-			// NOTE: commenting this out to support all types of pricing models and aggregation.
-
-			// Check if we can process this price/meter combination
-			// canProcess := s.isSupportedAggregationForPostProcessing(match.Meter.Aggregation.Type, match.Price.BillingModel)
-			// if !canProcess {
-			// 	s.Logger.Debugw("unsupported aggregation type or billing model, skipping",
-			// 		"event_id", event.ID,
-			// 		"meter_id", match.Meter.ID,
-			// 		"aggregation_type", match.Meter.Aggregation.Type,
-			// 		"billing_model", match.Price.BillingModel,
-			// 	)
-			// 	continue
-			// }
+			// Support all types of pricing models and aggregation
 
 			// Extract quantity based on meter aggregation
 			quantity, _ := s.extractQuantityFromEvent(event, match.Meter)
@@ -644,26 +630,10 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 			// Store original quantity
 			processedEventCopy.QtyTotal = quantity
 
-			// Apply free units logic
-			freeUnitsApplied := decimal.Zero
-			billableQty := quantity
-
-			// Store free units applied and billable quantity
-			processedEventCopy.QtyFreeApplied = freeUnitsApplied
-			processedEventCopy.QtyBillable = billableQty
-
-			// Apply tiered pricing logic
-			tierSnapshot := decimal.Zero
-			processedEventCopy.TierSnapshot = tierSnapshot
-
-			// NOTE: commenting this out to as this values won't be used further.
-
-			// Calculate cost details using the price service
-			// since per event price can be very small, we don't round the cost
-			// priceService := NewPriceService(s.ServiceParams)
-			// costDetails := priceService.CalculateCostWithBreakup(ctx, match.Price, billableQty, false)
-
-			// Set cost details on the processed event
+			// Set lightweight values - no cost calculations needed
+			processedEventCopy.QtyFreeApplied = decimal.Zero
+			processedEventCopy.QtyBillable = quantity
+			processedEventCopy.TierSnapshot = decimal.Zero
 			processedEventCopy.UnitCost = decimal.Zero
 			processedEventCopy.Cost = decimal.Zero
 			processedEventCopy.Currency = match.Price.Currency
@@ -683,26 +653,6 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 
 	// If we got here, no events were processed
 	return results, nil
-}
-
-// isSupportedAggregationType checks if the aggregation type is supported for post-processing
-func (s *eventPostProcessingService) isSupportedAggregationType(agg types.AggregationType) bool {
-	return agg == types.AggregationCount || agg == types.AggregationSum
-}
-
-// isSupportedBillingModel checks if the billing model is supported for post-processing
-func (s *eventPostProcessingService) isSupportedBillingModel(billingModel types.BillingModel) bool {
-	// We support usage-based billing models
-	// FLAT_FEE is not appropriate for usage-based billing as it doesn't depend on consumption
-	return billingModel == types.BILLING_MODEL_FLAT_FEE
-}
-
-// isSupportedAggregationForPostProcessing checks if the aggregation type and billing model are supported
-func (s *eventPostProcessingService) isSupportedAggregationForPostProcessing(
-	agg types.AggregationType,
-	billingModel types.BillingModel,
-) bool {
-	return s.isSupportedAggregationType(agg) && s.isSupportedBillingModel(billingModel)
 }
 
 // Find matching prices for an event based on meter configuration and filters
