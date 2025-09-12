@@ -33,7 +33,7 @@ func NewFeatureService(params ServiceParams) FeatureService {
 }
 
 func (s *featureService) CreateFeature(ctx context.Context, req dto.CreateFeatureRequest) (*dto.FeatureResponse, error) {
-	meterService := NewMeterService(s.MeterRepo)
+	meterService := NewMeterServiceWithParams(s.ServiceParams)
 	err := req.Validate()
 	if err != nil {
 		return nil, err // Validation errors are already properly formatted in the DTO
@@ -53,6 +53,9 @@ func (s *featureService) CreateFeature(ctx context.Context, req dto.CreateFeatur
 				return nil, err
 			}
 			req.MeterID = meter.ID
+
+			// Sync meter to external providers asynchronously (meter service already handles this)
+			// No additional sync needed here as CreateMeter already handles it
 		}
 
 		// Validate meter status
@@ -212,7 +215,7 @@ func (s *featureService) UpdateFeature(ctx context.Context, id string, req dto.U
 
 	if feature.Type == types.FeatureTypeMetered && feature.MeterID != "" {
 		// update meter filters if provided
-		meterService := NewMeterService(s.MeterRepo)
+		meterService := NewMeterServiceWithParams(s.ServiceParams)
 		if req.Filters != nil {
 			if _, err := meterService.UpdateMeter(ctx, feature.MeterID, *req.Filters); err != nil {
 				return nil, err
