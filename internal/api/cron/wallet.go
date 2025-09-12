@@ -250,7 +250,7 @@ func (h *WalletCronHandler) CheckAlerts(c *gin.Context) {
 					)
 
 					// If current state is alert, update to ok (recovery)
-					if wallet.AlertState == string(types.AlertStateAlert) {
+					if wallet.AlertState == string(types.AlertStateInAlarm) {
 						if err := h.walletService.UpdateWalletAlertState(ctx, wallet.ID, types.AlertStateOk); err != nil {
 							h.logger.Errorw("failed to update wallet alert state",
 								"wallet_id", wallet.ID,
@@ -266,7 +266,7 @@ func (h *WalletCronHandler) CheckAlerts(c *gin.Context) {
 				}
 
 				// Skip if already in alert state
-				if wallet.AlertState == string(types.AlertStateAlert) {
+				if wallet.AlertState == string(types.AlertStateInAlarm) {
 					h.logger.Infow("skipping wallet - already in alert state",
 						"wallet_id", wallet.ID,
 					)
@@ -281,7 +281,7 @@ func (h *WalletCronHandler) CheckAlerts(c *gin.Context) {
 				)
 
 				// Update wallet state to alert
-				if err := h.walletService.UpdateWalletAlertState(ctx, wallet.ID, types.AlertStateAlert); err != nil {
+				if err := h.walletService.UpdateWalletAlertState(ctx, wallet.ID, types.AlertStateInAlarm); err != nil {
 					h.logger.Errorw("failed to update wallet alert state",
 						"wallet_id", wallet.ID,
 						"error", err,

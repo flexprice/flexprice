@@ -438,6 +438,10 @@ func (ilic *InvoiceLineItemCreate) defaults() {
 		v := invoicelineitem.DefaultEnvironmentID
 		ilic.mutation.SetEnvironmentID(v)
 	}
+	if _, ok := ilic.mutation.EntityType(); !ok {
+		v := invoicelineitem.DefaultEntityType
+		ilic.mutation.SetEntityType(v)
+	}
 	if _, ok := ilic.mutation.Amount(); !ok {
 		v := invoicelineitem.DefaultAmount
 		ilic.mutation.SetAmount(v)
@@ -577,7 +581,7 @@ func (ilic *InvoiceLineItemCreate) createSpec() (*InvoiceLineItem, *sqlgraph.Cre
 	}
 	if value, ok := ilic.mutation.EntityType(); ok {
 		_spec.SetField(invoicelineitem.FieldEntityType, field.TypeString, value)
-		_node.EntityType = &value
+		_node.EntityType = value
 	}
 	if value, ok := ilic.mutation.PlanDisplayName(); ok {
 		_spec.SetField(invoicelineitem.FieldPlanDisplayName, field.TypeString, value)

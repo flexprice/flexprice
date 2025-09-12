@@ -80,6 +80,10 @@ const (
 
 // alert event names
 const (
+	WebhookEventAlertTriggered = "alert.triggered"
+	WebhookEventAlertRecovered = "alert.recovered"
+
+	// Entity-specific alert events
 	WebhookEventWalletCreditBalanceDropped  = "wallet.credit_balance.dropped"
 	WebhookEventWalletOngoingBalanceDropped = "wallet.ongoing_balance.dropped"
 

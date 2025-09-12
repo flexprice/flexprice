@@ -16,6 +16,7 @@ type Services struct {
 	WalletService       service.WalletService
 	CustomerService     service.CustomerService
 	PaymentService      service.PaymentService
+	AlertService        service.AlertService
 	Sentry              *sentry.Service
 }
 
@@ -30,6 +31,7 @@ func NewServices(
 	walletService service.WalletService,
 	customerService service.CustomerService,
 	paymentService service.PaymentService,
+	alertService service.AlertService,
 	sentry *sentry.Service,
 ) *Services {
 	return &Services{
@@ -42,6 +44,7 @@ func NewServices(
 		WalletService:       walletService,
 		CustomerService:     customerService,
 		PaymentService:      paymentService,
+		AlertService:        alertService,
 		Sentry:              sentry,
 	}
 }
