@@ -863,18 +863,6 @@ func TestIntegrationBuildOutput(t *testing.T) {
 
 // TestTimeConditionsSecurity tests time condition security specifically
 func TestTimeConditionsSecurity(t *testing.T) {
-	t.Run("formatClickHouseDateTime_security", func(t *testing.T) {
-		// Test that formatClickHouseDateTime doesn't allow SQL injection
-		maliciousTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-		result := formatClickHouseDateTime(maliciousTime)
-
-		// Should be properly formatted without any SQL injection
-		assert.Equal(t, "2024-01-01 00:00:00.000", result)
-		assert.NotContains(t, result, ";", "Formatted time should not contain semicolons")
-		assert.NotContains(t, result, "'", "Formatted time should not contain quotes")
-		assert.NotContains(t, result, "--", "Formatted time should not contain comments")
-	})
-
 	t.Run("Boundary_time_conditions", func(t *testing.T) {
 		qb := NewQueryBuilder()
 		ctx := context.Background()

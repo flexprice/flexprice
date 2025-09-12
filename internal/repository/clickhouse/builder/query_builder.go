@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/types"
@@ -349,8 +348,4 @@ func (qb *QueryBuilder) parseTimeConditionsWithIndex(params *events.UsageParams,
 	}
 
 	return conditions, args, argIndex
-}
-
-func formatClickHouseDateTime(t time.Time) string {
-	return t.UTC().Format("2006-01-02 15:04:05.000")
 }
