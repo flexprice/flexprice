@@ -1,22 +1,18 @@
 package service
 
 import (
-	"bytes"
 	"context"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
 	"maps"
-	"net/http"
-	"regexp"
 	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/task"
 	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -27,10 +23,12 @@ type TaskService interface {
 	ListTasks(ctx context.Context, filter *types.TaskFilter) (*dto.ListTasksResponse, error)
 	UpdateTaskStatus(ctx context.Context, id string, status types.TaskStatus) error
 	ProcessTask(ctx context.Context, id string) error
+	ProcessTaskWithStreaming(ctx context.Context, id string) error
 }
 
 type taskService struct {
 	ServiceParams
+	fileProcessor *FileProcessor
 }
 
 func NewTaskService(
@@ -38,6 +36,7 @@ func NewTaskService(
 ) TaskService {
 	return &taskService{
 		ServiceParams: serviceParams,
+		fileProcessor: NewFileProcessor(serviceParams.Client, serviceParams.Logger),
 	}
 }
 
@@ -56,12 +55,8 @@ func (s *taskService) CreateTask(ctx context.Context, req dto.CreateTaskRequest)
 		return nil, err
 	}
 
-	// Start processing the task in sync for now
-	// TODO: Start processing the task in async using temporal
-	if err := s.ProcessTask(ctx, t.ID); err != nil {
-		s.Logger.Error("failed to process task", "error", err)
-		return nil, err
-	}
+	// Task is created and ready for processing
+	// The API layer will handle starting the temporal workflow
 
 	return dto.NewTaskResponse(t), nil
 }
@@ -156,16 +151,21 @@ func (s *taskService) ProcessTask(ctx context.Context, id string) error {
 			Mark(ierr.ErrValidation)
 	}
 
-	// Create progress tracker with the task object
-	tracker := newProgressTracker(ctx, t, 100, 30*time.Second, s.TaskRepo, s.Logger)
+	// Create a context with extended timeout for file processing
+	// This ensures we have enough time for large file downloads and processing
+	processingCtx, cancel := context.WithTimeout(ctx, 30*time.Minute)
+	defer cancel()
 
-	// Process based on entity type
+	// Create progress tracker with the extended context
+	tracker := newProgressTracker(processingCtx, t, 100, 30*time.Second, s.TaskRepo, s.Logger)
+
+	// Process based on entity type using the extended context
 	var processErr error
 	switch t.EntityType {
 	case types.EntityTypeEvents:
-		processErr = s.processEvents(ctx, t, tracker)
+		processErr = s.processEvents(processingCtx, t, tracker)
 	case types.EntityTypeCustomers:
-		processErr = s.processCustomers(ctx, t, tracker)
+		processErr = s.processCustomers(processingCtx, t, tracker)
 	default:
 		processErr = ierr.NewError("unsupported entity type").
 			WithHint("Unsupported entity type").
@@ -198,85 +198,62 @@ func (s *taskService) ProcessTask(ctx context.Context, id string) error {
 
 // downloadFile downloads a file from the given URL and returns the response body
 func (s *taskService) downloadFile(ctx context.Context, t *task.Task) ([]byte, error) {
-	// Get the actual download URL
-	downloadURL := t.FileURL
-	if strings.Contains(downloadURL, "drive.google.com") {
-		// Extract file ID from Google Drive URL
-		fileID := extractGoogleDriveFileID(downloadURL)
-		if fileID == "" {
-			return nil, ierr.NewError("invalid Google Drive URL").
-				WithHint("Invalid Google Drive URL").
-				WithReportableDetails(map[string]interface{}{
-					"url": downloadURL,
-				}).
-				Mark(ierr.ErrValidation)
+	// Add retry logic for file downloads with exponential backoff
+	maxRetries := 3
+	var lastErr error
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			// Exponential backoff: 1s, 2s, 4s
+			backoff := time.Duration(1<<uint(attempt)) * time.Second
+			s.Logger.Info("retrying file download", "attempt", attempt+1, "backoff", backoff, "url", t.FileURL)
+
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(backoff):
+			}
 		}
-		downloadURL = fmt.Sprintf("https://drive.google.com/uc?export=download&id=%s", fileID)
-		s.Logger.Debugw("converted Google Drive URL", "original", t.FileURL, "download_url", downloadURL)
+
+		content, err := s.fileProcessor.DownloadFile(ctx, t)
+		if err == nil {
+			return content, nil
+		}
+
+		lastErr = err
+		s.Logger.Warn("file download failed", "attempt", attempt+1, "error", err, "url", t.FileURL)
+
+		// Check if it's a timeout error and we should retry
+		if isTimeoutError(err) && attempt < maxRetries-1 {
+			continue
+		}
+
+		// For non-timeout errors or final attempt, return immediately
+		break
 	}
 
-	// Download file
-	req := &httpclient.Request{
-		Method: "GET",
-		URL:    downloadURL,
+	return nil, lastErr
+}
+
+// isTimeoutError checks if the error is related to timeouts
+func isTimeoutError(err error) bool {
+	if err == nil {
+		return false
 	}
 
-	resp, err := s.Client.Send(ctx, req)
-	if err != nil {
-		s.Logger.Error("failed to download file", "error", err, "url", downloadURL)
-		errorSummary := fmt.Sprintf("Failed to download file: %v", err)
-		t.ErrorSummary = &errorSummary
-		return nil, err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		s.Logger.Error("failed to download file", "status_code", resp.StatusCode, "url", downloadURL)
-		errorSummary := fmt.Sprintf("Failed to download file: HTTP %d", resp.StatusCode)
-		t.ErrorSummary = &errorSummary
-		return nil, ierr.NewError(fmt.Sprintf("failed to download file: %d", resp.StatusCode)).
-			WithHint("Failed to download file").
-			WithReportableDetails(map[string]interface{}{
-				"status_code": resp.StatusCode,
-				"url":         downloadURL,
-			}).
-			Mark(ierr.ErrHTTPClient)
-	}
-
-	// Log the first few bytes of the response for debugging
-	previewLen := 200
-	if len(resp.Body) < previewLen {
-		previewLen = len(resp.Body)
-	}
-	s.Logger.Debugw("received file content preview",
-		"preview", string(resp.Body[:previewLen]),
-		"content_type", resp.Headers["Content-Type"],
-		"content_length", len(resp.Body))
-
-	return resp.Body, nil
+	errStr := err.Error()
+	return strings.Contains(errStr, "timeout") ||
+		strings.Contains(errStr, "deadline exceeded") ||
+		strings.Contains(errStr, "context deadline exceeded")
 }
 
 // prepareCSVReader creates a configured CSV reader from the file content
 func (s *taskService) prepareCSVReader(fileContent []byte) (*csv.Reader, error) {
-	// Check for and remove BOM if present
-	if len(fileContent) >= 3 && fileContent[0] == 0xEF && fileContent[1] == 0xBB && fileContent[2] == 0xBF {
-		// BOM detected, remove it
-		fileContent = fileContent[3:]
-		s.Logger.Debug("DEBUG: BOM detected and removed from file content")
-	}
-
-	reader := csv.NewReader(bytes.NewReader(fileContent))
-
-	// Configure CSV reader to handle potential issues
-	reader.LazyQuotes = true       // Allow lazy quotes
-	reader.FieldsPerRecord = -1    // Allow variable number of fields
-	reader.ReuseRecord = true      // Reuse record memory
-	reader.TrimLeadingSpace = true // Trim leading space
-
-	return reader, nil
+	return s.fileProcessor.PrepareCSVReader(fileContent)
 }
 
-// processCSVFile is a generic function to process a CSV file with a custom row processor
-func (s *taskService) processCSVFile(
+// processFile is a generic function to process a file (CSV or JSON) with a custom row processor
+func (s *taskService) processFile(
 	ctx context.Context,
 	t *task.Task,
 	tracker task.ProgressTracker,
@@ -290,82 +267,158 @@ func (s *taskService) processCSVFile(
 		return err
 	}
 
-	// Prepare CSV reader
-	reader, err := s.prepareCSVReader(fileContent)
-	if err != nil {
-		return err
-	}
-
-	// Read headers
-	headers, err := reader.Read()
-	if err != nil {
-		previewLen := 200
-		if len(fileContent) < previewLen {
-			previewLen = len(fileContent)
-		}
-		s.Logger.Error("failed to read CSV headers",
-			"error", err,
-			"content_preview", string(fileContent[:previewLen]))
-		errorSummary := fmt.Sprintf("Failed to read CSV headers: %v", err)
-		t.ErrorSummary = &errorSummary
-		return ierr.NewError("failed to read CSV headers").
-			WithHint("Failed to read CSV headers").
-			WithReportableDetails(map[string]interface{}{
-				"error": err,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	s.Logger.Debugw("parsed CSV headers", "headers", headers)
-
-	// Process headers with the provided function
-	standardHeaders, specialColumns, err := processHeadersFunc(headers)
-	if err != nil {
-		errorSummary := fmt.Sprintf("Failed to process headers: %v", err)
-		t.ErrorSummary = &errorSummary
-		return err
-	}
-
-	// Debug: Print processed headers
-	s.Logger.Debug("DEBUG: Processed standard headers: %#v\n", standardHeaders)
-	s.Logger.Debug("DEBUG: Special columns: %#v\n", specialColumns)
-
-	// Validate required columns
-	if err := validateHeaders(standardHeaders); err != nil {
-		errorSummary := fmt.Sprintf("Invalid CSV format: %v", err)
-		t.ErrorSummary = &errorSummary
-		return err
-	}
-
-	// Process rows
-	lineNum := 1 // Start after headers
+	var headers []string
+	var standardHeaders []string
+	var specialColumns map[int]string
+	var lineNum int
 	var failureCount int
 	var errorLines []string // Track line numbers with errors
 
-	for {
-		lineNum++
-		record, err := reader.Read()
-		if err == io.EOF {
-			break
-		}
+	switch t.FileType {
+	case types.FileTypeCSV:
+		// Prepare CSV reader
+		reader, err := s.fileProcessor.PrepareCSVReader(fileContent)
 		if err != nil {
-			s.Logger.Error("failed to read CSV line", "line", lineNum, "error", err)
-			errorLines = append(errorLines, fmt.Sprintf("Line %d: Failed to read - %v", lineNum, err))
-			tracker.Increment(false, err)
-			failureCount++
-			continue
+			return err
 		}
 
-		// Process the row with the provided function
-		success, err := processRowFunc(lineNum, record, standardHeaders, specialColumns)
-		if !success {
-			errorLines = append(errorLines, fmt.Sprintf("Line %d: %v", lineNum, err))
-			tracker.Increment(false, err)
-			failureCount++
-			continue
+		// Read headers
+		headers, err = reader.Read()
+		if err != nil {
+			previewLen := 200
+			if len(fileContent) < previewLen {
+				previewLen = len(fileContent)
+			}
+			s.Logger.Error("failed to read CSV headers",
+				"error", err,
+				"content_preview", string(fileContent[:previewLen]))
+			errorSummary := fmt.Sprintf("Failed to read CSV headers: %v", err)
+			t.ErrorSummary = &errorSummary
+			return ierr.NewError("failed to read CSV headers").
+				WithHint("Failed to read CSV headers").
+				WithReportableDetails(map[string]interface{}{
+					"error": err,
+				}).
+				Mark(ierr.ErrValidation)
 		}
 
-		tracker.Increment(true, nil)
+		// Process headers with the provided function
+		standardHeaders, specialColumns, err = processHeadersFunc(headers)
+		if err != nil {
+			errorSummary := fmt.Sprintf("Failed to process headers: %v", err)
+			t.ErrorSummary = &errorSummary
+			return err
+		}
+
+		// Validate required columns
+		if err := validateHeaders(standardHeaders); err != nil {
+			errorSummary := fmt.Sprintf("Invalid CSV format: %v", err)
+			t.ErrorSummary = &errorSummary
+			return err
+		}
+
+		// Process rows
+		lineNum = 1 // Start after headers
+		for {
+			lineNum++
+			record, err := reader.Read()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				s.Logger.Error("failed to read CSV line", "line", lineNum, "error", err)
+				errorLines = append(errorLines, fmt.Sprintf("Line %d: Failed to read - %v", lineNum, err))
+				tracker.Increment(false, err)
+				failureCount++
+				continue
+			}
+
+			// Process the row with the provided function
+			success, err := processRowFunc(lineNum, record, standardHeaders, specialColumns)
+			if !success {
+				errorLines = append(errorLines, fmt.Sprintf("Line %d: %v", lineNum, err))
+				tracker.Increment(false, err)
+				failureCount++
+				continue
+			}
+
+			tracker.Increment(true, nil)
+		}
+
+	case types.FileTypeJSON:
+		// Prepare JSON reader
+		decoder, err := s.fileProcessor.PrepareJSONReader(fileContent)
+		if err != nil {
+			return err
+		}
+
+		// Extract headers from first object
+		headers, err = s.fileProcessor.JSONProcessor.ExtractHeaders(decoder)
+		if err != nil {
+			errorSummary := fmt.Sprintf("Failed to extract JSON headers: %v", err)
+			t.ErrorSummary = &errorSummary
+			return err
+		}
+
+		// Process headers with the provided function
+		standardHeaders, specialColumns, err = processHeadersFunc(headers)
+		if err != nil {
+			errorSummary := fmt.Sprintf("Failed to process headers: %v", err)
+			t.ErrorSummary = &errorSummary
+			return err
+		}
+
+		// Validate required columns
+		if err := validateHeaders(standardHeaders); err != nil {
+			errorSummary := fmt.Sprintf("Invalid JSON format: %v", err)
+			t.ErrorSummary = &errorSummary
+			return err
+		}
+
+		// Reset decoder for processing
+		decoder, err = s.fileProcessor.PrepareJSONReader(fileContent)
+		if err != nil {
+			return err
+		}
+
+		// Skip array start token
+		_, err = decoder.Token()
+		if err != nil {
+			return err
+		}
+
+		// Process objects
+		lineNum = 0
+		for decoder.More() {
+			lineNum++
+			var obj map[string]interface{}
+			if err := decoder.Decode(&obj); err != nil {
+				s.Logger.Error("failed to decode JSON object", "line", lineNum, "error", err)
+				errorLines = append(errorLines, fmt.Sprintf("Line %d: Failed to decode - %v", lineNum, err))
+				tracker.Increment(false, err)
+				failureCount++
+				continue
+			}
+
+			// Convert object to string array matching CSV format
+			record := make([]string, len(headers))
+			for i, header := range headers {
+				if val, ok := obj[header]; ok {
+					record[i] = fmt.Sprintf("%v", val)
+				}
+			}
+
+			// Process the row with the provided function
+			success, err := processRowFunc(lineNum, record, standardHeaders, specialColumns)
+			if !success {
+				errorLines = append(errorLines, fmt.Sprintf("Line %d: %v", lineNum, err))
+				tracker.Increment(false, err)
+				failureCount++
+				continue
+			}
+
+			tracker.Increment(true, nil)
+		}
 	}
 
 	// Return error if any rows failed
@@ -483,8 +536,8 @@ func (s *taskService) processEvents(ctx context.Context, t *task.Task, tracker t
 		return true, nil
 	}
 
-	// Process the CSV file with the event-specific processors
-	return s.processCSVFile(
+	// Process the file with the event-specific processors
+	return s.processFile(
 		ctx,
 		t,
 		tracker,
@@ -653,8 +706,8 @@ func (s *taskService) processCustomers(ctx context.Context, t *task.Task, tracke
 		return true, nil
 	}
 
-	// Process the CSV file with the customer-specific processors
-	return s.processCSVFile(
+	// Process the file with the customer-specific processors
+	return s.processFile(
 		ctx,
 		t,
 		tracker,
@@ -864,21 +917,382 @@ func (t *progressTracker) flush() {
 	t.errors = t.errors[:0] // Clear errors after update
 }
 
-func extractGoogleDriveFileID(url string) string {
-	// Handle different Google Drive URL formats
-	patterns := []string{
-		`/file/d/([^/]+)`,   // Format: /file/d/{fileId}/
-		`id=([^&]+)`,        // Format: ?id={fileId}
-		`/d/([^/]+)`,        // Format: /d/{fileId}/
-		`/open\?id=([^&]+)`, // Format: /open?id={fileId}
+// ProcessTaskWithStreaming processes a task using streaming for large files
+func (s *taskService) ProcessTaskWithStreaming(ctx context.Context, id string) error {
+	// Update status to processing
+	if err := s.UpdateTaskStatus(ctx, id, types.TaskStatusProcessing); err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to update task status").
+			Mark(ierr.ErrValidation)
 	}
 
-	for _, pattern := range patterns {
-		re := regexp.MustCompile(pattern)
-		matches := re.FindStringSubmatch(url)
-		if len(matches) > 1 {
-			return matches[1]
+	// Get task
+	t, err := s.TaskRepo.Get(ctx, id)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to get task").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Create a context with extended timeout for streaming file processing
+	// This ensures we have enough time for large file downloads and processing
+	processingCtx, cancel := context.WithTimeout(ctx, 30*time.Minute)
+	defer cancel()
+
+	// Use the file processor for streaming
+	streamingProcessor := s.fileProcessor.StreamingProcessor
+
+	// Process based on entity type
+	var processor ChunkProcessor
+	switch t.EntityType {
+	case types.EntityTypeEvents:
+		// Create event service for chunk processor
+		eventSvc := NewEventService(
+			s.EventRepo,
+			s.MeterRepo,
+			s.EventPublisher,
+			s.Logger,
+			s.Config,
+		)
+		processor = &EventsChunkProcessor{
+			eventService: eventSvc,
+			logger:       s.Logger,
+		}
+	case types.EntityTypeCustomers:
+		// Create customer service for chunk processor
+		customerSvc := NewCustomerService(s.ServiceParams)
+		processor = &CustomersChunkProcessor{
+			customerService: customerSvc,
+			logger:          s.Logger,
+		}
+	default:
+		return ierr.NewError("unsupported entity type").
+			WithHint("Unsupported entity type").
+			WithReportableDetails(map[string]interface{}{
+				"entity_type": t.EntityType,
+			}).
+			Mark(ierr.ErrInvalidOperation)
+	}
+
+	// Process file with streaming using the extended context
+	config := DefaultStreamingConfig()
+	err = streamingProcessor.ProcessFileStream(processingCtx, t, processor, config)
+	if err != nil {
+		// Update task status to failed
+		if updateErr := s.UpdateTaskStatus(ctx, id, types.TaskStatusFailed); updateErr != nil {
+			s.Logger.Error("failed to update task status", "error", updateErr)
+		}
+		return err
+	}
+
+	// Update task status to completed
+	if err := s.UpdateTaskStatus(ctx, id, types.TaskStatusCompleted); err != nil {
+		s.Logger.Error("failed to update task status", "error", err)
+		return err
+	}
+
+	return nil
+}
+
+// EventsChunkProcessor processes chunks of event data
+type EventsChunkProcessor struct {
+	eventService EventService
+	logger       *logger.Logger
+}
+
+// ProcessChunk processes a chunk of event records
+func (p *EventsChunkProcessor) ProcessChunk(ctx context.Context, chunk [][]string, headers []string, chunkIndex int) (*ChunkResult, error) {
+	processedRecords := 0
+	successfulRecords := 0
+	failedRecords := 0
+	var errors []string
+
+	// Batch process events for better performance
+	var eventRequests []*dto.IngestEventRequest
+
+	// Parse all records in the chunk
+	for i, record := range chunk {
+		processedRecords++
+
+		// Create event request
+		eventReq := &dto.IngestEventRequest{
+			Properties: make(map[string]interface{}),
+		}
+
+		// Map standard fields
+		for j, header := range headers {
+			if j >= len(record) {
+				continue
+			}
+			value := record[j]
+			switch header {
+			case "event_name":
+				eventReq.EventName = value
+			case "external_customer_id":
+				eventReq.ExternalCustomerID = value
+			case "customer_id":
+				eventReq.CustomerID = value
+			case "timestamp":
+				eventReq.TimestampStr = value
+			case "source":
+				eventReq.Source = value
+			}
+		}
+
+		// Parse property fields (headers starting with "properties.")
+		for j, header := range headers {
+			if j >= len(record) {
+				continue
+			}
+			if strings.HasPrefix(header, "properties.") {
+				propertyName := strings.TrimPrefix(header, "properties.")
+				eventReq.Properties[propertyName] = record[j]
+			}
+		}
+
+		// Validate the event request
+		if err := eventReq.Validate(); err != nil {
+			errors = append(errors, fmt.Sprintf("Record %d: %v", i, err))
+			failedRecords++
+			continue
+		}
+
+		// Parse timestamp
+		if err := p.parseTimestamp(eventReq); err != nil {
+			errors = append(errors, fmt.Sprintf("Record %d: timestamp error: %v", i, err))
+			failedRecords++
+			continue
+		}
+
+		eventRequests = append(eventRequests, eventReq)
+	}
+
+	// Batch create events
+	if len(eventRequests) > 0 {
+		successCount, err := p.batchCreateEvents(ctx, eventRequests)
+		if err != nil {
+			// If batch creation fails, try individual creation
+			p.logger.Warn("batch event creation failed, falling back to individual creation", "error", err)
+			for _, eventReq := range eventRequests {
+				if err := p.eventService.CreateEvent(ctx, eventReq); err != nil {
+					errors = append(errors, fmt.Sprintf("Event creation failed: %v", err))
+					failedRecords++
+				} else {
+					successfulRecords++
+				}
+			}
+		} else {
+			successfulRecords += successCount
+			failedRecords += len(eventRequests) - successCount
 		}
 	}
-	return ""
+
+	// Create error summary if there are errors
+	var errorSummary *string
+	if len(errors) > 0 {
+		summary := strings.Join(errors, "; ")
+		errorSummary = &summary
+	}
+
+	return &ChunkResult{
+		ProcessedRecords:  processedRecords,
+		SuccessfulRecords: successfulRecords,
+		FailedRecords:     failedRecords,
+		ErrorSummary:      errorSummary,
+	}, nil
+}
+
+// parseTimestamp parses the timestamp string
+func (p *EventsChunkProcessor) parseTimestamp(eventReq *dto.IngestEventRequest) error {
+	if eventReq.TimestampStr != "" {
+		timestamp, err := time.Parse(time.RFC3339, eventReq.TimestampStr)
+		if err != nil {
+			return fmt.Errorf("invalid timestamp format: %w", err)
+		}
+		eventReq.Timestamp = timestamp
+	} else {
+		eventReq.Timestamp = time.Now()
+	}
+	return nil
+}
+
+// batchCreateEvents creates multiple events in a batch
+func (p *EventsChunkProcessor) batchCreateEvents(ctx context.Context, events []*dto.IngestEventRequest) (int, error) {
+	successCount := 0
+	for _, eventReq := range events {
+		if err := p.eventService.CreateEvent(ctx, eventReq); err != nil {
+			p.logger.Error("failed to create event in batch", "error", err)
+			continue
+		}
+		successCount++
+	}
+	return successCount, nil
+}
+
+// CustomersChunkProcessor processes chunks of customer data
+type CustomersChunkProcessor struct {
+	customerService CustomerService
+	logger          *logger.Logger
+}
+
+// ProcessChunk processes a chunk of customer records
+func (p *CustomersChunkProcessor) ProcessChunk(ctx context.Context, chunk [][]string, headers []string, chunkIndex int) (*ChunkResult, error) {
+	processedRecords := 0
+	successfulRecords := 0
+	failedRecords := 0
+	var errors []string
+
+	// Process each record in the chunk
+	for i, record := range chunk {
+		processedRecords++
+
+		// Create customer request
+		customerReq := &dto.CreateCustomerRequest{
+			Metadata: make(map[string]string),
+		}
+
+		// Map standard fields
+		for j, header := range headers {
+			if j >= len(record) {
+				continue
+			}
+			value := record[j]
+			switch header {
+			case "external_id":
+				customerReq.ExternalID = value
+			case "name":
+				customerReq.Name = value
+			case "email":
+				customerReq.Email = value
+			case "address_line1":
+				customerReq.AddressLine1 = value
+			case "address_line2":
+				customerReq.AddressLine2 = value
+			case "address_city":
+				customerReq.AddressCity = value
+			case "address_state":
+				customerReq.AddressState = value
+			case "address_postal_code":
+				customerReq.AddressPostalCode = value
+			case "address_country":
+				customerReq.AddressCountry = value
+			}
+		}
+
+		// Parse metadata fields (headers starting with "metadata.")
+		for j, header := range headers {
+			if j >= len(record) {
+				continue
+			}
+			if strings.HasPrefix(header, "metadata.") {
+				metadataKey := strings.TrimPrefix(header, "metadata.")
+				customerReq.Metadata[metadataKey] = record[j]
+			}
+		}
+
+		// Validate the customer request
+		if err := customerReq.Validate(); err != nil {
+			errors = append(errors, fmt.Sprintf("Record %d: %v", i, err))
+			failedRecords++
+			continue
+		}
+
+		// Process the customer (create or update)
+		if err := p.processCustomer(ctx, customerReq); err != nil {
+			errors = append(errors, fmt.Sprintf("Record %d: %v", i, err))
+			failedRecords++
+			continue
+		}
+
+		successfulRecords++
+	}
+
+	// Create error summary if there are errors
+	var errorSummary *string
+	if len(errors) > 0 {
+		summary := strings.Join(errors, "; ")
+		errorSummary = &summary
+	}
+
+	return &ChunkResult{
+		ProcessedRecords:  processedRecords,
+		SuccessfulRecords: successfulRecords,
+		FailedRecords:     failedRecords,
+		ErrorSummary:      errorSummary,
+	}, nil
+}
+
+// processCustomer processes a single customer (create or update)
+func (p *CustomersChunkProcessor) processCustomer(ctx context.Context, customerReq *dto.CreateCustomerRequest) error {
+	// Check if customer with this external ID already exists
+	if customerReq.ExternalID != "" {
+		customer, err := p.customerService.GetCustomer(ctx, customerReq.ExternalID)
+		if err != nil {
+			p.logger.Error("failed to search for existing customer", "external_id", customerReq.ExternalID, "error", err)
+			return fmt.Errorf("failed to search for existing customer: %w", err)
+		}
+
+		// If customer exists, update it
+		if customer != nil && customer.Status == types.StatusPublished {
+			existingCustomer := customer
+
+			// Create update request from create request
+			updateReq := dto.UpdateCustomerRequest{}
+
+			// Only update fields that are different
+			if existingCustomer.ExternalID != customerReq.ExternalID {
+				updateReq.ExternalID = &customerReq.ExternalID
+			}
+			if existingCustomer.Email != customerReq.Email {
+				updateReq.Email = &customerReq.Email
+			}
+			if existingCustomer.Name != customerReq.Name {
+				updateReq.Name = &customerReq.Name
+			}
+			if existingCustomer.AddressLine1 != customerReq.AddressLine1 {
+				updateReq.AddressLine1 = &customerReq.AddressLine1
+			}
+			if existingCustomer.AddressLine2 != customerReq.AddressLine2 {
+				updateReq.AddressLine2 = &customerReq.AddressLine2
+			}
+			if existingCustomer.AddressCity != customerReq.AddressCity {
+				updateReq.AddressCity = &customerReq.AddressCity
+			}
+			if existingCustomer.AddressState != customerReq.AddressState {
+				updateReq.AddressState = &customerReq.AddressState
+			}
+			if existingCustomer.AddressPostalCode != customerReq.AddressPostalCode {
+				updateReq.AddressPostalCode = &customerReq.AddressPostalCode
+			}
+			if existingCustomer.AddressCountry != customerReq.AddressCountry {
+				updateReq.AddressCountry = &customerReq.AddressCountry
+			}
+
+			// Merge metadata
+			mergedMetadata := make(map[string]string)
+			maps.Copy(mergedMetadata, existingCustomer.Metadata)
+			maps.Copy(mergedMetadata, customerReq.Metadata)
+			updateReq.Metadata = mergedMetadata
+
+			// Update the customer
+			_, err := p.customerService.UpdateCustomer(ctx, existingCustomer.ID, updateReq)
+			if err != nil {
+				p.logger.Error("failed to update customer", "customer_id", existingCustomer.ID, "error", err)
+				return fmt.Errorf("failed to update customer: %w", err)
+			}
+
+			p.logger.Info("updated existing customer", "customer_id", existingCustomer.ID, "external_id", customerReq.ExternalID)
+			return nil
+		}
+	}
+
+	// If no existing customer found, create a new one
+	_, err := p.customerService.CreateCustomer(ctx, *customerReq)
+	if err != nil {
+		p.logger.Error("failed to create customer", "error", err)
+		return fmt.Errorf("failed to create customer: %w", err)
+	}
+
+	p.logger.Info("created new customer", "external_id", customerReq.ExternalID)
+	return nil
 }

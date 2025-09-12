@@ -38,11 +38,13 @@ require (
 	github.com/swaggo/gin-swagger v1.6.0
 	github.com/swaggo/swag v1.16.4
 	github.com/teris-io/shortid v0.0.0-20220617161101-71ec9f2aa569
+	go.temporal.io/api v1.44.1
 	go.temporal.io/sdk v1.32.1
 	go.uber.org/fx v1.23.0
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.38.0
 	golang.org/x/time v0.8.0
+	google.golang.org/protobuf v1.35.1
 )
 
 require (
@@ -163,7 +165,6 @@ require (
 	go.opentelemetry.io/otel v1.35.0 // indirect
 	go.opentelemetry.io/otel/metric v1.35.0 // indirect
 	go.opentelemetry.io/otel/trace v1.35.0 // indirect
-	go.temporal.io/api v1.44.1 // indirect
 	go.uber.org/dig v1.18.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/arch v0.12.0 // indirect
@@ -177,7 +178,6 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20240827150818-7e3bb234dfed // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240827150818-7e3bb234dfed // indirect
 	google.golang.org/grpc v1.66.0 // indirect
-	google.golang.org/protobuf v1.35.1 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

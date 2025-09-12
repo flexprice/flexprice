@@ -35,6 +35,20 @@ type ClientConfig struct {
 	Timeout time.Duration
 }
 
+// NewClientWithConfig creates a new DefaultClient with custom configuration
+func NewClientWithConfig(config ClientConfig) Client {
+	timeout := config.Timeout
+	if timeout == 0 {
+		timeout = 10 * time.Minute // Default timeout for large file downloads
+	}
+
+	return &DefaultClient{
+		client: &http.Client{
+			Timeout: timeout,
+		},
+	}
+}
+
 // DefaultClient implements the Client interface
 type DefaultClient struct {
 	client *http.Client
