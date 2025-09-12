@@ -614,7 +614,8 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 				continue
 			}
 
-			// Change: commenting this out to support all types of pricing models and aggregation.
+			// NOTE: commenting this out to support all types of pricing models and aggregation.
+
 			// Check if we can process this price/meter combination
 			// canProcess := s.isSupportedAggregationForPostProcessing(match.Meter.Aggregation.Type, match.Price.BillingModel)
 			// if !canProcess {
@@ -655,7 +656,8 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 			tierSnapshot := decimal.Zero
 			processedEventCopy.TierSnapshot = tierSnapshot
 
-			// Change: commenting this out to as this values won't be used further.
+			// NOTE: commenting this out to as this values won't be used further.
+
 			// Calculate cost details using the price service
 			// since per event price can be very small, we don't round the cost
 			// priceService := NewPriceService(s.ServiceParams)

@@ -1029,7 +1029,7 @@ func (s *subscriptionService) GetUsageBySubscriptionV2(ctx context.Context, req 
 	environmentID := types.GetEnvironmentID(ctx)
 
 	// Use the optimized single query
-	usageResults, err := s.ProcessedEventRepo.GetUsageBySubscriptionV2(ctx, req.SubscriptionID, customer.ExternalID, environmentID, tenantID, usageStartTime, usageEndTime)
+	usageResults, err := s.ProcessedEventRepo.GetProcessedEventsBySubscription(ctx, req.SubscriptionID, customer.ExternalID, environmentID, tenantID, usageStartTime, usageEndTime)
 	if err != nil {
 		return nil, err
 	}

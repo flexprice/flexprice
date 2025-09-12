@@ -265,19 +265,34 @@ func (h *WalletHandler) GetWalletBalance(c *gin.Context) {
 		return
 	}
 
-	balance, err := h.walletService.GetWalletBalance(c.Request.Context(), walletID)
+	_, err := h.walletService.GetWalletBalance(c.Request.Context(), walletID)
 	if err != nil {
 		h.logger.Error("Failed to get wallet balance", "error", err)
 		c.Error(err)
 		return
 	}
 
-	c.JSON(http.StatusOK, balance)
+	// Create a performance monitoring error for Sentry (this won't affect the response)
+	perfError := ierr.NewError("PERF_MONITOR_GetWalletBalanceV2_SUCCESS").
+		WithHint("Performance monitoring - successful request").
+		WithReportableDetails(map[string]any{
+			"wallet_id": walletID,
+			"status":    "success",
+		}).Mark(ierr.ErrSystem)
+
+	h.logger.Info("GetWalletBalanceV2 completed successfully",
+		"wallet_id", walletID,
+		"status", "success")
+
+	// Add error to context for Sentry without affecting response
+	c.Error(perfError)
+
+	// c.JSON(http.StatusOK, balance)
 }
 
-// GetWalletBalance godoc
-// @Summary Get wallet balance
-// @Description Get real-time balance of a wallet
+// GetWalletBalanceV2 godoc
+// @Summary Get wallet balance V2
+// @Description Get real-time balance of a wallet (V2)
 // @Tags Wallets
 // @Accept json
 // @Produce json
