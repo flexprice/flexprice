@@ -71,11 +71,11 @@ func (qb *QueryBuilder) WithBaseFilters(ctx context.Context, params *events.Usag
 		argIndex++
 	}
 
-	// Time conditions (now parameterized)
-	timeConditions, timeArgs := qb.parseTimeConditions(params)
+	// Time conditions (now parameterized with proper indexing)
+	timeConditions, timeArgs, newArgIndex := qb.parseTimeConditionsWithIndex(params, argIndex)
 	conditions = append(conditions, timeConditions...)
 	args = append(args, timeArgs...)
-	argIndex += len(timeArgs)
+	argIndex = newArgIndex
 
 	// Customer ID parameters
 	if params.ExternalCustomerID != "" {
@@ -95,21 +95,22 @@ func (qb *QueryBuilder) WithBaseFilters(ctx context.Context, params *events.Usag
 			if len(values) > 0 {
 				var condition string
 				if len(values) == 1 {
-					condition = fmt.Sprintf("JSONExtractString(properties, '%s') = ?%d", property, argIndex)
-					args = append(args, values[0])
-					argIndex++
+					condition = fmt.Sprintf("JSONExtractString(properties, ?%d) = ?%d", argIndex, argIndex+1)
+					args = append(args, property, values[0])
+					argIndex += 2
 				} else {
 					placeholders := make([]string, len(values))
 					for i := range values {
-						placeholders[i] = fmt.Sprintf("?%d", argIndex+i)
+						placeholders[i] = fmt.Sprintf("?%d", argIndex+i+1)
 						args = append(args, values[i])
 					}
 					condition = fmt.Sprintf(
-						"JSONExtractString(properties, '%s') IN (%s)",
-						property,
+						"JSONExtractString(properties, ?%d) IN (%s)",
+						argIndex,
 						strings.Join(placeholders, ","),
 					)
-					argIndex += len(values)
+					args = append(args, property)
+					argIndex += len(values) + 1
 				}
 				conditions = append(conditions, condition)
 			}
@@ -163,21 +164,22 @@ func (qb *QueryBuilder) WithFilterGroups(ctx context.Context, groups []events.Fi
 			}
 			var condition string
 			if len(values) == 1 {
-				condition = fmt.Sprintf("JSONExtractString(properties, '%s') = ?%d", property, localArgIndex)
-				groupArgs = append(groupArgs, values[0])
-				localArgIndex++
+				condition = fmt.Sprintf("JSONExtractString(properties, ?%d) = ?%d", localArgIndex, localArgIndex+1)
+				groupArgs = append(groupArgs, property, values[0])
+				localArgIndex += 2
 			} else {
 				placeholders := make([]string, len(values))
 				for i := range values {
-					placeholders[i] = fmt.Sprintf("?%d", localArgIndex+i)
+					placeholders[i] = fmt.Sprintf("?%d", localArgIndex+i+1)
 					groupArgs = append(groupArgs, values[i])
 				}
 				condition = fmt.Sprintf(
-					"JSONExtractString(properties, '%s') IN (%s)",
-					property,
+					"JSONExtractString(properties, ?%d) IN (%s)",
+					localArgIndex,
 					strings.Join(placeholders, ","),
 				)
-				localArgIndex += len(values)
+				groupArgs = append(groupArgs, property)
+				localArgIndex += len(values) + 1
 			}
 			conditions = append(conditions, condition)
 		}
@@ -187,20 +189,22 @@ func (qb *QueryBuilder) WithFilterGroups(ctx context.Context, groups []events.Fi
 
 		// Only add the filter group if it has conditions
 		if len(conditions) > 0 {
+			// Parameterize group ID and priority
 			filterConditions = append(filterConditions, fmt.Sprintf(
-				"('%s', %d, (%s))",
-				group.ID,
-				group.Priority,
-				strings.Join(conditions, " AND "),
+				"(?%d, ?%d, (%s))",
+				argIndex, argIndex+1, strings.Join(conditions, " AND "),
 			))
+			allArgs = append(allArgs, group.ID, group.Priority)
 			allArgs = append(allArgs, groupArgs...)
+			argIndex += 2
 		} else {
 			// For empty filter groups, use a constant true condition
 			filterConditions = append(filterConditions, fmt.Sprintf(
-				"('%s', %d, 1)",
-				group.ID,
-				group.Priority,
+				"(?%d, ?%d, 1)",
+				argIndex, argIndex+1,
 			))
+			allArgs = append(allArgs, group.ID, group.Priority)
+			argIndex += 2
 		}
 	}
 
@@ -313,7 +317,7 @@ func (qb *QueryBuilder) Build() (string, []interface{}) {
 
 	// Collect all CTE components
 	for _, component := range qb.cteComponents {
-		cteParts = append(cteParts, fmt.Sprintf("%s AS (%s)", component.Name, component.Query))
+		cteParts = append(cteParts, component.Query)
 		allArgs = append(allArgs, component.Args...)
 	}
 
@@ -327,85 +331,26 @@ func (qb *QueryBuilder) Build() (string, []interface{}) {
 	return finalQuery, allArgs
 }
 
-func (qb *QueryBuilder) parseTimeConditions(params *events.UsageParams) ([]string, []interface{}) {
+func (qb *QueryBuilder) parseTimeConditionsWithIndex(params *events.UsageParams, startIndex int) ([]string, []interface{}, int) {
 	var conditions []string
 	var args []interface{}
+	argIndex := startIndex
 
 	if !params.StartTime.IsZero() {
-		conditions = append(conditions, "timestamp >= toDateTime64(?, 3)")
-		args = append(args, formatClickHouseDateTime(params.StartTime))
+		conditions = append(conditions, fmt.Sprintf("timestamp >= toDateTime64(?%d, 3)", argIndex))
+		args = append(args, params.StartTime)
+		argIndex++
 	}
 
 	if !params.EndTime.IsZero() {
-		conditions = append(conditions, "timestamp < toDateTime64(?, 3)")
-		args = append(args, formatClickHouseDateTime(params.EndTime))
+		conditions = append(conditions, fmt.Sprintf("timestamp < toDateTime64(?%d, 3)", argIndex))
+		args = append(args, params.EndTime)
+		argIndex++
 	}
 
-	return conditions, args
+	return conditions, args, argIndex
 }
 
 func formatClickHouseDateTime(t time.Time) string {
 	return t.UTC().Format("2006-01-02 15:04:05.000")
 }
-
-/*
-
----------Sample Query with Filter Groups---------------------------------------------
-
-WITH base_events AS (
-    SELECT
-        id,
-        timestamp,
-        properties
-    FROM events
-    WHERE event_name = 'images_processed'
-      AND tenant_id = '00000000-0000-0000-0000-000000000000'
-      AND timestamp >= toDateTime64('2024-12-01 08:03:02.000', 3)
-      AND timestamp < toDateTime64('2025-01-01 08:03:02.000', 3)
-      AND external_customer_id = 'cus_loadtest_1'
-      AND JSONExtractString(properties, 'image_size') IN ('512x512','768x768','1024x1024')
-),
-filter_matches AS (
-    SELECT
-        id,
-        timestamp,
-        properties,
-        arrayMap(x -> (
-            x.1,
-            x.2,
-            x.3
-        ), [
-            ('3759afd0-588d-4a15-a6d8-8278901ab610', 3, (JSONExtractString(properties, 'image_size') IN ('1024x1024'))),
-            ('1f04fd3a-33ce-494c-9498-70e47de97fc5', 2, (JSONExtractString(properties, 'image_size') IN ('512x512'))),
-            ('2715dab7-1045-4a3c-bad1-8d6d837ce491', 1, (JSONExtractString(properties, 'image_size') IN ('768x768')))
-        ]) AS group_matches
-    FROM base_events
-),
-matched_events AS (
-    SELECT
-        id,
-        timestamp,
-        properties,
-        arrayJoin(group_matches) AS matched_group,
-        matched_group.1 AS group_id,
-        matched_group.2 AS total_filters,
-        matched_group.3 AS matches
-    FROM filter_matches
-),
-best_matches AS (
-    SELECT
-        id,
-        properties,
-        argMax(group_id, (total_filters, group_id)) AS best_match_group
-    FROM matched_events
-    WHERE matches = 1
-    GROUP BY id, properties
-)
-SELECT
-    best_match_group AS filter_group_id,
-    COUNT(*) AS value
-FROM best_matches
-GROUP BY best_match_group
-ORDER BY best_match_group;
-
-*/
