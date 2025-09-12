@@ -54,7 +54,7 @@ postgres:
 
 sentry:
   enabled: true # Set to true in production
-  dsn: "https://3fe19a52f5df8388a8eac108ca400162@o4507167699435520.ingest.us.sentry.io/4508519084130304" # Add your Sentry DSN here
+  dsn: "" # Add your Sentry DSN here
   environment: "development" # Change to "production" in prod
   sample_rate: 1.0 # Adjust sampling rate as needed (0.0 to 1.0)
 

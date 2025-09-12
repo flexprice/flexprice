@@ -265,7 +265,7 @@ func (h *WalletHandler) GetWalletBalance(c *gin.Context) {
 		return
 	}
 
-	_, err := h.walletService.GetWalletBalance(c.Request.Context(), walletID)
+	balance, err := h.walletService.GetWalletBalance(c.Request.Context(), walletID)
 	if err != nil {
 		h.logger.Error("Failed to get wallet balance", "error", err)
 		c.Error(err)
@@ -273,21 +273,21 @@ func (h *WalletHandler) GetWalletBalance(c *gin.Context) {
 	}
 
 	// Create a performance monitoring error for Sentry (this won't affect the response)
-	perfError := ierr.NewError("PERF_MONITOR_GetWalletBalanceV2_SUCCESS").
-		WithHint("Performance monitoring - successful request").
-		WithReportableDetails(map[string]any{
-			"wallet_id": walletID,
-			"status":    "success",
-		}).Mark(ierr.ErrSystem)
+	// perfError := ierr.NewError("PERF_MONITOR_GetWalletBalanceV2_SUCCESS").
+	// 	WithHint("Performance monitoring - successful request").
+	// 	WithReportableDetails(map[string]any{
+	// 		"wallet_id": walletID,
+	// 		"status":    "success",
+	// 	}).Mark(ierr.ErrSystem)
 
-	h.logger.Info("GetWalletBalanceV2 completed successfully",
-		"wallet_id", walletID,
-		"status", "success")
+	// h.logger.Info("GetWalletBalanceV2 completed successfully",
+	// 	"wallet_id", walletID,
+	// 	"status", "success")
 
 	// Add error to context for Sentry without affecting response
-	c.Error(perfError)
+	// c.Error(perfError)
 
-	// c.JSON(http.StatusOK, balance)
+	c.JSON(http.StatusOK, balance)
 }
 
 // GetWalletBalanceV2 godoc
@@ -318,6 +318,21 @@ func (h *WalletHandler) GetWalletBalanceV2(c *gin.Context) {
 		c.Error(err)
 		return
 	}
+
+	// Create a performance monitoring error for Sentry (this won't affect the response)
+	// perfError := ierr.NewError("PERF_MONITOR_GetWalletBalanceV2_SUCCESS").
+	// 	WithHint("Performance monitoring - successful request").
+	// 	WithReportableDetails(map[string]any{
+	// 		"wallet_id": walletID,
+	// 		"status":    "success",
+	// 	}).Mark(ierr.ErrSystem)
+
+	// h.logger.Info("GetWalletBalanceV2 completed successfully",
+	// 	"wallet_id", walletID,
+	// 	"status", "success")
+
+	// Add error to context for Sentry without affecting response
+	// c.Error(perfError)
 
 	c.JSON(http.StatusOK, balance)
 }
