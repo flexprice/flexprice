@@ -628,11 +628,6 @@ func (s *subscriptionService) handleCreditGrants(
 				Mark(ierr.ErrDatabase)
 		}
 
-		s.Logger.Infow("successfully processed credit grant for subscription",
-			"subscription_id", subscription.ID,
-			"grant_id", createdGrant.ID,
-			"grant_name", createdGrant.Name,
-			"amount", createdGrant.Credits)
 	}
 
 	return nil
@@ -842,27 +837,42 @@ func (s *subscriptionService) CancelSubscription(
 }
 
 func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *types.SubscriptionFilter) (*dto.ListSubscriptionsResponse, error) {
+	s.Logger.Debugw("starting ListSubscriptions",
+		"filter", filter,
+		"tenant_id", types.GetTenantID(ctx),
+		"environment_id", types.GetEnvironmentID(ctx))
+
 	planService := NewPlanService(s.ServiceParams)
 
 	if filter == nil {
+		s.Logger.Debugw("filter is nil, creating new subscription filter")
 		filter = types.NewSubscriptionFilter()
 	}
 
 	if filter.GetLimit() == 0 {
+		s.Logger.Debugw("filter limit is 0, setting default limit", "default_limit", types.GetDefaultFilter().Limit)
 		filter.Limit = lo.ToPtr(types.GetDefaultFilter().Limit)
 	}
 
 	if filter.QueryFilter == nil {
+		s.Logger.Debugw("filter.QueryFilter is nil, creating default query filter")
 		filter.QueryFilter = types.NewDefaultQueryFilter()
 	}
 
+	s.Logger.Debugw("calling SubRepo.List",
+		"final_filter", filter,
+		"limit", filter.GetLimit(),
+		"offset", filter.GetOffset())
+
 	subscriptions, err := s.SubRepo.List(ctx, filter)
 	if err != nil {
+		s.Logger.Errorw("failed to list subscriptions from repository", "error", err, "filter", filter)
 		return nil, err
 	}
 
 	count, err := s.SubRepo.Count(ctx, filter)
 	if err != nil {
+		s.Logger.Errorw("failed to count subscriptions from repository", "error", err, "filter", filter)
 		return nil, err
 	}
 
@@ -878,43 +888,137 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 	// Collect unique plan IDs
 	planIDMap := make(map[string]*dto.PlanResponse, 0)
 	for _, sub := range subscriptions {
+		if sub.PlanID == "" {
+			s.Logger.Warnw("subscription has empty plan_id", "subscription_id", sub.ID)
+		}
 		planIDMap[sub.PlanID] = nil
 	}
 
+	uniquePlanIDs := lo.Keys(planIDMap)
+	s.Logger.Debugw("collected unique plan IDs",
+		"unique_plan_count", len(uniquePlanIDs),
+		"plan_ids", uniquePlanIDs)
+
 	// Get plans in bulk
 	planFilter := types.NewNoLimitPlanFilter()
-	planFilter.EntityIDs = lo.Keys(planIDMap)
+	planFilter.EntityIDs = uniquePlanIDs
 	if filter != nil && filter.Expand != nil {
+		s.Logger.Debugw("passing expand filters to plan service", "expand", filter.Expand)
 		planFilter.Expand = filter.Expand // pass on the filters to next layer
 	}
+
 	planResponse, err := planService.GetPlans(ctx, planFilter)
 	if err != nil {
+		s.Logger.Errorw("failed to get plans from plan service",
+			"error", err,
+			"plan_filter", planFilter,
+			"plan_ids", uniquePlanIDs)
 		return nil, err
 	}
 
 	// Build plan map for quick lookup
 	for _, plan := range planResponse.Items {
+		if plan.Plan == nil {
+			s.Logger.Warnw("plan response has nil Plan field", "plan_response", plan)
+			continue
+		}
 		planIDMap[plan.Plan.ID] = plan
 	}
 
-	// Build response with plans
+	// Get customers in bulk if customer expansion is requested
+	var customerIDMap map[string]*dto.CustomerResponse
+	if filter.Expand != nil && filter.GetExpand().Has(types.ExpandCustomer) {
+		customerIDMap = make(map[string]*dto.CustomerResponse, 0)
+		for _, sub := range subscriptions {
+			if sub.CustomerID == "" {
+				s.Logger.Warnw("subscription has empty customer_id", "subscription_id", sub.ID)
+			}
+			customerIDMap[sub.CustomerID] = nil
+		}
+
+		uniqueCustomerIDs := lo.Keys(customerIDMap)
+		s.Logger.Debugw("collected unique customer IDs",
+			"unique_customer_count", len(uniqueCustomerIDs),
+			"customer_ids", uniqueCustomerIDs)
+
+		// Get customers in bulk
+		customerService := NewCustomerService(s.ServiceParams)
+		customerFilter := types.NewNoLimitCustomerFilter()
+		customerFilter.CustomerIDs = uniqueCustomerIDs
+		if filter != nil && filter.Expand != nil {
+			s.Logger.Debugw("passing expand filters to customer service", "expand", filter.Expand)
+			customerFilter.Expand = filter.Expand // pass on the filters to next layer
+		}
+
+		customerResponse, err := customerService.GetCustomers(ctx, customerFilter)
+		if err != nil {
+			s.Logger.Errorw("failed to get customers from customer service",
+				"error", err,
+				"customer_filter", customerFilter,
+				"customer_ids", uniqueCustomerIDs)
+			return nil, err
+		}
+
+		// Build customer map for quick lookup
+		for _, customer := range customerResponse.Items {
+			if customer.Customer == nil {
+				s.Logger.Warnw("customer response has nil Customer field", "customer_response", customer)
+				continue
+			}
+			customerIDMap[customer.Customer.ID] = customer
+		}
+
+		s.Logger.Debugw("built customer map", "customer_map_size", len(customerIDMap))
+	}
+
+	// Build response with plans and customers
 	for i, sub := range subscriptions {
+		planResp := planIDMap[sub.PlanID]
+		if planResp == nil {
+			s.Logger.Warnw("no plan found for subscription",
+				"subscription_id", sub.ID,
+				"plan_id", sub.PlanID,
+				"available_plan_ids", lo.Keys(planIDMap))
+		}
+
+		var customerResp *dto.CustomerResponse
+		if customerIDMap != nil {
+			customerResp = customerIDMap[sub.CustomerID]
+			if customerResp == nil {
+				s.Logger.Warnw("no customer found for subscription",
+					"subscription_id", sub.ID,
+					"customer_id", sub.CustomerID,
+					"available_customer_ids", lo.Keys(customerIDMap))
+			}
+		}
+
 		response.Items[i] = &dto.SubscriptionResponse{
 			Subscription: sub,
-			Plan:         planIDMap[sub.PlanID],
+			Plan:         planResp,
+			Customer:     customerResp,
 		}
 	}
 
+	s.Logger.Debugw("built subscription responses", "response_count", len(response.Items))
+
 	// Include schedules if requested in expand
 	if filter.Expand != nil && filter.GetExpand().Has(types.ExpandSchedule) {
+		s.Logger.Debugw("adding schedules to subscription responses")
 		s.addSchedulesToSubscriptionResponses(ctx, response.Items)
 	}
+
+	s.Logger.Debugw("completed ListSubscriptions successfully",
+		"total_items", len(response.Items),
+		"total_count", count,
+		"pagination", response.Pagination)
 
 	return response, nil
 }
 
 // addSchedulesToSubscriptionResponses adds schedule information to subscription responses if available
 func (s *subscriptionService) addSchedulesToSubscriptionResponses(ctx context.Context, items []*dto.SubscriptionResponse) {
+	s.Logger.Debugw("starting addSchedulesToSubscriptionResponses", "items_count", len(items))
+
 	// If repository doesn't support schedules, return early
 	if s.SubscriptionScheduleRepo == nil {
 		s.Logger.Debugw("subscription schedule repository is not configured, skipping schedule expansion")
@@ -924,26 +1028,61 @@ func (s *subscriptionService) addSchedulesToSubscriptionResponses(ctx context.Co
 	// Group subscriptions by ID for faster lookup
 	subMap := make(map[string]*dto.SubscriptionResponse, len(items))
 	for _, sub := range items {
+		if sub == nil {
+			s.Logger.Warnw("found nil subscription response in items")
+			continue
+		}
+		if sub.ID == "" {
+			s.Logger.Warnw("found subscription response with empty ID", "subscription", sub)
+			continue
+		}
 		subMap[sub.ID] = sub
 	}
 
 	// Collect all subscription IDs
 	subscriptionIDs := lo.Keys(subMap)
+	s.Logger.Debugw("collected subscription IDs for schedule lookup",
+		"subscription_ids", subscriptionIDs,
+		"subscription_count", len(subscriptionIDs))
 
 	// In a real implementation, we would get schedules in a single query
 	// For now, we'll do individual lookups
+	schedulesFound := 0
+	schedulesErrors := 0
 	for _, subscriptionID := range subscriptionIDs {
 		sub := subMap[subscriptionID]
 
+		s.Logger.Debugw("looking up schedule for subscription", "subscription_id", subscriptionID)
+
 		// Try to get schedule if exists
 		schedule, err := s.SubscriptionScheduleRepo.GetBySubscriptionID(ctx, subscriptionID)
-		if err != nil || schedule == nil {
+		if err != nil {
+			s.Logger.Debugw("error getting schedule for subscription",
+				"subscription_id", subscriptionID,
+				"error", err)
+			schedulesErrors++
 			continue
 		}
 
+		if schedule == nil {
+			s.Logger.Debugw("no schedule found for subscription", "subscription_id", subscriptionID)
+			continue
+		}
+
+		s.Logger.Debugw("found schedule for subscription",
+			"subscription_id", subscriptionID,
+			"schedule_id", schedule.ID,
+			"schedule_status", schedule.ScheduleStatus)
+
 		// Add schedule to subscription response
 		sub.Schedule = dto.SubscriptionScheduleResponseFromDomain(schedule)
+		schedulesFound++
 	}
+
+	s.Logger.Debugw("completed addSchedulesToSubscriptionResponses",
+		"total_subscriptions", len(subscriptionIDs),
+		"schedules_found", schedulesFound,
+		"schedule_errors", schedulesErrors)
 }
 
 func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error) {

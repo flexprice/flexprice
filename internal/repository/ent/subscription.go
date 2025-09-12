@@ -296,6 +296,7 @@ func (r *subscriptionRepository) List(ctx context.Context, filter *types.Subscri
 
 	client := r.client.Querier(ctx)
 	query := client.Subscription.Query()
+
 	if filter.WithLineItems {
 		query = query.WithLineItems(func(q *ent.SubscriptionLineItemQuery) {
 			q.Where(subscriptionlineitem.Status(string(types.StatusPublished)))
@@ -442,6 +443,11 @@ func (r *subscriptionRepository) ListAllTenant(ctx context.Context, filter *type
 
 // Count returns the total number of subscriptions based on the provided filter
 func (r *subscriptionRepository) Count(ctx context.Context, filter *types.SubscriptionFilter) (int, error) {
+	r.logger.Debugw("starting subscription repository Count",
+		"filter", filter,
+		"tenant_id", types.GetTenantID(ctx),
+		"environment_id", types.GetEnvironmentID(ctx))
+
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "subscription", "count", map[string]interface{}{
 		"filter": filter,
@@ -450,9 +456,10 @@ func (r *subscriptionRepository) Count(ctx context.Context, filter *types.Subscr
 
 	client := r.client.Querier(ctx)
 	query := client.Subscription.Query()
+	query = ApplyBaseFilters(ctx, query, filter, r.queryOpts)
 
-	// Apply entity-specific filters
-	query, err := r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
+	var err error
+	query, err = r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
 	if err != nil {
 		SetSpanError(span, err)
 		return 0, ierr.WithError(err).
@@ -526,6 +533,46 @@ func (o SubscriptionQueryOptions) GetFieldName(field string) string {
 		return subscription.FieldCurrentPeriodStart
 	case "current_period_end":
 		return subscription.FieldCurrentPeriodEnd
+	case "status":
+		return subscription.FieldStatus
+	case "subscription_status":
+		return subscription.FieldSubscriptionStatus
+	case "billing_cadence":
+		return subscription.FieldBillingCadence
+	case "billing_period":
+		return subscription.FieldBillingPeriod
+	case "billing_period_count":
+		return subscription.FieldBillingPeriodCount
+	case "version":
+		return subscription.FieldVersion
+	case "metadata":
+		return subscription.FieldMetadata
+	case "pause_status":
+		return subscription.FieldPauseStatus
+	case "active_pause_id":
+		return subscription.FieldActivePauseID
+	case "billing_cycle":
+		return subscription.FieldBillingCycle
+	case "commitment_amount":
+		return subscription.FieldCommitmentAmount
+	case "overage_factor":
+		return subscription.FieldOverageFactor
+	case "payment_behavior":
+		return subscription.FieldPaymentBehavior
+	case "collection_method":
+		return subscription.FieldCollectionMethod
+	case "gateway_payment_method_id":
+		return subscription.FieldGatewayPaymentMethodID
+	case "customer_timezone":
+		return subscription.FieldCustomerTimezone
+	case "proration_behavior":
+		return subscription.FieldProrationBehavior
+	case "lookup_key":
+		return subscription.FieldLookupKey
+	case "customer_id":
+		return subscription.FieldCustomerID
+	case "plan_id":
+		return subscription.FieldPlanID
 	default:
 		return field
 	}
