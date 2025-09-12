@@ -2,6 +2,7 @@ package dto
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -138,4 +139,35 @@ func SettingFromDomain(s *settings.Setting) *SettingResponse {
 		CreatedBy:     s.CreatedBy,
 		UpdatedBy:     s.UpdatedBy,
 	}
+}
+
+type UpsertSettingsByKey struct {
+	Key   string      `json:"key"`
+	Value interface{} `json:"value"`
+}
+
+func (r *UpsertSettingsByKey) Validate() error {
+
+	if r.Key == "" {
+		return errors.New("key is required and cannot be empty")
+	}
+
+	if r.Value == nil {
+		return errors.New("value is required and cannot be empty")
+	}
+
+	json_bytes, err := json.Marshal(r.Value)
+	if err != nil {
+		return err
+	}
+	// Unmarshal the value to struct
+	switch r.Key {
+	case string(types.SettingKeyInvoiceConfig):
+		invoiceConfig := &types.InvoiceConfig{}
+		err := json.Unmarshal(json_bytes, invoiceConfig)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
