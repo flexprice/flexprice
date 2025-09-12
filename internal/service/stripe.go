@@ -8,12 +8,14 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	flexCustomer "github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/meter"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stripe/stripe-go/v82"
+	"github.com/stripe/stripe-go/v82/price"
 	"github.com/stripe/stripe-go/v82/product"
 	"github.com/stripe/stripe-go/v82/webhook"
 )
@@ -326,6 +328,108 @@ func (s *StripeService) CreateCustomerFromStripe(ctx context.Context, stripeCust
 
 	_, err := customerService.CreateCustomer(ctx, createReq)
 	return err
+}
+
+// CreateMeterFromStripe creates a meter in our system from Stripe webhook data
+func (s *StripeService) CreateMeterFromStripe(ctx context.Context, meterData map[string]interface{}, environmentID string) error {
+	// Create meter service instance
+	meterService := NewMeterServiceWithParams(s.ServiceParams)
+
+	// Extract meter fields
+	meterID, _ := meterData["id"].(string)
+	displayName, _ := meterData["display_name"].(string)
+	eventName, _ := meterData["event_name"].(string)
+
+	// Check for existing meter by external ID if flexprice_meter_id is present
+	var externalID string
+	if metadata, ok := meterData["metadata"].(map[string]interface{}); ok {
+		if flexpriceID, exists := metadata["flexprice_meter_id"]; exists {
+			if flexpriceIDStr, ok := flexpriceID.(string); ok {
+				externalID = flexpriceIDStr
+				// Check if meter with this external ID already exists by searching
+				filter := &types.MeterFilter{
+					QueryFilter: types.NewNoLimitQueryFilter(),
+				}
+				existingMeters, err := meterService.GetMeters(ctx, filter)
+				if err == nil && existingMeters != nil {
+					for _, meterResp := range existingMeters.Items {
+						// Check if this meter has the same external ID in metadata or name
+						if meterResp.Name == externalID || meterResp.EventName == eventName {
+							s.Logger.Infow("meter already exists with external ID",
+								"meter_id", meterResp.ID,
+								"stripe_meter_id", meterID,
+								"external_id", externalID)
+							return nil
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if externalID == "" {
+		// When syncing from Stripe webhook, set external_id as stripe_meter_id
+		externalID = meterID
+	}
+
+	// Map Stripe meter aggregation to FlexPrice aggregation
+	var aggregation meter.Aggregation
+	aggregation.Type = types.AggregationCount // Default to count (doesn't require field)
+
+	if defaultAgg, ok := meterData["default_aggregation"].(map[string]interface{}); ok {
+		if formula, ok := defaultAgg["formula"].(string); ok {
+			switch formula {
+			case "sum":
+				aggregation.Type = types.AggregationSum
+				aggregation.Field = "value" // Default field for sum aggregation
+			case "count":
+				aggregation.Type = types.AggregationCount
+				// Count doesn't require a field
+			case "max":
+				aggregation.Type = types.AggregationMax
+				aggregation.Field = "value" // Default field for max aggregation
+			default:
+				aggregation.Type = types.AggregationCount // Default to count
+			}
+		}
+	}
+
+	// Extract field from value_settings if available
+	if valueSettings, ok := meterData["value_settings"].(map[string]interface{}); ok {
+		if eventPayloadKey, ok := valueSettings["event_payload_key"].(string); ok && eventPayloadKey != "" {
+			aggregation.Field = eventPayloadKey
+		}
+	}
+
+	// Create new meter using DTO
+	createReq := dto.CreateMeterRequest{
+		Name:        displayName,
+		EventName:   eventName,
+		Aggregation: aggregation,
+		Filters:     []meter.Filter{},              // Empty filters array
+		ResetUsage:  types.ResetUsageBillingPeriod, // Default reset usage
+	}
+
+	_, err := meterService.CreateMeter(ctx, &createReq)
+	if err != nil {
+		s.Logger.Errorw("failed to create meter in FlexPrice",
+			"error", err,
+			"meter_id", meterID,
+			"display_name", displayName,
+			"event_name", eventName,
+			"aggregation_type", aggregation.Type)
+		return ierr.WithError(err).
+			WithHint("Failed to create meter in FlexPrice").
+			Mark(ierr.ErrInternal)
+	}
+
+	s.Logger.Infow("successfully created meter from Stripe",
+		"stripe_meter_id", meterID,
+		"display_name", displayName,
+		"event_name", eventName,
+		"environment_id", environmentID)
+
+	return nil
 }
 
 // CreatePaymentLink creates a Stripe checkout session for payment
@@ -1673,4 +1777,261 @@ func (s *StripeService) CreateProductInStripe(ctx context.Context, planID string
 		"lookup_key", ourPlan.LookupKey)
 
 	return stripeProduct.ID, nil
+}
+
+// CreatePriceInStripe creates a price in Stripe and returns the Stripe price ID
+func (s *StripeService) CreatePriceInStripe(ctx context.Context, priceID string) (string, error) {
+	// Get our price
+	ourPrice, err := s.PriceRepo.Get(ctx, priceID)
+	if err != nil {
+		return "", ierr.NewError("failed to get price").
+			WithHint("Price not found").
+			Mark(ierr.ErrNotFound)
+	}
+
+	// Get Stripe connection for this environment
+	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderStripe)
+	if err != nil {
+		return "", ierr.NewError("failed to get Stripe connection").
+			WithHint("Stripe connection not configured for this environment").
+			Mark(ierr.ErrNotFound)
+	}
+
+	stripeConfig, err := s.GetDecryptedStripeConfig(conn)
+	if err != nil {
+		return "", ierr.NewError("failed to get Stripe configuration").
+			WithHint("Invalid Stripe configuration").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Set Stripe API key
+	stripe.Key = stripeConfig.SecretKey
+
+	// Get the Stripe product ID for this price's plan
+	stripeProductID, err := s.getStripeProductID(ctx, ourPrice.EntityID)
+	if err != nil {
+		return "", ierr.NewError("failed to get Stripe product ID").
+			WithHint("Plan must be synced to Stripe before syncing prices").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Create price parameters
+	params := &stripe.PriceParams{
+		Currency: stripe.String(strings.ToLower(ourPrice.Currency)),
+		Product:  stripe.String(stripeProductID),
+		Active:   stripe.Bool(true),
+	}
+
+	// Add lookup key if available
+	if ourPrice.LookupKey != "" {
+		params.LookupKey = stripe.String(ourPrice.LookupKey)
+	}
+
+	// Add metadata
+	params.Metadata = map[string]string{
+		"flexprice_price_id":      ourPrice.ID,
+		"flexprice_tenant_id":     types.GetTenantID(ctx),
+		"flexprice_environment":   types.GetEnvironmentID(ctx),
+		"flexprice_price_type":    string(ourPrice.Type),
+		"flexprice_billing_model": string(ourPrice.BillingModel),
+	}
+
+	// Map billing cadence (type)
+	if ourPrice.BillingCadence == types.BILLING_CADENCE_RECURRING {
+		// Set up recurring parameters
+		recurringParams := &stripe.PriceRecurringParams{
+			Interval:      stripe.String(s.mapBillingPeriodToStripe(ourPrice.BillingPeriod)),
+			IntervalCount: stripe.Int64(int64(ourPrice.BillingPeriodCount)),
+		}
+
+		// Map usage type based on price type
+		if ourPrice.Type == types.PRICE_TYPE_USAGE && ourPrice.MeterID != "" {
+			recurringParams.UsageType = stripe.String("metered")
+
+			// Get synced meter ID from integration mapping
+			stripeMeterID, err := s.getStripeMeterID(ctx, ourPrice.MeterID)
+			if err != nil {
+				return "", ierr.NewError("failed to get Stripe meter ID").
+					WithHint("Meter must be synced to Stripe before creating usage-based prices").
+					Mark(ierr.ErrValidation)
+			}
+			recurringParams.Meter = stripe.String(stripeMeterID)
+		} else {
+			recurringParams.UsageType = stripe.String("licensed")
+		}
+
+		params.Recurring = recurringParams
+	}
+	// Note: For one-time prices, we don't set recurring params
+
+	// Map billing model
+	switch ourPrice.BillingModel {
+	case types.BILLING_MODEL_FLAT_FEE:
+		params.BillingScheme = stripe.String("per_unit")
+		// Convert amount to cents (Stripe expects cents)
+		amountInCents := ourPrice.Amount.Mul(decimal.NewFromInt(100)).IntPart()
+		params.UnitAmount = stripe.Int64(amountInCents)
+
+	case types.BILLING_MODEL_PACKAGE:
+		// Package pricing maps to per_unit with calculated unit amount
+		params.BillingScheme = stripe.String("per_unit")
+		// For package pricing, use the amount as-is (already calculated per package)
+		amountInCents := ourPrice.Amount.Mul(decimal.NewFromInt(100)).IntPart()
+		params.UnitAmount = stripe.Int64(amountInCents)
+
+	case types.BILLING_MODEL_TIERED:
+		params.BillingScheme = stripe.String("tiered")
+
+		// Map tier mode
+		if ourPrice.TierMode == types.BILLING_TIER_VOLUME {
+			params.TiersMode = stripe.String("volume")
+		} else if ourPrice.TierMode == types.BILLING_TIER_SLAB {
+			params.TiersMode = stripe.String("graduated")
+		}
+
+		// Map tiers
+		if len(ourPrice.Tiers) > 0 {
+			// Convert domain tiers to types tiers
+			var typeTiers []types.PriceTier
+			for _, tier := range ourPrice.Tiers {
+				typeTiers = append(typeTiers, types.PriceTier{
+					UpTo:       tier.UpTo,
+					UnitAmount: tier.UnitAmount,
+					FlatAmount: tier.FlatAmount,
+				})
+			}
+			stripeTiers := s.mapPriceTiersToStripe(typeTiers)
+			params.Tiers = stripeTiers
+		}
+
+	default:
+		return "", ierr.NewError("unsupported billing model").
+			WithHint(fmt.Sprintf("Billing model %s is not supported for Stripe sync", ourPrice.BillingModel)).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Handle transform quantity if present
+	if ourPrice.TransformQuantity.DivideBy > 0 {
+		params.TransformQuantity = &stripe.PriceTransformQuantityParams{
+			DivideBy: stripe.Int64(int64(ourPrice.TransformQuantity.DivideBy)),
+			Round:    stripe.String(strings.ToLower(ourPrice.TransformQuantity.Round)),
+		}
+	}
+
+	// Create price in Stripe
+	stripePrice, err := price.New(params)
+	if err != nil {
+		return "", ierr.NewError("failed to create price in Stripe").
+			WithHint("Stripe API error").
+			Mark(ierr.ErrHTTPClient)
+	}
+
+	s.Logger.Infow("successfully created price in Stripe",
+		"price_id", priceID,
+		"stripe_price_id", stripePrice.ID,
+		"type", ourPrice.Type,
+		"billing_model", ourPrice.BillingModel,
+		"amount", ourPrice.Amount,
+		"currency", ourPrice.Currency)
+
+	return stripePrice.ID, nil
+}
+
+// mapBillingPeriodToStripe maps FlexPrice billing periods to Stripe intervals
+func (s *StripeService) mapBillingPeriodToStripe(period types.BillingPeriod) string {
+	switch period {
+	case types.BILLING_PERIOD_DAILY:
+		return "day"
+	case types.BILLING_PERIOD_WEEKLY:
+		return "week"
+	case types.BILLING_PERIOD_MONTHLY:
+		return "month"
+	case types.BILLING_PERIOD_ANNUAL:
+		return "year"
+	case types.BILLING_PERIOD_QUARTER:
+		return "month" // Will use interval_count=3
+	case types.BILLING_PERIOD_HALF_YEAR:
+		return "month" // Will use interval_count=6
+	default:
+		return "month"
+	}
+}
+
+// mapPriceTiersToStripe maps FlexPrice tiers to Stripe tier parameters
+func (s *StripeService) mapPriceTiersToStripe(flexTiers []types.PriceTier) []*stripe.PriceTierParams {
+	var stripeTiers []*stripe.PriceTierParams
+
+	for _, tier := range flexTiers {
+		stripeTier := &stripe.PriceTierParams{}
+
+		// Map up_to value
+		if tier.UpTo == nil {
+			// For the last tier, Stripe expects "inf" as a string
+			stripeTier.UpToInf = stripe.Bool(true)
+		} else {
+			stripeTier.UpTo = stripe.Int64(int64(*tier.UpTo))
+		}
+
+		// Map flat amount (convert to cents)
+		if tier.FlatAmount != nil && !tier.FlatAmount.IsZero() {
+			flatAmountInCents := tier.FlatAmount.Mul(decimal.NewFromInt(100)).IntPart()
+			stripeTier.FlatAmount = stripe.Int64(flatAmountInCents)
+		}
+
+		// Map unit amount (convert to cents)
+		if !tier.UnitAmount.IsZero() {
+			unitAmountInCents := tier.UnitAmount.Mul(decimal.NewFromInt(100)).IntPart()
+			stripeTier.UnitAmount = stripe.Int64(unitAmountInCents)
+		}
+
+		stripeTiers = append(stripeTiers, stripeTier)
+	}
+
+	return stripeTiers
+}
+
+// getStripeProductID gets the Stripe product ID for a FlexPrice plan
+func (s *StripeService) getStripeProductID(ctx context.Context, planID string) (string, error) {
+	entityMappingService := NewEntityIntegrationMappingService(s.ServiceParams)
+	filter := &types.EntityIntegrationMappingFilter{
+		EntityType:    types.IntegrationEntityTypePlan,
+		EntityID:      planID,
+		ProviderTypes: []string{string(types.SecretProviderStripe)},
+	}
+
+	mappings, err := entityMappingService.GetEntityIntegrationMappings(ctx, filter)
+	if err != nil {
+		return "", err
+	}
+
+	if len(mappings.Items) == 0 {
+		return "", ierr.NewError("plan not synced to Stripe").
+			WithHint("Plan must be synced to Stripe before creating prices").
+			Mark(ierr.ErrNotFound)
+	}
+
+	return mappings.Items[0].ProviderEntityID, nil
+}
+
+// getStripeMeterID gets the Stripe meter ID for a FlexPrice meter
+func (s *StripeService) getStripeMeterID(ctx context.Context, meterID string) (string, error) {
+	entityMappingService := NewEntityIntegrationMappingService(s.ServiceParams)
+	filter := &types.EntityIntegrationMappingFilter{
+		EntityType:    types.IntegrationEntityTypeMeter,
+		EntityID:      meterID,
+		ProviderTypes: []string{string(types.SecretProviderStripe)},
+	}
+
+	mappings, err := entityMappingService.GetEntityIntegrationMappings(ctx, filter)
+	if err != nil {
+		return "", err
+	}
+
+	if len(mappings.Items) == 0 {
+		return "", ierr.NewError("meter not synced to Stripe").
+			WithHint("Meter must be synced to Stripe before creating usage-based prices").
+			Mark(ierr.ErrNotFound)
+	}
+
+	return mappings.Items[0].ProviderEntityID, nil
 }

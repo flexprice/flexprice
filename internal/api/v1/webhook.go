@@ -193,6 +193,8 @@ func (h *WebhookHandler) HandleStripeWebhook(c *gin.Context) {
 	switch string(event.Type) {
 	case string(types.WebhookEventTypeCustomerCreated):
 		h.handleCustomerCreated(c, event, environmentID)
+	case string(types.WebhookEventTypeBillingMeterCreated):
+		h.handleBillingMeterCreated(c, event, environmentID)
 	case string(types.WebhookEventTypeCheckoutSessionCompleted):
 		h.handleCheckoutSessionCompleted(c, event, environmentID)
 	case string(types.WebhookEventTypeCheckoutSessionAsyncPaymentSucceeded):
@@ -270,6 +272,73 @@ func (h *WebhookHandler) handleCustomerCreated(c *gin.Context, event *stripe.Eve
 
 	h.logger.Infow("successfully synced customer from Stripe",
 		"stripe_customer_id", customer.ID,
+		"environment_id", environmentID,
+	)
+}
+
+// handleBillingMeterCreated handles billing.meter.created webhook
+func (h *WebhookHandler) handleBillingMeterCreated(c *gin.Context, event *stripe.Event, environmentID string) {
+	// Parse the raw JSON data from the webhook
+	var meterRaw map[string]interface{}
+	err := json.Unmarshal(event.Data.Raw, &meterRaw)
+	if err != nil {
+		h.logger.Errorw("failed to parse meter from webhook", "error", err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Failed to parse meter data",
+		})
+		return
+	}
+
+	// Extract meter ID and other fields safely
+	meterID, _ := meterRaw["id"].(string)
+	displayName, _ := meterRaw["display_name"].(string)
+	eventName, _ := meterRaw["event_name"].(string)
+
+	// Log the webhook data
+	h.logger.Infow("received billing.meter.created webhook",
+		"meter_id", meterID,
+		"display_name", displayName,
+		"event_name", eventName,
+		"environment_id", environmentID,
+		"event_id", event.ID,
+		"event_type", event.Type,
+	)
+
+	// Convert Stripe meter to generic meter data
+	meterData := map[string]interface{}{
+		"display_name":        displayName,
+		"event_name":          eventName,
+		"customer_mapping":    meterRaw["customer_mapping"],
+		"default_aggregation": meterRaw["default_aggregation"],
+		"value_settings":      meterRaw["value_settings"],
+	}
+
+	// Add metadata if available
+	if metadata, ok := meterRaw["metadata"].(map[string]interface{}); ok {
+		for k, v := range metadata {
+			if vStr, ok := v.(string); ok {
+				meterData[k] = vStr
+			}
+		}
+	}
+
+	// Use integration service to sync meter from Stripe
+	integrationService := service.NewIntegrationService(h.stripeService.ServiceParams)
+	if err := integrationService.SyncMeterFromProvider(c.Request.Context(), "stripe", meterID, meterData); err != nil {
+		h.logger.Errorw("failed to sync meter from Stripe",
+			"error", err,
+			"stripe_meter_id", meterID,
+			"environment_id", environmentID,
+		)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to sync meter from Stripe",
+		})
+		return
+	}
+
+	h.logger.Infow("successfully synced meter from Stripe",
+		"stripe_meter_id", meterID,
+		"display_name", displayName,
 		"environment_id", environmentID,
 	)
 }
