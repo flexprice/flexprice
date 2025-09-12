@@ -72,6 +72,20 @@ func (s *settingsService) updateSetting(ctx context.Context, setting *settings.S
 	return dto.SettingFromDomain(setting), nil
 }
 
+func (s *settingsService) UpsertSettingByKey(ctx context.Context, req *dto.UpsertSettingsByKey) (*dto.SettingResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	_, err := s.SettingsRepo.GetByKey(ctx, req.Key)
+	if ent.IsNotFound(err) {
+		return s.createSetting(ctx, req)
+	}
+
+	return s.updateSetting(ctx, req)
+
+}
+
 func (s *settingsService) UpdateSettingByKey(ctx context.Context, key string, req *dto.UpdateSettingRequest) (*dto.SettingResponse, error) {
 	// STEP 1: Validate the request
 	if err := req.Validate(key); err != nil {
