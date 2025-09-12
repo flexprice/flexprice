@@ -6,6 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/taxapplied"
 	"github.com/flexprice/flexprice/internal/domain/taxassociation"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
@@ -583,6 +584,48 @@ func (s *taxService) ListTaxApplied(ctx context.Context, filter *types.TaxApplie
 		items[i] = &dto.TaxAppliedResponse{TaxApplied: *ta}
 	}
 
+	// Fetch tax rates if requested
+	s.Logger.Infow("DEBUG: Checking expand", "has_expand", filter.GetExpand().Has(types.ExpandTaxRate), "expand_fields", filter.GetExpand().Fields)
+	if filter.GetExpand().Has(types.ExpandTaxRate) {
+		s.Logger.Infow("DEBUG: Expanding tax rates", "tax_applied_count", len(taxAppliedRecords))
+
+		taxRateIDs := lo.Map(taxAppliedRecords, func(ta *taxapplied.TaxApplied, _ int) string {
+			return ta.TaxRateID
+		})
+		s.Logger.Infow("DEBUG: Tax rate IDs to fetch", "tax_rate_ids", taxRateIDs)
+
+		taxRateFilter := types.NewNoLimitTaxRateFilter()
+		taxRateFilter.TaxRateIDs = taxRateIDs
+
+		taxRatesResponse, err := s.ListTaxRates(ctx, taxRateFilter)
+		if err != nil {
+			s.Logger.Errorw("failed to list tax rates for expansion",
+				"error", err,
+				"tax_rate_ids", taxRateIDs)
+			return nil, err
+		}
+		s.Logger.Infow("DEBUG: Fetched tax rates", "count", len(taxRatesResponse.Items))
+
+		// Create a map for quick lookup
+		taxRatesByID := make(map[string]*dto.TaxRateResponse)
+		for _, taxRate := range taxRatesResponse.Items {
+			taxRatesByID[taxRate.ID] = taxRate
+			s.Logger.Infow("DEBUG: Tax rate", "id", taxRate.ID, "name", taxRate.Name, "code", taxRate.Code)
+		}
+
+		// Assign tax rates to the appropriate tax applied records
+		for i, ta := range taxAppliedRecords {
+			if taxRate, exists := taxRatesByID[ta.TaxRateID]; exists {
+				items[i].TaxRate = taxRate
+				s.Logger.Infow("DEBUG: Assigned tax rate", "index", i, "tax_applied_id", ta.ID, "tax_rate_name", taxRate.Name)
+			} else {
+				s.Logger.Warnw("DEBUG: Tax rate not found", "tax_rate_id", ta.TaxRateID)
+			}
+		}
+	} else {
+		s.Logger.Warnw("DEBUG: Expand not requested or not working")
+	}
+
 	// Get the total count of tax applied records
 	count, err := s.TaxAppliedRepo.Count(ctx, filter)
 	if err != nil {
@@ -594,8 +637,6 @@ func (s *taxService) ListTaxApplied(ctx context.Context, filter *types.TaxApplie
 	}
 
 	// Return the response with pagination
-	// Note: Since the repository doesn't have a Count method, we'll use the length of items
-	// This is a limitation, but it's consistent with how other services handle this
 	return &dto.ListTaxAppliedResponse{
 		Items:      items,
 		Pagination: types.NewPaginationResponse(count, filter.GetLimit(), filter.GetOffset()),

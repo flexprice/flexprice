@@ -3,61 +3,46 @@
 #let invoice-data = json(sys.inputs.path)
 
 #show: template.default-invoice.with(
-  currency: if "currency" in invoice-data {
-    invoice-data.currency
-  },
+  currency: invoice-data.at("currency", default: "$"),
   banner-image: if "banner_image" in invoice-data {
     image(invoice-data.banner_image, width: 30%)
   },
-  invoice-status: invoice-data.invoice_status,
-  invoice-number: invoice-data.invoice_number,
-  issuing-date: invoice-data.issuing_date,
-  due-date: invoice-data.due_date,
-  amount-due: invoice-data.amount_due,
-  notes: invoice-data.notes,
-  vat: invoice-data.vat,
+  invoice-status: invoice-data.at("invoice_status", default: "DRAFT"),
+  invoice-number: invoice-data.at("invoice_number", default: ""),
+  issuing-date: invoice-data.at("issuing_date", default: ""),
+  due-date: invoice-data.at("due_date", default: ""),
+  amount-due: invoice-data.at("amount_due", default: 0),
+  notes: invoice-data.at("notes", default: ""),
+  subtotal: invoice-data.at("subtotal", default: 0),
+  discount: invoice-data.at("total_discount", default: 0),
+  tax: invoice-data.at("total_tax", default: 0),
   biller: (
-    // website: invoice-data.biller.website,
-    name: invoice-data.biller.name,
-    email: if "email" in invoice-data.biller {
-      invoice-data.biller.email
-    },
-    help-email: if "help_email" in invoice-data.biller {
-      invoice-data.biller.help_email
-    },
+    name: invoice-data.at("biller", default: (:)).at("name", default: ""),
+    email: invoice-data.at("biller", default: (:)).at("email", default: ""),
+    help-email: invoice-data.at("biller", default: (:)).at("help_email", default: ""),
     address: (
-      street: invoice-data.biller.address.street,
-      city: invoice-data.biller.address.city,
-      postal-code: invoice-data.biller.address.postal_code,
-      state: if "state" in invoice-data.biller.address {
-        invoice-data.biller.address.state
-      },
-      country: if "country" in invoice-data.biller.address {
-        invoice-data.biller.address.country
-      },
+      street: invoice-data.at("biller", default: (:)).at("address", default: (:)).at("street", default: ""),
+      city: invoice-data.at("biller", default: (:)).at("address", default: (:)).at("city", default: ""),
+      postal-code: invoice-data.at("biller", default: (:)).at("address", default: (:)).at("postal_code", default: ""),
+      state: invoice-data.at("biller", default: (:)).at("address", default: (:)).at("state", default: ""),
+      country: invoice-data.at("biller", default: (:)).at("address", default: (:)).at("country", default: ""),
     ),
-    payment-instructions: if "payment_instructions" in invoice-data.biller {
-      [#invoice-data.biller.payment_instructions]
-    },
+    payment-instructions: invoice-data.at("biller", default: (:)).at("payment_instructions", default: ""),
   ),
   recipient: (
-    name: invoice-data.recipient.name,
-    email: if "email" in invoice-data.recipient {
-      invoice-data.recipient.email
-    },
+    name: invoice-data.at("recipient", default: (:)).at("name", default: ""),
+    email: invoice-data.at("recipient", default: (:)).at("email", default: ""),
     address: (
-      street: invoice-data.recipient.address.street,
-      city: invoice-data.recipient.address.city,
-      postal-code: invoice-data.recipient.address.postal_code,
-      state: if "state" in invoice-data.recipient.address {
-        invoice-data.recipient.address.state
-      },
-      country: if "country" in invoice-data.recipient.address {
-        invoice-data.recipient.address.country
-      },
+      street: invoice-data.at("recipient", default: (:)).at("address", default: (:)).at("street", default: ""),
+      city: invoice-data.at("recipient", default: (:)).at("address", default: (:)).at("city", default: ""),
+      postal-code: invoice-data.at("recipient", default: (:)).at("address", default: (:)).at("postal_code", default: ""),
+      state: invoice-data.at("recipient", default: (:)).at("address", default: (:)).at("state", default: ""),
+      country: invoice-data.at("recipient", default: (:)).at("address", default: (:)).at("country", default: ""),
     )
   ),
-  items: invoice-data.line_items,
+  items: invoice-data.at("line_items", default: ()),
+  applied-taxes: invoice-data.at("applied_taxes", default: ()),
+  applied-discounts: invoice-data.at("applied_discounts", default: ()),
   styling: (
     font: if "styling" in invoice-data and "font" in invoice-data.styling {
       invoice-data.styling.font

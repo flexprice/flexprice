@@ -67,7 +67,11 @@
   keywords: (),
   styling: (:),                 // font, font-size, margin (sets defaults below)
   items: (),                    // Line items
-  vat: 0,                       // VAT percentage as decimal
+  applied-taxes: (),            // Applied taxes breakdown
+  applied-discounts: (),        // Applied discounts breakdown
+  subtotal: 0,                  // Subtotal before discounts and tax
+  discount: 0,                  // Total discounts
+  tax: 0,                       // Total tax
   doc,
 ) = {
   // Set styling defaults
@@ -187,13 +191,20 @@
       bottom: if y == 0 { 1pt + styling.line-color } else { 1pt + styling.line-color },
     ),
     table.header(
-      [*Subscription*],
+      [*Item*],
       [*Description*],
       [*Interval*],
       [*Quantity*],
       [*Amount*],
     ),
     ..items.map((item) => {
+      let line-total = item.quantity * item.amount
+      let amount-display = if line-total < 0 {
+        [−#currency #format-number(calc.abs(line-total))]
+      } else {
+        [#currency #format-number(line-total)]
+      }
+      
       (
         item.at("plan_display_name", default: "Plan"),
         if item.at("description", default: "Recurring") != "" {
@@ -208,7 +219,7 @@
           "-"
         },
         format-number(item.quantity),
-        [#currency #format-number(item.quantity * item.amount)],
+        amount-display,
       )
     }).flatten(),
   )
@@ -222,14 +233,105 @@
       align: (left, right),
       inset: 6pt,
       stroke: none,
-      [Subtotal], [#currency#format-number(amount-due)],
-      [Tax], if vat == 0 { [-] } else { [#currency#format-number(calc.round(amount-due * vat, digits: 2))] },
+      // Always show subtotal
+      [Subtotal], [#currency#format-number(subtotal)],
+      
+      // Show discount row only if there's a discount
+      ..if discount > 0 { ([Discount], [−#currency#format-number(discount)]) } else { () },
+      
+      // Show tax row only if there's tax
+      ..if tax > 0 { ([Tax], [#currency#format-number(tax)]) } else { () },
+      
       table.hline(stroke: 1pt + styling.line-color),
-      [*Total Amount*], [*#currency#format-number(amount-due + calc.round(amount-due * vat, digits: 2))*],
+      [*Net Payable*], [*#currency#format-number(subtotal - discount + tax)*],
     )
   )
 
   v(2em)
+
+  // Applied Discounts section (if any discounts were applied)
+  if applied-discounts.len() > 0 {
+    [== Applied Discounts]
+    v(0.5em)
+
+    table(
+      columns: (1fr, 1fr, 1fr, 1fr, 1fr),
+      inset: 8pt,
+      align: (left, left, right, right, left),
+      fill: white,
+      stroke: (x, y) => (
+        bottom: if y == 0 { 1pt + styling.line-color } else { 1pt + styling.line-color },
+      ),
+      table.header(
+        [*Discount Name*],
+        [*Type*],
+        [*Value*],
+        [*Discount Amount*],
+        [*Line Item Ref.*],
+      ),
+      ..applied-discounts.map((discount) => {
+        let value-display = if discount.type == "percentage" {
+          [#format-number(discount.value)%]
+        } else {
+          [#currency#format-number(discount.value)]
+        }
+        
+        (
+          discount.discount_name,
+          discount.type,
+          value-display,
+          [#currency#format-number(discount.discount_amount)],
+          discount.line_item_ref,
+        )
+      }).flatten(),
+    )
+
+    v(1em)
+  }
+
+  // Applied Taxes section (if any taxes were applied)
+  if applied-taxes.len() > 0 {
+    [== Applied Taxes]
+    v(0.5em)
+
+    table(
+      columns: (1fr, 1fr, 1fr, 1fr, 1fr, 1fr),
+      inset: 8pt,
+      align: (left, left, left, right, right, right),
+      fill: white,
+      stroke: (x, y) => (
+        bottom: if y == 0 { 1pt + styling.line-color } else { 1pt + styling.line-color },
+      ),
+      table.header(
+        [*Tax Name*],
+        [*Code*],
+        [*Type*],
+        [*Rate*],
+        [*Taxable Amount*],
+        [*Tax Amount*],
+        // [*Applied At*],
+      ),
+      ..applied-taxes.map((tax) => {
+        let rate-display = if tax.tax_type == "Percentage" {
+          [#format-number(tax.tax_rate)%]
+        } else {
+          [#currency#format-number(tax.tax_rate)]
+        }
+        
+        (
+          tax.tax_name,
+          tax.tax_code,
+          tax.tax_type,
+          rate-display,
+          [#currency#format-number(tax.taxable_amount)],
+          [#currency#format-number(tax.tax_amount)],
+          // tax.applied_at,
+        )
+      }).flatten(),
+    )
+
+    v(1em)
+  }
 
   // Payment information
   if invoice-status == "FINALIZED" {
