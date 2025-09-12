@@ -55,6 +55,11 @@ func (s *settingsService) GetSettingByKey(ctx context.Context, key string) (*dto
 func (s *settingsService) createSetting(ctx context.Context, req *dto.CreateSettingRequest) (*dto.SettingResponse, error) {
 	setting := req.ToSetting(ctx)
 
+	// Validate the setting using domain model validation
+	if err := setting.Validate(); err != nil {
+		return nil, err
+	}
+
 	err := s.SettingsRepo.Create(ctx, setting)
 	if err != nil {
 		return nil, err
@@ -64,6 +69,11 @@ func (s *settingsService) createSetting(ctx context.Context, req *dto.CreateSett
 }
 
 func (s *settingsService) updateSetting(ctx context.Context, setting *settings.Setting) (*dto.SettingResponse, error) {
+	// Validate the setting using domain model validation
+	if err := setting.Validate(); err != nil {
+		return nil, err
+	}
+
 	err := s.SettingsRepo.Update(ctx, setting)
 	if err != nil {
 		return nil, err
@@ -73,21 +83,14 @@ func (s *settingsService) updateSetting(ctx context.Context, setting *settings.S
 }
 
 func (s *settingsService) UpdateSettingByKey(ctx context.Context, key string, req *dto.UpdateSettingRequest) (*dto.SettingResponse, error) {
-	// STEP 1: Validate the request
-	if err := req.Validate(key); err != nil {
-		return nil, err
-	}
-
-	// STEP 2: Check if the setting exists
+	// Check if the setting exists
 	setting, err := s.SettingsRepo.GetByKey(ctx, key)
 	if ent.IsNotFound(err) {
 		createReq := &dto.CreateSettingRequest{
 			Key:   key,
 			Value: req.Value,
 		}
-		if err := createReq.Validate(); err != nil {
-			return nil, err
-		}
+		// Validation happens in createSetting via domain model
 		return s.createSetting(ctx, createReq)
 	}
 

@@ -10,7 +10,6 @@ import (
 type Repository interface {
 	// Core operations
 	Create(ctx context.Context, setting *Setting) error
-	Get(ctx context.Context, id string) (*Setting, error)
 	Update(ctx context.Context, setting *Setting) error
 	Delete(ctx context.Context, id string) error
 

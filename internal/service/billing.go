@@ -14,6 +14,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -941,13 +942,21 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 ) (*dto.CreateInvoiceRequest, error) {
 	// Get invoice config for tenant
 	settingsService := NewSettingsService(s.ServiceParams)
-	invoiceConfigResponse, err := settingsService.GetSettingByKey(ctx, types.SettingKeyInvoiceConfig.String())
+	invoiceSettingResponse, err := settingsService.GetSettingByKey(ctx, types.SettingKeyInvoiceConfig.String())
 	if err != nil {
 		return nil, err
 	}
 
-	// Use the safe conversion function
-	invoiceConfig, err := dto.ConvertToInvoiceConfig(invoiceConfigResponse.Value)
+	// Convert DTO to domain model
+	invoiceSettingsDomain := &settings.Setting{
+		ID:            invoiceSettingResponse.ID,
+		Key:           invoiceSettingResponse.Key,
+		Value:         invoiceSettingResponse.Value,
+		EnvironmentID: invoiceSettingResponse.EnvironmentID,
+	}
+
+	// Convert to InvoiceConfig using domain model method
+	invoiceConfig, err := invoiceSettingsDomain.ToInvoiceConfig()
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Failed to parse invoice configuration").
