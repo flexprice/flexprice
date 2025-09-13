@@ -2,10 +2,12 @@ package dto
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/settings"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -23,56 +25,71 @@ type SettingResponse struct {
 	UpdatedBy     string                 `json:"updated_by,omitempty"`
 }
 
+// ConvertMapToStruct converts a map[string]interface{} to any struct type
+// using JSON marshal/unmarshal for clean type conversion
+func ConvertMapToStruct(value map[string]interface{}, target interface{}) error {
+	if value == nil {
+		return ierr.NewError("value map is nil").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Marshal the map to JSON
+	jsonBytes, err := json.Marshal(value)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("failed to marshal value to JSON").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Unmarshal JSON into target struct
+	err = json.Unmarshal(jsonBytes, target)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("failed to unmarshal JSON to target type").
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}
+
+// ConvertMapToStructWithDefaults converts a map[string]interface{} to any struct type,
+// merging with default values first
+func ConvertMapToStructWithDefaults(value map[string]interface{}, target interface{}, defaults map[string]interface{}) error {
+	if value == nil {
+		return ierr.NewError("value map is nil").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Merge defaults with actual values (actual values take precedence)
+	mergedValue := make(map[string]interface{})
+
+	// First, copy defaults
+	for k, v := range defaults {
+		mergedValue[k] = v
+	}
+
+	// Then, override with actual values
+	for k, v := range value {
+		mergedValue[k] = v
+	}
+
+	return ConvertMapToStruct(mergedValue, target)
+}
+
 func ConvertToInvoiceConfig(value map[string]interface{}) (*types.InvoiceConfig, error) {
+	// Get default values for invoice config
+	defaultSettings := types.GetDefaultSettings()
+	defaults := defaultSettings[types.SettingKeyInvoiceConfig].DefaultValue
 
-	invoiceConfig := &types.InvoiceConfig{}
-	if dueDateDaysRaw, exists := value["due_date_days"]; exists {
-		switch v := dueDateDaysRaw.(type) {
-		case int:
-			dueDateDays := v
-			invoiceConfig.DueDateDays = &dueDateDays
-		case float64:
-			dueDateDays := int(v)
-			invoiceConfig.DueDateDays = &dueDateDays
-		}
-	} else {
-		// Get default value and convert to pointer
-		defaultDays := types.GetDefaultSettings()[types.SettingKeyInvoiceConfig].DefaultValue["due_date_days"].(int)
-		invoiceConfig.DueDateDays = &defaultDays
+	var invoiceConfig types.InvoiceConfig
+	err := ConvertMapToStructWithDefaults(value, &invoiceConfig, defaults)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("failed to convert map to invoice config").
+			Mark(ierr.ErrValidation)
 	}
 
-	if invoiceNumberPrefix, ok := value["prefix"].(string); ok {
-		invoiceConfig.InvoiceNumberPrefix = invoiceNumberPrefix
-	}
-	if invoiceNumberFormat, ok := value["format"].(string); ok {
-		invoiceConfig.InvoiceNumberFormat = types.InvoiceNumberFormat(invoiceNumberFormat)
-	}
-
-	if invoiceNumberTimezone, ok := value["timezone"].(string); ok {
-		invoiceConfig.InvoiceNumberTimezone = invoiceNumberTimezone
-	}
-	if startSequenceRaw, exists := value["start_sequence"]; exists {
-		switch v := startSequenceRaw.(type) {
-		case int:
-			invoiceConfig.InvoiceNumberStartSequence = v
-		case float64:
-			invoiceConfig.InvoiceNumberStartSequence = int(v)
-		}
-	}
-
-	if invoiceNumberSeparator, ok := value["separator"].(string); ok {
-		invoiceConfig.InvoiceNumberSeparator = invoiceNumberSeparator
-	}
-	if suffixLengthRaw, exists := value["suffix_length"]; exists {
-		switch v := suffixLengthRaw.(type) {
-		case int:
-			invoiceConfig.InvoiceNumberSuffixLength = v
-		case float64:
-			invoiceConfig.InvoiceNumberSuffixLength = int(v)
-		}
-	}
-
-	return invoiceConfig, nil
+	return &invoiceConfig, nil
 }
 
 // CreateSettingRequest represents the request to create a new setting
