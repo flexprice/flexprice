@@ -21,13 +21,13 @@ type Repository interface {
 // ProcessedEventRepository defines operations for processed events
 type ProcessedEventRepository interface {
 	// Inserts a single processed event into events_processed table
-	InsertProcessedEvent(ctx context.Context, event *ProcessedEvent) error
+	InsertProcessedEvent(ctx context.Context, event *FeatureUsage) error
 
 	// Bulk insert events into events_processed table
-	BulkInsertProcessedEvents(ctx context.Context, events []*ProcessedEvent) error
+	BulkInsertProcessedEvents(ctx context.Context, events []*FeatureUsage) error
 
 	// Get processed events with filtering options
-	GetProcessedEvents(ctx context.Context, params *GetProcessedEventsParams) ([]*ProcessedEvent, uint64, error)
+	GetProcessedEvents(ctx context.Context, params *GetProcessedEventsParams) ([]*FeatureUsage, uint64, error)
 
 	// Check for duplicate event using unique_hash
 	IsDuplicate(ctx context.Context, subscriptionID, meterID string, periodID uint64, uniqueHash string) (bool, error)

@@ -30,14 +30,13 @@ func NewProcessedEventRepository(store *clickhouse.ClickHouseStore, logger *logg
 }
 
 // InsertProcessedEvent inserts a single processed event
-func (r *ProcessedEventRepository) InsertProcessedEvent(ctx context.Context, event *events.ProcessedEvent) error {
+func (r *ProcessedEventRepository) InsertProcessedEvent(ctx context.Context, event *events.FeatureUsage) error {
 	query := `
-		INSERT INTO events_processed (
+		INSERT INTO feature_usage (
 			id, tenant_id, external_customer_id, customer_id, event_name, source, 
 			timestamp, ingested_at, properties, environment_id,
 			subscription_id, sub_line_item_id, price_id, meter_id, feature_id, period_id,
-			unique_hash, qty_total, qty_billable, qty_free_applied, tier_snapshot, 
-			unit_cost, cost, currency, sign
+			unique_hash, qty_total, sign
 		) VALUES (
 			?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 		)
@@ -78,12 +77,6 @@ func (r *ProcessedEventRepository) InsertProcessedEvent(ctx context.Context, eve
 		event.PeriodID,
 		event.UniqueHash,
 		event.QtyTotal,
-		event.QtyBillable,
-		event.QtyFreeApplied,
-		event.TierSnapshot,
-		event.UnitCost,
-		event.Cost,
-		event.Currency,
 		sign,
 	}
 
@@ -101,7 +94,7 @@ func (r *ProcessedEventRepository) InsertProcessedEvent(ctx context.Context, eve
 }
 
 // BulkInsertProcessedEvents inserts multiple processed events
-func (r *ProcessedEventRepository) BulkInsertProcessedEvents(ctx context.Context, events []*events.ProcessedEvent) error {
+func (r *ProcessedEventRepository) BulkInsertProcessedEvents(ctx context.Context, events []*events.FeatureUsage) error {
 	if len(events) == 0 {
 		return nil
 	}
@@ -112,12 +105,11 @@ func (r *ProcessedEventRepository) BulkInsertProcessedEvents(ctx context.Context
 	for _, eventsBatch := range eventsBatches {
 		// Prepare batch statement
 		batch, err := r.store.GetConn().PrepareBatch(ctx, `
-			INSERT INTO events_processed (
+			INSERT INTO feature_usage (
 				id, tenant_id, external_customer_id, customer_id, event_name, source, 
 				timestamp, ingested_at, properties, environment_id,
 				subscription_id, sub_line_item_id, price_id, meter_id, feature_id, period_id,
-				unique_hash, qty_total, qty_billable, qty_free_applied, tier_snapshot, 
-				unit_cost, cost, currency, sign
+				unique_hash, qty_total, sign
 			)
 		`)
 		if err != nil {
@@ -162,12 +154,6 @@ func (r *ProcessedEventRepository) BulkInsertProcessedEvents(ctx context.Context
 				event.PeriodID,
 				event.UniqueHash,
 				event.QtyTotal,
-				event.QtyBillable,
-				event.QtyFreeApplied,
-				event.TierSnapshot,
-				event.UnitCost,
-				event.Cost,
-				event.Currency,
 				sign,
 			)
 
@@ -196,15 +182,14 @@ func (r *ProcessedEventRepository) BulkInsertProcessedEvents(ctx context.Context
 }
 
 // GetProcessedEvents retrieves processed events based on the provided parameters
-func (r *ProcessedEventRepository) GetProcessedEvents(ctx context.Context, params *events.GetProcessedEventsParams) ([]*events.ProcessedEvent, uint64, error) {
+func (r *ProcessedEventRepository) GetProcessedEvents(ctx context.Context, params *events.GetProcessedEventsParams) ([]*events.FeatureUsage, uint64, error) {
 	query := `
 		SELECT 
 			id, tenant_id, external_customer_id, customer_id, event_name, source, 
 			timestamp, ingested_at, properties, processed_at, environment_id,
 			subscription_id, sub_line_item_id, price_id, meter_id, feature_id, period_id,
-			unique_hash, qty_total, qty_billable, qty_free_applied, tier_snapshot, 
-			unit_cost, cost, currency, version, sign, final_lag_ms
-		FROM events_processed
+			unique_hash, qty_total, version, sign, processing_lag_ms
+		FROM feature_usage
 		WHERE tenant_id = ?
 		AND environment_id = ?
 		AND timestamp >= ?
@@ -213,7 +198,7 @@ func (r *ProcessedEventRepository) GetProcessedEvents(ctx context.Context, param
 
 	countQuery := `
 		SELECT COUNT(*)
-		FROM events_processed
+		FROM feature_usage
 		WHERE tenant_id = ?
 		AND environment_id = ?
 		AND timestamp >= ?
@@ -294,9 +279,9 @@ func (r *ProcessedEventRepository) GetProcessedEvents(ctx context.Context, param
 	}
 	defer rows.Close()
 
-	var eventsList []*events.ProcessedEvent
+	var eventsList []*events.FeatureUsage
 	for rows.Next() {
-		var event events.ProcessedEvent
+		var event events.FeatureUsage
 		var propertiesJSON string
 
 		err := rows.Scan(
@@ -319,15 +304,9 @@ func (r *ProcessedEventRepository) GetProcessedEvents(ctx context.Context, param
 			&event.PeriodID,
 			&event.UniqueHash,
 			&event.QtyTotal,
-			&event.QtyBillable,
-			&event.QtyFreeApplied,
-			&event.TierSnapshot,
-			&event.UnitCost,
-			&event.Cost,
-			&event.Currency,
 			&event.Version,
 			&event.Sign,
-			&event.FinalLagMs,
+			&event.ProcessingLagMs,
 		)
 		if err != nil {
 			return nil, 0, ierr.WithError(err).
@@ -356,7 +335,7 @@ func (r *ProcessedEventRepository) GetProcessedEvents(ctx context.Context, param
 func (r *ProcessedEventRepository) IsDuplicate(ctx context.Context, subscriptionID, meterID string, periodID uint64, uniqueHash string) (bool, error) {
 	query := `
 		SELECT 1 
-		FROM events_processed 
+		FROM feature_usage 
 		WHERE subscription_id = ? 
 		AND meter_id = ? 
 		AND period_id = ? 
@@ -594,15 +573,14 @@ func (r *ProcessedEventRepository) GetDetailedUsageAnalytics(ctx context.Context
 		selectColumns = append(selectColumns, strings.Join(groupByColumnAliases, ", ")) // group by columns with aliases
 	}
 	selectColumns = append(selectColumns,
-		"SUM(qty_billable * sign) AS total_usage",
-		"SUM(cost * sign) AS total_cost",
+		"SUM(qty_total * sign) AS total_usage",
 		"COUNT(DISTINCT id) AS event_count", // Count distinct event IDs, not rows
 	)
 
 	aggregateQuery := fmt.Sprintf(`
 		SELECT 
 			%s
-		FROM events_processed
+		FROM feature_usage
 		WHERE tenant_id = ?
 		AND environment_id = ?
 		AND customer_id = ?
@@ -696,7 +674,7 @@ func (r *ProcessedEventRepository) GetDetailedUsageAnalytics(ctx context.Context
 		analytics.Properties = make(map[string]string)
 
 		// Scan the row based on group by columns
-		expectedColumns := len(params.GroupBy) + 3 // +3 for total_usage, total_cost, event_count
+		expectedColumns := len(params.GroupBy) + 2 // +2 for total_usage, total_cost, event_count
 		scanArgs := make([]interface{}, expectedColumns)
 
 		// Prepare scan targets for each group by field
@@ -707,8 +685,7 @@ func (r *ProcessedEventRepository) GetDetailedUsageAnalytics(ctx context.Context
 
 		// Scan the aggregate values
 		scanArgs[len(params.GroupBy)] = &analytics.TotalUsage
-		scanArgs[len(params.GroupBy)+1] = &analytics.TotalCost
-		scanArgs[len(params.GroupBy)+2] = &analytics.EventCount
+		scanArgs[len(params.GroupBy)+1] = &analytics.EventCount
 
 		if err := rows.Scan(scanArgs...); err != nil {
 			SetSpanError(span, err)
@@ -800,8 +777,7 @@ func (r *ProcessedEventRepository) getAnalyticsPoints(
 	// Build the select columns for time-series query - always include event count
 	selectColumns := []string{
 		fmt.Sprintf("%s AS window_time", timeWindowExpr),
-		"SUM(qty_billable * sign) AS usage",
-		"SUM(cost * sign) AS cost",
+		"SUM(qty_total * sign) AS usage",
 		"COUNT(DISTINCT id) AS event_count", // Count distinct event IDs, not rows
 	}
 
@@ -809,7 +785,7 @@ func (r *ProcessedEventRepository) getAnalyticsPoints(
 	query := fmt.Sprintf(`
 		SELECT 
 			%s
-		FROM events_processed
+		FROM feature_usage
 		WHERE tenant_id = ?
 		AND environment_id = ?
 		AND customer_id = ?
@@ -905,7 +881,7 @@ func (r *ProcessedEventRepository) getAnalyticsPoints(
 	for rows.Next() {
 		var point events.UsageAnalyticPoint
 
-		if err := rows.Scan(&point.Timestamp, &point.Usage, &point.Cost, &point.EventCount); err != nil {
+		if err := rows.Scan(&point.Timestamp, &point.Usage, &point.EventCount); err != nil {
 			return nil, ierr.WithError(err).
 				WithHint("Failed to scan time-series point").
 				Mark(ierr.ErrDatabase)
@@ -945,7 +921,7 @@ func (r *ProcessedEventRepository) GetProcessedEventsBySubscription(ctx context.
 			count(DISTINCT id)                 AS count_distinct_ids,
 			count(DISTINCT unique_hash)        AS count_unique_qty,
 			argMax(qty_total, "timestamp")     AS latest_qty
-		FROM events_processed
+		FROM feature_usage
 		WHERE 
 			subscription_id = ?
 			AND external_customer_id = ?
