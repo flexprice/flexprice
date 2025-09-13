@@ -17,6 +17,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	typesSettings "github.com/flexprice/flexprice/internal/types/settings"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
@@ -941,17 +942,29 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 ) (*dto.CreateInvoiceRequest, error) {
 	// Get invoice config for tenant
 	settingsService := NewSettingsService(s.ServiceParams)
-	invoiceConfigResponse, err := settingsService.GetSettingByKey(ctx, types.SettingKeyInvoiceConfig.String())
+	invoiceConfigResponse, err := settingsService.GetSettingByKey(ctx, typesSettings.SettingKeyInvoiceConfig.String())
 	if err != nil {
 		return nil, err
 	}
 
-	// Use the safe conversion function
-	invoiceConfig, err := dto.ConvertToInvoiceConfig(invoiceConfigResponse.Value)
+	// Use the new optimized conversion method
+	var config typesSettings.InvoiceConfig
+	settingsInvoiceConfig, err := config.ToInvoiceConfig(invoiceConfigResponse.Value)
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Failed to parse invoice configuration").
 			Mark(ierr.ErrValidation)
+	}
+
+	// Convert from settings InvoiceConfig to types InvoiceConfig
+	invoiceConfig := &types.InvoiceConfig{
+		InvoiceNumberPrefix:        settingsInvoiceConfig.Prefix,
+		InvoiceNumberFormat:        types.InvoiceNumberFormat(settingsInvoiceConfig.Format),
+		InvoiceNumberStartSequence: settingsInvoiceConfig.StartSequence,
+		InvoiceNumberTimezone:      settingsInvoiceConfig.Timezone,
+		InvoiceNumberSeparator:     settingsInvoiceConfig.Separator,
+		InvoiceNumberSuffixLength:  settingsInvoiceConfig.SuffixLength,
+		DueDateDays:                &settingsInvoiceConfig.DueDateDays,
 	}
 
 	// Prepare invoice due date using tenant's configuration

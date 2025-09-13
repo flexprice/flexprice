@@ -18,6 +18,7 @@ import (
 	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/s3"
 	"github.com/flexprice/flexprice/internal/types"
+	typesSettings "github.com/flexprice/flexprice/internal/types/settings"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
@@ -174,17 +175,29 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 			invoiceNumber = *req.InvoiceNumber
 		} else {
 			settingsService := NewSettingsService(s.ServiceParams)
-			invoiceConfigResponse, err := settingsService.GetSettingByKey(ctx, types.SettingKeyInvoiceConfig.String())
+			invoiceConfigResponse, err := settingsService.GetSettingByKey(ctx, typesSettings.SettingKeyInvoiceConfig.String())
 			if err != nil {
 				return err
 			}
 
-			// Use the safe conversion function
-			invoiceConfig, err := dto.ConvertToInvoiceConfig(invoiceConfigResponse.Value)
+			// Use the new optimized conversion method
+			var config typesSettings.InvoiceConfig
+			settingsInvoiceConfig, err := config.ToInvoiceConfig(invoiceConfigResponse.Value)
 			if err != nil {
 				return ierr.WithError(err).
 					WithHint("Failed to parse invoice configuration").
 					Mark(ierr.ErrValidation)
+			}
+
+			// Convert from settings InvoiceConfig to types InvoiceConfig
+			invoiceConfig := &types.InvoiceConfig{
+				InvoiceNumberPrefix:        settingsInvoiceConfig.Prefix,
+				InvoiceNumberFormat:        types.InvoiceNumberFormat(settingsInvoiceConfig.Format),
+				InvoiceNumberStartSequence: settingsInvoiceConfig.StartSequence,
+				InvoiceNumberTimezone:      settingsInvoiceConfig.Timezone,
+				InvoiceNumberSeparator:     settingsInvoiceConfig.Separator,
+				InvoiceNumberSuffixLength:  settingsInvoiceConfig.SuffixLength,
+				DueDateDays:                &settingsInvoiceConfig.DueDateDays,
 			}
 
 			invoiceNumber, err = s.InvoiceRepo.GetNextInvoiceNumber(ctx, invoiceConfig)
