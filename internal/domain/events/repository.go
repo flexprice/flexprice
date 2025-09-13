@@ -78,6 +78,22 @@ type UsageParams struct {
 	EndTime            time.Time             `json:"end_time" validate:"required"`
 	Filters            map[string][]string   `json:"filters"`
 	Multiplier         *decimal.Decimal      `json:"multiplier,omitempty" validate:"omitempty,gt=0"`
+	// BillingAnchor enables custom monthly billing periods for usage aggregation.
+	//
+	// Behavior by WindowSize:
+	// - MONTH + BillingAnchor: Custom monthly periods (e.g., 5th to 5th of each month)
+	// - MONTH + nil: Standard calendar months (1st to 1st of each month)
+	// - DAY/HOUR/WEEK/etc: BillingAnchor is ignored, uses standard windows
+	//
+	// Precision: Day-level granularity is used for simplicity and predictability (time is ignored)
+	// Example: BillingAnchor = 2024-03-05 (any time on March 5th)
+	//   - Creates monthly buckets starting on the 5th of each month
+	//
+	// Use cases:
+	// - Subscription billing periods that don't align with calendar months
+	// - Custom business cycles (fiscal months, quarterly periods)
+	// - Multi-tenant billing with different anchor dates per customer
+	BillingAnchor *time.Time `json:"billing_anchor,omitempty"`
 }
 
 // UsageSummaryParams defines parameters for querying pre-computed usage
