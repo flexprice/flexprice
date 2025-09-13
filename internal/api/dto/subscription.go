@@ -910,7 +910,7 @@ type GetUsageBySubscriptionRequest struct {
 	LifetimeUsage  bool      `json:"lifetime_usage" example:"false"`
 }
 
-type GetUsageBySubscriptionV2Request struct {
+type GetFeatureUsageBySubscriptionRequest struct {
 	SubscriptionID     string    `json:"subscription_id" binding:"required" example:"123"`
 	StartTime          time.Time `json:"start_time" example:"2024-03-13T00:00:00Z"`
 	EndTime            time.Time `json:"end_time" example:"2024-03-20T00:00:00Z"`

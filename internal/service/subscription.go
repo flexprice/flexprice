@@ -66,7 +66,7 @@ type SubscriptionService interface {
 	ProcessSubscriptionRenewalDueAlert(ctx context.Context) error
 
 	// Subscription Usage
-	GetUsageBySubscriptionV2(ctx context.Context, req *dto.GetUsageBySubscriptionV2Request) (*dto.GetUsageBySubscriptionResponse, error)
+	GetFeatureUsageBySubscription(ctx context.Context, req *dto.GetFeatureUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error)
 }
 
 type subscriptionService struct {
@@ -949,7 +949,7 @@ func (s *subscriptionService) addSchedulesToSubscriptionResponses(ctx context.Co
 	}
 }
 
-func (s *subscriptionService) GetUsageBySubscriptionV2(ctx context.Context, req *dto.GetUsageBySubscriptionV2Request) (*dto.GetUsageBySubscriptionResponse, error) {
+func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context, req *dto.GetFeatureUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error) {
 	response := &dto.GetUsageBySubscriptionResponse{}
 	priceService := NewPriceService(s.ServiceParams)
 
