@@ -609,11 +609,12 @@ func handleEventConsumption(ctx context.Context, cfg *config.Configuration, log 
 		return err
 	}
 
+	// DevNote: Since we are going to read the event from the events topic itself, we don't need to publish it to the post-processing service
 	// Publish event to post-processing service
-	if err := eventPostProcessingSvc.PublishEvent(ctx, &event, false); err != nil {
-		log.Errorf("Failed to publish event to post-processing service: %v, original event: %+v", err, event)
-		return err
-	}
+	// if err := eventPostProcessingSvc.PublishEvent(ctx, &event, false); err != nil {
+	// 	log.Errorf("Failed to publish event to post-processing service: %v, original event: %+v", err, event)
+	// 	return err
+	// }
 
 	log.Debugf(
 		"Successfully processed event with lag : %v ms : %+v",

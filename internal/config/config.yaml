@@ -53,7 +53,7 @@ postgres:
   auto_migrate: false
 
 sentry:
-  enabled: false # Set to true in production
+  enabled: true # Set to true in production
   dsn: "" # Add your Sentry DSN here
   environment: "development" # Change to "production" in prod
   sample_rate: 1.0 # Adjust sampling rate as needed (0.0 to 1.0)
@@ -142,7 +142,7 @@ cache:
   enabled: false
 
 event_post_processing:
-  topic: "events_post_processing"
+  topic: "events"
   rate_limit: 12
   consumer_group: "v1_events_post_processing"
   topic_backfill: "events_post_processing_backfill"
