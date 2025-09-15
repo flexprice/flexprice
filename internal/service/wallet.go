@@ -466,6 +466,7 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 
 	// Initialize billing service
 	billingService := NewBillingService(s.ServiceParams)
+	subscriptionService := NewSubscriptionService(s.ServiceParams)
 
 	// Calculate total pending charges (usage)
 	totalPendingCharges := decimal.Zero
@@ -475,7 +476,6 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 		periodEnd := sub.CurrentPeriodEnd
 
 		// Get usage data for current period
-		subscriptionService := NewSubscriptionService(s.ServiceParams)
 		usage, err := subscriptionService.GetFeatureUsageBySubscription(ctx, &dto.GetFeatureUsageBySubscriptionRequest{
 			SubscriptionID: sub.ID,
 			StartTime:      periodStart,
