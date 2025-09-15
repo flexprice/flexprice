@@ -899,7 +899,7 @@ func (r *ProcessedEventRepository) getAnalyticsPoints(
 	return points, nil
 }
 
-// GetUsageBySubscriptionV2 gets usage data for a subscription using a single optimized query
+// GetProcessedEventsBySubscription gets usage data for a subscription using a single optimized query
 func (r *ProcessedEventRepository) GetProcessedEventsBySubscription(ctx context.Context, subscriptionID, externalCustomerID, environmentID, tenantID string, startTime, endTime time.Time) (map[string]*events.UsageByFeatureResult, error) {
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "processed_event", "get_usage_by_subscription_v2", map[string]interface{}{

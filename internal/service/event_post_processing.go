@@ -350,7 +350,7 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 	// Create a base processed event
 	baseProcessedEvent := event.ToProcessedEvent()
 
-	// Results slice - will contain either a single skipped event or multiple processed events
+	// Results slice - will contain either a single skipped event or multiple feature usage
 	results := make([]*events.FeatureUsage, 0)
 
 	// CASE 1: Lookup customer
