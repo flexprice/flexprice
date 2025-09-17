@@ -352,7 +352,7 @@ func (h *WebhookHandler) getSessionIDFromPaymentIntent(ctx context.Context, paym
 	}
 	params.Limit = stripe.Int64(1)
 
-	iter := stripeClient.V1CheckoutSessions.List(context.Background(), params)
+	iter := stripeClient.V1CheckoutSessions.List(ctx, params)
 	var sessionID string
 
 	iter(func(session *stripe.CheckoutSession, err error) bool {

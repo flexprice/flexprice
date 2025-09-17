@@ -161,7 +161,7 @@ func (s *StripeInvoiceSyncService) createDraftInvoiceInStripe(ctx context.Contex
 	}
 
 	// Create the invoice
-	stripeInvoice, err := stripeClient.V1Invoices.Create(context.Background(), params)
+	stripeInvoice, err := stripeClient.V1Invoices.Create(ctx, params)
 	if err != nil {
 		s.Logger.Errorw("failed to create draft invoice in Stripe",
 			"error", err,
@@ -251,7 +251,7 @@ func (s *StripeInvoiceSyncService) addLineItemToStripeInvoice(ctx context.Contex
 	// For now, we'll always use Amount since it's simpler and works for all cases
 	params.Amount = stripe.Int64(amountCents)
 
-	invoiceItem, err := stripeClient.V1InvoiceItems.Create(context.Background(), params)
+	invoiceItem, err := stripeClient.V1InvoiceItems.Create(ctx, params)
 	if err != nil {
 		s.Logger.Errorw("failed to add line item to Stripe invoice",
 			"error", err,
@@ -291,7 +291,7 @@ func (s *StripeInvoiceSyncService) finalizeStripeInvoice(ctx context.Context, st
 		AutoAdvance: stripe.Bool(false), // Let Stripe handle payment intent creation and sending
 	}
 
-	finalizedInvoice, err := stripeClient.V1Invoices.FinalizeInvoice(context.Background(), stripeInvoiceID, params)
+	finalizedInvoice, err := stripeClient.V1Invoices.FinalizeInvoice(ctx, stripeInvoiceID, params)
 	if err != nil {
 		s.Logger.Errorw("failed to finalize Stripe invoice",
 			"error", err,
@@ -316,7 +316,7 @@ func (s *StripeInvoiceSyncService) finalizeStripeInvoice(ctx context.Context, st
 			"stripe_invoice_id", stripeInvoiceID,
 			"collection_method", collectionMethod)
 
-		_, err = stripeClient.V1Invoices.SendInvoice(context.Background(), stripeInvoiceID, &stripe.InvoiceSendInvoiceParams{})
+		_, err = stripeClient.V1Invoices.SendInvoice(ctx, stripeInvoiceID, &stripe.InvoiceSendInvoiceParams{})
 		if err != nil {
 			s.Logger.Errorw("failed to send Stripe invoice",
 				"error", err,
@@ -354,7 +354,7 @@ func (s *StripeInvoiceSyncService) SyncPaymentToStripe(ctx context.Context, invo
 		"source", paymentSource)
 
 	// Get the invoice to check current status
-	stripeInvoice, err := stripeClient.V1Invoices.Retrieve(context.Background(), stripeInvoiceID, nil)
+	stripeInvoice, err := stripeClient.V1Invoices.Retrieve(ctx, stripeInvoiceID, nil)
 	if err != nil {
 		return ierr.NewError("failed to retrieve Stripe invoice").
 			WithHint("Unable to get invoice from Stripe").
@@ -382,7 +382,7 @@ func (s *StripeInvoiceSyncService) SyncPaymentToStripe(ctx context.Context, invo
 		"amount_cents", amountCents,
 		"payment_source", paymentSource)
 
-	updatedInvoice, err := stripeClient.V1Invoices.Pay(context.Background(), stripeInvoiceID, payParams)
+	updatedInvoice, err := stripeClient.V1Invoices.Pay(ctx, stripeInvoiceID, payParams)
 	if err != nil {
 		s.Logger.Errorw("failed to mark payment as paid out of band",
 			"error", err,
@@ -556,7 +556,7 @@ func (s *StripeInvoiceSyncService) updateFlexPriceInvoiceFromStripe(ctx context.
 // updateStripeInvoiceMetadata updates the Stripe invoice metadata to track FlexPrice credit payments
 func (s *StripeInvoiceSyncService) updateStripeInvoiceMetadata(ctx context.Context, stripeClient *stripe.Client, stripeInvoiceID string, paymentAmount decimal.Decimal, paymentSource string, paymentMetadata map[string]string) error {
 	// Get current invoice to read existing metadata
-	currentInvoice, err := stripeClient.V1Invoices.Retrieve(context.Background(), stripeInvoiceID, nil)
+	currentInvoice, err := stripeClient.V1Invoices.Retrieve(ctx, stripeInvoiceID, nil)
 	if err != nil {
 		return err
 	}
@@ -589,7 +589,7 @@ func (s *StripeInvoiceSyncService) updateStripeInvoiceMetadata(ctx context.Conte
 		"payment_amount_cents", paymentAmountCents.String(),
 		"new_total_credits_cents", newTotalCredits.String())
 
-	_, err = stripeClient.V1Invoices.Update(context.Background(), stripeInvoiceID, updateParams)
+	_, err = stripeClient.V1Invoices.Update(ctx, stripeInvoiceID, updateParams)
 	if err != nil {
 		return err
 	}

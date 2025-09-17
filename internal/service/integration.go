@@ -644,7 +644,7 @@ func (s *integrationService) validateStripeCustomer(ctx context.Context, conn *c
 	sc := stripe.NewClient(stripeConfig.SecretKey, nil)
 
 	// Validate that the customer exists in Stripe
-	cust, err := sc.V1Customers.Retrieve(context.Background(), customerID, nil)
+	cust, err := sc.V1Customers.Retrieve(ctx, customerID, nil)
 	if err != nil {
 		s.Logger.Errorw("failed to validate Stripe customer",
 			"customer_id", customerID,
