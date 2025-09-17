@@ -370,6 +370,101 @@ func (h *WebhookHandler) getSessionIDFromPaymentIntent(ctx context.Context, paym
 	return sessionID, nil
 }
 
+// attachPaymentToStripeInvoice attaches a payment from a checkout session to the corresponding Stripe invoice
+func (h *WebhookHandler) attachPaymentToStripeInvoice(ctx context.Context, session stripe.CheckoutSession, payment *dto.PaymentResponse) error {
+	if session.PaymentIntent == nil {
+		h.logger.Debugw("no payment intent in checkout session, skipping Stripe invoice attachment",
+			"session_id", session.ID,
+			"payment_id", payment.ID)
+		return nil
+	}
+
+	paymentIntentID := session.PaymentIntent.ID
+
+	// Find Stripe invoice ID using entity integration mapping (same pattern as StripeService)
+	mappingService := service.NewEntityIntegrationMappingService(service.ServiceParams{
+		Logger:                       h.logger,
+		EntityIntegrationMappingRepo: h.stripeService.EntityIntegrationMappingRepo,
+	})
+
+	filter := &types.EntityIntegrationMappingFilter{
+		EntityIDs:     []string{payment.DestinationID},
+		EntityType:    "invoice",
+		ProviderTypes: []string{"stripe"},
+	}
+
+	mappings, err := mappingService.GetEntityIntegrationMappings(ctx, filter)
+	if err != nil || len(mappings.Items) == 0 {
+		h.logger.Debugw("no Stripe invoice found for FlexPrice invoice, skipping attachment",
+			"flexprice_invoice_id", payment.DestinationID,
+			"payment_id", payment.ID,
+			"error", err)
+		return nil
+	}
+
+	stripeInvoiceID := mappings.Items[0].ProviderEntityID
+
+	// Create Stripe client (same pattern as other StripeService methods)
+	conn, err := h.stripeService.ConnectionRepo.GetByProvider(ctx, types.SecretProviderStripe)
+	if err != nil {
+		return err
+	}
+
+	stripeConfig, err := h.stripeService.GetDecryptedStripeConfig(conn)
+	if err != nil {
+		return err
+	}
+
+	stripeClient := stripe.NewClient(stripeConfig.SecretKey, nil)
+
+	// Attach the payment intent to the Stripe invoice
+	if err := h.stripeService.AttachPaymentToStripeInvoice(ctx, stripeClient, paymentIntentID, stripeInvoiceID); err != nil {
+		return err
+	}
+
+	h.logger.Infow("successfully attached payment to Stripe invoice",
+		"payment_id", payment.ID,
+		"flexprice_invoice_id", payment.DestinationID,
+		"stripe_invoice_id", stripeInvoiceID,
+		"payment_intent_id", paymentIntentID,
+		"session_id", session.ID)
+
+	return nil
+}
+
+// isPaymentFromCheckoutSession checks if a payment intent is from a checkout session
+func (h *WebhookHandler) isPaymentFromCheckoutSession(ctx context.Context, paymentIntentID, environmentID string) bool {
+	// Direct query by gateway_payment_id and payment_method_type - much more efficient!
+	paymentService := service.NewPaymentService(h.stripeService.ServiceParams)
+	paymentMethodType := string(types.PaymentMethodTypePaymentLink)
+
+	// Query directly by gateway_payment_id and payment_method_type
+	payments, err := paymentService.ListPayments(ctx, &types.PaymentFilter{
+		GatewayPaymentID:  &paymentIntentID,
+		PaymentMethodType: &paymentMethodType,
+		QueryFilter: &types.QueryFilter{
+			Limit: lo.ToPtr(1), // Only need to check if one exists
+		},
+	})
+	if err != nil {
+		h.logger.Debugw("failed to check for existing payment records",
+			"payment_intent_id", paymentIntentID,
+			"error", err)
+		return false
+	}
+
+	// If we found any PAYMENT_LINK payment with this gateway_payment_id, it's from checkout session
+	if len(payments.Items) > 0 {
+		h.logger.Debugw("found existing PAYMENT_LINK payment for this payment intent",
+			"payment_id", payments.Items[0].ID,
+			"payment_intent_id", paymentIntentID,
+			"payment_method_type", payments.Items[0].PaymentMethodType)
+		return true
+	}
+
+	return false
+}
+
 // handleCheckoutSessionCompleted handles checkout.session.completed webhook
 func (h *WebhookHandler) handleCheckoutSessionCompleted(c *gin.Context, event *stripe.Event, environmentID string) {
 	var session stripe.CheckoutSession
@@ -558,6 +653,20 @@ func (h *WebhookHandler) handleCheckoutSessionCompleted(c *gin.Context, event *s
 			)
 			// Don't fail the webhook if reconciliation fails, but log the error
 			// The payment is still marked as succeeded
+		}
+
+		// Attach payment to Stripe invoice if payment succeeded and invoice is synced to Stripe
+		if paymentStatus == string(types.PaymentStatusSucceeded) {
+			if err := h.attachPaymentToStripeInvoice(c.Request.Context(), session, payment); err != nil {
+				h.logger.Errorw("failed to attach payment to Stripe invoice",
+					"error", err,
+					"payment_id", payment.ID,
+					"invoice_id", payment.DestinationID,
+					"session_id", session.ID,
+				)
+				// Don't fail the webhook if attachment fails, but log the error
+				// The payment reconciliation was successful
+			}
 		}
 	}
 
@@ -1216,6 +1325,19 @@ func (h *WebhookHandler) handleInvoicePaymentPaid(c *gin.Context, event *stripe.
 			"stripe_invoice_id", stripeInvoiceID)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Failed to get payment intent details",
+		})
+		return
+	}
+
+	// Check if this payment is from a checkout session (already processed by checkout.session.completed)
+	// Skip processing to avoid double reconciliation
+	if h.isPaymentFromCheckoutSession(ctx, paymentIntentID, environmentID) {
+		h.logger.Infow("payment is from checkout session, skipping invoice_payment.paid processing to avoid double reconciliation",
+			"payment_intent_id", paymentIntentID,
+			"stripe_invoice_id", stripeInvoiceID,
+			"event_id", event.ID)
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Payment from checkout session already processed",
 		})
 		return
 	}
