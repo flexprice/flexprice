@@ -7,7 +7,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// FeatureUsageTrackingRepository defines operations for feature usage tracking
+// FeatureUsageRepository defines operations for feature usage tracking
 type FeatureUsageRepository interface {
 	// Inserts a single processed event into events_processed table
 	InsertProcessedEvent(ctx context.Context, event *FeatureUsage) error
