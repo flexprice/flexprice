@@ -213,6 +213,7 @@ func main() {
 			service.NewAddonService,
 			service.NewSettingsService,
 			service.NewSubscriptionChangeService,
+			service.NewFeatureUsageTrackingService,
 		),
 	)
 
@@ -273,9 +274,10 @@ func provideHandlers(
 	addonService service.AddonService,
 	settingsService service.SettingsService,
 	subscriptionChangeService service.SubscriptionChangeService,
+	featureUsageTrackingService service.FeatureUsageTrackingService,
 ) api.Handlers {
 	return api.Handlers{
-		Events:                   v1.NewEventsHandler(eventService, eventPostProcessingService, logger),
+		Events:                   v1.NewEventsHandler(eventService, eventPostProcessingService, featureUsageTrackingService, logger),
 		Meter:                    v1.NewMeterHandler(meterService, logger),
 		Auth:                     v1.NewAuthHandler(cfg, authService, logger),
 		User:                     v1.NewUserHandler(userService, logger),
@@ -344,6 +346,7 @@ func startServer(
 	log *logger.Logger,
 	sentryService *sentry.Service,
 	eventPostProcessingSvc service.EventPostProcessingService,
+	featureUsageTrackingSvc service.FeatureUsageTrackingService,
 	params service.ServiceParams,
 ) {
 	mode := cfg.Deployment.Mode
@@ -360,6 +363,7 @@ func startServer(
 		startConsumer(lc, consumer, eventRepo, cfg, log, sentryService, eventPostProcessingSvc)
 		startMessageRouter(lc, router, webhookService, onboardingService, log)
 		startPostProcessingConsumer(lc, router, eventPostProcessingSvc, cfg, log)
+		startFeatureUsageTrackingConsumer(lc, router, featureUsageTrackingSvc, cfg, log)
 		startTemporalWorker(lc, temporalClient, &cfg.Temporal, params)
 	case types.ModeAPI:
 		startAPIServer(lc, r, cfg, log)
@@ -373,6 +377,7 @@ func startServer(
 		}
 		startConsumer(lc, consumer, eventRepo, cfg, log, sentryService, eventPostProcessingSvc)
 		startPostProcessingConsumer(lc, router, eventPostProcessingSvc, cfg, log)
+		startFeatureUsageTrackingConsumer(lc, router, featureUsageTrackingSvc, cfg, log)
 	case types.ModeAWSLambdaAPI:
 		startAWSLambdaAPI(r)
 		startMessageRouter(lc, router, webhookService, onboardingService, log)
@@ -609,12 +614,11 @@ func handleEventConsumption(ctx context.Context, cfg *config.Configuration, log 
 		return err
 	}
 
-	// DevNote: Since we are going to read the event from the events topic itself, we don't need to publish it to the post-processing service
 	// Publish event to post-processing service
-	// if err := eventPostProcessingSvc.PublishEvent(ctx, &event, false); err != nil {
-	// 	log.Errorf("Failed to publish event to post-processing service: %v, original event: %+v", err, event)
-	// 	return err
-	// }
+	if err := eventPostProcessingSvc.PublishEvent(ctx, &event, false); err != nil {
+		log.Errorf("Failed to publish event to post-processing service: %v, original event: %+v", err, event)
+		return err
+	}
 
 	log.Debugf(
 		"Successfully processed event with lag : %v ms : %+v",
@@ -667,6 +671,33 @@ func startPostProcessingConsumer(
 			go func() {
 				if err := router.Run(); err != nil {
 					logger.Errorw("message router failed", "error", err)
+				}
+			}()
+			return nil
+		},
+		OnStop: func(ctx context.Context) error {
+			logger.Info("stopping message router")
+			return router.Close()
+		},
+	})
+}
+
+func startFeatureUsageTrackingConsumer(
+	lc fx.Lifecycle,
+	router *pubsubRouter.Router,
+	featureUsageTrackingSvc service.FeatureUsageTrackingService,
+	cfg *config.Configuration,
+	logger *logger.Logger,
+) {
+	// Register handlers before starting the router
+	featureUsageTrackingSvc.RegisterHandler(router, cfg)
+
+	lc.Append(fx.Hook{
+		OnStart: func(ctx context.Context) error {
+			logger.Info("starting feature usage tracking consumer")
+			go func() {
+				if err := router.Run(); err != nil {
+					logger.Errorw("feature usage tracking consumer failed", "error", err)
 				}
 			}()
 			return nil

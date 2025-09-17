@@ -29,27 +29,20 @@ import (
 )
 
 // PriceMatch represents a matching price and meter for an event
-type PriceMatch struct {
-	Price *price.Price
-	Meter *meter.Meter
+type PriceMatchFeature struct {
+	Price         *price.Price
+	Meter         *meter.Meter
+	StartDateTime time.Time
+	EndDateTime   time.Time
 }
 
 // EventPostProcessingService handles post-processing operations for metered events
-type EventPostProcessingService interface {
+type FeatureUsageTrackingService interface {
 	// Publish an event for post-processing
 	PublishEvent(ctx context.Context, event *events.Event, isBackfill bool) error
 
 	// Register message handler with the router
 	RegisterHandler(router *pubsubRouter.Router, cfg *config.Configuration)
-
-	// Get usage cost for a specific period
-	GetPeriodCost(ctx context.Context, tenantID, environmentID, customerID, subscriptionID string, periodID uint64) (decimal.Decimal, error)
-
-	// Get usage totals per feature for a period
-	GetPeriodFeatureTotals(ctx context.Context, tenantID, environmentID, customerID, subscriptionID string, periodID uint64) ([]*events.PeriodFeatureTotal, error)
-
-	// Get usage analytics for a customer
-	GetUsageAnalytics(ctx context.Context, tenantID, environmentID, customerID string, lookbackHours int) ([]*events.UsageAnalytic, error)
 
 	// Get detailed usage analytics with filtering, grouping, and time-series data
 	GetDetailedUsageAnalytics(ctx context.Context, req *dto.GetUsageAnalyticsRequest) (*dto.GetUsageAnalyticsResponse, error)
@@ -58,30 +51,30 @@ type EventPostProcessingService interface {
 	ReprocessEvents(ctx context.Context, params *events.ReprocessEventsParams) error
 }
 
-type eventPostProcessingService struct {
+type featureUsageTrackingService struct {
 	ServiceParams
-	pubSub             pubsub.PubSub // Regular PubSub for normal processing
-	backfillPubSub     pubsub.PubSub // Dedicated Kafka PubSub for backfill processing
-	eventRepo          events.Repository
-	processedEventRepo events.ProcessedEventRepository
+	pubSub                   pubsub.PubSub // Regular PubSub for normal processing
+	backfillPubSub           pubsub.PubSub // Dedicated Kafka PubSub for backfill processing
+	eventRepo                events.Repository
+	featureUsageTrackingRepo events.FeatureUsageTrackingRepository
 }
 
 // NewEventPostProcessingService creates a new event post-processing service
-func NewEventPostProcessingService(
+func NewFeatureUsageTrackingService(
 	params ServiceParams,
 	eventRepo events.Repository,
-	processedEventRepo events.ProcessedEventRepository,
-) EventPostProcessingService {
-	ev := &eventPostProcessingService{
-		ServiceParams:      params,
-		eventRepo:          eventRepo,
-		processedEventRepo: processedEventRepo,
+	featureUsageTrackingRepo events.FeatureUsageTrackingRepository,
+) FeatureUsageTrackingService {
+	ev := &featureUsageTrackingService{
+		ServiceParams:            params,
+		eventRepo:                eventRepo,
+		featureUsageTrackingRepo: featureUsageTrackingRepo,
 	}
 
 	pubSub, err := kafka.NewPubSubFromConfig(
 		params.Config,
 		params.Logger,
-		params.Config.EventPostProcessing.ConsumerGroup,
+		params.Config.FeatureUsageTracking.ConsumerGroup,
 	)
 
 	if err != nil {
@@ -93,7 +86,7 @@ func NewEventPostProcessingService(
 	backfillPubSub, err := kafka.NewPubSubFromConfig(
 		params.Config,
 		params.Logger,
-		params.Config.EventPostProcessing.ConsumerGroupBackfill,
+		params.Config.FeatureUsageTracking.ConsumerGroupBackfill,
 	)
 	if err != nil {
 		params.Logger.Fatalw("failed to create backfill pubsub", "error", err)
@@ -104,12 +97,12 @@ func NewEventPostProcessingService(
 }
 
 // PublishEvent publishes an event to the post-processing topic
-func (s *eventPostProcessingService) PublishEvent(ctx context.Context, event *events.Event, isBackfill bool) error {
+func (s *featureUsageTrackingService) PublishEvent(ctx context.Context, event *events.Event, isBackfill bool) error {
 	// Create message payload
 	payload, err := json.Marshal(event)
 	if err != nil {
 		return ierr.WithError(err).
-			WithHint("Failed to marshal event for post-processing").
+			WithHint("Failed to marshal event for feature usage tracking").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -134,10 +127,10 @@ func (s *eventPostProcessingService) PublishEvent(ctx context.Context, event *ev
 	// TODO: use partition key in the producer
 
 	pubSub := s.pubSub
-	topic := s.Config.EventPostProcessing.Topic
+	topic := s.Config.FeatureUsageTracking.Topic
 	if isBackfill {
 		pubSub = s.backfillPubSub
-		topic = s.Config.EventPostProcessing.TopicBackfill
+		topic = s.Config.FeatureUsageTracking.TopicBackfill
 	}
 
 	if pubSub == nil {
@@ -146,7 +139,7 @@ func (s *eventPostProcessingService) PublishEvent(ctx context.Context, event *ev
 			Mark(ierr.ErrSystem)
 	}
 
-	s.Logger.Debugw("publishing event for post-processing",
+	s.Logger.Debugw("publishing event for feature usage tracking",
 		"event_id", event.ID,
 		"event_name", event.EventName,
 		"partition_key", partitionKey,
@@ -156,55 +149,55 @@ func (s *eventPostProcessingService) PublishEvent(ctx context.Context, event *ev
 	// Publish to post-processing topic using the backfill PubSub (Kafka)
 	if err := pubSub.Publish(ctx, topic, msg); err != nil {
 		return ierr.WithError(err).
-			WithHint("Failed to publish event for post-processing").
+			WithHint("Failed to publish event for feature usage tracking").
 			Mark(ierr.ErrSystem)
 	}
 	return nil
 }
 
 // RegisterHandler registers a handler for the post-processing topic with rate limiting
-func (s *eventPostProcessingService) RegisterHandler(router *pubsubRouter.Router, cfg *config.Configuration) {
+func (s *featureUsageTrackingService) RegisterHandler(router *pubsubRouter.Router, cfg *config.Configuration) {
 	// Add throttle middleware to this specific handler
-	throttle := middleware.NewThrottle(cfg.EventPostProcessing.RateLimit, time.Second)
+	throttle := middleware.NewThrottle(cfg.FeatureUsageTracking.RateLimit, time.Second)
 
 	// Add the handler
 	router.AddNoPublishHandler(
-		"events_post_processing_handler",
-		cfg.EventPostProcessing.Topic,
+		"feature_usage_tracking_handler",
+		cfg.FeatureUsageTracking.Topic,
 		s.pubSub,
 		s.processMessage,
 		throttle.Middleware,
 	)
 
-	s.Logger.Infow("registered event post-processing handler",
-		"topic", cfg.EventPostProcessing.Topic,
-		"rate_limit", cfg.EventPostProcessing.RateLimit,
+	s.Logger.Infow("registered feature usage tracking handler",
+		"topic", cfg.FeatureUsageTracking.Topic,
+		"rate_limit", cfg.FeatureUsageTracking.RateLimit,
 	)
 
 	// Add backfill handler
-	if cfg.EventPostProcessing.TopicBackfill == "" {
+	if cfg.FeatureUsageTracking.TopicBackfill == "" {
 		s.Logger.Warnw("backfill topic not set, skipping backfill handler")
 		return
 	}
 
-	backfillThrottle := middleware.NewThrottle(cfg.EventPostProcessing.RateLimitBackfill, time.Second)
+	backfillThrottle := middleware.NewThrottle(cfg.FeatureUsageTracking.RateLimitBackfill, time.Second)
 	router.AddNoPublishHandler(
-		"events_post_processing_backfill_handler",
-		cfg.EventPostProcessing.TopicBackfill,
+		"feature_usage_tracking_backfill_handler",
+		cfg.FeatureUsageTracking.TopicBackfill,
 		s.backfillPubSub, // Use the dedicated Kafka backfill PubSub
 		s.processMessage,
 		backfillThrottle.Middleware,
 	)
 
-	s.Logger.Infow("registered event post-processing backfill handler",
-		"topic", cfg.EventPostProcessing.TopicBackfill,
-		"rate_limit", cfg.EventPostProcessing.RateLimitBackfill,
+	s.Logger.Infow("registered feature usage tracking backfill handler",
+		"topic", cfg.FeatureUsageTracking.TopicBackfill,
+		"rate_limit", cfg.FeatureUsageTracking.RateLimitBackfill,
 		"pubsub_type", "kafka",
 	)
 }
 
 // Process a single event message
-func (s *eventPostProcessingService) processMessage(msg *message.Message) error {
+func (s *featureUsageTrackingService) processMessage(msg *message.Message) error {
 	// Extract tenant ID from message metadata
 	partitionKey := msg.Metadata.Get("partition_key")
 	tenantID := msg.Metadata.Get("tenant_id")
@@ -237,39 +230,42 @@ func (s *eventPostProcessingService) processMessage(msg *message.Message) error 
 		return nil // Don't retry on unmarshal errors
 	}
 
+	// s.Logger.Debugw("event", "event", event)
 	// TODO: this is a hack to get the ingested_at for events that were ingested in the
 	// post processing pipeline directly from the event ingestion service and hence
 	// don't have an ingested_at value as it gets defaulted to now in the CH DB
 	// However this is not required in case of backfill events as they are ingested
 	// from the event ingestion service and hence have an ingested_at value
-	var foundEvent *events.Event
-	if event.IngestedAt.IsZero() {
-		events, _, err := s.eventRepo.GetEvents(ctx, &events.GetEventsParams{
-			EventID:            event.ID,
-			ExternalCustomerID: event.ExternalCustomerID,
-		})
-		if err != nil {
-			s.Logger.Errorw("failed to update event with ingested_at",
-				"error", err,
-			)
-			return err
-		}
+	// var foundEvent *events.Event
+	// if event.IngestedAt.IsZero() {
+	// 	events, _, err := s.eventRepo.GetEvents(ctx, &events.GetEventsParams{
+	// 		EventID:            event.ID,
+	// 		ExternalCustomerID: event.ExternalCustomerID,
+	// 	})
+	// 	if err != nil {
+	// 		s.Logger.Errorw("failed to update event with ingested_at",
+	// 			"error", err,
+	// 		)
+	// 		return err
+	// 	}
 
-		if len(events) == 0 {
-			s.Logger.Errorw("event not found",
-				"event_id", event.ID,
-				"external_customer_id", event.ExternalCustomerID,
-			)
-			return nil // Don't retry on event not found
-		}
+	// 	if len(events) == 0 {
+	// 		s.Logger.Errorw("event not found",
+	// 			"event_id", event.ID,
+	// 			"external_customer_id", event.ExternalCustomerID,
+	// 		)
+	// 		return nil // Don't retry on event not found
+	// 	}
 
-		foundEvent = events[0]
-	} else {
-		foundEvent = &event
-	}
+	// 	foundEvent = events[0]
+	// } else {
+	// 	foundEvent = &event
+	// }
+
+	// foundEvent = &event
 
 	// validate tenant id
-	if foundEvent.TenantID != tenantID {
+	if event.TenantID != tenantID {
 		s.Logger.Errorw("invalid tenant id",
 			"expected", tenantID,
 			"actual", event.TenantID,
@@ -279,25 +275,25 @@ func (s *eventPostProcessingService) processMessage(msg *message.Message) error 
 	}
 
 	// Process the event
-	if err := s.processEvent(ctx, foundEvent); err != nil {
+	if err := s.processEvent(ctx, &event); err != nil {
 		s.Logger.Errorw("failed to process event",
 			"error", err,
-			"event_id", foundEvent.ID,
-			"event_name", foundEvent.EventName,
+			"event_id", event.ID,
+			"event_name", event.EventName,
 		)
 		return err // Return error for retry
 	}
 
 	s.Logger.Infow("event processed successfully",
-		"event_id", foundEvent.ID,
-		"event_name", foundEvent.EventName,
+		"event_id", event.ID,
+		"event_name", event.EventName,
 	)
 
 	return nil
 }
 
 // Process a single event
-func (s *eventPostProcessingService) processEvent(ctx context.Context, event *events.Event) error {
+func (s *featureUsageTrackingService) processEvent(ctx context.Context, event *events.Event) error {
 	s.Logger.Debugw("processing event",
 		"event_id", event.ID,
 		"event_name", event.EventName,
@@ -315,7 +311,7 @@ func (s *eventPostProcessingService) processEvent(ctx context.Context, event *ev
 	}
 
 	if len(processedEvents) > 0 {
-		if err := s.processedEventRepo.BulkInsertProcessedEvents(ctx, processedEvents); err != nil {
+		if err := s.featureUsageTrackingRepo.BulkInsertFeatureUsages(ctx, processedEvents); err != nil {
 			return err
 		}
 	}
@@ -327,7 +323,7 @@ func (s *eventPostProcessingService) processEvent(ctx context.Context, event *ev
 // there are 2 cases:
 // 1. event_name + event_id // for non COUNT_UNIQUE aggregation types
 // 2. event_name + event_field_name + event_field_value // for COUNT_UNIQUE aggregation types
-func (s *eventPostProcessingService) generateUniqueHash(event *events.Event, meter *meter.Meter) string {
+func (s *featureUsageTrackingService) generateUniqueHash(event *events.Event, meter *meter.Meter) string {
 	hashStr := fmt.Sprintf("%s:%s", event.EventName, event.ID)
 
 	// For meters with field-based aggregation, include the field value in the hash
@@ -341,14 +337,14 @@ func (s *eventPostProcessingService) generateUniqueHash(event *events.Event, met
 	return hex.EncodeToString(hash[:])
 }
 
-func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context, event *events.Event) ([]*events.ProcessedEvent, error) {
+func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context, event *events.Event) ([]*events.FeatureUsage, error) {
 	subscriptionService := NewSubscriptionService(s.ServiceParams)
 
 	// Create a base processed event
 	baseProcessedEvent := event.ToProcessedEvent()
 
-	// Results slice - will contain either a single skipped event or multiple processed events
-	results := make([]*events.ProcessedEvent, 0)
+	// Results slice - will contain either a single skipped event or multiple feature usage
+	results := make([]*events.FeatureUsage, 0)
 
 	// CASE 1: Lookup customer
 	customer, err := s.CustomerRepo.GetByLookupKey(ctx, event.ExternalCustomerID)
@@ -509,7 +505,7 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 	}
 
 	// Process the event against each subscription
-	processedEventsPerSub := make([]*events.ProcessedEvent, 0)
+	processedEventsPerSub := make([]*events.FeatureUsage, 0)
 
 	for _, sub := range subscriptions {
 		// Calculate the period ID for this subscription (epoch-ms of period start)
@@ -589,10 +585,8 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 			// Create a unique hash for deduplication
 			uniqueHash := s.generateUniqueHash(event, match.Meter)
 
-			// TODO: Check for duplicate events also maybe just call for COUNT_UNIQUE and not all cases
-
 			// Create a new processed event for each match
-			processedEventCopy := &events.ProcessedEvent{
+			processedEventCopy := &events.FeatureUsage{
 				Event:          *event,
 				SubscriptionID: sub.ID,
 				SubLineItemID:  lineItem.ID,
@@ -614,18 +608,7 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 				continue
 			}
 
-			// Check if we can process this price/meter combination
-			canProcess := s.isSupportedAggregationForPostProcessing(match.Meter.Aggregation.Type, match.Price.BillingModel)
-
-			if !canProcess {
-				s.Logger.Debugw("unsupported aggregation type or billing model, skipping",
-					"event_id", event.ID,
-					"meter_id", match.Meter.ID,
-					"aggregation_type", match.Meter.Aggregation.Type,
-					"billing_model", match.Price.BillingModel,
-				)
-				continue
-			}
+			// Support all types of pricing models and aggregation
 
 			// Extract quantity based on meter aggregation
 			quantity, _ := s.extractQuantityFromEvent(event, match.Meter)
@@ -642,28 +625,6 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 
 			// Store original quantity
 			processedEventCopy.QtyTotal = quantity
-
-			// Apply free units logic
-			freeUnitsApplied := decimal.Zero
-			billableQty := quantity
-
-			// Store free units applied and billable quantity
-			processedEventCopy.QtyFreeApplied = freeUnitsApplied
-			processedEventCopy.QtyBillable = billableQty
-
-			// Apply tiered pricing logic
-			tierSnapshot := decimal.Zero
-			processedEventCopy.TierSnapshot = tierSnapshot
-
-			// Calculate cost details using the price service
-			// since per event price can be very small, we don't round the cost
-			priceService := NewPriceService(s.ServiceParams)
-			costDetails := priceService.CalculateCostWithBreakup(ctx, match.Price, billableQty, false)
-
-			// Set cost details on the processed event
-			processedEventCopy.UnitCost = costDetails.EffectiveUnitCost
-			processedEventCopy.Cost = costDetails.FinalCost
-			processedEventCopy.Currency = match.Price.Currency
 
 			processedEventsPerSub = append(processedEventsPerSub, processedEventCopy)
 		}
@@ -682,28 +643,8 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 	return results, nil
 }
 
-// isSupportedAggregationType checks if the aggregation type is supported for post-processing
-func (s *eventPostProcessingService) isSupportedAggregationType(agg types.AggregationType) bool {
-	return agg == types.AggregationCount || agg == types.AggregationSum
-}
-
-// isSupportedBillingModel checks if the billing model is supported for post-processing
-func (s *eventPostProcessingService) isSupportedBillingModel(billingModel types.BillingModel) bool {
-	// We support usage-based billing models
-	// FLAT_FEE is not appropriate for usage-based billing as it doesn't depend on consumption
-	return billingModel == types.BILLING_MODEL_FLAT_FEE
-}
-
-// isSupportedAggregationForPostProcessing checks if the aggregation type and billing model are supported
-func (s *eventPostProcessingService) isSupportedAggregationForPostProcessing(
-	agg types.AggregationType,
-	billingModel types.BillingModel,
-) bool {
-	return s.isSupportedAggregationType(agg) && s.isSupportedBillingModel(billingModel)
-}
-
 // Find matching prices for an event based on meter configuration and filters
-func (s *eventPostProcessingService) findMatchingPricesForEvent(
+func (s *featureUsageTrackingService) findMatchingPricesForEvent(
 	event *events.Event,
 	prices []*price.Price,
 	meterMap map[string]*meter.Meter,
@@ -761,7 +702,7 @@ func (s *eventPostProcessingService) findMatchingPricesForEvent(
 }
 
 // Check if an event matches the meter filters
-func (s *eventPostProcessingService) checkMeterFilters(event *events.Event, filters []meter.Filter) bool {
+func (s *featureUsageTrackingService) checkMeterFilters(event *events.Event, filters []meter.Filter) bool {
 	if len(filters) == 0 {
 		return true // No filters means everything matches
 	}
@@ -786,7 +727,7 @@ func (s *eventPostProcessingService) checkMeterFilters(event *events.Event, filt
 
 // Extract quantity from event based on meter aggregation
 // Returns the quantity and the string representation of the field value
-func (s *eventPostProcessingService) extractQuantityFromEvent(
+func (s *featureUsageTrackingService) extractQuantityFromEvent(
 	event *events.Event,
 	meter *meter.Meter,
 ) (decimal.Decimal, string) {
@@ -914,23 +855,8 @@ func (s *eventPostProcessingService) extractQuantityFromEvent(
 	}
 }
 
-// GetPeriodCost returns the total cost for a subscription in a billing period
-func (s *eventPostProcessingService) GetPeriodCost(ctx context.Context, tenantID, environmentID, customerID, subscriptionID string, periodID uint64) (decimal.Decimal, error) {
-	return s.processedEventRepo.GetPeriodCost(ctx, tenantID, environmentID, customerID, subscriptionID, periodID)
-}
-
-// GetPeriodFeatureTotals returns usage totals by feature for a subscription in a period
-func (s *eventPostProcessingService) GetPeriodFeatureTotals(ctx context.Context, tenantID, environmentID, customerID, subscriptionID string, periodID uint64) ([]*events.PeriodFeatureTotal, error) {
-	return s.processedEventRepo.GetPeriodFeatureTotals(ctx, tenantID, environmentID, customerID, subscriptionID, periodID)
-}
-
-// GetUsageAnalytics returns recent usage analytics for a customer
-func (s *eventPostProcessingService) GetUsageAnalytics(ctx context.Context, tenantID, environmentID, customerID string, lookbackHours int) ([]*events.UsageAnalytic, error) {
-	return s.processedEventRepo.GetUsageAnalytics(ctx, tenantID, environmentID, customerID, lookbackHours)
-}
-
 // GetDetailedUsageAnalytics provides detailed usage analytics with filtering, grouping, and time-series data
-func (s *eventPostProcessingService) GetDetailedUsageAnalytics(ctx context.Context, req *dto.GetUsageAnalyticsRequest) (*dto.GetUsageAnalyticsResponse, error) {
+func (s *featureUsageTrackingService) GetDetailedUsageAnalytics(ctx context.Context, req *dto.GetUsageAnalyticsRequest) (*dto.GetUsageAnalyticsResponse, error) {
 	// Validate the request
 	if req.ExternalCustomerID == "" {
 		return nil, ierr.NewError("external_customer_id is required").
@@ -1011,7 +937,7 @@ func (s *eventPostProcessingService) GetDetailedUsageAnalytics(ctx context.Conte
 	}
 
 	// Step 5: Call the repository to get base analytics data
-	analytics, err := s.processedEventRepo.GetDetailedUsageAnalytics(ctx, params)
+	analytics, err := s.featureUsageTrackingRepo.GetDetailedUsageAnalytics(ctx, params)
 	if err != nil {
 		s.Logger.Errorw("failed to get detailed usage analytics",
 			"error", err,
@@ -1046,7 +972,7 @@ func (s *eventPostProcessingService) GetDetailedUsageAnalytics(ctx context.Conte
 }
 
 // enrichAnalyticsWithFeatureAndMeterData fetches and adds feature and meter data to analytics results
-func (s *eventPostProcessingService) enrichAnalyticsWithFeatureAndMeterData(ctx context.Context, analytics []*events.DetailedUsageAnalytic) error {
+func (s *featureUsageTrackingService) enrichAnalyticsWithFeatureAndMeterData(ctx context.Context, analytics []*events.DetailedUsageAnalytic) error {
 	// Extract all unique feature IDs
 	featureIDs := make([]string, 0)
 	featureIDSet := make(map[string]bool)
@@ -1102,6 +1028,28 @@ func (s *eventPostProcessingService) enrichAnalyticsWithFeatureAndMeterData(ctx 
 		meterMap[m.ID] = m
 	}
 
+	// Fetch prices for the meters to enable cost calculation
+	priceFilter := types.NewNoLimitPriceFilter()
+	priceFilter.MeterIDs = meterIDs
+	priceFilter.WithStatus(types.StatusPublished)
+	prices, err := s.PriceRepo.List(ctx, priceFilter)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to fetch prices for cost calculation").
+			Mark(ierr.ErrDatabase)
+	}
+
+	// Create price map for quick lookup by meter ID
+	priceMap := make(map[string]*price.Price)
+	for _, p := range prices {
+		if p.MeterID != "" {
+			priceMap[p.MeterID] = p
+		}
+	}
+
+	// Create price service instance for cost calculation
+	priceService := NewPriceService(s.ServiceParams)
+
 	// Enrich analytics with feature and meter data
 	for _, item := range analytics {
 		if feature, ok := featureMap[item.FeatureID]; ok {
@@ -1113,6 +1061,20 @@ func (s *eventPostProcessingService) enrichAnalyticsWithFeatureAndMeterData(ctx 
 				item.MeterID = meter.ID
 				item.EventName = meter.EventName
 				item.AggregationType = meter.Aggregation.Type
+
+				// Calculate cost if price is available for this meter
+				if price, hasPricing := priceMap[meter.ID]; hasPricing {
+					// Calculate cost based on usage
+					cost := priceService.CalculateCost(ctx, price, item.TotalUsage)
+					item.TotalCost = cost
+					item.Currency = price.Currency
+
+					// Also calculate cost for each point in the time series if points exist
+					for i := range item.Points {
+						pointCost := priceService.CalculateCost(ctx, price, item.Points[i].Usage)
+						item.Points[i].Cost = pointCost
+					}
+				}
 			}
 		}
 	}
@@ -1121,7 +1083,7 @@ func (s *eventPostProcessingService) enrichAnalyticsWithFeatureAndMeterData(ctx 
 }
 
 // ReprocessEvents triggers reprocessing of events for a customer or with other filters
-func (s *eventPostProcessingService) ReprocessEvents(ctx context.Context, params *events.ReprocessEventsParams) error {
+func (s *featureUsageTrackingService) ReprocessEvents(ctx context.Context, params *events.ReprocessEventsParams) error {
 	s.Logger.Infow("starting event reprocessing",
 		"external_customer_id", params.ExternalCustomerID,
 		"event_name", params.EventName,
@@ -1232,7 +1194,7 @@ func (s *eventPostProcessingService) ReprocessEvents(ctx context.Context, params
 
 // isSubscriptionValidForEvent checks if a subscription is valid for processing the given event
 // It ensures the event timestamp falls within the subscription's active period
-func (s *eventPostProcessingService) isSubscriptionValidForEvent(
+func (s *featureUsageTrackingService) isSubscriptionValidForEvent(
 	sub *dto.SubscriptionResponse,
 	event *events.Event,
 ) bool {
@@ -1274,7 +1236,7 @@ func (s *eventPostProcessingService) isSubscriptionValidForEvent(
 	return true
 }
 
-func (s *eventPostProcessingService) ToGetUsageAnalyticsResponseDTO(ctx context.Context, analytics []*events.DetailedUsageAnalytic) (*dto.GetUsageAnalyticsResponse, error) {
+func (s *featureUsageTrackingService) ToGetUsageAnalyticsResponseDTO(ctx context.Context, analytics []*events.DetailedUsageAnalytic) (*dto.GetUsageAnalyticsResponse, error) {
 	response := &dto.GetUsageAnalyticsResponse{
 		TotalCost: decimal.Zero,
 		Currency:  "",

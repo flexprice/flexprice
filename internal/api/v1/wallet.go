@@ -290,19 +290,6 @@ func (h *WalletHandler) GetWalletBalance(c *gin.Context) {
 	c.JSON(http.StatusOK, balance)
 }
 
-// GetWalletBalanceV2 godoc
-// @Summary Get wallet balance V2
-// @Description Get real-time balance of a wallet (V2)
-// @Tags Wallets
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param id path string true "Wallet ID"
-// @Success 200 {object} dto.WalletBalanceResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /wallets/{id}/balance/real-time-v2 [get]
 func (h *WalletHandler) GetWalletBalanceV2(c *gin.Context) {
 	walletID := c.Param("id")
 	if walletID == "" {
@@ -318,22 +305,6 @@ func (h *WalletHandler) GetWalletBalanceV2(c *gin.Context) {
 		c.Error(err)
 		return
 	}
-
-	// Create a performance monitoring error for Sentry (this won't affect the response)
-	// perfError := ierr.NewError("PERF_MONITOR_GetWalletBalanceV2_SUCCESS").
-	// 	WithHint("Performance monitoring - successful request").
-	// 	WithReportableDetails(map[string]any{
-	// 		"wallet_id": walletID,
-	// 		"status":    "success",
-	// 	}).Mark(ierr.ErrSystem)
-
-	// h.logger.Info("GetWalletBalanceV2 completed successfully",
-	// 	"wallet_id", walletID,
-	// 	"status", "success")
-
-	// Add error to context for Sentry without affecting response
-	// c.Error(perfError)
-
 	c.JSON(http.StatusOK, balance)
 }
 
