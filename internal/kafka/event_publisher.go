@@ -3,6 +3,7 @@ package kafka
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill/message"
@@ -46,9 +47,16 @@ func (p *EventPublisher) Publish(ctx context.Context, event *events.Event) error
 	}
 
 	msg := message.NewMessage(event.ID, payload)
+
+	// Create a deterministic partition key based on tenant_id and external_customer_id
+	// This ensures all events for the same customer go to the same partition
+	partitionKey := event.TenantID
+	if event.ExternalCustomerID != "" {
+		partitionKey = fmt.Sprintf("%s:%s", event.TenantID, event.ExternalCustomerID)
+	}
 	msg.Metadata.Set("tenant_id", event.TenantID)
 	msg.Metadata.Set("environment_id", event.EnvironmentID)
-	msg.Metadata.Set("partition_key", event.TenantID)
+	msg.Metadata.Set("partition_key", partitionKey)
 
 	if err := p.producer.Publish(p.config.Topic, msg); err != nil {
 		return ierr.WithError(err).

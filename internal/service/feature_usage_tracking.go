@@ -183,7 +183,7 @@ func (s *featureUsageTrackingService) RegisterHandler(router *pubsubRouter.Route
 
 	backfillThrottle := middleware.NewThrottle(cfg.EventPostProcessing.RateLimitBackfill, time.Second)
 	router.AddNoPublishHandler(
-		"events_post_processing_backfill_handler",
+		"feature_usage_tracking_backfill_handler",
 		cfg.EventPostProcessing.TopicBackfill,
 		s.backfillPubSub, // Use the dedicated Kafka backfill PubSub
 		s.processMessage,
