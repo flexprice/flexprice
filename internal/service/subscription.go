@@ -64,6 +64,9 @@ type SubscriptionService interface {
 	ProcessAutoCancellationSubscriptions(ctx context.Context) error
 	// Renewal due alert methods
 	ProcessSubscriptionRenewalDueAlert(ctx context.Context) error
+
+	// Feature usage tracking
+	GetFeatureUsageBySubscription(ctx context.Context, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error)
 }
 
 type subscriptionService struct {
@@ -4212,4 +4215,334 @@ func (s *subscriptionService) generateProrationDescriptionFromResult(
 	default:
 		return fmt.Sprintf("Proration (%s)", effectiveDate.Format("2006-01-02"))
 	}
+}
+
+func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error) {
+	response := &dto.GetUsageBySubscriptionResponse{}
+	priceService := NewPriceService(s.ServiceParams)
+
+	// Get subscription with line items
+	subscription, lineItems, err := s.SubRepo.GetWithLineItems(ctx, req.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	customer, err := s.CustomerRepo.Get(ctx, subscription.CustomerID)
+	if err != nil {
+		return nil, err
+	}
+
+	usageStartTime := req.StartTime
+	if usageStartTime.IsZero() {
+		usageStartTime = subscription.CurrentPeriodStart
+	}
+
+	// TODO: Handle line item level end time - use the earliest end time among all line items
+	usageEndTime := req.EndTime
+	if usageEndTime.IsZero() {
+		usageEndTime = subscription.CurrentPeriodEnd
+	}
+
+	if req.LifetimeUsage {
+		usageStartTime = time.Time{}
+		usageEndTime = time.Now().UTC()
+	}
+
+	// Collect all price IDs and build meter to price mapping
+	priceIDs := make([]string, 0, len(lineItems))
+	meterToPriceMap := make(map[string]string) // meter_id -> price_id
+
+	for _, item := range lineItems {
+		if item.PriceType != types.PRICE_TYPE_USAGE {
+			continue
+		}
+		if item.MeterID == "" {
+			continue
+		}
+		priceIDs = append(priceIDs, item.PriceID)
+		meterToPriceMap[item.MeterID] = item.PriceID
+	}
+
+	// Fetch all prices in one call
+	priceFilter := types.NewNoLimitPriceFilter()
+	priceFilter.PriceIDs = priceIDs
+	priceFilter.Expand = lo.ToPtr(string(types.ExpandMeters))
+	priceFilter.AllowExpiredPrices = true
+	pricesList, err := priceService.GetPrices(ctx, priceFilter)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build price map for quick lookup
+	priceMap := make(map[string]*price.Price, len(pricesList.Items))
+	meterMap := make(map[string]*dto.MeterResponse, len(pricesList.Items))
+	meterDisplayNames := make(map[string]string)
+
+	for _, p := range pricesList.Items {
+		priceMap[p.ID] = p.Price
+		meterMap[p.Price.MeterID] = p.Meter
+		if p.Meter != nil {
+			meterDisplayNames[p.Price.MeterID] = p.Meter.Name
+		}
+	}
+
+	s.Logger.Debugw("calculating usage for subscription V2",
+		"subscription_id", req.SubscriptionID,
+		"start_time", usageStartTime,
+		"end_time", usageEndTime,
+		"metered_line_items", len(priceIDs))
+
+	// Get tenant and environment IDs
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
+	// Use the optimized single query
+	usageResults, err := s.FeatureUsageRepo.GetFeatureUsageBySubscription(ctx, req.SubscriptionID, customer.ExternalID, environmentID, tenantID, usageStartTime, usageEndTime)
+	if err != nil {
+		return nil, err
+	}
+
+	s.Logger.Debugw("fetched usage for features using V2 query",
+		"feature_ids", lo.Keys(usageResults),
+		"total_usage_count", len(usageResults),
+		"subscription_id", req.SubscriptionID)
+
+	// Store usage charges for later sorting and processing
+	var usageCharges []*dto.SubscriptionUsageByMetersResponse
+	totalCost := decimal.Zero
+
+	// Process each feature result - now we have meter_id directly from ClickHouse
+	for featureID, usageResult := range usageResults {
+		meterID := usageResult.MeterID
+		if meterID == "" {
+			s.Logger.Warnw("meter_id not found in usage result, skipping",
+				"feature_id", featureID,
+				"subscription_id", req.SubscriptionID)
+			continue
+		}
+
+		priceID, hasPrice := meterToPriceMap[meterID]
+		if !hasPrice {
+			s.Logger.Warnw("price not found for meter, skipping",
+				"feature_id", featureID,
+				"meter_id", meterID,
+				"subscription_id", req.SubscriptionID)
+			continue
+		}
+
+		priceObj, priceExists := priceMap[priceID]
+		if !priceExists || priceObj == nil {
+			s.Logger.Warnw("price object not found, skipping",
+				"feature_id", featureID,
+				"meter_id", meterID,
+				"price_id", priceID,
+				"subscription_id", req.SubscriptionID)
+			continue
+		}
+
+		meter := meterMap[meterID]
+		if meter == nil {
+			s.Logger.Warnw("meter not found, skipping",
+				"feature_id", featureID,
+				"meter_id", meterID,
+				"subscription_id", req.SubscriptionID)
+			continue
+		}
+
+		// Calculate quantity based on meter aggregation type
+		var quantity decimal.Decimal
+		switch meter.Aggregation.Type {
+		case types.AggregationSum, types.AggregationSumWithMultiplier:
+			quantity = usageResult.SumTotal
+		case types.AggregationMax:
+			quantity = usageResult.MaxTotal
+		case types.AggregationCount:
+			quantity = decimal.NewFromInt(int64(usageResult.CountDistinctIDs))
+		case types.AggregationCountUnique:
+			quantity = decimal.NewFromInt(int64(usageResult.CountUniqueQty))
+		case types.AggregationLatest:
+			quantity = usageResult.LatestQty
+		default:
+			quantity = usageResult.SumTotal // Default to sum
+		}
+
+		// Apply multiplier if needed
+		if meter.Aggregation.Type == types.AggregationSumWithMultiplier && meter.Aggregation.Multiplier != nil {
+			quantity = quantity.Mul(*meter.Aggregation.Multiplier)
+		}
+
+		// Calculate cost using the price service
+		cost := priceService.CalculateCost(ctx, priceObj, quantity)
+		totalCost = totalCost.Add(cost)
+
+		// Create charge response
+		charge := &dto.SubscriptionUsageByMetersResponse{
+			Amount:           cost.InexactFloat64(),
+			Currency:         priceObj.Currency,
+			DisplayAmount:    fmt.Sprintf("%.2f %s", cost.InexactFloat64(), priceObj.Currency),
+			Quantity:         quantity.InexactFloat64(),
+			FilterValues:     make(price.JSONBFilters),
+			MeterID:          meterID,
+			MeterDisplayName: meterDisplayNames[meterID],
+			Price:            priceObj,
+			IsOverage:        false,
+		}
+
+		// Add filter values from meter
+		for _, filter := range meter.Filters {
+			charge.FilterValues[filter.Key] = filter.Values
+		}
+
+		usageCharges = append(usageCharges, charge)
+	}
+
+	// Apply commitment-based overage logic if configured
+	commitmentAmount := lo.FromPtr(subscription.CommitmentAmount)
+	overageFactor := lo.FromPtr(subscription.OverageFactor)
+	hasCommitment := commitmentAmount.GreaterThan(decimal.Zero) && overageFactor.GreaterThan(decimal.NewFromInt(1))
+
+	// Default values assuming no commitment/overage
+	commitmentFloat, _ := commitmentAmount.Float64()
+	overageFactorFloat, _ := overageFactor.Float64()
+	response.CommitmentAmount = commitmentFloat
+	response.OverageFactor = overageFactorFloat
+	response.HasOverage = false
+
+	// Initialize charges list with enough capacity for potential overage splits
+	finalCharges := make([]*dto.SubscriptionUsageByMetersResponse, 0, len(usageCharges)*2)
+
+	// If using commitment-based pricing, process charges with overage logic
+	if hasCommitment {
+		// First, filter charges to only include usage-based charges for commitment calculations
+		// Fixed charges are not subject to commitment/overage
+		var usageOnlyCharges []*dto.SubscriptionUsageByMetersResponse
+		var fixedCharges []*dto.SubscriptionUsageByMetersResponse
+
+		for _, charge := range usageCharges {
+			if charge.Price != nil && charge.Price.Type == types.PRICE_TYPE_USAGE {
+				usageOnlyCharges = append(usageOnlyCharges, charge)
+			} else {
+				// Add fixed charges directly to the response without overage calculation
+				fixedCharges = append(fixedCharges, charge)
+			}
+		}
+
+		// Add all fixed charges directly to the response
+		finalCharges = append(finalCharges, fixedCharges...)
+
+		// Track remaining commitment and process each usage charge
+		remainingCommitment := commitmentAmount
+		totalOverageAmount := decimal.Zero
+
+		for _, charge := range usageOnlyCharges {
+			// Get charge amount as decimal for precise calculations
+			chargeAmount := decimal.NewFromFloat(charge.Amount)
+			pricePerUnit := decimal.Zero
+			if charge.Price != nil && charge.Price.BillingModel == types.BILLING_MODEL_FLAT_FEE {
+				pricePerUnit = charge.Price.Amount
+			} else if charge.Quantity > 0 {
+				pricePerUnit = chargeAmount.Div(decimal.NewFromFloat(charge.Quantity))
+			}
+
+			// Normal price covers all of this charge
+			if remainingCommitment.GreaterThanOrEqual(chargeAmount) {
+				charge.IsOverage = false
+				remainingCommitment = remainingCommitment.Sub(chargeAmount)
+				finalCharges = append(finalCharges, charge)
+				continue
+			}
+
+			// Charge needs to be split between normal and overage
+			if remainingCommitment.GreaterThan(decimal.Zero) {
+				// Calculate exact quantity that can be covered by remaining commitment
+				var normalQuantityDecimal decimal.Decimal
+
+				if !pricePerUnit.IsZero() {
+					normalQuantityDecimal = remainingCommitment.Div(pricePerUnit)
+					// Round down to ensure we don't exceed commitment
+					normalQuantityDecimal = normalQuantityDecimal.Floor()
+				}
+
+				// Calculate the normal amount based on the normal quantity
+				normalAmountDecimal := normalQuantityDecimal.Mul(pricePerUnit)
+
+				// Create the normal charge
+				if normalQuantityDecimal.GreaterThan(decimal.Zero) {
+					normalCharge := *charge // Create a copy
+					normalCharge.Quantity = normalQuantityDecimal.InexactFloat64()
+					normalCharge.Amount = price.FormatAmountToFloat64WithPrecision(normalAmountDecimal, subscription.Currency)
+					normalCharge.DisplayAmount = price.FormatAmountToStringWithPrecision(normalAmountDecimal, subscription.Currency)
+					normalCharge.IsOverage = false
+					finalCharges = append(finalCharges, &normalCharge)
+				}
+
+				// Calculate overage quantity and amount
+				overageQuantityDecimal := decimal.NewFromFloat(charge.Quantity).Sub(normalQuantityDecimal)
+
+				// Create the overage charge only if there's actual overage
+				if overageQuantityDecimal.GreaterThan(decimal.Zero) {
+					overageAmountDecimal := overageQuantityDecimal.Mul(pricePerUnit).Mul(overageFactor)
+					totalOverageAmount = totalOverageAmount.Add(overageAmountDecimal)
+
+					overageCharge := *charge // Create a copy
+					overageCharge.Quantity = overageQuantityDecimal.InexactFloat64()
+					overageCharge.Amount = price.FormatAmountToFloat64WithPrecision(overageAmountDecimal, subscription.Currency)
+					overageCharge.DisplayAmount = price.FormatAmountToStringWithPrecision(overageAmountDecimal, subscription.Currency)
+					overageCharge.IsOverage = true
+					overageCharge.OverageFactor = overageFactorFloat
+					finalCharges = append(finalCharges, &overageCharge)
+					response.HasOverage = true
+				}
+
+				// Update remaining commitment (should be zero or very close to it due to rounding)
+				remainingCommitment = remainingCommitment.Sub(normalAmountDecimal)
+				continue
+			}
+
+			// Charge is entirely in overage
+			overageAmountDecimal := chargeAmount.Mul(overageFactor)
+			totalOverageAmount = totalOverageAmount.Add(overageAmountDecimal)
+
+			charge.Amount = price.FormatAmountToFloat64WithPrecision(overageAmountDecimal, subscription.Currency)
+			charge.DisplayAmount = overageAmountDecimal.StringFixed(6)
+			charge.IsOverage = true
+			charge.OverageFactor = overageFactorFloat
+			finalCharges = append(finalCharges, charge)
+			response.HasOverage = true
+		}
+
+		// Calculate final amounts for response
+		commitmentUtilized := commitmentAmount.Sub(remainingCommitment)
+		commitmentUtilizedFloat, _ := commitmentUtilized.Float64()
+		overageAmountFloat, _ := totalOverageAmount.Float64()
+		response.CommitmentUtilized = commitmentUtilizedFloat
+		response.OverageAmount = overageAmountFloat
+
+		// Update total cost with commitment + overage calculation
+		totalCost = commitmentUtilized.Add(totalOverageAmount)
+	} else {
+		// Without commitment, just use the original charges
+		finalCharges = usageCharges
+	}
+
+	// Sort charges by meter display name for consistent ordering
+	sort.Slice(finalCharges, func(i, j int) bool {
+		return finalCharges[i].MeterDisplayName < finalCharges[j].MeterDisplayName
+	})
+
+	// Build response
+	response.Amount = totalCost.InexactFloat64()
+	response.Currency = subscription.Currency
+	response.DisplayAmount = fmt.Sprintf("%.2f %s", totalCost.InexactFloat64(), response.Currency)
+	response.StartTime = usageStartTime
+	response.EndTime = usageEndTime
+	response.Charges = finalCharges
+
+	s.Logger.Infow("subscription usage calculation completed V2",
+		"subscription_id", req.SubscriptionID,
+		"total_cost", totalCost.InexactFloat64(),
+		"charge_count", len(finalCharges),
+		"currency", response.Currency)
+
+	return response, nil
 }

@@ -16,16 +16,18 @@ import (
 )
 
 type EventsHandler struct {
-	eventService               service.EventService
-	eventPostProcessingService service.EventPostProcessingService
-	log                        *logger.Logger
+	eventService                service.EventService
+	eventPostProcessingService  service.EventPostProcessingService
+	featureUsageTrackingService service.FeatureUsageTrackingService
+	log                         *logger.Logger
 }
 
-func NewEventsHandler(eventService service.EventService, eventPostProcessingService service.EventPostProcessingService, log *logger.Logger) *EventsHandler {
+func NewEventsHandler(eventService service.EventService, eventPostProcessingService service.EventPostProcessingService, featureUsageTrackingService service.FeatureUsageTrackingService, log *logger.Logger) *EventsHandler {
 	return &EventsHandler{
-		eventService:               eventService,
-		eventPostProcessingService: eventPostProcessingService,
-		log:                        log,
+		eventService:                eventService,
+		eventPostProcessingService:  eventPostProcessingService,
+		featureUsageTrackingService: featureUsageTrackingService,
+		log:                         log,
 	}
 }
 
@@ -336,6 +338,37 @@ func (h *EventsHandler) GetUsageAnalytics(c *gin.Context) {
 
 	// Call the service to get detailed analytics
 	response, err := h.eventPostProcessingService.GetDetailedUsageAnalytics(ctx, &req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+// TODONEW: Revamp
+func (h *EventsHandler) GetUsageAnalyticsV2(c *gin.Context) {
+	ctx := c.Request.Context()
+	var err error
+
+	var req dto.GetUsageAnalyticsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Please check the request payload").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	req.StartTime, req.EndTime, err = validateStartAndEndTime(req.StartTime, req.EndTime)
+	if err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Please check the request payload").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	// Call the service to get detailed analytics
+	response, err := h.featureUsageTrackingService.GetDetailedUsageAnalytics(ctx, &req)
 	if err != nil {
 		c.Error(err)
 		return

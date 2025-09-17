@@ -46,6 +46,9 @@ func (p *EventPublisher) Publish(ctx context.Context, event *events.Event) error
 	}
 
 	msg := message.NewMessage(event.ID, payload)
+	msg.Metadata.Set("tenant_id", event.TenantID)
+	msg.Metadata.Set("environment_id", event.EnvironmentID)
+	msg.Metadata.Set("partition_key", event.TenantID)
 
 	if err := p.producer.Publish(p.config.Topic, msg); err != nil {
 		return ierr.WithError(err).

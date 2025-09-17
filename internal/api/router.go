@@ -121,6 +121,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			events.POST("/usage", handlers.Events.GetUsage)
 			events.POST("/usage/meter", handlers.Events.GetUsageByMeter)
 			events.POST("/analytics", handlers.Events.GetUsageAnalytics)
+			events.POST("/analytics-v2", handlers.Events.GetUsageAnalyticsV2)
 		}
 
 		meters := v1Private.Group("/meters")
@@ -240,6 +241,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			wallet.POST("/:id/top-up", handlers.Wallet.TopUpWallet)
 			wallet.POST("/:id/terminate", handlers.Wallet.TerminateWallet)
 			wallet.GET("/:id/balance/real-time", handlers.Wallet.GetWalletBalance)
+			wallet.GET("/:id/balance/real-time-v2", handlers.Wallet.GetWalletBalanceV2)
 			wallet.PUT("/:id", handlers.Wallet.UpdateWallet)
 		}
 		// Tenant routes

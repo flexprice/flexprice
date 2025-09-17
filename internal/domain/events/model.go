@@ -151,3 +151,33 @@ func (e *Event) ToProcessedEvent() *ProcessedEvent {
 		Cost:           decimal.Zero,
 	}
 }
+
+// Feature Usage Model
+type FeatureUsageEvent struct {
+	Event
+	FeatureID string `json:"feature_id" ch:"feature_id"`
+}
+
+// Feature Usage Processed Event
+type FeatureUsage struct {
+	// Original event fields
+	Event
+	// Processing fields
+	SubscriptionID string `json:"subscription_id" ch:"subscription_id"`
+	SubLineItemID  string `json:"sub_line_item_id" ch:"sub_line_item_id"`
+	PriceID        string `json:"price_id" ch:"price_id"`
+	FeatureID      string `json:"feature_id" ch:"feature_id"`
+	MeterID        string `json:"meter_id" ch:"meter_id"`
+	PeriodID       uint64 `json:"period_id" ch:"period_id"`
+	// Deduplication and metrics
+	UniqueHash string          `json:"unique_hash" ch:"unique_hash"`
+	QtyTotal   decimal.Decimal `json:"qty_total" ch:"qty_total"`
+
+	// Audit fields
+	Version uint64 `json:"version" ch:"version"`
+	Sign    int8   `json:"sign" ch:"sign"`
+
+	// Processing metadata
+	ProcessedAt     time.Time `json:"processed_at" ch:"processed_at,timezone('UTC')"`
+	ProcessingLagMs uint32    `json:"processing_lag_ms" ch:"processing_lag_ms"`
+}
