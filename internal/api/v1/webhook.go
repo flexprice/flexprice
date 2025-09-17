@@ -1316,19 +1316,6 @@ func (h *WebhookHandler) handleInvoicePaymentPaid(c *gin.Context, event *stripe.
 		return
 	}
 
-	// Get payment intent details from Stripe
-	paymentIntent, err := h.stripeService.GetPaymentIntent(ctx, paymentIntentID, environmentID)
-	if err != nil {
-		h.logger.Errorw("failed to get payment intent from Stripe",
-			"error", err,
-			"payment_intent_id", paymentIntentID,
-			"stripe_invoice_id", stripeInvoiceID)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to get payment intent details",
-		})
-		return
-	}
-
 	// Check if this payment is from a checkout session (already processed by checkout.session.completed)
 	// Skip processing to avoid double reconciliation
 	if h.isPaymentFromCheckoutSession(ctx, paymentIntentID, environmentID) {
@@ -1338,6 +1325,19 @@ func (h *WebhookHandler) handleInvoicePaymentPaid(c *gin.Context, event *stripe.
 			"event_id", event.ID)
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Payment from checkout session already processed",
+		})
+		return
+	}
+
+	// Get payment intent details from Stripe
+	paymentIntent, err := h.stripeService.GetPaymentIntent(ctx, paymentIntentID, environmentID)
+	if err != nil {
+		h.logger.Errorw("failed to get payment intent from Stripe",
+			"error", err,
+			"payment_intent_id", paymentIntentID,
+			"stripe_invoice_id", stripeInvoiceID)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to get payment intent details",
 		})
 		return
 	}
