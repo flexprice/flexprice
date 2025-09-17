@@ -105,17 +105,16 @@ func (r *FeatureUsageRepository) BulkInsertProcessedEvents(ctx context.Context, 
 	for _, eventsBatch := range eventsBatches {
 		// Prepare batch statement
 		batch, err := r.store.GetConn().PrepareBatch(ctx, `
-			INSERT INTO events_processed (
+			INSERT INTO feature_usage (
 				id, tenant_id, external_customer_id, customer_id, event_name, source, 
 				timestamp, ingested_at, properties, environment_id,
 				subscription_id, sub_line_item_id, price_id, meter_id, feature_id, period_id,
-				unique_hash, qty_total, qty_billable, qty_free_applied, tier_snapshot, 
-				unit_cost, cost, currency, sign
+				unique_hash, qty_total, sign
 			)
 		`)
 		if err != nil {
 			return ierr.WithError(err).
-				WithHint("Failed to prepare batch for processed events").
+				WithHint("Failed to prepare batch for feature usage").
 				Mark(ierr.ErrDatabase)
 		}
 
@@ -160,7 +159,7 @@ func (r *FeatureUsageRepository) BulkInsertProcessedEvents(ctx context.Context, 
 
 			if err != nil {
 				return ierr.WithError(err).
-					WithHint("Failed to append processed event to batch").
+					WithHint("Failed to append feature usage to batch").
 					WithReportableDetails(map[string]interface{}{
 						"event_id": event.ID,
 					}).
@@ -171,7 +170,7 @@ func (r *FeatureUsageRepository) BulkInsertProcessedEvents(ctx context.Context, 
 		// Send batch
 		if err := batch.Send(); err != nil {
 			return ierr.WithError(err).
-				WithHint("Failed to execute batch insert for processed events").
+				WithHint("Failed to execute batch insert for feature usage").
 				WithReportableDetails(map[string]interface{}{
 					"event_count": len(events),
 				}).
@@ -932,6 +931,7 @@ func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Conte
 
 	query := `
 		SELECT 
+			sub_line_item_id,
 			feature_id,
 			meter_id,
 			sum(qty_total)                     AS sum_total,
@@ -947,7 +947,7 @@ func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Conte
 			AND tenant_id = ?
 			AND "timestamp" >= ?
 			AND "timestamp" < ?
-		GROUP BY feature_id, meter_id, sub_line_item_id
+		GROUP BY sub_line_item_id, feature_id, meter_id
 	`
 
 	log.Printf("Executing query: %s", query)
@@ -968,11 +968,11 @@ func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Conte
 
 	results := make(map[string]*events.UsageByFeatureResult)
 	for rows.Next() {
-		var featureID, meterID string
+		var subLineItemID, featureID, meterID string
 		var sumTotal, maxTotal, latestQty decimal.Decimal
 		var countDistinctIDs, countUniqueQty uint64
 
-		err := rows.Scan(&featureID, &meterID, &sumTotal, &maxTotal, &countDistinctIDs, &countUniqueQty, &latestQty)
+		err := rows.Scan(&subLineItemID, &featureID, &meterID, &sumTotal, &maxTotal, &countDistinctIDs, &countUniqueQty, &latestQty)
 		if err != nil {
 			SetSpanError(span, err)
 			return nil, ierr.WithError(err).
@@ -980,7 +980,8 @@ func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Conte
 				Mark(ierr.ErrDatabase)
 		}
 
-		results[featureID] = &events.UsageByFeatureResult{
+		results[subLineItemID] = &events.UsageByFeatureResult{
+			SubLineItemID:    subLineItemID,
 			FeatureID:        featureID,
 			MeterID:          meterID,
 			SumTotal:         sumTotal,

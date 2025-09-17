@@ -4312,11 +4312,11 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 	totalCost := decimal.Zero
 
 	// Process each feature result - now we have meter_id directly from ClickHouse
-	for featureID, usageResult := range usageResults {
+	for subLineItemID, usageResult := range usageResults {
 		meterID := usageResult.MeterID
 		if meterID == "" {
 			s.Logger.Warnw("meter_id not found in usage result, skipping",
-				"feature_id", featureID,
+				"sub_line_item_id", subLineItemID,
 				"subscription_id", req.SubscriptionID)
 			continue
 		}
@@ -4324,7 +4324,7 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 		priceID, hasPrice := meterToPriceMap[meterID]
 		if !hasPrice {
 			s.Logger.Warnw("price not found for meter, skipping",
-				"feature_id", featureID,
+				"sub_line_item_id", subLineItemID,
 				"meter_id", meterID,
 				"subscription_id", req.SubscriptionID)
 			continue
@@ -4333,7 +4333,7 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 		priceObj, priceExists := priceMap[priceID]
 		if !priceExists || priceObj == nil {
 			s.Logger.Warnw("price object not found, skipping",
-				"feature_id", featureID,
+				"sub_line_item_id", subLineItemID,
 				"meter_id", meterID,
 				"price_id", priceID,
 				"subscription_id", req.SubscriptionID)
@@ -4343,7 +4343,7 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 		meter := meterMap[meterID]
 		if meter == nil {
 			s.Logger.Warnw("meter not found, skipping",
-				"feature_id", featureID,
+				"sub_line_item_id", subLineItemID,
 				"meter_id", meterID,
 				"subscription_id", req.SubscriptionID)
 			continue

@@ -28,12 +28,6 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// PriceMatch represents a matching price and meter for an event
-type PriceMatchWithTimestamp struct {
-	Price *price.Price
-	Meter *meter.Meter
-}
-
 // FeatureUsageTrackingService handles post-processing operations for metered events
 type FeatureUsageTrackingService interface {
 	// Publish an event for post-processing
@@ -518,6 +512,9 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 		prices := make([]*price.Price, 0, len(subscriptionLineItems))
 		for _, item := range subscriptionLineItems {
 			if price, ok := priceMap[item.PriceID]; ok {
+				if event.Timestamp.Before(item.StartDate) || event.Timestamp.After(item.EndDate) {
+					continue
+				}
 				prices = append(prices, price)
 			} else {
 				s.Logger.Warnw("price not found for subscription line item",

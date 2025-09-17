@@ -69,6 +69,7 @@ type UsageAnalyticPoint struct {
 
 // UsageByFeatureResult represents aggregated usage data for a feature
 type UsageByFeatureResult struct {
+	SubLineItemID    string
 	FeatureID        string
 	MeterID          string
 	SumTotal         decimal.Decimal
