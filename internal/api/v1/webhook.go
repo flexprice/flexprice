@@ -433,7 +433,7 @@ func (h *WebhookHandler) attachPaymentToStripeInvoice(ctx context.Context, sessi
 }
 
 // isPaymentFromCheckoutSession checks if a payment intent is from a checkout session
-func (h *WebhookHandler) isPaymentFromCheckoutSession(ctx context.Context, paymentIntentID, environmentID string) bool {
+func (h *WebhookHandler) isPaymentFromCheckoutSession(ctx context.Context, paymentIntentID string) bool {
 	// Direct query by gateway_payment_id and payment_method_type - much more efficient!
 	paymentService := service.NewPaymentService(h.stripeService.ServiceParams)
 	paymentMethodType := string(types.PaymentMethodTypePaymentLink)
@@ -1318,7 +1318,7 @@ func (h *WebhookHandler) handleInvoicePaymentPaid(c *gin.Context, event *stripe.
 
 	// Check if this payment is from a checkout session (already processed by checkout.session.completed)
 	// Skip processing to avoid double reconciliation
-	if h.isPaymentFromCheckoutSession(ctx, paymentIntentID, environmentID) {
+	if h.isPaymentFromCheckoutSession(ctx, paymentIntentID) {
 		h.logger.Infow("payment is from checkout session, skipping invoice_payment.paid processing to avoid double reconciliation",
 			"payment_intent_id", paymentIntentID,
 			"stripe_invoice_id", stripeInvoiceID,
