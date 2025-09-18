@@ -296,7 +296,7 @@ func (s *featureUsageTrackingService) generateUniqueHash(event *events.Event, me
 	// For meters with field-based aggregation, include the field value in the hash
 	if meter.Aggregation.Type == types.AggregationCountUnique && meter.Aggregation.Field != "" {
 		if fieldValue, ok := event.Properties[meter.Aggregation.Field]; ok {
-			hashStr = fmt.Sprintf("%s:%s:%v", hashStr, meter.Aggregation.Field, fieldValue)
+			hashStr = fmt.Sprintf("%s:%s:%v", event.EventName, meter.Aggregation.Field, fieldValue)
 		}
 	}
 
@@ -512,7 +512,7 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 		prices := make([]*price.Price, 0, len(subscriptionLineItems))
 		for _, item := range subscriptionLineItems {
 			if price, ok := priceMap[item.PriceID]; ok {
-				if event.Timestamp.Before(item.StartDate) || event.Timestamp.After(item.EndDate) {
+				if event.Timestamp.Before(item.StartDate) || (!item.EndDate.IsZero() && event.Timestamp.After(item.EndDate)) {
 					continue
 				}
 				prices = append(prices, price)
@@ -706,9 +706,42 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 		// For count, always return 1 and empty string for field value
 		return decimal.NewFromInt(1), ""
 
-	case types.AggregationSum:
+	case types.AggregationSum, types.AggregationAvg, types.AggregationLatest, types.AggregationMax:
 		if meter.Aggregation.Field == "" {
-			s.Logger.Warnw("sum aggregation with empty field name",
+			s.Logger.Warnw("aggregation with empty field name",
+				"event_id", event.ID,
+				"meter_id", meter.ID,
+				"aggregation_type", meter.Aggregation.Type,
+			)
+			return decimal.Zero, ""
+		}
+
+		val, ok := event.Properties[meter.Aggregation.Field]
+		if !ok {
+			s.Logger.Warnw("property not found for aggregation",
+				"event_id", event.ID,
+				"meter_id", meter.ID,
+				"field", meter.Aggregation.Field,
+				"aggregation_type", meter.Aggregation.Type,
+			)
+			return decimal.Zero, ""
+		}
+
+		// Convert value to decimal and string with detailed error handling
+		decimalValue, stringValue := s.convertValueToDecimal(val, event, meter)
+		return decimalValue, stringValue
+
+	case types.AggregationSumWithMultiplier:
+		if meter.Aggregation.Field == "" {
+			s.Logger.Warnw("sum_with_multiplier aggregation with empty field name",
+				"event_id", event.ID,
+				"meter_id", meter.ID,
+			)
+			return decimal.Zero, ""
+		}
+
+		if meter.Aggregation.Multiplier == nil {
+			s.Logger.Warnw("sum_with_multiplier aggregation without multiplier",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 			)
@@ -717,7 +750,7 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 
 		val, ok := event.Properties[meter.Aggregation.Field]
 		if !ok {
-			s.Logger.Warnw("property not found for sum aggregation",
+			s.Logger.Warnw("property not found for sum_with_multiplier aggregation",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 				"field", meter.Aggregation.Field,
@@ -725,103 +758,153 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 			return decimal.Zero, ""
 		}
 
-		// Convert value to decimal and string with detailed error handling
-		var decimalValue decimal.Decimal
-		var stringValue string
-
-		switch v := val.(type) {
-		case float64:
-			decimalValue = decimal.NewFromFloat(v)
-			stringValue = fmt.Sprintf("%f", v)
-
-		case float32:
-			decimalValue = decimal.NewFromFloat32(v)
-			stringValue = fmt.Sprintf("%f", v)
-
-		case int:
-			decimalValue = decimal.NewFromInt(int64(v))
-			stringValue = fmt.Sprintf("%d", v)
-
-		case int64:
-			decimalValue = decimal.NewFromInt(v)
-			stringValue = fmt.Sprintf("%d", v)
-
-		case int32:
-			decimalValue = decimal.NewFromInt(int64(v))
-			stringValue = fmt.Sprintf("%d", v)
-
-		case uint:
-			// Convert uint to int64 safely
-			decimalValue = decimal.NewFromInt(int64(v))
-			stringValue = fmt.Sprintf("%d", v)
-
-		case uint64:
-			// Convert uint64 to string then parse to ensure no overflow
-			str := fmt.Sprintf("%d", v)
-			var err error
-			decimalValue, err = decimal.NewFromString(str)
-			if err != nil {
-				s.Logger.Warnw("failed to parse uint64 as decimal",
-					"event_id", event.ID,
-					"meter_id", meter.ID,
-					"value", v,
-					"error", err,
-				)
-				return decimal.Zero, str
-			}
-			stringValue = str
-
-		case string:
-			var err error
-			decimalValue, err = decimal.NewFromString(v)
-			if err != nil {
-				s.Logger.Warnw("failed to parse string as decimal",
-					"event_id", event.ID,
-					"meter_id", meter.ID,
-					"value", v,
-					"error", err,
-				)
-				return decimal.Zero, v
-			}
-			stringValue = v
-
-		case json.Number:
-			var err error
-			decimalValue, err = decimal.NewFromString(string(v))
-			if err != nil {
-				s.Logger.Warnw("failed to parse json.Number as decimal",
-					"event_id", event.ID,
-					"meter_id", meter.ID,
-					"value", v,
-					"error", err,
-				)
-				return decimal.Zero, string(v)
-			}
-			stringValue = string(v)
-
-		default:
-			// Try to convert to string representation
-			stringValue = fmt.Sprintf("%v", v)
-			s.Logger.Warnw("unknown type for sum aggregation - cannot convert to decimal",
-				"event_id", event.ID,
-				"meter_id", meter.ID,
-				"field", meter.Aggregation.Field,
-				"type", fmt.Sprintf("%T", v),
-				"value", stringValue,
-			)
+		// Convert value to decimal and apply multiplier
+		decimalValue, stringValue := s.convertValueToDecimal(val, event, meter)
+		if decimalValue.IsZero() {
 			return decimal.Zero, stringValue
 		}
 
-		return decimalValue, stringValue
+		// Apply multiplier
+		result := decimalValue.Mul(*meter.Aggregation.Multiplier)
+		return result, stringValue
+
+	case types.AggregationCountUnique:
+		if meter.Aggregation.Field == "" {
+			s.Logger.Warnw("count_unique aggregation with empty field name",
+				"event_id", event.ID,
+				"meter_id", meter.ID,
+			)
+			return decimal.Zero, ""
+		}
+
+		val, ok := event.Properties[meter.Aggregation.Field]
+		if !ok {
+			s.Logger.Warnw("property not found for count_unique aggregation",
+				"event_id", event.ID,
+				"meter_id", meter.ID,
+				"field", meter.Aggregation.Field,
+			)
+			return decimal.Zero, ""
+		}
+
+		// For count_unique, we return 1 if the value exists (uniqueness is handled at aggregation level)
+		// and convert the value to string for tracking
+		stringValue := s.convertValueToString(val)
+		return decimal.NewFromInt(1), stringValue
 
 	default:
-		// We're only supporting COUNT and SUM for now
 		s.Logger.Warnw("unsupported aggregation type",
 			"event_id", event.ID,
 			"meter_id", meter.ID,
 			"aggregation_type", meter.Aggregation.Type,
 		)
 		return decimal.Zero, ""
+	}
+}
+
+// convertValueToDecimal converts a property value to decimal and string representation
+func (s *featureUsageTrackingService) convertValueToDecimal(val interface{}, event *events.Event, meter *meter.Meter) (decimal.Decimal, string) {
+	var decimalValue decimal.Decimal
+	var stringValue string
+
+	switch v := val.(type) {
+	case float64:
+		decimalValue = decimal.NewFromFloat(v)
+		stringValue = fmt.Sprintf("%f", v)
+
+	case float32:
+		decimalValue = decimal.NewFromFloat32(v)
+		stringValue = fmt.Sprintf("%f", v)
+
+	case int:
+		decimalValue = decimal.NewFromInt(int64(v))
+		stringValue = fmt.Sprintf("%d", v)
+
+	case int64:
+		decimalValue = decimal.NewFromInt(v)
+		stringValue = fmt.Sprintf("%d", v)
+
+	case int32:
+		decimalValue = decimal.NewFromInt(int64(v))
+		stringValue = fmt.Sprintf("%d", v)
+
+	case uint:
+		// Convert uint to int64 safely
+		decimalValue = decimal.NewFromInt(int64(v))
+		stringValue = fmt.Sprintf("%d", v)
+
+	case uint64:
+		// Convert uint64 to string then parse to ensure no overflow
+		str := fmt.Sprintf("%d", v)
+		var err error
+		decimalValue, err = decimal.NewFromString(str)
+		if err != nil {
+			s.Logger.Warnw("failed to parse uint64 as decimal",
+				"event_id", event.ID,
+				"meter_id", meter.ID,
+				"value", v,
+				"error", err,
+			)
+			return decimal.Zero, str
+		}
+		stringValue = str
+
+	case string:
+		var err error
+		decimalValue, err = decimal.NewFromString(v)
+		if err != nil {
+			s.Logger.Warnw("failed to parse string as decimal",
+				"event_id", event.ID,
+				"meter_id", meter.ID,
+				"value", v,
+				"error", err,
+			)
+			return decimal.Zero, v
+		}
+		stringValue = v
+
+	case json.Number:
+		var err error
+		decimalValue, err = decimal.NewFromString(string(v))
+		if err != nil {
+			s.Logger.Warnw("failed to parse json.Number as decimal",
+				"event_id", event.ID,
+				"meter_id", meter.ID,
+				"value", v,
+				"error", err,
+			)
+			return decimal.Zero, string(v)
+		}
+		stringValue = string(v)
+
+	default:
+		// Try to convert to string representation
+		stringValue = fmt.Sprintf("%v", v)
+		s.Logger.Warnw("unknown type for aggregation - cannot convert to decimal",
+			"event_id", event.ID,
+			"meter_id", meter.ID,
+			"field", meter.Aggregation.Field,
+			"aggregation_type", meter.Aggregation.Type,
+			"type", fmt.Sprintf("%T", v),
+			"value", stringValue,
+		)
+		return decimal.Zero, stringValue
+	}
+
+	return decimalValue, stringValue
+}
+
+// convertValueToString converts a property value to string representation
+func (s *featureUsageTrackingService) convertValueToString(val interface{}) string {
+	switch v := val.(type) {
+	case string:
+		return v
+	case float64, float32, int, int64, int32, uint, uint64:
+		return fmt.Sprintf("%v", v)
+	case json.Number:
+		return string(v)
+	default:
+		return fmt.Sprintf("%v", v)
 	}
 }
 
