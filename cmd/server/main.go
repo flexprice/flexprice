@@ -362,13 +362,17 @@ func startServer(
 		}
 		startAPIServer(lc, r, cfg, log)
 		startConsumer(lc, consumer, eventRepo, cfg, log, sentryService, eventPostProcessingSvc)
-		startMessageRouter(lc, router, webhookService, onboardingService, log)
-		startPostProcessingConsumer(lc, router, eventPostProcessingSvc, cfg, log)
-		startFeatureUsageTrackingConsumer(lc, router, featureUsageSvc, cfg, log)
+
+		// Register all handlers and start router once
+		registerRouterHandlers(router, webhookService, onboardingService, eventPostProcessingSvc, featureUsageSvc, cfg, true)
+		startRouter(lc, router, log)
 		startTemporalWorker(lc, temporalClient, &cfg.Temporal, params)
 	case types.ModeAPI:
 		startAPIServer(lc, r, cfg, log)
-		startMessageRouter(lc, router, webhookService, onboardingService, log)
+
+		// Register all handlers and start router once
+		registerRouterHandlers(router, webhookService, onboardingService, eventPostProcessingSvc, featureUsageSvc, cfg, false)
+		startRouter(lc, router, log)
 
 	case types.ModeTemporalWorker:
 		startTemporalWorker(lc, temporalClient, &cfg.Temporal, params)
@@ -377,11 +381,16 @@ func startServer(
 			log.Fatal("Kafka consumer required for consumer mode")
 		}
 		startConsumer(lc, consumer, eventRepo, cfg, log, sentryService, eventPostProcessingSvc)
-		startPostProcessingConsumer(lc, router, eventPostProcessingSvc, cfg, log)
-		startFeatureUsageTrackingConsumer(lc, router, featureUsageSvc, cfg, log)
+
+		// Register all handlers and start router once
+		registerRouterHandlers(router, webhookService, onboardingService, eventPostProcessingSvc, featureUsageSvc, cfg, true)
+		startRouter(lc, router, log)
 	case types.ModeAWSLambdaAPI:
 		startAWSLambdaAPI(r)
-		startMessageRouter(lc, router, webhookService, onboardingService, log)
+
+		// Register basic handlers and start router once
+		registerRouterHandlers(router, webhookService, onboardingService, eventPostProcessingSvc, featureUsageSvc, cfg, false)
+		startRouter(lc, router, log)
 	case types.ModeAWSLambdaConsumer:
 		startAWSLambdaConsumer(eventRepo, cfg, log, sentryService, eventPostProcessingSvc)
 	default:
@@ -628,71 +637,31 @@ func handleEventConsumption(ctx context.Context, cfg *config.Configuration, log 
 	return nil
 }
 
-func startMessageRouter(
-	lc fx.Lifecycle,
+func registerRouterHandlers(
 	router *pubsubRouter.Router,
 	webhookService *webhook.WebhookService,
 	onboardingService service.OnboardingService,
-	logger *logger.Logger,
+	eventPostProcessingSvc service.EventPostProcessingService,
+	featureUsageSvc service.FeatureUsageTrackingService,
+	cfg *config.Configuration,
+	includeProcessingHandlers bool,
 ) {
-	// Register handlers before starting the router
+	// Always register these basic handlers
 	webhookService.RegisterHandler(router)
 	onboardingService.RegisterHandler(router)
 
-	lc.Append(fx.Hook{
-		OnStart: func(ctx context.Context) error {
-			logger.Info("starting message router")
-			go func() {
-				if err := router.Run(); err != nil {
-					logger.Errorw("message router failed", "error", err)
-				}
-			}()
-			return nil
-		},
-		OnStop: func(ctx context.Context) error {
-			logger.Info("stopping message router")
-			return router.Close()
-		},
-	})
+	// Only register processing handlers when needed
+	if includeProcessingHandlers {
+		eventPostProcessingSvc.RegisterHandler(router, cfg)
+		featureUsageSvc.RegisterHandler(router, cfg)
+	}
 }
 
-func startPostProcessingConsumer(
+func startRouter(
 	lc fx.Lifecycle,
 	router *pubsubRouter.Router,
-	eventPostProcessingSvc service.EventPostProcessingService,
-	cfg *config.Configuration,
 	logger *logger.Logger,
 ) {
-	// Register handlers before starting the router
-	eventPostProcessingSvc.RegisterHandler(router, cfg)
-
-	lc.Append(fx.Hook{
-		OnStart: func(ctx context.Context) error {
-			logger.Info("starting message router")
-			go func() {
-				if err := router.Run(); err != nil {
-					logger.Errorw("message router failed", "error", err)
-				}
-			}()
-			return nil
-		},
-		OnStop: func(ctx context.Context) error {
-			logger.Info("stopping message router")
-			return router.Close()
-		},
-	})
-}
-
-func startFeatureUsageTrackingConsumer(
-	lc fx.Lifecycle,
-	router *pubsubRouter.Router,
-	featureUsageSvc service.FeatureUsageTrackingService,
-	cfg *config.Configuration,
-	logger *logger.Logger,
-) {
-	// Register handlers before starting the router
-	featureUsageSvc.RegisterHandler(router, cfg)
-
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			logger.Info("starting message router")
