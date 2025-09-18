@@ -61,6 +61,7 @@ func (r *connectionRepository) Create(ctx context.Context, c *domainConnection.C
 		SetName(c.Name).
 		SetProviderType(string(c.ProviderType)).
 		SetEncryptedSecretData(encryptedSecretDataMap).
+		SetMetadata(c.Metadata).
 		SetStatus(string(c.Status)).
 		SetCreatedAt(c.CreatedAt).
 		SetUpdatedAt(c.UpdatedAt).
@@ -269,6 +270,7 @@ func (r *connectionRepository) Update(ctx context.Context, c *domainConnection.C
 			connection.EnvironmentID(c.EnvironmentID),
 		).
 		SetName(c.Name).
+		SetMetadata(c.Metadata).
 		SetUpdatedAt(c.UpdatedAt).
 		SetUpdatedBy(c.UpdatedBy).
 		Save(ctx)
