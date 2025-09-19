@@ -49,7 +49,7 @@ async function main() {
         // Example 2: Get customer summary
         console.log("\n📈 Fetching customer summary...");
         const summary = await api.getCustomerSummary('customer-123');
-
+        
         if (summary) {
             console.log("✅ Customer summary:");
             console.log(`   Status: ${summary.status}`);
@@ -65,7 +65,7 @@ async function main() {
             includeSubscriptions: true,
             subscriptionLimit: 3
         });
-
+        
         console.log("✅ Quick data fetch completed!");
         console.log(`   Subscriptions: ${quickData.subscriptions?.data?.length || 0}`);
 

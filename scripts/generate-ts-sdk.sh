@@ -46,8 +46,18 @@ echo -e "${BLUE}🚀 Starting TypeScript SDK generation...${NC}"
 # Ensure we're in the project root directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-cd "$PROJECT_ROOT"
+cd "$PROJECT_ROOT" || {
+    echo -e "${RED}❌ Error: Could not change to project root directory: $PROJECT_ROOT${NC}"
+    exit 1
+}
 echo -e "${BLUE}📁 Working from project root: $(pwd)${NC}"
+
+# Verify we're in the right directory
+if [ ! -f "go.mod" ] || [ ! -d "api" ]; then
+    echo -e "${RED}❌ Error: Not in project root directory. Expected go.mod and api/ directory${NC}"
+    echo -e "${YELLOW}💡 Current directory: $(pwd)${NC}"
+    exit 1
+fi
 
 # Check if swagger file exists
 if [ ! -f "$SWAGGER_FILE" ]; then
@@ -363,28 +373,45 @@ echo -e "${BLUE}📁 Copying custom APIs...${NC}"
 echo -e "${BLUE}🔍 Checking for custom directory at: $CUSTOM_DIR${NC}"
 echo -e "${BLUE}🔍 Current working directory: $(pwd)${NC}"
 echo -e "${BLUE}🔍 Directory exists check: $(ls -la $CUSTOM_DIR 2>/dev/null || echo 'Directory not found')${NC}"
-if [ -d "$CUSTOM_DIR" ]; then
-    echo -e "${BLUE}📁 Found custom directory: $CUSTOM_DIR${NC}"
+
+# Use absolute paths to ensure we find the custom directory
+ABSOLUTE_CUSTOM_DIR="$PROJECT_ROOT/$CUSTOM_DIR"
+ABSOLUTE_API_DIR="$PROJECT_ROOT/$API_DIR"
+
+echo -e "${BLUE}🔍 Absolute custom directory: $ABSOLUTE_CUSTOM_DIR${NC}"
+echo -e "${BLUE}🔍 Absolute API directory: $ABSOLUTE_API_DIR${NC}"
+
+if [ -d "$ABSOLUTE_CUSTOM_DIR" ]; then
+    echo -e "${BLUE}📁 Found custom directory: $ABSOLUTE_CUSTOM_DIR${NC}"
     # Copy custom APIs to the generated SDK
-    cp "$CUSTOM_DIR/src/apis/"*.ts "$API_DIR/src/apis/" 2>/dev/null || true
-    cp -r "$CUSTOM_DIR/examples/"* "$API_DIR/examples/" 2>/dev/null || true
-    cp "$CUSTOM_DIR/"*.md "$API_DIR/" 2>/dev/null || true
+    if [ -d "$ABSOLUTE_CUSTOM_DIR/src/apis" ]; then
+        echo -e "${BLUE}📁 Copying custom API files...${NC}"
+        cp "$ABSOLUTE_CUSTOM_DIR/src/apis/"*.ts "$ABSOLUTE_API_DIR/src/apis/" 2>/dev/null || true
+    fi
+    if [ -d "$ABSOLUTE_CUSTOM_DIR/examples" ]; then
+        echo -e "${BLUE}📁 Copying custom examples...${NC}"
+        cp -r "$ABSOLUTE_CUSTOM_DIR/examples/"* "$ABSOLUTE_API_DIR/examples/" 2>/dev/null || true
+    fi
+    if [ -f "$ABSOLUTE_CUSTOM_DIR/"*.md ]; then
+        echo -e "${BLUE}📁 Copying custom markdown files...${NC}"
+        cp "$ABSOLUTE_CUSTOM_DIR/"*.md "$ABSOLUTE_API_DIR/" 2>/dev/null || true
+    fi
     
     # Update the main index.ts to include custom APIs
     echo -e "${BLUE}🔧 Updating main index.ts to include custom APIs...${NC}"
-    if [ -f "$API_DIR/src/index.ts" ]; then
+    if [ -f "$ABSOLUTE_API_DIR/src/index.ts" ]; then
         # Add custom API exports to the main index
-        echo "" >> "$API_DIR/src/index.ts"
-        echo "// Custom APIs" >> "$API_DIR/src/index.ts"
-        echo "export * from './apis/CustomerPortalApi';" >> "$API_DIR/src/index.ts"
+        echo "" >> "$ABSOLUTE_API_DIR/src/index.ts"
+        echo "// Custom APIs" >> "$ABSOLUTE_API_DIR/src/index.ts"
+        echo "export * from './apis/CustomerPortalApi';" >> "$ABSOLUTE_API_DIR/src/index.ts"
     fi
     
     # Update apis/index.ts to include custom APIs
-    if [ -f "$API_DIR/src/apis/index.ts" ]; then
+    if [ -f "$ABSOLUTE_API_DIR/src/apis/index.ts" ]; then
         # Add custom API exports to the apis index
-        echo "" >> "$API_DIR/src/apis/index.ts"
-        echo "// Custom APIs" >> "$API_DIR/src/apis/index.ts"
-        echo "export * from './CustomerPortalApi';" >> "$API_DIR/src/apis/index.ts"
+        echo "" >> "$ABSOLUTE_API_DIR/src/apis/index.ts"
+        echo "// Custom APIs" >> "$ABSOLUTE_API_DIR/src/apis/index.ts"
+        echo "export * from './CustomerPortalApi';" >> "$ABSOLUTE_API_DIR/src/apis/index.ts"
     fi
     
     echo -e "${GREEN}✅ Custom APIs copied successfully${NC}"
