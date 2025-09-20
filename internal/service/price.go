@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -697,6 +698,11 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 			"entity_type", existingPrice.EntityType,
 			"entity_id", existingPrice.EntityID)
 
+		// Trigger plan sync workflow for plan prices only
+		if newPriceResp.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
+			s.triggerPlanSyncWorkflow(ctx, newPriceResp.EntityID, newPriceResp.ID)
+		}
+
 		return newPriceResp, nil
 	} else {
 		// No critical fields - simple update
@@ -755,6 +761,42 @@ func (s *priceService) DeletePrice(ctx context.Context, id string, req dto.Delet
 	}
 
 	return nil
+}
+
+// triggerPlanSyncWorkflow triggers the plan sync workflow
+func (s *priceService) triggerPlanSyncWorkflow(ctx context.Context, planID, priceID string) {
+	// Check if plan has active subscriptions before triggering workflow
+	filter := types.NewNoLimitSubscriptionFilter()
+	filter.PlanID = planID
+	filter.Status = lo.ToPtr(types.StatusPublished)
+	filter.QueryFilter.Limit = lo.ToPtr(1) // Only need to know if at least one exists
+
+	subscriptions, err := s.SubRepo.List(ctx, filter)
+	if err != nil {
+		s.Logger.Warnw("failed to check plan subscriptions, triggering workflow anyway",
+			"plan_id", planID,
+			"price_id", priceID,
+			"error", err)
+	}
+
+	if len(subscriptions) == 0 {
+		s.Logger.Infow("skipping plan sync workflow - no active subscriptions",
+			"plan_id", planID,
+			"price_id", priceID)
+		return
+	}
+
+	// Trigger the workflow
+	if _, err := service.GetGlobalTemporalService().ExecuteWorkflow(ctx, types.TemporalPriceSyncWorkflow, planID); err != nil {
+		s.Logger.Warnw("failed to trigger plan sync workflow",
+			"plan_id", planID,
+			"price_id", priceID,
+			"error", err)
+	} else {
+		s.Logger.Infow("plan sync workflow triggered successfully",
+			"plan_id", planID,
+			"price_id", priceID)
+	}
 }
 
 // calculateBucketedMaxCost calculates cost for bucketed max values
