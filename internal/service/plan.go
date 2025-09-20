@@ -151,6 +151,22 @@ func (s *planService) CreatePlan(ctx context.Context, req dto.CreatePlanRequest)
 		return nil, err
 	}
 
+	// Sync plan to external providers asynchronously
+	// Create a detached context that preserves tenant/environment info but won't be canceled
+	syncCtx := context.WithValue(context.Background(), types.CtxTenantID, types.GetTenantID(ctx))
+	syncCtx = context.WithValue(syncCtx, types.CtxEnvironmentID, types.GetEnvironmentID(ctx))
+	syncCtx = context.WithValue(syncCtx, types.CtxUserID, types.GetUserID(ctx))
+
+	go func(syncCtx context.Context, planID string) {
+		integrationService := NewIntegrationService(s.ServiceParams)
+
+		if err := integrationService.SyncEntityToProviders(syncCtx, types.IntegrationEntityTypePlan, planID); err != nil {
+			s.Logger.Errorw("failed to sync plan to providers",
+				"plan_id", planID,
+				"error", err)
+		}
+	}(syncCtx, plan.ID)
+
 	response := &dto.CreatePlanResponse{Plan: plan}
 
 	return response, nil

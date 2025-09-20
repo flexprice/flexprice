@@ -105,6 +105,22 @@ func (s *priceService) CreatePrice(ctx context.Context, req dto.CreatePriceReque
 		response.PlanID = price.EntityID
 	}
 
+	// Sync price to external providers asynchronously
+	// Create a detached context that preserves tenant/environment info but won't be canceled
+	syncCtx := context.WithValue(context.Background(), types.CtxTenantID, types.GetTenantID(ctx))
+	syncCtx = context.WithValue(syncCtx, types.CtxEnvironmentID, types.GetEnvironmentID(ctx))
+	syncCtx = context.WithValue(syncCtx, types.CtxUserID, types.GetUserID(ctx))
+
+	go func(syncCtx context.Context, priceID string) {
+		integrationService := NewIntegrationService(s.ServiceParams)
+
+		if err := integrationService.SyncEntityToProviders(syncCtx, types.IntegrationEntityTypePrice, priceID); err != nil {
+			s.Logger.Errorw("failed to sync price to providers",
+				"price_id", priceID,
+				"error", err)
+		}
+	}(syncCtx, price.ID)
+
 	return response, nil
 }
 
@@ -218,6 +234,24 @@ func (s *priceService) CreateBulkPrice(ctx context.Context, req dto.CreateBulkPr
 
 	if err != nil {
 		return nil, err
+	}
+
+	// Sync all created prices to external providers asynchronously
+	for _, priceResp := range response.Items {
+		// Create a detached context that preserves tenant/environment info but won't be canceled
+		syncCtx := context.WithValue(context.Background(), types.CtxTenantID, types.GetTenantID(ctx))
+		syncCtx = context.WithValue(syncCtx, types.CtxEnvironmentID, types.GetEnvironmentID(ctx))
+		syncCtx = context.WithValue(syncCtx, types.CtxUserID, types.GetUserID(ctx))
+
+		go func(syncCtx context.Context, priceID string) {
+			integrationService := NewIntegrationService(s.ServiceParams)
+
+			if err := integrationService.SyncEntityToProviders(syncCtx, types.IntegrationEntityTypePrice, priceID); err != nil {
+				s.Logger.Errorw("failed to sync price to providers",
+					"price_id", priceID,
+					"error", err)
+			}
+		}(syncCtx, priceResp.ID)
 	}
 
 	return response, nil
