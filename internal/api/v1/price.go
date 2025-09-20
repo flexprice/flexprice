@@ -7,18 +7,24 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
+	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
 )
 
 type PriceHandler struct {
-	service service.PriceService
-	log     *logger.Logger
+	service         service.PriceService
+	temporalService temporalservice.TemporalService
+	log             *logger.Logger
 }
 
-func NewPriceHandler(service service.PriceService, log *logger.Logger) *PriceHandler {
-	return &PriceHandler{service: service, log: log}
+func NewPriceHandler(service service.PriceService, temporalService temporalservice.TemporalService, log *logger.Logger) *PriceHandler {
+	return &PriceHandler{
+		service:         service,
+		temporalService: temporalService,
+		log:             log,
+	}
 }
 
 // @Summary Create a new price
@@ -174,6 +180,24 @@ func (h *PriceHandler) UpdatePrice(c *gin.Context) {
 	if err != nil {
 		c.Error(err)
 		return
+	}
+
+	// Trigger plan sync workflow if this is a plan price and critical fields were updated
+	if resp.EntityType == types.PRICE_ENTITY_TYPE_PLAN && req.HasCriticalFields() {
+		workflowRun, err := h.temporalService.ExecuteWorkflow(c.Request.Context(), types.TemporalPriceSyncWorkflow, resp.EntityID)
+		if err != nil {
+			h.log.Warnw("failed to trigger plan sync workflow",
+				"plan_id", resp.EntityID,
+				"price_id", resp.ID,
+				"error", err)
+			// Don't fail the request if workflow trigger fails
+		} else {
+			h.log.Infow("plan sync workflow triggered",
+				"plan_id", resp.EntityID,
+				"price_id", resp.ID,
+				"workflow_id", workflowRun.GetID(),
+				"run_id", workflowRun.GetRunID())
+		}
 	}
 
 	c.JSON(http.StatusOK, resp)

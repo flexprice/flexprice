@@ -295,7 +295,7 @@ func provideHandlers(
 		User:                     v1.NewUserHandler(userService, logger),
 		Environment:              v1.NewEnvironmentHandler(environmentService, logger),
 		Health:                   v1.NewHealthHandler(logger),
-		Price:                    v1.NewPriceHandler(priceService, logger),
+		Price:                    v1.NewPriceHandler(priceService, temporalService, logger),
 		Customer:                 v1.NewCustomerHandler(customerService, billingService, logger),
 		Plan:                     v1.NewPlanHandler(planService, entitlementService, creditGrantService, temporalService, logger),
 		Subscription:             v1.NewSubscriptionHandler(subscriptionService, logger),

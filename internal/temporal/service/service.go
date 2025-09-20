@@ -12,7 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
-// temporalService implements TemporalService
+// TemporalService provides a centralized interface for all Temporal operations
 type temporalService struct {
 	client        client.TemporalClient
 	workerManager worker.TemporalWorkerManager
