@@ -121,6 +121,14 @@ func NewPayloadBuilderFactory(services *Services) PayloadBuilderFactory {
 		return NewCustomerPayloadBuilder(f.services)
 	}
 
+	// alert builders
+	f.builders[types.WebhookEventAlertTriggered] = func() PayloadBuilder {
+		return NewAlertPayloadBuilder(f.services)
+	}
+	f.builders[types.WebhookEventAlertRecovered] = func() PayloadBuilder {
+		return NewAlertPayloadBuilder(f.services)
+	}
+
 	// payment builders
 	f.builders[types.WebhookEventPaymentCreated] = func() PayloadBuilder {
 		return NewPaymentPayloadBuilder(f.services)

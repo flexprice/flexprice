@@ -48,7 +48,7 @@ func (i *InvoiceLineItem) FromEnt(e *ent.InvoiceLineItem) *InvoiceLineItem {
 		CustomerID:       e.CustomerID,
 		SubscriptionID:   e.SubscriptionID,
 		EntityID:         e.EntityID,
-		EntityType:       e.EntityType,
+		EntityType:       &e.EntityType,
 		PlanDisplayName:  e.PlanDisplayName,
 		PriceID:          e.PriceID,
 		PriceType:        e.PriceType,
