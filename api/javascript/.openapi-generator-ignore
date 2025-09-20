@@ -10,3 +10,6 @@ README.md
 **/*.test.ts
 **/*.spec.ts
 **/__tests__/**
+
+# Preserve custom APIs directory
+custom/

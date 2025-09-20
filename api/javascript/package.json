@@ -1,8 +1,8 @@
 {
   "name": "@flexprice/sdk",
   "version": "1.0.17",
-  "description": "Official TypeScript/JavaScript SDK of Flexprice",
-  "author": "Flexprice",
+  "description": "Official TypeScript/JavaScript SDK of Flexprice with modern ES7 module support",
+  "author": "OpenAPI-Generator",
   "repository": {
     "type": "git",
     "url": "https://github.com/flexprice/javascript-sdk.git"

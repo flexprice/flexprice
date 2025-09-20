@@ -62,6 +62,8 @@ api/*/*
 !api/scripts/*
 # skip examples and README.md modifications
 !api/*/examples
+# preserve custom SDK files
+!api/*/custom
 !api/*/README.md
 !api/*/.openapi-generator-ignore
 # /spacific package files

@@ -295,6 +295,27 @@ generate-javascript-sdk: install-openapi-generator
 	@echo "Generating TypeScript SDK with modern ES7 module support..."
 	@./scripts/generate-ts-sdk.sh
 
+# Copy custom APIs to generated SDK
+copy-custom-apis:
+	@echo "Copying custom APIs to generated SDK..."
+	@if [ -d "api/javascript/custom" ]; then \
+		echo "Custom APIs directory found, copying..."; \
+		cp -r api/javascript/custom/src/apis/* api/javascript/src/apis/ 2>/dev/null || true; \
+		cp -r api/javascript/custom/examples/* api/javascript/examples/ 2>/dev/null || true; \
+		cp api/javascript/custom/*.md api/javascript/ 2>/dev/null || true; \
+		echo "Custom APIs copied successfully"; \
+	else \
+		echo "No custom APIs directory found at api/javascript/custom"; \
+	fi
+
+# Clean up backup directories
+clean-backups:
+	@echo "Cleaning up backup directories..."
+	@find . -name "*_backup_*" -type d -exec rm -rf {} + 2>/dev/null || true
+	@find . -name "*_examples_backup_*" -type d -exec rm -rf {} + 2>/dev/null || true
+	@find . -name "*_custom_backup_*" -type d -exec rm -rf {} + 2>/dev/null || true
+	@echo "Backup directories cleaned up"
+
 # Note: Alternative modern approach removed during cleanup
 
 # SDK publishing
@@ -334,4 +355,4 @@ test-github-workflow:
 	 --container-architecture linux/amd64 \
 	 --action-offline-mode
 
-.PHONY: sdk-publish-js sdk-publish-py sdk-publish-go sdk-publish-all sdk-publish-all-with-version test-github-workflow
+.PHONY: sdk-publish-js sdk-publish-py sdk-publish-go sdk-publish-all sdk-publish-all-with-version test-github-workflow copy-custom-apis clean-backups

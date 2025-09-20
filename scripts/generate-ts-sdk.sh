@@ -5,6 +5,28 @@
 
 set -e -o pipefail
 
+# Cleanup function to remove backup directories
+cleanup_backups() {
+    echo -e "${BLUE}🧹 Cleaning up backup directories...${NC}"
+    if [ -d "$EXAMPLES_BACKUP" ]; then
+        echo -e "${BLUE}🗑️  Removing examples backup: $EXAMPLES_BACKUP${NC}"
+        rm -rf "$EXAMPLES_BACKUP"
+    fi
+
+    if [ -d "$CUSTOM_BACKUP" ]; then
+        echo -e "${BLUE}🗑️  Removing custom APIs backup: $CUSTOM_BACKUP${NC}"
+        rm -rf "$CUSTOM_BACKUP"
+    fi
+
+    if [ -d "$BACKUP_DIR" ]; then
+        echo -e "${BLUE}🗑️  Removing main backup: $BACKUP_DIR${NC}"
+        rm -rf "$BACKUP_DIR"
+    fi
+}
+
+# Set trap to cleanup on script exit
+trap cleanup_backups EXIT
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -14,11 +36,28 @@ NC='\033[0m' # No Color
 
 # Configuration
 API_DIR="api/javascript"
+CUSTOM_DIR="custom-sdk-files/javascript"
 SWAGGER_FILE="docs/swagger/swagger-3-0.json"
 SDK_NAME="@flexprice/sdk"
 SDK_VERSION="1.0.17"
 
 echo -e "${BLUE}🚀 Starting TypeScript SDK generation...${NC}"
+
+# Ensure we're in the project root directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+cd "$PROJECT_ROOT" || {
+    echo -e "${RED}❌ Error: Could not change to project root directory: $PROJECT_ROOT${NC}"
+    exit 1
+}
+echo -e "${BLUE}📁 Working from project root: $(pwd)${NC}"
+
+# Verify we're in the right directory
+if [ ! -f "go.mod" ] || [ ! -d "api" ]; then
+    echo -e "${RED}❌ Error: Not in project root directory. Expected go.mod and api/ directory${NC}"
+    echo -e "${YELLOW}💡 Current directory: $(pwd)${NC}"
+    exit 1
+fi
 
 # Check if swagger file exists
 if [ ! -f "$SWAGGER_FILE" ]; then
@@ -33,14 +72,21 @@ if ! command -v openapi-generator-cli &> /dev/null; then
     npm install -g @openapitools/openapi-generator-cli
 fi
 
-# Clean and create API directory while preserving examples
-echo -e "${BLUE}🧹 Cleaning existing SDK directory while preserving examples...${NC}"
+# Clean and create API directory while preserving examples and custom APIs
+echo -e "${BLUE}🧹 Cleaning existing SDK directory while preserving examples and custom APIs...${NC}"
 if [ -d "$API_DIR" ]; then
     # Backup examples directory if it exists
     if [ -d "$API_DIR/examples" ]; then
         echo -e "${BLUE}📁 Backing up examples directory...${NC}"
         EXAMPLES_BACKUP="${API_DIR}_examples_backup_$(date +%Y%m%d_%H%M%S)"
         cp -r "$API_DIR/examples" "$EXAMPLES_BACKUP"
+    fi
+    
+    # Backup custom APIs if they exist
+    if [ -d "$API_DIR/custom" ]; then
+        echo -e "${BLUE}📁 Backing up custom APIs directory...${NC}"
+        CUSTOM_BACKUP="${API_DIR}_custom_backup_$(date +%Y%m%d_%H%M%S)"
+        cp -r "$API_DIR/custom" "$CUSTOM_BACKUP"
     fi
     
     # Try to remove normally first
@@ -59,6 +105,12 @@ mkdir -p "$API_DIR"
 if [ -d "$EXAMPLES_BACKUP" ]; then
     echo -e "${BLUE}📁 Restoring examples directory...${NC}"
     mv "$EXAMPLES_BACKUP" "$API_DIR/examples"
+fi
+
+# Restore custom APIs directory if it was backed up
+if [ -d "$CUSTOM_BACKUP" ]; then
+    echo -e "${BLUE}📁 Restoring custom APIs directory...${NC}"
+    mv "$CUSTOM_BACKUP" "$API_DIR/custom"
 fi
 
 # Generate TypeScript SDK
@@ -311,7 +363,61 @@ README.md
 **/*.test.ts
 **/*.spec.ts
 **/__tests__/**
+
+# Preserve custom APIs directory
+custom/
 EOF
+
+# Copy custom APIs from custom-sdk-files directory
+echo -e "${BLUE}📁 Copying custom APIs...${NC}"
+echo -e "${BLUE}🔍 Checking for custom directory at: $CUSTOM_DIR${NC}"
+echo -e "${BLUE}🔍 Current working directory: $(pwd)${NC}"
+echo -e "${BLUE}🔍 Directory exists check: $(ls -la $CUSTOM_DIR 2>/dev/null || echo 'Directory not found')${NC}"
+
+# Use absolute paths to ensure we find the custom directory
+ABSOLUTE_CUSTOM_DIR="$PROJECT_ROOT/$CUSTOM_DIR"
+ABSOLUTE_API_DIR="$PROJECT_ROOT/$API_DIR"
+
+echo -e "${BLUE}🔍 Absolute custom directory: $ABSOLUTE_CUSTOM_DIR${NC}"
+echo -e "${BLUE}🔍 Absolute API directory: $ABSOLUTE_API_DIR${NC}"
+
+if [ -d "$ABSOLUTE_CUSTOM_DIR" ]; then
+    echo -e "${BLUE}📁 Found custom directory: $ABSOLUTE_CUSTOM_DIR${NC}"
+    # Copy custom APIs to the generated SDK
+    if [ -d "$ABSOLUTE_CUSTOM_DIR/src/apis" ]; then
+        echo -e "${BLUE}📁 Copying custom API files...${NC}"
+        cp "$ABSOLUTE_CUSTOM_DIR/src/apis/"*.ts "$ABSOLUTE_API_DIR/src/apis/" 2>/dev/null || true
+    fi
+    if [ -d "$ABSOLUTE_CUSTOM_DIR/examples" ]; then
+        echo -e "${BLUE}📁 Copying custom examples...${NC}"
+        cp -r "$ABSOLUTE_CUSTOM_DIR/examples/"* "$ABSOLUTE_API_DIR/examples/" 2>/dev/null || true
+    fi
+    if [ -f "$ABSOLUTE_CUSTOM_DIR/"*.md ]; then
+        echo -e "${BLUE}📁 Copying custom markdown files...${NC}"
+        cp "$ABSOLUTE_CUSTOM_DIR/"*.md "$ABSOLUTE_API_DIR/" 2>/dev/null || true
+    fi
+    
+    # Update the main index.ts to include custom APIs
+    echo -e "${BLUE}🔧 Updating main index.ts to include custom APIs...${NC}"
+    if [ -f "$ABSOLUTE_API_DIR/src/index.ts" ]; then
+        # Add custom API exports to the main index
+        echo "" >> "$ABSOLUTE_API_DIR/src/index.ts"
+        echo "// Custom APIs" >> "$ABSOLUTE_API_DIR/src/index.ts"
+        echo "export * from './apis/CustomerPortalApi';" >> "$ABSOLUTE_API_DIR/src/index.ts"
+    fi
+    
+    # Update apis/index.ts to include custom APIs
+    if [ -f "$ABSOLUTE_API_DIR/src/apis/index.ts" ]; then
+        # Add custom API exports to the apis index
+        echo "" >> "$ABSOLUTE_API_DIR/src/apis/index.ts"
+        echo "// Custom APIs" >> "$ABSOLUTE_API_DIR/src/apis/index.ts"
+        echo "export * from './CustomerPortalApi';" >> "$ABSOLUTE_API_DIR/src/apis/index.ts"
+    fi
+    
+    echo -e "${GREEN}✅ Custom APIs copied successfully${NC}"
+else
+    echo -e "${YELLOW}⚠️  Custom APIs directory not found at $CUSTOM_DIR${NC}"
+fi
 
 # Build the project
 echo -e "${BLUE}🔨 Building TypeScript project...${NC}"
