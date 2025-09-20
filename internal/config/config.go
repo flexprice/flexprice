@@ -16,25 +16,26 @@ import (
 )
 
 type Configuration struct {
-	Deployment          DeploymentConfig          `validate:"required"`
-	Server              ServerConfig              `validate:"required"`
-	Auth                AuthConfig                `validate:"required"`
-	Kafka               KafkaConfig               `validate:"required"`
-	ClickHouse          ClickHouseConfig          `validate:"required"`
-	Logging             LoggingConfig             `validate:"required"`
-	Postgres            PostgresConfig            `validate:"required"`
-	Sentry              SentryConfig              `validate:"required"`
-	Pyroscope           PyroscopeConfig           `validate:"required"`
-	Event               EventConfig               `validate:"required"`
-	DynamoDB            DynamoDBConfig            `validate:"required"`
-	Temporal            TemporalConfig            `validate:"required"`
-	Webhook             Webhook                   `validate:"omitempty"`
-	Secrets             SecretsConfig             `validate:"required"`
-	Billing             BillingConfig             `validate:"omitempty"`
-	S3                  S3Config                  `validate:"required"`
-	Cache               CacheConfig               `validate:"required"`
-	EventPostProcessing EventPostProcessingConfig `mapstructure:"event_post_processing" validate:"required"`
-	EnvAccess           EnvAccessConfig           `mapstructure:"env_access" json:"env_access" validate:"omitempty"`
+	Deployment           DeploymentConfig           `validate:"required"`
+	Server               ServerConfig               `validate:"required"`
+	Auth                 AuthConfig                 `validate:"required"`
+	Kafka                KafkaConfig                `validate:"required"`
+	ClickHouse           ClickHouseConfig           `validate:"required"`
+	Logging              LoggingConfig              `validate:"required"`
+	Postgres             PostgresConfig             `validate:"required"`
+	Sentry               SentryConfig               `validate:"required"`
+	Pyroscope            PyroscopeConfig            `validate:"required"`
+	Event                EventConfig                `validate:"required"`
+	DynamoDB             DynamoDBConfig             `validate:"required"`
+	Temporal             TemporalConfig             `validate:"required"`
+	Webhook              Webhook                    `validate:"omitempty"`
+	Secrets              SecretsConfig              `validate:"required"`
+	Billing              BillingConfig              `validate:"omitempty"`
+	S3                   S3Config                   `validate:"required"`
+	Cache                CacheConfig                `validate:"required"`
+	EventPostProcessing  EventPostProcessingConfig  `mapstructure:"event_post_processing" validate:"required"`
+	FeatureUsageTracking FeatureUsageTrackingConfig `mapstructure:"feature_usage_tracking" validate:"required"`
+	EnvAccess            EnvAccessConfig            `mapstructure:"env_access" json:"env_access" validate:"omitempty"`
 }
 
 type CacheConfig struct {
@@ -168,6 +169,15 @@ type EventPostProcessingConfig struct {
 	ConsumerGroupBackfill string `mapstructure:"consumer_group_backfill" default:"v1_events_post_processing_backfill"`
 }
 
+type FeatureUsageTrackingConfig struct {
+	// Rate limit in messages consumed per second
+	Topic                 string `mapstructure:"topic" default:"events"`
+	RateLimit             int64  `mapstructure:"rate_limit" default:"1"`
+	ConsumerGroup         string `mapstructure:"consumer_group" default:"v1_feature_tracking_service"`
+	TopicBackfill         string `mapstructure:"topic_backfill" default:"v1_feature_tracking_service_backfill"`
+	RateLimitBackfill     int64  `mapstructure:"rate_limit_backfill" default:"1"`
+	ConsumerGroupBackfill string `mapstructure:"consumer_group_backfill" default:"v1_feature_tracking_service_backfill"`
+}
 type EnvAccessConfig struct {
 	UserEnvMapping map[string]map[string][]string `mapstructure:"user_env_mapping" json:"user_env_mapping" validate:"omitempty"`
 }

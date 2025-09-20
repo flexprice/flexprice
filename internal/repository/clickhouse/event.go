@@ -297,7 +297,7 @@ func (r *EventRepository) GetUsage(ctx context.Context, params *events.UsagePara
 					}
 					value = decimal.NewFromFloat(floatValue)
 				}
-			case types.AggregationSum, types.AggregationAvg, types.AggregationLatest, types.AggregationSumWithMultiplier:
+			case types.AggregationSum, types.AggregationAvg, types.AggregationLatest, types.AggregationSumWithMultiplier, types.AggregationWeightedSum:
 				var floatValue float64
 				if err := rows.Scan(&windowSize, &floatValue); err != nil {
 					SetSpanError(span, err)
@@ -346,7 +346,7 @@ func (r *EventRepository) GetUsage(ctx context.Context, params *events.UsagePara
 						Mark(ierr.ErrDatabase)
 				}
 				result.Value = decimal.NewFromUint64(value)
-			case types.AggregationSum, types.AggregationAvg, types.AggregationLatest, types.AggregationSumWithMultiplier, types.AggregationMax:
+			case types.AggregationSum, types.AggregationAvg, types.AggregationLatest, types.AggregationSumWithMultiplier, types.AggregationMax, types.AggregationWeightedSum:
 				var value float64
 				if err := rows.Scan(&value); err != nil {
 					SetSpanError(span, err)

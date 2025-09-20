@@ -57,6 +57,11 @@ type DetailedUsageAnalytic struct {
 	EventCount      uint64            // Number of events that contributed to this aggregation
 	Properties      map[string]string // Stores property values for flexible grouping (e.g., org_id -> "org123")
 	Points          []UsageAnalyticPoint
+
+	// All aggregation values - we fetch all and use the appropriate one based on meter type
+	MaxUsage         decimal.Decimal // MAX(qty_total * sign)
+	LatestUsage      decimal.Decimal // argMax(qty_total, timestamp)
+	CountUniqueUsage uint64          // COUNT(DISTINCT unique_hash)
 }
 
 // UsageAnalyticPoint represents a data point in a time series
@@ -65,4 +70,21 @@ type UsageAnalyticPoint struct {
 	Usage      decimal.Decimal
 	Cost       decimal.Decimal
 	EventCount uint64 // Number of events in this time window
+
+	// All aggregation values for this time point
+	MaxUsage         decimal.Decimal // MAX(qty_total * sign)
+	LatestUsage      decimal.Decimal // argMax(qty_total, timestamp)
+	CountUniqueUsage uint64          // COUNT(DISTINCT unique_hash)
+}
+
+// UsageByFeatureResult represents aggregated usage data for a feature
+type UsageByFeatureResult struct {
+	SubLineItemID    string
+	FeatureID        string
+	MeterID          string
+	SumTotal         decimal.Decimal
+	MaxTotal         decimal.Decimal
+	CountDistinctIDs uint64
+	CountUniqueQty   uint64
+	LatestQty        decimal.Decimal
 }

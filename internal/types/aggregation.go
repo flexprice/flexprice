@@ -12,6 +12,7 @@ const (
 	AggregationLatest            AggregationType = "LATEST"
 	AggregationSumWithMultiplier AggregationType = "SUM_WITH_MULTIPLIER" // Sum with a multiplier - [sum(value) * multiplier]
 	AggregationMax               AggregationType = "MAX"
+	AggregationWeightedSum       AggregationType = "WEIGHTED_SUM"
 )
 
 func (t AggregationType) Validate() bool {
@@ -22,7 +23,8 @@ func (t AggregationType) Validate() bool {
 		AggregationCountUnique,
 		AggregationLatest,
 		AggregationSumWithMultiplier,
-		AggregationMax:
+		AggregationMax,
+		AggregationWeightedSum:
 		return true
 	default:
 		return false

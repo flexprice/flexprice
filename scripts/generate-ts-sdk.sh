@@ -82,7 +82,8 @@ npm pkg set main=./dist/index.js
 npm pkg set module=./dist/index.js
 npm pkg set types=./dist/index.d.ts
 npm pkg set engines.node=">=16.0.0"
-npm pkg set description="Official TypeScript/JavaScript SDK of Flexprice with modern ES7 module support"
+npm pkg set description="Official TypeScript/JavaScript SDK of Flexprice"
+npm pkg set author="Flexprice"
 npm pkg set keywords='["flexprice","sdk","typescript","javascript","api","billing","pricing","es7","esmodules","fetch"]'
 npm pkg set scripts.build="tsc"
 npm pkg set scripts.prepare="npm run build"

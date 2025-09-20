@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"maps"
 	"strings"
@@ -305,6 +306,9 @@ func (p *EventsChunkProcessor) ProcessChunk(ctx context.Context, chunk [][]strin
 			Properties: make(map[string]interface{}),
 		}
 
+		// Flag to track if this record should be skipped due to errors
+		skipRecord := false
+
 		// Map standard fields
 		for j, header := range headers {
 			if j >= len(record) {
@@ -334,6 +338,32 @@ func (p *EventsChunkProcessor) ProcessChunk(ctx context.Context, chunk [][]strin
 				propertyName := strings.TrimPrefix(header, "properties.")
 				eventReq.Properties[propertyName] = record[j]
 			}
+		}
+
+		// Handle single "properties" column with JSON content
+		for j, header := range headers {
+			if j >= len(record) {
+				continue
+			}
+			if header == "properties" && record[j] != "" {
+				// Parse JSON properties
+				var properties map[string]interface{}
+				if err := json.Unmarshal([]byte(record[j]), &properties); err != nil {
+					errors = append(errors, fmt.Sprintf("Record %d: invalid JSON in properties column: %v", i, err))
+					failedRecords++
+					skipRecord = true
+					break // Break out of the inner loop to skip this record
+				}
+				// Merge JSON properties into event properties
+				for key, value := range properties {
+					eventReq.Properties[key] = value
+				}
+			}
+		}
+
+		// Skip this record if JSON parsing failed
+		if skipRecord {
+			continue
 		}
 
 		// Validate the event request

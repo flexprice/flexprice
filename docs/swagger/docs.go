@@ -8980,7 +8980,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Create a new import/export task",
+                "description": "Create a new task for processing files asynchronously",
                 "consumes": [
                     "application/json"
                 ],
@@ -8993,7 +8993,7 @@ const docTemplate = `{
                 "summary": "Create a new task",
                 "parameters": [
                     {
-                        "description": "Task details",
+                        "description": "Task configuration",
                         "name": "task",
                         "in": "body",
                         "required": true,
@@ -9003,14 +9003,69 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {
-                    "201": {
-                        "description": "Created",
+                    "202": {
+                        "description": "Accepted",
                         "schema": {
                             "$ref": "#/definitions/dto.TaskResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/tasks/result": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get the result of a task processing workflow",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tasks"
+                ],
+                "summary": "Get task processing result",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workflow ID",
+                        "name": "workflow_id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.TemporalWorkflowResult"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -9031,7 +9086,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get detailed information about a task",
+                "description": "Get a task by ID",
                 "consumes": [
                     "application/json"
                 ],
@@ -9041,7 +9096,7 @@ const docTemplate = `{
                 "tags": [
                     "Tasks"
                 ],
-                "summary": "Get a task by ID",
+                "summary": "Get a task",
                 "parameters": [
                     {
                         "type": "string",
@@ -9056,55 +9111,6 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/dto.TaskResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/tasks/{id}/process": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Start processing a task",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Tasks"
-                ],
-                "summary": "Process a task",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Task ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "202": {
-                        "description": "Accepted",
-                        "schema": {
-                            "$ref": "#/definitions/gin.H"
                         }
                     },
                     "400": {
@@ -9135,7 +9141,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Update the status of a task",
+                "description": "Update a task's status",
                 "consumes": [
                     "application/json"
                 ],
@@ -9155,7 +9161,7 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "New status",
+                        "description": "Status update",
                         "name": "status",
                         "in": "body",
                         "required": true,
@@ -9168,7 +9174,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/dto.TaskResponse"
+                            "$ref": "#/definitions/gin.H"
                         }
                     },
                     "400": {
@@ -16762,6 +16768,9 @@ const docTemplate = `{
                 "entity_type": {
                     "$ref": "#/definitions/types.EntityType"
                 },
+                "environment_id": {
+                    "type": "string"
+                },
                 "error_summary": {
                     "type": "string"
                 },
@@ -16794,7 +16803,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "status": {
-                    "type": "string"
+                    "$ref": "#/definitions/types.Status"
                 },
                 "successful_records": {
                     "type": "integer"
@@ -18225,6 +18234,9 @@ const docTemplate = `{
         "models.TemporalWorkflowResult": {
             "type": "object",
             "properties": {
+                "message": {
+                    "type": "string"
+                },
                 "run_id": {
                     "type": "string"
                 },

@@ -1,6 +1,6 @@
 {
   "name": "@flexprice/sdk",
-  "version": "1.0.17",
+  "version": "1.0.26",
   "description": "Official TypeScript/JavaScript SDK of Flexprice",
   "author": "Flexprice",
   "repository": {
@@ -29,7 +29,7 @@
     "typescript": "^5.9.2"
   },
   "publishConfig": {
-    "registry": "https://github.com/flexprice/javascript-sdk.git"
+    "access": "public"
   },
   "type": "module",
   "types": "./dist/index.d.ts",

@@ -62,6 +62,8 @@ func GetAggregator(aggregationType types.AggregationType) events.Aggregator {
 		return &SumWithMultiAggregator{}
 	case types.AggregationMax:
 		return &MaxAggregator{}
+	case types.AggregationWeightedSum:
+		return &WeightedSumAggregator{}
 	}
 	return nil
 }
@@ -709,6 +711,127 @@ func (a *MaxAggregator) getWindowedQuery(ctx context.Context, params *events.Usa
 func (a *MaxAggregator) GetType() types.AggregationType {
 	return types.AggregationMax
 }
+
+// WeightedSumAggregator implements weighted sum aggregation
+type WeightedSumAggregator struct{}
+
+func (a *WeightedSumAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
+	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor)
+	selectClause := ""
+	windowClause := ""
+	groupByClause := ""
+
+	if windowSize != "" {
+		selectClause = "window_size,"
+		windowClause = fmt.Sprintf("%s AS window_size,", windowSize)
+		groupByClause = "GROUP BY window_size ORDER BY window_size"
+	}
+
+	externalCustomerFilter := ""
+	if params.ExternalCustomerID != "" {
+		externalCustomerFilter = fmt.Sprintf("AND external_customer_id = '%s'", params.ExternalCustomerID)
+	}
+
+	customerFilter := ""
+	if params.CustomerID != "" {
+		customerFilter = fmt.Sprintf("AND customer_id = '%s'", params.CustomerID)
+	}
+
+	filterConditions := buildFilterConditions(params.Filters)
+	timeConditions := buildTimeConditions(params)
+
+	return fmt.Sprintf(`
+        WITH
+            toDateTime64('%s', 3) AS period_start,
+            toDateTime64('%s', 3) AS period_end,
+            dateDiff('second', period_start, period_end) AS total_seconds
+        SELECT 
+            %s sum(
+                (JSONExtractFloat(assumeNotNull(properties), '%s') / nullIf(total_seconds, 0)) *
+                dateDiff('second', timestamp, period_end)
+            ) AS total
+        FROM (
+            SELECT
+                %s timestamp,
+                properties
+            FROM events
+            PREWHERE tenant_id = '%s'
+				AND environment_id = '%s'
+				AND event_name = '%s'
+				%s
+				%s
+                %s
+                %s
+        )
+        %s
+    `,
+		formatClickHouseDateTime(params.StartTime),
+		formatClickHouseDateTime(params.EndTime),
+		selectClause,
+		params.PropertyName,
+		windowClause,
+		types.GetTenantID(ctx),
+		types.GetEnvironmentID(ctx),
+		params.EventName,
+		externalCustomerFilter,
+		customerFilter,
+		filterConditions,
+		timeConditions,
+		groupByClause,
+	)
+}
+
+func (a *WeightedSumAggregator) GetType() types.AggregationType {
+	return types.AggregationWeightedSum
+}
+
+// weighted sum final query without window size
+// WITH
+//             toDateTime64('2025-07-31 18:30:00.000', 3) AS period_start,
+//             toDateTime64('2025-08-31 18:30:00.000', 3) AS period_end,
+//             dateDiff('second', period_start, period_end) AS total_seconds
+//         SELECT
+//              sum(
+//                 (JSONExtractFloat(assumeNotNull(properties), 'value') / nullIf(total_seconds, 0)) *
+//                 dateDiff('second', timestamp, period_end)
+//             ) AS total
+//         FROM (
+//             SELECT
+//                  timestamp,
+//                 properties
+//             FROM events
+//             PREWHERE tenant_id = '00000000-0000-0000-0000-000000000000'
+//                                 AND environment_id = 'env_01K3G204ZZS7F1CAPE32TS0X9W'
+//                                 AND event_name = 'weighted_sum_event'
+//                                 AND external_customer_id = 'cust-wc-5'
+
+//                 AND timestamp >= toDateTime64('2025-07-31 18:30:00.000', 3) AND timestamp < toDateTime64('2025-08-31 18:30:00.000', 3)
+//         )
+
+// weighted sum final query with window size
+// WITH
+//             toDateTime64('2025-09-12 11:08:50.630', 3) AS period_start,
+//             toDateTime64('2025-09-19 11:08:50.630', 3) AS period_end,
+//             dateDiff('second', period_start, period_end) AS total_seconds
+//         SELECT
+//             window_size, sum(
+//                 (JSONExtractFloat(assumeNotNull(properties), 'value') / nullIf(total_seconds, 0)) *
+//                 dateDiff('second', timestamp, period_end)
+//             ) AS total
+//         FROM (
+//             SELECT
+//                 toStartOfInterval(timestamp, INTERVAL 15 MINUTE) AS window_size, timestamp,
+//                 properties
+//             FROM events
+//             PREWHERE tenant_id = '00000000-0000-0000-0000-000000000000'
+//                                 AND environment_id = 'env_01K3G204ZZS7F1CAPE32TS0X9W'
+//                                 AND event_name = 'weighted_sum_event'
+//                                 AND external_customer_id = 'cust-wc-5'
+//                                 AND customer_id = 'cust_01K5GHAV4R787PVZTYW5G9BMGD'
+
+//                 AND timestamp >= toDateTime64('2025-09-12 11:08:50.630', 3) AND timestamp < toDateTime64('2025-09-19 11:08:50.630', 3)
+//         )
+//         GROUP BY window_size ORDER BY window_size
 
 // // buildFilterGroupsQuery builds a query that matches events to the most specific filter group
 // func buildFilterGroupsQuery(params *events.UsageWithFiltersParams) string {

@@ -4455,6 +4455,8 @@ definitions:
         type: string
       entity_type:
         $ref: '#/definitions/types.EntityType'
+      environment_id:
+        type: string
       error_summary:
         type: string
       failed_at:
@@ -4477,7 +4479,7 @@ definitions:
       started_at:
         type: string
       status:
-        type: string
+        $ref: '#/definitions/types.Status'
       successful_records:
         type: integer
       task_status:
@@ -5477,6 +5479,8 @@ definitions:
     type: object
   models.TemporalWorkflowResult:
     properties:
+      message:
+        type: string
       run_id:
         type: string
       workflow_id:
@@ -12922,9 +12926,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Create a new import/export task
+      description: Create a new task for processing files asynchronously
       parameters:
-      - description: Task details
+      - description: Task configuration
         in: body
         name: task
         required: true
@@ -12933,8 +12937,8 @@ paths:
       produces:
       - application/json
       responses:
-        "201":
-          description: Created
+        "202":
+          description: Accepted
           schema:
             $ref: '#/definitions/dto.TaskResponse'
         "400":
@@ -12954,7 +12958,7 @@ paths:
     get:
       consumes:
       - application/json
-      description: Get detailed information about a task
+      description: Get a task by ID
       parameters:
       - description: Task ID
         in: path
@@ -12968,6 +12972,10 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/dto.TaskResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
         "404":
           description: Not Found
           schema:
@@ -12978,25 +12986,31 @@ paths:
             $ref: '#/definitions/errors.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: Get a task by ID
+      summary: Get a task
       tags:
       - Tasks
-  /tasks/{id}/process:
-    post:
+  /tasks/{id}/status:
+    put:
       consumes:
       - application/json
-      description: Start processing a task
+      description: Update a task's status
       parameters:
       - description: Task ID
         in: path
         name: id
         required: true
         type: string
+      - description: Status update
+        in: body
+        name: status
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateTaskStatusRequest'
       produces:
       - application/json
       responses:
-        "202":
-          description: Accepted
+        "200":
+          description: OK
           schema:
             $ref: '#/definitions/gin.H'
         "400":
@@ -13013,33 +13027,27 @@ paths:
             $ref: '#/definitions/errors.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: Process a task
+      summary: Update task status
       tags:
       - Tasks
-  /tasks/{id}/status:
-    put:
+  /tasks/result:
+    get:
       consumes:
       - application/json
-      description: Update the status of a task
+      description: Get the result of a task processing workflow
       parameters:
-      - description: Task ID
-        in: path
-        name: id
+      - description: Workflow ID
+        in: query
+        name: workflow_id
         required: true
         type: string
-      - description: New status
-        in: body
-        name: status
-        required: true
-        schema:
-          $ref: '#/definitions/dto.UpdateTaskStatusRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.TaskResponse'
+            $ref: '#/definitions/models.TemporalWorkflowResult'
         "400":
           description: Bad Request
           schema:
@@ -13054,7 +13062,7 @@ paths:
             $ref: '#/definitions/errors.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: Update task status
+      summary: Get task processing result
       tags:
       - Tasks
   /taxes/associations:
