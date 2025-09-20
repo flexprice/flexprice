@@ -628,9 +628,196 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 }
 
 type UpdatePriceRequest struct {
-	LookupKey   string            `json:"lookup_key"`
-	Description string            `json:"description"`
+	// All price fields that can be updated
+	// Non-critical fields (can be updated directly)
+	LookupKey   string            `json:"lookup_key,omitempty"`
+	Description string            `json:"description,omitempty"`
 	Metadata    map[string]string `json:"metadata,omitempty"`
+	StartDate   *time.Time        `json:"start_date,omitempty"`
+	EndDate     *time.Time        `json:"end_date,omitempty"`
+
+	// Critical fields (require price termination + recreation)
+	Amount             string                   `json:"amount,omitempty"`
+	Currency           string                   `json:"currency,omitempty"`
+	Type               types.PriceType          `json:"type,omitempty"`
+	PriceUnitType      types.PriceUnitType      `json:"price_unit_type,omitempty"`
+	BillingPeriod      types.BillingPeriod      `json:"billing_period,omitempty"`
+	BillingPeriodCount int                      `json:"billing_period_count,omitempty"`
+	BillingModel       types.BillingModel       `json:"billing_model,omitempty"`
+	BillingCadence     types.BillingCadence     `json:"billing_cadence,omitempty"`
+	InvoiceCadence     types.InvoiceCadence     `json:"invoice_cadence,omitempty"`
+	TrialPeriod        int                      `json:"trial_period,omitempty"`
+	MeterID            string                   `json:"meter_id,omitempty"`
+	TierMode           types.BillingTier        `json:"tier_mode,omitempty"`
+	Tiers              []CreatePriceTier        `json:"tiers,omitempty"`
+	TransformQuantity  *price.TransformQuantity `json:"transform_quantity,omitempty"`
+	PriceUnitConfig    *PriceUnitConfig         `json:"price_unit_config,omitempty"`
+
+	// EndDate is used as the termination date for the current price when critical fields are updated
+}
+
+func (r *UpdatePriceRequest) Validate() error {
+	// Basic validation - let the service layer handle detailed validation
+	// when creating the new price
+
+	// Validate end date if present and critical fields are being updated
+	// EndDate is used as termination date for the existing price when critical fields are updated
+	if r.EndDate != nil && r.HasCriticalFields() && r.EndDate.Before(time.Now().UTC()) {
+		return ierr.NewError("end date must be in the future when used as termination date").
+			WithHint("End date must be in the future when updating critical fields").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Validate start and end date if both present
+	if r.StartDate != nil && r.EndDate != nil {
+		if r.StartDate.After(*r.EndDate) {
+			return ierr.NewError("start date cannot be after end date").
+				WithHint("Start date must be before or equal to end date").
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	return nil
+}
+
+// HasCriticalFields checks if the request contains any critical fields that require price termination
+func (r *UpdatePriceRequest) HasCriticalFields() bool {
+	return r.Amount != "" ||
+		r.Currency != "" ||
+		r.Type != "" ||
+		r.PriceUnitType != "" ||
+		r.BillingPeriod != "" ||
+		r.BillingPeriodCount != 0 ||
+		r.BillingModel != "" ||
+		r.BillingCadence != "" ||
+		r.InvoiceCadence != "" ||
+		r.TrialPeriod != 0 ||
+		r.MeterID != "" ||
+		r.TierMode != "" ||
+		len(r.Tiers) > 0 ||
+		r.TransformQuantity != nil ||
+		r.PriceUnitConfig != nil
+}
+
+// ToCreatePriceRequest converts the update request to a create request for the new price
+func (r *UpdatePriceRequest) ToCreatePriceRequest(existingPrice *price.Price) CreatePriceRequest {
+	// Start with a copy of existing price as base
+	createReq := copyPriceToCreateRequest(existingPrice)
+
+	// Apply updates from request - only update fields that are provided
+	if r.Amount != "" {
+		createReq.Amount = r.Amount
+	}
+	if r.Currency != "" {
+		createReq.Currency = r.Currency
+	}
+	if r.Type != "" {
+		createReq.Type = r.Type
+	}
+	if r.PriceUnitType != "" {
+		createReq.PriceUnitType = r.PriceUnitType
+	}
+	if r.BillingPeriod != "" {
+		createReq.BillingPeriod = r.BillingPeriod
+	}
+	if r.BillingPeriodCount != 0 {
+		createReq.BillingPeriodCount = r.BillingPeriodCount
+	}
+	if r.BillingModel != "" {
+		createReq.BillingModel = r.BillingModel
+	}
+	if r.BillingCadence != "" {
+		createReq.BillingCadence = r.BillingCadence
+	}
+	if r.InvoiceCadence != "" {
+		createReq.InvoiceCadence = r.InvoiceCadence
+	}
+	if r.TrialPeriod != 0 {
+		createReq.TrialPeriod = r.TrialPeriod
+	}
+	if r.MeterID != "" {
+		createReq.MeterID = r.MeterID
+	}
+	if r.LookupKey != "" {
+		createReq.LookupKey = r.LookupKey
+	}
+	if r.Description != "" {
+		createReq.Description = r.Description
+	}
+	if r.Metadata != nil {
+		createReq.Metadata = r.Metadata
+	}
+	if r.TierMode != "" {
+		createReq.TierMode = r.TierMode
+	}
+	if len(r.Tiers) > 0 {
+		createReq.Tiers = r.Tiers
+	}
+	if r.TransformQuantity != nil {
+		createReq.TransformQuantity = r.TransformQuantity
+	}
+	if r.PriceUnitConfig != nil {
+		createReq.PriceUnitConfig = r.PriceUnitConfig
+	}
+	// Note: StartDate and EndDate are handled by the service layer:
+	// - EndDate in the request is used as termination date for the old price
+	// - New price starts exactly when the old price ends (terminationEndDate)
+	// - New price will not have an end date unless explicitly set
+
+	return createReq
+}
+
+// copyPriceToCreateRequest creates a CreatePriceRequest from an existing price
+func copyPriceToCreateRequest(existingPrice *price.Price) CreatePriceRequest {
+	createReq := CreatePriceRequest{
+		EntityType:           existingPrice.EntityType,
+		EntityID:             existingPrice.EntityID,
+		SkipEntityValidation: true, // Skip validation since we're updating an existing entity
+	}
+
+	// Copy basic fields
+	createReq.Amount = existingPrice.Amount.String()
+	createReq.Currency = existingPrice.Currency
+	createReq.Type = existingPrice.Type
+	createReq.PriceUnitType = existingPrice.PriceUnitType
+	createReq.BillingPeriod = existingPrice.BillingPeriod
+	createReq.BillingPeriodCount = existingPrice.BillingPeriodCount
+	createReq.BillingModel = existingPrice.BillingModel
+	createReq.BillingCadence = existingPrice.BillingCadence
+	createReq.InvoiceCadence = existingPrice.InvoiceCadence
+	createReq.TrialPeriod = existingPrice.TrialPeriod
+	createReq.MeterID = existingPrice.MeterID
+	createReq.LookupKey = existingPrice.LookupKey
+	createReq.Description = existingPrice.Description
+	createReq.Metadata = existingPrice.Metadata
+	createReq.TierMode = existingPrice.TierMode
+
+	// Copy tiers
+	if len(existingPrice.Tiers) > 0 {
+		createReq.Tiers = make([]CreatePriceTier, len(existingPrice.Tiers))
+		for i, tier := range existingPrice.Tiers {
+			createReq.Tiers[i] = CreatePriceTier{
+				UpTo:       tier.UpTo,
+				UnitAmount: tier.UnitAmount.String(),
+			}
+			if tier.FlatAmount != nil {
+				flatAmountStr := tier.FlatAmount.String()
+				createReq.Tiers[i].FlatAmount = &flatAmountStr
+			}
+		}
+	}
+
+	// Copy transform quantity
+	if existingPrice.TransformQuantity != (price.JSONBTransformQuantity{}) {
+		transformQuantity := price.TransformQuantity(existingPrice.TransformQuantity)
+		createReq.TransformQuantity = &transformQuantity
+	}
+
+	// Copy dates
+	createReq.StartDate = existingPrice.StartDate
+	createReq.EndDate = existingPrice.EndDate
+
+	return createReq
 }
 
 type PriceResponse struct {

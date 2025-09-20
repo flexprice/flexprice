@@ -650,27 +650,88 @@ func (s *priceService) GetPrices(ctx context.Context, filter *types.PriceFilter)
 }
 
 func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.UpdatePriceRequest) (*dto.PriceResponse, error) {
-	price, err := s.PriceRepo.Get(ctx, id)
+	// Validate the request
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Get the existing price
+	existingPrice, err := s.PriceRepo.Get(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
-	price.Description = req.Description
-	price.Metadata = req.Metadata
-	price.LookupKey = req.LookupKey
+	// Check if the request has critical fields
+	if req.HasCriticalFields() {
+		// Critical fields detected - terminate existing price and create new one
 
-	if err := s.PriceRepo.Update(ctx, price); err != nil {
-		return nil, err
+		// Set termination end date - use EndDate from request if provided, otherwise use current time
+		terminationEndDate := time.Now().UTC()
+		if req.EndDate != nil {
+			terminationEndDate = *req.EndDate
+		}
+
+		// Terminate the existing price
+		existingPrice.EndDate = &terminationEndDate
+		if err := s.PriceRepo.Update(ctx, existingPrice); err != nil {
+			return nil, err
+		}
+
+		// Convert update request to create request - this handles all the field mapping
+		createReq := req.ToCreatePriceRequest(existingPrice)
+
+		// Set start date for new price to be exactly when the old price ends
+		createReq.StartDate = &terminationEndDate
+
+		// Create the new price - this will use all existing validation logic
+		newPriceResp, err := s.CreatePrice(ctx, createReq)
+		if err != nil {
+			return nil, err
+		}
+
+		s.Logger.Infow("price updated with termination and recreation",
+			"old_price_id", existingPrice.ID,
+			"new_price_id", newPriceResp.ID,
+			"termination_end_date", terminationEndDate,
+			"new_price_start_date", terminationEndDate,
+			"entity_type", existingPrice.EntityType,
+			"entity_id", existingPrice.EntityID)
+
+		return newPriceResp, nil
+	} else {
+		// No critical fields - simple update
+
+		// Update non-critical fields
+		if req.LookupKey != "" {
+			existingPrice.LookupKey = req.LookupKey
+		}
+		if req.Description != "" {
+			existingPrice.Description = req.Description
+		}
+		if req.Metadata != nil {
+			existingPrice.Metadata = req.Metadata
+		}
+		if req.StartDate != nil {
+			existingPrice.StartDate = req.StartDate
+		}
+		if req.EndDate != nil {
+			existingPrice.EndDate = req.EndDate
+		}
+
+		// Update the price in database
+		if err := s.PriceRepo.Update(ctx, existingPrice); err != nil {
+			return nil, err
+		}
+
+		response := &dto.PriceResponse{Price: existingPrice}
+
+		// TODO: !REMOVE after migration
+		if existingPrice.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
+			response.PlanID = existingPrice.EntityID
+		}
+
+		return response, nil
 	}
-
-	response := &dto.PriceResponse{Price: price}
-
-	// TODO: !REMOVE after migration
-	if price.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
-		response.PlanID = price.EntityID
-	}
-
-	return response, nil
 }
 
 func (s *priceService) DeletePrice(ctx context.Context, id string, req dto.DeletePriceRequest) error {
