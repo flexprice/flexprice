@@ -162,6 +162,7 @@ func main() {
 			repository.NewAddonAssociationRepository,
 			repository.NewSubscriptionLineItemRepository,
 			repository.NewSettingsRepository,
+			repository.NewAlertRepository,
 
 			// PubSub
 			pubsubRouter.NewRouter,
@@ -215,6 +216,7 @@ func main() {
 			service.NewAddonService,
 			service.NewSettingsService,
 			service.NewSubscriptionChangeService,
+			service.NewAlertService,
 		),
 	)
 
@@ -282,6 +284,7 @@ func provideHandlers(
 	settingsService service.SettingsService,
 	subscriptionChangeService service.SubscriptionChangeService,
 	featureUsageTrackingService service.FeatureUsageTrackingService,
+	alertService service.AlertService,
 ) api.Handlers {
 	return api.Handlers{
 		Events:                   v1.NewEventsHandler(eventService, eventPostProcessingService, featureUsageTrackingService, logger),
@@ -320,6 +323,7 @@ func provideHandlers(
 		Coupon:                   v1.NewCouponHandler(couponService, logger),
 		Addon:                    v1.NewAddonHandler(addonService, logger),
 		Settings:                 v1.NewSettingsHandler(settingsService, logger),
+		CronAlert:                cron.NewAlertCronHandler(alertService, logger),
 	}
 }
 

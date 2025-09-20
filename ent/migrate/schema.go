@@ -74,6 +74,51 @@ var (
 			},
 		},
 	}
+	// AlertsColumns holds the columns for the "alerts" table.
+	AlertsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "entity_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "entity_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "alert_metric", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "alert_state", Type: field.TypeString, Default: "ok", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "alert_enabled", Type: field.TypeBool, Default: true},
+		{Name: "alert_data", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+	}
+	// AlertsTable holds the schema information for the "alerts" table.
+	AlertsTable = &schema.Table{
+		Name:       "alerts",
+		Columns:    AlertsColumns,
+		PrimaryKey: []*schema.Column{AlertsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "idx_alerts_tenant_env_entity_metric",
+				Unique:  false,
+				Columns: []*schema.Column{AlertsColumns[1], AlertsColumns[7], AlertsColumns[8], AlertsColumns[9], AlertsColumns[10]},
+			},
+			{
+				Name:    "idx_alerts_tenant_environment_state",
+				Unique:  false,
+				Columns: []*schema.Column{AlertsColumns[1], AlertsColumns[7], AlertsColumns[11]},
+			},
+			{
+				Name:    "idx_alerts_tenant_environment_enabled",
+				Unique:  false,
+				Columns: []*schema.Column{AlertsColumns[1], AlertsColumns[7], AlertsColumns[12]},
+			},
+			{
+				Name:    "idx_alerts_tenant_env_entity_metric_state",
+				Unique:  false,
+				Columns: []*schema.Column{AlertsColumns[1], AlertsColumns[7], AlertsColumns[8], AlertsColumns[9], AlertsColumns[10], AlertsColumns[11]},
+			},
+		},
+	}
 	// AuthsColumns holds the columns for the "auths" table.
 	AuthsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -950,7 +995,7 @@ var (
 		{Name: "customer_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "subscription_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "entity_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "entity_type", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "entity_type", Type: field.TypeString, Nullable: true, Default: "plan", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "plan_display_name", Type: field.TypeString, Nullable: true},
 		{Name: "price_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "price_type", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -2084,6 +2129,7 @@ var (
 	Tables = []*schema.Table{
 		AddonsTable,
 		AddonAssociationsTable,
+		AlertsTable,
 		AuthsTable,
 		BillingSequencesTable,
 		ConnectionsTable,

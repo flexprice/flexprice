@@ -110,6 +110,7 @@ const (
 	// Temporal workflow prefixes
 	UUID_PREFIX_WORKFLOW = "wf"
 	UUID_PREFIX_RUN      = "run"
+	UUID_PREFIX_ALERT    = "alert"
 )
 
 const (

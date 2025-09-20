@@ -7,6 +7,7 @@ import (
 
 	"github.com/flexprice/flexprice/ent/addon"
 	"github.com/flexprice/flexprice/ent/addonassociation"
+	"github.com/flexprice/flexprice/ent/alert"
 	"github.com/flexprice/flexprice/ent/auth"
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/connection"
@@ -148,6 +149,53 @@ func init() {
 	addonassociation.DefaultAddonStatus = addonassociationDescAddonStatus.Default.(string)
 	// addonassociation.AddonStatusValidator is a validator for the "addon_status" field. It is called by the builders before save.
 	addonassociation.AddonStatusValidator = addonassociationDescAddonStatus.Validators[0].(func(string) error)
+	alertMixin := schema.Alert{}.Mixin()
+	alertMixinFields0 := alertMixin[0].Fields()
+	_ = alertMixinFields0
+	alertMixinFields1 := alertMixin[1].Fields()
+	_ = alertMixinFields1
+	alertFields := schema.Alert{}.Fields()
+	_ = alertFields
+	// alertDescTenantID is the schema descriptor for tenant_id field.
+	alertDescTenantID := alertMixinFields0[0].Descriptor()
+	// alert.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	alert.TenantIDValidator = alertDescTenantID.Validators[0].(func(string) error)
+	// alertDescStatus is the schema descriptor for status field.
+	alertDescStatus := alertMixinFields0[1].Descriptor()
+	// alert.DefaultStatus holds the default value on creation for the status field.
+	alert.DefaultStatus = alertDescStatus.Default.(string)
+	// alertDescCreatedAt is the schema descriptor for created_at field.
+	alertDescCreatedAt := alertMixinFields0[2].Descriptor()
+	// alert.DefaultCreatedAt holds the default value on creation for the created_at field.
+	alert.DefaultCreatedAt = alertDescCreatedAt.Default.(func() time.Time)
+	// alertDescUpdatedAt is the schema descriptor for updated_at field.
+	alertDescUpdatedAt := alertMixinFields0[3].Descriptor()
+	// alert.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	alert.DefaultUpdatedAt = alertDescUpdatedAt.Default.(func() time.Time)
+	// alert.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	alert.UpdateDefaultUpdatedAt = alertDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// alertDescEnvironmentID is the schema descriptor for environment_id field.
+	alertDescEnvironmentID := alertMixinFields1[0].Descriptor()
+	// alert.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	alert.DefaultEnvironmentID = alertDescEnvironmentID.Default.(string)
+	// alertDescEntityType is the schema descriptor for entity_type field.
+	alertDescEntityType := alertFields[1].Descriptor()
+	// alert.EntityTypeValidator is a validator for the "entity_type" field. It is called by the builders before save.
+	alert.EntityTypeValidator = alertDescEntityType.Validators[0].(func(string) error)
+	// alertDescAlertMetric is the schema descriptor for alert_metric field.
+	alertDescAlertMetric := alertFields[3].Descriptor()
+	// alert.AlertMetricValidator is a validator for the "alert_metric" field. It is called by the builders before save.
+	alert.AlertMetricValidator = alertDescAlertMetric.Validators[0].(func(string) error)
+	// alertDescAlertState is the schema descriptor for alert_state field.
+	alertDescAlertState := alertFields[4].Descriptor()
+	// alert.DefaultAlertState holds the default value on creation for the alert_state field.
+	alert.DefaultAlertState = alertDescAlertState.Default.(string)
+	// alert.AlertStateValidator is a validator for the "alert_state" field. It is called by the builders before save.
+	alert.AlertStateValidator = alertDescAlertState.Validators[0].(func(string) error)
+	// alertDescAlertEnabled is the schema descriptor for alert_enabled field.
+	alertDescAlertEnabled := alertFields[5].Descriptor()
+	// alert.DefaultAlertEnabled holds the default value on creation for the alert_enabled field.
+	alert.DefaultAlertEnabled = alertDescAlertEnabled.Default.(bool)
 	authFields := schema.Auth{}.Fields()
 	_ = authFields
 	// authDescProvider is the schema descriptor for provider field.
@@ -956,6 +1004,10 @@ func init() {
 	invoicelineitemDescCustomerID := invoicelineitemFields[2].Descriptor()
 	// invoicelineitem.CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
 	invoicelineitem.CustomerIDValidator = invoicelineitemDescCustomerID.Validators[0].(func(string) error)
+	// invoicelineitemDescEntityType is the schema descriptor for entity_type field.
+	invoicelineitemDescEntityType := invoicelineitemFields[5].Descriptor()
+	// invoicelineitem.DefaultEntityType holds the default value on creation for the entity_type field.
+	invoicelineitem.DefaultEntityType = invoicelineitemDescEntityType.Default.(string)
 	// invoicelineitemDescAmount is the schema descriptor for amount field.
 	invoicelineitemDescAmount := invoicelineitemFields[15].Descriptor()
 	// invoicelineitem.DefaultAmount holds the default value on creation for the amount field.
