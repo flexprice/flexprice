@@ -295,7 +295,7 @@ func provideHandlers(
 		User:                     v1.NewUserHandler(userService, logger),
 		Environment:              v1.NewEnvironmentHandler(environmentService, logger),
 		Health:                   v1.NewHealthHandler(logger),
-		Price:                    v1.NewPriceHandler(priceService, temporalService, logger),
+		Price:                    v1.NewPriceHandler(priceService, logger),
 		Customer:                 v1.NewCustomerHandler(customerService, billingService, logger),
 		Plan:                     v1.NewPlanHandler(planService, entitlementService, creditGrantService, temporalService, logger),
 		Subscription:             v1.NewSubscriptionHandler(subscriptionService, logger),
@@ -370,8 +370,16 @@ func provideTemporalWorkerManager(temporalClient client.TemporalClient, log *log
 }
 
 func provideTemporalService(temporalClient client.TemporalClient, workerManager worker.TemporalWorkerManager, log *logger.Logger) temporalservice.TemporalService {
-	service := temporalservice.NewTemporalService(temporalClient, workerManager, log)
-	service.Start(context.Background())
+	// Initialize the global Temporal service instance
+	temporalservice.InitializeGlobalTemporalService(temporalClient, workerManager, log)
+
+	// Get the global instance and start it
+	service := temporalservice.GetGlobalTemporalService()
+	if err := service.Start(context.Background()); err != nil {
+		log.Error("Failed to start global Temporal service", "error", err)
+		return nil
+	}
+
 	return service
 }
 
