@@ -117,6 +117,7 @@ type PaymentFilter struct {
 	PaymentStatus     *string  `form:"payment_status"`
 	PaymentGateway    *string  `form:"payment_gateway"`
 	Currency          *string  `form:"currency"`
+	GatewayPaymentID  *string  `form:"gateway_payment_id"`
 }
 
 // NewNoLimitPaymentFilter creates a new payment filter with no limit
@@ -195,3 +196,9 @@ func (f *PaymentFilter) IsUnlimited() bool {
 	}
 	return f.QueryFilter.IsUnlimited()
 }
+
+type PaymentMethodProvider string
+
+const (
+	PaymentMethodProviderStripe PaymentMethodProvider = "stripe"
+)

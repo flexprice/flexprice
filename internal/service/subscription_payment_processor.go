@@ -447,6 +447,17 @@ func (s *subscriptionPaymentProcessor) processPayment(
 				flowType,
 			)
 
+			// If invoice is synced to Stripe, don't allow partial payments
+			if s.isInvoiceSyncedToStripe(ctx, inv.ID) {
+				s.Logger.Warnw("card payment failed, invoice is synced to Stripe - not allowing partial wallet payment",
+					"subscription_id", sub.ID,
+					"invoice_id", inv.ID,
+					"attempted_card_amount", cardAmount,
+					"wallet_amount_available", walletAmount,
+				)
+				allowPartialWallet = false
+			}
+
 			if !allowPartialWallet {
 				// Card payment failed - do not attempt wallet payment
 				// The invoice cannot be fully paid, so we stop here
@@ -906,4 +917,27 @@ func (s *subscriptionPaymentProcessor) checkAvailableCredits(
 	)
 
 	return totalAvailable
+}
+
+// isInvoiceSyncedToStripe checks if an invoice is synced to Stripe by looking up entity integration mapping
+func (s *subscriptionPaymentProcessor) isInvoiceSyncedToStripe(ctx context.Context, invoiceID string) bool {
+	filter := &types.EntityIntegrationMappingFilter{
+		EntityID:      invoiceID,
+		EntityType:    "invoice",
+		ProviderTypes: []string{"stripe"},
+	}
+
+	mappings, err := s.EntityIntegrationMappingRepo.List(ctx, filter)
+
+	if err != nil {
+		s.Logger.Errorw("failed to check invoice Stripe sync status",
+			"error", err,
+			"invoice_id", invoiceID,
+		)
+		// In case of error, assume not synced to be safe
+		return false
+	}
+
+	// If we have any mappings, the invoice is synced to Stripe
+	return len(mappings) > 0
 }

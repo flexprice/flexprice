@@ -730,6 +730,17 @@ func (s *invoiceService) ProcessDraftInvoice(ctx context.Context, id string, pay
 		return err
 	}
 
+	// Sync to Stripe if Stripe connection is enabled and invoice is for subscription
+	if sub != nil {
+		if err := s.syncInvoiceToStripeIfEnabled(ctx, inv, sub, paymentParams); err != nil {
+			// Log error but don't fail the entire process
+			s.Logger.Errorw("failed to sync invoice to Stripe",
+				"error", err,
+				"invoice_id", inv.ID,
+				"subscription_id", sub.ID)
+		}
+	}
+
 	// try to process payment for the invoice based on behavior and log any errors
 	// Pass the subscription object to avoid extra DB call
 	// Error handling logic is properly handled in attemptPaymentForSubscriptionInvoice
@@ -737,6 +748,61 @@ func (s *invoiceService) ProcessDraftInvoice(ctx context.Context, id string, pay
 		// Only return error if it's a blocking error (e.g., subscription creation with error_if_incomplete)
 		return err
 	}
+
+	return nil
+}
+
+// syncInvoiceToStripeIfEnabled syncs the invoice to Stripe if Stripe connection is enabled
+func (s *invoiceService) syncInvoiceToStripeIfEnabled(ctx context.Context, inv *invoice.Invoice, sub *subscription.Subscription, paymentParams *dto.PaymentParameters) error {
+	// Check if Stripe connection exists
+	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderStripe)
+	if err != nil || conn == nil {
+		s.Logger.Debugw("Stripe connection not available, skipping invoice sync",
+			"invoice_id", inv.ID,
+			"error", err)
+		return nil // Not an error, just skip sync
+	}
+
+	// Check if invoice sync is enabled for this connection
+	if !conn.IsInvoiceSyncEnabled() {
+		s.Logger.Debugw("invoice sync disabled for Stripe connection, skipping invoice sync",
+			"invoice_id", inv.ID,
+			"connection_id", conn.ID)
+		return nil // Not an error, just skip sync
+	}
+
+	s.Logger.Infow("syncing invoice to Stripe",
+		"invoice_id", inv.ID,
+		"subscription_id", sub.ID,
+		"collection_method", sub.CollectionMethod)
+
+	// Initialize Stripe sync service
+	stripeInvoiceSyncService := NewStripeInvoiceSyncService(s.ServiceParams)
+
+	// Determine collection method from subscription
+	collectionMethod := types.CollectionMethod(sub.CollectionMethod)
+
+	// Create sync request
+	syncRequest := dto.StripeInvoiceSyncRequest{
+		InvoiceID:        inv.ID,
+		CollectionMethod: collectionMethod,
+	}
+
+	if paymentParams != nil {
+		syncRequest.PaymentBehavior = paymentParams.PaymentBehavior
+	}
+
+	// Perform the sync
+	syncResponse, err := stripeInvoiceSyncService.SyncInvoiceToStripe(ctx, syncRequest)
+	if err != nil {
+		return err
+	}
+
+	s.Logger.Infow("successfully synced invoice to Stripe",
+		"invoice_id", inv.ID,
+		"stripe_invoice_id", syncResponse.StripeInvoiceID,
+		"status", syncResponse.Status,
+		"hosted_invoice_url", syncResponse.HostedInvoiceURL)
 
 	return nil
 }

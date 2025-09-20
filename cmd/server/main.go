@@ -320,6 +320,7 @@ func provideHandlers(
 		Coupon:                   v1.NewCouponHandler(couponService, logger),
 		Addon:                    v1.NewAddonHandler(addonService, logger),
 		Settings:                 v1.NewSettingsHandler(settingsService, logger),
+		SetupIntent:              v1.NewSetupIntentHandler(stripeService, logger),
 	}
 }
 
