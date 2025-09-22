@@ -635,10 +635,6 @@ type UpdatePriceRequest struct {
 	Metadata    map[string]string `json:"metadata,omitempty"`
 	EndDate     *time.Time        `json:"end_date,omitempty"`
 
-	// Critical fields (require price termination + recreation)
-	// Quantity for this line item (optional)
-	Quantity *decimal.Decimal `json:"quantity,omitempty"`
-
 	BillingModel types.BillingModel `json:"billing_model,omitempty"`
 
 	// Amount is the new price amount that overrides the original price (optional)
@@ -655,11 +651,7 @@ type UpdatePriceRequest struct {
 }
 
 func (r *UpdatePriceRequest) Validate() error {
-	// Basic validation - let the service layer handle detailed validation
-	// when creating the new price
 
-	// Validate end date if present and critical fields are being updated
-	// EndDate is used as termination date for the existing price when critical fields are updated
 	if r.EndDate != nil && r.HasCriticalFields() && r.EndDate.Before(time.Now().UTC()) {
 		return ierr.NewError("end date must be in the future when used as termination date").
 			WithHint("End date must be in the future when updating critical fields").
@@ -671,8 +663,7 @@ func (r *UpdatePriceRequest) Validate() error {
 
 // HasCriticalFields checks if the request contains any critical fields that require price termination
 func (r *UpdatePriceRequest) HasCriticalFields() bool {
-	return r.Quantity != nil ||
-		r.BillingModel != "" ||
+	return r.BillingModel != "" ||
 		r.Amount != nil ||
 		r.TierMode != "" ||
 		len(r.Tiers) > 0 ||
