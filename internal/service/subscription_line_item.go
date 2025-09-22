@@ -122,9 +122,9 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 	}
 
 	// Check if line item is already terminated
-	if existingLineItem.Status == types.StatusDeleted {
-		return nil, ierr.NewError("line item is already terminated").
-			WithHint("Cannot update a terminated line item").
+	if existingLineItem.Status != types.StatusPublished {
+		return nil, ierr.NewError("line item is not active").
+			WithHint("Cannot update an inactive line item").
 			WithReportableDetails(map[string]interface{}{
 				"line_item_id": lineItemID,
 				"status":       existingLineItem.Status,
@@ -136,17 +136,6 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 	sub, err := s.SubRepo.Get(ctx, existingLineItem.SubscriptionID)
 	if err != nil {
 		return nil, err
-	}
-
-	// Additional security check: ensure line item belongs to the subscription
-	if existingLineItem.SubscriptionID != sub.ID {
-		return nil, ierr.NewError("line item does not belong to the subscription").
-			WithHint("Line item and subscription ID mismatch").
-			WithReportableDetails(map[string]interface{}{
-				"line_item_subscription_id": existingLineItem.SubscriptionID,
-				"subscription_id":           sub.ID,
-			}).
-			Mark(ierr.ErrValidation)
 	}
 
 	// Validate subscription status
@@ -181,27 +170,9 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 
 	}
 
-	// Validate that we have meaningful overrides (not just empty values)
-	hasValidOverrides := false
-	if req.Amount != nil && !req.Amount.IsZero() {
-		hasValidOverrides = true
-	}
-	if req.BillingModel != "" {
-		hasValidOverrides = true
-	}
-	if req.TierMode != "" {
-		hasValidOverrides = true
-	}
-	if len(req.Tiers) > 0 {
-		hasValidOverrides = true
-	}
-	if req.TransformQuantity != nil {
-		hasValidOverrides = true
-	}
-
-	// Create subscription-scoped price if overrides are provided
+	// Check if the request has critical fields that require price termination
 	var newPriceID string
-	if hasValidOverrides {
+	if req.HasCriticalFields() {
 
 		if !existingLineItem.EndDate.IsZero() {
 			return nil, ierr.NewError("line item is already terminated").

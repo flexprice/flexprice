@@ -185,6 +185,15 @@ func (r *UpdateSubscriptionLineItemRequest) Validate() error {
 	return nil
 }
 
+// HasCriticalFields checks if the request contains any critical fields that require price termination
+func (r *UpdateSubscriptionLineItemRequest) HasCriticalFields() bool {
+	return (r.Amount != nil && !r.Amount.IsZero()) ||
+		r.BillingModel != "" ||
+		r.TierMode != "" ||
+		len(r.Tiers) > 0 ||
+		r.TransformQuantity != nil
+}
+
 // ToSubscriptionLineItem converts the update request to a domain subscription line item
 // This method creates a new line item based on the existing one with updated parameters
 func (r *UpdateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.Context, existingLineItem *subscription.SubscriptionLineItem, newPriceID string) *subscription.SubscriptionLineItem {
