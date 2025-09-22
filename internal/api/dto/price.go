@@ -633,27 +633,25 @@ type UpdatePriceRequest struct {
 	LookupKey   string            `json:"lookup_key,omitempty"`
 	Description string            `json:"description,omitempty"`
 	Metadata    map[string]string `json:"metadata,omitempty"`
-	StartDate   *time.Time        `json:"start_date,omitempty"`
 	EndDate     *time.Time        `json:"end_date,omitempty"`
 
 	// Critical fields (require price termination + recreation)
-	Amount             string                   `json:"amount,omitempty"`
-	Currency           string                   `json:"currency,omitempty"`
-	Type               types.PriceType          `json:"type,omitempty"`
-	PriceUnitType      types.PriceUnitType      `json:"price_unit_type,omitempty"`
-	BillingPeriod      types.BillingPeriod      `json:"billing_period,omitempty"`
-	BillingPeriodCount int                      `json:"billing_period_count,omitempty"`
-	BillingModel       types.BillingModel       `json:"billing_model,omitempty"`
-	BillingCadence     types.BillingCadence     `json:"billing_cadence,omitempty"`
-	InvoiceCadence     types.InvoiceCadence     `json:"invoice_cadence,omitempty"`
-	TrialPeriod        int                      `json:"trial_period,omitempty"`
-	MeterID            string                   `json:"meter_id,omitempty"`
-	TierMode           types.BillingTier        `json:"tier_mode,omitempty"`
-	Tiers              []CreatePriceTier        `json:"tiers,omitempty"`
-	TransformQuantity  *price.TransformQuantity `json:"transform_quantity,omitempty"`
-	PriceUnitConfig    *PriceUnitConfig         `json:"price_unit_config,omitempty"`
+	// Quantity for this line item (optional)
+	Quantity *decimal.Decimal `json:"quantity,omitempty"`
 
-	// EndDate is used as the termination date for the current price when critical fields are updated
+	BillingModel types.BillingModel `json:"billing_model,omitempty"`
+
+	// Amount is the new price amount that overrides the original price (optional)
+	Amount *decimal.Decimal `json:"amount,omitempty"`
+
+	// TierMode determines how to calculate the price for a given quantity
+	TierMode types.BillingTier `json:"tier_mode,omitempty"`
+
+	// Tiers determines the pricing tiers for this line item
+	Tiers []CreatePriceTier `json:"tiers,omitempty"`
+
+	// TransformQuantity determines how to transform the quantity for this line item
+	TransformQuantity *price.TransformQuantity `json:"transform_quantity,omitempty"`
 }
 
 func (r *UpdatePriceRequest) Validate() error {
@@ -668,35 +666,17 @@ func (r *UpdatePriceRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	// Validate start and end date if both present
-	if r.StartDate != nil && r.EndDate != nil {
-		if r.StartDate.After(*r.EndDate) {
-			return ierr.NewError("start date cannot be after end date").
-				WithHint("Start date must be before or equal to end date").
-				Mark(ierr.ErrValidation)
-		}
-	}
-
 	return nil
 }
 
 // HasCriticalFields checks if the request contains any critical fields that require price termination
 func (r *UpdatePriceRequest) HasCriticalFields() bool {
-	return r.Amount != "" ||
-		r.Currency != "" ||
-		r.Type != "" ||
-		r.PriceUnitType != "" ||
-		r.BillingPeriod != "" ||
-		r.BillingPeriodCount != 0 ||
+	return r.Quantity != nil ||
 		r.BillingModel != "" ||
-		r.BillingCadence != "" ||
-		r.InvoiceCadence != "" ||
-		r.TrialPeriod != 0 ||
-		r.MeterID != "" ||
+		r.Amount != nil ||
 		r.TierMode != "" ||
 		len(r.Tiers) > 0 ||
-		r.TransformQuantity != nil ||
-		r.PriceUnitConfig != nil
+		r.TransformQuantity != nil
 }
 
 // ToCreatePriceRequest converts the update request to a create request for the new price
@@ -705,38 +685,11 @@ func (r *UpdatePriceRequest) ToCreatePriceRequest(existingPrice *price.Price) Cr
 	createReq := copyPriceToCreateRequest(existingPrice)
 
 	// Apply updates from request - only update fields that are provided
-	if r.Amount != "" {
-		createReq.Amount = r.Amount
-	}
-	if r.Currency != "" {
-		createReq.Currency = r.Currency
-	}
-	if r.Type != "" {
-		createReq.Type = r.Type
-	}
-	if r.PriceUnitType != "" {
-		createReq.PriceUnitType = r.PriceUnitType
-	}
-	if r.BillingPeriod != "" {
-		createReq.BillingPeriod = r.BillingPeriod
-	}
-	if r.BillingPeriodCount != 0 {
-		createReq.BillingPeriodCount = r.BillingPeriodCount
+	if r.Amount != nil {
+		createReq.Amount = r.Amount.String()
 	}
 	if r.BillingModel != "" {
 		createReq.BillingModel = r.BillingModel
-	}
-	if r.BillingCadence != "" {
-		createReq.BillingCadence = r.BillingCadence
-	}
-	if r.InvoiceCadence != "" {
-		createReq.InvoiceCadence = r.InvoiceCadence
-	}
-	if r.TrialPeriod != 0 {
-		createReq.TrialPeriod = r.TrialPeriod
-	}
-	if r.MeterID != "" {
-		createReq.MeterID = r.MeterID
 	}
 	if r.LookupKey != "" {
 		createReq.LookupKey = r.LookupKey
@@ -755,9 +708,6 @@ func (r *UpdatePriceRequest) ToCreatePriceRequest(existingPrice *price.Price) Cr
 	}
 	if r.TransformQuantity != nil {
 		createReq.TransformQuantity = r.TransformQuantity
-	}
-	if r.PriceUnitConfig != nil {
-		createReq.PriceUnitConfig = r.PriceUnitConfig
 	}
 	// Note: StartDate and EndDate are handled by the service layer:
 	// - EndDate in the request is used as termination date for the old price
@@ -813,9 +763,8 @@ func copyPriceToCreateRequest(existingPrice *price.Price) CreatePriceRequest {
 		createReq.TransformQuantity = &transformQuantity
 	}
 
-	// Copy dates
+	// Copy dates - only copy StartDate, EndDate should be nil for new price
 	createReq.StartDate = existingPrice.StartDate
-	createReq.EndDate = existingPrice.EndDate
 
 	return createReq
 }
