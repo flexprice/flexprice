@@ -28,10 +28,8 @@ type DeleteSubscriptionLineItemRequest struct {
 
 // UpdateSubscriptionLineItemRequest represents the request to update a subscription line item
 // This will terminate the existing line item and create a new one with updated parameters
+// LineItemID is provided via URL parameter, not in the request body
 type UpdateSubscriptionLineItemRequest struct {
-	// LineItemID references the existing line item to update
-	LineItemID string `json:"line_item_id" validate:"required"`
-
 	// EndDate for the existing line item (if not provided, defaults to now)
 	EndDate *time.Time `json:"end_date,omitempty"`
 
@@ -51,6 +49,9 @@ type UpdateSubscriptionLineItemRequest struct {
 
 	// Metadata for the new line item
 	Metadata map[string]string `json:"metadata,omitempty"`
+
+	// LineItemID is set by the handler from URL parameter (not in JSON)
+	LineItemID string `json:"-"`
 }
 
 // LineItemParams contains all necessary parameters for creating a line item
@@ -184,11 +185,8 @@ func (r *DeleteSubscriptionLineItemRequest) Validate() error {
 
 // Validate validates the update subscription line item request
 func (r *UpdateSubscriptionLineItemRequest) Validate() error {
-	if r.LineItemID == "" {
-		return ierr.NewError("line_item_id is required").
-			WithHint("Line item ID is required for updating").
-			Mark(ierr.ErrValidation)
-	}
+	// LineItemID validation is now handled by the handler layer
+	// since it comes from the URL parameter
 
 	return nil
 }
