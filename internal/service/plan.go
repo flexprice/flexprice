@@ -813,23 +813,27 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*dto.SyncP
 						continue
 					}
 
-					// Price has expired - end the line item
-					s.Logger.Infow("Ending line item for expired price",
-						"subscription_id", sub.ID,
-						"price_id", priceID,
-						"end_date", planPrice.EndDate)
-
-					deleteReq := dto.DeleteSubscriptionLineItemRequest{
-						EndDate: planPrice.EndDate,
-					}
-					if _, err = subscriptionService.DeleteSubscriptionLineItem(ctx, lineItem.ID, deleteReq); err != nil {
-						s.Logger.Errorw("Failed to end line item",
+					// only end the line item if it is not already ended
+					if lineItem.EndDate.IsZero() {
+						// Price has expired - end the line item
+						s.Logger.Infow("Ending line item for expired price",
 							"subscription_id", sub.ID,
-							"line_item_id", lineItem.ID,
-							"error", err)
-						continue
+							"price_id", priceID,
+							"end_date", planPrice.EndDate)
+
+						deleteReq := dto.DeleteSubscriptionLineItemRequest{
+							EndDate: planPrice.EndDate,
+						}
+						if _, err = subscriptionService.DeleteSubscriptionLineItem(ctx, lineItem.ID, deleteReq); err != nil {
+							s.Logger.Errorw("Failed to end line item",
+								"subscription_id", sub.ID,
+								"line_item_id", lineItem.ID,
+								"error", err)
+							continue
+						}
+						updatedCount++
 					}
-					updatedCount++
+
 				} else {
 					// Price is still active - no changes needed
 					skippedCount++
@@ -839,6 +843,16 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*dto.SyncP
 
 			// Handle missing line items - create for any active price (no end date)
 			if planPrice.EndDate == nil {
+				// here we also need to check if the price has an override
+				if _, isOverride := parentToOverrideMap[priceID]; isOverride {
+					s.Logger.Infow("Skipping override price line item",
+						"subscription_id", sub.ID,
+						"price_id", priceID,
+						"reason", "override price - subscription specific")
+					skippedCount++
+					continue
+				}
+
 				// Create line item for active price (regardless of start date)
 				s.Logger.Infow("Creating line item for price",
 					"subscription_id", sub.ID,
