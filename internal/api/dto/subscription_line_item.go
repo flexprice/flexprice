@@ -35,9 +35,6 @@ type UpdateSubscriptionLineItemRequest struct {
 	// EndDate for the existing line item (if not provided, defaults to now)
 	EndDate *time.Time `json:"end_date,omitempty"`
 
-	// Quantity for this line item (optional)
-	Quantity *decimal.Decimal `json:"quantity,omitempty"`
-
 	BillingModel types.BillingModel `json:"billing_model,omitempty"`
 
 	// Amount is the new price amount that overrides the original price (optional)
@@ -193,16 +190,6 @@ func (r *UpdateSubscriptionLineItemRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	// Validate quantity if provided (line item specific)
-	if r.Quantity != nil && r.Quantity.IsNegative() {
-		return ierr.NewError("quantity must be non-negative").
-			WithHint("Quantity cannot be negative").
-			WithReportableDetails(map[string]interface{}{
-				"quantity": r.Quantity.String(),
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
 	return nil
 }
 
@@ -228,15 +215,9 @@ func (r *UpdateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 		MeterID:          existingLineItem.MeterID,
 		MeterDisplayName: existingLineItem.MeterDisplayName,
 		DisplayName:      existingLineItem.DisplayName,
+		Quantity:         existingLineItem.Quantity,
 		EnvironmentID:    types.GetEnvironmentID(ctx),
 		BaseModel:        types.GetDefaultBaseModel(ctx),
-	}
-
-	// Set quantity - use provided quantity or keep existing
-	if r.Quantity != nil {
-		newLineItem.Quantity = *r.Quantity
-	} else {
-		newLineItem.Quantity = existingLineItem.Quantity
 	}
 
 	// Set metadata - use provided metadata or keep existing

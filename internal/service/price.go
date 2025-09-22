@@ -664,7 +664,14 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 
 	// Check if the request has critical fields
 	if req.HasCriticalFields() {
-		// Critical fields detected - terminate existing price and create new one
+		if existingPrice.EndDate != nil {
+			return nil, ierr.NewError("price is already terminated").
+				WithHint("Cannot update a terminated price").
+				WithReportableDetails(map[string]interface{}{
+					"price_id": id,
+				}).
+				Mark(ierr.ErrValidation)
+		}
 
 		// Set termination end date - use EndDate from request if provided, otherwise use current time
 		terminationEndDate := time.Now().UTC()
