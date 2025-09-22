@@ -324,14 +324,6 @@ func (c WalletConfig) Validate() error {
 	return nil
 }
 
-// AlertState represents the current state of a wallet alert
-type AlertState string
-
-const (
-	AlertStateOk    AlertState = "ok"
-	AlertStateAlert AlertState = "alert"
-)
-
 type CheckAlertsRequest struct {
 	TenantIDs []string        `json:"tenant_ids"`
 	EnvIDs    []string        `json:"env_ids"`

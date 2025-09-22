@@ -53,6 +53,7 @@ type Handlers struct {
 	CronSubscription *cron.SubscriptionHandler
 	CronWallet       *cron.WalletCronHandler
 	CronCreditGrant  *cron.CreditGrantCronHandler
+	CronAlert        *cron.AlertCronHandler
 }
 
 func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logger, secretService service.SecretService, envAccessService service.EnvAccessService) *gin.Engine {
@@ -470,6 +471,12 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		creditGrantGroup := cron.Group("/creditgrants")
 		{
 			creditGrantGroup.POST("/process-scheduled-applications", handlers.CronCreditGrant.ProcessScheduledCreditGrantApplications)
+		}
+
+		// Alert related cron jobs
+		alertGroup := cron.Group("/alerts")
+		{
+			alertGroup.POST("/check", handlers.CronAlert.CheckAlerts)
 		}
 
 		// Settings routes
