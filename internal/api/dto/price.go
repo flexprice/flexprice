@@ -672,8 +672,50 @@ func (r *UpdatePriceRequest) HasCriticalFields() bool {
 
 // ToCreatePriceRequest converts the update request to a create request for the new price
 func (r *UpdatePriceRequest) ToCreatePriceRequest(existingPrice *price.Price) CreatePriceRequest {
-	// Start with a copy of existing price as base
-	createReq := copyPriceToCreateRequest(existingPrice)
+	// Start with existing price as base
+	createReq := CreatePriceRequest{
+		EntityType:           existingPrice.EntityType,
+		EntityID:             existingPrice.EntityID,
+		SkipEntityValidation: true, // Skip validation since we're updating an existing entity
+	}
+
+	// Copy basic fields from existing price
+	createReq.Amount = existingPrice.Amount.String()
+	createReq.Currency = existingPrice.Currency
+	createReq.Type = existingPrice.Type
+	createReq.PriceUnitType = existingPrice.PriceUnitType
+	createReq.BillingPeriod = existingPrice.BillingPeriod
+	createReq.BillingPeriodCount = existingPrice.BillingPeriodCount
+	createReq.BillingModel = existingPrice.BillingModel
+	createReq.BillingCadence = existingPrice.BillingCadence
+	createReq.InvoiceCadence = existingPrice.InvoiceCadence
+	createReq.TrialPeriod = existingPrice.TrialPeriod
+	createReq.MeterID = existingPrice.MeterID
+	createReq.LookupKey = existingPrice.LookupKey
+	createReq.Description = existingPrice.Description
+	createReq.Metadata = existingPrice.Metadata
+	createReq.TierMode = existingPrice.TierMode
+
+	// Copy tiers from existing price
+	if len(existingPrice.Tiers) > 0 {
+		createReq.Tiers = make([]CreatePriceTier, len(existingPrice.Tiers))
+		for i, tier := range existingPrice.Tiers {
+			createReq.Tiers[i] = CreatePriceTier{
+				UpTo:       tier.UpTo,
+				UnitAmount: tier.UnitAmount.String(),
+			}
+			if tier.FlatAmount != nil {
+				flatAmountStr := tier.FlatAmount.String()
+				createReq.Tiers[i].FlatAmount = &flatAmountStr
+			}
+		}
+	}
+
+	// Copy transform quantity from existing price
+	if existingPrice.TransformQuantity != (price.JSONBTransformQuantity{}) {
+		transformQuantity := price.TransformQuantity(existingPrice.TransformQuantity)
+		createReq.TransformQuantity = &transformQuantity
+	}
 
 	// Apply updates from request - only update fields that are provided
 	if r.Amount != nil {
@@ -700,62 +742,11 @@ func (r *UpdatePriceRequest) ToCreatePriceRequest(existingPrice *price.Price) Cr
 	if r.TransformQuantity != nil {
 		createReq.TransformQuantity = r.TransformQuantity
 	}
+
 	// Note: StartDate and EndDate are handled by the service layer:
 	// - EndDate in the request is used as termination date for the old price
 	// - New price starts exactly when the old price ends (terminationEndDate)
 	// - New price will not have an end date unless explicitly set
-
-	return createReq
-}
-
-// copyPriceToCreateRequest creates a CreatePriceRequest from an existing price
-func copyPriceToCreateRequest(existingPrice *price.Price) CreatePriceRequest {
-	createReq := CreatePriceRequest{
-		EntityType:           existingPrice.EntityType,
-		EntityID:             existingPrice.EntityID,
-		SkipEntityValidation: true, // Skip validation since we're updating an existing entity
-	}
-
-	// Copy basic fields
-	createReq.Amount = existingPrice.Amount.String()
-	createReq.Currency = existingPrice.Currency
-	createReq.Type = existingPrice.Type
-	createReq.PriceUnitType = existingPrice.PriceUnitType
-	createReq.BillingPeriod = existingPrice.BillingPeriod
-	createReq.BillingPeriodCount = existingPrice.BillingPeriodCount
-	createReq.BillingModel = existingPrice.BillingModel
-	createReq.BillingCadence = existingPrice.BillingCadence
-	createReq.InvoiceCadence = existingPrice.InvoiceCadence
-	createReq.TrialPeriod = existingPrice.TrialPeriod
-	createReq.MeterID = existingPrice.MeterID
-	createReq.LookupKey = existingPrice.LookupKey
-	createReq.Description = existingPrice.Description
-	createReq.Metadata = existingPrice.Metadata
-	createReq.TierMode = existingPrice.TierMode
-
-	// Copy tiers
-	if len(existingPrice.Tiers) > 0 {
-		createReq.Tiers = make([]CreatePriceTier, len(existingPrice.Tiers))
-		for i, tier := range existingPrice.Tiers {
-			createReq.Tiers[i] = CreatePriceTier{
-				UpTo:       tier.UpTo,
-				UnitAmount: tier.UnitAmount.String(),
-			}
-			if tier.FlatAmount != nil {
-				flatAmountStr := tier.FlatAmount.String()
-				createReq.Tiers[i].FlatAmount = &flatAmountStr
-			}
-		}
-	}
-
-	// Copy transform quantity
-	if existingPrice.TransformQuantity != (price.JSONBTransformQuantity{}) {
-		transformQuantity := price.TransformQuantity(existingPrice.TransformQuantity)
-		createReq.TransformQuantity = &transformQuantity
-	}
-
-	// Copy dates - only copy StartDate, EndDate should be nil for new price
-	createReq.StartDate = existingPrice.StartDate
 
 	return createReq
 }
