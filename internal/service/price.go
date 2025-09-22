@@ -717,9 +717,6 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 		if req.Metadata != nil {
 			existingPrice.Metadata = req.Metadata
 		}
-		if req.StartDate != nil {
-			existingPrice.StartDate = req.StartDate
-		}
 		if req.EndDate != nil {
 			existingPrice.EndDate = req.EndDate
 		}
