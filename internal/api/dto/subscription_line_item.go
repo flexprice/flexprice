@@ -26,16 +26,13 @@ type DeleteSubscriptionLineItemRequest struct {
 	EndDate *time.Time `json:"end_date,omitempty"`
 }
 
-// UpdateSubscriptionLineItemRequest represents the request to update a subscription line item
-// This will terminate the existing line item and create a new one with updated parameters
-// LineItemID is provided via URL parameter, not in the request body
 type UpdateSubscriptionLineItemRequest struct {
 	// EndDate for the existing line item (if not provided, defaults to now)
 	EndDate *time.Time `json:"end_date,omitempty"`
 
 	BillingModel types.BillingModel `json:"billing_model,omitempty"`
 
-	// Amount is the new price amount that overrides the original price (optional)
+	// Amount is the new price amount that overrides the original price
 	Amount *decimal.Decimal `json:"amount,omitempty"`
 
 	// TierMode determines how to calculate the price for a given quantity
@@ -49,9 +46,6 @@ type UpdateSubscriptionLineItemRequest struct {
 
 	// Metadata for the new line item
 	Metadata map[string]string `json:"metadata,omitempty"`
-
-	// LineItemID is set by the handler from URL parameter (not in JSON)
-	LineItemID string `json:"-"`
 }
 
 // LineItemParams contains all necessary parameters for creating a line item

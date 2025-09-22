@@ -358,10 +358,7 @@ func (h *SubscriptionHandler) UpdateSubscriptionLineItem(c *gin.Context) {
 		return
 	}
 
-	// Set the line item ID from URL parameter
-	req.LineItemID = lineItemID
-
-	resp, err := h.service.UpdateSubscriptionLineItem(c.Request.Context(), req)
+	resp, err := h.service.UpdateSubscriptionLineItem(c.Request.Context(), lineItemID, req)
 	if err != nil {
 		h.log.Error("Failed to update subscription line item", "error", err)
 		c.Error(err)

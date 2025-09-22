@@ -110,13 +110,13 @@ func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, li
 
 // UpdateSubscriptionLineItem updates a subscription line item by terminating the existing one and creating a new one
 // This method reuses existing service methods for creating and deleting line items
-func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, req dto.UpdateSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error) {
+func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, lineItemID string, req dto.UpdateSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
 
 	// Get the existing line item
-	existingLineItem, err := s.SubscriptionLineItemRepo.Get(ctx, req.LineItemID)
+	existingLineItem, err := s.SubscriptionLineItemRepo.Get(ctx, lineItemID)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +126,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, re
 		return nil, ierr.NewError("line item is already terminated").
 			WithHint("Cannot update a terminated line item").
 			WithReportableDetails(map[string]interface{}{
-				"line_item_id": req.LineItemID,
+				"line_item_id": lineItemID,
 				"status":       existingLineItem.Status,
 			}).
 			Mark(ierr.ErrValidation)
@@ -207,7 +207,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, re
 			return nil, ierr.NewError("line item is already terminated").
 				WithHint("Terminated line items cannot be updated").
 				WithReportableDetails(map[string]interface{}{
-					"line_item_id": req.LineItemID,
+					"line_item_id": lineItemID,
 					"end_date":     existingLineItem.EndDate,
 				}).
 				Mark(ierr.ErrValidation)
@@ -290,12 +290,12 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, re
 		deleteReq := dto.DeleteSubscriptionLineItemRequest{
 			EndDate: &endDate,
 		}
-		_, err := s.DeleteSubscriptionLineItem(ctx, req.LineItemID, deleteReq)
+		_, err := s.DeleteSubscriptionLineItem(ctx, lineItemID, deleteReq)
 		if err != nil {
 			return ierr.WithError(err).
 				WithHint("Failed to terminate existing line item").
 				WithReportableDetails(map[string]interface{}{
-					"line_item_id": req.LineItemID,
+					"line_item_id": lineItemID,
 				}).
 				Mark(ierr.ErrDatabase)
 		}
