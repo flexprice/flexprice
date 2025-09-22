@@ -44,6 +44,9 @@ type CreatePriceRequest struct {
 	// This is used when creating a subscription-scoped price
 	// NOTE: This is not a public field and is used internally should be used with caution
 	SkipEntityValidation bool `json:"-"`
+
+	// ParentPriceID is the id of the parent price for this price
+	ParentPriceID string `json:"-"`
 }
 
 type PriceUnitConfig struct {
@@ -618,6 +621,7 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 		EntityType:         r.EntityType,
 		EntityID:           r.EntityID,
 		StartDate:          startDate,
+		ParentPriceID:      r.ParentPriceID,
 		EndDate:            r.EndDate,
 		EnvironmentID:      types.GetEnvironmentID(ctx),
 		BaseModel:          types.GetDefaultBaseModel(ctx),
@@ -695,6 +699,7 @@ func (r *UpdatePriceRequest) ToCreatePriceRequest(existingPrice *price.Price) Cr
 	createReq.Description = existingPrice.Description
 	createReq.Metadata = existingPrice.Metadata
 	createReq.TierMode = existingPrice.TierMode
+	createReq.ParentPriceID = existingPrice.ParentPriceID
 
 	// Copy tiers from existing price
 	if len(existingPrice.Tiers) > 0 {
