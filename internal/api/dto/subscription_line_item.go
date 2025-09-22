@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -23,6 +24,36 @@ type CreateSubscriptionLineItemRequest struct {
 // DeleteSubscriptionLineItemRequest represents the request to delete a subscription line item
 type DeleteSubscriptionLineItemRequest struct {
 	EndDate *time.Time `json:"end_date,omitempty"`
+}
+
+// UpdateSubscriptionLineItemRequest represents the request to update a subscription line item
+// This will terminate the existing line item and create a new one with updated parameters
+type UpdateSubscriptionLineItemRequest struct {
+	// LineItemID references the existing line item to update
+	LineItemID string `json:"line_item_id" validate:"required"`
+
+	// EndDate for the existing line item (if not provided, defaults to now)
+	EndDate *time.Time `json:"end_date,omitempty"`
+
+	// Quantity for this line item (optional)
+	Quantity *decimal.Decimal `json:"quantity,omitempty"`
+
+	BillingModel types.BillingModel `json:"billing_model,omitempty"`
+
+	// Amount is the new price amount that overrides the original price (optional)
+	Amount *decimal.Decimal `json:"amount,omitempty"`
+
+	// TierMode determines how to calculate the price for a given quantity
+	TierMode types.BillingTier `json:"tier_mode,omitempty"`
+
+	// Tiers determines the pricing tiers for this line item
+	Tiers []CreatePriceTier `json:"tiers,omitempty"`
+
+	// TransformQuantity determines how to transform the quantity for this line item
+	TransformQuantity *price.TransformQuantity `json:"transform_quantity,omitempty"`
+
+	// Metadata for the new line item
+	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
 // LineItemParams contains all necessary parameters for creating a line item
@@ -152,4 +183,68 @@ func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 func (r *DeleteSubscriptionLineItemRequest) Validate() error {
 
 	return nil
+}
+
+// Validate validates the update subscription line item request
+func (r *UpdateSubscriptionLineItemRequest) Validate() error {
+	if r.LineItemID == "" {
+		return ierr.NewError("line_item_id is required").
+			WithHint("Line item ID is required for updating").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Validate quantity if provided (line item specific)
+	if r.Quantity != nil && r.Quantity.IsNegative() {
+		return ierr.NewError("quantity must be non-negative").
+			WithHint("Quantity cannot be negative").
+			WithReportableDetails(map[string]interface{}{
+				"quantity": r.Quantity.String(),
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}
+
+// ToSubscriptionLineItem converts the update request to a domain subscription line item
+// This method creates a new line item based on the existing one with updated parameters
+func (r *UpdateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.Context, existingLineItem *subscription.SubscriptionLineItem, newPriceID string) *subscription.SubscriptionLineItem {
+	// Start with the existing line item as base
+	newLineItem := &subscription.SubscriptionLineItem{
+		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+		SubscriptionID:   existingLineItem.SubscriptionID,
+		CustomerID:       existingLineItem.CustomerID,
+		PriceID:          newPriceID,
+		PriceType:        existingLineItem.PriceType,
+		Currency:         existingLineItem.Currency,
+		BillingPeriod:    existingLineItem.BillingPeriod,
+		InvoiceCadence:   existingLineItem.InvoiceCadence,
+		TrialPeriod:      existingLineItem.TrialPeriod,
+		PriceUnitID:      existingLineItem.PriceUnitID,
+		PriceUnit:        existingLineItem.PriceUnit,
+		EntityType:       existingLineItem.EntityType,
+		EntityID:         existingLineItem.EntityID,
+		PlanDisplayName:  existingLineItem.PlanDisplayName,
+		MeterID:          existingLineItem.MeterID,
+		MeterDisplayName: existingLineItem.MeterDisplayName,
+		DisplayName:      existingLineItem.DisplayName,
+		EnvironmentID:    types.GetEnvironmentID(ctx),
+		BaseModel:        types.GetDefaultBaseModel(ctx),
+	}
+
+	// Set quantity - use provided quantity or keep existing
+	if r.Quantity != nil {
+		newLineItem.Quantity = *r.Quantity
+	} else {
+		newLineItem.Quantity = existingLineItem.Quantity
+	}
+
+	// Set metadata - use provided metadata or keep existing
+	if r.Metadata != nil {
+		newLineItem.Metadata = r.Metadata
+	} else {
+		newLineItem.Metadata = existingLineItem.Metadata
+	}
+
+	return newLineItem
 }
