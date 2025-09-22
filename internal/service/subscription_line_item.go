@@ -202,10 +202,21 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, re
 	// Create subscription-scoped price if overrides are provided
 	var newPriceID string
 	if hasValidOverrides {
+
+		if !existingLineItem.EndDate.IsZero() {
+			return nil, ierr.NewError("line item is already terminated").
+				WithHint("Terminated line items cannot be updated").
+				WithReportableDetails(map[string]interface{}{
+					"line_item_id": req.LineItemID,
+					"end_date":     existingLineItem.EndDate,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
 		// Convert request to OverrideLineItemRequest format to reuse existing logic
 		overrideReq := dto.OverrideLineItemRequest{
 			PriceID:           targetPriceID,
-			Quantity:          req.Quantity,
+			Quantity:          &existingLineItem.Quantity,
 			BillingModel:      req.BillingModel,
 			Amount:            req.Amount,
 			TierMode:          req.TierMode,
