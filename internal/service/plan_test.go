@@ -1087,9 +1087,9 @@ func (s *PlanServiceSuite) TestSyncPlanPrices_Comprehensive() {
 		s.Equal(archivedPlan.ID, result.PlanID)
 		s.Equal(archivedPlan.Name, result.PlanName)
 		s.Equal(0, result.SynchronizationSummary.SubscriptionsProcessed)
-		s.Equal(0, result.SynchronizationSummary.PricesAdded)
-		s.Equal(0, result.SynchronizationSummary.PricesRemoved)
-		s.Equal(0, result.SynchronizationSummary.PricesSkipped)
+		s.Equal(0, result.SynchronizationSummary.LineItemsCreated)
+		s.Equal(0, result.SynchronizationSummary.LineItemsTerminated)
+		s.Equal(0, result.SynchronizationSummary.LineItemsSkipped)
 	})
 
 	s.Run("TC-SYNC-005_No_Active_Subscriptions", func() {
@@ -1125,9 +1125,9 @@ func (s *PlanServiceSuite) TestSyncPlanPrices_Comprehensive() {
 		s.Equal(testPlan.ID, result.PlanID)
 		s.Equal(testPlan.Name, result.PlanName)
 		s.Equal(0, result.SynchronizationSummary.SubscriptionsProcessed)
-		s.Equal(0, result.SynchronizationSummary.PricesAdded)
-		s.Equal(0, result.SynchronizationSummary.PricesRemoved)
-		s.Equal(0, result.SynchronizationSummary.PricesSkipped)
+		s.Equal(0, result.SynchronizationSummary.LineItemsCreated)
+		s.Equal(0, result.SynchronizationSummary.LineItemsTerminated)
+		s.Equal(0, result.SynchronizationSummary.LineItemsSkipped)
 	})
 
 	s.Run("TC-SYNC-006_Only_Cancelled_Subscriptions", func() {
@@ -1165,9 +1165,9 @@ func (s *PlanServiceSuite) TestSyncPlanPrices_Comprehensive() {
 		s.Equal(testPlan.ID, result.PlanID)
 		s.Equal(testPlan.Name, result.PlanName)
 		s.Equal(0, result.SynchronizationSummary.SubscriptionsProcessed)
-		s.Equal(0, result.SynchronizationSummary.PricesAdded)
-		s.Equal(0, result.SynchronizationSummary.PricesRemoved)
-		s.Equal(0, result.SynchronizationSummary.PricesSkipped)
+		s.Equal(0, result.SynchronizationSummary.LineItemsCreated)
+		s.Equal(0, result.SynchronizationSummary.LineItemsTerminated)
+		s.Equal(0, result.SynchronizationSummary.LineItemsSkipped)
 	})
 
 	s.Run("TC-SYNC-007_Mixed_Subscription_Statuses", func() {
@@ -1231,9 +1231,9 @@ func (s *PlanServiceSuite) TestSyncPlanPrices_Comprehensive() {
 		s.Equal(testPlan.ID, result.PlanID)
 		s.Equal(testPlan.Name, result.PlanName)
 		s.Equal(2, result.SynchronizationSummary.SubscriptionsProcessed) // Only Active and Trialing
-		s.Equal(0, result.SynchronizationSummary.PricesAdded)            // No prices to add
-		s.Equal(0, result.SynchronizationSummary.PricesRemoved)          // No prices to remove
-		s.Equal(0, result.SynchronizationSummary.PricesSkipped)          // No prices to skip
+		s.Equal(0, result.SynchronizationSummary.LineItemsCreated)       // No prices to add
+		s.Equal(0, result.SynchronizationSummary.LineItemsTerminated)    // No prices to remove
+		s.Equal(0, result.SynchronizationSummary.LineItemsSkipped)       // No prices to skip
 	})
 
 	s.Run("TC-SYNC-008_Subscriptions_In_Different_States", func() {
@@ -1298,9 +1298,9 @@ func (s *PlanServiceSuite) TestSyncPlanPrices_Comprehensive() {
 		s.Equal(testPlan.ID, result.PlanID)
 		s.Equal(testPlan.Name, result.PlanName)
 		s.Equal(3, result.SynchronizationSummary.SubscriptionsProcessed) // All 3 subscriptions processed
-		s.Equal(0, result.SynchronizationSummary.PricesAdded)            // No prices to add
-		s.Equal(0, result.SynchronizationSummary.PricesRemoved)          // No prices to remove
-		s.Equal(0, result.SynchronizationSummary.PricesSkipped)          // No prices to skip
+		s.Equal(0, result.SynchronizationSummary.LineItemsCreated)       // No prices to add
+		s.Equal(0, result.SynchronizationSummary.LineItemsTerminated)    // No prices to remove
+		s.Equal(0, result.SynchronizationSummary.LineItemsSkipped)       // No prices to skip
 	})
 }
 
@@ -1374,9 +1374,9 @@ func (s *PlanServiceSuite) TestSyncPlanPrices_Price_Synchronization() {
 		s.Equal(testPlan.ID, result.PlanID)
 		s.Equal(testPlan.Name, result.PlanName)
 		s.Equal(1, result.SynchronizationSummary.SubscriptionsProcessed)
-		s.Equal(2, result.SynchronizationSummary.PricesAdded) // Both existing and new prices
-		s.Equal(0, result.SynchronizationSummary.PricesRemoved)
-		s.Equal(0, result.SynchronizationSummary.PricesSkipped)
+		s.Equal(2, result.SynchronizationSummary.LineItemsCreated) // Both existing and new prices
+		s.Equal(0, result.SynchronizationSummary.LineItemsTerminated)
+		s.Equal(0, result.SynchronizationSummary.LineItemsSkipped)
 	})
 
 	s.Run("TC-SYNC-010_Deleting_Terminating_Price_In_Plan", func() {
