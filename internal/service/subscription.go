@@ -495,7 +495,7 @@ func (s *subscriptionService) ProcessSubscriptionPriceOverrides(
 			MeterID:              originalPrice.MeterID,
 			Description:          originalPrice.Description,
 			Metadata:             originalPrice.Metadata,
-			ParentPriceID:        originalPrice.ID, // Set parent to the original price, not its parent
+			ParentPriceID:        originalPrice.GetRootPriceID(), // Always point to the root price ID
 			SkipEntityValidation: true,
 		}
 
