@@ -308,8 +308,10 @@ type SyncPlanPricesResponse struct {
 	PlanName               string `json:"plan_name"`
 	SynchronizationSummary struct {
 		SubscriptionsProcessed int `json:"subscriptions_processed"`
-		PricesAdded            int `json:"prices_added"`
-		PricesRemoved          int `json:"prices_removed"`
-		PricesSkipped          int `json:"prices_skipped"`
+		PricesProcessed        int `json:"prices_processed"`
+		LineItemsCreated       int `json:"line_items_created"`
+		LineItemsTerminated    int `json:"line_items_terminated"`
+		LineItemsSkipped       int `json:"line_items_skipped"`
+		LineItemsFailed        int `json:"line_items_failed"`
 	} `json:"synchronization_summary"`
 }

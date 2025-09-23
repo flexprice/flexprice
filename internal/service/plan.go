@@ -700,6 +700,8 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*dto.SyncP
 	totalAdded := 0
 	totalUpdated := 0
 	totalSkipped := 0
+	totalFailed := 0
+	totalPricesProcessed := 0
 
 	// Iterate through each subscription
 	for _, sub := range subs {
@@ -754,18 +756,22 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*dto.SyncP
 			}
 		}
 
-		addedCount := 0
-		updatedCount := 0
-		skippedCount := 0
+		// Track line item operations for transparency
+		lineItemsCreated := 0
+		lineItemsTerminated := 0
+		lineItemsSkippedAlreadyTerminated := 0
+		lineItemsSkippedOverridden := 0
+		lineItemsSkippedIncompatible := 0
+		lineItemsFailed := 0
 
-		// SyncPlanPrices - Enhanced Price Synchronization Logic (v3.0)
+		// SyncPlanPrices - Enhanced Line Item Synchronization Logic (v3.0)
 		//
-		// This section handles the synchronization of prices between a plan and its subscriptions.
-		// The enhanced process follows these rules:
+		// This section synchronizes plan prices to subscription line items with comprehensive tracking.
+		// The process creates, terminates, and skips line items based on plan price states:
 		//
 		// 1. Price Eligibility:
 		//    - Each price must match the subscription's currency and billing period
-		//    - Ineligible prices are skipped to maintain billing consistency
+		//    - Ineligible prices are skipped (tracked as line_items_skipped_incompatible)
 		//
 		// 2. Price Lineage Tracking:
 		//    - ParentPriceID always points to the root plan price (P1)
@@ -773,30 +779,39 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*dto.SyncP
 		//    - P2 -> P3: P3.ParentPriceID = P1 (not P2)
 		//    - This enables proper override detection across price updates
 		//
-		// 3. Line Item States:
-		//    - Existing line items with expired prices (EndDate != nil) -> End only if not already ended
-		//    - Existing line items with active prices (EndDate == nil) -> Keep as is
-		//    - Missing line items for active prices -> Create new (regardless of start date)
-		//    - Missing line items for expired prices -> Skip
+		// 3. Line Item Operations:
+		//    - Existing line items with expired prices -> Terminate (tracked as line_items_terminated)
+		//    - Existing line items with active prices -> Keep as is (tracked as line_items_skipped_already_terminated)
+		//    - Missing line items for active prices -> Create new (tracked as line_items_created)
+		//    - Missing line items for expired prices -> Skip (tracked as line_items_skipped_already_terminated)
 		//
 		// 4. Override Detection:
 		//    - Check if any line item traces back to the plan price using ParentPriceID
-		//    - If override exists, skip creating new line items for that root price
+		//    - If override exists, skip creating new line items (tracked as line_items_skipped_overridden)
 		//    - This handles complex scenarios: P1->P2->P3 where L2 uses P2 but P1 is updated to P4
 		//
-		// 5. Price Lifecycle:
-		//    - Active Price: EndDate is nil, can be attached to subscriptions
-		//    - Expired Price: Has EndDate, existing line items will be ended (unless already ended)
+		// 5. Error Handling:
+		//    - Failed line item creation/termination operations are tracked as line_items_failed
+		//    - All operations are logged with detailed counters for transparency
+		//
+		// 6. Comprehensive Tracking:
+		//    - prices_processed: Total plan prices processed across all subscriptions
+		//    - line_items_created: New line items created for active prices
+		//    - line_items_terminated: Existing line items ended for expired prices
+		//    - line_items_skipped: Skipped operations (already terminated, overridden, incompatible)
+		//    - line_items_failed: Failed operations for monitoring and debugging
 		//
 		// The sync ensures subscriptions accurately reflect the current state of plan prices
 		// while maintaining proper billing continuity and respecting all price overrides.
 		// Time complexity: O(n) where n is the number of plan prices.
 
 		subscriptionService := NewSubscriptionService(s.ServiceParams)
+		pricesProcessedForSub := 0
 		for priceID, planPrice := range priceMap {
+			pricesProcessedForSub++
 			// Skip if price currency/billing period doesn't match subscription
 			if !planPrice.IsEligibleForSubscription(sub.Currency, sub.BillingPeriod, sub.BillingPeriodCount) {
-				skippedCount++
+				lineItemsSkippedIncompatible++
 				continue
 			}
 
@@ -810,12 +825,13 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*dto.SyncP
 				if planPrice.EndDate != nil && lineItem.EndDate.IsZero() {
 					deleteReq := dto.DeleteSubscriptionLineItemRequest{EndDate: planPrice.EndDate}
 					if _, err = subscriptionService.DeleteSubscriptionLineItem(ctx, lineItem.ID, deleteReq); err != nil {
-						s.Logger.Errorw("Failed to end line item", "subscription_id", sub.ID, "line_item_id", lineItem.ID, "error", err)
+						s.Logger.Errorw("Failed to terminate line item", "subscription_id", sub.ID, "line_item_id", lineItem.ID, "error", err)
+						lineItemsFailed++
 						continue
 					}
-					updatedCount++
+					lineItemsTerminated++
 				} else {
-					skippedCount++
+					lineItemsSkippedAlreadyTerminated++
 				}
 				continue
 			}
@@ -834,47 +850,62 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*dto.SyncP
 
 				if _, err = subscriptionService.AddSubscriptionLineItem(ctx, sub.ID, createReq); err != nil {
 					s.Logger.Errorw("Failed to create line item", "subscription_id", sub.ID, "price_id", priceID, "error", err)
+					lineItemsFailed++
 					continue
 				}
-				addedCount++
+				lineItemsCreated++
+			} else if hasOverride {
+				lineItemsSkippedOverridden++
 			} else {
-				skippedCount++
+				// Price expired but no line item exists - nothing to do
+				lineItemsSkippedAlreadyTerminated++
 			}
 		}
 
-		s.Logger.Infow("Subscription processed",
+		s.Logger.Infow("Line item sync completed",
 			"subscription_id", sub.ID,
-			"added_count", addedCount,
-			"updated_count", updatedCount,
-			"skipped_count", skippedCount)
+			"line_items_created", lineItemsCreated,
+			"line_items_terminated", lineItemsTerminated,
+			"line_items_skipped_already_terminated", lineItemsSkippedAlreadyTerminated,
+			"line_items_skipped_overridden", lineItemsSkippedOverridden,
+			"line_items_skipped_incompatible", lineItemsSkippedIncompatible,
+			"line_items_failed", lineItemsFailed)
 
-		totalAdded += addedCount
-		totalUpdated += updatedCount
-		totalSkipped += skippedCount
+		totalAdded += lineItemsCreated
+		totalUpdated += lineItemsTerminated
+		totalSkipped += lineItemsSkippedAlreadyTerminated + lineItemsSkippedOverridden + lineItemsSkippedIncompatible
+		totalFailed += lineItemsFailed
+		totalPricesProcessed += pricesProcessedForSub
 	}
 
 	// Update response with final statistics
 	response := &dto.SyncPlanPricesResponse{
-		Message:  "Plan prices synchronized successfully",
+		Message:  "Plan prices synchronized to subscription line items successfully",
 		PlanID:   id,
 		PlanName: plan.Name,
 		SynchronizationSummary: struct {
 			SubscriptionsProcessed int `json:"subscriptions_processed"`
-			PricesAdded            int `json:"prices_added"`
-			PricesRemoved          int `json:"prices_removed"`
-			PricesSkipped          int `json:"prices_skipped"`
+			PricesProcessed        int `json:"prices_processed"`
+			LineItemsCreated       int `json:"line_items_created"`
+			LineItemsTerminated    int `json:"line_items_terminated"`
+			LineItemsSkipped       int `json:"line_items_skipped"`
+			LineItemsFailed        int `json:"line_items_failed"`
 		}{
 			SubscriptionsProcessed: len(subs),
-			PricesAdded:            totalAdded,
-			PricesRemoved:          totalUpdated, // Using removed field for updates
-			PricesSkipped:          totalSkipped,
+			PricesProcessed:        totalPricesProcessed,
+			LineItemsCreated:       totalAdded,
+			LineItemsTerminated:    totalUpdated,
+			LineItemsSkipped:       totalSkipped,
+			LineItemsFailed:        totalFailed,
 		},
 	}
 
 	s.Logger.Infow("Plan sync completed",
-		"total_added", totalAdded,
-		"total_updated", totalUpdated,
-		"total_skipped", totalSkipped)
+		"total_prices_processed", totalPricesProcessed,
+		"total_line_items_created", totalAdded,
+		"total_line_items_terminated", totalUpdated,
+		"total_line_items_skipped", totalSkipped,
+		"total_line_items_failed", totalFailed)
 
 	return response, nil
 }
