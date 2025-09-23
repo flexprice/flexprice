@@ -420,6 +420,7 @@ func (s *priceService) createPriceWithUnitConfig(ctx context.Context, req dto.Cr
 		DisplayPriceUnitAmount: displayPriceUnitAmount,
 		ConversionRate:         priceUnit.ConversionRate,
 	}
+
 	p.DisplayAmount = p.GetDisplayAmount()
 
 	if err := s.PriceRepo.Create(ctx, p); err != nil {
