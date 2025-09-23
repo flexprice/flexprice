@@ -20,10 +20,15 @@ type MeterService interface {
 
 type meterService struct {
 	meterRepo meter.Repository
+	params    *ServiceParams // Optional for sync functionality
 }
 
 func NewMeterService(meterRepo meter.Repository) MeterService {
 	return &meterService{meterRepo: meterRepo}
+}
+
+func NewMeterServiceWithParams(params ServiceParams) MeterService {
+	return &meterService{meterRepo: params.MeterRepo, params: &params}
 }
 
 func (s *meterService) CreateMeter(ctx context.Context, req *dto.CreateMeterRequest) (*meter.Meter, error) {
@@ -48,6 +53,24 @@ func (s *meterService) CreateMeter(ctx context.Context, req *dto.CreateMeterRequ
 
 	if err := s.meterRepo.CreateMeter(ctx, meter); err != nil {
 		return nil, err
+	}
+
+	// Sync meter to external providers asynchronously if params are available
+	if s.params != nil {
+		// Create a detached context that preserves tenant/environment info but won't be canceled
+		syncCtx := context.WithValue(context.Background(), types.CtxTenantID, types.GetTenantID(ctx))
+		syncCtx = context.WithValue(syncCtx, types.CtxEnvironmentID, types.GetEnvironmentID(ctx))
+		syncCtx = context.WithValue(syncCtx, types.CtxUserID, types.GetUserID(ctx))
+
+		go func(detachedCtx context.Context, meterID string) {
+			integrationService := NewIntegrationService(*s.params)
+
+			if err := integrationService.SyncEntityToProviders(detachedCtx, types.IntegrationEntityTypeMeter, meterID); err != nil {
+				s.params.Logger.Errorw("failed to sync meter to providers",
+					"meter_id", meterID,
+					"error", err)
+			}
+		}(syncCtx, meter.ID)
 	}
 
 	return meter, nil
