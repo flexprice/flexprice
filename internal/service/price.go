@@ -411,6 +411,7 @@ func (s *priceService) createPriceWithUnitConfig(ctx context.Context, req dto.Cr
 		Tiers:              tiers,
 		PriceUnitTiers:     priceUnitTiers,
 		TransformQuantity:  transformQuantity,
+		ParentPriceID:      req.ParentPriceID,
 		EnvironmentID:      envID,
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 		// Price unit fields - set all from the fetched price unit
