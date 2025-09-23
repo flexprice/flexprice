@@ -796,86 +796,32 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*dto.SyncP
 		for priceID, planPrice := range priceMap {
 			// Skip if price currency/billing period doesn't match subscription
 			if !planPrice.IsEligibleForSubscription(sub.Currency, sub.BillingPeriod, sub.BillingPeriodCount) {
-				s.Logger.Infow("Skipping incompatible price",
-					"subscription_id", sub.ID,
-					"price_id", priceID,
-					"reason", "currency/billing_period mismatch")
+				skippedCount++
 				continue
 			}
 
-			// For plan prices, we need to check if the original plan price has been overridden
-			// The original plan price is the one without a ParentPriceID (root price)
+			// Check if this plan price has been overridden
 			originalPlanPriceID := planPrice.GetRootPriceID()
 			hasOverride := rootPriceToLineItemMap[originalPlanPriceID] != nil
 
-			if hasOverride {
-				s.Logger.Debugw("Found price override",
-					"subscription_id", sub.ID,
-					"plan_price_id", priceID,
-					"original_plan_price_id", originalPlanPriceID,
-					"line_item_id", rootPriceToLineItemMap[originalPlanPriceID].ID)
-			}
-
 			// Handle existing line items for this exact price
-			lineItem, existingLineItem := directPriceToLineItemMap[priceID]
-
-			if existingLineItem {
-				if planPrice.EndDate != nil {
-					// Price has expired - end the line item only if it's not already ended
-					if lineItem.EndDate.IsZero() {
-						s.Logger.Infow("Ending line item for expired price",
-							"subscription_id", sub.ID,
-							"price_id", priceID,
-							"end_date", planPrice.EndDate)
-
-						deleteReq := dto.DeleteSubscriptionLineItemRequest{
-							EndDate: planPrice.EndDate,
-						}
-						if _, err = subscriptionService.DeleteSubscriptionLineItem(ctx, lineItem.ID, deleteReq); err != nil {
-							s.Logger.Errorw("Failed to end line item",
-								"subscription_id", sub.ID,
-								"line_item_id", lineItem.ID,
-								"error", err)
-							continue
-						}
-						updatedCount++
-					} else {
-						// Line item already ended, skip
-						s.Logger.Infow("Skipping already ended line item",
-							"subscription_id", sub.ID,
-							"price_id", priceID,
-							"existing_end_date", lineItem.EndDate)
-						skippedCount++
+			if lineItem, exists := directPriceToLineItemMap[priceID]; exists {
+				// End expired line items only if not already ended
+				if planPrice.EndDate != nil && lineItem.EndDate.IsZero() {
+					deleteReq := dto.DeleteSubscriptionLineItemRequest{EndDate: planPrice.EndDate}
+					if _, err = subscriptionService.DeleteSubscriptionLineItem(ctx, lineItem.ID, deleteReq); err != nil {
+						s.Logger.Errorw("Failed to end line item", "subscription_id", sub.ID, "line_item_id", lineItem.ID, "error", err)
+						continue
 					}
+					updatedCount++
 				} else {
-					// Price is still active - no changes needed
-					s.Logger.Infow("Price is active, no changes needed",
-						"subscription_id", sub.ID,
-						"price_id", priceID)
 					skippedCount++
 				}
 				continue
 			}
 
-			// Handle missing line items for active prices
-			if planPrice.EndDate == nil {
-				// Check if the original plan price has been overridden
-				if hasOverride {
-					s.Logger.Infow("Skipping price with existing override",
-						"subscription_id", sub.ID,
-						"price_id", priceID,
-						"original_plan_price_id", originalPlanPriceID,
-						"reason", "original plan price has been overridden in subscription")
-					skippedCount++
-					continue
-				}
-
-				// Create line item for active price (regardless of start date)
-				s.Logger.Infow("Creating line item for price",
-					"subscription_id", sub.ID,
-					"price_id", priceID,
-					"start_date", planPrice.StartDate)
-
+			// Create line items for active prices only if not overridden
+			if planPrice.EndDate == nil && !hasOverride {
 				createReq := dto.CreateSubscriptionLineItemRequest{
 					PriceID:   planPrice.ID,
 					StartDate: planPrice.StartDate,
@@ -887,20 +833,11 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*dto.SyncP
 				}
 
 				if _, err = subscriptionService.AddSubscriptionLineItem(ctx, sub.ID, createReq); err != nil {
-					s.Logger.Errorw("Failed to create line item",
-						"subscription_id", sub.ID,
-						"price_id", priceID,
-						"error", err)
+					s.Logger.Errorw("Failed to create line item", "subscription_id", sub.ID, "price_id", priceID, "error", err)
 					continue
 				}
 				addedCount++
 			} else {
-				// Price has expired (EndDate != nil) - skip creating line items
-				s.Logger.Infow("Skipping expired price",
-					"subscription_id", sub.ID,
-					"price_id", priceID,
-					"end_date", planPrice.EndDate,
-					"reason", "price expired")
 				skippedCount++
 			}
 		}
