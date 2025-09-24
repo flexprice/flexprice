@@ -51,11 +51,14 @@ func SyncPlanPrices() error {
 	}
 
 	log.Printf("Plan sync completed successfully for plan: %s (%s)\n", result.PlanID, result.PlanName)
-	log.Printf("Summary: %d subscriptions processed, %d prices added, %d prices removed, %d prices skipped\n",
+	log.Printf("Summary: %d subscriptions processed, %d prices processed, %d line items created, %d line items terminated, %d line items skipped, %d line items failed\n",
 		result.SynchronizationSummary.SubscriptionsProcessed,
-		result.SynchronizationSummary.PricesAdded,
-		result.SynchronizationSummary.PricesRemoved,
-		result.SynchronizationSummary.PricesSkipped)
+		result.SynchronizationSummary.PricesProcessed,
+		result.SynchronizationSummary.LineItemsCreated,
+		result.SynchronizationSummary.LineItemsTerminated,
+		result.SynchronizationSummary.LineItemsSkipped,
+		result.SynchronizationSummary.LineItemsFailed,
+	)
 
 	return nil
 }
