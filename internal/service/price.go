@@ -731,11 +731,6 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 
 		response := &dto.PriceResponse{Price: existingPrice}
 
-		// TODO: !REMOVE after migration
-		if existingPrice.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
-			response.PlanID = existingPrice.EntityID
-		}
-
 		return response, nil
 	}
 }
