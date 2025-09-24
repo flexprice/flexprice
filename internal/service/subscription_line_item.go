@@ -154,8 +154,8 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 
 	// Determine end date for existing line item
 	endDate := time.Now().UTC()
-	if req.EndDate != nil {
-		endDate = req.EndDate.UTC()
+	if req.EffectiveFrom != nil {
+		endDate = req.EffectiveFrom.UTC()
 
 		// Validate end date is not before line item start date
 		if endDate.Before(existingLineItem.StartDate) {

@@ -674,9 +674,9 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*dto.SyncP
 	}
 
 	// Create price map for quick lookups
-	priceMap := make(map[string]*price.Price)
+	planPriceMap := make(map[string]*price.Price)
 	for _, priceResp := range pricesResponse.Items {
-		priceMap[priceResp.ID] = priceResp.Price
+		planPriceMap[priceResp.ID] = priceResp.Price
 	}
 
 	// Set up filter for subscriptions
@@ -807,7 +807,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*dto.SyncP
 
 		subscriptionService := NewSubscriptionService(s.ServiceParams)
 		pricesProcessedForSub := 0
-		for priceID, planPrice := range priceMap {
+		for priceID, planPrice := range planPriceMap {
 			pricesProcessedForSub++
 			// Skip if price currency/billing period doesn't match subscription
 			if !planPrice.IsEligibleForSubscription(sub.Currency, sub.BillingPeriod, sub.BillingPeriodCount) {
