@@ -216,12 +216,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			}
 			_, err := s.DeleteSubscriptionLineItem(ctx, lineItemID, deleteReq)
 			if err != nil {
-				return ierr.WithError(err).
-					WithHint("Failed to terminate existing line item").
-					WithReportableDetails(map[string]interface{}{
-						"line_item_id": lineItemID,
-					}).
-					Mark(ierr.ErrDatabase)
+				return err
 			}
 
 			// Create new line item using the DTO method
