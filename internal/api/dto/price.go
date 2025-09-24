@@ -683,69 +683,90 @@ func (r *UpdatePriceRequest) ToCreatePriceRequest(existingPrice *price.Price) Cr
 		SkipEntityValidation: true, // Skip validation since we're updating an existing entity
 	}
 
-	// Copy basic fields from existing price
-	createReq.Amount = existingPrice.Amount.String()
+	// Copy all non-critical, non-billing-model-specific fields from existing price
 	createReq.Currency = existingPrice.Currency
 	createReq.Type = existingPrice.Type
 	createReq.PriceUnitType = existingPrice.PriceUnitType
 	createReq.BillingPeriod = existingPrice.BillingPeriod
 	createReq.BillingPeriodCount = existingPrice.BillingPeriodCount
-	createReq.BillingModel = existingPrice.BillingModel
 	createReq.BillingCadence = existingPrice.BillingCadence
 	createReq.InvoiceCadence = existingPrice.InvoiceCadence
 	createReq.TrialPeriod = existingPrice.TrialPeriod
 	createReq.MeterID = existingPrice.MeterID
-	createReq.LookupKey = existingPrice.LookupKey
-	createReq.Description = existingPrice.Description
-	createReq.Metadata = existingPrice.Metadata
-	createReq.TierMode = existingPrice.TierMode
 	createReq.ParentPriceID = existingPrice.ParentPriceID
 
-	// Copy tiers from existing price
-	if len(existingPrice.Tiers) > 0 {
-		createReq.Tiers = make([]CreatePriceTier, len(existingPrice.Tiers))
-		for i, tier := range existingPrice.Tiers {
-			createReq.Tiers[i] = CreatePriceTier{
-				UpTo:       tier.UpTo,
-				UnitAmount: tier.UnitAmount.String(),
-			}
-			if tier.FlatAmount != nil {
-				flatAmountStr := tier.FlatAmount.String()
-				createReq.Tiers[i].FlatAmount = &flatAmountStr
+	// Determine target billing model (use request billing model if provided, otherwise existing)
+	targetBillingModel := existingPrice.BillingModel
+	if r.BillingModel != "" {
+		targetBillingModel = r.BillingModel
+	}
+	createReq.BillingModel = targetBillingModel
+
+	// Handle billing model-specific fields based on target billing model
+	switch targetBillingModel {
+	case types.BILLING_MODEL_FLAT_FEE:
+		// For FLAT_FEE, only amount is relevant
+		if r.Amount != nil {
+			createReq.Amount = r.Amount.String()
+		} else {
+			createReq.Amount = existingPrice.Amount.String()
+		}
+
+	case types.BILLING_MODEL_PACKAGE:
+		// For PACKAGE, amount and transform_quantity are relevant
+		if r.Amount != nil {
+			createReq.Amount = r.Amount.String()
+		} else {
+			createReq.Amount = existingPrice.Amount.String()
+		}
+
+		if r.TransformQuantity != nil {
+			createReq.TransformQuantity = r.TransformQuantity
+		} else if existingPrice.TransformQuantity != (price.JSONBTransformQuantity{}) {
+			transformQuantity := price.TransformQuantity(existingPrice.TransformQuantity)
+			createReq.TransformQuantity = &transformQuantity
+		}
+
+	case types.BILLING_MODEL_TIERED:
+		// For TIERED, only tier_mode and tiers are relevant 
+		if r.TierMode != "" {
+			createReq.TierMode = r.TierMode
+		} else {
+			createReq.TierMode = existingPrice.TierMode
+		}
+
+		if len(r.Tiers) > 0 {
+			createReq.Tiers = r.Tiers
+		} else if len(existingPrice.Tiers) > 0 {
+			createReq.Tiers = make([]CreatePriceTier, len(existingPrice.Tiers))
+			for i, tier := range existingPrice.Tiers {
+				createReq.Tiers[i] = CreatePriceTier{
+					UpTo:       tier.UpTo,
+					UnitAmount: tier.UnitAmount.String(),
+				}
+				if tier.FlatAmount != nil {
+					flatAmountStr := tier.FlatAmount.String()
+					createReq.Tiers[i].FlatAmount = &flatAmountStr
+				}
 			}
 		}
 	}
 
-	// Copy transform quantity from existing price
-	if existingPrice.TransformQuantity != (price.JSONBTransformQuantity{}) {
-		transformQuantity := price.TransformQuantity(existingPrice.TransformQuantity)
-		createReq.TransformQuantity = &transformQuantity
-	}
-
-	// Apply updates from request - only update fields that are provided
-	if r.Amount != nil {
-		createReq.Amount = r.Amount.String()
-	}
-	if r.BillingModel != "" {
-		createReq.BillingModel = r.BillingModel
-	}
+	// Apply non-critical field updates from request
 	if r.LookupKey != "" {
 		createReq.LookupKey = r.LookupKey
+	} else {
+		createReq.LookupKey = existingPrice.LookupKey
 	}
 	if r.Description != "" {
 		createReq.Description = r.Description
+	} else {
+		createReq.Description = existingPrice.Description
 	}
 	if r.Metadata != nil {
 		createReq.Metadata = r.Metadata
-	}
-	if r.TierMode != "" {
-		createReq.TierMode = r.TierMode
-	}
-	if len(r.Tiers) > 0 {
-		createReq.Tiers = r.Tiers
-	}
-	if r.TransformQuantity != nil {
-		createReq.TransformQuantity = r.TransformQuantity
+	} else {
+		createReq.Metadata = existingPrice.Metadata
 	}
 
 	// Note: StartDate and EndDate are handled by the service layer:
