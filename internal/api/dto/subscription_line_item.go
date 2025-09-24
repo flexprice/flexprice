@@ -182,11 +182,18 @@ func (r *UpdateSubscriptionLineItemRequest) Validate() error {
 	// LineItemID validation is now handled by the handler layer
 	// since it comes from the URL parameter
 
+	// If EffectiveFrom is provided, at least one critical field must be present
+	if r.EffectiveFrom != nil && !r.ShouldCreateNewLineItem() {
+		return ierr.NewError("effective_from requires at least one critical field").
+			WithHint("When providing effective_from, you must also provide one of: amount, billing_model, tier_mode, tiers, or transform_quantity").
+			Mark(ierr.ErrValidation)
+	}
+
 	return nil
 }
 
-// HasCriticalFields checks if the request contains any critical fields that require price termination
-func (r *UpdateSubscriptionLineItemRequest) HasCriticalFields() bool {
+// ShouldCreateNewLineItem checks if the request contains any critical fields that require creating a new line item
+func (r *UpdateSubscriptionLineItemRequest) ShouldCreateNewLineItem() bool {
 	return (r.Amount != nil && !r.Amount.IsZero()) ||
 		r.BillingModel != "" ||
 		r.TierMode != "" ||
