@@ -676,8 +676,8 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 
 		// Set termination end date - use EndDate from request if provided, otherwise use current time
 		terminationEndDate := time.Now().UTC()
-		if req.EndDate != nil {
-			terminationEndDate = *req.EndDate
+		if req.EffectiveFrom != nil {
+			terminationEndDate = *req.EffectiveFrom
 		}
 
 		// Terminate the existing price
@@ -720,8 +720,8 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 		if req.Metadata != nil {
 			existingPrice.Metadata = req.Metadata
 		}
-		if req.EndDate != nil {
-			existingPrice.EndDate = req.EndDate
+		if req.EffectiveFrom != nil {
+			existingPrice.EndDate = req.EffectiveFrom
 		}
 
 		// Update the price in database

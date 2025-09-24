@@ -27,8 +27,8 @@ type DeleteSubscriptionLineItemRequest struct {
 }
 
 type UpdateSubscriptionLineItemRequest struct {
-	// EndDate for the existing line item (if not provided, defaults to now)
-	EndDate *time.Time `json:"end_date,omitempty"`
+	// EffectiveFrom for the existing line item (if not provided, defaults to now)
+	EffectiveFrom *time.Time `json:"effective_from,omitempty"`
 
 	BillingModel types.BillingModel `json:"billing_model,omitempty"`
 

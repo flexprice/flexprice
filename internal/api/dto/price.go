@@ -634,10 +634,10 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 type UpdatePriceRequest struct {
 	// All price fields that can be updated
 	// Non-critical fields (can be updated directly)
-	LookupKey   string            `json:"lookup_key,omitempty"`
-	Description string            `json:"description,omitempty"`
-	Metadata    map[string]string `json:"metadata,omitempty"`
-	EndDate     *time.Time        `json:"end_date,omitempty"`
+	LookupKey     string            `json:"lookup_key,omitempty"`
+	Description   string            `json:"description,omitempty"`
+	Metadata      map[string]string `json:"metadata,omitempty"`
+	EffectiveFrom *time.Time        `json:"effective_from,omitempty"`
 
 	BillingModel types.BillingModel `json:"billing_model,omitempty"`
 
@@ -656,9 +656,9 @@ type UpdatePriceRequest struct {
 
 func (r *UpdatePriceRequest) Validate() error {
 
-	if r.EndDate != nil && r.HasCriticalFields() && r.EndDate.Before(time.Now().UTC()) {
-		return ierr.NewError("end date must be in the future when used as termination date").
-			WithHint("End date must be in the future when updating critical fields").
+	if r.EffectiveFrom != nil && r.HasCriticalFields() && r.EffectiveFrom.Before(time.Now().UTC()) {
+		return ierr.NewError("effective from date must be in the future when used as termination date").
+			WithHint("Effective from date must be in the future when updating critical fields").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -728,7 +728,7 @@ func (r *UpdatePriceRequest) ToCreatePriceRequest(existingPrice *price.Price) Cr
 		}
 
 	case types.BILLING_MODEL_TIERED:
-		// For TIERED, only tier_mode and tiers are relevant 
+		// For TIERED, only tier_mode and tiers are relevant
 		if r.TierMode != "" {
 			createReq.TierMode = r.TierMode
 		} else {
@@ -770,7 +770,7 @@ func (r *UpdatePriceRequest) ToCreatePriceRequest(existingPrice *price.Price) Cr
 	}
 
 	// Note: StartDate and EndDate are handled by the service layer:
-	// - EndDate in the request is used as termination date for the old price
+	// - EffectiveFrom in the request is used as termination date for the old price
 	// - New price starts exactly when the old price ends (terminationEndDate)
 	// - New price will not have an end date unless explicitly set
 
