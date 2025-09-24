@@ -149,9 +149,6 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			Mark(ierr.ErrValidation)
 	}
 
-	// Use the existing line item's price
-	targetPriceID := existingLineItem.PriceID
-
 	// Determine end date for existing line item
 	endDate := time.Now().UTC()
 	if req.EffectiveFrom != nil {
@@ -173,7 +170,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 
 		// Convert request to OverrideLineItemRequest format to reuse existing logic
 		overrideReq := dto.OverrideLineItemRequest{
-			PriceID:           targetPriceID,
+			PriceID:           existingLineItem.PriceID,
 			Quantity:          &existingLineItem.Quantity,
 			BillingModel:      req.BillingModel,
 			Amount:            req.Amount,
@@ -184,12 +181,12 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 
 		// Get price map for validation (reuse existing logic)
 		priceService := NewPriceService(s.ServiceParams)
-		price, err := priceService.GetPrice(ctx, targetPriceID)
+		price, err := priceService.GetPrice(ctx, existingLineItem.PriceID)
 		if err != nil {
 			return nil, err
 		}
 
-		priceMap := map[string]*dto.PriceResponse{targetPriceID: price}
+		priceMap := map[string]*dto.PriceResponse{existingLineItem.PriceID: price}
 
 		// Execute the complex update within a transaction
 		var newLineItem *subscription.SubscriptionLineItem
