@@ -655,8 +655,14 @@ type UpdatePriceRequest struct {
 }
 
 func (r *UpdatePriceRequest) Validate() error {
+	// If EffectiveFrom is provided, at least one critical field must be present
+	if r.EffectiveFrom != nil && !r.ShouldCreateNewPrice() {
+		return ierr.NewError("effective_from requires at least one critical field").
+			WithHint("When providing effective_from, you must also provide one of: amount, billing_model, tier_mode, tiers, or transform_quantity").
+			Mark(ierr.ErrValidation)
+	}
 
-	if r.EffectiveFrom != nil && r.HasCriticalFields() && r.EffectiveFrom.Before(time.Now().UTC()) {
+	if r.EffectiveFrom != nil && r.ShouldCreateNewPrice() && r.EffectiveFrom.Before(time.Now().UTC()) {
 		return ierr.NewError("effective from date must be in the future when used as termination date").
 			WithHint("Effective from date must be in the future when updating critical fields").
 			Mark(ierr.ErrValidation)
@@ -665,8 +671,8 @@ func (r *UpdatePriceRequest) Validate() error {
 	return nil
 }
 
-// HasCriticalFields checks if the request contains any critical fields that require price termination
-func (r *UpdatePriceRequest) HasCriticalFields() bool {
+// ShouldCreateNewPrice checks if the request contains any critical fields that require creating a new price
+func (r *UpdatePriceRequest) ShouldCreateNewPrice() bool {
 	return r.BillingModel != "" ||
 		r.Amount != nil ||
 		r.TierMode != "" ||

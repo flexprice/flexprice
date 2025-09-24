@@ -172,7 +172,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 
 	// Check if the request has critical fields that require price termination
 	var newPriceID string
-	if req.HasCriticalFields() {
+	if req.ShouldCreateNewLineItem() {
 
 		if !existingLineItem.EndDate.IsZero() {
 			return nil, ierr.NewError("line item is already terminated").
