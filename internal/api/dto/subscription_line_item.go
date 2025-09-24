@@ -179,8 +179,15 @@ func (r *DeleteSubscriptionLineItemRequest) Validate() error {
 
 // Validate validates the update subscription line item request
 func (r *UpdateSubscriptionLineItemRequest) Validate() error {
-	// LineItemID validation is now handled by the handler layer
-	// since it comes from the URL parameter
+	if r.EffectiveFrom != nil && r.EffectiveFrom.Before(time.Now().UTC()) {
+		return ierr.NewError("effective_from must be in the future").
+			WithHint("Effective from date must be in the future").
+			WithReportableDetails(map[string]interface{}{
+				"effective_from": r.EffectiveFrom,
+				"current_time":   time.Now().UTC(),
+			}).
+			Mark(ierr.ErrValidation)
+	}
 
 	// If EffectiveFrom is provided, at least one critical field must be present
 	if r.EffectiveFrom != nil && !r.ShouldCreateNewLineItem() {

@@ -156,107 +156,97 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 	endDate := time.Now().UTC()
 	if req.EffectiveFrom != nil {
 		endDate = req.EffectiveFrom.UTC()
-
-		// Validate end date is not before line item start date
-		if endDate.Before(existingLineItem.StartDate) {
-			return nil, ierr.NewError("end_date cannot be before line item start date").
-				WithHint("End date must be on or after the line item start date").
-				WithReportableDetails(map[string]interface{}{
-					"line_item_start_date": existingLineItem.StartDate,
-					"provided_end_date":    endDate,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-
 	}
 
 	// Check if the request has critical fields that require price termination
 	var newPriceID string
-	if req.ShouldCreateNewLineItem() {
-
-		if !existingLineItem.EndDate.IsZero() {
-			return nil, ierr.NewError("line item is already terminated").
-				WithHint("Terminated line items cannot be updated").
-				WithReportableDetails(map[string]interface{}{
-					"line_item_id": lineItemID,
-					"end_date":     existingLineItem.EndDate,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-
-		// Convert request to OverrideLineItemRequest format to reuse existing logic
-		overrideReq := dto.OverrideLineItemRequest{
-			PriceID:           targetPriceID,
-			Quantity:          &existingLineItem.Quantity,
-			BillingModel:      req.BillingModel,
-			Amount:            req.Amount,
-			TierMode:          req.TierMode,
-			Tiers:             req.Tiers,
-			TransformQuantity: req.TransformQuantity,
-		}
-
-		// Get price map for validation (reuse existing logic)
-		priceService := NewPriceService(s.ServiceParams)
-		price, err := priceService.GetPrice(ctx, targetPriceID)
-		if err != nil {
-			return nil, ierr.WithError(err).
-				WithHint("Failed to retrieve price for line item update").
-				WithReportableDetails(map[string]interface{}{
-					"price_id": targetPriceID,
-				}).
-				Mark(ierr.ErrDatabase)
-		}
-
-		// Validate price is still active and compatible
-		if price.Status != types.StatusPublished {
-			return nil, ierr.NewError("price is not active").
-				WithHint("Cannot update line item with inactive price").
-				WithReportableDetails(map[string]interface{}{
-					"price_id": targetPriceID,
-					"status":   price.Status,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-
-		// Validate price compatibility with subscription
-		if !price.IsEligibleForSubscription(sub.Currency, sub.BillingPeriod, sub.BillingPeriodCount) {
-			return nil, ierr.NewError("price is not compatible with subscription").
-				WithHint("Price currency and billing period must match subscription").
-				WithReportableDetails(map[string]interface{}{
-					"subscription_id":             sub.ID,
-					"price_id":                    targetPriceID,
-					"subscription_currency":       sub.Currency,
-					"subscription_billing_period": sub.BillingPeriod,
-					"price_currency":              price.Currency,
-					"price_billing_period":        price.BillingPeriod,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-
-		priceMap := map[string]*dto.PriceResponse{targetPriceID: price}
-		lineItemsByPriceID := map[string]*subscription.SubscriptionLineItem{targetPriceID: existingLineItem}
-
-		// Validate the override request
-		if err := overrideReq.Validate(priceMap, lineItemsByPriceID, sub.PlanID); err != nil {
-			return nil, err
-		}
-
-		// Process the price override using existing method
-		lineItems := []*subscription.SubscriptionLineItem{existingLineItem}
-		err = s.ProcessSubscriptionPriceOverrides(ctx, sub, []dto.OverrideLineItemRequest{overrideReq}, lineItems, priceMap)
-		if err != nil {
-			return nil, err
-		}
-
-		// The ProcessSubscriptionPriceOverrides method updates the line item's PriceID
-		newPriceID = existingLineItem.PriceID
-	} else {
-		newPriceID = targetPriceID
-	}
 
 	// Execute the update within a transaction
 	var newLineItem *subscription.SubscriptionLineItem
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
+
+		if req.ShouldCreateNewLineItem() {
+
+			if !existingLineItem.EndDate.IsZero() {
+				return ierr.NewError("line item is already terminated").
+					WithHint("Terminated line items cannot be updated").
+					WithReportableDetails(map[string]interface{}{
+						"line_item_id": lineItemID,
+						"end_date":     existingLineItem.EndDate,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+
+			// Convert request to OverrideLineItemRequest format to reuse existing logic
+			overrideReq := dto.OverrideLineItemRequest{
+				PriceID:           targetPriceID,
+				Quantity:          &existingLineItem.Quantity,
+				BillingModel:      req.BillingModel,
+				Amount:            req.Amount,
+				TierMode:          req.TierMode,
+				Tiers:             req.Tiers,
+				TransformQuantity: req.TransformQuantity,
+			}
+
+			// Get price map for validation (reuse existing logic)
+			priceService := NewPriceService(s.ServiceParams)
+			price, err := priceService.GetPrice(ctx, targetPriceID)
+			if err != nil {
+				return ierr.WithError(err).
+					WithHint("Failed to retrieve price for line item update").
+					WithReportableDetails(map[string]interface{}{
+						"price_id": targetPriceID,
+					}).
+					Mark(ierr.ErrDatabase)
+			}
+
+			// Validate price is still active and compatible
+			if price.Status != types.StatusPublished {
+				return ierr.NewError("price is not active").
+					WithHint("Cannot update line item with inactive price").
+					WithReportableDetails(map[string]interface{}{
+						"price_id": targetPriceID,
+						"status":   price.Status,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+
+			// Validate price compatibility with subscription
+			if !price.IsEligibleForSubscription(sub.Currency, sub.BillingPeriod, sub.BillingPeriodCount) {
+				return ierr.NewError("price is not compatible with subscription").
+					WithHint("Price currency and billing period must match subscription").
+					WithReportableDetails(map[string]interface{}{
+						"subscription_id":             sub.ID,
+						"price_id":                    targetPriceID,
+						"subscription_currency":       sub.Currency,
+						"subscription_billing_period": sub.BillingPeriod,
+						"price_currency":              price.Currency,
+						"price_billing_period":        price.BillingPeriod,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+
+			priceMap := map[string]*dto.PriceResponse{targetPriceID: price}
+			lineItemsByPriceID := map[string]*subscription.SubscriptionLineItem{targetPriceID: existingLineItem}
+
+			// Validate the override request
+			if err := overrideReq.Validate(priceMap, lineItemsByPriceID, sub.PlanID); err != nil {
+				return err
+			}
+
+			// Process the price override using existing method
+			lineItems := []*subscription.SubscriptionLineItem{existingLineItem}
+			err = s.ProcessSubscriptionPriceOverrides(ctx, sub, []dto.OverrideLineItemRequest{overrideReq}, lineItems, priceMap)
+			if err != nil {
+				return err
+			}
+
+			// The ProcessSubscriptionPriceOverrides method updates the line item's PriceID
+			newPriceID = existingLineItem.PriceID
+		} else {
+			newPriceID = targetPriceID
+		}
+
 		// Terminate the existing line item using existing method
 		deleteReq := dto.DeleteSubscriptionLineItemRequest{
 			EndDate: &endDate,
