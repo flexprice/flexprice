@@ -520,7 +520,6 @@ func (s *subscriptionService) ProcessSubscriptionPriceOverrides(
 			createPriceReq.TransformQuantity = &transformQuantity
 		}
 
-		// Apply overrides - handle all override fields
 
 		// Amount override
 		if override.Amount != nil {
