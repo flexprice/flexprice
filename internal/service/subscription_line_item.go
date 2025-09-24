@@ -190,12 +190,6 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 		}
 
 		priceMap := map[string]*dto.PriceResponse{targetPriceID: price}
-		lineItemsByPriceID := map[string]*subscription.SubscriptionLineItem{targetPriceID: existingLineItem}
-
-		// Validate the override request
-		if err := overrideReq.Validate(priceMap, lineItemsByPriceID, sub.PlanID); err != nil {
-			return nil, err
-		}
 
 		// Execute the complex update within a transaction
 		var newLineItem *subscription.SubscriptionLineItem
