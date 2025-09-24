@@ -243,8 +243,10 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 
 		return &dto.SubscriptionLineItemResponse{SubscriptionLineItem: newLineItem}, nil
 	} else {
-		// Simple update - just update the existing line item
-		existingLineItem.Metadata = req.Metadata
+		if req.Metadata != nil {
+			existingLineItem.Metadata = req.Metadata
+		}
+
 		if err := s.SubscriptionLineItemRepo.Update(ctx, existingLineItem); err != nil {
 			return nil, err
 		}
