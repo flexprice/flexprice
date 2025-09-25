@@ -32,7 +32,7 @@ type CreateSubscriptionRequest struct {
 	TrialEnd           *time.Time           `json:"trial_end,omitempty"`
 	BillingCadence     types.BillingCadence `json:"billing_cadence" validate:"required"`
 	BillingPeriod      types.BillingPeriod  `json:"billing_period" validate:"required"`
-	BillingPeriodCount int                  `json:"billing_period_count" validate:"required,min=1"`
+	BillingPeriodCount int                  `json:"billing_period_count" default:"1"`
 	Metadata           map[string]string    `json:"metadata,omitempty"`
 	// BillingCycle is the cycle of the billing anchor.
 	// This is used to determine the billing date for the subscription (i.e set the billing anchor)
@@ -241,6 +241,18 @@ func (r *CreateSubscriptionRequest) Validate() error {
 	if r.PaymentBehavior == nil {
 		defaultPaymentBehavior := types.PaymentBehaviorDefaultActive
 		r.PaymentBehavior = &defaultPaymentBehavior
+	}
+
+	// Set default value to Billing Period Count if not provided
+	if r.BillingPeriodCount == 0 {
+		r.BillingPeriodCount = 1
+	} else if r.BillingPeriodCount < 0 {
+		return ierr.NewError("invalid billing period count").
+			WithHint("Billing Period must be a valid positive number").
+			WithReportableDetails(map[string]interface{}{
+				"billing_period_count": r.BillingPeriodCount,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	// Validate payment behavior and collection method combination

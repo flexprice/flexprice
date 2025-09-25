@@ -70,7 +70,7 @@ type Price struct {
 	BillingPeriod types.BillingPeriod `db:"billing_period" json:"billing_period"`
 
 	// BillingPeriodCount is the count of the billing period ex 1, 3, 6, 12
-	BillingPeriodCount int `db:"billing_period_count" json:"billing_period_count"`
+	BillingPeriodCount int `db:"billing_period_count" json:"billing_period_count" default:"1"`
 
 	BillingModel types.BillingModel `db:"billing_model" json:"billing_model"`
 

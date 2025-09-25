@@ -76,7 +76,7 @@ type Subscription struct {
 	BillingPeriod types.BillingPeriod `db:"billing_period" json:"billing_period"`
 
 	// BillingPeriodCount is the total number units of the billing period.
-	BillingPeriodCount int `db:"billing_period_count" json:"billing_period_count"`
+	BillingPeriodCount int `db:"billing_period_count" json:"billing_period_count" default:"1"`
 
 	// Version is used for optimistic locking
 	Version int `db:"version" json:"version"`

@@ -23,7 +23,7 @@ type CreatePriceRequest struct {
 	Type               types.PriceType          `json:"type" validate:"required"`
 	PriceUnitType      types.PriceUnitType      `json:"price_unit_type" validate:"required"`
 	BillingPeriod      types.BillingPeriod      `json:"billing_period" validate:"required"`
-	BillingPeriodCount int                      `json:"billing_period_count" validate:"required,min=1"`
+	BillingPeriodCount int                      `json:"billing_period_count" default:"1"`
 	BillingModel       types.BillingModel       `json:"billing_model" validate:"required"`
 	BillingCadence     types.BillingCadence     `json:"billing_cadence" validate:"required"`
 	MeterID            string                   `json:"meter_id,omitempty"`
@@ -74,6 +74,18 @@ func (r *CreatePriceRequest) Validate() error {
 	// Set default price unit type to FIAT if not provided
 	if r.PriceUnitType == "" {
 		r.PriceUnitType = types.PRICE_UNIT_TYPE_FIAT
+	}
+
+	// Set default value to Billing Period Count if not provided
+	if r.BillingPeriodCount == 0 {
+		r.BillingPeriodCount = 1
+	} else if r.BillingPeriodCount < 0 {
+		return ierr.NewError("invalid billing period count").
+			WithHint("Billing Period must be a valid positive number").
+			WithReportableDetails(map[string]interface{}{
+				"billing_period_count": r.BillingPeriodCount,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	// Base validations
