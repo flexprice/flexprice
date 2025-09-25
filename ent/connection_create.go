@@ -128,12 +128,6 @@ func (cc *ConnectionCreate) SetEncryptedSecretData(m map[string]interface{}) *Co
 	return cc
 }
 
-// SetMetadata sets the "metadata" field.
-func (cc *ConnectionCreate) SetMetadata(m map[string]interface{}) *ConnectionCreate {
-	cc.mutation.SetMetadata(m)
-	return cc
-}
-
 // SetID sets the "id" field.
 func (cc *ConnectionCreate) SetID(s string) *ConnectionCreate {
 	cc.mutation.SetID(s)
@@ -302,10 +296,6 @@ func (cc *ConnectionCreate) createSpec() (*Connection, *sqlgraph.CreateSpec) {
 	if value, ok := cc.mutation.EncryptedSecretData(); ok {
 		_spec.SetField(connection.FieldEncryptedSecretData, field.TypeJSON, value)
 		_node.EncryptedSecretData = value
-	}
-	if value, ok := cc.mutation.Metadata(); ok {
-		_spec.SetField(connection.FieldMetadata, field.TypeJSON, value)
-		_node.Metadata = value
 	}
 	return _node, _spec
 }

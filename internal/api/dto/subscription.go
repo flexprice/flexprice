@@ -586,25 +586,9 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		// We don't fail here to allow the conversion to happen first
 	}
 
-	// Set initial status based on payment behavior
-	var initialStatus types.SubscriptionStatus
-	switch paymentBehavior {
-	case types.PaymentBehaviorDefaultActive:
-		// Default active behavior - subscription starts as active
-		initialStatus = types.SubscriptionStatusActive
-	case types.PaymentBehaviorDefaultIncomplete:
-		// Default incomplete behavior - subscription starts as incomplete
-		initialStatus = types.SubscriptionStatusIncomplete
-	case types.PaymentBehaviorAllowIncomplete:
-		// Allow incomplete behavior - subscription starts as incomplete (will be updated based on payment result)
-		initialStatus = types.SubscriptionStatusIncomplete
-	case types.PaymentBehaviorErrorIfIncomplete:
-		// Error if incomplete behavior - subscription starts as incomplete (will fail if payment fails)
-		initialStatus = types.SubscriptionStatusIncomplete
-	default:
-		// Fallback to active for unknown behaviors
-		initialStatus = types.SubscriptionStatusActive
-	}
+	// Initial status will be determined by payment processor based on payment behavior
+	// For now, set to Active - the payment processor will update it
+	initialStatus := types.SubscriptionStatusActive
 
 	if r.CustomerTimezone == "" {
 		r.CustomerTimezone = "UTC"

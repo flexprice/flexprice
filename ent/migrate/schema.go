@@ -150,7 +150,6 @@ var (
 		{Name: "name", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "provider_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "encrypted_secret_data", Type: field.TypeJSON, Nullable: true},
-		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
 	}
 	// ConnectionsTable holds the schema information for the "connections" table.
 	ConnectionsTable = &schema.Table{

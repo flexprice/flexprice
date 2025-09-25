@@ -12,7 +12,6 @@ type Connection struct {
 	Name                string                   `db:"name" json:"name"`
 	ProviderType        types.SecretProvider     `db:"provider_type" json:"provider_type"`
 	EncryptedSecretData types.ConnectionMetadata `db:"encrypted_secret_data" json:"encrypted_secret_data"`
-	Metadata            map[string]interface{}   `db:"metadata" json:"metadata"`
 	EnvironmentID       string                   `db:"environment_id" json:"environment_id"`
 	types.BaseModel
 }
@@ -47,20 +46,6 @@ func (c *Connection) GetStripeConfig() (*StripeConnection, error) {
 	}
 
 	return config, nil
-}
-
-// IsInvoiceSyncEnabled checks if invoice sync is enabled for this connection
-func (c *Connection) IsInvoiceSyncEnabled() bool {
-	if c.Metadata == nil {
-		return false // Default to false if metadata is not set
-	}
-
-	// Check if invoice_sync_enable is set to true
-	if enable, ok := c.Metadata["invoice_sync_enable"].(bool); ok {
-		return enable
-	}
-
-	return false // Default to false if not set or not a boolean
 }
 
 // convertMapToConnectionMetadata converts old map format to new structured format
@@ -110,7 +95,6 @@ func FromEnt(entConn *ent.Connection) *Connection {
 		Name:                entConn.Name,
 		ProviderType:        types.SecretProvider(entConn.ProviderType),
 		EncryptedSecretData: metadata,
-		Metadata:            entConn.Metadata,
 		EnvironmentID:       entConn.EnvironmentID,
 		BaseModel: types.BaseModel{
 			TenantID:  entConn.TenantID,

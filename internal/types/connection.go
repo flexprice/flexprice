@@ -34,11 +34,6 @@ type StripeConnectionMetadata struct {
 	AccountID      string `json:"account_id,omitempty"`
 }
 
-// ConnectionSettings represents general connection settings
-type ConnectionSettings struct {
-	InvoiceSyncEnable *bool `json:"invoice_sync_enable,omitempty"`
-}
-
 // Validate validates the Stripe connection metadata
 func (s *StripeConnectionMetadata) Validate() error {
 	if s.PublishableKey == "" {
@@ -76,9 +71,8 @@ func (g *GenericConnectionMetadata) Validate() error {
 
 // ConnectionMetadata represents structured connection metadata
 type ConnectionMetadata struct {
-	Stripe   *StripeConnectionMetadata  `json:"stripe,omitempty"`
-	Generic  *GenericConnectionMetadata `json:"generic,omitempty"`
-	Settings *ConnectionSettings        `json:"settings,omitempty"`
+	Stripe  *StripeConnectionMetadata  `json:"stripe,omitempty"`
+	Generic *GenericConnectionMetadata `json:"generic,omitempty"`
 }
 
 // Validate validates the connection metadata based on provider type
@@ -100,14 +94,6 @@ func (c *ConnectionMetadata) Validate(providerType SecretProvider) error {
 		}
 		return c.Generic.Validate()
 	}
-}
-
-// IsInvoiceSyncEnabled checks if invoice sync is enabled for this connection
-func (c *ConnectionMetadata) IsInvoiceSyncEnabled() bool {
-	if c.Settings == nil || c.Settings.InvoiceSyncEnable == nil {
-		return false // Default to false if not set
-	}
-	return *c.Settings.InvoiceSyncEnable
 }
 
 // ConnectionFilter represents filters for connection queries

@@ -261,11 +261,6 @@ func (s *connectionService) UpdateConnection(ctx context.Context, id string, req
 		conn.Name = req.Name
 	}
 
-	// Update metadata if provided
-	if req.Metadata != nil {
-		conn.Metadata = req.Metadata
-	}
-
 	conn.UpdatedAt = time.Now()
 	conn.UpdatedBy = types.GetUserID(ctx)
 

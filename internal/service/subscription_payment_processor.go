@@ -447,19 +447,6 @@ func (s *subscriptionPaymentProcessor) processPayment(
 				flowType,
 			)
 
-			// If invoice is synced to Stripe, don't allow partial payments
-			stripeService := NewStripeService(*s.ServiceParams)
-
-			if stripeService.IsInvoiceSyncedToStripe(ctx, inv.ID) {
-				s.Logger.Warnw("card payment failed, invoice is synced to Stripe - not allowing partial wallet payment",
-					"subscription_id", sub.ID,
-					"invoice_id", inv.ID,
-					"attempted_card_amount", cardAmount,
-					"wallet_amount_available", walletAmount,
-				)
-				allowPartialWallet = false
-			}
-
 			if !allowPartialWallet {
 				// Card payment failed - do not attempt wallet payment
 				// The invoice cannot be fully paid, so we stop here

@@ -12,7 +12,6 @@ type CreateConnectionRequest struct {
 	Name                string                   `json:"name" validate:"required,max=255"`
 	ProviderType        types.SecretProvider     `json:"provider_type" validate:"required"`
 	EncryptedSecretData types.ConnectionMetadata `json:"encrypted_secret_data,omitempty"`
-	Metadata            map[string]interface{}   `json:"metadata,omitempty"`
 }
 
 // UnmarshalJSON custom unmarshaling to handle flat metadata structure
@@ -22,7 +21,6 @@ func (req *CreateConnectionRequest) UnmarshalJSON(data []byte) error {
 		Name                string                 `json:"name"`
 		ProviderType        types.SecretProvider   `json:"provider_type"`
 		EncryptedSecretData map[string]interface{} `json:"encrypted_secret_data,omitempty"`
-		Metadata            map[string]interface{} `json:"metadata,omitempty"`
 	}
 
 	if err := json.Unmarshal(data, &temp); err != nil {
@@ -32,7 +30,6 @@ func (req *CreateConnectionRequest) UnmarshalJSON(data []byte) error {
 	// Set the basic fields
 	req.Name = temp.Name
 	req.ProviderType = temp.ProviderType
-	req.Metadata = temp.Metadata
 
 	// Convert flat encrypted secret data to structured format based on provider_type
 	if temp.EncryptedSecretData != nil {
@@ -77,42 +74,38 @@ func convertFlatMetadataToStructured(flatMetadata map[string]interface{}, provid
 
 // UpdateConnectionRequest represents the request to update a connection
 type UpdateConnectionRequest struct {
-	Name     string                 `json:"name,omitempty" validate:"omitempty,max=255"`
-	Metadata map[string]interface{} `json:"metadata,omitempty"`
+	Name string `json:"name,omitempty" validate:"omitempty,max=255"`
 }
 
 // UnmarshalJSON custom unmarshaling to handle flat metadata structure
 func (req *UpdateConnectionRequest) UnmarshalJSON(data []byte) error {
 	// First, unmarshal to a temporary struct to get the raw data
 	var temp struct {
-		Name     string                 `json:"name"`
-		Metadata map[string]interface{} `json:"metadata,omitempty"`
+		Name string `json:"name"`
 	}
 
 	if err := json.Unmarshal(data, &temp); err != nil {
 		return err
 	}
 
-	// Set the basic fields
+	// Set the basic fields (only name is updatable)
 	req.Name = temp.Name
-	req.Metadata = temp.Metadata
 
 	return nil
 }
 
 // ConnectionResponse represents the response for connection operations
 type ConnectionResponse struct {
-	ID            string                 `json:"id"`
-	Name          string                 `json:"name"`
-	ProviderType  types.SecretProvider   `json:"provider_type"`
-	EnvironmentID string                 `json:"environment_id"`
-	TenantID      string                 `json:"tenant_id"`
-	Status        types.Status           `json:"status"`
-	Metadata      map[string]interface{} `json:"metadata,omitempty"`
-	CreatedAt     string                 `json:"created_at"`
-	UpdatedAt     string                 `json:"updated_at"`
-	CreatedBy     string                 `json:"created_by"`
-	UpdatedBy     string                 `json:"updated_by"`
+	ID            string               `json:"id"`
+	Name          string               `json:"name"`
+	ProviderType  types.SecretProvider `json:"provider_type"`
+	EnvironmentID string               `json:"environment_id"`
+	TenantID      string               `json:"tenant_id"`
+	Status        types.Status         `json:"status"`
+	CreatedAt     string               `json:"created_at"`
+	UpdatedAt     string               `json:"updated_at"`
+	CreatedBy     string               `json:"created_by"`
+	UpdatedBy     string               `json:"updated_by"`
 }
 
 // ListConnectionsResponse represents the response for listing connections
@@ -129,7 +122,6 @@ func (req *CreateConnectionRequest) ToConnection() *connection.Connection {
 		Name:                req.Name,
 		ProviderType:        req.ProviderType,
 		EncryptedSecretData: req.EncryptedSecretData,
-		Metadata:            req.Metadata,
 	}
 }
 
@@ -146,7 +138,6 @@ func ToConnectionResponse(conn *connection.Connection) *ConnectionResponse {
 		EnvironmentID: conn.EnvironmentID,
 		TenantID:      conn.TenantID,
 		Status:        conn.Status,
-		Metadata:      conn.Metadata,
 		CreatedAt:     conn.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:     conn.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		CreatedBy:     conn.CreatedBy,

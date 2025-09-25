@@ -108,18 +108,6 @@ func (cu *ConnectionUpdate) ClearEncryptedSecretData() *ConnectionUpdate {
 	return cu
 }
 
-// SetMetadata sets the "metadata" field.
-func (cu *ConnectionUpdate) SetMetadata(m map[string]interface{}) *ConnectionUpdate {
-	cu.mutation.SetMetadata(m)
-	return cu
-}
-
-// ClearMetadata clears the value of the "metadata" field.
-func (cu *ConnectionUpdate) ClearMetadata() *ConnectionUpdate {
-	cu.mutation.ClearMetadata()
-	return cu
-}
-
 // Mutation returns the ConnectionMutation object of the builder.
 func (cu *ConnectionUpdate) Mutation() *ConnectionMutation {
 	return cu.mutation
@@ -218,12 +206,6 @@ func (cu *ConnectionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if cu.mutation.EncryptedSecretDataCleared() {
 		_spec.ClearField(connection.FieldEncryptedSecretData, field.TypeJSON)
 	}
-	if value, ok := cu.mutation.Metadata(); ok {
-		_spec.SetField(connection.FieldMetadata, field.TypeJSON, value)
-	}
-	if cu.mutation.MetadataCleared() {
-		_spec.ClearField(connection.FieldMetadata, field.TypeJSON)
-	}
 	if n, err = sqlgraph.UpdateNodes(ctx, cu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{connection.Label}
@@ -321,18 +303,6 @@ func (cuo *ConnectionUpdateOne) SetEncryptedSecretData(m map[string]interface{})
 // ClearEncryptedSecretData clears the value of the "encrypted_secret_data" field.
 func (cuo *ConnectionUpdateOne) ClearEncryptedSecretData() *ConnectionUpdateOne {
 	cuo.mutation.ClearEncryptedSecretData()
-	return cuo
-}
-
-// SetMetadata sets the "metadata" field.
-func (cuo *ConnectionUpdateOne) SetMetadata(m map[string]interface{}) *ConnectionUpdateOne {
-	cuo.mutation.SetMetadata(m)
-	return cuo
-}
-
-// ClearMetadata clears the value of the "metadata" field.
-func (cuo *ConnectionUpdateOne) ClearMetadata() *ConnectionUpdateOne {
-	cuo.mutation.ClearMetadata()
 	return cuo
 }
 
@@ -463,12 +433,6 @@ func (cuo *ConnectionUpdateOne) sqlSave(ctx context.Context) (_node *Connection,
 	}
 	if cuo.mutation.EncryptedSecretDataCleared() {
 		_spec.ClearField(connection.FieldEncryptedSecretData, field.TypeJSON)
-	}
-	if value, ok := cuo.mutation.Metadata(); ok {
-		_spec.SetField(connection.FieldMetadata, field.TypeJSON, value)
-	}
-	if cuo.mutation.MetadataCleared() {
-		_spec.ClearField(connection.FieldMetadata, field.TypeJSON)
 	}
 	_node = &Connection{config: cuo.config}
 	_spec.Assign = _node.assignValues

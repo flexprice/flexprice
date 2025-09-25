@@ -46,7 +46,6 @@ type Handlers struct {
 	EntityIntegrationMapping *v1.EntityIntegrationMappingHandler
 	Integration              *v1.IntegrationHandler
 	Settings                 *v1.SettingsHandler
-	SetupIntent              *v1.SetupIntentHandler
 
 	// Portal handlers
 	Onboarding *v1.OnboardingHandler
@@ -310,12 +309,6 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			payments.PUT("/:id", handlers.Payment.UpdatePayment)
 			payments.DELETE("/:id", handlers.Payment.DeletePayment)
 			payments.POST("/:id/process", handlers.Payment.ProcessPayment)
-
-			custPaymentsGroup := payments.Group("/customers")
-			{
-				custPaymentsGroup.GET("/:id/methods", handlers.SetupIntent.ListCustomerPaymentMethods)
-				custPaymentsGroup.POST("/:id/setup/intent", handlers.SetupIntent.CreateSetupIntentSession)
-			}
 		}
 
 		tasks := v1Private.Group("/tasks")

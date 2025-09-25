@@ -684,16 +684,6 @@ func EncryptedSecretDataNotNil() predicate.Connection {
 	return predicate.Connection(sql.FieldNotNull(FieldEncryptedSecretData))
 }
 
-// MetadataIsNil applies the IsNil predicate on the "metadata" field.
-func MetadataIsNil() predicate.Connection {
-	return predicate.Connection(sql.FieldIsNull(FieldMetadata))
-}
-
-// MetadataNotNil applies the NotNil predicate on the "metadata" field.
-func MetadataNotNil() predicate.Connection {
-	return predicate.Connection(sql.FieldNotNull(FieldMetadata))
-}
-
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.Connection) predicate.Connection {
 	return predicate.Connection(sql.AndPredicates(predicates...))
