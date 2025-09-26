@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -23,6 +24,28 @@ type CreateSubscriptionLineItemRequest struct {
 // DeleteSubscriptionLineItemRequest represents the request to delete a subscription line item
 type DeleteSubscriptionLineItemRequest struct {
 	EndDate *time.Time `json:"end_date,omitempty"`
+}
+
+type UpdateSubscriptionLineItemRequest struct {
+	// EffectiveFrom for the existing line item (if not provided, defaults to now)
+	EffectiveFrom *time.Time `json:"effective_from,omitempty"`
+
+	BillingModel types.BillingModel `json:"billing_model,omitempty"`
+
+	// Amount is the new price amount that overrides the original price
+	Amount *decimal.Decimal `json:"amount,omitempty"`
+
+	// TierMode determines how to calculate the price for a given quantity
+	TierMode types.BillingTier `json:"tier_mode,omitempty"`
+
+	// Tiers determines the pricing tiers for this line item
+	Tiers []CreatePriceTier `json:"tiers,omitempty"`
+
+	// TransformQuantity determines how to transform the quantity for this line item
+	TransformQuantity *price.TransformQuantity `json:"transform_quantity,omitempty"`
+
+	// Metadata for the new line item
+	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
 // LineItemParams contains all necessary parameters for creating a line item
@@ -152,4 +175,72 @@ func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 func (r *DeleteSubscriptionLineItemRequest) Validate() error {
 
 	return nil
+}
+
+// Validate validates the update subscription line item request
+func (r *UpdateSubscriptionLineItemRequest) Validate() error {
+	if r.EffectiveFrom != nil && r.EffectiveFrom.Before(time.Now().UTC()) {
+		return ierr.NewError("effective_from must be in the future").
+			WithHint("Effective from date must be in the future").
+			WithReportableDetails(map[string]interface{}{
+				"effective_from": r.EffectiveFrom,
+				"current_time":   time.Now().UTC(),
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// If EffectiveFrom is provided, at least one critical field must be present
+	if r.EffectiveFrom != nil && !r.ShouldCreateNewLineItem() {
+		return ierr.NewError("effective_from requires at least one critical field").
+			WithHint("When providing effective_from, you must also provide one of: amount, billing_model, tier_mode, tiers, or transform_quantity").
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}
+
+// ShouldCreateNewLineItem checks if the request contains any critical fields that require creating a new line item
+func (r *UpdateSubscriptionLineItemRequest) ShouldCreateNewLineItem() bool {
+	return (r.Amount != nil && !r.Amount.IsZero()) ||
+		r.BillingModel != "" ||
+		r.TierMode != "" ||
+		len(r.Tiers) > 0 ||
+		r.TransformQuantity != nil
+}
+
+// ToSubscriptionLineItem converts the update request to a domain subscription line item
+// This method creates a new line item based on the existing one with updated parameters
+func (r *UpdateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.Context, existingLineItem *subscription.SubscriptionLineItem, newPriceID string) *subscription.SubscriptionLineItem {
+	// Start with the existing line item as base
+	newLineItem := &subscription.SubscriptionLineItem{
+		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+		SubscriptionID:   existingLineItem.SubscriptionID,
+		CustomerID:       existingLineItem.CustomerID,
+		PriceID:          newPriceID,
+		PriceType:        existingLineItem.PriceType,
+		Currency:         existingLineItem.Currency,
+		BillingPeriod:    existingLineItem.BillingPeriod,
+		InvoiceCadence:   existingLineItem.InvoiceCadence,
+		TrialPeriod:      existingLineItem.TrialPeriod,
+		PriceUnitID:      existingLineItem.PriceUnitID,
+		PriceUnit:        existingLineItem.PriceUnit,
+		EntityType:       existingLineItem.EntityType,
+		EntityID:         existingLineItem.EntityID,
+		PlanDisplayName:  existingLineItem.PlanDisplayName,
+		MeterID:          existingLineItem.MeterID,
+		MeterDisplayName: existingLineItem.MeterDisplayName,
+		DisplayName:      existingLineItem.DisplayName,
+		Quantity:         existingLineItem.Quantity,
+		EnvironmentID:    types.GetEnvironmentID(ctx),
+		BaseModel:        types.GetDefaultBaseModel(ctx),
+	}
+
+	// Set metadata - use provided metadata or keep existing
+	if r.Metadata != nil {
+		newLineItem.Metadata = r.Metadata
+	} else {
+		newLineItem.Metadata = existingLineItem.Metadata
+	}
+
+	return newLineItem
 }

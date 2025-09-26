@@ -4708,9 +4708,9 @@ func (s *SubscriptionServiceSuite) TestSyncPlanPrices_Line_Item_Management() {
 		s.Equal(testPlan.ID, result.PlanID)
 		s.Equal(testPlan.Name, result.PlanName)
 		s.Equal(1, result.SynchronizationSummary.SubscriptionsProcessed)
-		s.Equal(0, result.SynchronizationSummary.PricesAdded) // Line item already exists
-		s.Equal(0, result.SynchronizationSummary.PricesRemoved)
-		s.Equal(1, result.SynchronizationSummary.PricesSkipped) // Price skipped as line item exists
+		s.Equal(0, result.SynchronizationSummary.LineItemsCreated) // Line item already exists
+		s.Equal(0, result.SynchronizationSummary.LineItemsTerminated)
+		s.Equal(1, result.SynchronizationSummary.LineItemsSkipped) // Price skipped as line item exists
 	})
 
 	s.Run("TC-SYNC-015_Existing_Line_Items_For_Expired_Prices", func() {
@@ -4811,9 +4811,9 @@ func (s *SubscriptionServiceSuite) TestSyncPlanPrices_Line_Item_Management() {
 		s.Equal(testPlan.ID, result.PlanID)
 		s.Equal(testPlan.Name, result.PlanName)
 		s.Equal(1, result.SynchronizationSummary.SubscriptionsProcessed)
-		s.Equal(0, result.SynchronizationSummary.PricesAdded)   // No active prices to add
-		s.Equal(0, result.SynchronizationSummary.PricesRemoved) // Line item should be ended
-		s.Equal(1, result.SynchronizationSummary.PricesSkipped) // Expired price skipped
+		s.Equal(0, result.SynchronizationSummary.LineItemsCreated)    // No active prices to add
+		s.Equal(0, result.SynchronizationSummary.LineItemsTerminated) // Line item should be ended
+		s.Equal(1, result.SynchronizationSummary.LineItemsSkipped)    // Expired price skipped
 	})
 
 	s.Run("TC-SYNC-016_Missing_Line_Items_For_Active_Prices", func() {
@@ -4894,9 +4894,9 @@ func (s *SubscriptionServiceSuite) TestSyncPlanPrices_Line_Item_Management() {
 		s.Equal(testPlan.ID, result.PlanID)
 		s.Equal(testPlan.Name, result.PlanName)
 		s.Equal(1, result.SynchronizationSummary.SubscriptionsProcessed)
-		s.Equal(1, result.SynchronizationSummary.PricesAdded) // Line item created for active price
-		s.Equal(0, result.SynchronizationSummary.PricesRemoved)
-		s.Equal(0, result.SynchronizationSummary.PricesSkipped)
+		s.Equal(1, result.SynchronizationSummary.LineItemsCreated) // Line item created for active price
+		s.Equal(0, result.SynchronizationSummary.LineItemsTerminated)
+		s.Equal(0, result.SynchronizationSummary.LineItemsSkipped)
 	})
 
 	s.Run("TC-SYNC-017_Missing_Line_Items_For_Expired_Prices", func() {
@@ -4978,9 +4978,9 @@ func (s *SubscriptionServiceSuite) TestSyncPlanPrices_Line_Item_Management() {
 		s.Equal(testPlan.ID, result.PlanID)
 		s.Equal(testPlan.Name, result.PlanName)
 		s.Equal(1, result.SynchronizationSummary.SubscriptionsProcessed)
-		s.Equal(0, result.SynchronizationSummary.PricesAdded) // No line items created for expired price
-		s.Equal(0, result.SynchronizationSummary.PricesRemoved)
-		s.Equal(1, result.SynchronizationSummary.PricesSkipped) // Expired price skipped
+		s.Equal(0, result.SynchronizationSummary.LineItemsCreated) // No line items created for expired price
+		s.Equal(0, result.SynchronizationSummary.LineItemsTerminated)
+		s.Equal(1, result.SynchronizationSummary.LineItemsSkipped) // Expired price skipped
 	})
 }
 
@@ -5128,9 +5128,9 @@ func (s *SubscriptionServiceSuite) TestSyncPlanPrices_Addon_Handling() {
 		s.Equal(testPlan.ID, result.PlanID)
 		s.Equal(testPlan.Name, result.PlanName)
 		s.Equal(1, result.SynchronizationSummary.SubscriptionsProcessed)
-		s.Equal(0, result.SynchronizationSummary.PricesAdded) // No plan prices to add
-		s.Equal(0, result.SynchronizationSummary.PricesRemoved)
-		s.Equal(1, result.SynchronizationSummary.PricesSkipped) // Plan price skipped as line item exists
+		s.Equal(0, result.SynchronizationSummary.LineItemsCreated) // No plan prices to add
+		s.Equal(0, result.SynchronizationSummary.LineItemsTerminated)
+		s.Equal(1, result.SynchronizationSummary.LineItemsSkipped) // Plan price skipped as line item exists
 	})
 
 	s.Run("TC-SYNC-019_Addon_Line_Items_With_Entity_Type_Addon", func() {
@@ -5265,9 +5265,9 @@ func (s *SubscriptionServiceSuite) TestSyncPlanPrices_Addon_Handling() {
 		s.Equal(testPlan.ID, result.PlanID)
 		s.Equal(testPlan.Name, result.PlanName)
 		s.Equal(1, result.SynchronizationSummary.SubscriptionsProcessed)
-		s.Equal(0, result.SynchronizationSummary.PricesAdded) // No plan prices to add
-		s.Equal(0, result.SynchronizationSummary.PricesRemoved)
-		s.Equal(1, result.SynchronizationSummary.PricesSkipped) // Plan price skipped as line item exists
+		s.Equal(0, result.SynchronizationSummary.LineItemsCreated) // No plan prices to add
+		s.Equal(0, result.SynchronizationSummary.LineItemsTerminated)
+		s.Equal(1, result.SynchronizationSummary.LineItemsSkipped) // Plan price skipped as line item exists
 	})
 
 	s.Run("TC-SYNC-020_Mixed_Plan_And_Addon_Line_Items", func() {
@@ -5393,9 +5393,9 @@ func (s *SubscriptionServiceSuite) TestSyncPlanPrices_Addon_Handling() {
 		s.Equal(testPlan.ID, result.PlanID)
 		s.Equal(testPlan.Name, result.PlanName)
 		s.Equal(1, result.SynchronizationSummary.SubscriptionsProcessed)
-		s.Equal(0, result.SynchronizationSummary.PricesAdded) // Plan price already has line item
-		s.Equal(0, result.SynchronizationSummary.PricesRemoved)
-		s.Equal(1, result.SynchronizationSummary.PricesSkipped) // Plan price skipped as line item exists
+		s.Equal(0, result.SynchronizationSummary.LineItemsCreated) // Plan price already has line item
+		s.Equal(0, result.SynchronizationSummary.LineItemsTerminated)
+		s.Equal(1, result.SynchronizationSummary.LineItemsSkipped) // Plan price skipped as line item exists
 	})
 }
 
@@ -5502,9 +5502,9 @@ func (s *SubscriptionServiceSuite) TestSyncPlanPrices_Timing_And_Edge_Cases() {
 		s.Equal(testPlan.ID, result.PlanID)
 		s.Equal(testPlan.Name, result.PlanName)
 		s.Equal(1, result.SynchronizationSummary.SubscriptionsProcessed)
-		s.Equal(0, result.SynchronizationSummary.PricesAdded)   // No active prices to add
-		s.Equal(0, result.SynchronizationSummary.PricesRemoved) // Past line item should be ended
-		s.Equal(1, result.SynchronizationSummary.PricesSkipped) // Expired price skipped
+		s.Equal(0, result.SynchronizationSummary.LineItemsCreated)    // No active prices to add
+		s.Equal(0, result.SynchronizationSummary.LineItemsTerminated) // Past line item should be ended
+		s.Equal(1, result.SynchronizationSummary.LineItemsSkipped)    // Expired price skipped
 	})
 
 	s.Run("TC-SYNC-030_Current_Period_Start_vs_Line_Item_End_Date", func() {
@@ -5590,9 +5590,9 @@ func (s *SubscriptionServiceSuite) TestSyncPlanPrices_Timing_And_Edge_Cases() {
 		s.Equal(testPlan.ID, result.PlanID)
 		s.Equal(testPlan.Name, result.PlanName)
 		s.Equal(1, result.SynchronizationSummary.SubscriptionsProcessed)
-		s.Equal(1, result.SynchronizationSummary.PricesAdded) // Line item created for active price
-		s.Equal(0, result.SynchronizationSummary.PricesRemoved)
-		s.Equal(0, result.SynchronizationSummary.PricesSkipped)
+		s.Equal(1, result.SynchronizationSummary.LineItemsCreated) // Line item created for active price
+		s.Equal(0, result.SynchronizationSummary.LineItemsTerminated)
+		s.Equal(0, result.SynchronizationSummary.LineItemsSkipped)
 	})
 }
 

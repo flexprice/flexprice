@@ -370,8 +370,16 @@ func provideTemporalWorkerManager(temporalClient client.TemporalClient, log *log
 }
 
 func provideTemporalService(temporalClient client.TemporalClient, workerManager worker.TemporalWorkerManager, log *logger.Logger) temporalservice.TemporalService {
-	service := temporalservice.NewTemporalService(temporalClient, workerManager, log)
-	service.Start(context.Background())
+	// Initialize the global Temporal service instance
+	temporalservice.InitializeGlobalTemporalService(temporalClient, workerManager, log)
+
+	// Get the global instance and start it
+	service := temporalservice.GetGlobalTemporalService()
+	if err := service.Start(context.Background()); err != nil {
+		log.Error("Failed to start global Temporal service", "error", err)
+		return nil
+	}
+
 	return service
 }
 

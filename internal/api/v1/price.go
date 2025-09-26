@@ -18,7 +18,10 @@ type PriceHandler struct {
 }
 
 func NewPriceHandler(service service.PriceService, log *logger.Logger) *PriceHandler {
-	return &PriceHandler{service: service, log: log}
+	return &PriceHandler{
+		service: service,
+		log:     log,
+	}
 }
 
 // @Summary Create a new price
