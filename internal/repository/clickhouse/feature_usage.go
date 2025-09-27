@@ -358,138 +358,6 @@ func (r *FeatureUsageRepository) IsDuplicate(ctx context.Context, subscriptionID
 	return exists == 1, nil
 }
 
-// GetLineItemUsage gets the current usage amounts for a subscription line item in a period
-func (r *FeatureUsageRepository) GetLineItemUsage(ctx context.Context, subLineItemID string, periodID uint64) (qty decimal.Decimal, freeUnits decimal.Decimal, err error) {
-	query := `
-		SELECT 
-			sumMerge(qty_state) AS qty_total
-		FROM agg_usage_period_totals
-		WHERE sub_line_item_id = ?
-		AND period_id = ?
-	`
-
-	err = r.store.GetConn().QueryRow(ctx, query, subLineItemID, periodID).Scan(&qty, &freeUnits)
-	if err != nil {
-		// If no rows found, return zero values
-		if err.Error() == "sql: no rows in result set" {
-			return decimal.Zero, decimal.Zero, nil
-		}
-		return decimal.Zero, decimal.Zero, ierr.WithError(err).
-			WithHint("Failed to get line item usage").
-			Mark(ierr.ErrDatabase)
-	}
-
-	return qty, freeUnits, nil
-}
-
-// GetPeriodCost gets the total cost for a subscription in a billing period
-func (r *FeatureUsageRepository) GetPeriodCost(ctx context.Context, tenantID, environmentID, customerID, subscriptionID string, periodID uint64) (decimal.Decimal, error) {
-	query := `
-		SELECT sumMerge(cost_state) AS cost 
-		FROM agg_usage_period_totals
-		WHERE tenant_id = ?
-		AND environment_id = ?
-		AND customer_id = ?
-		AND subscription_id = ?
-		AND period_id = ?
-	`
-
-	var cost decimal.Decimal
-	err := r.store.GetConn().QueryRow(ctx, query, tenantID, environmentID, customerID, subscriptionID, periodID).Scan(&cost)
-	if err != nil {
-		// If no rows found, return zero
-		if err.Error() == "sql: no rows in result set" {
-			return decimal.Zero, nil
-		}
-		return decimal.Zero, ierr.WithError(err).
-			WithHint("Failed to get period cost").
-			Mark(ierr.ErrDatabase)
-	}
-
-	return cost, nil
-}
-
-// GetPeriodFeatureTotals gets usage totals by feature for a subscription in a period
-func (r *FeatureUsageRepository) GetPeriodFeatureTotals(ctx context.Context, tenantID, environmentID, customerID, subscriptionID string, periodID uint64) ([]*events.PeriodFeatureTotal, error) {
-	query := `
-		SELECT 
-			feature_id,
-			sumMerge(qty_state) AS qty,
-			sumMerge(free_state) AS free,
-			sumMerge(cost_state) AS cost
-		FROM agg_usage_period_totals
-		WHERE tenant_id = ?
-		AND environment_id = ?
-		AND customer_id = ?
-		AND subscription_id = ?
-		AND period_id = ?
-		GROUP BY feature_id
-	`
-
-	rows, err := r.store.GetConn().Query(ctx, query, tenantID, environmentID, customerID, subscriptionID, periodID)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to query period feature totals").
-			Mark(ierr.ErrDatabase)
-	}
-	defer rows.Close()
-
-	var results []*events.PeriodFeatureTotal
-	for rows.Next() {
-		var total events.PeriodFeatureTotal
-		err := rows.Scan(&total.FeatureID, &total.Quantity, &total.FreeUnits, &total.Cost)
-		if err != nil {
-			return nil, ierr.WithError(err).
-				WithHint("Failed to scan period feature total").
-				Mark(ierr.ErrDatabase)
-		}
-		results = append(results, &total)
-	}
-
-	return results, nil
-}
-
-// GetUsageAnalytics gets recent usage analytics for a customer
-func (r *FeatureUsageRepository) GetUsageAnalytics(ctx context.Context, tenantID, environmentID, customerID string, lookbackHours int) ([]*events.UsageAnalytic, error) {
-	query := `
-		SELECT 
-			source,
-			feature_id,
-			sum(cost) AS cost,
-			sum(qty_total) AS usage
-		FROM feature_usage
-		WHERE tenant_id = ?
-		AND environment_id = ?
-		AND customer_id = ?
-		AND timestamp >= now64(3) - INTERVAL ? HOUR
-		GROUP BY source, feature_id
-		ORDER BY cost DESC
-		LIMIT 100
-	`
-
-	rows, err := r.store.GetConn().Query(ctx, query, tenantID, environmentID, customerID, lookbackHours)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to query usage analytics").
-			Mark(ierr.ErrDatabase)
-	}
-	defer rows.Close()
-
-	var results []*events.UsageAnalytic
-	for rows.Next() {
-		var analytics events.UsageAnalytic
-		err := rows.Scan(&analytics.Source, &analytics.FeatureID, &analytics.Cost, &analytics.Usage)
-		if err != nil {
-			return nil, ierr.WithError(err).
-				WithHint("Failed to scan usage analytics").
-				Mark(ierr.ErrDatabase)
-		}
-		results = append(results, &analytics)
-	}
-
-	return results, nil
-}
-
 // GetDetailedUsageAnalytics provides comprehensive usage analytics with filtering, grouping, and time-series data
 func (r *FeatureUsageRepository) GetDetailedUsageAnalytics(ctx context.Context, params *events.UsageAnalyticsParams, maxBucketFeatures map[string]*events.MaxBucketFeatureInfo) ([]*events.DetailedUsageAnalytic, error) {
 	span := StartRepositorySpan(ctx, "processed_event", "get_detailed_usage_analytics", map[string]interface{}{
@@ -604,16 +472,17 @@ func (r *FeatureUsageRepository) getStandardAnalytics(ctx context.Context, param
 	}
 
 	// Add group by columns based on params.GroupBy
-	groupByColumns := []string{}
-	groupByColumnAliases := []string{}             // for SELECT clause
+	// Always include feature_id for cost calculation, then add requested grouping dimensions
+	groupByColumns := []string{"feature_id"}       // Always include feature_id for cost calculation
+	groupByColumnAliases := []string{"feature_id"} // for SELECT clause
 	groupByFieldMapping := make(map[string]string) // maps original field to column alias
+	groupByFieldMapping["feature_id"] = "feature_id"
 
+	// Add the requested grouping dimensions
 	for _, groupBy := range params.GroupBy {
 		switch {
 		case groupBy == "feature_id":
-			groupByColumns = append(groupByColumns, "feature_id")
-			groupByColumnAliases = append(groupByColumnAliases, "feature_id")
-			groupByFieldMapping["feature_id"] = "feature_id"
+			// Already included above
 		case groupBy == "source":
 			groupByColumns = append(groupByColumns, "source")
 			groupByColumnAliases = append(groupByColumnAliases, "source")
@@ -756,21 +625,23 @@ func (r *FeatureUsageRepository) getStandardAnalytics(ctx context.Context, param
 		analytics.Properties = make(map[string]string)
 
 		// Scan the row based on group by columns
-		expectedColumns := len(params.GroupBy) + 5 // +5 for sum_usage, max_usage, latest_usage, count_unique_usage, event_count
+		// feature_id is always first, followed by requested grouping dimensions
+		totalGroupByColumns := 1 + len(params.GroupBy) // feature_id + requested dimensions
+		expectedColumns := totalGroupByColumns + 5     // +5 for sum_usage, max_usage, latest_usage, count_unique_usage, event_count
 		scanArgs := make([]interface{}, expectedColumns)
 
-		// Prepare scan targets for each group by field
-		scanTargets := make([]string, len(params.GroupBy)) // to store scanned string values
-		for i := range params.GroupBy {
+		// Prepare scan targets: feature_id first, then requested grouping dimensions
+		scanTargets := make([]string, totalGroupByColumns)
+		for i := range scanTargets {
 			scanArgs[i] = &scanTargets[i]
 		}
 
 		// Scan the aggregate values
-		scanArgs[len(params.GroupBy)] = &analytics.TotalUsage
-		scanArgs[len(params.GroupBy)+1] = &analytics.MaxUsage
-		scanArgs[len(params.GroupBy)+2] = &analytics.LatestUsage
-		scanArgs[len(params.GroupBy)+3] = &analytics.CountUniqueUsage
-		scanArgs[len(params.GroupBy)+4] = &analytics.EventCount
+		scanArgs[totalGroupByColumns] = &analytics.TotalUsage
+		scanArgs[totalGroupByColumns+1] = &analytics.MaxUsage
+		scanArgs[totalGroupByColumns+2] = &analytics.LatestUsage
+		scanArgs[totalGroupByColumns+3] = &analytics.CountUniqueUsage
+		scanArgs[totalGroupByColumns+4] = &analytics.EventCount
 
 		if err := rows.Scan(scanArgs...); err != nil {
 			return nil, ierr.WithError(err).
@@ -781,12 +652,15 @@ func (r *FeatureUsageRepository) getStandardAnalytics(ctx context.Context, param
 				Mark(ierr.ErrDatabase)
 		}
 
-		// Populate analytics fields and grouped values based on scanned results
+		// Populate analytics fields: feature_id is always first
+		analytics.FeatureID = scanTargets[0]
+
+		// Then populate requested grouping dimensions
 		for i, groupBy := range params.GroupBy {
-			value := scanTargets[i]
+			value := scanTargets[1+i] // +1 because feature_id is at index 0
 			switch groupBy {
 			case "feature_id":
-				analytics.FeatureID = value
+				// Already handled above
 			case "source":
 				analytics.Source = value
 			default:
@@ -953,22 +827,16 @@ func (r *FeatureUsageRepository) getMaxBucketTotals(ctx context.Context, params 
 		scanTargets := []interface{}{&analytics.FeatureID}
 
 		// Add scan targets for grouping columns
-		for _, groupBy := range params.GroupBy {
+		groupingValues := make([]string, len(params.GroupBy))
+		for i, groupBy := range params.GroupBy {
 			switch groupBy {
 			case "source":
-				var source string
-				scanTargets = append(scanTargets, &source)
-				analytics.Source = source
+				scanTargets = append(scanTargets, &groupingValues[i])
 			case "feature_id":
 				// Already handled
 			default:
 				if strings.HasPrefix(groupBy, "properties.") {
-					propertyName := strings.TrimPrefix(groupBy, "properties.")
-					var propertyValue string
-					scanTargets = append(scanTargets, &propertyValue)
-					if propertyValue != "" {
-						analytics.Properties[propertyName] = propertyValue
-					}
+					scanTargets = append(scanTargets, &groupingValues[i])
 				}
 			}
 		}
@@ -981,6 +849,24 @@ func (r *FeatureUsageRepository) getMaxBucketTotals(ctx context.Context, params 
 			return nil, ierr.WithError(err).
 				WithHint("Failed to scan MAX bucket totals row").
 				Mark(ierr.ErrDatabase)
+		}
+
+		// Populate grouping fields from scanned values
+		for i, groupBy := range params.GroupBy {
+			value := groupingValues[i]
+			switch groupBy {
+			case "source":
+				analytics.Source = value
+			case "feature_id":
+				// Already handled above
+			default:
+				if strings.HasPrefix(groupBy, "properties.") {
+					propertyName := strings.TrimPrefix(groupBy, "properties.")
+					if value != "" {
+						analytics.Properties[propertyName] = value
+					}
+				}
+			}
 		}
 
 		results = append(results, analytics)
