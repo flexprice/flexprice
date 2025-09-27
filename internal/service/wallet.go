@@ -637,7 +637,7 @@ func (s *walletService) UpdateWallet(ctx context.Context, id string, req *dto.Up
 		// Convert AlertConfig to types.AlertConfig
 		existing.AlertConfig = &types.AlertConfig{
 			Threshold: &types.AlertThreshold{
-				Type:  req.AlertConfig.Threshold.Type,
+				Type:  types.AlertThresholdType(req.AlertConfig.Threshold.Type),
 				Value: req.AlertConfig.Threshold.Value,
 			},
 		}
@@ -757,66 +757,68 @@ func (s *walletService) processDebitOperation(ctx context.Context, req *wallet.W
 func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.WalletOperation) error {
 	s.Logger.Debugw("Processing wallet operation", "req", req)
 
-	return s.DB.WithTx(ctx, func(ctx context.Context) error {
-		// Get wallet
-		w, err := s.WalletRepo.GetWalletByID(ctx, req.WalletID)
+	// Get wallet
+	w, err := s.WalletRepo.GetWalletByID(ctx, req.WalletID)
+	if err != nil {
+		return err
+	}
+
+	// Validate operation
+	if err := s.validateWalletOperation(w, req); err != nil {
+		return err
+	}
+
+	var newCreditBalance decimal.Decimal
+
+	// For debit operations, find and consume available credits
+	if req.Type == types.TransactionTypeDebit {
+		newCreditBalance = w.CreditBalance.Sub(req.CreditAmount)
+		// Process debit operation first
+		err = s.processDebitOperation(ctx, req)
 		if err != nil {
 			return err
 		}
+	} else {
+		// Process credit operation
+		newCreditBalance = w.CreditBalance.Add(req.CreditAmount)
+	}
 
-		// Validate operation
-		if err := s.validateWalletOperation(w, req); err != nil {
-			return err
-		}
+	finalBalance := s.GetCurrencyAmountFromCredits(newCreditBalance, w.ConversionRate)
 
-		var newCreditBalance decimal.Decimal
-		// For debit operations, find and consume available credits
-		if req.Type == types.TransactionTypeDebit {
-			newCreditBalance = w.CreditBalance.Sub(req.CreditAmount)
-			// Process debit operation first
-			err = s.processDebitOperation(ctx, req)
-			if err != nil {
-				return err
-			}
-		} else {
-			// Process credit operation
-			newCreditBalance = w.CreditBalance.Add(req.CreditAmount)
-		}
+	// Create transaction record
+	tx := &wallet.Transaction{
+		ID:                  types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION),
+		WalletID:            req.WalletID,
+		Type:                req.Type,
+		Amount:              req.Amount,
+		CreditAmount:        req.CreditAmount,
+		ReferenceType:       req.ReferenceType,
+		ReferenceID:         req.ReferenceID,
+		Description:         req.Description,
+		Metadata:            req.Metadata,
+		TxStatus:            types.TransactionStatusCompleted,
+		TransactionReason:   req.TransactionReason,
+		ExpiryDate:          types.ParseYYYYMMDDToDate(req.ExpiryDate),
+		Priority:            req.Priority,
+		CreditBalanceBefore: w.CreditBalance,
+		CreditBalanceAfter:  newCreditBalance,
+		EnvironmentID:       types.GetEnvironmentID(ctx),
+		IdempotencyKey:      req.IdempotencyKey,
+		BaseModel:           types.GetDefaultBaseModel(ctx),
+	}
 
-		finalBalance := s.GetCurrencyAmountFromCredits(newCreditBalance, w.ConversionRate)
+	// Set credits available based on transaction type
+	if req.Type == types.TransactionTypeCredit {
+		tx.CreditsAvailable = req.CreditAmount
+	} else {
+		tx.CreditsAvailable = decimal.Zero
+	}
 
-		// Create transaction record
-		tx := &wallet.Transaction{
-			ID:                  types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION),
-			WalletID:            req.WalletID,
-			Type:                req.Type,
-			Amount:              req.Amount,
-			CreditAmount:        req.CreditAmount,
-			ReferenceType:       req.ReferenceType,
-			ReferenceID:         req.ReferenceID,
-			Description:         req.Description,
-			Metadata:            req.Metadata,
-			TxStatus:            types.TransactionStatusCompleted,
-			TransactionReason:   req.TransactionReason,
-			ExpiryDate:          types.ParseYYYYMMDDToDate(req.ExpiryDate),
-			Priority:            req.Priority,
-			CreditBalanceBefore: w.CreditBalance,
-			CreditBalanceAfter:  newCreditBalance,
-			EnvironmentID:       types.GetEnvironmentID(ctx),
-			IdempotencyKey:      req.IdempotencyKey,
-			BaseModel:           types.GetDefaultBaseModel(ctx),
-		}
+	if req.Type == types.TransactionTypeCredit && req.ExpiryDate != nil {
+		tx.ExpiryDate = types.ParseYYYYMMDDToDate(req.ExpiryDate)
+	}
 
-		// Set credits available based on transaction type
-		if req.Type == types.TransactionTypeCredit {
-			tx.CreditsAvailable = req.CreditAmount
-		} else {
-			tx.CreditsAvailable = decimal.Zero
-		}
-
-		if req.Type == types.TransactionTypeCredit && req.ExpiryDate != nil {
-			tx.ExpiryDate = types.ParseYYYYMMDDToDate(req.ExpiryDate)
-		}
+	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
 
 		if err := s.WalletRepo.CreateTransaction(ctx, tx); err != nil {
 			return err
@@ -830,8 +832,67 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 		s.Logger.Debugw("Wallet operation completed")
 		s.publishInternalTransactionWebhookEvent(ctx, types.WebhookEventWalletTransactionCreated, tx.ID)
 		return nil
-
 	})
+	if err != nil {
+		return err
+	}
+
+	// Check credit balance alerts after wallet operation
+	var thresholdValue decimal.Decimal
+	var alertStatus types.AlertState
+
+	// Get wallet threshold or use default (0)
+	if w.AlertConfig != nil && w.AlertConfig.Threshold != nil {
+		thresholdValue = w.AlertConfig.Threshold.Value
+	} else {
+		thresholdValue = decimal.Zero
+	}
+
+	// Determine alert status based on balance vs threshold
+	if newCreditBalance.LessThan(thresholdValue) {
+		alertStatus = types.AlertStateInAlarm
+	} else {
+		alertStatus = types.AlertStateOk
+	}
+
+	// Create alert info
+	alertInfo := types.AlertInfo{
+		Threshold: types.AlertThreshold{
+			Type:  types.AlertThresholdTypeAmount,
+			Value: thresholdValue,
+		},
+		ValueAtTime: newCreditBalance,
+		Timestamp:   time.Now().UTC(),
+	}
+
+	// Log the alert
+	alertService := NewAlertLogsService(s.ServiceParams)
+	logAlertReq := &LogAlertRequest{
+		EntityType:  types.AlertEntityTypeWallet,
+		EntityID:    w.ID,
+		AlertType:   types.AlertTypeLowCreditBalance,
+		AlertStatus: alertStatus,
+		AlertInfo:   alertInfo,
+	}
+
+	if err := alertService.LogAlert(ctx, logAlertReq); err != nil {
+		// Log error but don't fail the transaction
+		s.Logger.Errorw("failed to log credit balance alert",
+			"error", err,
+			"wallet_id", w.ID,
+			"new_credit_balance", newCreditBalance,
+			"threshold", thresholdValue,
+			"alert_status", alertStatus,
+		)
+	} else {
+		s.Logger.Infow("credit balance alert logged successfully",
+			"wallet_id", w.ID,
+			"new_credit_balance", newCreditBalance,
+			"threshold", thresholdValue,
+			"alert_status", alertStatus,
+		)
+	}
+	return nil
 }
 
 // ExpireCredits expires credits for a given transaction
@@ -1153,10 +1214,10 @@ func (s *walletService) PublishEvent(ctx context.Context, eventName string, w *w
 
 func getAlertType(eventName string) string {
 	switch eventName {
-	case types.WebhookEventWalletCreditBalanceDropped:
-		return "credit_balance"
-	case types.WebhookEventWalletOngoingBalanceDropped:
-		return "ongoing_balance"
+	case types.WebhookEventWalletCreditBalanceDropped, types.WebhookEventWalletCreditBalanceRecovered:
+		return string(types.AlertTypeLowCreditBalance)
+	case types.WebhookEventWalletOngoingBalanceDropped, types.WebhookEventWalletOngoingBalanceRecovered:
+		return string(types.AlertTypeLowOngoingBalance)
 	default:
 		return ""
 	}
@@ -1203,7 +1264,7 @@ func (s *walletService) CheckBalanceThresholds(ctx context.Context, w *wallet.Wa
 		)
 
 		// If current state is alert, update to ok (recovery)
-		if w.AlertState == string(types.AlertStateAlert) {
+		if w.AlertState == string(types.AlertStateInAlarm) {
 			if err := s.UpdateWalletAlertState(ctx, w.ID, types.AlertStateOk); err != nil {
 				s.Logger.Errorw("failed to update wallet alert state",
 					"wallet_id", w.ID,
@@ -1220,7 +1281,7 @@ func (s *walletService) CheckBalanceThresholds(ctx context.Context, w *wallet.Wa
 	}
 
 	// Skip if already in alert state
-	if w.AlertState == string(types.AlertStateAlert) {
+	if w.AlertState == string(types.AlertStateInAlarm) {
 		s.Logger.Infow("skipping alert - already in alert state",
 			"wallet_id", w.ID,
 		)
@@ -1235,7 +1296,7 @@ func (s *walletService) CheckBalanceThresholds(ctx context.Context, w *wallet.Wa
 	)
 
 	// Update wallet state to alert
-	if err := s.UpdateWalletAlertState(ctx, w.ID, types.AlertStateAlert); err != nil {
+	if err := s.UpdateWalletAlertState(ctx, w.ID, types.AlertStateInAlarm); err != nil {
 		s.Logger.Errorw("failed to update wallet alert state",
 			"wallet_id", w.ID,
 			"error", err,

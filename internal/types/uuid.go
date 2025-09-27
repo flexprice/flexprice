@@ -106,6 +106,7 @@ const (
 	UUID_PREFIX_ADDON_ASSOCIATION           = "addon_assoc"
 	UUID_PREFIX_WEBHOOK_EVENT               = "webhook"
 	UUID_PREFIX_SETTING                     = "setting"
+	UUID_PREFIX_ALERT_LOG                   = "alert"
 
 	// Temporal workflow prefixes
 	UUID_PREFIX_WORKFLOW = "wf"

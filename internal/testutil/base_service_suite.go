@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
+	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	"github.com/flexprice/flexprice/internal/domain/auth"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/coupon"
@@ -81,6 +82,7 @@ type Stores struct {
 	ConnectionRepo               connection.Repository
 	EntityIntegrationMappingRepo entityintegrationmapping.Repository
 	SettingsRepo                 settings.Repository
+	AlertLogsRepo                alertlogs.Repository
 }
 
 // BaseServiceTestSuite provides common functionality for all service test suites
@@ -190,6 +192,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 		ConnectionRepo:               NewInMemoryConnectionStore(),
 		EntityIntegrationMappingRepo: NewInMemoryEntityIntegrationMappingStore(),
 		SettingsRepo:                 NewInMemorySettingsStore(),
+		AlertLogsRepo:                NewInMemoryAlertLogsStore(),
 	}
 
 	s.db = NewMockPostgresClient(s.logger)
@@ -237,6 +240,7 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.AddonAssociationRepo.(*InMemoryAddonAssociationStore).Clear()
 	s.stores.SettingsRepo.(*InMemorySettingsStore).Clear()
 	s.stores.SubscriptionLineItemRepo.(*InMemorySubscriptionLineItemStore).Clear()
+	s.stores.AlertLogsRepo.(*InMemoryAlertLogsStore).Clear()
 }
 
 func (s *BaseServiceTestSuite) ClearStores() {

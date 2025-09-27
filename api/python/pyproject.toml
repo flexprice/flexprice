@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "flexprice"
-version = "1.0.5"
+version = "1.0.27"
 description = "Official Python SDK of Flexprice"
 authors = ["Flexprice <tech@flexprice.io>"]
 license = "Apache 2.0"

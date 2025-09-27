@@ -97,6 +97,7 @@ func (s *BillingServiceSuite) setupService() {
 		EventPublisher:        s.GetPublisher(),
 		WebhookPublisher:      s.GetWebhookPublisher(),
 		ProrationCalculator:   s.GetCalculator(),
+		AlertLogsRepo:         s.GetStores().AlertLogsRepo,
 	})
 }
 

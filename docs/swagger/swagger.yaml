@@ -444,6 +444,9 @@ definitions:
         type: string
       id:
         type: string
+      metadata:
+        additionalProperties: true
+        type: object
       name:
         type: string
       provider_type:
@@ -749,6 +752,9 @@ definitions:
     properties:
       encrypted_secret_data:
         $ref: '#/definitions/types.ConnectionMetadata'
+      metadata:
+        additionalProperties: true
+        type: object
       name:
         maxLength: 255
         type: string
@@ -4747,6 +4753,9 @@ definitions:
     type: object
   dto.UpdateConnectionRequest:
     properties:
+      metadata:
+        additionalProperties: true
+        type: object
       name:
         maxLength: 255
         type: string
@@ -5877,6 +5886,7 @@ definitions:
     - LATEST
     - SUM_WITH_MULTIPLIER
     - MAX
+    - WEIGHTED_SUM
     type: string
     x-enum-comments:
       AggregationSumWithMultiplier: Sum with a multiplier - [sum(value) * multiplier]
@@ -5888,6 +5898,7 @@ definitions:
     - ""
     - Sum with a multiplier - [sum(value) * multiplier]
     - ""
+    - ""
     x-enum-varnames:
     - AggregationCount
     - AggregationSum
@@ -5896,6 +5907,7 @@ definitions:
     - AggregationLatest
     - AggregationSumWithMultiplier
     - AggregationMax
+    - AggregationWeightedSum
   types.AlertConfig:
     properties:
       threshold:
@@ -6024,8 +6036,15 @@ definitions:
     properties:
       generic:
         $ref: '#/definitions/types.GenericConnectionMetadata'
+      settings:
+        $ref: '#/definitions/types.ConnectionSettings'
       stripe:
         $ref: '#/definitions/types.StripeConnectionMetadata'
+    type: object
+  types.ConnectionSettings:
+    properties:
+      invoice_sync_enable:
+        type: boolean
     type: object
   types.CouponCadence:
     enum:
@@ -10928,6 +10947,9 @@ paths:
         type: string
       - in: query
         name: expand
+        type: string
+      - in: query
+        name: gateway_payment_id
         type: string
       - in: query
         maximum: 1000

@@ -770,6 +770,22 @@ func (s *invoiceService) syncInvoiceToStripeIfEnabled(ctx context.Context, inv *
 		return nil // Not an error, just skip sync
 	}
 
+	// Ensure customer is synced to Stripe before syncing invoice
+	stripeService := NewStripeService(s.ServiceParams)
+	customerResp, err := stripeService.EnsureCustomerSyncedToStripe(ctx, inv.CustomerID)
+	if err != nil {
+		s.Logger.Errorw("failed to ensure customer is synced to Stripe, skipping invoice sync",
+			"invoice_id", inv.ID,
+			"customer_id", inv.CustomerID,
+			"error", err)
+		return nil // Don't fail the entire process, just skip invoice sync
+	}
+
+	s.Logger.Infow("customer synced to Stripe, proceeding with invoice sync",
+		"invoice_id", inv.ID,
+		"customer_id", inv.CustomerID,
+		"stripe_customer_id", customerResp.Customer.Metadata["stripe_customer_id"])
+
 	s.Logger.Infow("syncing invoice to Stripe",
 		"invoice_id", inv.ID,
 		"subscription_id", sub.ID,

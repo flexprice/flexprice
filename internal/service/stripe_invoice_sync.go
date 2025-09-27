@@ -425,6 +425,11 @@ func (s *StripeInvoiceSyncService) hasStripeConnection(ctx context.Context) bool
 	return err == nil && conn != nil
 }
 
+// GetStripeClient gets an authenticated Stripe client (public method)
+func (s *StripeInvoiceSyncService) GetStripeClient(ctx context.Context) (*stripe.Client, error) {
+	return s.getStripeClient(ctx)
+}
+
 // getStripeClient gets an authenticated Stripe client
 func (s *StripeInvoiceSyncService) getStripeClient(ctx context.Context) (*stripe.Client, error) {
 	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderStripe)
@@ -463,6 +468,11 @@ func (s *StripeInvoiceSyncService) getStripeCustomerID(ctx context.Context, cust
 	}
 
 	return stripeCustomerID, nil
+}
+
+// GetExistingStripeMapping gets existing Stripe mapping for an invoice (public method)
+func (s *StripeInvoiceSyncService) GetExistingStripeMapping(ctx context.Context, invoiceID string) (*entityintegrationmapping.EntityIntegrationMapping, error) {
+	return s.getExistingStripeMapping(ctx, invoiceID)
 }
 
 // getExistingStripeMapping gets existing Stripe mapping for an invoice

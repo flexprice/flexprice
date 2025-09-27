@@ -80,8 +80,11 @@ const (
 
 // alert event names
 const (
-	WebhookEventWalletCreditBalanceDropped  = "wallet.credit_balance.dropped"
-	WebhookEventWalletOngoingBalanceDropped = "wallet.ongoing_balance.dropped"
+	WebhookEventWalletCreditBalanceDropped   = "wallet.credit_balance.dropped"
+	WebhookEventWalletCreditBalanceRecovered = "wallet.credit_balance.recovered"
+
+	WebhookEventWalletOngoingBalanceDropped   = "wallet.ongoing_balance.dropped"
+	WebhookEventWalletOngoingBalanceRecovered = "wallet.ongoing_balance.recovered"
 
 	// cron driven webhook event names
 	WebhookEventSubscriptionRenewalDue = "subscription.renewal.due"

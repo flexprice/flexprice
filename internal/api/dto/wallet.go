@@ -159,7 +159,7 @@ func (r *CreateWalletRequest) ToWallet(ctx context.Context) *wallet.Wallet {
 	if r.AlertConfig != nil {
 		alertConfig = &types.AlertConfig{
 			Threshold: &types.AlertThreshold{
-				Type:  r.AlertConfig.Threshold.Type,
+				Type:  types.AlertThresholdType(r.AlertConfig.Threshold.Type),
 				Value: r.AlertConfig.Threshold.Value,
 			},
 		}

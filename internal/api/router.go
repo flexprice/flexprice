@@ -54,6 +54,7 @@ type Handlers struct {
 	CronSubscription *cron.SubscriptionHandler
 	CronWallet       *cron.WalletCronHandler
 	CronCreditGrant  *cron.CreditGrantCronHandler
+	CronInvoice      *cron.InvoiceHandler
 }
 
 func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logger, secretService service.SecretService, envAccessService service.EnvAccessService) *gin.Engine {
@@ -477,6 +478,12 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		creditGrantGroup := cron.Group("/creditgrants")
 		{
 			creditGrantGroup.POST("/process-scheduled-applications", handlers.CronCreditGrant.ProcessScheduledCreditGrantApplications)
+		}
+
+		// Invoice related cron jobs
+		invoiceGroup := cron.Group("/invoices")
+		{
+			invoiceGroup.POST("/void-old-pending", handlers.CronInvoice.VoidOldPendingInvoices)
 		}
 
 		// Settings routes

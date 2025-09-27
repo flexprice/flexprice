@@ -1288,3 +1288,20 @@ func (r *InvoiceVoidRequest) Validate() error {
 	}
 	return nil
 }
+
+// VoidOldPendingInvoicesResponse represents the response for the void old pending invoices cron job
+type VoidOldPendingInvoicesResponse struct {
+	Items   []*VoidOldPendingInvoicesResponseItem `json:"items"`
+	Total   int                                   `json:"total"`
+	Success int                                   `json:"success"`
+	Failed  int                                   `json:"failed"`
+}
+
+// VoidOldPendingInvoicesResponseItem represents the response item for each environment processed
+type VoidOldPendingInvoicesResponseItem struct {
+	TenantID      string `json:"tenant_id"`
+	EnvironmentID string `json:"environment_id"`
+	Count         int    `json:"count"`
+	Success       int    `json:"success"`
+	Failed        int    `json:"failed"`
+}

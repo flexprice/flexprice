@@ -33,6 +33,18 @@ func (f AddonAssociationFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.V
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AddonAssociationMutation", m)
 }
 
+// The AlertLogsFunc type is an adapter to allow the use of ordinary
+// function as AlertLogs mutator.
+type AlertLogsFunc func(context.Context, *ent.AlertLogsMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AlertLogsFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AlertLogsMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AlertLogsMutation", m)
+}
+
 // The AuthFunc type is an adapter to allow the use of ordinary
 // function as Auth mutator.
 type AuthFunc func(context.Context, *ent.AuthMutation) (ent.Value, error)

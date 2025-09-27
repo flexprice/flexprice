@@ -16,7 +16,7 @@ NC='\033[0m' # No Color
 API_DIR="api/javascript"
 SWAGGER_FILE="docs/swagger/swagger-3-0.json"
 SDK_NAME="@flexprice/sdk"
-SDK_VERSION="1.0.17"
+SDK_VERSION="1.0.0"
 
 echo -e "${BLUE}🚀 Starting TypeScript SDK generation...${NC}"
 
@@ -67,7 +67,7 @@ openapi-generator-cli generate \
     -i "$SWAGGER_FILE" \
     -g typescript-fetch \
     -o "$API_DIR" \
-    --additional-properties=npmName="$SDK_NAME",npmVersion="$SDK_VERSION",npmRepository=https://github.com/flexprice/javascript-sdk.git,supportsES6=true,typescriptThreePlus=true,withNodeImports=true,withSeparateModelsAndApi=true,modelPackage=models,apiPackage=apis,enumPropertyNaming=UPPERCASE,stringEnums=true,modelPropertyNaming=camelCase,paramNaming=camelCase,withInterfaces=true,useSingleRequestParameter=true,platform=node,sortParamsByRequiredFlag=true,sortModelPropertiesByRequiredFlag=true,ensureUniqueParams=true,allowUnicodeIdentifiers=false,prependFormOrBodyParameters=false,apiNameSuffix=Api \
+    --additional-properties=npmName="$SDK_NAME",supportsES6=true,typescriptThreePlus=true,withNodeImports=true,withSeparateModelsAndApi=true,modelPackage=models,apiPackage=apis,enumPropertyNaming=UPPERCASE,stringEnums=true,modelPropertyNaming=camelCase,paramNaming=camelCase,withInterfaces=true,useSingleRequestParameter=true,platform=node,sortParamsByRequiredFlag=true,sortModelPropertiesByRequiredFlag=true,ensureUniqueParams=true,allowUnicodeIdentifiers=false,prependFormOrBodyParameters=false,apiNameSuffix=Api \
     --git-repo-id=javascript-sdk \
     --git-user-id=flexprice \
     --global-property apiTests=false,modelTests=false,apiDocs=true,modelDocs=true,withSeparateModelsAndApi=true,withInterfaces=true,useSingleRequestParameter=true,typescriptThreePlus=true,platform=node
@@ -76,22 +76,46 @@ openapi-generator-cli generate \
 echo -e "${BLUE}📝 Configuring package.json...${NC}"
 cd "$API_DIR"
 
-# Update package.json with modern configuration
-npm pkg set type=module
-npm pkg set main=./dist/index.js
-npm pkg set module=./dist/index.js
-npm pkg set types=./dist/index.d.ts
-npm pkg set engines.node=">=16.0.0"
-npm pkg set description="Official TypeScript/JavaScript SDK of Flexprice"
-npm pkg set author="Flexprice"
-npm pkg set keywords='["flexprice","sdk","typescript","javascript","api","billing","pricing","es7","esmodules","fetch"]'
-npm pkg set scripts.build="tsc"
-npm pkg set scripts.prepare="npm run build"
-npm pkg set scripts.test="jest"
-npm pkg set scripts.lint="eslint src/**/*.ts"
-npm pkg set scripts."lint:fix"="eslint src/**/*.ts --fix"
-npm pkg set files='["dist","src","README.md"]'
-npm pkg set exports='{".": {"import": "./dist/index.js", "require": "./dist/index.cjs", "types": "./dist/index.d.ts"}, "./package.json": "./package.json"}'
+# Create package.json with proper JSON structure
+echo -e "${BLUE}🔧 Creating package.json with proper JSON structure...${NC}"
+cat > package.json << EOF
+{
+  "name": "@flexprice/sdk",
+  "version": "$SDK_VERSION",
+  "description": "Official TypeScript/JavaScript SDK of Flexprice",
+  "author": "Flexprice",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/flexprice/javascript-sdk.git"
+  },
+  "main": "./dist/index.js",
+  "typings": "./dist/index.d.ts",
+  "module": "./dist/index.js",
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc",
+    "prepare": "npm run build",
+    "test": "jest",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix"
+  },
+  "type": "module",
+  "types": "./dist/index.d.ts",
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "keywords": ["flexprice", "sdk", "typescript", "javascript", "api", "billing", "pricing", "es7", "esmodules", "fetch"],
+  "files": ["dist", "README.md"],
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
+      "types": "./dist/index.d.ts"
+    },
+    "./package.json": "./package.json"
+  }
+}
+EOF
 
 # Remove invalid dependencies and add proper ones
 echo -e "${BLUE}🔧 Fixing package.json dependencies...${NC}"
@@ -118,7 +142,7 @@ cat > tsconfig.json << 'EOF'
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "ESNext",
+    "module": "ES2022",
     "moduleResolution": "node",
     "lib": ["ES2022", "DOM"],
     "declaration": true,
@@ -138,7 +162,7 @@ cat > tsconfig.json << 'EOF'
     "tsBuildInfoFile": "./dist/.tsbuildinfo"
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]
+  "exclude": ["node_modules", "**/*.test.ts", "**/*.spec.ts"]
 }
 EOF
 

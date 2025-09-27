@@ -4,6 +4,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
+	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	"github.com/flexprice/flexprice/internal/domain/auth"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	costsheet "github.com/flexprice/flexprice/internal/domain/costsheet"
@@ -93,6 +94,7 @@ type ServiceParams struct {
 	ConnectionRepo               connection.Repository
 	EntityIntegrationMappingRepo entityintegrationmapping.Repository
 	SettingsRepo                 settings.Repository
+	AlertLogsRepo                alertlogs.Repository
 
 	// Publishers
 	EventPublisher   publisher.EventPublisher
@@ -153,6 +155,7 @@ func NewServiceParams(
 	connectionRepo connection.Repository,
 	entityIntegrationMappingRepo entityintegrationmapping.Repository,
 	settingsRepo settings.Repository,
+	alertLogsRepo alertlogs.Repository,
 	prorationCalculator proration.Calculator,
 ) ServiceParams {
 	return ServiceParams{
@@ -202,6 +205,7 @@ func NewServiceParams(
 		ConnectionRepo:               connectionRepo,
 		EntityIntegrationMappingRepo: entityIntegrationMappingRepo,
 		SettingsRepo:                 settingsRepo,
+		AlertLogsRepo:                alertLogsRepo,
 		ProrationCalculator:          prorationCalculator,
 	}
 }
