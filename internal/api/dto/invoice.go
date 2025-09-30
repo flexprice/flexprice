@@ -834,6 +834,8 @@ type UpdateInvoiceRequest struct {
 	// invoice_pdf_url is the URL where customers can download the PDF version of this invoice
 	InvoicePDFURL *string    `json:"invoice_pdf_url,omitempty"`
 	DueDate       *time.Time `json:"due_date,omitempty"`
+	// Invoice metadata will be overridden with the request metadata
+	Metadata *types.Metadata `json:"metadata,omitempty"`
 }
 
 func (r *UpdateInvoiceRequest) Validate() error {
@@ -1272,4 +1274,17 @@ func (p *PaymentParameters) NormalizePaymentParameters() *PaymentParameters {
 		return normalized
 	}
 	return p
+}
+
+type InvoiceVoidRequest struct {
+	// metadata will only add/override the values of key-value pairs provided in this request.
+	// for a complete override of metadata field, refer update invoice (PUT /invoices) endpoint
+	Metadata types.Metadata `json:"metadata,omitempty"`
+}
+
+func (r *InvoiceVoidRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+	return nil
 }

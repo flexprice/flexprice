@@ -3,5 +3,47 @@
   "spaces": 2,
   "generator-cli": {
     "version": "7.12.0"
+  },
+  "generators": {
+    "typescript-fetch": {
+      "generatorName": "typescript-fetch",
+      "inputSpec": "./docs/swagger/swagger-3-0.json",
+      "outputDir": "./api/javascript",
+      "additionalProperties": {
+        "npmName": "@flexprice/sdk",
+        "npmVersion": "1.0.17",
+        "npmRepository": "https://github.com/flexprice/javascript-sdk.git",
+        "supportsES6": true,
+        "typescriptThreePlus": true,
+        "withNodeImports": true,
+        "withSeparateModelsAndApi": true,
+        "modelPackage": "models",
+        "apiPackage": "apis",
+        "enumPropertyNaming": "UPPERCASE",
+        "stringEnums": true,
+        "modelPropertyNaming": "camelCase",
+        "paramNaming": "camelCase",
+        "withInterfaces": true,
+        "useSingleRequestParameter": true,
+        "platform": "node",
+        "sortParamsByRequiredFlag": true,
+        "sortModelPropertiesByRequiredFlag": true,
+        "ensureUniqueParams": true,
+        "allowUnicodeIdentifiers": false,
+        "prependFormOrBodyParameters": false,
+        "apiNameSuffix": "Api"
+      },
+      "globalProperties": {
+        "apiTests": false,
+        "modelTests": false,
+        "apiDocs": true,
+        "modelDocs": true,
+        "withSeparateModelsAndApi": true,
+        "withInterfaces": true,
+        "useSingleRequestParameter": true,
+        "typescriptThreePlus": true,
+        "platform": "node"
+      }
+    }
   }
 }

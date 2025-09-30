@@ -38,6 +38,10 @@ func (e EntitlementUsageResetPeriod) Validate() error {
 	return nil
 }
 
+func (e EntitlementUsageResetPeriod) String() string {
+	return string(e)
+}
+
 type EntitlementEntityType string
 
 const (

@@ -1,3 +1,38 @@
+// Package clickhouse provides ClickHouse-specific aggregators for usage data.
+//
+// Custom Monthly Billing Periods
+// ==============================
+//
+// This package supports custom monthly billing periods through the BillingAnchor parameter.
+// This allows usage data to be aggregated by custom monthly periods (e.g., 5th to 5th of each month)
+// instead of standard calendar months (1st to 1st of each month).
+//
+// How it works:
+// 1. When WindowSize = "MONTH" and BillingAnchor is provided, events are grouped by custom monthly periods
+// 2. The BillingAnchor timestamp defines the reference day for monthly periods (time is ignored)
+// 3. Day-level granularity is used for simplicity and predictability
+// 4. All other window sizes (DAY, HOUR, WEEK, etc.) ignore BillingAnchor and use standard windows
+//
+// Example:
+//   BillingAnchor = 2024-03-05 (any time on March 5th)
+//   - March period: 2024-03-05 to 2024-04-05
+//   - April period: 2024-04-05 to 2024-05-05
+//
+// Use cases:
+// - Subscription billing that doesn't align with calendar months
+// - Customer-specific billing cycles (e.g., signed up on 15th)
+// - Multi-tenant systems with different billing anchor dates
+// - Custom business cycles (fiscal months, quarterly periods)
+//
+// Implementation:
+// The custom monthly logic generates ClickHouse expressions that:
+// 1. Shift timestamps by the day offset from the billing anchor
+// 2. Apply toStartOfMonth() to get calendar month boundaries
+// 3. Shift back by the same day offset to create custom monthly periods
+//
+// This ensures that events are correctly grouped into the appropriate billing periods
+// using day-level granularity for better predictability and user understanding.
+
 package clickhouse
 
 import (
@@ -27,6 +62,8 @@ func GetAggregator(aggregationType types.AggregationType) events.Aggregator {
 		return &SumWithMultiAggregator{}
 	case types.AggregationMax:
 		return &MaxAggregator{}
+	case types.AggregationWeightedSum:
+		return &WeightedSumAggregator{}
 	}
 	return nil
 }
@@ -59,9 +96,51 @@ func formatWindowSize(windowSize types.WindowSize) string {
 		return "toStartOfInterval(timestamp, INTERVAL 6 HOUR)"
 	case types.WindowSize12Hour:
 		return "toStartOfInterval(timestamp, INTERVAL 12 HOUR)"
+	case types.WindowSizeMonth:
+		return "toStartOfMonth(timestamp)"
 	default:
 		return ""
 	}
+}
+
+// formatWindowSizeWithBillingAnchor formats window size with custom billing anchor for monthly periods.
+//
+// This function handles custom billing periods for monthly aggregations, allowing events to be grouped
+// by custom monthly periods (e.g., 5th to 5th of each month) instead of calendar months (1st to 1st).
+//
+// Parameters:
+//   - windowSize: The aggregation window size (MONTH, DAY, HOUR, etc.)
+//   - billingAnchor: The reference timestamp for custom monthly periods (only used for MONTH window size)
+//
+// Behavior by window size:
+//   - MONTH + billingAnchor: Creates custom monthly periods using day-level granularity
+//   - MONTH + nil: Falls back to standard calendar months (toStartOfMonth)
+//   - DAY/HOUR/WEEK/etc: Ignores billing anchor, uses standard window functions
+//
+// Example: billingAnchor = 2024-03-05 (any time on March 5th)
+//   - Events from March 5 to April 5 → March billing period
+//   - Events from April 5 to May 5 → April billing period
+//
+// The generated ClickHouse expression shifts timestamps by the day offset,
+// applies toStartOfMonth(), then shifts back to create the correct billing periods.
+// This uses day-level granularity for simplicity and predictability.
+func formatWindowSizeWithBillingAnchor(windowSize types.WindowSize, billingAnchor *time.Time) string {
+	if windowSize == types.WindowSizeMonth && billingAnchor != nil {
+		// Extract only the day component from billing anchor for simplicity
+		anchorDay := billingAnchor.Day()
+
+		// Generate the custom monthly window expression using day-level granularity
+		// This shifts the timestamp by the day offset, then uses toStartOfMonth,
+		// then shifts back by the same day offset to get the correct billing period
+		return fmt.Sprintf(`
+			addDays(
+				toStartOfMonth(addDays(timestamp, -%d)),
+				%d
+			)`, anchorDay-1, anchorDay-1)
+	}
+
+	// Fall back to standard window size formatting
+	return formatWindowSize(windowSize)
 }
 
 func buildFilterConditions(filters map[string][]string) string {
@@ -126,7 +205,7 @@ func parseTimeConditions(params *events.UsageParams) []string {
 type SumAggregator struct{}
 
 func (a *SumAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
-	windowSize := formatWindowSize(params.WindowSize)
+	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor)
 	selectClause := ""
 	windowClause := ""
 	groupByClause := ""
@@ -193,7 +272,7 @@ func (a *SumAggregator) GetType() types.AggregationType {
 type CountAggregator struct{}
 
 func (a *CountAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
-	windowSize := formatWindowSize(params.WindowSize)
+	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor)
 	selectClause := ""
 	groupByClause := ""
 
@@ -248,7 +327,7 @@ func (a *CountAggregator) GetType() types.AggregationType {
 type CountUniqueAggregator struct{}
 
 func (a *CountUniqueAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
-	windowSize := formatWindowSize(params.WindowSize)
+	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor)
 	selectClause := ""
 	windowClause := ""
 	groupByClause := ""
@@ -315,7 +394,7 @@ func (a *CountUniqueAggregator) GetType() types.AggregationType {
 type AvgAggregator struct{}
 
 func (a *AvgAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
-	windowSize := formatWindowSize(params.WindowSize)
+	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor)
 	selectClause := ""
 	windowClause := ""
 	groupByClause := ""
@@ -382,7 +461,7 @@ func (a *AvgAggregator) GetType() types.AggregationType {
 type LatestAggregator struct{}
 
 func (a *LatestAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
-	windowSize := formatWindowSize(params.WindowSize)
+	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor)
 	windowClause := ""
 	groupByClause := ""
 
@@ -437,7 +516,7 @@ func (a *LatestAggregator) GetType() types.AggregationType {
 type SumWithMultiAggregator struct{}
 
 func (a *SumWithMultiAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
-	windowSize := formatWindowSize(params.WindowSize)
+	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor)
 	selectClause := ""
 	windowClause := ""
 	groupByClause := ""
@@ -519,7 +598,7 @@ func (a *MaxAggregator) GetQuery(ctx context.Context, params *events.UsageParams
 }
 
 func (a *MaxAggregator) getNonWindowedQuery(ctx context.Context, params *events.UsageParams) string {
-	windowSize := formatWindowSize(params.WindowSize)
+	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor)
 	selectClause := ""
 	windowClause := ""
 	groupByClause := ""
@@ -579,7 +658,7 @@ func (a *MaxAggregator) getNonWindowedQuery(ctx context.Context, params *events.
 }
 
 func (a *MaxAggregator) getWindowedQuery(ctx context.Context, params *events.UsageParams) string {
-	bucketWindow := formatWindowSize(params.BucketSize)
+	bucketWindow := formatWindowSizeWithBillingAnchor(params.BucketSize, params.BillingAnchor)
 
 	externalCustomerFilter := ""
 	if params.ExternalCustomerID != "" {
@@ -632,6 +711,127 @@ func (a *MaxAggregator) getWindowedQuery(ctx context.Context, params *events.Usa
 func (a *MaxAggregator) GetType() types.AggregationType {
 	return types.AggregationMax
 }
+
+// WeightedSumAggregator implements weighted sum aggregation
+type WeightedSumAggregator struct{}
+
+func (a *WeightedSumAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
+	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor)
+	selectClause := ""
+	windowClause := ""
+	groupByClause := ""
+
+	if windowSize != "" {
+		selectClause = "window_size,"
+		windowClause = fmt.Sprintf("%s AS window_size,", windowSize)
+		groupByClause = "GROUP BY window_size ORDER BY window_size"
+	}
+
+	externalCustomerFilter := ""
+	if params.ExternalCustomerID != "" {
+		externalCustomerFilter = fmt.Sprintf("AND external_customer_id = '%s'", params.ExternalCustomerID)
+	}
+
+	customerFilter := ""
+	if params.CustomerID != "" {
+		customerFilter = fmt.Sprintf("AND customer_id = '%s'", params.CustomerID)
+	}
+
+	filterConditions := buildFilterConditions(params.Filters)
+	timeConditions := buildTimeConditions(params)
+
+	return fmt.Sprintf(`
+        WITH
+            toDateTime64('%s', 3) AS period_start,
+            toDateTime64('%s', 3) AS period_end,
+            dateDiff('second', period_start, period_end) AS total_seconds
+        SELECT 
+            %s sum(
+                (JSONExtractFloat(assumeNotNull(properties), '%s') / nullIf(total_seconds, 0)) *
+                dateDiff('second', timestamp, period_end)
+            ) AS total
+        FROM (
+            SELECT
+                %s timestamp,
+                properties
+            FROM events
+            PREWHERE tenant_id = '%s'
+				AND environment_id = '%s'
+				AND event_name = '%s'
+				%s
+				%s
+                %s
+                %s
+        )
+        %s
+    `,
+		formatClickHouseDateTime(params.StartTime),
+		formatClickHouseDateTime(params.EndTime),
+		selectClause,
+		params.PropertyName,
+		windowClause,
+		types.GetTenantID(ctx),
+		types.GetEnvironmentID(ctx),
+		params.EventName,
+		externalCustomerFilter,
+		customerFilter,
+		filterConditions,
+		timeConditions,
+		groupByClause,
+	)
+}
+
+func (a *WeightedSumAggregator) GetType() types.AggregationType {
+	return types.AggregationWeightedSum
+}
+
+// weighted sum final query without window size
+// WITH
+//             toDateTime64('2025-07-31 18:30:00.000', 3) AS period_start,
+//             toDateTime64('2025-08-31 18:30:00.000', 3) AS period_end,
+//             dateDiff('second', period_start, period_end) AS total_seconds
+//         SELECT
+//              sum(
+//                 (JSONExtractFloat(assumeNotNull(properties), 'value') / nullIf(total_seconds, 0)) *
+//                 dateDiff('second', timestamp, period_end)
+//             ) AS total
+//         FROM (
+//             SELECT
+//                  timestamp,
+//                 properties
+//             FROM events
+//             PREWHERE tenant_id = '00000000-0000-0000-0000-000000000000'
+//                                 AND environment_id = 'env_01K3G204ZZS7F1CAPE32TS0X9W'
+//                                 AND event_name = 'weighted_sum_event'
+//                                 AND external_customer_id = 'cust-wc-5'
+
+//                 AND timestamp >= toDateTime64('2025-07-31 18:30:00.000', 3) AND timestamp < toDateTime64('2025-08-31 18:30:00.000', 3)
+//         )
+
+// weighted sum final query with window size
+// WITH
+//             toDateTime64('2025-09-12 11:08:50.630', 3) AS period_start,
+//             toDateTime64('2025-09-19 11:08:50.630', 3) AS period_end,
+//             dateDiff('second', period_start, period_end) AS total_seconds
+//         SELECT
+//             window_size, sum(
+//                 (JSONExtractFloat(assumeNotNull(properties), 'value') / nullIf(total_seconds, 0)) *
+//                 dateDiff('second', timestamp, period_end)
+//             ) AS total
+//         FROM (
+//             SELECT
+//                 toStartOfInterval(timestamp, INTERVAL 15 MINUTE) AS window_size, timestamp,
+//                 properties
+//             FROM events
+//             PREWHERE tenant_id = '00000000-0000-0000-0000-000000000000'
+//                                 AND environment_id = 'env_01K3G204ZZS7F1CAPE32TS0X9W'
+//                                 AND event_name = 'weighted_sum_event'
+//                                 AND external_customer_id = 'cust-wc-5'
+//                                 AND customer_id = 'cust_01K5GHAV4R787PVZTYW5G9BMGD'
+
+//                 AND timestamp >= toDateTime64('2025-09-12 11:08:50.630', 3) AND timestamp < toDateTime64('2025-09-19 11:08:50.630', 3)
+//         )
+//         GROUP BY window_size ORDER BY window_size
 
 // // buildFilterGroupsQuery builds a query that matches events to the most specific filter group
 // func buildFilterGroupsQuery(params *events.UsageWithFiltersParams) string {

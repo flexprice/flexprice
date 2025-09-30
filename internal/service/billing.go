@@ -265,7 +265,7 @@ func (s *billingService) CalculateUsageCharges(
 				if matchingEntitlement.UsageLimit != nil {
 
 					// consider the usage reset period
-					// TODO: Suppport other reset periods i.e. weekly, monthly, yearly
+					// TODO: Support other reset periods i.e. weekly, yearly
 					// usage limit is set, so we decrement the usage quantity by the already entitled usage
 
 					// case 1 : when the usage reset period is billing period
@@ -331,6 +331,63 @@ func (s *billingService) CalculateUsageCharges(
 
 						// Use the total billable quantity for calculation
 						quantityForCalculation = totalBillableQuantity
+					} else if matchingEntitlement.UsageResetPeriod == types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY {
+
+						// case 3 : when the usage reset period is monthly
+						// For monthly reset periods, we need to fetch usage with monthly window size
+						// and calculate overage per month, then sum the total overage
+
+						// Create usage request with monthly window size
+						usageRequest := &dto.GetUsageByMeterRequest{
+							MeterID:            item.MeterID,
+							PriceID:            item.PriceID,
+							ExternalCustomerID: customer.ExternalID,
+							StartTime:          item.GetPeriodStart(periodStart),
+							EndTime:            item.GetPeriodEnd(periodEnd),
+							BillingAnchor:      &sub.BillingAnchor,
+							WindowSize:         types.WindowSizeMonth, // Use monthly window size
+						}
+
+						// Get usage data with monthly windows
+						usageResult, err := eventService.GetUsageByMeter(ctx, usageRequest)
+						if err != nil {
+							return nil, decimal.Zero, err
+						}
+
+						// Calculate monthly limit
+						monthlyLimit := decimal.NewFromFloat(float64(*matchingEntitlement.UsageLimit))
+						totalBillableQuantity := decimal.Zero
+
+						s.Logger.Debugw("calculating monthly usage charges",
+							"subscription_id", sub.ID,
+							"line_item_id", item.ID,
+							"meter_id", item.MeterID,
+							"monthly_limit", monthlyLimit,
+							"num_monthly_windows", len(usageResult.Results))
+
+						// Process each monthly window
+						for _, monthlyResult := range usageResult.Results {
+							monthlyUsage := monthlyResult.Value
+
+							// Calculate overage for this month: max(0, monthly_usage - monthly_limit)
+							monthlyOverage := decimal.Max(decimal.Zero, monthlyUsage.Sub(monthlyLimit))
+
+							if monthlyOverage.GreaterThan(decimal.Zero) {
+								// Add to total billable quantity
+								totalBillableQuantity = totalBillableQuantity.Add(monthlyOverage)
+
+								s.Logger.Debugw("monthly overage calculated",
+									"subscription_id", sub.ID,
+									"line_item_id", item.ID,
+									"month", monthlyResult.WindowSize,
+									"monthly_usage", monthlyUsage,
+									"monthly_limit", monthlyLimit,
+									"monthly_overage", monthlyOverage)
+							}
+						}
+
+						// Use the total billable quantity for calculation
+						quantityForCalculation = totalBillableQuantity
 					} else if matchingEntitlement.UsageResetPeriod == types.ENTITLEMENT_USAGE_RESET_PERIOD_NEVER {
 						// Calculate usage for never reset entitlements using helper function
 						usageAllowed := decimal.NewFromFloat(float64(*matchingEntitlement.UsageLimit))
@@ -366,6 +423,8 @@ func (s *billingService) CalculateUsageCharges(
 								ExternalCustomerID: customer.ExternalID,
 								StartTime:          item.GetPeriodStart(periodStart),
 								EndTime:            item.GetPeriodEnd(periodEnd),
+								WindowSize:         types.WindowSizeMonth, // Set monthly window size for custom billing periods
+								BillingAnchor:      &sub.BillingAnchor,
 							}
 
 							// Get usage data with buckets
@@ -425,11 +484,13 @@ func (s *billingService) CalculateUsageCharges(
 				displayName = lo.ToPtr(fmt.Sprintf("%s (Overage)", item.DisplayName))
 			}
 
-			// Add usage reset period metadata if entitlement has daily or never reset
+			// Add usage reset period metadata if entitlement has daily, monthly, or never reset
 			if !matchingCharge.IsOverage && ok && matchingEntitlement.IsEnabled {
 				switch matchingEntitlement.UsageResetPeriod {
 				case types.ENTITLEMENT_USAGE_RESET_PERIOD_DAILY:
 					metadata["usage_reset_period"] = "daily"
+				case types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY:
+					metadata["usage_reset_period"] = "monthly"
 				case types.ENTITLEMENT_USAGE_RESET_PERIOD_NEVER:
 					metadata["usage_reset_period"] = "never"
 				}
@@ -1468,11 +1529,13 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID string, req *dto.GetCustomerUsageSummaryRequest) (*dto.CustomerUsageSummaryResponse, error) {
 	subscriptionService := NewSubscriptionService(s.ServiceParams)
 	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config)
+
 	// get customer
 	customer, err := s.CustomerRepo.Get(ctx, customerID)
 	if err != nil {
 		return nil, err
 	}
+
 	// 1. Get customer entitlements first
 	entitlementsReq := &dto.GetCustomerEntitlementsRequest{
 		SubscriptionIDs: req.SubscriptionIDs,
@@ -1484,61 +1547,83 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 		return nil, err
 	}
 
-	subscriptionIDs := make([]string, 0)
-	for _, entitlement := range entitlements.Features {
-		for _, source := range entitlement.Sources {
-			subscriptionIDs = append(subscriptionIDs, source.SubscriptionID)
-		}
-	}
-	subscriptionIDs = lo.Uniq(subscriptionIDs)
-
-	// 2. Initialize response with customer ID
-	resp := &dto.CustomerUsageSummaryResponse{
-		CustomerID: customerID,
-		Features:   make([]*dto.FeatureUsageSummary, 0),
-	}
-
 	// If no features found, return empty response
 	if len(entitlements.Features) == 0 {
-		return resp, nil
+		return &dto.CustomerUsageSummaryResponse{
+			CustomerID: customerID,
+			Features:   make([]*dto.FeatureUsageSummary, 0),
+		}, nil
 	}
 
-	// 3. Create a map to track usage by feature ID
+	// 2. Build subscription and feature maps for efficient lookup
+	subscriptionMap := make(map[string]*subscription.Subscription)
+	featureSubscriptionMap := make(map[string]*subscription.Subscription) // feature ID -> subscription
 	usageByFeature := make(map[string]decimal.Decimal)
 	meterFeatureMap := make(map[string]string)
-	featureMeterMap := make(map[string]string)
+	featureMeterMap := make(map[string]string) // feature ID -> meter ID
 	featureUsageResetPeriodMap := make(map[string]types.EntitlementUsageResetPeriod)
 
+	// Collect unique subscription IDs and build feature maps
+	subscriptionIDs := make([]string, 0)
 	for _, feature := range entitlements.Features {
 		usageByFeature[feature.Feature.ID] = decimal.Zero
 		meterFeatureMap[feature.Feature.MeterID] = feature.Feature.ID
 		featureMeterMap[feature.Feature.ID] = feature.Feature.MeterID
 		featureUsageResetPeriodMap[feature.Feature.ID] = feature.Entitlement.UsageResetPeriod
+
+		// Map feature to its subscription (use first source)
+		if len(feature.Sources) > 0 {
+			subscriptionID := feature.Sources[0].SubscriptionID
+			subscriptionIDs = append(subscriptionIDs, subscriptionID)
+		}
+	}
+	subscriptionIDs = lo.Uniq(subscriptionIDs)
+
+	// Load all subscriptions once
+	for _, subscriptionID := range subscriptionIDs {
+		sub, err := s.SubRepo.Get(ctx, subscriptionID)
+		if err != nil {
+			s.Logger.Warnw("failed to get subscription", "subscription_id", subscriptionID, "error", err)
+			continue
+		}
+		subscriptionMap[subscriptionID] = sub
 	}
 
-	// 4. Get usage for each subscription
+	// Map features to their subscriptions
+	for _, feature := range entitlements.Features {
+		if len(feature.Sources) > 0 {
+			subscriptionID := feature.Sources[0].SubscriptionID
+			if sub, exists := subscriptionMap[subscriptionID]; exists {
+				featureSubscriptionMap[feature.Feature.ID] = sub
+			}
+		}
+	}
+
+	// 3. Process usage data for each subscription
 	for _, subscriptionID := range subscriptionIDs {
+		sub := subscriptionMap[subscriptionID]
+		if sub == nil {
+			continue
+		}
+
 		usageReq := &dto.GetUsageBySubscriptionRequest{
 			SubscriptionID: subscriptionID,
 		}
 
 		usage, err := subscriptionService.GetUsageBySubscription(ctx, usageReq)
 		if err != nil {
-			return nil, err
+			s.Logger.Warnw("failed to get usage for subscription", "subscription_id", subscriptionID, "error", err)
+			continue
 		}
 
-		sub, err := s.SubRepo.Get(ctx, subscriptionID)
-		if err != nil {
-			return nil, err
-		}
-
-		// Add usage if found for this feature
+		// Process usage data for features that have charges
 		for _, charge := range usage.Charges {
 			if featureID, ok := meterFeatureMap[charge.MeterID]; ok {
-				// currentUsage := usageByFeature[featureID]
-				// usageByFeature[featureID] = currentUsage.Add(decimal.NewFromFloat(charge.Quantity))
 				resetPeriod := featureUsageResetPeriodMap[featureID]
-				if resetPeriod == types.ENTITLEMENT_USAGE_RESET_PERIOD_DAILY {
+				if resetPeriod.String() == sub.BillingPeriod.String() {
+					currentUsage := usageByFeature[featureID]
+					usageByFeature[featureID] = currentUsage.Add(decimal.NewFromFloat(charge.Quantity))
+				} else if resetPeriod == types.ENTITLEMENT_USAGE_RESET_PERIOD_DAILY {
 					// Handle daily reset features: get today's usage from daily windows
 					meterID := featureMeterMap[featureID]
 					// Create usage request with daily window size for current billing period
@@ -1588,6 +1673,63 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 							"total_daily_windows", len(usageResult.Results))
 					}
 					usageByFeature[featureID] = dailyUsage
+				} else if resetPeriod == types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY {
+					// Handle monthly reset features: get current month's usage from monthly windows
+					meterID := featureMeterMap[featureID]
+
+					// Create usage request for current month with monthly window size
+					usageRequest := &dto.GetUsageByMeterRequest{
+						MeterID:            meterID,
+						ExternalCustomerID: customer.ExternalID,
+						StartTime:          sub.CurrentPeriodStart,
+						EndTime:            sub.CurrentPeriodEnd,
+						WindowSize:         types.WindowSizeMonth,
+						BillingAnchor:      &sub.BillingAnchor,
+					}
+
+					// Get usage data for current month
+					usageResult, err := eventService.GetUsageByMeter(ctx, usageRequest)
+					if err != nil {
+						s.Logger.Warnw("failed to get monthly usage for feature",
+							"feature_id", featureID,
+							"meter_id", meterID,
+							"subscription_id", subscriptionID,
+							"error", err)
+						continue
+					}
+
+					// Get the current month's usage (last bucket if available)
+					monthlyUsage := decimal.Zero
+					currentTime := time.Now().In(sub.CurrentPeriodStart.Location())
+					if len(usageResult.Results) > 0 {
+						// Find the current month's bucket
+						for _, result := range usageResult.Results {
+							windowStart := result.WindowSize
+							// Calculate window end (next month's start)
+							windowEnd := windowStart.AddDate(0, 1, 0)
+							// TODO : critical think of cliff cases here ex 28th feb of a leap year adding 1 month
+							// will miss factoring in the 29th feb from this bucket
+							// TODO : move this all to flexprice calculated buckets logics upfront
+							// rather than relying on clickhouse calculated window sizes
+
+							// Check if current time falls within this window
+							if (currentTime.Equal(windowStart) || currentTime.After(windowStart)) && currentTime.Before(windowEnd) {
+								monthlyUsage = result.Value
+								break
+							}
+						}
+					}
+
+					s.Logger.Debugw("using monthly usage for feature summary",
+						"customer_id", customerID,
+						"external_customer_id", customer.ExternalID,
+						"feature_id", featureID,
+						"meter_id", meterID,
+						"subscription_id", subscriptionID,
+						"current_time", currentTime,
+						"monthly_usage", monthlyUsage)
+
+					usageByFeature[featureID] = monthlyUsage
 				} else if resetPeriod == types.ENTITLEMENT_USAGE_RESET_PERIOD_NEVER {
 					// Handle never reset features: get cumulative usage from subscription start
 					meterID := featureMeterMap[featureID]
@@ -1623,16 +1765,31 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 						"subscription_start", sub.StartDate,
 						"current_period_end", sub.CurrentPeriodEnd,
 						"total_cumulative_usage", totalUsageResult.Value)
-				} else {
-					currentUsage := usageByFeature[featureID]
-					usageByFeature[featureID] = currentUsage.Add(decimal.NewFromFloat(charge.Quantity))
 				}
 			}
 		}
 	}
 
-	// define priority for feature types
+	currentTime := time.Now().UTC()
+	// 4. Calculate next usage reset at for ALL features uniformly
+	featureNextUsageResetAtMap := make(map[string]*time.Time)
+	for _, feature := range entitlements.Features {
+		featureID := feature.Feature.ID
+		if sub, exists := featureSubscriptionMap[featureID]; exists {
+			resetPeriod := featureUsageResetPeriodMap[featureID]
+			nextUsageResetAt, err := types.GetNextUsageResetAt(currentTime, sub.StartDate, sub.EndDate, sub.BillingAnchor, resetPeriod)
+			if err != nil {
+				s.Logger.Warnw("failed to get next usage reset at for feature",
+					"feature_id", featureID,
+					"subscription_id", sub.ID,
+					"error", err)
+				continue
+			}
+			featureNextUsageResetAtMap[featureID] = &nextUsageResetAt
+		}
+	}
 
+	// 5. Sort features by type and name
 	features := entitlements.Features
 	featureOrder := map[types.FeatureType]int{
 		types.FeatureTypeMetered: 1,
@@ -1649,19 +1806,26 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 		return features[i].Feature.Name < features[j].Feature.Name
 	})
 
-	// 5. Build final response combining entitlements and usage
-	for _, feature := range entitlements.Features {
+	// 6. Build final response combining entitlements and usage
+	resp := &dto.CustomerUsageSummaryResponse{
+		CustomerID: customerID,
+		Features:   make([]*dto.FeatureUsageSummary, 0, len(features)),
+	}
+
+	for _, feature := range features {
 		featureID := feature.Feature.ID
 		usage := usageByFeature[featureID]
+		nextUsageResetAt := featureNextUsageResetAtMap[featureID]
 
 		featureSummary := &dto.FeatureUsageSummary{
-			Feature:      feature.Feature,
-			TotalLimit:   feature.Entitlement.UsageLimit,
-			CurrentUsage: usage,
-			UsagePercent: s.getUsagePercent(usage, feature.Entitlement.UsageLimit),
-			IsEnabled:    feature.Entitlement.IsEnabled,
-			IsSoftLimit:  feature.Entitlement.IsSoftLimit,
-			Sources:      feature.Sources,
+			Feature:          feature.Feature,
+			TotalLimit:       feature.Entitlement.UsageLimit,
+			CurrentUsage:     usage,
+			UsagePercent:     s.getUsagePercent(usage, feature.Entitlement.UsageLimit),
+			IsEnabled:        feature.Entitlement.IsEnabled,
+			IsSoftLimit:      feature.Entitlement.IsSoftLimit,
+			Sources:          feature.Sources,
+			NextUsageResetAt: nextUsageResetAt,
 		}
 
 		resp.Features = append(resp.Features, featureSummary)
@@ -1722,6 +1886,7 @@ func (s *billingService) calculateNeverResetUsage(
 		ExternalCustomerID: customer.ExternalID,
 		StartTime:          sub.StartDate,
 		EndTime:            lineItemPeriodEnd,
+		BillingAnchor:      &sub.BillingAnchor,
 	}
 
 	totalUsageResult, err := eventService.GetUsageByMeter(ctx, totalUsageRequest)

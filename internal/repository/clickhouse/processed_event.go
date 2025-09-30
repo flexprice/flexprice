@@ -791,6 +791,21 @@ func (r *ProcessedEventRepository) getAnalyticsPoints(
 		timeWindowExpr = "toStartOfInterval(timestamp, INTERVAL 3 HOUR)"
 	case types.WindowSize6Hour:
 		timeWindowExpr = "toStartOfInterval(timestamp, INTERVAL 6 HOUR)"
+	case types.WindowSizeMonth:
+		// Use custom monthly billing period if billing anchor is provided
+		if params.BillingAnchor != nil {
+			// Extract only the day component from billing anchor for simplicity
+			anchorDay := params.BillingAnchor.Day()
+
+			// Generate the custom monthly window expression using day-level granularity
+			timeWindowExpr = fmt.Sprintf(`
+				addDays(
+					toStartOfMonth(addDays(timestamp, -%d)),
+					%d
+				)`, anchorDay-1, anchorDay-1)
+		} else {
+			timeWindowExpr = "toStartOfMonth(timestamp)"
+		}
 	default:
 		// Default to hourly for unknown window sizes
 		timeWindowExpr = "toStartOfHour(timestamp)"

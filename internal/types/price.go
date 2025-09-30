@@ -178,6 +178,10 @@ func (b BillingPeriod) Validate() error {
 	return nil
 }
 
+func (b BillingPeriod) String() string {
+	return string(b)
+}
+
 func (b BillingModel) Validate() error {
 	allowed := []BillingModel{
 		BILLING_MODEL_FLAT_FEE,

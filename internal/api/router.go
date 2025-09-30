@@ -46,6 +46,7 @@ type Handlers struct {
 	EntityIntegrationMapping *v1.EntityIntegrationMappingHandler
 	Integration              *v1.IntegrationHandler
 	Settings                 *v1.SettingsHandler
+	SetupIntent              *v1.SetupIntentHandler
 
 	// Portal handlers
 	Onboarding *v1.OnboardingHandler
@@ -121,6 +122,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			events.POST("/usage", handlers.Events.GetUsage)
 			events.POST("/usage/meter", handlers.Events.GetUsageByMeter)
 			events.POST("/analytics", handlers.Events.GetUsageAnalytics)
+			events.POST("/analytics-v2", handlers.Events.GetUsageAnalyticsV2)
 		}
 
 		meters := v1Private.Group("/meters")
@@ -240,6 +242,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			wallet.POST("/:id/top-up", handlers.Wallet.TopUpWallet)
 			wallet.POST("/:id/terminate", handlers.Wallet.TerminateWallet)
 			wallet.GET("/:id/balance/real-time", handlers.Wallet.GetWalletBalance)
+			wallet.GET("/:id/balance/real-time-v2", handlers.Wallet.GetWalletBalanceV2)
 			wallet.PUT("/:id", handlers.Wallet.UpdateWallet)
 		}
 		// Tenant routes
@@ -307,6 +310,12 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			payments.PUT("/:id", handlers.Payment.UpdatePayment)
 			payments.DELETE("/:id", handlers.Payment.DeletePayment)
 			payments.POST("/:id/process", handlers.Payment.ProcessPayment)
+
+			custPaymentsGroup := payments.Group("/customers")
+			{
+				custPaymentsGroup.GET("/:id/methods", handlers.SetupIntent.ListCustomerPaymentMethods)
+				custPaymentsGroup.POST("/:id/setup/intent", handlers.SetupIntent.CreateSetupIntentSession)
+			}
 		}
 
 		tasks := v1Private.Group("/tasks")
@@ -315,7 +324,6 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			tasks.GET("", handlers.Task.ListTasks)
 			tasks.GET("/:id", handlers.Task.GetTask)
 			tasks.PUT("/:id/status", handlers.Task.UpdateTaskStatus)
-			tasks.POST("/:id/process", handlers.Task.ProcessTask)
 		}
 
 		// Tax rate routes
@@ -454,7 +462,6 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		subscriptionGroup := cron.Group("/subscriptions")
 		{
 			subscriptionGroup.POST("/update-periods", handlers.CronSubscription.UpdateBillingPeriods)
-			subscriptionGroup.POST("/generate-invoice", handlers.CronSubscription.GenerateInvoice)
 			subscriptionGroup.POST("/process-auto-cancellation", handlers.CronSubscription.ProcessAutoCancellationSubscriptions)
 			subscriptionGroup.POST("/renewal-due-alerts", handlers.CronSubscription.ProcessSubscriptionRenewalDueAlerts)
 		}

@@ -41,6 +41,8 @@ func (Connection) Fields() []ent.Field {
 			}),
 		field.JSON("encrypted_secret_data", map[string]interface{}{}).
 			Optional(),
+		field.JSON("metadata", map[string]interface{}{}).
+			Optional(),
 	}
 }
 

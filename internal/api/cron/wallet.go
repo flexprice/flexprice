@@ -8,7 +8,6 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
-	"github.com/flexprice/flexprice/internal/temporal"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
@@ -17,21 +16,18 @@ import (
 
 type WalletCronHandler struct {
 	logger             *logger.Logger
-	temporalService    *temporal.Service
 	walletService      service.WalletService
 	tenantService      service.TenantService
 	environmentService service.EnvironmentService
 }
 
 func NewWalletCronHandler(logger *logger.Logger,
-	temporalService *temporal.Service,
 	walletService service.WalletService,
 	tenantService service.TenantService,
 	environmentService service.EnvironmentService,
 ) *WalletCronHandler {
 	return &WalletCronHandler{
 		logger:             logger,
-		temporalService:    temporalService,
 		walletService:      walletService,
 		tenantService:      tenantService,
 		environmentService: environmentService,
@@ -202,7 +198,7 @@ func (h *WalletCronHandler) CheckAlerts(c *gin.Context) {
 				}
 
 				// Get real-time balance
-				balance, err := h.walletService.GetWalletBalance(ctx, wallet.ID)
+				balance, err := h.walletService.GetWalletBalanceV2(ctx, wallet.ID)
 				if err != nil {
 					h.logger.Errorw("failed to get wallet balance",
 						"wallet_id", wallet.ID,

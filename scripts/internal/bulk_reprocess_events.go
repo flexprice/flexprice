@@ -32,11 +32,12 @@ type BulkReprocessEventsParams struct {
 
 // BulkReprocessEventsScript holds all dependencies for the script
 type BulkReprocessEventsScript struct {
-	log                        *logger.Logger
-	serviceParams              service.ServiceParams
-	customerRepo               domainCustomer.Repository
-	subscriptionRepo           domainSubscription.Repository
-	eventPostProcessingService service.EventPostProcessingService
+	log                         *logger.Logger
+	serviceParams               service.ServiceParams
+	customerRepo                domainCustomer.Repository
+	subscriptionRepo            domainSubscription.Repository
+	eventPostProcessingService  service.EventPostProcessingService
+	featureUsageTrackingService service.FeatureUsageTrackingService
 }
 
 // BulkReprocessEvents pulls all customers and triggers reprocessing for their active subscriptions
@@ -162,7 +163,16 @@ func BulkReprocessEvents(params BulkReprocessEventsParams) error {
 
 				// Call the service method directly instead of creating new connections
 				if err := script.eventPostProcessingService.ReprocessEvents(ctx, reprocessParams); err != nil {
-					script.log.Errorw("Failed to reprocess events",
+					script.log.Errorw("Failed to reprocess events for event post processing",
+						"customerID", customer.ID,
+						"externalCustomerID", customer.ExternalID,
+						"subscriptionID", subscription.ID,
+						"error", err)
+					continue
+				}
+
+				if err := script.featureUsageTrackingService.ReprocessEvents(ctx, reprocessParams); err != nil {
+					script.log.Errorw("Failed to reprocess events for feature usage tracking",
 						"customerID", customer.ID,
 						"externalCustomerID", customer.ExternalID,
 						"subscriptionID", subscription.ID,
@@ -227,15 +237,17 @@ func newBulkReprocessEventsScript() (*BulkReprocessEventsScript, error) {
 	meterRepo := entRepo.NewMeterRepository(pgClient, log, cacheClient)
 	priceRepo := entRepo.NewPriceRepository(pgClient, log, cacheClient)
 	featureRepo := entRepo.NewFeatureRepository(pgClient, log, cacheClient)
+	featureUsageRepo := chRepo.NewFeatureUsageRepository(chStore, log)
 
 	// Create service parameters
 	serviceParams := service.ServiceParams{
-		Config:       cfg,
-		Logger:       log,
-		CustomerRepo: customerRepo,
-		MeterRepo:    meterRepo,
-		PriceRepo:    priceRepo,
-		FeatureRepo:  featureRepo,
+		Config:           cfg,
+		Logger:           log,
+		CustomerRepo:     customerRepo,
+		MeterRepo:        meterRepo,
+		PriceRepo:        priceRepo,
+		FeatureRepo:      featureRepo,
+		FeatureUsageRepo: featureUsageRepo,
 	}
 
 	// Initialize event post-processing service (this creates Kafka connections once)
@@ -245,11 +257,18 @@ func newBulkReprocessEventsScript() (*BulkReprocessEventsScript, error) {
 		processedEventRepo,
 	)
 
+	featureUsageTrackingService := service.NewFeatureUsageTrackingService(
+		serviceParams,
+		eventRepo,
+		featureUsageRepo,
+	)
+
 	return &BulkReprocessEventsScript{
-		log:                        log,
-		serviceParams:              serviceParams,
-		customerRepo:               customerRepo,
-		subscriptionRepo:           subscriptionRepo,
-		eventPostProcessingService: eventPostProcessingService,
+		log:                         log,
+		serviceParams:               serviceParams,
+		customerRepo:                customerRepo,
+		subscriptionRepo:            subscriptionRepo,
+		eventPostProcessingService:  eventPostProcessingService,
+		featureUsageTrackingService: featureUsageTrackingService,
 	}, nil
 }

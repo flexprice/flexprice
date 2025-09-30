@@ -398,3 +398,99 @@ func NextBillingDateWithEndDate(currentPeriodStart, billingAnchor time.Time, uni
 func NextBillingDateLegacy(currentPeriodStart, billingAnchor time.Time, unit int, period BillingPeriod) (time.Time, error) {
 	return NextBillingDate(currentPeriodStart, billingAnchor, unit, period, nil)
 }
+
+// GetNextUsageResetAt calculates the next usage reset timestamp based on the entitlement usage reset period.
+// The logic handles three main scenarios:
+// 1. If entitlement usage reset period is NEVER, returns zero time
+// 2. If entitlement usage reset period is DAILY, returns start of tomorrow (00:00:00)
+// 3. If entitlement usage reset period is MONTHLY, calculates monthly periods based on subscription start and billing anchor
+//
+// For monthly reset, it finds the current monthly period containing currentTime and returns the end of that period at 00:00:00.
+// All calculations respect timezone of the billingAnchor and handle subscription end cliffing.
+func GetNextUsageResetAt(
+	currentTime time.Time,
+	subscriptionStart time.Time,
+	subscriptionEnd *time.Time,
+	billingAnchor time.Time,
+	entitlementUsageResetPeriod EntitlementUsageResetPeriod,
+) (time.Time, error) {
+	switch entitlementUsageResetPeriod {
+	case ENTITLEMENT_USAGE_RESET_PERIOD_NEVER:
+		return time.Time{}, nil
+
+	case ENTITLEMENT_USAGE_RESET_PERIOD_DAILY:
+		// Calculate start of tomorrow in billing anchor's timezone
+		currentInAnchorTZ := currentTime.In(billingAnchor.Location())
+		nextDay := currentInAnchorTZ.AddDate(0, 0, 1)
+		resetTime := time.Date(nextDay.Year(), nextDay.Month(), nextDay.Day(), 0, 0, 0, 0, billingAnchor.Location())
+
+		// Cliff to subscription end if provided
+		if subscriptionEnd != nil && resetTime.After(*subscriptionEnd) {
+			return *subscriptionEnd, nil
+		}
+
+		return resetTime, nil
+
+	case ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY:
+		// Calculate monthly periods starting from subscription start
+		// Find the period containing currentTime and return its end at 00:00:00
+
+		// Start from subscription start
+		periodStart := subscriptionStart
+
+		// Safeguard against infinite loops - allow up to 1000 periods (83+ years of monthly periods)
+		for i := 0; i < 1000; i++ {
+			// Calculate next monthly boundary using billing anchor
+			periodEnd, err := NextBillingDate(periodStart, billingAnchor, 1, BILLING_PERIOD_MONTHLY, nil)
+			if err != nil {
+				return time.Time{}, ierr.NewError("failed to calculate monthly period").
+					WithHint("Failed to calculate monthly period for usage reset").
+					WithReportableDetails(map[string]any{
+						"period_start":   periodStart,
+						"billing_anchor": billingAnchor,
+						"current_time":   currentTime,
+						"original_error": err.Error(),
+					}).
+					Mark(ierr.ErrValidation)
+			}
+
+			// Check if current time falls in this monthly period [periodStart, periodEnd)
+			if isBetween(currentTime, periodStart, periodEnd) {
+				// Return the period end date at 00:00:00 in billing anchor timezone
+				resetTime := time.Date(periodEnd.Year(), periodEnd.Month(), periodEnd.Day(), 0, 0, 0, 0, periodEnd.Location())
+
+				// Cliff to subscription end if provided
+				if subscriptionEnd != nil && resetTime.After(*subscriptionEnd) {
+					return *subscriptionEnd, nil
+				}
+
+				return resetTime, nil
+			}
+
+			// Move to next period
+			periodStart = periodEnd
+
+			// Safety check: if we've gone way beyond current time, something is wrong
+			if periodStart.After(currentTime.AddDate(1, 0, 0)) {
+				break
+			}
+		}
+
+		return time.Time{}, ierr.NewError("failed to find monthly reset period").
+			WithHint("Failed to find appropriate monthly period for usage reset").
+			WithReportableDetails(map[string]any{
+				"current_time":       currentTime,
+				"subscription_start": subscriptionStart,
+				"billing_anchor":     billingAnchor,
+			}).
+			Mark(ierr.ErrValidation)
+
+	default:
+		return time.Time{}, ierr.NewError("unsupported entitlement usage reset period").
+			WithHint("Unsupported entitlement usage reset period. Only DAILY, MONTHLY, and NEVER are supported").
+			WithReportableDetails(map[string]any{
+				"reset_period": entitlementUsageResetPeriod,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+}

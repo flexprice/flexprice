@@ -6,6 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/taxapplied"
 	"github.com/flexprice/flexprice/internal/domain/taxassociation"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
@@ -583,6 +584,37 @@ func (s *taxService) ListTaxApplied(ctx context.Context, filter *types.TaxApplie
 		items[i] = &dto.TaxAppliedResponse{TaxApplied: *ta}
 	}
 
+	// Fetch tax rates if requested
+	if filter.GetExpand().Has(types.ExpandTaxRate) {
+		taxRateIDs := lo.Map(taxAppliedRecords, func(ta *taxapplied.TaxApplied, _ int) string {
+			return ta.TaxRateID
+		})
+
+		taxRateFilter := types.NewNoLimitTaxRateFilter()
+		taxRateFilter.TaxRateIDs = taxRateIDs
+
+		taxRatesResponse, err := s.ListTaxRates(ctx, taxRateFilter)
+		if err != nil {
+			s.Logger.Errorw("failed to list tax rates for expansion",
+				"error", err,
+				"tax_rate_ids", taxRateIDs)
+			return nil, err
+		}
+
+		// Create a map for quick lookup
+		taxRatesByID := make(map[string]*dto.TaxRateResponse)
+		for _, taxRate := range taxRatesResponse.Items {
+			taxRatesByID[taxRate.ID] = taxRate
+		}
+
+		// Assign tax rates to the appropriate tax applied records
+		for i, ta := range taxAppliedRecords {
+			if taxRate, exists := taxRatesByID[ta.TaxRateID]; exists {
+				items[i].TaxRate = taxRate
+			}
+		}
+	}
+
 	// Get the total count of tax applied records
 	count, err := s.TaxAppliedRepo.Count(ctx, filter)
 	if err != nil {
@@ -594,8 +626,6 @@ func (s *taxService) ListTaxApplied(ctx context.Context, filter *types.TaxApplie
 	}
 
 	// Return the response with pagination
-	// Note: Since the repository doesn't have a Count method, we'll use the length of items
-	// This is a limitation, but it's consistent with how other services handle this
 	return &dto.ListTaxAppliedResponse{
 		Items:      items,
 		Pagination: types.NewPaginationResponse(count, filter.GetLimit(), filter.GetOffset()),

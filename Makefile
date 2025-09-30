@@ -290,18 +290,12 @@ generate-python-sdk: install-openapi-generator
 	@python api/scripts/python/add_python_async.py || echo "Failed to add async functionality, but continuing..."
 	@echo "Python SDK generated successfully"
 
-# Generate JavaScript SDK
+# Generate JavaScript/TypeScript SDK
 generate-javascript-sdk: install-openapi-generator
-	@echo "Generating JavaScript SDK..."
-	@openapi-generator-cli generate \
-		-i docs/swagger/swagger-3-0.json \
-		-g javascript \
-		-o api/javascript \
-		--additional-properties=projectName=@flexprice/sdk \
-		--git-repo-id=javascript-sdk \
-		--git-user-id=flexprice \
-		--global-property apiTests=false,modelTests=false
-	@echo "JavaScript SDK generated successfully"
+	@echo "Generating TypeScript SDK with modern ES7 module support..."
+	@./scripts/generate-ts-sdk.sh
+
+# Note: Alternative modern approach removed during cleanup
 
 # SDK publishing
 sdk-publish-js:

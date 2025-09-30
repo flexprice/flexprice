@@ -14,8 +14,11 @@ type InvoiceData struct {
 	InvoiceNumber string     `json:"invoice_number"`
 	IssuingDate   CustomTime `json:"issuing_date"`
 	DueDate       CustomTime `json:"due_date"`
-	AmountDue     float64    `json:"amount_due"`
-	VAT           float64    `json:"vat"` // VAT percentage as decimal (0.18 = 18%)
+	AmountDue     float64    `json:"amount_due"`     // Total amount (subtotal - discount + tax)
+	Subtotal      float64    `json:"subtotal"`       // Before discounts and taxes
+	TotalDiscount float64    `json:"total_discount"` // Total discounts applied
+	TotalTax      float64    `json:"total_tax"`      // Total tax amount
+	VAT           float64    `json:"vat"`            // VAT percentage as decimal (0.18 = 18%)
 	Notes         string     `json:"notes"`
 	BillingReason string     `json:"billing_reason"`
 
@@ -25,6 +28,12 @@ type InvoiceData struct {
 
 	// Line items
 	LineItems []LineItemData `json:"line_items"`
+
+	// Applied taxes (detailed breakdown)
+	AppliedTaxes []AppliedTaxData `json:"applied_taxes"`
+
+	// Applied discounts (detailed breakdown)
+	AppliedDiscounts []AppliedDiscountData `json:"applied_discounts"`
 }
 
 // BillerInfo contains company information for the invoice issuer
@@ -60,9 +69,30 @@ type LineItemData struct {
 	Description     string     `json:"description"`
 	PeriodStart     CustomTime `json:"period_start"`
 	PeriodEnd       CustomTime `json:"period_end"`
-	Amount          float64    `json:"amount"`
+	Amount          float64    `json:"amount"` // Positive for charges, negative for discounts
 	Quantity        float64    `json:"quantity"`
 	Currency        string     `json:"currency"`
+	Type            string     `json:"type"` // "subscription", "addon", "discount", "tax"
+}
+
+// AppliedTaxData represents a tax applied to the invoice
+type AppliedTaxData struct {
+	TaxName       string  `json:"tax_name"`
+	TaxCode       string  `json:"tax_code"`
+	TaxType       string  `json:"tax_type"`       // "Fixed" or "Percentage"
+	TaxRate       float64 `json:"tax_rate"`       // Rate value (e.g., 1.00 for fixed, 10.0 for 10%)
+	TaxableAmount float64 `json:"taxable_amount"` // Amount tax was calculated on
+	TaxAmount     float64 `json:"tax_amount"`     // Actual tax amount
+	// AppliedAt     string  `json:"applied_at"`     // Date when tax was applied
+}
+
+// AppliedDiscountData represents a discount applied to the invoice
+type AppliedDiscountData struct {
+	DiscountName   string  `json:"discount_name"`   // Human-readable discount name
+	Type           string  `json:"type"`            // "Fixed" or "Percentage"
+	Value          float64 `json:"value"`           // Discount value (e.g., 5.00 for $5 off, 10.0 for 10% off)
+	DiscountAmount float64 `json:"discount_amount"` // Actual discount amount applied
+	LineItemRef    string  `json:"line_item_ref"`   // Line item reference if discount applied to specific line item, empty if invoice-level
 }
 
 type CustomTime struct {

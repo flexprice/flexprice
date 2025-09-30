@@ -130,6 +130,7 @@ func (s *eventService) GetUsageByMeter(ctx context.Context, req *dto.GetUsageByM
 		Filters:            req.Filters,
 		PriceID:            req.PriceID,
 		MeterID:            req.MeterID,
+		BillingAnchor:      req.BillingAnchor,
 	}
 
 	// Pass the multiplier from meter configuration if it's a SUM_WITH_MULTIPLIER aggregation
@@ -172,7 +173,7 @@ func (s *eventService) BulkGetUsageByMeter(ctx context.Context, req []*dto.GetUs
 
 	// Get configuration values or use defaults
 	maxWorkers := 5
-	timeoutDuration := 500 * time.Millisecond
+	timeoutDuration := 1500 * time.Millisecond
 
 	// Log the configuration being used
 	s.logger.With(

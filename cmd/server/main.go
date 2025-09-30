@@ -29,6 +29,10 @@ import (
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/svix"
 	"github.com/flexprice/flexprice/internal/temporal"
+	"github.com/flexprice/flexprice/internal/temporal/client"
+	"github.com/flexprice/flexprice/internal/temporal/models"
+	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
+	"github.com/flexprice/flexprice/internal/temporal/worker"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/typst"
 	"github.com/flexprice/flexprice/internal/validator"
@@ -122,6 +126,7 @@ func main() {
 			// Repositories
 			repository.NewEventRepository,
 			repository.NewProcessedEventRepository,
+			repository.NewFeatureUsageRepository,
 			repository.NewMeterRepository,
 			repository.NewUserRepository,
 			repository.NewAuthRepository,
@@ -161,10 +166,6 @@ func main() {
 			// PubSub
 			pubsubRouter.NewRouter,
 
-			// Temporal
-			provideTemporalClient,
-			provideTemporalService,
-
 			// Proration
 			proration.NewCalculator,
 		),
@@ -186,6 +187,7 @@ func main() {
 			service.NewMeterService,
 			service.NewEventService,
 			service.NewEventPostProcessingService,
+			service.NewFeatureUsageTrackingService,
 			service.NewPriceService,
 			service.NewCustomerService,
 			service.NewPlanService,
@@ -216,12 +218,18 @@ func main() {
 		),
 	)
 
-	// API and Temporal
+	// API layer
 	opts = append(opts,
 		fx.Provide(
+			// Temporal components
+			provideTemporalConfig,
+			provideTemporalClient,
+			provideTemporalWorkerManager,
+			provideTemporalService,
+
+			// API components
 			provideHandlers,
 			provideRouter,
-			provideTemporalConfig,
 		),
 		fx.Invoke(
 			sentry.RegisterHooks,
@@ -250,7 +258,7 @@ func provideHandlers(
 	walletService service.WalletService,
 	tenantService service.TenantService,
 	invoiceService service.InvoiceService,
-	temporalService *temporal.Service,
+	temporalService temporalservice.TemporalService,
 	featureService service.FeatureService,
 	entitlementService service.EntitlementService,
 	paymentService service.PaymentService,
@@ -273,9 +281,10 @@ func provideHandlers(
 	addonService service.AddonService,
 	settingsService service.SettingsService,
 	subscriptionChangeService service.SubscriptionChangeService,
+	featureUsageTrackingService service.FeatureUsageTrackingService,
 ) api.Handlers {
 	return api.Handlers{
-		Events:                   v1.NewEventsHandler(eventService, eventPostProcessingService, logger),
+		Events:                   v1.NewEventsHandler(eventService, eventPostProcessingService, featureUsageTrackingService, logger),
 		Meter:                    v1.NewMeterHandler(meterService, logger),
 		Auth:                     v1.NewAuthHandler(cfg, authService, logger),
 		User:                     v1.NewUserHandler(userService, logger),
@@ -289,16 +298,16 @@ func provideHandlers(
 		SubscriptionChange:       v1.NewSubscriptionChangeHandler(subscriptionChangeService, logger),
 		Wallet:                   v1.NewWalletHandler(walletService, logger),
 		Tenant:                   v1.NewTenantHandler(tenantService, logger),
-		Invoice:                  v1.NewInvoiceHandler(invoiceService, temporalService, logger),
+		Invoice:                  v1.NewInvoiceHandler(invoiceService, logger),
 		Feature:                  v1.NewFeatureHandler(featureService, logger),
 		Entitlement:              v1.NewEntitlementHandler(entitlementService, logger),
 		Payment:                  v1.NewPaymentHandler(paymentService, paymentProcessorService, logger),
-		Task:                     v1.NewTaskHandler(taskService, logger),
+		Task:                     v1.NewTaskHandler(taskService, temporalService, logger),
 		Secret:                   v1.NewSecretHandler(secretService, logger),
 		Tax:                      v1.NewTaxHandler(taxService, logger),
 		Onboarding:               v1.NewOnboardingHandler(onboardingService, logger),
-		CronSubscription:         cron.NewSubscriptionHandler(subscriptionService, temporalService, logger),
-		CronWallet:               cron.NewWalletCronHandler(logger, temporalService, walletService, tenantService, environmentService),
+		CronSubscription:         cron.NewSubscriptionHandler(subscriptionService, logger),
+		CronWallet:               cron.NewWalletCronHandler(logger, walletService, tenantService, environmentService),
 		CreditGrant:              v1.NewCreditGrantHandler(creditGrantService, logger),
 		CostSheet:                v1.NewCostSheetHandler(costSheetService, logger),
 		CronCreditGrant:          cron.NewCreditGrantCronHandler(creditGrantService, logger),
@@ -311,6 +320,7 @@ func provideHandlers(
 		Coupon:                   v1.NewCouponHandler(couponService, logger),
 		Addon:                    v1.NewAddonHandler(addonService, logger),
 		Settings:                 v1.NewSettingsHandler(settingsService, logger),
+		SetupIntent:              v1.NewSetupIntentHandler(stripeService, logger),
 	}
 }
 
@@ -322,12 +332,41 @@ func provideTemporalConfig(cfg *config.Configuration) *config.TemporalConfig {
 	return &cfg.Temporal
 }
 
-func provideTemporalClient(cfg *config.TemporalConfig, log *logger.Logger) (*temporal.TemporalClient, error) {
-	return temporal.NewTemporalClient(cfg, log)
+func provideTemporalClient(cfg *config.TemporalConfig, log *logger.Logger) (client.TemporalClient, error) {
+	log.Info("Initializing Temporal client", "address", cfg.Address, "namespace", cfg.Namespace)
+
+	// Use default options and merge with config
+	options := models.DefaultClientOptions()
+	if cfg.Address != "" {
+		options.Address = cfg.Address
+	}
+	if cfg.Namespace != "" {
+		options.Namespace = cfg.Namespace
+	}
+	if cfg.APIKey != "" {
+		options.APIKey = cfg.APIKey
+	}
+	options.TLS = cfg.TLS
+
+	// Create temporal client directly
+	temporalClient, err := client.NewTemporalClient(options, log)
+	if err != nil {
+		log.Error("Failed to create Temporal client", "error", err)
+		return nil, fmt.Errorf("failed to create temporal client: %w", err)
+	}
+
+	log.Info("Temporal client created successfully")
+	return temporalClient, nil
 }
 
-func provideTemporalService(temporalClient *temporal.TemporalClient, cfg *config.TemporalConfig, log *logger.Logger, params service.ServiceParams) (*temporal.Service, error) {
-	return temporal.NewService(temporalClient, cfg, log, params)
+func provideTemporalWorkerManager(temporalClient client.TemporalClient, log *logger.Logger) worker.TemporalWorkerManager {
+	return worker.NewTemporalWorkerManager(temporalClient, log)
+}
+
+func provideTemporalService(temporalClient client.TemporalClient, workerManager worker.TemporalWorkerManager, log *logger.Logger) temporalservice.TemporalService {
+	service := temporalservice.NewTemporalService(temporalClient, workerManager, log)
+	service.Start(context.Background())
+	return service
 }
 
 func startServer(
@@ -336,14 +375,15 @@ func startServer(
 	r *gin.Engine,
 	consumer kafka.MessageConsumer,
 	eventRepo events.Repository,
-	temporalClient *temporal.TemporalClient,
-	temporalService *temporal.Service,
+	temporalClient client.TemporalClient,
+	temporalService temporalservice.TemporalService,
 	webhookService *webhook.WebhookService,
 	router *pubsubRouter.Router,
 	onboardingService service.OnboardingService,
 	log *logger.Logger,
 	sentryService *sentry.Service,
 	eventPostProcessingSvc service.EventPostProcessingService,
+	featureUsageSvc service.FeatureUsageTrackingService,
 	params service.ServiceParams,
 ) {
 	mode := cfg.Deployment.Mode
@@ -358,24 +398,35 @@ func startServer(
 		}
 		startAPIServer(lc, r, cfg, log)
 		startConsumer(lc, consumer, eventRepo, cfg, log, sentryService, eventPostProcessingSvc)
-		startMessageRouter(lc, router, webhookService, onboardingService, log)
-		startPostProcessingConsumer(lc, router, eventPostProcessingSvc, cfg, log)
-		startTemporalWorker(lc, temporalClient, &cfg.Temporal, params)
+
+		// Register all handlers and start router once
+		registerRouterHandlers(router, webhookService, onboardingService, eventPostProcessingSvc, featureUsageSvc, cfg, true)
+		startRouter(lc, router, log)
+		startTemporalWorker(lc, temporalService, params)
 	case types.ModeAPI:
 		startAPIServer(lc, r, cfg, log)
-		startMessageRouter(lc, router, webhookService, onboardingService, log)
+
+		// Register all handlers and start router once
+		registerRouterHandlers(router, webhookService, onboardingService, eventPostProcessingSvc, featureUsageSvc, cfg, false)
+		startRouter(lc, router, log)
 
 	case types.ModeTemporalWorker:
-		startTemporalWorker(lc, temporalClient, &cfg.Temporal, params)
+		startTemporalWorker(lc, temporalService, params)
 	case types.ModeConsumer:
 		if consumer == nil {
 			log.Fatal("Kafka consumer required for consumer mode")
 		}
 		startConsumer(lc, consumer, eventRepo, cfg, log, sentryService, eventPostProcessingSvc)
-		startPostProcessingConsumer(lc, router, eventPostProcessingSvc, cfg, log)
+
+		// Register all handlers and start router once
+		registerRouterHandlers(router, webhookService, onboardingService, eventPostProcessingSvc, featureUsageSvc, cfg, true)
+		startRouter(lc, router, log)
 	case types.ModeAWSLambdaAPI:
 		startAWSLambdaAPI(r)
-		startMessageRouter(lc, router, webhookService, onboardingService, log)
+
+		// Register basic handlers and start router once
+		registerRouterHandlers(router, webhookService, onboardingService, eventPostProcessingSvc, featureUsageSvc, cfg, false)
+		startRouter(lc, router, log)
 	case types.ModeAWSLambdaConsumer:
 		startAWSLambdaConsumer(eventRepo, cfg, log, sentryService, eventPostProcessingSvc)
 	default:
@@ -385,12 +436,29 @@ func startServer(
 
 func startTemporalWorker(
 	lc fx.Lifecycle,
-	temporalClient *temporal.TemporalClient,
-	cfg *config.TemporalConfig,
+	temporalService temporalservice.TemporalService,
 	params service.ServiceParams,
 ) {
-	worker := temporal.NewWorker(temporalClient, *cfg, params)
-	worker.RegisterWithLifecycle(lc)
+	lc.Append(fx.Hook{
+		OnStart: func(ctx context.Context) error {
+			// Register workflows and activities first (this creates the workers)
+			if err := temporal.RegisterWorkflowsAndActivities(temporalService, params); err != nil {
+				return fmt.Errorf("failed to register workflows and activities: %w", err)
+			}
+
+			// Start workers for all task queues
+			for _, taskQueue := range types.GetAllTaskQueues() {
+				if err := temporalService.StartWorker(taskQueue); err != nil {
+					return fmt.Errorf("failed to start worker for task queue %s: %w", taskQueue.String(), err)
+				}
+			}
+
+			return nil
+		},
+		OnStop: func(ctx context.Context) error {
+			return temporalService.StopAllWorkers()
+		},
+	})
 }
 
 func startAPIServer(
@@ -622,44 +690,31 @@ func handleEventConsumption(ctx context.Context, cfg *config.Configuration, log 
 	return nil
 }
 
-func startMessageRouter(
-	lc fx.Lifecycle,
+func registerRouterHandlers(
 	router *pubsubRouter.Router,
 	webhookService *webhook.WebhookService,
 	onboardingService service.OnboardingService,
-	logger *logger.Logger,
+	eventPostProcessingSvc service.EventPostProcessingService,
+	featureUsageSvc service.FeatureUsageTrackingService,
+	cfg *config.Configuration,
+	includeProcessingHandlers bool,
 ) {
-	// Register handlers before starting the router
+	// Always register these basic handlers
 	webhookService.RegisterHandler(router)
 	onboardingService.RegisterHandler(router)
 
-	lc.Append(fx.Hook{
-		OnStart: func(ctx context.Context) error {
-			logger.Info("starting message router")
-			go func() {
-				if err := router.Run(); err != nil {
-					logger.Errorw("message router failed", "error", err)
-				}
-			}()
-			return nil
-		},
-		OnStop: func(ctx context.Context) error {
-			logger.Info("stopping message router")
-			return router.Close()
-		},
-	})
+	// Only register processing handlers when needed
+	if includeProcessingHandlers {
+		eventPostProcessingSvc.RegisterHandler(router, cfg)
+		featureUsageSvc.RegisterHandler(router, cfg)
+	}
 }
 
-func startPostProcessingConsumer(
+func startRouter(
 	lc fx.Lifecycle,
 	router *pubsubRouter.Router,
-	eventPostProcessingSvc service.EventPostProcessingService,
-	cfg *config.Configuration,
 	logger *logger.Logger,
 ) {
-	// Register handlers before starting the router
-	eventPostProcessingSvc.RegisterHandler(router, cfg)
-
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			logger.Info("starting message router")

@@ -2,30 +2,27 @@ package v1
 
 import (
 	"errors"
+	"io"
 	"net/http"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
-	"github.com/flexprice/flexprice/internal/temporal"
-	"github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
 )
 
 type InvoiceHandler struct {
-	invoiceService  service.InvoiceService
-	temporalService *temporal.Service
-	logger          *logger.Logger
+	invoiceService service.InvoiceService
+	logger         *logger.Logger
 }
 
-func NewInvoiceHandler(invoiceService service.InvoiceService, temporalService *temporal.Service, logger *logger.Logger) *InvoiceHandler {
+func NewInvoiceHandler(invoiceService service.InvoiceService, logger *logger.Logger) *InvoiceHandler {
 	return &InvoiceHandler{
-		invoiceService:  invoiceService,
-		temporalService: temporalService,
-		logger:          logger,
+		invoiceService: invoiceService,
+		logger:         logger,
 	}
 }
 
@@ -194,12 +191,27 @@ func (h *InvoiceHandler) FinalizeInvoice(c *gin.Context) {
 // @Router /invoices/{id}/void [post]
 func (h *InvoiceHandler) VoidInvoice(c *gin.Context) {
 	id := c.Param("id")
+	var req dto.InvoiceVoidRequest
+
 	if id == "" {
 		c.Error(ierr.NewError("invalid invoice id").Mark(ierr.ErrValidation))
 		return
 	}
 
-	if err := h.invoiceService.VoidInvoice(c.Request.Context(), id); err != nil {
+	// This will handle empty body gracefully and only bind if there's valid JSON
+	if err := c.ShouldBindJSON(&req); err != nil {
+		// Check if it's actually an EOF error (empty body)
+		if err == io.EOF {
+			// Empty body is fine, use zero value
+			req = dto.InvoiceVoidRequest{}
+		} else {
+			h.logger.Error("Failed to parse request body", "error", err)
+			c.Error(ierr.WithError(err).WithHint("failed to parse request body").Mark(ierr.ErrValidation))
+			return
+		}
+	}
+
+	if err := h.invoiceService.VoidInvoice(c.Request.Context(), id, req); err != nil {
 		h.logger.Errorw("failed to void invoice", "error", err, "invoice_id", id)
 		c.Error(err)
 		return
@@ -316,29 +328,6 @@ func (h *InvoiceHandler) GetCustomerInvoiceSummary(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, resp)
-}
-
-// GenerateInvoice handles manual invoice generation requests
-func (h *InvoiceHandler) GenerateInvoice(c *gin.Context) {
-	ctx := c.Request.Context()
-
-	var req models.BillingWorkflowInput
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(ierr.WithError(err).WithHint("failed to bind request body").Mark(ierr.ErrValidation))
-		return
-	}
-
-	result, err := h.temporalService.StartBillingWorkflow(ctx, req)
-	if err != nil {
-		h.logger.Errorw("failed to start billing workflow",
-			"error", err,
-			"customer_id", req.CustomerID,
-			"subscription_id", req.SubscriptionID)
-		c.Error(err)
-		return
-	}
-
-	c.JSON(http.StatusOK, result)
 }
 
 // AttemptPayment godoc

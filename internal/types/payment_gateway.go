@@ -48,6 +48,8 @@ const (
 	WebhookEventTypeCheckoutSessionExpired               WebhookEventType = "checkout.session.expired"
 	WebhookEventTypeCustomerCreated                      WebhookEventType = "customer.created"
 	WebhookEventTypePaymentIntentPaymentFailed           WebhookEventType = "payment_intent.payment_failed"
+	WebhookEventTypeInvoicePaymentPaid                   WebhookEventType = "invoice_payment.paid"
+	WebhookEventTypeSetupIntentSucceeded                 WebhookEventType = "setup_intent.succeeded"
 )
 
 // Validate validates the webhook event type
@@ -58,7 +60,9 @@ func (w WebhookEventType) Validate() error {
 		WebhookEventTypeCheckoutSessionAsyncPaymentFailed,
 		WebhookEventTypeCheckoutSessionExpired,
 		WebhookEventTypeCustomerCreated,
-		WebhookEventTypePaymentIntentPaymentFailed:
+		WebhookEventTypePaymentIntentPaymentFailed,
+		WebhookEventTypeInvoicePaymentPaid,
+		WebhookEventTypeSetupIntentSucceeded:
 		return nil
 	default:
 		return ierr.NewError("invalid webhook event type").
@@ -71,6 +75,8 @@ func (w WebhookEventType) Validate() error {
 					WebhookEventTypeCheckoutSessionExpired,
 					WebhookEventTypeCustomerCreated,
 					WebhookEventTypePaymentIntentPaymentFailed,
+					WebhookEventTypeInvoicePaymentPaid,
+					WebhookEventTypeSetupIntentSucceeded,
 				},
 			}).
 			Mark(ierr.ErrValidation)
@@ -90,7 +96,9 @@ func (w WebhookEventType) GetGatewayFromEventType() PaymentGatewayType {
 		WebhookEventTypeCheckoutSessionAsyncPaymentFailed,
 		WebhookEventTypeCheckoutSessionExpired,
 		WebhookEventTypeCustomerCreated,
-		WebhookEventTypePaymentIntentPaymentFailed:
+		WebhookEventTypePaymentIntentPaymentFailed,
+		WebhookEventTypeInvoicePaymentPaid,
+		WebhookEventTypeSetupIntentSucceeded:
 		return PaymentGatewayTypeStripe
 	default:
 		return PaymentGatewayTypeStripe // Default to Stripe for unknown events

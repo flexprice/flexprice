@@ -87,3 +87,18 @@ func (l *Logger) WithContext(ctx context.Context) *Logger {
 		),
 	}
 }
+
+// retryableHTTPLogger adapts our Logger to go-retryablehttp's logging interface
+type retryableHTTPLogger struct {
+	logger *Logger
+}
+
+// GetRetryableHTTPLogger returns a retryable HTTP client-compatible logger
+func (l *Logger) GetRetryableHTTPLogger() *retryableHTTPLogger {
+	return &retryableHTTPLogger{logger: l}
+}
+
+// Printf implements the Logger interface for go-retryablehttp
+func (r *retryableHTTPLogger) Printf(format string, v ...interface{}) {
+	r.logger.Infof(format, v...)
+}

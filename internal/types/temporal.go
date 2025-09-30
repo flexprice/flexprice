@@ -8,68 +8,43 @@ import (
 	"github.com/samber/lo"
 )
 
-// TemporalActivityType represents the type of activity
-type TemporalActivityType string
+// TemporalTaskQueue represents a logical grouping of workflows and activities
+type TemporalTaskQueue string
 
 const (
-	// Activity Types - must match the method names in activity structs
-	TemporalActivitySyncPlanPrices       TemporalActivityType = "SyncPlanPrices"
-	TemporalActivityFetchData            TemporalActivityType = "FetchData"
-	TemporalActivityCalculate            TemporalActivityType = "Calculate"
-	TemporalActivitySubscriptionChange   TemporalActivityType = "SubscriptionChange"
-	TemporalActivitySubscriptionCreation TemporalActivityType = "SubscriptionCreation"
+	// Task Queues - logical groupings to limit worker count
+	TemporalTaskQueueTask  TemporalTaskQueue = "task"
+	TemporalTaskQueuePrice TemporalTaskQueue = "price"
 )
 
-// ActivityInfo holds information about an activity
-type ActivityInfo struct {
-	Name string // Fully qualified name (e.g., "SyncPlanPrices")
-	Type TemporalActivityType
+// String returns the string representation of the task queue
+func (tq TemporalTaskQueue) String() string {
+	return string(tq)
 }
 
-// String returns the string representation of the activity type
-func (a TemporalActivityType) String() string {
-	return string(a)
-}
-
-// Validate validates the activity type
-func (a TemporalActivityType) Validate() error {
-	allowedValues := []string{
-		string(TemporalActivitySyncPlanPrices),
-		string(TemporalActivityFetchData),
-		string(TemporalActivityCalculate),
-		string(TemporalActivitySubscriptionChange),
-		string(TemporalActivitySubscriptionCreation),
+// Validate validates the task queue
+func (tq TemporalTaskQueue) Validate() error {
+	allowedQueues := []TemporalTaskQueue{
+		TemporalTaskQueueTask,
+		TemporalTaskQueuePrice,
 	}
-	if !lo.Contains(allowedValues, string(a)) {
-		return ierr.NewError("invalid activity type").
-			WithHint("Invalid activity type").
-			WithReportableDetails(map[string]any{
-				"allowed":        allowedValues,
-				"type":           a,
-				"allowed_values": allowedValues,
-				"provided_value": a,
-			}).
-			Mark(ierr.ErrValidation)
+	if lo.Contains(allowedQueues, tq) {
+		return nil
 	}
-	return nil
-}
-
-// QualifiedName returns the fully qualified activity name
-func (a TemporalActivityType) QualifiedName(prefix string) string {
-	return prefix + "." + string(a)
+	return ierr.NewError("invalid task queue").
+		WithHint(fmt.Sprintf("Task queue must be one of: %s", strings.Join(lo.Map(allowedQueues, func(tq TemporalTaskQueue, _ int) string { return string(tq) }), ", "))).
+		Mark(ierr.ErrValidation)
 }
 
 // TemporalWorkflowType represents the type of workflow
 type TemporalWorkflowType string
 
 const (
-	// Workflow Types - using clean aliases for registration
-	TemporalBillingWorkflow              TemporalWorkflowType = "CronBillingWorkflow"
-	TemporalCalculationWorkflow          TemporalWorkflowType = "CalculateChargesWorkflow"
+	// Workflow Types - only include implemented workflows
 	TemporalPriceSyncWorkflow            TemporalWorkflowType = "PriceSyncWorkflow"
+	TemporalTaskProcessingWorkflow       TemporalWorkflowType = "TaskProcessingWorkflow"
 	TemporalSubscriptionChangeWorkflow   TemporalWorkflowType = "SubscriptionChangeWorkflow"
 	TemporalSubscriptionCreationWorkflow TemporalWorkflowType = "SubscriptionCreationWorkflow"
-	
 )
 
 // String returns the string representation of the workflow type
@@ -80,9 +55,8 @@ func (w TemporalWorkflowType) String() string {
 // Validate validates the workflow type
 func (w TemporalWorkflowType) Validate() error {
 	allowedWorkflows := []TemporalWorkflowType{
-		TemporalBillingWorkflow,              // "CronBillingWorkflow"
-		TemporalCalculationWorkflow,          // "CalculateChargesWorkflow"
 		TemporalPriceSyncWorkflow,            // "PriceSyncWorkflow"
+		TemporalTaskProcessingWorkflow,       // "TaskProcessingWorkflow"
 		TemporalSubscriptionChangeWorkflow,   // "SubscriptionChangeWorkflow"
 		TemporalSubscriptionCreationWorkflow, // "SubscriptionCreationWorkflow"
 	}
@@ -95,12 +69,48 @@ func (w TemporalWorkflowType) Validate() error {
 		Mark(ierr.ErrValidation)
 }
 
+// TaskQueue returns the logical task queue for the workflow
+func (w TemporalWorkflowType) TaskQueue() TemporalTaskQueue {
+	switch w {
+	case TemporalTaskProcessingWorkflow, TemporalSubscriptionChangeWorkflow, TemporalSubscriptionCreationWorkflow:
+		return TemporalTaskQueueTask
+	case TemporalPriceSyncWorkflow:
+		return TemporalTaskQueuePrice
+	default:
+		return TemporalTaskQueueTask // Default fallback
+	}
+}
+
 // TaskQueueName returns the task queue name for the workflow
 func (w TemporalWorkflowType) TaskQueueName() string {
-	return string(w) + "TaskQueue"
+	return w.TaskQueue().String()
 }
 
 // WorkflowID returns the workflow ID for the workflow with given identifier
 func (w TemporalWorkflowType) WorkflowID(identifier string) string {
 	return string(w) + "-" + identifier
+}
+
+// GetWorkflowsForTaskQueue returns all workflows that belong to a specific task queue
+func GetWorkflowsForTaskQueue(taskQueue TemporalTaskQueue) []TemporalWorkflowType {
+	switch taskQueue {
+	case TemporalTaskQueueTask:
+		return []TemporalWorkflowType{
+			TemporalTaskProcessingWorkflow,
+		}
+	case TemporalTaskQueuePrice:
+		return []TemporalWorkflowType{
+			TemporalPriceSyncWorkflow,
+		}
+	default:
+		return []TemporalWorkflowType{}
+	}
+}
+
+// GetAllTaskQueues returns all available task queues
+func GetAllTaskQueues() []TemporalTaskQueue {
+	return []TemporalTaskQueue{
+		TemporalTaskQueueTask,
+		TemporalTaskQueuePrice,
+	}
 }

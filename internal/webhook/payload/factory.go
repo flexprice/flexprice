@@ -140,6 +140,12 @@ func NewPayloadBuilderFactory(services *Services) PayloadBuilderFactory {
 	f.builders[types.WebhookEventInvoicePaymentOverdue] = func() PayloadBuilder {
 		return NewInvoicePayloadBuilder(f.services)
 	}
+	f.builders[types.WebhookEventCreditNoteCreated] = func() PayloadBuilder {
+		return NewCreditNotePayloadBuilder(f.services)
+	}
+	f.builders[types.WebhookEventCreditNoteUpdated] = func() PayloadBuilder {
+		return NewCreditNotePayloadBuilder(f.services)
+	}
 
 	return f
 }

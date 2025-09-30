@@ -91,3 +91,9 @@ const (
 const (
 	WebhookEventInvoiceCommunicationTriggered = "invoice.communication.triggered"
 )
+
+// credit note event names
+const (
+	WebhookEventCreditNoteCreated = "credit_note.created"
+	WebhookEventCreditNoteUpdated = "credit_note.updated"
+)

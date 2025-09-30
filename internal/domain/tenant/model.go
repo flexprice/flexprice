@@ -1,6 +1,7 @@
 package tenant
 
 import (
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
@@ -104,5 +105,20 @@ func (t TenantAddress) ToSchema() schema.TenantAddress {
 		State:      t.State,
 		PostalCode: t.PostalCode,
 		Country:    t.Country,
+	}
+}
+
+func (t TenantAddress) FormatAddressLines() string {
+	line1 := strings.TrimSpace(t.Line1)
+	line2 := strings.TrimSpace(t.Line2)
+	switch {
+	case line1 != "" && line2 != "":
+		return line1 + "\n" + line2
+	case line1 != "":
+		return line1
+	case line2 != "":
+		return line2
+	default:
+		return ""
 	}
 }

@@ -5366,8 +5366,18 @@ const docTemplate = `{
                     },
                     {
                         "type": "boolean",
-                        "description": "Include source-level price breakdown for usage line items",
+                        "description": "Include source-level price breakdown for usage line items (legacy)",
                         "name": "expand_by_source",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "Group usage breakdown by specified fields (e.g., source, feature_id, properties.org_id)",
+                        "name": "group_by",
                         "in": "query"
                     }
                 ],
@@ -5398,7 +5408,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Update invoice details like PDF URL",
+                "description": "Update invoice details like PDF URL and due date.",
                 "consumes": [
                     "application/json"
                 ],
@@ -6769,7 +6779,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/dto.SyncPlanPricesResponse"
+                            "$ref": "#/definitions/models.TemporalWorkflowResult"
                         }
                     },
                     "400": {
@@ -8401,7 +8411,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Cancel a subscription",
+                "description": "Cancel a subscription with enhanced proration support",
                 "consumes": [
                     "application/json"
                 ],
@@ -8421,21 +8431,152 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "type": "boolean",
-                        "description": "Cancel at period end",
-                        "name": "cancel_at_period_end",
-                        "in": "query"
+                        "description": "Cancel Subscription Request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CancelSubscriptionRequest"
+                        }
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/gin.H"
+                            "$ref": "#/definitions/dto.CancelSubscriptionResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/subscriptions/{id}/change/execute": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Execute a subscription plan change, including proration and invoice generation",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Subscriptions"
+                ],
+                "summary": "Execute subscription plan change",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Subscription ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Subscription change request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.SubscriptionChangeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.SubscriptionChangeExecuteResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/subscriptions/{id}/change/preview": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Preview the impact of changing a subscription's plan, including proration calculations",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Subscriptions"
+                ],
+                "summary": "Preview subscription plan change",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Subscription ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Subscription change preview request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.SubscriptionChangeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.SubscriptionChangePreviewResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -8839,7 +8980,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Create a new import/export task",
+                "description": "Create a new task for processing files asynchronously",
                 "consumes": [
                     "application/json"
                 ],
@@ -8852,7 +8993,7 @@ const docTemplate = `{
                 "summary": "Create a new task",
                 "parameters": [
                     {
-                        "description": "Task details",
+                        "description": "Task configuration",
                         "name": "task",
                         "in": "body",
                         "required": true,
@@ -8862,14 +9003,69 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {
-                    "201": {
-                        "description": "Created",
+                    "202": {
+                        "description": "Accepted",
                         "schema": {
                             "$ref": "#/definitions/dto.TaskResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/tasks/result": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get the result of a task processing workflow",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tasks"
+                ],
+                "summary": "Get task processing result",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workflow ID",
+                        "name": "workflow_id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.TemporalWorkflowResult"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -8890,7 +9086,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get detailed information about a task",
+                "description": "Get a task by ID",
                 "consumes": [
                     "application/json"
                 ],
@@ -8900,7 +9096,7 @@ const docTemplate = `{
                 "tags": [
                     "Tasks"
                 ],
-                "summary": "Get a task by ID",
+                "summary": "Get a task",
                 "parameters": [
                     {
                         "type": "string",
@@ -8915,55 +9111,6 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/dto.TaskResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/tasks/{id}/process": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Start processing a task",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Tasks"
-                ],
-                "summary": "Process a task",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Task ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "202": {
-                        "description": "Accepted",
-                        "schema": {
-                            "$ref": "#/definitions/gin.H"
                         }
                     },
                     "400": {
@@ -8994,7 +9141,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Update the status of a task",
+                "description": "Update a task's status",
                 "consumes": [
                     "application/json"
                 ],
@@ -9014,7 +9161,7 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "New status",
+                        "description": "Status update",
                         "name": "status",
                         "in": "body",
                         "required": true,
@@ -9027,7 +9174,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/dto.TaskResponse"
+                            "$ref": "#/definitions/gin.H"
                         }
                     },
                     "400": {
@@ -10916,7 +11063,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "usage_reset_period": {
-                    "$ref": "#/definitions/types.BillingPeriod"
+                    "$ref": "#/definitions/types.EntitlementUsageResetPeriod"
                 }
             }
         },
@@ -10955,6 +11102,43 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.BillingCycleInfo": {
+            "type": "object",
+            "properties": {
+                "billing_anchor": {
+                    "description": "billing_anchor is the new billing anchor",
+                    "type": "string"
+                },
+                "billing_cadence": {
+                    "description": "billing_cadence is the billing cadence",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.BillingCadence"
+                        }
+                    ]
+                },
+                "billing_period": {
+                    "description": "billing_period is the billing period",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.BillingPeriod"
+                        }
+                    ]
+                },
+                "billing_period_count": {
+                    "description": "billing_period_count is the billing period count",
+                    "type": "integer"
+                },
+                "period_end": {
+                    "description": "period_end is the end of the new billing period",
+                    "type": "string"
+                },
+                "period_start": {
+                    "description": "period_start is the start of the new billing period",
                     "type": "string"
                 }
             }
@@ -11014,6 +11198,79 @@ const docTemplate = `{
                 "subscription_id": {
                     "description": "SubscriptionID is required to get subscription details",
                     "type": "string"
+                }
+            }
+        },
+        "dto.CancelSubscriptionRequest": {
+            "type": "object",
+            "required": [
+                "cancellation_type"
+            ],
+            "properties": {
+                "cancellation_type": {
+                    "description": "CancellationType determines when the cancellation takes effect",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.CancellationType"
+                        }
+                    ]
+                },
+                "proration_behavior": {
+                    "description": "ProrationBehavior controls how proration is handled.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ProrationBehavior"
+                        }
+                    ]
+                },
+                "reason": {
+                    "description": "Reason for cancellation (for audit and business intelligence)",
+                    "type": "string"
+                }
+            }
+        },
+        "dto.CancelSubscriptionResponse": {
+            "type": "object",
+            "properties": {
+                "cancellation_type": {
+                    "$ref": "#/definitions/types.CancellationType"
+                },
+                "effective_date": {
+                    "type": "string"
+                },
+                "message": {
+                    "description": "Response metadata",
+                    "type": "string"
+                },
+                "processed_at": {
+                    "type": "string"
+                },
+                "proration_details": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.ProrationDetail"
+                    }
+                },
+                "proration_invoice": {
+                    "description": "Proration details",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.InvoiceResponse"
+                        }
+                    ]
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.SubscriptionStatus"
+                },
+                "subscription_id": {
+                    "description": "Basic cancellation info",
+                    "type": "string"
+                },
+                "total_credit_amount": {
+                    "type": "number"
                 }
             }
         },
@@ -11822,7 +12079,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "usage_reset_period": {
-                    "$ref": "#/definitions/types.BillingPeriod"
+                    "$ref": "#/definitions/types.EntitlementUsageResetPeriod"
                 }
             }
         },
@@ -12290,7 +12547,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "usage_reset_period": {
-                    "$ref": "#/definitions/types.BillingPeriod"
+                    "$ref": "#/definitions/types.EntitlementUsageResetPeriod"
                 }
             }
         },
@@ -12415,6 +12672,9 @@ const docTemplate = `{
                 },
                 "description": {
                     "type": "string"
+                },
+                "display_order": {
+                    "type": "integer"
                 },
                 "entitlements": {
                     "type": "array",
@@ -12667,11 +12927,18 @@ const docTemplate = `{
                     "description": "customer_id is the flexprice customer id\nand it is prioritized over external_customer_id in case both are provided.",
                     "type": "string"
                 },
+                "customer_timezone": {
+                    "description": "Timezone of the customer.\nIf not set, the default value is UTC.",
+                    "type": "string"
+                },
                 "end_date": {
                     "type": "string"
                 },
                 "external_customer_id": {
                     "description": "external_customer_id is the customer id in your DB\nand must be same as what you provided as external_id while creating the customer in flexprice.",
+                    "type": "string"
+                },
+                "gateway_payment_method_id": {
                     "type": "string"
                 },
                 "line_item_coupons": {
@@ -12704,6 +12971,14 @@ const docTemplate = `{
                         "$ref": "#/definitions/dto.OverrideLineItemRequest"
                     }
                 },
+                "payment_behavior": {
+                    "description": "Payment behavior configuration",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.PaymentBehavior"
+                        }
+                    ]
+                },
                 "phases": {
                     "description": "Phases represents an optional timeline of subscription phases",
                     "type": "array",
@@ -12713,6 +12988,14 @@ const docTemplate = `{
                 },
                 "plan_id": {
                     "type": "string"
+                },
+                "proration_behavior": {
+                    "description": "ProrationBehavior controls how proration is handled.\nIf not set, the default value is none. Possible values are create_prorations and none.\ncreate_prorations means the proration will be calculated and applied.\nnone means the proration will not be calculated.\nThis is IGNORED when the billing cycle is anniversary.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ProrationBehavior"
+                        }
+                    ]
                 },
                 "start_date": {
                     "type": "string"
@@ -13330,6 +13613,9 @@ const docTemplate = `{
                 "created_by": {
                     "type": "string"
                 },
+                "display_order": {
+                    "type": "integer"
+                },
                 "entity_id": {
                     "type": "string"
                 },
@@ -13383,7 +13669,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "usage_reset_period": {
-                    "$ref": "#/definitions/types.BillingPeriod"
+                    "$ref": "#/definitions/types.EntitlementUsageResetPeriod"
                 }
             }
         },
@@ -13595,6 +13881,9 @@ const docTemplate = `{
                 "is_soft_limit": {
                     "type": "boolean"
                 },
+                "next_usage_reset_at": {
+                    "type": "string"
+                },
                 "sources": {
                     "type": "array",
                     "items": {
@@ -13741,7 +14030,7 @@ const docTemplate = `{
                     }
                 },
                 "group_by": {
-                    "description": "allowed values: \"source\", \"feature_id\"",
+                    "description": "allowed values: \"source\", \"feature_id\", \"properties.\u003cfield_name\u003e\"",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -13794,6 +14083,11 @@ const docTemplate = `{
                 "meter_id"
             ],
             "properties": {
+                "billing_anchor": {
+                    "description": "BillingAnchor enables custom monthly billing periods for meter usage aggregation.\n\nUsage guidelines:\n- Only effective when WindowSize = \"MONTH\"\n- For other window sizes (DAY, HOUR, WEEK), this field is ignored\n- When nil, uses standard calendar months (1st to 1st)\n- When provided, creates custom monthly periods (e.g., 5th to 5th)\n\nCommon use cases:\n- Subscription billing periods that don't align with calendar months\n- Customer-specific billing cycles (e.g., signed up on 15th)\n- Multi-tenant systems with different billing anchor dates\n\nExample: If BillingAnchor = \"2024-03-05T14:30:45Z\" and WindowSize = \"MONTH\":\n  - March period: 2024-03-05 14:30:45 to 2024-04-05 14:30:45\n  - April period: 2024-04-05 14:30:45 to 2024-05-05 14:30:45",
+                    "type": "string",
+                    "example": "2024-03-05T14:30:45Z"
+                },
                 "bucket_size": {
                     "description": "Optional, only used for MAX aggregation with windowing",
                     "allOf": [
@@ -13914,6 +14208,11 @@ const docTemplate = `{
             "properties": {
                 "aggregation_type": {
                     "$ref": "#/definitions/types.AggregationType"
+                },
+                "billing_anchor": {
+                    "description": "BillingAnchor enables custom monthly billing periods for usage aggregation.\n\nWhen to use:\n- WindowSize = \"MONTH\" AND you need custom monthly periods (not calendar months)\n- Subscription billing that doesn't align with calendar months\n- Example: Customer signed up on 15th, so billing periods are 15th to 15th\n\nWhen NOT to use:\n- WindowSize != \"MONTH\" (ignored for DAY, HOUR, WEEK, etc.)\n- Standard calendar-based billing (1st to 1st of each month)\n\nExample values:\n- \"2024-03-05T14:30:45.123456789Z\" (5th of each month at 2:30:45 PM)\n- \"2024-01-15T00:00:00Z\" (15th of each month at midnight)\n- \"2024-02-29T12:00:00Z\" (29th of each month at noon - handles leap years)",
+                    "type": "string",
+                    "example": "2024-03-05T14:30:45.123456789Z"
                 },
                 "bucket_size": {
                     "description": "Optional, only used for MAX aggregation with windowing",
@@ -14098,6 +14397,39 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.InvoiceLineItemPreview": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "description": "amount for this line item",
+                    "type": "number"
+                },
+                "description": {
+                    "description": "description of the line item",
+                    "type": "string"
+                },
+                "is_proration": {
+                    "description": "is_proration indicates if this line item is a proration",
+                    "type": "boolean"
+                },
+                "period_end": {
+                    "description": "period_end for this line item (if applicable)",
+                    "type": "string"
+                },
+                "period_start": {
+                    "description": "period_start for this line item (if applicable)",
+                    "type": "string"
+                },
+                "quantity": {
+                    "description": "quantity for this line item",
+                    "type": "number"
+                },
+                "unit_price": {
+                    "description": "unit_price for this line item",
+                    "type": "number"
+                }
+            }
+        },
         "dto.InvoiceLineItemResponse": {
             "type": "object",
             "properties": {
@@ -14218,11 +14550,50 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "usage_analytics": {
-                    "description": "usage_analytics contains usage analytics for this line item",
+                    "description": "usage_analytics contains usage analytics for this line item (legacy - grouped by source)",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/dto.SourceUsageItem"
                     }
+                },
+                "usage_breakdown": {
+                    "description": "usage_breakdown contains flexible usage breakdown for this line item (supports any grouping)",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.UsageBreakdownItem"
+                    }
+                }
+            }
+        },
+        "dto.InvoicePreview": {
+            "type": "object",
+            "properties": {
+                "currency": {
+                    "description": "currency is the currency for all amounts",
+                    "type": "string"
+                },
+                "due_date": {
+                    "description": "due_date is when the invoice would be due",
+                    "type": "string"
+                },
+                "line_items": {
+                    "description": "line_items contains preview of line items",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.InvoiceLineItemPreview"
+                    }
+                },
+                "subtotal": {
+                    "description": "subtotal is the subtotal amount before taxes",
+                    "type": "number"
+                },
+                "tax_amount": {
+                    "description": "tax_amount is the total tax amount",
+                    "type": "number"
+                },
+                "total": {
+                    "description": "total is the total amount including taxes",
+                    "type": "number"
                 }
             }
         },
@@ -15063,6 +15434,9 @@ const docTemplate = `{
                 "description": {
                     "type": "string"
                 },
+                "display_order": {
+                    "type": "integer"
+                },
                 "entitlements": {
                     "type": "array",
                     "items": {
@@ -15101,6 +15475,27 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "updated_by": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.PlanSummary": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "description": "description of the plan",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "id of the plan",
+                    "type": "string"
+                },
+                "lookup_key": {
+                    "description": "lookup_key of the plan",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "name of the plan",
                     "type": "string"
                 }
             }
@@ -15334,6 +15729,84 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.ProrationDetail": {
+            "type": "object",
+            "properties": {
+                "charge_amount": {
+                    "type": "number"
+                },
+                "credit_amount": {
+                    "type": "number"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "line_item_id": {
+                    "type": "string"
+                },
+                "original_amount": {
+                    "type": "number"
+                },
+                "plan_name": {
+                    "type": "string"
+                },
+                "price_id": {
+                    "type": "string"
+                },
+                "proration_days": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.ProrationDetails": {
+            "type": "object",
+            "properties": {
+                "charge_amount": {
+                    "description": "charge_amount is the charge amount for the new subscription",
+                    "type": "number"
+                },
+                "charge_description": {
+                    "description": "charge_description describes what the charge is for",
+                    "type": "string"
+                },
+                "credit_amount": {
+                    "description": "credit_amount is the credit amount from the old subscription",
+                    "type": "number"
+                },
+                "credit_description": {
+                    "description": "credit_description describes what the credit is for",
+                    "type": "string"
+                },
+                "currency": {
+                    "description": "currency is the currency for all amounts",
+                    "type": "string"
+                },
+                "current_period_end": {
+                    "description": "current_period_end is the end of the current billing period",
+                    "type": "string"
+                },
+                "current_period_start": {
+                    "description": "current_period_start is the start of the current billing period",
+                    "type": "string"
+                },
+                "days_remaining": {
+                    "description": "days_remaining is the number of days remaining in the current period",
+                    "type": "integer"
+                },
+                "days_used": {
+                    "description": "days_used is the number of days used in the current period",
+                    "type": "integer"
+                },
+                "net_amount": {
+                    "description": "net_amount is the net amount (charge - credit)",
+                    "type": "number"
+                },
+                "proration_date": {
+                    "description": "proration_date is the date used for proration calculations",
+                    "type": "string"
+                }
+            }
+        },
         "dto.ROIResponse": {
             "type": "object",
             "properties": {
@@ -15500,6 +15973,207 @@ const docTemplate = `{
                 },
                 "usage": {
                     "description": "usage is the total usage amount from this source (optional, for additional context)",
+                    "type": "string"
+                }
+            }
+        },
+        "dto.SubscriptionChangeExecuteResponse": {
+            "description": "Response after successfully executing a subscription plan change",
+            "type": "object",
+            "properties": {
+                "change_type": {
+                    "description": "change_type indicates whether this was an upgrade, downgrade, or lateral change",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.SubscriptionChangeType"
+                        }
+                    ]
+                },
+                "credit_grants": {
+                    "description": "credit_grants contains any credit grants created for proration credits",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.CreditGrantResponse"
+                    }
+                },
+                "effective_date": {
+                    "description": "effective_date is when the change took effect",
+                    "type": "string"
+                },
+                "invoice": {
+                    "description": "invoice contains the immediate invoice generated for the change (if any)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.InvoiceResponse"
+                        }
+                    ]
+                },
+                "metadata": {
+                    "description": "metadata from the request",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "new_subscription": {
+                    "description": "new_subscription contains the new subscription details",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.SubscriptionSummary"
+                        }
+                    ]
+                },
+                "old_subscription": {
+                    "description": "old_subscription contains the archived subscription details",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.SubscriptionSummary"
+                        }
+                    ]
+                },
+                "proration_applied": {
+                    "description": "proration_applied contains details of the proration that was applied",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.ProrationDetails"
+                        }
+                    ]
+                }
+            }
+        },
+        "dto.SubscriptionChangePreviewResponse": {
+            "description": "Response showing the financial impact of a subscription plan change",
+            "type": "object",
+            "properties": {
+                "change_type": {
+                    "description": "change_type indicates whether this is an upgrade, downgrade, or lateral change",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.SubscriptionChangeType"
+                        }
+                    ]
+                },
+                "current_plan": {
+                    "description": "current_plan contains information about the current plan",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.PlanSummary"
+                        }
+                    ]
+                },
+                "effective_date": {
+                    "description": "effective_date is when the change would take effect",
+                    "type": "string"
+                },
+                "metadata": {
+                    "description": "metadata from the request",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "new_billing_cycle": {
+                    "description": "new_billing_cycle shows the new billing cycle details",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.BillingCycleInfo"
+                        }
+                    ]
+                },
+                "next_invoice_preview": {
+                    "description": "next_invoice_preview shows how the next regular invoice would be affected",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.InvoicePreview"
+                        }
+                    ]
+                },
+                "proration_details": {
+                    "description": "proration_details contains the calculated proration amounts",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.ProrationDetails"
+                        }
+                    ]
+                },
+                "subscription_id": {
+                    "description": "subscription_id is the ID of the subscription being changed",
+                    "type": "string"
+                },
+                "target_plan": {
+                    "description": "target_plan contains information about the target plan",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.PlanSummary"
+                        }
+                    ]
+                },
+                "warnings": {
+                    "description": "warnings contains any warnings about the change",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "dto.SubscriptionChangeRequest": {
+            "description": "Request object for changing a subscription plan (upgrade/downgrade)",
+            "type": "object",
+            "required": [
+                "billing_cadence",
+                "billing_cycle",
+                "billing_period",
+                "billing_period_count",
+                "proration_behavior",
+                "target_plan_id"
+            ],
+            "properties": {
+                "billing_cadence": {
+                    "description": "billing_cadence is the billing cadence for the new subscription",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.BillingCadence"
+                        }
+                    ]
+                },
+                "billing_cycle": {
+                    "description": "billing_cycle is the billing cycle for the new subscription",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.BillingCycle"
+                        }
+                    ]
+                },
+                "billing_period": {
+                    "description": "billing_period is the billing period for the new subscription",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.BillingPeriod"
+                        }
+                    ]
+                },
+                "billing_period_count": {
+                    "description": "billing_period_count is the billing period count for the new subscription",
+                    "type": "integer"
+                },
+                "metadata": {
+                    "description": "metadata contains additional key-value pairs for storing extra information",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "proration_behavior": {
+                    "description": "proration_behavior controls how proration is handled for the change\nOptions: create_prorations, none",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ProrationBehavior"
+                        }
+                    ]
+                },
+                "target_plan_id": {
+                    "description": "target_plan_id is the ID of the new plan to change to (required)",
                     "type": "string"
                 }
             }
@@ -15733,6 +16407,10 @@ const docTemplate = `{
                     "description": "CanceledAt is the date the subscription was canceled",
                     "type": "string"
                 },
+                "collection_method": {
+                    "description": "CollectionMethod determines how invoices are collected",
+                    "type": "string"
+                },
                 "commitment_amount": {
                     "description": "CommitmentAmount is the minimum amount a customer commits to paying for a billing period",
                     "type": "number"
@@ -15769,6 +16447,9 @@ const docTemplate = `{
                     "description": "CustomerID is the identifier for the customer in our system",
                     "type": "string"
                 },
+                "customer_timezone": {
+                    "type": "string"
+                },
                 "end_date": {
                     "description": "EndDate is the end date of the subscription",
                     "type": "string"
@@ -15777,15 +16458,26 @@ const docTemplate = `{
                     "description": "EnvironmentID is the environment identifier for the subscription",
                     "type": "string"
                 },
+                "gateway_payment_method_id": {
+                    "description": "GatewayPaymentMethodID is the gateway payment method ID for this subscription",
+                    "type": "string"
+                },
                 "id": {
                     "description": "ID is the unique identifier for the subscription",
                     "type": "string"
                 },
+                "latest_invoice": {
+                    "description": "Latest invoice information for incomplete subscriptions",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.InvoiceResponse"
+                        }
+                    ]
+                },
                 "line_items": {
-                    "description": "LineItems are the line items for this subscription",
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/dto.SubscriptionLineItemResponse"
+                        "$ref": "#/definitions/subscription.SubscriptionLineItem"
                     }
                 },
                 "lookup_key": {
@@ -15808,12 +16500,19 @@ const docTemplate = `{
                         "$ref": "#/definitions/subscription.SubscriptionPause"
                     }
                 },
+                "payment_behavior": {
+                    "description": "PaymentBehavior determines how subscription payments are handled",
+                    "type": "string"
+                },
                 "plan": {
                     "$ref": "#/definitions/dto.PlanResponse"
                 },
                 "plan_id": {
                     "description": "PlanID is the identifier for the plan in our system",
                     "type": "string"
+                },
+                "proration_behavior": {
+                    "$ref": "#/definitions/types.ProrationBehavior"
                 },
                 "schedule": {
                     "description": "Schedule is included when the subscription has a schedule",
@@ -15976,6 +16675,47 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.SubscriptionSummary": {
+            "type": "object",
+            "properties": {
+                "archived_at": {
+                    "description": "archived_at timestamp (for old subscriptions)",
+                    "type": "string"
+                },
+                "billing_anchor": {
+                    "description": "billing_anchor of the subscription",
+                    "type": "string"
+                },
+                "created_at": {
+                    "description": "created_at timestamp",
+                    "type": "string"
+                },
+                "current_period_end": {
+                    "description": "current_period_end of the subscription",
+                    "type": "string"
+                },
+                "current_period_start": {
+                    "description": "current_period_start of the subscription",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "id of the subscription",
+                    "type": "string"
+                },
+                "plan_id": {
+                    "description": "plan_id of the subscription",
+                    "type": "string"
+                },
+                "status": {
+                    "description": "status of the subscription",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.SubscriptionStatus"
+                        }
+                    ]
+                }
+            }
+        },
         "dto.SubscriptionUsageByMetersResponse": {
             "type": "object",
             "properties": {
@@ -16013,37 +16753,6 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.SyncPlanPricesResponse": {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string"
-                },
-                "plan_id": {
-                    "type": "string"
-                },
-                "plan_name": {
-                    "type": "string"
-                },
-                "synchronization_summary": {
-                    "type": "object",
-                    "properties": {
-                        "prices_added": {
-                            "type": "integer"
-                        },
-                        "prices_removed": {
-                            "type": "integer"
-                        },
-                        "prices_skipped": {
-                            "type": "integer"
-                        },
-                        "subscriptions_processed": {
-                            "type": "integer"
-                        }
-                    }
-                }
-            }
-        },
         "dto.TaskResponse": {
             "type": "object",
             "properties": {
@@ -16058,6 +16767,9 @@ const docTemplate = `{
                 },
                 "entity_type": {
                     "$ref": "#/definitions/types.EntityType"
+                },
+                "environment_id": {
+                    "type": "string"
                 },
                 "error_summary": {
                     "type": "string"
@@ -16091,7 +16803,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "status": {
-                    "type": "string"
+                    "$ref": "#/definitions/types.Status"
                 },
                 "successful_records": {
                     "type": "integer"
@@ -16160,6 +16872,9 @@ const docTemplate = `{
                 },
                 "tax_association_id": {
                     "type": "string"
+                },
+                "tax_rate": {
+                    "$ref": "#/definitions/dto.TaxRateResponse"
                 },
                 "tax_rate_id": {
                     "type": "string"
@@ -16599,7 +17314,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "usage_reset_period": {
-                    "$ref": "#/definitions/types.BillingPeriod"
+                    "$ref": "#/definitions/types.EntitlementUsageResetPeriod"
                 }
             }
         },
@@ -16643,9 +17358,20 @@ const docTemplate = `{
         "dto.UpdateInvoiceRequest": {
             "type": "object",
             "properties": {
+                "due_date": {
+                    "type": "string"
+                },
                 "invoice_pdf_url": {
                     "description": "invoice_pdf_url is the URL where customers can download the PDF version of this invoice",
                     "type": "string"
+                },
+                "metadata": {
+                    "description": "Invoice metadata will be overridden with the request metadata",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.Metadata"
+                        }
+                    ]
                 }
             }
         },
@@ -16791,7 +17517,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "usage_reset_period": {
-                    "$ref": "#/definitions/types.BillingPeriod"
+                    "$ref": "#/definitions/types.EntitlementUsageResetPeriod"
                 }
             }
         },
@@ -16917,6 +17643,9 @@ const docTemplate = `{
                 },
                 "description": {
                     "type": "string"
+                },
+                "display_order": {
+                    "type": "integer"
                 },
                 "entitlements": {
                     "type": "array",
@@ -17095,6 +17824,13 @@ const docTemplate = `{
                         "$ref": "#/definitions/dto.UsageAnalyticPoint"
                     }
                 },
+                "properties": {
+                    "description": "Stores property values for flexible grouping (e.g., org_id -\u003e \"org123\")",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
                 "source": {
                     "type": "string"
                 },
@@ -17127,6 +17863,34 @@ const docTemplate = `{
                 },
                 "usage": {
                     "type": "number"
+                }
+            }
+        },
+        "dto.UsageBreakdownItem": {
+            "type": "object",
+            "properties": {
+                "cost": {
+                    "description": "cost is the cost attributed to this group for the line item",
+                    "type": "string"
+                },
+                "event_count": {
+                    "description": "event_count is the number of events from this group (optional)",
+                    "type": "integer"
+                },
+                "grouped_by": {
+                    "description": "grouped_by contains the grouping field values (e.g., {\"source\": \"api\", \"org_id\": \"org123\"})",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "percentage": {
+                    "description": "percentage is the percentage of total line item cost from this group (optional)",
+                    "type": "string"
+                },
+                "usage": {
+                    "description": "usage is the total usage amount from this group (optional, for additional context)",
+                    "type": "string"
                 }
             }
         },
@@ -17464,6 +18228,20 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "models.TemporalWorkflowResult": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "run_id": {
+                    "type": "string"
+                },
+                "workflow_id": {
+                    "type": "string"
                 }
             }
         },
@@ -18118,14 +18896,25 @@ const docTemplate = `{
                 "BILLING_TIER_SLAB"
             ]
         },
+        "types.CancellationType": {
+            "type": "string",
+            "enum": [
+                "immediate",
+                "end_of_period"
+            ],
+            "x-enum-varnames": [
+                "CancellationTypeImmediate",
+                "CancellationTypeEndOfPeriod"
+            ]
+        },
         "types.CollectionMethod": {
             "type": "string",
             "enum": [
-                "default_incomplete",
+                "charge_automatically",
                 "send_invoice"
             ],
             "x-enum-varnames": [
-                "CollectionMethodDefaultIncomplete",
+                "CollectionMethodChargeAutomatically",
                 "CollectionMethodSendInvoice"
             ]
         },
@@ -18496,6 +19285,27 @@ const docTemplate = `{
                 }
             }
         },
+        "types.EntitlementUsageResetPeriod": {
+            "type": "string",
+            "enum": [
+                "MONTHLY",
+                "ANNUAL",
+                "WEEKLY",
+                "DAILY",
+                "QUARTERLY",
+                "HALF_YEARLY",
+                "NEVER"
+            ],
+            "x-enum-varnames": [
+                "ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY",
+                "ENTITLEMENT_USAGE_RESET_PERIOD_ANNUAL",
+                "ENTITLEMENT_USAGE_RESET_PERIOD_WEEKLY",
+                "ENTITLEMENT_USAGE_RESET_PERIOD_DAILY",
+                "ENTITLEMENT_USAGE_RESET_PERIOD_QUARTER",
+                "ENTITLEMENT_USAGE_RESET_PERIOD_HALF_YEAR",
+                "ENTITLEMENT_USAGE_RESET_PERIOD_NEVER"
+            ]
+        },
         "types.EntityType": {
             "type": "string",
             "enum": [
@@ -18672,12 +19482,14 @@ const docTemplate = `{
                 "SUBSCRIPTION_CREATE",
                 "SUBSCRIPTION_CYCLE",
                 "SUBSCRIPTION_UPDATE",
+                "PRORATION",
                 "MANUAL"
             ],
             "x-enum-varnames": [
                 "InvoiceBillingReasonSubscriptionCreate",
                 "InvoiceBillingReasonSubscriptionCycle",
                 "InvoiceBillingReasonSubscriptionUpdate",
+                "InvoiceBillingReasonProration",
                 "InvoiceBillingReasonManual"
             ]
         },
@@ -18866,6 +19678,21 @@ const docTemplate = `{
                 "PauseStatusCancelled"
             ]
         },
+        "types.PaymentBehavior": {
+            "type": "string",
+            "enum": [
+                "allow_incomplete",
+                "default_incomplete",
+                "error_if_incomplete",
+                "default_active"
+            ],
+            "x-enum-varnames": [
+                "PaymentBehaviorAllowIncomplete",
+                "PaymentBehaviorDefaultIncomplete",
+                "PaymentBehaviorErrorIfIncomplete",
+                "PaymentBehaviorDefaultActive"
+            ]
+        },
         "types.PaymentDestinationType": {
             "type": "string",
             "enum": [
@@ -19026,6 +19853,25 @@ const docTemplate = `{
                 "PRICE_UNIT_TYPE_CUSTOM"
             ]
         },
+        "types.ProrationBehavior": {
+            "type": "string",
+            "enum": [
+                "create_prorations",
+                "none"
+            ],
+            "x-enum-comments": {
+                "ProrationBehaviorCreateProrations": "Default: Create credits/charges on invoice",
+                "ProrationBehaviorNone": "Calculate but don't apply (e.g., for previews)"
+            },
+            "x-enum-descriptions": [
+                "Default: Create credits/charges on invoice",
+                "Calculate but don't apply (e.g., for previews)"
+            ],
+            "x-enum-varnames": [
+                "ProrationBehaviorCreateProrations",
+                "ProrationBehaviorNone"
+            ]
+        },
         "types.QueryFilter": {
             "type": "object",
             "properties": {
@@ -19168,6 +20014,19 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
+        },
+        "types.SubscriptionChangeType": {
+            "type": "string",
+            "enum": [
+                "upgrade",
+                "downgrade",
+                "lateral"
+            ],
+            "x-enum-varnames": [
+                "SubscriptionChangeTypeUpgrade",
+                "SubscriptionChangeTypeDowngrade",
+                "SubscriptionChangeTypeLateral"
+            ]
         },
         "types.SubscriptionFilter": {
             "type": "object",
@@ -19571,7 +20430,8 @@ const docTemplate = `{
                 "6HOUR",
                 "12HOUR",
                 "DAY",
-                "WEEK"
+                "WEEK",
+                "MONTH"
             ],
             "x-enum-varnames": [
                 "WindowSizeMinute",
@@ -19582,7 +20442,8 @@ const docTemplate = `{
                 "WindowSize6Hour",
                 "WindowSize12Hour",
                 "WindowSizeDay",
-                "WindowSizeWeek"
+                "WindowSizeWeek",
+                "WindowSizeMonth"
             ]
         }
     },

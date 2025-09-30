@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -14,6 +16,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/types"
+	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 )
 
 type CreditNoteService interface {
@@ -141,6 +144,9 @@ func (s *creditNoteService) CreateCreditNote(ctx context.Context, req *dto.Creat
 		)
 		return nil, err
 	}
+
+	// Publish webhook event after successful transaction
+	s.publishInternalWebhookEvent(ctx, types.WebhookEventCreditNoteCreated, creditNote.ID)
 
 	// Finalize the credit note if the flag is set
 	if req.ProcessCreditNote {
@@ -422,6 +428,9 @@ func (s *creditNoteService) VoidCreditNote(ctx context.Context, id string) error
 		}
 	}
 
+	// Publish webhook event after successful update
+	s.publishInternalWebhookEvent(ctx, types.WebhookEventCreditNoteUpdated, cn.ID)
+
 	s.Logger.Infow("credit note voided successfully",
 		"credit_note_id", id,
 		"previous_status", originalStatus)
@@ -543,6 +552,9 @@ func (s *creditNoteService) FinalizeCreditNote(ctx context.Context, id string) e
 	if err != nil {
 		return err
 	}
+
+	// Publish webhook event after successful transaction
+	s.publishInternalWebhookEvent(ctx, types.WebhookEventCreditNoteUpdated, cn.ID)
 
 	s.Logger.Infow("credit note processed successfully",
 		"credit_note_id", id,
@@ -783,4 +795,49 @@ func (c *creditNoteService) RecalculateInvoiceAmountsForCreditNote(ctx context.C
 	)
 
 	return nil
+}
+
+func (c *creditNoteService) publishInternalWebhookEvent(ctx context.Context, eventType string, creditNoteID string) {
+	webhookPayload, err := json.Marshal(webhookDto.InternalCreditNoteEvent{
+		CreditNoteID: creditNoteID,
+		TenantID:     types.GetTenantID(ctx),
+	})
+	if err != nil {
+		c.Logger.Errorw("failed to marshal webhook payload", "error", err)
+		return
+	}
+
+	webhookEvent := &types.WebhookEvent{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WEBHOOK_EVENT),
+		EventName:     eventType,
+		TenantID:      types.GetTenantID(ctx),
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		UserID:        types.GetUserID(ctx),
+		Timestamp:     time.Now().UTC(),
+		Payload:       json.RawMessage(webhookPayload),
+	}
+	c.Logger.Infow("attempting to publish webhook event",
+		"webhook_id", webhookEvent.ID,
+		"event_name", eventType,
+		"credit_note_id", creditNoteID,
+		"tenant_id", webhookEvent.TenantID,
+		"environment_id", webhookEvent.EnvironmentID,
+	)
+
+	if err := c.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
+		c.Logger.Errorw("failed to publish webhook event",
+			"error", err,
+			"webhook_id", webhookEvent.ID,
+			"event_name", eventType,
+			"credit_note_id", creditNoteID,
+		)
+		return
+	}
+
+	c.Logger.Infow("webhook event published successfully",
+		"webhook_id", webhookEvent.ID,
+		"event_name", eventType,
+		"credit_note_id", creditNoteID,
+	)
+
 }

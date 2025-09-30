@@ -1358,3 +1358,387 @@ func TestCalculatePeriodID_Simple(t *testing.T) {
 		})
 	}
 }
+
+func TestGetNextUsageResetAt_Never(t *testing.T) {
+	currentTime := time.Date(2024, time.March, 15, 12, 30, 0, 0, time.UTC)
+	subscriptionStart := time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC)
+	billingAnchor := time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC)
+
+	resetTime, err := GetNextUsageResetAt(
+		currentTime,
+		subscriptionStart,
+		nil,
+		billingAnchor,
+		ENTITLEMENT_USAGE_RESET_PERIOD_NEVER,
+	)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !resetTime.IsZero() {
+		t.Errorf("expected zero time for NEVER reset period, got %v", resetTime)
+	}
+}
+
+func TestGetNextUsageResetAt_Daily(t *testing.T) {
+	tests := []struct {
+		name              string
+		currentTime       time.Time
+		subscriptionStart time.Time
+		billingAnchor     time.Time
+		subscriptionEnd   *time.Time
+		want              time.Time
+		wantErr           bool
+	}{
+		{
+			name:              "simple daily reset - UTC",
+			currentTime:       time.Date(2024, time.March, 15, 12, 30, 0, 0, time.UTC),
+			subscriptionStart: time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC),
+			billingAnchor:     time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC),
+			subscriptionEnd:   nil,
+			want:              time.Date(2024, time.March, 16, 0, 0, 0, 0, time.UTC),
+			wantErr:           false,
+		},
+		{
+			name:              "daily reset - crossing month boundary",
+			currentTime:       time.Date(2024, time.February, 29, 23, 59, 59, 0, time.UTC), // leap year
+			subscriptionStart: time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC),
+			billingAnchor:     time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC),
+			subscriptionEnd:   nil,
+			want:              time.Date(2024, time.March, 1, 0, 0, 0, 0, time.UTC),
+			wantErr:           false,
+		},
+		{
+			name:              "daily reset - crossing year boundary",
+			currentTime:       time.Date(2024, time.December, 31, 12, 0, 0, 0, time.UTC),
+			subscriptionStart: time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC),
+			billingAnchor:     time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC),
+			subscriptionEnd:   nil,
+			want:              time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC),
+			wantErr:           false,
+		},
+		{
+			name:              "daily reset - with subscription end cliffing",
+			currentTime:       time.Date(2024, time.March, 15, 12, 30, 0, 0, time.UTC),
+			subscriptionStart: time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC),
+			billingAnchor:     time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC),
+			subscriptionEnd:   timePtr(time.Date(2024, time.March, 15, 18, 0, 0, 0, time.UTC)),
+			want:              time.Date(2024, time.March, 15, 18, 0, 0, 0, time.UTC), // cliffed
+			wantErr:           false,
+		},
+		{
+			name:              "daily reset - IST timezone",
+			currentTime:       time.Date(2024, time.March, 15, 12, 30, 0, 0, ist),
+			subscriptionStart: time.Date(2024, time.January, 1, 0, 0, 0, 0, ist),
+			billingAnchor:     time.Date(2024, time.January, 1, 5, 30, 0, 0, ist),
+			subscriptionEnd:   nil,
+			want:              time.Date(2024, time.March, 16, 0, 0, 0, 0, ist),
+			wantErr:           false,
+		},
+		{
+			name:              "daily reset - PST timezone with DST considerations",
+			currentTime:       time.Date(2024, time.March, 15, 12, 30, 0, 0, pst),
+			subscriptionStart: time.Date(2024, time.January, 1, 0, 0, 0, 0, pst),
+			billingAnchor:     time.Date(2024, time.January, 1, 8, 0, 0, 0, pst),
+			subscriptionEnd:   nil,
+			want:              time.Date(2024, time.March, 16, 0, 0, 0, 0, pst),
+			wantErr:           false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := GetNextUsageResetAt(
+				tt.currentTime,
+				tt.subscriptionStart,
+				tt.subscriptionEnd,
+				tt.billingAnchor,
+				ENTITLEMENT_USAGE_RESET_PERIOD_DAILY,
+			)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !got.Equal(tt.want) {
+				t.Errorf("got %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetNextUsageResetAt_Monthly(t *testing.T) {
+	tests := []struct {
+		name              string
+		currentTime       time.Time
+		subscriptionStart time.Time
+		billingAnchor     time.Time
+		subscriptionEnd   *time.Time
+		want              time.Time
+		wantErr           bool
+	}{
+		{
+			name:              "monthly reset - subscription starts 5th Jan, current 10th Jan",
+			currentTime:       time.Date(2024, time.January, 10, 12, 0, 0, 0, time.UTC),
+			subscriptionStart: time.Date(2024, time.January, 5, 0, 0, 0, 0, time.UTC),
+			billingAnchor:     time.Date(2024, time.January, 5, 0, 0, 0, 0, time.UTC),
+			subscriptionEnd:   nil,
+			want:              time.Date(2024, time.February, 5, 0, 0, 0, 0, time.UTC),
+			wantErr:           false,
+		},
+		{
+			name:              "monthly reset - subscription starts 5th Jan, current 15th Feb",
+			currentTime:       time.Date(2024, time.February, 15, 14, 30, 0, 0, time.UTC),
+			subscriptionStart: time.Date(2024, time.January, 5, 0, 0, 0, 0, time.UTC),
+			billingAnchor:     time.Date(2024, time.January, 5, 0, 0, 0, 0, time.UTC),
+			subscriptionEnd:   nil,
+			want:              time.Date(2024, time.March, 5, 0, 0, 0, 0, time.UTC),
+			wantErr:           false,
+		},
+		{
+			name:              "monthly reset - subscription starts 5th Jan, current 19th Oct",
+			currentTime:       time.Date(2024, time.October, 19, 9, 15, 0, 0, time.UTC),
+			subscriptionStart: time.Date(2024, time.January, 5, 0, 0, 0, 0, time.UTC),
+			billingAnchor:     time.Date(2024, time.January, 5, 0, 0, 0, 0, time.UTC),
+			subscriptionEnd:   nil,
+			want:              time.Date(2024, time.November, 5, 0, 0, 0, 0, time.UTC),
+			wantErr:           false,
+		},
+		{
+			name:              "monthly reset - subscription starts 5th Jan, billing anchor 1st Feb",
+			currentTime:       time.Date(2024, time.January, 10, 12, 0, 0, 0, time.UTC),
+			subscriptionStart: time.Date(2024, time.January, 5, 0, 0, 0, 0, time.UTC),
+			billingAnchor:     time.Date(2024, time.February, 1, 0, 0, 0, 0, time.UTC),
+			subscriptionEnd:   nil,
+			want:              time.Date(2024, time.February, 1, 0, 0, 0, 0, time.UTC),
+			wantErr:           false,
+		},
+		{
+			name:              "monthly reset - subscription starts 5th Jan, billing anchor 1st Feb, current 15th Feb",
+			currentTime:       time.Date(2024, time.February, 15, 14, 30, 0, 0, time.UTC),
+			subscriptionStart: time.Date(2024, time.January, 5, 0, 0, 0, 0, time.UTC),
+			billingAnchor:     time.Date(2024, time.February, 1, 0, 0, 0, 0, time.UTC),
+			subscriptionEnd:   nil,
+			want:              time.Date(2024, time.March, 1, 0, 0, 0, 0, time.UTC),
+			wantErr:           false,
+		},
+		{
+			name:              "monthly reset - month-end billing anchor with February leap year",
+			currentTime:       time.Date(2024, time.February, 15, 12, 0, 0, 0, time.UTC),
+			subscriptionStart: time.Date(2024, time.January, 31, 0, 0, 0, 0, time.UTC),
+			billingAnchor:     time.Date(2024, time.January, 31, 0, 0, 0, 0, time.UTC),
+			subscriptionEnd:   nil,
+			want:              time.Date(2024, time.February, 29, 0, 0, 0, 0, time.UTC), // Feb 29 in leap year
+			wantErr:           false,
+		},
+		{
+			name:              "monthly reset - month-end billing anchor with February non-leap year",
+			currentTime:       time.Date(2025, time.February, 15, 12, 0, 0, 0, time.UTC),
+			subscriptionStart: time.Date(2025, time.January, 31, 0, 0, 0, 0, time.UTC),
+			billingAnchor:     time.Date(2025, time.January, 31, 0, 0, 0, 0, time.UTC),
+			subscriptionEnd:   nil,
+			want:              time.Date(2025, time.February, 28, 0, 0, 0, 0, time.UTC), // Feb 28 in non-leap year
+			wantErr:           false,
+		},
+		{
+			name:              "monthly reset - with subscription end cliffing",
+			currentTime:       time.Date(2024, time.March, 15, 12, 0, 0, 0, time.UTC),
+			subscriptionStart: time.Date(2024, time.January, 5, 0, 0, 0, 0, time.UTC),
+			billingAnchor:     time.Date(2024, time.January, 5, 0, 0, 0, 0, time.UTC),
+			subscriptionEnd:   timePtr(time.Date(2024, time.March, 20, 0, 0, 0, 0, time.UTC)),
+			want:              time.Date(2024, time.March, 20, 0, 0, 0, 0, time.UTC), // cliffed to subscription end
+			wantErr:           false,
+		},
+		{
+			name:              "monthly reset - current time at period boundary (start)",
+			currentTime:       time.Date(2024, time.February, 5, 0, 0, 0, 0, time.UTC),
+			subscriptionStart: time.Date(2024, time.January, 5, 0, 0, 0, 0, time.UTC),
+			billingAnchor:     time.Date(2024, time.January, 5, 0, 0, 0, 0, time.UTC),
+			subscriptionEnd:   nil,
+			want:              time.Date(2024, time.March, 5, 0, 0, 0, 0, time.UTC),
+			wantErr:           false,
+		},
+		{
+			name:              "monthly reset - current time just before period boundary",
+			currentTime:       time.Date(2024, time.March, 4, 23, 59, 59, 0, time.UTC),
+			subscriptionStart: time.Date(2024, time.January, 5, 0, 0, 0, 0, time.UTC),
+			billingAnchor:     time.Date(2024, time.January, 5, 0, 0, 0, 0, time.UTC),
+			subscriptionEnd:   nil,
+			want:              time.Date(2024, time.March, 5, 0, 0, 0, 0, time.UTC),
+			wantErr:           false,
+		},
+		{
+			name:              "monthly reset - cross year boundary",
+			currentTime:       time.Date(2024, time.December, 15, 12, 0, 0, 0, time.UTC),
+			subscriptionStart: time.Date(2024, time.November, 5, 0, 0, 0, 0, time.UTC),
+			billingAnchor:     time.Date(2024, time.November, 5, 0, 0, 0, 0, time.UTC),
+			subscriptionEnd:   nil,
+			want:              time.Date(2025, time.January, 5, 0, 0, 0, 0, time.UTC),
+			wantErr:           false,
+		},
+		{
+			name:              "monthly reset - IST timezone",
+			currentTime:       time.Date(2024, time.March, 15, 14, 30, 0, 0, ist),
+			subscriptionStart: time.Date(2024, time.January, 5, 5, 30, 0, 0, ist),
+			billingAnchor:     time.Date(2024, time.January, 5, 5, 30, 0, 0, ist),
+			subscriptionEnd:   nil,
+			want:              time.Date(2024, time.April, 5, 0, 0, 0, 0, ist), // Reset time always at 00:00:00
+			wantErr:           false,
+		},
+		{
+			name:              "monthly reset - PST timezone",
+			currentTime:       time.Date(2024, time.March, 15, 14, 30, 0, 0, pst),
+			subscriptionStart: time.Date(2024, time.January, 5, 8, 0, 0, 0, pst),
+			billingAnchor:     time.Date(2024, time.January, 5, 8, 0, 0, 0, pst),
+			subscriptionEnd:   nil,
+			want:              time.Date(2024, time.April, 5, 0, 0, 0, 0, pst),
+			wantErr:           false,
+		},
+		{
+			name:              "monthly reset - subscription start before current time by several months",
+			currentTime:       time.Date(2024, time.June, 10, 12, 0, 0, 0, time.UTC),
+			subscriptionStart: time.Date(2023, time.December, 15, 0, 0, 0, 0, time.UTC),
+			billingAnchor:     time.Date(2023, time.December, 15, 0, 0, 0, 0, time.UTC),
+			subscriptionEnd:   nil,
+			want:              time.Date(2024, time.June, 15, 0, 0, 0, 0, time.UTC),
+			wantErr:           false,
+		},
+		{
+			name:              "monthly reset - current time exactly at subscription start",
+			currentTime:       time.Date(2024, time.January, 5, 0, 0, 0, 0, time.UTC),
+			subscriptionStart: time.Date(2024, time.January, 5, 0, 0, 0, 0, time.UTC),
+			billingAnchor:     time.Date(2024, time.January, 5, 0, 0, 0, 0, time.UTC),
+			subscriptionEnd:   nil,
+			want:              time.Date(2024, time.February, 5, 0, 0, 0, 0, time.UTC),
+			wantErr:           false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := GetNextUsageResetAt(
+				tt.currentTime,
+				tt.subscriptionStart,
+				tt.subscriptionEnd,
+				tt.billingAnchor,
+				ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY,
+			)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !got.Equal(tt.want) {
+				t.Errorf("got %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetNextUsageResetAt_UnsupportedPeriod(t *testing.T) {
+	currentTime := time.Date(2024, time.March, 15, 12, 30, 0, 0, time.UTC)
+	subscriptionStart := time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC)
+	billingAnchor := time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC)
+
+	// Test with an unsupported period (WEEKLY is available but not implemented in our simplified version)
+	_, err := GetNextUsageResetAt(
+		currentTime,
+		subscriptionStart,
+		nil,
+		billingAnchor,
+		ENTITLEMENT_USAGE_RESET_PERIOD_WEEKLY, // This should trigger the default case
+	)
+
+	if err == nil {
+		t.Errorf("expected error for unsupported period, got nil")
+	}
+
+	if !contains(err.Error(), "unsupported entitlement usage reset period") {
+		t.Errorf("expected error message to contain 'unsupported entitlement usage reset period', got %v", err)
+	}
+}
+
+func TestGetNextUsageResetAt_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name              string
+		currentTime       time.Time
+		subscriptionStart time.Time
+		billingAnchor     time.Time
+		subscriptionEnd   *time.Time
+		resetPeriod       EntitlementUsageResetPeriod
+		want              time.Time
+		wantErr           bool
+		errContains       string
+	}{
+		{
+			name:              "monthly reset - current time way before subscription start should error",
+			currentTime:       time.Date(2023, time.January, 1, 0, 0, 0, 0, time.UTC),
+			subscriptionStart: time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC),
+			billingAnchor:     time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC),
+			subscriptionEnd:   nil,
+			resetPeriod:       ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY,
+			wantErr:           true,
+			errContains:       "failed to find monthly reset period",
+		},
+		{
+			name:              "daily reset - current time equals subscription end",
+			currentTime:       time.Date(2024, time.March, 15, 12, 0, 0, 0, time.UTC),
+			subscriptionStart: time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC),
+			billingAnchor:     time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC),
+			subscriptionEnd:   timePtr(time.Date(2024, time.March, 15, 12, 0, 0, 0, time.UTC)),
+			resetPeriod:       ENTITLEMENT_USAGE_RESET_PERIOD_DAILY,
+			want:              time.Date(2024, time.March, 15, 12, 0, 0, 0, time.UTC), // cliffed to subscription end
+			wantErr:           false,
+		},
+		{
+			name:              "monthly reset - current time equals subscription end",
+			currentTime:       time.Date(2024, time.March, 15, 12, 0, 0, 0, time.UTC),
+			subscriptionStart: time.Date(2024, time.January, 5, 0, 0, 0, 0, time.UTC),
+			billingAnchor:     time.Date(2024, time.January, 5, 0, 0, 0, 0, time.UTC),
+			subscriptionEnd:   timePtr(time.Date(2024, time.March, 15, 12, 0, 0, 0, time.UTC)),
+			resetPeriod:       ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY,
+			want:              time.Date(2024, time.March, 15, 12, 0, 0, 0, time.UTC), // cliffed to subscription end
+			wantErr:           false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := GetNextUsageResetAt(
+				tt.currentTime,
+				tt.subscriptionStart,
+				tt.subscriptionEnd,
+				tt.billingAnchor,
+				tt.resetPeriod,
+			)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("expected error, got nil")
+				} else if tt.errContains != "" && !contains(err.Error(), tt.errContains) {
+					t.Errorf("expected error to contain %q, got %v", tt.errContains, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !got.Equal(tt.want) {
+				t.Errorf("got %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// Helper function for creating time pointers in tests
+func timePtr(t time.Time) *time.Time {
+	return &t
+}

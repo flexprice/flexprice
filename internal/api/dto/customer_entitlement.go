@@ -120,11 +120,12 @@ type CustomerUsageSummaryResponse struct {
 
 // FeatureUsageSummary represents usage for a single feature
 type FeatureUsageSummary struct {
-	Feature      *FeatureResponse     `json:"feature"`
-	TotalLimit   *int64               `json:"total_limit"`
-	CurrentUsage decimal.Decimal      `json:"current_usage"`
-	UsagePercent decimal.Decimal      `json:"usage_percent"`
-	IsEnabled    bool                 `json:"is_enabled"`
-	IsSoftLimit  bool                 `json:"is_soft_limit"`
-	Sources      []*EntitlementSource `json:"sources"`
+	Feature          *FeatureResponse     `json:"feature"`
+	TotalLimit       *int64               `json:"total_limit"`
+	CurrentUsage     decimal.Decimal      `json:"current_usage"`
+	UsagePercent     decimal.Decimal      `json:"usage_percent"`
+	IsEnabled        bool                 `json:"is_enabled"`
+	IsSoftLimit      bool                 `json:"is_soft_limit"`
+	NextUsageResetAt *time.Time           `json:"next_usage_reset_at"`
+	Sources          []*EntitlementSource `json:"sources"`
 }

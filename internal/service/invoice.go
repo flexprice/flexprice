@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -28,7 +27,7 @@ type InvoiceService interface {
 	GetInvoice(ctx context.Context, id string) (*dto.InvoiceResponse, error)
 	ListInvoices(ctx context.Context, filter *types.InvoiceFilter) (*dto.ListInvoicesResponse, error)
 	FinalizeInvoice(ctx context.Context, id string) error
-	VoidInvoice(ctx context.Context, id string) error
+	VoidInvoice(ctx context.Context, id string, req dto.InvoiceVoidRequest) error
 	ProcessDraftInvoice(ctx context.Context, id string, paymentParams *dto.PaymentParameters, sub *subscription.Subscription, flowType types.InvoiceFlowType) error
 	UpdatePaymentStatus(ctx context.Context, id string, status types.PaymentStatus, amount *decimal.Decimal) error
 	ReconcilePaymentStatus(ctx context.Context, id string, status types.PaymentStatus, amount *decimal.Decimal) error
@@ -637,7 +636,36 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 	return nil
 }
 
-func (s *invoiceService) VoidInvoice(ctx context.Context, id string) error {
+// updateMetadata merges the request metadata with the existing invoice metadata.
+// This function performs a selective update where:
+// - Existing metadata keys not mentioned in the request are preserved
+// - Keys present in both existing and request metadata are updated with request values
+// - New keys from the request are added to the metadata
+// - If the invoice has no existing metadata, a new metadata map is created
+func (s *invoiceService) updateMetadata(inv *invoice.Invoice, req dto.InvoiceVoidRequest) error {
+
+	// Start with existing metadata
+	metadata := inv.Metadata
+	if metadata == nil {
+		metadata = make(types.Metadata)
+	}
+
+	// Merge request metadata into existing metadata
+	// Request values will override existing values
+	for key, value := range req.Metadata {
+		metadata[key] = value
+	}
+
+	inv.Metadata = metadata
+	return nil
+}
+
+func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.InvoiceVoidRequest) error {
+
+	if err := req.Validate(); err != nil {
+		return err
+	}
+
 	inv, err := s.InvoiceRepo.Get(ctx, id)
 	if err != nil {
 		return err
@@ -672,6 +700,11 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string) error {
 	now := time.Now().UTC()
 	inv.InvoiceStatus = types.InvoiceStatusVoided
 	inv.VoidedAt = &now
+	if req.Metadata != nil {
+		if err := s.updateMetadata(inv, req); err != nil {
+			return err
+		}
+	}
 
 	if err := s.InvoiceRepo.Update(ctx, inv); err != nil {
 		return err
@@ -696,6 +729,17 @@ func (s *invoiceService) ProcessDraftInvoice(ctx context.Context, id string, pay
 		return err
 	}
 
+	// Sync to Stripe if Stripe connection is enabled and invoice is for subscription
+	if sub != nil {
+		if err := s.syncInvoiceToStripeIfEnabled(ctx, inv, sub, paymentParams); err != nil {
+			// Log error but don't fail the entire process
+			s.Logger.Errorw("failed to sync invoice to Stripe",
+				"error", err,
+				"invoice_id", inv.ID,
+				"subscription_id", sub.ID)
+		}
+	}
+
 	// try to process payment for the invoice based on behavior and log any errors
 	// Pass the subscription object to avoid extra DB call
 	// Error handling logic is properly handled in attemptPaymentForSubscriptionInvoice
@@ -703,6 +747,57 @@ func (s *invoiceService) ProcessDraftInvoice(ctx context.Context, id string, pay
 		// Only return error if it's a blocking error (e.g., subscription creation with error_if_incomplete)
 		return err
 	}
+
+	return nil
+}
+
+// syncInvoiceToStripeIfEnabled syncs the invoice to Stripe if Stripe connection is enabled
+func (s *invoiceService) syncInvoiceToStripeIfEnabled(ctx context.Context, inv *invoice.Invoice, sub *subscription.Subscription, paymentParams *dto.PaymentParameters) error {
+	// Check if Stripe connection exists
+	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderStripe)
+	if err != nil || conn == nil {
+		s.Logger.Debugw("Stripe connection not available, skipping invoice sync",
+			"invoice_id", inv.ID,
+			"error", err)
+		return nil // Not an error, just skip sync
+	}
+
+	// Check if invoice sync is enabled for this connection
+	if !conn.IsInvoiceSyncEnabled() {
+		s.Logger.Debugw("invoice sync disabled for Stripe connection, skipping invoice sync",
+			"invoice_id", inv.ID,
+			"connection_id", conn.ID)
+		return nil // Not an error, just skip sync
+	}
+
+	s.Logger.Infow("syncing invoice to Stripe",
+		"invoice_id", inv.ID,
+		"subscription_id", sub.ID,
+		"collection_method", sub.CollectionMethod)
+
+	// Initialize Stripe sync service
+	stripeInvoiceSyncService := NewStripeInvoiceSyncService(s.ServiceParams)
+
+	// Determine collection method from subscription
+	collectionMethod := types.CollectionMethod(sub.CollectionMethod)
+
+	// Create sync request
+	syncRequest := dto.StripeInvoiceSyncRequest{
+		InvoiceID:        inv.ID,
+		CollectionMethod: collectionMethod,
+	}
+
+	// Perform the sync
+	syncResponse, err := stripeInvoiceSyncService.SyncInvoiceToStripe(ctx, syncRequest)
+	if err != nil {
+		return err
+	}
+
+	s.Logger.Infow("successfully synced invoice to Stripe",
+		"invoice_id", inv.ID,
+		"stripe_invoice_id", syncResponse.StripeInvoiceID,
+		"status", syncResponse.Status,
+		"hosted_invoice_url", syncResponse.HostedInvoiceURL)
 
 	return nil
 }
@@ -1235,6 +1330,19 @@ func (s *invoiceService) attemptPaymentForSubscriptionInvoice(ctx context.Contex
 		}
 	}
 
+	// Check if invoice is synced to Stripe - if so, only allow payments through record payment API
+	stripeService := NewStripeService(s.ServiceParams)
+	if stripeService.IsInvoiceSyncedToStripe(ctx, inv.ID) {
+		s.Logger.Infow("invoice is synced to Stripe, skipping automatic payment processing",
+			"invoice_id", inv.ID,
+			"subscription_id", lo.FromPtr(inv.SubscriptionID),
+			"flow_type", flowType)
+
+		// For invoices synced to Stripe, payments should only be processed through the record payment API
+		// which handles payment links and card payments. Automatic payment processing is disabled.
+		return nil
+	}
+
 	// Use parameters if provided, otherwise get from subscription
 	var finalPaymentBehavior types.PaymentBehavior
 
@@ -1424,7 +1532,7 @@ func (s *invoiceService) GetInvoicePDF(ctx context.Context, id string) ([]byte, 
 }
 
 func (s *invoiceService) getInvoiceDataForPDFGen(
-	_ context.Context,
+	ctx context.Context,
 	inv *invoice.Invoice,
 	customer *customer.Customer,
 	tenant *tenant.Tenant,
@@ -1434,14 +1542,21 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 		invoiceNum = *inv.InvoiceNumber
 	}
 
-	amountDue, _ := inv.AmountDue.Float64()
+	subtotal, _ := inv.Subtotal.Float64()
+	totalDiscount, _ := inv.TotalDiscount.Float64()
+	totalTax, _ := inv.TotalTax.Float64()
+	total, _ := inv.Total.Float64()
+
 	// Convert to InvoiceData
 	data := &pdf.InvoiceData{
 		ID:            inv.ID,
 		InvoiceNumber: invoiceNum,
 		InvoiceStatus: string(inv.InvoiceStatus),
 		Currency:      types.GetCurrencySymbol(inv.Currency),
-		AmountDue:     amountDue,
+		AmountDue:     total,
+		Subtotal:      subtotal,
+		TotalDiscount: totalDiscount,
+		TotalTax:      totalTax,
 		BillingReason: inv.BillingReason,
 		Notes:         "",  // resolved from invoice metadata
 		VAT:           0.0, // resolved from invoice metadata
@@ -1475,9 +1590,11 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 		}
 	}
 
-	data.LineItems = make([]pdf.LineItemData, len(inv.LineItems))
+	// Prepare line items
+	var lineItems []pdf.LineItemData
 
-	for i, item := range inv.LineItems {
+	// Process line items
+	for _, item := range inv.LineItems {
 		planDisplayName := ""
 		if item.PlanDisplayName != nil {
 			planDisplayName = *item.PlanDisplayName
@@ -1497,13 +1614,28 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 			}
 		}
 
+		// Determine item type based on EntityType (source of truth)
+		itemType := "subscription" // default fallback
+
+		if item.EntityType != nil {
+			switch *item.EntityType {
+			case "addon":
+				itemType = "addon"
+			case "plan":
+				itemType = "subscription"
+			default:
+				itemType = *item.EntityType
+			}
+		}
+
 		lineItem := pdf.LineItemData{
 			PlanDisplayName: planDisplayName,
 			DisplayName:     displayName,
 			Description:     description,
-			Amount:          amount,
+			Amount:          amount, // Keep original sign
 			Quantity:        quantity,
 			Currency:        types.GetCurrencySymbol(item.Currency),
+			Type:            itemType,
 		}
 
 		if lineItem.PlanDisplayName == "" {
@@ -1517,8 +1649,30 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 			lineItem.PeriodEnd = pdf.CustomTime{Time: *item.PeriodEnd}
 		}
 
-		data.LineItems[i] = lineItem
+		lineItems = append(lineItems, lineItem)
 	}
+
+	// Line items contain only actual billable items (subscriptions, addons)
+	// Taxes and discounts are shown in the summary section, not as line items
+
+	data.LineItems = lineItems
+
+	// Get applied taxes for detailed breakdown
+	appliedTaxes, err := s.getAppliedTaxesForPDF(ctx, inv.ID)
+	if err != nil {
+		s.Logger.Warnw("failed to get applied taxes for PDF", "error", err, "invoice_id", inv.ID)
+		// Don't fail PDF generation, just skip applied taxes section
+		appliedTaxes = []pdf.AppliedTaxData{}
+	}
+	data.AppliedTaxes = appliedTaxes
+
+	appliedDiscounts, err := s.getAppliedDiscountsForPDF(ctx, inv)
+	if err != nil {
+		s.Logger.Warnw("failed to get applied discounts for PDF", "error", err, "invoice_id", inv.ID)
+		// Don't fail PDF generation, just skip applied discounts section
+		appliedDiscounts = []pdf.AppliedDiscountData{}
+	}
+	data.AppliedDiscounts = appliedDiscounts
 
 	return data, nil
 }
@@ -1534,12 +1688,8 @@ func (s *invoiceService) getRecipientInfo(c *customer.Customer) *pdf.RecipientIn
 	}
 
 	result := &pdf.RecipientInfo{
-		Name: name,
-		Address: pdf.AddressInfo{
-			Street:     "--",
-			City:       "--",
-			PostalCode: "--",
-		},
+		Name:    name,
+		Address: pdf.AddressInfo{},
 	}
 
 	if c.Email != "" {
@@ -1574,12 +1724,8 @@ func (s *invoiceService) getBillerInfo(t *tenant.Tenant) *pdf.BillerInfo {
 	}
 
 	billerInfo := pdf.BillerInfo{
-		Name: t.Name,
-		Address: pdf.AddressInfo{
-			Street:     "--",
-			City:       "--",
-			PostalCode: "--",
-		},
+		Name:    t.Name,
+		Address: pdf.AddressInfo{},
 	}
 
 	if t.BillingDetails != (tenant.TenantBillingDetails{}) {
@@ -1588,8 +1734,9 @@ func (s *invoiceService) getBillerInfo(t *tenant.Tenant) *pdf.BillerInfo {
 		// billerInfo.Website = billingDetails.Website //TODO: Add this
 		billerInfo.HelpEmail = billingDetails.HelpEmail
 		// billerInfo.PaymentInstructions = billingDetails.PaymentInstructions //TODO: Add this
+
 		billerInfo.Address = pdf.AddressInfo{
-			Street:     strings.Join([]string{billingDetails.Address.Line1, billingDetails.Address.Line2}, "\n"),
+			Street:     billingDetails.Address.FormatAddressLines(),
 			City:       billingDetails.Address.City,
 			PostalCode: billingDetails.Address.PostalCode,
 			Country:    billingDetails.Address.Country,
@@ -2070,7 +2217,11 @@ func (s *invoiceService) UpdateInvoice(ctx context.Context, id string, req dto.U
 	// Update due date if provided
 	if req.DueDate != nil {
 		inv.DueDate = req.DueDate
-		inv.UpdatedAt = time.Now().UTC()
+	}
+
+	// Update metadata if provided
+	if req.Metadata != nil {
+		inv.Metadata = *req.Metadata
 	}
 
 	// Update the invoice in the repository
@@ -2538,6 +2689,147 @@ func (s *invoiceService) mapFlexibleAnalyticsToLineItems(ctx context.Context, an
 	}
 
 	return usageBreakdownResponse, nil
+}
+
+// getAppliedTaxesForPDF retrieves and formats applied tax data for PDF generation
+func (s *invoiceService) getAppliedTaxesForPDF(ctx context.Context, invoiceID string) ([]pdf.AppliedTaxData, error) {
+	// Get applied taxes for this invoice with tax rate details expanded - SINGLE DB CALL!
+	taxService := NewTaxService(s.ServiceParams)
+	filter := types.NewNoLimitTaxAppliedFilter()
+	filter.EntityType = types.TaxRateEntityTypeInvoice
+	filter.EntityID = invoiceID
+	filter.QueryFilter.Expand = lo.ToPtr(types.NewExpand("tax_rate").String())
+
+	appliedTaxesResponse, err := taxService.ListTaxApplied(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	s.Logger.Infow("DEBUG: Applied taxes response", "count", len(appliedTaxesResponse.Items))
+	for i, item := range appliedTaxesResponse.Items {
+		s.Logger.Infow("DEBUG: Applied tax item", "index", i, "tax_rate_id", item.TaxRateID, "has_tax_rate", item.TaxRate != nil)
+		if item.TaxRate != nil {
+			s.Logger.Infow("DEBUG: Tax rate details", "name", item.TaxRate.Name, "code", item.TaxRate.Code)
+		}
+	}
+
+	if len(appliedTaxesResponse.Items) == 0 {
+		return []pdf.AppliedTaxData{}, nil
+	}
+
+	// Convert to PDF format using expanded tax rate data
+	appliedTaxes := make([]pdf.AppliedTaxData, 0, len(appliedTaxesResponse.Items))
+	for _, appliedTax := range appliedTaxesResponse.Items {
+		taxableAmount, _ := appliedTax.TaxableAmount.Float64()
+		taxAmount, _ := appliedTax.TaxAmount.Float64()
+
+		// Use expanded tax rate data if available
+		var taxName, taxCode, taxType string
+		var taxRateValue float64
+
+		if appliedTax.TaxRate != nil {
+			// Use expanded tax rate data
+			taxName = appliedTax.TaxRate.Name
+			taxCode = appliedTax.TaxRate.Code
+			taxType = string(appliedTax.TaxRate.TaxRateType)
+			if appliedTax.TaxRate.TaxRateType == types.TaxRateTypePercentage && appliedTax.TaxRate.PercentageValue != nil {
+				taxRateValue, _ = appliedTax.TaxRate.PercentageValue.Float64()
+			} else if appliedTax.TaxRate.TaxRateType == types.TaxRateTypeFixed && appliedTax.TaxRate.FixedValue != nil {
+				taxRateValue, _ = appliedTax.TaxRate.FixedValue.Float64()
+			}
+		} else {
+			// Fallback if tax rate not expanded - this should not happen if expand works
+			s.Logger.Errorw("Tax rate expand failed - falling back to basic info", "tax_rate_id", appliedTax.TaxRateID)
+			taxName = "Tax Rate " + appliedTax.TaxRateID[len(appliedTax.TaxRateID)-6:] // Show last 6 chars
+			taxCode = appliedTax.TaxRateID
+			taxType = "Unknown"
+			taxRateValue = 0
+		}
+
+		appliedTaxData := pdf.AppliedTaxData{
+			TaxName:       taxName,
+			TaxCode:       taxCode,
+			TaxType:       taxType,
+			TaxRate:       taxRateValue,
+			TaxableAmount: taxableAmount,
+			TaxAmount:     taxAmount,
+			// AppliedAt:     appliedTax.AppliedAt.Format("Jan 02, 2006"),
+		}
+
+		appliedTaxes = append(appliedTaxes, appliedTaxData)
+	}
+
+	return appliedTaxes, nil
+}
+
+// getAppliedDiscountsForPDF retrieves and formats applied discount data for PDF generation
+func (s *invoiceService) getAppliedDiscountsForPDF(ctx context.Context, inv *invoice.Invoice) ([]pdf.AppliedDiscountData, error) {
+	// Get coupon applications for this invoice
+	couponApplicationService := NewCouponApplicationService(s.ServiceParams)
+	couponApplications, err := couponApplicationService.GetCouponApplicationsByInvoice(ctx, inv.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(couponApplications) == 0 {
+		return []pdf.AppliedDiscountData{}, nil
+	}
+
+	// Get coupon service to fetch coupon details
+	couponService := NewCouponService(s.ServiceParams)
+
+	// Convert to PDF format using coupon application data
+	appliedDiscounts := make([]pdf.AppliedDiscountData, 0, len(couponApplications))
+	for _, couponApp := range couponApplications {
+		discountAmount, _ := couponApp.DiscountedAmount.Float64()
+
+		discountName := "Discount"
+		// Get coupon name from coupon service
+		if coupon, err := couponService.GetCoupon(ctx, couponApp.CouponID); err == nil && coupon != nil {
+			discountName = coupon.Name
+		}
+
+		// Determine discount type and value
+		var discountValue float64
+		discountType := string(couponApp.DiscountType)
+		if couponApp.DiscountType == types.CouponTypePercentage && couponApp.DiscountPercentage != nil {
+			discountValue, _ = couponApp.DiscountPercentage.Float64()
+		} else if couponApp.DiscountType == types.CouponTypeFixed {
+			// For fixed discounts, use the actual discount amount as the value
+			discountValue = discountAmount
+		} else {
+			// Fallback
+			discountValue = discountAmount
+		}
+
+		// Determine line item reference
+		lineItemRef := "--"
+		if couponApp.InvoiceLineItemID != nil {
+			// Find the line item display name for this line item ID
+			for _, lineItem := range inv.LineItems {
+				if lineItem.ID == *couponApp.InvoiceLineItemID {
+					if lineItem.DisplayName != nil && *lineItem.DisplayName != "" {
+						lineItemRef = *lineItem.DisplayName
+					} else if lineItem.PlanDisplayName != nil && *lineItem.PlanDisplayName != "" {
+						lineItemRef = *lineItem.PlanDisplayName
+					}
+					break
+				}
+			}
+		}
+
+		appliedDiscount := pdf.AppliedDiscountData{
+			DiscountName:   discountName,
+			Type:           discountType,
+			Value:          discountValue,
+			DiscountAmount: discountAmount,
+			LineItemRef:    lineItemRef,
+		}
+
+		appliedDiscounts = append(appliedDiscounts, appliedDiscount)
+	}
+
+	return appliedDiscounts, nil
 }
 
 // isSafeUpdateForPaidInvoice checks if the update request contains only safe fields for paid invoices

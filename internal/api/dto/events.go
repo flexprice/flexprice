@@ -65,6 +65,22 @@ type GetUsageRequest struct {
 	PriceID            string                `form:"-" json:"-"` // this is just for internal use to store the price id
 	MeterID            string                `form:"-" json:"-"` // this is just for internal use to store the meter id
 	Multiplier         *decimal.Decimal      `form:"multiplier" json:"multiplier,omitempty"`
+	// BillingAnchor enables custom monthly billing periods for usage aggregation.
+	//
+	// When to use:
+	// - WindowSize = "MONTH" AND you need custom monthly periods (not calendar months)
+	// - Subscription billing that doesn't align with calendar months
+	// - Example: Customer signed up on 15th, so billing periods are 15th to 15th
+	//
+	// When NOT to use:
+	// - WindowSize != "MONTH" (ignored for DAY, HOUR, WEEK, etc.)
+	// - Standard calendar-based billing (1st to 1st of each month)
+	//
+	// Example values:
+	// - "2024-03-05T14:30:45.123456789Z" (5th of each month at 2:30:45 PM)
+	// - "2024-01-15T00:00:00Z" (15th of each month at midnight)
+	// - "2024-02-29T12:00:00Z" (29th of each month at noon - handles leap years)
+	BillingAnchor *time.Time `form:"billing_anchor" json:"billing_anchor,omitempty" example:"2024-03-05T14:30:45.123456789Z"`
 }
 
 type GetUsageByMeterRequest struct {
@@ -78,6 +94,23 @@ type GetUsageByMeterRequest struct {
 	WindowSize         types.WindowSize    `form:"window_size" json:"window_size"`
 	BucketSize         types.WindowSize    `form:"bucket_size" json:"bucket_size,omitempty" example:"HOUR"` // Optional, only used for MAX aggregation with windowing
 	Filters            map[string][]string `form:"filters,omitempty" json:"filters,omitempty"`
+	// BillingAnchor enables custom monthly billing periods for meter usage aggregation.
+	//
+	// Usage guidelines:
+	// - Only effective when WindowSize = "MONTH"
+	// - For other window sizes (DAY, HOUR, WEEK), this field is ignored
+	// - When nil, uses standard calendar months (1st to 1st)
+	// - When provided, creates custom monthly periods (e.g., 5th to 5th)
+	//
+	// Common use cases:
+	// - Subscription billing periods that don't align with calendar months
+	// - Customer-specific billing cycles (e.g., signed up on 15th)
+	// - Multi-tenant systems with different billing anchor dates
+	//
+	// Example: If BillingAnchor = "2024-03-05T14:30:45Z" and WindowSize = "MONTH":
+	//   - March period: 2024-03-05 14:30:45 to 2024-04-05 14:30:45
+	//   - April period: 2024-04-05 14:30:45 to 2024-05-05 14:30:45
+	BillingAnchor *time.Time `form:"billing_anchor" json:"billing_anchor,omitempty" example:"2024-03-05T14:30:45Z"`
 }
 
 type GetEventsRequest struct {
@@ -190,6 +223,7 @@ func (r *GetUsageRequest) ToUsageParams() *events.UsageParams {
 		BucketSize:         r.BucketSize,
 		Filters:            r.Filters,
 		Multiplier:         r.Multiplier,
+		BillingAnchor:      r.BillingAnchor,
 	}
 }
 

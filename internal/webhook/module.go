@@ -51,6 +51,7 @@ func providePayloadBuilderFactory(
 	customerService service.CustomerService,
 	paymentService service.PaymentService,
 	sentry *sentry.Service,
+	creditNoteService service.CreditNoteService,
 ) payload.PayloadBuilderFactory {
 	services := payload.NewServices(
 		invoiceService,
@@ -63,6 +64,7 @@ func providePayloadBuilderFactory(
 		customerService,
 		paymentService,
 		sentry,
+		creditNoteService,
 	)
 	return payload.NewPayloadBuilderFactory(services)
 }

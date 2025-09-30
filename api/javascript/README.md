@@ -1,256 +1,337 @@
-# FlexPrice JavaScript SDK
+# FlexPrice JavaScript/TypeScript SDK
 
-This is the JavaScript client library for the FlexPrice API.
+[![npm version](https://badge.fury.io/js/%40flexprice%2Fsdk.svg)](https://badge.fury.io/js/%40flexprice%2Fsdk)
+[![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue.svg)](https://www.typescriptlang.org/)
+
+Official TypeScript/JavaScript SDK for the FlexPrice API with modern ES7 module support and comprehensive type safety.
+
+## Features
+
+- ✅ **Full TypeScript Support** - Complete type definitions for all API endpoints
+- ✅ **Modern ES7 Modules** - Native ES modules with CommonJS fallback
+- ✅ **Fetch API** - Built on modern web standards
+- ✅ **Browser Compatible** - Works in Node.js, Webpack, and Browserify
+- ✅ **Promise & Callback Support** - Flexible async patterns
+- ✅ **Comprehensive Documentation** - Auto-generated from OpenAPI specs
+- ✅ **Error Handling** - Detailed error messages and status codes
 
 ## Installation
 
-### Node.js
+### Published Package
 
 ```bash
 npm install @flexprice/sdk --save
 ```
 
-### Browser via CDN
+### Unpublished (Development)
+
+```bash
+npm install PATH_TO_GENERATED_PACKAGE --save
+```
+
+## Quick Start
+
+### JavaScript (CommonJS)
+
+```javascript
+const FlexPrice = require("@flexprice/sdk");
+require("dotenv").config();
+
+// Configure the API client
+const defaultClient = FlexPrice.ApiClient.instance;
+defaultClient.basePath = "https://api.cloud.flexprice.io/v1";
+
+const apiKeyAuth = defaultClient.authentications["ApiKeyAuth"];
+apiKeyAuth.apiKey = process.env.FLEXPRICE_API_KEY;
+apiKeyAuth.in = "header";
+apiKeyAuth.name = "x-api-key";
+
+// Create an event
+const eventsApi = new FlexPrice.EventsApi();
+const eventRequest = {
+  event_name: "Sample Event",
+  external_customer_id: "customer-123",
+  properties: { source: "javascript_app" },
+  source: "javascript_app",
+  timestamp: new Date().toISOString(),
+};
+
+eventsApi.eventsPost(eventRequest, (error, data, response) => {
+  if (error) {
+    console.error("Error:", error);
+  } else {
+    console.log("Event created:", data);
+  }
+});
+```
+
+### TypeScript (ES Modules)
+
+```typescript
+import * as FlexPrice from "@flexprice/sdk";
+import * as dotenv from "dotenv";
+
+dotenv.config();
+
+// Configure the API client with type safety
+const defaultClient = FlexPrice.ApiClient.instance;
+defaultClient.basePath = "https://api.cloud.flexprice.io/v1";
+
+const apiKeyAuth = defaultClient.authentications["ApiKeyAuth"];
+apiKeyAuth.apiKey = process.env.FLEXPRICE_API_KEY!;
+apiKeyAuth.in = "header";
+apiKeyAuth.name = "x-api-key";
+
+// Type-safe API calls
+const eventsApi = new FlexPrice.EventsApi();
+const eventRequest: FlexPrice.DtoIngestEventRequest = {
+  eventName: "Sample Event",
+  externalCustomerId: "customer-123",
+  properties: { source: "typescript_app" },
+  source: "typescript_app",
+  timestamp: new Date().toISOString(),
+};
+
+try {
+  const result = await eventsApi.eventsPost({ event: eventRequest });
+  console.log("Event created:", result);
+} catch (error) {
+  console.error("Error:", error);
+}
+```
+
+### Browser Usage
 
 ```html
 <script src="https://cdn.jsdelivr.net/npm/@flexprice/sdk/dist/flexprice-sdk.min.js"></script>
+<script>
+  // Configure the API client
+  const defaultClient = FlexPrice.ApiClient.instance;
+  defaultClient.basePath = "https://api.cloud.flexprice.io/v1";
+
+  const apiKeyAuth = defaultClient.authentications["ApiKeyAuth"];
+  apiKeyAuth.apiKey = "your-api-key-here";
+  apiKeyAuth.in = "header";
+  apiKeyAuth.name = "x-api-key";
+
+  // Use the SDK
+  const eventsApi = new FlexPrice.EventsApi();
+  // ... rest of your code
+</script>
 ```
 
-## Usage
+## Environment Support
+
+### Node.js Environments
+
+- Node.js 16+
+- Webpack
+- Browserify
+
+### Language Levels
+
+- ES5 (requires Promises/A+ library)
+- ES6+
+- TypeScript 4.5+
+
+### Module Systems
+
+- CommonJS
+- ES6 Modules
+- UMD (Universal Module Definition)
+
+## API Reference
+
+### Authentication
+
+All API requests require authentication using an API key:
 
 ```javascript
-// Import the FlexPrice SDK
-const FlexPrice = require('@flexprice/sdk');
-// Or using ES modules:
-// import * as FlexPrice from '@flexprice/sdk';
-
-// Load environment variables (using dotenv package)
-require('dotenv').config();
-
-function main() {
-  try {
-    // Configure the API client with your API key
-    // API keys should start with 'sk_' followed by a unique identifier
-    const apiKey = process.env.FLEXPRICE_API_KEY;
-    const apiHost = process.env.FLEXPRICE_API_HOST || 'api.cloud.flexprice.io';
-    
-    if (!apiKey) {
-      console.error('ERROR: You must provide a valid FlexPrice API key');
-      process.exit(1);
-    }
-
-    // Initialize the API client with your API key
-    const defaultClient = FlexPrice.ApiClient.instance;
-    
-    // Set the base path directly to the API endpoint including /v1
-    defaultClient.basePath = `https://${apiHost}/v1`;
-    
-    // Configure API key authorization
-    const apiKeyAuth = defaultClient.authentications['ApiKeyAuth'];
-    apiKeyAuth.apiKey = apiKey;
-    apiKeyAuth.in = 'header';
-    apiKeyAuth.name = 'x-api-key';
-
-    // Generate a unique customer ID for this example
-    const customerId = `sample-customer-${Date.now()}`;
-
-    // Create API instances for different endpoints
-    const eventsApi = new FlexPrice.EventsApi();
-    const customersApi = new FlexPrice.CustomersApi();
-
-    // Step 1: Create a customer
-    console.log(`Creating customer with ID: ${customerId}...`);
-    
-    const customerRequest = {
-      externalId: customerId,
-      email: `example-${customerId}@example.com`,
-      name: 'Example Customer',
-      metadata: {
-        source: 'javascript-sdk-example',
-        createdAt: new Date().toISOString()
-      }
-    };
-
-    customersApi.customersPost({ 
-      dtoCreateCustomerRequest: customerRequest 
-    }, function(error, data, response) {
-      if (error) {
-        console.error('Error creating customer:', error);
-        return;
-      }
-      
-      console.log('Customer created successfully!');
-
-      // Step 2: Create an event
-      console.log('Creating event...');
-      
-      // Important: Use snake_case for all property names to match the API
-      const eventRequest = {
-        event_name: 'Sample Event',
-        external_customer_id: customerId,
-        properties: {
-          source: 'javascript_sample_app',
-          environment: 'test',
-          timestamp: new Date().toISOString()
-        },
-        source: 'javascript_sample_app',
-        timestamp: new Date().toISOString()
-      };
-
-      // Important: Pass the event directly without wrapping it
-      eventsApi.eventsPost(eventRequest, function(error, eventResult, response) {
-        if (error) {
-          console.error('Error creating event:', error);
-          return;
-        }
-        
-        console.log(`Event created successfully! ID: ${eventResult.event_id}`);
-
-        // Step 3: Retrieve events for this customer
-        console.log(`Retrieving events for customer ${customerId}...`);
-        
-        // Important: Use snake_case for parameter names
-        eventsApi.eventsGet({
-          external_customer_id: customerId
-        }, function(error, events, response) {
-          if (error) {
-            console.error('Error retrieving events:', error);
-            return;
-          }
-          
-          console.log(`Found ${events.events.length} events:`);
-          
-          events.events.forEach((event, index) => {
-            console.log(`Event ${index + 1}: ${event.id} - ${event.event_name}`);
-            console.log(`Properties: ${JSON.stringify(event.properties)}`);
-          });
-
-          console.log('Example completed successfully!');
-        });
-      });
-    });
-  } catch (error) {
-    console.error('Error:', error);
-  }
-}
-
-main();
+const apiKeyAuth = defaultClient.authentications["ApiKeyAuth"];
+apiKeyAuth.apiKey = "sk_your_api_key_here";
+apiKeyAuth.in = "header";
+apiKeyAuth.name = "x-api-key";
 ```
 
-## Running the Example
+### Available APIs
 
-To run the provided example:
+- **EventsApi** - Event ingestion and retrieval
+- **CustomersApi** - Customer management
+- **SubscriptionsApi** - Subscription management
+- **InvoicesApi** - Invoice operations
+- **PaymentsApi** - Payment processing
+- **PlansApi** - Plan management
+- **AddonsApi** - Addon management
+- **CouponsApi** - Coupon management
+- **WebhooksApi** - Webhook management
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/flexprice/javascript-sdk.git
-   cd javascript-sdk/examples
-   ```
+### Common Patterns
 
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
+#### Creating Events
 
-3. Create a `.env` file with your API credentials:
-   ```bash
-   cp .env.sample .env
-   # Edit .env with your API key
-   ```
+```javascript
+const eventRequest = {
+  eventName: "user_signup",
+  externalCustomerId: "customer-123",
+  properties: {
+    plan: "premium",
+    source: "website",
+  },
+  source: "web_app",
+  timestamp: new Date().toISOString(),
+};
 
-4. Run the example:
-   ```bash
-   npm start
-   ```
+eventsApi.eventsPost({ event: eventRequest }, callback);
+```
 
-## Features
+#### Creating Customers
 
-- Complete API coverage
-- CommonJS and ES Module support
-- Browser compatibility
-- Detailed documentation
-- Error handling
-- TypeScript definitions
+```javascript
+const customerRequest = {
+  externalId: "customer-123",
+  email: "user@example.com",
+  name: "John Doe",
+  metadata: {
+    source: "signup_form",
+  },
+};
 
-## Documentation
+customersApi.customersPost({ customer: customerRequest }, callback);
+```
 
-For detailed API documentation, refer to the code comments and the official FlexPrice API documentation.
+#### Error Handling
+
+```javascript
+eventsApi.eventsPost(eventRequest, (error, data, response) => {
+  if (error) {
+    if (error.status === 401) {
+      console.error("Authentication failed");
+    } else if (error.status === 400) {
+      console.error("Bad request:", error.response.body);
+    } else {
+      console.error("API Error:", error.message);
+    }
+  } else {
+    console.log("Success:", data);
+  }
+});
+```
+
+## Development
+
+### Building
+
+To build and compile the TypeScript sources to JavaScript:
+
+```bash
+npm install
+npm run build
+```
+
+### Publishing
+
+First build the package then run:
+
+```bash
+npm publish
+```
+
+### Testing
+
+```bash
+npm test
+```
+
+### Linting
+
+```bash
+npm run lint
+npm run lint:fix
+```
+
+## Examples
+
+### Running JavaScript Example
+
+```bash
+cd examples
+npm install
+npm start
+```
+
+### Running TypeScript Example
+
+```bash
+cd examples
+npm install
+npm run start:ts
+```
+
+### Building TypeScript Example
+
+```bash
+cd examples
+npm run build:ts
+npm run start:built
+```
 
 ## Troubleshooting
 
 ### Authentication Issues
 
-If you see errors related to authentication:
+- Ensure your API key starts with `sk_`
+- Verify the key is active and has required permissions
+- Check that the `x-api-key` header is being sent correctly
 
-- Make sure your API key starts with `sk_` (for server-side usage)
-- Check that the key is active and has the necessary permissions
-- Use the `x-api-key` header for authentication (the SDK handles this for you)
+### Property Naming
 
-### Property Names
+Use the correct property names based on the TypeScript interfaces:
 
-Always use snake_case for property names in requests:
-- ✅ `event_name`, `external_customer_id`, `page_size`
-- ❌ `eventName`, `externalCustomerId`, `pageSize`
+- ✅ TypeScript: `eventName`, `externalCustomerId`, `externalId`
+- ✅ API JSON: `event_name`, `external_customer_id`, `external_id`
+- ❌ Mixed: `event_name` in TypeScript or `eventName` in JSON
 
 ### Parameter Passing
 
-Pass parameters directly to methods like eventsPost:
-- ✅ `eventsApi.eventsPost(eventRequest, callback)`
-- ❌ `eventsApi.eventsPost({ dtoIngestEventRequest: eventRequest }, callback)`
+Pass parameters in the correct format for each API method:
 
-### Callback vs Promise Error
+- ✅ `eventsApi.eventsPost({ event: eventRequest }, callback)`
+- ✅ `customersApi.customersPost({ customer: customerRequest }, callback)`
+- ❌ `eventsApi.eventsPost(eventRequest, callback)` (missing wrapper object)
 
-The SDK uses callback-style API calls instead of Promises. If you see an error like:
+### TypeScript Issues
 
-```
-Warning: superagent request was sent twice, because both .end() and .then() were called.
-```
+- Ensure you have TypeScript 4.5+ installed
+- Use proper type imports: `import * as FlexPrice from '@flexprice/sdk'`
+- Check that your `tsconfig.json` includes the SDK types
 
-Make sure you're using the callback pattern shown in the examples, not trying to `await` the API calls.
+### Network Issues
 
-### Network or Connectivity Issues
+- Verify your internet connection
+- Check firewall/proxy settings
+- Ensure the API host is accessible from your environment
 
-If you encounter network-related errors:
+## Browser Considerations
 
-- Check your internet connection
-- Verify that the API host is accessible from your environment
-- Look for firewall or proxy settings that might block API requests
+When using in browsers:
 
-### Using the SDK in a Browser
+- CORS restrictions may apply - ensure your domain is whitelisted
+- Never expose API keys in client-side code
+- Use a proxy or backend service for sensitive operations
+- Some features may be limited in browser environments
 
-When using the SDK in a browser, remember:
+## TypeScript Definitions
 
-- CORS restrictions might apply - ensure your domain is whitelisted
-- Never expose API keys in client-side code - use a proxy or backend service
-- Some features might be limited in browser environments
+The package includes comprehensive TypeScript definitions that are automatically resolved via `package.json`. All API endpoints, request/response types, and configuration options are fully typed.
 
-## TypeScript Usage
+## License
 
-The package includes TypeScript definitions:
+This SDK is licensed under the MIT License. See the LICENSE file for details.
 
-```typescript
-import * as FlexPrice from '@flexprice/sdk';
+## Support
 
-// Configure the client
-const client = FlexPrice.ApiClient.instance;
-// ... rest of the configuration
+For support and questions:
 
-// Type-safe API calls with correct property names
-const api = new FlexPrice.EventsApi();
-
-const eventRequest = {
-  event_name: 'Sample Event',
-  external_customer_id: 'customer-123',
-  properties: { key: 'value' },
-  source: 'typescript_example',
-  timestamp: new Date().toISOString()
-};
-
-api.eventsPost(eventRequest, (error, data, response) => {
-  if (error) {
-    console.error(error);
-  } else {
-    console.log(data);
-  }
-});
-``` 
+- Check the [API Documentation](https://docs.flexprice.io)
+- Open an issue on [GitHub](https://github.com/flexprice/javascript-sdk)
+- Contact support at [support@flexprice.io](mailto:support@flexprice.io)
