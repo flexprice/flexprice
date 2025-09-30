@@ -103,3 +103,5 @@ temp/*
 Thumbs.db
 
 server
+.gocache/
+.gomodcache/
