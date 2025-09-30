@@ -699,7 +699,7 @@ func (r *UpdatePriceRequest) ToCreatePriceRequest(existingPrice *price.Price) Cr
 	createReq.InvoiceCadence = existingPrice.InvoiceCadence
 	createReq.TrialPeriod = existingPrice.TrialPeriod
 	createReq.MeterID = existingPrice.MeterID
-	createReq.ParentPriceID = existingPrice.ParentPriceID
+	createReq.ParentPriceID = existingPrice.GetRootPriceID()
 
 	// Determine target billing model (use request billing model if provided, otherwise existing)
 	targetBillingModel := existingPrice.BillingModel
