@@ -21,7 +21,9 @@ type syncScript struct {
 	planService service.PlanService
 }
 
-// SyncPlanPrices synchronizes all prices from a plan to subscriptions using the plan service
+// SyncPlanPrices synchronizes all prices from the plan identified by the PLAN_ID environment variable to subscriptions for the tenant and environment provided by TENANT_ID and ENVIRONMENT_ID.
+// It reads TENANT_ID, ENVIRONMENT_ID and PLAN_ID from the environment, initializes required services, invokes the plan service synchronization, and logs a summary of processed subscriptions, prices, and line-item outcomes.
+// It returns an error if required environment variables are missing, initialization fails, or the plan service reports an error.
 func SyncPlanPrices() error {
 	// Get environment variables for the script
 	tenantID := os.Getenv("TENANT_ID")
@@ -51,11 +53,14 @@ func SyncPlanPrices() error {
 	}
 
 	log.Printf("Plan sync completed successfully for plan: %s (%s)\n", result.PlanID, result.PlanName)
-	log.Printf("Summary: %d subscriptions processed, %d prices added, %d prices removed, %d prices skipped\n",
+	log.Printf("Summary: %d subscriptions processed, %d prices processed, %d line items created, %d line items terminated, %d line items skipped, %d line items failed\n",
 		result.SynchronizationSummary.SubscriptionsProcessed,
-		result.SynchronizationSummary.PricesAdded,
-		result.SynchronizationSummary.PricesRemoved,
-		result.SynchronizationSummary.PricesSkipped)
+		result.SynchronizationSummary.PricesProcessed,
+		result.SynchronizationSummary.LineItemsCreated,
+		result.SynchronizationSummary.LineItemsTerminated,
+		result.SynchronizationSummary.LineItemsSkipped,
+		result.SynchronizationSummary.LineItemsFailed,
+	)
 
 	return nil
 }

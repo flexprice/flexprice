@@ -17,8 +17,12 @@ type PriceHandler struct {
 	log     *logger.Logger
 }
 
+// NewPriceHandler creates a PriceHandler configured with the provided PriceService and Logger.
 func NewPriceHandler(service service.PriceService, log *logger.Logger) *PriceHandler {
-	return &PriceHandler{service: service, log: log}
+	return &PriceHandler{
+		service: service,
+		log:     log,
+	}
 }
 
 // @Summary Create a new price

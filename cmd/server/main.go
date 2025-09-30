@@ -365,13 +365,24 @@ func provideTemporalClient(cfg *config.TemporalConfig, log *logger.Logger) (clie
 	return temporalClient, nil
 }
 
+// provideTemporalWorkerManager constructs and returns a Temporal worker manager using the provided Temporal client and logger.
 func provideTemporalWorkerManager(temporalClient client.TemporalClient, log *logger.Logger) worker.TemporalWorkerManager {
 	return worker.NewTemporalWorkerManager(temporalClient, log)
 }
 
+// provideTemporalService initializes the global Temporal service, starts it, and returns the started service.
+// It returns nil if the service fails to start.
 func provideTemporalService(temporalClient client.TemporalClient, workerManager worker.TemporalWorkerManager, log *logger.Logger) temporalservice.TemporalService {
-	service := temporalservice.NewTemporalService(temporalClient, workerManager, log)
-	service.Start(context.Background())
+	// Initialize the global Temporal service instance
+	temporalservice.InitializeGlobalTemporalService(temporalClient, workerManager, log)
+
+	// Get the global instance and start it
+	service := temporalservice.GetGlobalTemporalService()
+	if err := service.Start(context.Background()); err != nil {
+		log.Error("Failed to start global Temporal service", "error", err)
+		return nil
+	}
+
 	return service
 }
 

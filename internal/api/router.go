@@ -57,6 +57,7 @@ type Handlers struct {
 	CronInvoice      *cron.InvoiceHandler
 }
 
+// are used by middleware for authentication, API key checks, and environment access control.
 func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logger, secretService service.SecretService, envAccessService service.EnvAccessService) *gin.Engine {
 	// gin.SetMode(gin.ReleaseMode)
 
@@ -232,6 +233,9 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			// Subscription plan changes (upgrade/downgrade)
 			subscription.POST("/:id/change/preview", handlers.SubscriptionChange.PreviewSubscriptionChange)
 			subscription.POST("/:id/change/execute", handlers.SubscriptionChange.ExecuteSubscriptionChange)
+
+			// Subscription line item management
+			subscription.PUT("/lineitems/:id", handlers.Subscription.UpdateSubscriptionLineItem)
 
 		}
 
