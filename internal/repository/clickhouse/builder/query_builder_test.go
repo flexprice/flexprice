@@ -3,6 +3,7 @@ package builder
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -11,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // Test helper functions
@@ -38,6 +40,15 @@ func createTestUsageParams(eventName string, startTime, endTime time.Time) *even
 			"region": {"us-west-1", "us-east-1"},
 		},
 	}
+}
+
+func indexOfArg(args []interface{}, target interface{}) int {
+	for i, arg := range args {
+		if reflect.DeepEqual(arg, target) {
+			return i
+		}
+	}
+	return -1
 }
 
 // SQL Injection Test Vectors
@@ -164,6 +175,33 @@ func TestSQLInjectionPreventionFilterValues(t *testing.T) {
 	}
 }
 
+// TestBaseFilterArgumentOrdering ensures property arguments precede their values for multi-value filters
+func TestBaseFilterArgumentOrdering(t *testing.T) {
+	ctx := context.Background()
+	params := &events.UsageParams{
+		EventName: "test_event",
+		Filters: map[string][]string{
+			"region": {"us-west", "us-east"},
+		},
+	}
+
+	qb := NewQueryBuilder()
+	qb.WithBaseFilters(ctx, params)
+	query, args := qb.Build()
+
+	regionIdx := indexOfArg(args, "region")
+	westIdx := indexOfArg(args, "us-west")
+	eastIdx := indexOfArg(args, "us-east")
+
+	require.NotEqual(t, -1, regionIdx, "region property should be in args")
+	require.NotEqual(t, -1, westIdx, "us-west value should be in args")
+	require.NotEqual(t, -1, eastIdx, "us-east value should be in args")
+
+	assert.Less(t, regionIdx, westIdx, "property argument must precede its values to align numbered placeholders")
+	assert.Less(t, westIdx, eastIdx, "values should maintain insertion order")
+	assert.NotContains(t, query, "'region'", "property names should stay parameterized")
+}
+
 // TestSQLInjectionPreventionFilterGroups tests SQL injection prevention for filter group values
 func TestSQLInjectionPreventionFilterGroups(t *testing.T) {
 	ctx := createTestContext("tenant_123", "env_123")
@@ -198,6 +236,47 @@ func TestSQLInjectionPreventionFilterGroups(t *testing.T) {
 			assert.Greater(t, len(args), 0, "Args should contain parameters")
 		})
 	}
+}
+
+// TestFilterGroupArgumentOrdering ensures grouped filters maintain property/value ordering
+func TestFilterGroupArgumentOrdering(t *testing.T) {
+	ctx := context.Background()
+	params := &events.UsageParams{
+		EventName: "test_event",
+	}
+
+	filterGroups := []events.FilterGroup{
+		{
+			ID:       "group1",
+			Priority: 7,
+			Filters: map[string][]string{
+				"status": {"pending", "complete"},
+			},
+		},
+	}
+
+	qb := NewQueryBuilder()
+	qb.WithBaseFilters(ctx, params)
+	qb.WithFilterGroups(ctx, filterGroups)
+	qb.WithAggregation(ctx, types.AggregationCount, "")
+
+	query, args := qb.Build()
+
+	groupIDIdx := indexOfArg(args, "group1")
+	priorityIdx := indexOfArg(args, filterGroups[0].Priority)
+	statusIdx := indexOfArg(args, "status")
+	pendingIdx := indexOfArg(args, "pending")
+	completeIdx := indexOfArg(args, "complete")
+
+	require.NotEqual(t, -1, groupIDIdx, "group id should be parameterized")
+	require.NotEqual(t, -1, priorityIdx, "group priority should be parameterized")
+	require.NotEqual(t, -1, statusIdx, "status property should be parameterized")
+	require.NotEqual(t, -1, pendingIdx, "pending value should be parameterized")
+	require.NotEqual(t, -1, completeIdx, "complete value should be parameterized")
+
+	assert.Less(t, statusIdx, pendingIdx, "group property argument must precede first value")
+	assert.Less(t, pendingIdx, completeIdx, "group values should maintain insertion order")
+	assert.NotContains(t, query, "'status'", "group property must not leak into SQL text")
 }
 
 // TestSQLInjectionPreventionPropertyNames tests SQL injection prevention for property names

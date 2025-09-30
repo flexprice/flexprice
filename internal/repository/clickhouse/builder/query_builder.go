@@ -99,16 +99,16 @@ func (qb *QueryBuilder) WithBaseFilters(ctx context.Context, params *events.Usag
 					argIndex += 2
 				} else {
 					placeholders := make([]string, len(values))
-					for i := range values {
+					args = append(args, property)
+					for i, value := range values {
 						placeholders[i] = fmt.Sprintf("?%d", argIndex+i+1)
-						args = append(args, values[i])
+						args = append(args, value)
 					}
 					condition = fmt.Sprintf(
 						"JSONExtractString(properties, ?%d) IN (%s)",
 						argIndex,
 						strings.Join(placeholders, ","),
 					)
-					args = append(args, property)
 					argIndex += len(values) + 1
 				}
 				conditions = append(conditions, condition)
@@ -168,16 +168,16 @@ func (qb *QueryBuilder) WithFilterGroups(ctx context.Context, groups []events.Fi
 				localArgIndex += 2
 			} else {
 				placeholders := make([]string, len(values))
-				for i := range values {
+				groupArgs = append(groupArgs, property)
+				for i, value := range values {
 					placeholders[i] = fmt.Sprintf("?%d", localArgIndex+i+1)
-					groupArgs = append(groupArgs, values[i])
+					groupArgs = append(groupArgs, value)
 				}
 				condition = fmt.Sprintf(
 					"JSONExtractString(properties, ?%d) IN (%s)",
 					localArgIndex,
 					strings.Join(placeholders, ","),
 				)
-				groupArgs = append(groupArgs, property)
 				localArgIndex += len(values) + 1
 			}
 			conditions = append(conditions, condition)
@@ -231,7 +231,7 @@ func (qb *QueryBuilder) WithFilterGroups(ctx context.Context, groups []events.Fi
 		Args:  allArgs,
 	})
 
-	matchedQuery := `matched_events AS (
+	matchedEventsQuery := `matched_events AS (
 		SELECT
 			id,
 			timestamp,
@@ -241,8 +241,9 @@ func (qb *QueryBuilder) WithFilterGroups(ctx context.Context, groups []events.Fi
 			matched_group.2 as total_filters,
 			matched_group.3 as matches
 		FROM filter_matches
-	),
-	best_matches AS (
+	)`
+
+	bestMatchesQuery := `best_matches AS (
 		SELECT
 			id,
 			properties,
@@ -253,27 +254,22 @@ func (qb *QueryBuilder) WithFilterGroups(ctx context.Context, groups []events.Fi
 	)`
 
 	qb.matchedQuery = &ParameterizedQuery{
-		Query: matchedQuery,
+		Query: matchedEventsQuery + ",\n\t" + bestMatchesQuery,
 		Args:  []interface{}{},
 	}
 
-	// Split matched query into CTE components
-	matchedCTEs := strings.Split(matchedQuery, ",")
-	for i, cte := range matchedCTEs {
-		cte = strings.TrimSpace(cte)
-		if cte != "" {
-			if i == 0 {
-				cte = strings.TrimPrefix(cte, "matched_events AS (")
-			} else {
-				cte = strings.TrimSpace(cte)
-			}
-			qb.cteComponents = append(qb.cteComponents, CTEComponent{
-				Name:  fmt.Sprintf("matched_cte_%d", i),
-				Query: cte,
-				Args:  []interface{}{},
-			})
-		}
-	}
+	qb.cteComponents = append(qb.cteComponents,
+		CTEComponent{
+			Name:  "matched_events",
+			Query: matchedEventsQuery,
+			Args:  []interface{}{},
+		},
+		CTEComponent{
+			Name:  "best_matches",
+			Query: bestMatchesQuery,
+			Args:  []interface{}{},
+		},
+	)
 
 	return qb
 }
