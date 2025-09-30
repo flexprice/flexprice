@@ -5916,11 +5916,18 @@ definitions:
   types.AlertThreshold:
     properties:
       type:
+        allOf:
+        - $ref: '#/definitions/types.AlertThresholdType'
         description: amount
-        type: string
       value:
         type: number
     type: object
+  types.AlertThresholdType:
+    enum:
+    - amount
+    type: string
+    x-enum-varnames:
+    - AlertThresholdTypeAmount
   types.AutoTopupTrigger:
     enum:
     - disabled

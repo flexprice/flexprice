@@ -18833,12 +18833,25 @@ const docTemplate = `{
             "properties": {
                 "type": {
                     "description": "amount",
-                    "type": "string"
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.AlertThresholdType"
+                        }
+                    ]
                 },
                 "value": {
                     "type": "number"
                 }
             }
+        },
+        "types.AlertThresholdType": {
+            "type": "string",
+            "enum": [
+                "amount"
+            ],
+            "x-enum-varnames": [
+                "AlertThresholdTypeAmount"
+            ]
         },
         "types.AutoTopupTrigger": {
             "type": "string",

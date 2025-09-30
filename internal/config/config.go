@@ -96,7 +96,8 @@ type ClickHouseConfig struct {
 }
 
 type LoggingConfig struct {
-	Level types.LogLevel `mapstructure:"level" validate:"required"`
+	Level   types.LogLevel `mapstructure:"level" validate:"required"`
+	DBLevel types.LogLevel `mapstructure:"db_level" validate:"required"`
 }
 
 type PostgresConfig struct {

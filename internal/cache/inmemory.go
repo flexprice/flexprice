@@ -2,7 +2,6 @@ package cache
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -60,7 +59,6 @@ func GetInMemoryCache() *InMemoryCache {
 // Get retrieves a value from the cache
 func (c *InMemoryCache) Get(_ context.Context, key string) (interface{}, bool) {
 	if !c.cfg.Cache.Enabled {
-		fmt.Println("Cache is disabled, returning nil")
 		return nil, false
 	}
 	return c.cache.Get(key)
@@ -69,7 +67,6 @@ func (c *InMemoryCache) Get(_ context.Context, key string) (interface{}, bool) {
 // Set adds a value to the cache with the specified expiration
 func (c *InMemoryCache) Set(_ context.Context, key string, value interface{}, expiration time.Duration) {
 	if !c.cfg.Cache.Enabled {
-		fmt.Println("Cache is disabled")
 		return
 	}
 	c.cache.Set(key, value, expiration)
@@ -78,7 +75,6 @@ func (c *InMemoryCache) Set(_ context.Context, key string, value interface{}, ex
 // Delete removes a key from the cache
 func (c *InMemoryCache) Delete(_ context.Context, key string) {
 	if !c.cfg.Cache.Enabled {
-		fmt.Println("Cache is disabled, returning nil")
 		return
 	}
 	c.cache.Delete(key)
@@ -87,7 +83,6 @@ func (c *InMemoryCache) Delete(_ context.Context, key string) {
 // DeleteByPrefix removes all keys with the given prefix
 func (c *InMemoryCache) DeleteByPrefix(_ context.Context, prefix string) {
 	if !c.cfg.Cache.Enabled {
-		fmt.Println("Cache is disabled")
 		return
 	}
 	// Get all items from the cache
@@ -104,7 +99,6 @@ func (c *InMemoryCache) DeleteByPrefix(_ context.Context, prefix string) {
 // Flush removes all items from the cache
 func (c *InMemoryCache) Flush(_ context.Context) {
 	if !c.cfg.Cache.Enabled {
-		fmt.Println("Cache is disabled")
 		return
 	}
 	c.cache.Flush()

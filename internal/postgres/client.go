@@ -68,7 +68,13 @@ func NewEntClient(config *config.Configuration, logger *logger.Logger) (*ent.Cli
 	// Create client with options
 	opts := []ent.Option{
 		ent.Driver(drv),
-		ent.Debug(), // Enable debug logging
+	}
+
+	if config.Logging.DBLevel == types.LogLevelDebug {
+		opts = append(opts,
+			ent.Debug(),
+			ent.Log(logger.GetEntLogger()),
+		)
 	}
 
 	client := ent.NewClient(opts...)
