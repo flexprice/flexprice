@@ -319,9 +319,20 @@ func (qb *QueryBuilder) Build() (string, []interface{}) {
 	// Join CTEs with commas
 	ctePart := strings.Join(cteParts, ",\n")
 
-	// Combine CTEs with final query
-	finalQuery := fmt.Sprintf("WITH %s\n%s", ctePart, qb.finalQuery.Query)
-	allArgs = append(allArgs, qb.finalQuery.Args...)
+	var finalQuery string
+
+	switch {
+	case len(cteParts) > 0 && qb.finalQuery != nil && qb.finalQuery.Query != "":
+		finalQuery = fmt.Sprintf("WITH %s\n%s", ctePart, qb.finalQuery.Query)
+	case len(cteParts) > 0:
+		finalQuery = fmt.Sprintf("WITH %s", ctePart)
+	case qb.finalQuery != nil:
+		finalQuery = qb.finalQuery.Query
+	}
+
+	if qb.finalQuery != nil {
+		allArgs = append(allArgs, qb.finalQuery.Args...)
+	}
 
 	return finalQuery, allArgs
 }

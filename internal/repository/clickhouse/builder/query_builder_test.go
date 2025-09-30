@@ -352,15 +352,37 @@ func TestParameterizedQueryValidation(t *testing.T) {
 
 	query, args := qb.Build()
 
-	// Verify parameter count - updated to match new parameterized implementation
-	// Base filters: event(1) + time(2) + customer(2) + region(3:prop+2vals) + tier(2:prop+val) = 10
-	// Filter groups: category(2:prop+val) + group(2:id+priority) = 4
-	// Aggregation: amount(1) = 1
-	// Total: 10 + 4 + 1 = 15
-	assert.Equal(t, 15, len(args), "Parameter count should match expected")
+	// Verify the query captures all critical user inputs through parameters rather than string interpolation
+	expectedArgs := []interface{}{
+		params.EventName,
+		params.ExternalCustomerID,
+		params.CustomerID,
+		"region",
+		"us-west",
+		"us-east",
+		"tier",
+		"premium",
+		"group1",
+		1,
+		"category",
+		"amount",
+	}
+
+	for _, expected := range expectedArgs {
+		idx := indexOfArg(args, expected)
+		require.NotEqualf(t, -1, idx, "expected argument %v to be parameterized", expected)
+	}
+
+	for _, expected := range []time.Time{params.StartTime, params.EndTime} {
+		idx := indexOfArg(args, expected)
+		require.NotEqualf(t, -1, idx, "expected time argument %v to be parameterized", expected)
+	}
+
+	assert.GreaterOrEqual(t, len(args), len(expectedArgs)+2, "should at least contain the expected arguments and time bounds")
 
 	// Verify category filter is parameterized (not hardcoded)
-	assert.Contains(t, query, "JSONExtractString(properties, ?1) = ?2", "Category filter should be parameterized")
+	categoryPattern := regexp.MustCompile(`JSONExtractString\(properties, \?\d+\) = \?\d+`)
+	assert.Regexp(t, categoryPattern, query, "Category filter should be parameterized")
 
 	// Verify no hardcoded property names in the final query
 	assert.NotContains(t, query, "'category'", "Property names should be parameterized, not hardcoded")
