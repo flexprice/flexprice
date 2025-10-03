@@ -219,12 +219,12 @@ func (r *CreateSubscriptionRequest) Validate() error {
 	if r.CollectionMethod != nil {
 		// Handle legacy default_incomplete collection method
 		if string(*r.CollectionMethod) == "default_incomplete" {
-			// Convert to send_invoice + default_incomplete for backward compatibility
-			sendInvoiceMethod := types.CollectionMethodSendInvoice
-			r.CollectionMethod = &sendInvoiceMethod
+			// Convert to charge_automatically + allow_incomplete for backward compatibility
+			chargeAutomaticallyMethod := types.CollectionMethodChargeAutomatically
+			r.CollectionMethod = &chargeAutomaticallyMethod
 			if r.PaymentBehavior == nil {
-				defaultIncomplete := types.PaymentBehaviorDefaultIncomplete
-				r.PaymentBehavior = &defaultIncomplete
+				allowIncomplete := types.PaymentBehaviorAllowIncomplete
+				r.PaymentBehavior = &allowIncomplete
 			}
 		}
 

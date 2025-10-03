@@ -1267,7 +1267,7 @@ func (p *PaymentParameters) NormalizePaymentParameters() *PaymentParameters {
 		// Convert old default_incomplete collection behavior to new format
 		// collection_method: charge_automatically, payment_behavior: default_incomplete
 		normalized := &PaymentParameters{
-			CollectionMethod: lo.ToPtr(types.CollectionMethodSendInvoice),
+			CollectionMethod: lo.ToPtr(types.CollectionMethodChargeAutomatically),
 			PaymentBehavior:  lo.ToPtr(types.PaymentBehaviorDefaultIncomplete),
 			PaymentMethodID:  p.PaymentMethodID,
 		}

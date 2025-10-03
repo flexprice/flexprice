@@ -10,20 +10,14 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/samber/lo"
 )
 
 // PaymentService defines the interface for payment operations
-type PaymentService interface {
-	// Core payment operations
-	CreatePayment(ctx context.Context, req *dto.CreatePaymentRequest) (*dto.PaymentResponse, error)
-	GetPayment(ctx context.Context, id string) (*dto.PaymentResponse, error)
-	UpdatePayment(ctx context.Context, id string, req dto.UpdatePaymentRequest) (*dto.PaymentResponse, error)
-	ListPayments(ctx context.Context, filter *types.PaymentFilter) (*dto.ListPaymentsResponse, error)
-	DeletePayment(ctx context.Context, id string) error
-}
+type PaymentService = interfaces.PaymentService
 
 type paymentService struct {
 	ServiceParams

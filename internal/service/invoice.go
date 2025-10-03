@@ -15,6 +15,8 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
+	"github.com/flexprice/flexprice/internal/integration/stripe"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/s3"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -22,15 +24,15 @@ import (
 )
 
 type InvoiceService interface {
+	// Embed the basic interface from interfaces package
+	interfaces.InvoiceService
+
+	// Additional methods specific to this service
 	CreateOneOffInvoice(ctx context.Context, req dto.CreateInvoiceRequest) (*dto.InvoiceResponse, error)
-	CreateInvoice(ctx context.Context, req dto.CreateInvoiceRequest) (*dto.InvoiceResponse, error)
-	GetInvoice(ctx context.Context, id string) (*dto.InvoiceResponse, error)
-	ListInvoices(ctx context.Context, filter *types.InvoiceFilter) (*dto.ListInvoicesResponse, error)
 	FinalizeInvoice(ctx context.Context, id string) error
 	VoidInvoice(ctx context.Context, id string, req dto.InvoiceVoidRequest) error
 	ProcessDraftInvoice(ctx context.Context, id string, paymentParams *dto.PaymentParameters, sub *subscription.Subscription, flowType types.InvoiceFlowType) error
 	UpdatePaymentStatus(ctx context.Context, id string, status types.PaymentStatus, amount *decimal.Decimal) error
-	ReconcilePaymentStatus(ctx context.Context, id string, status types.PaymentStatus, amount *decimal.Decimal) error
 	CreateSubscriptionInvoice(ctx context.Context, req *dto.CreateSubscriptionInvoiceRequest, paymentParams *dto.PaymentParameters, flowType types.InvoiceFlowType) (*dto.InvoiceResponse, *subscription.Subscription, error)
 	GetPreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error)
 	GetCustomerInvoiceSummary(ctx context.Context, customerID string, currency string) (*dto.CustomerInvoiceSummary, error)
@@ -41,7 +43,6 @@ type InvoiceService interface {
 	GetInvoicePDFUrl(ctx context.Context, id string) (string, error)
 	RecalculateInvoice(ctx context.Context, id string, finalize bool) (*dto.InvoiceResponse, error)
 	RecalculateInvoiceAmounts(ctx context.Context, invoiceID string) error
-	UpdateInvoice(ctx context.Context, id string, req dto.UpdateInvoiceRequest) (*dto.InvoiceResponse, error)
 	CalculatePriceBreakdown(ctx context.Context, inv *dto.InvoiceResponse) (map[string][]dto.SourceUsageItem, error)
 	CalculateUsageBreakdown(ctx context.Context, inv *dto.InvoiceResponse, groupBy []string) (map[string][]dto.UsageBreakdownItem, error)
 	TriggerCommunication(ctx context.Context, id string) error
@@ -770,9 +771,18 @@ func (s *invoiceService) syncInvoiceToStripeIfEnabled(ctx context.Context, inv *
 		return nil // Not an error, just skip sync
 	}
 
+	// Get Stripe integration
+	stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
+	if err != nil {
+		s.Logger.Errorw("failed to get Stripe integration, skipping invoice sync",
+			"invoice_id", inv.ID,
+			"error", err)
+		return nil // Don't fail the entire process, just skip invoice sync
+	}
+
 	// Ensure customer is synced to Stripe before syncing invoice
-	stripeService := NewStripeService(s.ServiceParams)
-	customerResp, err := stripeService.EnsureCustomerSyncedToStripe(ctx, inv.CustomerID)
+	customerService := NewCustomerService(s.ServiceParams)
+	customerResp, err := stripeIntegration.CustomerSvc.EnsureCustomerSyncedToStripe(ctx, inv.CustomerID, customerService)
 	if err != nil {
 		s.Logger.Errorw("failed to ensure customer is synced to Stripe, skipping invoice sync",
 			"invoice_id", inv.ID,
@@ -791,20 +801,17 @@ func (s *invoiceService) syncInvoiceToStripeIfEnabled(ctx context.Context, inv *
 		"subscription_id", sub.ID,
 		"collection_method", sub.CollectionMethod)
 
-	// Initialize Stripe sync service
-	stripeInvoiceSyncService := NewStripeInvoiceSyncService(s.ServiceParams)
-
 	// Determine collection method from subscription
 	collectionMethod := types.CollectionMethod(sub.CollectionMethod)
 
-	// Create sync request
-	syncRequest := dto.StripeInvoiceSyncRequest{
+	// Create sync request using the integration package's DTO
+	syncRequest := stripe.StripeInvoiceSyncRequest{
 		InvoiceID:        inv.ID,
-		CollectionMethod: collectionMethod,
+		CollectionMethod: string(collectionMethod),
 	}
 
 	// Perform the sync
-	syncResponse, err := stripeInvoiceSyncService.SyncInvoiceToStripe(ctx, syncRequest)
+	syncResponse, err := stripeIntegration.InvoiceSyncSvc.SyncInvoiceToStripe(ctx, syncRequest, customerService)
 	if err != nil {
 		return err
 	}
@@ -812,8 +819,7 @@ func (s *invoiceService) syncInvoiceToStripeIfEnabled(ctx context.Context, inv *
 	s.Logger.Infow("successfully synced invoice to Stripe",
 		"invoice_id", inv.ID,
 		"stripe_invoice_id", syncResponse.StripeInvoiceID,
-		"status", syncResponse.Status,
-		"hosted_invoice_url", syncResponse.HostedInvoiceURL)
+		"status", syncResponse.Status)
 
 	return nil
 }
@@ -1347,8 +1353,8 @@ func (s *invoiceService) attemptPaymentForSubscriptionInvoice(ctx context.Contex
 	}
 
 	// Check if invoice is synced to Stripe - if so, only allow payments through record payment API
-	stripeService := NewStripeService(s.ServiceParams)
-	if stripeService.IsInvoiceSyncedToStripe(ctx, inv.ID) {
+	stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
+	if err == nil && stripeIntegration.InvoiceSyncSvc.IsInvoiceSyncedToStripe(ctx, inv.ID) {
 		s.Logger.Infow("invoice is synced to Stripe, skipping automatic payment processing",
 			"invoice_id", inv.ID,
 			"subscription_id", lo.FromPtr(inv.SubscriptionID),
@@ -2857,4 +2863,12 @@ func isSafeUpdateForPaidInvoice(req dto.UpdateInvoiceRequest) bool {
 	// For now, all fields in UpdateInvoiceRequest are safe
 	// This function is here for future extensibility
 	return true
+}
+
+// DeleteInvoice deletes an invoice (stub implementation)
+func (s *invoiceService) DeleteInvoice(ctx context.Context, id string) error {
+	// TODO: Implement invoice deletion if needed
+	return ierr.NewError("invoice deletion not implemented").
+		WithHint("Invoice deletion is not currently supported").
+		Mark(ierr.ErrNotFound)
 }

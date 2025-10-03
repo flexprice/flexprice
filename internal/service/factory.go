@@ -38,6 +38,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/httpclient"
+	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/pdf"
 	"github.com/flexprice/flexprice/internal/postgres"
@@ -105,6 +106,9 @@ type ServiceParams struct {
 
 	// Proration
 	ProrationCalculator proration.Calculator
+
+	// Integration Factory
+	IntegrationFactory *integration.Factory
 }
 
 // Common service params
@@ -157,6 +161,7 @@ func NewServiceParams(
 	settingsRepo settings.Repository,
 	alertLogsRepo alertlogs.Repository,
 	prorationCalculator proration.Calculator,
+	integrationFactory *integration.Factory,
 ) ServiceParams {
 	return ServiceParams{
 		Logger:                       logger,
@@ -207,5 +212,6 @@ func NewServiceParams(
 		SettingsRepo:                 settingsRepo,
 		AlertLogsRepo:                alertLogsRepo,
 		ProrationCalculator:          prorationCalculator,
+		IntegrationFactory:           integrationFactory,
 	}
 }

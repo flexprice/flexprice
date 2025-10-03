@@ -44,7 +44,6 @@ type Handlers struct {
 	Webhook                  *v1.WebhookHandler
 	Addon                    *v1.AddonHandler
 	EntityIntegrationMapping *v1.EntityIntegrationMappingHandler
-	Integration              *v1.IntegrationHandler
 	Settings                 *v1.SettingsHandler
 	SetupIntent              *v1.SetupIntentHandler
 
@@ -409,91 +408,85 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			entityIntegrationMappings.DELETE("/:id", handlers.EntityIntegrationMapping.DeleteEntityIntegrationMapping)
 		}
 
-		// Integration routes
-		integration := v1Private.Group("/integration")
+		// Coupon routes
+		coupon := v1Private.Group("/coupons")
 		{
-			integration.POST("/sync/:entity_type/:entity_id", handlers.Integration.SyncEntityToProviders)
-			integration.GET("/providers", handlers.Integration.GetAvailableProviders)
-			// Coupon routes
-			coupon := v1Private.Group("/coupons")
-			{
-				coupon.POST("", handlers.Coupon.CreateCoupon)
-				coupon.GET("", handlers.Coupon.ListCouponsByFilter)
-				coupon.GET("/:id", handlers.Coupon.GetCoupon)
-				coupon.PUT("/:id", handlers.Coupon.UpdateCoupon)
-				coupon.DELETE("/:id", handlers.Coupon.DeleteCoupon)
-				coupon.POST("/search", handlers.Coupon.ListCouponsByFilter)
-			}
+			coupon.POST("", handlers.Coupon.CreateCoupon)
+			coupon.GET("", handlers.Coupon.ListCouponsByFilter)
+			coupon.GET("/:id", handlers.Coupon.GetCoupon)
+			coupon.PUT("/:id", handlers.Coupon.UpdateCoupon)
+			coupon.DELETE("/:id", handlers.Coupon.DeleteCoupon)
+			coupon.POST("/search", handlers.Coupon.ListCouponsByFilter)
+		}
 
-			// Admin routes (API Key only)
-			adminRoutes := v1Private.Group("/admin")
-			adminRoutes.Use(middleware.APIKeyAuthMiddleware(cfg, secretService, logger))
-			{
-				// All admin routes to go here
-			}
+		// Admin routes (API Key only)
+		adminRoutes := v1Private.Group("/admin")
+		adminRoutes.Use(middleware.APIKeyAuthMiddleware(cfg, secretService, logger))
+		{
+			// All admin routes to go here
+		}
 
-			// Portal routes (UI-specific endpoints)
-			portalRoutes := v1Private.Group("/portal")
+		// Portal routes (UI-specific endpoints)
+		portalRoutes := v1Private.Group("/portal")
+		{
+			onboarding := portalRoutes.Group("/onboarding")
 			{
-				onboarding := portalRoutes.Group("/onboarding")
-				{
-					onboarding.POST("/events", handlers.Onboarding.GenerateEvents)
-					onboarding.POST("/setup", handlers.Onboarding.SetupDemo)
-				}
-			}
-
-			// Webhook routes
-			webhookGroup := v1Private.Group("/webhooks")
-			{
-				webhookGroup.GET("/dashboard", handlers.Webhook.GetDashboardURL)
+				onboarding.POST("/events", handlers.Onboarding.GenerateEvents)
+				onboarding.POST("/setup", handlers.Onboarding.SetupDemo)
 			}
 		}
 
-		// Public webhook endpoints (no authentication required)
-		webhooks := v1Public.Group("/webhooks")
+		// Webhook routes
+		webhookGroup := v1Private.Group("/webhooks")
 		{
-			// Stripe webhook endpoint: POST /v1/webhooks/stripe/{tenant_id}/{environment_id}
-			webhooks.POST("/stripe/:tenant_id/:environment_id", handlers.Webhook.HandleStripeWebhook)
+			webhookGroup.GET("/dashboard", handlers.Webhook.GetDashboardURL)
 		}
-
-		// Cron routes
-		// TODO: move crons out of API based architecture
-		cron := v1Private.Group("/cron")
-		// Subscription related cron jobs
-		subscriptionGroup := cron.Group("/subscriptions")
-		{
-			subscriptionGroup.POST("/update-periods", handlers.CronSubscription.UpdateBillingPeriods)
-			subscriptionGroup.POST("/process-auto-cancellation", handlers.CronSubscription.ProcessAutoCancellationSubscriptions)
-			subscriptionGroup.POST("/renewal-due-alerts", handlers.CronSubscription.ProcessSubscriptionRenewalDueAlerts)
-		}
-
-		// Wallet related cron jobs
-		walletGroup := cron.Group("/wallets")
-		{
-			walletGroup.POST("/expire-credits", handlers.CronWallet.ExpireCredits)
-			walletGroup.POST("/check-alerts", handlers.CronWallet.CheckAlerts)
-		}
-
-		// Credit grant related cron jobs
-		creditGrantGroup := cron.Group("/creditgrants")
-		{
-			creditGrantGroup.POST("/process-scheduled-applications", handlers.CronCreditGrant.ProcessScheduledCreditGrantApplications)
-		}
-
-		// Invoice related cron jobs
-		invoiceGroup := cron.Group("/invoices")
-		{
-			invoiceGroup.POST("/void-old-pending", handlers.CronInvoice.VoidOldPendingInvoices)
-		}
-
-		// Settings routes
-		settings := v1Private.Group("/settings")
-		{
-			settings.GET("/:key", handlers.Settings.GetSettingByKey)
-			settings.PUT("/:key", handlers.Settings.UpdateSettingByKey)
-			settings.DELETE("/:key", handlers.Settings.DeleteSettingByKey)
-		}
-
-		return router
 	}
+
+	// Public webhook endpoints (no authentication required)
+	webhooks := v1Public.Group("/webhooks")
+	{
+		// Stripe webhook endpoint: POST /v1/webhooks/stripe/{tenant_id}/{environment_id}
+		webhooks.POST("/stripe/:tenant_id/:environment_id", handlers.Webhook.HandleStripeWebhook)
+	}
+
+	// Cron routes
+	// TODO: move crons out of API based architecture
+	cron := v1Private.Group("/cron")
+	// Subscription related cron jobs
+	subscriptionGroup := cron.Group("/subscriptions")
+	{
+		subscriptionGroup.POST("/update-periods", handlers.CronSubscription.UpdateBillingPeriods)
+		subscriptionGroup.POST("/process-auto-cancellation", handlers.CronSubscription.ProcessAutoCancellationSubscriptions)
+		subscriptionGroup.POST("/renewal-due-alerts", handlers.CronSubscription.ProcessSubscriptionRenewalDueAlerts)
+	}
+
+	// Wallet related cron jobs
+	walletGroup := cron.Group("/wallets")
+	{
+		walletGroup.POST("/expire-credits", handlers.CronWallet.ExpireCredits)
+		walletGroup.POST("/check-alerts", handlers.CronWallet.CheckAlerts)
+	}
+
+	// Credit grant related cron jobs
+	creditGrantGroup := cron.Group("/creditgrants")
+	{
+		creditGrantGroup.POST("/process-scheduled-applications", handlers.CronCreditGrant.ProcessScheduledCreditGrantApplications)
+	}
+
+	// Invoice related cron jobs
+	invoiceGroup := cron.Group("/invoices")
+	{
+		invoiceGroup.POST("/void-old-pending", handlers.CronInvoice.VoidOldPendingInvoices)
+	}
+
+	// Settings routes
+	settings := v1Private.Group("/settings")
+	{
+		settings.GET("/:key", handlers.Settings.GetSettingByKey)
+		settings.PUT("/:key", handlers.Settings.UpdateSettingByKey)
+		settings.DELETE("/:key", handlers.Settings.DeleteSettingByKey)
+	}
+
+	return router
 }

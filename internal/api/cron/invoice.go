@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/types"
@@ -22,7 +23,7 @@ type InvoiceHandler struct {
 	connectionService   service.ConnectionService
 	tenantService       service.TenantService
 	environmentService  service.EnvironmentService
-	stripeService       *service.StripeInvoiceSyncService
+	integrationFactory  *integration.Factory
 	logger              *logger.Logger
 }
 
@@ -33,7 +34,7 @@ func NewInvoiceHandler(
 	connectionService service.ConnectionService,
 	tenantService service.TenantService,
 	environmentService service.EnvironmentService,
-	stripeService *service.StripeInvoiceSyncService,
+	integrationFactory *integration.Factory,
 	logger *logger.Logger,
 ) *InvoiceHandler {
 	return &InvoiceHandler{
@@ -42,7 +43,7 @@ func NewInvoiceHandler(
 		connectionService:   connectionService,
 		tenantService:       tenantService,
 		environmentService:  environmentService,
-		stripeService:       stripeService,
+		integrationFactory:  integrationFactory,
 		logger:              logger,
 	}
 }
@@ -204,28 +205,29 @@ func (h *InvoiceHandler) processIncompleteSubscriptionsForEnvironment(
 		"tenant_id", tenantID,
 		"environment_id", environmentID)
 
-	conn, err := h.stripeService.ConnectionRepo.GetByProvider(ctx, types.SecretProviderStripe)
-	if err != nil || conn == nil {
-		h.logger.Infow("Stripe connection not available, skipping environment",
+	// Get Stripe integration
+	stripeIntegration, err := h.integrationFactory.GetStripeIntegration(ctx)
+	if err != nil {
+		h.logger.Infow("Stripe integration not available, skipping environment",
 			"tenant_id", tenantID,
 			"environment_id", environmentID,
 			"error", err)
 		return response, nil // Not an error, just skip this environment
 	}
 
-	// Check if invoice sync is enabled for this connection
-	if !conn.IsInvoiceSyncEnabled() {
-		h.logger.Infow("invoice sync disabled for Stripe connection, skipping environment",
+	// Check if Stripe connection exists
+	if !stripeIntegration.Client.HasStripeConnection(ctx) {
+		h.logger.Infow("Stripe connection not available, skipping environment",
 			"tenant_id", tenantID,
-			"environment_id", environmentID,
-			"connection_id", conn.ID)
+			"environment_id", environmentID)
 		return response, nil // Not an error, just skip this environment
 	}
 
-	h.logger.Infow("Stripe connection and invoice sync are enabled, proceeding with processing",
+	// Note: For now, we assume invoice sync is enabled if connection exists
+	// In the future, we can add a method to check if invoice sync is enabled
+	h.logger.Infow("Stripe connection available, proceeding with processing",
 		"tenant_id", tenantID,
-		"environment_id", environmentID,
-		"connection_id", conn.ID)
+		"environment_id", environmentID)
 
 	// Get incomplete subscriptions older than 24 hours
 	cutoffTime := time.Now().UTC().Add(-24 * time.Hour)
@@ -335,8 +337,15 @@ func (h *InvoiceHandler) processOldIncompleteSubscription(ctx context.Context, s
 // processSingleInvoice handles the case where subscription has exactly one old invoice
 func (h *InvoiceHandler) processSingleInvoice(ctx context.Context, sub *dto.SubscriptionResponse, inv *dto.InvoiceResponse) error {
 
+	// Get Stripe integration
+	stripeIntegration, err := h.integrationFactory.GetStripeIntegration(ctx)
+	if err != nil {
+		h.logger.Errorw("failed to get Stripe integration", "error", err, "invoice_id", inv.ID)
+		return nil
+	}
+
 	// Check if synced to Stripe
-	mapping, err := h.stripeService.GetExistingStripeMapping(ctx, inv.ID)
+	mapping, err := stripeIntegration.InvoiceSyncSvc.GetExistingStripeMapping(ctx, inv.ID)
 	if err != nil || mapping == nil {
 		h.logger.Infow("invoice not synced to Stripe, skipping", "invoice_id", inv.ID)
 		return nil
@@ -445,8 +454,15 @@ func (h *InvoiceHandler) voidOldPendingInvoice(
 
 // checkStripePartialPayment checks if an invoice has partial payments in Stripe
 func (h *InvoiceHandler) checkStripePartialPayment(ctx context.Context, invoiceID string) (bool, error) {
+	// Get Stripe integration
+	stripeIntegration, err := h.integrationFactory.GetStripeIntegration(ctx)
+	if err != nil {
+		h.logger.Errorw("failed to get Stripe integration", "error", err, "invoice_id", invoiceID)
+		return false, err
+	}
+
 	// Get Stripe invoice ID from entity integration mapping
-	mapping, err := h.stripeService.GetExistingStripeMapping(ctx, invoiceID)
+	mapping, err := stripeIntegration.InvoiceSyncSvc.GetExistingStripeMapping(ctx, invoiceID)
 	if err != nil {
 		// If no mapping exists, the invoice was never synced to Stripe
 		h.logger.Debugw("no Stripe mapping found for invoice, assuming no partial payments", "invoice_id", invoiceID)
@@ -456,7 +472,7 @@ func (h *InvoiceHandler) checkStripePartialPayment(ctx context.Context, invoiceI
 	stripeInvoiceID := mapping.ProviderEntityID
 
 	// Get Stripe client
-	stripeClient, err := h.stripeService.GetStripeClient(ctx)
+	stripeClient, _, err := stripeIntegration.Client.GetStripeClient(ctx)
 	if err != nil {
 		return false, err
 	}
@@ -489,8 +505,15 @@ func (h *InvoiceHandler) checkStripePartialPayment(ctx context.Context, invoiceI
 
 // voidInvoiceInStripe voids an invoice in Stripe if it exists
 func (h *InvoiceHandler) voidInvoiceInStripe(ctx context.Context, invoiceID string) error {
+	// Get Stripe integration
+	stripeIntegration, err := h.integrationFactory.GetStripeIntegration(ctx)
+	if err != nil {
+		h.logger.Errorw("failed to get Stripe integration", "error", err, "invoice_id", invoiceID)
+		return err
+	}
+
 	// Get Stripe invoice ID from entity integration mapping
-	mapping, err := h.stripeService.GetExistingStripeMapping(ctx, invoiceID)
+	mapping, err := stripeIntegration.InvoiceSyncSvc.GetExistingStripeMapping(ctx, invoiceID)
 	if err != nil {
 		// If no mapping exists, the invoice was never synced to Stripe
 		h.logger.Debugw("no Stripe mapping found for invoice", "invoice_id", invoiceID)
@@ -503,7 +526,7 @@ func (h *InvoiceHandler) voidInvoiceInStripe(ctx context.Context, invoiceID stri
 		"stripe_invoice_id", stripeInvoiceID)
 
 	// Get Stripe client
-	stripeClient, err := h.stripeService.GetStripeClient(ctx)
+	stripeClient, _, err := stripeIntegration.Client.GetStripeClient(ctx)
 	if err != nil {
 		return err
 	}

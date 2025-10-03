@@ -448,16 +448,17 @@ func (s *subscriptionPaymentProcessor) processPayment(
 			)
 
 			// If invoice is synced to Stripe, don't allow partial payments
-			stripeService := NewStripeService(*s.ServiceParams)
-
-			if stripeService.IsInvoiceSyncedToStripe(ctx, inv.ID) {
-				s.Logger.Warnw("card payment failed, invoice is synced to Stripe - not allowing partial wallet payment",
-					"subscription_id", sub.ID,
-					"invoice_id", inv.ID,
-					"attempted_card_amount", cardAmount,
-					"wallet_amount_available", walletAmount,
-				)
-				allowPartialWallet = false
+			stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
+			if err == nil {
+				if stripeIntegration.InvoiceSyncSvc.IsInvoiceSyncedToStripe(ctx, inv.ID) {
+					s.Logger.Warnw("card payment failed, invoice is synced to Stripe - not allowing partial wallet payment",
+						"subscription_id", sub.ID,
+						"invoice_id", inv.ID,
+						"attempted_card_amount", cardAmount,
+						"wallet_amount_available", walletAmount,
+					)
+					allowPartialWallet = false
+				}
 			}
 
 			if !allowPartialWallet {
@@ -715,9 +716,19 @@ func (s *subscriptionPaymentProcessor) processPaymentMethodCharge(
 		return decimal.Zero
 	}
 
+	// Get Stripe integration
+	stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
+	if err != nil {
+		s.Logger.Warnw("failed to get Stripe integration",
+			"subscription_id", sub.ID,
+			"error", err,
+		)
+		return decimal.Zero
+	}
+
 	// Check if customer has Stripe entity mapping
-	stripeService := NewStripeService(*s.ServiceParams)
-	if !stripeService.HasCustomerStripeMapping(ctx, sub.CustomerID) {
+	customerService := NewCustomerService(*s.ServiceParams)
+	if !stripeIntegration.CustomerSvc.HasCustomerStripeMapping(ctx, sub.CustomerID, customerService) {
 		s.Logger.Warnw("no Stripe entity mapping found for customer",
 			"subscription_id", sub.ID,
 			"customer_id", sub.CustomerID,
@@ -799,8 +810,17 @@ func (s *subscriptionPaymentProcessor) getPaymentMethodID(ctx context.Context, s
 	}
 
 	// Get customer's default payment method from Stripe
-	stripeService := NewStripeService(*s.ServiceParams)
-	defaultPaymentMethod, err := stripeService.GetDefaultPaymentMethod(ctx, sub.CustomerID)
+	stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
+	if err != nil {
+		s.Logger.Warnw("failed to get Stripe integration",
+			"error", err,
+			"subscription_id", sub.ID,
+		)
+		return ""
+	}
+
+	customerService := NewCustomerService(*s.ServiceParams)
+	defaultPaymentMethod, err := stripeIntegration.CustomerSvc.GetDefaultPaymentMethod(ctx, sub.CustomerID, customerService)
 	if err != nil {
 		s.Logger.Warnw("failed to get default payment method",
 			"error", err,
