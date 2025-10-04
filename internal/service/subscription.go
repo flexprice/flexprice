@@ -60,6 +60,7 @@ type SubscriptionService interface {
 	// Line item management
 	AddSubscriptionLineItem(ctx context.Context, subscriptionID string, req dto.CreateSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error)
 	DeleteSubscriptionLineItem(ctx context.Context, lineItemID string, req dto.DeleteSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error)
+	UpdateSubscriptionLineItem(ctx context.Context, lineItemID string, req dto.UpdateSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error)
 
 	// Auto-cancellation methods
 	ProcessAutoCancellationSubscriptions(ctx context.Context) error
@@ -494,6 +495,7 @@ func (s *subscriptionService) ProcessSubscriptionPriceOverrides(
 			MeterID:              originalPrice.MeterID,
 			Description:          originalPrice.Description,
 			Metadata:             originalPrice.Metadata,
+			ParentPriceID:        originalPrice.GetRootPriceID(), // Always point to the root price ID
 			SkipEntityValidation: true,
 		}
 
@@ -518,7 +520,6 @@ func (s *subscriptionService) ProcessSubscriptionPriceOverrides(
 			createPriceReq.TransformQuantity = &transformQuantity
 		}
 
-		// Apply overrides - handle all override fields
 
 		// Amount override
 		if override.Amount != nil {

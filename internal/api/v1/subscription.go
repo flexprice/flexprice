@@ -327,3 +327,43 @@ func (h *SubscriptionHandler) RemoveAddonToSubscription(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "addon removed from subscription successfully"})
 }
+
+// @Summary Update subscription line item
+// @Description Update a subscription line item by terminating the existing one and creating a new one
+// @Tags Subscriptions
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Line Item ID"
+// @Param request body dto.UpdateSubscriptionLineItemRequest true "Update Line Item Request"
+// @Success 200 {object} dto.SubscriptionLineItemResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /subscriptions/lineitems/{id} [put]
+func (h *SubscriptionHandler) UpdateSubscriptionLineItem(c *gin.Context) {
+	lineItemID := c.Param("id")
+	if lineItemID == "" {
+		c.Error(ierr.NewError("line item ID is required").
+			WithHint("Please provide a valid line item ID").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	var req dto.UpdateSubscriptionLineItemRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.log.Error("Failed to bind JSON", "error", err)
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.service.UpdateSubscriptionLineItem(c.Request.Context(), lineItemID, req)
+	if err != nil {
+		h.log.Error("Failed to update subscription line item", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}

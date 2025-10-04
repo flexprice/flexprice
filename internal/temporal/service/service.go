@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -12,7 +13,12 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
-// temporalService implements TemporalService
+var (
+	globalTemporalService TemporalService
+	globalTemporalOnce    sync.Once
+)
+
+// TemporalService provides a centralized interface for all Temporal operations
 type temporalService struct {
 	client        client.TemporalClient
 	workerManager worker.TemporalWorkerManager
@@ -26,6 +32,22 @@ func NewTemporalService(client client.TemporalClient, workerManager worker.Tempo
 		workerManager: workerManager,
 		logger:        logger,
 	}
+}
+
+// InitializeGlobalTemporalService initializes the global Temporal service instance
+func InitializeGlobalTemporalService(client client.TemporalClient, workerManager worker.TemporalWorkerManager, logger *logger.Logger) {
+	globalTemporalOnce.Do(func() {
+		globalTemporalService = NewTemporalService(client, workerManager, logger)
+	})
+}
+
+// GetGlobalTemporalService returns the global Temporal service instance
+func GetGlobalTemporalService() TemporalService {
+	if globalTemporalService == nil {
+		// Return a nil service - the ExecuteWorkflow method will handle this gracefully
+		return nil
+	}
+	return globalTemporalService
 }
 
 // Start implements TemporalService
@@ -280,6 +302,13 @@ func (s *temporalService) DescribeWorkflowExecution(ctx context.Context, workflo
 
 // ExecuteWorkflow implements the unified workflow execution method
 func (s *temporalService) ExecuteWorkflow(ctx context.Context, workflowType types.TemporalWorkflowType, params interface{}) (models.WorkflowRun, error) {
+	// Check if service is initialized
+	if s == nil {
+		return nil, errors.NewError("temporal service not initialized").
+			WithHint("Temporal service must be initialized before use").
+			Mark(errors.ErrInternal)
+	}
+
 	// Build input with context validation
 	input, err := s.buildWorkflowInput(ctx, workflowType, params)
 	if err != nil {

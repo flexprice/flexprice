@@ -844,7 +844,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 
 			// Verify collection method behavior
 			if tc.input.CollectionMethod != nil {
-				if *tc.input.CollectionMethod == types.CollectionMethodSendInvoice {
+				if *tc.input.CollectionMethod == types.CollectionMethodChargeAutomatically {
 					// charge_automatically should create active subscription when no invoice is created
 					// (usage-based plan with advance cadence doesn't create invoice at subscription time)
 					s.Equal(types.SubscriptionStatusActive, resp.SubscriptionStatus,
@@ -1336,7 +1336,7 @@ func (s *SubscriptionServiceSuite) TestCancelSubscription() {
 			Currency:           "usd",
 			EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
 			EntityID:           s.testData.plan.ID,
-			Type:               types.PRICE_TYPE_FIXED,
+			Type:               types.PRICE_TYPE_USAGE, // Changed from FIXED to USAGE
 			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 			BillingPeriodCount: 1,
 			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
@@ -1437,7 +1437,7 @@ func (s *SubscriptionServiceSuite) TestCancelSubscription() {
 			Currency:           "usd",
 			EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
 			EntityID:           s.testData.plan.ID,
-			Type:               types.PRICE_TYPE_FIXED,
+			Type:               types.PRICE_TYPE_USAGE, // Changed from FIXED to USAGE
 			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 			BillingPeriodCount: 1,
 			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
@@ -1540,7 +1540,7 @@ func (s *SubscriptionServiceSuite) TestCancelSubscription() {
 			Currency:           "usd",
 			EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
 			EntityID:           s.testData.plan.ID,
-			Type:               types.PRICE_TYPE_FIXED,
+			Type:               types.PRICE_TYPE_USAGE, // Changed from FIXED to USAGE
 			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 			BillingPeriodCount: 1,
 			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
@@ -2093,7 +2093,7 @@ func (s *SubscriptionServiceSuite) TestCancelSubscription() {
 			Currency:           "usd",
 			EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
 			EntityID:           s.testData.plan.ID,
-			Type:               types.PRICE_TYPE_FIXED,
+			Type:               types.PRICE_TYPE_USAGE, // Changed from FIXED to USAGE
 			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 			BillingPeriodCount: 1,
 			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
@@ -2428,7 +2428,7 @@ func (s *SubscriptionServiceSuite) TestCancelSubscription() {
 				Currency:           "usd",
 				EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
 				EntityID:           s.testData.plan.ID,
-				Type:               types.PRICE_TYPE_FIXED,
+				Type:               types.PRICE_TYPE_USAGE, // Changed from FIXED to USAGE
 				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 				BillingPeriodCount: 1,
 				BillingModel:       types.BILLING_MODEL_FLAT_FEE,
@@ -2443,7 +2443,7 @@ func (s *SubscriptionServiceSuite) TestCancelSubscription() {
 				Currency:           "usd",
 				EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
 				EntityID:           s.testData.plan.ID,
-				Type:               types.PRICE_TYPE_FIXED,
+				Type:               types.PRICE_TYPE_USAGE, // Changed from FIXED to USAGE
 				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 				BillingPeriodCount: 1,
 				BillingModel:       types.BILLING_MODEL_FLAT_FEE,
@@ -2797,7 +2797,7 @@ func (s *SubscriptionServiceSuite) TestCancelSubscription() {
 			Currency:           "usd",
 			EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
 			EntityID:           s.testData.plan.ID,
-			Type:               types.PRICE_TYPE_FIXED,
+			Type:               types.PRICE_TYPE_USAGE, // Changed from FIXED to USAGE
 			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 			BillingPeriodCount: 1,
 			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
@@ -4597,6 +4597,24 @@ func (s *SubscriptionServiceSuite) TestPriceOverrideIntegration() {
 	})
 }
 
+// Helper function to create a test meter
+func (s *SubscriptionServiceSuite) createTestMeter(id string, name string) *meter.Meter {
+	testMeter := &meter.Meter{
+		ID:        id,
+		Name:      name,
+		EventName: name,
+		Aggregation: meter.Aggregation{
+			Type:  types.AggregationSum,
+			Field: "value",
+		},
+		EnvironmentID: types.GetEnvironmentID(s.GetContext()),
+		BaseModel:     types.GetDefaultBaseModel(s.GetContext()),
+	}
+	err := s.GetStores().MeterRepo.CreateMeter(s.GetContext(), testMeter)
+	s.NoError(err)
+	return testMeter
+}
+
 func (s *SubscriptionServiceSuite) TestSyncPlanPrices_Line_Item_Management() {
 	s.Run("TC-SYNC-014_Existing_Line_Items_For_Active_Prices", func() {
 		// Clear stores to prevent data persistence between tests
@@ -4619,7 +4637,7 @@ func (s *SubscriptionServiceSuite) TestSyncPlanPrices_Line_Item_Management() {
 			Currency:           "usd",
 			EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
 			EntityID:           testPlan.ID,
-			Type:               types.PRICE_TYPE_FIXED,
+			Type:               types.PRICE_TYPE_USAGE, // Changed from FIXED to USAGE
 			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 			BillingPeriodCount: 1,
 			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
@@ -4708,12 +4726,15 @@ func (s *SubscriptionServiceSuite) TestSyncPlanPrices_Line_Item_Management() {
 		s.Equal(testPlan.ID, result.PlanID)
 		s.Equal(testPlan.Name, result.PlanName)
 		s.Equal(1, result.SynchronizationSummary.SubscriptionsProcessed)
-		s.Equal(0, result.SynchronizationSummary.PricesAdded) // Line item already exists
-		s.Equal(0, result.SynchronizationSummary.PricesRemoved)
-		s.Equal(1, result.SynchronizationSummary.PricesSkipped) // Price skipped as line item exists
+		s.Equal(0, result.SynchronizationSummary.LineItemsCreated) // Line item already exists
+		s.Equal(0, result.SynchronizationSummary.LineItemsTerminated)
+		s.Equal(1, result.SynchronizationSummary.LineItemsSkipped) // Price skipped as line item exists
 	})
 
 	s.Run("TC-SYNC-015_Existing_Line_Items_For_Expired_Prices", func() {
+		// Clear stores to prevent data persistence between tests
+		s.BaseServiceTestSuite.ClearStores()
+
 		// Create a plan with expired prices
 		testPlan := &plan.Plan{
 			ID:          "plan_015_unique_data",
@@ -4731,7 +4752,7 @@ func (s *SubscriptionServiceSuite) TestSyncPlanPrices_Line_Item_Management() {
 			Currency:           "usd",
 			EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
 			EntityID:           testPlan.ID,
-			Type:               types.PRICE_TYPE_FIXED,
+			Type:               types.PRICE_TYPE_USAGE, // Changed from FIXED to USAGE
 			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 			BillingPeriodCount: 1,
 			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
@@ -4811,12 +4832,15 @@ func (s *SubscriptionServiceSuite) TestSyncPlanPrices_Line_Item_Management() {
 		s.Equal(testPlan.ID, result.PlanID)
 		s.Equal(testPlan.Name, result.PlanName)
 		s.Equal(1, result.SynchronizationSummary.SubscriptionsProcessed)
-		s.Equal(0, result.SynchronizationSummary.PricesAdded)   // No active prices to add
-		s.Equal(0, result.SynchronizationSummary.PricesRemoved) // Line item should be ended
-		s.Equal(1, result.SynchronizationSummary.PricesSkipped) // Expired price skipped
+		s.Equal(0, result.SynchronizationSummary.LineItemsCreated)    // No active prices to add
+		s.Equal(0, result.SynchronizationSummary.LineItemsTerminated) // Line item should be ended
+		s.Equal(1, result.SynchronizationSummary.LineItemsSkipped)    // Expired price skipped
 	})
 
 	s.Run("TC-SYNC-016_Missing_Line_Items_For_Active_Prices", func() {
+		// Clear stores to prevent data persistence between tests
+		s.BaseServiceTestSuite.ClearStores()
+
 		// Create a plan with active prices
 		testPlan := &plan.Plan{
 			ID:          types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PLAN),
@@ -4834,7 +4858,7 @@ func (s *SubscriptionServiceSuite) TestSyncPlanPrices_Line_Item_Management() {
 			Currency:           "usd",
 			EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
 			EntityID:           testPlan.ID,
-			Type:               types.PRICE_TYPE_FIXED,
+			Type:               types.PRICE_TYPE_USAGE, // Changed from FIXED to USAGE
 			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 			BillingPeriodCount: 1,
 			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
@@ -4894,12 +4918,15 @@ func (s *SubscriptionServiceSuite) TestSyncPlanPrices_Line_Item_Management() {
 		s.Equal(testPlan.ID, result.PlanID)
 		s.Equal(testPlan.Name, result.PlanName)
 		s.Equal(1, result.SynchronizationSummary.SubscriptionsProcessed)
-		s.Equal(1, result.SynchronizationSummary.PricesAdded) // Line item created for active price
-		s.Equal(0, result.SynchronizationSummary.PricesRemoved)
-		s.Equal(0, result.SynchronizationSummary.PricesSkipped)
+		s.Equal(1, result.SynchronizationSummary.LineItemsCreated) // Line item created for active price
+		s.Equal(0, result.SynchronizationSummary.LineItemsTerminated)
+		s.Equal(0, result.SynchronizationSummary.LineItemsSkipped)
 	})
 
 	s.Run("TC-SYNC-017_Missing_Line_Items_For_Expired_Prices", func() {
+		// Clear stores to prevent data persistence between tests
+		s.BaseServiceTestSuite.ClearStores()
+
 		// Create a plan with expired prices
 		testPlan := &plan.Plan{
 			ID:          types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PLAN),
@@ -4917,7 +4944,7 @@ func (s *SubscriptionServiceSuite) TestSyncPlanPrices_Line_Item_Management() {
 			Currency:           "usd",
 			EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
 			EntityID:           testPlan.ID,
-			Type:               types.PRICE_TYPE_FIXED,
+			Type:               types.PRICE_TYPE_USAGE, // Changed from FIXED to USAGE
 			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 			BillingPeriodCount: 1,
 			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
@@ -4978,14 +5005,16 @@ func (s *SubscriptionServiceSuite) TestSyncPlanPrices_Line_Item_Management() {
 		s.Equal(testPlan.ID, result.PlanID)
 		s.Equal(testPlan.Name, result.PlanName)
 		s.Equal(1, result.SynchronizationSummary.SubscriptionsProcessed)
-		s.Equal(0, result.SynchronizationSummary.PricesAdded) // No line items created for expired price
-		s.Equal(0, result.SynchronizationSummary.PricesRemoved)
-		s.Equal(1, result.SynchronizationSummary.PricesSkipped) // Expired price skipped
+		s.Equal(0, result.SynchronizationSummary.LineItemsCreated) // No line items created for expired price
+		s.Equal(0, result.SynchronizationSummary.LineItemsTerminated)
+		s.Equal(1, result.SynchronizationSummary.LineItemsSkipped) // Expired price skipped
 	})
 }
 
 func (s *SubscriptionServiceSuite) TestSyncPlanPrices_Addon_Handling() {
 	s.Run("TC-SYNC-018_Subscription_With_Addon_Line_Items_Unique", func() {
+		// Clear stores to prevent data persistence between tests
+		s.BaseServiceTestSuite.ClearStores()
 
 		// TEST 018: Create a plan with prices
 		testPlan := &plan.Plan{
@@ -5015,7 +5044,7 @@ func (s *SubscriptionServiceSuite) TestSyncPlanPrices_Addon_Handling() {
 			Currency:           "usd",
 			EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
 			EntityID:           testPlan.ID,
-			Type:               types.PRICE_TYPE_FIXED,
+			Type:               types.PRICE_TYPE_USAGE, // Changed from FIXED to USAGE
 			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 			BillingPeriodCount: 1,
 			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
@@ -5128,9 +5157,9 @@ func (s *SubscriptionServiceSuite) TestSyncPlanPrices_Addon_Handling() {
 		s.Equal(testPlan.ID, result.PlanID)
 		s.Equal(testPlan.Name, result.PlanName)
 		s.Equal(1, result.SynchronizationSummary.SubscriptionsProcessed)
-		s.Equal(0, result.SynchronizationSummary.PricesAdded) // No plan prices to add
-		s.Equal(0, result.SynchronizationSummary.PricesRemoved)
-		s.Equal(1, result.SynchronizationSummary.PricesSkipped) // Plan price skipped as line item exists
+		s.Equal(0, result.SynchronizationSummary.LineItemsCreated) // No plan prices to add
+		s.Equal(0, result.SynchronizationSummary.LineItemsTerminated)
+		s.Equal(1, result.SynchronizationSummary.LineItemsSkipped) // Plan price skipped as line item exists
 	})
 
 	s.Run("TC-SYNC-019_Addon_Line_Items_With_Entity_Type_Addon", func() {
@@ -5154,7 +5183,7 @@ func (s *SubscriptionServiceSuite) TestSyncPlanPrices_Addon_Handling() {
 			Currency:           "usd",
 			EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
 			EntityID:           testPlan.ID,
-			Type:               types.PRICE_TYPE_FIXED,
+			Type:               types.PRICE_TYPE_USAGE, // Changed from FIXED to USAGE
 			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 			BillingPeriodCount: 1,
 			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
@@ -5265,9 +5294,9 @@ func (s *SubscriptionServiceSuite) TestSyncPlanPrices_Addon_Handling() {
 		s.Equal(testPlan.ID, result.PlanID)
 		s.Equal(testPlan.Name, result.PlanName)
 		s.Equal(1, result.SynchronizationSummary.SubscriptionsProcessed)
-		s.Equal(0, result.SynchronizationSummary.PricesAdded) // No plan prices to add
-		s.Equal(0, result.SynchronizationSummary.PricesRemoved)
-		s.Equal(1, result.SynchronizationSummary.PricesSkipped) // Plan price skipped as line item exists
+		s.Equal(0, result.SynchronizationSummary.LineItemsCreated) // No plan prices to add
+		s.Equal(0, result.SynchronizationSummary.LineItemsTerminated)
+		s.Equal(1, result.SynchronizationSummary.LineItemsSkipped) // Plan price skipped as line item exists
 	})
 
 	s.Run("TC-SYNC-020_Mixed_Plan_And_Addon_Line_Items", func() {
@@ -5291,7 +5320,7 @@ func (s *SubscriptionServiceSuite) TestSyncPlanPrices_Addon_Handling() {
 			Currency:           "usd",
 			EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
 			EntityID:           testPlan.ID,
-			Type:               types.PRICE_TYPE_FIXED,
+			Type:               types.PRICE_TYPE_USAGE, // Changed from FIXED to USAGE
 			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 			BillingPeriodCount: 1,
 			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
@@ -5393,9 +5422,9 @@ func (s *SubscriptionServiceSuite) TestSyncPlanPrices_Addon_Handling() {
 		s.Equal(testPlan.ID, result.PlanID)
 		s.Equal(testPlan.Name, result.PlanName)
 		s.Equal(1, result.SynchronizationSummary.SubscriptionsProcessed)
-		s.Equal(0, result.SynchronizationSummary.PricesAdded) // Plan price already has line item
-		s.Equal(0, result.SynchronizationSummary.PricesRemoved)
-		s.Equal(1, result.SynchronizationSummary.PricesSkipped) // Plan price skipped as line item exists
+		s.Equal(0, result.SynchronizationSummary.LineItemsCreated) // Plan price already has line item
+		s.Equal(0, result.SynchronizationSummary.LineItemsTerminated)
+		s.Equal(1, result.SynchronizationSummary.LineItemsSkipped) // Plan price skipped as line item exists
 	})
 }
 
@@ -5414,6 +5443,9 @@ func (s *SubscriptionServiceSuite) TestSyncPlanPrices_Timing_And_Edge_Cases() {
 		err := s.GetStores().PlanRepo.Create(s.GetContext(), testPlan)
 		s.NoError(err)
 
+		// Create a test meter for usage prices
+		testMeter := s.createTestMeter("meter_029", "Test Meter 029")
+
 		// Create expired price
 		expiredPrice := &price.Price{
 			ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
@@ -5421,7 +5453,8 @@ func (s *SubscriptionServiceSuite) TestSyncPlanPrices_Timing_And_Edge_Cases() {
 			Currency:           "usd",
 			EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
 			EntityID:           testPlan.ID,
-			Type:               types.PRICE_TYPE_FIXED,
+			Type:               types.PRICE_TYPE_USAGE, // Changed from FIXED to USAGE
+			MeterID:            testMeter.ID,
 			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 			BillingPeriodCount: 1,
 			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
@@ -5502,9 +5535,9 @@ func (s *SubscriptionServiceSuite) TestSyncPlanPrices_Timing_And_Edge_Cases() {
 		s.Equal(testPlan.ID, result.PlanID)
 		s.Equal(testPlan.Name, result.PlanName)
 		s.Equal(1, result.SynchronizationSummary.SubscriptionsProcessed)
-		s.Equal(0, result.SynchronizationSummary.PricesAdded)   // No active prices to add
-		s.Equal(0, result.SynchronizationSummary.PricesRemoved) // Past line item should be ended
-		s.Equal(1, result.SynchronizationSummary.PricesSkipped) // Expired price skipped
+		s.Equal(0, result.SynchronizationSummary.LineItemsCreated)    // No active prices to add
+		s.Equal(0, result.SynchronizationSummary.LineItemsTerminated) // Past line item should be ended
+		s.Equal(1, result.SynchronizationSummary.LineItemsSkipped)    // Expired price skipped
 	})
 
 	s.Run("TC-SYNC-030_Current_Period_Start_vs_Line_Item_End_Date", func() {
@@ -5521,6 +5554,9 @@ func (s *SubscriptionServiceSuite) TestSyncPlanPrices_Timing_And_Edge_Cases() {
 		err := s.GetStores().PlanRepo.Create(s.GetContext(), testPlan)
 		s.NoError(err)
 
+		// Create a test meter for usage prices
+		testMeter := s.createTestMeter("meter_030", "Test Meter 030")
+
 		// Create price
 		testPrice := &price.Price{
 			ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
@@ -5528,7 +5564,8 @@ func (s *SubscriptionServiceSuite) TestSyncPlanPrices_Timing_And_Edge_Cases() {
 			Currency:           "usd",
 			EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
 			EntityID:           testPlan.ID,
-			Type:               types.PRICE_TYPE_FIXED,
+			Type:               types.PRICE_TYPE_USAGE, // Changed from FIXED to USAGE
+			MeterID:            testMeter.ID,
 			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 			BillingPeriodCount: 1,
 			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
@@ -5590,458 +5627,8 @@ func (s *SubscriptionServiceSuite) TestSyncPlanPrices_Timing_And_Edge_Cases() {
 		s.Equal(testPlan.ID, result.PlanID)
 		s.Equal(testPlan.Name, result.PlanName)
 		s.Equal(1, result.SynchronizationSummary.SubscriptionsProcessed)
-		s.Equal(1, result.SynchronizationSummary.PricesAdded) // Line item created for active price
-		s.Equal(0, result.SynchronizationSummary.PricesRemoved)
-		s.Equal(0, result.SynchronizationSummary.PricesSkipped)
+		s.Equal(1, result.SynchronizationSummary.LineItemsCreated) // Line item created for active price
+		s.Equal(0, result.SynchronizationSummary.LineItemsTerminated)
+		s.Equal(0, result.SynchronizationSummary.LineItemsSkipped)
 	})
 }
-
-// // TestCreateSubscriptionWithProration tests proration during subscription creation
-// func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithProration() {
-// 	// Create a fixed-fee price for testing proration
-// 	fixedPrice := &price.Price{
-// 		ID:                 "price_fixed_monthly",
-// 		Amount:             decimal.NewFromFloat(100), // $100/month
-// 		Currency:           "usd",
-// 		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
-// 		EntityID:           s.testData.plan.ID,
-// 		Type:               types.PRICE_TYPE_FIXED,
-// 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
-// 		BillingPeriodCount: 1,
-// 		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
-// 		BillingCadence:     types.BILLING_CADENCE_RECURRING,
-// 		InvoiceCadence:     types.InvoiceCadenceAdvance,
-// 		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
-// 	}
-// 	s.NoError(s.GetStores().PriceRepo.Create(s.GetContext(), fixedPrice))
-
-// 	tests := []struct {
-// 		name             string
-// 		billingCycle     types.BillingCycle
-// 		prorationMode    types.ProrationMode
-// 		startDate        time.Time
-// 		expectProration  bool
-// 		description      string
-// 		expectedAnchor   *time.Time
-// 		customerTimezone string
-// 	}{
-// 		{
-// 			name:             "anniversary_billing_no_proration",
-// 			billingCycle:     types.BillingCycleAnniversary,
-// 			prorationMode:    types.ProrationModeActive,
-// 			startDate:        time.Now().UTC(), // Current time
-// 			expectProration:  false,
-// 			description:      "Anniversary billing should not apply proration even with active proration mode",
-// 			customerTimezone: "UTC",
-// 		},
-// 		{
-// 			name:             "calendar_billing_proration_disabled",
-// 			billingCycle:     types.BillingCycleCalendar,
-// 			prorationMode:    types.ProrationModeNone,
-// 			startDate:        time.Now().UTC(), // Current time
-// 			expectProration:  false,
-// 			description:      "Calendar billing with disabled proration should not apply proration",
-// 			customerTimezone: "UTC",
-// 		},
-// 		{
-// 			name:             "calendar_billing_with_proration_mid_month",
-// 			billingCycle:     types.BillingCycleCalendar,
-// 			prorationMode:    types.ProrationModeActive,
-// 			startDate:        time.Now().UTC(), // Current time
-// 			expectProration:  true,
-// 			description:      "Calendar billing with active proration should apply proration",
-// 			customerTimezone: "UTC",
-// 		},
-// 		{
-// 			name:            "calendar_billing_with_proration_start_of_next_month",
-// 			billingCycle:    types.BillingCycleCalendar,
-// 			prorationMode:   types.ProrationModeActive,
-// 			startDate:       time.Date(time.Now().Year(), time.Now().Month()+1, 1, 0, 0, 0, 0, time.UTC), // Start of next month
-// 			expectProration: false,                                                                       // No proration needed at start of period
-// 			description:     "Calendar billing at start of month should not need proration",
-// 			// expectedAnchor will be calculated dynamically in the test
-// 			customerTimezone: "UTC",
-// 		},
-// 		{
-// 			name:            "calendar_billing_with_timezone_proration",
-// 			billingCycle:    types.BillingCycleCalendar,
-// 			prorationMode:   types.ProrationModeActive,
-// 			startDate:       time.Now().UTC(), // Current time
-// 			expectProration: true,
-// 			description:     "Calendar billing with timezone should apply proration correctly",
-// 			// expectedAnchor will be calculated dynamically in the test
-// 			customerTimezone: "America/New_York",
-// 		},
-// 		{
-// 			name:            "calendar_billing_end_of_month",
-// 			billingCycle:    types.BillingCycleCalendar,
-// 			prorationMode:   types.ProrationModeActive,
-// 			startDate:       time.Now().UTC(), // Current time
-// 			expectProration: true,
-// 			description:     "Calendar billing should apply proration",
-// 			// expectedAnchor will be calculated dynamically in the test
-// 			customerTimezone: "UTC",
-// 		},
-// 	}
-
-// 	for _, tt := range tests {
-// 		s.Run(tt.name, func() {
-// 			// Create subscription request
-// 			req := dto.CreateSubscriptionRequest{
-// 				CustomerID:         s.testData.customer.ID,
-// 				PlanID:             s.testData.plan.ID,
-// 				StartDate:          lo.ToPtr(tt.startDate),
-// 				Currency:           "usd",
-// 				BillingCadence:     types.BILLING_CADENCE_RECURRING,
-// 				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
-// 				BillingPeriodCount: 1,
-// 				BillingCycle:       tt.billingCycle,
-// 				ProrationMode:      tt.prorationMode,
-// 				CustomerTimezone:   tt.customerTimezone,
-// 			}
-
-// 			// Create subscription
-// 			resp, err := s.service.CreateSubscription(s.GetContext(), req)
-// 			s.NoError(err, "Failed to create subscription: %s", tt.description)
-// 			s.NotNil(resp, "Subscription response should not be nil")
-
-// 			// Verify basic subscription properties
-// 			s.Equal(tt.billingCycle, resp.BillingCycle, "Billing cycle should match")
-// 			s.Equal(tt.prorationMode, resp.ProrationMode, "Proration mode should match")
-// 			s.Equal(tt.startDate.UTC(), resp.StartDate.UTC(), "Start date should match")
-// 			s.Equal(tt.customerTimezone, resp.CustomerTimezone, "Customer timezone should match")
-
-// 			// Billing anchor verification is done in the billing behavior section below
-
-// 			// Verify billing behavior
-// 			if tt.billingCycle == types.BillingCycleCalendar {
-// 				// For calendar billing (regardless of proration mode), verify the billing anchor is calculated correctly
-// 				expectedAnchor := types.CalculateCalendarBillingAnchor(tt.startDate, types.BILLING_PERIOD_MONTHLY)
-// 				s.Equal(expectedAnchor.UTC(), resp.BillingAnchor.UTC(), "Calendar billing anchor should be calculated correctly")
-
-// 				// Verify current period is calculated correctly
-// 				s.Equal(tt.startDate.UTC(), resp.CurrentPeriodStart.UTC(), "Current period start should match start date")
-
-// 				// For calendar billing, the period end should be calculated from the anchor
-// 				nextBilling, err := types.NextBillingDate(resp.CurrentPeriodStart, resp.BillingAnchor, resp.BillingPeriodCount, resp.BillingPeriod, resp.EndDate)
-// 				s.NoError(err, "Should calculate next billing date correctly")
-// 				s.Equal(nextBilling.UTC(), resp.CurrentPeriodEnd.UTC(), "Current period end should match calculated next billing date")
-// 			} else {
-// 				// For anniversary billing, anchor should match start date
-// 				s.Equal(tt.startDate.UTC(), resp.BillingAnchor.UTC(), "Anniversary billing anchor should match start date")
-// 			}
-
-// 			s.T().Logf("Test %s: BillingCycle=%s, ProrationMode=%s, StartDate=%v, BillingAnchor=%v, Description=%s",
-// 				tt.name, tt.billingCycle, tt.prorationMode, tt.startDate, resp.BillingAnchor, tt.description)
-// 		})
-// 	}
-// }
-
-// // TestProrationCalculationDuringSubscriptionCreation tests the actual proration calculation
-// func (s *SubscriptionServiceSuite) TestProrationCalculationDuringSubscriptionCreation() {
-// 	// Create fixed-fee prices for testing proration
-// 	monthlyFixedPrice := &price.Price{
-// 		ID:                 "price_fixed_monthly_proration",
-// 		Amount:             decimal.NewFromFloat(120), // $120/month = $4/day
-// 		Currency:           "usd",
-// 		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
-// 		EntityID:           s.testData.plan.ID,
-// 		Type:               types.PRICE_TYPE_FIXED,
-// 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
-// 		BillingPeriodCount: 1,
-// 		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
-// 		BillingCadence:     types.BILLING_CADENCE_RECURRING,
-// 		InvoiceCadence:     types.InvoiceCadenceAdvance, // Important: advance billing for proration
-// 		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
-// 	}
-// 	s.NoError(s.GetStores().PriceRepo.Create(s.GetContext(), monthlyFixedPrice))
-
-// 	tests := []struct {
-// 		name                 string
-// 		startDate            time.Time
-// 		expectedPeriodStart  time.Time
-// 		expectedPeriodEnd    time.Time
-// 		expectedProrationPct float64 // Expected percentage of full month
-// 		description          string
-// 		customerTimezone     string
-// 	}{
-// 		{
-// 			name:                 "current_time_start",
-// 			startDate:            time.Now().UTC(), // Current time
-// 			expectedPeriodStart:  time.Now().UTC(),
-// 			expectedProrationPct: 0.5, // Approximate - will vary based on current date
-// 			description:          "Current time start should be prorated for remaining days",
-// 			customerTimezone:     "UTC",
-// 		},
-// 		{
-// 			name:                 "future_start_5_days",
-// 			startDate:            time.Now().UTC().AddDate(0, 0, 5), // 5 days in the future
-// 			expectedPeriodStart:  time.Now().UTC().AddDate(0, 0, 5),
-// 			expectedProrationPct: 0.8, // Approximate - most of month remaining
-// 			description:          "Future start should be prorated for most of remaining days",
-// 			customerTimezone:     "UTC",
-// 		},
-// 		{
-// 			name:                 "month_start_next_month",
-// 			startDate:            time.Now().UTC().AddDate(0, 1, 0).Truncate(24 * time.Hour), // Start of next month
-// 			expectedPeriodStart:  time.Now().UTC().AddDate(0, 1, 0).Truncate(24 * time.Hour),
-// 			expectedProrationPct: 1.0, // Full month
-// 			description:          "Month start should not need proration",
-// 			customerTimezone:     "UTC",
-// 		},
-// 		{
-// 			name:                 "timezone_aware_proration",
-// 			startDate:            time.Now().UTC(), // Current time
-// 			expectedPeriodStart:  time.Now().UTC(),
-// 			expectedProrationPct: 0.7, // Approximate - varies based on current date
-// 			description:          "Timezone should be considered in proration calculation",
-// 			customerTimezone:     "America/New_York",
-// 		},
-// 	}
-
-// 	for _, tt := range tests {
-// 		s.Run(tt.name, func() {
-// 			// Create subscription with calendar billing and active proration
-// 			req := dto.CreateSubscriptionRequest{
-// 				CustomerID:         s.testData.customer.ID,
-// 				PlanID:             s.testData.plan.ID,
-// 				StartDate:          lo.ToPtr(tt.startDate),
-// 				Currency:           "usd",
-// 				BillingCadence:     types.BILLING_CADENCE_RECURRING,
-// 				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
-// 				BillingPeriodCount: 1,
-// 				BillingCycle:       types.BillingCycleCalendar,
-// 				ProrationMode:      types.ProrationModeActive,
-// 				CustomerTimezone:   tt.customerTimezone,
-// 			}
-
-// 			// Create subscription
-// 			resp, err := s.service.CreateSubscription(s.GetContext(), req)
-// 			s.NoError(err, "Failed to create subscription: %s", tt.description)
-// 			s.NotNil(resp, "Subscription response should not be nil")
-
-// 			// Verify billing periods are set correctly
-// 			s.Equal(tt.expectedPeriodStart.UTC(), resp.CurrentPeriodStart.UTC(), "Period start should match expected")
-
-// 			// Verify calendar billing anchor
-// 			expectedAnchor := types.CalculateCalendarBillingAnchor(tt.startDate, types.BILLING_PERIOD_MONTHLY)
-// 			s.Equal(expectedAnchor.UTC(), resp.BillingAnchor.UTC(), "Calendar billing anchor should be calculated correctly")
-
-// 			// Verify subscription was created with correct proration settings
-// 			s.Equal(types.BillingCycleCalendar, resp.BillingCycle, "Should use calendar billing")
-// 			s.Equal(types.ProrationModeActive, resp.ProrationMode, "Should have active proration")
-// 			s.Equal(tt.customerTimezone, resp.CustomerTimezone, "Should preserve customer timezone")
-
-// 			s.T().Logf("Test %s: StartDate=%v, PeriodStart=%v, PeriodEnd=%v, BillingAnchor=%v, ExpectedProration=%.2f%%, Description=%s",
-// 				tt.name, tt.startDate, resp.CurrentPeriodStart, resp.CurrentPeriodEnd, resp.BillingAnchor, tt.expectedProrationPct*100, tt.description)
-// 		})
-// 	}
-// }
-
-// // TestProrationWithDifferentPriceTypes tests proration behavior with different price types
-// func (s *SubscriptionServiceSuite) TestProrationWithDifferentPriceTypes() {
-// 	// Create different types of prices
-// 	fixedFeePrice := &price.Price{
-// 		ID:                 "price_fixed_fee_proration_test",
-// 		Amount:             decimal.NewFromFloat(60), // $60/month
-// 		Currency:           "usd",
-// 		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
-// 		EntityID:           s.testData.plan.ID,
-// 		Type:               types.PRICE_TYPE_FIXED,
-// 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
-// 		BillingPeriodCount: 1,
-// 		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
-// 		BillingCadence:     types.BILLING_CADENCE_RECURRING,
-// 		InvoiceCadence:     types.InvoiceCadenceAdvance,
-// 		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
-// 	}
-// 	s.NoError(s.GetStores().PriceRepo.Create(s.GetContext(), fixedFeePrice))
-
-// 	// Usage-based price should NOT be prorated
-// 	usagePrice := &price.Price{
-// 		ID:                 "price_usage_no_proration_test",
-// 		Amount:             decimal.NewFromFloat(0.10), // $0.10 per unit
-// 		Currency:           "usd",
-// 		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
-// 		EntityID:           s.testData.plan.ID,
-// 		Type:               types.PRICE_TYPE_USAGE,
-// 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
-// 		BillingPeriodCount: 1,
-// 		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
-// 		BillingCadence:     types.BILLING_CADENCE_RECURRING,
-// 		InvoiceCadence:     types.InvoiceCadenceAdvance,
-// 		MeterID:            s.testData.meters.apiCalls.ID,
-// 		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
-// 	}
-// 	s.NoError(s.GetStores().PriceRepo.Create(s.GetContext(), usagePrice))
-
-// 	tests := []struct {
-// 		name          string
-// 		priceType     types.PriceType
-// 		shouldProrate bool
-// 		description   string
-// 	}{
-// 		{
-// 			name:          "fixed_fee_should_be_prorated",
-// 			priceType:     types.PRICE_TYPE_FIXED,
-// 			shouldProrate: true,
-// 			description:   "Fixed fee prices should be prorated in calendar billing",
-// 		},
-// 		{
-// 			name:          "usage_price_should_not_be_prorated",
-// 			priceType:     types.PRICE_TYPE_USAGE,
-// 			shouldProrate: false,
-// 			description:   "Usage-based prices should not be prorated as they are calculated for actual usage",
-// 		},
-// 	}
-
-// 	startDate := time.Now().UTC() // Current time
-
-// 	for _, tt := range tests {
-// 		s.Run(tt.name, func() {
-// 			// Create subscription with calendar billing and active proration
-// 			req := dto.CreateSubscriptionRequest{
-// 				CustomerID:         s.testData.customer.ID,
-// 				PlanID:             s.testData.plan.ID,
-// 				StartDate:          lo.ToPtr(startDate),
-// 				Currency:           "usd",
-// 				BillingCadence:     types.BILLING_CADENCE_RECURRING,
-// 				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
-// 				BillingPeriodCount: 1,
-// 				BillingCycle:       types.BillingCycleCalendar,
-// 				ProrationMode:      types.ProrationModeActive,
-// 				CustomerTimezone:   "UTC",
-// 			}
-
-// 			// Create subscription
-// 			resp, err := s.service.CreateSubscription(s.GetContext(), req)
-// 			s.NoError(err, "Failed to create subscription: %s", tt.description)
-// 			s.NotNil(resp, "Subscription response should not be nil")
-
-// 			// Verify subscription settings
-// 			s.Equal(types.BillingCycleCalendar, resp.BillingCycle, "Should use calendar billing")
-// 			s.Equal(types.ProrationModeActive, resp.ProrationMode, "Should have active proration")
-
-// 			// Verify calendar billing anchor is calculated correctly
-// 			expectedAnchor := types.CalculateCalendarBillingAnchor(startDate, types.BILLING_PERIOD_MONTHLY)
-// 			s.Equal(expectedAnchor.UTC(), resp.BillingAnchor.UTC(), "Calendar billing anchor should be calculated correctly")
-
-// 			// For this test, we're primarily verifying that the subscription is created correctly
-// 			// The actual proration logic is tested in the billing service tests
-// 			// Here we verify that the subscription has the correct setup for proration to work
-
-// 			s.T().Logf("Test %s: PriceType=%s, ShouldProrate=%v, BillingAnchor=%v, Description=%s",
-// 				tt.name, tt.priceType, tt.shouldProrate, resp.BillingAnchor, tt.description)
-// 		})
-// 	}
-// }
-
-// // TestProrationWithDifferentBillingPeriods tests proration with different billing periods
-// func (s *SubscriptionServiceSuite) TestProrationWithDifferentBillingPeriods() {
-// 	// Create prices for different billing periods
-// 	monthlyPrice := &price.Price{
-// 		ID:                 "price_monthly_proration_test",
-// 		Amount:             decimal.NewFromFloat(30), // $30/month
-// 		Currency:           "usd",
-// 		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
-// 		EntityID:           s.testData.plan.ID,
-// 		Type:               types.PRICE_TYPE_FIXED,
-// 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
-// 		BillingPeriodCount: 1,
-// 		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
-// 		BillingCadence:     types.BILLING_CADENCE_RECURRING,
-// 		InvoiceCadence:     types.InvoiceCadenceAdvance,
-// 		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
-// 	}
-// 	s.NoError(s.GetStores().PriceRepo.Create(s.GetContext(), monthlyPrice))
-
-// 	annualPrice := &price.Price{
-// 		ID:                 "price_annual_proration_test",
-// 		Amount:             decimal.NewFromFloat(300), // $300/year
-// 		Currency:           "usd",
-// 		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
-// 		EntityID:           s.testData.plan.ID,
-// 		Type:               types.PRICE_TYPE_FIXED,
-// 		BillingPeriod:      types.BILLING_PERIOD_ANNUAL,
-// 		BillingPeriodCount: 1,
-// 		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
-// 		BillingCadence:     types.BILLING_CADENCE_RECURRING,
-// 		InvoiceCadence:     types.InvoiceCadenceAdvance,
-// 		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
-// 	}
-// 	s.NoError(s.GetStores().PriceRepo.Create(s.GetContext(), annualPrice))
-
-// 	tests := []struct {
-// 		name          string
-// 		billingPeriod types.BillingPeriod
-// 		startDate     time.Time
-// 		description   string
-// 	}{
-// 		{
-// 			name:          "monthly_billing_current_time",
-// 			billingPeriod: types.BILLING_PERIOD_MONTHLY,
-// 			startDate:     time.Now().UTC(), // Current time
-// 			description:   "Monthly billing should prorate for partial month",
-// 		},
-// 		{
-// 			name:          "annual_billing_current_time",
-// 			billingPeriod: types.BILLING_PERIOD_ANNUAL,
-// 			startDate:     time.Now().UTC(), // Current time
-// 			description:   "Annual billing should prorate for partial year",
-// 		},
-// 		{
-// 			name:          "monthly_billing_start_of_next_month",
-// 			billingPeriod: types.BILLING_PERIOD_MONTHLY,
-// 			startDate:     time.Date(time.Now().Year(), time.Now().Month()+1, 1, 0, 0, 0, 0, time.UTC), // Start of next month
-// 			description:   "Monthly billing at month start should not need proration",
-// 		},
-// 		{
-// 			name:          "annual_billing_future_start",
-// 			billingPeriod: types.BILLING_PERIOD_ANNUAL,
-// 			startDate:     time.Now().UTC().AddDate(0, 0, 10), // 10 days in the future
-// 			description:   "Annual billing should prorate for partial year",
-// 		},
-// 	}
-
-// 	for _, tt := range tests {
-// 		s.Run(tt.name, func() {
-// 			// Create subscription with calendar billing and active proration
-// 			req := dto.CreateSubscriptionRequest{
-// 				CustomerID:         s.testData.customer.ID,
-// 				PlanID:             s.testData.plan.ID,
-// 				StartDate:          lo.ToPtr(tt.startDate),
-// 				Currency:           "usd",
-// 				BillingCadence:     types.BILLING_CADENCE_RECURRING,
-// 				BillingPeriod:      tt.billingPeriod,
-// 				BillingPeriodCount: 1,
-// 				BillingCycle:       types.BillingCycleCalendar,
-// 				ProrationMode:      types.ProrationModeActive,
-// 				CustomerTimezone:   "UTC",
-// 			}
-
-// 			// Create subscription
-// 			resp, err := s.service.CreateSubscription(s.GetContext(), req)
-// 			s.NoError(err, "Failed to create subscription: %s", tt.description)
-// 			s.NotNil(resp, "Subscription response should not be nil")
-
-// 			// Verify subscription properties
-// 			s.Equal(tt.billingPeriod, resp.BillingPeriod, "Billing period should match")
-// 			s.Equal(types.BillingCycleCalendar, resp.BillingCycle, "Should use calendar billing")
-// 			s.Equal(types.ProrationModeActive, resp.ProrationMode, "Should have active proration")
-
-// 			// Verify billing anchor calculation
-// 			expectedAnchor := types.CalculateCalendarBillingAnchor(tt.startDate, tt.billingPeriod)
-// 			s.Equal(expectedAnchor.UTC(), resp.BillingAnchor.UTC(), "Calendar billing anchor should be calculated correctly")
-
-// 			// Verify period calculations
-// 			s.Equal(tt.startDate.UTC(), resp.CurrentPeriodStart.UTC(), "Current period start should match start date")
-
-// 			nextBilling, err := types.NextBillingDate(resp.CurrentPeriodStart, resp.BillingAnchor, resp.BillingPeriodCount, resp.BillingPeriod, resp.EndDate)
-// 			s.NoError(err, "Should calculate next billing date correctly")
-// 			s.Equal(nextBilling.UTC(), resp.CurrentPeriodEnd.UTC(), "Current period end should match calculated next billing date")
-
-// 			s.T().Logf("Test %s: BillingPeriod=%s, StartDate=%v, BillingAnchor=%v, PeriodEnd=%v, Description=%s",
-// 				tt.name, tt.billingPeriod, tt.startDate, resp.BillingAnchor, resp.CurrentPeriodEnd, tt.description)
-// 		})
-// 	}
-// }
