@@ -55,7 +55,7 @@ func (r *featureRepository) Create(ctx context.Context, f *domainFeature.Feature
 		f.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
 
-	feature, err := client.Feature.Create().
+	createQuery := client.Feature.Create().
 		SetID(f.ID).
 		SetName(f.Name).
 		SetType(string(f.Type)).
@@ -71,8 +71,14 @@ func (r *featureRepository) Create(ctx context.Context, f *domainFeature.Feature
 		SetUpdatedAt(f.UpdatedAt).
 		SetCreatedBy(f.CreatedBy).
 		SetUpdatedBy(f.UpdatedBy).
-		SetEnvironmentID(f.EnvironmentID).
-		Save(ctx)
+		SetEnvironmentID(f.EnvironmentID)
+
+	// Set alert settings if provided
+	if f.AlertSettings != nil {
+		createQuery = createQuery.SetAlertSettings(*f.AlertSettings)
+	}
+
+	feature, err := createQuery.Save(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
@@ -252,7 +258,7 @@ func (r *featureRepository) Update(ctx context.Context, f *domainFeature.Feature
 	})
 	defer FinishSpan(span)
 
-	_, err := client.Feature.Update().
+	updateQuery := client.Feature.Update().
 		Where(
 			feature.ID(f.ID),
 			feature.TenantID(f.TenantID),
@@ -266,8 +272,14 @@ func (r *featureRepository) Update(ctx context.Context, f *domainFeature.Feature
 		SetMetadata(map[string]string(f.Metadata)).
 		SetMeterID(f.MeterID).
 		SetUpdatedAt(time.Now().UTC()).
-		SetUpdatedBy(types.GetUserID(ctx)).
-		Save(ctx)
+		SetUpdatedBy(types.GetUserID(ctx))
+
+	// Set alert settings if provided
+	if f.AlertSettings != nil {
+		updateQuery = updateQuery.SetAlertSettings(*f.AlertSettings)
+	}
+
+	_, err := updateQuery.Save(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)

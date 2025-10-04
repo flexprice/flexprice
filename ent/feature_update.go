@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/feature"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // FeatureUpdate is the builder for updating Feature entities.
@@ -174,6 +175,26 @@ func (fu *FeatureUpdate) ClearUnitPlural() *FeatureUpdate {
 	return fu
 }
 
+// SetAlertSettings sets the "alert_settings" field.
+func (fu *FeatureUpdate) SetAlertSettings(tas types.FeatureAlertSettings) *FeatureUpdate {
+	fu.mutation.SetAlertSettings(tas)
+	return fu
+}
+
+// SetNillableAlertSettings sets the "alert_settings" field if the given value is not nil.
+func (fu *FeatureUpdate) SetNillableAlertSettings(tas *types.FeatureAlertSettings) *FeatureUpdate {
+	if tas != nil {
+		fu.SetAlertSettings(*tas)
+	}
+	return fu
+}
+
+// ClearAlertSettings clears the value of the "alert_settings" field.
+func (fu *FeatureUpdate) ClearAlertSettings() *FeatureUpdate {
+	fu.mutation.ClearAlertSettings()
+	return fu
+}
+
 // Mutation returns the FeatureMutation object of the builder.
 func (fu *FeatureUpdate) Mutation() *FeatureMutation {
 	return fu.mutation
@@ -220,6 +241,11 @@ func (fu *FeatureUpdate) check() error {
 	if v, ok := fu.mutation.Name(); ok {
 		if err := feature.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Feature.name": %w`, err)}
+		}
+	}
+	if v, ok := fu.mutation.AlertSettings(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "alert_settings", err: fmt.Errorf(`ent: validator failed for field "Feature.alert_settings": %w`, err)}
 		}
 	}
 	return nil
@@ -287,6 +313,12 @@ func (fu *FeatureUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if fu.mutation.UnitPluralCleared() {
 		_spec.ClearField(feature.FieldUnitPlural, field.TypeString)
+	}
+	if value, ok := fu.mutation.AlertSettings(); ok {
+		_spec.SetField(feature.FieldAlertSettings, field.TypeJSON, value)
+	}
+	if fu.mutation.AlertSettingsCleared() {
+		_spec.ClearField(feature.FieldAlertSettings, field.TypeJSON)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, fu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -454,6 +486,26 @@ func (fuo *FeatureUpdateOne) ClearUnitPlural() *FeatureUpdateOne {
 	return fuo
 }
 
+// SetAlertSettings sets the "alert_settings" field.
+func (fuo *FeatureUpdateOne) SetAlertSettings(tas types.FeatureAlertSettings) *FeatureUpdateOne {
+	fuo.mutation.SetAlertSettings(tas)
+	return fuo
+}
+
+// SetNillableAlertSettings sets the "alert_settings" field if the given value is not nil.
+func (fuo *FeatureUpdateOne) SetNillableAlertSettings(tas *types.FeatureAlertSettings) *FeatureUpdateOne {
+	if tas != nil {
+		fuo.SetAlertSettings(*tas)
+	}
+	return fuo
+}
+
+// ClearAlertSettings clears the value of the "alert_settings" field.
+func (fuo *FeatureUpdateOne) ClearAlertSettings() *FeatureUpdateOne {
+	fuo.mutation.ClearAlertSettings()
+	return fuo
+}
+
 // Mutation returns the FeatureMutation object of the builder.
 func (fuo *FeatureUpdateOne) Mutation() *FeatureMutation {
 	return fuo.mutation
@@ -513,6 +565,11 @@ func (fuo *FeatureUpdateOne) check() error {
 	if v, ok := fuo.mutation.Name(); ok {
 		if err := feature.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Feature.name": %w`, err)}
+		}
+	}
+	if v, ok := fuo.mutation.AlertSettings(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "alert_settings", err: fmt.Errorf(`ent: validator failed for field "Feature.alert_settings": %w`, err)}
 		}
 	}
 	return nil
@@ -597,6 +654,12 @@ func (fuo *FeatureUpdateOne) sqlSave(ctx context.Context) (_node *Feature, err e
 	}
 	if fuo.mutation.UnitPluralCleared() {
 		_spec.ClearField(feature.FieldUnitPlural, field.TypeString)
+	}
+	if value, ok := fuo.mutation.AlertSettings(); ok {
+		_spec.SetField(feature.FieldAlertSettings, field.TypeJSON, value)
+	}
+	if fuo.mutation.AlertSettingsCleared() {
+		_spec.ClearField(feature.FieldAlertSettings, field.TypeJSON)
 	}
 	_node = &Feature{config: fuo.config}
 	_spec.Assign = _node.assignValues

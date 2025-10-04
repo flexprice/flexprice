@@ -210,6 +210,43 @@ func (s *featureService) UpdateFeature(ctx context.Context, id string, req dto.U
 		feature.UnitPlural = *req.UnitPlural
 	}
 
+	// Update alert settings if provided
+	if req.AlertSettings != nil {
+		// Check if at least one field is being updated
+		if req.AlertSettings.Upperbound == nil && req.AlertSettings.Lowerbound == nil && req.AlertSettings.AlertEnabled == nil {
+			return nil, ierr.NewError("at least one alert setting field must be provided").
+				WithHint("Provide at least one of: upperbound, lowerbound, or alert_enabled").
+				Mark(ierr.ErrValidation)
+		}
+
+		// Start with existing settings
+		newAlertSettings := &types.FeatureAlertSettings{}
+		if feature.AlertSettings != nil {
+			newAlertSettings.Upperbound = feature.AlertSettings.Upperbound
+			newAlertSettings.Lowerbound = feature.AlertSettings.Lowerbound
+			newAlertSettings.AlertEnabled = feature.AlertSettings.AlertEnabled
+		}
+
+		// Overwrite with request values
+		if req.AlertSettings.Upperbound != nil {
+			newAlertSettings.Upperbound = req.AlertSettings.Upperbound
+		}
+		if req.AlertSettings.Lowerbound != nil {
+			newAlertSettings.Lowerbound = req.AlertSettings.Lowerbound
+		}
+		if req.AlertSettings.AlertEnabled != nil {
+			newAlertSettings.AlertEnabled = req.AlertSettings.AlertEnabled
+		}
+
+		// Validate the final merged state
+		if err := newAlertSettings.Validate(); err != nil {
+			return nil, err
+		}
+
+		// Validation passed - now assign to feature
+		feature.AlertSettings = newAlertSettings
+	}
+
 	if feature.Type == types.FeatureTypeMetered && feature.MeterID != "" {
 		// update meter filters if provided
 		meterService := NewMeterService(s.MeterRepo)

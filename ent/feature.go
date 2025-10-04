@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/feature"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // Feature is the model entity for the Feature schema.
@@ -47,8 +48,10 @@ type Feature struct {
 	// UnitSingular holds the value of the "unit_singular" field.
 	UnitSingular *string `json:"unit_singular,omitempty"`
 	// UnitPlural holds the value of the "unit_plural" field.
-	UnitPlural   *string `json:"unit_plural,omitempty"`
-	selectValues sql.SelectValues
+	UnitPlural *string `json:"unit_plural,omitempty"`
+	// AlertSettings holds the value of the "alert_settings" field.
+	AlertSettings types.FeatureAlertSettings `json:"alert_settings,omitempty"`
+	selectValues  sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -56,7 +59,7 @@ func (*Feature) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case feature.FieldMetadata:
+		case feature.FieldMetadata, feature.FieldAlertSettings:
 			values[i] = new([]byte)
 		case feature.FieldID, feature.FieldTenantID, feature.FieldStatus, feature.FieldCreatedBy, feature.FieldUpdatedBy, feature.FieldEnvironmentID, feature.FieldLookupKey, feature.FieldName, feature.FieldDescription, feature.FieldType, feature.FieldMeterID, feature.FieldUnitSingular, feature.FieldUnitPlural:
 			values[i] = new(sql.NullString)
@@ -179,6 +182,14 @@ func (f *Feature) assignValues(columns []string, values []any) error {
 				f.UnitPlural = new(string)
 				*f.UnitPlural = value.String
 			}
+		case feature.FieldAlertSettings:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field alert_settings", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &f.AlertSettings); err != nil {
+					return fmt.Errorf("unmarshal field alert_settings: %w", err)
+				}
+			}
 		default:
 			f.selectValues.Set(columns[i], values[i])
 		}
@@ -267,6 +278,9 @@ func (f *Feature) String() string {
 		builder.WriteString("unit_plural=")
 		builder.WriteString(*v)
 	}
+	builder.WriteString(", ")
+	builder.WriteString("alert_settings=")
+	builder.WriteString(fmt.Sprintf("%v", f.AlertSettings))
 	builder.WriteByte(')')
 	return builder.String()
 }

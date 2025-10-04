@@ -313,7 +313,7 @@ func provideHandlers(
 		Onboarding:               v1.NewOnboardingHandler(onboardingService, logger),
 		CronSubscription:         cron.NewSubscriptionHandler(subscriptionService, logger),
 		CronInvoice:              cron.NewInvoiceHandler(invoiceService, subscriptionService, connectionService, tenantService, environmentService, stripeInvoiceSyncService, logger),
-		CronWallet:               cron.NewWalletCronHandler(logger, walletService, tenantService, environmentService, alertLogsService),
+		CronWallet:               cron.NewWalletCronHandler(logger, walletService, tenantService, environmentService, featureService, alertLogsService),
 		CreditGrant:              v1.NewCreditGrantHandler(creditGrantService, logger),
 		CostSheet:                v1.NewCostSheetHandler(costSheetService, logger),
 		CronCreditGrant:          cron.NewCreditGrantCronHandler(creditGrantService, logger),

@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/feature"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // FeatureCreate is the builder for creating a Feature entity.
@@ -190,6 +191,20 @@ func (fc *FeatureCreate) SetNillableUnitPlural(s *string) *FeatureCreate {
 	return fc
 }
 
+// SetAlertSettings sets the "alert_settings" field.
+func (fc *FeatureCreate) SetAlertSettings(tas types.FeatureAlertSettings) *FeatureCreate {
+	fc.mutation.SetAlertSettings(tas)
+	return fc
+}
+
+// SetNillableAlertSettings sets the "alert_settings" field if the given value is not nil.
+func (fc *FeatureCreate) SetNillableAlertSettings(tas *types.FeatureAlertSettings) *FeatureCreate {
+	if tas != nil {
+		fc.SetAlertSettings(*tas)
+	}
+	return fc
+}
+
 // SetID sets the "id" field.
 func (fc *FeatureCreate) SetID(s string) *FeatureCreate {
 	fc.mutation.SetID(s)
@@ -287,6 +302,11 @@ func (fc *FeatureCreate) check() error {
 			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "Feature.type": %w`, err)}
 		}
 	}
+	if v, ok := fc.mutation.AlertSettings(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "alert_settings", err: fmt.Errorf(`ent: validator failed for field "Feature.alert_settings": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -381,6 +401,10 @@ func (fc *FeatureCreate) createSpec() (*Feature, *sqlgraph.CreateSpec) {
 	if value, ok := fc.mutation.UnitPlural(); ok {
 		_spec.SetField(feature.FieldUnitPlural, field.TypeString, value)
 		_node.UnitPlural = &value
+	}
+	if value, ok := fc.mutation.AlertSettings(); ok {
+		_spec.SetField(feature.FieldAlertSettings, field.TypeJSON, value)
+		_node.AlertSettings = value
 	}
 	return _node, _spec
 }

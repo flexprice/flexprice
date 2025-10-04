@@ -123,6 +123,34 @@ func (alc *AlertLogsCreate) SetEntityID(s string) *AlertLogsCreate {
 	return alc
 }
 
+// SetParentEntityType sets the "parent_entity_type" field.
+func (alc *AlertLogsCreate) SetParentEntityType(s string) *AlertLogsCreate {
+	alc.mutation.SetParentEntityType(s)
+	return alc
+}
+
+// SetNillableParentEntityType sets the "parent_entity_type" field if the given value is not nil.
+func (alc *AlertLogsCreate) SetNillableParentEntityType(s *string) *AlertLogsCreate {
+	if s != nil {
+		alc.SetParentEntityType(*s)
+	}
+	return alc
+}
+
+// SetParentEntityID sets the "parent_entity_id" field.
+func (alc *AlertLogsCreate) SetParentEntityID(s string) *AlertLogsCreate {
+	alc.mutation.SetParentEntityID(s)
+	return alc
+}
+
+// SetNillableParentEntityID sets the "parent_entity_id" field if the given value is not nil.
+func (alc *AlertLogsCreate) SetNillableParentEntityID(s *string) *AlertLogsCreate {
+	if s != nil {
+		alc.SetParentEntityID(*s)
+	}
+	return alc
+}
+
 // SetAlertType sets the "alert_type" field.
 func (alc *AlertLogsCreate) SetAlertType(s string) *AlertLogsCreate {
 	alc.mutation.SetAlertType(s)
@@ -324,6 +352,14 @@ func (alc *AlertLogsCreate) createSpec() (*AlertLogs, *sqlgraph.CreateSpec) {
 	if value, ok := alc.mutation.EntityID(); ok {
 		_spec.SetField(alertlogs.FieldEntityID, field.TypeString, value)
 		_node.EntityID = value
+	}
+	if value, ok := alc.mutation.ParentEntityType(); ok {
+		_spec.SetField(alertlogs.FieldParentEntityType, field.TypeString, value)
+		_node.ParentEntityType = &value
+	}
+	if value, ok := alc.mutation.ParentEntityID(); ok {
+		_spec.SetField(alertlogs.FieldParentEntityID, field.TypeString, value)
+		_node.ParentEntityID = &value
 	}
 	if value, ok := alc.mutation.AlertType(); ok {
 		_spec.SetField(alertlogs.FieldAlertType, field.TypeString, value)

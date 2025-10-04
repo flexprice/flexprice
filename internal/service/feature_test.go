@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -575,6 +576,73 @@ func (s *FeatureServiceSuite) TestUpdateFeature() {
 			},
 		},
 		{
+			name: "successful update with alert settings",
+			id:   s.testData.features.apiCalls.ID,
+			req: dto.UpdateFeatureRequest{
+				Name:        lo.ToPtr("Updated API Calls"),
+				Description: lo.ToPtr("Updated Description"),
+				AlertSettings: &types.FeatureAlertSettings{
+					Upperbound: lo.ToPtr(decimal.NewFromInt(1000)),
+					Lowerbound: lo.ToPtr(decimal.NewFromInt(100)),
+				},
+			},
+		},
+		{
+			name: "error - invalid alert settings (upperbound < lowerbound)",
+			id:   s.testData.features.apiCalls.ID,
+			req: dto.UpdateFeatureRequest{
+				AlertSettings: &types.FeatureAlertSettings{
+					Upperbound: lo.ToPtr(decimal.NewFromInt(100)),
+					Lowerbound: lo.ToPtr(decimal.NewFromInt(1000)),
+				},
+			},
+			wantErr:   true,
+			errString: "upperbound must be greater than or equal to lowerbound",
+		},
+		{
+			name: "success - alert settings with only lowerbound (keeps existing upperbound)",
+			id:   s.testData.features.apiCalls.ID, // Use apiCalls which has existing alert settings
+			req: dto.UpdateFeatureRequest{
+				AlertSettings: &types.FeatureAlertSettings{
+					Lowerbound: lo.ToPtr(decimal.NewFromInt(200)),
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "success - alert settings with only upperbound (keeps existing lowerbound)",
+			id:   s.testData.features.apiCalls.ID, // Use apiCalls which has existing alert settings
+			req: dto.UpdateFeatureRequest{
+				AlertSettings: &types.FeatureAlertSettings{
+					Upperbound: lo.ToPtr(decimal.NewFromInt(2000)),
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "success - alert settings with alert_enabled explicitly set to false",
+			id:   s.testData.features.apiCalls.ID,
+			req: dto.UpdateFeatureRequest{
+				AlertSettings: &types.FeatureAlertSettings{
+					Upperbound:   lo.ToPtr(decimal.NewFromInt(1000)),
+					Lowerbound:   lo.ToPtr(decimal.NewFromInt(500)),
+					AlertEnabled: lo.ToPtr(false),
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "success - alert settings without alert_enabled (defaults to false)",
+			id:   s.testData.features.apiCalls.ID,
+			req: dto.UpdateFeatureRequest{
+				AlertSettings: &types.FeatureAlertSettings{
+					Upperbound: lo.ToPtr(decimal.NewFromInt(2000)),
+					Lowerbound: lo.ToPtr(decimal.NewFromInt(1000)),
+				},
+			},
+			wantErr: false,
+		},
+		{
 			name: "error - feature not found",
 			id:   "nonexistent-id",
 			req: dto.UpdateFeatureRequest{
@@ -598,9 +666,29 @@ func (s *FeatureServiceSuite) TestUpdateFeature() {
 
 			s.NoError(err)
 			s.NotNil(resp)
-			s.Equal(*tt.req.Name, resp.Name)
-			s.Equal(*tt.req.Description, resp.Description)
-			s.Equal(*tt.req.Metadata, resp.Metadata)
+			if tt.req.Name != nil {
+				s.Equal(*tt.req.Name, resp.Name)
+			}
+			if tt.req.Description != nil {
+				s.Equal(*tt.req.Description, resp.Description)
+			}
+			if tt.req.Metadata != nil {
+				s.Equal(*tt.req.Metadata, resp.Metadata)
+			}
+			if tt.req.AlertSettings != nil {
+				s.NotNil(resp.AlertSettings)
+
+				// For partial updates, check that provided values are updated and others remain unchanged
+				if tt.req.AlertSettings.Upperbound != nil {
+					s.Equal(tt.req.AlertSettings.Upperbound, resp.AlertSettings.Upperbound, "upperbound should be updated")
+				}
+				if tt.req.AlertSettings.Lowerbound != nil {
+					s.Equal(tt.req.AlertSettings.Lowerbound, resp.AlertSettings.Lowerbound, "lowerbound should be updated")
+				}
+				if tt.req.AlertSettings.AlertEnabled != nil {
+					s.Equal(tt.req.AlertSettings.AlertEnabled, resp.AlertSettings.AlertEnabled, "alert_enabled should be updated")
+				}
+			}
 		})
 	}
 }
