@@ -618,6 +618,43 @@ func (s *WalletServiceSuite) TestGetWalletBalanceBackwardCompatibility() {
 		"Real-time balance should be less than raw balance due to charges")
 }
 
+func (s *WalletServiceSuite) TestGetWalletBalanceFixedPriceTypeOnly() {
+	// Test wallet with only FIXED price type (should not calculate usage charges)
+	fixedOnlyWallet := &wallet.Wallet{
+		ID:             "wallet-fixed-only",
+		CustomerID:     s.testData.customer.ID,
+		Currency:       "usd",
+		WalletType:     types.WalletTypePrePaid,
+		Balance:        decimal.NewFromInt(1000),
+		CreditBalance:  decimal.NewFromInt(1000),
+		ConversionRate: decimal.NewFromFloat(1.0),
+		WalletStatus:   types.WalletStatusActive,
+		Config: types.WalletConfig{
+			AllowedPriceTypes: []types.WalletConfigPriceType{types.WalletConfigPriceTypeFixed},
+		},
+		BaseModel: types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().WalletRepo.CreateWallet(s.GetContext(), fixedOnlyWallet))
+
+	// Test that the wallet balance calculation works with FIXED-only price type
+	resp, err := s.service.GetWalletBalance(s.GetContext(), fixedOnlyWallet.ID)
+	s.NoError(err)
+	s.NotNil(resp)
+
+	// The real-time balance will be affected by unpaid invoices but not by usage charges
+	s.NotNil(resp.RealTimeBalance)
+	s.NotNil(resp.RealTimeCreditBalance)
+	s.NotNil(resp.UnpaidInvoiceAmount)
+	s.NotNil(resp.CurrentPeriodUsage)
+
+	// Current period usage should be zero since FIXED-only wallets don't calculate usage
+	s.Equal(decimal.Zero, *resp.CurrentPeriodUsage)
+
+	// The real-time balance should be less than or equal to the raw balance due to unpaid invoices
+	s.True(resp.RealTimeBalance.LessThanOrEqual(fixedOnlyWallet.Balance),
+		"Real-time balance should be less than or equal to raw balance due to unpaid invoices")
+}
+
 func (s *WalletServiceSuite) TestCreateWallet() {
 	// Test successful wallet creation with CustomerID
 	req := &dto.CreateWalletRequest{
