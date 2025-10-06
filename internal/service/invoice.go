@@ -1242,7 +1242,7 @@ func (s *invoiceService) GetUnpaidInvoicesToBePaid(ctx context.Context, customer
 	containsPriceTypeFixed := lo.Contains(allowedPriceTypes, types.WalletConfigPriceTypeFixed)
 	containsPriceTypeUsage := lo.Contains(allowedPriceTypes, types.WalletConfigPriceTypeUsage)
 
-	if containsPriceTypeAll && containsPriceTypeFixed || containsPriceTypeAll {
+	if containsPriceTypeUsage && containsPriceTypeFixed || containsPriceTypeAll {
 		// All allowed, include all
 		unpaidAmount = usageAmountTotal.Add(fixedAmountTotal)
 	} else if containsPriceTypeUsage {
