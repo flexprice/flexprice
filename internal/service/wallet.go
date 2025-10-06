@@ -437,6 +437,9 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 		}, nil
 	}
 
+	hasAll := lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeAll)
+	hasUsage := lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeUsage)
+
 	// STEP 1: Get all unpaid invoices for the customer
 	// This includes any previously generated invoices that haven't been paid
 	invoiceService := NewInvoiceService(s.ServiceParams)
@@ -453,6 +456,7 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 	}
 
 	// STEP 2: Get all active subscriptions to calculate current usage
+	// We only get subscriptions if allowed price types are all, usage or both
 	subscriptions, err := s.SubRepo.ListByCustomerID(ctx, w.CustomerID)
 	if err != nil {
 		return nil, err
@@ -478,8 +482,7 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 	totalPendingCharges := decimal.Zero
 
 	// Only calculate usage charges if wallet allows usage price type
-	if lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeUsage) ||
-		lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeAll) {
+	if hasUsage || hasAll {
 
 		for _, sub := range filteredSubscriptions {
 			subscriptionService := NewSubscriptionService(s.ServiceParams)
