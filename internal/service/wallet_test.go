@@ -502,7 +502,17 @@ func (s *WalletServiceSuite) setupTestData() {
 			PaymentStatus:   types.PaymentStatusPending,
 			AmountDue:       decimal.NewFromInt(100),
 			AmountRemaining: decimal.NewFromInt(100),
-			BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
+			LineItems: []*invoice.InvoiceLineItem{
+				{
+					ID:          "line_1",
+					InvoiceID:   "inv_1",
+					Amount:      decimal.NewFromInt(100),
+					PriceType:   lo.ToPtr(string(types.PRICE_TYPE_FIXED)),
+					DisplayName: lo.ToPtr("Fixed Charge"),
+					BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
+				},
+			},
+			BaseModel: types.GetDefaultBaseModel(s.GetContext()),
 		},
 		{
 			ID:              "inv_2",
@@ -512,7 +522,17 @@ func (s *WalletServiceSuite) setupTestData() {
 			PaymentStatus:   types.PaymentStatusPending,
 			AmountDue:       decimal.NewFromInt(150),
 			AmountRemaining: decimal.NewFromInt(150),
-			BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
+			LineItems: []*invoice.InvoiceLineItem{
+				{
+					ID:          "line_2",
+					InvoiceID:   "inv_2",
+					Amount:      decimal.NewFromInt(150),
+					PriceType:   lo.ToPtr(string(types.PRICE_TYPE_FIXED)),
+					DisplayName: lo.ToPtr("Fixed Charge 2"),
+					BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
+				},
+			},
+			BaseModel: types.GetDefaultBaseModel(s.GetContext()),
 		},
 		{
 			ID:              "inv_3",
@@ -522,7 +542,17 @@ func (s *WalletServiceSuite) setupTestData() {
 			PaymentStatus:   types.PaymentStatusPending,
 			AmountDue:       decimal.NewFromInt(200),
 			AmountRemaining: decimal.NewFromInt(200),
-			BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
+			LineItems: []*invoice.InvoiceLineItem{
+				{
+					ID:          "line_3",
+					InvoiceID:   "inv_3",
+					Amount:      decimal.NewFromInt(200),
+					PriceType:   lo.ToPtr(string(types.PRICE_TYPE_FIXED)),
+					DisplayName: lo.ToPtr("Fixed Charge EUR"),
+					BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
+				},
+			},
+			BaseModel: types.GetDefaultBaseModel(s.GetContext()),
 		},
 	}
 
@@ -547,9 +577,45 @@ func (s *WalletServiceSuite) setupWallet() {
 		CreditBalance:  decimal.NewFromInt(1000),
 		ConversionRate: decimal.NewFromFloat(1.0),
 		WalletStatus:   types.WalletStatusActive,
+		Config:         *types.GetDefaultWalletConfig(),
 		BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
 	}
 	s.NoError(s.GetStores().WalletRepo.CreateWallet(s.GetContext(), s.testData.wallet))
+}
+
+func (s *WalletServiceSuite) TestGetWalletBalanceBackwardCompatibility() {
+	// Test wallet with nil AllowedPriceTypes (backward compatibility)
+	legacyWallet := &wallet.Wallet{
+		ID:             "wallet-legacy",
+		CustomerID:     s.testData.customer.ID,
+		Currency:       "usd",
+		WalletType:     types.WalletTypePrePaid,
+		Balance:        decimal.NewFromInt(1000),
+		CreditBalance:  decimal.NewFromInt(1000),
+		ConversionRate: decimal.NewFromFloat(1.0),
+		WalletStatus:   types.WalletStatusActive,
+		Config:         types.WalletConfig{}, // Empty config with nil AllowedPriceTypes
+		BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().WalletRepo.CreateWallet(s.GetContext(), legacyWallet))
+
+	// Test that the wallet balance calculation works with nil AllowedPriceTypes
+	// The backward compatibility should allow all price types, so it should calculate
+	// unpaid invoices and usage charges just like a wallet with proper config
+	resp, err := s.service.GetWalletBalance(s.GetContext(), legacyWallet.ID)
+	s.NoError(err)
+	s.NotNil(resp)
+
+	// The real-time balance should be calculated (not just the raw balance)
+	// because backward compatibility enables all price types
+	s.NotNil(resp.RealTimeBalance)
+	s.NotNil(resp.RealTimeCreditBalance)
+	s.NotNil(resp.UnpaidInvoiceAmount)
+	s.NotNil(resp.CurrentPeriodUsage)
+
+	// Verify that the calculation is working (should be less than raw balance due to charges)
+	s.True(resp.RealTimeBalance.LessThan(legacyWallet.Balance),
+		"Real-time balance should be less than raw balance due to charges")
 }
 
 func (s *WalletServiceSuite) TestCreateWallet() {

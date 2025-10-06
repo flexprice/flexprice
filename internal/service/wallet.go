@@ -437,8 +437,17 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 		}, nil
 	}
 
-	hasAll := lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeAll)
-	hasUsage := lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeUsage)
+	// Handle backward compatibility: if Config.AllowedPriceTypes is nil, use default config
+	var allowedPriceTypes []types.WalletConfigPriceType
+	if w.Config.AllowedPriceTypes != nil {
+		allowedPriceTypes = w.Config.AllowedPriceTypes
+	} else {
+		// Default to allowing all price types for backward compatibility
+		allowedPriceTypes = []types.WalletConfigPriceType{types.WalletConfigPriceTypeAll}
+	}
+
+	hasAll := lo.Contains(allowedPriceTypes, types.WalletConfigPriceTypeAll)
+	hasUsage := lo.Contains(allowedPriceTypes, types.WalletConfigPriceTypeUsage)
 
 	// STEP 1: Get all unpaid invoices for the customer
 	// This includes any previously generated invoices that haven't been paid
@@ -449,7 +458,7 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 		ctx,
 		w.CustomerID,
 		w.Currency,
-		w.Config.AllowedPriceTypes,
+		allowedPriceTypes,
 	)
 	if err != nil {
 		return nil, err
@@ -515,7 +524,7 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 		"pending_charges", totalPendingCharges,
 		"real_time_balance", realTimeBalance,
 		"credit_balance", w.CreditBalance,
-		"allowed_price_types", w.Config.AllowedPriceTypes)
+		"allowed_price_types", allowedPriceTypes)
 
 	// Convert real-time balance to credit balance
 	realTimeCreditBalance := s.GetCreditsFromCurrencyAmount(realTimeBalance, w.ConversionRate)
@@ -1487,6 +1496,15 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 		}, nil
 	}
 
+	// Handle backward compatibility: if Config.AllowedPriceTypes is nil, use default config
+	var allowedPriceTypes []types.WalletConfigPriceType
+	if w.Config.AllowedPriceTypes != nil {
+		allowedPriceTypes = w.Config.AllowedPriceTypes
+	} else {
+		// Default to allowing all price types for backward compatibility
+		allowedPriceTypes = []types.WalletConfigPriceType{types.WalletConfigPriceTypeAll}
+	}
+
 	// STEP 1: Get all unpaid invoices for the customer
 	// This includes any previously generated invoices that haven't been paid
 	invoiceService := NewInvoiceService(s.ServiceParams)
@@ -1496,7 +1514,7 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 		ctx,
 		w.CustomerID,
 		w.Currency,
-		w.Config.AllowedPriceTypes,
+		allowedPriceTypes,
 	)
 	if err != nil {
 		return nil, err
