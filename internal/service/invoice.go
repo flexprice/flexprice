@@ -34,7 +34,7 @@ type InvoiceService interface {
 	CreateSubscriptionInvoice(ctx context.Context, req *dto.CreateSubscriptionInvoiceRequest, paymentParams *dto.PaymentParameters, flowType types.InvoiceFlowType) (*dto.InvoiceResponse, *subscription.Subscription, error)
 	GetPreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error)
 	GetCustomerInvoiceSummary(ctx context.Context, customerID string, currency string) (*dto.CustomerInvoiceSummary, error)
-	GetUnpaidInvoicesToBePaid(ctx context.Context, customerID string, currency string) ([]*dto.InvoiceResponse, decimal.Decimal, error)
+	GetUnpaidInvoicesToBePaid(ctx context.Context, customerID string, currency string, allowedPriceTypes []types.WalletConfigPriceType) ([]*dto.InvoiceResponse, decimal.Decimal, error)
 	GetCustomerMultiCurrencyInvoiceSummary(ctx context.Context, customerID string) (*dto.CustomerMultiCurrencyInvoiceSummary, error)
 	AttemptPayment(ctx context.Context, id string) error
 	GetInvoicePDF(ctx context.Context, id string) ([]byte, error)
@@ -1186,15 +1186,16 @@ func (s *invoiceService) GetCustomerInvoiceSummary(ctx context.Context, customer
 	return summary, nil
 }
 
-func (s *invoiceService) GetUnpaidInvoicesToBePaid(ctx context.Context, customerID string, currency string) ([]*dto.InvoiceResponse, decimal.Decimal, error) {
+func (s *invoiceService) GetUnpaidInvoicesToBePaid(ctx context.Context, customerID string, currency string, allowedPriceTypes []types.WalletConfigPriceType) ([]*dto.InvoiceResponse, decimal.Decimal, error) {
 	unpaidInvoices := make([]*dto.InvoiceResponse, 0)
-	unpaidAmount := decimal.Zero
+	fixedAmountTotal := decimal.Zero
+	usageAmountTotal := decimal.Zero
 
 	filter := types.NewNoLimitInvoiceFilter()
 	filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
 	filter.CustomerID = customerID
 	filter.InvoiceStatus = []types.InvoiceStatus{types.InvoiceStatusFinalized}
-	filter.SkipLineItems = true
+	filter.SkipLineItems = false
 
 	invoicesResp, err := s.ListInvoices(ctx, filter)
 	if err != nil {
@@ -1216,10 +1217,43 @@ func (s *invoiceService) GetUnpaidInvoicesToBePaid(ctx context.Context, customer
 			continue
 		}
 
+		// Add invoice to the list
 		unpaidInvoices = append(unpaidInvoices, inv)
-		unpaidAmount = unpaidAmount.Add(inv.AmountRemaining)
+
+		if len(inv.LineItems) > 0 {
+			// Separate fixed and usage charges
+			for _, item := range inv.LineItems {
+				priceType := lo.FromPtr(item.PriceType)
+
+				if priceType == string(types.PRICE_TYPE_USAGE) {
+					usageAmountTotal = usageAmountTotal.Add(item.Amount)
+				} else {
+					fixedAmountTotal = fixedAmountTotal.Add(item.Amount)
+				}
+			}
+		}
 	}
 
+	// Determine which amount to return based on allowed price types
+	var unpaidAmount decimal.Decimal
+
+	// Check if we need to filter by price type
+	hasUsage := lo.Contains(allowedPriceTypes, types.WalletConfigPriceTypeUsage)
+	hasFixed := lo.Contains(allowedPriceTypes, types.WalletConfigPriceTypeFixed)
+
+	if hasUsage && hasFixed || lo.Contains(allowedPriceTypes, types.WalletConfigPriceTypeAll) {
+		// Both types allowed, include all
+		unpaidAmount = usageAmountTotal.Add(fixedAmountTotal)
+	} else if hasUsage {
+		// Usage-only wallet
+		unpaidAmount = usageAmountTotal
+	} else if hasFixed {
+		// Fixed-only wallet
+		unpaidAmount = fixedAmountTotal
+	} else {
+		// No price type filter, include all
+		unpaidAmount = usageAmountTotal.Add(fixedAmountTotal)
+	}
 	return unpaidInvoices, unpaidAmount, nil
 }
 
