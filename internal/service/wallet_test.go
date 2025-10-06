@@ -655,6 +655,47 @@ func (s *WalletServiceSuite) TestGetWalletBalanceFixedPriceTypeOnly() {
 		"Real-time balance should be less than or equal to raw balance due to unpaid invoices")
 }
 
+func (s *WalletServiceSuite) TestGetWalletBalanceMixedPriceTypes() {
+	// Test wallet with both USAGE and FIXED price types (should calculate both components)
+	mixedWallet := &wallet.Wallet{
+		ID:             "wallet-mixed",
+		CustomerID:     s.testData.customer.ID,
+		Currency:       "usd",
+		WalletType:     types.WalletTypePrePaid,
+		Balance:        decimal.NewFromInt(1000),
+		CreditBalance:  decimal.NewFromInt(1000),
+		ConversionRate: decimal.NewFromFloat(1.0),
+		WalletStatus:   types.WalletStatusActive,
+		Config: types.WalletConfig{
+			AllowedPriceTypes: []types.WalletConfigPriceType{
+				types.WalletConfigPriceTypeUsage,
+				types.WalletConfigPriceTypeFixed,
+			},
+		},
+		BaseModel: types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().WalletRepo.CreateWallet(s.GetContext(), mixedWallet))
+
+	// Test that the wallet balance calculation works with mixed price types
+	resp, err := s.service.GetWalletBalance(s.GetContext(), mixedWallet.ID)
+	s.NoError(err)
+	s.NotNil(resp)
+
+	// The wallet should calculate both usage charges and unpaid invoices
+	s.NotNil(resp.RealTimeBalance)
+	s.NotNil(resp.RealTimeCreditBalance)
+	s.NotNil(resp.UnpaidInvoiceAmount)
+	s.NotNil(resp.CurrentPeriodUsage)
+
+	// Current period usage should be non-zero since USAGE is allowed
+	s.True(resp.CurrentPeriodUsage.GreaterThan(decimal.Zero),
+		"Current period usage should be greater than zero for mixed price type wallets")
+
+	// The real-time balance should be less than raw balance due to both usage and unpaid invoices
+	s.True(resp.RealTimeBalance.LessThan(mixedWallet.Balance),
+		"Real-time balance should be less than raw balance due to usage and unpaid invoices")
+}
+
 func (s *WalletServiceSuite) TestCreateWallet() {
 	// Test successful wallet creation with CustomerID
 	req := &dto.CreateWalletRequest{
