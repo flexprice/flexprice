@@ -66,14 +66,14 @@ func GetCurrencySymbol(code string) string {
 // GetCurrencyPrecision returns the precision for a given currency code
 // if the code is not found, it returns the default precision of 2
 func GetCurrencyPrecision(code string) int32 {
-	if config, ok := CURRENCY_CONFIG[code]; ok {
+	if config, ok := CURRENCY_CONFIG[strings.ToLower(code)]; ok {
 		return config.Precision
 	}
 	return DEFAULT_PRECISION
 }
 
 func GetCurrencyConfig(code string) CurrencyConfig {
-	if config, ok := CURRENCY_CONFIG[code]; ok {
+	if config, ok := CURRENCY_CONFIG[strings.ToLower(code)]; ok {
 		return config
 	}
 	return CurrencyConfig{Precision: DEFAULT_PRECISION}
