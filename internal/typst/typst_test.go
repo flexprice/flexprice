@@ -57,6 +57,10 @@ func (s *TypstCompilerSuite) SetupTest() {
 	err = CopyDir(filepath.Join(currentDir, "../../assets", "typst-templates"), s.templateDir)
 	s.Require().NoError(err)
 
+	// copy fonts from ../../assets/fonts dir to temp fonts dir
+	err = CopyDir(filepath.Join(currentDir, "../../assets", "fonts"), s.fontsDir)
+	s.Require().NoError(err)
+
 	// Create a sample Typst file
 	s.sampleFile = filepath.Join(s.templateDir, "sample.typ")
 	err = os.WriteFile(s.sampleFile, []byte(`#set page(width: 10cm, height: 5cm)

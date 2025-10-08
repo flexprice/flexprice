@@ -39,14 +39,22 @@
     let raw-decimal = parts.at(1)
     // Ensure exactly the specified precision decimal places
     if raw-decimal.len() < precision {
-      raw-decimal + "0".repeat(precision - raw-decimal.len())
+      let zeros = ""
+      for i in range(precision - raw-decimal.len()) {
+        zeros += "0"
+      }
+      raw-decimal + zeros
     } else if raw-decimal.len() > precision {
       raw-decimal.slice(0, precision)
     } else {
       raw-decimal
     }
   } else { 
-    "0".repeat(precision)
+    let zeros = ""
+    for i in range(precision) {
+      zeros += "0"
+    }
+    zeros
   }
 
   // Add commas every 3 digits from the right
@@ -67,7 +75,7 @@
 }
 
 #let format-currency = (num, precision: 2) => {
-  let multiplier = 10.0 ^ precision
+  let multiplier = calc.pow(10.0, precision)
   let rounded = calc.round(num * multiplier) / multiplier
   format-number(rounded, precision: precision)
 }
@@ -223,9 +231,9 @@
       // Amount is already the total line amount, not unit price
       let line-total = item.amount
       let amount-display = if line-total < 0 {
-        [−#currency #format-currency(calc.abs(line-total), precision)]
+        [−#currency #format-currency(calc.abs(line-total), precision: precision)]
       } else {
-        [#currency #format-currency(line-total, precision)]
+        [#currency #format-currency(line-total, precision: precision)]
       }
       
       (
@@ -257,16 +265,16 @@
       inset: 6pt,
       stroke: none,
       // Always show subtotal
-      [Subtotal], [#currency#format-currency(subtotal, precision)],
+      [Subtotal], [#currency#format-currency(subtotal, precision: precision)],
       
       // Show discount row only if there's a discount
-      ..if discount > 0 { ([Discount], [−#currency#format-currency(discount, precision)]) } else { () },
+      ..if discount > 0 { ([Discount], [−#currency#format-currency(discount, precision: precision)]) } else { () },
       
       // Show tax row only if there's tax
-      ..if tax > 0 { ([Tax], [#currency#format-currency(tax, precision)]) } else { () },
+      ..if tax > 0 { ([Tax], [#currency#format-currency(tax, precision: precision)]) } else { () },
       
       table.hline(stroke: 1pt + styling.line-color),
-      [*Net Payable*], [*#currency#format-currency(subtotal - discount + tax, precision)*],
+      [*Net Payable*], [*#currency#format-currency(subtotal - discount + tax, precision: precision)*],
     )
   )
 
@@ -294,16 +302,16 @@
       ),
       ..applied-discounts.map((discount) => {
         let value-display = if discount.type == "percentage" {
-          [#format-currency(discount.value, precision)%]
+          [#format-currency(discount.value, precision: precision)%]
         } else {
-          [#currency#format-currency(discount.value, precision)]
+          [#currency#format-currency(discount.value, precision: precision)]
         }
         
         (
           discount.discount_name,
           discount.type,
           value-display,
-          [#currency#format-currency(discount.discount_amount, precision)],
+          [#currency#format-currency(discount.discount_amount, precision: precision)],
           discount.line_item_ref,
         )
       }).flatten(),
@@ -336,9 +344,9 @@
       ),
       ..applied-taxes.map((tax) => {
         let rate-display = if tax.tax_type == "percentage" {
-          [#format-currency(tax.tax_rate, precision)%]
+          [#format-currency(tax.tax_rate, precision: precision)%]
         } else {
-          [#currency#format-currency(tax.tax_rate, precision)]
+          [#currency#format-currency(tax.tax_rate, precision: precision)]
         }
         
         (
@@ -346,8 +354,8 @@
           tax.tax_code,
           tax.tax_type,
           rate-display,
-          [#currency#format-currency(tax.taxable_amount, precision)],
-          [#currency#format-currency(tax.tax_amount, precision)],
+          [#currency#format-currency(tax.taxable_amount, precision: precision)],
+          [#currency#format-currency(tax.tax_amount, precision: precision)],
           // tax.applied_at,
         )
       }).flatten(),
