@@ -1564,10 +1564,12 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 		invoiceNum = *inv.InvoiceNumber
 	}
 
-	subtotal, _ := inv.Subtotal.Float64()
-	totalDiscount, _ := inv.TotalDiscount.Float64()
-	totalTax, _ := inv.TotalTax.Float64()
-	total, _ := inv.Total.Float64()
+	// Round to currency precision before converting to float64
+	precision := types.GetCurrencyPrecision(inv.Currency)
+	subtotal, _ := inv.Subtotal.Round(precision).Float64()
+	totalDiscount, _ := inv.TotalDiscount.Round(precision).Float64()
+	totalTax, _ := inv.TotalTax.Round(precision).Float64()
+	total, _ := inv.Total.Round(precision).Float64()
 
 	// Convert to InvoiceData
 	data := &pdf.InvoiceData{
@@ -1626,8 +1628,10 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 			displayName = *item.DisplayName
 		}
 
-		amount, _ := item.Amount.Float64()
-		quantity, _ := item.Quantity.Float64()
+		// Round to currency precision before converting to float64
+		precision := types.GetCurrencyPrecision(item.Currency)
+		amount, _ := item.Amount.Round(precision).Float64()
+		quantity, _ := item.Quantity.Round(precision).Float64()
 
 		description := ""
 		if item.Metadata != nil {
@@ -2742,8 +2746,10 @@ func (s *invoiceService) getAppliedTaxesForPDF(ctx context.Context, invoiceID st
 	// Convert to PDF format using expanded tax rate data
 	appliedTaxes := make([]pdf.AppliedTaxData, 0, len(appliedTaxesResponse.Items))
 	for _, appliedTax := range appliedTaxesResponse.Items {
-		taxableAmount, _ := appliedTax.TaxableAmount.Float64()
-		taxAmount, _ := appliedTax.TaxAmount.Float64()
+		// Round to currency precision before converting to float64
+		precision := types.GetCurrencyPrecision(appliedTax.Currency)
+		taxableAmount, _ := appliedTax.TaxableAmount.Round(precision).Float64()
+		taxAmount, _ := appliedTax.TaxAmount.Round(precision).Float64()
 
 		// Use expanded tax rate data if available
 		var taxName, taxCode, taxType string
@@ -2755,9 +2761,9 @@ func (s *invoiceService) getAppliedTaxesForPDF(ctx context.Context, invoiceID st
 			taxCode = appliedTax.TaxRate.Code
 			taxType = string(appliedTax.TaxRate.TaxRateType)
 			if appliedTax.TaxRate.TaxRateType == types.TaxRateTypePercentage && appliedTax.TaxRate.PercentageValue != nil {
-				taxRateValue, _ = appliedTax.TaxRate.PercentageValue.Float64()
+				taxRateValue, _ = appliedTax.TaxRate.PercentageValue.Round(precision).Float64()
 			} else if appliedTax.TaxRate.TaxRateType == types.TaxRateTypeFixed && appliedTax.TaxRate.FixedValue != nil {
-				taxRateValue, _ = appliedTax.TaxRate.FixedValue.Float64()
+				taxRateValue, _ = appliedTax.TaxRate.FixedValue.Round(precision).Float64()
 			}
 		} else {
 			// Fallback if tax rate not expanded - this should not happen if expand works
@@ -2803,7 +2809,9 @@ func (s *invoiceService) getAppliedDiscountsForPDF(ctx context.Context, inv *inv
 	// Convert to PDF format using coupon application data
 	appliedDiscounts := make([]pdf.AppliedDiscountData, 0, len(couponApplications))
 	for _, couponApp := range couponApplications {
-		discountAmount, _ := couponApp.DiscountedAmount.Float64()
+		// Round to currency precision before converting to float64
+		precision := types.GetCurrencyPrecision(couponApp.Currency)
+		discountAmount, _ := couponApp.DiscountedAmount.Round(precision).Float64()
 
 		discountName := "Discount"
 		// Get coupon name from coupon service
@@ -2815,7 +2823,7 @@ func (s *invoiceService) getAppliedDiscountsForPDF(ctx context.Context, inv *inv
 		var discountValue float64
 		discountType := string(couponApp.DiscountType)
 		if couponApp.DiscountType == types.CouponTypePercentage && couponApp.DiscountPercentage != nil {
-			discountValue, _ = couponApp.DiscountPercentage.Float64()
+			discountValue, _ = couponApp.DiscountPercentage.Round(precision).Float64()
 		} else if couponApp.DiscountType == types.CouponTypeFixed {
 			// For fixed discounts, use the actual discount amount as the value
 			discountValue = discountAmount

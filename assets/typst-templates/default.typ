@@ -35,7 +35,19 @@
   let str-num = str(num)
   let parts = str-num.split(".")
   let integer-part = str(parts.at(0))
-  let decimal-part = if parts.len() > 1 { "." + parts.at(1) } else { "" }
+  let decimal-part = if parts.len() > 1 { 
+    let raw-decimal = parts.at(1)
+    // Ensure exactly 2 decimal places
+    if raw-decimal.len() == 1 {
+      raw-decimal + "0"
+    } else if raw-decimal.len() > 2 {
+      raw-decimal.slice(0, 2)
+    } else {
+      raw-decimal
+    }
+  } else { 
+    "00" 
+  }
 
   // Add commas every 3 digits from the right
   let chars = integer-part.rev().clusters()
@@ -47,7 +59,13 @@
     result += c
   }
 
-  result.rev() + decimal-part
+  result.rev() + "." + decimal-part
+}
+
+#let format-currency = (num) => {
+  // Round to 2 decimal places first
+  let rounded = calc.round(num * 100) / 100
+  format-number(rounded)
 }
 
 // Define the default-invoice function
@@ -197,11 +215,12 @@
       [*Amount*],
     ),
     ..items.map((item) => {
-      let line-total = item.quantity * item.amount
+      // Amount is already the total line amount, not unit price
+      let line-total = item.amount
       let amount-display = if line-total < 0 {
-        [−#currency #format-number(calc.abs(line-total))]
+        [−#currency #format-currency(calc.abs(line-total))]
       } else {
-        [#currency #format-number(line-total)]
+        [#currency #format-currency(line-total)]
       }
       
       (
@@ -233,16 +252,16 @@
       inset: 6pt,
       stroke: none,
       // Always show subtotal
-      [Subtotal], [#currency#format-number(subtotal)],
+      [Subtotal], [#currency#format-currency(subtotal)],
       
       // Show discount row only if there's a discount
-      ..if discount > 0 { ([Discount], [−#currency#format-number(discount)]) } else { () },
+      ..if discount > 0 { ([Discount], [−#currency#format-currency(discount)]) } else { () },
       
       // Show tax row only if there's tax
-      ..if tax > 0 { ([Tax], [#currency#format-number(tax)]) } else { () },
+      ..if tax > 0 { ([Tax], [#currency#format-currency(tax)]) } else { () },
       
       table.hline(stroke: 1pt + styling.line-color),
-      [*Net Payable*], [*#currency#format-number(subtotal - discount + tax)*],
+      [*Net Payable*], [*#currency#format-currency(subtotal - discount + tax)*],
     )
   )
 
@@ -270,16 +289,16 @@
       ),
       ..applied-discounts.map((discount) => {
         let value-display = if discount.type == "percentage" {
-          [#format-number(discount.value)%]
+          [#format-currency(discount.value)%]
         } else {
-          [#currency#format-number(discount.value)]
+          [#currency#format-currency(discount.value)]
         }
         
         (
           discount.discount_name,
           discount.type,
           value-display,
-          [#currency#format-number(discount.discount_amount)],
+          [#currency#format-currency(discount.discount_amount)],
           discount.line_item_ref,
         )
       }).flatten(),
@@ -312,9 +331,9 @@
       ),
       ..applied-taxes.map((tax) => {
         let rate-display = if tax.tax_type == "percentage" {
-          [#format-number(tax.tax_rate)%]
+          [#format-currency(tax.tax_rate)%]
         } else {
-          [#currency#format-number(tax.tax_rate)]
+          [#currency#format-currency(tax.tax_rate)]
         }
         
         (
@@ -322,8 +341,8 @@
           tax.tax_code,
           tax.tax_type,
           rate-display,
-          [#currency#format-number(tax.taxable_amount)],
-          [#currency#format-number(tax.tax_amount)],
+          [#currency#format-currency(tax.taxable_amount)],
+          [#currency#format-currency(tax.tax_amount)],
           // tax.applied_at,
         )
       }).flatten(),
