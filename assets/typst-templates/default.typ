@@ -31,22 +31,22 @@
 }
 
 
-#let format-number = (num) => {
+#let format-number = (num, precision: 2) => {
   let str-num = str(num)
   let parts = str-num.split(".")
   let integer-part = str(parts.at(0))
   let decimal-part = if parts.len() > 1 { 
     let raw-decimal = parts.at(1)
-    // Ensure exactly 2 decimal places
-    if raw-decimal.len() == 1 {
-      raw-decimal + "0"
-    } else if raw-decimal.len() > 2 {
-      raw-decimal.slice(0, 2)
+    // Ensure exactly the specified precision decimal places
+    if raw-decimal.len() < precision {
+      raw-decimal + "0".repeat(precision - raw-decimal.len())
+    } else if raw-decimal.len() > precision {
+      raw-decimal.slice(0, precision)
     } else {
       raw-decimal
     }
   } else { 
-    "00" 
+    "0".repeat(precision)
   }
 
   // Add commas every 3 digits from the right
@@ -59,19 +59,24 @@
     result += c
   }
 
-  result.rev() + "." + decimal-part
+  if precision > 0 {
+    result.rev() + "." + decimal-part
+  } else {
+    result.rev()
+  }
 }
 
-#let format-currency = (num) => {
-  // Round to 2 decimal places first
-  let rounded = calc.round(num * 100) / 100
-  format-number(rounded)
+#let format-currency = (num, precision: 2) => {
+  let multiplier = 10.0 ^ precision
+  let rounded = calc.round(num * multiplier) / multiplier
+  format-number(rounded, precision: precision)
 }
 
 // Define the default-invoice function
 #let default-invoice(
   language: "en",
   currency: "$",
+  precision: 2,
   title: none,
   banner-image: none,
   invoice-status: "DRAFT",       // DRAFT, FINALIZED, VOIDED
@@ -218,9 +223,9 @@
       // Amount is already the total line amount, not unit price
       let line-total = item.amount
       let amount-display = if line-total < 0 {
-        [−#currency #format-currency(calc.abs(line-total))]
+        [−#currency #format-currency(calc.abs(line-total), precision)]
       } else {
-        [#currency #format-currency(line-total)]
+        [#currency #format-currency(line-total, precision)]
       }
       
       (
@@ -252,16 +257,16 @@
       inset: 6pt,
       stroke: none,
       // Always show subtotal
-      [Subtotal], [#currency#format-currency(subtotal)],
+      [Subtotal], [#currency#format-currency(subtotal, precision)],
       
       // Show discount row only if there's a discount
-      ..if discount > 0 { ([Discount], [−#currency#format-currency(discount)]) } else { () },
+      ..if discount > 0 { ([Discount], [−#currency#format-currency(discount, precision)]) } else { () },
       
       // Show tax row only if there's tax
-      ..if tax > 0 { ([Tax], [#currency#format-currency(tax)]) } else { () },
+      ..if tax > 0 { ([Tax], [#currency#format-currency(tax, precision)]) } else { () },
       
       table.hline(stroke: 1pt + styling.line-color),
-      [*Net Payable*], [*#currency#format-currency(subtotal - discount + tax)*],
+      [*Net Payable*], [*#currency#format-currency(subtotal - discount + tax, precision)*],
     )
   )
 
@@ -289,16 +294,16 @@
       ),
       ..applied-discounts.map((discount) => {
         let value-display = if discount.type == "percentage" {
-          [#format-currency(discount.value)%]
+          [#format-currency(discount.value, precision)%]
         } else {
-          [#currency#format-currency(discount.value)]
+          [#currency#format-currency(discount.value, precision)]
         }
         
         (
           discount.discount_name,
           discount.type,
           value-display,
-          [#currency#format-currency(discount.discount_amount)],
+          [#currency#format-currency(discount.discount_amount, precision)],
           discount.line_item_ref,
         )
       }).flatten(),
@@ -331,9 +336,9 @@
       ),
       ..applied-taxes.map((tax) => {
         let rate-display = if tax.tax_type == "percentage" {
-          [#format-currency(tax.tax_rate)%]
+          [#format-currency(tax.tax_rate, precision)%]
         } else {
-          [#currency#format-currency(tax.tax_rate)]
+          [#currency#format-currency(tax.tax_rate, precision)]
         }
         
         (
@@ -341,8 +346,8 @@
           tax.tax_code,
           tax.tax_type,
           rate-display,
-          [#currency#format-currency(tax.taxable_amount)],
-          [#currency#format-currency(tax.tax_amount)],
+          [#currency#format-currency(tax.taxable_amount, precision)],
+          [#currency#format-currency(tax.tax_amount, precision)],
           // tax.applied_at,
         )
       }).flatten(),
