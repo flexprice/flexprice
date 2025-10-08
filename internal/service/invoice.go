@@ -1637,6 +1637,7 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 		InvoiceNumber: invoiceNum,
 		InvoiceStatus: string(inv.InvoiceStatus),
 		Currency:      types.GetCurrencySymbol(inv.Currency),
+		Precision:     types.GetCurrencyPrecision(inv.Currency),
 		AmountDue:     total,
 		Subtotal:      subtotal,
 		TotalDiscount: totalDiscount,

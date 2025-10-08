@@ -8,6 +8,7 @@ import (
 // InvoiceData represents the data model for invoice PDF generation
 type InvoiceData struct {
 	Currency      string     `json:"currency"`
+	Precision     int32      `json:"precision"`
 	BannerImage   string     `json:"banner_image,omitempty"`
 	ID            string     `json:"id"`
 	InvoiceStatus string     `json:"invoice_status"`
