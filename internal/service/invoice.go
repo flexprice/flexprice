@@ -174,7 +174,7 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 			invoiceNumber = *req.InvoiceNumber
 		} else {
 			settingsService := NewSettingsService(s.ServiceParams)
-			invoiceConfigResponse, err := settingsService.GetSettingByKey(ctx, types.SettingKeyInvoiceConfig.String())
+			invoiceConfigResponse, err := settingsService.GetSettingByKey(ctx, types.SettingKeyInvoiceConfig)
 			if err != nil {
 				return err
 			}
@@ -2373,55 +2373,6 @@ func (s *invoiceService) HandleIncompleteSubscriptionPayment(ctx context.Context
 		"subscription_id", *invoice.SubscriptionID)
 
 	return nil
-}
-
-// convertProrationToLineItems converts proration results to invoice line items
-func (s *invoiceService) convertProrationToLineItems(prorationResult *dto.ProrationResult) ([]dto.CreateInvoiceLineItemRequest, error) {
-	var lineItems []dto.CreateInvoiceLineItemRequest
-
-	for lineItemID, result := range prorationResult.LineItemResults {
-		// Process credit items
-		for _, creditItem := range result.CreditItems {
-			lineItem := dto.CreateInvoiceLineItemRequest{
-				EntityID:    &lineItemID,
-				EntityType:  lo.ToPtr("subscription_line_item"),
-				PriceID:     &creditItem.PriceID,
-				DisplayName: &creditItem.Description,
-				Amount:      creditItem.Amount, // Already negative for credits
-				Quantity:    creditItem.Quantity,
-				PeriodStart: &creditItem.StartDate,
-				PeriodEnd:   &creditItem.EndDate,
-				Metadata: types.Metadata{
-					"proration_type":    "credit",
-					"line_item_id":      lineItemID,
-					"original_price_id": creditItem.PriceID,
-				},
-			}
-			lineItems = append(lineItems, lineItem)
-		}
-
-		// Process charge items
-		for _, chargeItem := range result.ChargeItems {
-			lineItem := dto.CreateInvoiceLineItemRequest{
-				EntityID:    &lineItemID,
-				EntityType:  lo.ToPtr("subscription_line_item"),
-				PriceID:     &chargeItem.PriceID,
-				DisplayName: &chargeItem.Description,
-				Amount:      chargeItem.Amount, // Positive for charges
-				Quantity:    chargeItem.Quantity,
-				PeriodStart: &chargeItem.StartDate,
-				PeriodEnd:   &chargeItem.EndDate,
-				Metadata: types.Metadata{
-					"proration_type":    "charge",
-					"line_item_id":      lineItemID,
-					"original_price_id": chargeItem.PriceID,
-				},
-			}
-			lineItems = append(lineItems, lineItem)
-		}
-	}
-
-	return lineItems, nil
 }
 
 // generateProrationInvoiceDescription creates a description for proration invoices

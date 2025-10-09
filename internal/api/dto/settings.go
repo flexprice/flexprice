@@ -77,7 +77,7 @@ func ConvertToInvoiceConfig(value map[string]interface{}) (*types.InvoiceConfig,
 
 // CreateSettingRequest represents the request to create a new setting
 type CreateSettingRequest struct {
-	Key   string                 `json:"key" validate:"required,min=1,max=255"`
+	Key   types.SettingKey       `json:"key" validate:"required"`
 	Value map[string]interface{} `json:"value,omitempty"`
 }
 
@@ -86,11 +86,12 @@ func (r *CreateSettingRequest) Validate() error {
 		return errors.New("key is required and cannot be empty")
 	}
 
-	if len(r.Key) > 255 {
-		return errors.New("key cannot exceed 255 characters")
+	// Check if the key is a valid setting key
+	if !types.IsValidSettingKey(r.Key.String()) {
+		return errors.New("invalid setting key")
 	}
 
-	if err := types.ValidateSettingValue(r.Key, r.Value); err != nil {
+	if err := types.ValidateSettingValue(r.Key.String(), r.Value); err != nil {
 		return err
 	}
 
@@ -102,7 +103,7 @@ func (r *CreateSettingRequest) ToSetting(ctx context.Context) *settings.Setting 
 		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SETTING),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		BaseModel:     types.GetDefaultBaseModel(ctx),
-		Key:           r.Key,
+		Key:           r.Key.String(),
 		Value:         r.Value,
 	}
 }
@@ -112,8 +113,8 @@ type UpdateSettingRequest struct {
 }
 
 // UpdateSettingRequest represents the request to update an existing setting
-func (r *UpdateSettingRequest) Validate(key string) error {
-	if err := types.ValidateSettingValue(key, r.Value); err != nil {
+func (r *UpdateSettingRequest) Validate(key types.SettingKey) error {
+	if err := types.ValidateSettingValue(key.String(), r.Value); err != nil {
 		return err
 	}
 
