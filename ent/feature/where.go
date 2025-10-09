@@ -1074,6 +1074,16 @@ func UnitPluralContainsFold(v string) predicate.Feature {
 	return predicate.Feature(sql.FieldContainsFold(FieldUnitPlural, v))
 }
 
+// AlertSettingsIsNil applies the IsNil predicate on the "alert_settings" field.
+func AlertSettingsIsNil() predicate.Feature {
+	return predicate.Feature(sql.FieldIsNull(FieldAlertSettings))
+}
+
+// AlertSettingsNotNil applies the NotNil predicate on the "alert_settings" field.
+func AlertSettingsNotNil() predicate.Feature {
+	return predicate.Feature(sql.FieldNotNull(FieldAlertSettings))
+}
+
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.Feature) predicate.Feature {
 	return predicate.Feature(sql.AndPredicates(predicates...))

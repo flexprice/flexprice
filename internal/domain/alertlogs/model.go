@@ -7,13 +7,15 @@ import (
 
 // AlertLog represents an alert log entry for monitoring entity states
 type AlertLog struct {
-	ID            string                `db:"id" json:"id"`
-	EntityType    types.AlertEntityType `db:"entity_type" json:"entity_type"`
-	EntityID      string                `db:"entity_id" json:"entity_id"`
-	AlertType     types.AlertType       `db:"alert_type" json:"alert_type"`
-	AlertStatus   types.AlertState      `db:"alert_status" json:"alert_status"`
-	AlertInfo     types.AlertInfo       `db:"alert_info" json:"alert_info"`
-	EnvironmentID string                `db:"environment_id" json:"environment_id"`
+	ID               string                `db:"id" json:"id"`
+	EntityType       types.AlertEntityType `db:"entity_type" json:"entity_type"`
+	EntityID         string                `db:"entity_id" json:"entity_id"`
+	ParentEntityType *string               `db:"parent_entity_type" json:"parent_entity_type,omitempty"`
+	ParentEntityID   *string               `db:"parent_entity_id" json:"parent_entity_id,omitempty"`
+	AlertType        types.AlertType       `db:"alert_type" json:"alert_type"`
+	AlertStatus      types.AlertState      `db:"alert_status" json:"alert_status"`
+	AlertInfo        types.AlertInfo       `db:"alert_info" json:"alert_info"`
+	EnvironmentID    string                `db:"environment_id" json:"environment_id"`
 	types.BaseModel
 }
 
@@ -23,13 +25,15 @@ func FromEnt(e *ent.AlertLogs) *AlertLog {
 		return nil
 	}
 	return &AlertLog{
-		ID:            e.ID,
-		EntityType:    types.AlertEntityType(e.EntityType),
-		EntityID:      e.EntityID,
-		AlertType:     types.AlertType(e.AlertType),
-		AlertStatus:   types.AlertState(e.AlertStatus),
-		AlertInfo:     e.AlertInfo,
-		EnvironmentID: e.EnvironmentID,
+		ID:               e.ID,
+		EntityType:       types.AlertEntityType(e.EntityType),
+		EntityID:         e.EntityID,
+		ParentEntityType: e.ParentEntityType,
+		ParentEntityID:   e.ParentEntityID,
+		AlertType:        types.AlertType(e.AlertType),
+		AlertStatus:      types.AlertState(e.AlertStatus),
+		AlertInfo:        e.AlertInfo,
+		EnvironmentID:    e.EnvironmentID,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

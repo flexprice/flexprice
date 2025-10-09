@@ -7,16 +7,17 @@ import (
 )
 
 type Feature struct {
-	ID            string            `json:"id"`
-	Name          string            `json:"name"`
-	LookupKey     string            `json:"lookup_key"`
-	Description   string            `json:"description"`
-	MeterID       string            `json:"meter_id"`
-	Metadata      types.Metadata    `json:"metadata"`
-	Type          types.FeatureType `json:"type"`
-	UnitSingular  string            `json:"unit_singular"`
-	UnitPlural    string            `json:"unit_plural"`
-	EnvironmentID string            `json:"environment_id"`
+	ID            string               `json:"id"`
+	Name          string               `json:"name"`
+	LookupKey     string               `json:"lookup_key"`
+	Description   string               `json:"description"`
+	MeterID       string               `json:"meter_id"`
+	Metadata      types.Metadata       `json:"metadata"`
+	Type          types.FeatureType    `json:"type"`
+	UnitSingular  string               `json:"unit_singular"`
+	UnitPlural    string               `json:"unit_plural"`
+	AlertSettings *types.AlertSettings `json:"alert_settings,omitempty"`
+	EnvironmentID string               `json:"environment_id"`
 	types.BaseModel
 }
 
@@ -24,6 +25,13 @@ type Feature struct {
 func FromEnt(f *ent.Feature) *Feature {
 	if f == nil {
 		return nil
+	}
+
+	// Extract alert settings from Ent entity
+	var alertSettings *types.AlertSettings
+	// Check if alert settings are set (critical threshold must be provided)
+	if f.AlertSettings.Critical != nil {
+		alertSettings = &f.AlertSettings
 	}
 
 	return &Feature{
@@ -36,6 +44,7 @@ func FromEnt(f *ent.Feature) *Feature {
 		Type:          types.FeatureType(f.Type),
 		UnitSingular:  lo.FromPtr(f.UnitSingular),
 		UnitPlural:    lo.FromPtr(f.UnitPlural),
+		AlertSettings: alertSettings,
 		EnvironmentID: f.EnvironmentID,
 		BaseModel: types.BaseModel{
 			TenantID:  f.TenantID,

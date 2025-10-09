@@ -14,25 +14,29 @@ type AlertState string
 const (
 	AlertStateOk      AlertState = "ok"
 	AlertStateInAlarm AlertState = "in_alarm"
+	AlertStateWarning AlertState = "warning"
 )
 
 type AlertType string
 
 const (
-	AlertTypeLowOngoingBalance AlertType = "low_ongoing_balance"
-	AlertTypeLowCreditBalance  AlertType = "low_credit_balance"
+	AlertTypeLowOngoingBalance    AlertType = "low_ongoing_balance"
+	AlertTypeLowCreditBalance     AlertType = "low_credit_balance"
+	AlertTypeFeatureWalletBalance AlertType = "feature_wallet_balance"
 )
 
 // AlertEntityType represents the type of entity for alerts
 type AlertEntityType string
 
 const (
-	AlertEntityTypeWallet AlertEntityType = "wallet"
+	AlertEntityTypeWallet  AlertEntityType = "wallet"
+	AlertEntityTypeFeature AlertEntityType = "feature"
 )
 
 func (aet AlertEntityType) Validate() error {
 	allowedTypes := []AlertEntityType{
 		AlertEntityTypeWallet,
+		AlertEntityTypeFeature,
 	}
 	if !lo.Contains(allowedTypes, aet) {
 		return ierr.NewError("invalid alert entity type").
@@ -65,6 +69,7 @@ func (at AlertType) Validate() error {
 	allowedTypes := []AlertType{
 		AlertTypeLowOngoingBalance,
 		AlertTypeLowCreditBalance,
+		AlertTypeFeatureWalletBalance,
 	}
 	if !lo.Contains(allowedTypes, at) {
 		return ierr.NewError("invalid alert type").
@@ -75,18 +80,18 @@ func (at AlertType) Validate() error {
 }
 
 type AlertInfo struct {
-	Threshold   AlertThreshold  `json:"threshold"`
-	ValueAtTime decimal.Decimal `json:"value_at_time"`
-	Timestamp   time.Time       `json:"timestamp"`
+	AlertSettings *AlertSettings  `json:"alert_settings,omitempty"`
+	ValueAtTime   decimal.Decimal `json:"value_at_time"`
+	Timestamp     time.Time       `json:"timestamp"`
 }
 
 // AlertConfig represents the configuration for wallet alerts
 type AlertConfig struct {
-	Threshold *AlertThreshold `json:"threshold,omitempty"`
+	Threshold *WalletAlertThreshold `json:"threshold,omitempty"`
 }
 
-// AlertThreshold represents the threshold configuration
-type AlertThreshold struct {
+// WalletAlertThreshold represents the threshold configuration for wallet alerts
+type WalletAlertThreshold struct {
 	Type  AlertThresholdType `json:"type"` // amount
 	Value decimal.Decimal    `json:"value"`
 }
@@ -162,4 +167,139 @@ func (f *AlertLogFilter) GetOffset() int {
 		return NewDefaultQueryFilter().GetOffset()
 	}
 	return f.QueryFilter.GetOffset()
+}
+
+type AlertSettings struct {
+	Critical     *AlertThreshold `json:"critical"`
+	Warning      *AlertThreshold `json:"warning"`
+	AlertEnabled *bool           `json:"alert_enabled"`
+}
+
+func (at *AlertSettings) Validate() error {
+	// Validate critical threshold if provided
+	if at.Critical != nil {
+		// critical condition must be provided either above or below
+		if at.Critical.Condition != AlertConditionAbove && at.Critical.Condition != AlertConditionBelow {
+			return ierr.NewError("critical threshold condition must be either above or below").
+				WithHint("Please provide a valid critical threshold condition").
+				Mark(ierr.ErrValidation)
+		}
+	}
+	if at.Warning != nil {
+		// If warning is provided, critical must also be provided for validation
+		if at.Critical == nil {
+			return ierr.NewError("critical threshold is required when warning threshold is provided").
+				WithHint("Please provide a critical threshold").
+				Mark(ierr.ErrValidation)
+		}
+		switch at.Critical.Condition {
+		case AlertConditionAbove:
+			// warning threshold must be less than critical threshold
+			if at.Warning.Threshold.GreaterThan(at.Critical.Threshold) {
+				return ierr.NewError("warning threshold must be less than critical threshold").
+					WithHint("Please provide a valid warning threshold").
+					Mark(ierr.ErrValidation)
+			}
+			// warning condition must be same as critical condition
+			if at.Warning.Condition != at.Critical.Condition {
+				return ierr.NewError("warning condition must be same as critical condition").
+					WithHint("Please provide a valid warning condition").
+					Mark(ierr.ErrValidation)
+			}
+		case AlertConditionBelow:
+			// warning threshold must be greater than critical threshold
+			if at.Warning.Threshold.LessThan(at.Critical.Threshold) {
+				return ierr.NewError("warning threshold must be greater than critical threshold").
+					WithHint("Please provide a valid warning threshold").
+					Mark(ierr.ErrValidation)
+			}
+			// warning condition must be same as critical condition
+			if at.Warning.Condition != at.Critical.Condition {
+				return ierr.NewError("warning condition must be same as critical condition").
+					WithHint("Please provide a valid warning condition").
+					Mark(ierr.ErrValidation)
+			}
+		}
+	}
+	return nil
+}
+
+type AlertThreshold struct {
+	Threshold decimal.Decimal `json:"threshold"`
+	Condition AlertCondition  `json:"condition"`
+}
+
+func (at *AlertThreshold) Validate() error {
+	if at.Condition == "" {
+		return ierr.NewError("alert threshold condition is required").
+			WithHint("Please provide a valid alert threshold condition").
+			Mark(ierr.ErrValidation)
+	}
+	if at.Condition != AlertConditionAbove && at.Condition != AlertConditionBelow {
+		return ierr.NewError("alert threshold condition must be either above or below").
+			WithHint("Please provide a valid alert threshold condition").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+type AlertCondition string
+
+const (
+	AlertConditionAbove AlertCondition = "above"
+	AlertConditionBelow AlertCondition = "below"
+)
+
+func (ac AlertCondition) Validate() error {
+	allowedConditions := []AlertCondition{
+		AlertConditionAbove,
+		AlertConditionBelow,
+	}
+	if !lo.Contains(allowedConditions, ac) {
+		return ierr.NewError("invalid alert condition").
+			WithHint("Please provide a valid alert condition").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// AlertStatus determines the alert status based on ongoing balance vs alert settings
+// if critical condition is above:
+// if ongoing balance is greater than or equal to critical threshold, return AlertStateInAlarm
+// if ongoing balance is greater than or equal to warning threshold, return AlertStateWarning
+// if ongoing balance is less than warning threshold, return AlertStateOk
+// if critical condition is below:
+// if ongoing balance is less than or equal to critical threshold, return AlertStateInAlarm
+// if ongoing balance is less than or equal to warning threshold, return AlertStateWarning
+// if ongoing balance is greater than warning threshold, return AlertStateOk
+func (At *AlertSettings) AlertState(ongoingBalance decimal.Decimal) (AlertState, error) {
+	criticalThreshold := lo.FromPtr(At.Critical)
+	warningThreshold := lo.FromPtr(At.Warning)
+
+	switch At.Critical.Condition {
+	case AlertConditionAbove:
+		if ongoingBalance.GreaterThanOrEqual(criticalThreshold.Threshold) {
+			return AlertStateInAlarm, nil
+		}
+		if ongoingBalance.GreaterThanOrEqual(warningThreshold.Threshold) {
+			return AlertStateWarning, nil
+		}
+		return AlertStateOk, nil
+	case AlertConditionBelow:
+		if ongoingBalance.LessThanOrEqual(criticalThreshold.Threshold) {
+			return AlertStateInAlarm, nil
+		}
+		if ongoingBalance.LessThanOrEqual(warningThreshold.Threshold) {
+			return AlertStateWarning, nil
+		}
+		return AlertStateOk, nil
+	}
+
+	return "", ierr.NewError("Alert State determination failed").
+		WithHint("Please provide a valid alert settings").
+		Mark(ierr.ErrValidation)
+}
+
+func (at *AlertSettings) IsAlertEnabled() bool {
+	return at.AlertEnabled != nil && *at.AlertEnabled
 }

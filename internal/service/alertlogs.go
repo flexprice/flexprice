@@ -2,11 +2,14 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
+	"github.com/samber/lo"
 )
 
 // AlertLogsService defines the interface for alert logs operations
@@ -15,11 +18,8 @@ type AlertLogsService interface {
 	// This is the main method used by cron jobs or other internal processes
 	LogAlert(ctx context.Context, req *LogAlertRequest) error
 
-	// GetLatestAlertForEntityAndType retrieves the latest alert log for a specific entity and alert type
-	GetLatestAlertForEntityAndType(ctx context.Context, entityType types.AlertEntityType, entityID string, alertType types.AlertType) (*alertlogs.AlertLog, error)
-
-	// GetLatestAlertForEntity retrieves the latest alert log for a specific entity (any alert type)
-	GetLatestAlertForEntity(ctx context.Context, entityType types.AlertEntityType, entityID string) (*alertlogs.AlertLog, error)
+	// GetLatestAlert retrieves the latest alert log based on provided filters
+	GetLatestAlert(ctx context.Context, entityType types.AlertEntityType, entityID string, alertType *types.AlertType, parentEntityType *string, parentEntityID *string) (*alertlogs.AlertLog, error)
 
 	// ListAlertsByEntity retrieves alert logs for a specific entity
 	ListAlertsByEntity(ctx context.Context, entityType types.AlertEntityType, entityID string, limit int) ([]*alertlogs.AlertLog, error)
@@ -27,11 +27,13 @@ type AlertLogsService interface {
 
 // LogAlertRequest represents the request to log an alert
 type LogAlertRequest struct {
-	EntityType  types.AlertEntityType `json:"entity_type" validate:"required"`
-	EntityID    string                `json:"entity_id" validate:"required"`
-	AlertType   types.AlertType       `json:"alert_type" validate:"required"`
-	AlertStatus types.AlertState      `json:"alert_status" validate:"required"`
-	AlertInfo   types.AlertInfo       `json:"alert_info" validate:"required"`
+	EntityType       types.AlertEntityType `json:"entity_type" validate:"required"`
+	EntityID         string                `json:"entity_id" validate:"required"`
+	ParentEntityType *string               `json:"parent_entity_type,omitempty"` // Optional parent entity type (e.g., "wallet")
+	ParentEntityID   *string               `json:"parent_entity_id,omitempty"`   // Optional parent entity ID (e.g., wallet_id)
+	AlertType        types.AlertType       `json:"alert_type" validate:"required"`
+	AlertStatus      types.AlertState      `json:"alert_status" validate:"required"`
+	AlertInfo        types.AlertInfo       `json:"alert_info" validate:"required"`
 }
 
 // Validate validates the log alert request
@@ -70,99 +72,105 @@ func (s *alertLogsService) LogAlert(ctx context.Context, req *LogAlertRequest) e
 		return err
 	}
 
-	s.Logger.Infow("logging alert",
+	s.Logger.Debugw("evaluating alert status",
 		"entity_type", req.EntityType,
 		"entity_id", req.EntityID,
+		"parent_entity_type", req.ParentEntityType,
+		"parent_entity_id", req.ParentEntityID,
 		"alert_type", req.AlertType,
 		"alert_status", req.AlertStatus,
 	)
 
-	// Check for existing alert log for this specific entity and alert type combination
-	existingAlert, err := s.AlertLogsRepo.GetLatestByEntityAndAlertType(ctx, req.EntityType, req.EntityID, req.AlertType)
+	// Check for existing alert log using the unified GetLatestAlert method
+	// This method handles all alert types - with or without parent entities
+	existingAlert, err := s.AlertLogsRepo.GetLatestAlert(
+		ctx,
+		req.EntityType,
+		req.EntityID,
+		&req.AlertType,
+		req.ParentEntityType,
+		req.ParentEntityID,
+	)
 	if err != nil {
 		return ierr.WithError(err).
 			WithHint("Failed to check existing alert status").
 			Mark(ierr.ErrDatabase)
 	}
 
-	// Business logic based on your specifications:
+	// Debug log to verify what we fetched from DB (NO CACHE!)
+	if existingAlert != nil {
+		s.Logger.Infow("fetched existing alert from database",
+			"entity_type", req.EntityType,
+			"entity_id", req.EntityID,
+			"alert_type", req.AlertType,
+			"existing_alert_id", existingAlert.ID,
+			"existing_alert_status", existingAlert.AlertStatus,
+			"existing_alert_created_at", existingAlert.CreatedAt,
+			"requested_status", req.AlertStatus,
+		)
+	} else {
+		s.Logger.Infow("no existing alert found in database",
+			"entity_type", req.EntityType,
+			"entity_id", req.EntityID,
+			"alert_type", req.AlertType,
+			"requested_status", req.AlertStatus,
+		)
+	}
+
+	// Business logic: Log alerts ONLY when state changes or when problems are detected
+	// Works for all alert types (wallet, feature, etc.) and all states (ok, warning, in_alarm)
 	shouldCreateLog := false
 	var webhookEventName string
 
-	if req.AlertStatus == types.AlertStateInAlarm {
-		// For ALERT TRIGGERED condition:
-		// Publish if threshold breached AND:
-		// 1. No latest alert exists for entity.id x alert_type
-		// 2. Latest alert exists but status is "ok"
-		if existingAlert == nil {
-			// Case 1: No previous alert exists
+	// State transition rules:
+	// 1. No previous alert + OK state → Skip (system is healthy from start, no alert needed)
+	// 2. No previous alert + WARNING/IN_ALARM → Create (problem detected for first time)
+	// 3. Previous alert exists + status changed → Create (state transition)
+	// 4. Previous alert exists + status unchanged → Skip (no change)
+
+	if existingAlert == nil {
+		// No previous alert exists
+		if req.AlertStatus == types.AlertStateOk {
+			// System is healthy from the start - no need to log
+			s.Logger.Debugw("skipping alert - no previous alert and status is ok (system healthy)",
+				"entity_type", req.EntityType,
+				"entity_id", req.EntityID,
+				"alert_type", req.AlertType,
+				"alert_status", req.AlertStatus,
+			)
+		} else {
+			// Problem state detected for first time (WARNING or IN_ALARM) - create alert
 			shouldCreateLog = true
 			webhookEventName = s.getWebhookEventName(req.AlertType, req.AlertStatus)
-			s.Logger.Infow("creating new alert - no previous alert exists",
+			s.Logger.Infow("creating alert - problem detected for first time",
 				"entity_type", req.EntityType,
 				"entity_id", req.EntityID,
 				"alert_type", req.AlertType,
 				"alert_status", req.AlertStatus,
 				"webhook_event", webhookEventName,
 			)
-		} else if existingAlert.AlertStatus == types.AlertStateOk {
-			// Case 2: Previous alert exists but is in "ok" state
-			shouldCreateLog = true
-			webhookEventName = s.getWebhookEventName(req.AlertType, req.AlertStatus)
-			s.Logger.Infow("creating alert - transitioning from ok to in_alarm",
-				"entity_type", req.EntityType,
-				"entity_id", req.EntityID,
-				"alert_type", req.AlertType,
-				"previous_status", existingAlert.AlertStatus,
-				"new_status", req.AlertStatus,
-				"webhook_event", webhookEventName,
-			)
-		} else {
-			// Latest alert exists and is already "in_alarm" - don't log/publish
-			s.Logger.Debugw("skipping alert - already in alarm state",
-				"entity_type", req.EntityType,
-				"entity_id", req.EntityID,
-				"alert_type", req.AlertType,
-				"current_status", existingAlert.AlertStatus,
-			)
 		}
-	} else if req.AlertStatus == types.AlertStateOk {
-		// For ALERT RECOVERED condition:
-		// Publish if threshold not breached AND:
-		// 1. Latest alert exists for entity.id x alert_type AND status is "in_alarm"
-		if existingAlert != nil && existingAlert.AlertStatus == types.AlertStateInAlarm {
-			// Only case: Previous alert exists and is in "in_alarm" state
-			shouldCreateLog = true
-			webhookEventName = s.getWebhookEventName(req.AlertType, req.AlertStatus)
-			s.Logger.Infow("creating recovery alert - transitioning from in_alarm to ok",
-				"entity_type", req.EntityType,
-				"entity_id", req.EntityID,
-				"alert_type", req.AlertType,
-				"previous_status", existingAlert.AlertStatus,
-				"new_status", req.AlertStatus,
-				"webhook_event", webhookEventName,
-			)
-		} else {
-			// No previous alert OR previous alert is already "ok" - don't log/publish
-			var reason string
-			if existingAlert == nil {
-				reason = "no previous alert exists"
-			} else {
-				reason = "previous alert already in ok state"
-			}
-			s.Logger.Debugw("skipping recovery alert",
-				"entity_type", req.EntityType,
-				"entity_id", req.EntityID,
-				"alert_type", req.AlertType,
-				"reason", reason,
-				"existing_status", func() string {
-					if existingAlert != nil {
-						return string(existingAlert.AlertStatus)
-					}
-					return "none"
-				}(),
-			)
-		}
+	} else if existingAlert.AlertStatus != req.AlertStatus {
+		// Previous alert exists BUT status is different - state changed, create log
+		shouldCreateLog = true
+		webhookEventName = s.getWebhookEventName(req.AlertType, req.AlertStatus)
+		s.Logger.Infow("creating alert - state changed",
+			"entity_type", req.EntityType,
+			"entity_id", req.EntityID,
+			"alert_type", req.AlertType,
+			"previous_status", existingAlert.AlertStatus,
+			"new_status", req.AlertStatus,
+			"webhook_event", webhookEventName,
+		)
+	} else {
+		// Previous alert exists AND status is the same - no change, skip
+		s.Logger.Debugw("skipping alert - status unchanged",
+			"entity_type", req.EntityType,
+			"entity_id", req.EntityID,
+			"alert_type", req.AlertType,
+			"current_status", existingAlert.AlertStatus,
+			"requested_status", req.AlertStatus,
+		)
 	}
 
 	if !shouldCreateLog {
@@ -171,13 +179,15 @@ func (s *alertLogsService) LogAlert(ctx context.Context, req *LogAlertRequest) e
 
 	// Create new alert log entry
 	alertLog := &alertlogs.AlertLog{
-		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ALERT_LOG),
-		EntityType:    req.EntityType,
-		EntityID:      req.EntityID,
-		AlertType:     req.AlertType,
-		AlertStatus:   req.AlertStatus,
-		AlertInfo:     req.AlertInfo,
-		EnvironmentID: types.GetEnvironmentID(ctx),
+		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ALERT_LOG),
+		EntityType:       req.EntityType,
+		EntityID:         req.EntityID,
+		ParentEntityType: req.ParentEntityType,
+		ParentEntityID:   req.ParentEntityID,
+		AlertType:        req.AlertType,
+		AlertStatus:      req.AlertStatus,
+		AlertInfo:        req.AlertInfo,
+		EnvironmentID:    types.GetEnvironmentID(ctx),
 		BaseModel: types.BaseModel{
 			TenantID:  types.GetTenantID(ctx),
 			Status:    types.StatusPublished,
@@ -194,7 +204,7 @@ func (s *alertLogsService) LogAlert(ctx context.Context, req *LogAlertRequest) e
 			Mark(ierr.ErrDatabase)
 	}
 
-	s.Logger.Infow("alert logged successfully",
+	s.Logger.Infow("alert log created successfully",
 		"alert_log_id", alertLog.ID,
 		"entity_type", req.EntityType,
 		"entity_id", req.EntityID,
@@ -203,8 +213,8 @@ func (s *alertLogsService) LogAlert(ctx context.Context, req *LogAlertRequest) e
 		"webhook_event", webhookEventName,
 	)
 
-	switch req.EntityType {
-	case types.AlertEntityTypeWallet:
+	switch req.AlertType {
+	case types.AlertTypeLowOngoingBalance, types.AlertTypeLowCreditBalance:
 		// Get wallet domain object directly from repository
 		wallet, err := s.WalletRepo.GetWalletByID(ctx, alertLog.EntityID)
 		if err != nil {
@@ -239,6 +249,31 @@ func (s *alertLogsService) LogAlert(ctx context.Context, req *LogAlertRequest) e
 				"webhook_event", webhookEventName,
 			)
 		}
+	case types.AlertTypeFeatureWalletBalance:
+		// Publish webhook event using the publishWebhookEvent helper
+		// This will pass the alert log with parent entity fields (feature_id, wallet_id) to AlertPayloadBuilder
+		if webhookEventName != "" {
+			if err := s.publishWebhookEvent(ctx, webhookEventName, alertLog, req.AlertType); err != nil {
+				s.Logger.Errorw("failed to publish webhook event",
+					"error", err,
+					"alert_log_id", alertLog.ID,
+					"entity_type", req.EntityType,
+					"entity_id", req.EntityID,
+					"alert_type", req.AlertType,
+					"alert_status", req.AlertStatus,
+					"webhook_event", webhookEventName,
+				)
+			} else {
+				s.Logger.Infow("webhook event published successfully",
+					"alert_log_id", alertLog.ID,
+					"entity_type", req.EntityType,
+					"entity_id", req.EntityID,
+					"alert_type", req.AlertType,
+					"alert_status", req.AlertStatus,
+					"webhook_event", webhookEventName,
+				)
+			}
+		}
 	default:
 		s.Logger.Warnw("webhook event not published for alert log:",
 			"entity_type", req.EntityType,
@@ -250,12 +285,10 @@ func (s *alertLogsService) LogAlert(ctx context.Context, req *LogAlertRequest) e
 	return nil
 }
 
-func (s *alertLogsService) GetLatestAlertForEntityAndType(ctx context.Context, entityType types.AlertEntityType, entityID string, alertType types.AlertType) (*alertlogs.AlertLog, error) {
-	return s.AlertLogsRepo.GetLatestByEntityAndAlertType(ctx, entityType, entityID, alertType)
-}
-
-func (s *alertLogsService) GetLatestAlertForEntity(ctx context.Context, entityType types.AlertEntityType, entityID string) (*alertlogs.AlertLog, error) {
-	return s.AlertLogsRepo.GetLatestByEntity(ctx, entityType, entityID)
+// GetLatestAlert retrieves the latest alert log based on provided filters
+// All parameters except entityType and entityID are optional
+func (s *alertLogsService) GetLatestAlert(ctx context.Context, entityType types.AlertEntityType, entityID string, alertType *types.AlertType, parentEntityType *string, parentEntityID *string) (*alertlogs.AlertLog, error) {
+	return s.AlertLogsRepo.GetLatestAlert(ctx, entityType, entityID, alertType, parentEntityType, parentEntityID)
 }
 
 func (s *alertLogsService) ListAlertsByEntity(ctx context.Context, entityType types.AlertEntityType, entityID string, limit int) ([]*alertlogs.AlertLog, error) {
@@ -290,6 +323,17 @@ var alertWebhookMapping = map[types.AlertType]map[types.AlertState]WebhookEventM
 			WebhookEvent: types.WebhookEventWalletCreditBalanceRecovered, // "wallet.credit_balance.recovered"
 		},
 	},
+	types.AlertTypeFeatureWalletBalance: {
+		types.AlertStateInAlarm: {
+			WebhookEvent: types.WebhookEventFeatureWalletBalanceAlert, // "feature.balance.threshold.alert"
+		},
+		types.AlertStateOk: {
+			WebhookEvent: types.WebhookEventFeatureWalletBalanceAlert, // "feature.balance.threshold.alert"
+		},
+		types.AlertStateWarning: {
+			WebhookEvent: types.WebhookEventFeatureWalletBalanceAlert, // "feature.balance.threshold.alert"
+		},
+	},
 }
 
 // getWebhookEventName determines the appropriate webhook event name based on alert type and status
@@ -304,4 +348,49 @@ func (s *alertLogsService) getWebhookEventName(alertType types.AlertType, alertS
 
 	// Return empty string if no mapping found
 	return ""
+}
+
+func (s *alertLogsService) publishWebhookEvent(ctx context.Context, eventName string, alertLog *alertlogs.AlertLog, alertType types.AlertType) error {
+	var webhookPayload []byte
+	var err error
+
+	switch alertType {
+	case types.AlertTypeFeatureWalletBalance:
+		// For feature alerts, pass both feature_id and wallet_id
+		walletID := ""
+		if alertLog.ParentEntityID != nil {
+			walletID = lo.FromPtr(alertLog.ParentEntityID)
+		}
+		webhookPayload, err = json.Marshal(webhookDto.InternalAlertEvent{
+			FeatureID:   alertLog.EntityID,            // Feature ID
+			WalletID:    walletID,                     // Wallet ID from parent entity ID
+			AlertType:   string(alertLog.AlertType),   // Alert type
+			AlertStatus: string(alertLog.AlertStatus), // Alert status
+		})
+		if err != nil {
+			s.Logger.Errorw("failed to marshal webhook payload", "error", err)
+			return err
+		}
+	default:
+		return ierr.NewError("invalid alert type").
+			WithHint("Invalid alert type").
+			Mark(ierr.ErrValidation)
+	}
+
+	webhookEvent := &types.WebhookEvent{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WEBHOOK_EVENT),
+		EventName:     eventName,
+		TenantID:      types.GetTenantID(ctx),
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		UserID:        types.GetUserID(ctx),
+		Timestamp:     time.Now().UTC(),
+		Payload:       json.RawMessage(webhookPayload),
+	}
+
+	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
+		s.Logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
+		return err
+	}
+
+	return nil
 }

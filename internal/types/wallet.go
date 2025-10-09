@@ -325,10 +325,10 @@ func (c WalletConfig) Validate() error {
 }
 
 type CheckAlertsRequest struct {
-	TenantIDs []string        `json:"tenant_ids"`
-	EnvIDs    []string        `json:"env_ids"`
-	WalletIDs []string        `json:"wallet_ids"`
-	Threshold *AlertThreshold `json:"threshold,omitempty"`
+	TenantIDs []string              `json:"tenant_ids"`
+	EnvIDs    []string              `json:"env_ids"`
+	WalletIDs []string              `json:"wallet_ids"`
+	Threshold *WalletAlertThreshold `json:"threshold,omitempty"`
 }
 
 // WalletFilter represents the filter options for wallets

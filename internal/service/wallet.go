@@ -633,7 +633,7 @@ func (s *walletService) UpdateWallet(ctx context.Context, id string, req *dto.Up
 
 		// Convert AlertConfig to types.AlertConfig
 		existing.AlertConfig = &types.AlertConfig{
-			Threshold: &types.AlertThreshold{
+			Threshold: &types.WalletAlertThreshold{
 				Type:  types.AlertThresholdType(req.AlertConfig.Threshold.Type),
 				Value: req.AlertConfig.Threshold.Value,
 			},
@@ -854,9 +854,11 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 
 	// Create alert info
 	alertInfo := types.AlertInfo{
-		Threshold: types.AlertThreshold{
-			Type:  types.AlertThresholdTypeAmount,
-			Value: thresholdValue,
+		AlertSettings: &types.AlertSettings{
+			Critical: &types.AlertThreshold{
+				Threshold: thresholdValue,
+				Condition: types.AlertConditionBelow,
+			},
 		},
 		ValueAtTime: newCreditBalance,
 		Timestamp:   time.Now().UTC(),

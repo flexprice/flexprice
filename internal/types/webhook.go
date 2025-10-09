@@ -33,9 +33,10 @@ const (
 
 // feature event names
 const (
-	WebhookEventFeatureCreated = "feature.created"
-	WebhookEventFeatureUpdated = "feature.updated"
-	WebhookEventFeatureDeleted = "feature.deleted"
+	WebhookEventFeatureCreated            = "feature.created"
+	WebhookEventFeatureUpdated            = "feature.updated"
+	WebhookEventFeatureDeleted            = "feature.deleted"
+	WebhookEventFeatureWalletBalanceAlert = "feature.wallet_balance.alert"
 )
 
 // entitlement event names

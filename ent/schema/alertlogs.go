@@ -48,6 +48,24 @@ func (AlertLogs) Fields() []ent.Field {
 			NotEmpty().
 			Immutable(),
 
+		// Parent entity type (optional) - e.g., "wallet" for feature balance alerts
+		field.String("parent_entity_type").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable().
+			Immutable(),
+
+		// Parent entity ID (optional) - e.g., wallet_id for feature balance alerts
+		field.String("parent_entity_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable().
+			Immutable(),
+
 		// Type of alert (credit_balance, ongoing_balance, etc)
 		field.String("alert_type").
 			SchemaType(map[string]string{
@@ -90,5 +108,8 @@ func (AlertLogs) Indexes() []ent.Index {
 		// Index for querying alerts by creation time (for latest alerts)
 		index.Fields("tenant_id", "environment_id", "entity_type", "entity_id", "created_at").
 			StorageKey("idx_alertlogs_entity_created_at"),
+		// Index for querying alerts by entity + parent entity (for feature wallet balance alerts)
+		index.Fields("tenant_id", "environment_id", "entity_type", "entity_id", "parent_entity_type", "parent_entity_id", "created_at").
+			StorageKey("idx_alertlogs_entity_parent_created_at"),
 	}
 }

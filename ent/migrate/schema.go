@@ -86,6 +86,8 @@ var (
 		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "entity_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "entity_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "parent_entity_type", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "parent_entity_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "alert_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "alert_status", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "alert_info", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
@@ -104,12 +106,17 @@ var (
 			{
 				Name:    "idx_alertlogs_type",
 				Unique:  false,
-				Columns: []*schema.Column{AlertLogsColumns[1], AlertLogsColumns[7], AlertLogsColumns[10]},
+				Columns: []*schema.Column{AlertLogsColumns[1], AlertLogsColumns[7], AlertLogsColumns[12]},
 			},
 			{
 				Name:    "idx_alertlogs_entity_created_at",
 				Unique:  false,
 				Columns: []*schema.Column{AlertLogsColumns[1], AlertLogsColumns[7], AlertLogsColumns[8], AlertLogsColumns[9], AlertLogsColumns[3]},
+			},
+			{
+				Name:    "idx_alertlogs_entity_parent_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{AlertLogsColumns[1], AlertLogsColumns[7], AlertLogsColumns[8], AlertLogsColumns[9], AlertLogsColumns[10], AlertLogsColumns[11], AlertLogsColumns[3]},
 			},
 		},
 	}
@@ -842,6 +849,7 @@ var (
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 		{Name: "unit_singular", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "unit_plural", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "alert_settings", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 	}
 	// FeaturesTable holds the schema information for the "features" table.
 	FeaturesTable = &schema.Table{

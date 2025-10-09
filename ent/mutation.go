@@ -2614,25 +2614,27 @@ func (m *AddonAssociationMutation) ResetEdge(name string) error {
 // AlertLogsMutation represents an operation that mutates the AlertLogs nodes in the graph.
 type AlertLogsMutation struct {
 	config
-	op             Op
-	typ            string
-	id             *string
-	tenant_id      *string
-	status         *string
-	created_at     *time.Time
-	updated_at     *time.Time
-	created_by     *string
-	updated_by     *string
-	environment_id *string
-	entity_type    *string
-	entity_id      *string
-	alert_type     *string
-	alert_status   *string
-	alert_info     *types.AlertInfo
-	clearedFields  map[string]struct{}
-	done           bool
-	oldValue       func(context.Context) (*AlertLogs, error)
-	predicates     []predicate.AlertLogs
+	op                 Op
+	typ                string
+	id                 *string
+	tenant_id          *string
+	status             *string
+	created_at         *time.Time
+	updated_at         *time.Time
+	created_by         *string
+	updated_by         *string
+	environment_id     *string
+	entity_type        *string
+	entity_id          *string
+	parent_entity_type *string
+	parent_entity_id   *string
+	alert_type         *string
+	alert_status       *string
+	alert_info         *types.AlertInfo
+	clearedFields      map[string]struct{}
+	done               bool
+	oldValue           func(context.Context) (*AlertLogs, error)
+	predicates         []predicate.AlertLogs
 }
 
 var _ ent.Mutation = (*AlertLogsMutation)(nil)
@@ -3102,6 +3104,104 @@ func (m *AlertLogsMutation) ResetEntityID() {
 	m.entity_id = nil
 }
 
+// SetParentEntityType sets the "parent_entity_type" field.
+func (m *AlertLogsMutation) SetParentEntityType(s string) {
+	m.parent_entity_type = &s
+}
+
+// ParentEntityType returns the value of the "parent_entity_type" field in the mutation.
+func (m *AlertLogsMutation) ParentEntityType() (r string, exists bool) {
+	v := m.parent_entity_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldParentEntityType returns the old "parent_entity_type" field's value of the AlertLogs entity.
+// If the AlertLogs object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AlertLogsMutation) OldParentEntityType(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldParentEntityType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldParentEntityType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldParentEntityType: %w", err)
+	}
+	return oldValue.ParentEntityType, nil
+}
+
+// ClearParentEntityType clears the value of the "parent_entity_type" field.
+func (m *AlertLogsMutation) ClearParentEntityType() {
+	m.parent_entity_type = nil
+	m.clearedFields[alertlogs.FieldParentEntityType] = struct{}{}
+}
+
+// ParentEntityTypeCleared returns if the "parent_entity_type" field was cleared in this mutation.
+func (m *AlertLogsMutation) ParentEntityTypeCleared() bool {
+	_, ok := m.clearedFields[alertlogs.FieldParentEntityType]
+	return ok
+}
+
+// ResetParentEntityType resets all changes to the "parent_entity_type" field.
+func (m *AlertLogsMutation) ResetParentEntityType() {
+	m.parent_entity_type = nil
+	delete(m.clearedFields, alertlogs.FieldParentEntityType)
+}
+
+// SetParentEntityID sets the "parent_entity_id" field.
+func (m *AlertLogsMutation) SetParentEntityID(s string) {
+	m.parent_entity_id = &s
+}
+
+// ParentEntityID returns the value of the "parent_entity_id" field in the mutation.
+func (m *AlertLogsMutation) ParentEntityID() (r string, exists bool) {
+	v := m.parent_entity_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldParentEntityID returns the old "parent_entity_id" field's value of the AlertLogs entity.
+// If the AlertLogs object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AlertLogsMutation) OldParentEntityID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldParentEntityID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldParentEntityID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldParentEntityID: %w", err)
+	}
+	return oldValue.ParentEntityID, nil
+}
+
+// ClearParentEntityID clears the value of the "parent_entity_id" field.
+func (m *AlertLogsMutation) ClearParentEntityID() {
+	m.parent_entity_id = nil
+	m.clearedFields[alertlogs.FieldParentEntityID] = struct{}{}
+}
+
+// ParentEntityIDCleared returns if the "parent_entity_id" field was cleared in this mutation.
+func (m *AlertLogsMutation) ParentEntityIDCleared() bool {
+	_, ok := m.clearedFields[alertlogs.FieldParentEntityID]
+	return ok
+}
+
+// ResetParentEntityID resets all changes to the "parent_entity_id" field.
+func (m *AlertLogsMutation) ResetParentEntityID() {
+	m.parent_entity_id = nil
+	delete(m.clearedFields, alertlogs.FieldParentEntityID)
+}
+
 // SetAlertType sets the "alert_type" field.
 func (m *AlertLogsMutation) SetAlertType(s string) {
 	m.alert_type = &s
@@ -3244,7 +3344,7 @@ func (m *AlertLogsMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AlertLogsMutation) Fields() []string {
-	fields := make([]string, 0, 12)
+	fields := make([]string, 0, 14)
 	if m.tenant_id != nil {
 		fields = append(fields, alertlogs.FieldTenantID)
 	}
@@ -3271,6 +3371,12 @@ func (m *AlertLogsMutation) Fields() []string {
 	}
 	if m.entity_id != nil {
 		fields = append(fields, alertlogs.FieldEntityID)
+	}
+	if m.parent_entity_type != nil {
+		fields = append(fields, alertlogs.FieldParentEntityType)
+	}
+	if m.parent_entity_id != nil {
+		fields = append(fields, alertlogs.FieldParentEntityID)
 	}
 	if m.alert_type != nil {
 		fields = append(fields, alertlogs.FieldAlertType)
@@ -3307,6 +3413,10 @@ func (m *AlertLogsMutation) Field(name string) (ent.Value, bool) {
 		return m.EntityType()
 	case alertlogs.FieldEntityID:
 		return m.EntityID()
+	case alertlogs.FieldParentEntityType:
+		return m.ParentEntityType()
+	case alertlogs.FieldParentEntityID:
+		return m.ParentEntityID()
 	case alertlogs.FieldAlertType:
 		return m.AlertType()
 	case alertlogs.FieldAlertStatus:
@@ -3340,6 +3450,10 @@ func (m *AlertLogsMutation) OldField(ctx context.Context, name string) (ent.Valu
 		return m.OldEntityType(ctx)
 	case alertlogs.FieldEntityID:
 		return m.OldEntityID(ctx)
+	case alertlogs.FieldParentEntityType:
+		return m.OldParentEntityType(ctx)
+	case alertlogs.FieldParentEntityID:
+		return m.OldParentEntityID(ctx)
 	case alertlogs.FieldAlertType:
 		return m.OldAlertType(ctx)
 	case alertlogs.FieldAlertStatus:
@@ -3418,6 +3532,20 @@ func (m *AlertLogsMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetEntityID(v)
 		return nil
+	case alertlogs.FieldParentEntityType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetParentEntityType(v)
+		return nil
+	case alertlogs.FieldParentEntityID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetParentEntityID(v)
+		return nil
 	case alertlogs.FieldAlertType:
 		v, ok := value.(string)
 		if !ok {
@@ -3478,6 +3606,12 @@ func (m *AlertLogsMutation) ClearedFields() []string {
 	if m.FieldCleared(alertlogs.FieldEnvironmentID) {
 		fields = append(fields, alertlogs.FieldEnvironmentID)
 	}
+	if m.FieldCleared(alertlogs.FieldParentEntityType) {
+		fields = append(fields, alertlogs.FieldParentEntityType)
+	}
+	if m.FieldCleared(alertlogs.FieldParentEntityID) {
+		fields = append(fields, alertlogs.FieldParentEntityID)
+	}
 	return fields
 }
 
@@ -3500,6 +3634,12 @@ func (m *AlertLogsMutation) ClearField(name string) error {
 		return nil
 	case alertlogs.FieldEnvironmentID:
 		m.ClearEnvironmentID()
+		return nil
+	case alertlogs.FieldParentEntityType:
+		m.ClearParentEntityType()
+		return nil
+	case alertlogs.FieldParentEntityID:
+		m.ClearParentEntityID()
 		return nil
 	}
 	return fmt.Errorf("unknown AlertLogs nullable field %s", name)
@@ -3535,6 +3675,12 @@ func (m *AlertLogsMutation) ResetField(name string) error {
 		return nil
 	case alertlogs.FieldEntityID:
 		m.ResetEntityID()
+		return nil
+	case alertlogs.FieldParentEntityType:
+		m.ResetParentEntityType()
+		return nil
+	case alertlogs.FieldParentEntityID:
+		m.ResetParentEntityID()
 		return nil
 	case alertlogs.FieldAlertType:
 		m.ResetAlertType()
@@ -22520,6 +22666,7 @@ type FeatureMutation struct {
 	metadata       *map[string]string
 	unit_singular  *string
 	unit_plural    *string
+	alert_settings *types.AlertSettings
 	clearedFields  map[string]struct{}
 	done           bool
 	oldValue       func(context.Context) (*Feature, error)
@@ -23274,6 +23421,55 @@ func (m *FeatureMutation) ResetUnitPlural() {
 	delete(m.clearedFields, feature.FieldUnitPlural)
 }
 
+// SetAlertSettings sets the "alert_settings" field.
+func (m *FeatureMutation) SetAlertSettings(ts types.AlertSettings) {
+	m.alert_settings = &ts
+}
+
+// AlertSettings returns the value of the "alert_settings" field in the mutation.
+func (m *FeatureMutation) AlertSettings() (r types.AlertSettings, exists bool) {
+	v := m.alert_settings
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAlertSettings returns the old "alert_settings" field's value of the Feature entity.
+// If the Feature object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *FeatureMutation) OldAlertSettings(ctx context.Context) (v types.AlertSettings, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAlertSettings is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAlertSettings requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAlertSettings: %w", err)
+	}
+	return oldValue.AlertSettings, nil
+}
+
+// ClearAlertSettings clears the value of the "alert_settings" field.
+func (m *FeatureMutation) ClearAlertSettings() {
+	m.alert_settings = nil
+	m.clearedFields[feature.FieldAlertSettings] = struct{}{}
+}
+
+// AlertSettingsCleared returns if the "alert_settings" field was cleared in this mutation.
+func (m *FeatureMutation) AlertSettingsCleared() bool {
+	_, ok := m.clearedFields[feature.FieldAlertSettings]
+	return ok
+}
+
+// ResetAlertSettings resets all changes to the "alert_settings" field.
+func (m *FeatureMutation) ResetAlertSettings() {
+	m.alert_settings = nil
+	delete(m.clearedFields, feature.FieldAlertSettings)
+}
+
 // Where appends a list predicates to the FeatureMutation builder.
 func (m *FeatureMutation) Where(ps ...predicate.Feature) {
 	m.predicates = append(m.predicates, ps...)
@@ -23308,7 +23504,7 @@ func (m *FeatureMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *FeatureMutation) Fields() []string {
-	fields := make([]string, 0, 15)
+	fields := make([]string, 0, 16)
 	if m.tenant_id != nil {
 		fields = append(fields, feature.FieldTenantID)
 	}
@@ -23354,6 +23550,9 @@ func (m *FeatureMutation) Fields() []string {
 	if m.unit_plural != nil {
 		fields = append(fields, feature.FieldUnitPlural)
 	}
+	if m.alert_settings != nil {
+		fields = append(fields, feature.FieldAlertSettings)
+	}
 	return fields
 }
 
@@ -23392,6 +23591,8 @@ func (m *FeatureMutation) Field(name string) (ent.Value, bool) {
 		return m.UnitSingular()
 	case feature.FieldUnitPlural:
 		return m.UnitPlural()
+	case feature.FieldAlertSettings:
+		return m.AlertSettings()
 	}
 	return nil, false
 }
@@ -23431,6 +23632,8 @@ func (m *FeatureMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldUnitSingular(ctx)
 	case feature.FieldUnitPlural:
 		return m.OldUnitPlural(ctx)
+	case feature.FieldAlertSettings:
+		return m.OldAlertSettings(ctx)
 	}
 	return nil, fmt.Errorf("unknown Feature field %s", name)
 }
@@ -23545,6 +23748,13 @@ func (m *FeatureMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetUnitPlural(v)
 		return nil
+	case feature.FieldAlertSettings:
+		v, ok := value.(types.AlertSettings)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAlertSettings(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Feature field %s", name)
 }
@@ -23599,6 +23809,9 @@ func (m *FeatureMutation) ClearedFields() []string {
 	if m.FieldCleared(feature.FieldUnitPlural) {
 		fields = append(fields, feature.FieldUnitPlural)
 	}
+	if m.FieldCleared(feature.FieldAlertSettings) {
+		fields = append(fields, feature.FieldAlertSettings)
+	}
 	return fields
 }
 
@@ -23636,6 +23849,9 @@ func (m *FeatureMutation) ClearField(name string) error {
 		return nil
 	case feature.FieldUnitPlural:
 		m.ClearUnitPlural()
+		return nil
+	case feature.FieldAlertSettings:
+		m.ClearAlertSettings()
 		return nil
 	}
 	return fmt.Errorf("unknown Feature nullable field %s", name)
@@ -23689,6 +23905,9 @@ func (m *FeatureMutation) ResetField(name string) error {
 		return nil
 	case feature.FieldUnitPlural:
 		m.ResetUnitPlural()
+		return nil
+	case feature.FieldAlertSettings:
+		m.ResetAlertSettings()
 		return nil
 	}
 	return fmt.Errorf("unknown Feature field %s", name)

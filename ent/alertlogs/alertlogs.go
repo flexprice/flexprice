@@ -31,6 +31,10 @@ const (
 	FieldEntityType = "entity_type"
 	// FieldEntityID holds the string denoting the entity_id field in the database.
 	FieldEntityID = "entity_id"
+	// FieldParentEntityType holds the string denoting the parent_entity_type field in the database.
+	FieldParentEntityType = "parent_entity_type"
+	// FieldParentEntityID holds the string denoting the parent_entity_id field in the database.
+	FieldParentEntityID = "parent_entity_id"
 	// FieldAlertType holds the string denoting the alert_type field in the database.
 	FieldAlertType = "alert_type"
 	// FieldAlertStatus holds the string denoting the alert_status field in the database.
@@ -53,6 +57,8 @@ var Columns = []string{
 	FieldEnvironmentID,
 	FieldEntityType,
 	FieldEntityID,
+	FieldParentEntityType,
+	FieldParentEntityID,
 	FieldAlertType,
 	FieldAlertStatus,
 	FieldAlertInfo,
@@ -142,6 +148,16 @@ func ByEntityType(opts ...sql.OrderTermOption) OrderOption {
 // ByEntityID orders the results by the entity_id field.
 func ByEntityID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEntityID, opts...).ToFunc()
+}
+
+// ByParentEntityType orders the results by the parent_entity_type field.
+func ByParentEntityType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldParentEntityType, opts...).ToFunc()
+}
+
+// ByParentEntityID orders the results by the parent_entity_id field.
+func ByParentEntityID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldParentEntityID, opts...).ToFunc()
 }
 
 // ByAlertType orders the results by the alert_type field.

@@ -210,6 +210,40 @@ func (s *featureService) UpdateFeature(ctx context.Context, id string, req dto.U
 		feature.UnitPlural = *req.UnitPlural
 	}
 
+	// Update alert settings if provided
+	if req.AlertSettings != nil {
+		// Start with existing settings (preserve what's not being updated)
+		newAlertSettings := &types.AlertSettings{}
+		if feature.AlertSettings != nil {
+			// Preserve existing critical, warning, and alert_enabled if not being updated
+			newAlertSettings.Critical = feature.AlertSettings.Critical
+			newAlertSettings.Warning = feature.AlertSettings.Warning
+			newAlertSettings.AlertEnabled = feature.AlertSettings.AlertEnabled
+		}
+
+		// Overwrite with request values (partial update support)
+		if req.AlertSettings.Critical != nil {
+			newAlertSettings.Critical = req.AlertSettings.Critical
+		}
+		if req.AlertSettings.Warning != nil {
+			newAlertSettings.Warning = req.AlertSettings.Warning
+		}
+		if req.AlertSettings.AlertEnabled != nil {
+			newAlertSettings.AlertEnabled = req.AlertSettings.AlertEnabled
+		} else if feature.AlertSettings == nil {
+			// If no previous alert settings exist and alert_enabled not provided, default to false
+			newAlertSettings.AlertEnabled = lo.ToPtr(false)
+		}
+
+		// Validate the FINAL merged state (not the partial request)
+		if err := newAlertSettings.Validate(); err != nil {
+			return nil, err
+		}
+
+		// Validation passed - now assign to feature
+		feature.AlertSettings = newAlertSettings
+	}
+
 	if feature.Type == types.FeatureTypeMetered && feature.MeterID != "" {
 		// update meter filters if provided
 		meterService := NewMeterService(s.MeterRepo)

@@ -187,11 +187,11 @@ func init() {
 	// alertlogs.EntityIDValidator is a validator for the "entity_id" field. It is called by the builders before save.
 	alertlogs.EntityIDValidator = alertlogsDescEntityID.Validators[0].(func(string) error)
 	// alertlogsDescAlertType is the schema descriptor for alert_type field.
-	alertlogsDescAlertType := alertlogsFields[3].Descriptor()
+	alertlogsDescAlertType := alertlogsFields[5].Descriptor()
 	// alertlogs.AlertTypeValidator is a validator for the "alert_type" field. It is called by the builders before save.
 	alertlogs.AlertTypeValidator = alertlogsDescAlertType.Validators[0].(func(string) error)
 	// alertlogsDescAlertStatus is the schema descriptor for alert_status field.
-	alertlogsDescAlertStatus := alertlogsFields[4].Descriptor()
+	alertlogsDescAlertStatus := alertlogsFields[6].Descriptor()
 	// alertlogs.AlertStatusValidator is a validator for the "alert_status" field. It is called by the builders before save.
 	alertlogs.AlertStatusValidator = alertlogsDescAlertStatus.Validators[0].(func(string) error)
 	authFields := schema.Auth{}.Fields()

@@ -43,6 +43,8 @@ const (
 	FieldUnitSingular = "unit_singular"
 	// FieldUnitPlural holds the string denoting the unit_plural field in the database.
 	FieldUnitPlural = "unit_plural"
+	// FieldAlertSettings holds the string denoting the alert_settings field in the database.
+	FieldAlertSettings = "alert_settings"
 	// Table holds the table name of the feature in the database.
 	Table = "features"
 )
@@ -65,6 +67,7 @@ var Columns = []string{
 	FieldMetadata,
 	FieldUnitSingular,
 	FieldUnitPlural,
+	FieldAlertSettings,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
