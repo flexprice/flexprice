@@ -437,6 +437,9 @@ func GetNextUsageResetAt(
 
 		// Start from subscription start
 		periodStart := subscriptionStart
+		// cliff the billing anchor to ignore hours as we do not handle that in clickhouse DB queries
+		// so this constraint is becasuse of the way we are handling the monthly reset period from clickhouse DB queries (we query at day granularity)
+		billingAnchor = time.Date(billingAnchor.Year(), billingAnchor.Month(), billingAnchor.Day(), 0, 0, 0, 0, billingAnchor.Location())
 
 		// Safeguard against infinite loops - allow up to 1000 periods (83+ years of monthly periods)
 		for i := 0; i < 1000; i++ {

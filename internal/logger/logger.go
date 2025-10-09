@@ -21,7 +21,7 @@ var L *Logger
 func NewLogger(cfg *config.Configuration) (*Logger, error) {
 	config := zap.NewProductionConfig()
 
-	if cfg.Logging.Level == types.LogLevelDebug {
+	if cfg.Logging.DBLevel == types.LogLevelDebug {
 		config = zap.NewDevelopmentConfig()
 	}
 
@@ -101,4 +101,30 @@ func (l *Logger) GetRetryableHTTPLogger() *retryableHTTPLogger {
 // Printf implements the Logger interface for go-retryablehttp
 func (r *retryableHTTPLogger) Printf(format string, v ...interface{}) {
 	r.logger.Infof(format, v...)
+}
+
+// GetEntLogger returns an ent-compatible logger function
+func (l *Logger) GetEntLogger() func(...any) {
+	return func(args ...any) {
+		// Convert variadic args to a single string for logging
+		if len(args) > 0 {
+			l.Debugw("ent query", "query", args[0])
+		}
+	}
+}
+
+// ginLogger adapts our Logger to gin's logging interface
+type ginLogger struct {
+	logger *Logger
+}
+
+// GetGinLogger returns a gin-compatible logger
+func (l *Logger) GetGinLogger() *ginLogger {
+	return &ginLogger{logger: l}
+}
+
+// Write implements the io.Writer interface for gin
+func (g *ginLogger) Write(p []byte) (n int, err error) {
+	g.logger.Info(string(p))
+	return len(p), nil
 }

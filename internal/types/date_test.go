@@ -24,6 +24,15 @@ func TestNextbillingDate_Monthly_Anniversary(t *testing.T) {
 		errMsg        string
 	}{
 		{
+			name:          "subscription start 1st oct, current 1st oct, billing anchor 1st sept",
+			currentPeriod: time.Date(2025, time.October, 01, 13, 52, 55, 517240000, time.UTC), // "2025-09-01T13:52:55.51724Z"
+			billingAnchor: time.Date(2025, time.September, 01, 13, 52, 55, 517240000, time.UTC),
+			unit:          1,
+			want:          time.Date(2025, time.November, 01, 13, 52, 55, 0, time.UTC),
+			wantErr:       false,
+			errMsg:        "",
+		},
+		{
 			name:          "start: 31 Jan 2024, anchor: 31 Jan 2024, unit: 1",
 			currentPeriod: time.Date(2024, time.January, 31, 0, 0, 0, 0, ist),
 			billingAnchor: time.Date(2024, time.January, 31, 0, 0, 0, 0, ist),
@@ -1482,6 +1491,15 @@ func TestGetNextUsageResetAt_Monthly(t *testing.T) {
 		want              time.Time
 		wantErr           bool
 	}{
+		{
+			name:              "monthly reset non 00:00:00 time - subscription starts 5th Jan, current February 5th",
+			currentTime:       time.Date(2024, time.February, 5, 12, 15, 50, 0, time.UTC),
+			subscriptionStart: time.Date(2024, time.January, 5, 18, 25, 0, 0, time.UTC),
+			billingAnchor:     time.Date(2024, time.January, 5, 18, 25, 0, 0, time.UTC),
+			subscriptionEnd:   nil,
+			want:              time.Date(2024, time.March, 5, 0, 0, 0, 0, time.UTC),
+			wantErr:           false,
+		},
 		{
 			name:              "monthly reset - subscription starts 5th Jan, current 10th Jan",
 			currentTime:       time.Date(2024, time.January, 10, 12, 0, 0, 0, time.UTC),

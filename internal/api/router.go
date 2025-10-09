@@ -59,9 +59,16 @@ type Handlers struct {
 func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logger, secretService service.SecretService, envAccessService service.EnvAccessService) *gin.Engine {
 	// gin.SetMode(gin.ReleaseMode)
 
-	router := gin.Default()
+	// Create a new gin engine without default middleware
+	router := gin.New()
+
+	// Add recovery middleware (panic recovery)
+	router.Use(gin.RecoveryWithWriter(logger.GetGinLogger()))
+
+	// Add our custom middleware in order
 	router.Use(
-		middleware.RequestIDMiddleware,
+		middleware.RequestIDMiddleware,       // Generate/extract request ID first
+		middleware.LoggingMiddleware(logger), // Use our standard logger for HTTP logging
 		middleware.CORSMiddleware,
 		middleware.SentryMiddleware(cfg),    // Add Sentry middleware
 		middleware.PyroscopeMiddleware(cfg), // Add Pyroscope middleware
