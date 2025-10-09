@@ -45,6 +45,7 @@ type InvoiceService interface {
 	RecalculateInvoiceAmounts(ctx context.Context, invoiceID string) error
 	CalculatePriceBreakdown(ctx context.Context, inv *dto.InvoiceResponse) (map[string][]dto.SourceUsageItem, error)
 	CalculateUsageBreakdown(ctx context.Context, inv *dto.InvoiceResponse, groupBy []string) (map[string][]dto.UsageBreakdownItem, error)
+	GetInvoiceWithBreakdown(ctx context.Context, req dto.GetInvoiceWithBreakdownRequest) (*dto.InvoiceResponse, error)
 	TriggerCommunication(ctx context.Context, id string) error
 	HandleIncompleteSubscriptionPayment(ctx context.Context, invoice *invoice.Invoice) error
 }
@@ -2727,6 +2728,39 @@ func (s *invoiceService) mapFlexibleAnalyticsToLineItems(ctx context.Context, an
 	}
 
 	return usageBreakdownResponse, nil
+}
+
+// GetInvoiceWithBreakdown retrieves an invoice with optional usage breakdown
+func (s *invoiceService) GetInvoiceWithBreakdown(ctx context.Context, req dto.GetInvoiceWithBreakdownRequest) (*dto.InvoiceResponse, error) {
+
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Get the invoice first
+	invoice, err := s.GetInvoice(ctx, req.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Handle usage breakdown - prioritize group_by over expand_by_source for flexibility
+	if len(req.GroupByParams) > 0 {
+		// Use flexible grouping
+		usageBreakdown, err := s.CalculateUsageBreakdown(ctx, invoice, req.GroupByParams)
+		if err != nil {
+			return nil, err
+		}
+		invoice.WithUsageBreakdown(usageBreakdown)
+	} else if req.ExpandBySource {
+		// Legacy source-only breakdown for backward compatibility
+		usageAnalytics, err := s.CalculatePriceBreakdown(ctx, invoice)
+		if err != nil {
+			return nil, err
+		}
+		invoice.WithUsageAnalytics(usageAnalytics)
+	}
+
+	return invoice, nil
 }
 
 // getAppliedTaxesForPDF retrieves and formats applied tax data for PDF generation

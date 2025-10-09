@@ -80,29 +80,17 @@ func (h *InvoiceHandler) GetInvoice(c *gin.Context) {
 	expandBySource := c.DefaultQuery("expand_by_source", "false") == "true"
 	groupByParams := c.QueryArray("group_by")
 
-	invoice, err := h.invoiceService.GetInvoice(c.Request.Context(), id)
+	// Use the new service method that handles breakdown logic internally
+	req := dto.GetInvoiceWithBreakdownRequest{
+		ID:             id,
+		ExpandBySource: expandBySource,
+		GroupByParams:  groupByParams,
+	}
+
+	invoice, err := h.invoiceService.GetInvoiceWithBreakdown(c.Request.Context(), req)
 	if err != nil {
 		c.Error(err)
 		return
-	}
-
-	// Handle usage breakdown - prioritize group_by over expand_by_source for flexibility
-	if len(groupByParams) > 0 {
-		// Use flexible grouping
-		usageBreakdown, err := h.invoiceService.CalculateUsageBreakdown(c.Request.Context(), invoice, groupByParams)
-		if err != nil {
-			c.Error(err)
-			return
-		}
-		invoice.WithUsageBreakdown(usageBreakdown)
-	} else if expandBySource {
-		// Legacy source-only breakdown for backward compatibility
-		usageAnalytics, err := h.invoiceService.CalculatePriceBreakdown(c.Request.Context(), invoice)
-		if err != nil {
-			c.Error(err)
-			return
-		}
-		invoice.WithUsageAnalytics(usageAnalytics)
 	}
 
 	c.JSON(http.StatusOK, invoice)

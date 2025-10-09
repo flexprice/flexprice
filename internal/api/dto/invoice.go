@@ -1305,3 +1305,22 @@ type VoidOldPendingInvoicesResponseItem struct {
 	Success       int    `json:"success"`
 	Failed        int    `json:"failed"`
 }
+
+// GetInvoiceWithBreakdownRequest represents the request for getting an invoice with breakdown
+type GetInvoiceWithBreakdownRequest struct {
+	// ID is the unique identifier of the invoice
+	ID string `json:"id" validate:"required"`
+
+	// ExpandBySource indicates whether to include legacy source-only breakdown for backward compatibility
+	ExpandBySource bool `json:"expand_by_source,omitempty"`
+
+	// GroupByParams contains the grouping parameters for flexible usage breakdown
+	GroupByParams []string `json:"group_by,omitempty"`
+}
+
+func (r *GetInvoiceWithBreakdownRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+	return nil
+}
