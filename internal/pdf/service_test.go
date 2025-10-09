@@ -52,7 +52,7 @@ func TestRenderInvoicePdf(t *testing.T) {
 
 	mockCompiler.On("CompileTemplate", types.TemplateInvoiceDefault, jsonData, mock.Anything).Return(expectedPDF, nil)
 
-	pdf, err := service.RenderInvoicePdf(context.Background(), data)
+	pdf, err := service.RenderInvoicePdf(context.Background(), data, nil)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedPDF, pdf)
@@ -69,7 +69,7 @@ func TestRenderInvoicePdf_Error(t *testing.T) {
 
 	mockCompiler.On("CompileTemplate", types.TemplateInvoiceDefault, mock.Anything, mock.Anything).Return([]byte{}, expectedError)
 
-	pdf, err := service.RenderInvoicePdf(context.Background(), data)
+	pdf, err := service.RenderInvoicePdf(context.Background(), data, nil)
 
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, expectedError)

@@ -1559,21 +1559,30 @@ func (s *invoiceService) GetInvoicePDFUrl(ctx context.Context, id string) (strin
 
 	key := fmt.Sprintf("%s/%s", inv.TenantID, id)
 
-	exists, err := s.S3.Exists(ctx, key, s3.DocumentTypeInvoice)
+	// exists, err := s.S3.Exists(ctx, key, s3.DocumentTypeInvoice)
+	// if err != nil {
+	// 	return "", err
+	// }
+
+	// if !exists {
+	// 	data, err := s.GetInvoicePDF(ctx, id)
+	// 	if err != nil {
+	// 		return "", err
+	// 	}
+
+	// 	err = s.S3.UploadDocument(ctx, s3.NewPdfDocument(key, data, s3.DocumentTypeInvoice))
+	// 	if err != nil {
+	// 		return "", err
+	// 	}
+	// }
+	data, err := s.GetInvoicePDF(ctx, id)
 	if err != nil {
 		return "", err
 	}
 
-	if !exists {
-		data, err := s.GetInvoicePDF(ctx, id)
-		if err != nil {
-			return "", err
-		}
-
-		err = s.S3.UploadDocument(ctx, s3.NewPdfDocument(key, data, s3.DocumentTypeInvoice))
-		if err != nil {
-			return "", err
-		}
+	err = s.S3.UploadDocument(ctx, s3.NewPdfDocument(key, data, s3.DocumentTypeInvoice))
+	if err != nil {
+		return "", err
 	}
 
 	url, err := s.S3.GetPresignedUrl(ctx, key, s3.DocumentTypeInvoice)
@@ -1586,8 +1595,25 @@ func (s *invoiceService) GetInvoicePDFUrl(ctx context.Context, id string) (strin
 
 // GetInvoicePDF implements InvoiceService.
 func (s *invoiceService) GetInvoicePDF(ctx context.Context, id string) ([]byte, error) {
+
+	settingsService := NewSettingsService(s.ServiceParams)
+	settings, err := settingsService.GetSettingWithDefaults(ctx, types.SettingKeyInvoicePDFConfig, types.GetDefaultSettings()[types.SettingKeyInvoicePDFConfig].DefaultValue)
+	if err != nil {
+		return nil, err
+	}
+
+	// validate request
+	req := dto.GetInvoiceWithBreakdownRequest{ID: id}
+
+	// Get properly typed values (type conversion is handled in GetSettingWithDefaults)
+	req.GroupByParams = settings.Value["group_by"].([]string)
+	templateName := types.TemplateName(settings.Value["template_name"].(string))
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
 	// get invoice by id
-	inv, err := s.InvoiceRepo.Get(ctx, id)
+	inv, err := s.GetInvoiceWithBreakdown(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -1610,13 +1636,13 @@ func (s *invoiceService) GetInvoicePDF(ctx context.Context, id string) ([]byte, 
 	}
 
 	// generate pdf
-	return s.PDFGenerator.RenderInvoicePdf(ctx, invoiceData)
+	return s.PDFGenerator.RenderInvoicePdf(ctx, invoiceData, lo.ToPtr(templateName))
 
 }
 
 func (s *invoiceService) getInvoiceDataForPDFGen(
 	ctx context.Context,
-	inv *invoice.Invoice,
+	inv *dto.InvoiceResponse,
 	customer *customer.Customer,
 	tenant *tenant.Tenant,
 ) (*pdf.InvoiceData, error) {
@@ -2837,7 +2863,7 @@ func (s *invoiceService) getAppliedTaxesForPDF(ctx context.Context, invoiceID st
 }
 
 // getAppliedDiscountsForPDF retrieves and formats applied discount data for PDF generation
-func (s *invoiceService) getAppliedDiscountsForPDF(ctx context.Context, inv *invoice.Invoice) ([]pdf.AppliedDiscountData, error) {
+func (s *invoiceService) getAppliedDiscountsForPDF(ctx context.Context, inv *dto.InvoiceResponse) ([]pdf.AppliedDiscountData, error) {
 	// Get coupon applications for this invoice
 	couponApplicationService := NewCouponApplicationService(s.ServiceParams)
 	couponApplications, err := couponApplicationService.GetCouponApplicationsByInvoice(ctx, inv.ID)

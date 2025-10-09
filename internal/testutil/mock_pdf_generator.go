@@ -6,6 +6,7 @@ import (
 	domain "github.com/flexprice/flexprice/internal/domain/pdf"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/pdf"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/typst"
 	"github.com/stretchr/testify/mock"
 )
@@ -19,8 +20,8 @@ type MockPDFGenerator struct {
 }
 
 // RenderInvoicePdf implements pdf.Generator.
-func (m *MockPDFGenerator) RenderInvoicePdf(ctx context.Context, data *domain.InvoiceData) ([]byte, error) {
-	args := m.Called(ctx, data)
+func (m *MockPDFGenerator) RenderInvoicePdf(ctx context.Context, data *domain.InvoiceData, templateName *types.TemplateName) ([]byte, error) {
+	args := m.Called(ctx, data, templateName)
 	return args.Get(0).([]byte), args.Error(1)
 }
 

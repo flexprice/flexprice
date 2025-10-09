@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -137,6 +138,11 @@ func (s *settingsService) GetSettingWithDefaults(ctx context.Context, key types.
 	if err != nil {
 		// Check for not found error first
 		if ent.IsNotFound(err) {
+			// Normalize types for known setting keys to ensure consistent typing
+			if err := s.normalizeSettingTypes(key, mergedValues); err != nil {
+				return nil, err
+			}
+
 			// If setting not found, create a new one with default values
 			defaultSettingModel := &settings.Setting{
 				ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SETTING),
@@ -159,6 +165,11 @@ func (s *settingsService) GetSettingWithDefaults(ctx context.Context, key types.
 		mergedValues[k] = v
 	}
 
+	// Normalize types for known setting keys to ensure consistent typing
+	if err := s.normalizeSettingTypes(key, mergedValues); err != nil {
+		return nil, err
+	}
+
 	// Create a response with the merged values
 	settingModel := &settings.Setting{
 		ID:            setting.ID,
@@ -169,4 +180,54 @@ func (s *settingsService) GetSettingWithDefaults(ctx context.Context, key types.
 	}
 
 	return dto.SettingFromDomain(settingModel), nil
+}
+
+// normalizeSettingTypes normalizes types for known setting keys to ensure consistent typing
+func (s *settingsService) normalizeSettingTypes(key types.SettingKey, values map[string]interface{}) error {
+	switch key {
+	case types.SettingKeyInvoicePDFConfig:
+		return s.normalizeInvoicePDFConfigTypes(values)
+	default:
+		// No normalization needed for other setting keys
+		return nil
+	}
+}
+
+// normalizeInvoicePDFConfigTypes normalizes types for invoice PDF config settings
+func (s *settingsService) normalizeInvoicePDFConfigTypes(values map[string]interface{}) error {
+	// Normalize group_by field
+	if groupByRaw, exists := values["group_by"]; exists {
+		switch v := groupByRaw.(type) {
+		case []string:
+			// Already correct type - no change needed
+		case []interface{}:
+			// Convert []interface{} to []string
+			groupByParams := make([]string, len(v))
+			for i, item := range v {
+				if str, ok := item.(string); ok {
+					groupByParams[i] = str
+				} else {
+					return fmt.Errorf("group_by element %d must be a string, got %T", i, item)
+				}
+			}
+			values["group_by"] = groupByParams
+		default:
+			return fmt.Errorf("group_by must be an array of strings, got %T", groupByRaw)
+		}
+	}
+
+	// Normalize template_name field
+	if templateNameRaw, exists := values["template_name"]; exists {
+		switch v := templateNameRaw.(type) {
+		case string:
+			// Already correct type - no change needed
+		case types.TemplateName:
+			// Convert to string
+			values["template_name"] = string(v)
+		default:
+			return fmt.Errorf("template_name must be a string, got %T", templateNameRaw)
+		}
+	}
+
+	return nil
 }
