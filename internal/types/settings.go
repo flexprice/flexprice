@@ -381,8 +381,19 @@ func ValidateInvoicePDFConfig(value map[string]interface{}) error {
 
 	// Validate group by if provided
 	if groupByRaw, exists := value["group_by"]; exists {
-		_, ok := groupByRaw.([]string)
-		if !ok {
+		switch v := groupByRaw.(type) {
+		case []string:
+			// Already correct type - no validation needed
+		case []interface{}:
+			// Convert []interface{} to []string and validate each element
+			for i, item := range v {
+				if _, ok := item.(string); !ok {
+					return ierr.NewErrorf("invoice_pdf_config: 'group_by' element %d must be a string, got %T", i, item).
+						WithHintf("Invoice PDF config group by elements must be strings").
+						Mark(ierr.ErrValidation)
+				}
+			}
+		default:
 			return ierr.NewErrorf("invoice_pdf_config: 'group_by' must be an array of strings, got %T", groupByRaw).
 				WithHintf("Invoice PDF config group by must be an array of strings, got %T", groupByRaw).
 				Mark(ierr.ErrValidation)
