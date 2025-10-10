@@ -1002,7 +1002,7 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 ) (*dto.CreateInvoiceRequest, error) {
 	// Get invoice config for tenant
 	settingsService := NewSettingsService(s.ServiceParams)
-	invoiceConfigResponse, err := settingsService.GetSettingByKey(ctx, types.SettingKeyInvoiceConfig.String())
+	invoiceConfigResponse, err := settingsService.GetSettingByKey(ctx, types.SettingKeyInvoiceConfig)
 	if err != nil {
 		return nil, err
 	}

@@ -7,6 +7,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 )
 
@@ -26,7 +27,8 @@ func NewSettingsHandler(
 }
 
 func (h *SettingsHandler) GetSettingByKey(c *gin.Context) {
-	key := c.Param("key")
+	keyStr := c.Param("key")
+	key := types.SettingKey(keyStr)
 
 	resp, err := h.service.GetSettingByKey(c.Request.Context(), key)
 	if err != nil {
@@ -38,7 +40,8 @@ func (h *SettingsHandler) GetSettingByKey(c *gin.Context) {
 }
 
 func (h *SettingsHandler) UpdateSettingByKey(c *gin.Context) {
-	key := c.Param("key")
+	keyStr := c.Param("key")
+	key := types.SettingKey(keyStr)
 
 	var req dto.UpdateSettingRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -58,7 +61,8 @@ func (h *SettingsHandler) UpdateSettingByKey(c *gin.Context) {
 }
 
 func (h *SettingsHandler) DeleteSettingByKey(c *gin.Context) {
-	key := c.Param("key")
+	keyStr := c.Param("key")
+	key := types.SettingKey(keyStr)
 
 	err := h.service.DeleteSettingByKey(c.Request.Context(), key)
 	if err != nil {
