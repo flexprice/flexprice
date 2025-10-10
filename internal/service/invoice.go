@@ -1559,22 +1559,6 @@ func (s *invoiceService) GetInvoicePDFUrl(ctx context.Context, id string) (strin
 
 	key := fmt.Sprintf("%s/%s", inv.TenantID, id)
 
-	// exists, err := s.S3.Exists(ctx, key, s3.DocumentTypeInvoice)
-	// if err != nil {
-	// 	return "", err
-	// }
-
-	// if !exists {
-	// 	data, err := s.GetInvoicePDF(ctx, id)
-	// 	if err != nil {
-	// 		return "", err
-	// 	}
-
-	// 	err = s.S3.UploadDocument(ctx, s3.NewPdfDocument(key, data, s3.DocumentTypeInvoice))
-	// 	if err != nil {
-	// 		return "", err
-	// 	}
-	// }
 	data, err := s.GetInvoicePDF(ctx, id)
 	if err != nil {
 		return "", err
@@ -1763,6 +1747,10 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 			lineItem.PeriodEnd = pdf.CustomTime{Time: *item.PeriodEnd}
 		}
 
+		if item.UsageBreakdown != nil {
+			lineItem.UsageBreakdown = item.UsageBreakdown
+		}
+
 		lineItems = append(lineItems, lineItem)
 	}
 
@@ -1779,6 +1767,8 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 		appliedTaxes = []pdf.AppliedTaxData{}
 	}
 	data.AppliedTaxes = appliedTaxes
+
+	// No need to process usage breakdown here as it's already handled in LineItemData
 
 	appliedDiscounts, err := s.getAppliedDiscountsForPDF(ctx, inv)
 	if err != nil {

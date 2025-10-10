@@ -288,6 +288,7 @@
           // Extract data from the usage breakdown item
           let grouped_by = usage_item.grouped_by
           let cost = usage_item.cost
+          let usage = usage_item.at("usage", default: none)
           
           // Extract resource name from grouped_by map
           let resource_name = grouped_by.at("resource_name", default: "-")
@@ -298,14 +299,24 @@
             cost_value = float(str(cost))
           }
           
-          // Display a simple usage row - just resource name and cost
+          // Parse usage/units safely
+          let usage_value = 0.0
+          if usage != none {
+            usage_value = float(str(usage))
+          }
+          
+          // Display usage row with resource name in first column, blank for description and interval, 
+          // then quantity and amount aligned with main table
           table(
-            columns: (2fr, 1fr),
+            columns: (1fr, 2fr, 1fr, 1fr, 1fr),
             inset: (left: 2em, rest: 6pt),
-            align: (left, right),
+            align: (left, left, left, center, right),
             fill: rgb("#f9f9f9"),
             stroke: none,
             [#text(size: 0.9em, fill: styling.secondary-color)[#resource_name]],
+            [],  // Empty description column
+            [],  // Empty interval column
+            [#text(size: 0.9em)[#format-number(usage_value)]],
             [#text(size: 0.9em)[#currency #format-currency(cost_value, precision: precision)]]
           )
         }
