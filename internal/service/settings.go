@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/types"
+	typesSettings "github.com/flexprice/flexprice/internal/types/settings"
 )
 
 // SettingsService defines the interface for managing settings operations
@@ -34,7 +35,7 @@ func (s *settingsService) GetSettingByKey(ctx context.Context, key string) (*dto
 		// If setting not found, check if we should return default values
 		if ent.IsNotFound(err) {
 			// Check if this key has default values
-			if defaultSetting, exists := types.GetDefaultSettings()[types.SettingKey(key)]; exists {
+			if defaultSetting, exists := typesSettings.GetDefaultSettings()[typesSettings.SettingKey(key)]; exists {
 				// Create and return a setting with default values
 				defaultSettingModel := &settings.Setting{
 					ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SETTING),
