@@ -1581,7 +1581,7 @@ func (s *invoiceService) GetInvoicePDFUrl(ctx context.Context, id string) (strin
 func (s *invoiceService) GetInvoicePDF(ctx context.Context, id string) ([]byte, error) {
 
 	settingsService := NewSettingsService(s.ServiceParams)
-	settings, err := settingsService.GetSettingWithDefaults(ctx, types.SettingKeyInvoicePDFConfig, types.GetDefaultSettings()[types.SettingKeyInvoicePDFConfig].DefaultValue)
+	settings, err := settingsService.GetSettingWithDefaults(ctx, types.SettingKeyInvoicePDFConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -1691,8 +1691,17 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 	// Prepare line items
 	var lineItems []pdf.LineItemData
 
-	// Process line items
+	// Process line items - filter out zero-amount items for PDF
 	for _, item := range inv.LineItems {
+		// Skip line items with zero amount for PDF generation
+		if item.Amount.IsZero() {
+			s.Logger.Debugw("skipping zero-amount line item for PDF",
+				"line_item_id", item.ID,
+				"plan_display_name", lo.FromPtrOr(item.PlanDisplayName, ""),
+				"amount", item.Amount.String())
+			continue
+		}
+
 		planDisplayName := ""
 		if item.PlanDisplayName != nil {
 			planDisplayName = *item.PlanDisplayName
@@ -1705,7 +1714,6 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 		// Round to currency precision before converting to float64
 		precision := types.GetCurrencyPrecision(item.Currency)
 		amount, _ := item.Amount.Round(precision).Float64()
-		quantity, _ := item.Quantity.Round(precision).Float64()
 
 		description := ""
 		if item.Metadata != nil {
@@ -1733,7 +1741,7 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 			DisplayName:     displayName,
 			Description:     description,
 			Amount:          amount, // Keep original sign
-			Quantity:        quantity,
+			Quantity:        item.Quantity.InexactFloat64(),
 			Currency:        types.GetCurrencySymbol(item.Currency),
 			Type:            itemType,
 		}
@@ -2769,13 +2777,6 @@ func (s *invoiceService) GetInvoiceWithBreakdown(ctx context.Context, req dto.Ge
 			return nil, err
 		}
 		invoice.WithUsageBreakdown(usageBreakdown)
-	} else if req.ExpandBySource {
-		// Legacy source-only breakdown for backward compatibility
-		usageAnalytics, err := s.CalculatePriceBreakdown(ctx, invoice)
-		if err != nil {
-			return nil, err
-		}
-		invoice.WithUsageAnalytics(usageAnalytics)
 	}
 
 	return invoice, nil

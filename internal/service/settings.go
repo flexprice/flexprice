@@ -19,7 +19,7 @@ type SettingsService interface {
 	DeleteSettingByKey(ctx context.Context, key types.SettingKey) error
 
 	// Get setting with field-level defaults
-	GetSettingWithDefaults(ctx context.Context, key types.SettingKey, defaultValues map[string]interface{}) (*dto.SettingResponse, error)
+	GetSettingWithDefaults(ctx context.Context, key types.SettingKey) (*dto.SettingResponse, error)
 }
 
 type settingsService struct {
@@ -123,45 +123,31 @@ func (s *settingsService) DeleteSettingByKey(ctx context.Context, key types.Sett
 // If the setting doesn't exist in the database, it returns the default values
 // If the setting exists, it merges the default values with the stored values,
 // giving preference to stored values for fields that exist in both
-func (s *settingsService) GetSettingWithDefaults(ctx context.Context, key types.SettingKey, defaultValues map[string]interface{}) (*dto.SettingResponse, error) {
-	// Try to get the setting from the database
-	setting, err := s.SettingsRepo.GetByKey(ctx, key)
+func (s *settingsService) GetSettingWithDefaults(ctx context.Context, key types.SettingKey) (*dto.SettingResponse, error) {
+	// First, get the setting using GetSettingByKey which handles defaults for non-existent settings
+	setting, err := s.GetSettingByKey(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+
+	// If we get here, the setting exists in the database
+	// Now we need to merge it with default values
+	defaultSetting, exists := types.GetDefaultSettings()[key]
+	if !exists {
+		// No default values to merge, return the existing setting as-is
+		return setting, nil
+	}
 
 	// Create a new map to store the final merged values
 	mergedValues := make(map[string]interface{})
 
 	// First, copy all default values to the merged map
-	for k, v := range defaultValues {
+	for k, v := range defaultSetting.DefaultValue {
 		mergedValues[k] = v
 	}
 
-	if err != nil {
-		// Check for not found error first
-		if ent.IsNotFound(err) {
-			// Normalize types for known setting keys to ensure consistent typing
-			if err := s.normalizeSettingTypes(key, mergedValues); err != nil {
-				return nil, err
-			}
-
-			// If setting not found, create a new one with default values
-			defaultSettingModel := &settings.Setting{
-				ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SETTING),
-				Key:           key.String(),
-				Value:         mergedValues,
-				EnvironmentID: types.GetEnvironmentID(ctx),
-				BaseModel:     types.GetDefaultBaseModel(ctx),
-			}
-
-			return dto.SettingFromDomain(defaultSettingModel), nil
-		}
-		// If there was any other error
-		return nil, err
-	}
-
-	// If we get here, the setting exists and there was no error
-	// Iterate through the stored values and override defaults
+	// Then, override with stored values (giving preference to stored values)
 	for k, v := range setting.Value {
-		// If the key exists in the stored values, use that instead of default
 		mergedValues[k] = v
 	}
 
@@ -176,7 +162,14 @@ func (s *settingsService) GetSettingWithDefaults(ctx context.Context, key types.
 		Key:           setting.Key,
 		Value:         mergedValues,
 		EnvironmentID: setting.EnvironmentID,
-		BaseModel:     setting.BaseModel,
+		BaseModel: types.BaseModel{
+			TenantID:  setting.TenantID,
+			Status:    types.Status(setting.Status),
+			CreatedAt: setting.CreatedAt,
+			UpdatedAt: setting.UpdatedAt,
+			CreatedBy: setting.CreatedBy,
+			UpdatedBy: setting.UpdatedBy,
+		},
 	}
 
 	return dto.SettingFromDomain(settingModel), nil

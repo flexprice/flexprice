@@ -173,8 +173,8 @@ func (c *compiler) CompileTemplate(
 	data []byte,
 	opts ...CompileOptsBuilder,
 ) ([]byte, error) {
-	// Ensure template exists
-	templatePath := filepath.Join(c.templateDir, templateName.String())
+	// Ensure template exists - normalize template name to prevent path traversal
+	templatePath := filepath.Join(c.templateDir, filepath.Base(templateName.String()))
 	if _, err := os.Stat(templatePath); os.IsNotExist(err) {
 		return nil, ierr.WithError(err).
 			WithMessagef("template not found: %s", templatePath).

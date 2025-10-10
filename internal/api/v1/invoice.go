@@ -77,14 +77,12 @@ func (h *InvoiceHandler) GetInvoice(c *gin.Context) {
 		return
 	}
 
-	expandBySource := c.DefaultQuery("expand_by_source", "false") == "true"
 	groupByParams := c.QueryArray("group_by")
 
 	// Use the new service method that handles breakdown logic internally
 	req := dto.GetInvoiceWithBreakdownRequest{
-		ID:             id,
-		ExpandBySource: expandBySource,
-		GroupByParams:  groupByParams,
+		ID:            id,
+		GroupByParams: groupByParams,
 	}
 
 	invoice, err := h.invoiceService.GetInvoiceWithBreakdown(c.Request.Context(), req)

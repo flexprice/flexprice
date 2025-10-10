@@ -247,7 +247,7 @@
     if i == 0 {
       // Add header only for the first item
       table(
-        columns: (3fr, 1fr, 1fr, 1.5fr),
+        columns: (3fr, 1.5fr, 0.8fr, 1.2fr),
         inset: (top: 12pt, bottom: 12pt, left: 8pt, right: 8pt),
         align: (left, left, center, right),
         fill: (x, y) => if y == 0 { rgb("#f8f9fa") } else { white },
@@ -260,7 +260,7 @@
         [#text(weight: "semibold", size: 10pt, fill: rgb("#2c3e50"))[Quantity]],
         [#text(weight: "semibold", size: 10pt, fill: rgb("#2c3e50"))[Amount]],
       ),
-        [#item.at("plan_display_name", default: "Plan")], 
+        [#item.at("display_name", default: item.at("plan_display_name", default: "Plan"))], 
         [#interval],
         [#format-number(item.quantity)],
         [#amount-display]
@@ -268,14 +268,14 @@
     } else {
       // Just the row for subsequent items
       table(
-        columns: (3fr, 1fr, 1fr, 1.5fr),
+        columns: (3fr, 1.5fr, 0.8fr, 1.2fr),
         inset: (top: 10pt, bottom: 10pt, left: 8pt, right: 8pt),
         align: (left, left, center, right),
         fill: white,
         stroke: (x, y) => (
           bottom: 0.5pt + rgb("#e9ecef"),
         ),
-        [#item.at("plan_display_name", default: "Plan")], 
+        [#item.at("display_name", default: item.at("plan_display_name", default: "Plan"))], 
         [#interval],
         [#format-number(item.quantity)],
         [#amount-display]
@@ -286,45 +286,48 @@
     let has_usage_breakdown = "usage_breakdown" in item and item.usage_breakdown != none and item.usage_breakdown.len() > 0
     
     if has_usage_breakdown {
-      v(0.3em)
-      
-      // Create a simplified usage breakdown table
+      // Show usage breakdown as sub-rows within the same table structure
       for usage_item in item.usage_breakdown {
         // Check if grouped_by exists
         if "grouped_by" in usage_item {
           // Extract data from the usage breakdown item
-          let grouped_by = usage_item.grouped_by
-          let cost = usage_item.cost
+          let grouped_by = usage_item.at("grouped_by", default: none)
+          let cost = usage_item.at("cost", default: none)
           let usage = usage_item.at("usage", default: none)
           
-          // Extract resource name from grouped_by map
-          let resource_name = grouped_by.at("resource_name", default: "-")
-          
-          // Parse cost string to float safely
-          let cost_value = 0.0
-          if cost != none {
-            cost_value = float(str(cost))
-          }
-          
-          // Parse usage/units safely
-          let usage_value = 0.0
-          if usage != none {
-            usage_value = float(str(usage))
-          }
-          
-          // Display usage row with resource name in first column, blank for interval, 
-          // then quantity and amount aligned with main table
-          table(
-            columns: (3fr, 1fr, 1fr, 1.5fr),
-            inset: (left: 1.5em, rest: 8pt),
-            align: (left, left, center, right),
-            fill: rgb("#f8f9fa"),
-            stroke: none,
-            [#text(size: 0.9em, fill: rgb("#666666"), weight: "regular")[#resource_name]],
-            [],  // Empty interval column
-            [#text(size: 0.9em, weight: "medium")[#format-number(usage_value)]],
+          // Only proceed if grouped_by is not none
+          if grouped_by != none {
+            // Extract resource name from grouped_by map - try multiple fields
+            let resource_name = grouped_by.at("resource_name", default: 
+              grouped_by.at("type", default: 
+                grouped_by.at("feature_id", default: 
+                  grouped_by.at("source", default: "—"))))
+            
+            // Parse cost string to float safely
+            let cost_value = 0.0
+            if cost != none {
+              cost_value = float(str(cost))
+            }
+            
+            // Parse usage/units safely
+            let usage_value = 0.0
+            if usage != none {
+              usage_value = float(str(usage))
+            }
+            
+            // Display usage breakdown as a sub-row with indentation
+            table(
+              columns: (3fr, 1.5fr, 0.8fr, 1.2fr),
+              inset: (top: 6pt, bottom: 6pt, left: 2em, right: 8pt),
+              align: (left, left, center, right),
+              fill: rgb("#f8f9fa"),
+              stroke: none,
+              [#text(size: 0.85em, fill: rgb("#666666"), weight: "regular")[└─ #resource_name]],
+              [],  // Empty interval column
+              [#text(size: 0.9em, weight: "medium")[#format-number(usage_value)]],
             [#text(size: 0.9em, weight: "medium")[#currency #format-currency(cost_value, precision: precision)]]
-          )
+            )
+          }
         }
       }
     }

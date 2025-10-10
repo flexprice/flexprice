@@ -1311,9 +1311,6 @@ type GetInvoiceWithBreakdownRequest struct {
 	// ID is the unique identifier of the invoice
 	ID string `json:"id" validate:"required"`
 
-	// ExpandBySource indicates whether to include legacy source-only breakdown for backward compatibility
-	ExpandBySource bool `json:"expand_by_source,omitempty"`
-
 	// GroupByParams contains the grouping parameters for flexible usage breakdown
 	GroupByParams []string `json:"group_by,omitempty"`
 }
