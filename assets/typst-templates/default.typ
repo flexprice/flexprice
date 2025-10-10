@@ -107,16 +107,18 @@
 ) = {
   // Set styling defaults
   styling.font = styling.at("font", default: "Inter")
-  styling.font-size = styling.at("font-size", default: 10pt)
-  styling.primary-color = styling.at("primary-color", default: rgb("#4361ee"))
+  styling.font-size = styling.at("font-size", default: 9pt)
+  styling.primary-color = styling.at("primary-color", default: rgb("#000000"))
   styling.margin = styling.at("margin", default: (
     top: 15mm,
     right: 15mm,
     bottom: 15mm,
     left: 15mm,
   ))
-  styling.line-color = styling.at("line-color", default: rgb("#eee"))
-  styling.secondary-color = rgb(styling.at("secondary-color", default: rgb("#666666")))
+  styling.line-color = styling.at("line-color", default: rgb("#e0e0e0"))
+  styling.secondary-color = rgb(styling.at("secondary-color", default: rgb("#707070")))
+  styling.table-header-bg = rgb("#f7f7f7")
+  styling.table-header-color = rgb("#000000")
 
   // Set document properties
   let issuing-date-value = if issuing-date != "" { issuing-date }
@@ -150,12 +152,12 @@
         #banner-image
       ],
       [
-        #text(weight: "medium", size: 2em)[Invoice]
+        #text(weight: "medium", size: 1.6em)[Invoice]
       ]
     )
-    v(1em)
+    v(0.8em)
   } else {
-    text(weight: "bold", size: 2em)[Invoice]
+    text(weight: "medium", size: 1.6em, fill: styling.primary-color)[Invoice]
   }
 
   grid(
@@ -176,7 +178,7 @@
     ],
   )
 
-  line(length: 100%, stroke: styling.line-color)
+  line(length: 100%, stroke: 0.5pt + styling.line-color)
 
   v(2em)
 
@@ -205,12 +207,12 @@
   )
 
   v(2em)
-  line(length: 100%, stroke: styling.line-color)
+  line(length: 100%, stroke: 0.5pt + styling.line-color)
   v(1em)
 
   // Order Details
-  [== Order Details]
-  v(1em)
+  text(weight: "medium", size: 1.1em)[Order Details]
+  v(0.8em)
 
   // Main line items table with integrated usage breakdowns
   for (i, item) in items.enumerate() {
@@ -240,19 +242,19 @@
       // Add header only for the first item
       table(
         columns: (1fr, 2fr, 1fr, 1fr, 1fr),
-        inset: 8pt,
+        inset: 7pt,
         align: (left, left, left, center, right),
-        fill: white,
+        fill: (x, y) => if y == 0 { styling.table-header-bg } else { white },
         stroke: (x, y) => (
-          bottom: 1pt + styling.line-color,
+          bottom: 0.5pt + styling.line-color,
         ),
-        table.header(
-          [*Item*],
-          [*Description*],
-          [*Interval*],
-          [*Quantity*],
-          [*Amount*],
-        ),
+      table.header(
+        [#text(fill: styling.table-header-color, weight: "medium")[Item]],
+        [#text(fill: styling.table-header-color, weight: "medium")[Description]],
+        [#text(fill: styling.table-header-color, weight: "medium")[Interval]],
+        [#text(fill: styling.table-header-color, weight: "medium")[Quantity]],
+        [#text(fill: styling.table-header-color, weight: "medium")[Amount]],
+      ),
         [#item.at("plan_display_name", default: "Plan")], 
         [#description],
         [#interval],
@@ -263,11 +265,11 @@
       // Just the row for subsequent items
       table(
         columns: (1fr, 2fr, 1fr, 1fr, 1fr),
-        inset: 8pt,
+        inset: 7pt,
         align: (left, left, left, center, right),
-        fill: white,
+        fill: (x, y) => if y == 0 { styling.table-header-bg } else { white },
         stroke: (x, y) => (
-          bottom: 1pt + styling.line-color,
+          bottom: 0.5pt + styling.line-color,
         ),
         [#item.at("plan_display_name", default: "Plan")], 
         [#description],
@@ -309,15 +311,15 @@
           // then quantity and amount aligned with main table
           table(
             columns: (1fr, 2fr, 1fr, 1fr, 1fr),
-            inset: (left: 2em, rest: 6pt),
+            inset: (left: 1.5em, rest: 6pt),
             align: (left, left, left, center, right),
-            fill: rgb("#f9f9f9"),
+            fill: rgb("#fafafa"),
             stroke: none,
-            [#text(size: 0.9em, fill: styling.secondary-color)[#resource_name]],
+            [#text(size: 0.85em, fill: styling.secondary-color)[#resource_name]],
             [],  // Empty description column
             [],  // Empty interval column
-            [#text(size: 0.9em)[#format-number(usage_value)]],
-            [#text(size: 0.9em)[#currency #format-currency(cost_value, precision: precision)]]
+            [#text(size: 0.85em)[#format-number(usage_value)]],
+            [#text(size: 0.85em)[#currency #format-currency(cost_value, precision: precision)]]
           )
         }
       }
@@ -346,7 +348,7 @@
       // Show tax row only if there's tax
       ..if tax > 0 { ([Tax], [#currency#format-currency(tax, precision: precision)]) } else { () },
       
-      table.hline(stroke: 1pt + styling.line-color),
+      table.hline(stroke: 0.5pt + black),
       [*Net Payable*], [*#currency#format-currency(subtotal - discount + tax, precision: precision)*],
     )
   )
@@ -355,7 +357,7 @@
 
   // Applied Discounts section (if any discounts were applied)
   if applied-discounts.len() > 0 {
-    [== Applied Discounts]
+    text(weight: "medium", size: 1.1em)[Applied Discounts]
     v(0.5em)
 
     table(
@@ -395,7 +397,7 @@
 
   // Applied Taxes section (if any taxes were applied)
   if applied-taxes.len() > 0 {
-    [== Applied Taxes]
+    text(weight: "medium", size: 1.1em)[Applied Taxes]
     v(0.5em)
 
     table(
@@ -439,8 +441,8 @@
 
   // Payment information
   if invoice-status == "FINALIZED" {
-    [== Payment Information]
-    v(1em)
+    text(weight: "medium", size: 1.1em)[Payment Information]
+    v(0.8em)
 
     [We kindly request that you complete the payment by the due date of #due-date. Your prompt attention to this matter is greatly appreciated.]
 
@@ -453,7 +455,7 @@
   // Notes
   if notes != "" {
     v(1em)
-    [== Notes]
+    text(weight: "medium", size: 1.1em)[Notes]
     v(0.5em)
     notes
   }
