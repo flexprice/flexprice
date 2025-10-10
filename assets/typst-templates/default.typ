@@ -117,8 +117,9 @@
   ))
   styling.line-color = styling.at("line-color", default: rgb("#e0e0e0"))
   styling.secondary-color = rgb(styling.at("secondary-color", default: rgb("#707070")))
-  styling.table-header-bg = rgb("#f7f7f7")
-  styling.table-header-color = rgb("#000000")
+  styling.table-header-bg = rgb("#f8f9fa")
+  styling.table-header-color = rgb("#2c3e50")
+  styling.table-header-border = rgb("#dee2e6")
 
   // Set document properties
   let issuing-date-value = if issuing-date != "" { issuing-date }
@@ -187,8 +188,8 @@
     columns: (1fr, 1fr),
     gutter: 1em,
     [
-      #text(weight: "semibold", size: 12pt)[From]
-      #v(0.25em)
+      #text(weight: "medium", size: 12pt)[From]
+      #v(0.15em)
       #text(weight: "medium")[#biller.name] \
       #text(fill: gray)[#biller.at("email", default: "--")] \
       #text(fill: styling.secondary-color)[#biller.at("address", default: (:)).at("street", default: "--")] \
@@ -196,8 +197,8 @@
       #text(fill: styling.secondary-color)[#biller.at("address", default: (:)).at("postal-code", default: "--")]
     ],
     [
-      #text(weight: "semibold", size: 12pt)[Bill to]
-      #v(0.25em)
+      #text(weight: "medium", size: 12pt)[Bill to]
+      #v(0.15em)
       #text(weight: "medium")[#recipient.name] \
       #text(fill: gray)[#recipient.at("email", default: "--")] \
       #text(fill: styling.secondary-color)[#recipient.at("address", default: (:)).at("street", default: "--")] \
@@ -242,18 +243,19 @@
       // Add header only for the first item
       table(
         columns: (1fr, 2fr, 1fr, 1fr, 1fr),
-        inset: 7pt,
+        inset: (top: 10pt, bottom: 10pt, left: 8pt, right: 8pt),
         align: (left, left, left, center, right),
         fill: (x, y) => if y == 0 { styling.table-header-bg } else { white },
         stroke: (x, y) => (
-          bottom: 0.5pt + styling.line-color,
+          bottom: if y == 0 { 1pt + styling.table-header-border } else { 0.5pt + styling.line-color },
+          top: if y == 0 { 1pt + styling.table-header-border } else { none },
         ),
       table.header(
-        [#text(fill: styling.table-header-color, weight: "medium")[Item]],
-        [#text(fill: styling.table-header-color, weight: "medium")[Description]],
-        [#text(fill: styling.table-header-color, weight: "medium")[Interval]],
-        [#text(fill: styling.table-header-color, weight: "medium")[Quantity]],
-        [#text(fill: styling.table-header-color, weight: "medium")[Amount]],
+        [#text(fill: styling.table-header-color, weight: "semibold", size: 0.95em)[Item]],
+        [#text(fill: styling.table-header-color, weight: "semibold", size: 0.95em)[Description]],
+        [#text(fill: styling.table-header-color, weight: "semibold", size: 0.95em)[Interval]],
+        [#text(fill: styling.table-header-color, weight: "semibold", size: 0.95em)[Quantity]],
+        [#text(fill: styling.table-header-color, weight: "semibold", size: 0.95em)[Amount]],
       ),
         [#item.at("plan_display_name", default: "Plan")], 
         [#description],
@@ -265,9 +267,9 @@
       // Just the row for subsequent items
       table(
         columns: (1fr, 2fr, 1fr, 1fr, 1fr),
-        inset: 7pt,
+        inset: (top: 8pt, bottom: 8pt, left: 8pt, right: 8pt),
         align: (left, left, left, center, right),
-        fill: (x, y) => if y == 0 { styling.table-header-bg } else { white },
+        fill: white,
         stroke: (x, y) => (
           bottom: 0.5pt + styling.line-color,
         ),
@@ -280,7 +282,9 @@
     }
     
     // Check if this item has usage breakdown and add it directly below
-    if "usage_breakdown" in item and item.usage_breakdown != none and item.usage_breakdown.len() > 0 {
+    let has_usage_breakdown = "usage_breakdown" in item and item.usage_breakdown != none and item.usage_breakdown.len() > 0
+    
+    if has_usage_breakdown {
       v(0.3em)
       
       // Create a simplified usage breakdown table
@@ -325,7 +329,10 @@
       }
     }
     
-    v(0.5em)
+    // Only add spacing if there's usage breakdown or if it's not the last item
+    if has_usage_breakdown or i < items.len() - 1 {
+      v(0.5em)
+    }
   }
   
   // End of line items with usage breakdowns
