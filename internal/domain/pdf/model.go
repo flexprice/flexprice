@@ -3,6 +3,8 @@ package pdf
 import (
 	"encoding/json"
 	"time"
+
+	"github.com/flexprice/flexprice/internal/api/dto"
 )
 
 // InvoiceData represents the data model for invoice PDF generation
@@ -65,15 +67,16 @@ type AddressInfo struct {
 
 // LineItemData represents an invoice line item for PDF generation
 type LineItemData struct {
-	PlanDisplayName string     `json:"plan_display_name"`
-	DisplayName     string     `json:"display_name"`
-	Description     string     `json:"description"`
-	PeriodStart     CustomTime `json:"period_start"`
-	PeriodEnd       CustomTime `json:"period_end"`
-	Amount          float64    `json:"amount"` // Positive for charges, negative for discounts
-	Quantity        float64    `json:"quantity"`
-	Currency        string     `json:"currency"`
-	Type            string     `json:"type"` // "subscription", "addon", "discount", "tax"
+	PlanDisplayName string                   `json:"plan_display_name"`
+	DisplayName     string                   `json:"display_name"`
+	Description     string                   `json:"description"`
+	PeriodStart     CustomTime               `json:"period_start"`
+	PeriodEnd       CustomTime               `json:"period_end"`
+	Amount          float64                  `json:"amount"` // Positive for charges, negative for discounts
+	Quantity        float64                  `json:"quantity"`
+	Currency        string                   `json:"currency"`
+	Type            string                   `json:"type"` // "subscription", "addon", "discount", "tax"
+	UsageBreakdown  []dto.UsageBreakdownItem `json:"usage_breakdown,omitempty"`
 }
 
 // AppliedTaxData represents a tax applied to the invoice

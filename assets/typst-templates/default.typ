@@ -212,48 +212,110 @@
   [== Order Details]
   v(1em)
 
-  table(
-    columns: (1fr, 2fr, 1fr, 1fr, 1fr),
-    inset: 8pt,
-    align: (left, left, left, center, right),
-    fill: white,
-    stroke: (x, y) => (
-      bottom: if y == 0 { 1pt + styling.line-color } else { 1pt + styling.line-color },
-    ),
-    table.header(
-      [*Item*],
-      [*Description*],
-      [*Interval*],
-      [*Quantity*],
-      [*Amount*],
-    ),
-    ..items.map((item) => {
-      // Amount is already the total line amount, not unit price
-      let line-total = item.amount
-      let amount-display = if line-total < 0 {
-        [−#currency #format-currency(calc.abs(line-total), precision: precision)]
-      } else {
-        [#currency #format-currency(line-total, precision: precision)]
-      }
-      
-      (
-        item.at("plan_display_name", default: "Plan"),
-        if item.at("description", default: "Recurring") != "" {
-          item.at("description", default: "Recurring")
-        } else {
-          "-"
-        },
-        if item.at("period_start", default: "") != "" and 
-         item.at("period_end", default: "") != "" {
-          [#format-date(parse-date(item.at("period_start"))) - #format-date(parse-date(item.at("period_end")))]
-        } else {
-          "-"
-        },
-        format-number(item.quantity),
-        amount-display,
+  // Main line items table with integrated usage breakdowns
+  for (i, item) in items.enumerate() {
+    // Amount is already the total line amount, not unit price
+    let line-total = item.amount
+    let amount-display = if line-total < 0 {
+      [−#currency #format-currency(calc.abs(line-total), precision: precision)]
+    } else {
+      [#currency #format-currency(line-total, precision: precision)]
+    }
+    
+    let description = if item.at("description", default: "Recurring") != "" {
+      item.at("description", default: "Recurring")
+    } else {
+      "-"
+    }
+    
+    let has_period = item.at("period_start", default: "") != "" and item.at("period_end", default: "") != ""
+    let interval = if has_period {
+      [#format-date(parse-date(item.at("period_start"))) - #format-date(parse-date(item.at("period_end")))]
+    } else {
+      "-"
+    }
+    
+    // Display the main line item
+    if i == 0 {
+      // Add header only for the first item
+      table(
+        columns: (1fr, 2fr, 1fr, 1fr, 1fr),
+        inset: 8pt,
+        align: (left, left, left, center, right),
+        fill: white,
+        stroke: (x, y) => (
+          bottom: 1pt + styling.line-color,
+        ),
+        table.header(
+          [*Item*],
+          [*Description*],
+          [*Interval*],
+          [*Quantity*],
+          [*Amount*],
+        ),
+        [#item.at("plan_display_name", default: "Plan")], 
+        [#description],
+        [#interval],
+        [#format-number(item.quantity)],
+        [#amount-display]
       )
-    }).flatten(),
-  )
+    } else {
+      // Just the row for subsequent items
+      table(
+        columns: (1fr, 2fr, 1fr, 1fr, 1fr),
+        inset: 8pt,
+        align: (left, left, left, center, right),
+        fill: white,
+        stroke: (x, y) => (
+          bottom: 1pt + styling.line-color,
+        ),
+        [#item.at("plan_display_name", default: "Plan")], 
+        [#description],
+        [#interval],
+        [#format-number(item.quantity)],
+        [#amount-display]
+      )
+    }
+    
+    // Check if this item has usage breakdown and add it directly below
+    if "usage_breakdown" in item and item.usage_breakdown != none and item.usage_breakdown.len() > 0 {
+      v(0.3em)
+      
+      // Create a simplified usage breakdown table
+      for usage_item in item.usage_breakdown {
+        // Check if grouped_by exists
+        if "grouped_by" in usage_item {
+          // Extract data from the usage breakdown item
+          let grouped_by = usage_item.grouped_by
+          let cost = usage_item.cost
+          
+          // Extract resource name from grouped_by map
+          let resource_name = grouped_by.at("resource_name", default: "-")
+          
+          // Parse cost string to float safely
+          let cost_value = 0.0
+          if cost != none {
+            cost_value = float(str(cost))
+          }
+          
+          // Display a simple usage row - just resource name and cost
+          table(
+            columns: (2fr, 1fr),
+            inset: (left: 2em, rest: 6pt),
+            align: (left, right),
+            fill: rgb("#f9f9f9"),
+            stroke: none,
+            [#text(size: 0.9em, fill: styling.secondary-color)[#resource_name]],
+            [#text(size: 0.9em)[#currency #format-currency(cost_value, precision: precision)]]
+          )
+        }
+      }
+    }
+    
+    v(0.5em)
+  }
+  
+  // End of line items with usage breakdowns
 
   v(1em)
 
