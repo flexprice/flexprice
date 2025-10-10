@@ -24,6 +24,8 @@ type InvoiceData struct {
 	VAT           float64    `json:"vat"`            // VAT percentage as decimal (0.18 = 18%)
 	Notes         string     `json:"notes"`
 	BillingReason string     `json:"billing_reason"`
+	PeriodStart   CustomTime `json:"period_start"`
+	PeriodEnd     CustomTime `json:"period_end"`
 
 	// Company information
 	Biller    *BillerInfo    `json:"biller"`

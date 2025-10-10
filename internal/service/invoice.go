@@ -1657,6 +1657,8 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 		Notes:         "",  // resolved from invoice metadata
 		VAT:           0.0, // resolved from invoice metadata
 		Biller:        s.getBillerInfo(tenant),
+		PeriodStart:   pdf.CustomTime{Time: lo.FromPtr(inv.PeriodStart)},
+		PeriodEnd:     pdf.CustomTime{Time: lo.FromPtr(inv.PeriodEnd)},
 		Recipient:     s.getRecipientInfo(customer),
 	}
 
