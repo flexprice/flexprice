@@ -160,3 +160,14 @@ feature_usage_tracking:
 feature_flag:
   # This flag is used to enable/disable feature usage for analytics
   enable_feature_usage_for_analytics: true # TODO: cleanup by 15th October 2025
+
+email:
+  enabled: false # Set to true to enable email sending (override with FLEXPRICE_EMAIL_ENABLED=true)
+  resend_api_key: "" # Resend API key (set via FLEXPRICE_EMAIL_RESEND_API_KEY environment variable)
+  from_address: "" # Default from address for emails (MUST be verified in Resend)
+  reply_to: "" # Reply-to address for emails
+  onboarding_video_url: "" # Onboarding video URL
+  calendar_url: "" # Calendar booking URL
+  dashboard_url: "" # Dashboard URL
+  support_email: "" # Support email address
+  community_url: "" # Join community URL (Slack)

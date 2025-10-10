@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/user"
+	"github.com/flexprice/flexprice/internal/email"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/pubsub"
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
@@ -440,6 +441,16 @@ func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, userID
 		}
 	}
 
+	// Send onboarding email with user info
+	if err := s.sendOnboardingEmail(ctx, email, tenantName); err != nil {
+		// Log error but don't fail the onboarding process
+		s.Logger.Errorw("failed to send onboarding email",
+			"error", err,
+			"email", email,
+			"user_id", userID,
+		)
+	}
+
 	return nil
 }
 
@@ -798,6 +809,58 @@ func (s *onboardingService) createDefaultSubscriptions(ctx context.Context, cust
 		"subscription_id", resp.ID,
 		"subscription_status", resp.Status,
 	)
+
+	return nil
+}
+
+// sendOnboardingEmail sends a welcome email to a new user
+func (s *onboardingService) sendOnboardingEmail(ctx context.Context, toEmail, userName string) error {
+	// Create email client
+	emailClient := email.NewEmailClient(email.Config{
+		Enabled:     s.Config.Email.Enabled,
+		APIKey:      s.Config.Email.ResendAPIKey,
+		FromAddress: s.Config.Email.FromAddress,
+		ReplyTo:     s.Config.Email.ReplyTo,
+	})
+
+	if !emailClient.IsEnabled() {
+		s.Logger.Debugw("email service is disabled, skipping onboarding email")
+		return nil
+	}
+
+	// Create email service
+	emailSvc := email.NewEmail(emailClient, s.Logger.Desugar())
+
+	// Build template data from config
+	configData := map[string]string{
+		"onboarding_video_url": s.Config.Email.OnboardingVideoURL,
+		"calendar_url":         s.Config.Email.CalendarURL,
+		"dashboard_url":        s.Config.Email.DashboardURL,
+		"support_email":        s.Config.Email.SupportEmail,
+		"community_url":        s.Config.Email.CommunityURL,
+	}
+
+	templateData := email.BuildTemplateData(configData, toEmail)
+
+	// Override user_name if provided
+	if userName != "" {
+		templateData["user_name"] = userName
+	}
+
+	// Send email using template
+	resp, err := emailSvc.SendEmailWithTemplate(ctx, email.SendEmailWithTemplateRequest{
+		ToAddress:    toEmail,
+		Subject:      "Welcome to Flexprice!",
+		TemplatePath: "welcome-email.html",
+		Data:         templateData,
+	})
+	if err != nil {
+		return err
+	}
+
+	if !resp.Success {
+		s.Logger.Errorw("email send was not successful", "error", resp.Error)
+	}
 
 	return nil
 }
