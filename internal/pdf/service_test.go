@@ -7,6 +7,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/domain/pdf"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/typst"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -17,7 +18,7 @@ type MockCompiler struct {
 	mock.Mock
 }
 
-func (m *MockCompiler) CompileTemplate(templateName string, jsonData []byte, options ...typst.CompileOptsBuilder) ([]byte, error) {
+func (m *MockCompiler) CompileTemplate(templateName types.TemplateName, jsonData []byte, options ...typst.CompileOptsBuilder) ([]byte, error) {
 	args := m.Called(templateName, jsonData, options)
 	return args.Get(0).([]byte), args.Error(1)
 }
@@ -49,7 +50,7 @@ func TestRenderInvoicePdf(t *testing.T) {
 	jsonData, err := json.Marshal(data)
 	assert.NoError(t, err)
 
-	mockCompiler.On("CompileTemplate", "invoice.typ", jsonData, mock.Anything).Return(expectedPDF, nil)
+	mockCompiler.On("CompileTemplate", types.TemplateInvoiceDefault, jsonData, mock.Anything).Return(expectedPDF, nil)
 
 	pdf, err := service.RenderInvoicePdf(context.Background(), data)
 
@@ -66,7 +67,7 @@ func TestRenderInvoicePdf_Error(t *testing.T) {
 	data := &pdf.InvoiceData{ID: "123"}
 	expectedError := ierr.NewError("compilation error").Mark(ierr.ErrSystem)
 
-	mockCompiler.On("CompileTemplate", "invoice.typ", mock.Anything, mock.Anything).Return([]byte{}, expectedError)
+	mockCompiler.On("CompileTemplate", types.TemplateInvoiceDefault, mock.Anything, mock.Anything).Return([]byte{}, expectedError)
 
 	pdf, err := service.RenderInvoicePdf(context.Background(), data)
 
