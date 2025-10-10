@@ -91,6 +91,7 @@
   invoice-number: none,
   issuing-date: "",
   due-date: none,
+  service-period: none,              // Service period for billing
   amount-due: 0,  
   notes: "",
   biller: (:),                  // Company info
@@ -110,10 +111,10 @@
   styling.font-size = styling.at("font-size", default: 9pt)
   styling.primary-color = styling.at("primary-color", default: rgb("#000000"))
   styling.margin = styling.at("margin", default: (
-    top: 15mm,
-    right: 15mm,
-    bottom: 15mm,
-    left: 15mm,
+    top: 12mm,
+    right: 10mm,
+    bottom: 10mm,
+    left: 10mm,
   ))
   styling.line-color = styling.at("line-color", default: rgb("#e0e0e0"))
   styling.secondary-color = rgb(styling.at("secondary-color", default: rgb("#707070")))
@@ -124,6 +125,25 @@
   // Set document properties
   let issuing-date-value = if issuing-date != "" { issuing-date }
         else { datetime.today().display("[year]-[month]-[day]") }
+
+  // Initialize service period from items if not provided
+  let service-period-value = if service-period != none { 
+    service-period 
+  } else if items.len() > 0 {
+    // Extract period from first item that has period information
+    let first-item-with-period = items.find(item => 
+      item.at("period_start", default: "") != "" and item.at("period_end", default: "") != ""
+    )
+    if first-item-with-period != none {
+      let period-start = first-item-with-period.at("period_start")
+      let period-end = first-item-with-period.at("period_end")
+      format-date(parse-date(period-start)) + " - " + format-date(parse-date(period-end))
+    } else {
+      "--"
+    }
+  } else {
+    "--"
+  }
 
   set document(
     title: if title != none { title } else { "Invoice " + invoice-number },
@@ -158,63 +178,48 @@
     )
     v(0.8em)
   } else {
-    text(weight: "medium", size: 1.6em, fill: styling.primary-color)[Invoice]
+    text(weight: "bold", size: 2.2em, fill: styling.primary-color)[Invoice]
   }
 
-  grid(
-    columns: (1fr, 1fr, 1fr),
-    gutter: 0.5em,
-    align: auto,
-    [
-      #text(weight: "regular", fill: styling.secondary-color)[Invoice Number]\
-      #text(weight: "regular")[#invoice-number]
-    ],
-    [
-      #text(weight: "regular", fill: styling.secondary-color)[Date of Issue]\
-      #text(weight: "regular")[#issuing-date-value]
-    ],
-    [
-      #text(weight: "regular", fill: styling.secondary-color)[Date Due]\
-      #text(weight: "regular")[#due-date]
-    ],
-  )
+  v(0.8em)
+
+  // Invoice details in vertical format
+  [
+    #text(weight: "medium", size: 10pt)[Invoice number:] #text(weight: "regular", size: 10pt, fill: rgb("#666666"))[#invoice-number] \
+    #text(weight: "medium", size: 10pt)[Date of issue:] #text(weight: "regular", size: 10pt, fill: rgb("#666666"))[#issuing-date-value] \
+    #text(weight: "medium", size: 10pt)[Date due:] #text(weight: "regular", size: 10pt, fill: rgb("#666666"))[#due-date] \
+    #text(weight: "medium", size: 10pt)[Service period:] #text(weight: "regular", size: 10pt, fill: rgb("#666666"))[#service-period-value]
+  ]
 
   line(length: 100%, stroke: 0.5pt + styling.line-color)
 
-  v(2em)
+  v(1.2em)
 
   // Biller and Recipient Information
   grid(
     columns: (1fr, 1fr),
-    gutter: 1em,
+    gutter: 0.8em,
     [
-      #text(weight: "medium", size: 12pt)[From]
-      #v(0.15em)
-      #text(weight: "medium")[#biller.name] \
-      #text(fill: gray)[#biller.at("email", default: "--")] \
-      #text(fill: styling.secondary-color)[#biller.at("address", default: (:)).at("street", default: "--")] \
-      #text(fill: styling.secondary-color)[#biller.at("address", default: (:)).at("city", default: "--")] \
-      #text(fill: styling.secondary-color)[#biller.at("address", default: (:)).at("postal-code", default: "--")]
+      #text(weight: "semibold", size: 11pt)[From]
+      #v(0.3em)
+      #text(weight: "semibold", size: 10pt)[#biller.name] \
+      #text(weight: "regular", size: 9pt, fill: rgb("#666666"))[#biller.at("email", default: "--")] \
+      #text(weight: "regular", size: 9pt, fill: rgb("#666666"))[#biller.at("address", default: (:)).at("street", default: "--")] \
+      #text(weight: "regular", size: 9pt, fill: rgb("#666666"))[#biller.at("address", default: (:)).at("city", default: "--")] \
+      #text(weight: "regular", size: 9pt, fill: rgb("#666666"))[#biller.at("address", default: (:)).at("postal-code", default: "--")]
     ],
     [
-      #text(weight: "medium", size: 12pt)[Bill to]
-      #v(0.15em)
-      #text(weight: "medium")[#recipient.name] \
-      #text(fill: gray)[#recipient.at("email", default: "--")] \
-      #text(fill: styling.secondary-color)[#recipient.at("address", default: (:)).at("street", default: "--")] \
-      #text(fill: styling.secondary-color)[#recipient.at("address", default: (:)).at("city", default: "--")] \
-      #text(fill: styling.secondary-color)[#recipient.at("address", default: (:)).at("postal-code", default: "--")]
+      #text(weight: "semibold", size: 11pt)[Bill to]
+      #v(0.3em)
+      #text(weight: "semibold", size: 10pt)[#recipient.name] \
+      #text(weight: "regular", size: 9pt, fill: rgb("#666666"))[#recipient.at("email", default: "--")] \
+      #text(weight: "regular", size: 9pt, fill: rgb("#666666"))[#recipient.at("address", default: (:)).at("street", default: "--")] \
+      #text(weight: "regular", size: 9pt, fill: rgb("#666666"))[#recipient.at("address", default: (:)).at("city", default: "--")] \
+      #text(weight: "regular", size: 9pt, fill: rgb("#666666"))[#recipient.at("address", default: (:)).at("postal-code", default: "--")]
     ]
   )
 
-  v(2em)
-  line(length: 100%, stroke: 0.5pt + styling.line-color)
-  v(1em)
-
-  // Order Details
-  text(weight: "medium", size: 1.1em)[Order Details]
-  v(0.8em)
-
+  v(1.5em)
   // Main line items table with integrated usage breakdowns
   for (i, item) in items.enumerate() {
     // Amount is already the total line amount, not unit price
@@ -242,23 +247,20 @@
     if i == 0 {
       // Add header only for the first item
       table(
-        columns: (1fr, 2fr, 1fr, 1fr, 1fr),
-        inset: (top: 10pt, bottom: 10pt, left: 8pt, right: 8pt),
-        align: (left, left, left, center, right),
-        fill: (x, y) => if y == 0 { styling.table-header-bg } else { white },
+        columns: (3fr, 1fr, 1fr, 1.5fr),
+        inset: (top: 12pt, bottom: 12pt, left: 8pt, right: 8pt),
+        align: (left, left, center, right),
+        fill: (x, y) => if y == 0 { rgb("#f8f9fa") } else { white },
         stroke: (x, y) => (
-          bottom: if y == 0 { 1pt + styling.table-header-border } else { 0.5pt + styling.line-color },
-          top: if y == 0 { 1pt + styling.table-header-border } else { none },
+          bottom: if y == 0 { 1pt + rgb("#e9ecef") } else { 0.5pt + rgb("#e9ecef") },
         ),
       table.header(
-        [#text(fill: styling.table-header-color, weight: "semibold", size: 0.95em)[Item]],
-        [#text(fill: styling.table-header-color, weight: "semibold", size: 0.95em)[Description]],
-        [#text(fill: styling.table-header-color, weight: "semibold", size: 0.95em)[Interval]],
-        [#text(fill: styling.table-header-color, weight: "semibold", size: 0.95em)[Quantity]],
-        [#text(fill: styling.table-header-color, weight: "semibold", size: 0.95em)[Amount]],
+        [#text(weight: "semibold", size: 10pt, fill: rgb("#2c3e50"))[Item]],
+        [#text(weight: "semibold", size: 10pt, fill: rgb("#2c3e50"))[Interval]],
+        [#text(weight: "semibold", size: 10pt, fill: rgb("#2c3e50"))[Quantity]],
+        [#text(weight: "semibold", size: 10pt, fill: rgb("#2c3e50"))[Amount]],
       ),
         [#item.at("plan_display_name", default: "Plan")], 
-        [#description],
         [#interval],
         [#format-number(item.quantity)],
         [#amount-display]
@@ -266,15 +268,14 @@
     } else {
       // Just the row for subsequent items
       table(
-        columns: (1fr, 2fr, 1fr, 1fr, 1fr),
-        inset: (top: 8pt, bottom: 8pt, left: 8pt, right: 8pt),
-        align: (left, left, left, center, right),
+        columns: (3fr, 1fr, 1fr, 1.5fr),
+        inset: (top: 10pt, bottom: 10pt, left: 8pt, right: 8pt),
+        align: (left, left, center, right),
         fill: white,
         stroke: (x, y) => (
-          bottom: 0.5pt + styling.line-color,
+          bottom: 0.5pt + rgb("#e9ecef"),
         ),
         [#item.at("plan_display_name", default: "Plan")], 
-        [#description],
         [#interval],
         [#format-number(item.quantity)],
         [#amount-display]
@@ -311,19 +312,18 @@
             usage_value = float(str(usage))
           }
           
-          // Display usage row with resource name in first column, blank for description and interval, 
+          // Display usage row with resource name in first column, blank for interval, 
           // then quantity and amount aligned with main table
           table(
-            columns: (1fr, 2fr, 1fr, 1fr, 1fr),
-            inset: (left: 1.5em, rest: 6pt),
-            align: (left, left, left, center, right),
-            fill: rgb("#fafafa"),
+            columns: (3fr, 1fr, 1fr, 1.5fr),
+            inset: (left: 1.5em, rest: 8pt),
+            align: (left, left, center, right),
+            fill: rgb("#f8f9fa"),
             stroke: none,
-            [#text(size: 0.85em, fill: styling.secondary-color)[#resource_name]],
-            [],  // Empty description column
+            [#text(size: 0.9em, fill: rgb("#666666"), weight: "regular")[#resource_name]],
             [],  // Empty interval column
-            [#text(size: 0.85em)[#format-number(usage_value)]],
-            [#text(size: 0.85em)[#currency #format-currency(cost_value, precision: precision)]]
+            [#text(size: 0.9em, weight: "medium")[#format-number(usage_value)]],
+            [#text(size: 0.9em, weight: "medium")[#currency #format-currency(cost_value, precision: precision)]]
           )
         }
       }
