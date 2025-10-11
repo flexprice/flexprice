@@ -1040,13 +1040,9 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 		return nil, nil, err
 	}
 
-	// Check if the invoice is zeroAmountInvoice
-	if invoiceReq.Subtotal.IsZero() {
-		return nil, subscription, nil
-	}
-
 	s.Logger.Infow("prepared invoice request for subscription",
-		"invoice_request", invoiceReq)
+		"invoice_request", invoiceReq,
+		"is_zero_amount", invoiceReq.Subtotal.IsZero())
 
 	// Create the invoice
 	inv, err := s.CreateInvoice(ctx, *invoiceReq)
