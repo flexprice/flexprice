@@ -201,37 +201,55 @@ func (s *CustomerService) CreateCustomerInStripe(ctx context.Context, customerID
 
 // CreateCustomerFromStripe creates a customer in our system from Stripe webhook data
 func (s *CustomerService) CreateCustomerFromStripe(ctx context.Context, stripeCustomer *stripe.Customer, environmentID string, customerService interfaces.CustomerService) error {
-	// Check for existing customer by Flexprice customer ID if present in metadata
-	if flexpriceID, exists := stripeCustomer.Metadata["flexprice_customer_id"]; exists && flexpriceID != "" {
-		// Try to get customer by Flexprice ID first (this is the actual customer ID, not external_id)
-		existing, err := customerService.GetCustomer(ctx, flexpriceID)
-
-		// Skip if there is existing customer
-		if err == nil && existing != nil {
-			s.logger.Infow("FlexPrice customer already exists, skipping creation to avoid duplicates",
-				"flexprice_customer_id", flexpriceID,
-				"stripe_customer_id", stripeCustomer.ID)
-			return nil
-		}
-
-		// If not found by ID, try by lookup key (external_id)
-		existing, err = customerService.GetCustomerByLookupKey(ctx, flexpriceID)
-		if err == nil && existing != nil {
-			s.logger.Infow("FlexPrice customer already exists, skipping creation to avoid duplicates",
-				"flexprice_customer_id", flexpriceID,
-				"stripe_customer_id", stripeCustomer.ID)
-			return nil
-		}
-		// Don't create a new customer if we have flexprice_customer_id but couldn't find it
-		// This prevents duplicate creation when the customer was created by FlexPrice
-		return nil
-	}
-
-	// No flexprice_customer_id in metadata - this is an external Stripe customer
-	// Use stripe customer ID as external_id
 	externalID := stripeCustomer.ID
 
-	// Create new customer using DTO
+	// Step 1: Check by flexprice_customer_id, if exists just return
+	if flexpriceID, exists := stripeCustomer.Metadata["flexprice_customer_id"]; exists && flexpriceID != "" {
+		existing, err := customerService.GetCustomer(ctx, flexpriceID)
+		if err == nil && existing != nil {
+			s.logger.Infow("FlexPrice customer already exists, skipping creation",
+				"flexprice_customer_id", flexpriceID,
+				"stripe_customer_id", stripeCustomer.ID)
+			return nil
+		}
+	}
+
+	// Step 2: Check by flexprice_lookup_key
+	if lookupKey, exists := stripeCustomer.Metadata["flexprice_lookup_key"]; exists && lookupKey != "" {
+		externalID = lookupKey
+		existing, err := customerService.GetCustomerByLookupKey(ctx, lookupKey)
+		if err == nil && existing != nil {
+			// Customer found, check for existing mapping
+			filter := &types.EntityIntegrationMappingFilter{
+				EntityID:          existing.Customer.ID,
+				EntityType:        types.IntegrationEntityTypeCustomer,
+				ProviderTypes:     []string{string(types.SecretProviderStripe)},
+				ProviderEntityIDs: []string{stripeCustomer.ID},
+			}
+
+			existingMapping, err := s.entityIntegrationMappingRepo.List(ctx, filter)
+			if err == nil && len(existingMapping) > 0 {
+				// Mapping exists, just return
+				s.logger.Infow("FlexPrice customer and mapping already exist, skipping creation",
+					"flexprice_customer_id", existing.Customer.ID,
+					"stripe_customer_id", stripeCustomer.ID)
+				return nil
+			}
+
+			// Customer exists but no mapping, create mapping
+			err = s.createEntityIntegrationMapping(ctx, existing.Customer.ID, stripeCustomer)
+			if err != nil {
+				s.logger.Warnw("failed to create mapping for existing customer",
+					"error", err,
+					"customer_id", existing.Customer.ID,
+					"stripe_customer_id", stripeCustomer.ID)
+			}
+
+			return nil
+		}
+	}
+
+	// Step 3: Create new customer
 	createReq := dto.CreateCustomerRequest{
 		ExternalID: externalID,
 		Name:       stripeCustomer.Name,
@@ -256,32 +274,13 @@ func (s *CustomerService) CreateCustomerFromStripe(ctx context.Context, stripeCu
 		return err
 	}
 
-	// Create entity mapping if repository is available
-	if s.entityIntegrationMappingRepo != nil {
-		mapping := &entityintegrationmapping.EntityIntegrationMapping{
-			ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
-			EntityID:         customerResp.ID,
-			EntityType:       types.IntegrationEntityTypeCustomer,
-			ProviderType:     string(types.SecretProviderStripe),
-			ProviderEntityID: stripeCustomer.ID,
-			Metadata: map[string]interface{}{
-				"created_via":           "provider_to_flexprice",
-				"stripe_customer_email": stripeCustomer.Email,
-				"stripe_customer_name":  stripeCustomer.Name,
-				"synced_at":             time.Now().UTC().Format(time.RFC3339),
-			},
-			EnvironmentID: types.GetEnvironmentID(ctx),
-			BaseModel:     types.GetDefaultBaseModel(ctx),
-		}
-
-		err = s.entityIntegrationMappingRepo.Create(ctx, mapping)
-		if err != nil {
-			s.logger.Warnw("failed to create entity mapping for customer",
-				"error", err,
-				"customer_id", customerResp.ID,
-				"stripe_customer_id", stripeCustomer.ID)
-			// Don't fail the entire operation if entity mapping creation fails
-		}
+	// Create entity mapping for new customer
+	err = s.createEntityIntegrationMapping(ctx, customerResp.ID, stripeCustomer)
+	if err != nil {
+		s.logger.Warnw("failed to create mapping for new customer",
+			"error", err,
+			"customer_id", customerResp.ID,
+			"stripe_customer_id", stripeCustomer.ID)
 	}
 
 	return nil
@@ -423,6 +422,44 @@ func (s *CustomerService) mergeCustomerMetadata(existingMetadata map[string]stri
 	}
 
 	return merged
+}
+
+// createEntityIntegrationMapping creates an entity integration mapping for a customer
+func (s *CustomerService) createEntityIntegrationMapping(ctx context.Context, customerID string, stripeCustomer *stripe.Customer) error {
+	if s.entityIntegrationMappingRepo == nil {
+		return nil
+	}
+
+	mapping := &entityintegrationmapping.EntityIntegrationMapping{
+		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
+		EntityID:         customerID,
+		EntityType:       types.IntegrationEntityTypeCustomer,
+		ProviderType:     string(types.SecretProviderStripe),
+		ProviderEntityID: stripeCustomer.ID,
+		Metadata: map[string]interface{}{
+			"created_via":           "provider_to_flexprice",
+			"stripe_customer_email": stripeCustomer.Email,
+			"stripe_customer_name":  stripeCustomer.Name,
+			"synced_at":             time.Now().UTC().Format(time.RFC3339),
+		},
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}
+
+	err := s.entityIntegrationMappingRepo.Create(ctx, mapping)
+	if err != nil {
+		s.logger.Warnw("failed to create entity mapping for customer",
+			"error", err,
+			"customer_id", customerID,
+			"stripe_customer_id", stripeCustomer.ID)
+		return err
+	}
+
+	s.logger.Infow("Created entity integration mapping",
+		"flexprice_customer_id", customerID,
+		"stripe_customer_id", stripeCustomer.ID)
+
+	return nil
 }
 
 // findStripeCustomerByEmail finds a Stripe customer by email

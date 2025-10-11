@@ -753,21 +753,24 @@ func (r *FeatureUsageRepository) getMaxBucketTotals(ctx context.Context, params 
 
 	// Build group by columns based on request parameters
 	groupByColumns := []string{"bucket_start", "feature_id"}
-	selectColumns := []string{"feature_id"}
+	innerSelectColumns := []string{"feature_id"} // For inner query (has access to properties column)
+	outerSelectColumns := []string{"feature_id"} // For outer query (only has aliased columns)
 
 	// Add grouping columns
 	for _, groupBy := range params.GroupBy {
 		switch groupBy {
 		case "source":
 			groupByColumns = append(groupByColumns, "source")
-			selectColumns = append(selectColumns, "source")
+			innerSelectColumns = append(innerSelectColumns, "source")
+			outerSelectColumns = append(outerSelectColumns, "source")
 		case "feature_id":
 			// Already included
 		default:
 			if strings.HasPrefix(groupBy, "properties.") {
 				propertyName := strings.TrimPrefix(groupBy, "properties.")
 				groupByColumns = append(groupByColumns, fmt.Sprintf("JSONExtractString(properties, '%s')", propertyName))
-				selectColumns = append(selectColumns, fmt.Sprintf("JSONExtractString(properties, '%s') as %s", propertyName, propertyName))
+				innerSelectColumns = append(innerSelectColumns, fmt.Sprintf("JSONExtractString(properties, '%s') as %s", propertyName, propertyName))
+				outerSelectColumns = append(outerSelectColumns, propertyName) // Just the alias
 			}
 		}
 	}
@@ -791,7 +794,7 @@ func (r *FeatureUsageRepository) getMaxBucketTotals(ctx context.Context, params 
 		AND feature_id = ?
 		AND timestamp >= ?
 		AND timestamp <= ?
-		AND sign != 0`, bucketWindowExpr, strings.Join(selectColumns, ", "))
+		AND sign != 0`, bucketWindowExpr, strings.Join(innerSelectColumns, ", "))
 
 	queryParams := []interface{}{
 		params.TenantID,
@@ -850,10 +853,10 @@ func (r *FeatureUsageRepository) getMaxBucketTotals(ctx context.Context, params 
 			sum(bucket_max) as total_usage,
 			sum(event_count) as event_count
 		FROM bucket_maxes
-	`, innerQuery, strings.Join(selectColumns, ", "))
+	`, innerQuery, strings.Join(outerSelectColumns, ", "))
 
 	// Add GROUP BY clause
-	query += " GROUP BY " + strings.Join(selectColumns, ", ")
+	query += " GROUP BY " + strings.Join(outerSelectColumns, ", ")
 
 	rows, err := r.store.GetConn().Query(ctx, query, queryParams...)
 	if err != nil {
@@ -878,20 +881,20 @@ func (r *FeatureUsageRepository) getMaxBucketTotals(ctx context.Context, params 
 			Properties:      make(map[string]string),
 		}
 
-		// Build scan targets dynamically based on selectColumns structure
-		// The query selects: selectColumns + total_usage + event_count
-		totalSelectColumns := len(selectColumns) + 2 // +2 for total_usage and event_count
+		// Build scan targets dynamically based on outerSelectColumns structure
+		// The query selects: outerSelectColumns + total_usage + event_count
+		totalSelectColumns := len(outerSelectColumns) + 2 // +2 for total_usage and event_count
 		scanTargets := make([]interface{}, totalSelectColumns)
 
 		// Create string targets for all select columns
-		selectValues := make([]string, len(selectColumns))
+		selectValues := make([]string, len(outerSelectColumns))
 		for i := range selectValues {
 			scanTargets[i] = &selectValues[i]
 		}
 
 		// Add usage and event count targets
-		scanTargets[len(selectColumns)] = &analytics.TotalUsage
-		scanTargets[len(selectColumns)+1] = &analytics.EventCount
+		scanTargets[len(outerSelectColumns)] = &analytics.MaxUsage
+		scanTargets[len(outerSelectColumns)+1] = &analytics.EventCount
 
 		err := rows.Scan(scanTargets...)
 		if err != nil {
@@ -900,8 +903,8 @@ func (r *FeatureUsageRepository) getMaxBucketTotals(ctx context.Context, params 
 				Mark(ierr.ErrDatabase)
 		}
 
-		// Populate fields based on selectColumns order
-		for i, selectCol := range selectColumns {
+		// Populate fields based on outerSelectColumns order
+		for i, selectCol := range outerSelectColumns {
 			value := selectValues[i]
 			switch selectCol {
 			case "feature_id":
@@ -909,16 +912,9 @@ func (r *FeatureUsageRepository) getMaxBucketTotals(ctx context.Context, params 
 			case "source":
 				analytics.Source = value
 			default:
-				// For properties fields, extract the property name from the alias
-				if strings.Contains(selectCol, " as ") {
-					// Extract alias from "JSONExtractString(properties, 'property_name') as property_name"
-					parts := strings.Split(selectCol, " as ")
-					if len(parts) == 2 {
-						propertyName := strings.TrimSpace(parts[1])
-						if value != "" {
-							analytics.Properties[propertyName] = value
-						}
-					}
+				// For property columns, the selectCol is just the property name (alias)
+				if value != "" {
+					analytics.Properties[selectCol] = value
 				}
 			}
 		}

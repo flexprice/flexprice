@@ -228,6 +228,10 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	// Create response object
 	response := &dto.SubscriptionResponse{Subscription: sub}
 
+	if req.SubscriptionStatus != "" {
+		sub.SubscriptionStatus = req.SubscriptionStatus
+	}
+
 	invoiceService := NewInvoiceService(s.ServiceParams)
 	var invoice *dto.InvoiceResponse
 	var updatedSub *subscription.Subscription
@@ -332,7 +336,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 
 		// if the subscription is created with incomplete status, but it doesn't create an invoice, we need to mark it as active
 		// This applies regardless of collection method - if there's no invoice to pay, the subscription should be active
-		if sub.SubscriptionStatus == types.SubscriptionStatusIncomplete && (invoice == nil || invoice.PaymentStatus == types.PaymentStatusSucceeded) {
+		if (req.Workflow != nil && *req.Workflow != types.TemporalStripeIntegrationWorkflow) && sub.SubscriptionStatus == types.SubscriptionStatusIncomplete && (invoice == nil || invoice.PaymentStatus == types.PaymentStatusSucceeded) {
 			sub.SubscriptionStatus = types.SubscriptionStatusActive
 			err = s.SubRepo.Update(ctx, sub)
 			if err != nil {

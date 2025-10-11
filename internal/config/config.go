@@ -184,7 +184,8 @@ type EnvAccessConfig struct {
 }
 
 type FeatureFlagConfig struct {
-	EnableFeatureUsageForAnalytics bool `mapstructure:"enable_feature_usage_for_analytics" validate:"required"`
+	EnableFeatureUsageForAnalytics bool   `mapstructure:"enable_feature_usage_for_analytics" validate:"required"`
+	ForceV1ForTenant               string `mapstructure:"force_v1_for_tenant" validate:"omitempty"`
 }
 
 func NewConfig() (*Configuration, error) {

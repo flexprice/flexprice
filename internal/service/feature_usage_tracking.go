@@ -1105,9 +1105,84 @@ func (s *featureUsageTrackingService) fetchSubscriptions(ctx context.Context, cu
 	return subscriptions, nil
 }
 
+// buildMaxBucketFeatures builds a map of max bucket features from the request parameters
+func (s *featureUsageTrackingService) buildMaxBucketFeatures(ctx context.Context, params *events.UsageAnalyticsParams) (map[string]*events.MaxBucketFeatureInfo, error) {
+	maxBucketFeatures := make(map[string]*events.MaxBucketFeatureInfo)
+
+	// If no specific feature IDs requested, we can't pre-filter for max bucket features
+	if len(params.FeatureIDs) == 0 {
+		return maxBucketFeatures, nil
+	}
+
+	// Fetch features
+	featureFilter := types.NewNoLimitFeatureFilter()
+	featureFilter.FeatureIDs = params.FeatureIDs
+	features, err := s.FeatureRepo.List(ctx, featureFilter)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to fetch features for max bucket analysis").
+			Mark(ierr.ErrDatabase)
+	}
+
+	// Extract meter IDs
+	meterIDs := make([]string, 0)
+	meterIDSet := make(map[string]bool)
+	featureToMeterMap := make(map[string]string)
+
+	for _, f := range features {
+		if f.MeterID != "" && !meterIDSet[f.MeterID] {
+			meterIDs = append(meterIDs, f.MeterID)
+			meterIDSet[f.MeterID] = true
+		}
+		featureToMeterMap[f.ID] = f.MeterID
+	}
+
+	// Fetch meters if needed
+	if len(meterIDs) > 0 {
+		meterFilter := types.NewNoLimitMeterFilter()
+		meterFilter.MeterIDs = meterIDs
+		meters, err := s.MeterRepo.List(ctx, meterFilter)
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Failed to fetch meters for max bucket analysis").
+				Mark(ierr.ErrDatabase)
+		}
+
+		// Build meter map
+		meterMap := make(map[string]*meter.Meter)
+		for _, m := range meters {
+			meterMap[m.ID] = m
+		}
+
+		// Check features for bucketed max meters
+		for _, f := range features {
+			if meterID := featureToMeterMap[f.ID]; meterID != "" {
+				if m, exists := meterMap[meterID]; exists && m.IsBucketedMaxMeter() {
+					maxBucketFeatures[f.ID] = &events.MaxBucketFeatureInfo{
+						FeatureID:    f.ID,
+						MeterID:      meterID,
+						BucketSize:   types.WindowSize(m.Aggregation.BucketSize),
+						EventName:    m.EventName,
+						PropertyName: m.Aggregation.Field,
+					}
+				}
+			}
+		}
+	}
+
+	return maxBucketFeatures, nil
+}
+
 // fetchAnalytics fetches analytics data from repository
 func (s *featureUsageTrackingService) fetchAnalytics(ctx context.Context, params *events.UsageAnalyticsParams) ([]*events.DetailedUsageAnalytic, error) {
-	analytics, err := s.featureUsageRepo.GetDetailedUsageAnalytics(ctx, params, nil)
+	// Build max bucket features map
+	maxBucketFeatures, err := s.buildMaxBucketFeatures(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	// Fetch analytics with max bucket features
+	analytics, err := s.featureUsageRepo.GetDetailedUsageAnalytics(ctx, params, maxBucketFeatures)
 	if err != nil {
 		s.Logger.Errorw("failed to get detailed usage analytics",
 			"error", err,
@@ -1249,7 +1324,7 @@ func (s *featureUsageTrackingService) fetchSubscriptionPrices(ctx context.Contex
 		priceFilter := types.NewNoLimitPriceFilter()
 		priceFilter.PriceIDs = priceIDs
 		priceFilter.WithStatus(types.StatusPublished)
-		priceFilter.AllowExpiredPrices = true
+		priceFilter.AllowExpiredPrices = false
 		prices, err := s.PriceRepo.List(ctx, priceFilter)
 		if err != nil {
 			return ierr.WithError(err).
@@ -1315,19 +1390,19 @@ func (s *featureUsageTrackingService) calculateBucketedCost(ctx context.Context,
 		// Use points as buckets
 		bucketedValues := make([]decimal.Decimal, len(item.Points))
 		for i, point := range item.Points {
-			bucketedValues[i] = point.Usage
+			bucketedValues[i] = s.getCorrectUsageValueForPoint(point, types.AggregationMax)
 		}
 		cost = priceService.CalculateBucketedCost(ctx, price, bucketedValues)
 
 		// Calculate cost for each point
 		for i := range item.Points {
-			pointCost := priceService.CalculateCost(ctx, price, item.Points[i].Usage)
+			pointCost := priceService.CalculateCost(ctx, price, s.getCorrectUsageValueForPoint(item.Points[i], types.AggregationMax))
 			item.Points[i].Cost = pointCost
 		}
 	} else {
 		// Treat total usage as single bucket
-		if item.TotalUsage.IsPositive() {
-			bucketedValues := []decimal.Decimal{item.TotalUsage}
+		if item.MaxUsage.IsPositive() {
+			bucketedValues := []decimal.Decimal{item.MaxUsage}
 			cost = priceService.CalculateBucketedCost(ctx, price, bucketedValues)
 		}
 	}
@@ -1515,430 +1590,6 @@ func (s *featureUsageTrackingService) mergeTimeSeriesPoints(existing []events.Us
 	})
 
 	return result
-}
-
-// identifyMaxBucketFeaturesFromSubscriptions identifies MAX bucket features from customer's active subscriptions
-func (s *featureUsageTrackingService) identifyMaxBucketFeaturesFromSubscriptions(ctx context.Context, params *events.UsageAnalyticsParams, subscriptions []*subscription.Subscription) (map[string]*events.MaxBucketFeatureInfo, error) {
-	// Subscriptions should always be provided by the caller to avoid redundant fetches
-	if len(subscriptions) == 0 {
-		return make(map[string]*events.MaxBucketFeatureInfo), nil
-	}
-
-	// Extract all meter IDs from subscription line items
-	meterIDSet := make(map[string]bool)
-	for _, sub := range subscriptions {
-		for _, lineItem := range sub.LineItems {
-			if lineItem.IsUsage() && lineItem.MeterID != "" {
-				meterIDSet[lineItem.MeterID] = true
-			}
-		}
-	}
-
-	// Convert to slice
-	meterIDs := make([]string, 0, len(meterIDSet))
-	for meterID := range meterIDSet {
-		meterIDs = append(meterIDs, meterID)
-	}
-
-	if len(meterIDs) == 0 {
-		return make(map[string]*events.MaxBucketFeatureInfo), nil
-	}
-
-	// Get features by meter IDs with meter expansion for efficiency
-	featureService := NewFeatureService(s.ServiceParams)
-	featureFilter := types.NewNoLimitFeatureFilter()
-	featureFilter.MeterIDs = meterIDs
-	featureFilter.Expand = lo.ToPtr(string(types.ExpandMeters)) // Expand meters in single call
-
-	featuresResponse, err := featureService.GetFeatures(ctx, featureFilter)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to fetch features with meters for MAX bucket identification").
-			Mark(ierr.ErrDatabase)
-	}
-
-	// Identify MAX with bucket features directly
-	maxBucketFeatures := make(map[string]*events.MaxBucketFeatureInfo)
-	for _, featureResponse := range featuresResponse.Items {
-		feature := featureResponse.Feature
-		// Check if feature has meter and meter is expanded
-		if feature.Type == types.FeatureTypeMetered && feature.MeterID != "" && featureResponse.Meter != nil {
-			meter := featureResponse.Meter.ToMeter()
-			// Check if this is a MAX aggregation with bucket size
-			if meter.Aggregation.Type == types.AggregationMax && meter.Aggregation.BucketSize != "" {
-				maxBucketFeatures[feature.ID] = &events.MaxBucketFeatureInfo{
-					FeatureID:    feature.ID,
-					MeterID:      meter.ID,
-					BucketSize:   meter.Aggregation.BucketSize,
-					EventName:    meter.EventName,
-					PropertyName: meter.Aggregation.Field,
-				}
-			}
-		}
-	}
-
-	return maxBucketFeatures, nil
-}
-
-// enrichAnalyticsWithFeatureMeterAndPriceDataAndMaxBuckets combines enrichment and MAX bucket identification to avoid redundant fetches
-func (s *featureUsageTrackingService) enrichAnalyticsWithFeatureMeterAndPriceDataAndMaxBuckets(ctx context.Context, analytics []*events.DetailedUsageAnalytic, subscriptions []*subscription.Subscription, params *events.UsageAnalyticsParams) error {
-	// Extract all unique feature IDs from analytics
-	featureIDs := make([]string, 0)
-	featureIDSet := make(map[string]bool)
-
-	for _, item := range analytics {
-		if item.FeatureID != "" && !featureIDSet[item.FeatureID] {
-			featureIDs = append(featureIDs, item.FeatureID)
-			featureIDSet[item.FeatureID] = true
-		}
-	}
-
-	// If no feature IDs, nothing to enrich
-	if len(featureIDs) == 0 {
-		return nil
-	}
-
-	// Fetch all features with meter expansion in one call
-	featureFilter := types.NewNoLimitFeatureFilter()
-	featureFilter.FeatureIDs = featureIDs
-	featureFilter.Expand = lo.ToPtr(string(types.ExpandMeters)) // Expand meters in single call
-	features, err := s.FeatureRepo.List(ctx, featureFilter)
-	if err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to fetch features for enrichment").
-			Mark(ierr.ErrDatabase)
-	}
-
-	// Extract all meter IDs from features and build feature map
-	meterIDs := make([]string, 0)
-	meterIDSet := make(map[string]bool)
-	featureMap := make(map[string]*feature.Feature)
-	maxBucketFeatures := make(map[string]*events.MaxBucketFeatureInfo)
-
-	for _, f := range features {
-		featureMap[f.ID] = f
-		if f.MeterID != "" && !meterIDSet[f.MeterID] {
-			meterIDs = append(meterIDs, f.MeterID)
-			meterIDSet[f.MeterID] = true
-		}
-	}
-
-	// Fetch all meters in one call
-	meterFilter := types.NewNoLimitMeterFilter()
-	meterFilter.MeterIDs = meterIDs
-	meters, err := s.MeterRepo.List(ctx, meterFilter)
-	if err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to fetch meters for enrichment").
-			Mark(ierr.ErrDatabase)
-	}
-
-	// Create meter map and identify MAX bucket features
-	meterMap := make(map[string]*meter.Meter)
-	for _, m := range meters {
-		meterMap[m.ID] = m
-
-		// Check if this is a MAX aggregation with bucket size
-		if m.Aggregation.Type == types.AggregationMax && m.Aggregation.BucketSize != "" {
-			// Find the feature for this meter
-			for featureID, f := range featureMap {
-				if f.MeterID == m.ID {
-					maxBucketFeatures[featureID] = &events.MaxBucketFeatureInfo{
-						FeatureID:    featureID,
-						MeterID:      m.ID,
-						BucketSize:   m.Aggregation.BucketSize,
-						EventName:    m.EventName,
-						PropertyName: m.Aggregation.Field,
-					}
-					break
-				}
-			}
-		}
-	}
-
-	// Build subscription-specific price mapping from line items
-	meterToPriceMap := make(map[string]*price.Price) // meter_id -> price
-	priceService := NewPriceService(s.ServiceParams)
-
-	// Collect all price IDs from subscription line items
-	priceIDs := make([]string, 0)
-	priceIDSet := make(map[string]bool)
-
-	for _, sub := range subscriptions {
-		for _, lineItem := range sub.LineItems {
-			if lineItem.IsUsage() && lineItem.MeterID != "" && lineItem.PriceID != "" {
-				if !priceIDSet[lineItem.PriceID] {
-					priceIDs = append(priceIDs, lineItem.PriceID)
-					priceIDSet[lineItem.PriceID] = true
-				}
-			}
-		}
-	}
-
-	// Fetch subscription-specific prices
-	if len(priceIDs) > 0 {
-		priceFilter := types.NewNoLimitPriceFilter()
-		priceFilter.PriceIDs = priceIDs
-		priceFilter.WithStatus(types.StatusPublished)
-		priceFilter.AllowExpiredPrices = true // Include expired prices for historical data
-		prices, err := s.PriceRepo.List(ctx, priceFilter)
-		if err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to fetch subscription prices for cost calculation").
-				Mark(ierr.ErrDatabase)
-		}
-
-		// Create price map for quick lookup by meter ID
-		for _, p := range prices {
-			if p.MeterID != "" {
-				meterToPriceMap[p.MeterID] = p
-			}
-		}
-	}
-
-	// Enrich analytics with feature, meter, and subscription-specific price data
-	for _, item := range analytics {
-		if feature, ok := featureMap[item.FeatureID]; ok {
-			item.FeatureName = feature.Name
-			item.Unit = feature.UnitSingular
-			item.UnitPlural = feature.UnitPlural
-
-			if meter, ok := meterMap[feature.MeterID]; ok {
-				item.MeterID = meter.ID
-				item.EventName = meter.EventName
-				item.AggregationType = meter.Aggregation.Type
-
-				// Calculate cost using subscription-specific price
-				if price, hasPricing := meterToPriceMap[meter.ID]; hasPricing {
-					// Check if this is a bucketed max meter
-					if meter.IsBucketedMaxMeter() {
-						// For bucketed features, extract values from points and use CalculateBucketedCost
-						var cost decimal.Decimal
-
-						if len(item.Points) > 0 {
-							// When window size is provided, use points as buckets
-							bucketedValues := make([]decimal.Decimal, len(item.Points))
-							for i, point := range item.Points {
-								bucketedValues[i] = point.Usage
-							}
-
-							// Calculate total cost using bucketed values
-							cost = priceService.CalculateBucketedCost(ctx, price, bucketedValues)
-
-							// Calculate cost for each point individually (each point represents a bucket)
-							for i := range item.Points {
-								pointUsage := item.Points[i].Usage
-								pointCost := priceService.CalculateCost(ctx, price, pointUsage)
-								item.Points[i].Cost = pointCost
-							}
-						} else {
-							// When no window size is provided, treat TotalUsage as a single bucket
-							// This is a fallback for bucketedMax meters when no time windowing is requested
-							totalUsage := item.TotalUsage
-							if totalUsage.IsPositive() {
-								// Treat the total usage as a single bucket for cost calculation
-								bucketedValues := []decimal.Decimal{totalUsage}
-								cost = priceService.CalculateBucketedCost(ctx, price, bucketedValues)
-							} else {
-								cost = decimal.Zero
-							}
-						}
-
-						item.TotalCost = cost
-						item.Currency = price.Currency
-					} else {
-						// For non-bucketed features, use regular CalculateCost
-						item.TotalUsage = s.getCorrectUsageValue(item, meter.Aggregation.Type)
-
-						cost := priceService.CalculateCost(ctx, price, item.TotalUsage)
-						item.TotalCost = cost
-						item.Currency = price.Currency
-
-						// Also calculate cost for each point in the time series if points exist
-						for i := range item.Points {
-							pointUsage := s.getCorrectUsageValueForPoint(item.Points[i], meter.Aggregation.Type)
-							pointCost := priceService.CalculateCost(ctx, price, pointUsage)
-							item.Points[i].Cost = pointCost
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return nil
-}
-
-// enrichAnalyticsWithFeatureMeterAndPriceData fetches and adds feature, meter, and subscription-specific price data to analytics results
-func (s *featureUsageTrackingService) enrichAnalyticsWithFeatureMeterAndPriceData(ctx context.Context, analytics []*events.DetailedUsageAnalytic, subscriptions []*subscription.Subscription) error {
-	// Extract all unique feature IDs
-	featureIDs := make([]string, 0)
-	featureIDSet := make(map[string]bool)
-
-	for _, item := range analytics {
-		if item.FeatureID != "" && !featureIDSet[item.FeatureID] {
-			featureIDs = append(featureIDs, item.FeatureID)
-			featureIDSet[item.FeatureID] = true
-		}
-	}
-
-	// If no feature IDs, nothing to enrich
-	if len(featureIDs) == 0 {
-		return nil
-	}
-
-	// Fetch all features in one call
-	featureFilter := types.NewNoLimitFeatureFilter()
-	featureFilter.FeatureIDs = featureIDs
-	features, err := s.FeatureRepo.List(ctx, featureFilter)
-	if err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to fetch features for enrichment").
-			Mark(ierr.ErrDatabase)
-	}
-
-	// Extract all meter IDs from features
-	meterIDs := make([]string, 0)
-	meterIDSet := make(map[string]bool)
-	featureMap := make(map[string]*feature.Feature)
-
-	for _, f := range features {
-		featureMap[f.ID] = f
-		if f.MeterID != "" && !meterIDSet[f.MeterID] {
-			meterIDs = append(meterIDs, f.MeterID)
-			meterIDSet[f.MeterID] = true
-		}
-	}
-
-	// Fetch all meters in one call
-	meterFilter := types.NewNoLimitMeterFilter()
-	meterFilter.MeterIDs = meterIDs
-	meters, err := s.MeterRepo.List(ctx, meterFilter)
-	if err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to fetch meters for enrichment").
-			Mark(ierr.ErrDatabase)
-	}
-
-	// Create meter map for quick lookup
-	meterMap := make(map[string]*meter.Meter)
-	for _, m := range meters {
-		meterMap[m.ID] = m
-	}
-
-	// Build subscription-specific price mapping from line items
-	meterToPriceMap := make(map[string]*price.Price) // meter_id -> price
-	priceService := NewPriceService(s.ServiceParams)
-
-	// Collect all price IDs from subscription line items
-	priceIDs := make([]string, 0)
-	priceIDSet := make(map[string]bool)
-
-	for _, sub := range subscriptions {
-		for _, lineItem := range sub.LineItems {
-			if lineItem.IsUsage() && lineItem.MeterID != "" && lineItem.PriceID != "" {
-				if !priceIDSet[lineItem.PriceID] {
-					priceIDs = append(priceIDs, lineItem.PriceID)
-					priceIDSet[lineItem.PriceID] = true
-				}
-			}
-		}
-	}
-
-	// Fetch subscription-specific prices
-	if len(priceIDs) > 0 {
-		priceFilter := types.NewNoLimitPriceFilter()
-		priceFilter.PriceIDs = priceIDs
-		priceFilter.WithStatus(types.StatusPublished)
-		priceFilter.AllowExpiredPrices = true // Include expired prices for historical data
-		prices, err := s.PriceRepo.List(ctx, priceFilter)
-		if err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to fetch subscription prices for cost calculation").
-				Mark(ierr.ErrDatabase)
-		}
-
-		// Create price map for quick lookup by meter ID
-		for _, p := range prices {
-			if p.MeterID != "" {
-				meterToPriceMap[p.MeterID] = p
-			}
-		}
-	}
-
-	// Enrich analytics with feature, meter, and subscription-specific price data
-	for _, item := range analytics {
-		if feature, ok := featureMap[item.FeatureID]; ok {
-			item.FeatureName = feature.Name
-			item.Unit = feature.UnitSingular
-			item.UnitPlural = feature.UnitPlural
-
-			if meter, ok := meterMap[feature.MeterID]; ok {
-				item.MeterID = meter.ID
-				item.EventName = meter.EventName
-				item.AggregationType = meter.Aggregation.Type
-
-				// Set the correct TotalUsage based on meter's aggregation type
-
-				// Calculate cost using subscription-specific price
-				if price, hasPricing := meterToPriceMap[meter.ID]; hasPricing {
-					// Check if this is a bucketed max meter
-					if meter.IsBucketedMaxMeter() {
-						// For bucketed features, extract values from points and use CalculateBucketedCost
-						var cost decimal.Decimal
-
-						if len(item.Points) > 0 {
-							// When window size is provided, use points as buckets
-							bucketedValues := make([]decimal.Decimal, len(item.Points))
-							for i, point := range item.Points {
-								bucketedValues[i] = point.Usage
-							}
-
-							// Calculate total cost using bucketed values
-							cost = priceService.CalculateBucketedCost(ctx, price, bucketedValues)
-
-							// Calculate cost for each point individually (each point represents a bucket)
-							for i := range item.Points {
-								pointUsage := item.Points[i].Usage
-								pointCost := priceService.CalculateCost(ctx, price, pointUsage)
-								item.Points[i].Cost = pointCost
-							}
-						} else {
-							// When no window size is provided, treat TotalUsage as a single bucket
-							// This is a fallback for bucketedMax meters when no time windowing is requested
-							totalUsage := item.TotalUsage
-							if totalUsage.IsPositive() {
-								// Treat the total usage as a single bucket for cost calculation
-								bucketedValues := []decimal.Decimal{totalUsage}
-								cost = priceService.CalculateBucketedCost(ctx, price, bucketedValues)
-							} else {
-								cost = decimal.Zero
-							}
-						}
-
-						item.TotalCost = cost
-						item.Currency = price.Currency
-					} else {
-						// For non-bucketed features, use regular CalculateCost
-						item.TotalUsage = s.getCorrectUsageValue(item, meter.Aggregation.Type)
-
-						cost := priceService.CalculateCost(ctx, price, item.TotalUsage)
-						item.TotalCost = cost
-						item.Currency = price.Currency
-
-						// Also calculate cost for each point in the time series if points exist
-						for i := range item.Points {
-							pointUsage := s.getCorrectUsageValueForPoint(item.Points[i], meter.Aggregation.Type)
-							pointCost := priceService.CalculateCost(ctx, price, pointUsage)
-							item.Points[i].Cost = pointCost
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return nil
 }
 
 // getCorrectUsageValue returns the correct usage value based on the meter's aggregation type
@@ -2146,14 +1797,13 @@ func (s *featureUsageTrackingService) ToGetUsageAnalyticsResponseDTO(ctx context
 			Unit:            analytic.Unit,
 			UnitPlural:      analytic.UnitPlural,
 			AggregationType: analytic.AggregationType,
-			TotalUsage:      analytic.TotalUsage, // This is now set correctly in enrichment
+			TotalUsage:      s.getCorrectUsageValue(analytic, analytic.AggregationType), // This is now set correctly in enrichment
 			TotalCost:       analytic.TotalCost,
 			Currency:        analytic.Currency,
 			EventCount:      analytic.EventCount,
 			Properties:      analytic.Properties,
 			Points:          make([]dto.UsageAnalyticPoint, 0, len(analytic.Points)),
 		}
-
 		// Map time-series points if available
 		for _, point := range analytic.Points {
 			// Use the correct usage value based on aggregation type

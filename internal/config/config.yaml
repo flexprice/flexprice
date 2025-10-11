@@ -160,3 +160,5 @@ feature_usage_tracking:
 feature_flag:
   # This flag is used to enable/disable feature usage for analytics
   enable_feature_usage_for_analytics: true # TODO: cleanup by 15th October 2025
+  # Tenant ID to force use v1 analytics service (empty string means no tenant is forced to v1)
+  force_v1_for_tenant: ""
